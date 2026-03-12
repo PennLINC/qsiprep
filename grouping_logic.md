@@ -20,16 +20,16 @@ The things we need to account for:
         - If separate_all_dwis and MultipartID conflict, defer to separate_all_dwis but raise a warning.
     - ignore: If "fieldmaps" provided, do not use files in `fmap` directory to define field maps. DWI-based field maps will still be used.
         - If "fieldmaps" in ignore and fmap files have IntendedFor/B0FieldIdentifier, defer to ignore.
-    - pepolar_method: If "drbuddi" is used, only use reverse phase-encoded files to define field maps.
-        - If pepolar_method and distortion correction-related metadata (e.g., B0FieldSource/B0FieldIdentifier specify a B0Field using multiple PEDs) conflict, raise an exception for now, but plan to support if someone asks for it.
+    - pepolar_method: If "drbuddi" is used, only use reverse phase-encoded files to define field maps (i.e., `estimate_per_axis=True`).
+        - If `estimate_per_axis=True` and B0FieldSource/B0FieldIdentifier specify a B0Field using multiple PEDs, raise an exception for now, but plan to support (by splitting up the B0FieldIdentifier into per-axis versions) if someone asks for it.
 
 
 ## List of Relevant Things
 
-- Subject entity: Impacts all groups
-- Session entity: Impacts all groups
+- Subject entity: Impacts all groups. Files should not be combined in a distortion group, field map estimation group, field map application group, or concatenation group if they are from different subjects.
+- Session entity: Impacts all groups. Files should not be combined in a distortion group, field map estimation group, field map application group, or concatenation group if they are from different sessions.
 - ShimSetting: Impacts "Distortion Groups" and "Field Map * Groups"
-- TotalReadoutTime: Impacts "Distortion Groups" and "Field Map * Groups" (maybe, ask Okan)
+- TotalReadoutTime: Impacts "Distortion Groups" and "Field Map * Groups"
 - B0FieldSource: Impacts "Field Map Estimation Groups"
 - B0FieldIdentifier: Impacts "Field Map Application Groups"
 - IntendedFor: Impacts both "Field Map Estimation Groups" and "Field Map Application Groups"
@@ -37,7 +37,7 @@ The things we need to account for:
 - MultipartID: Impacts "Concatenation Groups"
 - `--separate-all-dwis`: Impacts "Distortion Groups" and "Concatenation Groups"
 - `--denoise-before-combining`: Hopefully doesn't impact grouping- just order of steps in workflow.
-- `--pepolar-method`: Impacts "Field Map Estimation Groups" and "Field Map Application Groups". Could be changed to `--estimate-per-axis True|False` internally.
+- `--pepolar-method`: Impacts "Field Map Estimation Groups" and "Field Map Application Groups". Changed to `estimate_per_axis True|False` parameter internally. `True` if DRBUDDI in `pepolar-method` and `False` otherwise.
 - `--ignore`: Impacts whether fmap files are used for field map estimation groups.
 
 ## Outputs
@@ -108,8 +108,8 @@ The things we need to account for:
 3.  Field Map Application Groups: Links from valid field maps to target DWI files or vice versa.
     A dictionary of field map identifiers and the DWI files that will use them for distortion correction.
     Keys are field map identifiers (B0FieldIdentifier when available, auto_000X when not).
-    Values are lists of files on which the field maps will be used.
-    Values are lists of files used to create the field map.
+    Values are lists of distortion group IDs that will be distortion-corrected
+    using the field map.
     Since field map estimation happens after distortion groups are created and denoised,
     the DWI files in the values should be distortion group IDs.
     For example:
@@ -191,27 +191,23 @@ Four distortion groups:
 One field map estimation group:
 
 - TOPUP
-    - sub-01_dir-AP_run-1_dwi.nii.gz
-    - sub-01_dir-AP_run-2_dwi.nii.gz
-    - sub-01_dir-PA_run-1_dwi.nii.gz
-    - sub-01_dir-PA_run-2_dwi.nii.gz
-    - sub-01_dir-LR_run-1_dwi.nii.gz
-    - sub-01_dir-LR_run-2_dwi.nii.gz
-    - sub-01_dir-RL_run-1_dwi.nii.gz
-    - sub-01_dir-RL_run-2_dwi.nii.gz
+    - sub-01_dir-AP
+    - sub-01_dir-PA
+    - sub-01_dir-LR
+    - sub-01_dir-RL
 
 One concatenation group:
 
 - sub-01
-    - sub-01_dir-AP_dwi.nii.gz
-    - sub-01_dir-PA_dwi.nii.gz
-    - sub-01_dir-LR_dwi.nii.gz
-    - sub-01_dir-RL_dwi.nii.gz
+    - sub-01_dir-AP
+    - sub-01_dir-PA
+    - sub-01_dir-LR
+    - sub-01_dir-RL
 
 
 #### Scenario 1B: Distortion groups don't match field map estimation groups
 
-We have the same data, but the curator specified that the run-1 files should be used to create one field map and the run-2 files should be used to create another.
+We have the same data, but the curator specified (via B0FieldIdentifier/B0FieldSource) that the run-1 files should be used to create one field map and the run-2 files should be used to create another.
 We should allow this without raising warnings.
 
 QSIPrep will need to account for the field map estimation groups when designing the distortion groups.
@@ -229,12 +225,12 @@ Eight distortion groups:
 
 Two field map estimation groups:
 
-- sub-01_run-1
+- topuprun01 (B0FieldIdentifier key)
     - sub-01_dir-AP_run-1_dwi.nii.gz
     - sub-01_dir-PA_run-1_dwi.nii.gz
     - sub-01_dir-LR_run-1_dwi.nii.gz
     - sub-01_dir-RL_run-1_dwi.nii.gz
-- sub-01_run-2
+- topuprun02 (B0FieldIdentifier key)
     - sub-01_dir-AP_run-2_dwi.nii.gz
     - sub-01_dir-PA_run-2_dwi.nii.gz
     - sub-01_dir-LR_run-2_dwi.nii.gz
@@ -277,14 +273,10 @@ Four distortion groups:
 One field map estimation group:
 
 - TOPUP
-    - sub-01_dir-AP_run-1_dwi.nii.gz
-    - sub-01_dir-AP_run-2_dwi.nii.gz
-    - sub-01_dir-PA_run-1_dwi.nii.gz
-    - sub-01_dir-PA_run-2_dwi.nii.gz
-    - sub-01_dir-LR_run-1_dwi.nii.gz
-    - sub-01_dir-LR_run-2_dwi.nii.gz
-    - sub-01_dir-RL_run-1_dwi.nii.gz
-    - sub-01_dir-RL_run-2_dwi.nii.gz
+    - sub-01_dir-AP
+    - sub-01_dir-PA
+    - sub-01_dir-LR
+    - sub-01_dir-RL
 
 Two concatenation groups (raise an error)
 
@@ -305,57 +297,20 @@ Two concatenation groups (raise an error)
 The following issues were identified during review of the logic above.
 They should be resolved before or during implementation.
 
-1. **Scenario 1A field map estimation group values use raw file paths.**
-   The spec (Output 2, line 77) says "the DWI files in the values should be distortion group IDs,"
-   but the Scenario 1A example lists raw file paths like `sub-01_dir-AP_run-1_dwi.nii.gz`.
-   The values should be distortion group IDs (e.g., `sub-01_dir-AP`).
-
-2. **Scenario 1A concatenation group values use raw file names.**
-   The concatenation group example lists `sub-01_dir-AP_dwi.nii.gz` etc.,
-   but these should be distortion group IDs like `sub-01_dir-AP`.
-
-3. **Field Map Application Groups description has a copy-paste error.**
-   Output 3 (line 112) says "Values are lists of files used to create the field map."
-   This duplicates the Estimation Groups description. It should say
-   "Values are lists of distortion group IDs that will be distortion-corrected
-   using the field map."
-
-4. **Scenario 1B does not specify the metadata mechanism.**
-   It says "the curator specified that the run-1 files should be used to create one
-   field map and the run-2 files should be used to create another" but does not state
-   which BIDS metadata fields accomplish this. The mechanism is B0FieldIdentifier:
-   run-1 files share one B0FieldIdentifier value and run-2 files share a different one.
-
-5. **No algorithm for computation order.**
+1. **No algorithm for computation order.**
    The document acknowledges (line 137) uncertainty about the order. The proposed order is:
    distortion groups -> field map estimation groups -> field map application groups ->
    concatenation groups -> validate consistency -> refine distortion groups (split any
    distortion group that spans multiple field map estimation groups).
 
-6. **TotalReadoutTime's role is unresolved.**
-   Line 32 says "ask Okan." Until resolved, it is treated the same as ShimSetting:
-   files must share the same TotalReadoutTime to be in the same distortion group.
-
-7. **Scenario 1B field map estimation group keys are misleading.**
-   The keys are `sub-01_run-1` and `sub-01_run-2`, which look like auto-generated names.
-   Since B0FieldIdentifier is the mechanism (see item 4), the keys should be the actual
-   B0FieldIdentifier strings chosen by the curator (arbitrary labels, not BIDS filenames).
-
-8. **Missing scenarios.** The document does not cover:
+2. **Missing scenarios.** The document does not cover:
    - `separate_all_dwis=True` (each file stays separate).
    - `ignore_fieldmaps=True` when fmap/ files with IntendedFor/B0FieldIdentifier exist.
-   - Multiple sessions.
    - Missing PhaseEncodingDirection metadata.
    - Non-DWI fieldmaps in fmap/ (phasediff, phase1/phase2).
    - Interaction between `estimate_per_axis=True` and B0FieldIdentifier-based grouping.
 
-9. **`estimate_per_axis` + B0Field\* conflict is under-specified.**
-   Line 24 says "raise an exception for now" but does not define the conflict precisely.
-   A conflict occurs when a single B0FieldIdentifier groups files whose phase encoding
-   directions span multiple axes (e.g., AP and LR in one B0FieldIdentifier) while
-   `estimate_per_axis=True`.
-
-10. **`denoise_before_combining` interaction is not discussed.**
+3.  **`denoise_before_combining` interaction is not discussed.**
     Line 39 correctly notes it "hopefully doesn't impact grouping," but if denoising
     happens before distortion-group concatenation, the operational meaning of
     "distortion group" changes. This should be clarified or confirmed as out of scope.

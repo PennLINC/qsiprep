@@ -18,7 +18,13 @@ from ..interfaces.bids import get_bids_params
 
 LOGGER = logging.getLogger('nipype.workflow')
 
-_DISTORTION_FIELDS = ('session', 'PhaseEncodingDirection', 'ShimSetting', 'TotalReadoutTime')
+_DISTORTION_FIELDS = (
+    'session',
+    'PhaseEncodingDirection',
+    'ShimSetting',
+    'TotalReadoutTime',
+    'B0FieldIdentifier',
+)
 
 
 def group_dwi_scans(
@@ -138,6 +144,9 @@ def build_distortion_groups(layout, subject_data, combine_scans):
             'PhaseEncodingDirection': metadata.get('PhaseEncodingDirection'),
             'ShimSetting': tuple(shim) if isinstance(shim, list) else shim,
             'TotalReadoutTime': metadata.get('TotalReadoutTime'),
+            'B0FieldIdentifier': tuple(_ensure_list(metadata.get('B0FieldIdentifier')))
+            if metadata.get('B0FieldIdentifier') is not None
+            else None,
         }
 
     groups = []
@@ -224,7 +233,11 @@ def build_fmap_estimation_groups(
             layout,
             estimate_per_axis,
         )
-        return {k: sorted(v) for k, v in b0field_groups.items()}
+        return _split_named_member_groups_by_session(
+            layout,
+            distortion_groups,
+            {k: sorted(v) for k, v in b0field_groups.items()},
+        )
 
     # ------------------------------------------------------------------
     # Path 2: IntendedFor on fmap files
@@ -237,7 +250,11 @@ def build_fmap_estimation_groups(
             file_to_dg,
         )
         if intended_groups:
-            return intended_groups
+            return _split_named_member_groups_by_session(
+                layout,
+                distortion_groups,
+                intended_groups,
+            )
 
     # ------------------------------------------------------------------
     # Path 3: Heuristic — pair distortion groups by PE direction
@@ -295,7 +312,11 @@ def build_fmap_application_groups(
                 b0source_map[val].add(file_to_dg[dwi])
 
     if has_b0source:
-        return {k: sorted(v) for k, v in b0source_map.items()}
+        return _split_named_member_groups_by_session(
+            layout,
+            distortion_groups,
+            {k: sorted(v) for k, v in b0source_map.items()},
+        )
 
     # Path 2 / 3: Derive from estimation groups — every DWI distortion group
     # that appears in an estimation group is also an application target.
@@ -376,17 +397,33 @@ def validate_group_consistency(
     if not fmap_estimation_groups:
         return
 
-    dg_to_concat = {}
+    # When scans are intentionally kept separate, field-map estimation groups
+    # can legitimately span many singleton concatenation groups.
+    if not combine_scans:
+        return
+
+    dg_to_concat = defaultdict(set)
     for cg_id, dg_ids in concatenation_groups.items():
         for dg_id in dg_ids:
-            dg_to_concat[dg_id] = cg_id
+            dg_to_concat[dg_id].add(cg_id)
+
+    # A distortion group should belong to exactly one concatenation group.
+    for dg_id, cg_ids in dg_to_concat.items():
+        if len(cg_ids) > 1:
+            raise ValueError(
+                f'Distortion group {dg_id!r} appears in multiple concatenation groups '
+                f'({cg_ids}). A field-map estimation group must be a subset of exactly one '
+                f'concatenation group.'
+            )
 
     for fme_key, fme_members in fmap_estimation_groups.items():
         fme_dg_ids = {m for m in fme_members if m in distortion_groups}
         if not fme_dg_ids:
             continue
 
-        concat_ids = {dg_to_concat[dg_id] for dg_id in fme_dg_ids if dg_id in dg_to_concat}
+        concat_ids = set()
+        for dg_id in fme_dg_ids:
+            concat_ids.update(dg_to_concat.get(dg_id, set()))
         if len(concat_ids) > 1:
             raise ValueError(
                 f'Field-map estimation group {fme_key!r} spans multiple '
@@ -592,37 +629,45 @@ def _build_intendedfor_groups(layout, fmap_files, all_dwis, file_to_dg):
 
 def _build_heuristic_estimation_groups(layout, distortion_groups, estimate_per_axis):
     """Pair distortion groups by PE direction when no curator metadata exists."""
-    pe_map = {}
-    for dg_id in distortion_groups:
-        pe = _dg_pe_direction(layout, distortion_groups, dg_id)
-        pe_map[dg_id] = pe
-
-    pe_axes = defaultdict(lambda: defaultdict(list))
-    for dg_id, pe in pe_map.items():
-        if pe is None:
-            continue
-        axis = _get_pe_axis(pe)
-        pe_axes[axis][pe].append(dg_id)
-
     fme_groups = {}
     auto_counter = 0
 
-    if estimate_per_axis:
-        for axis, dir_map in sorted(pe_axes.items()):
-            plus_dir = axis
-            minus_dir = axis + '-'
-            plus_dgs = dir_map.get(plus_dir, [])
-            minus_dgs = dir_map.get(minus_dir, [])
-            if plus_dgs and minus_dgs:
+    # Never create heuristic estimation groups across sessions.
+    dgs_by_session = defaultdict(list)
+    for dg_id, files in distortion_groups.items():
+        session = layout.get_file(files[0]).entities.get('session')
+        dgs_by_session[session].append(dg_id)
+
+    for session in sorted(dgs_by_session):
+        session_dg_ids = dgs_by_session[session]
+        pe_map = {}
+        for dg_id in session_dg_ids:
+            pe_map[dg_id] = _dg_pe_direction(layout, distortion_groups, dg_id)
+
+        pe_axes = defaultdict(lambda: defaultdict(list))
+        for dg_id, pe in pe_map.items():
+            if pe is None:
+                continue
+            axis = _get_pe_axis(pe)
+            pe_axes[axis][pe].append(dg_id)
+
+        if estimate_per_axis:
+            for axis, dir_map in sorted(pe_axes.items()):
+                plus_dir = axis
+                minus_dir = axis + '-'
+                plus_dgs = dir_map.get(plus_dir, [])
+                minus_dgs = dir_map.get(minus_dir, [])
+                if plus_dgs and minus_dgs:
+                    key = f'auto_{auto_counter:05d}'
+                    auto_counter += 1
+                    fme_groups[key] = sorted(plus_dgs + minus_dgs)
+        else:
+            all_dgs_with_pe = [dg_id for dg_id, pe in pe_map.items() if pe is not None]
+            unique_pes = {pe for pe in pe_map.values() if pe is not None}
+            if len(unique_pes) >= 2 and all_dgs_with_pe:
                 key = f'auto_{auto_counter:05d}'
                 auto_counter += 1
-                fme_groups[key] = sorted(plus_dgs + minus_dgs)
-    else:
-        all_dgs_with_pe = [dg_id for dg_id, pe in pe_map.items() if pe is not None]
-        unique_pes = {pe for pe in pe_map.values() if pe is not None}
-        if len(unique_pes) >= 2 and all_dgs_with_pe:
-            key = f'auto_{auto_counter:05d}'
-            fme_groups[key] = sorted(all_dgs_with_pe)
+                fme_groups[key] = sorted(all_dgs_with_pe)
 
     return fme_groups
 
@@ -633,6 +678,7 @@ def _build_multipartid_concatenation_groups(layout, distortion_groups):
     none_counter = 0
 
     for dg_id, files in distortion_groups.items():
+        session = layout.get_file(files[0]).entities.get('session')
         mp_ids = set()
         for dwi in files:
             mp = _get_metadata_field(layout, dwi, 'MultipartID')
@@ -641,9 +687,9 @@ def _build_multipartid_concatenation_groups(layout, distortion_groups):
 
         if mp_ids:
             for mp_id in mp_ids:
-                mp_groups[mp_id].add(dg_id)
+                mp_groups[(session, mp_id)].add(dg_id)
         else:
-            mp_groups[f'_none_{none_counter}'] = {dg_id}
+            mp_groups[(session, f'_none_{none_counter}')] = {dg_id}
             none_counter += 1
 
     all_dg_lists = [sorted(dg_ids) for dg_ids in mp_groups.values()]
@@ -675,6 +721,47 @@ def _build_session_concatenation_groups(layout, distortion_groups):
 
     names = _get_unique_concatenated_bids_names(all_file_lists)
     return dict(zip(names, all_dg_lists, strict=False))
+
+
+def _get_member_session(layout, distortion_groups, member):
+    """Return session entity for a group member (DG ID or file path)."""
+    if member in distortion_groups:
+        exemplar = distortion_groups[member][0]
+        return layout.get_file(exemplar).entities.get('session')
+    return layout.get_file(member).entities.get('session')
+
+
+def _split_named_member_groups_by_session(layout, distortion_groups, named_groups):
+    """Split named groups so members never span sessions.
+
+    Parameters
+    ----------
+    layout : :obj:`pybids.BIDSLayout`
+    distortion_groups : dict[str, list[str]]
+    named_groups : dict[str, list[str]]
+        Group-keyed members, where members are DG IDs and/or file paths.
+
+    Returns
+    -------
+    dict[str, list[str]]
+        Same structure as input, but any cross-session group is split into
+        per-session groups with deterministic suffixed keys.
+    """
+    split_groups = {}
+    for key, members in named_groups.items():
+        by_session = defaultdict(list)
+        for member in members:
+            by_session[_get_member_session(layout, distortion_groups, member)].append(member)
+
+        if len(by_session) <= 1:
+            split_groups[key] = sorted(members)
+            continue
+
+        for session in sorted(by_session, key=lambda s: '' if s is None else str(s)):
+            session_suffix = f'ses-{session}' if session is not None else 'ses-none'
+            split_groups[f'{key}_{session_suffix}'] = sorted(by_session[session])
+
+    return split_groups
 
 
 def get_entity_groups(layout, subject_data, combine_all_dwis):
