@@ -96,7 +96,20 @@ def group_dwi_scans(
         combine_scans,
     )
 
+    initial_distortion_groups = distortion_groups
     distortion_groups = refine_distortion_groups(distortion_groups, fmap_estimation_groups)
+    if distortion_groups != initial_distortion_groups:
+        (
+            fmap_estimation_groups,
+            fmap_application_groups,
+            concatenation_groups,
+        ) = _remap_groups_after_refinement(
+            initial_distortion_groups,
+            distortion_groups,
+            fmap_estimation_groups,
+            fmap_application_groups,
+            concatenation_groups,
+        )
 
     config.loggers.workflow.info('Finished grouping DWI scans')
     return distortion_groups, fmap_estimation_groups, fmap_application_groups, concatenation_groups
@@ -233,11 +246,18 @@ def build_fmap_estimation_groups(
             layout,
             estimate_per_axis,
         )
-        return _split_named_member_groups_by_session(
+        grouped = _split_named_member_groups_by_session(
             layout,
             distortion_groups,
             {k: sorted(v) for k, v in b0field_groups.items()},
         )
+        _check_distortion_metadata_compatibility(
+            layout,
+            distortion_groups,
+            grouped,
+            group_kind='field-map estimation',
+        )
+        return grouped
 
     # ------------------------------------------------------------------
     # Path 2: IntendedFor on fmap files
@@ -250,11 +270,18 @@ def build_fmap_estimation_groups(
             file_to_dg,
         )
         if intended_groups:
-            return _split_named_member_groups_by_session(
+            grouped = _split_named_member_groups_by_session(
                 layout,
                 distortion_groups,
                 intended_groups,
             )
+            _check_distortion_metadata_compatibility(
+                layout,
+                distortion_groups,
+                grouped,
+                group_kind='field-map estimation',
+            )
+            return grouped
 
     # ------------------------------------------------------------------
     # Path 3: Heuristic — pair distortion groups by PE direction
@@ -312,11 +339,18 @@ def build_fmap_application_groups(
                 b0source_map[val].add(file_to_dg[dwi])
 
     if has_b0source:
-        return _split_named_member_groups_by_session(
+        grouped = _split_named_member_groups_by_session(
             layout,
             distortion_groups,
             {k: sorted(v) for k, v in b0source_map.items()},
         )
+        _check_distortion_metadata_compatibility(
+            layout,
+            distortion_groups,
+            grouped,
+            group_kind='field-map application',
+        )
+        return grouped
 
     # Path 2 / 3: Derive from estimation groups — every DWI distortion group
     # that appears in an estimation group is also an application target.
@@ -640,34 +674,44 @@ def _build_heuristic_estimation_groups(layout, distortion_groups, estimate_per_a
 
     for session in sorted(dgs_by_session):
         session_dg_ids = dgs_by_session[session]
-        pe_map = {}
+
+        # In fully automatic mode (no curator-defined fmap links), do not build
+        # heuristic fmap groups across MultipartID boundaries.
+        multipart_partitions = defaultdict(list)
         for dg_id in session_dg_ids:
-            pe_map[dg_id] = _dg_pe_direction(layout, distortion_groups, dg_id)
+            multipart_key = _get_distortion_group_multipart_key(layout, distortion_groups, dg_id)
+            partition_key = multipart_key if multipart_key is not None else '_no_multipart'
+            multipart_partitions[partition_key].append(dg_id)
 
-        pe_axes = defaultdict(lambda: defaultdict(list))
-        for dg_id, pe in pe_map.items():
-            if pe is None:
-                continue
-            axis = _get_pe_axis(pe)
-            pe_axes[axis][pe].append(dg_id)
+        for partition_dg_ids in multipart_partitions.values():
+            pe_map = {}
+            for dg_id in partition_dg_ids:
+                pe_map[dg_id] = _dg_pe_direction(layout, distortion_groups, dg_id)
 
-        if estimate_per_axis:
-            for axis, dir_map in sorted(pe_axes.items()):
-                plus_dir = axis
-                minus_dir = axis + '-'
-                plus_dgs = dir_map.get(plus_dir, [])
-                minus_dgs = dir_map.get(minus_dir, [])
-                if plus_dgs and minus_dgs:
+            pe_axes = defaultdict(lambda: defaultdict(list))
+            for dg_id, pe in pe_map.items():
+                if pe is None:
+                    continue
+                axis = _get_pe_axis(pe)
+                pe_axes[axis][pe].append(dg_id)
+
+            if estimate_per_axis:
+                for axis, dir_map in sorted(pe_axes.items()):
+                    plus_dir = axis
+                    minus_dir = axis + '-'
+                    plus_dgs = dir_map.get(plus_dir, [])
+                    minus_dgs = dir_map.get(minus_dir, [])
+                    if plus_dgs and minus_dgs:
+                        key = f'auto_{auto_counter:05d}'
+                        auto_counter += 1
+                        fme_groups[key] = sorted(plus_dgs + minus_dgs)
+            else:
+                all_dgs_with_pe = [dg_id for dg_id, pe in pe_map.items() if pe is not None]
+                unique_pes = {pe for pe in pe_map.values() if pe is not None}
+                if len(unique_pes) >= 2 and all_dgs_with_pe:
                     key = f'auto_{auto_counter:05d}'
                     auto_counter += 1
-                    fme_groups[key] = sorted(plus_dgs + minus_dgs)
-        else:
-            all_dgs_with_pe = [dg_id for dg_id, pe in pe_map.items() if pe is not None]
-            unique_pes = {pe for pe in pe_map.values() if pe is not None}
-            if len(unique_pes) >= 2 and all_dgs_with_pe:
-                key = f'auto_{auto_counter:05d}'
-                auto_counter += 1
-                fme_groups[key] = sorted(all_dgs_with_pe)
+                    fme_groups[key] = sorted(all_dgs_with_pe)
 
     return fme_groups
 
@@ -762,6 +806,98 @@ def _split_named_member_groups_by_session(layout, distortion_groups, named_group
             split_groups[f'{key}_{session_suffix}'] = sorted(by_session[session])
 
     return split_groups
+
+
+def _get_distortion_group_multipart_key(layout, distortion_groups, dg_id):
+    """Return a deterministic MultipartID key for a distortion group."""
+    mp_ids = set()
+    for dwi in distortion_groups[dg_id]:
+        mp = _get_metadata_field(layout, dwi, 'MultipartID')
+        if mp is not None:
+            mp_ids.add(mp)
+
+    if not mp_ids:
+        return None
+    if len(mp_ids) == 1:
+        return next(iter(mp_ids))
+    return tuple(sorted(mp_ids))
+
+
+def _get_distortion_group_signature(layout, distortion_groups, dg_id):
+    """Return (ShimSetting, TotalReadoutTime) for a distortion group exemplar."""
+    exemplar = distortion_groups[dg_id][0]
+    metadata = layout.get_file(exemplar).get_metadata()
+    shim = metadata.get('ShimSetting')
+    shim = tuple(shim) if isinstance(shim, list) else shim
+    trt = metadata.get('TotalReadoutTime')
+    return shim, trt
+
+
+def _check_distortion_metadata_compatibility(
+    layout,
+    distortion_groups,
+    named_groups,
+    group_kind,
+):
+    """Raise if a metadata-defined group spans incompatible shim/TRT signatures."""
+    for group_key, members in named_groups.items():
+        dg_members = [m for m in members if m in distortion_groups]
+        if len(dg_members) <= 1:
+            continue
+
+        signatures = {
+            _get_distortion_group_signature(layout, distortion_groups, dg_id)
+            for dg_id in dg_members
+        }
+        if len(signatures) > 1:
+            raise ValueError(
+                f'{group_kind.capitalize()} group {group_key!r} contains distortion groups '
+                'with conflicting ShimSetting and/or TotalReadoutTime metadata. '
+                'These files cannot be grouped together for field-map processing.'
+            )
+
+
+def _remap_group_members_with_new_dg_ids(group_members, old_to_new):
+    """Replace old DG IDs in a member list with remapped new DG IDs."""
+    remapped = []
+    for member in group_members:
+        if member in old_to_new:
+            remapped.extend(sorted(old_to_new[member]))
+        else:
+            remapped.append(member)
+    return sorted(set(remapped))
+
+
+def _remap_groups_after_refinement(
+    old_distortion_groups,
+    new_distortion_groups,
+    fmap_estimation_groups,
+    fmap_application_groups,
+    concatenation_groups,
+):
+    """Remap DG IDs in returned groups after distortion-group refinement."""
+    file_to_new_dg = {}
+    for new_dg_id, files in new_distortion_groups.items():
+        for dwi in files:
+            file_to_new_dg[dwi] = new_dg_id
+
+    old_to_new = {}
+    for old_dg_id, files in old_distortion_groups.items():
+        old_to_new[old_dg_id] = {file_to_new_dg[dwi] for dwi in files if dwi in file_to_new_dg}
+
+    remapped_fme = {}
+    for key, members in fmap_estimation_groups.items():
+        remapped_fme[key] = _remap_group_members_with_new_dg_ids(members, old_to_new)
+
+    remapped_fma = {}
+    for key, members in fmap_application_groups.items():
+        remapped_fma[key] = _remap_group_members_with_new_dg_ids(members, old_to_new)
+
+    remapped_cg = {}
+    for key, members in concatenation_groups.items():
+        remapped_cg[key] = _remap_group_members_with_new_dg_ids(members, old_to_new)
+
+    return remapped_fme, remapped_fma, remapped_cg
 
 
 def get_entity_groups(layout, subject_data, combine_all_dwis):
