@@ -5,8 +5,8 @@ import shutil
 
 import nibabel as nb
 import numpy as np
-import SimpleITK as sitk
 import pytest
+import SimpleITK as sitk
 
 from qsiprep.interfaces.gradients import get_fsl_motion_params
 
