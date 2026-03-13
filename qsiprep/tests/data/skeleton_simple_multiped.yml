@@ -8,15 +8,51 @@
         suffix: dwi
         metadata:
           PhaseEncodingDirection: 'j-'
+          ShimSetting:
+            - 3767
+            - 2516
+            - 398
+            - 115
+            - 44
+            - -134
+            - -53
+            - 43
       - dir: PA
         suffix: dwi
         metadata:
           PhaseEncodingDirection: 'j'
+          ShimSetting:
+            - 3767
+            - 2516
+            - 398
+            - 115
+            - 44
+            - -134
+            - -53
+            - 43
       - dir: RL
         suffix: dwi
         metadata:
           PhaseEncodingDirection: 'i-'
+          ShimSetting:
+            - 3767
+            - 2516
+            - 398
+            - 115
+            - 44
+            - -134
+            - -53
+            - 43
       - dir: LR
         suffix: dwi
         metadata:
           PhaseEncodingDirection: 'i'
+          ShimSetting:
+            - 3767
+            - 2516
+            - 398
+            - 115
+            - 44
+            - -134
+            - -53
+            - 43
