@@ -7,15 +7,17 @@ Head motion correction
 
 """
 
+from importlib.resources import files
+
 import nipype.pipeline.engine as pe
 from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-from pkg_resources import resource_filename as pkgrf
 
 from ... import config
 from ...interfaces import DerivativesDataSink
 from ...interfaces.ants import MultivariateTemplateConstruction2
+from ...utils.resources import as_path
 from .hmc import init_b0_hmc_wf
 from .registration import init_b0_to_anat_registration_wf
 
@@ -290,7 +292,7 @@ def nonlinear_alignment_iteration(iternum=0, gradient_step=0.2):
         ),
         name='outputnode',
     )
-    ants_settings = pkgrf('qsiprep', 'data/intramodal_nonlinear.json')
+    ants_settings = as_path(files('qsiprep') / 'data' / 'intramodal_nonlinear.json')
     reg = ants.Registration(from_file=ants_settings)
     iter_reg = pe.MapNode(reg, name='nlreg_%03d' % iternum, iterfield=['moving_image'])
 
