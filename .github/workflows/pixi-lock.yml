@@ -58,6 +58,10 @@ jobs:
       - name: Install the latest version of uv
         if: ${{ steps.latest-commit.outputs.run_lockfile_update == 'true' }}
         uses: astral-sh/setup-uv@v7
+      # Lock all environments (default, test, qsiprep). The qsiprep env must use the
+      # non-editable workspace package variant (production feature) so the Docker
+      # runtime image can copy only the env; the Dockerfile forces a non-editable
+      # install if the lockfile resolves qsiprep to the editable variant.
       - name: Update lockfile
         if: ${{ steps.latest-commit.outputs.run_lockfile_update == 'true' }}
         run: >

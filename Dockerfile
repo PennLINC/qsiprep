@@ -5,6 +5,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
                     ca-certificates \
                     build-essential \
+                    curl \
                     git && \
     apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
@@ -19,6 +20,11 @@ RUN pixi shell-hook -e test --as-is | grep -v PATH > /test-shell-hook.sh
 COPY . /app
 RUN --mount=type=cache,target=/root/.cache/rattler pixi install -e test --frozen
 RUN --mount=type=cache,target=/root/.cache/rattler pixi install -e qsiprep --frozen
+# Ensure qsiprep is installed non-editably in the qsiprep env so the copied env is
+# self-contained in the runtime image (lockfile may resolve to editable variant).
+# Pixi envs do not include pip; use uv to install into the env's Python.
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    /root/.local/bin/uv pip install --python /app/.pixi/envs/qsiprep/bin/python --no-deps --force-reinstall .
 
 FROM ${BASE_IMAGE} AS base
 WORKDIR /home/qsiprep
