@@ -46,7 +46,8 @@ def group_dwi_scans(
     combine_scans : :obj:`bool`, optional
         If True, group scans together based on their BIDS entities.
     ignore_fieldmaps : :obj:`bool`, optional
-        If True, do not use files in ``fmap/`` for distortion correction.
+        If True, disable field-map usage entirely. Field-map estimation and
+        application groups will be returned as ``None``.
     estimate_per_axis : :obj:`bool`, optional
         If True, limit PE direction-based grouping to reverse-PED pairs only.
 
@@ -54,12 +55,14 @@ def group_dwi_scans(
     -------
     distortion_groups : dict[str, list[str]]
         Keys are unique BIDS names, values are lists of raw DWI file paths.
-    fmap_estimation_groups : dict[str, list[str]]
+    fmap_estimation_groups : dict[str, list[str]] or None
         Keys are field-map identifiers, values are lists mixing distortion-group
-        IDs (for DWI data) and raw file paths (for fmap data).
-    fmap_application_groups : dict[str, list[str]]
+        IDs (for DWI data) and raw file paths (for fmap data). ``None`` when
+        ``ignore_fieldmaps`` is True.
+    fmap_application_groups : dict[str, list[str]] or None
         Keys are field-map identifiers, values are distortion-group IDs that
-        will be corrected by that field map.
+        will be corrected by that field map. ``None`` when
+        ``ignore_fieldmaps`` is True.
     concatenation_groups : dict[str, list[str]]
         Keys are unique BIDS names, values are lists of distortion-group IDs.
     """
@@ -67,20 +70,24 @@ def group_dwi_scans(
 
     distortion_groups = build_distortion_groups(layout, subject_data, combine_scans)
 
-    fmap_estimation_groups = build_fmap_estimation_groups(
-        layout,
-        subject_data,
-        distortion_groups,
-        ignore_fieldmaps,
-        estimate_per_axis,
-    )
+    if ignore_fieldmaps:
+        fmap_estimation_groups = None
+        fmap_application_groups = None
+    else:
+        fmap_estimation_groups = build_fmap_estimation_groups(
+            layout,
+            subject_data,
+            distortion_groups,
+            ignore_fieldmaps,
+            estimate_per_axis,
+        )
 
-    fmap_application_groups = build_fmap_application_groups(
-        layout,
-        subject_data,
-        distortion_groups,
-        fmap_estimation_groups,
-    )
+        fmap_application_groups = build_fmap_application_groups(
+            layout,
+            subject_data,
+            distortion_groups,
+            fmap_estimation_groups,
+        )
 
     concatenation_groups = build_concatenation_groups(
         layout,

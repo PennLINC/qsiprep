@@ -558,6 +558,9 @@ def _build_outputs_to_files(
     -------
     outputs_to_files : dict[str, dict]
     """
+    fmap_estimation_groups = fmap_estimation_groups or {}
+    fmap_application_groups = fmap_application_groups or {}
+
     dg_to_fmap_key = {}
     for fmap_key, dg_ids in fmap_application_groups.items():
         for dg_id in dg_ids:

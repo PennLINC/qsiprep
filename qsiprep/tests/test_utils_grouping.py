@@ -9,7 +9,11 @@ from niworkflows.utils.testing import generate_bids_skeleton
 
 from qsiprep.tests.utils import get_test_data_path
 from qsiprep.utils import grouping
-from qsiprep.workflows.base import _legacy_outputs_to_files
+
+try:
+    from qsiprep.workflows.base import _build_outputs_to_files
+except ModuleNotFoundError:
+    _build_outputs_to_files = None
 
 dset_multipartid = {
     '01': [
@@ -486,7 +490,7 @@ def test_group_dwi_scans_with_complex_relpaths(
     check_expected(scan_groups, expected)
 
 
-def _expected_simple_outputs(combine_scans, estimate_per_axis):
+def _expected_simple_outputs(combine_scans, estimate_per_axis, ignore_fieldmaps):
     expected = {
         'raises': False,
         'dg': {
@@ -496,24 +500,32 @@ def _expected_simple_outputs(combine_scans, estimate_per_axis):
             'sub-01_dir-RL': ['sub-01_dir-RL_dwi.nii.gz'],
         },
         'fme': (
-            {
-                'auto_00000': ['sub-01_dir-LR', 'sub-01_dir-RL'],
-                'auto_00001': ['sub-01_dir-AP', 'sub-01_dir-PA'],
-            }
-            if estimate_per_axis
-            else {
-                'auto_00000': ['sub-01_dir-AP', 'sub-01_dir-LR', 'sub-01_dir-PA', 'sub-01_dir-RL'],
-            }
+            None
+            if ignore_fieldmaps
+            else (
+                {
+                    'auto_00000': ['sub-01_dir-LR', 'sub-01_dir-RL'],
+                    'auto_00001': ['sub-01_dir-AP', 'sub-01_dir-PA'],
+                }
+                if estimate_per_axis
+                else {
+                    'auto_00000': ['sub-01_dir-AP', 'sub-01_dir-LR', 'sub-01_dir-PA', 'sub-01_dir-RL'],
+                }
+            )
         ),
         'fma': (
-            {
-                'auto_00000': ['sub-01_dir-LR', 'sub-01_dir-RL'],
-                'auto_00001': ['sub-01_dir-AP', 'sub-01_dir-PA'],
-            }
-            if estimate_per_axis
-            else {
-                'auto_00000': ['sub-01_dir-AP', 'sub-01_dir-LR', 'sub-01_dir-PA', 'sub-01_dir-RL'],
-            }
+            None
+            if ignore_fieldmaps
+            else (
+                {
+                    'auto_00000': ['sub-01_dir-LR', 'sub-01_dir-RL'],
+                    'auto_00001': ['sub-01_dir-AP', 'sub-01_dir-PA'],
+                }
+                if estimate_per_axis
+                else {
+                    'auto_00000': ['sub-01_dir-AP', 'sub-01_dir-LR', 'sub-01_dir-PA', 'sub-01_dir-RL'],
+                }
+            )
         ),
         'cg': (
             {'sub-01': ['sub-01_dir-AP', 'sub-01_dir-LR', 'sub-01_dir-PA', 'sub-01_dir-RL']}
@@ -532,14 +544,14 @@ def _expected_simple_outputs(combine_scans, estimate_per_axis):
 @pytest.mark.parametrize(
     ('combine_scans', 'estimate_per_axis', 'ignore_fieldmaps', 'expected'),
     [
-        (True, True, False, _expected_simple_outputs(True, True)),
-        (True, True, True, _expected_simple_outputs(True, True)),
-        (False, True, False, _expected_simple_outputs(False, True)),
-        (False, True, True, _expected_simple_outputs(False, True)),
-        (True, False, False, _expected_simple_outputs(True, False)),
-        (True, False, True, _expected_simple_outputs(True, False)),
-        (False, False, False, _expected_simple_outputs(False, False)),
-        (False, False, True, _expected_simple_outputs(False, False)),
+        (True, True, False, _expected_simple_outputs(True, True, False)),
+        (True, True, True, _expected_simple_outputs(True, True, True)),
+        (False, True, False, _expected_simple_outputs(False, True, False)),
+        (False, True, True, _expected_simple_outputs(False, True, True)),
+        (True, False, False, _expected_simple_outputs(True, False, False)),
+        (True, False, True, _expected_simple_outputs(True, False, True)),
+        (False, False, False, _expected_simple_outputs(False, False, False)),
+        (False, False, True, _expected_simple_outputs(False, False, True)),
     ],
 )
 def test_group_dwi_scans_with_simple_multiped(
@@ -566,8 +578,8 @@ def test_group_dwi_scans_with_simple_multiped(
     assert cg == expected['cg']
 
 
-def _expected_multirun_outputs(combine_scans, estimate_per_axis):
-    if estimate_per_axis:
+def _expected_multirun_outputs(combine_scans, estimate_per_axis, ignore_fieldmaps):
+    if estimate_per_axis and not ignore_fieldmaps:
         return {'raises': True}
 
     expected = {
@@ -582,41 +594,49 @@ def _expected_multirun_outputs(combine_scans, estimate_per_axis):
             'sub-01_dir-RL_run-1': ['sub-01_dir-RL_run-1_dwi.nii.gz'],
             'sub-01_dir-RL_run-2': ['sub-01_dir-RL_run-2_dwi.nii.gz'],
         },
-        'fme': {
-            'pepolar_dwi_appa_run1': ['sub-01_dir-AP_run-1', 'sub-01_dir-PA_run-1'],
-            'pepolar_dwi_appa_run2': ['sub-01_dir-AP_run-2', 'sub-01_dir-PA_run-2'],
-            'pepolar_dwi_lrrl_run1': ['sub-01_dir-LR_run-1', 'sub-01_dir-RL_run-1'],
-            'pepolar_dwi_lrrl_run2': ['sub-01_dir-LR_run-2', 'sub-01_dir-RL_run-2'],
-            'topup_allpeds': [
-                'sub-01_dir-AP_run-1',
-                'sub-01_dir-AP_run-2',
-                'sub-01_dir-LR_run-1',
-                'sub-01_dir-LR_run-2',
-                'sub-01_dir-PA_run-1',
-                'sub-01_dir-PA_run-2',
-                'sub-01_dir-RL_run-1',
-                'sub-01_dir-RL_run-2',
-            ],
-            'topup_fmap_appa_run1': ['sub-01_dir-AP_run-1'],
-        },
-        'fma': {
-            'pepolar_dwi_appa_run1': ['sub-01_dir-AP_run-1', 'sub-01_dir-PA_run-1'],
-            'pepolar_dwi_appa_run2': ['sub-01_dir-PA_run-2'],
-            'pepolar_dwi_lrrl_run1': ['sub-01_dir-LR_run-1', 'sub-01_dir-RL_run-1'],
-            'pepolar_dwi_lrrl_run2': ['sub-01_dir-LR_run-2', 'sub-01_dir-RL_run-2'],
-            'pepolar_fmap_appa': ['sub-01_dir-AP_run-1'],
-            'topup_allpeds': [
-                'sub-01_dir-AP_run-1',
-                'sub-01_dir-AP_run-2',
-                'sub-01_dir-LR_run-1',
-                'sub-01_dir-LR_run-2',
-                'sub-01_dir-PA_run-1',
-                'sub-01_dir-PA_run-2',
-                'sub-01_dir-RL_run-1',
-                'sub-01_dir-RL_run-2',
-            ],
-            'topup_fmap_appa_run1': ['sub-01_dir-AP_run-1'],
-        },
+        'fme': (
+            None
+            if ignore_fieldmaps
+            else {
+                'pepolar_dwi_appa_run1': ['sub-01_dir-AP_run-1', 'sub-01_dir-PA_run-1'],
+                'pepolar_dwi_appa_run2': ['sub-01_dir-AP_run-2', 'sub-01_dir-PA_run-2'],
+                'pepolar_dwi_lrrl_run1': ['sub-01_dir-LR_run-1', 'sub-01_dir-RL_run-1'],
+                'pepolar_dwi_lrrl_run2': ['sub-01_dir-LR_run-2', 'sub-01_dir-RL_run-2'],
+                'topup_allpeds': [
+                    'sub-01_dir-AP_run-1',
+                    'sub-01_dir-AP_run-2',
+                    'sub-01_dir-LR_run-1',
+                    'sub-01_dir-LR_run-2',
+                    'sub-01_dir-PA_run-1',
+                    'sub-01_dir-PA_run-2',
+                    'sub-01_dir-RL_run-1',
+                    'sub-01_dir-RL_run-2',
+                ],
+                'topup_fmap_appa_run1': ['sub-01_dir-AP_run-1'],
+            }
+        ),
+        'fma': (
+            None
+            if ignore_fieldmaps
+            else {
+                'pepolar_dwi_appa_run1': ['sub-01_dir-AP_run-1', 'sub-01_dir-PA_run-1'],
+                'pepolar_dwi_appa_run2': ['sub-01_dir-PA_run-2'],
+                'pepolar_dwi_lrrl_run1': ['sub-01_dir-LR_run-1', 'sub-01_dir-RL_run-1'],
+                'pepolar_dwi_lrrl_run2': ['sub-01_dir-LR_run-2', 'sub-01_dir-RL_run-2'],
+                'pepolar_fmap_appa': ['sub-01_dir-AP_run-1'],
+                'topup_allpeds': [
+                    'sub-01_dir-AP_run-1',
+                    'sub-01_dir-AP_run-2',
+                    'sub-01_dir-LR_run-1',
+                    'sub-01_dir-LR_run-2',
+                    'sub-01_dir-PA_run-1',
+                    'sub-01_dir-PA_run-2',
+                    'sub-01_dir-RL_run-1',
+                    'sub-01_dir-RL_run-2',
+                ],
+                'topup_fmap_appa_run1': ['sub-01_dir-AP_run-1'],
+            }
+        ),
         'cg': (
             {
                 'sub-01': [
@@ -649,14 +669,14 @@ def _expected_multirun_outputs(combine_scans, estimate_per_axis):
 @pytest.mark.parametrize(
     ('combine_scans', 'estimate_per_axis', 'ignore_fieldmaps', 'expected'),
     [
-        (True, True, False, _expected_multirun_outputs(True, True)),
-        (True, True, True, _expected_multirun_outputs(True, True)),
-        (False, True, False, _expected_multirun_outputs(False, True)),
-        (False, True, True, _expected_multirun_outputs(False, True)),
-        (True, False, False, _expected_multirun_outputs(True, False)),
-        (True, False, True, _expected_multirun_outputs(True, False)),
-        (False, False, False, _expected_multirun_outputs(False, False)),
-        (False, False, True, _expected_multirun_outputs(False, False)),
+        (True, True, False, _expected_multirun_outputs(True, True, False)),
+        (True, True, True, _expected_multirun_outputs(True, True, True)),
+        (False, True, False, _expected_multirun_outputs(False, True, False)),
+        (False, True, True, _expected_multirun_outputs(False, True, True)),
+        (True, False, False, _expected_multirun_outputs(True, False, False)),
+        (True, False, True, _expected_multirun_outputs(True, False, True)),
+        (False, False, False, _expected_multirun_outputs(False, False, False)),
+        (False, False, True, _expected_multirun_outputs(False, False, True)),
     ],
 )
 def test_group_dwi_scans_with_multirun_multiped(
@@ -1629,29 +1649,24 @@ class TestScenario1ASeparateAll:
 class TestScenario1AIgnoreFieldmaps:
     """Scenario 1A with ignore_fieldmaps=True.
 
-    Fmap estimation groups should only use DWI-based heuristics (no fmap/ files),
-    but since there are no fmap files in this dataset the result is the same as
-    the default case.
+    Field-map estimation/application groups are disabled entirely.
     """
 
-    def test_no_fmap_files_in_estimation(self, tmpdir):
+    def test_fieldmap_groups_are_none(self, tmpdir):
         layout, subject_data = _make_layout(
             tmpdir,
             dset_multirun_multiped_no_metadata,
             'scenario_1a_ign',
         )
-        _, fme, _, _ = grouping.group_dwi_scans(
+        _, fme, fma, _ = grouping.group_dwi_scans(
             layout=layout,
             subject_data=subject_data,
             combine_scans=True,
             ignore_fieldmaps=True,
             estimate_per_axis=False,
         )
-        all_members = []
-        for members in fme.values():
-            all_members.extend(members)
-        for member in all_members:
-            assert 'fmap' not in member
+        assert fme is None
+        assert fma is None
 
 
 class TestScenario1BB0FieldSplitsRuns:
@@ -1812,29 +1827,23 @@ class TestB0FieldFmaps:
 
 
 class TestIgnoreFmapFiles:
-    """ignore_fieldmaps=True should exclude fmap/ files from estimation groups.
+    """ignore_fieldmaps=True disables field-map grouping entirely."""
 
-    Even though IntendedFor exists, fmap files should not appear.
-    """
-
-    def test_fmap_excluded(self, tmpdir):
+    def test_fmap_groups_none(self, tmpdir):
         layout, subject_data = _make_layout(
             tmpdir,
             dset_with_intendedfor_fmaps,
             'ignore_fmaps',
         )
-        _, fme, _, _ = grouping.group_dwi_scans(
+        _, fme, fma, _ = grouping.group_dwi_scans(
             layout=layout,
             subject_data=subject_data,
             combine_scans=True,
             ignore_fieldmaps=True,
             estimate_per_axis=False,
         )
-        all_members = []
-        for members in fme.values():
-            all_members.extend(members)
-        for member in all_members:
-            assert 'fmap' not in member
+        assert fme is None
+        assert fma is None
 
 
 class TestMultiSession:
@@ -2118,6 +2127,9 @@ class TestLegacyOutputAdapter:
 
     def test_fmap_only_groups_are_labeled_epi(self, tmpdir):
         """IntendedFor-linked fmap-only groups should not become rpe_series."""
+        if _build_outputs_to_files is None:
+            pytest.skip('qsiprep.workflows.base unavailable in this test environment')
+
         layout, subject_data = _make_layout(
             tmpdir,
             dset_with_intendedfor_fmaps,
@@ -2131,7 +2143,7 @@ class TestLegacyOutputAdapter:
             estimate_per_axis=False,
         )
 
-        outputs = _legacy_outputs_to_files(layout, dg, fme, fma)
+        outputs = _build_outputs_to_files(layout, dg, fme, fma)
         assert len(outputs) == 1
         scan_group = next(iter(outputs.values()))
         assert scan_group['fieldmap_info']['suffix'] == 'epi'

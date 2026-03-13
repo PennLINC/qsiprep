@@ -18,7 +18,8 @@ The things we need to account for:
 5. User-provided settings that control how files are concatenated and what distortion correction method is used.
     - separate_all_dwis: If True, do not concatenate files, but do use combinations of files to create field maps.
         - If separate_all_dwis and MultipartID conflict, defer to separate_all_dwis but raise a warning.
-    - ignore: If "fieldmaps" provided, do not use files in `fmap` directory to define field maps. DWI-based field maps will still be used.
+    - ignore: If "fieldmaps" provided, disable fieldmap usage entirely.
+        - Field Map Estimation Groups and Field Map Application Groups should both be `None`.
         - If "fieldmaps" in ignore and fmap files have IntendedFor/B0FieldIdentifier, defer to ignore.
     - pepolar_method: If "drbuddi" is used, only use reverse phase-encoded files to define field maps (i.e., `estimate_per_axis=True`).
         - If `estimate_per_axis=True` and B0FieldSource/B0FieldIdentifier specify a B0Field using multiple PEDs, raise an exception for now, but plan to support (by splitting up the B0FieldIdentifier into per-axis versions) if someone asks for it.
@@ -37,7 +38,7 @@ The things we need to account for:
 - MultipartID: Impacts "Concatenation Groups". Concatenation groups must consist of either files with the same MultipartID (when this metadata field is present) or all files in a given subject/session.
 - `--separate-all-dwis`: Impacts "Distortion Groups" and "Concatenation Groups". If set to True, files should not be grouped together in Distortion Groups or Concatenation Groups.
 - `--pepolar-method`: Impacts "Field Map Estimation Groups" and "Field Map Application Groups". Changed to `estimate_per_axis True|False` parameter internally. `True` if DRBUDDI in `pepolar-method` and `False` otherwise.
-- `--ignore`: Impacts whether fmap files are used for field map estimation groups. If "fieldmaps" is included, do not use files in the fmap datatype to define Field Map Estimation Groups.
+- `--ignore`: Impacts whether distortion correction will be done at all. If `--ignore fieldmaps` is used, then no distortion correction will be done, which means that Field Map Estimation/Application Groups should be None.
 
 ## Outputs
 
@@ -74,6 +75,7 @@ The things we need to account for:
     Values are lists of files used to create the field map.
     Since field map estimation happens after distortion groups are created and denoised,
     the DWI files in the values should be distortion group IDs.
+    If `--ignore fieldmaps` is used, this output is `None`.
 
     For example:
     ```
@@ -117,6 +119,7 @@ The things we need to account for:
     using the field map.
     Since field map estimation happens after distortion groups are created and denoised,
     the DWI files in the values should be distortion group IDs.
+    If `--ignore fieldmaps` is used, this output is `None`.
     For example:
     ```
     {
@@ -141,12 +144,12 @@ The things we need to account for:
 
 1. Build initial distortion groups from DWI files
     - Keyed by subject/session + distortion-relevant metadata (PhaseEncodingDirection, ShimSetting, TotalReadoutTime, B0FieldIdentifier), or singletons if separate_all_dwis.
-2. Build fieldmap estimation groups from those distortion groups
-    - Priority: B0FieldIdentifier → IntendedFor on fmap files → heuristic.
-    - Enforce session boundaries here.
-3. Build fieldmap application groups
-    - Priority: B0FieldSource on DWI → derived from estimation groups.
-    - Enforce session boundaries here too.
+2. Build fieldmap estimation/application groups from distortion groups
+    - If `--ignore fieldmaps` is set: set both outputs to `None` and skip fieldmap grouping logic.
+    - Otherwise:
+        - Estimation priority: B0FieldIdentifier → IntendedFor on fmap files → heuristic.
+        - Application priority: B0FieldSource on DWI → derived from estimation groups.
+        - Enforce session boundaries.
 4. Build concatenation groups from distortion groups
     - separate_all_dwis=False: by MultipartID if present, else by session.
     - separate_all_dwis=True: one concatenation group per distortion group (with warning if MultipartID exists).
