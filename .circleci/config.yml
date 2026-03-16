@@ -2,6 +2,8 @@ version: 2.1
 orbs:
   codecov: codecov/codecov@4.1.0
 
+# ── Reusable anchors ──────────────────────────────────────────────────
+
 _machine_defaults: &machine_defaults
   environment:
     TZ: "/usr/share/zoneinfo/America/New_York"
@@ -22,18 +24,14 @@ _setup_docker_registry: &setup_docker_registry
   name: Set up local Docker registry
   command: |
     if [[ -f /tmp/images/registry.tar.gz ]]; then
+      echo "Loading saved registry image"
       docker load < /tmp/images/registry.tar.gz
     else
+      echo "Pulling registry image from DockerHub"
       docker pull registry:2
     fi
     docker run -d -p 5000:5000 --restart=always --name=registry \
       -v /tmp/docker:/var/lib/registry registry:2
-
-_pull_from_registry: &pull_from_registry
-  name: Pull and tag production image from local registry
-  command: |
-    docker pull localhost:5000/qsiprep
-    docker tag localhost:5000/qsiprep pennlinc/qsiprep:latest
 
 _pull_test_image: &pull_test_image
   name: Pull and tag test image from local registry
@@ -41,26 +39,25 @@ _pull_test_image: &pull_test_image
     docker pull localhost:5000/qsiprep-test
     docker tag localhost:5000/qsiprep-test pennlinc/qsiprep:test
 
+# ── Reusable commands ─────────────────────────────────────────────────
+
 commands:
   restore_build_and_data:
-    description: Restore Docker build cache and test data cache
+    description: Restore Docker image cache and test data cache, then start the registry
     steps:
       - restore_cache:
           keys:
+            - build-v4-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}-{{ .Revision }}
             - build-v3-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
       - restore_cache:
           keys:
             - data-v1-{{ .Branch }}-{{ .Revision }}
-            - data-v1--{{ .Revision }}
-            - data-v1-{{ .Branch }}-
-            - data-v1-master-
-            - data-v1-
       - run: *docker_auth
       - run: *setup_docker_registry
       - run: *pull_test_image
 
   run_integration_test:
-    description: Run a pytest marker inside test image
+    description: Run a pytest marker inside the test Docker image
     parameters:
       marker:
         type: string
@@ -103,6 +100,8 @@ commands:
           paths:
             - .coverage.<< parameters.coverage_name >>
 
+# ── Jobs ──────────────────────────────────────────────────────────────
+
 jobs:
   image_prep:
     <<: *machine_defaults
@@ -114,9 +113,8 @@ jobs:
           path: /tmp/src/qsiprep
       - restore_cache:
           keys:
+            - build-v4-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}-{{ .Revision }}
             - build-v3-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
-            - build-v1-{{ .Branch }}-{{ .Revision }}
-            - build-v1-master-
       - run: *docker_auth
       - run: *setup_docker_registry
       - run:
@@ -129,13 +127,12 @@ jobs:
             echo "BASE_IMAGE_NAME=$BASE_IMAGE_NAME" >> "$BASH_ENV"
             echo "BASE_TAG=$BASE_TAG" >> "$BASH_ENV"
       - run:
-          name: Determine build requirements
+          name: Determine whether test image build is required
           command: |
             if [[ -f /tmp/images/imageprep-success.marker ]]; then
-              echo "BUILD_PRODUCTION_IMAGE=0" >> "$BASH_ENV"
               echo "BUILD_TEST_IMAGE=0" >> "$BASH_ENV"
             else
-              echo "BUILD_PRODUCTION_IMAGE=1" >> "$BASH_ENV"
+              echo "No successful cached image prep for current Docker inputs; rebuilding test image."
               echo "BUILD_TEST_IMAGE=1" >> "$BASH_ENV"
             fi
       - run:
@@ -143,54 +140,36 @@ jobs:
           no_output_timeout: 90m
           command: |
             if ! docker manifest inspect "$BASE_IMAGE" > /dev/null 2>&1; then
+              echo "Base image $BASE_IMAGE not found, building..."
               docker build -f Dockerfile.base \
                 --platform linux/amd64 \
                 -t "$BASE_IMAGE" \
                 -t "$BASE_IMAGE_NAME:latest" .
               echo "BASE_WAS_BUILT=1" >> "$BASH_ENV"
             else
+              echo "Base image $BASE_IMAGE already exists."
               echo "BASE_WAS_BUILT=0" >> "$BASH_ENV"
             fi
       - run:
-          name: Build production image
-          no_output_timeout: 3h
-          command: |
-            if [[ "$BUILD_PRODUCTION_IMAGE" == "1" || "$BASE_WAS_BUILT" == "1" ]]; then
-              if [[ -n "$CIRCLE_TAG" ]]; then THISVERSION="$CIRCLE_TAG"; else THISVERSION="0+build"; fi
-              e=1 && for i in {1..5}; do
-                docker build \
-                  --target qsiprep \
-                  --rm=false \
-                  -t pennlinc/qsiprep:latest \
-                  --platform linux/amd64 \
-                  --build-arg BUILD_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
-                  --build-arg VCS_REF="$(git rev-parse --short HEAD)" \
-                  --build-arg VERSION="$THISVERSION" . \
-                && e=0 && break || sleep 15
-              done && [ "$e" -eq "0" ]
-            fi
-      - run:
-          name: Build test image
+          name: Build Docker image (test)
           no_output_timeout: 90m
           command: |
             if [[ "$BUILD_TEST_IMAGE" == "1" || "$BASE_WAS_BUILT" == "1" ]]; then
               docker build --target test --rm=false -t pennlinc/qsiprep:test --platform linux/amd64 .
             elif docker image inspect pennlinc/qsiprep:test > /dev/null 2>&1; then
-              echo "Reusing local test image."
+              echo "Reusing existing local test image (no Dockerfile/pixi/base-triggered rebuild required)."
             elif docker pull localhost:5000/qsiprep-test; then
               docker tag localhost:5000/qsiprep-test pennlinc/qsiprep:test
+              echo "Reusing cached test image from local registry (no Dockerfile/pixi/base-triggered rebuild required)."
             else
+              echo "No reusable test image found; rebuilding test image."
               docker build --target test --rm=false -t pennlinc/qsiprep:test --platform linux/amd64 .
             fi
       - run:
-          name: Verify images
-          command: |
-            if [[ "$BUILD_PRODUCTION_IMAGE" == "1" || "$BASE_WAS_BUILT" == "1" ]]; then
-              docker run --rm pennlinc/qsiprep:latest --version
-            fi
-            docker run --rm --entrypoint pytest pennlinc/qsiprep:test --version
+          name: Verify test image
+          command: docker run --rm --entrypoint pytest pennlinc/qsiprep:test --version
       - run:
-          name: Push base image if newly built
+          name: Push base image to Docker Hub (if newly built)
           command: |
             if [[ "$BASE_WAS_BUILT" == "1" ]] && docker image inspect "$BASE_IMAGE" > /dev/null 2>&1; then
               if [[ -n "$DOCKERHUB_TOKEN" ]]; then
@@ -199,13 +178,9 @@ jobs:
               fi
             fi
       - run:
-          name: Push images to local registry
+          name: Push test image to local registry
           no_output_timeout: 40m
           command: |
-            if [[ "$BUILD_PRODUCTION_IMAGE" == "1" || "$BASE_WAS_BUILT" == "1" ]]; then
-              docker tag pennlinc/qsiprep:latest localhost:5000/qsiprep
-              docker push localhost:5000/qsiprep
-            fi
             docker tag pennlinc/qsiprep:test localhost:5000/qsiprep-test
             docker push localhost:5000/qsiprep-test
       - run:
@@ -218,7 +193,7 @@ jobs:
             touch /tmp/images/imageprep-success.marker
             docker save registry:2 -o /tmp/images/registry.tar.gz
       - save_cache:
-          key: build-v3-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
+          key: build-v4-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}-{{ .Revision }}
           paths:
             - /tmp/docker
             - /tmp/images
@@ -278,121 +253,53 @@ jobs:
           paths:
             - /tmp/data
 
-  DSCSDSI:
-    <<: *machine_defaults
-    steps:
-      - checkout:
-          path: /tmp/src/qsiprep
-      - restore_build_and_data
-      - run_integration_test:
-          marker: dscsdsi
-          cpus: 4
-          coverage_name: dscsdsi
+  # ── Integration tests ────────────────────────────────────────────────
 
-  DSDTI_nofmap:
+  integration_test:
     <<: *machine_defaults
+    parameters:
+      marker:
+        type: string
+      cpus:
+        type: integer
+        default: 4
+      coverage_name:
+        type: string
+      skip_marker:
+        type: string
+        default: ""
     steps:
       - checkout:
           path: /tmp/src/qsiprep
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            SKIP_MARKER="<< parameters.skip_marker >>"
+            if [[ -z "$SKIP_MARKER" ]]; then SKIP_MARKER="<< parameters.coverage_name >>"; fi
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?'"$SKIP_MARKER"'\]' )" != "" ]]; then
+              echo "Skipping << parameters.marker >>"
+              circleci step halt
+            fi
       - restore_build_and_data
       - run_integration_test:
-          marker: dsdti_nofmap
-          cpus: 4
-          coverage_name: dsdti_nofmap
+          marker: << parameters.marker >>
+          cpus: << parameters.cpus >>
+          coverage_name: << parameters.coverage_name >>
 
-  DSDTI_synfmap:
-    <<: *machine_defaults
-    steps:
-      - checkout:
-          path: /tmp/src/qsiprep
-      - restore_build_and_data
-      - run_integration_test:
-          marker: dsdti_synfmap
-          cpus: 4
-          coverage_name: dsdti_synfmap
-
-  DRBUDDI_TENSORLine_EPI:
-    <<: *machine_defaults
-    steps:
-      - checkout:
-          path: /tmp/src/qsiprep
-      - restore_build_and_data
-      - run_integration_test:
-          marker: drbuddi_tensorline_epi
-          cpus: 4
-          coverage_name: drbuddi_tensorline_epi
-
-  DRBUDDI_SHORELine_EPI:
-    <<: *machine_defaults
-    steps:
-      - checkout:
-          path: /tmp/src/qsiprep
-      - restore_build_and_data
-      - run_integration_test:
-          marker: drbuddi_shoreline_epi
-          cpus: 4
-          coverage_name: drbuddi_shoreline_epi
-
-  DRBUDDI_eddy_rpe_series:
-    <<: *machine_defaults
-    steps:
-      - checkout:
-          path: /tmp/src/qsiprep
-      - restore_build_and_data
-      - run_integration_test:
-          marker: drbuddi_rpe
-          cpus: 4
-          coverage_name: drbuddi_rpe
-
-  maternal_brain_project:
-    <<: *machine_defaults
-    steps:
-      - checkout:
-          path: /tmp/src/qsiprep
-      - restore_build_and_data
-      - run_integration_test:
-          marker: maternal_brain_project
-          cpus: 4
-          coverage_name: maternal_brain_project
-
-  forrest_gump:
-    <<: *machine_defaults
-    steps:
-      - checkout:
-          path: /tmp/src/qsiprep
-      - restore_build_and_data
-      - run_integration_test:
-          marker: forrest_gump
-          cpus: 4
-          coverage_name: forrest_gump
-
-  forrest_gump_patch2self:
-    <<: *machine_defaults
-    steps:
-      - checkout:
-          path: /tmp/src/qsiprep
-      - restore_build_and_data
-      - run_integration_test:
-          marker: forrest_gump_patch2self
-          cpus: 4
-          coverage_name: forrest_gump_patch2self
-
-  synthstrip_synthseg_interfaces:
-    <<: *machine_defaults
-    steps:
-      - checkout:
-          path: /tmp/src/qsiprep
-      - restore_build_and_data
-      - run_integration_test:
-          marker: synthstrip or synthseg
-          cpus: 4
-          coverage_name: synthstrip_synthseg
+  # ── Unit tests ───────────────────────────────────────────────────────
 
   unit_tests:
     <<: *machine_defaults
     steps:
       - checkout:
           path: /tmp/src/qsiprep
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?unit_tests\]' )" != "" ]]; then
+              echo "Skipping unit_tests"
+              circleci step halt
+            fi
       - restore_build_and_data
       - run:
           name: Run unit tests
@@ -419,27 +326,7 @@ jobs:
           paths:
             - .coverage.unit_tests
 
-  IntramodalTemplate:
-    <<: *machine_defaults
-    steps:
-      - checkout:
-          path: /tmp/src/qsiprep
-      - restore_build_and_data
-      - run_integration_test:
-          marker: intramodal_template
-          cpus: 4
-          coverage_name: intramodal_template
-
-  MultiT1w:
-    <<: *machine_defaults
-    steps:
-      - checkout:
-          path: /tmp/src/qsiprep
-      - restore_build_and_data
-      - run_integration_test:
-          marker: multi_t1w
-          cpus: 4
-          coverage_name: multi_t1w
+  # ── Coverage & deployment ────────────────────────────────────────────
 
   merge_coverage:
     <<: *machine_defaults
@@ -460,23 +347,34 @@ jobs:
       - codecov/upload:
           file: /tmp/coverage/coverage.xml
 
-  deployable:
-    docker:
-      - image: busybox:latest
-    steps:
-      - run: echo Deploying!
-
-  deploy_docker:
+  build_and_deploy_docker:
     <<: *machine_defaults
+    environment:
+      TZ: "/usr/share/zoneinfo/America/New_York"
+      DOCKER_BUILDKIT: "1"
     steps:
       - checkout:
           path: /tmp/src/qsiprep
-      - restore_cache:
-          keys:
-            - build-v3-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
       - run: *docker_auth
-      - run: *setup_docker_registry
-      - run: *pull_from_registry
+      - run:
+          name: Build Docker image (production)
+          no_output_timeout: 3h
+          command: |
+            if [[ -n "$CIRCLE_TAG" ]]; then THISVERSION="$CIRCLE_TAG"; else THISVERSION="0+build"; fi
+            e=1 && for i in {1..5}; do
+              docker build \
+                --target qsiprep \
+                --rm=false \
+                -t pennlinc/qsiprep:latest \
+                --platform linux/amd64 \
+                --build-arg BUILD_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+                --build-arg VCS_REF="$(git rev-parse --short HEAD)" \
+                --build-arg VERSION="$THISVERSION" . \
+              && e=0 && break || sleep 15
+            done && [ "$e" -eq "0" ]
+      - run:
+          name: Verify production image
+          command: docker run --rm pennlinc/qsiprep:latest --version
       - run:
           name: Deploy to Docker Hub
           no_output_timeout: 40m
@@ -507,14 +405,21 @@ jobs:
           name: Upload packages to PyPI
           command: python -m twine upload -u __token__ -p "${PYPI_PASS}" dist/qsiprep*
 
+# ── Workflows ─────────────────────────────────────────────────────────
+
 workflows:
   version: 2
-  build_test_deploy:
+  run_tests:
     jobs:
       - image_prep:
           filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
             tags:
               only: /.*/
+
       - get_data:
           filters:
             branches:
@@ -523,47 +428,12 @@ workflows:
                 - /tests?\/.*/
             tags:
               only: /.*/
-      - DSCSDSI:
+
+      - integration_test:
+          name: DSCSDSI
+          marker: dscsdsi
+          coverage_name: dscsdsi
           requires: [image_prep, get_data]
-      - DSDTI_nofmap:
-          requires: [image_prep, get_data]
-      - DSDTI_synfmap:
-          requires: [image_prep, get_data]
-      - DRBUDDI_SHORELine_EPI:
-          requires: [image_prep, get_data]
-      - DRBUDDI_eddy_rpe_series:
-          requires: [image_prep, get_data]
-      - DRBUDDI_TENSORLine_EPI:
-          requires: [image_prep, get_data]
-      - maternal_brain_project:
-          requires: [image_prep, get_data]
-      - forrest_gump:
-          requires: [image_prep, get_data]
-      - forrest_gump_patch2self:
-          requires: [image_prep, get_data]
-      - unit_tests:
-          requires: [image_prep, get_data]
-      - IntramodalTemplate:
-          requires: [image_prep, get_data]
-      - MultiT1w:
-          requires: [image_prep, get_data]
-      - synthstrip_synthseg_interfaces:
-          requires: [image_prep, get_data]
-      - merge_coverage:
-          requires:
-            - DSCSDSI
-            - DSDTI_nofmap
-            - DSDTI_synfmap
-            - DRBUDDI_SHORELine_EPI
-            - DRBUDDI_eddy_rpe_series
-            - DRBUDDI_TENSORLine_EPI
-            - maternal_brain_project
-            - forrest_gump
-            - forrest_gump_patch2self
-            - unit_tests
-            - IntramodalTemplate
-            - MultiT1w
-            - synthstrip_synthseg_interfaces
           filters:
             branches:
               ignore:
@@ -571,36 +441,196 @@ workflows:
                 - /tests?\/.*/
             tags:
               only: /.*/
-      - deployable:
+
+      - integration_test:
+          name: DSDTI_nofmap
+          marker: dsdti_nofmap
+          coverage_name: dsdti_nofmap
+          requires: [image_prep, get_data]
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - integration_test:
+          name: DSDTI_synfmap
+          marker: dsdti_synfmap
+          coverage_name: dsdti_synfmap
+          requires: [image_prep, get_data]
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - integration_test:
+          name: DRBUDDI_TENSORLine_EPI
+          marker: drbuddi_tensorline_epi
+          coverage_name: drbuddi_tensorline_epi
+          requires: [image_prep, get_data]
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - integration_test:
+          name: DRBUDDI_SHORELine_EPI
+          marker: drbuddi_shoreline_epi
+          coverage_name: drbuddi_shoreline_epi
+          requires: [image_prep, get_data]
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - integration_test:
+          name: DRBUDDI_eddy_rpe_series
+          marker: drbuddi_rpe
+          coverage_name: drbuddi_rpe
+          requires: [image_prep, get_data]
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - integration_test:
+          name: maternal_brain_project
+          marker: maternal_brain_project
+          coverage_name: maternal_brain_project
+          requires: [image_prep, get_data]
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - integration_test:
+          name: forrest_gump
+          marker: forrest_gump
+          coverage_name: forrest_gump
+          requires: [image_prep, get_data]
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - integration_test:
+          name: forrest_gump_patch2self
+          marker: forrest_gump_patch2self
+          coverage_name: forrest_gump_patch2self
+          requires: [image_prep, get_data]
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - integration_test:
+          name: synthstrip_synthseg_interfaces
+          marker: synthstrip or synthseg
+          coverage_name: synthstrip_synthseg
+          skip_marker: synthstrip_synthseg_interfaces
+          requires: [image_prep, get_data]
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - integration_test:
+          name: IntramodalTemplate
+          marker: intramodal_template
+          coverage_name: intramodal_template
+          requires: [image_prep, get_data]
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - integration_test:
+          name: MultiT1w
+          marker: multi_t1w
+          coverage_name: multi_t1w
+          requires: [image_prep, get_data]
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - unit_tests:
+          requires: [image_prep, get_data]
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - merge_coverage:
           requires:
-            - image_prep
             - DSCSDSI
             - DSDTI_nofmap
             - DSDTI_synfmap
+            - DRBUDDI_TENSORLine_EPI
             - DRBUDDI_SHORELine_EPI
             - DRBUDDI_eddy_rpe_series
-            - DRBUDDI_TENSORLine_EPI
             - maternal_brain_project
             - forrest_gump
             - forrest_gump_patch2self
-            - unit_tests
+            - synthstrip_synthseg_interfaces
             - IntramodalTemplate
             - MultiT1w
-            - synthstrip_synthseg_interfaces
+            - unit_tests
+          filters:
+            branches:
+              ignore:
+                - /docs?\/.*/
+                - /tests?\/.*/
+            tags:
+              only: /.*/
+
+      - build_and_deploy_docker:
+          requires:
+            - image_prep
           filters:
             branches:
               only: master
             tags:
               only: /.*/
-      - deploy_docker:
-          requires: [deployable]
-          filters:
-            branches:
-              only: master
-            tags:
-              only: /.*/
+
       - deploy_pypi:
-          requires: [deployable]
+          requires:
+            - build_and_deploy_docker
           filters:
             branches:
               ignore: /.*/
