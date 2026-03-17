@@ -44,9 +44,7 @@ The main features of this software are
   2. Automatically generated preprocessing pipelines that correctly group, distortion correct,
      motion correct, denoise, coregister and resample your scans, producing visual reports and
      QC metrics.
-  3. A system for running state-of-the-art reconstruction pipelines that include algorithms
-     from Dipy_, MRTrix_, `DSI Studio`_  and others.
-  4. A novel motion correction algorithm that works on DSI and random q-space sampling schemes
+  3. A novel motion correction algorithm that works on DSI and random q-space sampling schemes
 
 .. image:: https://github.com/PennLINC/qsiprep/raw/master/docs/_static/workflow_full.png
 
@@ -81,5 +79,5 @@ Note
 
 The *QSIPrep* pipeline uses much of the code from *fMRIPrep*.
 It is critical to note that the similarities in the code
-**do not imply that the authors of QSIPrep in any way endorse or support this code or its
+**do not imply that the authors of fMRIPrep in any way endorse or support this code or its
 pipelines**.

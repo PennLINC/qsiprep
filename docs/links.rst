@@ -18,4 +18,3 @@
 .. _`tckgen`: https://mrtrix.readthedocs.io/en/latest/reference/commands/tckgen.html
 .. _SIFT2: https://mrtrix.readthedocs.io/en/latest/reference/commands/tcksift2.html
 .. _tckglobal: https://mrtrix.readthedocs.io/en/latest/reference/commands/tckglobal.html
-
