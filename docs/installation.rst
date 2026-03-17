@@ -49,7 +49,8 @@ You may invoke ``docker`` directly::
         -v ${FREESURFER_HOME}/license.txt:/opt/freesurfer/license.txt \
         pennlinc/qsiprep:latest \
         /filepath/to/data/dir /filepath/to/output/dir participant \
-        --fs-license-file /opt/freesurfer/license.txt
+        --fs-license-file /opt/freesurfer/license.txt \
+        --output-resolution 2
 
 For example: ::
 
@@ -60,7 +61,8 @@ For example: ::
         pennlinc/qsiprep:latest \
         $HOME/fullds005 $HOME/dockerout participant \
         --ignore fieldmaps \
-        --fs-license-file /opt/freesurfer/license.txt
+        --fs-license-file /opt/freesurfer/license.txt \
+        --output-resolution 2
 
 If you are running Freesurfer as part of *QSIPrep*,
 you will need to mount your Freesurfer license.txt file when invoking ``docker`` ::
@@ -71,7 +73,8 @@ you will need to mount your Freesurfer license.txt file when invoking ``docker``
         -v ${FREESURFER_HOME}/license.txt:/opt/freesurfer/license.txt \
         pennlinc/qsiprep:latest \
         $HOME/fullds005 -v $HOME/dockerout participant \
-        --fs-license-file /opt/freesurfer/license.txt
+        --fs-license-file /opt/freesurfer/license.txt \
+        --output-resolution 2
 
 
 See `External Dependencies`_ for more information on what is included in the Docker image
@@ -95,7 +98,8 @@ As with Docker, you will need to bind the Freesurfer license.txt when running Ap
         -B $HOME/fullds005,$HOME/dockerout,${FREESURFER_HOME}/license.txt:/opt/freesurfer/license.txt \
         qsiprep-<version>.sif \
         $HOME/fullds005 $HOME/dockerout participant \
-        --fs-license-file /opt/freesurfer/license.txt
+        --fs-license-file /opt/freesurfer/license.txt \
+        --output-resolution 2
 
 .. note::
     **Running QSIPrep with Apptainer on Non-Internet Nodes**
