@@ -11,7 +11,7 @@ Building a pipeline
 *******************
 
 *QSIPrep* builds a pipeline based on your BIDS inputs. In general the pipeline will incorporate
-all the data it knows how to handle (i.e. fieldmaps, dMRI and anatomical data) automatically.
+all the data it knows how to handle (i.e., fieldmaps, dMRI, and anatomical data) automatically.
 There may be cases where you want to change the default behavior, particularly in regard to
 
   1. :ref:`merging`
@@ -27,7 +27,7 @@ There may be cases where you want to change the default behavior, particularly i
 .. _merging:
 
 Merging multiple scans from a session
-======================================
+=====================================
 
 For q-space imaging sequences it is common to have multiple separate scans to
 acquire the entire sampling scheme.
@@ -52,11 +52,11 @@ scenarios can be controlled by the ``--separate-all-dwis`` argument. If your stu
 has multiple sessions, DWI scans will *never* be combined across sessions.
 Merging only occurs within a session.
 
-If ``--separate-all-dwis`` is present in the commandline call, each dwi
+If ``--separate-all-dwis`` is present in the commandline call, each DWI
 scan in the ``dwi`` directories will be processed independently. You will have one
 preprocessed output per each DWI file in your input.
 
-Otherwise (default) the DWI scans will be merged (i.e. their images will be concatenated).
+Otherwise (default) the DWI scans will be merged (i.e., their images will be concatenated).
 The merging affects the pipeline at different stages.  If all DWIs in a session
 are in the same PE direction, they will be merged into a single series. If there are
 two PE directions detected in the DWI scans and ``'fieldmaps'`` is not in ``ignore``,
@@ -149,7 +149,7 @@ turned off using ``--dwi-no-b0-harmonization``.
   which may introduce artifacts on normalized data.
 
 Together, denoising (MP-PCA or patch2self), Gibbs unringing B1 bias field
-correction and b=0 intensity normalization are referred to as *denoising* in
+correction, and b=0 intensity normalization are referred to as *denoising* in
 *QSIPrep*. Each of these image processing operations has assumptions about its
 inputs and changes the distribution of noise in its outputs. Although the
 inclusion of each operation can be decided by the user, the order in which
@@ -215,7 +215,7 @@ Outputs of *QSIPrep*
      one :abbr:`HTML (hypertext markup language)` per subject,
      depicting images that provide a sanity check for each step of the pipeline.
 
-  2. **Pre-processed imaging data** such as anatomical segmentations, realigned and resampled
+  2. **Preprocessed imaging data** such as anatomical segmentations, realigned, and resampled
      diffusion weighted images and the corresponding corrected gradient files in FSL and MRTrix
      format.
 
@@ -248,12 +248,12 @@ Preprocessed data (*QSIPrep derivatives*)
 =========================================
 
 There are additional files, called "Derivatives",
-written to ``<output_dir>/qsiprep/sub-<subject_label>/``.
+written to ``<output_dir>/qsiprep/sub-<label>/[ses-<label>/]``.
 
-Derivatives related to anatomical files are nearly identical to those produced by ``fMRIprep`` and
+Derivatives related to anatomical files are nearly identical to those produced by ``fMRIPrep`` and
 can be found in the ``anat`` subfolder.
 One major difference is that the anatomical derivatives are in LPS+ orientation and are realigned to the AC-PC,
-while ``fMRIprep``'s are in RAS+ orientation and retain the original anatomical images' orientation ::
+while ``fMRIPrep``'s are in RAS+ orientation and retain the original anatomical images' orientation ::
 
   sub-<label>/[ses-<label>/]
     anat/
@@ -370,7 +370,6 @@ Confounds
 
 See implementation on :func:`~qsiprep.workflows.dwi.confounds.init_dwi_confs_wf`.
 
-
 For each DWI processed by *QSIPrep*, a
 ``<output_folder>/qsiprep/sub-<label>/func/<source_entities>_desc-confounds_timeseries.tsv``
 file will be generated. These are :abbr:`TSV (tab-separated values)` tables,
@@ -466,20 +465,23 @@ Processing the *Subject Anatomical Reference* T1w or T2w images
     :simple_form: yes
 
     from qsiprep.workflows.anatomical import init_anat_preproc_wf
-    wf = init_anat_preproc_wf(omp_nthreads=1,
-                              reportlets_dir='.',
-                              output_dir='.',
-                              dwi_only=False,
-                              infant_mode=False,
-                              template='MNI152NLin2009cAsym',
-                              output_spaces=['T1w'],
-                              output_resolution=1.25,
-                              skull_strip_template='OASIS',
-                              force_spatial_normalization=True,
-                              freesurfer=True,
-                              debug=False,
-                              hires=True,
-                              num_t1w=1)
+
+    wf = init_anat_preproc_wf(
+        omp_nthreads=1,
+        reportlets_dir='.',
+        output_dir='.',
+        dwi_only=False,
+        infant_mode=False,
+        template='MNI152NLin2009cAsym',
+        output_spaces=['T1w'],
+        output_resolution=1.25,
+        skull_strip_template='OASIS',
+        force_spatial_normalization=True,
+        freesurfer=True,
+        debug=False,
+        hires=True,
+        num_t1w=1,
+    )
 
 As of version 0.18 *QSIPrep* has been changed to be very flexible with anatomical
 processing workflows. Versions prior to 0.18 were focused on the T1w images and
@@ -521,17 +523,17 @@ Processing the *Anatomical Reference* images
      `Longitudinal T1w processing`_).
   3. Brain extraction is performed using ``SynthStrip``.
 
-.. figure:: _static/brainextraction_t1.svg
-    :scale: 100%
+    .. figure:: _static/brainextraction_t1.svg
+        :scale: 100%
 
-    Brain extraction
+        Brain extraction
 
   4. Brain tissue segmentation is performed using ``SynthStrip``
 
-.. figure:: _static/segmentation.svg
-    :scale: 100%
+    .. figure:: _static/segmentation.svg
+        :scale: 100%
 
-    Brain tissue segmentation.
+        Brain tissue segmentation.
 
   5. Rigid alignment to the *subject anatomical reference*. This can take
      two forms. If the *template anatomical reference* is a standard
@@ -551,7 +553,7 @@ Processing the *Anatomical Reference* images
 Handling Lesions and abnormalities
 ----------------------------------
 
-When processing images from patients with focal brain lesions (e.g. stroke, tumor
+When processing images from patients with focal brain lesions (e.g., stroke, tumor
 resection), it is possible to provide a lesion mask to be used during spatial
 normalization to MNI-space [Brett2001]_.
 ANTs will use this mask to minimize warping of healthy tissue into damaged
@@ -593,12 +595,13 @@ flag, which forces the estimation of an unbiased template.
 
 
 Processing Infant Data
-=======================
+======================
 
 When processing infant DWI data, users may add ``--infant`` to their
 *QSIPrep* call. This will swap the default MNI152NLin2009cAsym template
 with the MNI infant template. It is highly advisable to also include
 ``--dwi-only`` to avoid problems with T1w skull-stripping.
+
 
 .. _dwi_overview:
 
@@ -612,40 +615,44 @@ DWI preprocessing
     :simple_form: yes
 
     from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
-    wf = init_dwi_preproc_wf(dwi_only=False,
-                             scan_groups={'dwi_series': ['fake.nii'],
-                              'fieldmap_info': {'suffix': None},
-                              'dwi_series_pedir': 'j'},
-                              source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
-                              output_prefix='',
-                              ignore=[],
-                              b0_threshold=100,
-                              motion_corr_to='iterative',
-                              b0_to_t1w_transform='Rigid',
-                              hmc_model='3dSHORE',
-                              hmc_transform='Rigid',
-                              shoreline_iters=2,
-                              impute_slice_threshold=0,
-                              eddy_config=None,
-                              reportlets_dir='.',
-                              output_spaces=['T1w'],
-                              dwi_denoise_window=5,
-                              denoise_method='dwidenoise',
-                              unringing_method='mrdegibbs',
-                              b1_biascorr_stage='final',
-                              no_b0_harmonization=False,
-                              denoise_before_combining=True,
-                              template='MNI152NLin2009cAsym',
-                              output_dir='.',
-                              omp_nthreads=1,
-                              fmap_bspline=False,
-                              fmap_demean=True,
-                              use_syn=True,
-                              force_syn=False,
-                              low_mem=False,
-                              sloppy=True,
-                              layout=None)
 
+    wf = init_dwi_preproc_wf(
+        dwi_only=False,
+        scan_groups={
+            'dwi_series': ['fake.nii'],
+            'fieldmap_info': {'suffix': None},
+            'dwi_series_pedir': 'j',
+        },
+        source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
+        output_prefix='',
+        ignore=[],
+        b0_threshold=100,
+        motion_corr_to='iterative',
+        b0_to_t1w_transform='Rigid',
+        hmc_model='3dSHORE',
+        hmc_transform='Rigid',
+        shoreline_iters=2,
+        impute_slice_threshold=0,
+        eddy_config=None,
+        reportlets_dir='.',
+        output_spaces=['T1w'],
+        dwi_denoise_window=5,
+        denoise_method='dwidenoise',
+        unringing_method='mrdegibbs',
+        b1_biascorr_stage='final',
+        no_b0_harmonization=False,
+        denoise_before_combining=True,
+        template='MNI152NLin2009cAsym',
+        output_dir='.',
+        omp_nthreads=1,
+        fmap_bspline=False,
+        fmap_demean=True,
+        use_syn=True,
+        force_syn=False,
+        low_mem=False,
+        sloppy=True,
+        layout=None,
+    )
 
 Preprocessing of :abbr:`DWI (Diffusion Weighted Image)` files is
 split into multiple sub-workflows described below.
@@ -653,18 +660,18 @@ split into multiple sub-workflows described below.
 
 .. _fsl_wf:
 
-Head-motion / Eddy Current/ Distortion correction (FSL)
--------------------------------------------------------
+Head-motion / Eddy Current / Distortion correction (FSL)
+--------------------------------------------------------
 
 :func:`qsiprep.workflows.dwi.fsl.init_fsl_hmc_wf`
 
 FSL provides the most widely-used tools for head motion correction, eddy
-current correction and susceptibility distortion correction. These tools
+current correction, and susceptibility distortion correction. These tools
 are designed to work directly with one another and share a file format that
 is unique to their workflow.
 
 To ensure that the FSL workflow works as intended, all inputs are forced into
-to the FSL standard orientation. The head motion, eddy current and suscebtibility
+to the FSL standard orientation. The head motion, eddy current, and susceptibility
 distortion corrections are applied at the end of ``eddy``, which means that
 there will be *two* total interpolations in the FSL-based *QSIPrep* workflow, as
 the final interpolation into T1w/AC-PC space is done externally in ANTs.
@@ -688,16 +695,21 @@ and eddy current correction will be performed. The workflow looks like this:
     :simple_form: yes
 
     from qsiprep.workflows.dwi.fsl import init_fsl_hmc_wf
-    wf = init_fsl_hmc_wf({'dwi_series':['dwi1.nii', 'dwi2.nii'],
-                                'fieldmap_info': {'suffix': None},
-                                'dwi_series_pedir': 'j'},
-                         b0_threshold=100,
-                         impute_slice_threshold=0.,
-                         fmap_demean=False,
-                         fmap_bspline=False,
-                         eddy_config=None,
-                         source_file='/path/to/dwi/sub-X_dwi.nii.gz',
-                         omp_nthreads=1)
+
+    wf = init_fsl_hmc_wf(
+        {
+            'dwi_series': ['dwi1.nii', 'dwi2.nii'],
+            'fieldmap_info': {'suffix': None},
+            'dwi_series_pedir': 'j',
+        },
+        b0_threshold=100,
+        impute_slice_threshold=0.,
+        fmap_demean=False,
+        fmap_bspline=False,
+        eddy_config=None,
+        source_file='/path/to/dwi/sub-X_dwi.nii.gz',
+        omp_nthreads=1,
+    )
 
 
 PEPOLAR (TOPUP) Distortion Correction
@@ -712,19 +724,25 @@ dedicated fieldmaps (in the ``fmap/`` directory) or DWI series
     :simple_form: yes
 
     from qsiprep.workflows.dwi.fsl import init_fsl_hmc_wf
-    wf = init_fsl_hmc_wf({'dwi_series': [
-                          '.../opposite/sub-1/dwi/sub-1_dir-AP_dwi.nii.gz'],
-                         'dwi_series_pedir': 'j',
-                         'fieldmap_info': {'suffix': 'rpe_series',
-                          'rpe_series': ['.../opposite/sub-1/dwi/sub-1_dir-PA_dwi.nii.gz']},
-                         'concatenated_bids_name': 'sub-1'},
-                         b0_threshold=100,
-                         impute_slice_threshold=0.,
-                         fmap_demean=False,
-                         fmap_bspline=False,
-                         eddy_config=None,
-                         source_file='/path/to/dwi/sub-X_dwi.nii.gz',
-                         omp_nthreads=1)
+
+    wf = init_fsl_hmc_wf(
+        {
+            'dwi_series': ['.../opposite/sub-1/dwi/sub-1_dir-AP_dwi.nii.gz'],
+            'dwi_series_pedir': 'j',
+            'fieldmap_info': {
+                'suffix': 'rpe_series',
+                'rpe_series': ['.../opposite/sub-1/dwi/sub-1_dir-PA_dwi.nii.gz'],
+            },
+            'concatenated_bids_name': 'sub-1',
+        },
+        b0_threshold=100,
+        impute_slice_threshold=0.,
+        fmap_demean=False,
+        fmap_bspline=False,
+        eddy_config=None,
+        source_file='/path/to/dwi/sub-X_dwi.nii.gz',
+        omp_nthreads=1,
+    )
 
 
 Fieldmap-based Distortion Correction
@@ -739,20 +757,29 @@ For details see :ref:`dwi_sdc`.
     :simple_form: yes
 
     from qsiprep.workflows.dwi.fsl import init_fsl_hmc_wf
-    wf = init_fsl_hmc_wf({'dwi_series': ['.../phasediff/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
-                                        '.../phasediff/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz'],
-                          'fieldmap_info': {'phasediff': '.../phasediff/sub-1/fmap/sub-1_phasediff.nii.gz',
-                                            'magnitude1': '.../magnitude1/sub-1/fmap/sub-1_magnitude1.nii.gz',
-                                            'suffix': 'phasediff'},
-                          'dwi_series_pedir': 'j',
-                          'concatenated_bids_name': 'sub-1_dir-AP'},
-                         b0_threshold=100,
-                         impute_slice_threshold=0.,
-                         fmap_demean=False,
-                         fmap_bspline=False,
-                         eddy_config=None,
-                         source_file='/path/to/dwi/sub-X_dwi.nii.gz',
-                         omp_nthreads=1)
+
+    wf = init_fsl_hmc_wf(
+        {
+            'dwi_series': [
+                '.../phasediff/sub-1/dwi/sub-1_dir-AP_run-1_dwi.nii.gz',
+                '.../phasediff/sub-1/dwi/sub-1_dir-AP_run-2_dwi.nii.gz',
+            ],
+            'fieldmap_info': {
+                'phasediff': '.../phasediff/sub-1/fmap/sub-1_phasediff.nii.gz',
+                'magnitude1': '.../magnitude1/sub-1/fmap/sub-1_magnitude1.nii.gz',
+                'suffix': 'phasediff',
+            },
+            'dwi_series_pedir': 'j',
+            'concatenated_bids_name': 'sub-1_dir-AP',
+        },
+        b0_threshold=100,
+        impute_slice_threshold=0.,
+        fmap_demean=False,
+        fmap_bspline=False,
+        eddy_config=None,
+        source_file='/path/to/dwi/sub-X_dwi.nii.gz',
+        omp_nthreads=1,
+    )
 
 
 .. _configure_eddy:
@@ -765,7 +792,6 @@ options, you can specify them in a JSON file and pass that to *QSIPrep*
 using the ``--eddy-config`` option. An example (default) eddy config json can
 be viewed or downloaded `here
 <https://github.com/PennLINC/qsiprep/blob/master/qsiprep/data/eddy_params.json>`__
-
 
 
 .. _dwi_hmc:
@@ -803,7 +829,7 @@ is probably not a great idea.
 Susceptibility distortion correction is run as part of this pipeline to be
 consistent with the ``TOPUP``/``eddy`` workflow.
 
-Ultimately a list of 6 (or 12)-parameters per time-step is written and
+Ultimately a list of 6 (or 12) parameters per time-step is written and
 fed to the :ref:`confounds workflow <dwi_confounds>`. These are used to
 estimate framewise displacement.  Additionally, measures of model fits
 are saved for each slice for display in a carpet plot-like thing.
@@ -814,24 +840,29 @@ are saved for each slice for display in a carpet plot-like thing.
     :simple_form: yes
 
     from qsiprep.workflows.dwi.hmc_sdc import init_qsiprep_hmcsdc_wf
-    wf = init_qsiprep_hmcsdc_wf({'dwi_series':['dwi1.nii', 'dwi2.nii'],
-                                'fieldmap_info': {'suffix': None},
-                                'dwi_series_pedir': 'j'},
-                                source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
-                                b0_threshold=100,
-                                hmc_transform='Affine',
-                                hmc_model='3dSHORE',
-                                hmc_align_to='iterative',
-                                template='MNI152NLin2009cAsym',
-                                shoreline_iters=1,
-                                impute_slice_threshold=0,
-                                omp_nthreads=1,
-                                fmap_bspline=False,
-                                fmap_demean=False,
-                                use_syn=True,
-                                force_syn=False,
-                                name='qsiprep_hmcsdc_wf',
-                                dwi_metadata={})
+
+    wf = init_qsiprep_hmcsdc_wf(
+        {
+            'dwi_series':['dwi1.nii', 'dwi2.nii'],
+            'fieldmap_info': {'suffix': None},
+            'dwi_series_pedir': 'j',
+        },
+        source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
+        b0_threshold=100,
+        hmc_transform='Affine',
+        hmc_model='3dSHORE',
+        hmc_align_to='iterative',
+        template='MNI152NLin2009cAsym',
+        shoreline_iters=1,
+        impute_slice_threshold=0,
+        omp_nthreads=1,
+        fmap_bspline=False,
+        fmap_demean=False,
+        use_syn=True,
+        force_syn=False,
+        name='qsiprep_hmcsdc_wf',
+        dwi_metadata={},
+    )
 
 
 .. _dwi_sdc:
@@ -910,6 +941,7 @@ In this case the ``b0_anat_coreg`` workflow instead registers the b=0 reference
 to an AC-PC-oriented template and the rigid components of the coregistration
 transform are extracted.
 
+
 .. _dwi_ref:
 
 DWI reference image estimation
@@ -922,10 +954,13 @@ DWI reference image estimation
     :simple_form: yes
 
     from qsiprep.workflows.anatomical import init_dwi_reference_wf
-    wf = init_dwi_reference_wf(omp_nthreads=1,
-                               gen_report=True,
-                               source_file="sub-1_dwi.nii.gz",
-                               register_t1=True)
+
+    wf = init_dwi_reference_wf(
+        omp_nthreads=1,
+        gen_report=True,
+        source_file="sub-1_dwi.nii.gz",
+        register_t1=True,
+    )
 
 This workflow estimates a reference image for a DWI series. This
 procedure is different from the DWI reference image workflow in the
@@ -945,14 +980,17 @@ Pre-processed DWIs in a different space
     :simple_form: yes
 
     from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
-    wf = init_dwi_trans_wf(source_file='sub-1_dwi.nii.gz',
-                           template="ACPC",
-                           output_resolution=1.2,
-                           use_compression=True,
-                           to_mni=False,
-                           write_local_bvecs=True,
-                           mem_gb=3,
-                           omp_nthreads=1)
+
+    wf = init_dwi_trans_wf(
+        source_file='sub-1_dwi.nii.gz',
+        template="ACPC",
+        output_resolution=1.2,
+        use_compression=True,
+        to_mni=False,
+        write_local_bvecs=True,
+        mem_gb=3,
+        omp_nthreads=1,
+    )
 
 A DWI series is resampled to an output space. The ``output_resolution`` is
 specified on the commandline call. All transformations, including head motion
@@ -979,11 +1017,13 @@ b0 to T1w registration
     :simple_form: yes
 
     from qsiprep.workflows.dwi.registration import init_b0_to_anat_registration_wf
+
     wf = init_b0_to_anat_registration_wf(
-                                         mem_gb=3,
-                                         omp_nthreads=1,
-                                         transform_type="Rigid",
-                                         write_report=False)
+        mem_gb=3,
+        omp_nthreads=1,
+        transform_type="Rigid",
+        write_report=False,
+    )
 
 This just uses `antsRegistration`.
 
