@@ -17,7 +17,7 @@ _docker_auth: &docker_auth
   name: Docker authentication
   command: |
     if [[ -n "$DOCKERHUB_TOKEN" ]]; then
-      echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+      echo "$DOCKERHUB_TOKEN" | docker login -u $DOCKERHUB_USERNAME --password-stdin
     fi
 
 _setup_docker_registry: &setup_docker_registry
@@ -31,7 +31,7 @@ _setup_docker_registry: &setup_docker_registry
       docker pull registry:2
     fi
     docker run -d -p 5000:5000 --restart=always --name=registry \
-      -v /tmp/docker:/var/lib/registry registry:2
+        -v /tmp/docker:/var/lib/registry registry:2
 
 _pull_test_image: &pull_test_image
   name: Pull and tag test image from local registry
@@ -57,15 +57,13 @@ commands:
       - run: *pull_test_image
 
   run_integration_test:
-    description: Run a pytest marker inside the test Docker image
+    description: Run a pytest-marked integration test inside the test Docker image
     parameters:
       marker:
         type: string
       cpus:
         type: integer
         default: 4
-      coverage_name:
-        type: string
     steps:
       - run:
           name: Run qsiprep (<< parameters.marker >>)
@@ -74,7 +72,7 @@ commands:
             mkdir -p /tmp/out /tmp/work /tmp/coverage
             docker run --rm=false \
               -e CIRCLE_CPUS=<< parameters.cpus >> \
-              -e COVERAGE_FILE=/coverage/.coverage.<< parameters.coverage_name >> \
+              -e COVERAGE_FILE=/coverage/.coverage.<< parameters.marker >> \
               -v /tmp/src/qsiprep:/tmp/src/qsiprep:ro \
               -v /tmp/data:/data:ro \
               -v /tmp/out:/out \
@@ -88,17 +86,15 @@ commands:
               --data_dir=/data --output_dir=/out --working_dir=/work \
               qsiprep
       - run:
-          name: Clean large artifacts
+          name: Clean up large artifacts
           when: always
-          command: |
-            find /tmp/out/ -name "*.nii.gz" -type f -delete 2>/dev/null || true
-            find /tmp/out/ -name "*.fib.gz" -type f -delete 2>/dev/null || true
+          command: find /tmp/out/ -name "*.nii.gz" -type f -delete 2>/dev/null || true
       - store_artifacts:
           path: /tmp/out
       - persist_to_workspace:
           root: /tmp/coverage
           paths:
-            - .coverage.<< parameters.coverage_name >>
+            - .coverage.<< parameters.marker >>
 
 # ── Jobs ──────────────────────────────────────────────────────────────
 
@@ -123,9 +119,9 @@ jobs:
             export BASE_IMAGE=$( grep "BASE_IMAGE=" Dockerfile | head -1 | cut -d= -f2 )
             export BASE_IMAGE_NAME=${BASE_IMAGE%:*}
             export BASE_TAG=${BASE_IMAGE#*:}
-            echo "BASE_IMAGE=$BASE_IMAGE" >> "$BASH_ENV"
-            echo "BASE_IMAGE_NAME=$BASE_IMAGE_NAME" >> "$BASH_ENV"
-            echo "BASE_TAG=$BASE_TAG" >> "$BASH_ENV"
+            echo "BASE_IMAGE=$BASE_IMAGE" >> $BASH_ENV
+            echo "BASE_IMAGE_NAME=$BASE_IMAGE_NAME" >> $BASH_ENV
+            echo "BASE_TAG=$BASE_TAG" >> $BASH_ENV
       - run:
           name: Determine whether test image build is required
           command: |
@@ -139,12 +135,12 @@ jobs:
           name: Build base image if needed
           no_output_timeout: 90m
           command: |
-            if ! docker manifest inspect "$BASE_IMAGE" > /dev/null 2>&1; then
+            if ! docker manifest inspect $BASE_IMAGE > /dev/null 2>&1; then
               echo "Base image $BASE_IMAGE not found, building..."
               docker build -f Dockerfile.base \
                 --platform linux/amd64 \
-                -t "$BASE_IMAGE" \
-                -t "$BASE_IMAGE_NAME:latest" .
+                -t $BASE_IMAGE \
+                -t $BASE_IMAGE_NAME:latest .
               echo "BASE_WAS_BUILT=1" >> "$BASH_ENV"
             else
               echo "Base image $BASE_IMAGE already exists."
@@ -155,7 +151,12 @@ jobs:
           no_output_timeout: 90m
           command: |
             if [[ "$BUILD_TEST_IMAGE" == "1" || "$BASE_WAS_BUILT" == "1" ]]; then
-              docker build --target test --rm=false -t pennlinc/qsiprep:test --platform linux/amd64 .
+              docker build \
+                --target test \
+                --rm=false \
+                -t pennlinc/qsiprep:test \
+                --platform linux/amd64 \
+                --build-arg VCS_REF="$(git rev-parse --short HEAD)" .
             elif docker image inspect pennlinc/qsiprep:test > /dev/null 2>&1; then
               echo "Reusing existing local test image (no Dockerfile/pixi/base-triggered rebuild required)."
             elif docker pull localhost:5000/qsiprep-test; then
@@ -163,7 +164,23 @@ jobs:
               echo "Reusing cached test image from local registry (no Dockerfile/pixi/base-triggered rebuild required)."
             else
               echo "No reusable test image found; rebuilding test image."
-              docker build --target test --rm=false -t pennlinc/qsiprep:test --platform linux/amd64 .
+              docker build \
+                --target test \
+                --rm=false \
+                -t pennlinc/qsiprep:test \
+                --platform linux/amd64 \
+                --build-arg VCS_REF="$(git rev-parse --short HEAD)" .
+            fi
+      - run:
+          name: Guard test image revision
+          command: |
+            EXPECTED_REF="$(git rev-parse --short HEAD)"
+            IMAGE_REF="$(docker image inspect pennlinc/qsiprep:test --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"
+            echo "Expected test image ref: ${EXPECTED_REF}"
+            echo "Actual test image ref: ${IMAGE_REF:-<missing>}"
+            if [[ -z "$IMAGE_REF" || "$IMAGE_REF" != "$EXPECTED_REF" ]]; then
+              echo "Test image revision does not match checkout. Refusing to run tests with stale image."
+              exit 1
             fi
       - run:
           name: Verify test image
@@ -171,10 +188,10 @@ jobs:
       - run:
           name: Push base image to Docker Hub (if newly built)
           command: |
-            if [[ "$BASE_WAS_BUILT" == "1" ]] && docker image inspect "$BASE_IMAGE" > /dev/null 2>&1; then
+            if [[ "$BASE_WAS_BUILT" == "1" ]] && docker image inspect $BASE_IMAGE > /dev/null 2>&1; then
               if [[ -n "$DOCKERHUB_TOKEN" ]]; then
-                docker push "$BASE_IMAGE"
-                docker push "$BASE_IMAGE_NAME:latest"
+                docker push $BASE_IMAGE
+                docker push $BASE_IMAGE_NAME:latest
               fi
             fi
       - run:
@@ -185,7 +202,9 @@ jobs:
             docker push localhost:5000/qsiprep-test
       - run:
           name: Docker registry garbage collection
-          command: docker exec registry /bin/registry garbage-collect --delete-untagged /etc/docker/registry/config.yml
+          command: |
+            docker exec registry /bin/registry garbage-collect --delete-untagged \
+              /etc/docker/registry/config.yml
       - run:
           name: Record successful image prep
           command: |
@@ -263,8 +282,6 @@ jobs:
       cpus:
         type: integer
         default: 4
-      coverage_name:
-        type: string
       skip_marker:
         type: string
         default: ""
@@ -275,7 +292,7 @@ jobs:
           name: Check whether build should be skipped
           command: |
             SKIP_MARKER="<< parameters.skip_marker >>"
-            if [[ -z "$SKIP_MARKER" ]]; then SKIP_MARKER="<< parameters.coverage_name >>"; fi
+            if [[ -z "$SKIP_MARKER" ]]; then SKIP_MARKER="<< parameters.marker >>"; fi
             if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?'"$SKIP_MARKER"'\]' )" != "" ]]; then
               echo "Skipping << parameters.marker >>"
               circleci step halt
@@ -284,7 +301,6 @@ jobs:
       - run_integration_test:
           marker: << parameters.marker >>
           cpus: << parameters.cpus >>
-          coverage_name: << parameters.coverage_name >>
 
   # ── Unit tests ───────────────────────────────────────────────────────
 
@@ -338,12 +354,16 @@ jobs:
       - run:
           name: Merge coverage files
           command: |
-            python3 -m pip install coverage
+            pyenv local 3
+            pip install coverage
             cd /tmp/src/qsiprep
-            python3 -m coverage combine /tmp/coverage/
-            python3 -m coverage xml -o /tmp/coverage/coverage.xml
+            coverage combine /tmp/coverage/
+            coverage xml -o /tmp/coverage/coverage.xml
       - store_artifacts:
           path: /tmp/coverage
+      - run:
+          name: Quick fix for GPG error in Codecov
+          command: mkdir -p ~/.gnupg
       - codecov/upload:
           file: /tmp/coverage/coverage.xml
 
@@ -360,7 +380,11 @@ jobs:
           name: Build Docker image (production)
           no_output_timeout: 3h
           command: |
-            if [[ -n "$CIRCLE_TAG" ]]; then THISVERSION="$CIRCLE_TAG"; else THISVERSION="0+build"; fi
+            if [[ -n "$CIRCLE_TAG" ]]; then
+              THISVERSION="$CIRCLE_TAG"
+            else
+              THISVERSION="0+build"
+            fi
             e=1 && for i in {1..5}; do
               docker build \
                 --target qsiprep \
@@ -432,7 +456,6 @@ workflows:
       - integration_test:
           name: DSCSDSI
           marker: dscsdsi
-          coverage_name: dscsdsi
           requires: [image_prep, get_data]
           filters:
             branches:
@@ -445,7 +468,6 @@ workflows:
       - integration_test:
           name: DSDTI_nofmap
           marker: dsdti_nofmap
-          coverage_name: dsdti_nofmap
           requires: [image_prep, get_data]
           filters:
             branches:
@@ -458,7 +480,6 @@ workflows:
       - integration_test:
           name: DSDTI_synfmap
           marker: dsdti_synfmap
-          coverage_name: dsdti_synfmap
           requires: [image_prep, get_data]
           filters:
             branches:
@@ -471,7 +492,6 @@ workflows:
       - integration_test:
           name: DRBUDDI_TENSORLine_EPI
           marker: drbuddi_tensorline_epi
-          coverage_name: drbuddi_tensorline_epi
           requires: [image_prep, get_data]
           filters:
             branches:
@@ -484,7 +504,6 @@ workflows:
       - integration_test:
           name: DRBUDDI_SHORELine_EPI
           marker: drbuddi_shoreline_epi
-          coverage_name: drbuddi_shoreline_epi
           requires: [image_prep, get_data]
           filters:
             branches:
@@ -497,7 +516,6 @@ workflows:
       - integration_test:
           name: DRBUDDI_eddy_rpe_series
           marker: drbuddi_rpe
-          coverage_name: drbuddi_rpe
           requires: [image_prep, get_data]
           filters:
             branches:
@@ -510,7 +528,6 @@ workflows:
       - integration_test:
           name: maternal_brain_project
           marker: maternal_brain_project
-          coverage_name: maternal_brain_project
           requires: [image_prep, get_data]
           filters:
             branches:
@@ -523,7 +540,6 @@ workflows:
       - integration_test:
           name: forrest_gump
           marker: forrest_gump
-          coverage_name: forrest_gump
           requires: [image_prep, get_data]
           filters:
             branches:
@@ -536,7 +552,6 @@ workflows:
       - integration_test:
           name: forrest_gump_patch2self
           marker: forrest_gump_patch2self
-          coverage_name: forrest_gump_patch2self
           requires: [image_prep, get_data]
           filters:
             branches:
@@ -549,7 +564,6 @@ workflows:
       - integration_test:
           name: synthstrip_synthseg_interfaces
           marker: synthstrip or synthseg
-          coverage_name: synthstrip_synthseg
           skip_marker: synthstrip_synthseg_interfaces
           requires: [image_prep, get_data]
           filters:
@@ -563,7 +577,6 @@ workflows:
       - integration_test:
           name: IntramodalTemplate
           marker: intramodal_template
-          coverage_name: intramodal_template
           requires: [image_prep, get_data]
           filters:
             branches:
@@ -576,7 +589,6 @@ workflows:
       - integration_test:
           name: MultiT1w
           marker: multi_t1w
-          coverage_name: multi_t1w
           requires: [image_prep, get_data]
           filters:
             branches:
