@@ -333,7 +333,7 @@ jobs:
               -w /tmp/src/qsiprep \
               --entrypoint pytest \
               pennlinc/qsiprep:test \
-              -n 4 -vv -o log_cli=true -m "not integration and not (synthstrip or synthseg)" \
+              -n 4 -vv -o log_cli=true -m "not integration and not synthstrip" \
               --cov-append --cov-branch --cov-report term-missing --cov=qsiprep \
               --data_dir=/data --output_dir=/out --working_dir=/work \
               qsiprep
@@ -563,8 +563,7 @@ workflows:
 
       - integration_test:
           name: synthstrip_synthseg_interfaces
-          marker: synthstrip or synthseg
-          skip_marker: synthstrip_synthseg_interfaces
+          marker: synthstrip
           requires: [image_prep, get_data]
           filters:
             branches:
