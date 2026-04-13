@@ -1,14 +1,16 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
+from importlib.resources import files
+
 from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-from pkg_resources import resource_filename as pkgrf
 
 from ... import config
 from ...interfaces.itk import ACPCReport, AffineToRigid
 from ...interfaces.niworkflows import ANTSRegistrationRPT
+from ...utils.resources import as_path
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
@@ -206,7 +208,7 @@ def init_direct_b0_acpc_wf(write_report=True, name='b0_anat_coreg'):
     workflow = Workflow(name=name)
 
     # Defines a coregistration operation
-    ants_settings = pkgrf('qsiprep', 'data/intermodal_ACPC.json')
+    ants_settings = as_path(files('qsiprep') / 'data' / 'intermodal_ACPC.json')
     acpc_reg = pe.Node(
         ANTSRegistrationRPT(generate_report=write_report, from_file=ants_settings),
         name='acpc_reg',

@@ -64,7 +64,7 @@ def test_synthstrip_interface(datasets, tmp_path_factory):
     assert mask_img.shape == in_img.shape
 
 
-@pytest.mark.synthseg
+@pytest.mark.synthstrip
 def test_synthseg_interface(datasets, tmp_path_factory):
     """Test qsiprep.interfaces.freesurfer.SynthSeg."""
     tmpdir = tmp_path_factory.mktemp('test_synthseg')

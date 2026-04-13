@@ -1,0 +1,239 @@
+ARG BASE_IMAGE=ubuntu:jammy-20250730
+ARG TAG_FREESURFER=26.1.0
+ARG TAG_ANTS=26.1.2
+ARG TAG_MRTRIX3=26.1.0
+ARG TAG_3TISSUE=26.1.0
+ARG TAG_DSISTUDIO=26.1.2
+ARG TAG_AFNI=AFNI_25.2.09
+ARG TAG_TORTOISE=26.1.3
+ARG TAG_TORTOISECUDA=26.1.3
+ARG TAG_SYNB0=26.1.2
+
+FROM pennlinc/qsiprep-freesurfer:${TAG_FREESURFER} AS build_freesurfer
+FROM pennlinc/qsiprep-ants:${TAG_ANTS} AS build_ants
+FROM pennlinc/qsiprep-mrtrix3:${TAG_MRTRIX3} AS build_mrtrix3
+FROM pennlinc/qsiprep-3tissue:${TAG_3TISSUE} AS build_3tissue
+FROM pennlinc/qsiprep-dsistudio:${TAG_DSISTUDIO} AS build_dsistudio
+FROM afni/afni_make_build:${TAG_AFNI} AS build_afni
+FROM pennlinc/qsiprep-drbuddi:${TAG_TORTOISE} AS build_tortoise
+FROM pennlinc/qsiprep-drbuddicuda:${TAG_TORTOISECUDA} AS build_tortoisecuda
+FROM pennlinc/qsiprep-synb0:${TAG_SYNB0} AS build_synb0
+FROM nvidia/cuda:12.2.2-runtime-ubuntu22.04 AS base
+
+## ANTs
+COPY --from=build_ants /opt/ants /opt/ants
+ENV ANTSPATH="/opt/ants/bin" \
+    LD_LIBRARY_PATH="/opt/ants/lib:$LD_LIBRARY_PATH" \
+    PATH="$PATH:/opt/ants/bin" \
+    ANTS_DEPS="zlib1g"
+
+## DSI Studio
+ENV DSI_STUDIO_DEPS="libqt5charts5 libqt5opengl5 libqt5svg5 libqt5gui5 libqt5widgets5 libqt5sql5 libqt5network5" \
+    QT_PLUGIN_PATH="/usr/lib/x86_64-linux-gnu/qt5/plugins" \
+    QML2_IMPORT_PATH="/usr/lib/x86_64-linux-gnu/qt5/qml" \
+    PATH="/opt/dsi-studio:/opt/dsi-studio/dsi_studio_64:$PATH"
+
+## MRtrix3
+COPY --from=build_mrtrix3 /opt/mrtrix3-latest /opt/mrtrix3-latest
+## MRtrix3-3Tissue
+COPY --from=build_3tissue /opt/3Tissue /opt/3Tissue
+ENV PATH="$PATH:/opt/mrtrix3-latest/bin:/opt/3Tissue/bin" \
+    MRTRIX3_DEPS="bzip2 ca-certificates curl libpng16-16 libblas3 liblapack3"
+
+## Freesurfer
+COPY --from=build_freesurfer /opt/freesurfer /opt/freesurfer
+# Simulate SetUpFreeSurfer.sh
+ENV FSL_DIR="/opt/conda/envs/fslqsiprep" \
+    OS="Linux" \
+    FS_OVERRIDE=0 \
+    FIX_VERTEX_AREA="" \
+    FSF_OUTPUT_FORMAT="nii.gz" \
+    FREESURFER_HOME="/opt/freesurfer"
+ENV SUBJECTS_DIR="$FREESURFER_HOME/subjects" \
+    FUNCTIONALS_DIR="$FREESURFER_HOME/sessions" \
+    MNI_DIR="$FREESURFER_HOME/mni" \
+    LOCAL_DIR="$FREESURFER_HOME/local" \
+    MINC_BIN_DIR="$FREESURFER_HOME/mni/bin" \
+    MINC_LIB_DIR="$FREESURFER_HOME/mni/lib" \
+    MNI_DATAPATH="$FREESURFER_HOME/mni/data"
+ENV PERL5LIB="$MINC_LIB_DIR/perl5/5.8.5" \
+    MNI_PERL5LIB="$MINC_LIB_DIR/perl5/5.8.5" \
+    PATH="$FREESURFER_HOME/bin:$FSFAST_HOME/bin:$FREESURFER_HOME/tktools:$MINC_BIN_DIR:$PATH" \
+    FREESURFER_DEPS="bc ca-certificates curl libgomp1 libxmu6 libxt6 tcsh perl"
+RUN chmod a+rx /opt/freesurfer/bin/mri_synthseg /opt/freesurfer/bin/mri_synthstrip
+
+# SynB0-DISCO
+COPY --from=build_synb0 /opt/synb0 /opt/synb0
+ENV SYNB0_ATLASES=/opt/synb0/atlases
+
+## AFNI
+# Find libraries with `ldd $BINARIES | grep afni`
+COPY --link --from=build_afni \
+    /opt/afni/install/libf2c.so  \
+    /opt/afni/install/libmri.so  \
+    /opt/afni/install/libSUMA.so  \
+    /usr/local/lib/
+COPY --link --from=build_afni \
+    /opt/afni/install/3dAutobox \
+    /opt/afni/install/3dAutomask \
+    /opt/afni/install/3dFWHMx \
+    /opt/afni/install/3dQwarp \
+    /opt/afni/install/3dSeg \
+    /opt/afni/install/3dSkullStrip \
+    /opt/afni/install/3dTcat \
+    /opt/afni/install/3dTshift \
+    /opt/afni/install/3dTsplit4D \
+    /opt/afni/install/3dTstat \
+    /opt/afni/install/3dUnifize \
+    /opt/afni/install/3dWarp \
+    /opt/afni/install/3dZeropad \
+    /opt/afni/install/3dcalc \
+    /opt/afni/install/3drefit \
+    /opt/afni/install/3dresample \
+    /opt/afni/install/3dvolreg \
+    /usr/local/bin/
+
+ENV PATH="$PATH:/usr/local/bin" \
+    AFNI_INSTALLDIR=/usr/local/bin \
+    AFNI_IMSAVE_WARNINGS=NO
+
+## TORTOISE
+COPY --from=build_tortoise /src/TORTOISEV4/bin /src/TORTOISEV4/bin
+COPY --from=build_tortoise /src/TORTOISEV4/settings /src/TORTOISEV4/settings
+COPY --from=build_tortoisecuda /src/TORTOISEV4/bin/*cuda /src/TORTOISEV4/bin/
+ENV PATH="$PATH:/src/TORTOISEV4/bin" \
+    TORTOISE_DEPS="libfftw3-3"
+
+# Create a shared $HOME directory
+RUN useradd -m -s /bin/bash -G users qsiprep
+WORKDIR /home/qsiprep
+ENV HOME="/home/qsiprep" \
+    MKL_NUM_THREADS=1 \
+    OMP_NUM_THREADS=1 \
+    MRTRIX_NTHREADS=1 \
+    KMP_WARNINGS=0 \
+    CRN_SHARED_DATA=/niworkflows_data \
+    IS_DOCKER_8395080871=1 \
+    ARTHOME="/opt/art" \
+    DIPY_HOME=/home/qsiprep/.dipy
+
+ENV FSLOUTPUTTYPE="NIFTI_GZ" \
+    FSLMULTIFILEQUIT="TRUE" \
+    FSLLOCKDIR="" \
+    FSLMACHINELIST="" \
+    FSLREMOTECALL="" \
+    FSLGECUDAQ="cuda.q"
+
+RUN apt-get update -qq \
+    && apt-get install -y -q --no-install-recommends \
+        bc \
+        binutils \
+        bzip2 \
+        ca-certificates \
+        curl \
+        wget \
+        git \
+        gnupg \
+        gsl-bin \
+        graphviz \
+        libblas3 \
+        libboost-filesystem1.74.0 \
+        libboost-program-options1.74.0 \
+        libboost-serialization1.74.0 \
+        libboost-system1.74.0 \
+        libboost-thread1.74.0 \
+        libfftw3-3 \
+        libglib2.0-0 \
+        libgl1 \
+        libglu1-mesa \
+        libglw1-mesa \
+        libgomp1 \
+        libjpeg62 \
+        liblapack3 \
+        libpng16-16 \
+        libquadmath0 \
+        libtiff5 \
+        libxm4 \
+        libxmu6 \
+        libxt6 \
+        netpbm \
+        perl \
+        tcsh \
+        xfonts-base \
+        xvfb \
+        zlib1g \
+        ${MRTRIX3_DEPS} \
+        ${DSI_STUDIO_DEPS} \
+        ${TORTOISE_DEPS} \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -sSL --retry 5 -o /tmp/libxp6.deb https://upenn.box.com/shared/static/reyyundn0l3guvjzghrrv6t4w6md2tjd.deb \
+    && dpkg -i /tmp/libxp6.deb \
+    && rm /tmp/libxp6.deb \
+    && curl -sSL --retry 5 -o /tmp/libpng.deb http://snapshot.debian.org/archive/debian-security/20160113T213056Z/pool/updates/main/libp/libpng/libpng12-0_1.2.49-1%2Bdeb7u2_amd64.deb \
+    && (cd /tmp && ar x libpng.deb && tar xf data.tar.* && cp lib/x86_64-linux-gnu/libpng12.so.0* /usr/local/lib/ && rm -f libpng.deb data.tar.* control.tar.* debian-binary) \
+    && apt-get install -f --no-install-recommends \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && gsl2_path="$(find / -name 'libgsl.so.19' || printf '')" \
+    && if [ -n "$gsl2_path" ]; then ln -sfv "$gsl2_path" "$(dirname "$gsl2_path")/libgsl.so.0"; fi \
+    && ldconfig
+
+# Do not install Convert3D with conda (v1.4.2). That was causing segfaults when running c3d in the container.
+RUN echo "Downloading Convert3D ..." \
+    && mkdir -p /opt/convert3d-nightly \
+    && curl -fsSL --retry 5 https://sourceforge.net/projects/c3d/files/c3d/Nightly/c3d-nightly-Linux-x86_64.tar.gz/download \
+    | tar -xz -C /opt/convert3d-nightly --strip-components 1 \
+    --exclude "c3d-1.0.0-Linux-x86_64/lib" \
+    --exclude "c3d-1.0.0-Linux-x86_64/share" \
+    --exclude "c3d-1.0.0-Linux-x86_64/bin/c3d_gui"
+ENV C3DPATH="/opt/convert3d-nightly" \
+    PATH="/opt/convert3d-nightly/bin:$PATH"
+
+# Install Qt runtime deps for DSI Studio and copy binaries
+COPY --from=build_dsistudio /opt/dsi-studio /opt/dsi-studio
+
+# Install ACPC-detect
+WORKDIR /opt/art
+ENV PATH="/opt/art/bin:$PATH"
+RUN cd /opt/art \
+    && curl -fsSL https://osf.io/73h5s/download \
+    | tar xz --strip-components 1
+
+# Unless otherwise specified each process should only use one thread - nipype
+# will handle parallelization
+ENV \
+    HOME="/home/qsiprep" \
+    MKL_NUM_THREADS=1 \
+    OMP_NUM_THREADS=1 \
+    MRTRIX_NTHREADS=1 \
+    KMP_WARNINGS=0 \
+    CRN_SHARED_DATA=/niworkflows_data \
+    IS_DOCKER_8395080871=1 \
+    ARTHOME="/opt/art" \
+    DIPY_HOME=/home/qsiprep/.dipy \
+    QT_PLUGIN_PATH="/usr/lib/x86_64-linux-gnu/qt5/plugins" \
+    QML2_IMPORT_PATH="/usr/lib/x86_64-linux-gnu/qt5/qml" \
+    LD_LIBRARY_PATH="/opt/conda/envs/qsiprep/lib/python3.10/site-packages/nvidia/cudnn/lib:/opt/freesurfer/lib:${LD_LIBRARY_PATH}"
+
+WORKDIR /root/
+
+# Make it ok for singularity on CentOS
+RUN if [ -f /usr/lib/x86_64-linux-gnu/libQt5Core.so.5 ]; then \
+      strip --remove-section=.note.ABI-tag /usr/lib/x86_64-linux-gnu/libQt5Core.so.5; \
+    fi && ldconfig
+
+# Make singularity mount directories
+RUN  mkdir -p /sngl/data \
+    && mkdir /sngl/qsiprep-output \
+    && mkdir /sngl/out \
+    && mkdir /sngl/scratch \
+    && mkdir /sngl/eddy \
+    && mkdir /sngl/filter \
+    && chmod a+rwx /sngl/*
+
+LABEL org.label-schema.name="qsiprep-base" \
+      org.label-schema.description="QSIPrep base image - runtime dependencies without the qsiprep package" \
+      org.label-schema.url="https://qsiprep.readthedocs.io/" \
+      org.label-schema.vcs-url="https://github.com/PennLINC/qsiprep" \
+      org.label-schema.schema-version="1.0"
