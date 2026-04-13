@@ -16,8 +16,8 @@ _machine_defaults: &machine_defaults
 _docker_auth: &docker_auth
   name: Docker authentication
   command: |
-    if [[ -n "$DOCKERHUB_TOKEN" ]]; then
-      echo "$DOCKERHUB_TOKEN" | docker login -u $DOCKERHUB_USERNAME --password-stdin
+    if [[ -n "$DOCKER_PASS" ]]; then
+      echo "$DOCKER_PASS" | docker login -u $DOCKER_USER --password-stdin
     fi
 
 _setup_docker_registry: &setup_docker_registry
@@ -189,7 +189,7 @@ jobs:
           name: Push base image to Docker Hub (if newly built)
           command: |
             if [[ "$BASE_WAS_BUILT" == "1" ]] && docker image inspect $BASE_IMAGE > /dev/null 2>&1; then
-              if [[ -n "$DOCKERHUB_TOKEN" ]]; then
+              if [[ -n "$DOCKER_PASS" ]]; then
                 docker push $BASE_IMAGE
                 docker push $BASE_IMAGE_NAME:latest
               fi
@@ -403,7 +403,7 @@ jobs:
           name: Deploy to Docker Hub
           no_output_timeout: 40m
           command: |
-            if [[ -n "$DOCKERHUB_TOKEN" ]]; then
+            if [[ -n "$DOCKER_PASS" ]]; then
               docker tag pennlinc/qsiprep:latest pennlinc/qsiprep:unstable
               docker push pennlinc/qsiprep:unstable
               if [[ -n "$CIRCLE_TAG" ]]; then
