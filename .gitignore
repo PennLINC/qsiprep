@@ -103,3 +103,4 @@ notebooks/*
 # pixi environments
 .pixi/*
 !.pixi/config.toml
+.cursor/rules/cursorenv.mdc

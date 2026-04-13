@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=pennlinc/qsiprep-base:20260310-3
+ARG BASE_IMAGE=pennlinc/qsiprep-base:20260413
 
 FROM ghcr.io/prefix-dev/pixi:0.58.0 AS build
 RUN apt-get update && \
