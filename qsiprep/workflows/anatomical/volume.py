@@ -32,6 +32,8 @@ Anatomical reference preprocessing workflows
 
 """
 
+from importlib.resources import files
+
 from nipype.interfaces import afni, ants, mrtrix3
 from nipype.interfaces import utility as niu
 from nipype.interfaces.ants import BrainExtraction, N4BiasFieldCorrection
@@ -40,7 +42,6 @@ from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from niworkflows.interfaces.images import TemplateDimensions
 from niworkflows.interfaces.reportlets.masks import ROIsPlot
-from pkg_resources import resource_filename as pkgr
 
 from ... import config
 from ...interfaces import Conform, DerivativesDataSink
@@ -55,6 +56,7 @@ from ...interfaces.freesurfer import (
 from ...interfaces.itk import AffineToRigid, DisassembleTransform
 from ...interfaces.niworkflows import RobustMNINormalizationRPT
 from ...utils.misc import fix_multi_source_name
+from ...utils.resources import as_path
 
 ANTS_VERSION = BrainExtraction().version or '<ver>'
 FS_VERSION = '7.3.1'
@@ -301,10 +303,12 @@ FreeSurfer version {FS_VERSION}. """
         name='rigid_acpc_resample_mask',
     )
 
+    in_lut = as_path(files('qsiprep') / 'data' / 'FreeSurferColorLUT.txt')
+    in_config = as_path(files('qsiprep') / 'data' / 'FreeSurfer2dseg.txt')
     acpc_aseg_to_dseg = pe.Node(
         mrtrix3.LabelConvert(
-            in_lut=pkgr('qsiprep', 'data/FreeSurferColorLUT.txt'),
-            in_config=pkgr('qsiprep', 'data/FreeSurfer2dseg.txt'),
+            in_lut=in_lut,
+            in_config=in_config,
             out_file='acpc_dseg.nii.gz',
         ),
         name='acpc_aseg_to_dseg',
@@ -496,7 +500,7 @@ image using an affine transformation in antsRegistration.
     )
 
     # Perform registrations
-    settings = pkgr('qsiprep', 'data/affine.json')
+    settings = as_path(files('qsiprep') / 'data' / 'affine.json')
     t2_brain_to_t1_brain = pe.Node(
         ants.Registration(from_file=settings),
         name='t2_brain_to_t1_brain',
@@ -648,7 +652,9 @@ A {contrast}-reference map was computed after registration of
 
         n4_correct = pe.Node(n4_interface, name='n4_correct', n_procs=omp_nthreads)
 
-        outputnode.inputs.template_transforms = [pkgr('qsiprep', 'data/itkIdentityTransform.txt')]
+        outputnode.inputs.template_transforms = [
+            as_path(files('qsiprep') / 'data' / 'itkIdentityTransform.txt')
+        ]
 
         workflow.connect([
             (anat_conform, outputnode, [(('out_file', _get_first), 'template')]),
@@ -760,14 +766,10 @@ The anatomical reference image was reoriented into AC-PC alignment via
 a 6-DOF transform extracted from a full Affine registration to the
 {anatomical_template} template. """
 
-    acpc_settings = pkgr(
-        'qsiprep',
-        (
-            'data/intramodal_ACPC.json'
-            if not config.execution.sloppy
-            else 'data/intramodal_ACPC_sloppy.json'
-        ),
+    acpc_json = (
+        'intramodal_ACPC.json' if not config.execution.sloppy else 'intramodal_ACPC_sloppy.json'
     )
+    acpc_settings = as_path(files('qsiprep') / 'data' / acpc_json)
     acpc_reg = pe.Node(
         RobustMNINormalizationRPT(
             float=True,
@@ -821,7 +823,7 @@ estimated via symmetric nonlinear registration (SyN) using antsRegistration (@an
     if config.execution.sloppy:
         config.loggers.workflow.info('Using QuickSyN')
         # Requires a warp file: make an inaccurate one
-        settings = pkgr('qsiprep', 'data/quick_syn.json')
+        settings = as_path(files('qsiprep') / 'data' / 'quick_syn.json')
         anat_norm_interface = RobustMNINormalizationRPT(
             float=True, generate_report=True, settings=[settings]
         )

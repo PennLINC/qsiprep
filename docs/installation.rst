@@ -49,7 +49,8 @@ You may invoke ``docker`` directly::
         -v ${FREESURFER_HOME}/license.txt:/opt/freesurfer/license.txt \
         pennlinc/qsiprep:latest \
         /filepath/to/data/dir /filepath/to/output/dir participant \
-        --fs-license-file /opt/freesurfer/license.txt
+        --fs-license-file /opt/freesurfer/license.txt \
+        --output-resolution 2
 
 For example: ::
 
@@ -60,7 +61,8 @@ For example: ::
         pennlinc/qsiprep:latest \
         $HOME/fullds005 $HOME/dockerout participant \
         --ignore fieldmaps \
-        --fs-license-file /opt/freesurfer/license.txt
+        --fs-license-file /opt/freesurfer/license.txt \
+        --output-resolution 2
 
 If you are running Freesurfer as part of *QSIPrep*,
 you will need to mount your Freesurfer license.txt file when invoking ``docker`` ::
@@ -71,7 +73,8 @@ you will need to mount your Freesurfer license.txt file when invoking ``docker``
         -v ${FREESURFER_HOME}/license.txt:/opt/freesurfer/license.txt \
         pennlinc/qsiprep:latest \
         $HOME/fullds005 -v $HOME/dockerout participant \
-        --fs-license-file /opt/freesurfer/license.txt
+        --fs-license-file /opt/freesurfer/license.txt \
+        --output-resolution 2
 
 
 See `External Dependencies`_ for more information on what is included in the Docker image
@@ -95,41 +98,43 @@ As with Docker, you will need to bind the Freesurfer license.txt when running Ap
         -B $HOME/fullds005,$HOME/dockerout,${FREESURFER_HOME}/license.txt:/opt/freesurfer/license.txt \
         qsiprep-<version>.sif \
         $HOME/fullds005 $HOME/dockerout participant \
-        --fs-license-file /opt/freesurfer/license.txt
+        --fs-license-file /opt/freesurfer/license.txt \
+        --output-resolution 2
 
 .. note::
     **Running QSIPrep with Apptainer on Non-Internet Nodes**
 
-    QSIPrep relies on TemplateFlow to provide standard anatomical templates. By default, it downloads 
-    necessary files into the ``$TEMPLATEFLOW_HOME`` directory (default: ``$HOME/.cache/templateflow``). 
-    However, when running with ``--containall``, the default location may not be accessible, and any 
+    QSIPrep relies on TemplateFlow to provide standard anatomical templates. By default, it downloads
+    necessary files into the ``$TEMPLATEFLOW_HOME`` directory (default: ``$HOME/.cache/templateflow``).
+    However, when running with ``--containall``, the default location may not be accessible, and any
     missing templates will be tentatively downloaded into the temporary QSIPrep working directory instead.
     To avoid this, you must always set and bind ``TEMPLATEFLOW_HOME`` explicitly.
 
     Steps to ensure successful execution:
 
-    1. On an **internet-enabled node**, set and bind the ``TEMPLATEFLOW_HOME`` variable to a persistent 
-       directory before running QSIPrep. This will ensure all necessary templates are downloaded into the 
+    1. On an **internet-enabled node**, set and bind the ``TEMPLATEFLOW_HOME`` variable to a persistent
+       directory before running QSIPrep. This will ensure all necessary templates are downloaded into the
        specified location:
-    
+
        .. code-block:: sh
-    
+
           export TEMPLATEFLOW_HOME=/path/to/persistent/templateflow
           apptainer run --cleanenv --containall \
             -B ${TEMPLATEFLOW_HOME}:${TEMPLATEFLOW_HOME} \
             --env "TEMPLATEFLOW_HOME=$TEMPLATEFLOW_HOME" \
             /path/to/qsiprep_<VERSION>.sif <your commands>
 
-    2. If the ``TEMPLATEFLOW_HOME`` directory is not accessible on your target HPC node, manually copy it 
+    2. If the ``TEMPLATEFLOW_HOME`` directory is not accessible on your target HPC node, manually copy it
        to the target system after the first run.
 
-    3. On nodes without internet access, bind the copied ``TEMPLATEFLOW_HOME`` directory and set the 
+    3. On nodes without internet access, bind the copied ``TEMPLATEFLOW_HOME`` directory and set the
        environment variable as described above before running QSIPrep.
      4. It may help to run a single subject or session on its own before running many jobs that access the templates. The single run will download the necessary templates and prevent multiple jobs from attempting to download the templates simultaneously.
 
-    
-    For additional troubleshooting, see `fmriprep docs <https://fmriprep.org/en/stable/faq.html#how-do-you-use-templateflow-in-the-absence-of-access-to-the-internet>`_ 
+
+    For additional troubleshooting, see `fmriprep docs <https://fmriprep.org/en/stable/faq.html#how-do-you-use-templateflow-in-the-absence-of-access-to-the-internet>`_
     or `this thread on Neurostars <https://neurostars.org/t/issue-with-qsiprep-templateflow-on-hpc-host-with-no-internet-access/31259/10?u=pierre-nedelec>`_.
+
 
 *********************
 External Dependencies

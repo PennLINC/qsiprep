@@ -25,9 +25,9 @@ dependencies = [
     "jinja2 < 3.1",
     "matplotlib",
     "networkx ~= 2.8.8",
-    "nibabel <= 5.2.0",
+    "nibabel <= 5.3.2",
     "nilearn == 0.10.1",
-    "nipype == 1.9.1",
+    "nipype == 1.11.0",
     "nireports >= 24.0.3",
     "niworkflows >=1.9,<= 1.10",
     "numpy <= 1.26.3",
@@ -45,6 +45,15 @@ dependencies = [
     "transforms3d",
     "vtk",
     "xvfbwrapper",
+    "coverage",
+    "pytest",
+    "pytest-cov",
+    "pytest-env",
+    "pytest-xdist",
+    "templateflow",
+    "tensorflow",
+    "tensorflow-gpu == 2.8.4",
+    "torch",
 ]
 dynamic = ["version"]
 
@@ -116,6 +125,64 @@ source = "vcs"
 
 [tool.hatch.build.hooks.vcs]
 version-file = "qsiprep/_version.py"
+
+#
+# Pixi configuration
+#
+
+[tool.pixi.workspace]
+channels = ["https://fsl.fmrib.ox.ac.uk/fsldownloads/fslconda/public", "conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.activation.env]
+FSLDIR = "$CONDA_PREFIX"
+FSLOUTPUTTYPE = "NIFTI_GZ"
+
+[tool.pixi.environments]
+default = { features = ["editable"], solve-group = "default" }
+test = { features = ["editable", "tests"], solve-group = "default" }
+qsiprep = { features = ["production", "container"], solve-group = "production" }
+
+[tool.pixi.feature.editable.pypi-dependencies]
+qsiprep = { path = ".", editable = true }
+
+[tool.pixi.feature.production.pypi-dependencies]
+qsiprep = { path = ".", editable = false }
+
+[tool.pixi.tasks]
+
+[tool.pixi.pypi-options.dependency-overrides]
+numpy = ">=1.26,<1.27"
+
+[tool.pixi.dependencies]
+python = "3.10.*"
+nodejs = "20.*"
+mkl = "*"
+mkl-service = "*"
+numpy = "1.26.*"
+scipy = "1.11.*"
+matplotlib = "3.8.*"
+pandas = "1.5.*"
+h5py = "3.10.*"
+graphviz = "*"
+pandoc = "*"
+ants = "2.6.*"
+connectome-workbench-cli = { version = "2.*", build = "*qt6*" }
+fsl-bet2 = "*"
+fsl-flirt = "*"
+fsl-fast4 = "*"
+fsl-fugue = "*"
+fsl-mcflirt = "*"
+fsl-miscmaths = "*"
+fsl-mist = "*"
+fsl-topup = "*"
+fsl-eddy = "*"
+fsl-eddy_qc = "*"
+"fsl-eddy-cuda-11.0" = "*"
+
+[tool.pixi.feature.container.dependencies]
+git = "*"
+git-annex = { version = "*", build = "alldep*" }
 
 #
 # Developer tool configurations
@@ -199,13 +266,12 @@ markers = [
     "dsdti_nofmap: test 13",
     "dsdti_synfmap: test 14",
     "dsdti_topup: test 15",
-    "intramodal_template: test 16",
-    "multi_t1w: test 22",
+    "intramodal_template: IntramodalTemplate integration test",
+    "multi_t1w: MultiT1w integration test",
     "maternal_brain_project: multi-shell with GRE field map",
     "forrest_gump: single-shell with GRE field map",
     "forrest_gump_patch2self: single-shell with GRE field map and patch2self",
-    "synthstrip: test synthstrip interface",
-    "synthseg: test synthseg interface",
+    "synthstrip: test synthstrip and synthseg interfaces",
 ]
 env = [
     "RUNNING_PYTEST = 1",
@@ -226,3 +292,12 @@ exclude_lines = [
     'raise NotImplementedError',
     'warnings\.warn',
 ]
+
+[tool.codespell]
+skip = '.git,*.pdf,*.svg,*.html,dataset_description.json,*.gii,*.bib,*.lock'
+# te - TE
+# Weill - name
+# reson - Reson. abbreviation in citation
+# DNE: acronym for does not exist
+# fo: acronym for file object
+ignore-words-list = 'te,weill,reson,DNE,fo,Gage,nd,pres,fixel,assertIn'

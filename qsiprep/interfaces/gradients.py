@@ -2,6 +2,7 @@
 
 import logging
 import os
+import subprocess
 
 import nibabel as nb
 import numpy as np
@@ -636,16 +637,41 @@ class LocalGradientRotation(SimpleInterface):
 
 
 def get_fsl_motion_params(itk_file, ref_file, working_dir):
+    import SimpleITK as sitk
+
+    tmp_itk_file = fname_presuffix(itk_file, newpath=working_dir, suffix='_itk.tfm', use_ext=False)
     tmp_fsl_file = fname_presuffix(itk_file, newpath=working_dir, suffix='_FSL.xfm', use_ext=False)
+    # c3d_affine_tool may segfault on some binary ITK .mat files, so
+    # round-trip through a text ITK transform first.
+    sitk.WriteTransform(sitk.ReadTransform(itk_file), tmp_itk_file)
+
     # Use the same file for src and ref
-    fsl_convert_cmd = (
-        'c3d_affine_tool '
-        f'-ref {ref_file} '
-        f'-src {ref_file} '
-        f'-itk {itk_file} '
-        f'-ras2fsl -o {tmp_fsl_file}'
+    fsl_convert_cmd = [
+        'c3d_affine_tool',
+        '-ref',
+        ref_file,
+        '-src',
+        ref_file,
+        '-itk',
+        tmp_itk_file,
+        '-ras2fsl',
+        '-o',
+        tmp_fsl_file,
+    ]
+    completed = subprocess.run(
+        fsl_convert_cmd,
+        check=False,
+        capture_output=True,
+        text=True,
     )
-    os.system(fsl_convert_cmd)
+    if completed.returncode != 0 or not os.path.exists(tmp_fsl_file):
+        raise RuntimeError(
+            'Failed to convert ITK transform to FSL matrix with c3d_affine_tool. '
+            f'Command: {" ".join(fsl_convert_cmd)} '
+            f'Return code: {completed.returncode} '
+            f'Stdout: {completed.stdout} '
+            f'Stderr: {completed.stderr}'
+        )
 
     def get_measures(line):
         line = line.strip().split()
