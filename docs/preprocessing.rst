@@ -791,7 +791,7 @@ Configuring ``eddy``
 options, you can specify them in a JSON file and pass that to *QSIPrep*
 using the ``--eddy-config`` option. An example (default) eddy config json can
 be viewed or downloaded `here
-<https://github.com/PennLINC/qsiprep/blob/master/qsiprep/data/eddy_params.json>`__
+<https://github.com/PennLINC/qsiprep/blob/main/qsiprep/data/eddy_params.json>`__
 
 
 .. _dwi_hmc:
