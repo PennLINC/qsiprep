@@ -31,7 +31,7 @@ jobs:
       - name: Find submitting repository
         if: ${{ steps.latest-commit.outputs.run_lockfile_update == 'true' }}
         id: get-source-repo
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           OWNER: ${{ github.repository_owner }}
           REPO: ${{ github.repository }}
