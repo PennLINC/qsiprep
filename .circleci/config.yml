@@ -225,7 +225,7 @@ jobs:
             - data-v1-{{ .Branch }}-{{ .Revision }}
             - data-v1--{{ .Revision }}
             - data-v1-{{ .Branch }}-
-            - data-v1-master-
+            - data-v1-main-
             - data-v1-
       - run:
           name: Download integration datasets
@@ -635,7 +635,7 @@ workflows:
             - image_prep
           filters:
             branches:
-              only: master
+              only: main
             tags:
               only: /.*/
 
