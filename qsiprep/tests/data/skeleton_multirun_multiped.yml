@@ -1,0 +1,171 @@
+# A dataset with a single subject with multiple phase encoding directions and multiple runs of each.
+# No field maps, no complicated metadata fields.
+'01':
+  - anat:
+      - suffix: T1w
+    dwi:
+      - dir: AP
+        run: 1
+        suffix: dwi
+        metadata:
+          B0FieldIdentifier:
+            - 'topup_allpeds'
+            - 'pepolar_dwi_appa_run1'
+            - 'topup_fmap_appa_run1'
+          B0FieldSource:
+            - 'topup_allpeds'
+            - 'pepolar_dwi_appa_run1'
+            - 'topup_fmap_appa_run1'
+            - 'pepolar_fmap_appa'
+          PhaseEncodingDirection: 'j-'
+          ShimSetting:
+            - 3767
+            - 2516
+            - 398
+            - 115
+            - 44
+            - -134
+            - -53
+            - 43
+      - dir: AP
+        run: 2
+        suffix: dwi
+        metadata:
+          B0FieldIdentifier:
+            - 'topup_allpeds'
+            - 'pepolar_dwi_appa_run2'
+          B0FieldSource:
+            - 'topup_allpeds'
+            - 'pepolar_dwi_appa_run2'
+            - 'pepolar_fmap_appa'
+          B0FieldSource: 'topup_allpeds'
+          PhaseEncodingDirection: 'j-'
+          ShimSetting:
+            - 3767
+            - 2516
+            - 398
+            - 115
+            - 44
+            - -134
+            - -53
+            - 43
+      - dir: PA
+        run: 1
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          B0FieldIdentifier:
+            - 'topup_allpeds'
+            - 'pepolar_dwi_appa_run1'
+          B0FieldSource:
+            - 'topup_allpeds'
+            - 'pepolar_dwi_appa_run1'
+          ShimSetting:
+            - 3767
+            - 2516
+            - 398
+            - 115
+            - 44
+            - -134
+            - -53
+            - 43
+      - dir: PA
+        run: 2
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          B0FieldIdentifier:
+            - 'topup_allpeds'
+            - 'pepolar_dwi_appa_run2'
+          B0FieldSource:
+            - 'topup_allpeds'
+            - 'pepolar_dwi_appa_run2'
+          ShimSetting:
+            - 3767
+            - 2516
+            - 398
+            - 115
+            - 44
+            - -134
+            - -53
+            - 43
+      - dir: RL
+        run: 1
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'i-'
+          B0FieldIdentifier:
+            - 'topup_allpeds'
+            - 'pepolar_dwi_lrrl_run1'
+          B0FieldSource:
+            - 'topup_allpeds'
+            - 'pepolar_dwi_lrrl_run1'
+          ShimSetting:
+            - 3767
+            - 2516
+            - 398
+            - 115
+            - 44
+            - -134
+            - -53
+            - 43
+      - dir: RL
+        run: 2
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'i-'
+          B0FieldIdentifier:
+            - 'topup_allpeds'
+            - 'pepolar_dwi_lrrl_run2'
+          B0FieldSource:
+            - 'topup_allpeds'
+            - 'pepolar_dwi_lrrl_run2'
+          ShimSetting:
+            - 3767
+            - 2516
+            - 398
+            - 115
+            - 44
+            - -134
+            - -53
+            - 43
+      - dir: LR
+        run: 1
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'i'
+          B0FieldIdentifier:
+            - 'topup_allpeds'
+            - 'pepolar_dwi_lrrl_run1'
+          B0FieldSource:
+            - 'topup_allpeds'
+            - 'pepolar_dwi_lrrl_run1'
+          ShimSetting:
+            - 3767
+            - 2516
+            - 398
+            - 115
+            - 44
+            - -134
+            - -53
+            - 43
+      - dir: LR
+        run: 2
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'i'
+          B0FieldIdentifier:
+            - 'topup_allpeds'
+            - 'pepolar_dwi_lrrl_run2'
+          B0FieldSource:
+            - 'topup_allpeds'
+            - 'pepolar_dwi_lrrl_run2'
+          ShimSetting:
+            - 3767
+            - 2516
+            - 398
+            - 115
+            - 44
+            - -134
+            - -53
+            - 43
