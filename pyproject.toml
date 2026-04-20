@@ -33,7 +33,7 @@ dependencies = [
     "numpy <= 1.26.3",
     "pandas < 2.0.0",
     "psutil <= 5.9.8",
-    "pybids",
+    "pybids >= 0.15.0, < 0.16.0",
     "pyyaml",
     "scikit-image",
     "scikit-learn <= 1.4.0",
