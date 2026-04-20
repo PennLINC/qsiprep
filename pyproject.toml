@@ -121,7 +121,7 @@ exclude = [
 
 [tool.hatch.version]
 source = "vcs"
-# raw-options = { version_scheme = "nipreps-calver" }
+raw-options = { version_scheme = "nipreps-calver" }
 
 [tool.hatch.build.hooks.vcs]
 version-file = "qsiprep/_version.py"
