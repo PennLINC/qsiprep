@@ -6,8 +6,6 @@ environments:
     - url: https://conda.anaconda.org/conda-forge/
     indexes:
     - https://pypi.org/simple
-    options:
-      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-7_kmp_llvm.conda
@@ -432,8 +430,6 @@ environments:
     - url: https://conda.anaconda.org/conda-forge/
     indexes:
     - https://pypi.org/simple
-    options:
-      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-7_kmp_llvm.conda
@@ -882,8 +878,6 @@ environments:
     - url: https://conda.anaconda.org/conda-forge/
     indexes:
     - https://pypi.org/simple
-    options:
-      pypi-prerelease-mode: if-necessary-or-explicit
     packages:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-7_kmp_llvm.conda
@@ -6196,7 +6190,95 @@ packages:
   timestamp: 1770223379599
 - pypi: ./
   name: qsiprep
-  version: 1.1.2.dev12+gb80dc6d85.d20260420
+  version: 1.1.2.dev13+g8d46ed4c2
+  sha256: 08cdf116e7802b83cd045c79f631e1afde4bb9d7fe9219a33ab7b29d69fce905
+  requires_dist:
+  - acres
+  - coverage
+  - dipy>=1.11.0,<1.12.0
+  - fury
+  - importlib-resources ; python_full_version < '3.11'
+  - indexed-gzip<=1.8.7
+  - jinja2<3.1
+  - matplotlib
+  - networkx~=2.8.8
+  - nibabel<=5.3.2
+  - nilearn==0.10.1
+  - nipype==1.11.0
+  - nireports>=24.0.3
+  - niworkflows>=1.9,<=1.10
+  - numpy<=1.26.3
+  - pandas<2.0.0
+  - psutil<=5.9.8
+  - pybids>=0.15.0,<0.16.0
+  - pytest
+  - pytest-cov
+  - pytest-env
+  - pytest-xdist
+  - pyyaml
+  - scikit-image
+  - scikit-learn<=1.4.0
+  - seaborn
+  - sentry-sdk
+  - simpleitk
+  - surfa==0.6.1
+  - svgutils<=0.3.4
+  - templateflow
+  - tensorflow
+  - tensorflow-gpu==2.8.4
+  - torch
+  - transforms3d
+  - vtk
+  - xvfbwrapper
+  - coverage ; extra == 'all'
+  - dipy ; extra == 'all'
+  - doctest-ignore-unicode ; extra == 'all'
+  - fuzzywuzzy ; extra == 'all'
+  - lxml-html-clean ; extra == 'all'
+  - nbsphinx ; extra == 'all'
+  - pre-commit ; extra == 'all'
+  - pydot>=1.2.3 ; extra == 'all'
+  - pydotplus ; extra == 'all'
+  - pytest ; extra == 'all'
+  - pytest-cov ; extra == 'all'
+  - pytest-env ; extra == 'all'
+  - pytest-xdist ; extra == 'all'
+  - python-levenshtein ; extra == 'all'
+  - recommonmark ; extra == 'all'
+  - ruff~=0.4.3 ; extra == 'all'
+  - sphinx-argparse ; extra == 'all'
+  - sphinx-markdown-tables ; extra == 'all'
+  - sphinx-rtd-theme ; extra == 'all'
+  - sphinx>=4.2.0 ; extra == 'all'
+  - sphinxcontrib-apidoc ; extra == 'all'
+  - sphinxcontrib-bibtex ; extra == 'all'
+  - pre-commit ; extra == 'dev'
+  - ruff~=0.4.3 ; extra == 'dev'
+  - dipy ; extra == 'doc'
+  - doctest-ignore-unicode ; extra == 'doc'
+  - lxml-html-clean ; extra == 'doc'
+  - nbsphinx ; extra == 'doc'
+  - pydot>=1.2.3 ; extra == 'doc'
+  - pydotplus ; extra == 'doc'
+  - recommonmark ; extra == 'doc'
+  - sphinx-argparse ; extra == 'doc'
+  - sphinx-markdown-tables ; extra == 'doc'
+  - sphinx-rtd-theme ; extra == 'doc'
+  - sphinx>=4.2.0 ; extra == 'doc'
+  - sphinxcontrib-apidoc ; extra == 'doc'
+  - sphinxcontrib-bibtex ; extra == 'doc'
+  - fuzzywuzzy ; extra == 'maint'
+  - python-levenshtein ; extra == 'maint'
+  - coverage ; extra == 'tests'
+  - pytest ; extra == 'tests'
+  - pytest-cov ; extra == 'tests'
+  - pytest-env ; extra == 'tests'
+  - pytest-xdist ; extra == 'tests'
+  requires_python: '>=3.10'
+  editable: true
+- pypi: ./
+  name: qsiprep
+  version: 1.1.2.dev13+g8d46ed4c2
   sha256: 08cdf116e7802b83cd045c79f631e1afde4bb9d7fe9219a33ab7b29d69fce905
   requires_dist:
   - acres
