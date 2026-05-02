@@ -316,19 +316,38 @@ to workflows in *QSIPrep*'s documentation]\
     if config.workflow.anat_only:
         return workflow
 
-    # Handle the grouping of multiple dwi files within a session
-    # concatenation_scheme maps the outputs to their final concatenation group
-    dwi_fmap_groups, concatenation_scheme = group_dwi_scans(
-        layout=config.execution.layout,
-        subject_data=subject_data,
-        combine_scans=not config.workflow.separate_all_dwis,
-        ignore_fieldmaps='fieldmaps' in config.workflow.ignore,
+    # Handle the grouping of multiple dwi files within a session.
+    # Returns 4 dicts: distortion_groups, fmap_estimation_groups,
+    # fmap_application_groups, concatenation_groups.
+    distortion_groups, fmap_estimation_groups, fmap_application_groups, concatenation_groups = (
+        group_dwi_scans(
+            layout=config.execution.layout,
+            subject_data=subject_data,
+            combine_scans=not config.workflow.separate_all_dwis,
+            ignore_fieldmaps='fieldmaps' in config.workflow.ignore,
+            estimate_per_axis='drbuddi' in config.workflow.pepolar_method.lower(),
+        )
     )
-    config.loggers.workflow.info(dwi_fmap_groups)
+    config.loggers.workflow.info(distortion_groups)
 
-    # If a merge is happening at the end, make sure
+    # Build a compatibility dict for downstream workflows.
+    # ``outputs_to_files`` maps each distortion-group name to a dict with the
+    # keys expected by init_dwi_preproc_wf / init_dwi_finalize_wf.
+    outputs_to_files = _build_outputs_to_files(
+        config.execution.layout,
+        distortion_groups,
+        fmap_estimation_groups,
+        fmap_application_groups,
+    )
+
+    # Derive ``concatenation_scheme`` (old-style mapping from distortion-group
+    # name to concatenation-group name) from the new concatenation_groups dict.
+    concatenation_scheme = {}
+    for cg_name, dg_ids in concatenation_groups.items():
+        for dg_id in dg_ids:
+            concatenation_scheme[dg_id] = cg_name
+
     if merging_distortion_groups:
-        # create a mapping of which across-distortion-groups are contained in each merge
         merged_group_names = sorted(set(concatenation_scheme.values()))
         merged_to_subgroups = defaultdict(list)
         for subgroup_name, destination_name in concatenation_scheme.items():
@@ -352,9 +371,6 @@ to workflows in *QSIPrep*'s documentation]\
                 ]),
             ])  # fmt:skip
 
-    outputs_to_files = {
-        dwi_group['concatenated_bids_name']: dwi_group for dwi_group in dwi_fmap_groups
-    }
     if config.workflow.force_syn:
         for group_name in outputs_to_files:
             outputs_to_files[group_name]['fieldmap_info'] = {'suffix': 'syn'}
@@ -516,6 +532,77 @@ to workflows in *QSIPrep*'s documentation]\
             workflow.get_node(node).interface.inputs.datatype = 'figures'
 
     return workflow
+
+
+def _build_outputs_to_files(
+    layout,
+    distortion_groups,
+    fmap_estimation_groups,
+    fmap_application_groups,
+):
+    """Build old-style ``outputs_to_files`` dict from the new 4-dict return.
+
+    The downstream workflow builders (``init_dwi_preproc_wf``,
+    ``init_dwi_finalize_wf``) still expect a dict keyed by distortion-group
+    name whose values have keys ``concatenated_bids_name``, ``dwi_series``,
+    ``dwi_series_pedir``, and ``fieldmap_info``.
+
+    Parameters
+    ----------
+    layout : :obj:`pybids.BIDSLayout`
+    distortion_groups : dict[str, list[str]]
+    fmap_estimation_groups : dict[str, list[str]]
+    fmap_application_groups : dict[str, list[str]]
+
+    Returns
+    -------
+    outputs_to_files : dict[str, dict]
+    """
+    fmap_estimation_groups = fmap_estimation_groups or {}
+    fmap_application_groups = fmap_application_groups or {}
+
+    dg_to_fmap_key = {}
+    for fmap_key, dg_ids in fmap_application_groups.items():
+        for dg_id in dg_ids:
+            dg_to_fmap_key[dg_id] = fmap_key
+
+    outputs_to_files = {}
+    for dg_id, files in distortion_groups.items():
+        pe_dir = layout.get_metadata(files[0]).get('PhaseEncodingDirection', '')
+
+        fmap_key = dg_to_fmap_key.get(dg_id)
+        if fmap_key is None:
+            fieldmap_info = {'suffix': None}
+        else:
+            est_members = fmap_estimation_groups.get(fmap_key, [])
+            fmap_paths = [m for m in est_members if m not in distortion_groups]
+            rpe_dg_ids = [m for m in est_members if m in distortion_groups and m != dg_id]
+
+            rpe_files = []
+            for rpe_id in rpe_dg_ids:
+                rpe_files.extend(distortion_groups[rpe_id])
+
+            if fmap_paths and rpe_files:
+                fieldmap_info = {'suffix': 'rpe_series', 'rpe_series': sorted(rpe_files)}
+                fieldmap_info['epi'] = sorted(fmap_paths)
+            elif fmap_paths:
+                # Fmap-only estimation groups should flow through the EPI path.
+                # Marking these as rpe_series causes downstream PE+/PE- splitting
+                # to expect a reverse-DWI list that does not exist.
+                fieldmap_info = {'suffix': 'epi', 'epi': sorted(fmap_paths)}
+            elif rpe_files:
+                fieldmap_info = {'suffix': 'rpe_series', 'rpe_series': sorted(rpe_files)}
+            else:
+                fieldmap_info = {'suffix': None}
+
+        outputs_to_files[dg_id] = {
+            'concatenated_bids_name': dg_id,
+            'dwi_series': files,
+            'dwi_series_pedir': pe_dir,
+            'fieldmap_info': fieldmap_info,
+        }
+
+    return outputs_to_files
 
 
 def provide_processing_advice(subject_data, layout, unringing_method):

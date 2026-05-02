@@ -143,17 +143,96 @@ Therefore, you should organize your data as below, to make sure QSIPrep will wor
 BIDS-URIs
 =========
 
-BIDS-URIs are the recommended way to defined certain metadata fields, such as IntendedFor, in BIDS.
-However, QSIPrep does not currently support BIDS-URIs for the IntendedFor field.
-Therefore, you should use relative paths to the files, which is the older way to do things.
+BIDS-URIs are the recommended way to define metadata links (for example, in ``IntendedFor``).
+QSIPrep accepts both BIDS-URI style entries (``bids::sub-...``) and relative paths.
+Use one style consistently within your dataset.
+
+However, please use B0FieldIdentifier and B0FieldSource instead of IntendedFor for fieldmap metadata.
 
 
-B0FieldIdentifier and B0FieldSource
+Curating DWI Grouping and Fieldmaps
 ===================================
 
-B0FieldIdentifier and B0FieldSource are two metadata fields that are used to related images to field maps for distortion correction.
-They are the preferred alternative to the IntendedFor field in BIDS, but QSIPrep does not currently support them.
-Therefore, you should use the IntendedFor field with relative paths to the files, which is the older way to do things.
+QSIPrep builds four internal groupings per subject/session:
+
+1. Distortion groups (which DWI files are merged before denoising)
+2. Fieldmap estimation groups (which files are used to estimate each fieldmap)
+3. Fieldmap application groups (which DWI distortion groups each fieldmap is applied to)
+4. Concatenation groups (which distortion groups are merged in outputs)
+
+If your curation metadata conflicts with physical acquisition metadata
+(``ShimSetting`` and ``TotalReadoutTime``), QSIPrep raises an error instead of silently grouping incompatible scans.
+
+
+How QSIPrep decides groups
+--------------------------
+
+For fieldmap estimation groups (highest priority first):
+
+1. ``B0FieldIdentifier`` (on DWI and/or fmap files)
+2. ``IntendedFor`` (on fmap files)
+3. Automatic heuristic based on phase-encoding directions
+
+For fieldmap application groups:
+
+1. ``B0FieldSource`` (on DWI files)
+2. Otherwise derived from the estimation groups
+
+For concatenation groups:
+
+1. If not separating all DWIs: ``MultipartID`` if present
+2. Otherwise automatic per-session grouping
+3. If separating all DWIs: each distortion group remains separate
+
+Files are never grouped across sessions.
+
+
+Which metadata to use
+---------------------
+
+Use ``B0FieldIdentifier`` + ``B0FieldSource`` when you want explicit, reproducible control
+over both fieldmap estimation and application.
+
+Use ``MultipartID`` when you want only some runs concatenated together in final outputs.
+
+Use no grouping metadata only when you are happy with automatic behavior.
+
+
+Which parameters to use
+-----------------------
+
+The most important controls are:
+
+- ``--separate-all-dwis``: keep each DWI separate in distortion and concatenation groups.
+- ``--ignore fieldmaps``: ignore files in ``fmap/`` for fieldmap construction. Field maps using files in ``dwi/`` will still be used.
+- ``--pepolar-method``: If set to "DRBUDDI" or "TOPUP+DRBUDDI", require reverse-PE pairing per axis (for example AP/PA and LR/RL handled separately).
+
+
+Practical curation patterns
+---------------------------
+
+If you want one fieldmap from all PE directions:
+
+- Provide one shared ``B0FieldIdentifier`` across those DWIs.
+- Provide matching ``B0FieldSource`` on target DWIs.
+- Use ``--pepolar-method TOPUP``.
+
+If you want separate fieldmaps per run (for example run-1 vs run-2):
+
+- Use run-specific ``B0FieldIdentifier`` values.
+- Use matching run-specific ``B0FieldSource`` values.
+- Optionally use ``MultipartID`` to keep output concatenations run-specific.
+
+If you want automatic grouping:
+
+- Omit ``B0FieldIdentifier``, ``B0FieldSource``, and ``IntendedFor``.
+- Ensure ``PhaseEncodingDirection`` is present and correct.
+- Provide consistent ``ShimSetting`` and ``TotalReadoutTime`` for files that should be grouped.
+
+If you use ``--pepolar-method DRBUDDI`` or ``--pepolar-method TOPUP+DRBUDDI``:
+
+- Ensure each estimation group has reverse directions on the same axis (for example ``j`` and ``j-``).
+- A metadata-defined group spanning multiple axes with ``--pepolar-method DRBUDDI`` or ``--pepolar-method TOPUP+DRBUDDI`` will raise an error.
 
 
 MultipartID
@@ -162,8 +241,9 @@ MultipartID
 MultipartID is a metadata field that is used to identify a set of DWIs that should be considered as part of the same acquisition.
 If you want to group certain runs of dMRI data together, but not all runs (the default behavior), you should use the MultipartID field.
 
-However, please note that MultipartID may interact in unexpected ways with the IntendedFor field and the QSIPrep parameters that impact grouping (e.g., ``--distortion-group-merge``).
-Therefore, we recommend that, if you use MultipartID, you check your outputs to make sure the runs are being grouped in the manner you expect.
+Important: ``MultipartID`` constraints must be compatible with fieldmap group definitions.
+If one fieldmap application group would cross multiple ``MultipartID`` concatenation groups,
+QSIPrep raises an error and asks you to resolve the inconsistency.
 
 
 ******************
