@@ -1,2 +1,20 @@
 qsiprep/_version.py export-subst
 pixi.lock merge=binary linguist-language=YAML linguist-generated=true
+
+# Default: treat all text files as text, stored LF in the repo,
+# checked out as LF on every OS. Binary files are left alone.
+* text=auto eol=lf
+
+# Hard-force LF for things that break on CRLF.
+*.sh       text eol=lf
+*.bash     text eol=lf
+Dockerfile*    text eol=lf
+*.yml      text eol=lf
+*.yaml     text eol=lf
+*.toml     text eol=lf
+*.py       text eol=lf
+
+# Explicit binary.
+*.png      binary
+*.jpg      binary
+*.nii.gz   binary
