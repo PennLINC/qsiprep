@@ -528,11 +528,24 @@ How to combine images across distorted groups.
         '--hmc-model',
         action='store',
         default='eddy',
-        choices=['none', '3dSHORE', 'eddy', 'tensor'],
+        choices=[
+            'none',
+            '3dSHORE',
+            'eddy',
+            'tensor',
+            'diffprep_motion',
+            'diffprep_quadratic',
+            'diffprep_cubic',
+        ],
         help='model used to generate target images for hmc. If "none" the '
         'non-b0 images will be warped using the same transform as their '
-        'nearest b0 image. If "3dSHORE", SHORELine will be used. if "tensor", '
-        'SHORELine iterations with a tensor model will be used',
+        'nearest b0 image. If "3dSHORE", SHORELine will be used. If "tensor", '
+        'SHORELine iterations with a tensor model will be used. The '
+        '"diffprep_*" choices invoke TORTOISEV4 DIFFPREP for SHORE-prediction '
+        'based motion correction with eddy-current correction: '
+        '"diffprep_motion" for rigid motion only, "diffprep_quadratic" for '
+        'rigid + quadratic eddy currents (recommended), and "diffprep_cubic" '
+        'for rigid + cubic eddy currents.',
     )
     g_moco.add_argument(
         '--eddy-config',
@@ -541,6 +554,16 @@ How to combine images across distorted groups.
         'json is specified, a default one will be used. The current default '
         'json can be found here: '
         'https://github.com/PennLINC/qsiprep/blob/main/qsiprep/data/eddy_params.json',
+    )
+    g_moco.add_argument(
+        '--diffprep-config',
+        action='store',
+        help='path to a json file with optional TORTOISE/DIFFPREP settings '
+        '(b0_id, is_human_brain, rot_eddy_center, mec_settings, extra_args). '
+        'Only consulted when --hmc-model is one of the diffprep_* choices. '
+        'If no json is specified, defaults are used. The default json can '
+        'be found here: '
+        'https://github.com/PennLINC/qsiprep/blob/main/qsiprep/data/diffprep_params.json',
     )
     g_moco.add_argument(
         '--shoreline-iters',

@@ -264,6 +264,20 @@ def init_dwi_preproc_wf(
             name='hmc_sdc_wf',
         )
 
+    elif config.workflow.hmc_model.startswith('diffprep_'):
+        from .diffprep import init_diffprep_hmc_wf
+
+        # 'diffprep_quadratic' -> 'quadratic'
+        correction_mode = config.workflow.hmc_model.split('_', 1)[1]
+        hmc_wf = init_diffprep_hmc_wf(
+            scan_groups=scan_groups,
+            source_file=source_file,
+            dwi_metadata=dwi_metadata,
+            t2w_sdc=t2w_sdc,
+            correction_mode=correction_mode,
+            name='hmc_sdc_wf',
+        )
+
     workflow.connect([
         (pre_hmc_wf, hmc_wf, [
             ('outputnode.dwi_file', 'inputnode.dwi_file'),

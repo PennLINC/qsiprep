@@ -453,6 +453,7 @@ class execution(_Config):
         'bids_dir',
         'bids_database_dir',
         'dataset_links',
+        'diffprep_config',
         'eddy_config',
         'layout',
         'log_dir',
@@ -579,6 +580,9 @@ class workflow(_Config):
     """DEPRECATED: True if anat_modality is 'none'."""
     eddy_config = None
     """Configuration for running Eddy."""
+    diffprep_config = None
+    """Path to a JSON file with optional TORTOISE/DIFFPREP settings.
+    Only consulted when ``hmc_model`` is one of the ``diffprep_*`` values."""
     fmap_bspline = None
     """Regularize fieldmaps with a field of B-Spline basis."""
     fmap_demean = None

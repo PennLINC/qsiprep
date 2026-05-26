@@ -132,6 +132,12 @@ class MultivariateTemplateConstruction2(ANTSCommand):
             # Fall back to first candidate for predictable error messages.
             return candidates[0]
 
+        # Only nonlinear transformation models produce warp/inverse-warp NIfTI files.
+        # Affine-only runs (-t Affine) emit just the affine .mat per input image, so
+        # looking for warp files would resolve to non-existent paths and trip the
+        # File(exists=True) trait on the OutputSpec.
+        is_linear_only = self.inputs.transform == 'Affine'
+
         for num, input_image in enumerate(self.inputs.input_images):
             if isinstance(input_image, list):
                 input_image = input_image[0]
@@ -150,6 +156,14 @@ class MultivariateTemplateConstruction2(ANTSCommand):
                 ],
                 [op.join(xdir, f'{prefix}*{fname}*0GenericAffine.mat') for xdir in transform_dirs],
             )
+
+            if is_linear_only:
+                # The inverse of an affine is applied via invert_transform_flags;
+                # no separate inverse file is produced by MVTC2.
+                forward_transforms.append([affine])
+                reverse_transforms.append([affine])
+                continue
+
             warp = _resolve_transform(
                 [op.join(xdir, f'{prefix}{fname}{num}1Warp.nii.gz') for xdir in transform_dirs]
                 + [

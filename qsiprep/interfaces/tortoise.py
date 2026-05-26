@@ -704,6 +704,645 @@ def make_bmat_file(bvals, bvecs):
     return bvals.replace('bval', 'bmtxt')
 
 
+def bmtxt_to_fsl(bmtxt_file, working_dir=None):
+    """Convert a TORTOISE 6-col bmtxt file to FSL bval/bvec text files.
+
+    Wraps the upstream ``TORTOISEBmatrixToFSLBVecs`` binary, which writes
+    sibling files with extensions ``.bvecs`` and ``.bvals``. Returns
+    ``(bval_path, bvec_path)``.
+    """
+    bmtxt_abs = op.abspath(bmtxt_file)
+    if working_dir is not None:
+        # Copy into the working directory so outputs land there
+        dst = op.join(working_dir, op.basename(bmtxt_abs))
+        if dst != bmtxt_abs:
+            import shutil
+
+            shutil.copyfile(bmtxt_abs, dst)
+        bmtxt_abs = dst
+    subprocess.run(['TORTOISEBmatrixToFSLBVecs', bmtxt_abs], check=True)
+    base = bmtxt_abs[: -len('.bmtxt')]
+    return base + '.bvals', base + '.bvecs'
+
+
+# ---------------------------------------------------------------------------
+# DIFFPREP (TORTOISE) HMC backend
+# ---------------------------------------------------------------------------
+
+
+class _DIFFPREPInputSpec(TORTOISEInputSpec):
+    dwi_file = File(
+        exists=True,
+        mandatory=True,
+        copyfile=True,
+        argstr='-u %s',
+        desc='Uncompressed 4D NIfTI passed to TORTOISEProcess as the UP image. '
+        'A sibling ``.bmtxt`` and ``.json`` must be present.',
+    )
+    bmtxt_file = File(
+        exists=True,
+        mandatory=True,
+        copyfile=True,
+        desc='Sibling TORTOISE 6-column bmatrix file. Found by TORTOISEProcess '
+        "from the .nii's basename; not passed as its own argstr.",
+    )
+    json_file = File(
+        exists=True,
+        mandatory=True,
+        copyfile=True,
+        desc='Sibling BIDS JSON sidecar with PhaseEncodingDirection. Found by '
+        "TORTOISEProcess from the .nii's basename; not passed as its own argstr.",
+    )
+    correction_mode = traits.Enum(
+        'motion',
+        'quadratic',
+        'cubic',
+        argstr='-c %s',
+        mandatory=True,
+        desc='Motion & eddy correction mode forwarded to TORTOISE. '
+        '"motion" = rigid only; "quadratic" = rigid + quadratic eddy '
+        '(recommended); "cubic" = rigid + cubic eddy.',
+    )
+    b0_id = traits.Int(
+        -1,
+        usedefault=True,
+        argstr='--b0_id %d',
+        desc='Index of b=0 volume to use as the registration target. '
+        '-1 (default) lets TORTOISE pick the best one.',
+    )
+    is_human_brain = traits.Bool(
+        True,
+        usedefault=True,
+        argstr='--is_human_brain %d',
+        desc='Whether the data is an in-vivo human brain. Enables iterative '
+        'SHORE-prediction refinement.',
+    )
+    rot_eddy_center = traits.Enum(
+        'isocenter',
+        'center_voxel',
+        'center_slice',
+        usedefault=True,
+        argstr='--rot_eddy_center %s',
+        desc='Rotation and eddy-currents center.',
+    )
+    extra_args = traits.List(
+        traits.Str(),
+        usedefault=True,
+        desc='Additional flags appended verbatim to the TORTOISEProcess command. '
+        'Use to access TORTOISE knobs not surfaced as first-class fields '
+        '(e.g. ["--big_delta", "0.030"]).',
+    )
+    disable_itk_threads = traits.Bool(True, usedefault=True, argstr='--disable_itk_threads')
+
+
+class _DIFFPREPOutputSpec(TraitedSpec):
+    corrected_dwi_file = File(exists=True, desc='Motion + eddy corrected 4D DWI (uncompressed).')
+    corrected_bmtxt_file = File(exists=True, desc='Motion-rotated 6-col bmatrix.')
+    transformations_file = File(
+        exists=True,
+        desc='Per-volume 24-parameter Okan-quadratic transforms as written by DIFFPREP.',
+    )
+
+
+class DIFFPREP(TORTOISECommandLine):
+    """TORTOISE V4 DIFFPREP motion + eddy-current correction.
+
+    Runs the existing ``TORTOISEProcess`` binary with all stages other than
+    motion+eddy disabled (``--step motioneddy --denoising off --gibbs 0
+    --drift off --epi off``). Emits the per-volume corrected DWI, rotated
+    bmatrix, and 24-parameter transform file.
+    """
+
+    input_spec = _DIFFPREPInputSpec
+    output_spec = _DIFFPREPOutputSpec
+    _cmd = 'TORTOISEProcess'
+
+    # Hardcoded flags that put TORTOISE into "DIFFPREP-only" mode. qsiprep
+    # already runs its own denoising / gibbs / SDC stages, so we explicitly
+    # turn them off.
+    _step_flags = (
+        '--step motioneddy '
+        '--denoising off '
+        '--gibbs 0 '
+        '--drift off '
+        '--epi off '
+        '--do_QC 0 '
+        '--remove_temp 0 '
+        '--s2v 0 '
+        '--repol 0'
+    )
+
+    def _format_arg(self, name, spec, value):
+        # bmtxt_file and json_file are passed via sibling-stem lookup, not argstr
+        if name in ('bmtxt_file', 'json_file'):
+            return ''
+        # extra_args gets joined verbatim
+        if name == 'extra_args':
+            return ' '.join(value) if value else ''
+        return super()._format_arg(name, spec, value)
+
+    def _parse_inputs(self, skip=None):
+        parsed = super()._parse_inputs(skip=skip)
+        # Append the hardcoded "DIFFPREP-only" flags to the end of the command.
+        parsed.append(self._step_flags)
+        return parsed
+
+    def _list_outputs(self):
+        outputs = self.output_spec().get()
+        # TORTOISE writes outputs next to the input nifti (or its copy in cwd).
+        nii_path = op.abspath(self.inputs.dwi_file)
+        cwd_nii = op.join(os.getcwd(), op.basename(nii_path))
+        # nipype copies the input into cwd because of copyfile=True
+        if op.exists(cwd_nii):
+            base_nii = cwd_nii
+        else:
+            base_nii = nii_path
+        base = base_nii[: -len('.nii')] if base_nii.endswith('.nii') else base_nii
+        outputs['corrected_dwi_file'] = base + '_moteddy.nii'
+        outputs['corrected_bmtxt_file'] = base + '_moteddy.bmtxt'
+        outputs['transformations_file'] = base + '_moteddy_transformations.txt'
+        return outputs
+
+
+class _DIFFPREPMotionParamsInputSpec(BaseInterfaceInputSpec):
+    transformations_file = File(
+        exists=True,
+        mandatory=True,
+        desc='DIFFPREP _moteddy_transformations.txt file with 24 columns per volume.',
+    )
+
+
+class _DIFFPREPMotionParamsOutputSpec(TraitedSpec):
+    spm_motion_file = File(exists=True)
+
+
+class DIFFPREPMotionParams(SimpleInterface):
+    """Extract a 6-column SPM-style motion parameters file from DIFFPREP's
+    24-parameter transform file. Columns are translation_xyz (mm) and
+    rotation_xyz (radians) — exactly the leading 6 parameters of TORTOISE's
+    ``OkanQuadraticTransform``."""
+
+    input_spec = _DIFFPREPMotionParamsInputSpec
+    output_spec = _DIFFPREPMotionParamsOutputSpec
+
+    def _run_interface(self, runtime):
+        rows = _read_okan_transformations(self.inputs.transformations_file)
+        params = np.asarray(rows, dtype=float)
+        spm_motion = params[:, :6]
+        spm_motion_file = fname_presuffix(
+            self.inputs.transformations_file,
+            suffix='_spm_rp.txt',
+            use_ext=False,
+            newpath=runtime.cwd,
+        )
+        np.savetxt(spm_motion_file, spm_motion)
+        self._results['spm_motion_file'] = spm_motion_file
+        return runtime
+
+
+# ---------------------------------------------------------------------------
+# OkanQuadraticTransform decomposition
+#
+# DIFFPREP estimates a 24-parameter OkanQuadraticTransform per volume. The
+# transform applies a rigid motion + scaling to all three axes, then overwrites
+# the *phase-encoding* axis with a polynomial in the rigid-transformed
+# coordinates. That structure is exactly:
+#
+#     OkanTransform = rigid(motion)  ∘  voxel_shift_map(eddy, along PE only)
+#
+# Both pieces are nitransforms-native: an Affine + a DenseFieldTransform whose
+# data has zeros on the two non-PE components. Composed in order (affine first,
+# then warp), they reproduce the C++ OkanQuadraticTransform::TransformPoint
+# output exactly. See itkOkanQuadraticTransform.hxx in TORTOISEV4.
+#
+# All math happens in TORTOISE's "DP" coordinate frame, then is re-expressed in
+# image-physical coords (LPS). See DIFFPREP.cxx::ChangeImageHeaderToDP.
+# ---------------------------------------------------------------------------
+
+
+_PHASE_AXIS_FROM_BIDS = {'i': 0, 'j': 1, 'k': 2}
+
+
+def _dp_offset(ref_affine, ref_shape, rot_eddy_center):
+    """Physical-space offset such that ``c_DP = D^T (c_image - offset)``.
+
+    Matches the three modes of ``DIFFPREP::ChangeImageHeaderToDP``.
+    """
+    Dspac = ref_affine[:3, :3]
+    spacing = np.linalg.norm(Dspac, axis=0)
+    origin = ref_affine[:3, 3]
+
+    if rot_eddy_center == 'isocenter':
+        return np.zeros(3)
+    if rot_eddy_center == 'center_voxel':
+        center_idx = (np.array(ref_shape, dtype=float) - 1.0) / 2.0
+        return Dspac @ center_idx + origin
+    if rot_eddy_center == 'center_slice':
+        center_idx = (np.array(ref_shape, dtype=float) - 1.0) / 2.0
+        center_point = Dspac @ center_idx + origin
+        out = np.zeros(3)
+        out[2] = center_point[2]
+        return out
+    raise ValueError(f'unknown rot_eddy_center: {rot_eddy_center!r}')
+
+
+def _build_rotation(angle_x, angle_y, angle_z):
+    """Z · Y · X Euler rotation matrix, matching OkanQuadraticTransform::ComputeMatrix."""
+    cx, sx = np.cos(angle_x), np.sin(angle_x)
+    cy, sy = np.cos(angle_y), np.sin(angle_y)
+    cz, sz = np.cos(angle_z), np.sin(angle_z)
+    Rx = np.array([[1, 0, 0], [0, cx, -sx], [0, sx, cx]])
+    Ry = np.array([[cy, 0, sy], [0, 1, 0], [-sy, 0, cy]])
+    Rz = np.array([[cz, -sz, 0], [sz, cz, 0], [0, 0, 1]])
+    return Rz @ Ry @ Rx
+
+
+def _phase_axis_dp(phase_encoding_direction):
+    """Map a BIDS PhaseEncodingDirection ('i', 'j', 'k' with optional '-') to
+    a 0/1/2 DP voxel-axis index. Accepts an int already in [0, 1, 2]."""
+    if isinstance(phase_encoding_direction, int):
+        if phase_encoding_direction not in (0, 1, 2):
+            raise ValueError(f'phase axis must be in 0/1/2: {phase_encoding_direction!r}')
+        return phase_encoding_direction
+    return _PHASE_AXIS_FROM_BIDS[phase_encoding_direction.rstrip('-')]
+
+
+def okan_decompose(
+    params24,
+    ref_image,
+    phase_encoding_direction='j',
+    rot_eddy_center='isocenter',
+    do_cubic=None,
+):
+    """Split a 24-parameter Okan-quadratic transform into a 4x4 affine plus a
+    dense displacement field, both in image-physical (LPS) coordinates.
+
+    Parameters
+    ----------
+    params24 : array-like, shape (24,)
+        One row from DIFFPREP's ``*_moteddy_transformations.txt``.
+    ref_image : nibabel image
+        Reference grid (size + spacing + direction + origin) for the field.
+    phase_encoding_direction : str or int
+        BIDS ``PhaseEncodingDirection`` (``'i'``/``'j'``/``'k'`` with optional
+        ``'-'``) or the equivalent integer voxel axis index.
+    rot_eddy_center : str
+        ``'isocenter'`` (default), ``'center_voxel'`` or ``'center_slice'``.
+    do_cubic : bool, optional
+        If ``None``, inferred from whether any of params[14:21] are non-zero.
+
+    Returns
+    -------
+    affine_4x4 : ndarray, shape (4, 4)
+        Rigid (+ scaling) part as a homogeneous matrix in image-physical
+        coordinates. Maps output (b0_template) coordinates to input
+        (per-volume) coordinates, matching ITK / ANTs convention.
+    disp_field : ndarray, shape (X, Y, Z, 3)
+        Dense displacement field. Non-zero entries lie only along the
+        image-physical direction of the DP phase axis (i.e., the
+        corresponding column of the reference direction matrix).
+
+    Notes
+    -----
+    The composition ``A · x + disp(x)`` reproduces ``OkanTransform(x)``
+    exactly (up to floating-point rounding) for every voxel x.
+    """
+    params = np.asarray(params24, dtype=float).reshape(-1)
+    if params.size != 24:
+        raise ValueError(f'expected 24 parameters, got {params.size}')
+
+    phase_axis = _phase_axis_dp(phase_encoding_direction)
+    if do_cubic is None:
+        do_cubic = bool(np.any(np.abs(params[14:21]) > 0))
+
+    ref_affine = np.asarray(ref_image.affine, dtype=float)
+    ref_shape = tuple(ref_image.shape[:3])
+    Dspac = ref_affine[:3, :3]
+    spacing = np.linalg.norm(Dspac, axis=0)
+    direction = Dspac / spacing[None, :]
+    origin = ref_affine[:3, 3]
+
+    # Image <-> DP coord transforms. c_DP = D^T (c_image - offset).
+    offset = _dp_offset(ref_affine, ref_shape, rot_eddy_center)
+    M_to_dp = np.eye(4)
+    M_to_dp[:3, :3] = direction.T
+    M_to_dp[:3, 3] = -direction.T @ offset
+    M_from_dp = np.eye(4)
+    M_from_dp[:3, :3] = direction
+    M_from_dp[:3, 3] = offset
+
+    # Rigid part of the Okan transform in DP coords:
+    #   y = R (c_DP - center) + T + center
+    center_okan = params[21:24]
+    T_okan = params[0:3]
+    R_okan = _build_rotation(params[3], params[4], params[5])
+    A_rigid_dp = np.eye(4)
+    A_rigid_dp[:3, :3] = R_okan
+    A_rigid_dp[:3, 3] = T_okan + center_okan - R_okan @ center_okan
+
+    # Compose into image-physical coords: A_image = M_from_dp · A_rigid_dp · M_to_dp
+    A_image = M_from_dp @ A_rigid_dp @ M_to_dp
+
+    # Dense VSM along the DP phase axis.
+    indices = np.indices(ref_shape, dtype=float).reshape(3, -1)  # (3, N)
+    c_image = (Dspac @ indices).T + origin  # (N, 3)
+    c_dp = (M_to_dp[:3, :3] @ c_image.T).T + M_to_dp[:3, 3]  # (N, 3) in DP
+
+    # p = R (c_DP - center) + T  (the same `p` the C++ polynomial sees)
+    p = (R_okan @ (c_dp - center_okan).T).T + T_okan
+    px, py, pz = p[:, 0], p[:, 1], p[:, 2]
+
+    new_phase = (
+        params[6] * px + params[7] * py + params[8] * pz
+        + params[9] * px * py + params[10] * px * pz + params[11] * py * pz
+        + params[12] * (px * px - py * py)
+        + params[13] * (2.0 * pz * pz - px * px - py * py)
+    )
+    if do_cubic:
+        new_phase += (
+            params[14] * px * py * pz
+            + params[15] * pz * (px * px - py * py)
+            + params[16] * px * (4.0 * pz * pz - px * px - py * py)
+            + params[17] * py * (4.0 * pz * pz - px * px - py * py)
+            + params[18] * px * (px * px - 3.0 * py * py)
+            + params[19] * py * (3.0 * px * px - py * py)
+            + params[20] * pz * (2.0 * pz * pz - 3.0 * px * px - 3.0 * py * py)
+        )
+
+    # The eddy "shift" along the DP phase axis: how much the polynomial
+    # diverges from the rigid output on that axis.
+    shift_scalar = new_phase - p[:, phase_axis]
+
+    # Express as a 3-component physical displacement in image coords. The DP
+    # phase axis points along D[:, phase_axis] in image-physical-space.
+    disp_dir = direction[:, phase_axis]
+    disp_field = (shift_scalar[:, None] * disp_dir[None, :]).reshape(
+        *ref_shape, 3
+    )
+
+    return A_image, disp_field
+
+
+# ---------------------------------------------------------------------------
+# nipype wrapper around okan_decompose
+# ---------------------------------------------------------------------------
+
+
+_ITK_AFFINE_TEMPLATE = (
+    '#Insight Transform File V1.0\n'
+    '#Transform 0\n'
+    'Transform: MatrixOffsetTransformBase_double_3_3\n'
+    'Parameters: {p}\n'
+    'FixedParameters: 0 0 0\n'
+)
+
+
+def write_itk_affine(matrix_4x4, out_path):
+    """Write a 4x4 image-physical-space affine as an ITK ``.txt`` transform
+    file. Fixed center is the world origin; rotation matrix is stored row-major
+    followed by the translation."""
+    M = matrix_4x4[:3, :3]
+    t = matrix_4x4[:3, 3]
+    params = list(M.flatten()) + list(t)
+    with open(out_path, 'w') as fobj:
+        fobj.write(_ITK_AFFINE_TEMPLATE.format(p=' '.join(f'{v:.10g}' for v in params)))
+    return out_path
+
+
+def write_itk_warp(disp_field, ref_affine, out_path):
+    """Write a (X, Y, Z, 3) displacement field as an ITK/ANTs-compatible 5D
+    NIfTI (shape ``(X, Y, Z, 1, 3)``, intent code ``NIFTI_INTENT_VECTOR``)."""
+    # ITK uses a singleton 4th axis between spatial dims and the vector dim
+    field = np.asarray(disp_field, dtype='<f4')
+    field = field.reshape(*field.shape[:3], 1, 3)
+    img = nb.Nifti1Image(field, ref_affine)
+    img.header.set_intent('vector')
+    img.to_filename(out_path)
+    return out_path
+
+
+class _DIFFPREPDecomposeTransformsInputSpec(BaseInterfaceInputSpec):
+    transformations_file = File(
+        exists=True,
+        mandatory=True,
+        desc="DIFFPREP's _moteddy_transformations.txt (24 cols per volume).",
+    )
+    reference_image = File(
+        exists=True,
+        mandatory=True,
+        desc='3D reference image defining the grid for the per-volume warp '
+        'fields (typically the corrected b=0 average).',
+    )
+    phase_encoding_direction = traits.Enum(
+        'i', 'i-', 'j', 'j-', 'k', 'k-',
+        mandatory=True,
+        desc='BIDS PhaseEncodingDirection.',
+    )
+    rot_eddy_center = traits.Enum(
+        'isocenter', 'center_voxel', 'center_slice',
+        usedefault=True,
+        desc="TORTOISE's --rot_eddy_center setting (must match what was used "
+        'when transformations_file was produced).',
+    )
+    do_cubic = traits.Bool(
+        desc='Whether cubic params (14-20) should be evaluated. Inferred from '
+        'the data when not set.',
+    )
+
+
+class _DIFFPREPDecomposeTransformsOutputSpec(TraitedSpec):
+    affine_files = OutputMultiObject(File(exists=True))
+    warp_files = OutputMultiObject(File(exists=True))
+
+
+class DIFFPREPDecomposeTransforms(SimpleInterface):
+    """Decompose each row of DIFFPREP's transformations.txt into an ITK affine
+    file + a dense displacement field NIfTI, both in image-physical (LPS)
+    coordinates.
+
+    The two together reproduce the original ``OkanQuadraticTransform`` when
+    applied in the order ``[affine, warp]`` — i.e., they slot directly into
+    qsiprep's downstream ``apply_hmc_transforms`` (or any nitransforms /
+    ANTs composition) for single-shot resampling.
+    """
+
+    input_spec = _DIFFPREPDecomposeTransformsInputSpec
+    output_spec = _DIFFPREPDecomposeTransformsOutputSpec
+
+    def _run_interface(self, runtime):
+        params_per_vol = _read_okan_transformations(self.inputs.transformations_file)
+        ref_img = nb.load(self.inputs.reference_image)
+        if ref_img.ndim > 3:
+            # Squeeze any 4th singleton or pick the first volume for a 4D series
+            if ref_img.shape[3] == 1:
+                ref_img = ref_img.slicer[..., 0]
+            else:
+                ref_img = ref_img.slicer[..., 0]
+        do_cubic = self.inputs.do_cubic if isdefined(self.inputs.do_cubic) else None
+
+        affine_files = []
+        warp_files = []
+        for vol_idx, params in enumerate(params_per_vol):
+            A, disp = okan_decompose(
+                params,
+                ref_img,
+                phase_encoding_direction=self.inputs.phase_encoding_direction,
+                rot_eddy_center=self.inputs.rot_eddy_center,
+                do_cubic=do_cubic,
+            )
+            affine_path = op.join(runtime.cwd, f'diffprep_affine_{vol_idx:04d}.txt')
+            warp_path = op.join(runtime.cwd, f'diffprep_warp_{vol_idx:04d}.nii.gz')
+            write_itk_affine(A, affine_path)
+            write_itk_warp(disp, ref_img.affine, warp_path)
+            affine_files.append(affine_path)
+            warp_files.append(warp_path)
+
+        self._results['affine_files'] = affine_files
+        self._results['warp_files'] = warp_files
+        return runtime
+
+
+def _read_okan_transformations(path):
+    """Read a ``_moteddy_transformations.txt`` file and yield 24-element
+    parameter vectors. Accepts both the VNL bracketed ``[a, b, ...]`` form and
+    plain whitespace-separated rows."""
+    rows = []
+    with open(path) as fobj:
+        for line in fobj:
+            line = line.strip().strip('[]')
+            if not line:
+                continue
+            vals = [float(x) for x in line.replace(',', ' ').split()]
+            if len(vals) < 24:
+                raise ValueError(
+                    f'expected 24 columns per row in {path}, got {len(vals)}'
+                )
+            rows.append(np.asarray(vals[:24], dtype=float))
+    if not rows:
+        raise ValueError(f'no transform rows found in {path}')
+    return rows
+
+
+class _DIFFPREPSplitOutputsInputSpec(BaseInterfaceInputSpec):
+    corrected_dwi_file = File(exists=True, mandatory=True)
+    corrected_bmtxt_file = File(exists=True, mandatory=True)
+    b0_threshold = traits.CInt(100, usedefault=True)
+
+
+class _DIFFPREPSplitOutputsOutputSpec(TraitedSpec):
+    dwi_files = OutputMultiObject(File(exists=True))
+    bvec_files = OutputMultiObject(File(exists=True))
+    bval_files = OutputMultiObject(File(exists=True))
+    b0_indices = traits.List(traits.Int())
+    forward_transforms = traits.List(File(exists=True))
+
+
+class DIFFPREPSplitOutputs(SimpleInterface):
+    """Split TORTOISE's corrected 4D DWI + 6-col bmatrix into per-volume files
+    that match the qsiprep contract: per-volume dwi/bval/bvec triples plus
+    a list of identity ITK transforms (DIFFPREP has already baked the
+    motion+eddy correction into the volumes, so downstream apply-transform
+    nodes must be no-ops)."""
+
+    input_spec = _DIFFPREPSplitOutputsInputSpec
+    output_spec = _DIFFPREPSplitOutputsOutputSpec
+
+    _identity_itk = (
+        '#Insight Transform File V1.0\n'
+        '#Transform 0\n'
+        'Transform: MatrixOffsetTransformBase_double_3_3\n'
+        'Parameters: 1 0 0 0 1 0 0 0 1 0 0 0\n'
+        'FixedParameters: 0 0 0\n'
+    )
+
+    def _run_interface(self, runtime):
+        from .images import split_bvals_bvecs
+
+        dwi_img = nb.load(self.inputs.corrected_dwi_file)
+        nvols = 1 if dwi_img.ndim < 4 else dwi_img.shape[3]
+
+        # Convert TORTOISE bmtxt -> FSL bvals/bvecs
+        bval_path, bvec_path = bmtxt_to_fsl(self.inputs.corrected_bmtxt_file, runtime.cwd)
+
+        # Split the 4D image into per-volume niftis under runtime.cwd
+        dwi_data = np.asanyarray(dwi_img.dataobj)
+        if dwi_img.ndim < 4:
+            dwi_data = dwi_data[..., np.newaxis]
+        per_vol_dwis = []
+        base = op.join(runtime.cwd, 'diffprep_vol')
+        for vol_idx in range(nvols):
+            vol_img = nb.Nifti1Image(
+                dwi_data[..., vol_idx].astype('float32'),
+                dwi_img.affine,
+                dwi_img.header,
+            )
+            vol_img.set_data_dtype('float32')
+            vol_path = f'{base}_{vol_idx:04d}.nii.gz'
+            vol_img.to_filename(vol_path)
+            per_vol_dwis.append(vol_path)
+
+        # Split the FSL gradients into per-volume txt files
+        per_vol_bvals, per_vol_bvecs = split_bvals_bvecs(
+            bval_path,
+            bvec_path,
+            deoblique=False,
+            img_files=per_vol_dwis,
+            working_dir=runtime.cwd,
+        )
+
+        # Build b0 indices list from the bvals
+        bvals_arr = np.loadtxt(bval_path).reshape(-1)
+        b0_indices = [int(i) for i, b in enumerate(bvals_arr) if b < self.inputs.b0_threshold]
+
+        # Per-volume identity ITK affines (TORTOISE has already baked the
+        # correction into the volume images themselves).
+        forward_transforms = []
+        for vol_idx in range(nvols):
+            xfm_path = op.join(runtime.cwd, f'diffprep_identity_{vol_idx:04d}.txt')
+            with open(xfm_path, 'w') as fobj:
+                fobj.write(self._identity_itk)
+            forward_transforms.append(xfm_path)
+
+        self._results['dwi_files'] = per_vol_dwis
+        self._results['bvec_files'] = per_vol_bvecs
+        self._results['bval_files'] = per_vol_bvals
+        self._results['b0_indices'] = b0_indices
+        self._results['forward_transforms'] = forward_transforms
+        return runtime
+
+
+def write_diffprep_json(json_file, phase_encoding_direction, working_dir=None):
+    """Write a minimal BIDS sidecar JSON next to a DWI nifti so that
+    TORTOISEProcess can read PhaseEncodingDirection from it. Returns the
+    path of the file written."""
+    import json
+
+    target = op.join(working_dir, op.basename(json_file)) if working_dir else json_file
+    payload = {'PhaseEncodingDirection': phase_encoding_direction}
+    with open(target, 'w') as fobj:
+        json.dump(payload, fobj)
+    return target
+
+
+def generate_diffprep_boilerplate(correction_mode):
+    """Methods boilerplate describing the DIFFPREP HMC backend."""
+
+    mode_desc = {
+        'motion': 'rigid head motion only',
+        'quadratic': 'rigid head motion together with quadratic eddy currents',
+        'cubic': 'rigid head motion together with cubic eddy currents',
+    }[correction_mode]
+    return (
+        f'\n\nHead motion correction was performed with DIFFPREP '
+        f'[@diffprep], part of the TORTOISE [@tortoisev4] software package, '
+        f'in {correction_mode} mode (correcting {mode_desc}). DIFFPREP fits a '
+        'SHORE/MAPMRI signal model to the data and iteratively registers each '
+        'volume to a model-predicted target using TORTOISE\'s 24-parameter '
+        'Okan-quadratic transform. The corrected volumes and motion-rotated '
+        'bmatrix were then passed to the rest of the pipeline.\n\n'
+    )
+
+
 def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False):
     """Generate boilerplate that describes how DRBUDDI is being used."""
 
