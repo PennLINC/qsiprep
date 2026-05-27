@@ -578,7 +578,18 @@ class _TORTOISEConvertInputSpec(BaseInterfaceInputSpec):
     bval_file = File(exists=True, mandatory=True, copyfile=True)
     bvec_file = File(exists=True, mandatory=True, copyfile=True)
     dwi_file = File(exists=True, mandatory=True)
-    mask_file = File(exists=True, mandatory=True)
+    # mask_file is OPTIONAL. The downstream TORTOISEProcess (DIFFPREP) binary
+    # does NOT consume an externally-supplied mask — its `DPCreateMask()`
+    # method (DIFFPREP.cxx:2338-2358) reads `b0_mask_img` from the
+    # registration settings file, and if that's empty (the default in
+    # qsiprep, which doesn't populate it) it auto-generates a mask via
+    # `create_mask(b0_img, noise_img)` on the b0 itself. The implementation
+    # of TORTOISEConvert._run_interface already guards on `isdefined()` for
+    # this input, but a mistaken `mandatory=True` here used to short-circuit
+    # the run before that guard could trigger. Relaxed to optional so the
+    # auto-mask path is reachable; behaviour is unchanged when a mask is
+    # actually wired in.
+    mask_file = File(exists=True)
 
 
 class _TORTOISEConvertOutputSpec(TraitedSpec):
