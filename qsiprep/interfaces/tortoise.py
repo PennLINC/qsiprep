@@ -844,10 +844,13 @@ class _DIFFPREPOutputSpec(TraitedSpec):
 class DIFFPREP(TORTOISECommandLine):
     """TORTOISE V4 DIFFPREP motion + eddy-current correction.
 
-    Runs the existing ``TORTOISEProcess`` binary with all stages other than
-    motion+eddy disabled (``--step motioneddy --denoising off --gibbs 0
-    --drift off --epi off``). Emits the per-volume corrected DWI, rotated
-    bmatrix, and 24-parameter transform file.
+    Runs the ``TORTOISEProcess`` binary starting from the Import step (so the
+    proc.nii/proc.bmtxt/proc.json working files get staged) with all stages
+    other than motion+eddy disabled via their own flags (``--step import
+    --denoising off --gibbs 0 --drift off --epi off --repol 0 --s2v 0``).
+    See ``_step_flags`` for why ``--step import`` (not ``--step motioneddy``)
+    is required. Emits the per-volume corrected DWI, rotated bmatrix, and
+    24-parameter transform file.
     """
 
     input_spec = _DIFFPREPInputSpec
@@ -856,9 +859,29 @@ class DIFFPREP(TORTOISECommandLine):
 
     # Hardcoded flags that put TORTOISE into "DIFFPREP-only" mode. qsiprep
     # already runs its own denoising / gibbs / SDC stages, so we explicitly
-    # turn them off.
+    # turn each of them off — but we still START from the Import step.
+    #
+    # IMPORTANT: `--step` sets TORTOISE's *start* step, not "the only step to
+    # run". The Import step (TORTOISE::CheckAndCopyInputData) is what stages
+    # the working files TORTOISE needs — proc.nii / proc.bmtxt / and crucially
+    # proc.json — into the temp_proc folder. TORTOISE::Process() then reads
+    # proc.json *unconditionally* (TORTOISE.cxx ~line 531). Using
+    # `--step motioneddy` skips Import (the gate at TORTOISE.cxx:514 is an
+    # exact `== STEPS::Import` match), so proc.json is never created and the
+    # subsequent read aborts with an nlohmann "unexpected end of input"
+    # parse error. Starting from `import` runs the full chain, but the
+    # intervening stages are no-ops given the flags below:
+    #   * `--denoising off` → DenoiseData only estimates noise; it does NOT
+    #     modify the DWI (TORTOISE.cxx:1394 branch), so no double-denoising.
+    #   * `--gibbs 0`       → GibbsUnringData early-returns (guarded by
+    #     `gibbs_option`, TORTOISE.cxx:1284), so no double-unringing.
+    #   * `--drift off`, `--epi off`, `--repol 0`, `--s2v 0` similarly gate
+    #     their respective stages off.
+    # MotionEddy (DIFFPREP) and everything after it run identically to the
+    # old `--step motioneddy` setting, so this only ADDS the (required)
+    # Import plus two verified no-op stages.
     _step_flags = (
-        '--step motioneddy '
+        '--step import '
         '--denoising off '
         '--gibbs 0 '
         '--drift off '
