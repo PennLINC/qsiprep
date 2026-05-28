@@ -909,18 +909,33 @@ class DIFFPREP(TORTOISECommandLine):
 
     def _list_outputs(self):
         outputs = self.output_spec().get()
-        # TORTOISE writes outputs next to the input nifti (or its copy in cwd).
+        # TORTOISE stages all its working files into a temp-proc subfolder
+        # of the input's directory and runs DIFFPREP on a "_proc" copy there.
+        # With `--step import` (see _step_flags), the import step creates
+        #   <dir>/<stem>_temp_proc/<stem>_proc.nii   (+ .bmtxt, .json)
+        # and DIFFPREP's motion+eddy outputs land alongside it as
+        #   <dir>/<stem>_temp_proc/<stem>_proc_moteddy.{nii,bmtxt}
+        #   <dir>/<stem>_temp_proc/<stem>_proc_moteddy_transformations.txt
+        # NOT as <dir>/<stem>_moteddy.* in the node cwd (which is what an
+        # earlier version of this method incorrectly assumed). TORTOISE's
+        # *_TORTOISE_final.* output does land in the cwd, but it has no
+        # transformations sidecar, so we anchor all three outputs on the
+        # consistent _proc_moteddy triple from the same DIFFPREP step.
+        #
+        # The temp-proc folder is named from the `-u` input TORTOISE was
+        # given: nipype copies the input into the node cwd (copyfile=True),
+        # so resolve against the cwd copy when present.
         nii_path = op.abspath(self.inputs.dwi_file)
         cwd_nii = op.join(os.getcwd(), op.basename(nii_path))
-        # nipype copies the input into cwd because of copyfile=True
-        if op.exists(cwd_nii):
-            base_nii = cwd_nii
-        else:
-            base_nii = nii_path
-        base = base_nii[: -len('.nii')] if base_nii.endswith('.nii') else base_nii
-        outputs['corrected_dwi_file'] = base + '_moteddy.nii'
-        outputs['corrected_bmtxt_file'] = base + '_moteddy.bmtxt'
-        outputs['transformations_file'] = base + '_moteddy_transformations.txt'
+        base_nii = cwd_nii if op.exists(cwd_nii) else nii_path
+        stem = op.basename(base_nii)
+        if stem.endswith('.nii'):
+            stem = stem[: -len('.nii')]
+        temp_proc = op.join(op.dirname(base_nii), stem + '_temp_proc')
+        proc_base = op.join(temp_proc, stem + '_proc')
+        outputs['corrected_dwi_file'] = proc_base + '_moteddy.nii'
+        outputs['corrected_bmtxt_file'] = proc_base + '_moteddy.bmtxt'
+        outputs['transformations_file'] = proc_base + '_moteddy_transformations.txt'
         return outputs
 
 
@@ -937,10 +952,29 @@ class _DIFFPREPMotionParamsOutputSpec(TraitedSpec):
 
 
 class DIFFPREPMotionParams(SimpleInterface):
-    """Extract a 6-column SPM-style motion parameters file from DIFFPREP's
-    24-parameter transform file. Columns are translation_xyz (mm) and
-    rotation_xyz (radians) — exactly the leading 6 parameters of TORTOISE's
-    ``OkanQuadraticTransform``."""
+    """Extract a 6-column SPM-style motion-parameters file from DIFFPREP's
+    24-parameter transform file.
+
+    The output columns are the leading 6 parameters of TORTOISE's
+    ``OkanQuadraticTransform`` (see ``itkOkanQuadraticTransform.hxx``
+    ``SetParameters``), in SPM realignment-parameter order::
+
+        translation_x  translation_y  translation_z   rotation_x  rotation_y  rotation_z
+        <-------- mm (LPS physical) -------->          <------ radians ------>
+
+    parameters[0:3] are added directly to the LPS physical coordinate (so
+    millimetres); parameters[3:6] are the Euler angles fed to the cos/sin
+    rotation matrix (so radians). The remaining 18 Okan parameters encode the
+    eddy-current polynomial + rotation/eddy centre and are intentionally
+    dropped here — they are not rigid head motion.
+
+    Units match the eddy (``Eddy2SPMMotion``) and SHORELine
+    (``CombineMotions``) SPM motion files: translation mm, rotation radians.
+    Note the rotation *parameterisation* differs across backends — eddy and
+    DIFFPREP report Euler angles, SHORELine reports an axis-angle rotation
+    vector — so the rotation columns are only directly comparable between
+    backends in the small-angle regime; translation is exactly comparable.
+    """
 
     input_spec = _DIFFPREPMotionParamsInputSpec
     output_spec = _DIFFPREPMotionParamsOutputSpec
@@ -1440,3 +1474,181 @@ def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False):
         'in the final interpolated images using a method similar to LSR.\n\n'
     )
     return ' '.join(desc)
+
+
+# ---------------------------------------------------------------------------
+# Model-based "ideal" DWI synthesis for slice-wise QC (carpet plot)
+# ---------------------------------------------------------------------------
+#
+# FSL eddy emits a per-slice outlier map directly, and SHORELine builds
+# model-predicted ("noise-free") volumes from its 3dSHORE fit; both feed
+# qsiprep's SliceQC -> DMRISummary carpet plot. TORTOISE DIFFPREP does neither
+# of those by default -- it only persists model-synthesized volumes when REPOL
+# outlier replacement is enabled, which we keep OFF for the non-shelled CS-DSI
+# schemes (shell binning degenerates on continuous-q data). To get the same
+# observed-vs-model carpet plot for the DIFFPREP backend, we fit a MAPMRI model
+# to the *corrected* DWI with TORTOISE's own CLI tools and synthesize an ideal
+# volume at every corrected gradient, then hand the (observed, ideal) pair to
+# the same SliceQC node SHORELine uses.
+
+
+def _tortoise_heuristic_deltas(bmtxt_file):
+    """Replicate TORTOISE's internal small/big-delta heuristic.
+
+    ``EstimateMAPMRI`` derives diffusion timings from the maximum b-value when
+    they are not supplied on the command line (``estimate_mapmri_main.cxx``:
+    ``small_delta = (b_max / gyro^2 / G^2 / 2 * 1e6)^(1/3) * 1000``; ``G`` is
+    taken as ``2 * 40 mT/m`` and ``big_delta = 3 * small_delta``, in ms).
+
+    ``SynthesizeDWIsFromMAPMRI`` has **no** such fallback -- it consumes the
+    deltas as mandatory positional arguments. For the carpet-plot QC we only
+    need the fit and the synthesis to share an identical ``tdiff`` and q-space
+    scaling so the synthesized signal reproduces the *model's* prediction of
+    the observed signal (deviations then localize genuine slice corruption).
+    Computing the deltas here once and passing the identical values to both
+    ``EstimateMAPMRI`` and ``SynthesizeDWIsFromMAPMRI`` guarantees that
+    consistency and exactly matches what TORTOISE would have chosen on its own.
+
+    The b-value of each volume is the trace of its 6-column b-matrix row
+    (columns 0, 3, 5 -> Bxx, Byy, Bzz).
+    """
+    bmat = np.loadtxt(bmtxt_file)
+    if bmat.ndim == 1:
+        bmat = bmat[np.newaxis, :]
+    bvals = bmat[:, 0] + bmat[:, 3] + bmat[:, 5]
+    max_bval = float(np.max(bvals))
+
+    gyro = 267.51532e6
+    grad_strength = 2.0 * 40e-3  # TORTOISE assumes 2 * 40 mT/m
+    temp = max_bval / gyro / gyro / grad_strength / grad_strength / 2.0 * 1e6
+    small_delta = temp ** (1.0 / 3.0) * 1000.0  # ms, matching TORTOISE
+    big_delta = small_delta * 3.0
+    return small_delta, big_delta
+
+
+class _SynthesizeDWIsInputSpec(BaseInterfaceInputSpec):
+    dwi_file = File(exists=True, mandatory=True, desc='corrected 4D DWI (TORTOISE output)')
+    bmtxt_file = File(exists=True, mandatory=True, desc='corrected 6-col TORTOISE bmtxt')
+    mask_file = File(exists=True, mandatory=True, desc='brain mask (any grid; resampled to DWI)')
+    map_order = traits.Int(4, usedefault=True, desc='MAPMRI order for the QC model fit')
+    num_threads = traits.Int(desc='OMP threads for the TORTOISE estimators')
+
+
+class _SynthesizeDWIsOutputSpec(TraitedSpec):
+    synth_dwi_file = File(exists=True, desc='4D model-synthesized DWI at the corrected gradients')
+    per_volume_synth = OutputMultiObject(File(exists=True), desc='per-volume synthesized images')
+    qc_mask = File(exists=True, desc='brain mask resampled onto the corrected DWI grid')
+
+
+class SynthesizeDWIs(SimpleInterface):
+    """Fit a MAPMRI model to a corrected DWI and synthesize an "ideal" volume
+    at every measured gradient, for slice-wise QC.
+
+    Runs ``EstimateTensor`` -> ``EstimateMAPMRI`` -> ``SynthesizeDWIsFromMAPMRI``
+    entirely within the node's working directory. Unlike the qsirecon TORTOISE
+    recon interfaces -- which rely on the input NIfTI living in the node cwd so
+    that TORTOISE's "write outputs next to the input" convention lines up with
+    a basename-relative ``_list_outputs`` -- this interface copies the DWI and
+    its ``.bmtxt`` sibling into ``runtime.cwd`` with a fixed stem, so output
+    discovery is unambiguous regardless of where the upstream files lived.
+    """
+
+    input_spec = _SynthesizeDWIsInputSpec
+    output_spec = _SynthesizeDWIsOutputSpec
+
+    def _run_interface(self, runtime):
+        cwd = runtime.cwd
+        stem = 'diffprep_corrected'
+
+        # TORTOISE wants uncompressed float32 niftis and finds the b-matrix as
+        # a sibling file with the same stem (<stem>.bmtxt).
+        nii_path = op.join(cwd, stem + '.nii')
+        dwi_img = nim.load_img(self.inputs.dwi_file, dtype='float32')
+        dwi_img.set_data_dtype('float32')
+        dwi_img.to_filename(nii_path)
+
+        bmtxt_path = op.join(cwd, stem + '.bmtxt')
+        shutil.copyfile(self.inputs.bmtxt_file, bmtxt_path)
+
+        # Resample the mask onto the corrected DWI grid so it is valid both as
+        # a TORTOISE --mask and as the SliceQC mask (which indexes the data by
+        # slice and therefore requires an identical 3D shape/affine).
+        ref_3d = nim.index_img(dwi_img, 0)
+        mask_img = nim.resample_to_img(
+            self.inputs.mask_file, ref_3d, interpolation='nearest'
+        )
+        mask_img.set_data_dtype('float32')
+        mask_path = op.join(cwd, stem + '_mask.nii')
+        mask_img.to_filename(mask_path)
+
+        # Identical, self-consistent deltas for fit and synthesis.
+        small_delta, big_delta = _tortoise_heuristic_deltas(bmtxt_path)
+
+        env = dict(os.environ)
+        num_threads = self.inputs.num_threads if isdefined(self.inputs.num_threads) else None
+        if not num_threads:
+            num_threads = int(env.get('OMP_NUM_THREADS', 1) or 1)
+        env['OMP_NUM_THREADS'] = str(num_threads)
+
+        def _run(cmd):
+            LOGGER.info('SynthesizeDWIs: %s', ' '.join(map(str, cmd)))
+            subprocess.run(cmd, check=True, cwd=cwd, env=env)
+
+        # 1. Tensor (provides DT + A0 for the MAPMRI fit and the synthesizer).
+        dt_path = op.join(cwd, stem + '_L1_DT.nii')
+        am_path = op.join(cwd, stem + '_L1_AM.nii')
+        _run(['EstimateTensor', '--input', nii_path, '--mask', mask_path])
+
+        # 2. MAPMRI coefficients, deltas pinned explicitly.
+        coeffs_path = op.join(cwd, stem + '_mapmri.nii')
+        _run([
+            'EstimateMAPMRI',
+            '--input', nii_path,
+            '--mask', mask_path,
+            '--dti', dt_path,
+            '--A0', am_path,
+            '--map_order', str(self.inputs.map_order),
+            '--small_delta', f'{small_delta:.7f}',
+            '--big_delta', f'{big_delta:.7f}',
+        ])
+
+        # 3. Synthesize an ideal DWI at the corrected gradient table. The tool
+        #    is positional and writes <coeffs-stem>_synth.nii next to coeffs.
+        _run([
+            'SynthesizeDWIsFromMAPMRI',
+            coeffs_path,
+            dt_path,
+            am_path,
+            f'{small_delta:.7f}',
+            f'{big_delta:.7f}',
+            bmtxt_path,
+        ])
+        synth_path = coeffs_path[: -len('.nii')] + '_synth.nii'
+        if not op.exists(synth_path):
+            raise FileNotFoundError(
+                f'SynthesizeDWIsFromMAPMRI did not produce {synth_path}'
+            )
+
+        # Split into per-volume images in native (corrected-bmtxt) order so the
+        # i-th synthesized volume pairs with the i-th corrected volume that
+        # DIFFPREPSplitOutputs emits.
+        synth_img = nb.load(synth_path)
+        synth_data = np.asanyarray(synth_img.dataobj)
+        if synth_data.ndim < 4:
+            synth_data = synth_data[..., np.newaxis]
+        per_vol = []
+        for vol_idx in range(synth_data.shape[3]):
+            vol_img = nb.Nifti1Image(
+                synth_data[..., vol_idx].astype('float32'),
+                synth_img.affine,
+                synth_img.header,
+            )
+            vol_img.set_data_dtype('float32')
+            vol_path = op.join(cwd, f'synth_vol_{vol_idx:04d}.nii.gz')
+            vol_img.to_filename(vol_path)
+            per_vol.append(vol_path)
+
+        self._results['synth_dwi_file'] = synth_path
+        self._results['per_volume_synth'] = per_vol
+        self._results['qc_mask'] = mask_path
+        return runtime

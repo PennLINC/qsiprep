@@ -13,13 +13,14 @@ from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
 from ... import config
-from ...interfaces.gradients import ExtractB0s
+from ...interfaces.gradients import ExtractB0s, SliceQC
 from ...interfaces.nilearn import EnhanceB0
 from ...interfaces.tortoise import (
     DIFFPREP,
     DIFFPREPDecomposeTransforms,
     DIFFPREPMotionParams,
     DIFFPREPSplitOutputs,
+    SynthesizeDWIs,
     TORTOISEConvert,
     generate_diffprep_boilerplate,
 )
@@ -233,6 +234,19 @@ def init_diffprep_hmc_wf(
         source_file=source_file,
     )
 
+    # Slice-wise QC for the carpet plot. DIFFPREP (with REPOL off) does not
+    # persist model-synthesized volumes, so we fit a MAPMRI model to the
+    # corrected DWI and synthesize an "ideal" volume at every corrected
+    # gradient, then score observed-vs-ideal per slice with the same SliceQC
+    # node SHORELine uses. The .npz it emits feeds the backend-agnostic
+    # DMRISummary/carpet-plot machinery in init_dwi_derivatives_wf.
+    synth_dwis = pe.Node(
+        SynthesizeDWIs(num_threads=config.nipype.omp_nthreads),
+        name='synth_dwis',
+        n_procs=config.nipype.omp_nthreads,
+    )
+    slice_qc = pe.Node(SliceQC(), name='slice_qc')
+
     workflow.connect([
         (inputnode, tortoise_convert, [
             ('dwi_file', 'dwi_file'),
@@ -290,6 +304,24 @@ def init_diffprep_hmc_wf(
         (b0_ref_for_coreg, outputnode, [
             ('outputnode.dwi_mask', 'b0_template_mask'),
         ]),
+    ])  # fmt:skip
+
+    # Carpet-plot QC: synthesize a MAPMRI "ideal" DWI from the corrected data,
+    # then compare it to the corrected data slice-by-slice. The observed side
+    # reuses the per-volume corrected images from split_outputs (native
+    # corrected-bmtxt order), which matches the per-volume synthesis order.
+    workflow.connect([
+        (diffprep, synth_dwis, [
+            ('corrected_dwi_file', 'dwi_file'),
+            ('corrected_bmtxt_file', 'bmtxt_file'),
+        ]),
+        (b0_ref_for_coreg, synth_dwis, [('outputnode.dwi_mask', 'mask_file')]),
+        (split_outputs, slice_qc, [('dwi_files', 'uncorrected_dwi_files')]),
+        (synth_dwis, slice_qc, [
+            ('per_volume_synth', 'ideal_image_files'),
+            ('qc_mask', 'mask_image'),
+        ]),
+        (slice_qc, outputnode, [('slice_stats', 'slice_quality')]),
     ])  # fmt:skip
 
     fieldmap_info = scan_groups['fieldmap_info']
