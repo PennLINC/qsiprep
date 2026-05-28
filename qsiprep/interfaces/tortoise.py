@@ -6,6 +6,7 @@ Wrappers for the TORTOISE programs
 import logging
 import os
 import os.path as op
+import shutil
 import subprocess
 
 import nibabel as nb
@@ -603,14 +604,39 @@ class TORTOISEConvert(SimpleInterface):
     output_spec = _TORTOISEConvertOutputSpec
 
     def _run_interface(self, runtime):
-        """Convert gzipped niftis and bval/bvec into TORTOISE format."""
+        """Convert gzipped niftis and bval/bvec into TORTOISE format.
+
+        TORTOISEProcess requires the ``.bmtxt`` file to sit in the same
+        directory as the ``.nii`` and share the same basename (it locates
+        the bmtxt from the nii by extension swap). The DWI gets renamed
+        here to ``runtime.cwd/<input-dwi-stem>.nii`` — and its stem
+        typically carries pre-HMC suffixes like ``_LPS_denoised_mrdegibbs``
+        added by the upstream pre_hmc_wf. The bmtxt, however, was being
+        written by ``make_bmat_file`` *next to the bval file* with the
+        bval's stem (which lacks those pre-HMC suffixes — bvals don't go
+        through denoise/degibbs). The mismatch caused TORTOISEProcess to
+        fail with:
+
+            Either the .bmtxt file or the .bvecs/.bvals file should be
+            present in the same folder as the up data file and should
+            have the same basename.
+
+        Fix: after ``make_bmat_file`` writes the bmtxt next to the bval,
+        copy it to runtime.cwd with the DWI's basename so the pair is
+        co-located and same-stemmed.
+        """
         dwi_file = fname_presuffix(
             self.inputs.dwi_file, newpath=runtime.cwd, use_ext=False, suffix='.nii'
         )
         dwi_img = nim.load_img(self.inputs.dwi_file, dtype='float32')
         dwi_img.set_data_dtype('float32')
         dwi_img.to_filename(dwi_file)
-        bmtxt_file = make_bmat_file(self.inputs.bval_file, self.inputs.bvec_file)
+        src_bmtxt = make_bmat_file(self.inputs.bval_file, self.inputs.bvec_file)
+        # Co-locate the bmtxt with the renamed DWI and give it a matching
+        # stem so TORTOISEProcess can pair them.
+        bmtxt_file = op.splitext(dwi_file)[0] + '.bmtxt'
+        if op.abspath(src_bmtxt) != op.abspath(bmtxt_file):
+            shutil.copyfile(src_bmtxt, bmtxt_file)
 
         if isdefined(self.inputs.mask_file):
             mask_file = fname_presuffix(
