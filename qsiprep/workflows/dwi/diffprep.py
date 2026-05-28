@@ -382,19 +382,43 @@ def init_diffprep_hmc_wf(
 
 
 def _write_sidecar_json(nii_file, phase_encoding_direction, working_dir=None):
-    """Function-node helper. Writes a BIDS-style JSON sidecar next to a .nii
-    so TORTOISEProcess can read PhaseEncodingDirection from it."""
+    """Function-node helper. Writes a BIDS-style JSON sidecar with the same
+    basename as ``nii_file`` so TORTOISEProcess can read
+    PhaseEncodingDirection from it.
+
+    The JSON is written into **this node's own working directory** (the
+    function-node cwd) — NOT into the directory ``nii_file`` lives in. That
+    distinction matters: ``nii_file`` is typically the output of the
+    upstream ``tortoise_convert`` node, and earlier this helper derived the
+    output path from ``nii_file``'s full path, so the JSON landed inside
+    ``tortoise_convert``'s directory. That cross-node write coupled the two
+    nodes' on-disk state: clearing ``tortoise_convert``'s work dir (e.g. to
+    pick up a code change) while ``write_pe_json``'s result cache survived
+    left a dangling/empty JSON, and the downstream ``diffprep`` node then
+    propagated an empty sidecar — TORTOISE aborts with a nlohmann JSON
+    parse error ("unexpected end of input").
+
+    Writing into the node's own cwd keeps each node's outputs inside its
+    own directory, so the standard nipype ``copyfile=True`` propagation to
+    the ``diffprep`` node carries a valid sidecar regardless of how the
+    upstream node's cache was cleared. Only the **basename** of ``nii_file``
+    is used (so the sidecar stem matches the ``.nii`` TORTOISE looks up);
+    its directory is intentionally discarded.
+    """
     import json
+    import os
     import os.path as op
 
-    base = nii_file
+    base = op.basename(nii_file)
     if base.endswith('.nii.gz'):
         base = base[: -len('.nii.gz')]
     elif base.endswith('.nii'):
         base = base[: -len('.nii')]
-    json_file = base + '.json'
-    if working_dir:
-        json_file = op.join(working_dir, op.basename(json_file))
+    # working_dir override is honoured for callers that want an explicit
+    # destination; otherwise default to the node's own cwd (where nipype
+    # runs the function), never the input file's directory.
+    out_dir = working_dir if working_dir else os.getcwd()
+    json_file = op.abspath(op.join(out_dir, base + '.json'))
     with open(json_file, 'w') as fobj:
         json.dump({'PhaseEncodingDirection': phase_encoding_direction}, fobj)
     return json_file
