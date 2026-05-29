@@ -198,7 +198,7 @@ class GatherDRBUDDIInputs(SimpleInterface):
 def write_dummy_bmtxt(nii_file):
     new_fname = fname_presuffix(nii_file, suffix='.bmtxt', use_ext=False)
     img = nim.load_img(nii_file)
-    nvols = 1 if img.ndim < 4 else img.ndim.shape[3]
+    nvols = 1 if img.ndim < 4 else img.shape[3]
     with open(new_fname, 'w') as bmtxt_f:
         bmtxt_f.write('\n'.join(['0 0 0 0 0 0'] * nvols) + '\n')
     return new_fname
