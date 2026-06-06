@@ -171,13 +171,28 @@ jobs:
           name: Build test Docker image if needed
           no_output_timeout: 90m
           command: |
-            if [[ "$BUILD_TEST_IMAGE" == "1" || "$BASE_WAS_BUILT" == "1" ]]; then
+            build_test_image() {
               docker build \
+                "$@" \
                 --target test \
                 --rm=false \
                 -t pennlinc/qsiprep:test \
                 --platform linux/amd64 \
                 --build-arg VCS_REF="$(git rev-parse --short HEAD)" .
+            }
+            build_test_image_with_retry() {
+              e=1 && for i in {1..5}; do
+                if [[ "$i" -gt 1 ]]; then
+                  echo "Test image build failed; pruning BuildKit cache and retrying without cache."
+                  docker builder prune -af || true
+                  build_test_image --no-cache && e=0 && break || sleep 15
+                else
+                  build_test_image && e=0 && break || sleep 15
+                fi
+              done && [ "$e" -eq "0" ]
+            }
+            if [[ "$BUILD_TEST_IMAGE" == "1" || "$BASE_WAS_BUILT" == "1" ]]; then
+              build_test_image_with_retry
             elif docker image inspect pennlinc/qsiprep:test > /dev/null 2>&1; then
               echo "Reusing existing local test image (no Dockerfile/pixi/base-triggered rebuild required)."
             elif docker pull localhost:5000/qsiprep-test; then
@@ -185,12 +200,7 @@ jobs:
               echo "Reusing cached test image from local registry (no Dockerfile/pixi/base-triggered rebuild required)."
             else
               echo "No reusable test image found; rebuilding test image."
-              docker build \
-                --target test \
-                --rm=false \
-                -t pennlinc/qsiprep:test \
-                --platform linux/amd64 \
-                --build-arg VCS_REF="$(git rev-parse --short HEAD)" .
+              build_test_image_with_retry
             fi
       - run:
           name: Guard test image revision
