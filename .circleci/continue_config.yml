@@ -64,7 +64,7 @@ commands:
     steps:
       - restore_cache:
           keys:
-            - build-v4-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
+            - build-v5-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
       - restore_cache:
           keys:
             - data-v2-{{ checksum ".circleci/data_versions.txt" }}
@@ -131,7 +131,7 @@ jobs:
           path: /tmp/src/qsiprep
       - restore_cache:
           keys:
-            - build-v4-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
+            - build-v5-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
       - run: *docker_auth
       - run: *setup_docker_registry
       - run:
@@ -277,17 +277,12 @@ jobs:
               fi
             fi
       - run:
-          name: Docker registry garbage collection
-          command: |
-            docker exec registry /bin/registry garbage-collect --delete-untagged \
-              /etc/docker/registry/config.yml
-      - run:
           name: Record successful image prep
           command: |
             mkdir -p /tmp/images
             touch /tmp/images/imageprep-success.marker
       - save_cache:
-          key: build-v4-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
+          key: build-v5-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
           paths:
             - /tmp/docker
             - /tmp/images
