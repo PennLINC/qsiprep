@@ -23,6 +23,21 @@ from ..viz.utils import plot_denoise
 LOGGER = logging.getLogger('nipype.interface')
 
 
+def _to_magnitude(img):
+    """Return the magnitude of a complex-valued image, or the image unchanged.
+
+    Complex denoising methods (such as complex MP-PCA) operate on complex-valued
+    data. The visual reports should always display the magnitude images, so any
+    complex data are converted to their magnitude here.
+    """
+    data = np.asanyarray(img.dataobj)
+    if not np.iscomplexobj(data):
+        return img
+
+    magnitude = np.abs(data).astype(np.float32)
+    return nb.Nifti1Image(magnitude, affine=img.affine)
+
+
 class SeriesPreprocReportInputSpec(reporting.ReportCapableInputSpec):
     nmse_text = traits.File(
         name_source='in_file', keep_extension=False, name_template='%s_nmse.txt'
@@ -74,6 +89,14 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
         LOGGER.info('Generating denoising visual report')
 
         input_dwi, denoised_nii, field_nii = self._get_plotting_images()
+
+        # Complex-valued denoising (e.g. complex MP-PCA) produces complex images.
+        # The report should always show the magnitude images before and after
+        # denoising, so convert any complex data to its magnitude.
+        input_dwi = _to_magnitude(input_dwi)
+        denoised_nii = _to_magnitude(denoised_nii)
+        if field_nii is not None:
+            field_nii = _to_magnitude(field_nii)
 
         # find an image to use as the background
         image_data = input_dwi.get_fdata()
