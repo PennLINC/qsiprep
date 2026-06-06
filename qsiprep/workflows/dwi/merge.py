@@ -29,6 +29,7 @@ from ...interfaces.mrtrix import (
     PolarToComplex,
 )
 from ...interfaces.nilearn import MaskEPI, Merge
+from ...interfaces.phase import PhaseCorrect
 from ...interfaces.tortoise import Gibbs
 from ...utils.bids import IMPORTANT_DWI_FIELDS, update_metadata_from_nifti_header
 from .qc import init_modelfree_qc_wf
@@ -282,6 +283,11 @@ def init_merge_and_denoise_wf(
     merge_confounds = pe.Node(niu.Merge(2), name='merge_confounds')
     hstack_confounds = pe.Node(StackConfounds(axis=1), name='hstack_confounds')
     n_volumes = dwi_df['NumVolumes'].sum()
+    if config.workflow.dwi_phase_correction in ('tv', 'tvc', 'dc'):
+        config.loggers.workflow.warning(
+            'Phase correction is not applied to concatenated DWI series '
+            '(denoising after combining); the magnitude will be used.'
+        )
     denoising_wf = init_dwi_denoising_wf(
         partial_fourier=get_merged_parameter(dwi_df, 'PartialFourier', 'all'),
         phase_encoding_direction=get_merged_parameter(dwi_df, 'PhaseEncodingAxis', 'all'),
@@ -462,8 +468,6 @@ def init_dwi_denoising_wf(
                 'then denoised using the Marchenko-Pastur PCA method implemented in dwidenoise '
                 '[@mrtrix3; @dwidenoise1; @dwidenoise2; @cordero2019complex] '
                 f'with a{auto_str} window size of {dwi_denoise_window} voxels. '
-                'After denoising, the complex-valued data were split back into magnitude and '
-                'phase, and the denoised magnitude data were retained. '
             )
             last_step = 'After MP-PCA, '
 
@@ -501,16 +505,60 @@ def init_dwi_denoising_wf(
                 (denoiser, merge_confounds, [('nmse_text', f'in{step_num}')]),
             ])  # fmt:skip
 
-            split_complex = pe.Node(
-                ComplexToMagnitude(),
-                name='split_complex',
-                n_procs=omp_nthreads,
-            )
+            phase_correction = config.workflow.dwi_phase_correction
+            if phase_correction in ('tv', 'tvc', 'dc'):
+                method_name = {
+                    'tv': 'total-variation rephasing [@eichner2015real]',
+                    'tvc': 'complex-valued total-variation rephasing [@eichner2015real]',
+                    'dc': 'decorrelated phase filtering [@sprenger2017real]',
+                }[phase_correction]
+                desc += (
+                    'After denoising, the complex-valued data were phase-corrected '
+                    f'using {method_name}, and the real channel was retained for '
+                    'subsequent processing. '
+                )
 
-            workflow.connect([
-                (denoiser, split_complex, [('out_file', 'complex_file')]),
-                (split_complex, buffernodes[-1], [('out_file', 'dwi_file')]),
-            ])  # fmt:skip
+                phase_correct = pe.Node(
+                    PhaseCorrect(
+                        method=phase_correction,
+                        tv_weight=config.workflow.dwi_phase_tv_weight,
+                        dc_kernel=config.workflow.dwi_phase_dc_kernel,
+                    ),
+                    name='phase_correct',
+                    n_procs=omp_nthreads,
+                )
+                ds_report_phasecorr = pe.Node(
+                    DerivativesDataSink(
+                        datatype='figures',
+                        desc='phasecorrection',
+                        source_file=source_file,
+                    ),
+                    name=f'ds_report_{name}_phasecorrection',
+                    run_without_submitting=True,
+                    mem_gb=DEFAULT_MEMORY_MIN_GB,
+                )
+
+                workflow.connect([
+                    (denoiser, phase_correct, [('out_file', 'complex_file')]),
+                    (phase_correct, buffernodes[-1], [('out_file', 'dwi_file')]),
+                    (phase_correct, ds_report_phasecorr, [('out_report', 'in_file')]),
+                ])  # fmt:skip
+            else:
+                desc += (
+                    'After denoising, the complex-valued data were split back into '
+                    'magnitude and phase, and the denoised magnitude data were retained. '
+                )
+
+                split_complex = pe.Node(
+                    ComplexToMagnitude(),
+                    name='split_complex',
+                    n_procs=omp_nthreads,
+                )
+
+                workflow.connect([
+                    (denoiser, split_complex, [('out_file', 'complex_file')]),
+                    (split_complex, buffernodes[-1], [('out_file', 'dwi_file')]),
+                ])  # fmt:skip
 
         elif denoise_method == 'dwidenoise':
             desc += (

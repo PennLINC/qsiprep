@@ -186,6 +186,15 @@ sections:
     static: false
     subtitle: DWI Denoising
 
+  - bids: {datatype: figures, desc: phasecorrection, suffix: dwi}
+    caption: |
+      "Phase correction of the complex-valued data. The real channel (retained for
+      downstream processing) is shown alongside the imaginary residual for a low and
+      high-<em>b</em> image. After successful correction the imaginary residual should
+      contain only noise, with no coherent anatomical structure."
+    static: false
+    subtitle: Complex Phase Correction
+
   - bids: {datatype: figures, desc: unringing, suffix: dwi}
     caption: |
       "Effect of removing Gibbs ringing on a low and high-<em>b</em> image."

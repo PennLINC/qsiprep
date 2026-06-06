@@ -396,6 +396,19 @@ def _build_parser(**kwargs):
         '"patch2self" (DIPY) or "none". (default: dwidenoise)',
     )
     g_conf.add_argument(
+        '--dwi-phase-correction',
+        action='store',
+        choices=['none', 'tv', 'tvc', 'dc'],
+        default='none',
+        help='Phase-correction method for complex-valued DWI data. '
+        'When "tv" (Eichner 2015, TV on the magnitude/phase stack), "tvc" '
+        '(Eichner 2015, paper-faithful TV on the complex signal) or "dc" '
+        '(Sprenger 2017), the real channel after rephasing is used for '
+        'downstream processing instead of the magnitude. Requires phase data '
+        '(a BIDS part-phase file) and --denoise-method dwidenoise; otherwise it '
+        'is ignored. (default: none)',
+    )
+    g_conf.add_argument(
         '--unringing-method',
         action='store',
         choices=['none', 'mrdegibbs', 'rpg'],
@@ -753,6 +766,18 @@ def parse_args(args=None, namespace=None):
         elif config.workflow.denoise_method == 'none':
             config.loggers.cli.warning(
                 'The --dwi-denoise-window option is not used when --denoise-method=none'
+            )
+
+    if config.workflow.dwi_phase_correction != 'none':
+        if config.workflow.denoise_method != 'dwidenoise':
+            config.loggers.cli.warning(
+                'The --dwi-phase-correction option requires --denoise-method '
+                'dwidenoise; it will be ignored.'
+            )
+        if 'phase' in config.workflow.ignore:
+            config.loggers.cli.warning(
+                'The --dwi-phase-correction option has no effect when phase '
+                'data are ignored (--ignore phase); it will be ignored.'
             )
 
     bids_dir = config.execution.bids_dir
