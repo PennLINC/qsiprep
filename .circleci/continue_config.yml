@@ -60,11 +60,11 @@ _pull_test_image: &pull_test_image
 
 commands:
   restore_build_and_data:
-    description: Restore Docker image cache and test data cache, then start the registry
+    description: Restore workflow Docker image cache and test data cache, then start the registry
     steps:
       - restore_cache:
           keys:
-            - build-v5-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
+            - build-v6-workflow-{{ .Environment.CIRCLE_WORKFLOW_ID }}-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
       - restore_cache:
           keys:
             - data-v2-{{ checksum ".circleci/data_versions.txt" }}
@@ -131,7 +131,7 @@ jobs:
           path: /tmp/src/qsiprep
       - restore_cache:
           keys:
-            - build-v5-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
+            - build-v6-deps-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
       - run: *docker_auth
       - run: *setup_docker_registry
       - run:
@@ -225,16 +225,25 @@ jobs:
             else
               THISVERSION="0+build"
             fi
-            e=1 && for i in {1..5}; do
+            build_production_image() {
               docker build \
+                "$@" \
                 --target qsiprep \
                 --rm=false \
                 -t pennlinc/qsiprep:latest \
                 --platform linux/amd64 \
                 --build-arg BUILD_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
                 --build-arg VCS_REF="$(git rev-parse --short HEAD)" \
-                --build-arg VERSION="$THISVERSION" . \
-              && e=0 && break || sleep 15
+                --build-arg VERSION="$THISVERSION" .
+            }
+            e=1 && for i in {1..5}; do
+              if [[ "$i" -gt 1 ]]; then
+                echo "Production image build failed; pruning BuildKit cache and retrying without cache."
+                docker builder prune -af || true
+                build_production_image --no-cache && e=0 && break || sleep 15
+              else
+                build_production_image && e=0 && break || sleep 15
+              fi
             done && [ "$e" -eq "0" ]
       - run:
           name: Verify production image
@@ -282,7 +291,12 @@ jobs:
             mkdir -p /tmp/images
             touch /tmp/images/imageprep-success.marker
       - save_cache:
-          key: build-v5-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
+          key: build-v6-workflow-{{ .Environment.CIRCLE_WORKFLOW_ID }}-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
+          paths:
+            - /tmp/docker
+            - /tmp/images
+      - save_cache:
+          key: build-v6-deps-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
           paths:
             - /tmp/docker
             - /tmp/images
