@@ -32,7 +32,8 @@ def _build(use_phase):
     )
 
 
-def test_phase_correction_node_present_when_enabled(_denoise_defaults, monkeypatch):
+@pytest.mark.usefixtures('_denoise_defaults')
+def test_phase_correction_node_present_when_enabled(monkeypatch):
     monkeypatch.setattr(config.workflow, 'dwi_phase_correction', 'tv', raising=False)
     wf = _build(use_phase=True)
     names = _node_names(wf)
@@ -40,7 +41,8 @@ def test_phase_correction_node_present_when_enabled(_denoise_defaults, monkeypat
     assert 'split_complex' not in names
 
 
-def test_magnitude_path_unchanged_when_disabled(_denoise_defaults, monkeypatch):
+@pytest.mark.usefixtures('_denoise_defaults')
+def test_magnitude_path_unchanged_when_disabled(monkeypatch):
     monkeypatch.setattr(config.workflow, 'dwi_phase_correction', 'none', raising=False)
     wf = _build(use_phase=True)
     names = _node_names(wf)
@@ -60,9 +62,7 @@ def _get_node(wf, name):
 def test_derivatives_tagged_part_real_when_enabled(monkeypatch):
     monkeypatch.setattr(config.workflow, 'dwi_phase_correction', 'tv', raising=False)
     monkeypatch.setattr(config.workflow, 'hmc_model', 'eddy', raising=False)
-    wf = init_dwi_derivatives_wf(
-        source_file='/data/sub-01/dwi/sub-01_part-mag_dwi.nii.gz'
-    )
+    wf = init_dwi_derivatives_wf(source_file='/data/sub-01/dwi/sub-01_part-mag_dwi.nii.gz')
     for node_name in (
         'ds_dwi_t1',
         'ds_bvals_t1',
@@ -79,7 +79,5 @@ def test_derivatives_tagged_part_real_when_enabled(monkeypatch):
 def test_derivatives_not_tagged_when_disabled(monkeypatch):
     monkeypatch.setattr(config.workflow, 'dwi_phase_correction', 'none', raising=False)
     monkeypatch.setattr(config.workflow, 'hmc_model', 'eddy', raising=False)
-    wf = init_dwi_derivatives_wf(
-        source_file='/data/sub-01/dwi/sub-01_part-mag_dwi.nii.gz'
-    )
+    wf = init_dwi_derivatives_wf(source_file='/data/sub-01/dwi/sub-01_part-mag_dwi.nii.gz')
     assert not isdefined(_get_node(wf, 'ds_dwi_t1').inputs.part)

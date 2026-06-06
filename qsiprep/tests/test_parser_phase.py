@@ -1,8 +1,10 @@
 """Tests for the --dwi-phase-correction CLI flag."""
 
-import pytest
-import tempfile
 import os
+import tempfile
+
+import pytest
+
 from qsiprep.cli.parser import _build_parser
 
 
@@ -25,7 +27,15 @@ def test_phase_correction_flag_set():
 
         parser = _build_parser()
         opts = parser.parse_args(
-            [bids_dir, out_dir, 'participant', '--output-resolution', '1.2', '--dwi-phase-correction', 'tv']
+            [
+                bids_dir,
+                out_dir,
+                'participant',
+                '--output-resolution',
+                '1.2',
+                '--dwi-phase-correction',
+                'tv',
+            ]
         )
         assert opts.dwi_phase_correction == 'tv'
 
@@ -39,5 +49,13 @@ def test_phase_correction_flag_rejects_bad_value():
         parser = _build_parser()
         with pytest.raises(SystemExit):
             parser.parse_args(
-                [bids_dir, out_dir, 'participant', '--output-resolution', '1.2', '--dwi-phase-correction', 'bogus']
+                [
+                    bids_dir,
+                    out_dir,
+                    'participant',
+                    '--output-resolution',
+                    '1.2',
+                    '--dwi-phase-correction',
+                    'bogus',
+                ]
             )
