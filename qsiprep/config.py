@@ -571,10 +571,10 @@ class workflow(_Config):
     or "none"."""
     dwi_phase_correction = None
     """Phase-correction method applied to complex denoised DWI data.
-    One of "none", "tv" (Eichner 2015) or "dc" (Sprenger 2017). When "tv" or
-    "dc", the real channel after rephasing is passed downstream in place of the
-    magnitude. Only takes effect when phase data are present and
-    ``denoise_method`` is "dwidenoise"."""
+    One of "none", "tv" (Eichner 2015), "tvc" (Eichner 2015) or "dc"
+    (Sprenger 2017). For any method other than "none", the real channel after
+    rephasing is passed downstream in place of the magnitude. Only takes effect
+    when phase data are present and ``denoise_method`` is "dwidenoise"."""
     dwi_phase_tv_weight = 6.0
     """Total-variation regularization weight for the "tv" phase-correction
     method (Eichner 2015)."""

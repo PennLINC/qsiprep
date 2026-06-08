@@ -400,13 +400,16 @@ def _build_parser(**kwargs):
         action='store',
         choices=['none', 'tv', 'tvc', 'dc'],
         default='none',
-        help='Phase-correction method for complex-valued DWI data. '
-        'When "tv" (Eichner 2015, TV on the magnitude/phase stack), "tvc" '
-        '(Eichner 2015, paper-faithful TV on the complex signal) or "dc" '
-        '(Sprenger 2017), the real channel after rephasing is used for '
-        'downstream processing instead of the magnitude. Requires phase data '
-        '(a BIDS part-phase file) and --denoise-method dwidenoise; otherwise it '
-        'is ignored. (default: none)',
+        help=(
+            'Phase-correction method for complex-valued DWI data. '
+            'For any method other than "none", the real channel after rephasing is '
+            'used for downstream processing instead of the magnitude. The available '
+            'methods are "tv" (Eichner 2015, total variation on the magnitude/phase '
+            'stack), "tvc" (Eichner 2015, paper-faithful total variation on the '
+            'complex signal) and "dc" (Sprenger 2017, decorrelated-phase filtering). '
+            'Requires phase data (a BIDS part-phase file) and --denoise-method '
+            'dwidenoise; otherwise it is ignored. (default: none)'
+        ),
     )
     g_conf.add_argument(
         '--unringing-method',
