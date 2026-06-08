@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """Flatten a niworkflows "flicker" report SVG into a static side-by-side PNG.
 
 *QSIPrep*'s denoising and phase-correction reportlets are animated SVGs: a single
