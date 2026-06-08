@@ -624,6 +624,21 @@ performed. Including phase also enables the optional
 :ref:`phase-correction <complex_denoising>` step, which can further suppress the
 high-*b* noise floor.
 
+.. figure:: _static/denoising_example.png
+    :width: 100%
+
+    The denoising reportlet, with both animation frames shown side by side: the
+    raw images (left) and the MP-PCA-denoised images (right), each for a low-*b*
+    and a high-*b* volume.
+
+    Denoising should remove grainy, incoherent noise --
+    most visibly at high *b* -- while preserving anatomical structure and edges.
+    The improvement is typically clearest in the high-*b* panels, where the raw
+    signal is weakest.
+
+    The contour lines reflect the level of noise in the image.
+    These lines should not follow anatomical structures.
+
 
 .. _complex_denoising:
 
@@ -676,6 +691,17 @@ signal-dependent, non-smooth phase variation (for example from cardiac pulsation
 or bulk motion during the diffusion-encoding gradients) legitimately leaves
 additional, incoherent noise wherever there is tissue signal. A brain-shaped
 envelope of stronger speckling is expected; readable anatomy is not.
+
+.. figure:: _static/phasecorrection_example.png
+    :width: 100%
+
+    The phase-correction reportlet, with both animation frames shown side by
+    side: the retained real channel (left) and the imaginary residual (right),
+    each for a low-*b* and a high-*b* volume. The real channel should look like a
+    clean diffusion-weighted image. The imaginary residual is the diagnostic: it
+    should be noise-like speckling, possibly with a brain-shaped envelope of
+    stronger noise, but without recognizable anatomy. Coherent structure in the
+    imaginary residual indicates an incomplete background-phase estimate.
 
 
 .. _denoise_gibbs:
