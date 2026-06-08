@@ -131,8 +131,11 @@ def convert(in_svg, out_png, rsvg, zoom=1.0, gap=16, bg=(255, 255, 255)):
     """Flatten one flicker SVG into a side-by-side PNG."""
     root = etree.parse(in_svg).getroot()
 
-    found = {c for c in ('background-svg', 'foreground-svg') if root.xpath(
-        f".//s:g[@class='{c}']", namespaces=NSMAP)}
+    found = {
+        c
+        for c in ('background-svg', 'foreground-svg')
+        if root.xpath(f".//s:g[@class='{c}']", namespaces=NSMAP)
+    }
     if found != {'background-svg', 'foreground-svg'}:
         raise ValueError(
             f'{in_svg}: expected both background-svg and foreground-svg frames, found {found}'
@@ -148,7 +151,9 @@ def convert(in_svg, out_png, rsvg, zoom=1.0, gap=16, bg=(255, 255, 255)):
 
 
 def _parse_args(argv):
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument(
         '--pair',
         nargs=2,
@@ -157,9 +162,15 @@ def _parse_args(argv):
         help='An input flicker SVG and the output PNG path. May be repeated. '
         'If omitted, the example denoising and phase-correction figures are regenerated.',
     )
-    parser.add_argument('--rsvg', help='Path to the rsvg-convert executable (default: search PATH).')
-    parser.add_argument('--zoom', type=float, default=1.0, help='Rasterization zoom factor (default: 1.0).')
-    parser.add_argument('--gap', type=int, default=16, help='Pixel gap between the two frames (default: 16).')
+    parser.add_argument(
+        '--rsvg', help='Path to the rsvg-convert executable (default: search PATH).'
+    )
+    parser.add_argument(
+        '--zoom', type=float, default=1.0, help='Rasterization zoom factor (default: 1.0).'
+    )
+    parser.add_argument(
+        '--gap', type=int, default=16, help='Pixel gap between the two frames (default: 16).'
+    )
     return parser.parse_args(argv)
 
 
@@ -170,7 +181,7 @@ def main(argv=None):
     if args.pair:
         pairs = args.pair
     else:
-        # Resolve default output paths relative to the docs directory (this file's parent's parent).
+        # Resolve default output paths rel. to docs directory (this file's parent's parent)
         docs_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         pairs = [(src, os.path.join(docs_dir, dst)) for src, dst in DEFAULT_PAIRS]
 
