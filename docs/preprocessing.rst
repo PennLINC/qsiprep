@@ -126,222 +126,6 @@ You can enable regular expressions for more detailed filtering, for example::
 will do a case-insensitive match of "mprage" within the "t1w" query.
 
 
-.. _merge_denoise:
-
-Denoising and Merging Images
-============================
-
-*QSIPrep*'s "denoising" stage bundles together several image-processing operations
-that reduce noise and remove acquisition artifacts before head motion correction.
-Each can be enabled or disabled independently,
-but the order in which they are applied is fixed (see :ref:`denoise_order`).
-The sections below describe each operation -- its purpose, the relevant command-line
-arguments and their effects, and when to use it:
-
-* :ref:`denoise_image` (``--denoise-method``, ``--dwi-denoise-window``)
-* :ref:`complex_denoising` (``--dwi-phase-correction``)
-* :ref:`denoise_gibbs` (``--unringing-method``)
-* :ref:`denoise_biascorr` (``--b1-biascorrect-stage``)
-* :ref:`denoise_b0harmonize` (``--no-b0-harmonization``)
-
-A separate choice -- whether these operations run on each input DWI series
-individually or on the concatenated series -- is covered in :ref:`denoise_combine`.
-
-
-.. _denoise_image:
-
-Image Denoising
----------------
-
-Thermal noise corrupts diffusion-weighted images and biases downstream model
-fits, an effect that is most severe at high *b*-values where the signal is weak.
-*QSIPrep* reduces this noise with one of two algorithms, chosen with
-``--denoise-method`` (default ``dwidenoise``; pass ``none`` to skip denoising).
-The default, ``dwidenoise``, implements Marchenko-Pastur PCA (MP-PCA)
-:footcite:p:`dwidenoise1,dwidenoise2` as implemented in MRtrix3
-:footcite:p:`mrtrix3`: it performs a local PCA in a sliding window and discards
-the principal components whose variance is consistent with noise, exploiting the
-redundancy across the volumes of a DWI series. The window size is controlled by
-``--dwi-denoise-window``, whose default ``auto`` derives it from the number of
-volumes (following the ``dwidenoise`` documentation); a manual value must be an
-odd, positive integer, and a larger window gives the PCA more samples but tracks
-spatially varying noise less well. The alternative, ``patch2self``
-:footcite:p:`patch2self` (implemented in DIPY :footcite:p:`dipy`), is a
-self-supervised method that predicts each volume from the others via regression
-and assumes no a-priori noise model; it ignores ``--dwi-denoise-window``.
-``dwidenoise`` is a sound default for most acquisitions, whereas ``patch2self``
-can be advantageous when many volumes or directions are available. Because
-MP-PCA assumes "raw", uninterpolated input, denoising is run as early as possible
-in the pipeline (see :ref:`denoise_order`).
-
-When DWI **phase** data are available (a BIDS ``part-phase`` file accompanying
-the ``part-mag`` file), ``dwidenoise`` denoises the **complex-valued** data
-rather than the magnitude alone, which reduces the non-Gaussian (Rician)
-noise-floor bias that affects magnitude data :footcite:p:`cordero2019complex`.
-The magnitude and phase are combined into a single complex image, denoised
-jointly, and -- unless :ref:`phase correction <complex_denoising>` is requested
--- converted back to magnitude afterward. Phase is only used when it is available
-and ``phase`` is not listed in ``--ignore``. Before being combined with the
-magnitude, the phase is rescaled to radians in :math:`[-\pi, \pi)`, matching the
-MRtrix3 complex-``dwidenoise`` convention. The denoising report always shows
-magnitude images before and after denoising, even when complex denoising was
-performed. Including phase also enables the optional
-:ref:`phase-correction <complex_denoising>` step, which can further suppress the
-high-*b* noise floor.
-
-
-.. _complex_denoising:
-
-Phase Correction
-----------------
-
-By default, after complex denoising the data are returned to magnitude. Phase
-correction, enabled with ``--dwi-phase-correction`` (default ``none``), is an
-optional alternative: instead of taking the magnitude, it estimates a smooth,
-spatially varying *background phase* and rephases the complex signal so that the
-diffusion signal is rotated onto the real axis. The **real channel** is then
-kept for the rest of the pipeline, while the imaginary channel should contain
-mostly noise. Retaining the real channel rather than the magnitude avoids the
-rectified noise floor entirely, because Gaussian noise on the real axis stays
-zero-mean -- the main benefit of having acquired phase data. Phase correction
-requires phase data and ``--denoise-method dwidenoise``, and is ignored
-otherwise.
-
-The three methods differ in how they estimate the background phase. ``tv``
-applies total-variation rephasing to the joint magnitude/phase image
-:footcite:p:`eichner2015real`; this is the original formulation, but it operates
-on the (wrapped) phase as a scalar field and is therefore sensitive to phase
-wrapping. ``tvc`` is the paper-faithful, complex total-variation formulation
-:footcite:p:`eichner2015real`, estimating the background phase from a
-total-variation-denoised *complex* image, so it is wrap-free and
-intensity-weighted by construction. ``dc`` uses decorrelated-phase rephasing
-:footcite:p:`sprenger2017real`, smoothing the complex signal with a convolution
-kernel and likewise wrap-free, with optional outlier rejection. The ``tvc`` and
-``dc`` methods are invariant to a global phase offset, whereas ``tv`` is not. In
-practice ``tvc`` is the most principled choice and ``dc`` a robust, faster
-alternative, while the wrap-sensitive ``tv`` is a legacy option that is generally
-not recommended. Whichever method you use, inspect the phase-correction report
-(below) before trusting the result.
-
-
-Interpreting the phase-correction report
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-The phase-correction reportlet shows the retained **real channel** next to the
-**imaginary residual** for a low-*b* and a high-*b* volume. The imaginary
-residual is the diagnostic: it should look like featureless, noise-like
-speckling with no recognizable brain anatomy (no sharp tissue boundaries, gyral
-patterns, or contrast that mirrors the magnitude image). Coherent anatomy in the
-imaginary residual indicates that real signal is leaking into the imaginary
-channel -- i.e. the background-phase estimate is incomplete.
-
-It is normal, however, for the imaginary residual to show *higher* noise inside
-the brain than outside. The methods remove only a smooth background phase, so
-signal-dependent, non-smooth phase variation (for example from cardiac pulsation
-or bulk motion during the diffusion-encoding gradients) legitimately leaves
-additional, incoherent noise wherever there is tissue signal. A brain-shaped
-envelope of stronger speckling is expected; readable anatomy is not.
-
-
-.. _denoise_gibbs:
-
-Gibbs Unringing
----------------
-
-Gibbs ringing is the oscillating artifact that appears near sharp intensity
-boundaries -- such as CSF/tissue interfaces -- because k-space is sampled only up
-to a finite extent, truncating the Fourier series. Unringing is disabled by
-default and is enabled with ``--unringing-method``, which offers two algorithms.
-``mrdegibbs`` :footcite:p:`mrdegibbs` (implemented in MRtrix3
-:footcite:p:`mrtrix3`) uses the local subvoxel-shift method, resampling the image
-at the points where the ringing crosses zero; because it assumes the image was
-reconstructed from fully sampled k-space, it is **not** appropriate for
-partial-Fourier acquisitions. For those, use ``rpg`` :footcite:p:`pfgibbs`
-instead, which is designed to remove partial-Fourier-induced Gibbs ringing.
-Gibbs unringing should be performed on "raw" data, but MRtrix3 recommends
-applying MP-PCA *before* unringing, so *QSIPrep* enforces that order (see
-:ref:`denoise_order`).
-
-
-.. _denoise_biascorr:
-
-B1 Bias Field Correction
-------------------------
-
-Spatial inhomogeneity of the receive coil's B1 field produces a smooth,
-low-frequency intensity bias across the image -- some regions appear brighter
-simply because they are closer to the coil. *QSIPrep* estimates and removes this
-field using ANTs' N4 algorithm :footcite:p:`n4` (via ``dwibiascorrect``), and
-does so by default. The ``--b1-biascorrect-stage`` option controls when, or
-whether, this happens: ``final`` (the default) applies it after the data have
-been resampled to their final space, ``none`` skips it, and ``legacy`` reproduces
-the behavior of *QSIPrep* < 0.17.
-(The older ``--dwi-no-biascorr`` flag is deprecated in favor of ``--b1-biascorrect-stage none``.)
-
-.. tip::
-
-  For prescan-normalized data, we recommend ``--b1-biascorrect-stage none``,
-  because bias correction may introduce artifacts on data that have already been
-  intensity-normalized.
-
-
-.. _denoise_b0harmonize:
-
-b=0 Intensity Harmonization
----------------------------
-
-When multiple DWI series are concatenated, differences in overall scaling
-between series can introduce artificial intensity steps. *QSIPrep* harmonizes
-the series by rescaling each so that its b=0 images share a common mean
-intensity. This is done by default and can be turned off with
-``--no-b0-harmonization``.
-
-
-.. _denoise_order:
-
-Order of operations
--------------------
-
-Although each operation above can be toggled independently, the order in which
-they are applied is fixed. Image denoising (MP-PCA or ``patch2self``) is applied
-first, directly to the BIDS inputs, which should be uninterpolated and as "raw"
-as possible. Gibbs unringing should also be performed on "raw" data, but the
-MRtrix3 documentation recommends applying MP-PCA before unringing, so denoising
-precedes unringing. B1 bias field correction and b=0 intensity harmonization
-have no such strict input requirements and are run last. Each of these
-operations has assumptions about its inputs and changes the distribution of
-noise in its outputs, which is why the order is not user-configurable.
-
-
-.. _denoise_combine:
-
-Denoising before or after merging
----------------------------------
-
-A consequential choice is whether the denoising operations are applied to each
-input DWI series individually or to the concatenated DWI series. At present
-there is little data to guide this choice. The more volumes available, the more
-data MP-PCA/``patch2self`` have to work with. However, if the head is in a
-vastly different location across scans, denoising may be affected in
-unpredictable ways.
-
-Consider MP-PCA. If a voxel contains CSF in one DWI series and the subject
-repositions their head between scans so that the voxel contains corpus callosum
-in the next series, the non-noise signal will differ greatly between the two
-series. Similarly, if the head is repositioned, different areas will be closer
-to the head coil and therefore be inconsistently affected by the B1 bias field.
-Similar problems can also occur *within* a DWI series due to head motion, but
-these methods have been shown to work well even with within-scan movement. If
-the across-scan head-position change is of a similar magnitude to within-scan
-motion, it is likely fine to use ``--denoise-after-combining``, which runs
-denoising on the concatenated series (before motion correction) rather than on
-each series separately. By default, scans in the same warped space are denoised
-individually before concatenation; when warped groups are concatenated, an
-additional b=0 intensity normalization is performed. To gauge how much
-between-scan motion occurred, inspect the :ref:`qc_data` to see whether
-Framewise Displacement is large where a new series begins.
-
-
 Preprocessing HCP-style
 =======================
 
@@ -775,6 +559,222 @@ DWI preprocessing
 
 Preprocessing of :abbr:`DWI (Diffusion Weighted Image)` files is
 split into multiple sub-workflows described below.
+
+
+.. _merge_denoise:
+
+Denoising and Merging Images
+----------------------------
+
+*QSIPrep*'s "denoising" stage bundles together several image-processing operations
+that reduce noise and remove acquisition artifacts before head motion correction.
+Each can be enabled or disabled independently,
+but the order in which they are applied is fixed (see :ref:`denoise_order`).
+The sections below describe each operation -- its purpose, the relevant command-line
+arguments and their effects, and when to use it:
+
+* :ref:`denoise_image` (``--denoise-method``, ``--dwi-denoise-window``)
+* :ref:`complex_denoising` (``--dwi-phase-correction``)
+* :ref:`denoise_gibbs` (``--unringing-method``)
+* :ref:`denoise_biascorr` (``--b1-biascorrect-stage``)
+* :ref:`denoise_b0harmonize` (``--no-b0-harmonization``)
+
+A separate choice -- whether these operations run on each input DWI series
+individually or on the concatenated series -- is covered in :ref:`denoise_combine`.
+
+
+.. _denoise_image:
+
+Image Denoising
+^^^^^^^^^^^^^^^
+
+Thermal noise corrupts diffusion-weighted images and biases downstream model
+fits, an effect that is most severe at high *b*-values where the signal is weak.
+*QSIPrep* reduces this noise with one of two algorithms, chosen with
+``--denoise-method`` (default ``dwidenoise``; pass ``none`` to skip denoising).
+The default, ``dwidenoise``, implements Marchenko-Pastur PCA (MP-PCA)
+:footcite:p:`dwidenoise1,dwidenoise2` as implemented in MRtrix3
+:footcite:p:`mrtrix3`: it performs a local PCA in a sliding window and discards
+the principal components whose variance is consistent with noise, exploiting the
+redundancy across the volumes of a DWI series. The window size is controlled by
+``--dwi-denoise-window``, whose default ``auto`` derives it from the number of
+volumes (following the ``dwidenoise`` documentation); a manual value must be an
+odd, positive integer, and a larger window gives the PCA more samples but tracks
+spatially varying noise less well. The alternative, ``patch2self``
+:footcite:p:`patch2self` (implemented in DIPY :footcite:p:`dipy`), is a
+self-supervised method that predicts each volume from the others via regression
+and assumes no a-priori noise model; it ignores ``--dwi-denoise-window``.
+``dwidenoise`` is a sound default for most acquisitions, whereas ``patch2self``
+can be advantageous when many volumes or directions are available. Because
+MP-PCA assumes "raw", uninterpolated input, denoising is run as early as possible
+in the pipeline (see :ref:`denoise_order`).
+
+When DWI **phase** data are available (a BIDS ``part-phase`` file accompanying
+the ``part-mag`` file), ``dwidenoise`` denoises the **complex-valued** data
+rather than the magnitude alone, which reduces the non-Gaussian (Rician)
+noise-floor bias that affects magnitude data :footcite:p:`cordero2019complex`.
+The magnitude and phase are combined into a single complex image, denoised
+jointly, and -- unless :ref:`phase correction <complex_denoising>` is requested
+-- converted back to magnitude afterward. Phase is only used when it is available
+and ``phase`` is not listed in ``--ignore``. Before being combined with the
+magnitude, the phase is rescaled to radians in :math:`[-\pi, \pi)`, matching the
+MRtrix3 complex-``dwidenoise`` convention. The denoising report always shows
+magnitude images before and after denoising, even when complex denoising was
+performed. Including phase also enables the optional
+:ref:`phase-correction <complex_denoising>` step, which can further suppress the
+high-*b* noise floor.
+
+
+.. _complex_denoising:
+
+Phase Correction
+^^^^^^^^^^^^^^^^
+
+By default, after complex denoising the data are returned to magnitude. Phase
+correction, enabled with ``--dwi-phase-correction`` (default ``none``), is an
+optional alternative: instead of taking the magnitude, it estimates a smooth,
+spatially varying *background phase* and rephases the complex signal so that the
+diffusion signal is rotated onto the real axis. The **real channel** is then
+kept for the rest of the pipeline, while the imaginary channel should contain
+mostly noise. Retaining the real channel rather than the magnitude avoids the
+rectified noise floor entirely, because Gaussian noise on the real axis stays
+zero-mean -- the main benefit of having acquired phase data. Phase correction
+requires phase data and ``--denoise-method dwidenoise``, and is ignored
+otherwise.
+
+The three methods differ in how they estimate the background phase. ``tv``
+applies total-variation rephasing to the joint magnitude/phase image
+:footcite:p:`eichner2015real`; this is the original formulation, but it operates
+on the (wrapped) phase as a scalar field and is therefore sensitive to phase
+wrapping. ``tvc`` is the paper-faithful, complex total-variation formulation
+:footcite:p:`eichner2015real`, estimating the background phase from a
+total-variation-denoised *complex* image, so it is wrap-free and
+intensity-weighted by construction. ``dc`` uses decorrelated-phase rephasing
+:footcite:p:`sprenger2017real`, smoothing the complex signal with a convolution
+kernel and likewise wrap-free, with optional outlier rejection. The ``tvc`` and
+``dc`` methods are invariant to a global phase offset, whereas ``tv`` is not. In
+practice ``tvc`` is the most principled choice and ``dc`` a robust, faster
+alternative, while the wrap-sensitive ``tv`` is a legacy option that is generally
+not recommended. Whichever method you use, inspect the phase-correction report
+(below) before trusting the result.
+
+
+Interpreting the phase-correction report
+""""""""""""""""""""""""""""""""""""""""
+
+The phase-correction reportlet shows the retained **real channel** next to the
+**imaginary residual** for a low-*b* and a high-*b* volume. The imaginary
+residual is the diagnostic: it should look like featureless, noise-like
+speckling with no recognizable brain anatomy (no sharp tissue boundaries, gyral
+patterns, or contrast that mirrors the magnitude image). Coherent anatomy in the
+imaginary residual indicates that real signal is leaking into the imaginary
+channel -- i.e. the background-phase estimate is incomplete.
+
+It is normal, however, for the imaginary residual to show *higher* noise inside
+the brain than outside. The methods remove only a smooth background phase, so
+signal-dependent, non-smooth phase variation (for example from cardiac pulsation
+or bulk motion during the diffusion-encoding gradients) legitimately leaves
+additional, incoherent noise wherever there is tissue signal. A brain-shaped
+envelope of stronger speckling is expected; readable anatomy is not.
+
+
+.. _denoise_gibbs:
+
+Gibbs Unringing
+^^^^^^^^^^^^^^^
+
+Gibbs ringing is the oscillating artifact that appears near sharp intensity
+boundaries -- such as CSF/tissue interfaces -- because k-space is sampled only up
+to a finite extent, truncating the Fourier series. Unringing is disabled by
+default and is enabled with ``--unringing-method``, which offers two algorithms.
+``mrdegibbs`` :footcite:p:`mrdegibbs` (implemented in MRtrix3
+:footcite:p:`mrtrix3`) uses the local subvoxel-shift method, resampling the image
+at the points where the ringing crosses zero; because it assumes the image was
+reconstructed from fully sampled k-space, it is **not** appropriate for
+partial-Fourier acquisitions. For those, use ``rpg`` :footcite:p:`pfgibbs`
+instead, which is designed to remove partial-Fourier-induced Gibbs ringing.
+Gibbs unringing should be performed on "raw" data, but MRtrix3 recommends
+applying MP-PCA *before* unringing, so *QSIPrep* enforces that order (see
+:ref:`denoise_order`).
+
+
+.. _denoise_biascorr:
+
+B1 Bias Field Correction
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Spatial inhomogeneity of the receive coil's B1 field produces a smooth,
+low-frequency intensity bias across the image -- some regions appear brighter
+simply because they are closer to the coil. *QSIPrep* estimates and removes this
+field using ANTs' N4 algorithm :footcite:p:`n4` (via ``dwibiascorrect``), and
+does so by default. The ``--b1-biascorrect-stage`` option controls when, or
+whether, this happens: ``final`` (the default) applies it after the data have
+been resampled to their final space, ``none`` skips it, and ``legacy`` reproduces
+the behavior of *QSIPrep* < 0.17.
+(The older ``--dwi-no-biascorr`` flag is deprecated in favor of ``--b1-biascorrect-stage none``.)
+
+.. tip::
+
+  For prescan-normalized data, we recommend ``--b1-biascorrect-stage none``,
+  because bias correction may introduce artifacts on data that have already been
+  intensity-normalized.
+
+
+.. _denoise_b0harmonize:
+
+b=0 Intensity Harmonization
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When multiple DWI series are concatenated, differences in overall scaling
+between series can introduce artificial intensity steps. *QSIPrep* harmonizes
+the series by rescaling each so that its b=0 images share a common mean
+intensity. This is done by default and can be turned off with
+``--no-b0-harmonization``.
+
+
+.. _denoise_order:
+
+Order of operations
+^^^^^^^^^^^^^^^^^^^
+
+Although each operation above can be toggled independently, the order in which
+they are applied is fixed. Image denoising (MP-PCA or ``patch2self``) is applied
+first, directly to the BIDS inputs, which should be uninterpolated and as "raw"
+as possible. Gibbs unringing should also be performed on "raw" data, but the
+MRtrix3 documentation recommends applying MP-PCA before unringing, so denoising
+precedes unringing. B1 bias field correction and b=0 intensity harmonization
+have no such strict input requirements and are run last. Each of these
+operations has assumptions about its inputs and changes the distribution of
+noise in its outputs, which is why the order is not user-configurable.
+
+
+.. _denoise_combine:
+
+Denoising before or after merging
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A consequential choice is whether the denoising operations are applied to each
+input DWI series individually or to the concatenated DWI series. At present
+there is little data to guide this choice. The more volumes available, the more
+data MP-PCA/``patch2self`` have to work with. However, if the head is in a
+vastly different location across scans, denoising may be affected in
+unpredictable ways.
+
+Consider MP-PCA. If a voxel contains CSF in one DWI series and the subject
+repositions their head between scans so that the voxel contains corpus callosum
+in the next series, the non-noise signal will differ greatly between the two
+series. Similarly, if the head is repositioned, different areas will be closer
+to the head coil and therefore be inconsistently affected by the B1 bias field.
+Similar problems can also occur *within* a DWI series due to head motion, but
+these methods have been shown to work well even with within-scan movement. If
+the across-scan head-position change is of a similar magnitude to within-scan
+motion, it is likely fine to use ``--denoise-after-combining``, which runs
+denoising on the concatenated series (before motion correction) rather than on
+each series separately. By default, scans in the same warped space are denoised
+individually before concatenation; when warped groups are concatenated, an
+additional b=0 intensity normalization is performed. To gauge how much
+between-scan motion occurred, inspect the :ref:`qc_data` to see whether
+Framewise Displacement is large where a new series begins.
 
 
 .. _fsl_wf:
