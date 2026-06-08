@@ -392,8 +392,10 @@ def _build_parser(**kwargs):
         action='store',
         choices=['dwidenoise', 'patch2self', 'none'],
         default='dwidenoise',
-        help='Image-based denoising method. Either "dwidenoise" (MRtrix), '
-        '"patch2self" (DIPY) or "none". (default: dwidenoise)',
+        help=(
+            'Image-based denoising method. '
+            'Either "dwidenoise" (MRtrix), "patch2self" (DIPY) or "none".'
+        ),
     )
     g_conf.add_argument(
         '--dwi-phase-correction',
