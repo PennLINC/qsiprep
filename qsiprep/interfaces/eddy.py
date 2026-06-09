@@ -60,12 +60,16 @@ def _find_eddy_cuda(default='eddy_cuda10.2'):
     for directory in os.environ.get('PATH', '').split(os.pathsep):
         if not directory or not os.path.isdir(directory):
             continue
-        for entry in os.listdir(directory):
+        try:
+            entries = os.listdir(directory)
+        except OSError:
+            continue
+        for entry in entries:
             match = _EDDY_CUDA_RE.match(entry)
             if match is None:
                 continue
             full_path = os.path.join(directory, entry)
-            if not os.access(full_path, os.X_OK):
+            if not os.path.isfile(full_path) or not os.access(full_path, os.X_OK):
                 continue
             version = (int(match.group(1)), int(match.group(2)))
             # Keep the first match on PATH for each basename.
