@@ -30,12 +30,15 @@ def _to_magnitude(img):
     data. The visual reports should always display the magnitude images, so any
     complex data are converted to their magnitude here.
     """
-    data = np.asanyarray(img.dataobj)
-    if not np.iscomplexobj(data):
+    dtype = img.header.get_data_dtype()
+    if not np.issubdtype(dtype, np.complexfloating):
         return img
 
+    data = np.asanyarray(img.dataobj)
     magnitude = np.abs(data).astype(np.float32)
-    return nb.Nifti1Image(magnitude, affine=img.affine)
+    header = img.header.copy()
+    header.set_data_dtype(np.float32)
+    return img.__class__(magnitude, affine=img.affine, header=header)
 
 
 class SeriesPreprocReportInputSpec(reporting.ReportCapableInputSpec):
