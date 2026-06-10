@@ -98,3 +98,58 @@ def test_estimation_auto_id_when_unnamed(tmp_path):
         auto_id='auto_00000',
     )
     assert est.bids_id == 'auto_00000'
+
+
+def test_fieldmap_info_phasediff(tmp_path):
+    fmap_dir = tmp_path / 'sub-01' / 'fmap'
+    pd = _touch(fmap_dir / 'sub-01_phasediff.nii.gz')
+    _touch(fmap_dir / 'sub-01_magnitude1.nii.gz')
+    _touch(fmap_dir / 'sub-01_magnitude2.nii.gz')
+    est = fm.FieldmapEstimation(
+        [fm.FieldmapFile(pd, metadata={'EchoTime1': 0.004, 'EchoTime2': 0.006})]
+    )
+    info = est.to_fieldmap_info()
+    assert info['suffix'] == 'phasediff'
+    assert info['phasediff'].endswith('sub-01_phasediff.nii.gz')
+    assert info['magnitude1'].endswith('sub-01_magnitude1.nii.gz')
+    assert info['magnitude2'].endswith('sub-01_magnitude2.nii.gz')
+    assert 'epi' not in info
+
+
+def test_fieldmap_info_fieldmap(tmp_path):
+    fmap_dir = tmp_path / 'sub-01' / 'fmap'
+    fmapf = _touch(fmap_dir / 'sub-01_fieldmap.nii.gz')
+    _touch(fmap_dir / 'sub-01_magnitude.nii.gz')
+    est = fm.FieldmapEstimation([fm.FieldmapFile(fmapf, metadata={'Units': 'Hz'})])
+    info = est.to_fieldmap_info()
+    assert info['suffix'] == 'fieldmap'
+    assert info['fieldmap'].endswith('sub-01_fieldmap.nii.gz')
+    assert info['magnitude'].endswith('sub-01_magnitude.nii.gz')
+
+
+def test_fieldmap_info_pepolar_epi_only(tmp_path):
+    ap = _touch(tmp_path / 'sub-01_dir-AP_epi.nii.gz')
+    pa = _touch(tmp_path / 'sub-01_dir-PA_epi.nii.gz')
+    est = fm.FieldmapEstimation(
+        [
+            fm.FieldmapFile(ap, metadata={'PhaseEncodingDirection': 'j'}),
+            fm.FieldmapFile(pa, metadata={'PhaseEncodingDirection': 'j-'}),
+        ]
+    )
+    info = est.to_fieldmap_info(epi_files=[ap, pa], rpe_files=[])
+    assert info == {'suffix': 'epi', 'epi': sorted([ap, pa])}
+
+
+def test_fieldmap_info_pepolar_rpe_series(tmp_path):
+    ap = _touch(tmp_path / 'sub-01_dir-AP_epi.nii.gz')
+    rpe = _touch(tmp_path / 'sub-01_dir-PA_dwi.nii.gz')
+    est = fm.FieldmapEstimation(
+        [
+            fm.FieldmapFile(ap, metadata={'PhaseEncodingDirection': 'j'}),
+            fm.FieldmapFile(rpe, metadata={'PhaseEncodingDirection': 'j-'}),
+        ]
+    )
+    info = est.to_fieldmap_info(epi_files=[ap], rpe_files=[rpe])
+    assert info['suffix'] == 'rpe_series'
+    assert info['rpe_series'] == [rpe]
+    assert info['epi'] == [ap]

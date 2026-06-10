@@ -147,3 +147,59 @@ class FieldmapEstimation:
     def paths(self):
         """Sorted tuple of source paths."""
         return tuple(sorted(str(f.path) for f in self.sources))
+
+    def to_fieldmap_info(self, epi_files=None, rpe_files=None):
+        """Build the legacy ``fieldmap_info`` dict for downstream workflows.
+
+        For GRE field maps (MAPPED / PHASEDIFF) the dict is built from the
+        sources and their sibling magnitude/phase files. For PEPOLAR field maps
+        the caller supplies the target-specific ``epi_files`` (EPIs from
+        ``fmap/``) and ``rpe_files`` (reverse-PE DWI series), because which
+        series are sources vs. targets depends on the distortion group being
+        corrected.
+        """
+        if self.method is EstimatorType.MAPPED:
+            src = next(f for f in self.sources if f.suffix == 'fieldmap')
+            info = {'suffix': 'fieldmap', 'fieldmap': str(src.path)}
+            mag = self._sibling_path(src, 'magnitude')
+            if mag is not None:
+                info['magnitude'] = mag
+            return info
+
+        if self.method is EstimatorType.PHASEDIFF:
+            phasediff = next((f for f in self.sources if f.suffix == 'phasediff'), None)
+            if phasediff is not None:
+                info = {'suffix': 'phasediff', 'phasediff': str(phasediff.path)}
+                for mag in ('magnitude1', 'magnitude2'):
+                    sib = self._sibling_path(phasediff, mag)
+                    if sib is not None:
+                        info[mag] = sib
+                return info
+            # phase1/phase2
+            phase1 = next(f for f in self.sources if f.suffix == 'phase1')
+            info = {'suffix': 'phase1', 'phase1': str(phase1.path)}
+            for sib_suffix in ('phase2', 'magnitude1', 'magnitude2'):
+                sib = self._sibling_path(phase1, sib_suffix)
+                if sib is not None:
+                    info[sib_suffix] = sib
+            return info
+
+        # PEPOLAR
+        epi_files = sorted(epi_files or [])
+        rpe_files = sorted(rpe_files or [])
+        if rpe_files:
+            info = {'suffix': 'rpe_series', 'rpe_series': rpe_files}
+            if epi_files:
+                info['epi'] = epi_files
+            return info
+        if epi_files:
+            return {'suffix': 'epi', 'epi': epi_files}
+        return {'suffix': None}
+
+    def _sibling_path(self, source, suffix):
+        """Return a sibling path already among sources, else discover on disk."""
+        for f in self.sources:
+            if f.suffix == suffix:
+                return str(f.path)
+        found = source.find_siblings((suffix,))
+        return found.get(suffix)
