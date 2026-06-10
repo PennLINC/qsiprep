@@ -9,8 +9,8 @@ Scan grouping and fieldmap mapping
 Before *QSIPrep* preprocesses any diffusion data, it must answer four questions
 for each participant (and, when present, each session):
 
-#. Which DWI files share the same susceptibility distortions and can be merged
-   *before* denoising?
+#. Which DWI files share the same susceptibility distortions and should be
+   processed together before head-motion correction?
 #. Which files should be used to estimate each fieldmap?
 #. Which DWI series should each fieldmap be *applied* to?
 #. Which preprocessed series should be concatenated (or averaged) in the
@@ -31,9 +31,9 @@ This page documents exactly how those metadata fields and parameters interact.
    Every rule below applies *within* a single subject/session.
 
 
-********************
+******************
 The four groupings
-********************
+******************
 
 Internally, *QSIPrep* produces four dictionaries per subject/session. Each one
 controls a different part of the pipeline.
@@ -46,8 +46,9 @@ controls a different part of the pipeline.
      - What it controls
      - Primary inputs
    * - **Distortion groups**
-     - DWI files that share distortions and are merged *before* denoising and
-       head-motion correction.
+     - DWI files that share distortions and are processed as one pre-HMC
+       series. Denoising happens before or after this within-group merge
+       depending on ``--denoise-after-combining``.
      - ``PhaseEncodingDirection``, ``ShimSetting``, ``TotalReadoutTime``,
        ``B0FieldIdentifier``
    * - **Fieldmap estimation groups**
@@ -63,13 +64,13 @@ controls a different part of the pipeline.
 
 The estimation and application groups are computed *after* the distortion
 groups, so their members are referred to by distortion-group ID rather than by
-raw filename. When fieldmap usage is disabled (``--ignore fieldmaps``), both the
-estimation and application groupings are empty.
+raw filename. When fieldmap usage is disabled (``--ignore fieldmaps``), neither
+fieldmap grouping is built.
 
 
-********************
+***************
 Metadata fields
-********************
+***************
 
 The following metadata fields (read from the JSON sidecars) drive grouping.
 Each affects a specific subset of the four groupings.
@@ -87,15 +88,16 @@ Each affects a specific subset of the four groupings.
        Opposite directions on the same axis (e.g. ``j``/``j-``) are what the
        automatic heuristic pairs for PEPOLAR fieldmaps.
    * - ``ShimSetting``
-     - Distortion + fieldmap groups
-     - Two files can only be grouped/corrected together if their shim settings
-       match. A conflict raises an error (see :ref:`grouping_errors`).
+     - Distortion groups; curated fieldmap groups
+     - Files in one distortion group must share shim settings. Curated
+       fieldmap groups that combine distortion groups with different shim
+       settings raise an error (see :ref:`grouping_errors`).
    * - ``TotalReadoutTime``
-     - Distortion + fieldmap groups
-     - Same as ``ShimSetting``: files grouped together must agree, or *QSIPrep*
-       raises an error.
+     - Distortion groups; curated fieldmap groups
+     - Same as ``ShimSetting``: files in one distortion group must agree, and
+       curated fieldmap groups with conflicts raise an error.
    * - ``B0FieldIdentifier``
-     - Fieldmap **estimation** groups
+     - Distortion groups; fieldmap **estimation** groups
      - A label shared by all files that should be combined to estimate one
        fieldmap. Also participates in distortion grouping.
    * - ``B0FieldSource``
@@ -103,10 +105,11 @@ Each affects a specific subset of the four groupings.
      - On a DWI file, names the ``B0FieldIdentifier`` of the fieldmap that
        should be applied to it.
    * - ``IntendedFor``
-     - Fieldmap estimation **and** application groups
+     - Fieldmap estimation groups; application fallback
      - The older mechanism. On an ``fmap/`` file, lists the DWI files the
-       fieldmap should estimate from and be applied to. Used only when
-       ``B0FieldIdentifier``/``B0FieldSource`` are absent.
+       fieldmap should estimate from and be applied to. Used for estimation only
+       when ``B0FieldIdentifier`` is absent; application is then derived from
+       that estimation group unless ``B0FieldSource`` is present on DWIs.
    * - ``MultipartID``
      - Concatenation groups
      - A label shared by DWI runs that should be concatenated together in the
@@ -129,9 +132,13 @@ How each grouping is built
 Distortion groups
 =================
 
-A distortion group is a set of DWI files that *can be concatenated before
-denoising* because they share the same distortions. Two files land in the same
-distortion group only when **all** of the following match:
+A distortion group is a set of DWI files that share the same distortions and
+are sent through one pre-HMC workflow. The files in a distortion group are
+eventually concatenated before head-motion correction, but by default each
+input series is denoised before that concatenation. With
+``--denoise-after-combining``, denoising is instead run on the concatenated
+series. Two files land in the same distortion group only when **all** of the
+following match:
 
 * session
 * ``PhaseEncodingDirection``
@@ -202,7 +209,10 @@ These map each fieldmap to the distortion groups it will correct.
 *QSIPrep* uses the first strategy that applies:
 
 #. **B0FieldSource** — if DWI files carry ``B0FieldSource``, each fieldmap is
-   applied to exactly the distortion groups that name it.
+   applied to exactly the distortion groups that name it. The presence of any
+   ``B0FieldSource`` switches application into this explicit mode; DWI groups
+   without ``B0FieldSource`` are not assigned fieldmaps by the estimation-group
+   fallback.
 #. **Derived from estimation groups** — otherwise, every DWI distortion group
    that contributed to a fieldmap's estimation is also corrected by that
    fieldmap. (Pure ``fmap/`` files are sources, not targets.)
@@ -220,7 +230,8 @@ averaged in the output derivatives. *QSIPrep* chooses as follows:
    concatenation group (a warning is emitted if ``MultipartID`` is also
    present, since it is being overridden).
 #. Otherwise, if ``MultipartID`` is present, distortion groups are concatenated
-   by shared ``MultipartID`` (within a session).
+   by shared ``MultipartID`` (within a session). Distortion groups without a
+   ``MultipartID`` remain separate from the labeled groups.
 #. Otherwise, all distortion groups within a session are concatenated together.
 
 How the corrected groups are actually merged is then controlled by
@@ -242,10 +253,10 @@ takes precedence and a warning is raised.
 ``--ignore fieldmaps``
 ======================
 
-Disables fieldmap usage from the ``fmap/`` directory. The estimation and
-application groupings become empty (no fieldmaps from ``fmap/`` are built).
-Reverse phase-encoded series found in ``dwi/`` can still be used for SDC.
-This overrides ``IntendedFor``/``B0FieldIdentifier`` on ``fmap/`` files.
+Disables fieldmap grouping and application. No fieldmaps from ``fmap/`` are
+built, and the automatic reverse-PE DWI heuristic is also disabled. This
+overrides ``IntendedFor``/``B0FieldIdentifier`` on ``fmap/`` files and
+``B0FieldIdentifier``/``B0FieldSource`` on DWI files.
 
 ``--pepolar-method``
 ====================
@@ -333,15 +344,17 @@ Consistency rules and errors
 *QSIPrep* validates the groupings and raises an error (rather than silently
 producing a questionable result) in these cases:
 
-* **Incompatible acquisition metadata.** If curation metadata
-  (``B0FieldIdentifier``, ``B0FieldSource``, ``IntendedFor``, or
-  ``MultipartID``) groups files together, but those files disagree on
-  ``ShimSetting`` or ``TotalReadoutTime``, they cannot be combined — *QSIPrep*
-  raises an error.
+* **Incompatible acquisition metadata.** If fieldmap curation metadata
+  (``B0FieldIdentifier``, ``B0FieldSource``, or ``IntendedFor``) groups
+  distortion groups together, but those groups disagree on ``ShimSetting`` or
+  ``TotalReadoutTime``, they cannot be combined for fieldmap processing --
+  *QSIPrep* raises an error.
 * **A fieldmap split across concatenation groups.** A fieldmap estimation
   group must be a subset of exactly one concatenation group. If ``MultipartID``
   would split a fieldmap's targets into different concatenation groups,
-  *QSIPrep* raises an error.
+  *QSIPrep* raises an error. This check is skipped when
+  ``--separate-all-dwis`` intentionally makes every DWI file its own
+  concatenation group.
 * **A cross-axis fieldmap under DRBUDDI.** With ``--pepolar-method DRBUDDI`` or
   ``TOPUP+DRBUDDI``, a single ``B0FieldIdentifier`` that spans more than one
   phase-encoding axis raises an error, because DRBUDDI estimates per axis.
@@ -372,9 +385,9 @@ Choosing what to use
    command-line options.
 
 
-********************
+***************
 Worked examples
-********************
+***************
 
 These examples assume a single subject with multi-run, multi-PED DWI data
 (directions AP, PA, LR, RL, each with run-1 and run-2) and no fieldmaps in
@@ -388,7 +401,8 @@ forms one distortion group per direction, a single TOPUP estimation group from
 all of them, and a single concatenation group:
 
 * **Distortion groups:** ``sub-01_dir-AP``, ``sub-01_dir-PA``,
-  ``sub-01_dir-LR``, ``sub-01_dir-RL`` (each merging its two runs)
+  ``sub-01_dir-LR``, ``sub-01_dir-RL`` (each containing two runs; by default,
+  each run is denoised before the within-group concatenation)
 * **Estimation group:** one group containing all four distortion groups
 * **Concatenation group:** ``sub-01`` containing all four distortion groups
 

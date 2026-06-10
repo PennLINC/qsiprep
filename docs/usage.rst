@@ -155,13 +155,15 @@ Curating DWI Grouping and Fieldmaps
 
 QSIPrep builds four internal groupings per subject/session:
 
-1. Distortion groups (which DWI files are merged before denoising)
+1. Distortion groups (which DWI files are processed together before
+   head-motion correction)
 2. Fieldmap estimation groups (which files are used to estimate each fieldmap)
 3. Fieldmap application groups (which DWI distortion groups each fieldmap is applied to)
 4. Concatenation groups (which distortion groups are merged in outputs)
 
-If your curation metadata conflicts with physical acquisition metadata
-(``ShimSetting`` and ``TotalReadoutTime``), QSIPrep raises an error instead of silently grouping incompatible scans.
+If your fieldmap curation metadata conflicts with physical acquisition metadata
+(``ShimSetting`` and ``TotalReadoutTime``), QSIPrep raises an error instead of
+silently grouping incompatible scans.
 
 .. seealso::
 
@@ -186,9 +188,9 @@ For fieldmap application groups:
 
 For concatenation groups:
 
-1. If not separating all DWIs: ``MultipartID`` if present
-2. Otherwise automatic per-session grouping
-3. If separating all DWIs: each distortion group remains separate
+1. If separating all DWIs: each distortion group remains separate
+2. Otherwise, ``MultipartID`` if present
+3. Otherwise, automatic per-session grouping
 
 Files are never grouped across sessions.
 
@@ -210,7 +212,8 @@ Which parameters to use
 The most important controls are:
 
 - ``--separate-all-dwis``: keep each DWI separate in distortion and concatenation groups.
-- ``--ignore fieldmaps``: ignore files in ``fmap/`` for fieldmap construction. Field maps using files in ``dwi/`` will still be used.
+- ``--ignore fieldmaps``: disable fieldmap grouping and application, including
+  the automatic reverse-PE DWI heuristic.
 - ``--pepolar-method``: If set to "DRBUDDI" or "TOPUP+DRBUDDI", require reverse-PE pairing per axis (for example AP/PA and LR/RL handled separately).
 
 
@@ -247,9 +250,10 @@ MultipartID
 MultipartID is a metadata field that is used to identify a set of DWIs that should be considered as part of the same acquisition.
 If you want to group certain runs of dMRI data together, but not all runs (the default behavior), you should use the MultipartID field.
 
-Important: ``MultipartID`` constraints must be compatible with fieldmap group definitions.
-If one fieldmap application group would cross multiple ``MultipartID`` concatenation groups,
-QSIPrep raises an error and asks you to resolve the inconsistency.
+Important: ``MultipartID`` constraints must be compatible with fieldmap group
+definitions. If one fieldmap estimation group would cross multiple
+``MultipartID`` concatenation groups, QSIPrep raises an error and asks you to
+resolve the inconsistency.
 
 
 ******************

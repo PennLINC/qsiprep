@@ -321,8 +321,12 @@ def _build_parser(**kwargs):
         nargs='+',
         default=[],
         choices=['fieldmaps', 't2w', 'phase'],
-        help='Ignore selected aspects of the input dataset to disable corresponding '
-        'parts of the workflow (a space delimited list)',
+        help=(
+            'Ignore selected aspects of the input dataset to disable corresponding '
+            'parts of the workflow (a space delimited list). '
+            '"fieldmaps" will completely disable susceptibility distortion correction, '
+            'whether using field maps or reverse phase-encoded dMRI runs.'
+        ),
     )
     g_conf.add_argument(
         '--infant',
