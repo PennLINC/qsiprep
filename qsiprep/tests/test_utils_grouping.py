@@ -1617,6 +1617,81 @@ dset_drbuddi_rpe_like = {
     ],
 }
 
+# A DWI with B0FieldSource but no B0FieldIdentifier on the DWI itself;
+# the EPI fmap carries the matching B0FieldIdentifier.
+dset_b0source_only = {
+    '01': [
+        {
+            'anat': [{'suffix': 'T1w'}],
+            'fmap': [
+                {
+                    'dir': 'PA',
+                    'suffix': 'epi',
+                    'metadata': {
+                        'B0FieldIdentifier': 'pepolar01',
+                        'PhaseEncodingDirection': 'j',
+                        'TotalReadoutTime': 0.05,
+                    },
+                },
+            ],
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'TotalReadoutTime': 0.05,
+                        'B0FieldSource': 'pepolar01',
+                    },
+                },
+            ],
+        },
+    ],
+}
+
+# One fmap/ directory holding BOTH an EPI fieldmap and a GRE phasediff fieldmap,
+# linked to the same DWI via IntendedFor.
+dset_mixed_epi_gre = {
+    '01': [
+        {
+            'anat': [{'suffix': 'T1w'}],
+            'fmap': [
+                {
+                    'dir': 'PA',
+                    'suffix': 'epi',
+                    'metadata': {
+                        'IntendedFor': ['dwi/sub-01_dir-AP_dwi.nii.gz'],
+                        'PhaseEncodingDirection': 'j',
+                        'TotalReadoutTime': 0.05,
+                    },
+                },
+                {'suffix': 'magnitude1', 'metadata': {'EchoTime': 0.00492}},
+                {'suffix': 'magnitude2', 'metadata': {'EchoTime': 0.00738}},
+                {
+                    'suffix': 'phasediff',
+                    'metadata': {
+                        'IntendedFor': ['dwi/sub-01_dir-AP_dwi.nii.gz'],
+                        'EchoTime1': 0.00492,
+                        'EchoTime2': 0.00738,
+                    },
+                },
+            ],
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'TotalReadoutTime': 0.05,
+                    },
+                },
+            ],
+        },
+    ],
+}
+
 
 def _make_layout(tmpdir, dset_dict, name):
     """Helper: generate a BIDS skeleton and return (layout, subject_data)."""
