@@ -14,3 +14,5 @@ qsiprep.egg-info
 .eggs
 
 .tox
+.pixi
+.pixi/**/*

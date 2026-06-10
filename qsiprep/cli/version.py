@@ -85,13 +85,13 @@ def check_latest():
 
 def is_flagged():
     """Check whether current version is flagged."""
-    # https://raw.githubusercontent.com/pennlinc/qsiprep/master/.versions.json
+    # https://raw.githubusercontent.com/pennlinc/qsiprep/main/.versions.json
     flagged = ()
     response = None
     with suppress(Exception):
         response = requests.get(
             url="""\
-https://raw.githubusercontent.com/pennlinc/qsiprep/master/.versions.json""",
+https://raw.githubusercontent.com/pennlinc/qsiprep/main/.versions.json""",
             timeout=1.0,
         )
 

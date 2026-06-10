@@ -18,7 +18,7 @@ The common parts of the command are similar to the `BIDS-Apps
 
 Example: ::
 
-    qsiprep data/bids_root/ out/ participant -w work/
+    qsiprep data/bids_root/ out/ participant -w work/ --output-resolution 2
 
 
 **********************
@@ -48,7 +48,7 @@ Participant Ages
 
 *QSIPrep* will attempt to automatically extract participant ages (in months) from the BIDS layout. Specifically, these two files will be checked:
 
-Sessions file: <bids-root>/<subject>/subject_sessions.tsv
+Sessions file: <bids-root>/<subject>/<subject>_sessions.tsv
 
 Participants file: <bids-root>/participants.tsv
 

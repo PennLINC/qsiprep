@@ -27,7 +27,7 @@ Please summarize here the main changes to the documentation that the reviewers s
 Welcome, new contributors!
 
 We ask you to read through the Contributing Guide:
-https://github.com/pennlinc/qsiprep/blob/master/CONTRIBUTING.md
+https://github.com/pennlinc/qsiprep/blob/main/CONTRIBUTING.md
 
 These are guidelines intended to make communication easier by describing a consistent process, but
 don't worry if you don't get it everything exactly "right" on the first try.

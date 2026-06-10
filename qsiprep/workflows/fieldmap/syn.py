@@ -23,8 +23,9 @@ Feedback will be enthusiastically received.
 
 """
 
+from importlib.resources import files
+
 import nibabel as nb
-import pkg_resources as pkgr
 from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.interfaces.base import (
@@ -40,6 +41,7 @@ from nipype.utils.filemanip import fname_presuffix
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
 from ... import config
+from ...utils.resources import as_path
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
@@ -155,10 +157,9 @@ template [@fieldmapless3].
 
     # Collect predefined data
     # Atlas image and registration affine
-    atlas_img = pkgr.resource_filename('qsiprep', 'data/mni_lps_fmap_atlas.nii.gz')
-    # Registration specifications
-    affine_transform = pkgr.resource_filename('qsiprep', 'data/affine.json')
-    syn_transform = pkgr.resource_filename('qsiprep', 'data/susceptibility_syn.json')
+    atlas_img = as_path(files('qsiprep') / 'data' / 'mni_lps_fmap_atlas.nii.gz')
+    affine_transform = as_path(files('qsiprep') / 'data' / 'affine.json')
+    syn_transform = as_path(files('qsiprep') / 'data' / 'susceptibility_syn.json')
 
     invert_t1w = pe.Node(Rescale(invert=True), name='invert_t1w', mem_gb=0.3)
 

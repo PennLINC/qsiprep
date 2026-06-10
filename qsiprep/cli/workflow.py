@@ -33,9 +33,10 @@ a hard-limited memory-scope.
 
 """
 
+from importlib.resources import files
 from pathlib import Path
 
-from pkg_resources import resource_filename as pkgrf
+from ..utils.resources import as_path
 
 
 def build_workflow(config_file, retval):
@@ -58,7 +59,7 @@ def build_workflow(config_file, retval):
     retval['workflow'] = None
 
     banner = [f'Running QSIPrep version {version}']
-    notice_path = Path(pkgrf('qsiprep', 'data/NOTICE'))
+    notice_path = Path(as_path(files('qsiprep') / 'data' / 'NOTICE'))
     if notice_path.exists():
         banner[0] += '\n'
         banner += [f'License NOTICE {"#" * 50}']
@@ -160,7 +161,7 @@ def build_boilerplate(config_file, workflow):
     if citation_files['md'].exists():
         from subprocess import CalledProcessError, TimeoutExpired, check_call
 
-        bib_text = Path(pkgrf('qsiprep', 'data/boilerplate.bib')).read_text()
+        bib_text = (files('qsiprep') / 'data' / 'boilerplate.bib').read_text(encoding='utf-8')
         citation_files['bib'].write_text(
             bib_text.replace('QSIPrep <version>', f'QSIPrep {config.environment.version}')
         )
@@ -171,8 +172,7 @@ def build_boilerplate(config_file, workflow):
             '-s',
             '--bibliography',
             str(citation_files['bib']),
-            '--filter',
-            'pandoc-citeproc',
+            '--citeproc',
             '--metadata',
             'pagetitle="QSIPrep citation boilerplate"',
             str(citation_files['md']),

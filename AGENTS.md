@@ -135,7 +135,7 @@ QSIPrep is a BIDS App for preprocessing diffusion MRI (dMRI/DWI) data. It handle
 | Item | Value |
 |------|-------|
 | Package name | `qsiprep` |
-| Default branch | `master` |
+| Default branch | `main` |
 | Entry point | `qsiprep.cli.run:main` |
 | Python requirement | `>=3.10` |
 | Build backend | hatchling + hatch-vcs + cython + numpy |
@@ -176,7 +176,6 @@ This roadmap covers harmonization work across all four PennLINC BIDS Apps (qsipr
 
 ### Phase 2: Standardize across all four repos
 
-6. **Rename qsiprep default branch** from `master` to `main` and update `.github/workflows/lint.yml`.
 7. **Rename aslprep test extras** from `test` to `tests` for consistency with the other three repos.
 8. **Converge on version management** -- recommend the simpler `_version.py` direct-import pattern (used by qsiprep/qsirecon). Migrate xcp_d and aslprep away from `__about__.py`.
 9. **Pin the same ruff version** in all four repos' dev dependencies and `.pre-commit-config.yaml`.

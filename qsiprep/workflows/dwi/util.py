@@ -114,7 +114,7 @@ def init_dwi_reference_wf(
 
     # Synthstrip is used now
     # if register_t1:
-    #     affine_transform = pkgr.resource_filename("qsiprep", "data/affine.json")
+    #     affine_transform = as_path(files("qsiprep") / "data" / "affine.json")
     #     register_t1_to_raw = pe.Node(
     #         ants.Registration(from_file=affine_transform),
     #         name="register_t1_to_raw",

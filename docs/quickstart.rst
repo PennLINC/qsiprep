@@ -44,7 +44,7 @@ Assuming that ``sub-1/ses-1/fmap/sub-1_dir-PA_epi.nii.gz`` has a JSON sidecar co
     "ses-1/dwi/sub-1_ses-1_acq-multishell_run-03_dwi.nii.gz"
   ]
 
-*QSIPrep* will infer that the dwi scans are in the same **warped space** - that their
+*QSIPrep* will infer that the DWI scans are in the same **warped space** - that their
 susceptibility distortions are shared and they can be combined before head motion correction.
 Since we didn't specify ``--separate-all-dwis``,
 the separate scans will be merged together before head motion
@@ -62,8 +62,7 @@ Specifying outputs
 ******************
 
 .. note::
-   This section covers ``--output-resolution X``, and
-   ``--skip-t1-based-spatial-normalization``.
+   This section covers ``--output-resolution X`` and ``--skip-t1-based-spatial-normalization``.
 
 Unlike with fMRI, which can be coregistered to a T1w image and warped to a
 template using the T1w image's spatial normalization, the T1w images do not
@@ -87,14 +86,16 @@ brain graphs. If you want to save ~20 minutes of computation time, this
 normalization can be disabled with the
 ``--skip-t1-based-spatial-normalization`` option.
 
+
 .. _output_resolution:
+
 Output Resolution and Resampling
 ================================
 
 The ``--output-resolution`` argument determines the spatial resolution of the
-preprocessed dwi series. You can specify the resolution of the original data
+preprocessed DWI series. You can specify the resolution of the original data
 or choose to upsample the dwi to a higher spatial resolution. Some
-post-processing pipelines such as fixel-based analysis recommend resampling
+post-processing pipelines, such as fixel-based analysis, recommend resampling
 your output to at least 1.3mm resolution. By choosing this resolution here,
 it means your data will only be interpolated once: head motion correction,
 susceptibility distortion correction, coregistration and upsampling will be
@@ -136,7 +137,7 @@ of these steps to better match your data.
 |                 |   in images.                |   artifact from images.   |    uniformity of images.     |
 +-----------------+-----------------------------+---------------------------+------------------------------+
 | Algorithms      |  ``dwidenoise`` (MRtrix3)   | ``mrdegibbs`` (MRtrix3)   | ``dwibiascorrect``           |
-|                 |  patch2self (DIPY)          |                           | (ANTs/MRtrix3)               |
+|                 |  ``patch2self`` (DIPY)      |                           | (ANTs/MRtrix3)               |
 +-----------------+-----------------------------+---------------------------+------------------------------+
 | Default         |  ``dwidenoise`` (MRtrix3)   | None applied              | ``dwibiascorrect``           |
 |                 |                             |                           | (ANTs/MRtrix3)               |
@@ -162,6 +163,7 @@ Each of these steps can be applied at the same time, which by default is
 before any images are concatenated. The user can instead run these steps
 together *after* images are concatenated by specifying
 ``--denoise-after-combining``. See :ref:`merge_denoise` for more info.
+
 
 *******************
 What is happening??

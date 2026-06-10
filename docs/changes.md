@@ -1,14 +1,40 @@
 # What's New
 
-## 1.1.1 (Jan 15, 2026)
+
+## 26.0.0 (April 20, 2026)
+
+### 🐛 Bug Fixes
+
+* Add step to validate eddy config file by @tsalo in https://github.com/PennLINC/qsiprep/pull/1030
+
+### Other Changes
+
+* Add AGENTS.md and cursor rules by @singlesp in https://github.com/PennLINC/qsiprep/pull/1027
+* Add failing tests for BIDS-URI IntendedFors and B0Fields by @tsalo in https://github.com/PennLINC/qsiprep/pull/1032
+* Fix Python version in CircleCI config by @tsalo in https://github.com/PennLINC/qsiprep/pull/1031
+* Add output-resolution argument to sample commands by @arovai in https://github.com/PennLINC/qsiprep/pull/1033
+* Address small issues in documentation by @tsalo in https://github.com/PennLINC/qsiprep/pull/1035
+* Adopt NiPreps-style packaging by @tsalo in https://github.com/PennLINC/qsiprep/pull/1028
+* Rename master branch to main by @tsalo in https://github.com/PennLINC/qsiprep/pull/1042
+* Remove undefined `FSFAST_HOME` variable by @tsalo in https://github.com/PennLINC/qsiprep/pull/1043
+* Pin pybids version to fix upath protocol compatibility issue by @arovai in https://github.com/PennLINC/qsiprep/pull/1026
+* Run pixi lock by @tsalo in https://github.com/PennLINC/qsiprep/pull/1044
+
+### New Contributors
+
+* @singlesp made their first contribution in https://github.com/PennLINC/qsiprep/pull/1027
+
+**Full Changelog**: https://github.com/PennLINC/qsiprep/compare/1.1.1...26.0.0
+
+
+## 1.1.1 (January 15, 2026)
 
 A small fix to 1.1.0 for synthseg.
 
 * Add CI test for synthstrip by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1020
 
 
-
-## 1.1.0 (Jan 15, 2026)
+## 1.1.0 (January 15, 2026)
 
 This release updates the base OS in QSIPrep's Docker image, updating GLIBC.
 The CUDA runtime is updated from 11.1.1 to 12.2.2.
@@ -20,14 +46,17 @@ except for:
 * scipy, numpy, dipy, AMICO updated by @36000 in pennlinc/sqiprep_build#20
 
 ### 🎉 Exciting New Features
+
 * Update base image to ubuntu 22.04, CUDA 12.2.2 by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1019
 * Crop images before plotting by @tsalo in https://github.com/PennLINC/qsiprep/pull/997
 
 ### 🐛 Bug Fixes
+
 * Fix DeprecatedAction by @tsalo in https://github.com/PennLINC/qsiprep/pull/999
 * Fix bug in b0 harmonization when there is only one b0 volume in a file by @tsalo in https://github.com/PennLINC/qsiprep/pull/1002
 
 ### Other Changes
+
 * Correctly cite SynthSeg in boilerplate by @tsalo in https://github.com/PennLINC/qsiprep/pull/998
 * Update bibtex file by @araikes in https://github.com/PennLINC/qsiprep/pull/1009
 * ENH: Add recommended DatasetType field in dataset_description by @psadil in https://github.com/PennLINC/qsiprep/pull/1014

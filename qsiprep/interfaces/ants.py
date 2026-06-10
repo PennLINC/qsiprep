@@ -1,6 +1,7 @@
 import logging
 import os
 import os.path as op
+from glob import glob
 
 import nibabel as nb
 from nipype.interfaces.ants.base import ANTSCommand, ANTSCommandInputSpec
@@ -115,13 +116,62 @@ class MultivariateTemplateConstruction2(ANTSCommand):
         else:
             prefix = 'antsBTP'
         cwd = os.getcwd()
+        transform_dirs = (cwd, op.join(cwd, 'intermediateTemplates'))
+
+        def _resolve_transform(candidates, glob_patterns):
+            """Pick the first existing transform path, with glob fallback."""
+            for candidate in candidates:
+                if op.exists(candidate):
+                    return candidate
+
+            for pattern in glob_patterns:
+                matches = sorted(glob(pattern))
+                if matches:
+                    return matches[0]
+
+            # Fall back to first candidate for predictable error messages.
+            return candidates[0]
+
         for num, input_image in enumerate(self.inputs.input_images):
             if isinstance(input_image, list):
                 input_image = input_image[0]
             path, fname, ext = split_filename(input_image)
-            affine = f'{cwd}/{prefix}{fname}{num}0GenericAffine.mat'
-            warp = f'{cwd}/{prefix}{fname}{num}1Warp.nii.gz'
-            inv_warp = f'{cwd}/{prefix}{fname}{num}1InverseWarp.nii.gz'
+
+            # ANTs has used different naming/location conventions across versions.
+            # Support both legacy names and newer input-indexed names.
+            affine = _resolve_transform(
+                [
+                    op.join(xdir, f'{prefix}{fname}{num}0GenericAffine.mat')
+                    for xdir in transform_dirs
+                ]
+                + [
+                    op.join(xdir, f'{prefix}input{num:04d}-{fname}-0GenericAffine.mat')
+                    for xdir in transform_dirs
+                ],
+                [op.join(xdir, f'{prefix}*{fname}*0GenericAffine.mat') for xdir in transform_dirs],
+            )
+            warp = _resolve_transform(
+                [op.join(xdir, f'{prefix}{fname}{num}1Warp.nii.gz') for xdir in transform_dirs]
+                + [
+                    op.join(xdir, f'{prefix}input{num:04d}-{fname}-1Warp.nii.gz')
+                    for xdir in transform_dirs
+                ],
+                [op.join(xdir, f'{prefix}*{fname}*1Warp.nii.gz') for xdir in transform_dirs],
+            )
+            inv_warp = _resolve_transform(
+                [
+                    op.join(xdir, f'{prefix}{fname}{num}1InverseWarp.nii.gz')
+                    for xdir in transform_dirs
+                ]
+                + [
+                    op.join(xdir, f'{prefix}input{num:04d}-{fname}-1InverseWarp.nii.gz')
+                    for xdir in transform_dirs
+                ],
+                [
+                    op.join(xdir, f'{prefix}*{fname}*1InverseWarp.nii.gz')
+                    for xdir in transform_dirs
+                ],
+            )
             forward_transforms.append([affine, warp])
             reverse_transforms.append([inv_warp, affine])
 

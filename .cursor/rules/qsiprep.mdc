@@ -6,7 +6,7 @@ globs: "*.py"
 ## Project Identity
 
 - Package: `qsiprep` -- diffusion MRI preprocessing BIDS App
-- Default branch: `master` (migration to `main` is planned)
+- Default branch: `main`
 - Entry point: [qsiprep/cli/run.py](mdc:qsiprep/cli/run.py)
 
 ## Linting & Formatting

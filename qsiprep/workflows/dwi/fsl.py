@@ -8,12 +8,12 @@ Implementing the FSL preprocessing workflow
 
 import json
 import os
+from importlib.resources import files
 
 from nipype.interfaces import fsl
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-from pkg_resources import resource_filename as pkgr_fn
 
 from ... import config
 from ...interfaces import DerivativesDataSink
@@ -28,6 +28,7 @@ from ...interfaces.gradients import ExtractB0s
 from ...interfaces.images import ConformDwi, IntraModalMerge, SplitDWIsFSL
 from ...interfaces.nilearn import EnhanceB0
 from ...interfaces.reports import TopupSummary
+from ...utils.resources import as_path
 from ..fieldmap.base import init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf
 
@@ -164,7 +165,7 @@ def init_fsl_hmc_wf(
     omp_nthreads = config.nipype.omp_nthreads
     if config.workflow.eddy_config is None:
         # load from the defaults
-        eddy_cfg_file = pkgr_fn('qsiprep.data', 'eddy_params.json')
+        eddy_cfg_file = as_path(files('qsiprep.data') / 'eddy_params.json')
     else:
         eddy_cfg_file = config.workflow.eddy_config
 
