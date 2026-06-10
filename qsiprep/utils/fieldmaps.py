@@ -88,7 +88,11 @@ class FieldmapFile:
 
 
 _PEPOLAR_SUFFIXES = ('dwi', 'epi')
-_GRE_SUFFIXES = ('fieldmap', 'phasediff', 'phase1', 'phase2')
+# ``phase2`` is intentionally absent: it is always a sibling of ``phase1`` never an
+# estimation primary, so an estimation is never keyed on it. This keeps method
+# inference honest and avoids a degenerate phase2-only source set inferring
+# PHASEDIFF and then failing to find a phase1 primary in ``to_fieldmap_info``.
+_GRE_SUFFIXES = ('fieldmap', 'phasediff', 'phase1')
 
 
 @dataclass(slots=True)
