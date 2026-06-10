@@ -85,3 +85,65 @@ class FieldmapFile:
             if os.path.exists(candidate):
                 found[sibling_suffix] = candidate
         return found
+
+
+_PEPOLAR_SUFFIXES = ('dwi', 'epi')
+_GRE_SUFFIXES = ('fieldmap', 'phasediff', 'phase1', 'phase2')
+
+
+@dataclass(slots=True)
+class FieldmapEstimation:
+    """A set of :class:`FieldmapFile`s that together define one field map.
+
+    The estimation ``method`` is inferred from the suffixes of the sources. The
+    ``bids_id`` is the common ``B0FieldIdentifier`` of the sources, or the
+    provided ``auto_id`` fallback when none is set.
+
+    Parameters
+    ----------
+    sources : list[FieldmapFile]
+    auto_id : str, optional
+        Identifier to use when the sources carry no ``B0FieldIdentifier``.
+    """
+
+    sources: list
+    auto_id: str | None = None
+    method: EstimatorType = field(init=False, default=EstimatorType.UNKNOWN)
+    bids_id: str | None = field(init=False, default=None)
+
+    def __post_init__(self):
+        suffixes = {f.suffix for f in self.sources}
+
+        gre = suffixes.intersection(_GRE_SUFFIXES)
+        pepolar = suffixes.intersection(_PEPOLAR_SUFFIXES)
+
+        if gre:
+            # phase1/phase2 are the same method; any other mix is invalid.
+            if len(gre) > 1 and gre - {'phase1', 'phase2'}:
+                raise ValueError(f'Incompatible field-map suffixes: {sorted(gre)}')
+            self.method = MODALITIES[sorted(gre)[0]]
+        elif pepolar:
+            self.method = EstimatorType.PEPOLAR
+        else:
+            raise ValueError('Insufficient sources to estimate a field map.')
+
+        b0_ids = [
+            f.metadata['B0FieldIdentifier']
+            for f in self.sources
+            if f.metadata.get('B0FieldIdentifier') is not None
+        ]
+        # Flatten list-valued identifiers.
+        flat_ids = set()
+        for value in b0_ids:
+            flat_ids.update(value if isinstance(value, list) else [value])
+
+        if flat_ids:
+            if len(flat_ids) > 1:
+                raise ValueError(f'Conflicting B0FieldIdentifiers: {sorted(flat_ids)}')
+            self.bids_id = flat_ids.pop()
+        else:
+            self.bids_id = self.auto_id
+
+    def paths(self):
+        """Sorted tuple of source paths."""
+        return tuple(sorted(str(f.path) for f in self.sources))
