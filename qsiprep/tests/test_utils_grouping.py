@@ -509,7 +509,12 @@ def _expected_simple_outputs(combine_scans, estimate_per_axis, ignore_fieldmaps)
                 }
                 if estimate_per_axis
                 else {
-                    'auto_00000': ['sub-01_dir-AP', 'sub-01_dir-LR', 'sub-01_dir-PA', 'sub-01_dir-RL'],
+                    'auto_00000': [
+                        'sub-01_dir-AP',
+                        'sub-01_dir-LR',
+                        'sub-01_dir-PA',
+                        'sub-01_dir-RL',
+                    ],
                 }
             )
         ),
@@ -523,7 +528,12 @@ def _expected_simple_outputs(combine_scans, estimate_per_axis, ignore_fieldmaps)
                 }
                 if estimate_per_axis
                 else {
-                    'auto_00000': ['sub-01_dir-AP', 'sub-01_dir-LR', 'sub-01_dir-PA', 'sub-01_dir-RL'],
+                    'auto_00000': [
+                        'sub-01_dir-AP',
+                        'sub-01_dir-LR',
+                        'sub-01_dir-PA',
+                        'sub-01_dir-RL',
+                    ],
                 }
             )
         ),

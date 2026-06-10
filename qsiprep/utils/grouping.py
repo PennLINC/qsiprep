@@ -7,7 +7,6 @@ Utilities to group scans based on their acquisition parameters
 
 import logging
 import os
-import pprint
 import warnings
 from collections import defaultdict
 
