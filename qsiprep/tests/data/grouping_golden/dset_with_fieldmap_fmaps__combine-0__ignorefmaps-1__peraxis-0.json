@@ -1,0 +1,19 @@
+{
+  "distortion_groups": {
+    "sub-01": [
+      "sub-01/dwi/sub-01_dwi.nii.gz"
+    ]
+  },
+  "fmap_estimation_groups": null,
+  "fmap_application_groups": null,
+  "concatenation_groups": {
+    "sub-01": [
+      "sub-01"
+    ]
+  },
+  "fieldmap_infos": {
+    "sub-01": {
+      "suffix": null
+    }
+  }
+}

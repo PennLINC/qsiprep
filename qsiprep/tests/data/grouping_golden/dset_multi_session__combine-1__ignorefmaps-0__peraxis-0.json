@@ -1,0 +1,72 @@
+{
+  "distortion_groups": {
+    "sub-01_ses-01_dir-AP": [
+      "sub-01/ses-01/dwi/sub-01_ses-01_dir-AP_dwi.nii.gz"
+    ],
+    "sub-01_ses-01_dir-PA": [
+      "sub-01/ses-01/dwi/sub-01_ses-01_dir-PA_dwi.nii.gz"
+    ],
+    "sub-01_ses-02_dir-AP": [
+      "sub-01/ses-02/dwi/sub-01_ses-02_dir-AP_dwi.nii.gz"
+    ],
+    "sub-01_ses-02_dir-PA": [
+      "sub-01/ses-02/dwi/sub-01_ses-02_dir-PA_dwi.nii.gz"
+    ]
+  },
+  "fmap_estimation_groups": {
+    "auto_00000": [
+      "sub-01_ses-01_dir-AP",
+      "sub-01_ses-01_dir-PA"
+    ],
+    "auto_00001": [
+      "sub-01_ses-02_dir-AP",
+      "sub-01_ses-02_dir-PA"
+    ]
+  },
+  "fmap_application_groups": {
+    "auto_00000": [
+      "sub-01_ses-01_dir-AP",
+      "sub-01_ses-01_dir-PA"
+    ],
+    "auto_00001": [
+      "sub-01_ses-02_dir-AP",
+      "sub-01_ses-02_dir-PA"
+    ]
+  },
+  "concatenation_groups": {
+    "sub-01_ses-01": [
+      "sub-01_ses-01_dir-AP",
+      "sub-01_ses-01_dir-PA"
+    ],
+    "sub-01_ses-02": [
+      "sub-01_ses-02_dir-AP",
+      "sub-01_ses-02_dir-PA"
+    ]
+  },
+  "fieldmap_infos": {
+    "sub-01_ses-01_dir-AP": {
+      "suffix": "rpe_series",
+      "rpe_series": [
+        "sub-01/ses-01/dwi/sub-01_ses-01_dir-PA_dwi.nii.gz"
+      ]
+    },
+    "sub-01_ses-01_dir-PA": {
+      "suffix": "rpe_series",
+      "rpe_series": [
+        "sub-01/ses-01/dwi/sub-01_ses-01_dir-AP_dwi.nii.gz"
+      ]
+    },
+    "sub-01_ses-02_dir-AP": {
+      "suffix": "rpe_series",
+      "rpe_series": [
+        "sub-01/ses-02/dwi/sub-01_ses-02_dir-PA_dwi.nii.gz"
+      ]
+    },
+    "sub-01_ses-02_dir-PA": {
+      "suffix": "rpe_series",
+      "rpe_series": [
+        "sub-01/ses-02/dwi/sub-01_ses-02_dir-AP_dwi.nii.gz"
+      ]
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "distortion_groups": {
+    "sub-01_dir-AP": [
+      "sub-01/dwi/sub-01_dir-AP_dwi.nii.gz"
+    ]
+  },
+  "fmap_estimation_groups": {
+    "pepolar": [
+      "sub-01/fmap/sub-01_dir-PA_epi.nii.gz",
+      "sub-01_dir-AP"
+    ]
+  },
+  "fmap_application_groups": {
+    "pepolar": [
+      "sub-01_dir-AP"
+    ]
+  },
+  "concatenation_groups": {
+    "sub-01_dir-AP": [
+      "sub-01_dir-AP"
+    ]
+  },
+  "fieldmap_infos": {
+    "sub-01_dir-AP": {
+      "suffix": "epi",
+      "epi": [
+        "sub-01/fmap/sub-01_dir-PA_epi.nii.gz"
+      ]
+    }
+  }
+}
