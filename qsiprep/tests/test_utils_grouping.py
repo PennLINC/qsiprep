@@ -1,7 +1,7 @@
 """Tests for the grouping utils."""
 
 import os
-from pprint import pformat
+from pprint import pformat, pprint
 
 import pytest
 from bids.layout import BIDSLayout
@@ -1590,6 +1590,33 @@ dset_no_opposite_peds = {
     ],
 }
 
+dset_drbuddi_rpe_like = {
+    '01': [
+        {
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j',
+                        'ShimSetting': _SHARED_SHIM,
+                        'TotalReadoutTime': 0.0717598,
+                    },
+                },
+                {
+                    'dir': 'PA',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'TotalReadoutTime': 0.0717598,
+                    },
+                },
+            ],
+        },
+    ],
+}
+
 
 def _make_layout(tmpdir, dset_dict, name):
     """Helper: generate a BIDS skeleton and return (layout, subject_data)."""
@@ -1603,6 +1630,25 @@ def _make_layout(tmpdir, dset_dict, name):
 def _basenames(paths):
     """Return sorted basenames from a list of paths."""
     return sorted(os.path.basename(p) for p in paths)
+
+
+def _assert_expected_outputs(found_outputs, expected_outputs):
+    """Report output-name mismatches like the integration tests do."""
+    found_outputs = set(found_outputs)
+    expected_outputs = set(expected_outputs)
+    if found_outputs == expected_outputs:
+        return
+
+    expected_not_found = sorted(expected_outputs - found_outputs)
+    found_not_expected = sorted(found_outputs - expected_outputs)
+    msg = ''
+    if expected_not_found:
+        msg += '\nExpected but not found:\n\t'
+        msg += '\n\t'.join(expected_not_found)
+    if found_not_expected:
+        msg += '\nFound but not expected:\n\t'
+        msg += '\n\t'.join(found_not_expected)
+    raise AssertionError(msg)
 
 
 # ---------------------------------------------------------------------------
@@ -2225,6 +2271,42 @@ class TestBranchingLogicCoverage:
 
 class TestLegacyOutputAdapter:
     """Regression tests for 4-dict -> legacy outputs adapter."""
+
+    def test_drbuddi_rpe_pair_collapses_to_single_output(self, tmpdir):
+        """A DRBUDDI-style RPE DWI pair should produce one downstream output group."""
+        if _build_outputs_to_files is None:
+            pytest.skip('qsiprep.workflows.base unavailable in this test environment')
+
+        layout, subject_data = _make_layout(
+            tmpdir,
+            dset_drbuddi_rpe_like,
+            'legacy_adapter_drbuddi_rpe_like',
+        )
+        dg, fme, fma, cg = grouping.group_dwi_scans(
+            layout=layout,
+            subject_data=subject_data,
+            combine_scans=True,
+            ignore_fieldmaps=False,
+            estimate_per_axis=True,
+        )
+        print("Distortion groups:")
+        pprint(dg)
+        print("Fieldmap Estimation groups:")
+        pprint(fme)
+        print("Fieldmap Application groups:")
+        pprint(fma)
+        print("Concatenation groups:")
+        pprint(cg)
+
+        outputs = _build_outputs_to_files(layout, dg, fme, fma)
+        _assert_expected_outputs(outputs, {'sub-01'})
+
+        scan_group = outputs['sub-01']
+        assert scan_group['fieldmap_info']['suffix'] == 'rpe_series'
+        assert _basenames(scan_group['dwi_series']) == ['sub-01_dir-AP_dwi.nii.gz']
+        assert _basenames(scan_group['fieldmap_info']['rpe_series']) == [
+            'sub-01_dir-PA_dwi.nii.gz',
+        ]
 
     def test_fmap_only_groups_are_labeled_epi(self, tmpdir):
         """IntendedFor-linked fmap-only groups should not become rpe_series."""
