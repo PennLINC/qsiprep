@@ -1104,6 +1104,97 @@ dset_with_intendedfor_fmaps = {
     ],
 }
 
+dset_with_phasediff_fmaps = {
+    '01': [
+        {
+            'anat': [{'suffix': 'T1w'}],
+            'fmap': [
+                {'suffix': 'magnitude1', 'metadata': {'EchoTime': 0.00492}},
+                {'suffix': 'magnitude2', 'metadata': {'EchoTime': 0.00738}},
+                {
+                    'suffix': 'phasediff',
+                    'metadata': {
+                        'IntendedFor': ['dwi/sub-01_dwi.nii.gz'],
+                        'EchoTime1': 0.00492,
+                        'EchoTime2': 0.00738,
+                    },
+                },
+            ],
+            'dwi': [
+                {
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                    },
+                },
+            ],
+        },
+    ],
+}
+
+dset_with_fieldmap_fmaps = {
+    '01': [
+        {
+            'anat': [{'suffix': 'T1w'}],
+            'fmap': [
+                {'suffix': 'magnitude', 'metadata': {}},
+                {
+                    'suffix': 'fieldmap',
+                    'metadata': {
+                        'IntendedFor': ['dwi/sub-01_dwi.nii.gz'],
+                        'Units': 'Hz',
+                    },
+                },
+            ],
+            'dwi': [
+                {
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                    },
+                },
+            ],
+        },
+    ],
+}
+
+dset_with_two_phase_fmaps = {
+    '01': [
+        {
+            'anat': [{'suffix': 'T1w'}],
+            'fmap': [
+                {'suffix': 'magnitude1', 'metadata': {'EchoTime': 0.00492}},
+                {'suffix': 'magnitude2', 'metadata': {'EchoTime': 0.00738}},
+                {
+                    'suffix': 'phase1',
+                    'metadata': {
+                        'IntendedFor': ['dwi/sub-01_dwi.nii.gz'],
+                        'EchoTime': 0.00492,
+                    },
+                },
+                {
+                    'suffix': 'phase2',
+                    'metadata': {
+                        'IntendedFor': ['dwi/sub-01_dwi.nii.gz'],
+                        'EchoTime': 0.00738,
+                    },
+                },
+            ],
+            'dwi': [
+                {
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                    },
+                },
+            ],
+        },
+    ],
+}
+
 dset_with_b0field_fmaps = {
     '01': [
         {
@@ -2159,3 +2250,85 @@ class TestLegacyOutputAdapter:
         assert scan_group['fieldmap_info']['suffix'] == 'epi'
         assert 'epi' in scan_group['fieldmap_info']
         assert 'rpe_series' not in scan_group['fieldmap_info']
+
+    def test_phasediff_fmaps_are_typed(self, tmpdir):
+        """GRE phasediff fieldmaps must not be mislabeled as pepolar EPI fieldmaps."""
+        if _build_outputs_to_files is None:
+            pytest.skip('qsiprep.workflows.base unavailable in this test environment')
+
+        layout, subject_data = _make_layout(
+            tmpdir,
+            dset_with_phasediff_fmaps,
+            'legacy_adapter_phasediff',
+        )
+        dg, fme, fma, _ = grouping.group_dwi_scans(
+            layout=layout,
+            subject_data=subject_data,
+            combine_scans=True,
+            ignore_fieldmaps=False,
+            estimate_per_axis=False,
+        )
+
+        outputs = _build_outputs_to_files(layout, dg, fme, fma)
+        assert len(outputs) == 1
+        fieldmap_info = next(iter(outputs.values()))['fieldmap_info']
+        assert fieldmap_info['suffix'] == 'phasediff'
+        assert fieldmap_info['phasediff'].endswith('sub-01_phasediff.nii.gz')
+        assert fieldmap_info['magnitude1'].endswith('sub-01_magnitude1.nii.gz')
+        assert fieldmap_info['magnitude2'].endswith('sub-01_magnitude2.nii.gz')
+        assert 'epi' not in fieldmap_info
+        assert 'rpe_series' not in fieldmap_info
+
+    def test_fieldmap_fmaps_are_typed(self, tmpdir):
+        """Direct fieldmaps must not be mislabeled as pepolar EPI fieldmaps."""
+        if _build_outputs_to_files is None:
+            pytest.skip('qsiprep.workflows.base unavailable in this test environment')
+
+        layout, subject_data = _make_layout(
+            tmpdir,
+            dset_with_fieldmap_fmaps,
+            'legacy_adapter_fieldmap',
+        )
+        dg, fme, fma, _ = grouping.group_dwi_scans(
+            layout=layout,
+            subject_data=subject_data,
+            combine_scans=True,
+            ignore_fieldmaps=False,
+            estimate_per_axis=False,
+        )
+
+        outputs = _build_outputs_to_files(layout, dg, fme, fma)
+        assert len(outputs) == 1
+        fieldmap_info = next(iter(outputs.values()))['fieldmap_info']
+        assert fieldmap_info['suffix'] == 'fieldmap'
+        assert fieldmap_info['fieldmap'].endswith('sub-01_fieldmap.nii.gz')
+        assert fieldmap_info['magnitude'].endswith('sub-01_magnitude.nii.gz')
+        assert 'epi' not in fieldmap_info
+
+    def test_two_phase_fmaps_are_typed(self, tmpdir):
+        """phase1/phase2 fieldmaps must not be mislabeled as pepolar EPI fieldmaps."""
+        if _build_outputs_to_files is None:
+            pytest.skip('qsiprep.workflows.base unavailable in this test environment')
+
+        layout, subject_data = _make_layout(
+            tmpdir,
+            dset_with_two_phase_fmaps,
+            'legacy_adapter_two_phase',
+        )
+        dg, fme, fma, _ = grouping.group_dwi_scans(
+            layout=layout,
+            subject_data=subject_data,
+            combine_scans=True,
+            ignore_fieldmaps=False,
+            estimate_per_axis=False,
+        )
+
+        outputs = _build_outputs_to_files(layout, dg, fme, fma)
+        assert len(outputs) == 1
+        fieldmap_info = next(iter(outputs.values()))['fieldmap_info']
+        assert fieldmap_info['suffix'] == 'phase1'
+        assert fieldmap_info['phase1'].endswith('sub-01_phase1.nii.gz')
+        assert fieldmap_info['phase2'].endswith('sub-01_phase2.nii.gz')
+        assert fieldmap_info['magnitude1'].endswith('sub-01_magnitude1.nii.gz')
+        assert fieldmap_info['magnitude2'].endswith('sub-01_magnitude2.nii.gz')
+        assert 'epi' not in fieldmap_info

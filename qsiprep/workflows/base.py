@@ -50,7 +50,11 @@ from ..interfaces import (
     SubjectSummary,
 )
 from ..utils.bids import collect_data
-from ..utils.grouping import group_dwi_scans
+from ..utils.grouping import (
+    classify_fmap_files,
+    get_highest_priority_fieldmap,
+    group_dwi_scans,
+)
 from ..utils.misc import fix_multi_source_name
 from .anatomical.volume import init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
@@ -582,16 +586,22 @@ def _build_outputs_to_files(
             for rpe_id in rpe_dg_ids:
                 rpe_files.extend(distortion_groups[rpe_id])
 
-            if fmap_paths and rpe_files:
+            # The fmap files may be pepolar EPI fieldmaps or GRE fieldmaps
+            # (phasediff/phases/fieldmap + magnitudes). Only EPI files may be
+            # used in the pepolar paths; GRE fieldmaps get typed fieldmap_info.
+            epi_files, gre_fmap_infos = classify_fmap_files(fmap_paths)
+
+            if rpe_files:
                 fieldmap_info = {'suffix': 'rpe_series', 'rpe_series': sorted(rpe_files)}
-                fieldmap_info['epi'] = sorted(fmap_paths)
-            elif fmap_paths:
+                if epi_files:
+                    fieldmap_info['epi'] = epi_files
+            elif epi_files:
                 # Fmap-only estimation groups should flow through the EPI path.
                 # Marking these as rpe_series causes downstream PE+/PE- splitting
                 # to expect a reverse-DWI list that does not exist.
-                fieldmap_info = {'suffix': 'epi', 'epi': sorted(fmap_paths)}
-            elif rpe_files:
-                fieldmap_info = {'suffix': 'rpe_series', 'rpe_series': sorted(rpe_files)}
+                fieldmap_info = {'suffix': 'epi', 'epi': epi_files}
+            elif gre_fmap_infos:
+                fieldmap_info = get_highest_priority_fieldmap(gre_fmap_infos)
             else:
                 fieldmap_info = {'suffix': None}
 

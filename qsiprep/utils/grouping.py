@@ -882,6 +882,80 @@ FMAP_PRIORITY = {
 }
 
 
+def _find_sibling_fmap_file(fmap_file, suffix, sibling_suffix):
+    """Find a file next to *fmap_file* whose BIDS suffix is *sibling_suffix*."""
+    dirname, basename = os.path.split(fmap_file)
+    sibling_basename = basename.replace(f'_{suffix}.', f'_{sibling_suffix}.')
+    if sibling_basename == basename:
+        return None
+
+    sibling = os.path.join(dirname, sibling_basename)
+    if os.path.exists(sibling):
+        return sibling
+    return None
+
+
+def classify_fmap_files(fmap_files):
+    """Sort raw fmap file paths into pepolar EPI files and typed GRE fieldmaps.
+
+    Magnitude and phase2 images are attached to the phasediff/phase1/fieldmap
+    image they accompany (found by filename, like pybids' ``get_fieldmap``),
+    even when they are not listed in *fmap_files* themselves.
+
+    Parameters
+    ----------
+    fmap_files : :obj:`list` of :obj:`str`
+        Paths to NIfTI files in a subject's ``fmap/`` directory.
+
+    Returns
+    -------
+    epi_files : :obj:`list` of :obj:`str`
+        Sorted paths to pepolar EPI fieldmap files.
+    gre_fmap_infos : :obj:`list` of :obj:`dict`
+        One dictionary per GRE fieldmap, in the ``fieldmap_info`` format
+        expected by the downstream SDC workflows (a ``suffix`` key plus
+        type-specific file keys).
+    """
+    epi_files = []
+    gre_fmap_infos = []
+    handled = set()
+
+    for fmap_file in sorted(fmap_files):
+        if fmap_file in handled:
+            continue
+
+        suffix = split_filename(fmap_file)[1].split('_')[-1]
+        if suffix == 'epi':
+            epi_files.append(fmap_file)
+        elif suffix == 'phasediff':
+            info = {'suffix': 'phasediff', 'phasediff': fmap_file}
+            for mag_suffix in ('magnitude1', 'magnitude2'):
+                sibling = _find_sibling_fmap_file(fmap_file, suffix, mag_suffix)
+                if sibling is not None:
+                    info[mag_suffix] = sibling
+                    handled.add(sibling)
+            gre_fmap_infos.append(info)
+        elif suffix == 'phase1':
+            info = {'suffix': 'phase1', 'phase1': fmap_file}
+            for sibling_suffix in ('phase2', 'magnitude1', 'magnitude2'):
+                sibling = _find_sibling_fmap_file(fmap_file, suffix, sibling_suffix)
+                if sibling is not None:
+                    info[sibling_suffix] = sibling
+                    handled.add(sibling)
+            gre_fmap_infos.append(info)
+        elif suffix == 'fieldmap':
+            info = {'suffix': 'fieldmap', 'fieldmap': fmap_file}
+            sibling = _find_sibling_fmap_file(fmap_file, suffix, 'magnitude')
+            if sibling is not None:
+                info['magnitude'] = sibling
+                handled.add(sibling)
+            gre_fmap_infos.append(info)
+        # magnitude*/phase2 files are only useful as companions of the files
+        # handled above, so anything else is ignored.
+
+    return epi_files, gre_fmap_infos
+
+
 def get_highest_priority_fieldmap(fmap_infos):
     """Return a dictionary describing the highest priority fieldmap.
 

@@ -163,6 +163,12 @@ QSIPrep builds four internal groupings per subject/session:
 If your curation metadata conflicts with physical acquisition metadata
 (``ShimSetting`` and ``TotalReadoutTime``), QSIPrep raises an error instead of silently grouping incompatible scans.
 
+.. seealso::
+
+   The summary below covers the most common cases. For a comprehensive
+   reference on how every metadata field and parameter affects grouping and
+   distortion correction, see :ref:`grouping`.
+
 
 How QSIPrep decides groups
 --------------------------
