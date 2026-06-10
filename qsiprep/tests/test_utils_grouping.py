@@ -2491,6 +2491,70 @@ class TestLegacyOutputAdapter:
         assert 'epi' not in fieldmap_info
 
 
+# NOTE: deliberately NOT prefixed ``dset_`` so the golden harness
+# (test_grouping_golden) does not auto-discover this fixture, which is only used
+# by the unit-level find_estimators tests below and has no golden snapshot.
+_FIND_EST_B0FIELD_DSET = {
+    '01': [
+        {
+            'fmap': [
+                {
+                    'dir': 'PA',
+                    'suffix': 'epi',
+                    'metadata': {
+                        'B0FieldIdentifier': 'pepolar01',
+                        'PhaseEncodingDirection': 'j-',
+                        'TotalReadoutTime': 0.05,
+                        'IntendedFor': ['dwi/sub-01_dir-AP_dwi.nii.gz'],
+                    },
+                },
+            ],
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'B0FieldIdentifier': 'pepolar01',
+                        'B0FieldSource': 'pepolar01',
+                        'PhaseEncodingDirection': 'j',
+                        'TotalReadoutTime': 0.05,
+                    },
+                },
+            ],
+        },
+    ],
+}
+
+
+def test_find_estimators_b0field(tmpdir):
+    layout, subject_data = _make_layout(tmpdir, _FIND_EST_B0FIELD_DSET, 'find_est_b0')
+    series = [grouping.DwiSeries.from_layout(layout, p) for p in subject_data['dwi']]
+    estimators, series_to_id = grouping.find_estimators(
+        layout=layout,
+        series=series,
+        ignore_fieldmaps=False,
+        estimate_per_axis=False,
+    )
+    assert estimators
+    # Every estimator has an inferred method and an id.
+    assert all(e.method is not None and e.bids_id for e in estimators)
+    # The B0FieldIdentifier becomes the estimator id.
+    assert any(e.bids_id == 'pepolar01' for e in estimators)
+
+
+def test_find_estimators_ignore_fieldmaps(tmpdir):
+    layout, subject_data = _make_layout(tmpdir, _FIND_EST_B0FIELD_DSET, 'find_est_ign')
+    series = [grouping.DwiSeries.from_layout(layout, p) for p in subject_data['dwi']]
+    estimators, series_to_id = grouping.find_estimators(
+        layout=layout,
+        series=series,
+        ignore_fieldmaps=True,
+        estimate_per_axis=False,
+    )
+    # fmap/ EPIs are ignored; only reverse-PE DWI estimators (if any) remain.
+    assert all('epi' not in [s.suffix for s in e.sources] for e in estimators)
+
+
 def test_dwiseries_from_layout(tmpdir):
     layout, subject_data = _make_layout(tmpdir, dset_single_dwi, 'dwiseries_single')
     dwi_path = subject_data['dwi'][0]

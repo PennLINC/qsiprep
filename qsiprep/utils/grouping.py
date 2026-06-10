@@ -15,6 +15,7 @@ from nipype.utils.filemanip import split_filename
 
 from .. import config
 from ..interfaces.bids import get_bids_params
+from .fieldmaps import FieldmapEstimation, FieldmapFile
 
 LOGGER = logging.getLogger('nipype.workflow')
 
@@ -1294,3 +1295,291 @@ def _group_by_sessions(dwi_fmap_groups):
         ses_lookup[bids_info['session_id']].append(group)
 
     return ses_lookup
+
+
+# ---------------------------------------------------------------------------
+# Series-level field-map estimator discovery (new architecture).
+#
+# These helpers port the behavior of the distortion-group-level functions
+# above (``build_fmap_estimation_groups`` and friends) to operate over
+# ``DwiSeries`` objects, returning ``FieldmapEstimation`` objects. The
+# distortion-group originals are retained for now and removed in a later task.
+# ---------------------------------------------------------------------------
+
+
+def _as_list(value):
+    """Wrap scalars in a list; pass through lists unchanged.
+
+    Ported from :func:`_ensure_list`. Preserves the exact None handling
+    (``None`` becomes ``[None]``); callers filter ``None`` themselves.
+    """
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
+def _subject_fmap_files(layout, series):
+    """Sorted fmap/ NIfTI paths for the subject owning these series.
+
+    Ported from :func:`_get_fmap_files` (the ``ignore_fieldmaps`` short-circuit
+    is handled by the caller).
+    """
+    if not series:
+        return []
+    sub_id = layout.get_file(series[0].path).entities.get('subject')
+    try:
+        files = layout.get(
+            subject=sub_id,
+            datatype='fmap',
+            extension=['.nii.gz', '.nii'],
+            return_type='file',
+        )
+    except Exception:  # noqa: BLE001
+        files = []
+    return sorted(files)
+
+
+def _check_axis_conflict(est, estimate_per_axis):
+    """Raise if estimate_per_axis=True and an estimator spans multiple PE axes.
+
+    Ported from :func:`_check_b0field_axis_conflict`, reading PE directions from
+    the estimator's sources' metadata.
+    """
+    if not estimate_per_axis:
+        return
+
+    axes = set()
+    for f in est.sources:
+        pe = f.metadata.get('PhaseEncodingDirection')
+        axis = _get_pe_axis(pe)
+        if axis is not None:
+            axes.add(axis)
+
+    if len(axes) > 1:
+        raise ValueError(
+            f'B0FieldIdentifier {est.bids_id!r} groups files across PE axes '
+            f'{axes}, but estimate_per_axis is True. A single B0 field '
+            f'estimation group cannot span multiple axis pairs.'
+        )
+
+
+def _check_series_metadata_compatibility(member_series, group_key, group_kind):
+    """Raise if a metadata-defined group spans incompatible shim/TRT signatures.
+
+    Ported from :func:`_check_distortion_metadata_compatibility`, operating over
+    DWI-series members (fmap paths are not series and carry no signature here).
+    """
+    if len(member_series) <= 1:
+        return
+
+    signatures = {(s.shim, s.trt) for s in member_series}
+    if len(signatures) > 1:
+        raise ValueError(
+            f'{group_kind.capitalize()} group {group_key!r} contains distortion groups '
+            'with conflicting ShimSetting and/or TotalReadoutTime metadata. '
+            'These files cannot be grouped together for field-map processing.'
+        )
+
+
+def _resolve_intended_for_series(intended_for_paths, by_path):
+    """Map IntendedFor target paths to actual DWI series paths.
+
+    Ported from :func:`_resolve_intended_for`; ``by_path`` maps series paths to
+    :class:`DwiSeries`.
+    """
+    basename_to_path = {os.path.basename(p): p for p in by_path}
+    resolved = []
+    for target in intended_for_paths:
+        if target.startswith('bids::'):
+            target = target[len('bids::') :]
+        target_basename = os.path.basename(target)
+        if target_basename in basename_to_path:
+            resolved.append(basename_to_path[target_basename])
+    return resolved
+
+
+def _intendedfor_buckets(layout, fmap_files, by_path):
+    """Build estimation buckets from IntendedFor metadata on fmap files.
+
+    Ported from :func:`_build_intendedfor_groups`. Returns a list of
+    ``(tuple_of_sorted_target_series_paths, set_of_fmap_paths)`` ordered by the
+    target tuple, so the ``auto_`` ids come out in the same order as the
+    existing code (which numbered them by first appearance of each target key,
+    iterating fmap files in sorted order).
+    """
+    raw_groups = {}  # target_key -> set of fmap paths
+
+    for fmap_file in fmap_files:
+        intended_for = layout.get_metadata(fmap_file).get('IntendedFor')
+        if intended_for is None:
+            continue
+
+        intended_for = _as_list(intended_for)
+        targeted = _resolve_intended_for_series(intended_for, by_path)
+        targeted_paths = sorted(set(targeted))
+        if not targeted_paths:
+            continue
+
+        target_key = tuple(targeted_paths)
+        raw_groups.setdefault(target_key, set()).add(fmap_file)
+
+    return [
+        (target_key, raw_groups[target_key]) for target_key in sorted(raw_groups)
+    ]
+
+
+def _heuristic_series_groups(series, estimate_per_axis):
+    """Pair series by PE direction when no curator metadata exists.
+
+    Ported from :func:`_build_heuristic_estimation_groups`. Yields lists of
+    series paths in the same iteration order (sorted sessions -> MultipartID
+    partitions -> sorted PE axes).
+    """
+    groups = []
+
+    # Never create heuristic estimation groups across sessions.
+    by_session = defaultdict(list)
+    for s in series:
+        by_session[s.session].append(s)
+
+    for session in sorted(by_session, key=lambda v: '' if v is None else str(v)):
+        session_series = by_session[session]
+
+        # Do not build heuristic fmap groups across MultipartID boundaries.
+        multipart_partitions = defaultdict(list)
+        for s in session_series:
+            partition_key = s.multipart_id if s.multipart_id is not None else '_no_multipart'
+            multipart_partitions[partition_key].append(s)
+
+        for partition_series in multipart_partitions.values():
+            pe_axes = defaultdict(lambda: defaultdict(list))
+            for s in partition_series:
+                pe = s.pe_dir
+                if pe is None:
+                    continue
+                axis = _get_pe_axis(pe)
+                pe_axes[axis][pe].append(s.path)
+
+            if estimate_per_axis:
+                for axis, dir_map in sorted(pe_axes.items()):
+                    plus_dir = axis
+                    minus_dir = axis + '-'
+                    plus_paths = dir_map.get(plus_dir, [])
+                    minus_paths = dir_map.get(minus_dir, [])
+                    if plus_paths and minus_paths:
+                        groups.append(sorted(plus_paths + minus_paths))
+            else:
+                all_paths = [s.path for s in partition_series if s.pe_dir is not None]
+                unique_pes = {s.pe_dir for s in partition_series if s.pe_dir is not None}
+                if len(unique_pes) >= 2 and all_paths:
+                    groups.append(sorted(all_paths))
+
+    return groups
+
+
+def find_estimators(*, layout, series, ignore_fieldmaps, estimate_per_axis):
+    """Discover field-map estimators for a set of DWI series.
+
+    Priority (highest first): B0FieldIdentifier -> IntendedFor -> PE-direction
+    heuristic. Mirrors sdcflows' ``find_estimators`` shape but returns QSIPrep
+    estimator objects plus a per-series application assignment.
+
+    Parameters
+    ----------
+    layout : :obj:`pybids.BIDSLayout`
+    series : list[DwiSeries]
+    ignore_fieldmaps : :obj:`bool`
+    estimate_per_axis : :obj:`bool`
+
+    Returns
+    -------
+    estimators : list[FieldmapEstimation]
+    series_to_estimator : dict[str, str]
+        Maps a DWI series path to the ``bids_id`` of the estimator that corrects
+        it. (Application mapping; mirrors today's fmap_application_groups.)
+    """
+    estimators = []
+    series_to_estimator = {}
+    auto_counter = 0
+
+    by_path = {s.path: s for s in series}
+    fmap_files = [] if ignore_fieldmaps else _subject_fmap_files(layout, series)
+
+    def _fieldmap_file(path):
+        return FieldmapFile(path, metadata=layout.get_metadata(path))
+
+    # ----- Priority 1: B0FieldIdentifier on any DWI or fmap file -----
+    b0_members = defaultdict(set)  # identifier -> {paths}
+    has_b0field = False
+    for s in series:
+        b0fi = s.b0_identifier
+        if b0fi is not None:
+            has_b0field = True
+            for value in _as_list(b0fi):
+                if value is not None:
+                    b0_members[value].add(s.path)
+    for fpath in fmap_files:
+        b0fi = layout.get_metadata(fpath).get('B0FieldIdentifier')
+        if b0fi is not None:
+            has_b0field = True
+            for value in _as_list(b0fi):
+                if value is not None:
+                    b0_members[value].add(fpath)
+
+    if has_b0field:
+        # Does any series declare a B0FieldSource? (Application Path 1.)
+        any_b0_source = any(s.b0_source is not None for s in series)
+
+        for ident in sorted(b0_members):
+            member_paths = b0_members[ident]
+            member_series = [by_path[p] for p in member_paths if p in by_path]
+            _check_series_metadata_compatibility(
+                member_series, ident, group_kind='field-map estimation'
+            )
+            sources = [_fieldmap_file(p) for p in sorted(member_paths)]
+            est = FieldmapEstimation(sources)  # bids_id resolves to `ident`
+            _check_axis_conflict(est, estimate_per_axis)
+            estimators.append(est)
+
+        # Application assignment.
+        for s in series:
+            if any_b0_source:
+                if s.b0_source is not None:
+                    for value in _as_list(s.b0_source):
+                        if value in b0_members:
+                            series_to_estimator[s.path] = value
+            else:
+                for ident in sorted(b0_members):
+                    if s.path in b0_members[ident]:
+                        series_to_estimator[s.path] = ident
+
+        return estimators, series_to_estimator
+
+    # ----- Priority 2: IntendedFor on fmap files -----
+    if fmap_files:
+        intended = _intendedfor_buckets(layout, fmap_files, by_path)
+        for target_paths, fmap_paths in intended:
+            member_series = [by_path[p] for p in target_paths if p in by_path]
+            auto_id = f'auto_{auto_counter:05d}'
+            _check_series_metadata_compatibility(
+                member_series, auto_id, group_kind='field-map estimation'
+            )
+            sources = [_fieldmap_file(p) for p in sorted(fmap_paths)]
+            est = FieldmapEstimation(sources, auto_id=auto_id)
+            auto_counter += 1
+            estimators.append(est)
+            for tpath in target_paths:
+                series_to_estimator[tpath] = est.bids_id
+        if estimators:
+            return estimators, series_to_estimator
+
+    # ----- Priority 3: PE-direction heuristic -----
+    for group_paths in _heuristic_series_groups(series, estimate_per_axis):
+        sources = [_fieldmap_file(p) for p in sorted(group_paths)]
+        est = FieldmapEstimation(sources, auto_id=f'auto_{auto_counter:05d}')
+        auto_counter += 1
+        estimators.append(est)
+        for p in group_paths:
+            series_to_estimator[p] = est.bids_id
+
+    return estimators, series_to_estimator
