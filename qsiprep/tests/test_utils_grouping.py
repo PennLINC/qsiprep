@@ -2489,3 +2489,12 @@ class TestLegacyOutputAdapter:
         assert fieldmap_info['magnitude1'].endswith('sub-01_magnitude1.nii.gz')
         assert fieldmap_info['magnitude2'].endswith('sub-01_magnitude2.nii.gz')
         assert 'epi' not in fieldmap_info
+
+
+def test_dwiseries_from_layout(tmpdir):
+    layout, subject_data = _make_layout(tmpdir, dset_single_dwi, 'dwiseries_single')
+    dwi_path = subject_data['dwi'][0]
+    series = grouping.DwiSeries.from_layout(layout, dwi_path)
+    assert series.path == dwi_path
+    assert series.pe_dir is not None
+    assert series.session == layout.get_file(dwi_path).entities.get('session')

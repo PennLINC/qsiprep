@@ -9,6 +9,7 @@ import logging
 import os
 import warnings
 from collections import defaultdict
+from dataclasses import dataclass
 
 from nipype.utils.filemanip import split_filename
 
@@ -24,6 +25,42 @@ _DISTORTION_FIELDS = (
     'TotalReadoutTime',
     'B0FieldIdentifier',
 )
+
+
+@dataclass(slots=True)
+class DwiSeries:
+    """A DWI file plus its distortion-relevant metadata, read once."""
+
+    path: str
+    session: object
+    pe_dir: object
+    shim: object
+    trt: object
+    b0_identifier: object
+    b0_source: object
+    multipart_id: object
+
+    @classmethod
+    def from_layout(cls, layout, path):
+        bidsfile = layout.get_file(path)
+        metadata = bidsfile.get_metadata()
+        shim = metadata.get('ShimSetting')
+        b0fi = metadata.get('B0FieldIdentifier')
+        return cls(
+            path=path,
+            session=bidsfile.entities.get('session'),
+            pe_dir=metadata.get('PhaseEncodingDirection'),
+            shim=tuple(shim) if isinstance(shim, list) else shim,
+            trt=metadata.get('TotalReadoutTime'),
+            b0_identifier=tuple(b0fi) if isinstance(b0fi, list) else b0fi,
+            b0_source=metadata.get('B0FieldSource'),
+            multipart_id=metadata.get('MultipartID'),
+        )
+
+    @property
+    def distortion_signature(self):
+        """The physical-distortion key (no estimator constraint yet)."""
+        return (self.session, self.pe_dir, self.shim, self.trt, self.b0_identifier)
 
 
 def group_dwi_scans(
