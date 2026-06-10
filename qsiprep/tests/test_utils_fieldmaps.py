@@ -1,5 +1,7 @@
 """Tests for the field-map value-object model."""
 
+import os
+
 import pytest
 
 from qsiprep.utils import fieldmaps as fm
@@ -23,3 +25,30 @@ def test_modalities_mapping():
     assert fm.MODALITIES['fieldmap'] is fm.EstimatorType.MAPPED
     assert fm.MODALITIES['T1w'] is fm.EstimatorType.ANAT
     assert fm.MODALITIES['magnitude1'] is None
+
+
+def _touch(path, content=''):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content)
+    return str(path)
+
+
+def test_fieldmapfile_reads_suffix_and_metadata(tmp_path):
+    nii = _touch(tmp_path / 'sub-01_phasediff.nii.gz')
+    f = fm.FieldmapFile(nii, metadata={'EchoTime1': 0.004, 'EchoTime2': 0.006})
+    assert f.suffix == 'phasediff'
+    assert f.metadata['EchoTime1'] == 0.004
+    assert f.path == nii
+
+
+def test_fieldmapfile_finds_sibling_magnitudes(tmp_path):
+    fmap_dir = tmp_path / 'sub-01' / 'fmap'
+    pd = _touch(fmap_dir / 'sub-01_phasediff.nii.gz')
+    _touch(fmap_dir / 'sub-01_magnitude1.nii.gz')
+    _touch(fmap_dir / 'sub-01_magnitude2.nii.gz')
+    f = fm.FieldmapFile(pd, metadata={'EchoTime1': 0.004, 'EchoTime2': 0.006})
+    siblings = f.find_siblings(('magnitude1', 'magnitude2'))
+    assert sorted(os.path.basename(s) for s in siblings.values()) == [
+        'sub-01_magnitude1.nii.gz',
+        'sub-01_magnitude2.nii.gz',
+    ]

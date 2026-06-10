@@ -45,3 +45,43 @@ MODALITIES = {
 def _suffix_of(path):
     """Return the BIDS suffix of a NIfTI path (e.g. 'phasediff')."""
     return split_filename(path)[1].split('_')[-1]
+
+
+@dataclass(slots=True)
+class FieldmapFile:
+    """A single file usable in field-map estimation, with metadata read once.
+
+    Parameters
+    ----------
+    path : str
+        Path to a NIfTI file in a BIDS tree.
+    metadata : dict, optional
+        Metadata for the file. Caller is responsible for providing BIDS-resolved
+        metadata (QSIPrep reads it from the pybids layout).
+    """
+
+    path: str
+    metadata: dict = field(default_factory=dict)
+    suffix: str = field(init=False)
+
+    def __post_init__(self):
+        self.suffix = _suffix_of(self.path)
+
+    def find_siblings(self, suffixes):
+        """Return ``{suffix: path}`` for sibling files that exist on disk.
+
+        Siblings are located by replacing this file's suffix token in its
+        basename, matching pybids' ``get_fieldmap`` filename convention.
+        """
+        dirname, basename = os.path.split(self.path)
+        found = {}
+        for sibling_suffix in suffixes:
+            sibling_basename = basename.replace(
+                f'_{self.suffix}.', f'_{sibling_suffix}.'
+            )
+            if sibling_basename == basename:
+                continue
+            candidate = os.path.join(dirname, sibling_basename)
+            if os.path.exists(candidate):
+                found[sibling_suffix] = candidate
+        return found
