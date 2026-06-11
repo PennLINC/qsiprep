@@ -1692,6 +1692,70 @@ dset_mixed_epi_gre = {
     ],
 }
 
+# Two sessions that share a single B0FieldIdentifier ('pepolar01'). The named
+# estimation group spans both sessions, so it must be split into per-session
+# estimators (pepolar01_ses-01 / pepolar01_ses-02). Locks the cross-session
+# split behavior of named (B0FieldIdentifier / IntendedFor) groups.
+dset_b0field_multisession = {
+    '01': [
+        {
+            'session': '01',
+            'anat': [{'suffix': 'T1w'}],
+            'fmap': [
+                {
+                    'dir': 'PA',
+                    'suffix': 'epi',
+                    'metadata': {
+                        'B0FieldIdentifier': 'pepolar01',
+                        'PhaseEncodingDirection': 'j',
+                        'TotalReadoutTime': 0.05,
+                    },
+                },
+            ],
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'TotalReadoutTime': 0.05,
+                        'B0FieldIdentifier': 'pepolar01',
+                        'B0FieldSource': 'pepolar01',
+                    },
+                },
+            ],
+        },
+        {
+            'session': '02',
+            'fmap': [
+                {
+                    'dir': 'PA',
+                    'suffix': 'epi',
+                    'metadata': {
+                        'B0FieldIdentifier': 'pepolar01',
+                        'PhaseEncodingDirection': 'j',
+                        'TotalReadoutTime': 0.05,
+                    },
+                },
+            ],
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'TotalReadoutTime': 0.05,
+                        'B0FieldIdentifier': 'pepolar01',
+                        'B0FieldSource': 'pepolar01',
+                    },
+                },
+            ],
+        },
+    ],
+}
+
 
 def _make_layout(tmpdir, dset_dict, name):
     """Helper: generate a BIDS skeleton and return (layout, subject_data)."""
