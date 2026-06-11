@@ -11,6 +11,7 @@ from mimetypes import guess_type
 
 import matplotlib.pyplot as plt
 import nibabel as nb
+import niworkflows.interfaces.norm as _niw_norm
 import numpy as np
 import seaborn as sns
 from matplotlib import gridspec as mgs
@@ -35,6 +36,62 @@ from niworkflows.interfaces.reportlets.registration import (
 from seaborn import color_palette
 
 LOGGER = logging.getLogger('nipype.interface')
+
+
+def _create_cfm(in_file, lesion_mask=None, global_mask=True, out_path=None):
+    """Create a cost-function mask to constrain registration.
+
+    Corrected copy of ``niworkflows.interfaces.norm.create_cfm`` that resamples
+    the lesion mask into ``in_file``'s voxel grid before subtracting, instead of
+    reorienting it to canonical RAS. The upstream version corrupts the mask when
+    ``in_file`` is not RAS (qsiprep forces LPS), applying the lesion in the wrong
+    orientation.
+
+    See PennLINC/qsiprep#1023 and the upstream niworkflows PR. Remove this
+    function and the monkeypatch below once the niworkflows pin moves past the
+    release containing the upstream fix.
+    """
+    import os
+
+    from nibabel.processing import resample_from_to
+
+    if out_path is None:
+        out_path = fname_presuffix(in_file, suffix='_cfm', newpath=os.getcwd())
+    else:
+        out_path = os.path.abspath(out_path)
+
+    if not global_mask and not lesion_mask:
+        LOGGER.warning(
+            'No lesion mask was provided and global_mask not requested, '
+            'therefore the original mask will not be modified.'
+        )
+
+    # Load the input image.
+    in_img = nb.load(in_file)
+
+    # If we want a global mask, create one based on the input image.
+    data = np.ones(in_img.shape, dtype=np.uint8) if global_mask else np.asanyarray(in_img.dataobj)
+    if set(np.unique(data)) - {0, 1}:
+        raise ValueError('`global_mask` must be true if `in_file` is not a binary mask')
+
+    # If a lesion mask was provided, combine it with the secondary mask.
+    if lesion_mask is not None:
+        # Resample the lesion into in_file's voxel grid so the subtraction is
+        # spatially correct regardless of the lesion's stored orientation or
+        # grid. Nearest-neighbor (order=0) keeps the mask binary.
+        lm_img = resample_from_to(nb.load(lesion_mask), (data.shape, in_img.affine), order=0)
+        data = np.fmax(data - np.asanyarray(lm_img.dataobj), 0)
+
+    cfm_img = nb.Nifti1Image(data, in_img.affine, in_img.header)
+    cfm_img.set_data_dtype(np.uint8)
+    cfm_img.to_filename(out_path)
+
+    return out_path
+
+
+# Patch the buggy upstream create_cfm. SpatialNormalization._get_ants_args looks
+# the function up as a module global, so reassigning it here is sufficient.
+_niw_norm.create_cfm = _create_cfm
 
 
 class ANTSRegistrationRPT(RegistrationRC, Registration):
