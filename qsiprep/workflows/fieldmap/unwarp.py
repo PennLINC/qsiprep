@@ -119,9 +119,9 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
 
     # Register the reference of the fieldmap to the reference
     # of the target image (the one that shall be corrected)
-    ants_settings = load_data.as_path('fmap-any_registration.json')
+    ants_settings = str(load_data('fmap-any_registration.json'))
     if config.execution.sloppy:
-        ants_settings = load_data.as_path('fmap-any_registration_testing.json')
+        ants_settings = str(load_data('fmap-any_registration_testing.json'))
     fmap2ref_reg = pe.Node(
         ANTSRegistrationRPT(
             generate_report=True,

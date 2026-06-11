@@ -184,7 +184,7 @@ def init_prepare_dwi_epi_wf(omp_nthreads, orientation='LPS', name='prepare_epi_w
     )
 
     enhance_b0 = pe.Node(EnhanceB0(), name='enhance_b0')
-    ants_settings = load_data.as_path('translation_rigid.json')
+    ants_settings = str(load_data('translation_rigid.json'))
     fmap2ref_reg = pe.Node(
         ants.Registration(from_file=ants_settings, output_warped_image=True),
         name='fmap2ref_reg',

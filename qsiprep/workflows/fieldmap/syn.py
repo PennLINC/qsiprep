@@ -155,9 +155,9 @@ template [@fieldmapless3].
 
     # Collect predefined data
     # Atlas image and registration affine
-    atlas_img = load_data.as_path('mni_lps_fmap_atlas.nii.gz')
-    affine_transform = load_data.as_path('affine.json')
-    syn_transform = load_data.as_path('susceptibility_syn.json')
+    atlas_img = str(load_data('mni_lps_fmap_atlas.nii.gz'))
+    affine_transform = str(load_data('affine.json'))
+    syn_transform = str(load_data('susceptibility_syn.json'))
 
     invert_t1w = pe.Node(Rescale(invert=True), name='invert_t1w', mem_gb=0.3)
 

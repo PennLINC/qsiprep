@@ -164,7 +164,7 @@ def init_fsl_hmc_wf(
     omp_nthreads = config.nipype.omp_nthreads
     if config.workflow.eddy_config is None:
         # load from the defaults
-        eddy_cfg_file = load_data.as_path('eddy_params.json')
+        eddy_cfg_file = str(load_data('eddy_params.json'))
     else:
         eddy_cfg_file = config.workflow.eddy_config
 

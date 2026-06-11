@@ -33,8 +33,6 @@ a hard-limited memory-scope.
 
 """
 
-from pathlib import Path
-
 from qsiprep.data import load as load_data
 
 
@@ -58,7 +56,7 @@ def build_workflow(config_file, retval):
     retval['workflow'] = None
 
     banner = [f'Running QSIPrep version {version}']
-    notice_path = Path(load_data.as_path('NOTICE'))
+    notice_path = load_data('NOTICE')
     if notice_path.exists():
         banner[0] += '\n'
         banner += [f'License NOTICE {"#" * 50}']

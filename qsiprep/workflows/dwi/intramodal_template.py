@@ -290,7 +290,7 @@ def nonlinear_alignment_iteration(iternum=0, gradient_step=0.2):
         ),
         name='outputnode',
     )
-    ants_settings = load_data.as_path('intramodal_nonlinear.json')
+    ants_settings = str(load_data('intramodal_nonlinear.json'))
     reg = ants.Registration(from_file=ants_settings)
     iter_reg = pe.MapNode(reg, name='nlreg_%03d' % iternum, iterfield=['moving_image'])
 

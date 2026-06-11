@@ -206,7 +206,7 @@ def init_direct_b0_acpc_wf(write_report=True, name='b0_anat_coreg'):
     workflow = Workflow(name=name)
 
     # Defines a coregistration operation
-    ants_settings = load_data.as_path('intermodal_ACPC.json')
+    ants_settings = str(load_data('intermodal_ACPC.json'))
     acpc_reg = pe.Node(
         ANTSRegistrationRPT(generate_report=write_report, from_file=ants_settings),
         name='acpc_reg',

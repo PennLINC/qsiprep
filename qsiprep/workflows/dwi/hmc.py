@@ -251,7 +251,7 @@ def linear_alignment_workflow(transform='Rigid', iternum=0, omp_nthreads=1):
         name='outputnode',
     )
     precision = 'sloppy' if config.execution.sloppy else 'precise'
-    ants_settings = load_data.as_path(f'shoreline_{precision}_{transform}.json')
+    ants_settings = str(load_data(f'shoreline_{precision}_{transform}.json'))
     reg = ants.Registration(from_file=ants_settings, num_threads=omp_nthreads)
     iter_reg = pe.MapNode(
         reg, name='reg_%03d' % iternum, iterfield=['moving_image'], n_procs=omp_nthreads
@@ -490,9 +490,7 @@ def init_hmc_model_iteration_wf(name='hmc_model_iter0'):
         name='outputnode',
     )
     precision = 'sloppy' if config.execution.sloppy else 'precise'
-    ants_settings = load_data.as_path(
-        f'shoreline_{precision}_{config.workflow.hmc_transform}.json'
-    )
+    ants_settings = str(load_data(f'shoreline_{precision}_{config.workflow.hmc_transform}.json'))
 
     predict_dwis = pe.MapNode(
         SignalPrediction(model=config.workflow.hmc_model),
