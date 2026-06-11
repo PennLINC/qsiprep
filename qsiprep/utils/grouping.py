@@ -14,7 +14,6 @@ from dataclasses import dataclass
 from nipype.utils.filemanip import split_filename
 
 from .. import config
-from ..interfaces.bids import get_bids_params
 from .fieldmaps import FieldmapEstimation, FieldmapFile
 
 LOGGER = logging.getLogger('nipype.workflow')
@@ -335,25 +334,6 @@ def _build_file_to_dg_map(distortion_groups):
     return file_to_dg
 
 
-def _get_fmap_files(layout, dwi_files, ignore_fieldmaps):
-    """Return fmap/ NIfTI files for the same subject, or [] if ignored."""
-    if ignore_fieldmaps or not dwi_files:
-        return []
-
-    sub_id = layout.get_file(dwi_files[0]).entities.get('subject')
-    try:
-        files = layout.get(
-            subject=sub_id,
-            datatype='fmap',
-            extension=['.nii.gz', '.nii'],
-            return_type='file',
-        )
-    except Exception:
-        files = []
-
-    return sorted(files)
-
-
 def _get_metadata_field(layout, filepath, field):
     """Safely read a single metadata field from a BIDS file."""
     try:
@@ -466,21 +446,6 @@ def _split_named_member_groups_by_session(layout, distortion_groups, named_group
             split_groups[f'{key}_{session_suffix}'] = sorted(by_session[session])
 
     return split_groups
-
-
-def _get_distortion_group_multipart_key(layout, distortion_groups, dg_id):
-    """Return a deterministic MultipartID key for a distortion group."""
-    mp_ids = set()
-    for dwi in distortion_groups[dg_id]:
-        mp = _get_metadata_field(layout, dwi, 'MultipartID')
-        if mp is not None:
-            mp_ids.add(mp)
-
-    if not mp_ids:
-        return None
-    if len(mp_ids) == 1:
-        return next(iter(mp_ids))
-    return tuple(sorted(mp_ids))
 
 
 def _get_distortion_group_signature(layout, distortion_groups, dg_id):
@@ -680,65 +645,12 @@ def _get_common_bids_fields(fnames):
     return '_'.join(common_bids)
 
 
-def _group_by_sessions(dwi_fmap_groups):
-    """Create a lookup of distortion groups by session
-
-    Parameters
-    ----------
-    dwi_fmap_groups : :obj:`list` of :obj:`dict`
-        A list of dictionaries describing each group of dwi files.
-
-    Returns
-    -------
-    ses_lookup : :obj:`dict`
-        A dictionary mapping session ids to lists of dwi_fmap_groups.
-
-    Examples
-    --------
-    Paired DWI series to correct each other:
-    >>> dwi_groups = [
-    ...  {'dwi_series': ['.../mixed_fmaps/sub-1/ses-1/dwi/sub-1_ses-1_dir-AP_run-1_dwi.nii.gz'],
-    ...      'fieldmap_info': {'suffix': 'dwi',
-    ...      'dwi': ['.../mixed_fmaps/sub-1/ses-1/dwi/sub-1_ses-1_dir-PA_run-2_dwi.nii.gz']},
-    ...   'dwi_series_pedir': 'j',
-    ...      'concatenated_bids_name': 'sub-1_ses-1_dir-AP_run-1'},
-    ...  {'dwi_series': ['.../mixed_fmaps/sub-1/ses-1/dwi/sub-1_ses-1_dir-PA_run-2_dwi.nii.gz'],
-    ...      'fieldmap_info': {'suffix': 'dwi',
-    ...      'dwi': ['.../mixed_fmaps/sub-1/ses-1/dwi/sub-1_ses-1_dir-AP_run-1_dwi.nii.gz']},
-    ...      'dwi_series_pedir': 'j-',
-    ...   'concatenated_bids_name': 'sub-1_ses-1_dir-PA_run-2'},
-    ...  {'dwi_series': [
-    ...          '.../opposite_concat/sub-1/ses-2/dwi/sub-1_ses-2/dir-AP_run-1_dwi.nii.gz',
-    ...          '.../opposite_concat/sub-1/ses-2/dwi/sub-1_ses-2/dir-AP_run-2_dwi.nii.gz'],
-    ...      'fieldmap_info': {'suffix': 'dwi',
-    ...       'dwi': ['.../opposite_concat/sub-1/ses-2/dwi/sub-1_ses-2_dir-PA_run-1_dwi.nii.gz',
-    ...               '.../opposite_concat/sub-1/ses-2/dwi/sub-1_ses-2_dir-PA_run-2_dwi.nii.gz']},
-    ...      'dwi_series_pedir': 'j',
-    ...      'concatenated_bids_name': 'sub-1_ses-2_dir-AP'},
-    ...     {'dwi_series': [
-    ...           '.../opposite_concat/sub-1/ses-2/dwi/sub-1_ses-2_dir-PA_run-1_dwi.nii.gz',
-    ...           '.../opposite_concat/sub-1/ses-2/dwi/sub-1_ses-2_dir-PA_run-2_dwi.nii.gz'],
-    ...      'fieldmap_info': {'suffix': 'dwi',
-    ...       'dwi': ['.../opposite_concat/sub-1/ses-2/dwi/sub-1_ses-2_dir-AP_run-1_dwi.nii.gz',
-    ...               '.../opposite_concat/sub-1/ses-2/dwi/sub-1_ses-2_dir-AP_run-2_dwi.nii.gz']},
-    ...      'dwi_series_pedir': 'j-',
-    ...      'concatenated_bids_name': 'sub-1_ses-2_dir-PA'}]
-    """
-    ses_lookup = defaultdict(list)
-    for group in dwi_fmap_groups:
-        bids_info = get_bids_params(group['concatenated_bids_name'])
-        ses_lookup[bids_info['session_id']].append(group)
-
-    return ses_lookup
-
-
 # ---------------------------------------------------------------------------
-# Series-level field-map estimator discovery (new architecture).
+# Series-level field-map estimator discovery.
 #
-# These helpers port the behavior of the distortion-group-level functions
-# above (``build_fmap_estimation_groups`` and friends) to operate over
-# ``DwiSeries`` objects, returning ``FieldmapEstimation`` objects. The
-# distortion-group originals are retained for now and removed in a later task.
+# These helpers reproduce the behavior of QSIPrep's historical
+# distortion-group-level field-map selection, operating over ``DwiSeries``
+# objects and returning ``FieldmapEstimation`` value objects.
 # ---------------------------------------------------------------------------
 
 
