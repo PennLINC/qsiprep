@@ -1339,6 +1339,39 @@ def _subject_fmap_files(layout, series):
     return sorted(files)
 
 
+def _suffix_key(base_key, session):
+    """Append a session suffix to a group key (mirrors the legacy scheme)."""
+    suffix = f'ses-{session}' if session is not None else 'ses-none'
+    return f'{base_key}_{suffix}'
+
+
+def _session_of_path(layout, by_path, path):
+    """Session entity of a series path (via DwiSeries) or an fmap path."""
+    if path in by_path:
+        return by_path[path].session
+    bidsfile = layout.get_file(path)
+    return bidsfile.entities.get('session') if bidsfile is not None else None
+
+
+def _split_paths_by_session(layout, by_path, member_paths, base_key):
+    """Partition member paths by session into keyed groups.
+
+    Mirrors :func:`_split_named_member_groups_by_session`: when members occupy a
+    single session the group keeps ``base_key``; otherwise it splits into
+    ``f'{base_key}_ses-{session}'`` groups (sorted by session, ``None`` ->
+    ``'ses-none'``). Returns a list of ``(key, sorted_paths)``.
+    """
+    by_session = defaultdict(list)
+    for p in member_paths:
+        by_session[_session_of_path(layout, by_path, p)].append(p)
+    if len(by_session) <= 1:
+        return [(base_key, sorted(member_paths))]
+    return [
+        (_suffix_key(base_key, session), sorted(by_session[session]))
+        for session in sorted(by_session, key=lambda s: '' if s is None else str(s))
+    ]
+
+
 def _check_axis_conflict(est, estimate_per_axis):
     """Raise if estimate_per_axis=True and an estimator spans multiple PE axes.
 
@@ -1527,31 +1560,52 @@ def find_estimators(*, layout, series, ignore_fieldmaps, estimate_per_axis):
                     b0_members[value].add(fpath)
 
     if has_b0field:
-        # Does any series declare a B0FieldSource? (Application Path 1.)
-        any_b0_source = any(s.b0_source is not None for s in series)
-
+        # Axis conflicts are checked on the unsplit identifier groups, matching
+        # the legacy order (all axis checks before any session split / compat).
         for ident in sorted(b0_members):
-            member_paths = b0_members[ident]
-            member_series = [by_path[p] for p in member_paths if p in by_path]
-            _check_series_metadata_compatibility(
-                member_series, ident, group_kind='field-map estimation'
-            )
-            sources = [_fieldmap_file(p) for p in sorted(member_paths)]
-            est = FieldmapEstimation(sources)  # bids_id resolves to `ident`
-            _check_axis_conflict(est, estimate_per_axis)
-            estimators.append(est)
+            sources = [_fieldmap_file(p) for p in sorted(b0_members[ident])]
+            _check_axis_conflict(FieldmapEstimation(sources), estimate_per_axis)
 
-        # Application assignment.
-        for s in series:
-            if any_b0_source:
+        # A named estimation group is split so it never spans sessions, using the
+        # same suffixed-key scheme as _split_named_member_groups_by_session.
+        for ident in sorted(b0_members):
+            for key, part_paths in _split_paths_by_session(
+                layout, by_path, b0_members[ident], ident
+            ):
+                member_series = [by_path[p] for p in part_paths if p in by_path]
+                _check_series_metadata_compatibility(
+                    member_series, key, group_kind='field-map estimation'
+                )
+                sources = [_fieldmap_file(p) for p in sorted(part_paths)]
+                est = FieldmapEstimation(sources)
+                est.bids_id = key
+                estimators.append(est)
+
+        # Application assignment, derived independently of estimation (mirrors the
+        # legacy build_fmap_application_groups): if any series declares a
+        # B0FieldSource, split those by session; otherwise every member series is a
+        # target of its (session-split) estimation group.
+        any_b0_source = any(s.b0_source is not None for s in series)
+        if any_b0_source:
+            b0source_members = defaultdict(list)  # value -> [series paths]
+            for s in series:
                 if s.b0_source is not None:
                     for value in _as_list(s.b0_source):
-                        if value in b0_members:
-                            series_to_estimator[s.path] = value
-            else:
-                for ident in sorted(b0_members):
-                    if s.path in b0_members[ident]:
-                        series_to_estimator[s.path] = ident
+                        if value is not None:
+                            b0source_members[value].append(s.path)
+            for value, paths in b0source_members.items():
+                split = len({by_path[p].session for p in paths}) > 1
+                for p in paths:
+                    sess = by_path[p].session
+                    series_to_estimator[p] = _suffix_key(value, sess) if split else value
+        else:
+            for ident in sorted(b0_members):
+                for key, part_paths in _split_paths_by_session(
+                    layout, by_path, b0_members[ident], ident
+                ):
+                    for p in part_paths:
+                        if p in by_path:
+                            series_to_estimator[p] = key
 
         return estimators, series_to_estimator
 
@@ -1559,17 +1613,43 @@ def find_estimators(*, layout, series, ignore_fieldmaps, estimate_per_axis):
     if fmap_files:
         intended = _intendedfor_buckets(layout, fmap_files, by_path)
         for target_paths, fmap_paths in intended:
-            member_series = [by_path[p] for p in target_paths if p in by_path]
             auto_id = f'auto_{auto_counter:05d}'
-            _check_series_metadata_compatibility(
-                member_series, auto_id, group_kind='field-map estimation'
-            )
-            sources = [_fieldmap_file(p) for p in sorted(fmap_paths)]
-            est = FieldmapEstimation(sources, auto_id=auto_id)
             auto_counter += 1
-            estimators.append(est)
-            for tpath in target_paths:
-                series_to_estimator[tpath] = est.bids_id
+            # Split by session over the combined members (targets + fmaps),
+            # mirroring the legacy split. In practice IntendedFor resolves by
+            # basename (which carries the ses- entity), so groups are already
+            # single-session and the split is a no-op.
+            combined = list(target_paths) + sorted(fmap_paths)
+            sessions = {_session_of_path(layout, by_path, p) for p in combined}
+            split = len(sessions) > 1
+            ordered = (
+                sorted(sessions, key=lambda s: '' if s is None else str(s))
+                if split
+                else [None]
+            )
+            for session in ordered:
+                if split:
+                    key = _suffix_key(auto_id, session)
+                    sess_fmaps = [
+                        p
+                        for p in fmap_paths
+                        if _session_of_path(layout, by_path, p) == session
+                    ]
+                    sess_targets = [p for p in target_paths if by_path[p].session == session]
+                else:
+                    key = auto_id
+                    sess_fmaps = sorted(fmap_paths)
+                    sess_targets = list(target_paths)
+                member_series = [by_path[p] for p in sess_targets if p in by_path]
+                _check_series_metadata_compatibility(
+                    member_series, key, group_kind='field-map estimation'
+                )
+                sources = [_fieldmap_file(p) for p in sorted(sess_fmaps)]
+                est = FieldmapEstimation(sources, auto_id=key)
+                est.bids_id = key
+                estimators.append(est)
+                for tpath in sess_targets:
+                    series_to_estimator[tpath] = est.bids_id
         if estimators:
             return estimators, series_to_estimator
 

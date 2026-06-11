@@ -2619,6 +2619,27 @@ def test_find_estimators_ignore_fieldmaps(tmpdir):
     assert all('epi' not in [s.suffix for s in e.sources] for e in estimators)
 
 
+def test_find_estimators_splits_named_group_by_session(tmpdir):
+    """A single B0FieldIdentifier shared across sessions splits per session."""
+    layout, subject_data = _make_layout(
+        tmpdir, dset_b0field_multisession, 'find_est_multisession'
+    )
+    series = [grouping.DwiSeries.from_layout(layout, p) for p in subject_data['dwi']]
+    estimators, series_to_id = grouping.find_estimators(
+        layout=layout,
+        series=series,
+        ignore_fieldmaps=False,
+        estimate_per_axis=False,
+    )
+    # The shared 'pepolar01' identifier spans ses-01 and ses-02, so the estimation
+    # group is split into per-session estimators (never spanning sessions).
+    assert {e.bids_id for e in estimators} == {'pepolar01_ses-01', 'pepolar01_ses-02'}
+    # Application maps each session's DWI to its own session-suffixed estimator.
+    for path, est_id in series_to_id.items():
+        session = layout.get_file(path).entities.get('session')
+        assert est_id == f'pepolar01_ses-{session}'
+
+
 def test_dwiseries_from_layout(tmpdir):
     layout, subject_data = _make_layout(tmpdir, dset_single_dwi, 'dwiseries_single')
     dwi_path = subject_data['dwi'][0]
