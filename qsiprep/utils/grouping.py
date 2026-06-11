@@ -115,25 +115,28 @@ def group_dwi_scans(
 
     series_list = [DwiSeries.from_layout(layout, dwi) for dwi in subject_data['dwi']]
 
-    if ignore_fieldmaps:
-        estimators, series_to_estimator = [], {}
-    else:
-        estimators, series_to_estimator = find_estimators(
-            layout=layout,
-            series=series_list,
-            ignore_fieldmaps=ignore_fieldmaps,
-            estimate_per_axis=estimate_per_axis,
-        )
-
-    # Final distortion groups fold the estimator id into the physical signature,
-    # so a group never spans two estimators (no post-hoc refine/remap needed).
+    # Distortion groups are determined by physical signature alone (legacy
+    # build_distortion_groups). They are built first so that field-map discovery
+    # can resolve curator links (IntendedFor) against whole distortion groups,
+    # exactly as the legacy dg-level pipeline did.
     if combine_scans:
-        distortion_groups = _final_distortion_groups(series_list, series_to_estimator)
+        distortion_groups = _final_distortion_groups(series_list)
     else:
         names = _get_unique_concatenated_bids_names([[s.path] for s in series_list])
         distortion_groups = {
             name: [s.path] for name, s in zip(names, series_list, strict=False)
         }
+
+    if ignore_fieldmaps:
+        estimators = []
+    else:
+        estimators = find_estimators(
+            layout=layout,
+            series=series_list,
+            distortion_groups=distortion_groups,
+            ignore_fieldmaps=ignore_fieldmaps,
+            estimate_per_axis=estimate_per_axis,
+        )
 
     if ignore_fieldmaps:
         fmap_estimation_groups = None
@@ -1444,17 +1447,20 @@ def _resolve_intended_for_series(intended_for_paths, by_path):
     return resolved
 
 
-def _intendedfor_buckets(layout, fmap_files, by_path):
+def _intendedfor_buckets(layout, fmap_files, by_path, series_to_dg):
     """Build estimation buckets from IntendedFor metadata on fmap files.
 
-    Ported from :func:`_build_intendedfor_groups`. Returns a list of
-    ``(tuple_of_sorted_target_series_paths, set_of_fmap_paths)`` in
-    first-appearance order while iterating ``fmap_files`` (which the caller passes
-    sorted, matching legacy ``_get_fmap_files``). This reproduces the legacy
-    ``auto_`` numbering, which assigned ids by first appearance of each target key
-    during sorted-fmap iteration -- not by sorted target key.
+    Ported from :func:`_build_intendedfor_groups`. Targets are resolved to
+    *distortion-group ids* (legacy keyed buckets on target dg ids, not raw
+    files), so several fmaps pointing at series that collapse into one distortion
+    group share a single bucket. Returns a list of
+    ``(tuple_of_sorted_target_dg_ids, set_of_fmap_paths)`` in first-appearance
+    order while iterating ``fmap_files`` (which the caller passes sorted, matching
+    legacy ``_get_fmap_files``). This reproduces the legacy ``auto_`` numbering,
+    which assigned ids by first appearance of each target key during sorted-fmap
+    iteration -- not by sorted target key.
     """
-    raw_groups = {}  # target_key -> set of fmap paths (insertion order preserved)
+    raw_groups = {}  # target_dg_key -> set of fmap paths (insertion order preserved)
 
     for fmap_file in fmap_files:
         intended_for = layout.get_metadata(fmap_file).get('IntendedFor')
@@ -1463,11 +1469,11 @@ def _intendedfor_buckets(layout, fmap_files, by_path):
 
         intended_for = _as_list(intended_for)
         targeted = _resolve_intended_for_series(intended_for, by_path)
-        targeted_paths = sorted(set(targeted))
-        if not targeted_paths:
+        target_dgs = sorted({series_to_dg[p] for p in targeted if p in series_to_dg})
+        if not target_dgs:
             continue
 
-        target_key = tuple(targeted_paths)
+        target_key = tuple(target_dgs)
         raw_groups.setdefault(target_key, set()).add(fmap_file)
 
     return list(raw_groups.items())
@@ -1522,32 +1528,36 @@ def _heuristic_series_groups(series, estimate_per_axis):
     return groups
 
 
-def find_estimators(*, layout, series, ignore_fieldmaps, estimate_per_axis):
+def find_estimators(*, layout, series, distortion_groups, ignore_fieldmaps, estimate_per_axis):
     """Discover field-map estimators for a set of DWI series.
 
     Priority (highest first): B0FieldIdentifier -> IntendedFor -> PE-direction
-    heuristic. Mirrors sdcflows' ``find_estimators`` shape but returns QSIPrep
-    estimator objects plus a per-series application assignment.
+    heuristic. Mirrors sdcflows' ``find_estimators`` shape, adapted to QSIPrep's
+    distortion groups. Curator links (``IntendedFor``) are resolved against whole
+    distortion groups, reproducing the legacy dg-level pipeline.
 
     Parameters
     ----------
     layout : :obj:`pybids.BIDSLayout`
     series : list[DwiSeries]
+    distortion_groups : dict[str, list[str]]
+        The (final) distortion groups, used to collapse curator links that point
+        at series sharing a distortion group.
     ignore_fieldmaps : :obj:`bool`
     estimate_per_axis : :obj:`bool`
 
     Returns
     -------
     estimators : list[FieldmapEstimation]
-    series_to_estimator : dict[str, str]
-        Maps a DWI series path to the ``bids_id`` of the estimator that corrects
-        it. (Application mapping; mirrors today's fmap_application_groups.)
     """
     estimators = []
-    series_to_estimator = {}
     auto_counter = 0
 
     by_path = {s.path: s for s in series}
+    series_to_dg = {}
+    for dg_id, files in distortion_groups.items():
+        for f in files:
+            series_to_dg[f] = dg_id
     fmap_files = [] if ignore_fieldmaps else _subject_fmap_files(layout, series)
 
     def _fieldmap_file(path):
@@ -1595,40 +1605,16 @@ def find_estimators(*, layout, series, ignore_fieldmaps, estimate_per_axis):
                 est = FieldmapEstimation(sources, bids_id=key)
                 estimators.append(est)
 
-        # Application assignment, derived independently of estimation (mirrors the
-        # legacy build_fmap_application_groups): if any series declares a
-        # B0FieldSource, split those by session; otherwise every member series is a
-        # target of its (session-split) estimation group.
-        any_b0_source = any(s.b0_source is not None for s in series)
-        if any_b0_source:
-            b0source_members = defaultdict(list)  # value -> [series paths]
-            for s in series:
-                if s.b0_source is not None:
-                    for value in _as_list(s.b0_source):
-                        if value is not None:
-                            b0source_members[value].append(s.path)
-            for value, paths in b0source_members.items():
-                split = len({by_path[p].session for p in paths}) > 1
-                for p in paths:
-                    sess = by_path[p].session
-                    series_to_estimator[p] = _suffix_key(value, sess) if split else value
-        else:
-            for ident in sorted(b0_members):
-                for key, part_paths in _split_paths_by_session(
-                    layout, by_path, b0_members[ident], ident
-                ):
-                    for p in part_paths:
-                        if p in by_path:
-                            series_to_estimator[p] = key
-
-        return estimators, series_to_estimator
+        return estimators
 
     # ----- Priority 2: IntendedFor on fmap files -----
     if fmap_files:
-        intended = _intendedfor_buckets(layout, fmap_files, by_path)
-        for target_paths, fmap_paths in intended:
+        intended = _intendedfor_buckets(layout, fmap_files, by_path, series_to_dg)
+        for target_dgs, fmap_paths in intended:
             auto_id = f'auto_{auto_counter:05d}'
             auto_counter += 1
+            # The target series are every DWI in the targeted distortion groups.
+            target_paths = [p for dg in target_dgs for p in distortion_groups[dg]]
             # Split by session over the combined members (targets + fmaps),
             # mirroring the legacy split. In practice IntendedFor resolves by
             # basename (which carries the ses- entity), so groups are already
@@ -1674,10 +1660,8 @@ def find_estimators(*, layout, series, ignore_fieldmaps, estimate_per_axis):
                 ]
                 est = FieldmapEstimation(sources, bids_id=key)
                 estimators.append(est)
-                for tpath in sess_targets:
-                    series_to_estimator[tpath] = est.bids_id
         if estimators:
-            return estimators, series_to_estimator
+            return estimators
 
     # ----- Priority 3: PE-direction heuristic -----
     for group_paths in _heuristic_series_groups(series, estimate_per_axis):
@@ -1685,24 +1669,26 @@ def find_estimators(*, layout, series, ignore_fieldmaps, estimate_per_axis):
         est = FieldmapEstimation(sources, auto_id=f'auto_{auto_counter:05d}')
         auto_counter += 1
         estimators.append(est)
-        for p in group_paths:
-            series_to_estimator[p] = est.bids_id
 
-    return estimators, series_to_estimator
+    return estimators
 
 
-def _final_distortion_groups(series_list, series_to_estimator):
-    """Group DwiSeries by ``(physical signature, estimator id)``.
+def _final_distortion_groups(series_list):
+    """Group DwiSeries by their physical distortion signature.
 
-    Folding the estimator id into the signature means a distortion group never
-    spans two estimators, so no post-hoc split/remap is needed. Groups (and the
-    files within them) are kept in first-appearance order over ``series_list``,
-    matching the legacy ``build_distortion_groups``.
+    This reproduces the legacy ``build_distortion_groups`` exactly. The legacy
+    ``refine_distortion_groups`` step is a no-op in practice: two series sharing a
+    physical signature also share their ``B0FieldIdentifier`` (it is part of the
+    signature) and resolve any ``IntendedFor`` to the same group, so their
+    estimation membership is always identical and the refine split collapses to a
+    single sub-group. Grouping by signature alone therefore matches legacy while
+    avoiding the build-then-refine-then-remap dance. Groups (and the files within
+    them) are kept in first-appearance order over ``series_list``.
     """
     groups = []
     keys = []
     for s in series_list:
-        key = (s.distortion_signature, series_to_estimator.get(s.path))
+        key = s.distortion_signature
         if key in keys:
             groups[keys.index(key)].append(s.path)
         else:

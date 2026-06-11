@@ -1813,6 +1813,123 @@ dset_intendedfor_autoid_order = {
     ],
 }
 
+# Two same-PE DWI runs that share a full physical signature (same PE/shim/TRT and
+# the same B0FieldIdentifier list) but declare different B0FieldSource, plus two
+# EPI fmaps. Legacy collapses the runs into one distortion group corrected by both
+# fmaps; this locks that same-signature-with-differing-source behavior so a future
+# change cannot silently split the group.
+dset_same_sig_b0source = {
+    '01': [
+        {
+            'anat': [{'suffix': 'T1w'}],
+            'fmap': [
+                {
+                    'acq': 'A',
+                    'dir': 'PA',
+                    'suffix': 'epi',
+                    'metadata': {
+                        'B0FieldIdentifier': 'fmapA',
+                        'PhaseEncodingDirection': 'j',
+                        'TotalReadoutTime': 0.05,
+                    },
+                },
+                {
+                    'acq': 'B',
+                    'dir': 'PA',
+                    'suffix': 'epi',
+                    'metadata': {
+                        'B0FieldIdentifier': 'fmapB',
+                        'PhaseEncodingDirection': 'j',
+                        'TotalReadoutTime': 0.05,
+                    },
+                },
+            ],
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'run': '1',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'TotalReadoutTime': 0.05,
+                        'B0FieldIdentifier': ['fmapA', 'fmapB'],
+                        'B0FieldSource': 'fmapA',
+                    },
+                },
+                {
+                    'dir': 'AP',
+                    'run': '2',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'TotalReadoutTime': 0.05,
+                        'B0FieldIdentifier': ['fmapA', 'fmapB'],
+                        'B0FieldSource': 'fmapB',
+                    },
+                },
+            ],
+        },
+    ],
+}
+
+# Two same-PE DWI runs sharing a physical signature, no B0 metadata, with two EPI
+# fmaps that each IntendedFor one run. Legacy collapses the runs into one
+# distortion group and the two fmaps into ONE estimation group (both target the
+# same dg). Locks the dg-level IntendedFor bucketing.
+dset_same_sig_intendedfor = {
+    '01': [
+        {
+            'anat': [{'suffix': 'T1w'}],
+            'fmap': [
+                {
+                    'acq': 'A',
+                    'dir': 'PA',
+                    'suffix': 'epi',
+                    'metadata': {
+                        'IntendedFor': ['dwi/sub-01_dir-AP_run-1_dwi.nii.gz'],
+                        'PhaseEncodingDirection': 'j',
+                        'TotalReadoutTime': 0.05,
+                    },
+                },
+                {
+                    'acq': 'B',
+                    'dir': 'PA',
+                    'suffix': 'epi',
+                    'metadata': {
+                        'IntendedFor': ['dwi/sub-01_dir-AP_run-2_dwi.nii.gz'],
+                        'PhaseEncodingDirection': 'j',
+                        'TotalReadoutTime': 0.05,
+                    },
+                },
+            ],
+            'dwi': [
+                {
+                    'dir': 'AP',
+                    'run': '1',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'TotalReadoutTime': 0.05,
+                    },
+                },
+                {
+                    'dir': 'AP',
+                    'run': '2',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'TotalReadoutTime': 0.05,
+                    },
+                },
+            ],
+        },
+    ],
+}
+
 
 def _make_layout(tmpdir, dset_dict, name):
     """Helper: generate a BIDS skeleton and return (layout, subject_data)."""
@@ -2650,9 +2767,11 @@ _FIND_EST_B0FIELD_DSET = {
 def test_find_estimators_b0field(tmpdir):
     layout, subject_data = _make_layout(tmpdir, _FIND_EST_B0FIELD_DSET, 'find_est_b0')
     series = [grouping.DwiSeries.from_layout(layout, p) for p in subject_data['dwi']]
-    estimators, series_to_id = grouping.find_estimators(
+    distortion_groups = grouping._final_distortion_groups(series)
+    estimators = grouping.find_estimators(
         layout=layout,
         series=series,
+        distortion_groups=distortion_groups,
         ignore_fieldmaps=False,
         estimate_per_axis=False,
     )
@@ -2666,9 +2785,11 @@ def test_find_estimators_b0field(tmpdir):
 def test_find_estimators_ignore_fieldmaps(tmpdir):
     layout, subject_data = _make_layout(tmpdir, _FIND_EST_B0FIELD_DSET, 'find_est_ign')
     series = [grouping.DwiSeries.from_layout(layout, p) for p in subject_data['dwi']]
-    estimators, series_to_id = grouping.find_estimators(
+    distortion_groups = grouping._final_distortion_groups(series)
+    estimators = grouping.find_estimators(
         layout=layout,
         series=series,
+        distortion_groups=distortion_groups,
         ignore_fieldmaps=True,
         estimate_per_axis=False,
     )
@@ -2682,19 +2803,25 @@ def test_find_estimators_splits_named_group_by_session(tmpdir):
         tmpdir, dset_b0field_multisession, 'find_est_multisession'
     )
     series = [grouping.DwiSeries.from_layout(layout, p) for p in subject_data['dwi']]
-    estimators, series_to_id = grouping.find_estimators(
+    distortion_groups = grouping._final_distortion_groups(series)
+    estimators = grouping.find_estimators(
         layout=layout,
         series=series,
+        distortion_groups=distortion_groups,
         ignore_fieldmaps=False,
         estimate_per_axis=False,
     )
     # The shared 'pepolar01' identifier spans ses-01 and ses-02, so the estimation
     # group is split into per-session estimators (never spanning sessions).
     assert {e.bids_id for e in estimators} == {'pepolar01_ses-01', 'pepolar01_ses-02'}
-    # Application maps each session's DWI to its own session-suffixed estimator.
-    for path, est_id in series_to_id.items():
-        session = layout.get_file(path).entities.get('session')
-        assert est_id == f'pepolar01_ses-{session}'
+    # Application (derived separately) maps each session's distortion group to its
+    # own session-suffixed estimator.
+    fme = grouping._serialize_estimation_groups(estimators, distortion_groups)
+    fma = grouping.build_fmap_application_groups(layout, subject_data, distortion_groups, fme)
+    assert set(fma) == {'pepolar01_ses-01', 'pepolar01_ses-02'}
+    for key, dgs in fma.items():
+        session_suffix = key.split('_')[-1]  # e.g. 'ses-01'
+        assert all(session_suffix in dg for dg in dgs)
 
 
 def test_dwiseries_from_layout(tmpdir):
