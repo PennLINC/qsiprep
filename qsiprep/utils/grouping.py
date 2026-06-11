@@ -465,8 +465,8 @@ def validate_group_consistency(
         if len(cg_ids) > 1:
             raise ValueError(
                 f'Distortion group {dg_id!r} appears in multiple concatenation groups '
-                f'({cg_ids}). A field-map estimation group must be a subset of exactly one '
-                f'concatenation group.'
+                f'({sorted(cg_ids)}). A field-map estimation group must be a subset of '
+                f'exactly one concatenation group.'
             )
 
     for fme_key, fme_members in fmap_estimation_groups.items():
@@ -480,7 +480,7 @@ def validate_group_consistency(
         if len(concat_ids) > 1:
             raise ValueError(
                 f'Field-map estimation group {fme_key!r} spans multiple '
-                f'concatenation groups ({concat_ids}). A field-map estimation '
+                f'concatenation groups ({sorted(concat_ids)}). A field-map estimation '
                 f'group must be a subset of exactly one concatenation group.'
             )
 
@@ -622,7 +622,7 @@ def _check_b0field_axis_conflict(
         if len(axes) > 1:
             raise ValueError(
                 f'B0FieldIdentifier {b0fi_key!r} groups files across PE axes '
-                f'{axes}, but estimate_per_axis is True. A single B0 field '
+                f'{sorted(axes)}, but estimate_per_axis is True. A single B0 field '
                 f'estimation group cannot span multiple axis pairs.'
             )
 
@@ -1391,7 +1391,7 @@ def _check_axis_conflict(est, estimate_per_axis):
     if len(axes) > 1:
         raise ValueError(
             f'B0FieldIdentifier {est.bids_id!r} groups files across PE axes '
-            f'{axes}, but estimate_per_axis is True. A single B0 field '
+            f'{sorted(axes)}, but estimate_per_axis is True. A single B0 field '
             f'estimation group cannot span multiple axis pairs.'
         )
 
@@ -1435,12 +1435,13 @@ def _intendedfor_buckets(layout, fmap_files, by_path):
     """Build estimation buckets from IntendedFor metadata on fmap files.
 
     Ported from :func:`_build_intendedfor_groups`. Returns a list of
-    ``(tuple_of_sorted_target_series_paths, set_of_fmap_paths)`` ordered by the
-    target tuple, so the ``auto_`` ids come out in the same order as the
-    existing code (which numbered them by first appearance of each target key,
-    iterating fmap files in sorted order).
+    ``(tuple_of_sorted_target_series_paths, set_of_fmap_paths)`` in
+    first-appearance order while iterating ``fmap_files`` (which the caller passes
+    sorted, matching legacy ``_get_fmap_files``). This reproduces the legacy
+    ``auto_`` numbering, which assigned ids by first appearance of each target key
+    during sorted-fmap iteration -- not by sorted target key.
     """
-    raw_groups = {}  # target_key -> set of fmap paths
+    raw_groups = {}  # target_key -> set of fmap paths (insertion order preserved)
 
     for fmap_file in fmap_files:
         intended_for = layout.get_metadata(fmap_file).get('IntendedFor')
@@ -1456,9 +1457,7 @@ def _intendedfor_buckets(layout, fmap_files, by_path):
         target_key = tuple(targeted_paths)
         raw_groups.setdefault(target_key, set()).add(fmap_file)
 
-    return [
-        (target_key, raw_groups[target_key]) for target_key in sorted(raw_groups)
-    ]
+    return list(raw_groups.items())
 
 
 def _heuristic_series_groups(series, estimate_per_axis):
@@ -1640,6 +1639,13 @@ def find_estimators(*, layout, series, ignore_fieldmaps, estimate_per_axis):
                     key = auto_id
                     sess_fmaps = sorted(fmap_paths)
                     sess_targets = list(target_paths)
+                if not sess_fmaps:
+                    # Degenerate cross-session intent (a fmap in one session
+                    # intending a target in another). The legacy code emitted a
+                    # source-less estimation group here; we drop it rather than
+                    # raise 'Insufficient sources'. Unreachable when IntendedFor
+                    # entries carry the ses- entity (the normal case).
+                    continue
                 member_series = [by_path[p] for p in sess_targets if p in by_path]
                 _check_series_metadata_compatibility(
                     member_series, key, group_kind='field-map estimation'

@@ -1757,6 +1757,63 @@ dset_b0field_multisession = {
 }
 
 
+# Two IntendedFor fmaps whose sorted-path order (acq-a < acq-b) is anti-correlated
+# with their targets' sorted-path order (dir-AA < dir-ZZ): acq-a targets dir-ZZ,
+# acq-b targets dir-AA. The DWIs use different PE axes so they form separate
+# distortion groups (hence separate IntendedFor estimation groups). This locks the
+# legacy auto_NNNNN numbering, which assigns ids by first appearance during
+# sorted-fmap iteration (auto_00000 -> dir-ZZ group), not by sorted target key.
+dset_intendedfor_autoid_order = {
+    '01': [
+        {
+            'anat': [{'suffix': 'T1w'}],
+            'fmap': [
+                {
+                    'acq': 'a',
+                    'dir': 'PA',
+                    'suffix': 'epi',
+                    'metadata': {
+                        'IntendedFor': ['dwi/sub-01_dir-ZZ_dwi.nii.gz'],
+                        'PhaseEncodingDirection': 'j',
+                        'TotalReadoutTime': 0.05,
+                    },
+                },
+                {
+                    'acq': 'b',
+                    'dir': 'PA',
+                    'suffix': 'epi',
+                    'metadata': {
+                        'IntendedFor': ['dwi/sub-01_dir-AA_dwi.nii.gz'],
+                        'PhaseEncodingDirection': 'i',
+                        'TotalReadoutTime': 0.05,
+                    },
+                },
+            ],
+            'dwi': [
+                {
+                    'dir': 'ZZ',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'j-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'TotalReadoutTime': 0.05,
+                    },
+                },
+                {
+                    'dir': 'AA',
+                    'suffix': 'dwi',
+                    'metadata': {
+                        'PhaseEncodingDirection': 'i-',
+                        'ShimSetting': _SHARED_SHIM,
+                        'TotalReadoutTime': 0.05,
+                    },
+                },
+            ],
+        },
+    ],
+}
+
+
 def _make_layout(tmpdir, dset_dict, name):
     """Helper: generate a BIDS skeleton and return (layout, subject_data)."""
     bids_dir = tmpdir / name
@@ -2428,13 +2485,13 @@ class TestLegacyOutputAdapter:
             ignore_fieldmaps=False,
             estimate_per_axis=True,
         )
-        print("Distortion groups:")
+        print('Distortion groups:')
         pprint(dg)
-        print("Fieldmap Estimation groups:")
+        print('Fieldmap Estimation groups:')
         pprint(fme)
-        print("Fieldmap Application groups:")
+        print('Fieldmap Application groups:')
         pprint(fma)
-        print("Concatenation groups:")
+        print('Concatenation groups:')
         pprint(cg)
 
         outputs = _build_outputs_to_files(layout, dg, fme, fma)

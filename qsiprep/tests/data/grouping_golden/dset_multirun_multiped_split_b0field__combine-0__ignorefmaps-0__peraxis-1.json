@@ -1,4 +1,4 @@
 {
   "__error__": "ValueError",
-  "__match__": "B0FieldIdentifier 'fmap_run1' groups files across PE axes {'i', 'j'}, but estimate_per_axis is True. A single B0 field e"
+  "__match__": "B0FieldIdentifier 'fmap_run1' groups files across PE axes ['i', 'j'], but estimate_per_axis is True. A single B0 field e"
 }

@@ -1,4 +1,4 @@
 {
   "__error__": "ValueError",
-  "__match__": "Distortion group 'sub-01_dir-AP' appears in multiple concatenation groups ({'sub-01_acq-1', 'sub-01_acq-2'}). A field-ma"
+  "__match__": "Distortion group 'sub-01_dir-AP' appears in multiple concatenation groups (['sub-01_acq-1', 'sub-01_acq-2']). A field-ma"
 }
