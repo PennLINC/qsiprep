@@ -10,7 +10,6 @@ import json
 import os
 import os.path as op
 import re
-from importlib.resources import files
 
 import nibabel as nb
 import numpy as np
@@ -28,7 +27,7 @@ from nipype.interfaces.base import (
 )
 from nipype.utils.filemanip import fname_presuffix, split_filename
 
-from ..utils.resources import as_path
+from ..data import load as load_data
 from .epi_fmap import get_best_b0_topup_inputs_from
 from .fmap import eddy_inputs_from_dwi_files
 
@@ -166,7 +165,7 @@ class GatherEddyInputs(SimpleInterface):
         self._results['topup_config'] = 'b02b0.cnf'
         if 1 in (example_b0.shape[0] % 2, example_b0.shape[1] % 2, example_b0.shape[2] % 2):
             LOGGER.warning('Using slower b02b0_1.cnf because an axis has an odd number of slices')
-            self._results['topup_config'] = as_path(files('qsiprep.data') / 'b02b0_1.cnf')
+            self._results['topup_config'] = load_data.as_path('b02b0_1.cnf')
 
         # For the apply topup report:
         pre_topup_image = index_img(topup_imain_file, 0)
