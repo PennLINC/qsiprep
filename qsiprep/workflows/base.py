@@ -50,9 +50,13 @@ from ..interfaces import (
     SubjectSummary,
 )
 from ..utils.bids import collect_data
+from ..utils.fieldmaps import (
+    _PEPOLAR_SUFFIXES,
+    FieldmapEstimation,
+    FieldmapFile,
+    _suffix_of,
+)
 from ..utils.grouping import (
-    classify_fmap_files,
-    get_highest_priority_fieldmap,
     group_dwi_scans,
 )
 from ..utils.misc import fix_multi_source_name
@@ -586,22 +590,32 @@ def _build_outputs_to_files(
             for rpe_id in rpe_dg_ids:
                 rpe_files.extend(distortion_groups[rpe_id])
 
-            # The fmap files may be pepolar EPI fieldmaps or GRE fieldmaps
-            # (phasediff/phases/fieldmap + magnitudes). Only EPI files may be
-            # used in the pepolar paths; GRE fieldmaps get typed fieldmap_info.
-            epi_files, gre_fmap_infos = classify_fmap_files(fmap_paths)
+            # The fmap paths may be PEPOLAR EPI fieldmaps or GRE fieldmaps
+            # (phasediff/phase1/fieldmap, plus magnitude/phase siblings). Split
+            # them by suffix so the PEPOLAR path (EPI fmaps and/or reverse-PE DWI
+            # series) takes priority over GRE, matching the legacy behaviour.
+            epi_files = [p for p in fmap_paths if _suffix_of(p) in _PEPOLAR_SUFFIXES]
+            gre_files = [p for p in fmap_paths if _suffix_of(p) not in _PEPOLAR_SUFFIXES]
 
-            if rpe_files:
-                fieldmap_info = {'suffix': 'rpe_series', 'rpe_series': sorted(rpe_files)}
-                if epi_files:
-                    fieldmap_info['epi'] = epi_files
-            elif epi_files:
-                # Fmap-only estimation groups should flow through the EPI path.
-                # Marking these as rpe_series causes downstream PE+/PE- splitting
-                # to expect a reverse-DWI list that does not exist.
-                fieldmap_info = {'suffix': 'epi', 'epi': epi_files}
-            elif gre_fmap_infos:
-                fieldmap_info = get_highest_priority_fieldmap(gre_fmap_infos)
+            if rpe_files or epi_files:
+                # PEPOLAR. Pass an explicit ``bids_id`` so the constructor skips
+                # B0FieldIdentifier conflict resolution -- a reverse-PE DWI series
+                # can legitimately reference several estimations.
+                pepolar = FieldmapEstimation(
+                    [
+                        FieldmapFile(p, metadata=layout.get_metadata(p))
+                        for p in epi_files + rpe_files
+                    ],
+                    bids_id=fmap_key,
+                )
+                fieldmap_info = pepolar.to_fieldmap_info(
+                    epi_files=epi_files, rpe_files=rpe_files
+                )
+            elif gre_files:
+                gre = FieldmapEstimation(
+                    [FieldmapFile(p, metadata=layout.get_metadata(p)) for p in gre_files]
+                )
+                fieldmap_info = gre.to_fieldmap_info()
             else:
                 fieldmap_info = {'suffix': None}
 
