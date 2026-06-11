@@ -60,6 +60,5 @@ def test_anat_spatial_normalization_reportlet_allows_template_cohort(tmp_path):
     assert 'Spatial normalization of the anatomical reference' in report_html
     for reportlet in [*svg_reportlets, *html_reportlets]:
         assert (
-            reportlet.name in report_html
-            or reportlet.read_text(encoding='utf-8') in report_html
+            reportlet.name in report_html or reportlet.read_text(encoding='utf-8') in report_html
         )
