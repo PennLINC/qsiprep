@@ -60,8 +60,16 @@ class DwiSeries:
 
     @property
     def distortion_signature(self):
-        """The physical-distortion key (no estimator constraint yet)."""
-        return (self.session, self.pe_dir, self.shim, self.trt, self.b0_identifier)
+        """The physical-distortion key (no estimator constraint yet).
+
+        ``B0FieldIdentifier`` is normalized to a tuple exactly as the legacy
+        ``build_distortion_groups`` did (``tuple(_ensure_list(...))``), so a
+        scalar identifier and a single-element list group identically.
+        """
+        b0 = self.b0_identifier
+        if b0 is not None and not isinstance(b0, tuple):
+            b0 = (b0,)
+        return (self.session, self.pe_dir, self.shim, self.trt, b0)
 
 
 def group_dwi_scans(
@@ -105,20 +113,35 @@ def group_dwi_scans(
     """
     config.loggers.workflow.info('Grouping DWI scans')
 
-    distortion_groups = build_distortion_groups(layout, subject_data, combine_scans)
+    series_list = [DwiSeries.from_layout(layout, dwi) for dwi in subject_data['dwi']]
+
+    if ignore_fieldmaps:
+        estimators, series_to_estimator = [], {}
+    else:
+        estimators, series_to_estimator = find_estimators(
+            layout=layout,
+            series=series_list,
+            ignore_fieldmaps=ignore_fieldmaps,
+            estimate_per_axis=estimate_per_axis,
+        )
+
+    # Final distortion groups fold the estimator id into the physical signature,
+    # so a group never spans two estimators (no post-hoc refine/remap needed).
+    if combine_scans:
+        distortion_groups = _final_distortion_groups(series_list, series_to_estimator)
+    else:
+        names = _get_unique_concatenated_bids_names([[s.path] for s in series_list])
+        distortion_groups = {
+            name: [s.path] for name, s in zip(names, series_list, strict=False)
+        }
 
     if ignore_fieldmaps:
         fmap_estimation_groups = None
         fmap_application_groups = None
     else:
-        fmap_estimation_groups = build_fmap_estimation_groups(
-            layout,
-            subject_data,
-            distortion_groups,
-            ignore_fieldmaps,
-            estimate_per_axis,
-        )
-
+        fmap_estimation_groups = _serialize_estimation_groups(estimators, distortion_groups)
+        # Application is derived from the (final) distortion + estimation groups,
+        # reproducing the many-to-many B0FieldSource mapping exactly.
         fmap_application_groups = build_fmap_application_groups(
             layout,
             subject_data,
@@ -139,21 +162,6 @@ def group_dwi_scans(
         concatenation_groups,
         combine_scans,
     )
-
-    initial_distortion_groups = distortion_groups
-    distortion_groups = refine_distortion_groups(distortion_groups, fmap_estimation_groups)
-    if distortion_groups != initial_distortion_groups:
-        (
-            fmap_estimation_groups,
-            fmap_application_groups,
-            concatenation_groups,
-        ) = _remap_groups_after_refinement(
-            initial_distortion_groups,
-            distortion_groups,
-            fmap_estimation_groups,
-            fmap_application_groups,
-            concatenation_groups,
-        )
 
     config.loggers.workflow.info('Finished grouping DWI scans')
     return distortion_groups, fmap_estimation_groups, fmap_application_groups, concatenation_groups
@@ -1308,13 +1316,15 @@ def _group_by_sessions(dwi_fmap_groups):
 
 
 def _as_list(value):
-    """Wrap scalars in a list; pass through lists unchanged.
+    """Wrap scalars in a list; unpack lists and tuples.
 
-    Ported from :func:`_ensure_list`. Preserves the exact None handling
-    (``None`` becomes ``[None]``); callers filter ``None`` themselves.
+    Ported from :func:`_ensure_list`, but also unpacks tuples because
+    :class:`DwiSeries` normalizes list-valued ``B0FieldIdentifier`` to a tuple
+    (for hashability in the distortion signature). Preserves the exact None
+    handling (``None`` becomes ``[None]``); callers filter ``None`` themselves.
     """
-    if isinstance(value, list):
-        return value
+    if isinstance(value, list | tuple):
+        return list(value)
     return [value]
 
 
@@ -1372,17 +1382,20 @@ def _split_paths_by_session(layout, by_path, member_paths, base_key):
     ]
 
 
-def _check_axis_conflict(est, estimate_per_axis):
-    """Raise if estimate_per_axis=True and an estimator spans multiple PE axes.
+def _check_axis_conflict(sources, ident, estimate_per_axis):
+    """Raise if estimate_per_axis=True and a B0 group spans multiple PE axes.
 
-    Ported from :func:`_check_b0field_axis_conflict`, reading PE directions from
-    the estimator's sources' metadata.
+    Ported from :func:`_check_b0field_axis_conflict`, reading PE directions
+    directly from the source files' metadata. It deliberately does not build a
+    :class:`FieldmapEstimation`, because a single file may carry several
+    ``B0FieldIdentifier`` values (belonging to several groups) -- exactly as the
+    legacy check, which operated on the identifier->members map.
     """
     if not estimate_per_axis:
         return
 
     axes = set()
-    for f in est.sources:
+    for f in sources:
         pe = f.metadata.get('PhaseEncodingDirection')
         axis = _get_pe_axis(pe)
         if axis is not None:
@@ -1390,7 +1403,7 @@ def _check_axis_conflict(est, estimate_per_axis):
 
     if len(axes) > 1:
         raise ValueError(
-            f'B0FieldIdentifier {est.bids_id!r} groups files across PE axes '
+            f'B0FieldIdentifier {ident!r} groups files across PE axes '
             f'{sorted(axes)}, but estimate_per_axis is True. A single B0 field '
             f'estimation group cannot span multiple axis pairs.'
         )
@@ -1563,7 +1576,7 @@ def find_estimators(*, layout, series, ignore_fieldmaps, estimate_per_axis):
         # the legacy order (all axis checks before any session split / compat).
         for ident in sorted(b0_members):
             sources = [_fieldmap_file(p) for p in sorted(b0_members[ident])]
-            _check_axis_conflict(FieldmapEstimation(sources), estimate_per_axis)
+            _check_axis_conflict(sources, ident, estimate_per_axis)
 
         # A named estimation group is split so it never spans sessions, using the
         # same suffixed-key scheme as _split_named_member_groups_by_session.
@@ -1576,8 +1589,10 @@ def find_estimators(*, layout, series, ignore_fieldmaps, estimate_per_axis):
                     member_series, key, group_kind='field-map estimation'
                 )
                 sources = [_fieldmap_file(p) for p in sorted(part_paths)]
-                est = FieldmapEstimation(sources)
-                est.bids_id = key
+                # bids_id is passed explicitly: a source may carry several
+                # B0FieldIdentifiers (belonging to several groups), so per-source
+                # resolution would wrongly flag a conflict.
+                est = FieldmapEstimation(sources, bids_id=key)
                 estimators.append(est)
 
         # Application assignment, derived independently of estimation (mirrors the
@@ -1650,9 +1665,14 @@ def find_estimators(*, layout, series, ignore_fieldmaps, estimate_per_axis):
                 _check_series_metadata_compatibility(
                     member_series, key, group_kind='field-map estimation'
                 )
-                sources = [_fieldmap_file(p) for p in sorted(sess_fmaps)]
-                est = FieldmapEstimation(sources, auto_id=key)
-                est.bids_id = key
+                # The IntendedFor targets are part of the estimation group (legacy
+                # _build_intendedfor_groups records target dg ids as members), so
+                # they are included as sources here. This is harmless to method
+                # inference and to_fieldmap_info (which select fmaps by suffix).
+                sources = [
+                    _fieldmap_file(p) for p in sorted(sess_fmaps) + sorted(sess_targets)
+                ]
+                est = FieldmapEstimation(sources, bids_id=key)
                 estimators.append(est)
                 for tpath in sess_targets:
                     series_to_estimator[tpath] = est.bids_id
@@ -1669,3 +1689,51 @@ def find_estimators(*, layout, series, ignore_fieldmaps, estimate_per_axis):
             series_to_estimator[p] = est.bids_id
 
     return estimators, series_to_estimator
+
+
+def _final_distortion_groups(series_list, series_to_estimator):
+    """Group DwiSeries by ``(physical signature, estimator id)``.
+
+    Folding the estimator id into the signature means a distortion group never
+    spans two estimators, so no post-hoc split/remap is needed. Groups (and the
+    files within them) are kept in first-appearance order over ``series_list``,
+    matching the legacy ``build_distortion_groups``.
+    """
+    groups = []
+    keys = []
+    for s in series_list:
+        key = (s.distortion_signature, series_to_estimator.get(s.path))
+        if key in keys:
+            groups[keys.index(key)].append(s.path)
+        else:
+            keys.append(key)
+            groups.append([s.path])
+    names = _get_unique_concatenated_bids_names(groups)
+    return dict(zip(names, groups, strict=False))
+
+
+def _serialize_estimation_groups(estimators, distortion_groups):
+    """Serialize estimators into the legacy ``fmap_estimation_groups`` dict.
+
+    ``fmap_estimation_groups[bids_id]`` is the sorted list of members, mixing
+    distortion-group ids (for DWI sources, mapped via the file -> dg lookup) and
+    raw ``fmap/`` file paths (kept as paths), exactly as the legacy
+    ``build_fmap_estimation_groups`` produced. Application groups are derived
+    separately by :func:`build_fmap_application_groups`, which faithfully
+    reproduces the many-to-many B0FieldSource mapping (a DWI may declare several
+    sources).
+    """
+    path_to_dg = {}
+    for dg_id, files in distortion_groups.items():
+        for f in files:
+            path_to_dg[f] = dg_id
+
+    fmap_estimation_groups = {}
+    for est in estimators:
+        members = set()
+        for source in est.sources:
+            path = str(source.path)
+            members.add(path_to_dg.get(path, path))
+        fmap_estimation_groups[est.bids_id] = sorted(members)
+
+    return fmap_estimation_groups

@@ -108,12 +108,18 @@ class FieldmapEstimation:
     sources : list[FieldmapFile]
     auto_id : str, optional
         Identifier to use when the sources carry no ``B0FieldIdentifier``.
+    bids_id : str, optional
+        Explicit identifier for this estimation. When provided, it is used
+        verbatim and the per-source ``B0FieldIdentifier`` resolution (and its
+        conflict check) is skipped. This is needed when a single source file
+        carries several ``B0FieldIdentifier`` values and thus belongs to several
+        estimations -- the caller already knows which one this is.
     """
 
     sources: list
     auto_id: str | None = None
+    bids_id: str | None = None
     method: EstimatorType = field(init=False, default=EstimatorType.UNKNOWN)
-    bids_id: str | None = field(init=False, default=None)
 
     def __post_init__(self):
         suffixes = {f.suffix for f in self.sources}
@@ -130,6 +136,10 @@ class FieldmapEstimation:
             self.method = EstimatorType.PEPOLAR
         else:
             raise ValueError('Insufficient sources to estimate a field map.')
+
+        if self.bids_id is not None:
+            # Caller supplied an explicit id; skip per-source resolution.
+            return
 
         b0_ids = [
             f.metadata['B0FieldIdentifier']
