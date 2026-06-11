@@ -36,9 +36,9 @@ FIXTURE_NAMES = sorted(name for name in dir(fixtures) if name.startswith('dset_'
 # Flag axes exercised for every fixture.
 FLAG_COMBOS = list(
     product(
-        [True, False],   # combine_scans
-        [True, False],   # ignore_fieldmaps
-        [True, False],   # estimate_per_axis
+        [True, False],  # combine_scans
+        [True, False],  # ignore_fieldmaps
+        [True, False],  # estimate_per_axis
     )
 )
 
@@ -57,7 +57,7 @@ def _relativize(obj, root):
         return os.path.relpath(obj, root) if obj.startswith(root) else obj
     if isinstance(obj, dict):
         return {k: _relativize(v, root) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
+    if isinstance(obj, list | tuple):
         return [_relativize(v, root) for v in obj]
     return obj
 

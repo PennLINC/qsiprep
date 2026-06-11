@@ -2808,9 +2808,7 @@ def test_find_estimators_ignore_fieldmaps(tmpdir):
 
 def test_find_estimators_splits_named_group_by_session(tmpdir):
     """A single B0FieldIdentifier shared across sessions splits per session."""
-    layout, subject_data = _make_layout(
-        tmpdir, dset_b0field_multisession, 'find_est_multisession'
-    )
+    layout, subject_data = _make_layout(tmpdir, dset_b0field_multisession, 'find_est_multisession')
     series = [grouping.DwiSeries.from_layout(layout, p) for p in subject_data['dwi']]
     distortion_groups = grouping._final_distortion_groups(series)
     estimators = grouping.find_estimators(

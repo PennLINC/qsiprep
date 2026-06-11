@@ -608,9 +608,7 @@ def _build_outputs_to_files(
                     ],
                     bids_id=fmap_key,
                 )
-                fieldmap_info = pepolar.to_fieldmap_info(
-                    epi_files=epi_files, rpe_files=rpe_files
-                )
+                fieldmap_info = pepolar.to_fieldmap_info(epi_files=epi_files, rpe_files=rpe_files)
             elif gre_files:
                 gre = FieldmapEstimation(
                     [FieldmapFile(p, metadata=layout.get_metadata(p)) for p in gre_files]

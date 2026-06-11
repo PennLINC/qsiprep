@@ -123,9 +123,7 @@ def group_dwi_scans(
         distortion_groups = _final_distortion_groups(series_list)
     else:
         names = _get_unique_concatenated_bids_names([[s.path] for s in series_list])
-        distortion_groups = {
-            name: [s.path] for name, s in zip(names, series_list, strict=False)
-        }
+        distortion_groups = {name: [s.path] for name, s in zip(names, series_list, strict=False)}
 
     if ignore_fieldmaps:
         estimators = []
@@ -1049,17 +1047,13 @@ def find_estimators(*, layout, series, distortion_groups, ignore_fieldmaps, esti
             sessions = {_session_of_path(layout, by_path, p) for p in combined}
             split = len(sessions) > 1
             ordered = (
-                sorted(sessions, key=lambda s: '' if s is None else str(s))
-                if split
-                else [None]
+                sorted(sessions, key=lambda s: '' if s is None else str(s)) if split else [None]
             )
             for session in ordered:
                 if split:
                     key = _suffix_key(auto_id, session)
                     sess_fmaps = [
-                        p
-                        for p in fmap_paths
-                        if _session_of_path(layout, by_path, p) == session
+                        p for p in fmap_paths if _session_of_path(layout, by_path, p) == session
                     ]
                     sess_targets = [p for p in target_paths if by_path[p].session == session]
                 else:
@@ -1081,9 +1075,7 @@ def find_estimators(*, layout, series, distortion_groups, ignore_fieldmaps, esti
                 # _build_intendedfor_groups records target dg ids as members), so
                 # they are included as sources here. This is harmless to method
                 # inference and to_fieldmap_info (which select fmaps by suffix).
-                sources = [
-                    _fieldmap_file(p) for p in sorted(sess_fmaps) + sorted(sess_targets)
-                ]
+                sources = [_fieldmap_file(p) for p in sorted(sess_fmaps) + sorted(sess_targets)]
                 est = FieldmapEstimation(sources, bids_id=key)
                 estimators.append(est)
         if estimators:

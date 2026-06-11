@@ -76,9 +76,7 @@ class FieldmapFile:
         dirname, basename = os.path.split(self.path)
         found = {}
         for sibling_suffix in suffixes:
-            sibling_basename = basename.replace(
-                f'_{self.suffix}.', f'_{sibling_suffix}.'
-            )
+            sibling_basename = basename.replace(f'_{self.suffix}.', f'_{sibling_suffix}.')
             if sibling_basename == basename:
                 continue
             candidate = os.path.join(dirname, sibling_basename)

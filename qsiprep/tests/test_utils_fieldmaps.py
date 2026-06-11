@@ -2,8 +2,6 @@
 
 import os
 
-import pytest
-
 from qsiprep.utils import fieldmaps as fm
 
 
@@ -83,8 +81,12 @@ def test_estimation_uses_b0fieldidentifier_as_id(tmp_path):
     pa = _touch(tmp_path / 'sub-01_dir-PA_epi.nii.gz')
     est = fm.FieldmapEstimation(
         [
-            fm.FieldmapFile(ap, metadata={'PhaseEncodingDirection': 'j', 'B0FieldIdentifier': 'pp1'}),
-            fm.FieldmapFile(pa, metadata={'PhaseEncodingDirection': 'j-', 'B0FieldIdentifier': 'pp1'}),
+            fm.FieldmapFile(
+                ap, metadata={'PhaseEncodingDirection': 'j', 'B0FieldIdentifier': 'pp1'}
+            ),
+            fm.FieldmapFile(
+                pa, metadata={'PhaseEncodingDirection': 'j-', 'B0FieldIdentifier': 'pp1'}
+            ),
         ]
     )
     assert est.bids_id == 'pp1'
@@ -94,7 +96,10 @@ def test_estimation_auto_id_when_unnamed(tmp_path):
     pd = _touch(tmp_path / 'sub-01_phasediff.nii.gz')
     m1 = _touch(tmp_path / 'sub-01_magnitude1.nii.gz')
     est = fm.FieldmapEstimation(
-        [fm.FieldmapFile(pd, metadata={'EchoTime1': 0.004, 'EchoTime2': 0.006}), fm.FieldmapFile(m1)],
+        [
+            fm.FieldmapFile(pd, metadata={'EchoTime1': 0.004, 'EchoTime2': 0.006}),
+            fm.FieldmapFile(m1),
+        ],
         auto_id='auto_00000',
     )
     assert est.bids_id == 'auto_00000'
