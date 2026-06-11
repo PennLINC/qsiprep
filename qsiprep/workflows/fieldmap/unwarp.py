@@ -134,7 +134,7 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
     )
 
     ds_report_reg = pe.Node(
-        DerivativesDataSink(datatype='figures', suffix='fmapreg'),
+        DerivativesDataSink(datatype='figures', desc='fmapCoreg', suffix='fieldmap'),
         name='ds_report_reg',
         mem_gb=0.01,
         run_without_submitting=True,
@@ -156,7 +156,7 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
     )
 
     ds_report_reg_vsm = pe.Node(
-        DerivativesDataSink(datatype='figures', suffix='fmapregvsm'),
+        DerivativesDataSink(datatype='figures', desc='vsm', suffix='fieldmap'),
         name='ds_report_vsm',
         mem_gb=0.01,
         run_without_submitting=True,

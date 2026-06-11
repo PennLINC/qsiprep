@@ -135,12 +135,13 @@ def init_dwi_reference_wf(
         if source_file is None:
             raise Exception('Needs a source_file to write a report')
 
+        report_desc = 'b0ref' if desc == 'initial' else f'{desc}b0ref'
         b0ref_reportlet = pe.Node(SimpleBeforeAfterRPT(), name='b0ref_reportlet', mem_gb=0.1)
         ds_report_b0_mask = pe.Node(
             DerivativesDataSink(
                 datatype='figures',
-                desc=desc,
-                suffix='b0ref',
+                desc=report_desc,
+                suffix='dwi',
                 source_file=source_file,
             ),
             name='ds_report_b0_mask',
