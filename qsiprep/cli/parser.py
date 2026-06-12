@@ -107,7 +107,7 @@ def _build_parser(**kwargs):
     def _int_or_auto(value, parser):
         """Ensure an argument is an odd integer >= 3 or 'auto'."""
         if value.lower() == 'auto':
-            return value
+            return 'auto'
         try:
             value = int(value)
         except ValueError as exc:
