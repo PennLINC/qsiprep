@@ -26,8 +26,6 @@ from nireports.assembler.report import Report
 
 from qsiprep import data
 
-FIGURE_REPORTLET_EXTENSIONS = {'.gif', '.html', '.jpg', '.jpeg', '.png', '.svg'}
-
 
 def run_reports(
     output_dir,
@@ -63,78 +61,7 @@ def run_reports(
         traceback.print_exception(*sys.exc_info(), file=str(Path(output_dir) / 'logs' / errorname))
         return subject_label
 
-    _check_all_figures_in_report(
-        report_file=robj.out_filename,
-        reportlets_dir=reportlets_dir or output_dir,
-        subject_label=subject_label,
-        session_label=entities.get('session'),
-    )
-
     return None
-
-
-def _check_all_figures_in_report(report_file, reportlets_dir, subject_label, session_label=None):
-    """Temporarily fail report generation if any generated figure is omitted."""
-    report_file = Path(report_file)
-    reportlets_dir = Path(reportlets_dir)
-    subject_id = subject_label.removeprefix('sub-')
-
-    figure_dirs = [reportlets_dir / f'sub-{subject_id}' / 'figures']
-    subject_dir = reportlets_dir / f'sub-{subject_id}'
-    if session_label:
-        session_id = session_label.removeprefix('ses-')
-        figure_dirs.append(subject_dir / f'ses-{session_id}' / 'figures')
-    else:
-        figure_dirs.extend(sorted(subject_dir.glob('ses-*/figures')))
-
-    figure_files = sorted(
-        {
-            figure_file
-            for figure_dir in figure_dirs
-            if figure_dir.exists()
-            for figure_file in figure_dir.iterdir()
-            if (
-                figure_file.is_file()
-                and ''.join(figure_file.suffixes) in FIGURE_REPORTLET_EXTENSIONS
-            )
-        }
-    )
-    if not figure_files:
-        return
-
-    report_html = report_file.read_text(encoding='utf-8')
-    missing_figures = []
-    for figure_file in figure_files:
-        relpath = figure_file.relative_to(reportlets_dir)
-        if _figure_is_in_report(figure_file, relpath, report_html):
-            continue
-
-        missing_figures.append(relpath.as_posix())
-
-    if missing_figures:
-        missing_list = '\n'.join(f'  - {figure}' for figure in missing_figures)
-        raise RuntimeError(
-            'Generated figure reportlets are missing from the generated report:\n'
-            f'{missing_list}'
-        )
-
-
-def _figure_is_in_report(figure_file, relpath, report_html):
-    """Return True if a generated figure appears in the rendered report."""
-    anchors = {
-        figure_file.name,
-        str(relpath),
-        relpath.as_posix(),
-        str(relpath).replace('\\', '/'),
-    }
-    if any(anchor in report_html for anchor in anchors):
-        return True
-
-    if ''.join(figure_file.suffixes) == '.html':
-        contents = figure_file.read_text(encoding='utf-8').strip()
-        return not contents or contents in report_html
-
-    return False
 
 
 def generate_reports(
