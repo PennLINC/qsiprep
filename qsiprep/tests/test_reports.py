@@ -1,5 +1,7 @@
 """Tests for visual report assembly."""
 
+import pytest
+
 
 def test_template_to_report_entities():
     from qsiprep.workflows.anatomical.volume import _template_to_report_entities
@@ -61,4 +63,34 @@ def test_anat_spatial_normalization_reportlet_allows_template_cohort(tmp_path):
     for reportlet in [*svg_reportlets, *html_reportlets]:
         assert (
             reportlet.name in report_html or reportlet.read_text(encoding='utf-8') in report_html
+        )
+
+
+def test_check_all_figures_in_report_raises_with_missing_figures(tmp_path):
+    from qsiprep.reports.core import _check_all_figures_in_report
+
+    subject_figures = tmp_path / 'sub-01' / 'figures'
+    session_figures = tmp_path / 'sub-01' / 'ses-01' / 'figures'
+    subject_figures.mkdir(parents=True)
+    session_figures.mkdir(parents=True)
+
+    present_figure = subject_figures / 'sub-01_desc-present_dwi.svg'
+    missing_figure = session_figures / 'sub-01_ses-01_desc-missing_dwi.svg'
+    present_figure.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>',
+        encoding='utf-8',
+    )
+    missing_figure.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>',
+        encoding='utf-8',
+    )
+
+    report_file = tmp_path / 'sub-01.html'
+    report_file.write_text(present_figure.name, encoding='utf-8')
+
+    with pytest.raises(RuntimeError, match='sub-01/ses-01/figures/'):
+        _check_all_figures_in_report(
+            report_file=report_file,
+            reportlets_dir=tmp_path,
+            subject_label='01',
         )
