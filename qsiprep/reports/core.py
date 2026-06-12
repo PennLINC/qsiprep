@@ -114,8 +114,7 @@ def _check_all_figures_in_report(report_file, reportlets_dir, subject_label, ses
     if missing_figures:
         missing_list = '\n'.join(f'  - {figure}' for figure in missing_figures)
         raise RuntimeError(
-            'Generated figure reportlets are missing from the generated report:\n'
-            f'{missing_list}'
+            f'Generated figure reportlets are missing from the generated report:\n{missing_list}'
         )
 
 
