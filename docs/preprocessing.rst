@@ -752,6 +752,13 @@ If a GRE fieldmap or SyN-based fieldmapless distortion correction
 are detected, these will be performed on the outputs of ``eddy``.
 For details see :ref:`dwi_sdc`.
 
+.. tip::
+
+  If you want to disable susceptibility distortion correction, you should use the ``--ignore fieldmaps`` option.
+  This will completely disable susceptibility distortion correction,
+  whether using field maps or reverse phase-encoded dMRI runs.
+
+
 .. workflow::
     :graph2use: orig
     :simple_form: yes
