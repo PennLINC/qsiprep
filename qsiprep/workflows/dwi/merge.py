@@ -450,6 +450,7 @@ def init_dwi_denoising_wf(
             import numpy as np
 
             dwi_denoise_window = closest_odd(int(np.ceil(np.cbrt(n_volumes))))
+            dwi_denoise_window = np.maximum(dwi_denoise_window, 3)
             config.loggers.workflow.info(
                 f'Automatically using {dwi_denoise_window}, {dwi_denoise_window}, '
                 f'{dwi_denoise_window} window for dwidenoise'
