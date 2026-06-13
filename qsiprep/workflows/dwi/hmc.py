@@ -721,7 +721,7 @@ def init_dwi_model_hmc_wf(
         DerivativesDataSink(
             datatype='figures',
             desc='shoreline',
-            suffix='animation',
+            suffix='dwi',
         ),
         name='ds_report_shoreline_gif',
         mem_gb=1,

@@ -345,7 +345,7 @@ FreeSurfer version {FS_VERSION}. """
 
     seg2msks = pe.Node(niu.Function(function=_seg2msks), name='seg2msks')
     seg_rpt = pe.Node(ROIsPlot(colors=['r', 'magenta', 'b', 'g']), name='seg_rpt')
-    anat_reports_wf = init_anat_reports_wf()
+    anat_reports_wf = init_anat_reports_wf(anatomical_template=anatomical_template)
 
     workflow.connect([
         (inputnode, anat_reference_wf, [
@@ -1066,7 +1066,7 @@ def _tupleize(value):
     return (value, value, value)
 
 
-def init_anat_reports_wf() -> Workflow:
+def init_anat_reports_wf(anatomical_template) -> Workflow:
     """
     Set up a battery of datasinks to store reports in the right location
     """
@@ -1089,17 +1089,20 @@ def init_anat_reports_wf() -> Workflow:
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
             datatype='figures',
-            suffix='conform',
+            desc='conform',
+            suffix=config.workflow.anat_modality,
         ),
         name='ds_report_t1_conform',
         run_without_submitting=True,
     )
 
+    template_entities = _template_to_report_entities(anatomical_template)
     ds_report_t1_2_mni = pe.Node(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
             datatype='figures',
-            suffix='t1w2mni',
+            suffix=config.workflow.anat_modality,
+            **template_entities,
         ),
         name='ds_report_t1_2_mni',
         run_without_submitting=True,
@@ -1109,8 +1112,7 @@ def init_anat_reports_wf() -> Workflow:
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
             datatype='figures',
-            desc='seg',
-            suffix='mask',
+            suffix='dseg',
         ),
         name='ds_report_t1_seg_mask',
         run_without_submitting=True,
@@ -1136,6 +1138,15 @@ def init_anat_reports_wf() -> Workflow:
         ])  # fmt:skip
 
     return workflow
+
+
+def _template_to_report_entities(template):
+    """Convert a QSIPrep template string to reportlet filename entities."""
+    if '+' not in template:
+        return {'space': template}
+
+    space, cohort = template.split('+', 1)
+    return {'space': space, 'cohort': cohort}
 
 
 def init_anat_derivatives_wf(anatomical_template) -> Workflow:

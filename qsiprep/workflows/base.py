@@ -238,11 +238,15 @@ to workflows in *QSIPrep*'s documentation]\
         run_without_submitting=True,
     )
 
+    report_suffix = (
+        'dwi' if config.workflow.anat_modality == 'none' else config.workflow.anat_modality
+    )
     ds_report_summary = pe.Node(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
             datatype='figures',
-            suffix='summary',
+            desc='summary',
+            suffix=report_suffix,
         ),
         name='ds_report_summary',
         run_without_submitting=True,
@@ -252,7 +256,8 @@ to workflows in *QSIPrep*'s documentation]\
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
             datatype='figures',
-            suffix='about',
+            desc='about',
+            suffix=report_suffix,
         ),
         name='ds_report_about',
         run_without_submitting=True,
