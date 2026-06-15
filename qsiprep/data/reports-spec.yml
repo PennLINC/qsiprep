@@ -4,22 +4,23 @@ sections:
 
 - name: Summary
   reportlets:
-  - bids: {datatype: figures, suffix: "summary"}
+  - bids: {datatype: figures, desc: summary, suffix: [T1w, T2w, dwi]}
 
 - name: Anatomical
   reportlets:
   - bids:
       datatype: figures
+      desc: conform
       extension: [.html]
-      suffix: conform
+      suffix: [T1w, T2w]
 
-  - bids: {datatype: figures, desc: seg, suffix: mask}
+  - bids: {datatype: figures, suffix: dseg}
     caption: |
       This panel shows the final, preprocessed anatomical reference image,
       with contours delineating the detected brain mask and brain tissue segmentations.
     subtitle: Brain mask and brain tissue segmentation of the T1w
 
-  - bids: {datatype: figures, space: .*, suffix: t1w2mni, regex_search: True}
+  - bids: {datatype: figures, space: .*, suffix: [T1w, T2w], regex_search: True}
     caption: Spatial normalization of the anatomical reference to the <code>{space}</code> template.
     description: |
       Results of nonlinear alignment of the anatomical reference one or more template
@@ -38,12 +39,12 @@ sections:
   reportlets:
   - bids: {datatype: figures, desc: topupsummary, suffix: dwi}
 
-  - bids: {datatype: figures, suffix: fmapregvsm}
+  - bids: {datatype: figures, desc: vsm, suffix: fieldmap}
     caption: Voxel shift map overlaid on the reference EPI image.
     static: false
     subtitle: Voxel shift map
 
-  - bids: {datatype: figures, suffix: fmapreg}
+  - bids: {datatype: figures, desc: fmapCoreg, suffix: fieldmap}
     caption: Results of affine coregistration between the magnitude image of the fieldmap and the reference EPI image.
     static: false
     subtitle: Fieldmap to EPI registration
@@ -139,7 +140,7 @@ sections:
     static: false
     subtitle: "Reconstructed <em>B<sub>0</sub></em> map in the corresponding run's space (debug mode)"
 
-  - bids: {datatype: figures, desc: sdc, suffix: b0}
+  - bids: {datatype: figures, desc: sdc, suffix: dwi}
     caption: |
       Results of performing susceptibility distortion correction (SDC) on the
       DWI reference image. The "distorted" image is the image that would be used to
@@ -148,14 +149,14 @@ sections:
     static: false
     subtitle: Susceptibility distortion correction
 
-  - bids: {datatype: figures, desc: sdcdrbuddi, suffix: b0}
+  - bids: {datatype: figures, desc: sdcdrbuddi, suffix: dwi}
     caption: |
       Results of performing susceptibility distortion correction (SDC) using DRBUDDI.
       b=0 images are shown.
     static: false
     subtitle: Susceptibility distortion correction
 
-  - bids: {datatype: figures, desc: sdcdrbuddi, suffix: b0t2w}
+  - bids: {datatype: figures, desc: sdcdrbuddiT2w, suffix: dwi}
     caption: |
       Results of performing susceptibility distortion correction (SDC) using DRBUDDI.
       The overlay shown is an ad-hoc segmentation of a t2w image and is only for
@@ -163,7 +164,7 @@ sections:
     static: false
     subtitle: Susceptibility distortion correction
 
-  - bids: {datatype: figures, desc: sdc, suffix: fa}
+  - bids: {datatype: figures, desc: sdcFA, suffix: dwi}
     caption: |
       DRBUDDI uses the Fractional Anisotropy (FA) as part of its multimodal
       susceptibility distortion correction (SDC). This report shows the FA
@@ -207,13 +208,13 @@ sections:
     static: false
     subtitle: <em>B<sub>1</sub></em> Bias Correction
 
-  - bids: {datatype: figures, desc: biascorrpost, suffix: dwi}
+  - bids: {datatype: figures, desc: biascorrpost.*, suffix: dwi, regex_search: True}
     caption: |
       "Effect of correcting <em>B<sub>1</sub></em> bias on a low and high-<em>b</em> resampled image."
     static: false
     subtitle: <em>B<sub>1</sub></em> Bias Correction (Post-Resampling)
 
-  - bids: {datatype: figures, suffix: b0ref}
+  - bids: {datatype: figures, desc: [b0ref, resampledb0ref], suffix: dwi}
     caption: |
       b=0 template and final mask output. The t1 and signal intersection mask is blue,
       their xor is red and the entire mask is plotted in cyan.
@@ -244,6 +245,11 @@ sections:
     static: false
     subtitle: Reorientation of DWI reference image to AC-PC
 
+  - bids: {datatype: figures, desc: shoreline, suffix: dwi}
+    caption: |
+      Animation showing SHORELine model-predicted images, original images, and registered images.
+    subtitle: SHORELine Motion Correction
+
   - bids: {datatype: figures, desc: shorelineiters, suffix: dwi}
     caption: |
       Difference in motion estimates over SHORELine iterations. Values close to zero
@@ -258,7 +264,7 @@ sections:
 - name: About
   nested: true
   reportlets:
-  - bids: {datatype: figures, suffix: about}
+  - bids: {datatype: figures, desc: about, suffix: [T1w, T2w, dwi]}
   - custom: boilerplate
     path: '{reportlets_dir}/logs'
     bibfile: ['qsiprep', 'data/boilerplate.bib']

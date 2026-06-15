@@ -319,7 +319,7 @@ def init_dwi_preproc_wf(
             DerivativesDataSink(
                 datatype='figures',
                 desc='sdc',
-                suffix='b0',
+                suffix='dwi',
                 source_file=source_file,
             ),
             name='ds_report_sdc',
@@ -358,8 +358,8 @@ def init_dwi_preproc_wf(
         ds_report_fa_sdc = pe.Node(
             DerivativesMaybeDataSink(
                 datatype='figures',
-                desc='sdc',
-                suffix='fa',
+                desc='sdcFA',
+                suffix='dwi',
                 source_file=source_file,
             ),
             name='ds_report_fa_sdc',
@@ -370,8 +370,8 @@ def init_dwi_preproc_wf(
         ds_report_b0_sdc = pe.Node(
             DerivativesMaybeDataSink(
                 datatype='figures',
-                desc='sdcdrbuddi',
-                suffix='b0' if not t2w_sdc else 'b0t2w',
+                desc='sdcdrbuddi' if not t2w_sdc else 'sdcdrbuddiT2w',
+                suffix='dwi',
                 source_file=source_file,
             ),
             name='ds_report_b0_sdc',

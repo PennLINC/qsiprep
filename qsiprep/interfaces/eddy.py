@@ -9,7 +9,7 @@ Prepare files for TOPUP and eddy
 import json
 import os
 import os.path as op
-from importlib.resources import files
+import re
 
 import nibabel as nb
 import numpy as np
@@ -27,11 +27,64 @@ from nipype.interfaces.base import (
 )
 from nipype.utils.filemanip import fname_presuffix, split_filename
 
-from ..utils.resources import as_path
+from ..data import load as load_data
 from .epi_fmap import get_best_b0_topup_inputs_from
 from .fmap import eddy_inputs_from_dwi_files
 
 LOGGER = logging.getLogger('nipype.interface')
+
+_EDDY_CUDA_RE = re.compile(r'^eddy_cuda(\d+)\.(\d+)$')
+
+
+def _find_eddy_cuda(default='eddy_cuda10.2'):
+    """Locate the installed FSL eddy CUDA binary (e.g. ``eddy_cuda11.0``).
+
+    FSL ships version-specific binaries whose name encodes the CUDA version
+    (``eddy_cuda11.0``). Older code hardcoded ``eddy_cuda10.2``, which current
+    FSL builds no longer provide. Scan the directories on ``PATH`` for any
+    ``eddy_cuda<major>.<minor>`` executable and return the newest one.
+
+    Parameters
+    ----------
+    default : str
+        Name returned when no ``eddy_cuda*`` binary is found, so the downstream
+        missing-dependency check reports a recognizable command.
+
+    Returns
+    -------
+    str
+        Basename of the selected eddy CUDA binary, or ``default`` if none found.
+    """
+    found = {}
+    for directory in os.environ.get('PATH', '').split(os.pathsep):
+        if not directory or not os.path.isdir(directory):
+            continue
+        try:
+            entries = os.listdir(directory)
+        except OSError:
+            continue
+        for entry in entries:
+            match = _EDDY_CUDA_RE.match(entry)
+            if match is None:
+                continue
+            full_path = os.path.join(directory, entry)
+            if not os.path.isfile(full_path) or not os.access(full_path, os.X_OK):
+                continue
+            version = (int(match.group(1)), int(match.group(2)))
+            # Keep the first match on PATH for each basename.
+            found.setdefault(entry, version)
+
+    if not found:
+        LOGGER.warning('No eddy_cuda* binary found on PATH; falling back to %s', default)
+        return default
+
+    if len(found) > 1:
+        LOGGER.warning(
+            'Multiple eddy_cuda binaries found on PATH (%s); using the newest.',
+            ', '.join(sorted(found)),
+        )
+
+    return max(found, key=found.get)
 
 
 class GatherEddyInputsInputSpec(BaseInterfaceInputSpec):
@@ -112,7 +165,7 @@ class GatherEddyInputs(SimpleInterface):
         self._results['topup_config'] = 'b02b0.cnf'
         if 1 in (example_b0.shape[0] % 2, example_b0.shape[1] % 2, example_b0.shape[2] % 2):
             LOGGER.warning('Using slower b02b0_1.cnf because an axis has an odd number of slices')
-            self._results['topup_config'] = as_path(files('qsiprep.data') / 'b02b0_1.cnf')
+            self._results['topup_config'] = str(load_data('b02b0_1.cnf'))
 
         # For the apply topup report:
         pre_topup_image = index_img(topup_imain_file, 0)
@@ -182,7 +235,7 @@ class ExtendedEddy(fsl.Eddy):
             self._use_cuda()
 
     def _use_cuda(self):
-        self._cmd = 'eddy_cuda10.2' if self.inputs.use_cuda else 'eddy_cpu'
+        self._cmd = _find_eddy_cuda() if self.inputs.use_cuda else 'eddy_cpu'
 
     def _list_outputs(self):
         outputs = self.output_spec().get()

@@ -112,34 +112,6 @@ def init_dwi_reference_wf(
     if dwi_file is not None:
         inputnode.inputs.b0_template = dwi_file
 
-    # Synthstrip is used now
-    # if register_t1:
-    #     affine_transform = as_path(files("qsiprep") / "data" / "affine.json")
-    #     register_t1_to_raw = pe.Node(
-    #         ants.Registration(from_file=affine_transform),
-    #         name="register_t1_to_raw",
-    #         n_procs=omp_nthreads,
-    #     )
-    #     t1_mask_to_b0 = pe.Node(
-    #         ants.ApplyTransforms(interpolation="MultiLabel", invert_transform_flags=[True]),
-    #         name="t1_mask_to_b0",
-    #         n_procs=omp_nthreads,
-    #     )
-    #     workflow.connect([
-    #         (inputnode, register_t1_to_raw, [
-    #             ('t1_brain', 'fixed_image'),
-    #             ('t1_mask', 'fixed_image_masks'),
-    #             ('b0_template', 'moving_image'),
-    #         ]),
-    #         (register_t1_to_raw, t1_mask_to_b0, [('forward_transforms', 'transforms')]),
-    #     ])  # fmt:skip
-    # else:
-    #     # T1w is already aligned
-    #     t1_mask_to_b0 = pe.Node(
-    #         ants.ApplyTransforms(transforms="identity"), name="t1_mask_to_b0",
-    # n_procs=omp_nthreads
-    #     )
-
     # Use synthstrip to extract the brain
     synthstrip_wf = init_synthstrip_wf(do_padding=True, name='synthstrip_wf')
 
@@ -163,12 +135,13 @@ def init_dwi_reference_wf(
         if source_file is None:
             raise Exception('Needs a source_file to write a report')
 
+        report_desc = 'b0ref' if desc == 'initial' else f'{desc}b0ref'
         b0ref_reportlet = pe.Node(SimpleBeforeAfterRPT(), name='b0ref_reportlet', mem_gb=0.1)
         ds_report_b0_mask = pe.Node(
             DerivativesDataSink(
                 datatype='figures',
-                desc=desc,
-                suffix='b0ref',
+                desc=report_desc,
+                suffix='dwi',
                 source_file=source_file,
             ),
             name='ds_report_b0_mask',
@@ -251,7 +224,7 @@ def _get_wf_name(dwi_fname):
 def _list_squeeze(in_list):
     squeezed = []
     for item in in_list:
-        if type(item) is not str:
+        if not isinstance(item, str):
             squeezed.append(item[0])
         else:
             squeezed.append(item)

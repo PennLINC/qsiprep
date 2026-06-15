@@ -20,6 +20,7 @@ from nipype.interfaces.base import (
 )
 from nipype.utils.filemanip import fname_presuffix
 
+from ..utils.misc import safe_unit_vector
 from ..workflows.dwi.util import _get_concatenated_bids_name
 from .fmap import get_distortion_grouping
 
@@ -420,11 +421,6 @@ def find_image_pairs(original_bvecs, bvals, assignments):
     return pairs, bvecs
 
 
-def unit_vector(vector):
-    """Returns the unit vector of the vector."""
-    return vector / np.linalg.norm(vector)
-
-
 def angle_between(v1, v2):
     """Returns the angle in degrees between vectors 'v1' and 'v2'::
     >>> angle_between((1, 0, 0), (0, 1, 0))
@@ -434,8 +430,8 @@ def angle_between(v1, v2):
     >>> angle_between((1, 0, 0), (-1, 0, 0))
     180.0
     """
-    v1_u = unit_vector(v1)
-    v2_u = unit_vector(v2)
+    v1_u = safe_unit_vector(v1)
+    v2_u = safe_unit_vector(v2)
     return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0)) * 180 / np.pi
 
 
@@ -568,10 +564,8 @@ def average_bvec(bvec1, bvec2):
 
     bvec_diff = angle_between(bvec1, bvec2)
 
-    mean_bvec_plus = (bvec1 + bvec2) / 2.0
-    mean_bvec_plus = mean_bvec_plus / np.linalg.norm(mean_bvec_plus)
-    mean_bvec_minus = (bvec1 - bvec2) / 2.0
-    mean_bvec_minus = mean_bvec_minus / np.linalg.norm(mean_bvec_minus)
+    mean_bvec_plus = safe_unit_vector((bvec1 + bvec2) / 2.0)
+    mean_bvec_minus = safe_unit_vector((bvec1 - bvec2) / 2.0)
 
     if angle_between(bvec1, mean_bvec_plus) < angle_between(
         bvec1, mean_bvec_minus
