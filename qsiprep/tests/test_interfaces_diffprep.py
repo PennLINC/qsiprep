@@ -1,3 +1,5 @@
+import shutil
+
 import numpy as np
 
 
@@ -30,6 +32,7 @@ def test_tortoiseprocess_cmdline(tmp_path):
     assert 'quadratic' in cmd
     assert 'dwi.bmtxt' in cmd
     assert 'mask.nii' in cmd
+    assert '--step DIFFPREP' in cmd
 
 
 def test_diffprep_motion_params(tmp_path):
@@ -80,9 +83,12 @@ def test_bmat_to_fsl_roundtrip(tmp_path):
     assert np.allclose(np.abs(out_bvecs[:, 3]), [np.sqrt(0.5), np.sqrt(0.5), 0], atol=1e-3)
 
 
-def test_init_diffprep_hmc_wf_contract():
+def test_init_diffprep_hmc_wf_contract(monkeypatch):
     from qsiprep import config
     from qsiprep.workflows.dwi.diffprep import init_diffprep_hmc_wf
+
+    # The workflow guards on TORTOISEProcess being on PATH; pretend it exists offline.
+    monkeypatch.setattr(shutil, 'which', lambda name, *a, **k: '/opt/tortoise/bin/' + name)
 
     config.workflow.b0_threshold = 100
     scan_groups = {

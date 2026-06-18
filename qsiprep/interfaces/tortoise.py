@@ -634,12 +634,13 @@ class _TORTOISEProcessInputSpec(TORTOISEInputSpec):
     )
     b0_id = traits.Int(-1, usedefault=True, argstr='--b0_id %d', desc='index of b=0 (-1=auto)')
     config_file = File(exists=True, argstr='--DIFFPREP_settings %s', desc='DIFFPREP settings JSON')
-    # Bool with a fixed argstr: nipype emits the argstr verbatim when True, omits it when False.
-    do_drbuddi = traits.Bool(
-        False,
+    # Emit --step DIFFPREP by default so TORTOISEProcess runs DIFFPREP only (HMC-only;
+    # DRBUDDI/SDC is handled elsewhere in qsiprep). nipype emits a fixed argstr when True.
+    diffprep_only = traits.Bool(
+        True,
         usedefault=True,
         argstr='--step DIFFPREP',
-        desc='pass --step DIFFPREP to run the DIFFPREP step only (skip DRBUDDI); HMC-only default is False',
+        desc='run the DIFFPREP step only (skip DRBUDDI); emits --step DIFFPREP',
     )
 
 
@@ -692,6 +693,11 @@ class DIFFPREPMotionParams(SimpleInterface):
 
     def _run_interface(self, runtime):
         params = np.loadtxt(self.inputs.transforms_file, ndmin=2)
+        if params.shape[1] < 6:
+            raise ValueError(
+                f'DIFFPREP transforms file has {params.shape[1]} columns; expected at '
+                'least 6 (3 translations + 3 rotations).'
+            )
         rigid = params[:, :6]
         out_file = fname_presuffix(
             self.inputs.transforms_file,

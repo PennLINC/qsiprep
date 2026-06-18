@@ -1,6 +1,7 @@
 """TORTOISE DIFFPREP head-motion/eddy-current correction workflow."""
 
 import os
+import shutil
 
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
@@ -48,6 +49,22 @@ def _identity_itk_transforms(n_volumes, cwd=None):
     return out
 
 
+def _zeros_like_b0(b0_template, cwd=None):
+    """Write a zeros placeholder CNR map on the b0-template grid."""
+    import os
+
+    import nibabel as nb
+    import numpy as np
+
+    cwd = cwd or os.getcwd()
+    img = nb.load(b0_template)
+    out = os.path.join(cwd, 'diffprep_cnr_placeholder.nii.gz')
+    nb.Nifti1Image(np.zeros(img.shape[:3], dtype='float32'), img.affine, img.header).to_filename(
+        out
+    )
+    return out
+
+
 def init_diffprep_hmc_wf(
     scan_groups,
     source_file,
@@ -62,6 +79,12 @@ def init_diffprep_hmc_wf(
     TORTOISE-resampled DWI and TORTOISE-rotated gradients are emitted directly
     ("bake-in"); per-volume affines are identity and ``sdc_method`` is ``'None'``.
     """
+    if shutil.which('TORTOISEProcess') is None:
+        raise RuntimeError(
+            'TORTOISEProcess executable not found on PATH. The DIFFPREP HMC backend '
+            'requires TORTOISE v4 (bundled in the qsiprep container).'
+        )
+
     workflow = Workflow(name=name)
     workflow.__desc__ = generate_diffprep_boilerplate(transformation_type)
 
@@ -157,6 +180,13 @@ def init_diffprep_hmc_wf(
         niu.Function(function=_n_vols, output_names=['n_volumes']), name='n_vols'
     )
 
+    # Placeholder CNR map: DIFFPREP does not emit a CNR map, but downstream
+    # resampling feeds outputnode.cnr_map into a mandatory ApplyTransforms input.
+    cnr_placeholder = pe.Node(
+        niu.Function(function=_zeros_like_b0, output_names=['cnr_map']),
+        name='cnr_placeholder',
+    )
+
     workflow.connect([
         # Pre-HMC b0 extraction and DWI-space brain mask (for TORTOISEConvert)
         (inputnode, pre_hmc_extract_b0s, [
@@ -177,13 +207,19 @@ def init_diffprep_hmc_wf(
             ('bmtxt_file', 'bmtxt_file'),
             ('mask_file', 'mask_file'),
         ]),
-        # Conform corrected DWI back to LPS+
+        # Conform corrected DWI back to LPS+; pass gradients through ConformDwi so any
+        # axis flip it applies to the image is also applied to the bvecs (keeps the
+        # gradients consistent with the conformed image orientation).
         (diffprep, back_to_lps, [('corrected_dwi', 'dwi_file')]),
         # Recover FSL gradients from TORTOISE-rotated b-matrix
         (diffprep, bmat_to_fsl, [('corrected_bmtxt', 'bmtxt_file')]),
-        # Split corrected DWI into per-volume files using corrected gradients
-        (back_to_lps, split, [('dwi_file', 'dwi_file')]),
-        (bmat_to_fsl, split, [
+        (bmat_to_fsl, back_to_lps, [
+            ('bval_file', 'bval_file'),
+            ('bvec_file', 'bvec_file'),
+        ]),
+        # Split corrected DWI into per-volume files using conformed gradients
+        (back_to_lps, split, [
+            ('dwi_file', 'dwi_file'),
             ('bval_file', 'bval_file'),
             ('bvec_file', 'bvec_file'),
         ]),
@@ -198,11 +234,12 @@ def init_diffprep_hmc_wf(
         (split, n_vols, [('dwi_files', 'dwi_files')]),
         (n_vols, identity, [('n_volumes', 'n_volumes')]),
         (identity, outputnode, [('out', 'to_dwi_ref_affines')]),
-        # Extract b0s using corrected bval from bmat_to_fsl (matches back_to_lps series)
-        # DEVIATION FROM BRIEF: brief did not wire bval_file to extract_b0s;
-        # ExtractB0s requires bval_file or b0_indices to identify b0 volumes.
-        (back_to_lps, extract_b0s, [('dwi_file', 'dwi_series')]),
-        (bmat_to_fsl, extract_b0s, [('bval_file', 'bval_file')]),
+        # Extract b0s using the conformed bval from back_to_lps so b0 detection
+        # matches the conformed series. ExtractB0s requires bval_file or b0_indices.
+        (back_to_lps, extract_b0s, [
+            ('dwi_file', 'dwi_series'),
+            ('bval_file', 'bval_file'),
+        ]),
         # b0 reference workflow
         (extract_b0s, b0_ref, [('b0_average', 'inputnode.b0_template')]),
         (b0_ref, outputnode, [
@@ -210,6 +247,9 @@ def init_diffprep_hmc_wf(
             ('outputnode.dwi_mask', 'b0_template_mask'),
         ]),
         (extract_b0s, outputnode, [('b0_average', 'pre_sdc_template')]),
+        # Placeholder CNR map on the corrected b0-template grid (required downstream)
+        (extract_b0s, cnr_placeholder, [('b0_average', 'b0_template')]),
+        (cnr_placeholder, outputnode, [('cnr_map', 'cnr_map')]),
         # Motion parameters
         (diffprep, motion, [('transforms_file', 'transforms_file')]),
         (motion, outputnode, [('motion_file', 'motion_params')]),
