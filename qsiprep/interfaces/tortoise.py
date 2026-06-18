@@ -717,7 +717,8 @@ class BmatToFSLGradients(SimpleInterface):
     """Recover FSL bval/bvec from a TORTOISE b-matrix (inverse of make_bmat_file).
 
     The TORTOISE .bmtxt has one row per volume with the 6 unique entries of the
-    symmetric b-matrix: [Bxx, Bxy, Bxz, Byy, Byz, Bzz] in s/mm².
+    symmetric b-matrix: [Bxx, Bxy, Bxz, Byy, Byz, Bzz] (units assumed s/mm²;
+    verify against FSLBVecsToTORTOISEBmatrix when the binary is available).
     The b-value is recovered as trace(B) and the gradient direction as the
     principal eigenvector of B.
     """

@@ -48,7 +48,7 @@ def test_diffprep_motion_params(tmp_path):
 
 
 def test_bmat_to_fsl_roundtrip(tmp_path):
-    from qsiprep.interfaces.tortoise import BmatToFSLGradients, make_bmat_file  # noqa: F401
+    from qsiprep.interfaces.tortoise import BmatToFSLGradients, make_bmat_file  # noqa: F401  # make_bmat_file imported per brief; its FSLBVecsToTORTOISEBmatrix binary is unavailable offline, so the .bmtxt is hand-built below
 
     # Build a .bmtxt directly (FSLBVecsToTORTOISEBmatrix binary unavailable in CI).
     # TORTOISE b-matrix format: one row per volume, 6 entries [Bxx Bxy Bxz Byy Byz Bzz]
@@ -74,3 +74,7 @@ def test_bmat_to_fsl_roundtrip(tmp_path):
     assert np.allclose(out_bvals, [0, 1000, 1000, 2000], atol=1.0)
     # First weighted dir aligns with x; sign is arbitrary, compare abs.
     assert np.allclose(np.abs(out_bvecs[:, 1]), [1, 0, 0], atol=1e-3)
+    # Off-diagonal volume (index 3) is the only one that non-degenerately
+    # exercises principal-eigenvector selection; an argmin/argmax swap would
+    # pass the diagonal volumes but fail here. Sign is arbitrary -> compare abs.
+    assert np.allclose(np.abs(out_bvecs[:, 3]), [np.sqrt(0.5), np.sqrt(0.5), 0], atol=1e-3)
