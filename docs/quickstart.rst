@@ -118,7 +118,8 @@ grid sampling (DSI) and random q-space sampling (CS-DSI).
 The option ``none`` will register all the b=0 images to one another and the
 b>0 images will have the transform from the nearest b=0 image applied. This
 is not recommended. Between ``eddy`` and ``3dSHORE``, all sampling schemes
-can be motion corrected.
+can be motion corrected, though eddy-current correction for non-shelled data
+requires the DIFFPREP options described below.
 
 For non-shelled acquisitions such as compressed-sensing DSI (CS-DSI), FSL
 ``eddy`` cannot be used, and ``3dSHORE`` corrects motion but does not correct
