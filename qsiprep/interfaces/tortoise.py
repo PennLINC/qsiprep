@@ -616,6 +616,57 @@ class TORTOISEConvert(SimpleInterface):
         return runtime
 
 
+class _TORTOISEProcessInputSpec(TORTOISEInputSpec):
+    dwi_file = File(
+        exists=True, mandatory=True, argstr='--input %s', desc='DWI in TORTOISE .nii format'
+    )
+    bmtxt_file = File(
+        exists=True, mandatory=True, argstr='--input_bmtxt %s', desc='b-matrix (.bmtxt)'
+    )
+    mask_file = File(exists=True, mandatory=True, argstr='--mask %s', desc='brain mask')
+    transformation_type = traits.Enum(
+        'rigid',
+        'quadratic',
+        'cubic',
+        usedefault=True,
+        argstr='--DIFFPREP_transformation_type %s',
+        desc='Okan transform order: rigid (motion only), quadratic, or cubic',
+    )
+    b0_id = traits.Int(-1, usedefault=True, argstr='--b0_id %d', desc='index of b=0 (-1=auto)')
+    config_file = File(exists=True, argstr='--DIFFPREP_settings %s', desc='DIFFPREP settings JSON')
+    do_drbuddi = traits.Bool(
+        False, usedefault=True, argstr='--step DIFFPREP', desc='HMC-only: run DIFFPREP step only'
+    )
+
+
+class _TORTOISEProcessOutputSpec(TraitedSpec):
+    corrected_dwi = File(exists=True, desc='motion/eddy corrected DWI (LPS+ TORTOISE space)')
+    corrected_bmtxt = File(exists=True, desc='rotated b-matrix matching corrected_dwi')
+    transforms_file = File(exists=True, desc='per-volume DIFFPREP transform parameters')
+
+
+class TORTOISEProcess(TORTOISECommandLine):
+    """Run TORTOISE v4 DIFFPREP (motion + optional eddy) on a single DWI series.
+
+    HMC-only: susceptibility correction is left to qsiprep's fieldmap machinery.
+    """
+
+    input_spec = _TORTOISEProcessInputSpec
+    output_spec = _TORTOISEProcessOutputSpec
+    _cmd = 'TORTOISEProcess'
+
+    def _list_outputs(self):
+        outputs = self.output_spec().get()
+        cwd = os.getcwd()
+        base = fname_presuffix(
+            self.inputs.dwi_file, suffix='_proc', use_ext=False, newpath=cwd
+        )
+        outputs['corrected_dwi'] = base + '.nii'
+        outputs['corrected_bmtxt'] = base + '.bmtxt'
+        outputs['transforms_file'] = base + '_transformations.txt'
+        return outputs
+
+
 def split_into_up_and_down_niis(
     dwi_files,
     bval_files,
