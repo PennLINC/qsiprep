@@ -704,6 +704,54 @@ class DIFFPREPMotionParams(SimpleInterface):
         return runtime
 
 
+class _BmatToFSLGradientsInputSpec(BaseInterfaceInputSpec):
+    bmtxt_file = File(exists=True, mandatory=True, desc='TORTOISE b-matrix file')
+
+
+class _BmatToFSLGradientsOutputSpec(TraitedSpec):
+    bval_file = File(exists=True, desc='FSL bval')
+    bvec_file = File(exists=True, desc='FSL bvec')
+
+
+class BmatToFSLGradients(SimpleInterface):
+    """Recover FSL bval/bvec from a TORTOISE b-matrix (inverse of make_bmat_file).
+
+    The TORTOISE .bmtxt has one row per volume with the 6 unique entries of the
+    symmetric b-matrix: [Bxx, Bxy, Bxz, Byy, Byz, Bzz] in s/mm².
+    The b-value is recovered as trace(B) and the gradient direction as the
+    principal eigenvector of B.
+    """
+
+    input_spec = _BmatToFSLGradientsInputSpec
+    output_spec = _BmatToFSLGradientsOutputSpec
+
+    def _run_interface(self, runtime):
+        rows = np.loadtxt(self.inputs.bmtxt_file, ndmin=2)
+        bvals = np.zeros(rows.shape[0])
+        bvecs = np.zeros((3, rows.shape[0]))
+        for i, (bxx, bxy, bxz, byy, byz, bzz) in enumerate(rows):
+            bmat = np.array([[bxx, bxy, bxz], [bxy, byy, byz], [bxz, byz, bzz]])
+            bval = np.trace(bmat)
+            bvals[i] = bval
+            if bval > 0:
+                evals, evecs = np.linalg.eigh(bmat)
+                # principal eigenvector = gradient direction
+                vec = evecs[:, np.argmax(evals)]
+                bvecs[:, i] = vec / np.linalg.norm(vec)
+
+        bval_file = fname_presuffix(
+            self.inputs.bmtxt_file, suffix='.bval', use_ext=False, newpath=runtime.cwd
+        )
+        bvec_file = fname_presuffix(
+            self.inputs.bmtxt_file, suffix='.bvec', use_ext=False, newpath=runtime.cwd
+        )
+        np.savetxt(bval_file, bvals[np.newaxis, :], fmt='%g')
+        np.savetxt(bvec_file, bvecs, fmt='%.8f')
+        self._results['bval_file'] = bval_file
+        self._results['bvec_file'] = bvec_file
+        return runtime
+
+
 def split_into_up_and_down_niis(
     dwi_files,
     bval_files,
