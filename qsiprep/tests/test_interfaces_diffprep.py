@@ -30,3 +30,18 @@ def test_tortoiseprocess_cmdline(tmp_path):
     assert 'quadratic' in cmd
     assert 'dwi.bmtxt' in cmd
     assert 'mask.nii' in cmd
+
+
+def test_diffprep_motion_params(tmp_path):
+    from qsiprep.interfaces.tortoise import DIFFPREPMotionParams
+
+    # Two volumes, 6 rigid params each (tx ty tz rx ry rz), space-separated.
+    transforms = tmp_path / 'xfms.txt'
+    transforms.write_text('0 0 0 0 0 0\n1.5 -2.0 0.5 0.01 -0.02 0.0\n')
+
+    iface = DIFFPREPMotionParams(transforms_file=str(transforms))
+    res = iface.run(cwd=str(tmp_path))
+    out = np.loadtxt(res.outputs.motion_file)
+
+    assert out.shape == (2, 6)
+    assert np.allclose(out[1], [1.5, -2.0, 0.5, 0.01, -0.02, 0.0])
