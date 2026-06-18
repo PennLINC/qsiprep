@@ -119,21 +119,9 @@ def test_init_diffprep_hmc_wf_contract():
     assert wf.get_node('convert') is not None
 
 
-def test_base_selects_diffprep(monkeypatch):
-    import qsiprep.workflows.dwi.base as base_mod
-    from qsiprep import config
+def test_diffprep_order_helper():
+    from qsiprep.workflows.dwi.base import _diffprep_order
 
-    captured = {}
-
-    def fake_init_diffprep_hmc_wf(*args, **kwargs):
-        captured['transformation_type'] = kwargs.get('transformation_type')
-        from nipype.interfaces import utility as niu
-        from nipype.pipeline import engine as pe
-
-        return pe.Node(niu.IdentityInterface(fields=['x']), name='hmc_sdc_wf')
-
-    monkeypatch.setattr(base_mod, 'init_diffprep_hmc_wf', fake_init_diffprep_hmc_wf)
-
-    config.workflow.hmc_model = 'diffprep_cubic'
-    order = base_mod._diffprep_order(config.workflow.hmc_model)
-    assert order == 'cubic'
+    assert _diffprep_order('diffprep_motion') == 'motion'
+    assert _diffprep_order('diffprep_quadratic') == 'quadratic'
+    assert _diffprep_order('diffprep_cubic') == 'cubic'
