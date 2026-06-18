@@ -109,3 +109,11 @@ def test_init_diffprep_hmc_wf_contract():
         'motion_params',
     }
     assert required.issubset(set(outputnode.inputs.copyable_trait_names()))
+    # Fix 1: _n_vols should be at module level (picklable under MultiProc)
+    from qsiprep.workflows.dwi import diffprep as diffprep_mod
+
+    assert callable(getattr(diffprep_mod, '_n_vols', None)), '_n_vols must be module-level'
+    # Fix 2: convert mask comes from DWI-space pre-HMC b0 reference, not t1_mask
+    assert wf.get_node('pre_hmc_extract_b0s') is not None
+    assert wf.get_node('pre_hmc_b0_ref') is not None
+    assert wf.get_node('convert') is not None

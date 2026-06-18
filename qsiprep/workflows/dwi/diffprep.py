@@ -22,6 +22,11 @@ from .util import init_dwi_reference_wf
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
+def _n_vols(dwi_files):
+    """Return the number of volumes given a list of DWI files."""
+    return len(dwi_files) if isinstance(dwi_files, (list, tuple)) else 1
+
+
 def _identity_itk_transforms(n_volumes, cwd=None):
     """Write ``n_volumes`` identity ITK affine .mat files (bake-in: no re-move)."""
     import os
@@ -127,6 +132,12 @@ def init_diffprep_hmc_wf(
         name='split',
     )
 
+    # 4b. Pre-HMC b0 reference for DWI-space brain mask (fed to TORTOISEConvert)
+    pre_hmc_extract_b0s = pe.Node(
+        ExtractB0s(b0_threshold=config.workflow.b0_threshold), name='pre_hmc_extract_b0s'
+    )
+    pre_hmc_b0_ref = init_dwi_reference_wf(name='pre_hmc_b0_ref', gen_report=False)
+
     # 5. b0 template + mask
     # NOTE: ExtractB0s requires either bval_file or b0_indices to identify b0 volumes.
     # We use the corrected bval from bmat_to_fsl (consistent with back_to_lps series).
@@ -142,21 +153,24 @@ def init_diffprep_hmc_wf(
         name='identity',
     )
 
-    def _n_vols(dwi_files):
-        return len(dwi_files) if isinstance(dwi_files, (list, tuple)) else 1
-
     n_vols = pe.Node(
         niu.Function(function=_n_vols, output_names=['n_volumes']), name='n_vols'
     )
 
     workflow.connect([
-        # Convert DWI to TORTOISE format; t1_mask serves as brain mask for DIFFPREP
+        # Pre-HMC b0 extraction and DWI-space brain mask (for TORTOISEConvert)
+        (inputnode, pre_hmc_extract_b0s, [
+            ('dwi_file', 'dwi_series'),
+            ('bval_file', 'bval_file'),
+        ]),
+        (pre_hmc_extract_b0s, pre_hmc_b0_ref, [('b0_average', 'inputnode.b0_template')]),
+        # Convert DWI to TORTOISE format; use DWI-space brain mask from pre-HMC b0 reference
         (inputnode, convert, [
             ('dwi_file', 'dwi_file'),
             ('bval_file', 'bval_file'),
             ('bvec_file', 'bvec_file'),
-            ('t1_mask', 'mask_file'),
         ]),
+        (pre_hmc_b0_ref, convert, [('outputnode.dwi_mask', 'mask_file')]),
         # Run DIFFPREP
         (convert, diffprep, [
             ('dwi_file', 'dwi_file'),
