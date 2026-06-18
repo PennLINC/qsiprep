@@ -671,6 +671,39 @@ class TORTOISEProcess(TORTOISECommandLine):
         return outputs
 
 
+class _DIFFPREPMotionParamsInputSpec(BaseInterfaceInputSpec):
+    transforms_file = File(exists=True, mandatory=True, desc='per-volume DIFFPREP transforms')
+
+
+class _DIFFPREPMotionParamsOutputSpec(TraitedSpec):
+    motion_file = File(exists=True, desc='per-volume rigid motion params (mm, rad)')
+
+
+class DIFFPREPMotionParams(SimpleInterface):
+    """Extract the rigid 6-DOF motion parameters from a DIFFPREP transforms file.
+
+    Each volume's Okan transform begins with the rigid component
+    (3 translations in mm, 3 rotations in radians); the remaining
+    eddy-current parameters are not reported as motion.
+    """
+
+    input_spec = _DIFFPREPMotionParamsInputSpec
+    output_spec = _DIFFPREPMotionParamsOutputSpec
+
+    def _run_interface(self, runtime):
+        params = np.loadtxt(self.inputs.transforms_file, ndmin=2)
+        rigid = params[:, :6]
+        out_file = fname_presuffix(
+            self.inputs.transforms_file,
+            suffix='_motion.txt',
+            use_ext=False,
+            newpath=runtime.cwd,
+        )
+        np.savetxt(out_file, rigid, fmt='%.8f')
+        self._results['motion_file'] = out_file
+        return runtime
+
+
 def split_into_up_and_down_niis(
     dwi_files,
     bval_files,
