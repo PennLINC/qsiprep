@@ -1,5 +1,3 @@
-import os
-
 import numpy as np
 
 
@@ -30,3 +28,5 @@ def test_tortoiseprocess_cmdline(tmp_path):
     assert cmd.startswith('TORTOISEProcess')
     assert 'dwi.nii' in cmd
     assert 'quadratic' in cmd
+    assert 'dwi.bmtxt' in cmd
+    assert 'mask.nii' in cmd

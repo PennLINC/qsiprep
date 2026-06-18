@@ -634,8 +634,12 @@ class _TORTOISEProcessInputSpec(TORTOISEInputSpec):
     )
     b0_id = traits.Int(-1, usedefault=True, argstr='--b0_id %d', desc='index of b=0 (-1=auto)')
     config_file = File(exists=True, argstr='--DIFFPREP_settings %s', desc='DIFFPREP settings JSON')
+    # Bool with a fixed argstr: nipype emits the argstr verbatim when True, omits it when False.
     do_drbuddi = traits.Bool(
-        False, usedefault=True, argstr='--step DIFFPREP', desc='HMC-only: run DIFFPREP step only'
+        False,
+        usedefault=True,
+        argstr='--step DIFFPREP',
+        desc='pass --step DIFFPREP to run the DIFFPREP step only (skip DRBUDDI); HMC-only default is False',
     )
 
 
