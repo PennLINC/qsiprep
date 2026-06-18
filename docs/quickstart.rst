@@ -120,6 +120,22 @@ b>0 images will have the transform from the nearest b=0 image applied. This
 is not recommended. Between ``eddy`` and ``3dSHORE``, all sampling schemes
 can be motion corrected.
 
+For non-shelled acquisitions such as compressed-sensing DSI (CS-DSI), FSL
+``eddy`` cannot be used, and ``3dSHORE`` corrects motion but does not correct
+eddy currents. In these cases, TORTOISE DIFFPREP is available via
+``--hmc-model``:
+
+- ``diffprep_motion`` — rigid head-motion correction only.
+- ``diffprep_quadratic`` — rigid motion plus 24-parameter quadratic
+  eddy-current correction (recommended for CS-DSI).
+- ``diffprep_cubic`` — rigid motion plus cubic eddy-current correction.
+
+These options run TORTOISE v4 DIFFPREP, which fits a signal model over
+arbitrary q-space and therefore does not require shells. Susceptibility
+distortion correction is unaffected and continues to use the configured
+fieldmap method. Advanced TORTOISE settings can be supplied with
+``--diffprep-config``.
+
 
 ******************************************
 Enabling and disabling preprocessing steps
