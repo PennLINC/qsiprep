@@ -45,3 +45,32 @@ def test_diffprep_motion_params(tmp_path):
 
     assert out.shape == (2, 6)
     assert np.allclose(out[1], [1.5, -2.0, 0.5, 0.01, -0.02, 0.0])
+
+
+def test_bmat_to_fsl_roundtrip(tmp_path):
+    from qsiprep.interfaces.tortoise import BmatToFSLGradients, make_bmat_file  # noqa: F401
+
+    # Build a .bmtxt directly (FSLBVecsToTORTOISEBmatrix binary unavailable in CI).
+    # TORTOISE b-matrix format: one row per volume, 6 entries [Bxx Bxy Bxz Byy Byz Bzz]
+    # where B = b * g * g^T for unit gradient g.
+    #   vol 0: b=0,    g=[0,0,0]          -> B=0
+    #   vol 1: b=1000, g=[1,0,0]          -> Bxx=1000, rest=0
+    #   vol 2: b=1000, g=[0,1,0]          -> Byy=1000, rest=0
+    #   vol 3: b=2000, g=[0.7071,0.7071,0]-> Bxx=Bxy=Byy=1000, rest=0
+    bmtxt_path = tmp_path / 'in.bmtxt'
+    bmtxt_path.write_text(
+        '0 0 0 0 0 0\n'
+        '1000 0 0 0 0 0\n'
+        '0 0 0 1000 0 0\n'
+        '1000 1000 0 1000 0 0\n'
+    )
+
+    iface = BmatToFSLGradients(bmtxt_file=str(bmtxt_path))
+    res = iface.run(cwd=str(tmp_path))
+
+    out_bvals = np.loadtxt(res.outputs.bval_file, ndmin=1)
+    out_bvecs = np.loadtxt(res.outputs.bvec_file, ndmin=2)
+
+    assert np.allclose(out_bvals, [0, 1000, 1000, 2000], atol=1.0)
+    # First weighted dir aligns with x; sign is arbitrary, compare abs.
+    assert np.allclose(np.abs(out_bvecs[:, 1]), [1, 0, 0], atol=1e-3)
