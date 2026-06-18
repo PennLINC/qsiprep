@@ -453,6 +453,7 @@ class execution(_Config):
         'bids_dir',
         'bids_database_dir',
         'dataset_links',
+        'diffprep_config',
         'eddy_config',
         'layout',
         'log_dir',
@@ -577,6 +578,8 @@ class workflow(_Config):
     """DEPRECATED: see --b1-biascorrect-stage."""
     dwi_only = False
     """DEPRECATED: True if anat_modality is 'none'."""
+    diffprep_config = None
+    """Configuration JSON for running TORTOISE DIFFPREP."""
     eddy_config = None
     """Configuration for running Eddy."""
     fmap_bspline = None

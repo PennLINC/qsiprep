@@ -1,0 +1,9 @@
+{
+  "b0_id": -1,
+  "is_human_brain": true,
+  "rot_eddy_center": "isocenter",
+  "center_of_mass": false,
+  "will_be_drbuddied": false,
+  "interpolation": "cubic",
+  "output_type": "NIFTI_GZ"
+}

@@ -532,11 +532,25 @@ How to combine images across distorted groups.
         '--hmc-model',
         action='store',
         default='eddy',
-        choices=['none', '3dSHORE', 'eddy', 'tensor'],
+        choices=[
+            'none',
+            '3dSHORE',
+            'eddy',
+            'tensor',
+            'diffprep_motion',
+            'diffprep_quadratic',
+            'diffprep_cubic',
+        ],
         help='model used to generate target images for hmc. If "none" the '
         'non-b0 images will be warped using the same transform as their '
         'nearest b0 image. If "3dSHORE", SHORELine will be used. if "tensor", '
-        'SHORELine iterations with a tensor model will be used',
+        'SHORELine iterations with a tensor model will be used. The '
+        '"diffprep_*" options run TORTOISE DIFFPREP: "diffprep_motion" '
+        'corrects rigid head motion only, "diffprep_quadratic" adds '
+        '24-parameter quadratic eddy-current correction (recommended for '
+        'non-shelled / CS-DSI schemes), "diffprep_cubic" adds cubic eddy '
+        'correction. DIFFPREP works on arbitrary q-space (no shells '
+        'required).',
     )
     g_moco.add_argument(
         '--eddy-config',
@@ -545,6 +559,15 @@ How to combine images across distorted groups.
         'json is specified, a default one will be used. The current default '
         'json can be found here: '
         'https://github.com/PennLINC/qsiprep/blob/main/qsiprep/data/eddy_params.json',
+    )
+    g_moco.add_argument(
+        '--diffprep-config',
+        action='store',
+        help='path to a json file with settings for the call to TORTOISE '
+        'DIFFPREP (used only when --hmc-model is one of the diffprep_* '
+        'options). If no json is specified, a default one will be used. The '
+        'current default can be found here: '
+        'https://github.com/PennLINC/qsiprep/blob/main/qsiprep/data/diffprep_params.json',
     )
     g_moco.add_argument(
         '--shoreline-iters',
@@ -700,6 +723,11 @@ def parse_args(args=None, namespace=None):
         from ..utils.misc import validate_eddy_config
 
         validate_eddy_config(opts.eddy_config)
+
+    if opts.diffprep_config:
+        from ..utils.misc import validate_diffprep_config
+
+        validate_diffprep_config(opts.diffprep_config)
 
     config.execution.log_level = int(max(25 - 5 * opts.verbose_count, logging.DEBUG))
     config.from_dict(vars(opts), init=['nipype'])
