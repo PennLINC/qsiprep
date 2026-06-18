@@ -78,3 +78,34 @@ def test_bmat_to_fsl_roundtrip(tmp_path):
     # exercises principal-eigenvector selection; an argmin/argmax swap would
     # pass the diagonal volumes but fail here. Sign is arbitrary -> compare abs.
     assert np.allclose(np.abs(out_bvecs[:, 3]), [np.sqrt(0.5), np.sqrt(0.5), 0], atol=1e-3)
+
+
+def test_init_diffprep_hmc_wf_contract():
+    from qsiprep import config
+    from qsiprep.workflows.dwi.diffprep import init_diffprep_hmc_wf
+
+    config.workflow.b0_threshold = 100
+    scan_groups = {
+        'dwi_series': ['/data/sub-01_dwi.nii.gz'],
+        'fieldmap_info': {'suffix': None},
+        'dwi_series_pedir': 'j',
+    }
+    wf = init_diffprep_hmc_wf(
+        scan_groups=scan_groups,
+        source_file='/data/sub-01_dwi.nii.gz',
+        t2w_sdc='',
+        transformation_type='quadratic',
+    )
+    outputnode = wf.get_node('outputnode')
+    required = {
+        'dwi_files_to_transform',
+        'bvec_files_to_transform',
+        'bval_files',
+        'b0_indices',
+        'to_dwi_ref_affines',
+        'b0_template',
+        'b0_template_mask',
+        'sdc_method',
+        'motion_params',
+    }
+    assert required.issubset(set(outputnode.inputs.copyable_trait_names()))

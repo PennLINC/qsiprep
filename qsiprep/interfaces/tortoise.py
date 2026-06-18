@@ -841,6 +841,22 @@ def make_bmat_file(bvals, bvecs):
     return bvals.replace('bval', 'bmtxt')
 
 
+def generate_diffprep_boilerplate(transformation_type):
+    """Methods boilerplate for the TORTOISE DIFFPREP HMC backend."""
+    order = {
+        'rigid': 'rigid-body (motion only)',
+        'quadratic': 'quadratic (24-parameter Okan, motion + eddy-current)',
+        'cubic': 'cubic (motion + higher-order eddy-current)',
+    }[transformation_type]
+    return (
+        f'\n\nHead motion and eddy-current distortions were corrected using '
+        f'DIFFPREP from the TORTOISE [@tortoisev4] software package, with a '
+        f'{order} transformation model. DIFFPREP registers each volume to a '
+        f'signal-model-predicted target, supporting arbitrary (non-shelled) '
+        f'q-space sampling.\n'
+    )
+
+
 def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False):
     """Generate boilerplate that describes how DRBUDDI is being used."""
 
