@@ -635,9 +635,7 @@ def test_forrest_gump_patch2self(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
-@pytest.mark.parametrize(
-    'model', ['diffprep_motion', 'diffprep_quadratic', 'diffprep_cubic']
-)
+@pytest.mark.parametrize('model', ['diffprep_motion', 'diffprep_quadratic', 'diffprep_cubic'])
 def test_parser_accepts_diffprep_hmc_models(model, tmp_path):
     from qsiprep.cli.parser import _build_parser
 

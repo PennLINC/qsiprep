@@ -663,9 +663,7 @@ class TORTOISEProcess(TORTOISECommandLine):
     def _list_outputs(self):
         outputs = self.output_spec().get()
         cwd = os.getcwd()
-        base = fname_presuffix(
-            self.inputs.dwi_file, suffix='_proc', use_ext=False, newpath=cwd
-        )
+        base = fname_presuffix(self.inputs.dwi_file, suffix='_proc', use_ext=False, newpath=cwd)
         outputs['corrected_dwi'] = base + '.nii'
         outputs['corrected_bmtxt'] = base + '.bmtxt'
         outputs['transforms_file'] = base + '_transformations.txt'
