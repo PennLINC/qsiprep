@@ -30,7 +30,6 @@ def _n_vols(dwi_files):
 
 def _identity_itk_transforms(n_volumes, cwd=None):
     """Write ``n_volumes`` identity ITK affine .mat files (bake-in: no re-move)."""
-    import os
 
     cwd = cwd or os.getcwd()
     text = (
@@ -51,7 +50,6 @@ def _identity_itk_transforms(n_volumes, cwd=None):
 
 def _zeros_like_b0(b0_template, cwd=None):
     """Write a zeros placeholder CNR map on the b0-template grid."""
-    import os
 
     import nibabel as nb
     import numpy as np
@@ -176,9 +174,7 @@ def init_diffprep_hmc_wf(
         name='identity',
     )
 
-    n_vols = pe.Node(
-        niu.Function(function=_n_vols, output_names=['n_volumes']), name='n_vols'
-    )
+    n_vols = pe.Node(niu.Function(function=_n_vols, output_names=['n_volumes']), name='n_vols')
 
     # Placeholder CNR map: DIFFPREP does not emit a CNR map, but downstream
     # resampling feeds outputnode.cnr_map into a mandatory ApplyTransforms input.

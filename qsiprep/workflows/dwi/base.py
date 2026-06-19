@@ -273,11 +273,11 @@ def init_dwi_preproc_wf(
     elif config.workflow.hmc_model.startswith('diffprep_'):
         if fieldmap_type is not None:
             raise NotImplementedError(
-                f"The DIFFPREP HMC backend (--hmc-model {config.workflow.hmc_model}) is "
-                "head-motion/eddy-current correction only and does not perform "
+                f'The DIFFPREP HMC backend (--hmc-model {config.workflow.hmc_model}) is '
+                'head-motion/eddy-current correction only and does not perform '
                 f"susceptibility distortion correction, but a '{fieldmap_type}' fieldmap "
-                "was found for this DWI series. Either run without the fieldmap "
-                "(--ignore fieldmaps) or use --hmc-model eddy/3dSHORE for SDC."
+                'was found for this DWI series. Either run without the fieldmap '
+                '(--ignore fieldmaps) or use --hmc-model eddy/3dSHORE for SDC.'
             )
         hmc_wf = init_diffprep_hmc_wf(
             scan_groups=scan_groups,
