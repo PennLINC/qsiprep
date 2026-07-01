@@ -168,6 +168,16 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
 
+    if config.workflow.dwi_phase_correction in ('tv', 'tvc', 'dc'):
+        for _node in (
+            ds_dwi_t1,
+            ds_bvals_t1,
+            ds_bvecs_t1,
+            ds_gradient_table_t1,
+            ds_btable_t1,
+        ):
+            _node.inputs.part = 'real'
+
     workflow.connect([
         (inputnode, ds_dwi_t1, [('dwi_t1', 'in_file')]),
         (inputnode, ds_bvals_t1, [('bvals_t1', 'in_file')]),

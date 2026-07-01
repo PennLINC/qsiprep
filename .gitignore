@@ -1,4 +1,5 @@
 .cursor/.cursorenv
+docs/superpowers/
 
 # Test data
 qsiprep/tests/test_data/

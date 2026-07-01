@@ -2,3 +2,7 @@
 *.dot
 etc/
 args.txt
+
+# Example figures referenced from the documentation (kept despite the *.png rule)
+!_static/denoising_example.png
+!_static/phasecorrection_example.png

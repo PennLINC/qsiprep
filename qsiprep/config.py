@@ -569,6 +569,18 @@ class workflow(_Config):
     denoise_method = None
     """Image-based denoising method. Either "dwidenoise" (MRtrix), "patch2self" (DIPY)
     or "none"."""
+    dwi_phase_correction = None
+    """Phase-correction method applied to complex denoised DWI data.
+    One of "none", "tv" (Eichner 2015), "tvc" (Eichner 2015) or "dc"
+    (Sprenger 2017). For any method other than "none", the real channel after
+    rephasing is passed downstream in place of the magnitude. Only takes effect
+    when phase data are present and ``denoise_method`` is "dwidenoise"."""
+    dwi_phase_tv_weight = 6.0
+    """Total-variation regularization weight for the "tv" phase-correction
+    method (Eichner 2015)."""
+    dwi_phase_dc_kernel = 'Opt5'
+    """Convolution kernel name for the "dc" phase-correction method
+    (Sprenger 2017). One of B3, B5, G3F1, G5F2, G3F1H, G5F2H, Opt3, Opt5."""
     distortion_group_merge = None
     """How to combine images across distortion groups (concatenate, average or none)."""
     dwi_denoise_window = None

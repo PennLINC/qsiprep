@@ -9,6 +9,7 @@ Image tools interfaces
 
 import glob
 import os
+import re
 from subprocess import PIPE, Popen
 from textwrap import indent
 
@@ -396,6 +397,30 @@ class ConformDwiOutputSpec(TraitedSpec):
     out_report = File(exists=True, desc='HTML segment containing warning')
 
 
+def _find_gradient_file(dwi_file, ext):
+    """Locate the bval/bvec file (``ext``) associated with a DWI image.
+
+    The gradient file is normally named like the DWI image but with a ``.bval``
+    or ``.bvec`` extension. For complex-valued acquisitions the magnitude and
+    phase images share a single pair of gradient files that omit the ``part-``
+    entity (e.g. ``..._dwi.bval`` for ``..._part-mag_dwi.nii.gz``), so fall back
+    to a ``part``-stripped name when the part-specific file is absent. If
+    neither exists, the part-specific candidate is returned unchanged so the
+    caller's existing ``os.path.exists`` handling applies.
+    """
+    candidate = fname_presuffix(dwi_file, suffix=ext, use_ext=False)
+    if os.path.exists(candidate):
+        return candidate
+
+    stripped = re.sub(r'_part-[A-Za-z0-9]+', '', dwi_file)
+    if stripped != dwi_file:
+        stripped_candidate = fname_presuffix(stripped, suffix=ext, use_ext=False)
+        if os.path.exists(stripped_candidate):
+            return stripped_candidate
+
+    return candidate
+
+
 class ConformDwi(SimpleInterface):
     """Conform a series of dwi images to enable merging.
     Performs three basic functions:
@@ -419,12 +444,12 @@ class ConformDwi(SimpleInterface):
         if isdefined(self.inputs.bval_file):
             bval_fname = self.inputs.bval_file
         else:
-            bval_fname = fname_presuffix(fname, suffix='.bval', use_ext=False)
+            bval_fname = _find_gradient_file(fname, '.bval')
 
         if isdefined(self.inputs.bvec_file):
             bvec_fname = self.inputs.bvec_file
         else:
-            bvec_fname = fname_presuffix(fname, suffix='.bvec', use_ext=False)
+            bvec_fname = _find_gradient_file(fname, '.bvec')
 
         out_bvec_fname = fname_presuffix(bvec_fname, suffix=suffix, newpath=runtime.cwd)
         validator = ValidateImage(in_file=fname)

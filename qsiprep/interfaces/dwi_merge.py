@@ -840,10 +840,11 @@ class PhaseToRad(SimpleInterface):
     """Convert phase image from arbitrary units (au) to radians.
 
     This method assumes that the phase image's minimum and maximum values correspond to
-    -pi and pi, respectively, and scales the image to be between 0 and 2*pi.
+    -pi and pi, respectively, and scales the image to be between -pi and pi.
 
-    STATEMENT OF CHANGES: This class is derived from sources licensed under the Apache-2.0 terms,
-    and the code has not been changed.
+    STATEMENT OF CHANGES: This class is derived from sources licensed under the Apache-2.0 terms.
+    The rescaling target was changed from [0, 2*pi] to [-pi, pi] to match the phase convention
+    used by MRtrix's complex ``dwidenoise`` workflow (``mrcalc ... pi 4096 -div -mult -polar``).
 
     Notes
     -----
@@ -884,11 +885,11 @@ class PhaseToRad(SimpleInterface):
         data = im.get_fdata(caching='unchanged')  # Read as float64 for safety
         hdr = im.header.copy()
 
-        # Rescale to [0, 2*pi]
-        data = (data - data.min()) * (2 * np.pi / (data.max() - data.min()))
+        # Rescale to [-pi, pi]
+        data = (data - data.min()) * (2 * np.pi / (data.max() - data.min())) - np.pi
 
         # Round to float32 and clip
-        data = np.clip(np.float32(data), 0.0, 2 * np.pi)
+        data = np.clip(np.float32(data), -np.pi, np.pi)
 
         hdr.set_data_dtype(np.float32)
         hdr.set_xyzt_units('mm')
