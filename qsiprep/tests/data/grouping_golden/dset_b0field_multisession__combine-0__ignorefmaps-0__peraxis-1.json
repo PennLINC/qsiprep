@@ -1,0 +1,50 @@
+{
+  "distortion_groups": {
+    "sub-01_ses-01_dir-AP": [
+      "sub-01/ses-01/dwi/sub-01_ses-01_dir-AP_dwi.nii.gz"
+    ],
+    "sub-01_ses-02_dir-AP": [
+      "sub-01/ses-02/dwi/sub-01_ses-02_dir-AP_dwi.nii.gz"
+    ]
+  },
+  "fmap_estimation_groups": {
+    "pepolar01_ses-01": [
+      "sub-01/ses-01/fmap/sub-01_ses-01_dir-PA_epi.nii.gz",
+      "sub-01_ses-01_dir-AP"
+    ],
+    "pepolar01_ses-02": [
+      "sub-01/ses-02/fmap/sub-01_ses-02_dir-PA_epi.nii.gz",
+      "sub-01_ses-02_dir-AP"
+    ]
+  },
+  "fmap_application_groups": {
+    "pepolar01_ses-01": [
+      "sub-01_ses-01_dir-AP"
+    ],
+    "pepolar01_ses-02": [
+      "sub-01_ses-02_dir-AP"
+    ]
+  },
+  "concatenation_groups": {
+    "sub-01_ses-01_dir-AP": [
+      "sub-01_ses-01_dir-AP"
+    ],
+    "sub-01_ses-02_dir-AP": [
+      "sub-01_ses-02_dir-AP"
+    ]
+  },
+  "fieldmap_infos": {
+    "sub-01_ses-01_dir-AP": {
+      "suffix": "epi",
+      "epi": [
+        "sub-01/ses-01/fmap/sub-01_ses-01_dir-PA_epi.nii.gz"
+      ]
+    },
+    "sub-01_ses-02_dir-AP": {
+      "suffix": "epi",
+      "epi": [
+        "sub-01/ses-02/fmap/sub-01_ses-02_dir-PA_epi.nii.gz"
+      ]
+    }
+  }
+}

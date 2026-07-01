@@ -1,0 +1,26 @@
+{
+  "distortion_groups": {
+    "sub-01_dir-AP_run-1": [
+      "sub-01/dwi/sub-01_dir-AP_run-1_dwi.nii.gz"
+    ],
+    "sub-01_dir-AP_run-2": [
+      "sub-01/dwi/sub-01_dir-AP_run-2_dwi.nii.gz"
+    ]
+  },
+  "fmap_estimation_groups": null,
+  "fmap_application_groups": null,
+  "concatenation_groups": {
+    "sub-01_dir-AP": [
+      "sub-01_dir-AP_run-1",
+      "sub-01_dir-AP_run-2"
+    ]
+  },
+  "fieldmap_infos": {
+    "sub-01_dir-AP_run-1": {
+      "suffix": null
+    },
+    "sub-01_dir-AP_run-2": {
+      "suffix": null
+    }
+  }
+}

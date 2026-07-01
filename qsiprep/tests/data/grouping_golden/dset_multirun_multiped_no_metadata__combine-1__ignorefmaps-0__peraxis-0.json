@@ -1,0 +1,90 @@
+{
+  "distortion_groups": {
+    "sub-01_dir-AP": [
+      "sub-01/dwi/sub-01_dir-AP_run-1_dwi.nii.gz",
+      "sub-01/dwi/sub-01_dir-AP_run-2_dwi.nii.gz"
+    ],
+    "sub-01_dir-LR": [
+      "sub-01/dwi/sub-01_dir-LR_run-1_dwi.nii.gz",
+      "sub-01/dwi/sub-01_dir-LR_run-2_dwi.nii.gz"
+    ],
+    "sub-01_dir-PA": [
+      "sub-01/dwi/sub-01_dir-PA_run-1_dwi.nii.gz",
+      "sub-01/dwi/sub-01_dir-PA_run-2_dwi.nii.gz"
+    ],
+    "sub-01_dir-RL": [
+      "sub-01/dwi/sub-01_dir-RL_run-1_dwi.nii.gz",
+      "sub-01/dwi/sub-01_dir-RL_run-2_dwi.nii.gz"
+    ]
+  },
+  "fmap_estimation_groups": {
+    "auto_00000": [
+      "sub-01_dir-AP",
+      "sub-01_dir-LR",
+      "sub-01_dir-PA",
+      "sub-01_dir-RL"
+    ]
+  },
+  "fmap_application_groups": {
+    "auto_00000": [
+      "sub-01_dir-AP",
+      "sub-01_dir-LR",
+      "sub-01_dir-PA",
+      "sub-01_dir-RL"
+    ]
+  },
+  "concatenation_groups": {
+    "sub-01": [
+      "sub-01_dir-AP",
+      "sub-01_dir-LR",
+      "sub-01_dir-PA",
+      "sub-01_dir-RL"
+    ]
+  },
+  "fieldmap_infos": {
+    "sub-01_dir-AP": {
+      "suffix": "rpe_series",
+      "rpe_series": [
+        "sub-01/dwi/sub-01_dir-LR_run-1_dwi.nii.gz",
+        "sub-01/dwi/sub-01_dir-LR_run-2_dwi.nii.gz",
+        "sub-01/dwi/sub-01_dir-PA_run-1_dwi.nii.gz",
+        "sub-01/dwi/sub-01_dir-PA_run-2_dwi.nii.gz",
+        "sub-01/dwi/sub-01_dir-RL_run-1_dwi.nii.gz",
+        "sub-01/dwi/sub-01_dir-RL_run-2_dwi.nii.gz"
+      ]
+    },
+    "sub-01_dir-LR": {
+      "suffix": "rpe_series",
+      "rpe_series": [
+        "sub-01/dwi/sub-01_dir-AP_run-1_dwi.nii.gz",
+        "sub-01/dwi/sub-01_dir-AP_run-2_dwi.nii.gz",
+        "sub-01/dwi/sub-01_dir-PA_run-1_dwi.nii.gz",
+        "sub-01/dwi/sub-01_dir-PA_run-2_dwi.nii.gz",
+        "sub-01/dwi/sub-01_dir-RL_run-1_dwi.nii.gz",
+        "sub-01/dwi/sub-01_dir-RL_run-2_dwi.nii.gz"
+      ]
+    },
+    "sub-01_dir-PA": {
+      "suffix": "rpe_series",
+      "rpe_series": [
+        "sub-01/dwi/sub-01_dir-AP_run-1_dwi.nii.gz",
+        "sub-01/dwi/sub-01_dir-AP_run-2_dwi.nii.gz",
+        "sub-01/dwi/sub-01_dir-LR_run-1_dwi.nii.gz",
+        "sub-01/dwi/sub-01_dir-LR_run-2_dwi.nii.gz",
+        "sub-01/dwi/sub-01_dir-RL_run-1_dwi.nii.gz",
+        "sub-01/dwi/sub-01_dir-RL_run-2_dwi.nii.gz"
+      ]
+    },
+    "sub-01_dir-RL": {
+      "suffix": "rpe_series",
+      "rpe_series": [
+        "sub-01/dwi/sub-01_dir-AP_run-1_dwi.nii.gz",
+        "sub-01/dwi/sub-01_dir-AP_run-2_dwi.nii.gz",
+        "sub-01/dwi/sub-01_dir-LR_run-1_dwi.nii.gz",
+        "sub-01/dwi/sub-01_dir-LR_run-2_dwi.nii.gz",
+        "sub-01/dwi/sub-01_dir-PA_run-1_dwi.nii.gz",
+        "sub-01/dwi/sub-01_dir-PA_run-2_dwi.nii.gz"
+      ]
+    }
+  }
+}

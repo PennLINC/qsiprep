@@ -1,0 +1,58 @@
+{
+  "distortion_groups": {
+    "sub-01_dir-AP_run-1": [
+      "sub-01/dwi/sub-01_dir-AP_run-1_dwi.nii.gz"
+    ],
+    "sub-01_dir-AP_run-2": [
+      "sub-01/dwi/sub-01_dir-AP_run-2_dwi.nii.gz"
+    ]
+  },
+  "fmap_estimation_groups": {
+    "fmapA": [
+      "sub-01/fmap/sub-01_acq-A_dir-PA_epi.nii.gz",
+      "sub-01_dir-AP_run-1",
+      "sub-01_dir-AP_run-2"
+    ],
+    "fmapB": [
+      "sub-01/fmap/sub-01_acq-B_dir-PA_epi.nii.gz",
+      "sub-01_dir-AP_run-1",
+      "sub-01_dir-AP_run-2"
+    ]
+  },
+  "fmap_application_groups": {
+    "fmapA": [
+      "sub-01_dir-AP_run-1"
+    ],
+    "fmapB": [
+      "sub-01_dir-AP_run-2"
+    ]
+  },
+  "concatenation_groups": {
+    "sub-01_dir-AP_run-1": [
+      "sub-01_dir-AP_run-1"
+    ],
+    "sub-01_dir-AP_run-2": [
+      "sub-01_dir-AP_run-2"
+    ]
+  },
+  "fieldmap_infos": {
+    "sub-01_dir-AP_run-1": {
+      "suffix": "rpe_series",
+      "rpe_series": [
+        "sub-01/dwi/sub-01_dir-AP_run-2_dwi.nii.gz"
+      ],
+      "epi": [
+        "sub-01/fmap/sub-01_acq-A_dir-PA_epi.nii.gz"
+      ]
+    },
+    "sub-01_dir-AP_run-2": {
+      "suffix": "rpe_series",
+      "rpe_series": [
+        "sub-01/dwi/sub-01_dir-AP_run-1_dwi.nii.gz"
+      ],
+      "epi": [
+        "sub-01/fmap/sub-01_acq-B_dir-PA_epi.nii.gz"
+      ]
+    }
+  }
+}

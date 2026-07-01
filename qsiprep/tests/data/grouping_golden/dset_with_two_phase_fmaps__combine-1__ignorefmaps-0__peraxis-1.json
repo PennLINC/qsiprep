@@ -1,0 +1,33 @@
+{
+  "distortion_groups": {
+    "sub-01": [
+      "sub-01/dwi/sub-01_dwi.nii.gz"
+    ]
+  },
+  "fmap_estimation_groups": {
+    "auto_00000": [
+      "sub-01/fmap/sub-01_phase1.nii.gz",
+      "sub-01/fmap/sub-01_phase2.nii.gz",
+      "sub-01"
+    ]
+  },
+  "fmap_application_groups": {
+    "auto_00000": [
+      "sub-01"
+    ]
+  },
+  "concatenation_groups": {
+    "sub-01": [
+      "sub-01"
+    ]
+  },
+  "fieldmap_infos": {
+    "sub-01": {
+      "suffix": "phase1",
+      "phase1": "sub-01/fmap/sub-01_phase1.nii.gz",
+      "phase2": "sub-01/fmap/sub-01_phase2.nii.gz",
+      "magnitude1": "sub-01/fmap/sub-01_magnitude1.nii.gz",
+      "magnitude2": "sub-01/fmap/sub-01_magnitude2.nii.gz"
+    }
+  }
+}

@@ -1,0 +1,4 @@
+{
+  "__error__": "ValueError",
+  "__match__": "Field-map estimation group 'conflict_b0' contains distortion groups with conflicting ShimSetting and/or TotalReadoutTime"
+}

@@ -1,0 +1,28 @@
+{
+  "distortion_groups": {
+    "sub-01_dir-AA": [
+      "sub-01/dwi/sub-01_dir-AA_dwi.nii.gz"
+    ],
+    "sub-01_dir-ZZ": [
+      "sub-01/dwi/sub-01_dir-ZZ_dwi.nii.gz"
+    ]
+  },
+  "fmap_estimation_groups": null,
+  "fmap_application_groups": null,
+  "concatenation_groups": {
+    "sub-01_dir-AA": [
+      "sub-01_dir-AA"
+    ],
+    "sub-01_dir-ZZ": [
+      "sub-01_dir-ZZ"
+    ]
+  },
+  "fieldmap_infos": {
+    "sub-01_dir-AA": {
+      "suffix": null
+    },
+    "sub-01_dir-ZZ": {
+      "suffix": null
+    }
+  }
+}
