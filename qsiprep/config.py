@@ -616,6 +616,9 @@ class workflow(_Config):
     use_syn_sdc = None
     """Run *fieldmap-less* susceptibility-derived distortions estimation
     in the absence of any alternatives."""
+    syn_method = None
+    """Which method to use for synthetic distortion correction. Must be
+    synb0 or legacy."""
 
 
 class loggers:
