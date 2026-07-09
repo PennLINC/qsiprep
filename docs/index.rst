@@ -17,6 +17,7 @@ Contents
    quickstart
    usage
    preprocessing
+   grouping
    reconstruction
    contributors
    changes
