@@ -115,18 +115,168 @@ class MRTrixIngress(SimpleInterface):
 
 class DWIDenoiseInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
     in_file = File(exists=True, argstr='%s', position=-2, mandatory=True, desc='input DWI image')
-    mask = File(exists=True, argstr='-mask %s', position=1, desc='mask image')
-    extent = traits.Tuple(
-        (traits.Int, traits.Int, traits.Int),
-        argstr='-extent %d,%d,%d',
-        desc='set the window size of the denoising filter. (default = 5,5,5)',
+    mask = File(exists=True, desc='mask image used only to define the visual report contour')
+    onepass = traits.Bool(argstr='-onepass', desc='estimate noise and denoise in one pass')
+    datatype = traits.Enum(
+        'float32',
+        'float64',
+        argstr='-datatype %s',
+        desc='eigendecomposition datatype',
+    )
+    decomposition = traits.Enum(
+        'bdcsvd',
+        'selfadjoint',
+        argstr='-decomposition %s',
+        desc='patch decomposition method',
+    )
+    estimator = traits.Enum(
+        'Exp1',
+        'Exp2',
+        'Med',
+        'MRM2023',
+        argstr='-estimator %s',
+        desc='noise level estimator',
+    )
+    noise_in = traits.Either(
+        traits.Float,
+        File(exists=True),
+        argstr='-noise_in %s',
+        xor=('fixed_rank',),
+        desc='scalar noise level or pre-estimated noise map',
+    )
+    fixed_rank = traits.Int(
+        argstr='-fixed_rank %d', xor=('noise_in',), desc='fixed input signal rank'
+    )
+    shape = traits.Enum(
+        'cuboid',
+        'sphere',
+        argstr='-shape %s',
+        desc='sliding spatial window shape',
+    )
+    radius = traits.Float(argstr='-radius %g', desc='absolute spherical kernel radius in mm')
+    aspect_ratio = traits.Float(
+        argstr='-aspect_ratio %g',
+        desc='ratio of kernel voxels to input volumes',
+    )
+    minvoxels = traits.Int(argstr='-minvoxels %d', desc='minimum voxels in a spherical kernel')
+    extent = traits.Either(
+        traits.Int,
+        traits.Tuple(traits.Int, traits.Int, traits.Int),
+        argstr='-extent %s',
+        desc='cuboid window size as one integer or a triplet',
+    )
+    subsample = traits.Either(
+        traits.Int,
+        traits.Tuple(traits.Int, traits.Int, traits.Int),
+        argstr='-subsample %s',
+        desc='PCA kernel subsampling factor as one integer or a triplet',
+    )
+    demodulate = traits.Enum(
+        'none',
+        'linear',
+        'nonlinear',
+        argstr='-demodulate %s',
+        desc='phase demodulation mode',
+    )
+    demod_axes = traits.Str(
+        argstr='-demod_axes %s',
+        desc='comma-separated FFT axes for phase demodulation',
+    )
+    demean = traits.Enum(
+        'none',
+        'volume_groups',
+        'shells',
+        'all',
+        argstr='-demean %s',
+        desc='demeaning method before PCA',
+    )
+    vst = File(
+        exists=True,
+        argstr='-vst %s',
+        desc='noise map for variance-stabilising transformation',
+    )
+    preconditioned_input = File(
+        argstr='-preconditioned_input %s',
+        desc='export preconditioned PCA input',
+    )
+    preconditioned_output = File(
+        argstr='-preconditioned_output %s',
+        desc='export output before reversing preconditioning',
+    )
+    filter_method = traits.Enum(
+        'optshrink',
+        'optthresh',
+        'truncate',
+        argstr='-filter %s',
+        desc='eigenvalue filtering method',
+    )
+    aggregator = traits.Enum(
+        'exclusive',
+        'gaussian',
+        'invl0',
+        'rank',
+        'uniform',
+        argstr='-aggregator %s',
+        desc='overlapping-patch aggregation method',
     )
     noise_image = File(
-        argstr='-noise %s',
+        argstr='-noise_out %s',
         name_template='%s_noise.nii.gz',
         name_source=['in_file'],
         keep_extension=False,
         desc='the output noise map',
+    )
+    lamplus = File(argstr='-lamplus %s', desc='estimated upper noise eigenspectrum bound')
+    rank_pcanonzero = File(argstr='-rank_pcanonzero %s', desc='non-zero PCA rank before denoising')
+    rank_input = File(argstr='-rank_input %s', desc='estimated input rank per denoising patch')
+    rank_output = File(
+        argstr='-rank_output %s',
+        desc='estimated output rank after patch aggregation',
+    )
+    variance_removed = File(
+        argstr='-variance_removed %s',
+        desc='fraction of variance removed by PCA',
+    )
+    eigenspectra = File(
+        argstr='-eigenspectra %s',
+        desc='matrix of eigenvalue spectra across patches',
+    )
+    residual_statistics = traits.Tuple(
+        File(),
+        File(),
+        File(),
+        argstr='-residual_statistics %s %s %s',
+        desc='residual mean, variance, and maximum-absolute-value images',
+    )
+    max_dist = File(argstr='-max_dist %s', desc='maximum within-patch voxel distance')
+    voxelcount = File(argstr='-voxelcount %s', desc='voxels contributing to each PCA')
+    patchcount = File(argstr='-patchcount %s', desc='unique patches containing each voxel')
+    sum_aggregation = File(
+        argstr='-sum_aggregation %s',
+        desc='sum of aggregation weights per voxel',
+    )
+    sum_optshrink = File(
+        argstr='-sum_optshrink %s',
+        desc='sum of optimal-shrinkage weights per patch',
+    )
+    grad_file = File(
+        exists=True,
+        argstr='-grad %s',
+        xor=('bvec_file', 'bval_file'),
+        desc='MRtrix-format diffusion gradient scheme',
+    )
+    bvec_file = File(
+        exists=True,
+        argstr='-fslgrad %s %s',
+        requires=('bval_file',),
+        xor=('grad_file',),
+        desc='FSL-format diffusion gradient b-vector file',
+    )
+    bval_file = File(
+        exists=True,
+        requires=('bvec_file',),
+        xor=('grad_file',),
+        desc='FSL-format diffusion gradient b-value file',
     )
     out_file = File(
         name_template='%s_denoised.nii.gz',
@@ -137,13 +287,31 @@ class DWIDenoiseInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
         desc='the output denoised DWI image',
     )
     out_report = File(
-        'dwidenoise_report.svg', usedefault=True, desc='filename for the visual report'
+        'dwidenoise_report.svg',
+        usedefault=True,
+        desc='filename for the visual report',
     )
 
 
 class DWIDenoiseOutputSpec(SeriesPreprocReportOutputSpec):
     noise_image = File(desc='the output noise map', exists=True)
     out_file = File(desc='the output denoised DWI image', exists=True)
+    preconditioned_input = File(exists=True, desc='preconditioned PCA input')
+    preconditioned_output = File(exists=True, desc='output before reversal of preconditioning')
+    lamplus = File(exists=True, desc='estimated upper noise eigenspectrum bound')
+    rank_pcanonzero = File(exists=True, desc='non-zero PCA rank before denoising')
+    rank_input = File(exists=True, desc='estimated input rank per denoising patch')
+    rank_output = File(exists=True, desc='estimated output rank after patch aggregation')
+    variance_removed = File(exists=True, desc='fraction of variance removed by PCA')
+    eigenspectra = File(exists=True, desc='matrix of eigenvalue spectra across patches')
+    residual_statistics = traits.Tuple(
+        File(exists=True), File(exists=True), File(exists=True), desc='residual statistic images'
+    )
+    max_dist = File(exists=True, desc='maximum within-patch voxel distance')
+    voxelcount = File(exists=True, desc='voxels contributing to each PCA')
+    patchcount = File(exists=True, desc='unique patches containing each voxel')
+    sum_aggregation = File(exists=True, desc='sum of aggregation weights per voxel')
+    sum_optshrink = File(exists=True, desc='sum of optimal-shrinkage weights per patch')
 
 
 class DWIDenoise(SeriesPreprocReport, MRTrix3Base):
@@ -167,9 +335,16 @@ class DWIDenoise(SeriesPreprocReport, MRTrix3Base):
 
     """
 
-    _cmd = 'dwidenoise'
+    _cmd = 'dwidenoise2'
     input_spec = DWIDenoiseInputSpec
     output_spec = DWIDenoiseOutputSpec
+
+    def _format_arg(self, name, spec, value):
+        if name in ('extent', 'subsample') and not isinstance(value, int):
+            value = ','.join(str(item) for item in value)
+        elif name == 'bvec_file':
+            value = (value, self.inputs.bval_file)
+        return super()._format_arg(name, spec, value)
 
     def _get_plotting_images(self):
         input_dwi = load_img(self.inputs.in_file)
