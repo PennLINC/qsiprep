@@ -55,7 +55,7 @@ def test_parse_denoise_method_parameters():
         'onepass:true;radius:2.5;subsample:2,2,2'
     )
 
-    assert method == 'dwidenoise'
+    assert method == 'dwidenoise2'
     assert parameters == {
         'demodulate': 'nonlinear',
         'decomposition': 'bdcsvd',
@@ -70,12 +70,13 @@ def test_parse_denoise_method_parameters():
     [
         'unknown',
         'patch2self;decomposition:bdcsvd',
-        'dwidenoise;decomposition',
-        'dwidenoise;unknown:value',
-        'dwidenoise;decomposition:bdcsvd;decomposition:selfadjoint',
-        'dwidenoise;decomposition:invalid',
-        'dwidenoise;onepass:maybe',
-        'dwidenoise;extent:1,2',
+        'dwidenoise;decomposition:bdcsvd',
+        'dwidenoise2;decomposition',
+        'dwidenoise2;unknown:value',
+        'dwidenoise2;decomposition:bdcsvd;decomposition:selfadjoint',
+        'dwidenoise2;decomposition:invalid',
+        'dwidenoise2;onepass:maybe',
+        'dwidenoise2;extent:1,2',
     ],
 )
 def test_parse_denoise_method_rejects_invalid_specs(spec):
@@ -84,7 +85,7 @@ def test_parse_denoise_method_rejects_invalid_specs(spec):
 
 
 def test_denoise_method_cli_parameter(tmp_path):
-    spec = 'dwidenoise;demodulate:nonlinear;decomposition:bdcsvd'
+    spec = 'dwidenoise2;demodulate:nonlinear;decomposition:bdcsvd'
     opts = _build_parser().parse_args(
         [
             str(tmp_path),

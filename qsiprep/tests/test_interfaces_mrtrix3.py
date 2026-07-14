@@ -40,7 +40,7 @@ def test_dwidenoise(datasets, tmp_path_factory):
 
 def test_dwidenoise2(datasets, tmp_path_factory):
     """Test qsiprep.interfaces.mrtrix.DWIDenoise2."""
-    tmpdir = tmp_path_factory.mktemp('test_dwidenoise')
+    tmpdir = tmp_path_factory.mktemp('test_dwidenoise2')
 
     in_dir = datasets['forrest_gump']
     in_file = os.path.join(in_dir, 'sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_dwi.nii.gz')
