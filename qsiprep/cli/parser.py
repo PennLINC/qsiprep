@@ -406,13 +406,13 @@ def _build_parser(**kwargs):
         type=DenoiseMethod,
         default='dwidenoise',
         help=(
-            'Image-based denoising method: "dwidenoise" (MRtrix), "patch2self" (DIPY), '
-            'or "none".\n'
-            'dwidenoise parameters may follow the method as semicolon-delimited '
+            'Image-based denoising method: "dwidenoise" (MRtrix), "dwidenoise2", '
+            '"patch2self" (DIPY), or "none".\n'
+            'dwidenoise2 parameters may follow the method as semicolon-delimited '
             'name:value pairs, for example '
-            '"dwidenoise;demodulate:nonlinear;decomposition:bdcsvd".\n'
-            'To approximate legacy "dwidenoise", use '
-            '"dwidenoise;shape:cuboid;subsample:1;demodulate:none;demean:none;'
+            '"dwidenoise2;demodulate:nonlinear;decomposition:bdcsvd".\n'
+            'To approximate legacy "dwidenoise" with "dwidenoise2", use '
+            '"dwidenoise2;shape:cuboid;subsample:1;demodulate:none;demean:none;'
             'filter_method:truncate;aggregator:exclusive".'
         ),
     )
@@ -452,7 +452,7 @@ def _build_parser(**kwargs):
     g_conf.add_argument(
         '--denoise-after-combining',
         action='store_true',
-        help='run ``dwidenoise`` after combining dwis, but before motion correction',
+        help='run denoising after combining dwis, but before motion correction',
     )
     g_conf.add_argument(
         '--separate-all-dwis',

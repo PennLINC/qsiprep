@@ -59,15 +59,15 @@ _DWIDENOISE_PARAMETERS = (
 def parse_denoise_method(spec):
     """Parse a denoising method and semicolon-delimited parameters.
 
-    Parameters use ``name:value`` syntax, for example
-    ``dwidenoise;demodulate:nonlinear;decomposition:bdcsvd``.
+    Parameters for dwidenoise2 use ``name:value`` syntax, for example
+    ``dwidenoise2;demodulate:nonlinear;decomposition:bdcsvd``.
     """
     elements = spec.split(';')
     method = elements[0].strip()
-    if method not in ('dwidenoise', 'patch2self', 'none'):
+    if method not in ('dwidenoise', 'dwidenoise2', 'patch2self', 'none'):
         raise ValueError(f'Unknown denoising method: {method!r}')
-    if len(elements) > 1 and method != 'dwidenoise':
-        raise ValueError(f'{method!r} does not accept DWIDenoise parameters')
+    if len(elements) > 1 and method != 'dwidenoise2':
+        raise ValueError(f'{method!r} does not accept DWIDenoise2 parameters')
 
     parameters = {}
     for element in elements[1:]:
@@ -75,11 +75,11 @@ def parse_denoise_method(spec):
         name = name.strip()
         value = value.strip()
         if not separator or not name or not value:
-            raise ValueError(f'Invalid DWIDenoise parameter: {element!r}')
+            raise ValueError(f'Invalid DWIDenoise2 parameter: {element!r}')
         if name not in _DWIDENOISE_PARAMETERS:
-            raise ValueError(f'Unknown DWIDenoise parameter: {name!r}')
+            raise ValueError(f'Unknown DWIDenoise2 parameter: {name!r}')
         if name in parameters:
-            raise ValueError(f'Duplicate DWIDenoise parameter: {name!r}')
+            raise ValueError(f'Duplicate DWIDenoise2 parameter: {name!r}')
 
         if name in _DWIDENOISE_ENUM_PARAMETERS:
             choices = _DWIDENOISE_ENUM_PARAMETERS[name]

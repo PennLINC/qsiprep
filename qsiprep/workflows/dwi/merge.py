@@ -25,6 +25,7 @@ from ...interfaces.mrtrix import (
     ComplexToMagnitude,
     DWIBiasCorrect,
     DWIDenoise,
+    DWIDenoise2,
     MRDeGibbs,
     PolarToComplex,
 )
@@ -446,7 +447,7 @@ def init_dwi_denoising_wf(
 
         dwi_denoise_window = config.workflow.dwi_denoise_window
         auto_str = ''
-        if denoise_method == 'dwidenoise' and dwi_denoise_window == 'auto':
+        if (denoise_method == 'dwidenoise') and dwi_denoise_window == 'auto':
             # Configure the denoising window
             import numpy as np
 
@@ -458,7 +459,7 @@ def init_dwi_denoising_wf(
             )
             auto_str = 'n automatically-determined'
 
-        if (denoise_method == 'dwidenoise') and use_phase:
+        if denoise_method.startswith('dwidenoise') and use_phase:
             desc += (
                 'Magnitude and phase DWI data were combined into a complex-valued file, '
                 'then denoised using the Marchenko-Pastur PCA method implemented in dwidenoise '
@@ -488,13 +489,20 @@ def init_dwi_denoising_wf(
                 (phase_to_radians, combine_complex, [('phase_file', 'phase_file')]),
             ])  # fmt:skip
 
-            dwidenoise_inputs = {'shape': 'sphere', 'nthreads': omp_nthreads}
-            dwidenoise_inputs.update(dwidenoise_params)
-            denoiser = pe.Node(
-                DWIDenoise(**dwidenoise_inputs),
-                name='denoiser',
-                n_procs=omp_nthreads,
-            )
+            if denoise_method == 'dwidenoise2':
+                dwidenoise_inputs = {'shape': 'sphere', 'nthreads': omp_nthreads}
+                dwidenoise_inputs.update(dwidenoise_params)
+                denoiser = pe.Node(
+                    DWIDenoise2(**dwidenoise_inputs),
+                    name='denoiser',
+                    n_procs=omp_nthreads,
+                )
+            else:
+                denoiser = pe.Node(
+                    DWIDenoise(extent=dwi_denoise_window),
+                    name='denoiser',
+                    n_procs=omp_nthreads,
+                )
 
             workflow.connect([
                 (combine_complex, denoiser, [('out_file', 'in_file')]),
@@ -507,40 +515,46 @@ def init_dwi_denoising_wf(
                 name='split_complex',
                 n_procs=omp_nthreads,
             )
-
             workflow.connect([
                 (denoiser, split_complex, [('out_file', 'complex_file')]),
                 (split_complex, buffernodes[-1], [('out_file', 'dwi_file')]),
             ])  # fmt:skip
 
-        elif denoise_method == 'dwidenoise':
+        elif denoise_method.startswith('dwidenoise2'):
             desc += (
                 'DWI data were '
-                'denoised using the Marchenko-Pastur PCA method implemented in dwidenoise '
+                'denoised using the Marchenko-Pastur PCA method implemented in dwidenoise2 '
                 '[@mrtrix3; @dwidenoise1; @dwidenoise2; @cordero2019complex] '
                 f'with a{auto_str} window size of {dwi_denoise_window} voxels. '
             )
             last_step = 'After MP-PCA, '
 
-            dwidenoise_inputs = {
-                'shape': 'cuboid',
-                'extent': (dwi_denoise_window, dwi_denoise_window, dwi_denoise_window),
-                # Fixed odd extents are incompatible with the changing subsampling parity of
-                # iterative mode, so reproduce legacy fixed-window behavior in one pass.
-                'onepass': True,
-                'subsample': 1,
-                'nthreads': omp_nthreads,
-            }
-            if dwidenoise_params.get('shape') == 'sphere':
-                for parameter in ('extent', 'onepass', 'subsample'):
-                    if parameter not in dwidenoise_params:
-                        dwidenoise_inputs.pop(parameter)
-            dwidenoise_inputs.update(dwidenoise_params)
-            denoiser = pe.Node(
-                DWIDenoise(**dwidenoise_inputs),
-                name='denoiser',
-                n_procs=omp_nthreads,
-            )
+            if denoise_method == 'dwidenoise2':
+                dwidenoise_inputs = {
+                    'shape': 'cuboid',
+                    'extent': (dwi_denoise_window, dwi_denoise_window, dwi_denoise_window),
+                    # Fixed odd extents are incompatible with the changing subsampling parity of
+                    # iterative mode, so reproduce legacy fixed-window behavior in one pass.
+                    'onepass': True,
+                    'subsample': 1,
+                    'nthreads': omp_nthreads,
+                }
+                if dwidenoise_params.get('shape') == 'sphere':
+                    for parameter in ('extent', 'onepass', 'subsample'):
+                        if parameter not in dwidenoise_params:
+                            dwidenoise_inputs.pop(parameter)
+                dwidenoise_inputs.update(dwidenoise_params)
+                denoiser = pe.Node(
+                    DWIDenoise2(**dwidenoise_inputs),
+                    name='denoiser',
+                    n_procs=omp_nthreads,
+                )
+            else:
+                denoiser = pe.Node(
+                    DWIDenoise(extent=dwi_denoise_window),
+                    name='denoiser',
+                    n_procs=omp_nthreads,
+                )
         else:
             desc += (
                 "DWI data were denoised using DiPy's Patch2Self algorithm [@dipy; @patch2self] "
@@ -553,10 +567,13 @@ def init_dwi_denoising_wf(
                 n_procs=omp_nthreads,
             )
 
-        if denoise_method in ('dwidenoise', 'patch2self'):
+        if denoise_method in ('dwidenoise2', 'patch2self'):
             workflow.connect([(inputnode, denoiser, [('bval_file', 'bval_file')])])
 
-        if (denoise_method in ('dwidenoise', 'patch2self')) and not use_phase:
+        if denoise_method == 'dwidenoise2':
+            workflow.connect([(inputnode, denoiser, [('bvec_file', 'bvec_file')])])
+
+        if (denoise_method != 'none') and not use_phase:
             workflow.connect([
                 (buffernodes[-2], denoiser, [('dwi_file', 'in_file')]),
                 (denoiser, ds_report_denoising, [('out_report', 'in_file')]),

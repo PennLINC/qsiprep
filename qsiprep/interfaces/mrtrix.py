@@ -115,6 +115,74 @@ class MRTrixIngress(SimpleInterface):
 
 class DWIDenoiseInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
     in_file = File(exists=True, argstr='%s', position=-2, mandatory=True, desc='input DWI image')
+    mask = File(exists=True, argstr='-mask %s', position=1, desc='mask image')
+    extent = traits.Tuple(
+        (traits.Int, traits.Int, traits.Int),
+        argstr='-extent %d,%d,%d',
+        desc='set the window size of the denoising filter. (default = 5,5,5)',
+    )
+    noise_image = File(
+        argstr='-noise %s',
+        name_template='%s_noise.nii.gz',
+        name_source=['in_file'],
+        keep_extension=False,
+        desc='the output noise map',
+    )
+    out_file = File(
+        name_template='%s_denoised.nii.gz',
+        name_source=['in_file'],
+        keep_extension=False,
+        argstr='%s',
+        position=-1,
+        desc='the output denoised DWI image',
+    )
+    out_report = File(
+        'dwidenoise_report.svg', usedefault=True, desc='filename for the visual report'
+    )
+
+
+class DWIDenoiseOutputSpec(SeriesPreprocReportOutputSpec):
+    noise_image = File(desc='the output noise map', exists=True)
+    out_file = File(desc='the output denoised DWI image', exists=True)
+
+
+class DWIDenoise(SeriesPreprocReport, MRTrix3Base):
+    """
+    Denoise DWI data and estimate the noise level based on the optimal
+    threshold for PCA.
+
+    DWI data denoising and noise map estimation by exploiting data redundancy
+    in the PCA domain using the prior knowledge that the eigenspectrum of
+    random covariance matrices is described by the universal Marchenko Pastur
+    distribution.
+
+    Important note: image denoising must be performed as the first step of the
+    image processing pipeline. The routine will fail if interpolation or
+    smoothing has been applied to the data prior to denoising.
+
+    Note that this function does not correct for non-Gaussian noise biases.
+
+    For more information, see
+    <https://mrtrix.readthedocs.io/en/latest/reference/commands/dwidenoise.html>
+
+    """
+
+    _cmd = 'dwidenoise'
+    input_spec = DWIDenoiseInputSpec
+    output_spec = DWIDenoiseOutputSpec
+
+    def _get_plotting_images(self):
+        input_dwi = load_img(self.inputs.in_file)
+        outputs = self._list_outputs()
+        ref_name = outputs.get('out_file')
+        denoised_nii = load_img(ref_name)
+        noise_name = outputs['noise_image']
+        noisenii = load_img(noise_name)
+        return input_dwi, denoised_nii, noisenii
+
+
+class DWIDenoise2InputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
+    in_file = File(exists=True, argstr='%s', position=-2, mandatory=True, desc='input DWI image')
     mask = File(exists=True, desc='mask image used only to define the visual report contour')
     onepass = traits.Bool(argstr='-onepass', desc='estimate noise and denoise in one pass')
     datatype = traits.Enum(
@@ -298,7 +366,7 @@ class DWIDenoiseInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
     )
 
 
-class DWIDenoiseOutputSpec(SeriesPreprocReportOutputSpec):
+class DWIDenoise2OutputSpec(SeriesPreprocReportOutputSpec):
     noise_image = File(desc='the output noise map', exists=True)
     out_file = File(desc='the output denoised DWI image', exists=True)
     preconditioned_input = File(exists=True, desc='preconditioned PCA input')
@@ -319,7 +387,7 @@ class DWIDenoiseOutputSpec(SeriesPreprocReportOutputSpec):
     sum_optshrink = File(exists=True, desc='sum of optimal-shrinkage weights per patch')
 
 
-class DWIDenoise(SeriesPreprocReport, MRTrix3Base):
+class DWIDenoise2(SeriesPreprocReport, MRTrix3Base):
     """
     Denoise DWI data and estimate the noise level based on the optimal
     threshold for PCA.
@@ -341,8 +409,8 @@ class DWIDenoise(SeriesPreprocReport, MRTrix3Base):
     """
 
     _cmd = 'dwidenoise2'
-    input_spec = DWIDenoiseInputSpec
-    output_spec = DWIDenoiseOutputSpec
+    input_spec = DWIDenoise2InputSpec
+    output_spec = DWIDenoise2OutputSpec
 
     def _format_arg(self, name, spec, value):
         if name in ('extent', 'subsample') and not isinstance(value, int):
