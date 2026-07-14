@@ -405,10 +405,16 @@ def _build_parser(**kwargs):
         action='store',
         type=DenoiseMethod,
         default='dwidenoise',
-        help='Image-based denoising method: "dwidenoise" (MRtrix), "patch2self" (DIPY), '
-        'or "none". DWIDenoise parameters may follow the method as semicolon-delimited '
-        'name:value pairs, for example '
-        '"dwidenoise;demodulate:nonlinear;decomposition:bdcsvd".',
+        help=(
+            'Image-based denoising method: "dwidenoise" (MRtrix), "patch2self" (DIPY), '
+            'or "none".\n'
+            'dwidenoise parameters may follow the method as semicolon-delimited '
+            'name:value pairs, for example '
+            '"dwidenoise;demodulate:nonlinear;decomposition:bdcsvd".\n'
+            'To approximate legacy "dwidenoise", use '
+            '"dwidenoise;shape:cuboid;subsample:1;demodulate:none;demean:none;'
+            'filter_method:truncate;aggregator:exclusive".'
+        ),
     )
     g_conf.add_argument(
         '--unringing-method',

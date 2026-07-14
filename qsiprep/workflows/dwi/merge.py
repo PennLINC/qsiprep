@@ -525,10 +525,16 @@ def init_dwi_denoising_wf(
             dwidenoise_inputs = {
                 'shape': 'cuboid',
                 'extent': (dwi_denoise_window, dwi_denoise_window, dwi_denoise_window),
+                # Fixed odd extents are incompatible with the changing subsampling parity of
+                # iterative mode, so reproduce legacy fixed-window behavior in one pass.
+                'onepass': True,
+                'subsample': 1,
                 'nthreads': omp_nthreads,
             }
-            if dwidenoise_params.get('shape') == 'sphere' and 'extent' not in dwidenoise_params:
-                dwidenoise_inputs.pop('extent')
+            if dwidenoise_params.get('shape') == 'sphere':
+                for parameter in ('extent', 'onepass', 'subsample'):
+                    if parameter not in dwidenoise_params:
+                        dwidenoise_inputs.pop(parameter)
             dwidenoise_inputs.update(dwidenoise_params)
             denoiser = pe.Node(
                 DWIDenoise(**dwidenoise_inputs),

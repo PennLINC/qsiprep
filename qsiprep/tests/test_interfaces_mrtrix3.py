@@ -21,6 +21,8 @@ def test_dwidenoise(datasets, tmp_path_factory):
     interface = mrtrix.DWIDenoise(
         shape='cuboid',
         extent=(5, 5, 5),
+        onepass=True,
+        subsample=1,
         in_file=in_file,
         nthreads=1,
     )
@@ -94,3 +96,5 @@ def test_dwidenoise_cli_parameters_reach_workflow(monkeypatch):
 
     assert denoiser.inputs.demodulate == 'nonlinear'
     assert denoiser.inputs.decomposition == 'bdcsvd'
+    assert denoiser.inputs.onepass is True
+    assert denoiser.inputs.subsample == 1
