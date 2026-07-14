@@ -3,8 +3,10 @@
 import logging
 
 import numpy as np
+import pytest
 
-from qsiprep.utils.misc import safe_unit_vector
+from qsiprep.cli.parser import _build_parser
+from qsiprep.utils.misc import parse_denoise_method, safe_unit_vector
 
 
 def test_safe_unit_vector_zero_magnitude_substitutes_x_axis():
@@ -45,3 +47,70 @@ def test_angle_between_finite_for_zero_vector():
 
     angle = angle_between(np.array([0.0, 0.0, 0.0]), np.array([1.0, 0.0, 0.0]))
     assert np.isfinite(angle)
+
+
+def test_parse_denoise_method_parameters():
+    method, parameters = parse_denoise_method(
+        'dwidenoise2;demodulate:nonlinear;decomposition:bdcsvd;'
+        'onepass:true;radius:2.5;subsample:2,2,2'
+    )
+
+    assert method == 'dwidenoise2'
+    assert parameters == {
+        'demodulate': 'nonlinear',
+        'decomposition': 'bdcsvd',
+        'onepass': True,
+        'radius': 2.5,
+        'subsample': (2, 2, 2),
+    }
+
+
+@pytest.mark.parametrize(
+    'spec',
+    [
+        'unknown',
+        'patch2self;decomposition:bdcsvd',
+        'dwidenoise;decomposition:bdcsvd',
+        'dwidenoise2;decomposition',
+        'dwidenoise2;unknown:value',
+        'dwidenoise2;decomposition:bdcsvd;decomposition:selfadjoint',
+        'dwidenoise2;decomposition:invalid',
+        'dwidenoise2;onepass:maybe',
+        'dwidenoise2;extent:1,2',
+    ],
+)
+def test_parse_denoise_method_rejects_invalid_specs(spec):
+    with pytest.raises(ValueError, match='.'):
+        parse_denoise_method(spec)
+
+
+def test_denoise_method_cli_parameter(tmp_path):
+    spec = 'dwidenoise2;demodulate:nonlinear;decomposition:bdcsvd'
+    opts = _build_parser().parse_args(
+        [
+            str(tmp_path),
+            str(tmp_path / 'out'),
+            'participant',
+            '--output-resolution',
+            '2',
+            '--denoise-method',
+            spec,
+        ]
+    )
+
+    assert opts.denoise_method == spec
+
+
+def test_denoise_method_cli_rejects_invalid_parameter(tmp_path):
+    with pytest.raises(SystemExit):
+        _build_parser().parse_args(
+            [
+                str(tmp_path),
+                str(tmp_path / 'out'),
+                'participant',
+                '--output-resolution',
+                '2',
+                '--denoise-method',
+                'dwidenoise;decomposition:invalid',
+            ]
+        )

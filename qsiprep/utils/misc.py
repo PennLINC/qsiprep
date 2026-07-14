@@ -8,6 +8,115 @@ import numpy as np
 
 LOGGER = logging.getLogger('nipype.interface')
 
+_DWIDENOISE_ENUM_PARAMETERS = {
+    'datatype': ('float32', 'float64'),
+    'decomposition': ('bdcsvd', 'selfadjoint'),
+    'estimator': ('Exp1', 'Exp2', 'Med', 'MRM2023'),
+    'shape': ('sphere', 'cuboid'),
+    'demodulate': ('none', 'linear', 'nonlinear'),
+    'demean': ('none', 'volume_groups', 'shells', 'all'),
+    'filter_method': ('optshrink', 'optthresh', 'truncate'),
+    'aggregator': ('exclusive', 'gaussian', 'invl0', 'rank', 'uniform'),
+}
+_DWIDENOISE_STRING_PARAMETERS = {
+    'demod_axes',
+    'vst',
+    'preconditioned_input',
+    'preconditioned_output',
+    'noise_image',
+    'lamplus',
+    'rank_pcanonzero',
+    'rank_input',
+    'rank_output',
+    'variance_removed',
+    'eigenspectra',
+    'max_dist',
+    'voxelcount',
+    'patchcount',
+    'sum_aggregation',
+    'sum_optshrink',
+    'grad_file',
+    'bvec_file',
+    'bval_file',
+}
+_DWIDENOISE_PARAMETERS = (
+    set(_DWIDENOISE_ENUM_PARAMETERS)
+    | _DWIDENOISE_STRING_PARAMETERS
+    | {
+        'onepass',
+        'noise_in',
+        'fixed_rank',
+        'radius',
+        'aspect_ratio',
+        'minvoxels',
+        'extent',
+        'subsample',
+        'residual_statistics',
+    }
+)
+
+
+def parse_denoise_method(spec):
+    """Parse a denoising method and semicolon-delimited parameters.
+
+    Parameters for dwidenoise2 use ``name:value`` syntax, for example
+    ``dwidenoise2;demodulate:nonlinear;decomposition:bdcsvd``.
+    """
+    elements = spec.split(';')
+    method = elements[0].strip()
+    if method not in ('dwidenoise', 'dwidenoise2', 'patch2self', 'none'):
+        raise ValueError(f'Unknown denoising method: {method!r}')
+    if len(elements) > 1 and method != 'dwidenoise2':
+        raise ValueError(f'{method!r} does not accept DWIDenoise2 parameters')
+
+    parameters = {}
+    for element in elements[1:]:
+        name, separator, value = element.partition(':')
+        name = name.strip()
+        value = value.strip()
+        if not separator or not name or not value:
+            raise ValueError(f'Invalid DWIDenoise2 parameter: {element!r}')
+        if name not in _DWIDENOISE_PARAMETERS:
+            raise ValueError(f'Unknown DWIDenoise2 parameter: {name!r}')
+        if name in parameters:
+            raise ValueError(f'Duplicate DWIDenoise2 parameter: {name!r}')
+
+        if name in _DWIDENOISE_ENUM_PARAMETERS:
+            choices = _DWIDENOISE_ENUM_PARAMETERS[name]
+            if value not in choices:
+                raise ValueError(f'Invalid value for {name!r}: {value!r}; choose from {choices}')
+            parsed_value = value
+        elif name == 'onepass':
+            bool_values = {'true': True, 'false': False, '1': True, '0': False}
+            try:
+                parsed_value = bool_values[value.lower()]
+            except KeyError as exc:
+                raise ValueError(f'Invalid boolean value for {name!r}: {value!r}') from exc
+        elif name in ('fixed_rank', 'minvoxels'):
+            parsed_value = int(value)
+        elif name in ('radius', 'aspect_ratio'):
+            parsed_value = float(value)
+        elif name == 'noise_in':
+            try:
+                parsed_value = float(value)
+            except ValueError:
+                parsed_value = value
+        elif name in ('extent', 'subsample'):
+            values = tuple(int(item.strip()) for item in value.split(','))
+            if len(values) not in (1, 3):
+                raise ValueError(f'{name!r} must contain one or three integers')
+            parsed_value = values[0] if len(values) == 1 else values
+        elif name == 'residual_statistics':
+            parsed_value = tuple(item.strip() for item in value.split(','))
+            if len(parsed_value) != 3 or not all(parsed_value):
+                raise ValueError(f'{name!r} must contain three file names')
+        else:
+            parsed_value = value
+
+        parameters[name] = parsed_value
+
+    return method, parameters
+
 
 def safe_unit_vector(vector):
     """Return the unit vector of ``vector``.

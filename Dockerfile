@@ -1,4 +1,35 @@
 ARG BASE_IMAGE=pennlinc/qsiprep-base:20260415
+ARG DWIDENOISE2_COMMIT=892d5e8dd8f453ce1a561878f7dcb3998ae258ba
+ARG MRTRIX3_DWIDENOISE2_COMMIT=fa6ee952913fbc1df79aeca745600852155f533f
+
+FROM buildpack-deps:bookworm AS dwidenoise2-build
+ARG DWIDENOISE2_COMMIT
+ARG MRTRIX3_DWIDENOISE2_COMMIT
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+                    cmake \
+                    libfftw3-dev \
+                    ninja-build \
+                    pkg-config \
+                    zlib1g-dev && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+WORKDIR /src/dwidenoise2
+RUN git init . && \
+    git remote add origin https://github.com/tsalo/dwidenoise2.git && \
+    git fetch --depth 1 origin ${DWIDENOISE2_COMMIT} && \
+    git checkout --detach FETCH_HEAD
+
+WORKDIR /src/mrtrix3
+RUN git clone --filter=blob:none --no-checkout https://github.com/MRtrix3/mrtrix3.git . && \
+    git checkout --detach ${MRTRIX3_DWIDENOISE2_COMMIT}
+RUN cp /src/dwidenoise2/cpp/cmd/dwidenoise2.cpp cpp/cmd/dwidenoise2.cpp && \
+    cp -r /src/dwidenoise2/cpp/core/denoise cpp/core/denoise && \
+    cmake -B build -GNinja \
+          -DMRTRIX_BUILD_GUI=OFF \
+          -DCMAKE_COMPILE_WARNING_AS_ERROR=ON \
+          --preset=release && \
+    cmake --build build --target dwidenoise2
 
 FROM ghcr.io/prefix-dev/pixi:0.58.0 AS build
 RUN apt-get update && \
@@ -36,6 +67,19 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
 FROM ${BASE_IMAGE} AS base
 WORKDIR /home/qsiprep
 ENV HOME="/home/qsiprep"
+
+COPY --from=dwidenoise2-build \
+     /src/mrtrix3/build/bin/dwidenoise2 \
+     /opt/dwidenoise2/bin/dwidenoise2
+COPY --from=dwidenoise2-build \
+     /src/mrtrix3/build/cpp/core/libmrtrix-core.so \
+     /opt/dwidenoise2/lib/libmrtrix-core.so
+COPY --from=dwidenoise2-build \
+     /src/dwidenoise2/LICENSE \
+     /opt/dwidenoise2/LICENSE
+ENV PATH="/opt/dwidenoise2/bin:$PATH" \
+    LD_LIBRARY_PATH="/opt/dwidenoise2/lib:$LD_LIBRARY_PATH"
+RUN dwidenoise2 -version
 
 RUN chmod -R go=u $HOME
 WORKDIR /tmp
