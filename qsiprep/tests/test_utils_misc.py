@@ -51,7 +51,7 @@ def test_angle_between_finite_for_zero_vector():
 
 def test_parse_denoise_method_parameters():
     method, parameters = parse_denoise_method(
-        'dwidenoise;demodulate:nonlinear;decomposition:bdcsvd;'
+        'dwidenoise2;demodulate:nonlinear;decomposition:bdcsvd;'
         'onepass:true;radius:2.5;subsample:2,2,2'
     )
 

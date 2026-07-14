@@ -419,7 +419,7 @@ def init_dwi_denoising_wf(
     # Which steps to apply?
     denoise_method, dwidenoise_params = parse_denoise_method(config.workflow.denoise_method)
     unringing_method = config.workflow.unringing_method
-    do_denoise = denoise_method in ('patch2self', 'dwidenoise')
+    do_denoise = denoise_method in ('patch2self', 'dwidenoise', 'dwidenoise2')
     do_unringing = config.workflow.unringing_method in ('mrdegibbs', 'rpg')
     harmonize_b0s = not config.workflow.no_b0_harmonization
 
