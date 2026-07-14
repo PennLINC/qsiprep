@@ -148,12 +148,16 @@ class DWIDenoiseInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
         argstr='-fixed_rank %d', xor=('noise_in',), desc='fixed input signal rank'
     )
     shape = traits.Enum(
-        'cuboid',
         'sphere',
+        'cuboid',
         argstr='-shape %s',
         desc='sliding spatial window shape',
     )
-    radius = traits.Float(argstr='-radius %g', desc='absolute spherical kernel radius in mm')
+    radius = traits.Float(
+        argstr='-radius %g',
+        xor=('extent',),
+        desc='absolute spherical kernel radius in mm',
+    )
     aspect_ratio = traits.Float(
         argstr='-aspect_ratio %g',
         desc='ratio of kernel voxels to input volumes',
@@ -163,6 +167,7 @@ class DWIDenoiseInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
         traits.Int,
         traits.Tuple(traits.Int, traits.Int, traits.Int),
         argstr='-extent %s',
+        xor=('radius',),
         desc='cuboid window size as one integer or a triplet',
     )
     subsample = traits.Either(
@@ -345,6 +350,14 @@ class DWIDenoise(SeriesPreprocReport, MRTrix3Base):
         elif name == 'bvec_file':
             value = (value, self.inputs.bval_file)
         return super()._format_arg(name, spec, value)
+
+    def _parse_inputs(self, skip=None):
+        shape = self.inputs.shape if isdefined(self.inputs.shape) else 'sphere'
+        if shape == 'sphere' and isdefined(self.inputs.extent):
+            raise ValueError("'extent' cannot be used when 'shape' is 'sphere'")
+        if shape == 'cuboid' and isdefined(self.inputs.radius):
+            raise ValueError("'radius' cannot be used when 'shape' is 'cuboid'")
+        return super()._parse_inputs(skip=skip)
 
     def _get_plotting_images(self):
         input_dwi = load_img(self.inputs.in_file)

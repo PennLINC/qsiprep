@@ -31,6 +31,7 @@ from ...interfaces.mrtrix import (
 from ...interfaces.nilearn import MaskEPI, Merge
 from ...interfaces.tortoise import Gibbs
 from ...utils.bids import IMPORTANT_DWI_FIELDS, update_metadata_from_nifti_header
+from ...utils.misc import parse_denoise_method
 from .qc import init_modelfree_qc_wf
 from .util import _get_wf_name
 
@@ -415,7 +416,7 @@ def init_dwi_denoising_wf(
     ])  # fmt:skip
 
     # Which steps to apply?
-    denoise_method = config.workflow.denoise_method
+    denoise_method, dwidenoise_params = parse_denoise_method(config.workflow.denoise_method)
     unringing_method = config.workflow.unringing_method
     do_denoise = denoise_method in ('patch2self', 'dwidenoise')
     do_unringing = config.workflow.unringing_method in ('mrdegibbs', 'rpg')
@@ -487,11 +488,10 @@ def init_dwi_denoising_wf(
                 (phase_to_radians, combine_complex, [('phase_file', 'phase_file')]),
             ])  # fmt:skip
 
+            dwidenoise_inputs = {'shape': 'sphere', 'nthreads': omp_nthreads}
+            dwidenoise_inputs.update(dwidenoise_params)
             denoiser = pe.Node(
-                DWIDenoise(
-                    extent=(dwi_denoise_window, dwi_denoise_window, dwi_denoise_window),
-                    nthreads=omp_nthreads,
-                ),
+                DWIDenoise(**dwidenoise_inputs),
                 name='denoiser',
                 n_procs=omp_nthreads,
             )
@@ -522,11 +522,16 @@ def init_dwi_denoising_wf(
             )
             last_step = 'After MP-PCA, '
 
+            dwidenoise_inputs = {
+                'shape': 'cuboid',
+                'extent': (dwi_denoise_window, dwi_denoise_window, dwi_denoise_window),
+                'nthreads': omp_nthreads,
+            }
+            if dwidenoise_params.get('shape') == 'sphere' and 'extent' not in dwidenoise_params:
+                dwidenoise_inputs.pop('extent')
+            dwidenoise_inputs.update(dwidenoise_params)
             denoiser = pe.Node(
-                DWIDenoise(
-                    extent=(dwi_denoise_window, dwi_denoise_window, dwi_denoise_window),
-                    nthreads=omp_nthreads,
-                ),
+                DWIDenoise(**dwidenoise_inputs),
                 name='denoiser',
                 n_procs=omp_nthreads,
             )
@@ -541,6 +546,8 @@ def init_dwi_denoising_wf(
                 name='denoiser',
                 n_procs=omp_nthreads,
             )
+
+        if denoise_method in ('dwidenoise', 'patch2self'):
             workflow.connect([(inputnode, denoiser, [('bval_file', 'bval_file')])])
 
         if (denoise_method in ('dwidenoise', 'patch2self')) and not use_phase:

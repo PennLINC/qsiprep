@@ -27,6 +27,7 @@
 import sys
 
 from .. import config
+from ..utils.misc import parse_denoise_method
 
 
 def _build_parser(**kwargs):
@@ -121,6 +122,13 @@ def _build_parser(**kwargs):
 
         return value
 
+    def _denoise_method(value, parser):
+        try:
+            parse_denoise_method(value)
+        except ValueError as exc:
+            parser.error(f'Invalid --denoise-method specification: {exc}')
+        return value
+
     def _to_gb(value):
         scale = {'G': 1, 'T': 10**3, 'M': 1e-3, 'K': 1e-6, 'B': 1e-9}
         digits = ''.join([c for c in value if c.isdigit()])
@@ -177,6 +185,7 @@ def _build_parser(**kwargs):
     IsFile = partial(_is_file, parser=parser)
     PositiveInt = partial(_min_one, parser=parser)
     IntOrAuto = partial(_int_or_auto, parser=parser)
+    DenoiseMethod = partial(_denoise_method, parser=parser)
     BIDSFilter = partial(_bids_filter, parser=parser)
 
     # Arguments as specified by BIDS-Apps
@@ -394,10 +403,12 @@ def _build_parser(**kwargs):
     g_conf.add_argument(
         '--denoise-method',
         action='store',
-        choices=['dwidenoise', 'patch2self', 'none'],
+        type=DenoiseMethod,
         default='dwidenoise',
-        help='Image-based denoising method. Either "dwidenoise" (MRtrix), '
-        '"patch2self" (DIPY) or "none". (default: dwidenoise)',
+        help='Image-based denoising method: "dwidenoise" (MRtrix), "patch2self" (DIPY), '
+        'or "none". DWIDenoise parameters may follow the method as semicolon-delimited '
+        'name:value pairs, for example '
+        '"dwidenoise;demodulate:nonlinear;decomposition:bdcsvd".',
     )
     g_conf.add_argument(
         '--unringing-method',
@@ -749,12 +760,13 @@ def parse_args(args=None, namespace=None):
         )
 
     # Validate the tricky options here
+    denoise_method, _ = parse_denoise_method(config.workflow.denoise_method)
     if config.workflow.dwi_denoise_window != 'auto':
-        if config.workflow.denoise_method == 'patch2self':
+        if denoise_method == 'patch2self':
             config.loggers.cli.error(
                 'The --dwi-denoise-window option is not used when --denoise-method=patch2self'
             )
-        elif config.workflow.denoise_method == 'none':
+        elif denoise_method == 'none':
             config.loggers.cli.warning(
                 'The --dwi-denoise-window option is not used when --denoise-method=none'
             )

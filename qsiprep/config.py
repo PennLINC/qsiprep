@@ -568,7 +568,8 @@ class workflow(_Config):
     """Run ``dwidenoise`` after combining dwis, but before motion correction."""
     denoise_method = None
     """Image-based denoising method. Either "dwidenoise" (MRtrix), "patch2self" (DIPY)
-    or "none"."""
+    or "none". DWIDenoise parameters may be appended as semicolon-delimited name:value
+    pairs."""
     distortion_group_merge = None
     """How to combine images across distortion groups (concatenate, average or none)."""
     dwi_denoise_window = None
