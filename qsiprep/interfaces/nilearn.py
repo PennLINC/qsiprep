@@ -156,6 +156,58 @@ class Merge(SimpleInterface):
         return runtime
 
 
+class _MaskWithinDWIFieldOfViewInputSpec(BaseInterfaceInputSpec):
+    in_mask = File(exists=True, mandatory=True, desc='candidate brain mask')
+    b0_image = File(exists=True, mandatory=True, desc='mean b0 image used to constrain the mask')
+    b0_threshold = traits.Float(
+        1e-6,
+        usedefault=True,
+        desc='minimum finite mean-b0 value required to keep a mask voxel',
+    )
+
+
+class _MaskWithinDWIFieldOfViewOutputSpec(TraitedSpec):
+    out_mask = File(exists=True, desc='brain mask constrained to valid DWI support')
+
+
+class MaskWithinDWIFieldOfView(SimpleInterface):
+    input_spec = _MaskWithinDWIFieldOfViewInputSpec
+    output_spec = _MaskWithinDWIFieldOfViewOutputSpec
+
+    def _run_interface(self, runtime):
+        mask_img = nb.load(self.inputs.in_mask)
+        b0_img = nb.load(self.inputs.b0_image)
+
+        mask_data = np.asanyarray(mask_img.dataobj) > 0
+        b0_data = np.asanyarray(b0_img.dataobj, dtype=np.float32)
+
+        if b0_data.ndim == 4:
+            with np.errstate(invalid='ignore'):
+                b0_support = np.nanmean(b0_data, axis=3)
+        else:
+            b0_support = b0_data
+
+        valid_support = np.isfinite(b0_support) & (b0_support > self.inputs.b0_threshold)
+        refined_mask = (mask_data & valid_support).astype(np.uint8)
+        removed_voxels = int(mask_data.sum() - refined_mask.sum())
+        if removed_voxels:
+            LOGGER.warning(
+                'Removed %d mask voxels outside valid DWI support using a mean b0 threshold of %g.',
+                removed_voxels,
+                self.inputs.b0_threshold,
+            )
+
+        self._results['out_mask'] = fname_presuffix(
+            self.inputs.in_mask,
+            suffix='_dwisupport',
+            newpath=runtime.cwd,
+        )
+        out_img = nb.Nifti1Image(refined_mask, mask_img.affine, mask_img.header)
+        out_img.set_data_dtype(np.uint8)
+        out_img.to_filename(self._results['out_mask'])
+        return runtime
+
+
 class _EnhanceB0InputSpec(BaseInterfaceInputSpec):
     b0_file = File(exists=True, mandatory=True)
 
