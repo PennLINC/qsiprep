@@ -319,6 +319,84 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
 
 
 @pytest.mark.integration
+@pytest.mark.diffprep
+def test_diffprep(data_dir, output_dir, working_dir):
+    """TORTOISE DIFFPREP head-motion/eddy correction on non-shelled data.
+
+    This tests the following features:
+    - The TORTOISE DIFFPREP HMC backend (--hmc-model diffprep_quadratic) on a
+      compressed-sensing DSI (non-shelled) scheme, where FSL eddy cannot run
+    - The fieldmap-less path: with no fieldmap and no T2w, DIFFPREP performs
+      head-motion/eddy correction only and does not error out
+    - Skipping B1 biascorrection
+
+    Inputs
+    ------
+    - DSCSDSI BIDS data (data/DSCSDSI_nofmap)
+    """
+    TEST_NAME = 'diffprep'
+
+    dataset_dir = download_test_data('DSCSDSI', data_dir)
+    # XXX: Having to modify dataset_dirs is suboptimal.
+    dataset_dir = os.path.join(dataset_dir, 'DSCSDSI_nofmap')
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        'participant',
+        f'-w={work_dir}',
+        '--sloppy',
+        '--b1-biascorrect-stage=none',
+        '--hmc-model=diffprep_quadratic',
+        '--output-resolution=5',
+    ]
+
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
+
+
+@pytest.mark.integration
+@pytest.mark.diffprep_drbuddi
+def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
+    """TORTOISE DIFFPREP head-motion correction followed by DRBUDDI SDC.
+
+    This tests the following features:
+    - The TORTOISE DIFFPREP HMC backend combined with reverse phase-encoded
+      susceptibility distortion correction (DRBUDDI), i.e. that the backend
+      performs SDC rather than erroring when a fieldmap is present
+    - Denoising is skipped
+
+    Inputs
+    ------
+    - qsiprep rpe series results (data/drbuddi_rpe_series)
+    """
+    TEST_NAME = 'diffprep_drbuddi'
+
+    dataset_dir = download_test_data('drbuddi_rpe_series', data_dir)
+    # XXX: Having to modify dataset_dirs is suboptimal.
+    dataset_dir = os.path.join(dataset_dir, 'tinytensor_rpe_series')
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        'participant',
+        f'-w={work_dir}',
+        '--sloppy',
+        '--anat-modality=none',
+        '--denoise-method=none',
+        '--b1-biascorrect-stage=none',
+        '--hmc-model=diffprep_quadratic',
+        '--pepolar-method=DRBUDDI',
+        '--output-resolution=5',
+    ]
+
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
+
+
+@pytest.mark.integration
 @pytest.mark.dsdti_nofmap
 def test_dsdti_nofmap(data_dir, output_dir, working_dir):
     """DSCDTI_nofmap test.

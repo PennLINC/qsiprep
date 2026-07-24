@@ -128,14 +128,26 @@ eddy currents. In these cases, TORTOISE DIFFPREP is available via
 
 - ``diffprep_motion`` — rigid head-motion correction only.
 - ``diffprep_quadratic`` — rigid motion plus 24-parameter quadratic
-  eddy-current correction (recommended for CS-DSI).
+  eddy-current correction (recommended).
 - ``diffprep_cubic`` — rigid motion plus cubic eddy-current correction.
 
 These options run TORTOISE v4 DIFFPREP, which fits a signal model over
-arbitrary q-space and therefore does not require shells. Susceptibility
-distortion correction is unaffected and continues to use the configured
-fieldmap method. Advanced TORTOISE settings can be supplied with
-``--diffprep-config``.
+arbitrary q-space and therefore does not require shells. Advanced TORTOISE
+settings can be supplied with ``--diffprep-config``.
+
+The ``diffprep_*`` backends also perform susceptibility distortion correction,
+preferring TORTOISE-native tools:
+
+- **Reverse phase-encoded** data (``epi``/``rpe_series`` fieldmaps) is corrected
+  with DRBUDDI (``--pepolar-method DRBUDDI``; ``TOPUP`` is not supported with the
+  DIFFPREP backends).
+- **GRE / phase-difference fieldmaps** are handled by *QSIPrep*'s standard
+  fieldmap machinery (the deformation is applied downstream).
+- With **no fieldmap but a T2-weighted image** available, TORTOISE's
+  ``--epi T2Wreg`` structural correction is used (replacing fieldmap-less SyN for
+  this backend); if no T2w is available, fieldmap-less SyN is used when requested.
+- With no fieldmap and no T2w, head-motion/eddy correction is performed without
+  susceptibility correction.
 
 
 ******************************************

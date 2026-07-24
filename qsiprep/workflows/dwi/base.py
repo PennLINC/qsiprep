@@ -34,7 +34,8 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 def _diffprep_order(hmc_model):
-    """Map a diffprep_* hmc_model string to a TORTOISE transformation type."""
+    """Map a ``diffprep_*`` hmc_model string to a TORTOISE DIFFPREP correction
+    mode (``motion`` / ``quadratic`` / ``cubic``)."""
     return hmc_model.split('_', 1)[1]
 
 
@@ -271,20 +272,17 @@ def init_dwi_preproc_wf(
         )
 
     elif config.workflow.hmc_model.startswith('diffprep_'):
-        if fieldmap_type is not None:
-            raise NotImplementedError(
-                f'The DIFFPREP HMC backend (--hmc-model {config.workflow.hmc_model}) is '
-                'head-motion/eddy-current correction only and does not perform '
-                f"susceptibility distortion correction, but a '{fieldmap_type}' fieldmap "
-                'was found for this DWI series. Either run without the fieldmap '
-                '(--ignore fieldmaps) or use --hmc-model eddy/3dSHORE for SDC.'
-            )
+        # The DIFFPREP backend performs its own SDC internally (DRBUDDI for
+        # reverse-PE, TORTOISE T2Wreg for the fieldmap-less-with-T2w case, or
+        # qsiprep's init_sdc_wf for GRE/phase/SyN) -- exactly as init_fsl_hmc_wf
+        # owns its SDC. So no fieldmap guard here; the branching lives inside
+        # init_diffprep_hmc_wf.
         hmc_wf = init_diffprep_hmc_wf(
             scan_groups=scan_groups,
             source_file=source_file,
             dwi_metadata=dwi_metadata,
             t2w_sdc=t2w_sdc,
-            transformation_type=_diffprep_order(config.workflow.hmc_model),
+            correction_mode=_diffprep_order(config.workflow.hmc_model),
             name='hmc_sdc_wf',
         )
 
