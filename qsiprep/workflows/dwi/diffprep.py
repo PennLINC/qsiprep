@@ -373,8 +373,26 @@ def init_diffprep_hmc_wf(
     # SDC decision tree (TORTOISE-native where possible)
     # -----------------------------------------------------------------------
 
+    # A reverse-PE *series* (rpe_series) is not yet supported by this backend.
+    # qsiprep concatenates the opposing-PE series into one 4D file for FSL eddy
+    # (``preprocess_rpe_series``), but a single DIFFPREP run models one phase
+    # axis for the whole file: TORTOISE itself runs DIFFPREP once per PE
+    # direction (TORTOISE.cxx Process() loops ``for(PE=0;PE<2)``). Feeding it the
+    # concatenation does not error -- it silently mis-corrects half the volumes.
+    # Full support (per-direction DIFFPREP + a predicted single-shell series so
+    # DRBUDDI can derive usable b0/FA on non-shelled CS-DSI) is a planned
+    # follow-up; until then, fail loudly rather than return a wrong answer.
+    if fieldmap_type == 'rpe_series':
+        raise NotImplementedError(
+            'The DIFFPREP HMC backend does not yet support reverse phase-encoded '
+            'DWI series (rpe_series) for susceptibility distortion correction. '
+            "Provide an 'epi' fieldmap (a reverse-PE b=0/EPI in fmap/) to use "
+            'DRBUDDI with DIFFPREP, or use --hmc-model eddy/3dSHORE for '
+            'rpe_series data.'
+        )
+
     # 1. PEPOLAR (reverse-PE) -> DRBUDDI
-    if fieldmap_type in ('epi', 'rpe_series'):
+    if fieldmap_type == 'epi':
         if 'topup' in config.workflow.pepolar_method.lower():
             raise Exception(
                 'TOPUP-based pepolar correction is not supported with '

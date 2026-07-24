@@ -363,19 +363,25 @@ def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
 
     This tests the following features:
     - The TORTOISE DIFFPREP HMC backend combined with reverse phase-encoded
-      susceptibility distortion correction (DRBUDDI), i.e. that the backend
-      performs SDC rather than erroring when a fieldmap is present
+      (blip-up/blip-down) DRBUDDI susceptibility distortion correction, i.e.
+      that the backend performs SDC rather than erroring when a fieldmap is
+      present
     - Denoising is skipped
+
+    Uses an ``epi`` fieldmap rather than a reverse-PE *series* (rpe_series): the
+    latter concatenates opposing-PE volumes into one file for FSL eddy, which
+    DIFFPREP (single phase axis per run) cannot model. rpe_series support is a
+    planned follow-up; see ``test_diffprep_rpe_series_not_implemented``.
 
     Inputs
     ------
-    - qsiprep rpe series results (data/drbuddi_rpe_series)
+    - qsiprep epi fieldmap results (data/drbuddi_epi)
     """
     TEST_NAME = 'diffprep_drbuddi'
 
-    dataset_dir = download_test_data('drbuddi_rpe_series', data_dir)
+    dataset_dir = download_test_data('drbuddi_epi', data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, 'tinytensor_rpe_series')
+    dataset_dir = os.path.join(dataset_dir, 'tinytensor_epi')
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
@@ -390,7 +396,7 @@ def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
         '--b1-biascorrect-stage=none',
         '--hmc-model=diffprep_quadratic',
         '--pepolar-method=DRBUDDI',
-        '--output-resolution=5',
+        '--output-resolution=2',
     ]
 
     # See test_diffprep: no expected-output manifest yet, so the assertion is

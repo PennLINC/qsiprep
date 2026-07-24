@@ -460,6 +460,19 @@ def test_init_diffprep_hmc_wf_honours_sloppy():
         config.execution.sloppy = False
 
 
+def test_init_diffprep_hmc_wf_rejects_rpe_series():
+    """rpe_series (a concatenated opposing-PE series) must fail loudly.
+
+    DIFFPREP models one phase axis per run; qsiprep concatenates the two PE
+    directions for FSL eddy, and feeding that to DIFFPREP silently mis-corrects
+    half the data. Support for it (per-direction DIFFPREP + predicted-shell
+    DRBUDDI inputs) is a planned follow-up.
+    """
+    _base_config()
+    with pytest.raises(NotImplementedError, match='rpe_series'):
+        _build(_scan_groups('rpe_series', rpe_series=['/data/sub-01_dwi.nii.gz']), t2w_sdc=False)
+
+
 def test_drbuddi_sloppy_skips_rigid_diffeo_loop(tmp_path):
     """--sloppy should also cheapen DRBUDDI's initial registration.
 
@@ -510,6 +523,6 @@ def test_init_diffprep_hmc_wf_topup_rejected():
     config.workflow.pepolar_method = 'TOPUP'
     try:
         with pytest.raises(Exception, match='TOPUP'):
-            _build(_scan_groups('rpe_series', rpe_series=['/data/sub-01_dwi.nii.gz']), False)
+            _build(_scan_groups('epi', epi=['/data/sub-01_epi.nii.gz']), False)
     finally:
         config.workflow.pepolar_method = 'drbuddi'
