@@ -6190,8 +6190,8 @@ packages:
   timestamp: 1770223379599
 - pypi: ./
   name: qsiprep
-  version: 26.1.0.dev1+g8f9024671
-  sha256: a66eb8178bffd14f95c22dff1207d107c1516678100401eefc8f238ebae6e36e
+  version: 26.1.0.dev29+gf1d2e7e6d
+  sha256: 982202bb1a7532a7eb2b52a746052e6188e3ec62051df604c903c45c0e53fae5
   requires_dist:
   - acres
   - coverage
@@ -6278,8 +6278,8 @@ packages:
   editable: true
 - pypi: ./
   name: qsiprep
-  version: 26.1.0.dev1+g8f9024671
-  sha256: a66eb8178bffd14f95c22dff1207d107c1516678100401eefc8f238ebae6e36e
+  version: 26.1.0.dev29+gf1d2e7e6d
+  sha256: 982202bb1a7532a7eb2b52a746052e6188e3ec62051df604c903c45c0e53fae5
   requires_dist:
   - acres
   - coverage
