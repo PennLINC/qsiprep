@@ -23,6 +23,7 @@ from ..fieldmap.pepolar import init_extended_pepolar_report_wf
 # dwi workflows
 from ..fieldmap.unwarp import init_fmap_unwarp_report_wf
 from .confounds import init_dwi_confs_wf
+from .diffprep import init_diffprep_hmc_wf
 from .fsl import init_fsl_hmc_wf
 from .hmc_sdc import init_qsiprep_hmcsdc_wf
 from .pre_hmc import init_dwi_pre_hmc_wf
@@ -30,6 +31,12 @@ from .registration import init_b0_to_anat_registration_wf, init_direct_b0_acpc_w
 from .util import _create_mem_gb, _get_wf_name
 
 DEFAULT_MEMORY_MIN_GB = 0.01
+
+
+def _diffprep_order(hmc_model):
+    """Map a ``diffprep_*`` hmc_model string to a TORTOISE DIFFPREP correction
+    mode (``motion`` / ``quadratic`` / ``cubic``)."""
+    return hmc_model.split('_', 1)[1]
 
 
 def init_dwi_preproc_wf(
@@ -261,6 +268,21 @@ def init_dwi_preproc_wf(
             source_file=source_file,
             dwi_metadata=dwi_metadata,
             t2w_sdc=t2w_sdc,
+            name='hmc_sdc_wf',
+        )
+
+    elif config.workflow.hmc_model.startswith('diffprep_'):
+        # The DIFFPREP backend performs its own SDC internally (DRBUDDI for
+        # reverse-PE, TORTOISE T2Wreg for the fieldmap-less-with-T2w case, or
+        # qsiprep's init_sdc_wf for GRE/phase/SyN) -- exactly as init_fsl_hmc_wf
+        # owns its SDC. So no fieldmap guard here; the branching lives inside
+        # init_diffprep_hmc_wf.
+        hmc_wf = init_diffprep_hmc_wf(
+            scan_groups=scan_groups,
+            source_file=source_file,
+            dwi_metadata=dwi_metadata,
+            t2w_sdc=t2w_sdc,
+            correction_mode=_diffprep_order(config.workflow.hmc_model),
             name='hmc_sdc_wf',
         )
 

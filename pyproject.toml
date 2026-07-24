@@ -263,6 +263,8 @@ markers = [
     "drbuddi_shoreline_epi: test 10",
     "drbuddi_tensorline_epi: test 11",
     "dscsdsi: test 12",
+    "diffprep: TORTOISE DIFFPREP HMC on non-shelled data",
+    "diffprep_drbuddi: TORTOISE DIFFPREP HMC with DRBUDDI SDC",
     "dsdti_nofmap: test 13",
     "dsdti_synfmap: test 14",
     "dsdti_topup: test 15",

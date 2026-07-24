@@ -133,5 +133,29 @@ def validate_eddy_config(eddy_config):
     return
 
 
+def validate_diffprep_config(diffprep_config):
+    """Validate the DIFFPREP configuration file.
+
+    Parameters
+    ----------
+    diffprep_config : str
+        The path to the DIFFPREP configuration JSON file.
+
+    Raises
+    ------
+    ValueError
+        If the DIFFPREP configuration file does not exist or is not valid JSON.
+    """
+    import json
+    import os
+
+    if not os.path.exists(diffprep_config):
+        raise ValueError(f'DIFFPREP configuration file {diffprep_config} does not exist.')
+    with open(diffprep_config) as f:
+        json.load(f)
+
+    return
+
+
 if __name__ == '__main__':
     pass
