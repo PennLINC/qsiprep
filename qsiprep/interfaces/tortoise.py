@@ -6,6 +6,7 @@ Wrappers for the TORTOISE programs
 import logging
 import os
 import os.path as op
+import shutil
 import subprocess
 
 import nibabel as nb
@@ -578,7 +579,7 @@ class _TORTOISEConvertInputSpec(BaseInterfaceInputSpec):
     bval_file = File(exists=True, mandatory=True, copyfile=True)
     bvec_file = File(exists=True, mandatory=True, copyfile=True)
     dwi_file = File(exists=True, mandatory=True)
-    mask_file = File(exists=True, mandatory=True)
+    mask_file = File(exists=True)
 
 
 class _TORTOISEConvertOutputSpec(TraitedSpec):
@@ -592,14 +593,24 @@ class TORTOISEConvert(SimpleInterface):
     output_spec = _TORTOISEConvertOutputSpec
 
     def _run_interface(self, runtime):
-        """Convert gzipped niftis and bval/bvec into TORTOISE format."""
+        """Convert gzipped niftis and bval/bvec into TORTOISE format.
+
+        TORTOISEProcess requires the ``.bmtxt`` file to sit in the same
+        directory as the ``.nii`` and share the same basename (it locates the
+        bmtxt from the nii by extension swap). 
+        """
         dwi_file = fname_presuffix(
             self.inputs.dwi_file, newpath=runtime.cwd, use_ext=False, suffix='.nii'
         )
         dwi_img = nim.load_img(self.inputs.dwi_file, dtype='float32')
         dwi_img.set_data_dtype('float32')
         dwi_img.to_filename(dwi_file)
-        bmtxt_file = make_bmat_file(self.inputs.bval_file, self.inputs.bvec_file)
+        src_bmtxt = make_bmat_file(self.inputs.bval_file, self.inputs.bvec_file)
+        # Co-locate the bmtxt with the renamed DWI and give it a matching stem
+        # so TORTOISEProcess can pair them.
+        bmtxt_file = op.splitext(dwi_file)[0] + '.bmtxt'
+        if op.abspath(src_bmtxt) != op.abspath(bmtxt_file):
+            shutil.copyfile(src_bmtxt, bmtxt_file)
 
         if isdefined(self.inputs.mask_file):
             mask_file = fname_presuffix(
@@ -613,147 +624,6 @@ class TORTOISEConvert(SimpleInterface):
         self._results['dwi_file'] = dwi_file
         self._results['bmtxt_file'] = bmtxt_file
 
-        return runtime
-
-
-class _TORTOISEProcessInputSpec(TORTOISEInputSpec):
-    dwi_file = File(
-        exists=True, mandatory=True, argstr='--input %s', desc='DWI in TORTOISE .nii format'
-    )
-    bmtxt_file = File(
-        exists=True, mandatory=True, argstr='--input_bmtxt %s', desc='b-matrix (.bmtxt)'
-    )
-    mask_file = File(exists=True, mandatory=True, argstr='--mask %s', desc='brain mask')
-    transformation_type = traits.Enum(
-        'rigid',
-        'quadratic',
-        'cubic',
-        usedefault=True,
-        argstr='--DIFFPREP_transformation_type %s',
-        desc='Okan transform order: rigid (motion only), quadratic, or cubic',
-    )
-    b0_id = traits.Int(-1, usedefault=True, argstr='--b0_id %d', desc='index of b=0 (-1=auto)')
-    config_file = File(exists=True, argstr='--DIFFPREP_settings %s', desc='DIFFPREP settings JSON')
-    # Emit --step DIFFPREP by default so TORTOISEProcess runs DIFFPREP only (HMC-only;
-    # DRBUDDI/SDC is handled elsewhere in qsiprep). nipype emits a fixed argstr when True.
-    diffprep_only = traits.Bool(
-        True,
-        usedefault=True,
-        argstr='--step DIFFPREP',
-        desc='run the DIFFPREP step only (skip DRBUDDI); emits --step DIFFPREP',
-    )
-
-
-class _TORTOISEProcessOutputSpec(TraitedSpec):
-    corrected_dwi = File(exists=True, desc='motion/eddy corrected DWI (LPS+ TORTOISE space)')
-    corrected_bmtxt = File(exists=True, desc='rotated b-matrix matching corrected_dwi')
-    transforms_file = File(exists=True, desc='per-volume DIFFPREP transform parameters')
-
-
-class TORTOISEProcess(TORTOISECommandLine):
-    """Run TORTOISE v4 DIFFPREP (motion + optional eddy) on a single DWI series.
-
-    HMC-only: susceptibility correction is left to qsiprep's fieldmap machinery.
-    """
-
-    input_spec = _TORTOISEProcessInputSpec
-    output_spec = _TORTOISEProcessOutputSpec
-    _cmd = 'TORTOISEProcess'
-
-    def _list_outputs(self):
-        outputs = self.output_spec().get()
-        cwd = os.getcwd()
-        base = fname_presuffix(self.inputs.dwi_file, suffix='_proc', use_ext=False, newpath=cwd)
-        outputs['corrected_dwi'] = base + '.nii'
-        outputs['corrected_bmtxt'] = base + '.bmtxt'
-        outputs['transforms_file'] = base + '_transformations.txt'
-        return outputs
-
-
-class _DIFFPREPMotionParamsInputSpec(BaseInterfaceInputSpec):
-    transforms_file = File(exists=True, mandatory=True, desc='per-volume DIFFPREP transforms')
-
-
-class _DIFFPREPMotionParamsOutputSpec(TraitedSpec):
-    motion_file = File(exists=True, desc='per-volume rigid motion params (mm, rad)')
-
-
-class DIFFPREPMotionParams(SimpleInterface):
-    """Extract the rigid 6-DOF motion parameters from a DIFFPREP transforms file.
-
-    Each volume's Okan transform begins with the rigid component
-    (3 translations in mm, 3 rotations in radians); the remaining
-    eddy-current parameters are not reported as motion.
-    """
-
-    input_spec = _DIFFPREPMotionParamsInputSpec
-    output_spec = _DIFFPREPMotionParamsOutputSpec
-
-    def _run_interface(self, runtime):
-        params = np.loadtxt(self.inputs.transforms_file, ndmin=2)
-        if params.shape[1] < 6:
-            raise ValueError(
-                f'DIFFPREP transforms file has {params.shape[1]} columns; expected at '
-                'least 6 (3 translations + 3 rotations).'
-            )
-        rigid = params[:, :6]
-        out_file = fname_presuffix(
-            self.inputs.transforms_file,
-            suffix='_motion.txt',
-            use_ext=False,
-            newpath=runtime.cwd,
-        )
-        np.savetxt(out_file, rigid, fmt='%.8f')
-        self._results['motion_file'] = out_file
-        return runtime
-
-
-class _BmatToFSLGradientsInputSpec(BaseInterfaceInputSpec):
-    bmtxt_file = File(exists=True, mandatory=True, desc='TORTOISE b-matrix file')
-
-
-class _BmatToFSLGradientsOutputSpec(TraitedSpec):
-    bval_file = File(exists=True, desc='FSL bval')
-    bvec_file = File(exists=True, desc='FSL bvec')
-
-
-class BmatToFSLGradients(SimpleInterface):
-    """Recover FSL bval/bvec from a TORTOISE b-matrix (inverse of make_bmat_file).
-
-    The TORTOISE .bmtxt has one row per volume with the 6 unique entries of the
-    symmetric b-matrix: [Bxx, Bxy, Bxz, Byy, Byz, Bzz] (units assumed s/mm²;
-    verify against FSLBVecsToTORTOISEBmatrix when the binary is available).
-    The b-value is recovered as trace(B) and the gradient direction as the
-    principal eigenvector of B.
-    """
-
-    input_spec = _BmatToFSLGradientsInputSpec
-    output_spec = _BmatToFSLGradientsOutputSpec
-
-    def _run_interface(self, runtime):
-        rows = np.loadtxt(self.inputs.bmtxt_file, ndmin=2)
-        bvals = np.zeros(rows.shape[0])
-        bvecs = np.zeros((3, rows.shape[0]))
-        for i, (bxx, bxy, bxz, byy, byz, bzz) in enumerate(rows):
-            bmat = np.array([[bxx, bxy, bxz], [bxy, byy, byz], [bxz, byz, bzz]])
-            bval = np.trace(bmat)
-            bvals[i] = bval
-            if bval > 0:
-                evals, evecs = np.linalg.eigh(bmat)
-                # principal eigenvector = gradient direction
-                vec = evecs[:, np.argmax(evals)]
-                bvecs[:, i] = vec / np.linalg.norm(vec)
-
-        bval_file = fname_presuffix(
-            self.inputs.bmtxt_file, suffix='.bval', use_ext=False, newpath=runtime.cwd
-        )
-        bvec_file = fname_presuffix(
-            self.inputs.bmtxt_file, suffix='.bvec', use_ext=False, newpath=runtime.cwd
-        )
-        np.savetxt(bval_file, bvals[np.newaxis, :], fmt='%g')
-        np.savetxt(bvec_file, bvecs, fmt='%.8f')
-        self._results['bval_file'] = bval_file
-        self._results['bvec_file'] = bvec_file
         return runtime
 
 
@@ -845,19 +715,41 @@ def make_bmat_file(bvals, bvecs):
     return bvals.replace('bval', 'bmtxt')
 
 
-def generate_diffprep_boilerplate(transformation_type):
-    """Methods boilerplate for the TORTOISE DIFFPREP HMC backend."""
-    order = {
-        'rigid': 'rigid-body (motion only)',
-        'quadratic': 'quadratic (24-parameter Okan, motion + eddy-current)',
-        'cubic': 'cubic (motion + higher-order eddy-current)',
-    }[transformation_type]
+def bmtxt_to_fsl(bmtxt_file, working_dir=None):
+    """Convert a TORTOISE 6-col bmtxt file to FSL bval/bvec text files.
+
+    Wraps the upstream ``TORTOISEBmatrixToFSLBVecs`` binary, which writes
+    sibling files with extensions ``.bvecs`` and ``.bvals``. Returns
+    ``(bval_path, bvec_path)``.
+    """
+    bmtxt_abs = op.abspath(bmtxt_file)
+    if working_dir is not None:
+        # Copy into the working directory so outputs land there
+        dst = op.join(working_dir, op.basename(bmtxt_abs))
+        if dst != bmtxt_abs:
+            shutil.copyfile(bmtxt_abs, dst)
+        bmtxt_abs = dst
+    subprocess.run(['TORTOISEBmatrixToFSLBVecs', bmtxt_abs], check=True)
+    base = bmtxt_abs[: -len('.bmtxt')]
+    return base + '.bvals', base + '.bvecs'
+
+
+def generate_diffprep_boilerplate(correction_mode):
+    """Methods boilerplate describing the DIFFPREP HMC backend."""
+
+    mode_desc = {
+        'motion': 'rigid head motion only',
+        'quadratic': 'rigid head motion together with quadratic eddy currents',
+        'cubic': 'rigid head motion together with cubic eddy currents',
+    }[correction_mode]
     return (
-        f'\n\nHead motion and eddy-current distortions were corrected using '
-        f'DIFFPREP from the TORTOISE [@tortoisev4] software package, with a '
-        f'{order} transformation model. DIFFPREP registers each volume to a '
-        f'signal-model-predicted target, supporting arbitrary (non-shelled) '
-        f'q-space sampling.\n'
+        f'\n\nHead motion correction was performed with DIFFPREP '
+        f'[@diffprep], part of the TORTOISE [@tortoisev4] software package, '
+        f'in {correction_mode} mode (correcting {mode_desc}). DIFFPREP fits a '
+        'SHORE/MAPMRI signal model to the data and iteratively registers each '
+        "volume to a model-predicted target using TORTOISE's 24-parameter "
+        'Okan-quadratic transform. The corrected volumes and motion-rotated '
+        'bmatrix were then passed to the rest of the pipeline.\n\n'
     )
 
 
@@ -898,3 +790,493 @@ def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False):
         'in the final interpolated images using a method similar to LSR.\n\n'
     )
     return ' '.join(desc)
+
+
+class _DIFFPREPInputSpec(TORTOISEInputSpec):
+    dwi_file = File(
+        exists=True,
+        mandatory=True,
+        copyfile=True,
+        argstr='-u %s',
+        desc='Uncompressed 4D NIfTI passed to TORTOISEProcess as the UP image. '
+        'A sibling ``.bmtxt`` and ``.json`` must be present.',
+    )
+    bmtxt_file = File(
+        exists=True,
+        mandatory=True,
+        copyfile=True,
+        desc='Sibling TORTOISE 6-column bmatrix file. Found by TORTOISEProcess '
+        "from the .nii's basename; not passed as its own argstr.",
+    )
+    json_file = File(
+        exists=True,
+        mandatory=True,
+        copyfile=True,
+        desc='Sibling BIDS JSON sidecar with PhaseEncodingDirection. Found by '
+        "TORTOISEProcess from the .nii's basename; not passed as its own argstr.",
+    )
+    correction_mode = traits.Enum(
+        'motion',
+        'quadratic',
+        'cubic',
+        argstr='-c %s',
+        mandatory=True,
+        desc='Motion & eddy correction mode forwarded to TORTOISE. '
+        '"motion" = rigid only; "quadratic" = rigid + quadratic eddy '
+        '(recommended); "cubic" = rigid + cubic eddy.',
+    )
+    b0_id = traits.Int(
+        -1,
+        usedefault=True,
+        argstr='--b0_id %d',
+        desc='Index of b=0 volume to use as the registration target. '
+        '-1 (default) lets TORTOISE pick the best one.',
+    )
+    is_human_brain = traits.Bool(
+        True,
+        usedefault=True,
+        argstr='--is_human_brain %d',
+        desc='Whether the data is an in-vivo human brain. Enables iterative '
+        'SHORE-prediction refinement.',
+    )
+    rot_eddy_center = traits.Enum(
+        'isocenter',
+        'center_voxel',
+        'center_slice',
+        usedefault=True,
+        argstr='--rot_eddy_center %s',
+        desc='Rotation and eddy-currents center.',
+    )
+    extra_args = traits.List(
+        traits.Str(),
+        usedefault=True,
+        desc='Additional flags appended verbatim to the TORTOISEProcess command. '
+        'Use to access TORTOISE knobs not surfaced as first-class fields '
+        '(e.g. ["--big_delta", "0.030"]).',
+    )
+    disable_itk_threads = traits.Bool(True, usedefault=True, argstr='--disable_itk_threads')
+    epi_mode = traits.Enum(
+        'off',
+        'T2Wreg',
+        usedefault=True,
+        desc='TORTOISE --epi mode. "off": no in-TORTOISE SDC (default). '
+        '"T2Wreg": structural EPI correction using --structural_image.',
+    )
+    structural_image = File(
+        exists=True,
+        desc='T2w structural image for --epi T2Wreg (must NOT be a T1w). '
+        'Required when epi_mode == "T2Wreg".',
+    )
+
+
+class _DIFFPREPOutputSpec(TraitedSpec):
+    corrected_dwi_file = File(exists=True, desc='Motion + eddy (+ optional EPI) corrected 4D DWI.')
+    corrected_bmtxt_file = File(exists=True, desc='Motion-rotated 6-col bmatrix.')
+    transformations_file = File(
+        exists=True,
+        desc='Per-volume 24-parameter Okan-quadratic transforms as written by DIFFPREP.',
+    )
+
+
+class DIFFPREP(TORTOISECommandLine):
+    """TORTOISE V4 DIFFPREP motion + eddy-current correction.
+
+    Runs the ``TORTOISEProcess`` binary starting from the Import step (so the
+    proc.nii/proc.bmtxt/proc.json working files get staged) with all stages
+    other than motion+eddy (and optionally the EPI/``T2Wreg`` stage) disabled
+    via their own flags. See ``_base_step_flags`` for why ``--step import``
+    (not ``--step motioneddy``) is required. Emits the per-volume corrected
+    DWI, rotated bmatrix, and 24-parameter transform file.
+    """
+
+    input_spec = _DIFFPREPInputSpec
+    output_spec = _DIFFPREPOutputSpec
+    _cmd = 'TORTOISEProcess'
+
+    # Hardcoded flags that put TORTOISE into "DIFFPREP-only" mode. qsiprep
+    # already runs its own denoising / gibbs / SDC stages, so we explicitly
+    # turn each of them off -- but we still START from the Import step.
+    #
+    # NOTE: ``--epi`` is appended separately in ``_parse_inputs`` so it can
+    # switch between ``off`` (SDC handled downstream by qsiprep) and ``T2Wreg``
+    # (structural EPI correction performed here and baked into the output).
+    _base_step_flags = (
+        '--step import '
+        '--denoising off '
+        '--gibbs 0 '
+        '--drift off '
+        '--do_QC 0 '
+        '--remove_temp 0 '
+        '--s2v 0 '
+        '--repol 0'
+    )
+
+    def _format_arg(self, name, spec, value):
+        # bmtxt_file and json_file are passed via sibling-stem lookup, not argstr
+        if name in ('bmtxt_file', 'json_file'):
+            return ''
+        return super()._format_arg(name, spec, value)
+
+    def _parse_inputs(self, skip=None):
+        skip = list(skip or [])
+        # These are handled manually below (no argstr / sibling-file lookup).
+        skip += ['epi_mode', 'structural_image', 'extra_args']
+        parsed = super()._parse_inputs(skip=skip)
+        parsed.append(self._base_step_flags)
+
+        # EPI (susceptibility) stage.
+        if self.inputs.epi_mode == 'T2Wreg':
+            if not isdefined(self.inputs.structural_image):
+                raise ValueError('epi_mode="T2Wreg" requires a structural_image (T2w).')
+            parsed.append(f'--epi T2Wreg -s {op.abspath(self.inputs.structural_image)}')
+        else:
+            parsed.append('--epi off')
+
+        if isdefined(self.inputs.extra_args) and self.inputs.extra_args:
+            parsed.append(' '.join(self.inputs.extra_args))
+        return parsed
+
+    def _list_outputs(self):
+        outputs = self.output_spec().get()
+        # TORTOISE stages its working files into a temp-proc subfolder of the
+        # input's directory and runs DIFFPREP on a "_proc" copy there. With
+        # ``--step import`` the import step creates
+        #   <dir>/<stem>_temp_proc/<stem>_proc.nii (+ .bmtxt, .json)
+        # and DIFFPREP's motion+eddy outputs land alongside as
+        #   <dir>/<stem>_temp_proc/<stem>_proc_moteddy.{nii,bmtxt}
+        #   <dir>/<stem>_temp_proc/<stem>_proc_moteddy_transformations.txt
+        # nipype copies the input into the node cwd (copyfile=True), so resolve
+        # against the cwd copy when present.
+        nii_path = op.abspath(self.inputs.dwi_file)
+        cwd_nii = op.join(os.getcwd(), op.basename(nii_path))
+        base_nii = cwd_nii if op.exists(cwd_nii) else nii_path
+        stem = op.basename(base_nii).removesuffix('.nii')
+        temp_proc = op.join(op.dirname(base_nii), stem + '_temp_proc')
+        proc_base = op.join(temp_proc, stem + '_proc')
+
+        # The rotated bmatrix and per-volume transforms always come from the
+        # motion+eddy step (EPI is a spatial warp and does not rotate gradients).
+        outputs['corrected_bmtxt_file'] = proc_base + '_moteddy.bmtxt'
+        outputs['transformations_file'] = proc_base + '_moteddy_transformations.txt'
+
+        if self.inputs.epi_mode == 'T2Wreg':
+            # With EPI correction enabled, the fully-corrected DWI is TORTOISE's
+            # FINALDATA output (post-EPI), which lands in the node cwd as
+            # ``*_TORTOISE_final.nii`` -- NOT the pre-EPI ``_proc_moteddy`` image.
+            # NOTE: exact stem/location must be confirmed against the real
+            # TORTOISE binary; the T2Wreg path is flagged for a container test.
+            cwd = os.getcwd()
+            finals = sorted(f for f in os.listdir(cwd) if f.endswith('_TORTOISE_final.nii'))
+            if not finals:
+                raise FileNotFoundError(
+                    'epi_mode="T2Wreg": expected a *_TORTOISE_final.nii output in '
+                    f'{cwd}, found none.'
+                )
+            outputs['corrected_dwi_file'] = op.join(cwd, finals[0])
+        else:
+            outputs['corrected_dwi_file'] = proc_base + '_moteddy.nii'
+        return outputs
+
+
+def _read_okan_transformations(path):
+    """Read a ``_moteddy_transformations.txt`` file and return 24-element
+    parameter vectors. Accepts both the VNL bracketed ``[a, b, ...]`` form and
+    plain whitespace-separated rows."""
+    rows = []
+    with open(path) as fobj:
+        for line in fobj:
+            line = line.strip().strip('[]')
+            if not line:
+                continue
+            vals = [float(x) for x in line.replace(',', ' ').split()]
+            if len(vals) < 24:
+                raise ValueError(f'expected 24 columns per row in {path}, got {len(vals)}')
+            rows.append(np.asarray(vals[:24], dtype=float))
+    if not rows:
+        raise ValueError(f'no transform rows found in {path}')
+    return rows
+
+
+class _DIFFPREPMotionParamsInputSpec(BaseInterfaceInputSpec):
+    transformations_file = File(
+        exists=True,
+        mandatory=True,
+        desc='DIFFPREP _moteddy_transformations.txt file with 24 columns per volume.',
+    )
+
+
+class _DIFFPREPMotionParamsOutputSpec(TraitedSpec):
+    spm_motion_file = File(exists=True)
+
+
+class DIFFPREPMotionParams(SimpleInterface):
+    """Extract a 6-column SPM-style motion-parameters file from DIFFPREP's
+    24-parameter transform file.
+
+    The output columns are the leading 6 parameters of TORTOISE's
+    ``OkanQuadraticTransform`` in SPM realignment-parameter order
+    (translation_x/y/z in mm of LPS physical coordinate, rotation_x/y/z as
+    Euler angles in radians). The remaining 18 Okan parameters encode the
+    eddy-current polynomial + rotation/eddy centre and are intentionally
+    dropped -- they are not rigid head motion. Units match the eddy and
+    SHORELine SPM motion files (translation mm, rotation radians).
+    """
+
+    input_spec = _DIFFPREPMotionParamsInputSpec
+    output_spec = _DIFFPREPMotionParamsOutputSpec
+
+    def _run_interface(self, runtime):
+        rows = _read_okan_transformations(self.inputs.transformations_file)
+        params = np.asarray(rows, dtype=float)
+        spm_motion = params[:, :6]
+        spm_motion_file = fname_presuffix(
+            self.inputs.transformations_file,
+            suffix='_spm_rp.txt',
+            use_ext=False,
+            newpath=runtime.cwd,
+        )
+        np.savetxt(spm_motion_file, spm_motion)
+        self._results['spm_motion_file'] = spm_motion_file
+        return runtime
+
+
+class _DIFFPREPSplitOutputsInputSpec(BaseInterfaceInputSpec):
+    corrected_dwi_file = File(exists=True, mandatory=True)
+    corrected_bmtxt_file = File(exists=True, mandatory=True)
+    b0_threshold = traits.CInt(100, usedefault=True)
+
+
+class _DIFFPREPSplitOutputsOutputSpec(TraitedSpec):
+    dwi_files = OutputMultiObject(File(exists=True))
+    bvec_files = OutputMultiObject(File(exists=True))
+    bval_files = OutputMultiObject(File(exists=True))
+    b0_indices = traits.List(traits.Int())
+    forward_transforms = traits.List(File(exists=True))
+
+
+class DIFFPREPSplitOutputs(SimpleInterface):
+    """Split TORTOISE's corrected 4D DWI + 6-col bmatrix into per-volume files
+    that match the qsiprep contract: per-volume dwi/bval/bvec triples plus a
+    list of identity ITK transforms (DIFFPREP has already baked the motion+eddy
+    correction into the volumes, so downstream apply-transform nodes must be
+    no-ops)."""
+
+    input_spec = _DIFFPREPSplitOutputsInputSpec
+    output_spec = _DIFFPREPSplitOutputsOutputSpec
+
+    _identity_itk = (
+        '#Insight Transform File V1.0\n'
+        '#Transform 0\n'
+        'Transform: MatrixOffsetTransformBase_double_3_3\n'
+        'Parameters: 1 0 0 0 1 0 0 0 1 0 0 0\n'
+        'FixedParameters: 0 0 0\n'
+    )
+
+    def _run_interface(self, runtime):
+        dwi_img = nb.load(self.inputs.corrected_dwi_file)
+        nvols = 1 if dwi_img.ndim < 4 else dwi_img.shape[3]
+
+        # Convert TORTOISE bmtxt -> FSL bvals/bvecs
+        bval_path, bvec_path = bmtxt_to_fsl(self.inputs.corrected_bmtxt_file, runtime.cwd)
+
+        # Split the 4D image into per-volume niftis under runtime.cwd
+        dwi_data = np.asanyarray(dwi_img.dataobj)
+        if dwi_img.ndim < 4:
+            dwi_data = dwi_data[..., np.newaxis]
+        per_vol_dwis = []
+        base = op.join(runtime.cwd, 'diffprep_vol')
+        for vol_idx in range(nvols):
+            vol_img = nb.Nifti1Image(
+                dwi_data[..., vol_idx].astype('float32'),
+                dwi_img.affine,
+                dwi_img.header,
+            )
+            vol_img.set_data_dtype('float32')
+            vol_path = f'{base}_{vol_idx:04d}.nii.gz'
+            vol_img.to_filename(vol_path)
+            per_vol_dwis.append(vol_path)
+
+        # Split the FSL gradients into per-volume txt files
+        per_vol_bvals, per_vol_bvecs = split_bvals_bvecs(
+            bval_path,
+            bvec_path,
+            deoblique=False,
+            img_files=per_vol_dwis,
+            working_dir=runtime.cwd,
+        )
+
+        # Build b0 indices list from the bvals
+        bvals_arr = np.loadtxt(bval_path).reshape(-1)
+        b0_indices = [int(i) for i, b in enumerate(bvals_arr) if b < self.inputs.b0_threshold]
+
+        # Per-volume identity ITK affines (TORTOISE has already baked the
+        # correction into the volume images themselves).
+        forward_transforms = []
+        for vol_idx in range(nvols):
+            xfm_path = op.join(runtime.cwd, f'diffprep_identity_{vol_idx:04d}.txt')
+            with open(xfm_path, 'w') as fobj:
+                fobj.write(self._identity_itk)
+            forward_transforms.append(xfm_path)
+
+        self._results['dwi_files'] = per_vol_dwis
+        self._results['bvec_files'] = per_vol_bvecs
+        self._results['bval_files'] = per_vol_bvals
+        self._results['b0_indices'] = b0_indices
+        self._results['forward_transforms'] = forward_transforms
+        return runtime
+
+
+def write_diffprep_json(json_file, phase_encoding_direction, working_dir=None):
+    """Write a minimal BIDS sidecar JSON next to a DWI nifti so that
+    TORTOISEProcess can read PhaseEncodingDirection from it. Returns the path
+    of the file written."""
+    import json
+
+    target = op.join(working_dir, op.basename(json_file)) if working_dir else json_file
+    payload = {'PhaseEncodingDirection': phase_encoding_direction}
+    with open(target, 'w') as fobj:
+        json.dump(payload, fobj)
+    return target
+
+
+def _tortoise_heuristic_deltas(bmtxt_file):
+    """Replicate TORTOISE's internal small/big-delta heuristic.
+
+    ``EstimateMAPMRI`` derives diffusion timings from the maximum b-value when
+    they are not supplied (``small_delta = (b_max / gyro^2 / G^2 / 2 * 1e6)^(1/3)
+    * 1000`` with ``G = 2 * 40 mT/m`` and ``big_delta = 3 * small_delta``, in ms).
+    ``SynthesizeDWIsFromMAPMRI`` has no such fallback, so we compute the deltas
+    once and pass the identical values to both tools. The b-value of each volume
+    is the trace of its 6-column b-matrix row (columns 0, 3, 5)."""
+    bmat = np.loadtxt(bmtxt_file)
+    if bmat.ndim == 1:
+        bmat = bmat[np.newaxis, :]
+    bvals = bmat[:, 0] + bmat[:, 3] + bmat[:, 5]
+    max_bval = float(np.max(bvals))
+
+    gyro = 267.51532e6
+    grad_strength = 2.0 * 40e-3  # TORTOISE assumes 2 * 40 mT/m
+    temp = max_bval / gyro / gyro / grad_strength / grad_strength / 2.0 * 1e6
+    small_delta = temp ** (1.0 / 3.0) * 1000.0  # ms, matching TORTOISE
+    big_delta = small_delta * 3.0
+    return small_delta, big_delta
+
+
+class _SynthesizeDWIsInputSpec(BaseInterfaceInputSpec):
+    dwi_file = File(exists=True, mandatory=True, desc='corrected 4D DWI (TORTOISE output)')
+    bmtxt_file = File(exists=True, mandatory=True, desc='corrected 6-col TORTOISE bmtxt')
+    mask_file = File(exists=True, mandatory=True, desc='brain mask (any grid; resampled to DWI)')
+    map_order = traits.Int(4, usedefault=True, desc='MAPMRI order for the QC model fit')
+    num_threads = traits.Int(desc='OMP threads for the TORTOISE estimators')
+
+
+class _SynthesizeDWIsOutputSpec(TraitedSpec):
+    synth_dwi_file = File(exists=True, desc='4D model-synthesized DWI at the corrected gradients')
+    per_volume_synth = OutputMultiObject(File(exists=True), desc='per-volume synthesized images')
+    qc_mask = File(exists=True, desc='brain mask resampled onto the corrected DWI grid')
+
+
+class SynthesizeDWIs(SimpleInterface):
+    """Fit a MAPMRI model to a corrected DWI and synthesize an "ideal" volume
+    at every measured gradient, for slice-wise QC.
+
+    Runs ``EstimateTensor`` -> ``EstimateMAPMRI`` -> ``SynthesizeDWIsFromMAPMRI``
+    entirely within the node's working directory, copying the DWI and its
+    ``.bmtxt`` sibling into ``runtime.cwd`` with a fixed stem so output
+    discovery is unambiguous."""
+
+    input_spec = _SynthesizeDWIsInputSpec
+    output_spec = _SynthesizeDWIsOutputSpec
+
+    def _run_interface(self, runtime):
+        cwd = runtime.cwd
+        stem = 'diffprep_corrected'
+
+        # TORTOISE wants uncompressed float32 niftis and finds the b-matrix as
+        # a sibling file with the same stem (<stem>.bmtxt).
+        nii_path = op.join(cwd, stem + '.nii')
+        dwi_img = nim.load_img(self.inputs.dwi_file, dtype='float32')
+        dwi_img.set_data_dtype('float32')
+        dwi_img.to_filename(nii_path)
+
+        bmtxt_path = op.join(cwd, stem + '.bmtxt')
+        shutil.copyfile(self.inputs.bmtxt_file, bmtxt_path)
+
+        # Resample the mask onto the corrected DWI grid so it is valid both as
+        # a TORTOISE --mask and as the SliceQC mask (which indexes the data by
+        # slice and therefore requires an identical 3D shape/affine).
+        ref_3d = nim.index_img(dwi_img, 0)
+        mask_img = nim.resample_to_img(self.inputs.mask_file, ref_3d, interpolation='nearest')
+        mask_img.set_data_dtype('float32')
+        mask_path = op.join(cwd, stem + '_mask.nii')
+        mask_img.to_filename(mask_path)
+
+        # Identical, self-consistent deltas for fit and synthesis.
+        small_delta, big_delta = _tortoise_heuristic_deltas(bmtxt_path)
+
+        env = dict(os.environ)
+        num_threads = self.inputs.num_threads if isdefined(self.inputs.num_threads) else None
+        if not num_threads:
+            num_threads = int(env.get('OMP_NUM_THREADS', 1) or 1)
+        env['OMP_NUM_THREADS'] = str(num_threads)
+
+        def _run(cmd):
+            LOGGER.info('SynthesizeDWIs: %s', ' '.join(map(str, cmd)))
+            subprocess.run(cmd, check=True, cwd=cwd, env=env)
+
+        # 1. Tensor (provides DT + A0 for the MAPMRI fit and the synthesizer).
+        dt_path = op.join(cwd, stem + '_L1_DT.nii')
+        am_path = op.join(cwd, stem + '_L1_AM.nii')
+        _run(['EstimateTensor', '--input', nii_path, '--mask', mask_path])
+
+        # 2. MAPMRI coefficients, deltas pinned explicitly.
+        coeffs_path = op.join(cwd, stem + '_mapmri.nii')
+        _run([
+            'EstimateMAPMRI',
+            '--input', nii_path,
+            '--mask', mask_path,
+            '--dti', dt_path,
+            '--A0', am_path,
+            '--map_order', str(self.inputs.map_order),
+            '--small_delta', f'{small_delta:.7f}',
+            '--big_delta', f'{big_delta:.7f}',
+        ])  # fmt:skip
+
+        # 3. Synthesize an ideal DWI at the corrected gradient table. The tool
+        #    is positional and writes <coeffs-stem>_synth.nii next to coeffs.
+        _run([
+            'SynthesizeDWIsFromMAPMRI',
+            coeffs_path,
+            dt_path,
+            am_path,
+            f'{small_delta:.7f}',
+            f'{big_delta:.7f}',
+            bmtxt_path,
+        ])  # fmt:skip
+        synth_path = coeffs_path[: -len('.nii')] + '_synth.nii'
+        if not op.exists(synth_path):
+            raise FileNotFoundError(f'SynthesizeDWIsFromMAPMRI did not produce {synth_path}')
+
+        # Split into per-volume images in native (corrected-bmtxt) order so the
+        # i-th synthesized volume pairs with the i-th corrected volume that
+        # DIFFPREPSplitOutputs emits.
+        synth_img = nb.load(synth_path)
+        synth_data = np.asanyarray(synth_img.dataobj)
+        if synth_data.ndim < 4:
+            synth_data = synth_data[..., np.newaxis]
+        per_vol = []
+        for vol_idx in range(synth_data.shape[3]):
+            vol_img = nb.Nifti1Image(
+                synth_data[..., vol_idx].astype('float32'),
+                synth_img.affine,
+                synth_img.header,
+            )
+            vol_img.set_data_dtype('float32')
+            vol_path = op.join(cwd, f'synth_vol_{vol_idx:04d}.nii.gz')
+            vol_img.to_filename(vol_path)
+            per_vol.append(vol_path)
+
+        self._results['synth_dwi_file'] = synth_path
+        self._results['per_volume_synth'] = per_vol
+        self._results['qc_mask'] = mask_path
+        return runtime

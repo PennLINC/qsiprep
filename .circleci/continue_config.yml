@@ -572,6 +572,8 @@ workflows:
                 - drbuddi_tensorline_epi
                 - drbuddi_shoreline_epi
                 - drbuddi_rpe
+                - diffprep
+                - diffprep_drbuddi
                 - maternal_brain_project
                 - forrest_gump
                 - forrest_gump_patch2self
@@ -595,6 +597,8 @@ workflows:
             - drbuddi_tensorline_epi
             - drbuddi_shoreline_epi
             - drbuddi_rpe
+            - diffprep
+            - diffprep_drbuddi
             - maternal_brain_project
             - forrest_gump
             - forrest_gump_patch2self
