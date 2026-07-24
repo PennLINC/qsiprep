@@ -376,7 +376,7 @@ def test_init_diffprep_hmc_wf_syn_without_t2w():
 def test_cnr_model_label_is_bids_valid():
     """The ``model`` entity names the signal model and must be alphanumeric.
 
-    ``diffprep_quadratic`` would be unparseable -- ``_`` is the BIDS entity
+    ``diffprep_quadratic`` could not be parsed back -- ``_`` is the BIDS entity
     separator -- and DIFFPREP emits no CNR of its own, so the diffprep backends
     report the MAPMRI model the CNR is actually derived from. Every other
     backend must be left exactly as it was.
