@@ -22,10 +22,36 @@ from .. import config
 
 LOGGER = logging.getLogger('nipype.interface')
 DSI_STUDIO_VERSION = '94b9c79'
+_APPTAINER_LIBRARY_PATH = '/.singularity.d/libs'
+
+
+def _get_dsi_studio_environment(environ=None):
+    # Exclude host libraries injected by Apptainer's --nv.
+    environment = dict(os.environ if environ is None else environ)
+    library_path = environment.get('LD_LIBRARY_PATH')
+    if library_path is None:
+        return environment
+    apptainer_path = op.normpath(_APPTAINER_LIBRARY_PATH)
+    library_paths = library_path.split(os.pathsep)
+    library_paths = [path for path in library_paths if op.normpath(path) != apptainer_path]
+    environment['LD_LIBRARY_PATH'] = os.pathsep.join(library_paths)
+    return environment
 
 
 class DSIStudioCommandLineInputSpec(CommandLineInputSpec):
     num_threads = traits.Int(1, usedefault=True, argstr='--thread_count=%d', nohash=True)
+
+
+class DSIStudioCommandLine(CommandLine):
+    """Run DSI Studio without libraries injected by Apptainer."""
+
+    def _run_interface(self, runtime, correct_return_codes=(0,)):
+        environment = {**os.environ, **self.inputs.environ}
+        environment = _get_dsi_studio_environment(environment)
+        if 'LD_LIBRARY_PATH' in environment:
+            value = environment['LD_LIBRARY_PATH']
+            self.inputs.environ['LD_LIBRARY_PATH'] = value
+        return super()._run_interface(runtime, correct_return_codes)
 
 
 class DSIStudioCreateSrcInputSpec(DSIStudioCommandLineInputSpec):
@@ -62,7 +88,7 @@ class DSIStudioCreateSrcOutputSpec(TraitedSpec):
     output_src = File(desc='Output file (.src.gz)', name_source='subject_id')
 
 
-class DSIStudioCreateSrc(CommandLine):
+class DSIStudioCreateSrc(DSIStudioCommandLine):
     input_spec = DSIStudioCreateSrcInputSpec
     output_spec = DSIStudioCreateSrcOutputSpec
     _cmd = 'dsi_studio --action=src '
@@ -126,7 +152,13 @@ class DSIStudioQC(SimpleInterface):
         # (which *cannot* be symbolic links for some reason).
         src_file = fname_presuffix(self.inputs.src_file, newpath=runtime.cwd)
         cmd = ['dsi_studio', '--action=qc', '--source=' + src_file]
-        proc = Popen(cmd, cwd=runtime.cwd, stdout=PIPE, stderr=PIPE)
+        proc = Popen(
+            cmd,
+            cwd=runtime.cwd,
+            env=_get_dsi_studio_environment(),
+            stdout=PIPE,
+            stderr=PIPE,
+        )
         out, err = proc.communicate()
         if out:
             LOGGER.info(out.decode())
@@ -224,7 +256,7 @@ class DSIStudioGQIReconstructionInputSpec(DSIStudioReconstructionInputSpec):
     ratio_of_mean_diffusion_distance = traits.Float(1.25, usedefault=True, argstr='--param0=%.4f')
 
 
-class DSIStudioGQIReconstruction(CommandLine):
+class DSIStudioGQIReconstruction(DSIStudioCommandLine):
     input_spec = DSIStudioGQIReconstructionInputSpec
     output_spec = DSIStudioReconstructionOutputSpec
     _cmd = 'dsi_studio --action=rec --method=4'
