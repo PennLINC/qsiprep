@@ -171,6 +171,19 @@ def init_drbuddi_wf(
             fieldmap_type=fieldmap_info['suffix'],
             num_threads=config.nipype.omp_nthreads,
             sloppy=config.execution.sloppy,
+            # ``sloppy`` replaces TORTOISE's whole diffeomorphic schedule via
+            # --DRBUDDI_stage, but that has no effect on Step1, the initial
+            # up/down registration, which drives the remaining runtime. This
+            # skips Step1's up-to-4x rigid + quick-diffeo + rigid loop while
+            # leaving the two full initial registrations (and therefore the
+            # bdown_to_bup rigid transform and the working-grid padding) intact.
+            #
+            # NOTE: the bigger lever, --DRBUDDI_disable_initial_rigid, is
+            # deliberately NOT used: DRBUDDI._list_outputs only emits
+            # bdown_to_bup_rigid_trans_h5 when it is off, and
+            # DRBUDDIAggregateOutputs dereferences that file unguarded on the
+            # rpe_series FA branch, so enabling it would crash rpe_series runs.
+            start_with_diffeomorphic_for_rigid_reg=config.execution.sloppy,
         ),
         name='drbuddi',
         n_procs=config.nipype.omp_nthreads,

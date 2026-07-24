@@ -597,7 +597,7 @@ class TORTOISEConvert(SimpleInterface):
 
         TORTOISEProcess requires the ``.bmtxt`` file to sit in the same
         directory as the ``.nii`` and share the same basename (it locates the
-        bmtxt from the nii by extension swap). 
+        bmtxt from the nii by extension swap).
         """
         dwi_file = fname_presuffix(
             self.inputs.dwi_file, newpath=runtime.cwd, use_ext=False, suffix='.nii'
@@ -846,6 +846,12 @@ class _DIFFPREPInputSpec(TORTOISEInputSpec):
         usedefault=True,
         argstr='--rot_eddy_center %s',
         desc='Rotation and eddy-currents center.',
+    )
+    niter = traits.Int(
+        argstr='--niter %d',
+        desc='Number of iterations for the high-b / SHORE-prediction refinement '
+        'loop. Zero disables all iterative correction, which is much faster. '
+        'Left unset by default so TORTOISE picks its own default.',
     )
     extra_args = traits.List(
         traits.Str(),

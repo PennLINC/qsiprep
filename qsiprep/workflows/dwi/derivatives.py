@@ -15,6 +15,43 @@ from ... import config
 from ...interfaces import DerivativesDataSink
 
 DEFAULT_MEMORY_MIN_GB = 0.01
+
+# The BIDS ``model`` entity on the CNR derivative names the *signal model* the
+# CNR was computed from, not the HMC backend -- for the older backends the two
+# strings simply coincide (3dSHORE, tensor, eddy). The ``diffprep_*`` backends
+# break that: DIFFPREP itself emits no CNR, so qsiprep derives one from the
+# MAPMRI fit it already runs for slice QC. ``diffprep_quadratic`` would also be
+# an invalid entity value -- ``_`` is the BIDS entity separator, so
+# ``model-diffprep_quadratic_stat-cnr`` cannot be parsed back.
+_CNR_MODEL_LABELS = {
+    'diffprep_motion': 'MAPMRI',
+    'diffprep_quadratic': 'MAPMRI',
+    'diffprep_cubic': 'MAPMRI',
+}
+
+
+def _cnr_model_label(hmc_model):
+    """BIDS-safe ``model`` entity naming the signal model behind the CNR map."""
+    return _CNR_MODEL_LABELS.get(hmc_model, hmc_model)
+
+
+def _cnr_description(hmc_model):
+    """Sidecar description for the CNR map, flagging DIFFPREP's in-sample fit."""
+    desc = 'Contrast-to-noise ratio map for the HMC step.'
+    if hmc_model.startswith('diffprep_'):
+        desc += (
+            ' DIFFPREP does not emit a CNR map, so this was computed from the '
+            'MAPMRI model qsiprep fits to the corrected data for slice-wise QC. '
+            'Unlike the SHORELine CNR -- whose predictions exclude q-space '
+            'neighbours of the volume being predicted -- these predictions are '
+            'in-sample (the model is fit to all volumes and synthesized at the '
+            'measured gradients), so values are optimistically biased and are '
+            'not quantitatively comparable to the 3dSHORE or eddy CNR. The '
+            'spatial pattern remains informative.'
+        )
+    return desc
+
+
 LOGGER = logging.getLogger('nipype.workflow')
 
 
@@ -128,13 +165,13 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             source_file=source_file,
             base_directory=output_dir,
             space='ACPC',
-            model=config.workflow.hmc_model,
+            model=_cnr_model_label(config.workflow.hmc_model),
             statistic='cnr',
             suffix='dwimap',
             extension='.nii.gz',
             compress=True,
             meta_dict={
-                'Description': 'Contrast-to-noise ratio map for the HMC step.',
+                'Description': _cnr_description(config.workflow.hmc_model),
             },
         ),
         name='ds_cnr_map_t1',

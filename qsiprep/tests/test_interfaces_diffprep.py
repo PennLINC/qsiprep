@@ -16,6 +16,7 @@ import shutil
 
 import numpy as np
 import pytest
+from nipype.interfaces.base import isdefined
 
 
 def _require(*binaries):
@@ -370,6 +371,137 @@ def test_init_diffprep_hmc_wf_syn_without_t2w():
     wf = _build(_scan_groups('syn'), t2w_sdc=False)
     assert wf.get_node('diffprep').inputs.epi_mode == 'off'
     assert wf.get_node('sdc_wf') is not None
+
+
+def test_cnr_model_label_is_bids_valid():
+    """The ``model`` entity names the signal model and must be alphanumeric.
+
+    ``diffprep_quadratic`` would be unparseable -- ``_`` is the BIDS entity
+    separator -- and DIFFPREP emits no CNR of its own, so the diffprep backends
+    report the MAPMRI model the CNR is actually derived from. Every other
+    backend must be left exactly as it was.
+    """
+    import re
+
+    from qsiprep.workflows.dwi.derivatives import _cnr_model_label
+
+    for unchanged in ('3dSHORE', 'eddy', 'tensor', 'none'):
+        assert _cnr_model_label(unchanged) == unchanged
+
+    for diffprep_model in ('diffprep_motion', 'diffprep_quadratic', 'diffprep_cubic'):
+        assert _cnr_model_label(diffprep_model) == 'MAPMRI'
+
+    entity = re.compile(r'^[a-zA-Z0-9]+$')
+    for model in ('3dSHORE', 'eddy', 'tensor', 'none', 'diffprep_quadratic'):
+        assert entity.match(_cnr_model_label(model)), model
+
+
+def test_cnr_description_flags_in_sample_bias():
+    """The diffprep CNR is an in-sample fit; the sidecar must say so."""
+    from qsiprep.workflows.dwi.derivatives import _cnr_description
+
+    baseline = _cnr_description('3dSHORE')
+    assert baseline == 'Contrast-to-noise ratio map for the HMC step.'
+
+    diffprep_desc = _cnr_description('diffprep_quadratic')
+    assert 'MAPMRI' in diffprep_desc
+    assert 'in-sample' in diffprep_desc
+    assert 'not quantitatively comparable' in diffprep_desc
+
+
+def test_init_diffprep_hmc_wf_cnr_is_computed_not_placeholder():
+    """cnr_map must come from CalculateCNR on the MAPMRI synthesis, not zeros."""
+    _base_config()
+    wf = _build(_scan_groups(None), t2w_sdc=False, name='dp_cnr')
+
+    node = wf.get_node('calculate_cnr')
+    assert node is not None
+    # Same three inputs SliceQC consumes, so no extra model fit is needed.
+    assert wf.get_node('synth_dwis') is not None
+    assert wf.get_node('split_outputs') is not None
+
+    # cnr_map is fed by calculate_cnr.cnr_image
+    edge = wf._graph.get_edge_data(node, wf.get_node('outputnode'))
+    assert edge is not None
+    assert ('cnr_image', 'cnr_map') in edge['connect']
+
+
+def test_init_diffprep_hmc_wf_honours_sloppy():
+    """--sloppy must take TORTOISE's expensive second pass out, via --niter 0.
+
+    Without it a DIFFPREP node can burn >1h on CI-sized data (emitting no output
+    while it does, which trips no_output_timeout).
+
+    It must do so with ``--niter 0`` and NOT by clearing ``is_human_brain``:
+    that flag reaches the same ``iterative`` gate but also makes DIFFPREP's
+    auto-masking look for a ``<stem>_noise.nii`` and changes structural-target
+    masking on the T2Wreg path.
+    """
+    config = _base_config()
+
+    wf = _build(_scan_groups(None), t2w_sdc=False, name='dp_notsloppy')
+    node = wf.get_node('diffprep')
+    assert node.inputs.is_human_brain is True
+    assert not isdefined(node.inputs.niter)
+    # a production run gets exactly the correction the user asked for
+    assert node.inputs.correction_mode == 'quadratic'
+
+    config.execution.sloppy = True
+    try:
+        wf = _build(_scan_groups(None), t2w_sdc=False, name='dp_sloppy')
+        node = wf.get_node('diffprep')
+        assert node.inputs.niter == 0
+        # --niter 0 only bites on high-b data, so the always-run first pass is
+        # bounded by dropping the 24-parameter quadratic fit to rigid.
+        assert node.inputs.correction_mode == 'motion'
+        # sloppy must not silently redefine what the data *is*
+        assert node.inputs.is_human_brain is True
+    finally:
+        config.execution.sloppy = False
+
+
+def test_drbuddi_sloppy_skips_rigid_diffeo_loop(tmp_path):
+    """--sloppy should also cheapen DRBUDDI's initial registration.
+
+    This covers shared code (``init_drbuddi_wf`` is used by the FSL backend
+    too), but DRBUDDI is the SDC half of the DIFFPREP backend. ``sloppy``
+    already replaces the diffeomorphic schedule via --DRBUDDI_stage, which has
+    no effect on Step1; this additionally skips Step1's rigid+diffeo+rigid loop.
+
+    Deliberately NOT --DRBUDDI_disable_initial_rigid: that suppresses
+    ``bdown_to_bup_rigid_trans_h5``, which DRBUDDIAggregateOutputs dereferences
+    unguarded on the rpe_series FA branch.
+    """
+    from qsiprep.interfaces.tortoise import DRBUDDI
+
+    up = tmp_path / 'up.nii'
+    down = tmp_path / 'down.nii'
+    _write_dummy_nii(up, nvols=1)
+    _write_dummy_nii(down, nvols=1)
+    up_json = tmp_path / 'up.json'
+    up_json.write_text('{"PhaseEncodingDirection": "j"}')
+
+    common = {
+        'fieldmap_type': 'rpe_series',
+        'blip_up_image': str(up),
+        'blip_down_image': str(down),
+        'blip_up_json': str(up_json),
+    }
+    flag = '--DRBUDDI_start_with_diffeomorphic_for_rigid_reg'
+
+    sloppy_cmd = DRBUDDI(
+        sloppy=True, start_with_diffeomorphic_for_rigid_reg=True, **common
+    ).cmdline
+    assert flag in sloppy_cmd
+    assert '--DRBUDDI_stage' in sloppy_cmd
+    # the destructive lever stays off so the rigid transform is still produced
+    assert '--DRBUDDI_disable_initial_rigid' not in sloppy_cmd
+
+    prod_cmd = DRBUDDI(
+        sloppy=False, start_with_diffeomorphic_for_rigid_reg=False, **common
+    ).cmdline
+    assert flag not in prod_cmd
+    assert '--DRBUDDI_stage' not in prod_cmd
 
 
 def test_init_diffprep_hmc_wf_topup_rejected():

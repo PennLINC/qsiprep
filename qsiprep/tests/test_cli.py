@@ -393,7 +393,9 @@ def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
         '--output-resolution=5',
     ]
 
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
+    # See test_diffprep: no expected-output manifest yet, so the assertion is
+    # that DIFFPREP + DRBUDDI SDC completes end to end.
+    _run_and_generate(TEST_NAME, parameters, test_main=False, check_outputs=False)
 
 
 @pytest.mark.integration

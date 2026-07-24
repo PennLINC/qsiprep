@@ -27,6 +27,7 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from ... import config
 from ...interfaces.gradients import ExtractB0s, SliceQC
 from ...interfaces.nilearn import EnhanceB0
+from ...interfaces.shoreline import CalculateCNR
 from ...interfaces.tortoise import (
     DIFFPREP,
     DIFFPREPMotionParams,
@@ -66,26 +67,6 @@ def _resolve_phase_encoding(pe_dir):
     if pe_dir in _VALID_PE:
         return pe_dir
     return 'j'
-
-
-def _zeros_like_b0(b0_template, cwd=None):
-    """Write a zeros placeholder CNR map on the b0-template grid.
-
-    DIFFPREP does not emit a CNR map, but downstream resampling feeds
-    ``outputnode.cnr_map`` into a mandatory ApplyTransforms input.
-    """
-    import os
-
-    import nibabel as nb
-    import numpy as np
-
-    cwd = cwd or os.getcwd()
-    img = nb.load(b0_template)
-    out = os.path.join(cwd, 'diffprep_cnr_placeholder.nii.gz')
-    nb.Nifti1Image(np.zeros(img.shape[:3], dtype='float32'), img.affine, img.header).to_filename(
-        out
-    )
-    return out
 
 
 def _write_sidecar_json(nii_file, phase_encoding_direction, working_dir=None):
@@ -236,14 +217,46 @@ def init_diffprep_hmc_wf(
     pe_dir = _resolve_phase_encoding((dwi_metadata or {}).get('PhaseEncodingDirection'))
     write_pe_json.inputs.phase_encoding_direction = pe_dir
 
+    # --sloppy asks for underpowered-but-fast registration (the same contract
+    # DRBUDDI honours via its own ``sloppy`` input). Every DWI is registered to
+    # the b=0 regardless; what costs the time is TORTOISE's *second* pass, which
+    # fits DTI+MAPMRI to the corrected data, synthesizes a contrast-matched
+    # target per volume and re-registers against it. That pass is gated on
+    # ``iterative = (is_human_brain && high_bval) || s2v || repol``, and
+    # ``--niter 0`` sets ``iterative=false`` outright (DIFFPREP.cxx:1359).
+    #
+    # Use ONLY --niter 0 here. Clearing ``is_human_brain`` would reach the same
+    # flag but is not a speed knob: it also makes DIFFPREP's auto-masking read a
+    # ``<stem>_noise.nii`` (DIFFPREP.cxx:2349) and changes structural-target
+    # masking on the T2Wreg path (TORTOISE.cxx:1079).
+    #
+    # ``--niter 0`` only bites on high-b (>1200) data, so it alone does not bound
+    # runtime for DTI-regime test data. The first pass -- which always runs --
+    # fits a 24-parameter quadratic per volume; dropping to rigid ('motion') is
+    # what actually bounds it. Both are sloppy-only; production runs still get
+    # the correction mode the user asked for.
+    effective_correction_mode = correction_mode
+    if config.execution.sloppy:
+        effective_correction_mode = 'motion'
+        sloppy_kwargs = {'niter': 0}
+        config.loggers.workflow.warning(
+            '--sloppy: running DIFFPREP rigid-only (-c motion, --niter 0) instead '
+            'of %s. Eddy-current correction is DISABLED; this is for smoke-testing '
+            'the pipeline, not for real data.',
+            correction_mode,
+        )
+    else:
+        sloppy_kwargs = {}
+
     diffprep = pe.Node(
         DIFFPREP(
-            correction_mode=correction_mode,
+            correction_mode=effective_correction_mode,
             b0_id=diffprep_cfg['b0_id'],
             is_human_brain=diffprep_cfg['is_human_brain'],
             rot_eddy_center=diffprep_cfg['rot_eddy_center'],
             extra_args=diffprep_cfg['extra_args'],
             epi_mode=epi_mode,
+            **sloppy_kwargs,
         ),
         name='diffprep',
         n_procs=config.nipype.omp_nthreads,
@@ -281,12 +294,11 @@ def init_diffprep_hmc_wf(
     )
     slice_qc = pe.Node(SliceQC(), name='slice_qc')
 
-    # Placeholder CNR map (DIFFPREP emits none, but it is a required downstream
-    # ApplyTransforms input).
-    cnr_placeholder = pe.Node(
-        niu.Function(function=_zeros_like_b0, output_names=['cnr_map']),
-        name='cnr_placeholder',
-    )
+    # CNR from the same MAPMRI synthesis, using SHORELine's CalculateCNR so the
+    # map means the same thing (per-voxel var(predicted) / var(predicted -
+    # observed)) as it does for the other backends. DIFFPREP emits no CNR of its
+    # own, and the map is a required downstream ApplyTransforms input.
+    calculate_cnr = pe.Node(CalculateCNR(), name='calculate_cnr', mem_gb=2)
 
     workflow.connect([
         (inputnode, tortoise_convert, [
@@ -331,11 +343,7 @@ def init_diffprep_hmc_wf(
         ]),
         (b0_ref_for_coreg, outputnode, [('outputnode.dwi_mask', 'b0_template_mask')]),
 
-        # Placeholder CNR map on the corrected b0-template grid
-        (extract_b0s, cnr_placeholder, [('b0_average', 'b0_template')]),
-        (cnr_placeholder, outputnode, [('cnr_map', 'cnr_map')]),
-
-        # Carpet-plot QC
+        # Carpet-plot QC + CNR (both from the shared MAPMRI synthesis)
         (diffprep, synth_dwis, [
             ('corrected_dwi_file', 'dwi_file'),
             ('corrected_bmtxt_file', 'bmtxt_file'),
@@ -347,6 +355,12 @@ def init_diffprep_hmc_wf(
             ('qc_mask', 'mask_image'),
         ]),
         (slice_qc, outputnode, [('slice_stats', 'slice_quality')]),
+        (split_outputs, calculate_cnr, [('dwi_files', 'hmc_warped_images')]),
+        (synth_dwis, calculate_cnr, [
+            ('per_volume_synth', 'predicted_images'),
+            ('qc_mask', 'mask_image'),
+        ]),
+        (calculate_cnr, outputnode, [('cnr_image', 'cnr_map')]),
     ])  # fmt:skip
 
     # T2Wreg bakes SDC into the DIFFPREP call: feed the T2w structural.
