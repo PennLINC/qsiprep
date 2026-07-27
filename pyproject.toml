@@ -266,6 +266,7 @@ markers = [
     "diffprep: TORTOISE DIFFPREP HMC on non-shelled data",
     "diffprep_drbuddi: TORTOISE DIFFPREP HMC with DRBUDDI SDC",
     "diffprep_rpe_series: TORTOISE DIFFPREP HMC with reverse-PE-series DRBUDDI SDC",
+    "diffprep_csdsi_rpe_series: TORTOISE DIFFPREP HMC on a non-shelled CS-DSI reverse-PE series",
     "dsdti_nofmap: test 13",
     "dsdti_synfmap: test 14",
     "dsdti_topup: test 15",

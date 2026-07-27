@@ -453,6 +453,63 @@ def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
 
 
 @pytest.mark.integration
+@pytest.mark.diffprep_csdsi_rpe_series
+def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
+    """TORTOISE DIFFPREP on a NON-shelled (CS-DSI) reverse-PE series + DRBUDDI.
+
+    Unlike ``test_diffprep_drbuddi_rpe_series`` (DTI-regime, shelled), this uses a
+    downsampled CS-DSI HASC55 AP+PA acquisition. Its q-space grid is not
+    tensor-fittable, so the backend takes the **Tier-2 predicted-shell path**: it
+    synthesizes a ``[b0 + 32*b1000]`` shell per phase-encoding direction and hands
+    those to DRBUDDI (rather than the raw corrected series). This is the CS-DSI
+    ``rpe_series`` coverage that was previously missing.
+
+    The fixture also ships a T2w, so a heavier variant (drop ``--anat-modality
+    none``) can additionally exercise the DRBUDDI multimodal-T2w branch.
+
+    Inputs
+    ------
+    - Downsampled CS-DSI HASC55 reverse-PE series (data/csdsi_rpe_series)
+    """
+    TEST_NAME = 'diffprep_csdsi_rpe_series'
+
+    # Test data pending upload to Box (see qsiprep/tests/utils.py). Skip cleanly
+    # until the archive is available rather than failing the download.
+    try:
+        dataset_dir = download_test_data('csdsi_rpe_series', data_dir)
+    except Exception as exc:  # noqa: BLE001
+        pytest.skip(f'csdsi_rpe_series test data not available yet: {exc}')
+
+    # XXX: Having to modify dataset_dirs is suboptimal.
+    dataset_dir = os.path.join(dataset_dir, 'csdsi_hasc55')
+    # A failed placeholder download can leave an empty dir behind; skip if the
+    # BIDS root isn't actually present.
+    if not os.path.isdir(dataset_dir):
+        pytest.skip('csdsi_rpe_series test data not available yet (placeholder URL).')
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        'participant',
+        f'-w={work_dir}',
+        '--sloppy',
+        '--anat-modality=none',
+        '--denoise-method=none',
+        '--b0-motion-corr-to=first',
+        '--b1-biascorrect-stage=none',
+        '--hmc-model=diffprep_quadratic',
+        '--pepolar-method=DRBUDDI',
+        '--output-resolution=5',
+    ]
+
+    # No expected-output manifest yet: assert the per-direction DIFFPREP +
+    # predicted-shell synthesis + DRBUDDI path completes end to end.
+    _run_and_generate(TEST_NAME, parameters, test_main=False, check_outputs=False)
+
+
+@pytest.mark.integration
 @pytest.mark.dsdti_nofmap
 def test_dsdti_nofmap(data_dir, output_dir, working_dir):
     """DSCDTI_nofmap test.
