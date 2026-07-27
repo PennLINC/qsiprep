@@ -405,7 +405,12 @@ to workflows in *QSIPrep*'s documentation]\
             scan_groups=dwi_info,
             output_prefix=output_fname,
             source_file=source_file,
-            t2w_sdc=bool(subject_data.get('t2w')),
+            # A T2w only drives SDC (DRBUDDI multimodal, TORTOISE T2Wreg, and the
+            # extended pepolar report's t2w_n4) when it is actually processed.
+            # With --anat-modality none there is no anatomical workflow and thus
+            # no t2w_unfatsat, so requesting T2w-based SDC would leave those nodes
+            # without an input (t2w_n4 would fail with an empty input_image).
+            t2w_sdc=bool(subject_data.get('t2w')) and config.workflow.anat_modality != 'none',
             anatomical_template=anatomical_template,
         )
         dwi_finalize_wf = init_dwi_finalize_wf(
