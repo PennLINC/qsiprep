@@ -28,15 +28,24 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from ... import config
 from ...interfaces.gradients import ExtractB0s, SliceQC
 from ...interfaces.nilearn import EnhanceB0
-from ...interfaces.shoreline import CalculateCNR
+from ...interfaces.shoreline import B0Mean, CalculateCNR, ExtractDWIsForModel, SignalPrediction
 from ...interfaces.tortoise import (
     DIFFPREP,
+    DRBUDDI,
     ConcatenateDIFFPREPGroups,
     DIFFPREPMotionParams,
     DIFFPREPSplitOutputs,
+    DRBUDDIAggregateOutputs,
+    MergeVolumes4D,
+    SplitCorrectedByGroup,
     SplitDWIsByDistortionGroup,
+    StageDRBUDDIPair,
     SynthesizeDWIs,
     TORTOISEConvert,
+    WriteBmatTORTOISE,
+    WriteDRBUDDIJSON,
+    WriteFSLGradFiles,
+    equally_distributed_directions,
     generate_diffprep_boilerplate,
 )
 from ...utils.resources import as_path
@@ -135,7 +144,7 @@ def _rpe_series_is_shelled(
     if non_b0.size == 0:
         return True
 
-    for centre in unique_bvals_tolerance(non_b0, tol):
+    for centre in unique_bvals_tolerance(non_b0, tol=tol):
         if b0_threshold <= centre <= max_tensor_bval:
             if int(np.sum(np.abs(non_b0 - centre) <= tol)) >= min_shell_dirs:
                 return True
@@ -260,6 +269,229 @@ def _build_rpe_diffprep_stage(
     return recombine
 
 
+def _init_diffprep_predict_shell_wf(
+    n_directions=32, bval=1000.0, minimal_q_distance=2.0, name='predict_shell_wf'
+):
+    """Synthesize a tensor-fittable ``[b0 + n*bval]`` shell for one PE side.
+
+    Adapted from the validated ``csdsi_preproc.predict.init_predict_shell_wf``,
+    but **without** its per-volume HMC ``ApplyTransforms`` step: DIFFPREP has
+    already baked motion+eddy correction into the volumes (identity affines from
+    :class:`DIFFPREPSplitOutputs`), so the corrected non-b=0 volumes are already
+    aligned and feed straight into 3dSHORE :class:`SignalPrediction`. Volume 0 of
+    the emitted shell is the side's own b=0 mean (measured, not predicted); the
+    ``n`` non-zero directions are the deterministic
+    :func:`equally_distributed_directions` set, so the up and down shells are
+    directly comparable to DRBUDDI.
+    """
+    workflow = Workflow(name=name)
+    bvecs_full, bvals_full = equally_distributed_directions(n=n_directions, bval=bval)
+    target_bvecs = bvecs_full[1:]
+    target_bvals = bvals_full[1:]
+
+    inputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=[
+                'dwi_files',
+                'bvec_files',
+                'bval_files',
+                'transforms',
+                'b0_indices',
+                'b0_template',
+                'b0_template_mask',
+            ]
+        ),
+        name='inputnode',
+    )
+    outputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=['predicted_4d', 'predicted_bvec_file', 'predicted_bval_file']
+        ),
+        name='outputnode',
+    )
+
+    extract = pe.Node(ExtractDWIsForModel(), name='extract_non_b0')
+    predict = pe.MapNode(
+        SignalPrediction(model='3dSHORE', minimal_q_distance=minimal_q_distance),
+        iterfield=['bvec_to_predict', 'bval_to_predict'],
+        name='predict_directions',
+    )
+    predict.inputs.bvec_to_predict = list(target_bvecs)
+    predict.inputs.bval_to_predict = list(target_bvals.astype(float))
+
+    merge_4d = pe.Node(MergeVolumes4D(), name='merge_4d')
+    write_grad = pe.Node(WriteFSLGradFiles(), name='write_grad')
+    write_grad.inputs.bvecs = bvecs_full
+    write_grad.inputs.bvals = bvals_full
+
+    workflow.connect([
+        (inputnode, extract, [
+            ('dwi_files', 'dwi_files'),
+            ('bval_files', 'bval_files'),
+            ('bvec_files', 'bvec_files'),
+            ('transforms', 'transforms'),
+            ('b0_indices', 'b0_indices'),
+        ]),
+        (extract, predict, [
+            ('model_dwi_files', 'aligned_dwis'),
+            ('model_bvecs', 'aligned_bvecs'),
+            ('model_bvals', 'bvals'),
+        ]),
+        (inputnode, predict, [
+            ('b0_template', 'aligned_b0_mean'),
+            ('b0_template_mask', 'aligned_mask'),
+        ]),
+        (inputnode, merge_4d, [('b0_template', 'b0_image')]),
+        (predict, merge_4d, [('predicted_image', 'predicted_images')]),
+        (merge_4d, outputnode, [('merged_4d', 'predicted_4d')]),
+        (write_grad, outputnode, [
+            ('bvec_file', 'predicted_bvec_file'),
+            ('bval_file', 'predicted_bval_file'),
+        ]),
+    ])  # fmt:skip
+    return workflow
+
+
+def _build_rpe_synthesis_sdc(
+    workflow, inputnode, outputnode, split_outputs, mask_source, scan_groups, dwi_metadata, t2w_sdc
+):
+    """DRBUDDI SDC for a **non-shelled** reverse-PE series (e.g. CS-DSI).
+
+    DRBUDDI's ``rpe_series`` path fits its own ``[b0, FA]`` per direction; on a
+    q-space grid that fit is ill-conditioned. So per PE direction we synthesize a
+    tensor-fittable ``[b0 + 32*b1000]`` shell (3dSHORE prediction on the
+    already-corrected volumes) and hand THOSE to the ``DRBUDDI`` interface. The
+    predicted shell of a side lives in the same distorted geometry as that side's
+    real volumes, so the deformation DRBUDDI estimates is applied to the *real*
+    data via the **stock** :class:`DRBUDDIAggregateOutputs` (unchanged), using the
+    real series' per-volume ``blip_assignments``.
+
+    This mirrors the validated ``csdsi_preproc`` recipe (stage synthesized shells,
+    call DRBUDDI directly), adapted to qsiprep's single-``scan_groups`` path where
+    one DRBUDDI run corrects both directions. ``init_drbuddi_wf`` is intentionally
+    NOT reused here: its ``GatherDRBUDDIInputs`` rebuilds DRBUDDI's registration
+    images from the real (non-shelled) series, which is exactly what we must avoid.
+    """
+    split_corrected = pe.Node(SplitCorrectedByGroup(), name='split_corrected_by_group')
+    workflow.connect([
+        (split_outputs, split_corrected, [
+            ('dwi_files', 'dwi_files'),
+            ('bval_files', 'bval_files'),
+            ('bvec_files', 'bvec_files'),
+            ('forward_transforms', 'forward_transforms'),
+            ('b0_indices', 'b0_indices'),
+        ]),
+        (inputnode, split_corrected, [('original_files', 'original_files')]),
+    ])  # fmt:skip
+
+    stage_pair = pe.Node(StageDRBUDDIPair(), name='stage_drbuddi_pair')
+    for side in ('up', 'down'):
+        b0_mean = pe.Node(B0Mean(), name=f'{side}_b0_mean')
+        predict = _init_diffprep_predict_shell_wf(name=f'predict_{side}_shell')
+        write_bmat = pe.Node(WriteBmatTORTOISE(), name=f'{side}_write_bmat')
+        workflow.connect([
+            (split_corrected, b0_mean, [(f'{side}_b0_files', 'b0_images')]),
+            (split_corrected, predict, [
+                (f'{side}_dwi_files', 'inputnode.dwi_files'),
+                (f'{side}_bval_files', 'inputnode.bval_files'),
+                (f'{side}_bvec_files', 'inputnode.bvec_files'),
+                (f'{side}_transforms', 'inputnode.transforms'),
+                (f'{side}_b0_indices', 'inputnode.b0_indices'),
+            ]),
+            (b0_mean, predict, [('average_image', 'inputnode.b0_template')]),
+            (mask_source, predict, [('outputnode.dwi_mask', 'inputnode.b0_template_mask')]),
+            (predict, write_bmat, [
+                ('outputnode.predicted_bvec_file', 'bvec_file'),
+                ('outputnode.predicted_bval_file', 'bval_file'),
+            ]),
+            (predict, stage_pair, [('outputnode.predicted_4d', f'{side}_image')]),
+            (write_bmat, stage_pair, [('bmat_file', f'{side}_bmat')]),
+        ])  # fmt:skip
+
+    write_json = pe.Node(
+        WriteDRBUDDIJSON(phase_encoding_direction=scan_groups['dwi_series_pedir']),
+        name='write_drbuddi_json',
+    )
+    if dwi_metadata:
+        if 'TotalReadoutTime' in dwi_metadata:
+            write_json.inputs.total_readout_time = float(dwi_metadata['TotalReadoutTime'])
+        if 'EchoTime' in dwi_metadata:
+            write_json.inputs.echo_time = float(dwi_metadata['EchoTime'])
+
+    drbuddi = pe.Node(
+        DRBUDDI(
+            fieldmap_type='rpe_series',
+            num_threads=config.nipype.omp_nthreads,
+            sloppy=config.execution.sloppy,
+            start_with_diffeomorphic_for_rigid_reg=config.execution.sloppy,
+        ),
+        name='drbuddi',
+        n_procs=config.nipype.omp_nthreads,
+    )
+
+    aggregate = pe.Node(
+        DRBUDDIAggregateOutputs(fieldmap_type='rpe_series'), name='aggregate_drbuddi'
+    )
+
+    workflow.connect([
+        (stage_pair, drbuddi, [
+            ('up_image', 'blip_up_image'),
+            ('up_bmat', 'blip_up_bmat'),
+            ('down_image', 'blip_down_image'),
+            ('down_bmat', 'blip_down_bmat'),
+        ]),
+        (write_json, drbuddi, [('out_json', 'blip_up_json')]),
+        (split_corrected, aggregate, [('blip_assignments', 'blip_assignments')]),
+        (drbuddi, aggregate, [
+            ('undistorted_reference', 'undistorted_reference'),
+            ('bdown_to_bup_rigid_trans_h5', 'bdown_to_bup_rigid_trans_h5'),
+            ('blip_down_b0', 'blip_down_b0'),
+            ('blip_down_b0_corrected', 'blip_down_b0_corrected'),
+            ('blip_down_b0_corrected_jac', 'blip_down_b0_corrected_jac'),
+            ('blip_down_b0_quad', 'blip_down_b0_quad'),
+            ('blip_up_b0', 'blip_up_b0'),
+            ('blip_up_b0_corrected', 'blip_up_b0_corrected'),
+            ('blip_up_b0_corrected_jac', 'blip_up_b0_corrected_jac'),
+            ('blip_up_b0_quad', 'blip_up_b0_quad'),
+            ('deformation_finv', 'deformation_finv'),
+            ('deformation_minv', 'deformation_minv'),
+            ('blip_up_FA', 'blip_up_FA'),
+            ('blip_down_FA', 'blip_down_FA'),
+            ('structural_image', 'structural_image'),
+        ]),
+    ])  # fmt:skip
+
+    if t2w_sdc:
+        # Only DRBUDDI takes the T2w; aggregate_drbuddi.structural_image is fed
+        # from drbuddi.structural_image above (matching stock init_drbuddi_wf).
+        # Connecting inputnode here too would double-connect that input and make
+        # nipype raise at build time.
+        workflow.connect([
+            (inputnode, drbuddi, [('t2w_unfatsat', 'structural_image')]),
+        ])  # fmt:skip
+
+    outputnode.inputs.sdc_method = 'DRBUDDI (predicted shell)'
+    outputnode.inputs.fieldmap_type = 'rpe_series'
+    workflow.connect([
+        (aggregate, outputnode, [
+            ('sdc_warps', 'to_dwi_ref_warps'),
+            ('sdc_scaling_images', 'sdc_scaling_images'),
+            ('up_fa_corrected_image', 'up_fa_corrected_image'),
+            ('down_fa_corrected_image', 'down_fa_corrected_image'),
+            ('b0_ref', 'b0_template'),
+        ]),
+        (drbuddi, outputnode, [
+            ('blip_up_b0', 'b0_up_image'),
+            ('blip_down_b0', 'b0_down_image'),
+            ('blip_up_b0_corrected', 'b0_up_corrected_image'),
+            ('blip_down_b0_corrected', 'b0_down_corrected_image'),
+            ('blip_up_FA', 'up_fa_image'),
+            ('blip_down_FA', 'down_fa_image'),
+            ('structural_image', 't2w_image'),
+        ]),
+    ])  # fmt:skip
+
+
 def init_diffprep_hmc_wf(
     scan_groups,
     source_file,
@@ -365,7 +597,8 @@ def init_diffprep_hmc_wf(
     # For a reverse-PE series, decide up front whether DRBUDDI can tensor-fit
     # the corrected series as-is (shelled) or needs a synthesized single shell
     # for its [b0, FA] target (non-shelled, e.g. CS-DSI). See
-    # _rpe_series_is_shelled.
+    # _rpe_series_is_shelled. The DIFFPREP split/recombine stage below is the
+    # same either way; only the DRBUDDI-input derivation differs.
     rpe_shelled = None
     if fieldmap_type == 'rpe_series':
         rpe_shelled = _rpe_series_is_shelled(
@@ -373,17 +606,6 @@ def init_diffprep_hmc_wf(
             config.workflow.b0_threshold,
             override=diffprep_cfg.get('rpe_series_shelled'),
         )
-        if not rpe_shelled:
-            raise NotImplementedError(
-                'Non-shelled reverse phase-encoded DWI series (e.g. CS-DSI '
-                'rpe_series) are not yet supported by the DIFFPREP backend: '
-                'DRBUDDI cannot derive a usable [b0, FA] registration target '
-                'from a q-space grid, so it would silently mis-correct. Shelled '
-                'reverse-PE series are supported. Predicted-shell synthesis for '
-                'non-shelled data is a planned follow-up. If this acquisition was '
-                'misclassified, set "rpe_series_shelled": true in '
-                '--diffprep-config to force the shelled path.'
-            )
 
     pe_dir = _resolve_phase_encoding((dwi_metadata or {}).get('PhaseEncodingDirection'))
 
@@ -572,17 +794,43 @@ def init_diffprep_hmc_wf(
     # -----------------------------------------------------------------------
 
     # 1. PEPOLAR -> DRBUDDI. Both an ``epi`` fieldmap (a reverse-PE b=0/EPI in
-    #    fmap/) and a reverse-PE *series* (``rpe_series``) land here. For
-    #    rpe_series the per-direction DIFFPREP stage above has already produced a
-    #    single recombined series in the original merged order, so DRBUDDI's
-    #    GatherDRBUDDIInputs re-splits it into up/down exactly as it does for the
-    #    FSL backend -- no DRBUDDI changes are needed.
+    #    fmap/) and a reverse-PE *series* (``rpe_series``) land here.
     if fieldmap_type in ('epi', 'rpe_series'):
         if 'topup' in config.workflow.pepolar_method.lower():
             raise Exception(
                 'TOPUP-based pepolar correction is not supported with '
                 '--hmc-model diffprep_*; choose --pepolar-method DRBUDDI.'
             )
+
+        # Non-shelled reverse-PE series: DRBUDDI cannot tensor-fit a usable
+        # [b0, FA] from a q-space grid, so synthesize a single shell per PE
+        # direction and hand those to DRBUDDI (see _build_rpe_synthesis_sdc).
+        if fieldmap_type == 'rpe_series' and not rpe_shelled:
+            config.loggers.workflow.warning(
+                'Non-shelled reverse-PE series detected: using the EXPERIMENTAL '
+                'predicted-shell DRBUDDI path (a tensor-fittable shell is '
+                'synthesized per phase-encoding direction). This path has no '
+                'CS-DSI CI dataset yet and must be validated against real data; '
+                'inspect the SDC report. Override detection with '
+                '"rpe_series_shelled" in --diffprep-config.'
+            )
+            _build_rpe_synthesis_sdc(
+                workflow,
+                inputnode,
+                outputnode,
+                split_outputs,
+                b0_ref_for_coreg,
+                scan_groups,
+                dwi_metadata,
+                t2w_sdc,
+            )
+            return workflow
+
+        # ``epi`` fieldmaps and *shelled* reverse-PE series go through the stock
+        # DRBUDDI workflow unchanged: for rpe_series the per-direction DIFFPREP
+        # stage above already produced a single recombined series in the original
+        # merged order, so GatherDRBUDDIInputs re-splits it into up/down exactly
+        # as it does for the FSL backend.
         drbuddi_wf = init_drbuddi_wf(scan_groups=scan_groups, t2w_sdc=t2w_sdc)
 
         workflow.connect([

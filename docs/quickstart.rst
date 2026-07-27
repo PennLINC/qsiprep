@@ -144,10 +144,11 @@ preferring TORTOISE-native tools:
   in ``fmap/``) and a reverse phase-encoded *DWI series* (``rpe_series``). For a
   reverse-PE series, DIFFPREP is run **once per phase-encoding direction** (a
   single run models one phase axis for the whole file), then the corrected
-  directions are recombined before DRBUDDI. Non-shelled (e.g. CS-DSI) reverse-PE
-  series are not yet supported on this path, because DRBUDDI cannot derive a
-  usable ``[b0, FA]`` target from a q-space grid; use an ``epi`` fieldmap, or
-  ``--hmc-model eddy``/``3dSHORE``, for that data.
+  directions are recombined before DRBUDDI. On non-shelled (e.g. CS-DSI)
+  reverse-PE series a tensor-fittable ``[b0 + b=1000]`` shell is synthesized per
+  direction (via 3dSHORE prediction) so DRBUDDI can derive a usable ``[b0, FA]``
+  registration target; this path is auto-detected and can be forced either way
+  with ``"rpe_series_shelled"`` in ``--diffprep-config``.
 - **GRE / phase-difference fieldmaps** are handled by *QSIPrep*'s standard
   fieldmap machinery (the deformation is applied downstream).
 - With **no fieldmap but a T2-weighted image** available, TORTOISE's

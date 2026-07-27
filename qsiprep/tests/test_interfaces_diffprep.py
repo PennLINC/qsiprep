@@ -457,6 +457,205 @@ def test_concatenate_diffprep_groups_rejects_count_mismatch(tmp_path):
         ).run(cwd=str(run_dir))
 
 
+def test_write_bmat_tortoise(tmp_path):
+    """WriteBmatTORTOISE emits one 6-float B-matrix row per volume, zeros at b=0."""
+    from qsiprep.interfaces.tortoise import WriteBmatTORTOISE
+
+    bval_file, bvec_file = _write_fsl_gradients(
+        tmp_path, [0, 1000], [[0.0, 1.0], [0.0, 0.0], [0.0, 0.0]]
+    )
+    run_dir = tmp_path / 'bmat'
+    run_dir.mkdir()
+    res = WriteBmatTORTOISE(bval_file=str(bval_file), bvec_file=str(bvec_file)).run(
+        cwd=str(run_dir)
+    )
+    bmat = np.atleast_2d(np.loadtxt(res.outputs.bmat_file))
+    assert bmat.shape == (2, 6)
+    np.testing.assert_array_equal(bmat[0], [0, 0, 0, 0, 0, 0])
+    # g = (1, 0, 0), b = 1000 -> Byy-position (index 3) holds b*gx*gx = 1000.
+    assert bmat[1, 0] == 1000
+
+
+def test_merge_volumes_4d(tmp_path):
+    """MergeVolumes4D stacks b0 + predicted volumes in order."""
+    import nibabel as nb
+
+    from qsiprep.interfaces.tortoise import MergeVolumes4D
+
+    b0 = tmp_path / 'b0.nii.gz'
+    nb.Nifti1Image(np.full((2, 2, 2), 5.0, dtype='float32'), np.eye(4)).to_filename(str(b0))
+    preds = []
+    for i, val in enumerate((7.0, 9.0)):
+        p = tmp_path / f'pred{i}.nii.gz'
+        nb.Nifti1Image(np.full((2, 2, 2), val, dtype='float32'), np.eye(4)).to_filename(str(p))
+        preds.append(str(p))
+
+    run_dir = tmp_path / 'merge'
+    run_dir.mkdir()
+    res = MergeVolumes4D(b0_image=str(b0), predicted_images=preds).run(cwd=str(run_dir))
+    out = nb.load(res.outputs.merged_4d)
+    assert out.shape == (2, 2, 2, 3)
+    np.testing.assert_array_equal([out.dataobj[0, 0, 0, i] for i in range(3)], [5, 7, 9])
+
+
+def test_write_fsl_grad_files(tmp_path):
+    """WriteFSLGradFiles writes (3, N) bvecs and a single-row bval."""
+    from qsiprep.interfaces.tortoise import WriteFSLGradFiles
+
+    bvecs = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+    bvals = np.array([0.0, 1000.0, 1000.0])
+    run_dir = tmp_path / 'grad'
+    run_dir.mkdir()
+    res = WriteFSLGradFiles(bvecs=bvecs, bvals=bvals).run(cwd=str(run_dir))
+    out_bvec = np.loadtxt(res.outputs.bvec_file)
+    out_bval = np.loadtxt(res.outputs.bval_file)
+    assert out_bvec.shape == (3, 3)
+    np.testing.assert_allclose(out_bvec, bvecs.T)
+    np.testing.assert_array_equal(out_bval, bvals)
+
+
+def test_equally_distributed_directions_deterministic():
+    """The prediction target set is fixed and shaped [1 b=0 + n b=bval]."""
+    from qsiprep.interfaces.tortoise import equally_distributed_directions
+
+    bvecs, bvals = equally_distributed_directions(n=8, bval=1000.0)
+    assert bvecs.shape == (9, 3)
+    assert bvals.shape == (9,)
+    np.testing.assert_array_equal(bvecs[0], [0, 0, 0])
+    assert bvals[0] == 0
+    np.testing.assert_array_equal(bvals[1:], [1000.0] * 8)
+    # Deterministic across calls (same seed).
+    bvecs2, _ = equally_distributed_directions(n=8, bval=1000.0)
+    np.testing.assert_array_equal(bvecs, bvecs2)
+
+
+def test_stage_drbuddi_pair_distinct_uncompressed_stems(tmp_path):
+    """StageDRBUDDIPair writes distinct-stemmed, decompressed blip_up/blip_down
+    with matched sibling bmtxt (DRBUDDI segfaults otherwise)."""
+    from qsiprep.interfaces.tortoise import StageDRBUDDIPair
+
+    up = tmp_path / 'predicted_4d.nii.gz'
+    down = tmp_path / 'predicted_4d_down.nii.gz'
+    _write_dummy_nii(up, nvols=2)
+    _write_dummy_nii(down, nvols=2)
+    (tmp_path / 'up.bmtxt').write_text('0 0 0 0 0 0\n1000 0 0 0 0 0\n')
+    (tmp_path / 'down.bmtxt').write_text('0 0 0 0 0 0\n1000 0 0 0 0 0\n')
+
+    run_dir = tmp_path / 'stage'
+    run_dir.mkdir()
+    res = StageDRBUDDIPair(
+        up_image=str(up),
+        up_bmat=str(tmp_path / 'up.bmtxt'),
+        down_image=str(down),
+        down_bmat=str(tmp_path / 'down.bmtxt'),
+    ).run(cwd=str(run_dir))
+
+    assert res.outputs.up_image.endswith('blip_up.nii')
+    assert res.outputs.down_image.endswith('blip_down.nii')
+    assert res.outputs.up_bmat.endswith('blip_up.bmtxt')
+    assert res.outputs.down_bmat.endswith('blip_down.bmtxt')
+    # matched stems: <image-stem>.bmtxt
+    assert os.path.splitext(res.outputs.up_image)[0] + '.bmtxt' == res.outputs.up_bmat
+
+
+def test_split_corrected_by_group(tmp_path):
+    """SplitCorrectedByGroup partitions per-volume corrected outputs into up/down
+    lists with per-side b=0 positions and per-volume blip assignments."""
+    from qsiprep.interfaces.tortoise import SplitCorrectedByGroup
+
+    ap = _make_original_with_sidecar(tmp_path, 'sub-01_dir-AP_dwi', 'j')
+    pa = _make_original_with_sidecar(tmp_path, 'sub-01_dir-PA_dwi', 'j-')
+    # 4 volumes: AP(b0), AP(dwi), PA(b0), PA(dwi)
+    original_files = [ap, ap, pa, pa]
+
+    dwi_files, bval_files, bvec_files, transforms = [], [], [], []
+    import nibabel as nb
+
+    for i in range(4):
+        d = tmp_path / f'vol{i}.nii.gz'
+        nb.Nifti1Image(np.full((2, 2, 2), i, dtype='float32'), np.eye(4)).to_filename(str(d))
+        dwi_files.append(str(d))
+        bv = tmp_path / f'vol{i}.bval'
+        bv.write_text('0\n' if i in (0, 2) else '1000\n')
+        bval_files.append(str(bv))
+        bvec = tmp_path / f'vol{i}.bvec'
+        bvec.write_text('0\n0\n0\n' if i in (0, 2) else '1\n0\n0\n')
+        bvec_files.append(str(bvec))
+        xf = tmp_path / f'vol{i}.txt'
+        xf.write_text('identity')
+        transforms.append(str(xf))
+
+    run_dir = tmp_path / 'splitcorr'
+    run_dir.mkdir()
+    res = SplitCorrectedByGroup(
+        dwi_files=dwi_files,
+        bval_files=bval_files,
+        bvec_files=bvec_files,
+        forward_transforms=transforms,
+        b0_indices=[0, 2],
+        original_files=original_files,
+    ).run(cwd=str(run_dir))
+
+    # nipype OutputMultiObject squeezes single-element lists to a scalar.
+    def _aslist(x):
+        return x if isinstance(x, list) else [x]
+
+    assert res.outputs.blip_assignments == ['up', 'up', 'down', 'down']
+    assert len(res.outputs.up_dwi_files) == 2
+    assert len(res.outputs.down_dwi_files) == 2
+    # each side's local b=0 is at position 0
+    assert res.outputs.up_b0_indices == [0]
+    assert res.outputs.down_b0_indices == [0]
+    assert len(_aslist(res.outputs.up_b0_files)) == 1
+    assert len(_aslist(res.outputs.down_b0_files)) == 1
+
+
+def test_init_diffprep_hmc_wf_rpe_series_non_shelled_synthesizes(tmp_path):
+    """A non-shelled reverse-PE series routes to the predicted-shell DRBUDDI path
+    instead of the stock DRBUDDI workflow."""
+    import json as _json
+
+    config = _base_config()
+    cfg = tmp_path / 'diffprep_config.json'
+    cfg.write_text(_json.dumps({'rpe_series_shelled': False}))
+    config.workflow.diffprep_config = str(cfg)
+    try:
+        wf = _build(
+            _scan_groups('rpe_series', rpe_series=['/data/sub-01_dir-PA_dwi.nii.gz']),
+            t2w_sdc=False,
+            name='dp_rpe_syn',
+        )
+        # Synthesis nodes present; stock DRBUDDI workflow is NOT built.
+        for node in (
+            'split_corrected_by_group',
+            'up_b0_mean',
+            'down_b0_mean',
+            'stage_drbuddi_pair',
+            'drbuddi',
+            'aggregate_drbuddi',
+        ):
+            assert wf.get_node(node) is not None, node
+        assert wf.get_node('predict_up_shell') is not None
+        assert wf.get_node('predict_down_shell') is not None
+        assert wf.get_node('drbuddi_sdc_wf') is None
+        # The per-direction DIFFPREP split still runs (non-shelled needs it too).
+        assert wf.get_node('recombine_rpe_groups') is not None
+        assert wf.get_node('outputnode').inputs.sdc_method == 'DRBUDDI (predicted shell)'
+
+        # With a T2w available the synthesis path must still build: DRBUDDI takes
+        # the structural, but aggregate_drbuddi.structural_image must NOT be
+        # double-connected (once from drbuddi, once from inputnode) or nipype
+        # raises at build time.
+        wf_t2w = _build(
+            _scan_groups('rpe_series', rpe_series=['/data/sub-01_dir-PA_dwi.nii.gz']),
+            t2w_sdc=True,
+            name='dp_rpe_syn_t2w',
+        )
+        assert wf_t2w.get_node('drbuddi') is not None
+    finally:
+        config.workflow.diffprep_config = None
+
+
 def test_rpe_series_is_shelled(tmp_path):
     """The shelled/non-shelled detector distinguishes a DTI/HARDI shell from a
     CS-DSI q-space grid, and honours the config override."""
