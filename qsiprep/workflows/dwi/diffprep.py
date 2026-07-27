@@ -83,6 +83,39 @@ def _sibling_bval(nii_file):
     return op.splitext(nii_file)[0] + '.bval'
 
 
+def _side_is_shelled(bvals, b0_threshold, tol, max_tensor_bval, min_shell_dirs, max_shells):
+    """Is one phase-encoding direction a tensor-fittable set of shells?
+
+    Two conditions must both hold:
+
+    1. **Grid guard** -- the non-b=0 b-values cluster into at most ``max_shells``
+       distinct shells. A CS-DSI q-space grid fragments into many shells (real
+       HASC55 has ~18), while DTI has 1 and multi-shell HARDI a handful. This is
+       the decisive test: a grid can still pack ``>= min_shell_dirs`` samples
+       near some low-b radius (HASC55 has 4 near b=1195 per side, 8 when both PE
+       directions are pooled), so a low-b population count *alone* misclassifies
+       it as shelled.
+    2. **Tensor-fittability** -- at least one shell in
+       ``[b0_threshold, max_tensor_bval]`` holds ``>= min_shell_dirs`` volumes,
+       so DRBUDDI's own low-b tensor fit is well-conditioned.
+    """
+    import numpy as np
+    from dipy.core.gradients import unique_bvals_tolerance
+
+    non_b0 = np.asarray(bvals, float)
+    non_b0 = non_b0[non_b0 >= b0_threshold]
+    if non_b0.size == 0:
+        return False
+    centres = unique_bvals_tolerance(non_b0, tol=tol)
+    if len(centres) > max_shells:
+        return False
+    return any(
+        b0_threshold <= centre <= max_tensor_bval
+        and int(np.sum(np.abs(non_b0 - centre) <= tol)) >= min_shell_dirs
+        for centre in centres
+    )
+
+
 def _rpe_series_is_shelled(
     scan_groups,
     b0_threshold,
@@ -90,65 +123,68 @@ def _rpe_series_is_shelled(
     tol=100.0,
     max_tensor_bval=1500.0,
     min_shell_dirs=6,
+    max_shells=7,
 ):
     """Decide whether a reverse-PE series is tensor-fittable as-is.
 
     DRBUDDI's ``rpe_series`` path fits its own tensor per phase-encoding
     direction and uses ``[b0, FA]`` as a 2-channel registration target. That
-    tensor fit is well-conditioned only when the data contains a populous,
-    tensor-fittable low-b shell -- true for DTI and multi-shell HARDI, false for
-    a CS-DSI q-space grid, where DRBUDDI would silently produce a poor A0/FA.
+    tensor fit is well-conditioned only for DTI / multi-shell HARDI, not for a
+    CS-DSI q-space grid, where DRBUDDI would silently produce a poor A0/FA.
 
-    Returns ``True`` (use the corrected series directly) when a shell centre in
-    ``[b0_threshold, max_tensor_bval]`` holds at least ``min_shell_dirs`` volumes
-    within ``tol`` s/mm^2 of it; ``False`` (synthesize a shell) otherwise. A
-    user override (``--diffprep-config`` ``"rpe_series_shelled"``) wins. When the
-    b-values cannot be read -- e.g. docs/graph builds with placeholder paths --
-    we default to shelled, which is safe for real data because BIDS DWI always
-    ships ``.bval`` files.
+    Each phase-encoding direction is evaluated **independently** (see
+    :func:`_side_is_shelled`) -- pooling the two directions would double every
+    shell's population and tip a grid over the ``min_shell_dirs`` threshold. The
+    series is treated as shelled only if **both** directions are. A user override
+    (``--diffprep-config`` ``"rpe_series_shelled"``) wins. When the b-values
+    cannot be read -- e.g. docs/graph builds with placeholder paths -- we default
+    to shelled, which is safe for real data because BIDS DWI always ships
+    ``.bval`` files.
 
     .. note::
-       This is a heuristic and the DIFFPREP ``rpe_series`` path has no CS-DSI CI
-       dataset yet, so it must be validated against real data. Override it with
+       This is a heuristic; validate it against real data and override with
        ``"rpe_series_shelled": true|false`` in ``--diffprep-config`` if a
-       particular acquisition is misclassified.
+       particular acquisition is misclassified. The safe error direction is
+       toward *non*-shelled (synthesis), which produces a valid result on shelled
+       data too; a grid wrongly called shelled yields silently wrong SDC.
     """
     import numpy as np
-    from dipy.core.gradients import unique_bvals_tolerance
 
     if override is not None:
         return bool(override)
 
     fieldmap_info = scan_groups['fieldmap_info']
-    nii_files = list(scan_groups.get('dwi_series', [])) + list(
-        fieldmap_info.get('rpe_series', [])
-    )
-    all_bvals = []
-    for nii in nii_files:
-        bval_path = _sibling_bval(nii)
-        try:
-            all_bvals.append(np.loadtxt(bval_path).reshape(-1))
-        except (OSError, ValueError):
-            config.loggers.workflow.warning(
-                'rpe_series shelled/non-shelled detection could not read %s; '
-                'defaulting to the shelled (stock DRBUDDI) path. Set '
-                '"rpe_series_shelled" in --diffprep-config to override.',
-                bval_path,
-            )
-            return True
+    side_file_lists = [
+        list(scan_groups.get('dwi_series', [])),
+        list(fieldmap_info.get('rpe_series', [])),
+    ]
 
-    if not all_bvals:
-        return True
-    bvals = np.concatenate(all_bvals)
-    non_b0 = bvals[bvals >= b0_threshold]
-    if non_b0.size == 0:
-        return True
-
-    for centre in unique_bvals_tolerance(non_b0, tol=tol):
-        if b0_threshold <= centre <= max_tensor_bval:
-            if int(np.sum(np.abs(non_b0 - centre) <= tol)) >= min_shell_dirs:
+    per_side_bvals = []
+    for side_files in side_file_lists:
+        if not side_files:
+            continue
+        side = []
+        for nii in side_files:
+            bval_path = _sibling_bval(nii)
+            try:
+                side.append(np.loadtxt(bval_path).reshape(-1))
+            except (OSError, ValueError):
+                config.loggers.workflow.warning(
+                    'rpe_series shelled/non-shelled detection could not read %s; '
+                    'defaulting to the shelled (stock DRBUDDI) path. Set '
+                    '"rpe_series_shelled" in --diffprep-config to override.',
+                    bval_path,
+                )
                 return True
-    return False
+        per_side_bvals.append(np.concatenate(side))
+
+    if not per_side_bvals:
+        return True
+
+    return all(
+        _side_is_shelled(bvals, b0_threshold, tol, max_tensor_bval, min_shell_dirs, max_shells)
+        for bvals in per_side_bvals
+    )
 
 
 def _resolve_phase_encoding(pe_dir):

@@ -683,6 +683,21 @@ def test_rpe_series_is_shelled(tmp_path):
     # Override wins over auto-detection either way.
     assert _rpe_series_is_shelled(scan_groups, 100, override=True) is True
 
+    # Regression: a real CS-DSI HASC55 scheme has a dense low-b cluster (8
+    # volumes near b=1195 when both PE directions are pooled) that a bare
+    # min-shell-dirs count would mis-read as shelled. The grid guard (18 distinct
+    # shells) plus per-side evaluation must still classify it non-shelled.
+    hasc55 = (
+        '5 5 3395 3400 2595 4395 3795 2795 1995 4190 3600 3395 2795 1595 5 3790 '
+        '4390 800 3400 3990 1195 3590 2195 4190 4000 2790 5000 5 1795 1795 4195 '
+        '3395 1195 2795 595 3590 3395 1990 2795 4195 5 3390 3600 4395 4985 4195 '
+        '3390 3990 3400 2590 3590 995 2790 5000 2395 2000 1795 2190 1195 1195 '
+        '2595 3790 5'
+    )
+    (tmp_path / 'ap_dwi.bval').write_text(hasc55 + '\n')
+    (tmp_path / 'pa_dwi.bval').write_text(hasc55 + '\n')
+    assert _rpe_series_is_shelled(scan_groups, 100) is False
+
     # Unreadable b-values default to shelled (safe stock DRBUDDI path).
     missing = {
         'dwi_series': ['/nonexistent/ap_dwi.nii.gz'],
