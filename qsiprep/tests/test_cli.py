@@ -368,10 +368,10 @@ def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
       present
     - Denoising is skipped
 
-    Uses an ``epi`` fieldmap rather than a reverse-PE *series* (rpe_series): the
-    latter concatenates opposing-PE volumes into one file for FSL eddy, which
-    DIFFPREP (single phase axis per run) cannot model. rpe_series support is a
-    planned follow-up; see ``test_diffprep_rpe_series_not_implemented``.
+    Uses an ``epi`` fieldmap (a reverse-PE b=0/EPI in fmap/). The reverse-PE
+    *series* (rpe_series) case is covered separately in
+    ``test_diffprep_drbuddi_rpe_series``, which exercises the per-direction
+    DIFFPREP split/recombine before DRBUDDI.
 
     Inputs
     ------
@@ -401,6 +401,54 @@ def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
 
     # See test_diffprep: no expected-output manifest yet, so the assertion is
     # that DIFFPREP + DRBUDDI SDC completes end to end.
+    _run_and_generate(TEST_NAME, parameters, test_main=False, check_outputs=False)
+
+
+@pytest.mark.integration
+@pytest.mark.diffprep_rpe_series
+def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
+    """TORTOISE DIFFPREP HMC on a reverse-PE *series* (rpe_series) + DRBUDDI SDC.
+
+    Unlike ``test_diffprep_drbuddi`` (which uses an ``epi`` fieldmap), this feeds
+    two opposing-PE DWI *series*. qsiprep merges them into one 4D file for FSL
+    eddy; the DIFFPREP backend re-splits that merge back into its two PE groups,
+    runs DIFFPREP once per direction, recombines, and hands the flat list to the
+    stock DRBUDDI path. This exercises the Tier-1 (shelled) rpe_series path.
+
+    The ``tinytensor_rpe_series`` dataset is a DTI-regime (shelled) acquisition,
+    so DRBUDDI's own [b0, FA] tensor fit is well-conditioned and no predicted-
+    shell synthesis is needed. A non-shelled (CS-DSI) reverse-PE-series dataset
+    is still required to exercise the Tier-2 synthesis path end to end.
+
+    Inputs
+    ------
+    - qsiprep reverse-PE-series results (data/drbuddi_rpe_series)
+    """
+    TEST_NAME = 'diffprep_rpe_series'
+
+    dataset_dir = download_test_data('drbuddi_rpe_series', data_dir)
+    # XXX: Having to modify dataset_dirs is suboptimal.
+    dataset_dir = os.path.join(dataset_dir, 'tinytensor_rpe_series')
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        'participant',
+        f'-w={work_dir}',
+        '--sloppy',
+        '--anat-modality=none',
+        '--denoise-method=none',
+        '--b0-motion-corr-to=first',
+        '--b1-biascorrect-stage=none',
+        '--hmc-model=diffprep_quadratic',
+        '--pepolar-method=DRBUDDI',
+        '--output-resolution=5',
+    ]
+
+    # No expected-output manifest yet: assert the split/recombine + DRBUDDI SDC
+    # path completes end to end.
     _run_and_generate(TEST_NAME, parameters, test_main=False, check_outputs=False)
 
 

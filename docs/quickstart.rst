@@ -138,12 +138,16 @@ settings can be supplied with ``--diffprep-config``.
 The ``diffprep_*`` backends also perform susceptibility distortion correction,
 preferring TORTOISE-native tools:
 
-- **Reverse phase-encoded** ``epi`` fieldmaps (a blip-up/blip-down b=0 or EPI in
-  ``fmap/``) are corrected with DRBUDDI (``--pepolar-method DRBUDDI``; ``TOPUP``
-  is not supported with the DIFFPREP backends). Reverse phase-encoded *DWI
-  series* (``rpe_series``) are **not yet supported** by the DIFFPREP backends and
-  will raise an error — use an ``epi`` fieldmap, or ``--hmc-model eddy``/
-  ``3dSHORE``, for that data.
+- **Reverse phase-encoded** data is corrected with DRBUDDI
+  (``--pepolar-method DRBUDDI``; ``TOPUP`` is not supported with the DIFFPREP
+  backends). This covers both an ``epi`` fieldmap (a blip-up/blip-down b=0 or EPI
+  in ``fmap/``) and a reverse phase-encoded *DWI series* (``rpe_series``). For a
+  reverse-PE series, DIFFPREP is run **once per phase-encoding direction** (a
+  single run models one phase axis for the whole file), then the corrected
+  directions are recombined before DRBUDDI. Non-shelled (e.g. CS-DSI) reverse-PE
+  series are not yet supported on this path, because DRBUDDI cannot derive a
+  usable ``[b0, FA]`` target from a q-space grid; use an ``epi`` fieldmap, or
+  ``--hmc-model eddy``/``3dSHORE``, for that data.
 - **GRE / phase-difference fieldmaps** are handled by *QSIPrep*'s standard
   fieldmap machinery (the deformation is applied downstream).
 - With **no fieldmap but a T2-weighted image** available, TORTOISE's

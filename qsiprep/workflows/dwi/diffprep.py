@@ -18,6 +18,7 @@ This mirrors the SDC coverage of :func:`~qsiprep.workflows.dwi.fsl.init_fsl_hmc_
 """
 
 import json
+import os.path as op
 from importlib.resources import files
 
 from nipype.interfaces import utility as niu
@@ -30,8 +31,10 @@ from ...interfaces.nilearn import EnhanceB0
 from ...interfaces.shoreline import CalculateCNR
 from ...interfaces.tortoise import (
     DIFFPREP,
+    ConcatenateDIFFPREPGroups,
     DIFFPREPMotionParams,
     DIFFPREPSplitOutputs,
+    SplitDWIsByDistortionGroup,
     SynthesizeDWIs,
     TORTOISEConvert,
     generate_diffprep_boilerplate,
@@ -57,7 +60,86 @@ def _load_diffprep_config(config_path):
     cfg.setdefault('is_human_brain', True)
     cfg.setdefault('rot_eddy_center', 'isocenter')
     cfg.setdefault('extra_args', [])
+    # None => auto-detect whether a reverse-PE series is tensor-fittable
+    # as-is (see _rpe_series_is_shelled). true/false forces the decision.
+    cfg.setdefault('rpe_series_shelled', None)
     return cfg
+
+
+def _sibling_bval(nii_file):
+    """Return the FSL ``.bval`` sibling path for a BIDS DWI nii."""
+    for ext in ('.nii.gz', '.nii'):
+        if nii_file.endswith(ext):
+            return nii_file[: -len(ext)] + '.bval'
+    return op.splitext(nii_file)[0] + '.bval'
+
+
+def _rpe_series_is_shelled(
+    scan_groups,
+    b0_threshold,
+    override=None,
+    tol=100.0,
+    max_tensor_bval=1500.0,
+    min_shell_dirs=6,
+):
+    """Decide whether a reverse-PE series is tensor-fittable as-is.
+
+    DRBUDDI's ``rpe_series`` path fits its own tensor per phase-encoding
+    direction and uses ``[b0, FA]`` as a 2-channel registration target. That
+    tensor fit is well-conditioned only when the data contains a populous,
+    tensor-fittable low-b shell -- true for DTI and multi-shell HARDI, false for
+    a CS-DSI q-space grid, where DRBUDDI would silently produce a poor A0/FA.
+
+    Returns ``True`` (use the corrected series directly) when a shell centre in
+    ``[b0_threshold, max_tensor_bval]`` holds at least ``min_shell_dirs`` volumes
+    within ``tol`` s/mm^2 of it; ``False`` (synthesize a shell) otherwise. A
+    user override (``--diffprep-config`` ``"rpe_series_shelled"``) wins. When the
+    b-values cannot be read -- e.g. docs/graph builds with placeholder paths --
+    we default to shelled, which is safe for real data because BIDS DWI always
+    ships ``.bval`` files.
+
+    .. note::
+       This is a heuristic and the DIFFPREP ``rpe_series`` path has no CS-DSI CI
+       dataset yet, so it must be validated against real data. Override it with
+       ``"rpe_series_shelled": true|false`` in ``--diffprep-config`` if a
+       particular acquisition is misclassified.
+    """
+    import numpy as np
+    from dipy.core.gradients import unique_bvals_tolerance
+
+    if override is not None:
+        return bool(override)
+
+    fieldmap_info = scan_groups['fieldmap_info']
+    nii_files = list(scan_groups.get('dwi_series', [])) + list(
+        fieldmap_info.get('rpe_series', [])
+    )
+    all_bvals = []
+    for nii in nii_files:
+        bval_path = _sibling_bval(nii)
+        try:
+            all_bvals.append(np.loadtxt(bval_path).reshape(-1))
+        except (OSError, ValueError):
+            config.loggers.workflow.warning(
+                'rpe_series shelled/non-shelled detection could not read %s; '
+                'defaulting to the shelled (stock DRBUDDI) path. Set '
+                '"rpe_series_shelled" in --diffprep-config to override.',
+                bval_path,
+            )
+            return True
+
+    if not all_bvals:
+        return True
+    bvals = np.concatenate(all_bvals)
+    non_b0 = bvals[bvals >= b0_threshold]
+    if non_b0.size == 0:
+        return True
+
+    for centre in unique_bvals_tolerance(non_b0, tol):
+        if b0_threshold <= centre <= max_tensor_bval:
+            if int(np.sum(np.abs(non_b0 - centre) <= tol)) >= min_shell_dirs:
+                return True
+    return False
 
 
 def _resolve_phase_encoding(pe_dir):
@@ -97,6 +179,85 @@ def _write_sidecar_json(nii_file, phase_encoding_direction, working_dir=None):
     with open(json_file, 'w') as fobj:
         json.dump({'PhaseEncodingDirection': phase_encoding_direction}, fobj)
     return json_file
+
+
+def _write_pe_json_node(name):
+    """A function-node that writes a PhaseEncodingDirection sidecar for TORTOISE."""
+    return pe.Node(
+        niu.Function(
+            input_names=['nii_file', 'phase_encoding_direction', 'working_dir'],
+            output_names=['json_file'],
+            function=_write_sidecar_json,
+        ),
+        name=name,
+    )
+
+
+def _build_rpe_diffprep_stage(
+    workflow, inputnode, diffprep_kwargs, pe_axis, b0_threshold, n_procs
+):
+    """Wire the per-phase-encoding-direction DIFFPREP stage for ``rpe_series``.
+
+    Mirrors TORTOISE's own ``for(int PE=0;PE<2;PE++)`` loop: the already-merged
+    (denoised + b0-harmonized) series is re-split into its two PE groups, each
+    single-PE group is corrected by its own DIFFPREP run, and the two corrected
+    outputs are recombined in the original volume order. The returned node
+    exposes the same ``corrected_dwi_file`` / ``corrected_bmtxt_file`` /
+    ``transformations_file`` triple as a single DIFFPREP node, so everything
+    downstream (split, QC, CNR, motion params, DRBUDDI) is identical.
+
+    Returns
+    -------
+    nipype.pipeline.engine.Node
+        The ``ConcatenateDIFFPREPGroups`` node providing the recombined triple.
+    """
+    split_groups = pe.Node(
+        SplitDWIsByDistortionGroup(pe_axis=pe_axis, b0_threshold=b0_threshold),
+        name='split_rpe_groups',
+    )
+    workflow.connect([
+        (inputnode, split_groups, [
+            ('dwi_file', 'dwi_file'),
+            ('bval_file', 'bval_file'),
+            ('bvec_file', 'bvec_file'),
+            ('original_files', 'original_files'),
+        ]),
+    ])  # fmt:skip
+
+    recombine = pe.Node(ConcatenateDIFFPREPGroups(), name='recombine_rpe_groups')
+    workflow.connect([
+        (split_groups, recombine, [('group_assignments', 'group_assignments')]),
+    ])  # fmt:skip
+
+    for group_id in (1, 2):
+        convert = pe.Node(TORTOISEConvert(), name=f'tortoise_convert_g{group_id}')
+        write_json = _write_pe_json_node(f'write_pe_json_g{group_id}')
+        diffprep = pe.Node(
+            DIFFPREP(**diffprep_kwargs),
+            name=f'diffprep_g{group_id}',
+            n_procs=n_procs,
+        )
+        workflow.connect([
+            (split_groups, convert, [
+                (f'group{group_id}_dwi_file', 'dwi_file'),
+                (f'group{group_id}_bval_file', 'bval_file'),
+                (f'group{group_id}_bvec_file', 'bvec_file'),
+            ]),
+            (convert, write_json, [('dwi_file', 'nii_file')]),
+            (split_groups, write_json, [(f'group{group_id}_pe_dir', 'phase_encoding_direction')]),
+            (convert, diffprep, [
+                ('dwi_file', 'dwi_file'),
+                ('bmtxt_file', 'bmtxt_file'),
+            ]),
+            (write_json, diffprep, [('json_file', 'json_file')]),
+            (diffprep, recombine, [
+                ('corrected_dwi_file', f'group{group_id}_dwi_file'),
+                ('corrected_bmtxt_file', f'group{group_id}_bmtxt_file'),
+                ('transformations_file', f'group{group_id}_transformations_file'),
+            ]),
+        ])  # fmt:skip
+
+    return recombine
 
 
 def init_diffprep_hmc_wf(
@@ -201,21 +362,30 @@ def init_diffprep_hmc_wf(
     # Load any user-supplied DIFFPREP config (or our defaults)
     diffprep_cfg = _load_diffprep_config(config.workflow.diffprep_config)
 
-    # Convert gzipped niftis + FSL gradients into TORTOISE format (.nii + .bmtxt).
-    tortoise_convert = pe.Node(TORTOISEConvert(), name='tortoise_convert')
+    # For a reverse-PE series, decide up front whether DRBUDDI can tensor-fit
+    # the corrected series as-is (shelled) or needs a synthesized single shell
+    # for its [b0, FA] target (non-shelled, e.g. CS-DSI). See
+    # _rpe_series_is_shelled.
+    rpe_shelled = None
+    if fieldmap_type == 'rpe_series':
+        rpe_shelled = _rpe_series_is_shelled(
+            scan_groups,
+            config.workflow.b0_threshold,
+            override=diffprep_cfg.get('rpe_series_shelled'),
+        )
+        if not rpe_shelled:
+            raise NotImplementedError(
+                'Non-shelled reverse phase-encoded DWI series (e.g. CS-DSI '
+                'rpe_series) are not yet supported by the DIFFPREP backend: '
+                'DRBUDDI cannot derive a usable [b0, FA] registration target '
+                'from a q-space grid, so it would silently mis-correct. Shelled '
+                'reverse-PE series are supported. Predicted-shell synthesis for '
+                'non-shelled data is a planned follow-up. If this acquisition was '
+                'misclassified, set "rpe_series_shelled": true in '
+                '--diffprep-config to force the shelled path.'
+            )
 
-    # TORTOISE reads PhaseEncodingDirection from a BIDS-style JSON next to the
-    # .nii. Generate one so DIFFPREP (and T2Wreg) can pick the right phase axis.
-    write_pe_json = pe.Node(
-        niu.Function(
-            input_names=['nii_file', 'phase_encoding_direction', 'working_dir'],
-            output_names=['json_file'],
-            function=_write_sidecar_json,
-        ),
-        name='write_pe_json',
-    )
     pe_dir = _resolve_phase_encoding((dwi_metadata or {}).get('PhaseEncodingDirection'))
-    write_pe_json.inputs.phase_encoding_direction = pe_dir
 
     # --sloppy asks for underpowered-but-fast registration (the same contract
     # DRBUDDI honours via its own ``sloppy`` input). Every DWI is registered to
@@ -248,19 +418,65 @@ def init_diffprep_hmc_wf(
     else:
         sloppy_kwargs = {}
 
-    diffprep = pe.Node(
-        DIFFPREP(
-            correction_mode=effective_correction_mode,
-            b0_id=diffprep_cfg['b0_id'],
-            is_human_brain=diffprep_cfg['is_human_brain'],
-            rot_eddy_center=diffprep_cfg['rot_eddy_center'],
-            extra_args=diffprep_cfg['extra_args'],
-            epi_mode=epi_mode,
-            **sloppy_kwargs,
-        ),
-        name='diffprep',
-        n_procs=config.nipype.omp_nthreads,
+    diffprep_kwargs = dict(
+        correction_mode=effective_correction_mode,
+        b0_id=diffprep_cfg['b0_id'],
+        is_human_brain=diffprep_cfg['is_human_brain'],
+        rot_eddy_center=diffprep_cfg['rot_eddy_center'],
+        extra_args=diffprep_cfg['extra_args'],
+        epi_mode=epi_mode,
+        **sloppy_kwargs,
     )
+
+    # DIFFPREP stage. A reverse-PE *series* is corrected once per phase-encoding
+    # direction (DIFFPREP models a single phase axis / single b=0 reference for
+    # a whole file), then recombined; every other case is a single DIFFPREP run.
+    # Both expose the identical ``corrected_dwi_file`` / ``corrected_bmtxt_file``
+    # / ``transformations_file`` triple via ``corrected_node``.
+    if fieldmap_type == 'rpe_series':
+        corrected_node = _build_rpe_diffprep_stage(
+            workflow,
+            inputnode,
+            diffprep_kwargs,
+            pe_axis=pe_dir[0],
+            b0_threshold=config.workflow.b0_threshold,
+            n_procs=config.nipype.omp_nthreads,
+        )
+    else:
+        # Convert gzipped niftis + FSL gradients into TORTOISE format (.nii + .bmtxt).
+        tortoise_convert = pe.Node(TORTOISEConvert(), name='tortoise_convert')
+
+        # TORTOISE reads PhaseEncodingDirection from a BIDS-style JSON next to the
+        # .nii. Generate one so DIFFPREP (and T2Wreg) can pick the right phase axis.
+        write_pe_json = _write_pe_json_node('write_pe_json')
+        write_pe_json.inputs.phase_encoding_direction = pe_dir
+
+        diffprep = pe.Node(
+            DIFFPREP(**diffprep_kwargs),
+            name='diffprep',
+            n_procs=config.nipype.omp_nthreads,
+        )
+        workflow.connect([
+            (inputnode, tortoise_convert, [
+                ('dwi_file', 'dwi_file'),
+                ('bval_file', 'bval_file'),
+                ('bvec_file', 'bvec_file'),
+            ]),
+            (tortoise_convert, write_pe_json, [('dwi_file', 'nii_file')]),
+            (tortoise_convert, diffprep, [
+                ('dwi_file', 'dwi_file'),
+                ('bmtxt_file', 'bmtxt_file'),
+            ]),
+            (write_pe_json, diffprep, [('json_file', 'json_file')]),
+        ])  # fmt:skip
+
+        # T2Wreg bakes SDC into the DIFFPREP call: feed the T2w structural.
+        if use_t2wreg:
+            workflow.connect([
+                (inputnode, diffprep, [('t2w_unfatsat', 'structural_image')]),
+            ])  # fmt:skip
+
+        corrected_node = diffprep
 
     split_outputs = pe.Node(
         DIFFPREPSplitOutputs(b0_threshold=config.workflow.b0_threshold),
@@ -301,23 +517,11 @@ def init_diffprep_hmc_wf(
     calculate_cnr = pe.Node(CalculateCNR(), name='calculate_cnr', mem_gb=2)
 
     workflow.connect([
-        (inputnode, tortoise_convert, [
-            ('dwi_file', 'dwi_file'),
-            ('bval_file', 'bval_file'),
-            ('bvec_file', 'bvec_file'),
-        ]),
-        (tortoise_convert, write_pe_json, [('dwi_file', 'nii_file')]),
-        (tortoise_convert, diffprep, [
-            ('dwi_file', 'dwi_file'),
-            ('bmtxt_file', 'bmtxt_file'),
-        ]),
-        (write_pe_json, diffprep, [('json_file', 'json_file')]),
-
-        (diffprep, split_outputs, [
+        (corrected_node, split_outputs, [
             ('corrected_dwi_file', 'corrected_dwi_file'),
             ('corrected_bmtxt_file', 'corrected_bmtxt_file'),
         ]),
-        (diffprep, motion_params, [('transformations_file', 'transformations_file')]),
+        (corrected_node, motion_params, [('transformations_file', 'transformations_file')]),
 
         # Outputnode plumbing (per-volume corrected data + identity affines)
         (split_outputs, outputnode, [
@@ -330,7 +534,7 @@ def init_diffprep_hmc_wf(
         (motion_params, outputnode, [('spm_motion_file', 'motion_params')]),
 
         # Pre-SDC enhancement (report)
-        (diffprep, extract_b0s, [('corrected_dwi_file', 'dwi_series')]),
+        (corrected_node, extract_b0s, [('corrected_dwi_file', 'dwi_series')]),
         (split_outputs, extract_b0s, [('b0_indices', 'b0_indices')]),
         (extract_b0s, enhance_pre_sdc, [('b0_average', 'b0_file')]),
         (enhance_pre_sdc, outputnode, [('enhanced_file', 'pre_sdc_template')]),
@@ -344,7 +548,7 @@ def init_diffprep_hmc_wf(
         (b0_ref_for_coreg, outputnode, [('outputnode.dwi_mask', 'b0_template_mask')]),
 
         # Carpet-plot QC + CNR (both from the shared MAPMRI synthesis)
-        (diffprep, synth_dwis, [
+        (corrected_node, synth_dwis, [
             ('corrected_dwi_file', 'dwi_file'),
             ('corrected_bmtxt_file', 'bmtxt_file'),
         ]),
@@ -363,36 +567,17 @@ def init_diffprep_hmc_wf(
         (calculate_cnr, outputnode, [('cnr_image', 'cnr_map')]),
     ])  # fmt:skip
 
-    # T2Wreg bakes SDC into the DIFFPREP call: feed the T2w structural.
-    if use_t2wreg:
-        workflow.connect([
-            (inputnode, diffprep, [('t2w_unfatsat', 'structural_image')]),
-        ])  # fmt:skip
-
     # -----------------------------------------------------------------------
     # SDC decision tree (TORTOISE-native where possible)
     # -----------------------------------------------------------------------
 
-    # A reverse-PE *series* (rpe_series) is not yet supported by this backend.
-    # qsiprep concatenates the opposing-PE series into one 4D file for FSL eddy
-    # (``preprocess_rpe_series``), but a single DIFFPREP run models one phase
-    # axis for the whole file: TORTOISE itself runs DIFFPREP once per PE
-    # direction (TORTOISE.cxx Process() loops ``for(PE=0;PE<2)``). Feeding it the
-    # concatenation does not error -- it silently mis-corrects half the volumes.
-    # Full support (per-direction DIFFPREP + a predicted single-shell series so
-    # DRBUDDI can derive usable b0/FA on non-shelled CS-DSI) is a planned
-    # follow-up; until then, fail loudly rather than return a wrong answer.
-    if fieldmap_type == 'rpe_series':
-        raise NotImplementedError(
-            'The DIFFPREP HMC backend does not yet support reverse phase-encoded '
-            'DWI series (rpe_series) for susceptibility distortion correction. '
-            "Provide an 'epi' fieldmap (a reverse-PE b=0/EPI in fmap/) to use "
-            'DRBUDDI with DIFFPREP, or use --hmc-model eddy/3dSHORE for '
-            'rpe_series data.'
-        )
-
-    # 1. PEPOLAR (reverse-PE) -> DRBUDDI
-    if fieldmap_type == 'epi':
+    # 1. PEPOLAR -> DRBUDDI. Both an ``epi`` fieldmap (a reverse-PE b=0/EPI in
+    #    fmap/) and a reverse-PE *series* (``rpe_series``) land here. For
+    #    rpe_series the per-direction DIFFPREP stage above has already produced a
+    #    single recombined series in the original merged order, so DRBUDDI's
+    #    GatherDRBUDDIInputs re-splits it into up/down exactly as it does for the
+    #    FSL backend -- no DRBUDDI changes are needed.
+    if fieldmap_type in ('epi', 'rpe_series'):
         if 'topup' in config.workflow.pepolar_method.lower():
             raise Exception(
                 'TOPUP-based pepolar correction is not supported with '

@@ -281,6 +281,218 @@ def test_diffprep_split_outputs(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# rpe_series split / recombine (pure Python)
+# ---------------------------------------------------------------------------
+
+
+def _make_original_with_sidecar(tmp_path, name, pe_dir):
+    """Write a tiny original nii + BIDS sidecar for get_distortion_grouping."""
+    import json as _json
+
+    import nibabel as nb
+
+    nii = tmp_path / f'{name}.nii.gz'
+    nb.Nifti1Image(np.zeros((2, 2, 2), dtype='float32'), np.eye(4)).to_filename(str(nii))
+    (tmp_path / f'{name}.json').write_text(
+        _json.dumps({'PhaseEncodingDirection': pe_dir, 'TotalReadoutTime': 0.05})
+    )
+    return str(nii)
+
+
+def _make_4d(path, values):
+    """4D nii where volume i is a constant image of ``values[i]``."""
+    import nibabel as nb
+
+    data = np.zeros((2, 2, 2, len(values)), dtype='float32')
+    for i, val in enumerate(values):
+        data[..., i] = val
+    nb.Nifti1Image(data, np.eye(4)).to_filename(str(path))
+
+
+def test_split_dwis_by_distortion_group(tmp_path):
+    """SplitDWIsByDistortionGroup partitions the merged series by PE group,
+    labels the first-appearing group '+' and the second '-', and preserves
+    per-volume order within each group."""
+    import nibabel as nb
+
+    from qsiprep.interfaces.tortoise import SplitDWIsByDistortionGroup
+
+    ap = _make_original_with_sidecar(tmp_path, 'sub-01_dir-AP_dwi', 'j')
+    pa = _make_original_with_sidecar(tmp_path, 'sub-01_dir-PA_dwi', 'j-')
+    # Volume 0 is AP -> AP is group 1 ("+"); PA is group 2 ("-").
+    original_files = [ap, ap, ap, pa, pa, pa]
+
+    merged = tmp_path / 'merged.nii.gz'
+    _make_4d(merged, [0, 1, 2, 3, 4, 5])
+    bval_file, bvec_file = _write_fsl_gradients(
+        tmp_path,
+        [0, 1000, 2000, 0, 1000, 2000],
+        [[0, 1, 0, 0, 1, 0], [0, 0, 1, 0, 0, 1], [0, 0, 0, 0, 0, 0]],
+    )
+
+    run_dir = tmp_path / 'split'
+    run_dir.mkdir()
+    res = SplitDWIsByDistortionGroup(
+        dwi_file=str(merged),
+        bval_file=str(bval_file),
+        bvec_file=str(bvec_file),
+        original_files=original_files,
+        pe_axis='j',
+    ).run(cwd=str(run_dir))
+
+    assert res.outputs.group_assignments == [1, 1, 1, 2, 2, 2]
+    assert res.outputs.group1_pe_dir == 'j'
+    assert res.outputs.group2_pe_dir == 'j-'
+
+    g1 = nb.load(res.outputs.group1_dwi_file)
+    g2 = nb.load(res.outputs.group2_dwi_file)
+    assert g1.shape[3] == 3
+    assert g2.shape[3] == 3
+    np.testing.assert_array_equal([g1.dataobj[0, 0, 0, i] for i in range(3)], [0, 1, 2])
+    np.testing.assert_array_equal([g2.dataobj[0, 0, 0, i] for i in range(3)], [3, 4, 5])
+
+    np.testing.assert_array_equal(np.loadtxt(res.outputs.group1_bval_file), [0, 1000, 2000])
+    np.testing.assert_array_equal(np.loadtxt(res.outputs.group2_bval_file), [0, 1000, 2000])
+
+
+def test_split_dwis_by_distortion_group_rejects_single_group(tmp_path):
+    """A series with only one PE group is not a reverse-PE series."""
+    from qsiprep.interfaces.tortoise import SplitDWIsByDistortionGroup
+
+    ap = _make_original_with_sidecar(tmp_path, 'sub-01_dir-AP_dwi', 'j')
+    merged = tmp_path / 'merged.nii.gz'
+    _make_4d(merged, [0, 1])
+    bval_file, bvec_file = _write_fsl_gradients(tmp_path, [0, 1000], [[0, 1], [0, 0], [0, 0]])
+
+    run_dir = tmp_path / 'split'
+    run_dir.mkdir()
+    with pytest.raises(ValueError, match='exactly two'):
+        SplitDWIsByDistortionGroup(
+            dwi_file=str(merged),
+            bval_file=str(bval_file),
+            bvec_file=str(bvec_file),
+            original_files=[ap, ap],
+            pe_axis='j',
+        ).run(cwd=str(run_dir))
+
+
+def test_concatenate_diffprep_groups_preserves_original_order(tmp_path):
+    """ConcatenateDIFFPREPGroups reconstructs the original (merged) volume order
+    from two per-direction DIFFPREP outputs, even when groups interleave."""
+    import nibabel as nb
+
+    from qsiprep.interfaces.tortoise import ConcatenateDIFFPREPGroups
+
+    g1 = tmp_path / 'g1.nii.gz'
+    g2 = tmp_path / 'g2.nii.gz'
+    _make_4d(g1, [10, 11, 12])
+    _make_4d(g2, [20, 21])
+
+    (tmp_path / 'g1.bmtxt').write_text('\n'.join(f'{b} 0 0 0 0 0' for b in (0, 1000, 2000)) + '\n')
+    (tmp_path / 'g2.bmtxt').write_text('\n'.join(f'{b} 0 0 0 0 0' for b in (0, 1000)) + '\n')
+
+    def _xf(path, n, base):
+        rows = [' '.join(str(base + i * 100 + j) for j in range(24)) for i in range(n)]
+        path.write_text('\n'.join(rows) + '\n')
+
+    _xf(tmp_path / 'g1_xf.txt', 3, 0)
+    _xf(tmp_path / 'g2_xf.txt', 2, 10000)
+
+    # Interleaved: positions 0,1,3 -> g1[0,1,2]; positions 2,4 -> g2[0,1].
+    assignments = [1, 1, 2, 1, 2]
+
+    run_dir = tmp_path / 'recombine'
+    run_dir.mkdir()
+    res = ConcatenateDIFFPREPGroups(
+        group1_dwi_file=str(g1),
+        group1_bmtxt_file=str(tmp_path / 'g1.bmtxt'),
+        group1_transformations_file=str(tmp_path / 'g1_xf.txt'),
+        group2_dwi_file=str(g2),
+        group2_bmtxt_file=str(tmp_path / 'g2.bmtxt'),
+        group2_transformations_file=str(tmp_path / 'g2_xf.txt'),
+        group_assignments=assignments,
+    ).run(cwd=str(run_dir))
+
+    out = nb.load(res.outputs.corrected_dwi_file)
+    assert out.shape[3] == 5
+    np.testing.assert_array_equal(
+        [out.dataobj[0, 0, 0, i] for i in range(5)], [10, 11, 20, 12, 21]
+    )
+
+    bmat = np.atleast_2d(np.loadtxt(res.outputs.corrected_bmtxt_file))
+    assert bmat.shape == (5, 6)
+    np.testing.assert_array_equal(bmat[:, 0], [0, 1000, 0, 2000, 1000])
+
+    xf = np.atleast_2d(np.loadtxt(res.outputs.transformations_file))
+    assert xf.shape == (5, 24)
+    np.testing.assert_array_equal(xf[:, 0], [0, 100, 10000, 200, 10100])
+
+
+def test_concatenate_diffprep_groups_rejects_count_mismatch(tmp_path):
+    """A per-group output whose volume count disagrees with the assignments is
+    a wiring bug and must fail loudly rather than silently drop volumes."""
+    from qsiprep.interfaces.tortoise import ConcatenateDIFFPREPGroups
+
+    g1 = tmp_path / 'g1.nii.gz'
+    g2 = tmp_path / 'g2.nii.gz'
+    _make_4d(g1, [10, 11, 12])
+    _make_4d(g2, [20, 21])
+    (tmp_path / 'g1.bmtxt').write_text('\n'.join('0 0 0 0 0 0' for _ in range(3)) + '\n')
+    (tmp_path / 'g2.bmtxt').write_text('\n'.join('0 0 0 0 0 0' for _ in range(2)) + '\n')
+    (tmp_path / 'g1_xf.txt').write_text('\n'.join(' '.join(['0'] * 24) for _ in range(3)) + '\n')
+    (tmp_path / 'g2_xf.txt').write_text('\n'.join(' '.join(['0'] * 24) for _ in range(2)) + '\n')
+
+    run_dir = tmp_path / 'recombine'
+    run_dir.mkdir()
+    with pytest.raises(ValueError, match='volume count'):
+        ConcatenateDIFFPREPGroups(
+            group1_dwi_file=str(g1),
+            group1_bmtxt_file=str(tmp_path / 'g1.bmtxt'),
+            group1_transformations_file=str(tmp_path / 'g1_xf.txt'),
+            group2_dwi_file=str(g2),
+            group2_bmtxt_file=str(tmp_path / 'g2.bmtxt'),
+            group2_transformations_file=str(tmp_path / 'g2_xf.txt'),
+            # Only 4 assignments for a 5-volume pair.
+            group_assignments=[1, 1, 1, 2],
+        ).run(cwd=str(run_dir))
+
+
+def test_rpe_series_is_shelled(tmp_path):
+    """The shelled/non-shelled detector distinguishes a DTI/HARDI shell from a
+    CS-DSI q-space grid, and honours the config override."""
+    from qsiprep.workflows.dwi.diffprep import _rpe_series_is_shelled
+
+    ap = tmp_path / 'ap_dwi.nii.gz'
+    pa = tmp_path / 'pa_dwi.nii.gz'
+    scan_groups = {
+        'dwi_series': [str(ap)],
+        'fieldmap_info': {'suffix': 'rpe_series', 'rpe_series': [str(pa)]},
+    }
+
+    # Shelled: a single b=1000 shell with plenty of directions.
+    (tmp_path / 'ap_dwi.bval').write_text(' '.join(['0'] + ['1000'] * 12) + '\n')
+    (tmp_path / 'pa_dwi.bval').write_text(' '.join(['0'] + ['1000'] * 12) + '\n')
+    assert _rpe_series_is_shelled(scan_groups, 100) is True
+
+    # Non-shelled: a CS-DSI-like grid -- many distinct b-values, none forming a
+    # populous low-b shell.
+    grid = list(range(200, 3000, 150))
+    (tmp_path / 'ap_dwi.bval').write_text(' '.join(map(str, [0] + grid)) + '\n')
+    (tmp_path / 'pa_dwi.bval').write_text(' '.join(map(str, [0] + grid)) + '\n')
+    assert _rpe_series_is_shelled(scan_groups, 100) is False
+
+    # Override wins over auto-detection either way.
+    assert _rpe_series_is_shelled(scan_groups, 100, override=True) is True
+
+    # Unreadable b-values default to shelled (safe stock DRBUDDI path).
+    missing = {
+        'dwi_series': ['/nonexistent/ap_dwi.nii.gz'],
+        'fieldmap_info': {'suffix': 'rpe_series', 'rpe_series': ['/nonexistent/pa_dwi.nii.gz']},
+    }
+    assert _rpe_series_is_shelled(missing, 100) is True
+
+
+# ---------------------------------------------------------------------------
 # Dispatch + workflow wiring (pure Python)
 # ---------------------------------------------------------------------------
 
@@ -460,17 +672,65 @@ def test_init_diffprep_hmc_wf_honours_sloppy():
         config.execution.sloppy = False
 
 
-def test_init_diffprep_hmc_wf_rejects_rpe_series():
-    """rpe_series (a concatenated opposing-PE series) must fail loudly.
+def test_init_diffprep_hmc_wf_rpe_series_runs_per_direction(tmp_path):
+    """rpe_series must run DIFFPREP once per phase-encoding direction.
 
-    DIFFPREP models one phase axis per run; qsiprep concatenates the two PE
-    directions for FSL eddy, and feeding that to DIFFPREP silently mis-corrects
-    half the data. Support for it (per-direction DIFFPREP + predicted-shell
-    DRBUDDI inputs) is a planned follow-up.
+    A single DIFFPREP run models one phase axis / one b=0 reference for the
+    whole file, so the concatenated opposing-PE series would be silently
+    mis-corrected. The backend re-splits the merged series into its two PE
+    groups, corrects each on its own, and recombines before handing the flat
+    list to the stock DRBUDDI path.
     """
     _base_config()
-    with pytest.raises(NotImplementedError, match='rpe_series'):
-        _build(_scan_groups('rpe_series', rpe_series=['/data/sub-01_dwi.nii.gz']), t2w_sdc=False)
+    # DRBUDDI's GatherDRBUDDIInputs validates ``epi_fmaps`` (the rpe series) as
+    # existing files at build time, so point it at a real (tiny) nii.
+    rpe = tmp_path / 'sub-01_dir-PA_dwi.nii.gz'
+    _write_dummy_nii(rpe, nvols=2)
+    wf = _build(
+        _scan_groups('rpe_series', rpe_series=[str(rpe)]),
+        t2w_sdc=False,
+        name='dp_rpe',
+    )
+
+    # Per-direction stage present; the single-run DIFFPREP nodes are NOT built.
+    for node in (
+        'split_rpe_groups',
+        'tortoise_convert_g1',
+        'diffprep_g1',
+        'tortoise_convert_g2',
+        'diffprep_g2',
+        'recombine_rpe_groups',
+    ):
+        assert wf.get_node(node) is not None, node
+    assert wf.get_node('diffprep') is None
+    assert wf.get_node('tortoise_convert') is None
+
+    # The recombined triple feeds the shared downstream split (drop-in for a
+    # single DIFFPREP node), and DRBUDDI is wired for SDC.
+    recombine = wf.get_node('recombine_rpe_groups')
+    split_outputs = wf.get_node('split_outputs')
+    edge = wf._graph.get_edge_data(recombine, split_outputs)
+    assert edge is not None
+    assert ('corrected_dwi_file', 'corrected_dwi_file') in edge['connect']
+    assert wf.get_node('drbuddi_sdc_wf') is not None
+
+
+def test_init_diffprep_hmc_wf_rpe_series_pe_axis(tmp_path):
+    """The split node is told the phase-encoding axis of the series.
+
+    DIFFPREP is sign-agnostic on the axis, but the split still labels the
+    first-appearing group '+' and the second '-' so provenance is explicit.
+    """
+    _base_config()
+    rpe = tmp_path / 'sub-01_dir-PA_dwi.nii.gz'
+    _write_dummy_nii(rpe, nvols=2)
+    wf = _build(
+        _scan_groups('rpe_series', rpe_series=[str(rpe)]),
+        t2w_sdc=False,
+        name='dp_rpe_axis',
+    )
+    split = wf.get_node('split_rpe_groups')
+    assert split.inputs.pe_axis == 'j'
 
 
 def test_drbuddi_sloppy_skips_rigid_diffeo_loop(tmp_path):

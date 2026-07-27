@@ -1132,6 +1132,260 @@ class DIFFPREPSplitOutputs(SimpleInterface):
         return runtime
 
 
+def _distortion_group_assignments(original_files):
+    """Return a per-volume group label in ``{1, 2}`` for a reverse-PE series.
+
+    Wraps :func:`get_distortion_grouping` (which numbers groups by the order
+    their acqp first appears while iterating the *sorted* unique originals) and
+    re-labels so that **the group of the first volume is always ``1``**. This is
+    the same "up is first" convention :func:`split_into_up_and_down_niis` uses
+    inside ``GatherDRBUDDIInputs``, so the diffprep split and DRBUDDI's re-split
+    agree on which volumes are the "+"/"up" side.
+    """
+    _, raw_groups = get_distortion_grouping(original_files)
+    n_groups = len(set(raw_groups))
+    if n_groups != 2:
+        raise ValueError(
+            'rpe_series DIFFPREP requires exactly two phase-encoding groups; '
+            f'found {n_groups} in the original files.'
+        )
+    first = raw_groups[0]
+    return [1 if grp == first else 2 for grp in raw_groups]
+
+
+class _SplitDWIsByDistortionGroupInputSpec(BaseInterfaceInputSpec):
+    dwi_file = File(
+        exists=True,
+        mandatory=True,
+        desc='Merged 4D DWI from pre_hmc (already denoised + b0-harmonized across '
+        'the two PE directions). This is the file DIFFPREP must NOT see as a whole.',
+    )
+    bval_file = File(exists=True, mandatory=True)
+    bvec_file = File(exists=True, mandatory=True)
+    original_files = InputMultiObject(
+        File(exists=True),
+        mandatory=True,
+        desc='One original BIDS file per volume; the distortion group of each '
+        'volume is read from these (same partition GatherDRBUDDIInputs uses).',
+    )
+    pe_axis = traits.Enum(
+        'i',
+        'j',
+        'k',
+        mandatory=True,
+        desc='Phase-encoding axis (no sign). The first-appearing group is labelled '
+        "'+' and the second '-'. DIFFPREP is sign-agnostic on the axis "
+        "(DIFFPREP.cxx maps both 'j' and 'j-' to \"vertical\"), so this sign only "
+        'documents provenance; it does not change the eddy model.',
+    )
+    b0_threshold = traits.CInt(100, usedefault=True)
+
+
+class _SplitDWIsByDistortionGroupOutputSpec(TraitedSpec):
+    group1_dwi_file = File(exists=True)
+    group1_bval_file = File(exists=True)
+    group1_bvec_file = File(exists=True)
+    group1_pe_dir = traits.Str()
+    group2_dwi_file = File(exists=True)
+    group2_bval_file = File(exists=True)
+    group2_bvec_file = File(exists=True)
+    group2_pe_dir = traits.Str()
+    group_assignments = traits.List(
+        traits.Int(), desc='Per-volume group id (1 or 2) in merged order.'
+    )
+
+
+class SplitDWIsByDistortionGroup(SimpleInterface):
+    """Re-split an already-merged reverse-PE DWI series back into its two
+    phase-encoding groups so DIFFPREP can be run once per direction.
+
+    DIFFPREP models a single phase axis against a single b=0 reference for the
+    whole file (``TORTOISEProcess`` runs DIFFPREP once per PE direction, see
+    ``TORTOISE.cxx`` ``for(int PE=0;PE<2;PE++)``). qsiprep concatenates the two
+    PE directions into one 4D file for FSL eddy in ``pre_hmc``; feeding that
+    concatenation to a single DIFFPREP run silently mis-corrects, so we undo the
+    merge here (keeping pre_hmc's per-PE denoising + b0 harmonization) and emit
+    one single-PE series per group. The merge is intentionally left in place --
+    DRBUDDI re-splits the *recombined* series itself and relies on the shared
+    b0-intensity scale the merge established.
+    """
+
+    input_spec = _SplitDWIsByDistortionGroupInputSpec
+    output_spec = _SplitDWIsByDistortionGroupOutputSpec
+
+    def _run_interface(self, runtime):
+        assignments = _distortion_group_assignments(self.inputs.original_files)
+
+        dwi_img = nb.load(self.inputs.dwi_file)
+        nvols = 1 if dwi_img.ndim < 4 else dwi_img.shape[3]
+        if nvols != len(assignments):
+            raise ValueError(
+                f'{self.inputs.dwi_file} has {nvols} volumes but '
+                f'{len(assignments)} original files were supplied.'
+            )
+        dwi_data = np.asanyarray(dwi_img.dataobj)
+        if dwi_img.ndim < 4:
+            dwi_data = dwi_data[..., np.newaxis]
+
+        bvals = np.loadtxt(self.inputs.bval_file).reshape(-1)
+        bvecs = np.loadtxt(self.inputs.bvec_file)
+        # FSL stores bvecs as 3 x N; transpose if a stray N x 3 slips through.
+        if bvecs.ndim == 2 and bvecs.shape[0] != 3 and bvecs.shape[1] == 3:
+            bvecs = bvecs.T
+        bvecs = np.atleast_2d(bvecs)
+
+        self._results['group_assignments'] = assignments
+        for group_id, sign in ((1, ''), (2, '-')):
+            idx = [i for i, grp in enumerate(assignments) if grp == group_id]
+            prefix = op.join(runtime.cwd, f'group{group_id}')
+
+            grp_dwi = op.abspath(prefix + '_dwi.nii.gz')
+            grp_img = nb.Nifti1Image(
+                dwi_data[..., idx].astype('float32'), dwi_img.affine, dwi_img.header
+            )
+            grp_img.set_data_dtype('float32')
+            grp_img.to_filename(grp_dwi)
+
+            grp_bval = op.abspath(prefix + '.bval')
+            grp_bvec = op.abspath(prefix + '.bvec')
+            np.savetxt(grp_bval, bvals[idx].reshape(1, -1), fmt='%g')
+            np.savetxt(grp_bvec, bvecs[:, idx], fmt='%.8f')
+
+            # Warn when this side lacks a robust b=0 pool. TORTOISE's
+            # select_best_b0 (--b0_id -1) silently degrades to "use the first
+            # b=0" when there are too few, which yields a poor registration
+            # reference for the whole side.
+            grp_bvals = bvals[idx]
+            n_b0ish = int(np.sum(np.abs(grp_bvals - grp_bvals.min()) <= 30))
+            if n_b0ish < 4:
+                LOGGER.warning(
+                    'rpe_series DIFFPREP group %d has only %d b=0-like volumes '
+                    '(within 30 s/mm^2 of its minimum b-value). TORTOISE may fall '
+                    'back to a single b=0 reference for this phase-encoding '
+                    'direction, degrading its motion/eddy correction.',
+                    group_id,
+                    n_b0ish,
+                )
+
+            self._results[f'group{group_id}_dwi_file'] = grp_dwi
+            self._results[f'group{group_id}_bval_file'] = grp_bval
+            self._results[f'group{group_id}_bvec_file'] = grp_bvec
+            self._results[f'group{group_id}_pe_dir'] = self.inputs.pe_axis + sign
+
+        return runtime
+
+
+class _ConcatenateDIFFPREPGroupsInputSpec(BaseInterfaceInputSpec):
+    group1_dwi_file = File(exists=True, mandatory=True)
+    group1_bmtxt_file = File(exists=True, mandatory=True)
+    group1_transformations_file = File(exists=True, mandatory=True)
+    group2_dwi_file = File(exists=True, mandatory=True)
+    group2_bmtxt_file = File(exists=True, mandatory=True)
+    group2_transformations_file = File(exists=True, mandatory=True)
+    group_assignments = traits.List(
+        traits.Int(),
+        mandatory=True,
+        desc='Per-volume group id (1 or 2) in the original merged order, as '
+        'produced by SplitDWIsByDistortionGroup.',
+    )
+
+
+class _ConcatenateDIFFPREPGroupsOutputSpec(TraitedSpec):
+    corrected_dwi_file = File(exists=True)
+    corrected_bmtxt_file = File(exists=True)
+    transformations_file = File(exists=True)
+
+
+class ConcatenateDIFFPREPGroups(SimpleInterface):
+    """Recombine the two per-PE-direction DIFFPREP outputs into one series in
+    the original (merged) volume order.
+
+    Each group was corrected by its own DIFFPREP run, so the two corrected 4D
+    files live in **different corrected spaces** -- that is expected and correct;
+    reconciling those two spaces is exactly DRBUDDI's job. This node only
+    restores the per-volume order (so ``original_files`` still lines up with the
+    recombined series that DRBUDDI re-splits) and stitches the rotated bmatrix
+    and per-volume transforms to match. The emitted triple is a drop-in for a
+    single DIFFPREP node's ``corrected_dwi_file`` / ``corrected_bmtxt_file`` /
+    ``transformations_file``, so every downstream node is unchanged.
+    """
+
+    input_spec = _ConcatenateDIFFPREPGroupsInputSpec
+    output_spec = _ConcatenateDIFFPREPGroupsOutputSpec
+
+    def _run_interface(self, runtime):
+        assignments = self.inputs.group_assignments
+
+        img1 = nb.load(self.inputs.group1_dwi_file)
+        img2 = nb.load(self.inputs.group2_dwi_file)
+        data1 = np.asanyarray(img1.dataobj)
+        data2 = np.asanyarray(img2.dataobj)
+        if data1.ndim < 4:
+            data1 = data1[..., np.newaxis]
+        if data2.ndim < 4:
+            data2 = data2[..., np.newaxis]
+        if data1.shape[:3] != data2.shape[:3]:
+            raise ValueError(
+                'The two per-direction DIFFPREP outputs are on different voxel '
+                f'grids ({data1.shape[:3]} vs {data2.shape[:3]}); they must share '
+                'a grid to be recombined into one series.'
+            )
+
+        bmat1 = np.atleast_2d(np.loadtxt(self.inputs.group1_bmtxt_file))
+        bmat2 = np.atleast_2d(np.loadtxt(self.inputs.group2_bmtxt_file))
+        xf1 = _read_okan_transformations(self.inputs.group1_transformations_file)
+        xf2 = _read_okan_transformations(self.inputs.group2_transformations_file)
+
+        counts = {
+            1: (data1.shape[3], bmat1.shape[0], len(xf1)),
+            2: (data2.shape[3], bmat2.shape[0], len(xf2)),
+        }
+        for group_id, (n_dwi, n_bmat, n_xf) in counts.items():
+            n_expected = assignments.count(group_id)
+            if not n_dwi == n_bmat == n_xf == n_expected:
+                raise ValueError(
+                    f'group {group_id} DIFFPREP outputs disagree on volume count: '
+                    f'dwi={n_dwi}, bmtxt={n_bmat}, transforms={n_xf}, '
+                    f'assignments={n_expected}.'
+                )
+
+        # Walk the original order, pulling the next available volume/row from
+        # whichever group each position belongs to. Handles interleaved groups,
+        # not just contiguous plus-then-minus blocks.
+        sources = {
+            1: {'data': data1, 'bmat': bmat1, 'xf': xf1},
+            2: {'data': data2, 'bmat': bmat2, 'xf': xf2},
+        }
+        cursors = {1: 0, 2: 0}
+        out_vols = []
+        out_bmat = []
+        out_xf = []
+        for group_id in assignments:
+            src = sources[group_id]
+            k = cursors[group_id]
+            out_vols.append(src['data'][..., k])
+            out_bmat.append(src['bmat'][k])
+            out_xf.append(src['xf'][k])
+            cursors[group_id] = k + 1
+
+        corrected_dwi = op.join(runtime.cwd, 'diffprep_rpe_corrected.nii.gz')
+        combined = np.stack(out_vols, axis=-1).astype('float32')
+        combined_img = nb.Nifti1Image(combined, img1.affine, img1.header)
+        combined_img.set_data_dtype('float32')
+        combined_img.to_filename(corrected_dwi)
+
+        corrected_bmtxt = op.join(runtime.cwd, 'diffprep_rpe_corrected.bmtxt')
+        np.savetxt(corrected_bmtxt, np.vstack(out_bmat), fmt='%.10g')
+
+        transforms_file = op.join(runtime.cwd, 'diffprep_rpe_transformations.txt')
+        np.savetxt(transforms_file, np.vstack(out_xf), fmt='%.10g')
+
+        self._results['corrected_dwi_file'] = corrected_dwi
+        self._results['corrected_bmtxt_file'] = corrected_bmtxt
+        self._results['transformations_file'] = transforms_file
+        return runtime
+
+
 def write_diffprep_json(json_file, phase_encoding_direction, working_dir=None):
     """Write a minimal BIDS sidecar JSON next to a DWI nifti so that
     TORTOISEProcess can read PhaseEncodingDirection from it. Returns the path
