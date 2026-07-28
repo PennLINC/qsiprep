@@ -707,6 +707,103 @@ def test_rpe_series_is_shelled(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# T2w SDC handling (graph-level wiring; no pipeline run / resampling)
+# ---------------------------------------------------------------------------
+
+
+def test_t2w_available_for_sdc():
+    """t2w_sdc is requested only when a T2w exists AND anat processing runs.
+
+    With --anat-modality none there is no anatomical workflow, so t2w_unfatsat is
+    never produced; requesting T2w SDC then leaves the DRBUDDI structural / the
+    extended report's t2w_n4 with an empty input (the CI failure).
+    """
+    from qsiprep import config
+    from qsiprep.workflows.base import _t2w_available_for_sdc
+
+    orig = getattr(config.workflow, 'anat_modality', 't1w')
+    try:
+        config.workflow.anat_modality = 't1w'
+        assert _t2w_available_for_sdc({'t2w': ['/data/sub-01_T2w.nii.gz']}) is True
+        assert _t2w_available_for_sdc({}) is False
+        # The fix: a T2w present but no anat processing -> do NOT do T2w SDC.
+        config.workflow.anat_modality = 'none'
+        assert _t2w_available_for_sdc({'t2w': ['/data/sub-01_T2w.nii.gz']}) is False
+    finally:
+        config.workflow.anat_modality = orig
+
+
+def test_extended_pepolar_report_t2w_n4_gets_input():
+    """The node that failed in CI: with a T2w, the report's t2w_n4 must be fed
+    from inputnode.t2w_image; without one it uses the t1w-seg branch instead."""
+    _base_config()
+    from qsiprep.workflows.fieldmap.pepolar import init_extended_pepolar_report_wf
+
+    wf = init_extended_pepolar_report_wf(segment_t2w=True)
+    t2w_n4 = wf.get_node('t2w_n4')
+    assert t2w_n4 is not None
+    edge = wf._graph.get_edge_data(wf.get_node('inputnode'), t2w_n4)
+    assert edge is not None
+    assert ('t2w_image', 'input_image') in edge['connect']
+
+    wf_no_t2w = init_extended_pepolar_report_wf(segment_t2w=False)
+    assert wf_no_t2w.get_node('t2w_n4') is None
+    assert wf_no_t2w.get_node('map_seg') is not None
+
+
+def _build_nonshelled_rpe(tmp_path, t2w_sdc, name):
+    """Build the DIFFPREP rpe_series wf forced down the non-shelled (synthesis)
+    path, with T2w SDC on/off."""
+    import json as _json
+
+    from qsiprep import config
+
+    cfg = tmp_path / f'{name}_cfg.json'
+    cfg.write_text(_json.dumps({'rpe_series_shelled': False}))
+    config.workflow.diffprep_config = str(cfg)
+    try:
+        return _build(
+            _scan_groups('rpe_series', rpe_series=['/data/sub-01_dir-PA_dwi.nii.gz']),
+            t2w_sdc=t2w_sdc,
+            name=name,
+        )
+    finally:
+        config.workflow.diffprep_config = None
+
+
+def test_diffprep_synthesis_t2w_structural_wiring(tmp_path):
+    """In the predicted-shell DRBUDDI path, when T2w SDC is on the T2w is fed to
+    DRBUDDI as its structural and DRBUDDI's used structural flows out as
+    t2w_image (which feeds the extended report's t2w_n4). aggregate_drbuddi takes
+    the structural ONLY from drbuddi -- a second source would double-connect and
+    raise at build (the review-caught bug)."""
+    _base_config()
+    wf = _build_nonshelled_rpe(tmp_path, t2w_sdc=True, name='dp_t2w_on')
+    inputnode = wf.get_node('inputnode')
+    drbuddi = wf.get_node('drbuddi')
+    outputnode = wf.get_node('outputnode')
+    aggregate = wf.get_node('aggregate_drbuddi')
+
+    e_in = wf._graph.get_edge_data(inputnode, drbuddi)
+    assert e_in is not None
+    assert ('t2w_unfatsat', 'structural_image') in e_in['connect']
+
+    e_out = wf._graph.get_edge_data(drbuddi, outputnode)
+    assert ('structural_image', 't2w_image') in e_out['connect']
+
+    e_agg = wf._graph.get_edge_data(drbuddi, aggregate)
+    assert ('structural_image', 'structural_image') in e_agg['connect']
+
+    # T2w SDC off: DRBUDDI must NOT be handed a structural.
+    wf_off = _build_nonshelled_rpe(tmp_path, t2w_sdc=False, name='dp_t2w_off')
+    e_in_off = wf_off._graph.get_edge_data(
+        wf_off.get_node('inputnode'), wf_off.get_node('drbuddi')
+    )
+    off_connects = e_in_off['connect'] if e_in_off else []
+    assert not any(in_field == 'structural_image' for _, in_field in off_connects)
+
+
+# ---------------------------------------------------------------------------
 # Dispatch + workflow wiring (pure Python)
 # ---------------------------------------------------------------------------
 
