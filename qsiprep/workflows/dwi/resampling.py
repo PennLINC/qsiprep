@@ -298,6 +298,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
         (inputnode, extract_b0_series, [('b0_indices', 'b0_indices')]),
         (extract_b0_series, final_b0_ref, [('b0_average', 'inputnode.b0_template')]),
         (inputnode, final_b0_ref, [('t1_mask', 'inputnode.t1_mask')]),
+        (merge, refine_resampled_mask, [('out_file', 'dwi_series')]),
         (extract_b0_series, refine_resampled_mask, [('b0_average', 'b0_image')]),
         (final_b0_ref, refine_resampled_mask, [('outputnode.dwi_mask', 'in_mask')]),
         (final_b0_ref, outputnode, [('outputnode.ref_image', 'dwi_ref_resampled')]),

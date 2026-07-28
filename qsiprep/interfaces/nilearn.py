@@ -159,6 +159,11 @@ class Merge(SimpleInterface):
 class _MaskWithinDWIFieldOfViewInputSpec(BaseInterfaceInputSpec):
     in_mask = File(exists=True, mandatory=True, desc='candidate brain mask')
     b0_image = File(exists=True, mandatory=True, desc='mean b0 image used to constrain the mask')
+    dwi_series = File(
+        exists=True,
+        mandatory=False,
+        desc='optional resampled DWI series used to remove all-zero support voxels',
+    )
     b0_threshold = traits.Float(
         1e-6,
         usedefault=True,
@@ -187,12 +192,26 @@ class MaskWithinDWIFieldOfView(SimpleInterface):
         else:
             b0_support = b0_data
 
+        # Keep only voxels with valid b0 signal and, if available, at least one finite
+        # non-negligible value across the full resampled DWI series.
         valid_support = np.isfinite(b0_support) & (b0_support > self.inputs.b0_threshold)
+        if isdefined(self.inputs.dwi_series):
+            dwi_img = nb.load(self.inputs.dwi_series)
+            dwi_data = np.asanyarray(dwi_img.dataobj, dtype=np.float32)
+            if dwi_data.ndim != 4:
+                raise ValueError('dwi_series must be 4D')
+            finite_dwi = np.isfinite(dwi_data)
+            dwi_nonzero_support = np.any(
+                finite_dwi & (np.abs(dwi_data) > self.inputs.b0_threshold), axis=3
+            )
+            dwi_finite_everywhere = np.all(finite_dwi, axis=3)
+            valid_support &= dwi_nonzero_support & dwi_finite_everywhere
+
         refined_mask = (mask_data & valid_support).astype(np.uint8)
         removed_voxels = int(mask_data.sum() - refined_mask.sum())
         if removed_voxels:
             LOGGER.warning(
-                'Removed %d mask voxels outside valid DWI support using a mean b0 threshold of %g.',
+                'Removed %d mask voxels outside valid DWI support using threshold %g.',
                 removed_voxels,
                 self.inputs.b0_threshold,
             )
