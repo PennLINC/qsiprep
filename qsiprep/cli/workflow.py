@@ -33,10 +33,7 @@ a hard-limited memory-scope.
 
 """
 
-from importlib.resources import files
-from pathlib import Path
-
-from ..utils.resources import as_path
+from qsiprep.data import load as load_data
 
 
 def build_workflow(config_file, retval):
@@ -59,7 +56,7 @@ def build_workflow(config_file, retval):
     retval['workflow'] = None
 
     banner = [f'Running QSIPrep version {version}']
-    notice_path = Path(as_path(files('qsiprep') / 'data' / 'NOTICE'))
+    notice_path = load_data('NOTICE')
     if notice_path.exists():
         banner[0] += '\n'
         banner += [f'License NOTICE {"#" * 50}']
@@ -161,7 +158,7 @@ def build_boilerplate(config_file, workflow):
     if citation_files['md'].exists():
         from subprocess import CalledProcessError, TimeoutExpired, check_call
 
-        bib_text = (files('qsiprep') / 'data' / 'boilerplate.bib').read_text(encoding='utf-8')
+        bib_text = load_data('boilerplate.bib').read_text(encoding='utf-8')
         citation_files['bib'].write_text(
             bib_text.replace('QSIPrep <version>', f'QSIPrep {config.environment.version}')
         )

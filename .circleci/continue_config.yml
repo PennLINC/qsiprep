@@ -1,0 +1,561 @@
+version: 2.1
+
+parameters:
+  has_any_changes:
+    type: boolean
+    default: false
+  has_code_changes:
+    type: boolean
+    default: false
+
+orbs:
+  codecov: codecov/codecov@4.1.0
+
+_machine_defaults: &machine_defaults
+  environment:
+    TZ: "/usr/share/zoneinfo/America/New_York"
+  machine:
+    image: default
+  working_directory: /tmp/src/qsiprep
+  resource_class: large
+
+_machine_with_dlc: &machine_with_dlc
+  environment:
+    TZ: "/usr/share/zoneinfo/America/New_York"
+  machine:
+    image: default
+    docker_layer_caching: true
+  working_directory: /tmp/src/qsiprep
+  resource_class: large
+
+_default_filters: &default_filters
+  tags:
+    ignore: /.*/
+
+_tag_filters: &tag_filters
+  tags:
+    only: /.*/
+  branches:
+    ignore: /.*/
+
+_docker_auth: &docker_auth
+  name: Docker authentication
+  command: |
+    if [[ -n "$DOCKER_PASS" ]]; then
+      echo "$DOCKER_PASS" | docker login -u $DOCKER_USER --password-stdin
+    fi
+
+_setup_docker_registry: &setup_docker_registry
+  name: Set up local Docker registry
+  command: |
+    docker pull registry:2
+    docker run -d -p 5000:5000 --restart=always --name=registry \
+        -v /tmp/docker:/var/lib/registry registry:2
+
+_pull_test_image: &pull_test_image
+  name: Pull and tag test image from local registry
+  command: |
+    docker pull localhost:5000/qsiprep-test
+    docker tag localhost:5000/qsiprep-test pennlinc/qsiprep:test
+
+commands:
+  restore_build_and_data:
+    description: Restore workflow Docker image cache and test data cache, then start the registry
+    steps:
+      - restore_cache:
+          keys:
+            - build-v6-workflow-{{ .Environment.CIRCLE_WORKFLOW_ID }}-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
+      - restore_cache:
+          keys:
+            - data-v2-{{ checksum ".circleci/data_versions.txt" }}
+      - run: *docker_auth
+      - run: *setup_docker_registry
+      - run: *pull_test_image
+
+  run_integration_test:
+    description: Run a pytest-marked integration test inside the test Docker image
+    parameters:
+      marker:
+        type: string
+      cpus:
+        type: integer
+        default: 4
+    steps:
+      - run:
+          name: Run qsiprep (<< parameters.marker >>)
+          no_output_timeout: 1h
+          command: |
+            mkdir -p /tmp/out /tmp/work /tmp/coverage
+            docker run --rm=false \
+              -e CIRCLE_CPUS=<< parameters.cpus >> \
+              -e COVERAGE_FILE=/coverage/.coverage.<< parameters.marker >> \
+              -v /tmp/src/qsiprep:/tmp/src/qsiprep:ro \
+              -v /tmp/data:/data:ro \
+              -v /tmp/out:/out \
+              -v /tmp/work:/work \
+              -v /tmp/coverage:/coverage \
+              -w /tmp/src/qsiprep \
+              --entrypoint pytest \
+              pennlinc/qsiprep:test \
+              --strict-markers --strict-config \
+              -rP -o log_cli=true -m "<< parameters.marker >>" \
+              --cov-append --cov-report term-missing --cov=qsiprep \
+              --data_dir=/data --output_dir=/out --working_dir=/work \
+              qsiprep
+      - run:
+          name: Prune non-QC artifacts
+          when: always
+          command: |
+            find /tmp/out/ -name "*.nii.gz" -type f -delete 2>/dev/null || true
+            find /tmp/out/ \( \
+              -name "*.h5" -o -name "*.gii" -o -name "*.gii.gz" -o \
+              -name "*.mat" -o -name "*.npz" -o -name "*.mgz" -o -name "*.mif" \
+            \) -type f -delete 2>/dev/null || true
+            find /tmp/out/ \( -name ".pytest_cache" -o -name "__pycache__" \) -type d \
+              -exec rm -rf {} + 2>/dev/null || true
+      - store_artifacts:
+          path: /tmp/out
+      - persist_to_workspace:
+          root: /tmp/coverage
+          paths:
+            - .coverage.<< parameters.marker >>
+
+jobs:
+  image_prep:
+    <<: *machine_with_dlc
+    environment:
+      TZ: "/usr/share/zoneinfo/America/New_York"
+      DOCKER_BUILDKIT: "1"
+    steps:
+      - checkout:
+          path: /tmp/src/qsiprep
+      - restore_cache:
+          keys:
+            - build-v6-deps-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
+      - run: *docker_auth
+      - run: *setup_docker_registry
+      - run:
+          name: Get base image information
+          command: |
+            export BASE_IMAGE=$( grep "BASE_IMAGE=" Dockerfile | head -1 | cut -d= -f2 )
+            export BASE_IMAGE_NAME=${BASE_IMAGE%:*}
+            export BASE_TAG=${BASE_IMAGE#*:}
+            echo "BASE_IMAGE=$BASE_IMAGE" >> $BASH_ENV
+            echo "BASE_IMAGE_NAME=$BASE_IMAGE_NAME" >> $BASH_ENV
+            echo "BASE_TAG=$BASE_TAG" >> $BASH_ENV
+      - run:
+          name: Determine whether test image build is required
+          command: |
+            if [[ -f /tmp/images/imageprep-success.marker ]]; then
+              echo "BUILD_TEST_IMAGE=0" >> "$BASH_ENV"
+            else
+              echo "No successful cached image prep for current Docker inputs; rebuilding test image."
+              echo "BUILD_TEST_IMAGE=1" >> "$BASH_ENV"
+            fi
+      - run:
+          name: Build base Docker image if needed
+          no_output_timeout: 90m
+          command: |
+            if ! docker manifest inspect $BASE_IMAGE > /dev/null 2>&1; then
+              echo "Base image $BASE_IMAGE not found, building..."
+              docker build -f Dockerfile.base \
+                --platform linux/amd64 \
+                -t $BASE_IMAGE \
+                -t $BASE_IMAGE_NAME:latest .
+              echo "BASE_WAS_BUILT=1" >> "$BASH_ENV"
+            else
+              echo "Base image $BASE_IMAGE already exists."
+              echo "BASE_WAS_BUILT=0" >> "$BASH_ENV"
+            fi
+      - run:
+          name: Build test Docker image if needed
+          no_output_timeout: 90m
+          command: |
+            build_test_image() {
+              docker build \
+                "$@" \
+                --target test \
+                --rm=false \
+                -t pennlinc/qsiprep:test \
+                --platform linux/amd64 \
+                --build-arg VCS_REF="$(git rev-parse --short HEAD)" .
+            }
+            build_test_image_with_retry() {
+              e=1 && for i in {1..5}; do
+                if [[ "$i" -gt 1 ]]; then
+                  echo "Test image build failed; pruning BuildKit cache and retrying without cache."
+                  docker builder prune -af || true
+                  build_test_image --no-cache && e=0 && break || sleep 15
+                else
+                  build_test_image && e=0 && break || sleep 15
+                fi
+              done && [ "$e" -eq "0" ]
+            }
+            if [[ "$BUILD_TEST_IMAGE" == "1" || "$BASE_WAS_BUILT" == "1" ]]; then
+              build_test_image_with_retry
+            elif docker image inspect pennlinc/qsiprep:test > /dev/null 2>&1; then
+              echo "Reusing existing local test image (no Dockerfile/pixi/base-triggered rebuild required)."
+            elif docker pull localhost:5000/qsiprep-test; then
+              docker tag localhost:5000/qsiprep-test pennlinc/qsiprep:test
+              echo "Reusing cached test image from local registry (no Dockerfile/pixi/base-triggered rebuild required)."
+            else
+              echo "No reusable test image found; rebuilding test image."
+              build_test_image_with_retry
+            fi
+      - run:
+          name: Guard test image revision
+          command: |
+            if [[ "$BUILD_TEST_IMAGE" == "0" ]]; then
+              echo "Test image reused from cache (Docker deps unchanged); skipping revision guard."
+              exit 0
+            fi
+            EXPECTED_REF="$(git rev-parse --short HEAD)"
+            IMAGE_REF="$(docker image inspect pennlinc/qsiprep:test --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"
+            echo "Expected test image ref: ${EXPECTED_REF}"
+            echo "Actual test image ref: ${IMAGE_REF:-<missing>}"
+            if [[ -z "$IMAGE_REF" || "$IMAGE_REF" != "$EXPECTED_REF" ]]; then
+              echo "Test image revision does not match checkout. Refusing to run tests with stale image."
+              exit 1
+            fi
+      - run:
+          name: Verify test image
+          command: docker run --rm --entrypoint pytest pennlinc/qsiprep:test --version
+      - run:
+          name: Build production Docker image
+          no_output_timeout: 90m
+          command: |
+            if [[ "$CIRCLE_BRANCH" != "main" && -z "$CIRCLE_TAG" ]]; then
+              echo "PR branch; skipping production image build."
+              echo "BUILD_PRODUCTION_IMAGE=0" >> "$BASH_ENV"
+              exit 0
+            fi
+            echo "BUILD_PRODUCTION_IMAGE=1" >> "$BASH_ENV"
+            if [[ -n "$CIRCLE_TAG" ]]; then
+              THISVERSION="$CIRCLE_TAG"
+            else
+              THISVERSION="0+build"
+            fi
+            build_production_image() {
+              docker build \
+                "$@" \
+                --target qsiprep \
+                --rm=false \
+                -t pennlinc/qsiprep:latest \
+                --platform linux/amd64 \
+                --build-arg BUILD_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+                --build-arg VCS_REF="$(git rev-parse --short HEAD)" \
+                --build-arg VERSION="$THISVERSION" .
+            }
+            e=1 && for i in {1..5}; do
+              if [[ "$i" -gt 1 ]]; then
+                echo "Production image build failed; pruning BuildKit cache and retrying without cache."
+                docker builder prune -af || true
+                build_production_image --no-cache && e=0 && break || sleep 15
+              else
+                build_production_image && e=0 && break || sleep 15
+              fi
+            done && [ "$e" -eq "0" ]
+      - run:
+          name: Verify production image
+          command: |
+            if [[ "$BUILD_PRODUCTION_IMAGE" != "1" ]]; then
+              echo "Production image not built on this branch; skipping verify."
+              exit 0
+            fi
+            docker run --rm pennlinc/qsiprep:latest --version
+      - run:
+          name: Push base image to Docker Hub (if newly built)
+          command: |
+            if [[ "$BASE_WAS_BUILT" == "1" ]] && docker image inspect $BASE_IMAGE > /dev/null 2>&1; then
+              if [[ -n "$DOCKER_PASS" ]]; then
+                docker push $BASE_IMAGE
+                docker push $BASE_IMAGE_NAME:latest
+              fi
+            fi
+      - run:
+          name: Push test image to local registry
+          no_output_timeout: 40m
+          command: |
+            docker tag pennlinc/qsiprep:test localhost:5000/qsiprep-test
+            docker push localhost:5000/qsiprep-test
+      - run:
+          name: Push production image to Docker Hub
+          no_output_timeout: 40m
+          command: |
+            if [[ "$BUILD_PRODUCTION_IMAGE" != "1" ]]; then
+              echo "PR branch; skipping production image push."
+              exit 0
+            fi
+            if [[ -n "$DOCKER_PASS" ]]; then
+              docker tag pennlinc/qsiprep:latest pennlinc/qsiprep:unstable
+              docker push pennlinc/qsiprep:unstable
+              if [[ -n "$CIRCLE_TAG" ]]; then
+                docker tag pennlinc/qsiprep:latest pennlinc/qsiprep:$CIRCLE_TAG
+                docker push pennlinc/qsiprep:latest
+                docker push pennlinc/qsiprep:$CIRCLE_TAG
+              fi
+            fi
+      - run:
+          name: Record successful image prep
+          command: |
+            mkdir -p /tmp/images
+            touch /tmp/images/imageprep-success.marker
+      - save_cache:
+          key: build-v6-workflow-{{ .Environment.CIRCLE_WORKFLOW_ID }}-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
+          paths:
+            - /tmp/docker
+            - /tmp/images
+      - save_cache:
+          key: build-v6-deps-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
+          paths:
+            - /tmp/docker
+            - /tmp/images
+
+  get_data:
+    docker:
+      - image: cimg/base:stable
+    working_directory: /tmp/src/qsiprep
+    steps:
+      - checkout:
+          path: /tmp/src/qsiprep
+      - restore_cache:
+          keys:
+            - data-v2-{{ checksum ".circleci/data_versions.txt" }}
+      - run:
+          name: Load data URLs
+          command: |
+            set -a
+            . /tmp/src/qsiprep/.circleci/data_versions.txt
+            set +a
+            echo "export HBCD_URL=$HBCD_URL" >> "$BASH_ENV"
+            echo "export DSCSDSI_URL=$DSCSDSI_URL" >> "$BASH_ENV"
+            echo "export DSCSDSI_BUDS_URL=$DSCSDSI_BUDS_URL" >> "$BASH_ENV"
+            echo "export DSDTI_URL=$DSDTI_URL" >> "$BASH_ENV"
+            echo "export TWOSES_URL=$TWOSES_URL" >> "$BASH_ENV"
+            echo "export MULTISHELL_OUTPUT_URL=$MULTISHELL_OUTPUT_URL" >> "$BASH_ENV"
+            echo "export SINGLESHELL_OUTPUT_URL=$SINGLESHELL_OUTPUT_URL" >> "$BASH_ENV"
+            echo "export DRBUDDI_RPE_SERIES_URL=$DRBUDDI_RPE_SERIES_URL" >> "$BASH_ENV"
+            echo "export DRBUDDI_EPI_URL=$DRBUDDI_EPI_URL" >> "$BASH_ENV"
+            echo "export DSDTI_FMAP_URL=$DSDTI_FMAP_URL" >> "$BASH_ENV"
+            echo "export DSCSDSI_FMAP_URL=$DSCSDSI_FMAP_URL" >> "$BASH_ENV"
+            echo "export MATERNAL_BRAIN_PROJECT_URL=$MATERNAL_BRAIN_PROJECT_URL" >> "$BASH_ENV"
+            echo "export FORREST_GUMP_URL=$FORREST_GUMP_URL" >> "$BASH_ENV"
+      - run:
+          name: Download integration datasets
+          command: |
+            download_one() {
+              local dset=$1
+              local url=$2
+              if [[ -d /tmp/data/${dset} ]]; then
+                echo "${dset} data was cached"
+                return 0
+              fi
+              mkdir -p /tmp/data/${dset}
+              if [[ "${url}" == *.xz ]]; then
+                wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
+                  -O /tmp/${dset}.tar.xz "${url}" || return 1
+                tar xJf /tmp/${dset}.tar.xz -C /tmp/data/${dset}
+                rm -f /tmp/${dset}.tar.xz
+              elif [[ "${url}" == *.gz ]]; then
+                wget --retry-connrefused --waitretry=5 --read-timeout=20 --timeout=15 -t 0 -q \
+                  -O /tmp/${dset}.tar.gz "${url}" || return 1
+                tar xzf /tmp/${dset}.tar.gz -C /tmp/data/${dset}
+                rm -f /tmp/${dset}.tar.gz
+              else
+                echo "Unknown file extension for ${dset}: ${url}"
+                return 1
+              fi
+              echo "Downloaded ${dset}"
+            }
+            download_one HBCD "$HBCD_URL"
+            download_one DSCSDSI "$DSCSDSI_URL"
+            download_one DSCSDSI_BUDS "$DSCSDSI_BUDS_URL"
+            download_one DSDTI "$DSDTI_URL"
+            download_one twoses "$TWOSES_URL"
+            download_one multishell_output "$MULTISHELL_OUTPUT_URL"
+            download_one singleshell_output "$SINGLESHELL_OUTPUT_URL"
+            download_one drbuddi_rpe_series "$DRBUDDI_RPE_SERIES_URL"
+            download_one drbuddi_epi "$DRBUDDI_EPI_URL"
+            download_one DSDTI_fmap "$DSDTI_FMAP_URL"
+            download_one DSCSDSI_fmap "$DSCSDSI_FMAP_URL"
+            download_one maternal_brain_project "$MATERNAL_BRAIN_PROJECT_URL"
+            download_one forrest_gump "$FORREST_GUMP_URL"
+      - save_cache:
+          key: data-v2-{{ checksum ".circleci/data_versions.txt" }}
+          paths:
+            - /tmp/data
+
+  integration_test:
+    <<: *machine_defaults
+    parameters:
+      marker:
+        type: string
+      cpus:
+        type: integer
+        default: 4
+      skip_marker:
+        type: string
+        default: ""
+    steps:
+      - checkout:
+          path: /tmp/src/qsiprep
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            SKIP_MARKER="<< parameters.skip_marker >>"
+            if [[ -z "$SKIP_MARKER" ]]; then SKIP_MARKER="<< parameters.marker >>"; fi
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?'"$SKIP_MARKER"'\]' )" != "" ]]; then
+              echo "Skipping << parameters.marker >>"
+              circleci step halt
+            fi
+      - restore_build_and_data
+      - run_integration_test:
+          marker: << parameters.marker >>
+          cpus: << parameters.cpus >>
+
+  unit_tests:
+    <<: *machine_defaults
+    steps:
+      - checkout:
+          path: /tmp/src/qsiprep
+      - run:
+          name: Check whether build should be skipped
+          command: |
+            if [[ "$( git log --format=oneline -n 1 $CIRCLE_SHA1 | grep -i -E '\[skip[ _]?unit_tests\]' )" != "" ]]; then
+              echo "Skipping unit_tests"
+              circleci step halt
+            fi
+      - restore_build_and_data
+      - run:
+          name: Run unit tests
+          no_output_timeout: 2h
+          command: |
+            mkdir -p /tmp/out /tmp/work /tmp/coverage
+            docker run --rm=false \
+              -e CIRCLE_CPUS=4 \
+              -e COVERAGE_FILE=/coverage/.coverage.unit_tests \
+              -v /tmp/src/qsiprep:/tmp/src/qsiprep:ro \
+              -v /tmp/data:/data:ro \
+              -v /tmp/out:/out \
+              -v /tmp/work:/work \
+              -v /tmp/coverage:/coverage \
+              -w /tmp/src/qsiprep \
+              --entrypoint pytest \
+              pennlinc/qsiprep:test \
+              --strict-markers --strict-config \
+              -n 4 -vv -o log_cli=true -m "not integration and not synthstrip" \
+              --cov-append --cov-branch --cov-report term-missing --cov=qsiprep \
+              --data_dir=/data --output_dir=/out --working_dir=/work \
+              qsiprep
+      - persist_to_workspace:
+          root: /tmp/coverage
+          paths:
+            - .coverage.unit_tests
+
+  merge_coverage:
+    docker:
+      - image: cimg/python:3.12
+    working_directory: /tmp/src/qsiprep
+    steps:
+      - checkout:
+          path: /tmp/src/qsiprep
+      - attach_workspace:
+          at: /tmp/coverage
+      - run:
+          name: Merge coverage files
+          command: |
+            pip install coverage
+            cd /tmp/src/qsiprep
+            coverage combine /tmp/coverage/
+            coverage xml -o /tmp/coverage/coverage.xml
+      - store_artifacts:
+          path: /tmp/coverage
+      - run:
+          name: Quick fix for GPG error in Codecov
+          command: |
+            mkdir -p /tmp/gnupg
+            chmod 700 /tmp/gnupg
+            echo 'export GNUPGHOME=/tmp/gnupg' >> "$BASH_ENV"
+      - codecov/upload:
+          file: /tmp/coverage/coverage.xml
+
+  deploy_pypi:
+    docker:
+      - image: cimg/python:3.10.9
+    working_directory: /tmp/src/qsiprep
+    steps:
+      - checkout
+      - run:
+          name: Update build tools
+          command: pip install --upgrade build twine
+      - run:
+          name: Build QSIPrep
+          command: python -m build
+      - run:
+          name: Upload packages to PyPI
+          command: python -m twine upload -u __token__ -p "${PYPI_PASS}" dist/qsiprep*
+
+workflows:
+  version: 2
+
+  run_tests:
+    when: << pipeline.parameters.has_code_changes >>
+    jobs:
+      - image_prep:
+          filters: *default_filters
+
+      - get_data:
+          filters: *default_filters
+
+      - integration_test:
+          name: << matrix.marker >>
+          matrix:
+            parameters:
+              marker:
+                - dscsdsi
+                - dsdti_nofmap
+                - dsdti_synfmap
+                - drbuddi_tensorline_epi
+                - drbuddi_shoreline_epi
+                - drbuddi_rpe
+                - maternal_brain_project
+                - forrest_gump
+                - forrest_gump_patch2self
+                - synthstrip
+                - intramodal_template
+                - multi_t1w
+          requires: [image_prep, get_data]
+          filters: *default_filters
+
+      - unit_tests:
+          requires:
+            - image_prep
+            - get_data
+          filters: *default_filters
+
+      - merge_coverage:
+          requires:
+            - dscsdsi
+            - dsdti_nofmap
+            - dsdti_synfmap
+            - drbuddi_tensorline_epi
+            - drbuddi_shoreline_epi
+            - drbuddi_rpe
+            - maternal_brain_project
+            - forrest_gump
+            - forrest_gump_patch2self
+            - synthstrip
+            - intramodal_template
+            - multi_t1w
+            - unit_tests
+          filters: *default_filters
+
+  deploy:
+    jobs:
+      - image_prep:
+          filters: *tag_filters
+
+      - deploy_pypi:
+          requires:
+            - image_prep
+          filters: *tag_filters

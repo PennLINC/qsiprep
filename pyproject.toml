@@ -4,11 +4,11 @@ build-backend = "hatchling.build"
 
 [project]
 name = "QSIPrep"
-description = "qsiprep builds workflows for preprocessing and reconstructing q-space images"
+description = "QSIPrep builds workflows for preprocessing and reconstructing q-space images"
 readme = "long_description.rst"
 authors = [{name = "The PennLINC developers"}]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Image Recognition",
     "License :: OSI Approved :: BSD License",
@@ -121,7 +121,7 @@ exclude = [
 
 [tool.hatch.version]
 source = "vcs"
-# raw-options = { version_scheme = "nipreps-calver" }
+raw-options = { version_scheme = "nipreps-calver" }
 
 [tool.hatch.build.hooks.vcs]
 version-file = "qsiprep/_version.py"

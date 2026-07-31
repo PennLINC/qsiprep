@@ -445,11 +445,12 @@ def init_dwi_denoising_wf(
 
         dwi_denoise_window = config.workflow.dwi_denoise_window
         auto_str = ''
-        if denoise_method == 'dwidenoise' and config.workflow.dwi_denoise_window == 'auto':
+        if denoise_method == 'dwidenoise' and dwi_denoise_window == 'auto':
             # Configure the denoising window
             import numpy as np
 
             dwi_denoise_window = closest_odd(int(np.ceil(np.cbrt(n_volumes))))
+            dwi_denoise_window = max(dwi_denoise_window, 3)
             config.loggers.workflow.info(
                 f'Automatically using {dwi_denoise_window}, {dwi_denoise_window}, '
                 f'{dwi_denoise_window} window for dwidenoise'

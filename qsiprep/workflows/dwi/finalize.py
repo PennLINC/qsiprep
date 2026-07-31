@@ -595,8 +595,8 @@ def init_finalize_denoising_wf(
                     pe.Node(
                         DerivativesDataSink(
                             datatype='figures',
-                            desc=f'{name}{scan_num}',
-                            suffix='biascorr',
+                            desc=f'biascorrpost{name}{scan_num}',
+                            suffix='dwi',
                         ),
                         name='ds_report_' + name + '_biascorr%d' % scan_num,
                         run_without_submitting=True,

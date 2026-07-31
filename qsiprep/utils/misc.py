@@ -2,6 +2,27 @@
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """Miscellaneous utility functions."""
 
+import logging
+
+import numpy as np
+
+LOGGER = logging.getLogger('nipype.interface')
+
+
+def safe_unit_vector(vector):
+    """Return the unit vector of ``vector``.
+
+    A zero-magnitude b-vector (e.g. the magnitude-zero b-vectors Philips uses
+    for b=0 volumes) cannot be normalized: dividing by a zero norm yields NaN.
+    In that case ``(1, 0, 0)`` is substituted and a warning is emitted so it is
+    clear the b-vector has been modified.
+    """
+    norm = np.linalg.norm(vector)
+    if norm == 0:
+        LOGGER.warning('Encountered a zero-magnitude b-vector; substituting (1, 0, 0).')
+        return np.array([1.0, 0.0, 0.0])
+    return vector / norm
+
 
 def check_deps(workflow):
     from nipype.utils.filemanip import which

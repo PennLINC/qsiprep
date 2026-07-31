@@ -28,6 +28,8 @@ from scipy.spatial.transform import Rotation as R
 from sklearn.metrics import r2_score
 from transforms3d.affines import decompose44
 
+from ..utils.misc import safe_unit_vector
+
 LOGGER = logging.getLogger('nipype.interface')
 tensor_index = {'xx': (0, 0), 'xy': (0, 1), 'xz': (0, 2), 'yy': (1, 1), 'yz': (1, 2), 'zz': (2, 2)}
 
@@ -826,10 +828,6 @@ def aattp_rotate_vec(orig_vec, transform, runtime):
         bvec_txt.write('x,y,z,t\n0.0,0.0,0.0,0.0\n')
         bvec_txt.write(','.join(map(str, 5 * orig_vec)) + ',0.0\n')
 
-    def unit_vector(vector):
-        """The unit vector of the vector."""
-        return vector / np.linalg.norm(vector)
-
     # Only use the affine transforms for global bvecs
     # Reverse order and inverse to antsApplyTransformsToPoints
     transforms = f'--transform [{transform}, 1]'
@@ -844,7 +842,7 @@ def aattp_rotate_vec(orig_vec, transform, runtime):
     LOGGER.info(cmd)
     os.system(cmd)
     rotated_vec = np.loadtxt(rotated_txt, skiprows=1, delimiter=',')[:, :3]
-    rotated_unit_vec = unit_vector(rotated_vec[1] - rotated_vec[0])
+    rotated_unit_vec = safe_unit_vector(rotated_vec[1] - rotated_vec[0])
 
     return rotated_unit_vec, cmd
 
