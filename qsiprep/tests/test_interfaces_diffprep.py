@@ -123,6 +123,221 @@ def test_diffprep_t2wreg_requires_structural(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# CPU / CUDA binary selection
+# ---------------------------------------------------------------------------
+
+
+def test_tortoise_use_cuda_swaps_the_binary(tmp_path):
+    """use_cuda picks the <cmd>_cuda build, mirroring ExtendedEddy._use_cuda.
+
+    TORTOISE ships fixed ``_cuda`` suffixes, so unlike FSL (eddy_cuda11.0) no
+    PATH scan is needed. Default must stay on CPU.
+    """
+    from qsiprep.interfaces.tortoise import DIFFPREP, DRBUDDI
+
+    dwi, bmtxt, json_file = _diffprep_siblings(tmp_path)
+    common = {'dwi_file': str(dwi), 'bmtxt_file': str(bmtxt), 'json_file': str(json_file)}
+
+    assert DIFFPREP(**common).cmd == 'TORTOISEProcess'
+    assert DIFFPREP(use_cuda=False, **common).cmd == 'TORTOISEProcess'
+    assert DIFFPREP(use_cuda=True, **common).cmd == 'TORTOISEProcess_cuda'
+
+    assert DRBUDDI().cmd == 'DRBUDDI'
+    assert DRBUDDI(use_cuda=False).cmd == 'DRBUDDI'
+    assert DRBUDDI(use_cuda=True).cmd == 'DRBUDDI_cuda'
+
+
+def test_use_cuda_is_not_passed_on_the_command_line(tmp_path):
+    """use_cuda selects the executable; it is not a TORTOISEProcess flag."""
+    from qsiprep.interfaces.tortoise import DIFFPREP
+
+    dwi, bmtxt, json_file = _diffprep_siblings(tmp_path)
+    cmd = DIFFPREP(
+        dwi_file=str(dwi),
+        bmtxt_file=str(bmtxt),
+        json_file=str(json_file),
+        correction_mode='quadratic',
+        use_cuda=True,
+    ).cmdline
+    assert cmd.startswith('TORTOISEProcess_cuda')
+    # Not `'use_cuda' not in cmd` -- pytest's tmp_path embeds the test name.
+    assert '--use_cuda' not in cmd
+    assert not any(tok == 'use_cuda' for tok in cmd.split())
+
+
+def test_diffprep_config_use_cuda_default_and_override(tmp_path):
+    """The ``use_cuda`` key is opt-in in --diffprep-config and defaults to CPU."""
+    import json as _json
+
+    from qsiprep.workflows.dwi.diffprep import _load_diffprep_config
+
+    assert _load_diffprep_config(None)['use_cuda'] is False
+
+    cfg = tmp_path / 'cuda_cfg.json'
+    cfg.write_text(_json.dumps({'use_cuda': True}))
+    assert _load_diffprep_config(str(cfg))['use_cuda'] is True
+
+    cfg_absent = tmp_path / 'no_cuda_key.json'
+    cfg_absent.write_text(_json.dumps({'b0_id': 0}))
+    assert _load_diffprep_config(str(cfg_absent))['use_cuda'] is False
+
+
+def test_diffprep_wf_honours_use_cuda(tmp_path):
+    """A --diffprep-config asking for CUDA reaches the DIFFPREP node."""
+    import json as _json
+
+    config = _base_config()
+    cfg = tmp_path / 'wf_cuda_cfg.json'
+    cfg.write_text(_json.dumps({'use_cuda': True}))
+    orig = config.workflow.diffprep_config
+    try:
+        config.workflow.diffprep_config = str(cfg)
+        wf = _build(_scan_groups(), t2w_sdc=False, name='cuda_on')
+        assert wf.get_node('diffprep').interface.cmd == 'TORTOISEProcess_cuda'
+
+        config.workflow.diffprep_config = None
+        wf_cpu = _build(_scan_groups(), t2w_sdc=False, name='cuda_off')
+        assert wf_cpu.get_node('diffprep').interface.cmd == 'TORTOISEProcess'
+    finally:
+        config.workflow.diffprep_config = orig
+
+
+# ---------------------------------------------------------------------------
+# Output collection (pure Python -- lays out the files TORTOISE would write)
+# ---------------------------------------------------------------------------
+
+
+def _stage_diffprep_outputs(tmp_path, t2wreg):
+    """Recreate the file tree TORTOISEProcess leaves behind in a node's cwd.
+
+    Mirrors what the real binary produced for sub-0001a ses-1: the motion+eddy
+    step writes ``<stem>_temp_proc/<stem>_proc_moteddy.*``, and when ``-s`` is
+    given the StructuralAlignment + FinalData stages additionally write
+    ``<stem>_TORTOISE_final.nii`` and its own reoriented ``.bmtxt`` in the cwd.
+    """
+    dwi, bmtxt, json_file = _diffprep_siblings(tmp_path)
+    temp_proc = tmp_path / 'dwi_temp_proc'
+    temp_proc.mkdir()
+    _write_dummy_nii(temp_proc / 'dwi_proc_moteddy.nii')
+    (temp_proc / 'dwi_proc_moteddy.bmtxt').write_text('0 0 0 0 0 0\n1000 0 0 0 0 0\n')
+    (temp_proc / 'dwi_proc_moteddy_transformations.txt').write_text('')
+    if t2wreg:
+        # The EPI stage's displacement field plus the before/after b=0 pair.
+        _write_dummy_nii(temp_proc / 'deformation_FINV.nii.gz', nvols=3)
+        _write_dummy_nii(temp_proc / 'blip_up_b0.nii', nvols=1)
+        _write_dummy_nii(temp_proc / 'blip_up_b0_corrected.nii', nvols=1)
+        _write_dummy_nii(temp_proc / 'structural_used.nii', nvols=1)
+        # StructuralAlignment + FinalData still run (--step only sets the START
+        # step), so their output exists -- the interface must ignore it.
+        _write_dummy_nii(tmp_path / 'dwi_TORTOISE_final.nii')
+        (tmp_path / 'dwi_TORTOISE_final.bmtxt').write_text('0 0 0 0 0 0\n0 0 1000 0 0 0\n')
+    return dwi, bmtxt, json_file
+
+
+def test_diffprep_outputs_off_uses_moteddy(tmp_path, monkeypatch):
+    """epi_mode='off': both the image and the bmatrix come from motion+eddy."""
+    from qsiprep.interfaces.tortoise import DIFFPREP
+
+    dwi, bmtxt, json_file = _stage_diffprep_outputs(tmp_path, t2wreg=False)
+    monkeypatch.chdir(tmp_path)
+
+    outputs = DIFFPREP(
+        dwi_file=str(dwi),
+        bmtxt_file=str(bmtxt),
+        json_file=str(json_file),
+        epi_mode='off',
+    )._list_outputs()
+
+    assert outputs['corrected_dwi_file'].endswith('dwi_temp_proc/dwi_proc_moteddy.nii')
+    assert outputs['corrected_bmtxt_file'].endswith('dwi_temp_proc/dwi_proc_moteddy.bmtxt')
+
+
+def test_diffprep_outputs_t2wreg_stays_in_native_space(tmp_path, monkeypatch):
+    """epi_mode='T2Wreg' must emit the PRE-EPI image plus the EPI warp.
+
+    Passing ``-s`` makes TORTOISE run StructuralAlignment and FinalData, which
+    resample the DWIs into the structural's frame -- pulling coregistration and
+    ACPC alignment forward into HMC, where qsiprep does not want them (measured on
+    real data: ~12 deg of the alignment happened inside DIFFPREP, leaving
+    qsiprep's own b0->anat step with 1.7 deg). Take the native-grid motion+eddy
+    image and hand the EPI displacement field out as a transform instead, which is
+    the contract the DRBUDDI branch already uses.
+    """
+    from qsiprep.interfaces.tortoise import DIFFPREP
+
+    dwi, bmtxt, json_file = _stage_diffprep_outputs(tmp_path, t2wreg=True)
+    t2w = tmp_path / 't2w.nii'
+    _write_dummy_nii(t2w, nvols=1)
+    monkeypatch.chdir(tmp_path)
+
+    outputs = DIFFPREP(
+        dwi_file=str(dwi),
+        bmtxt_file=str(bmtxt),
+        json_file=str(json_file),
+        epi_mode='T2Wreg',
+        structural_image=str(t2w),
+    )._list_outputs()
+
+    # Native grid, and the bmatrix that goes with it.
+    assert outputs['corrected_dwi_file'].endswith('dwi_temp_proc/dwi_proc_moteddy.nii')
+    assert outputs['corrected_bmtxt_file'].endswith('dwi_temp_proc/dwi_proc_moteddy.bmtxt')
+    # The reoriented FinalData output exists but must NOT be used.
+    assert 'TORTOISE_final' not in outputs['corrected_dwi_file']
+    assert 'TORTOISE_final' not in outputs['corrected_bmtxt_file']
+    # SDC travels as a transform.
+    assert outputs['sdc_warp'].endswith('dwi_temp_proc/deformation_FINV.nii.gz')
+    # Named so nipype's remove_unnecessary_outputs keeps the SDC report inputs.
+    assert outputs['b0_up_image'].endswith('blip_up_b0.nii')
+    assert outputs['b0_up_corrected_image'].endswith('blip_up_b0_corrected.nii')
+    assert outputs['structural_image'].endswith('structural_used.nii')
+
+
+def test_diffprep_epi_off_emits_no_warp(tmp_path, monkeypatch):
+    """Without the EPI stage there is no displacement field to hand downstream."""
+    from nipype.interfaces.base import isdefined
+
+    from qsiprep.interfaces.tortoise import DIFFPREP
+
+    dwi, bmtxt, json_file = _stage_diffprep_outputs(tmp_path, t2wreg=False)
+    monkeypatch.chdir(tmp_path)
+
+    outputs = DIFFPREP(
+        dwi_file=str(dwi),
+        bmtxt_file=str(bmtxt),
+        json_file=str(json_file),
+        epi_mode='off',
+    )._list_outputs()
+
+    assert outputs['corrected_dwi_file'].endswith('dwi_proc_moteddy.nii')
+    assert not isdefined(outputs['sdc_warp'])
+
+
+def test_diffprep_t2wreg_missing_warp(tmp_path, monkeypatch):
+    """A T2Wreg run without its displacement field is an error, not a silent skip.
+
+    Falling through would produce a run with no susceptibility correction at all
+    while still reporting sdc_method='T2Wreg'.
+    """
+    from qsiprep.interfaces.tortoise import DIFFPREP
+
+    dwi, bmtxt, json_file = _stage_diffprep_outputs(tmp_path, t2wreg=True)
+    t2w = tmp_path / 't2w.nii'
+    _write_dummy_nii(t2w, nvols=1)
+    (tmp_path / 'dwi_temp_proc' / 'deformation_FINV.nii.gz').unlink()
+    monkeypatch.chdir(tmp_path)
+
+    iface = DIFFPREP(
+        dwi_file=str(dwi),
+        bmtxt_file=str(bmtxt),
+        json_file=str(json_file),
+        epi_mode='T2Wreg',
+        structural_image=str(t2w),
+    )
+    with pytest.raises(FileNotFoundError, match='displacement field'):
+        iface._list_outputs()
+
+
+# ---------------------------------------------------------------------------
 # Okan transform parsing (pure Python)
 # ---------------------------------------------------------------------------
 
@@ -248,7 +463,8 @@ def test_tortoise_convert_colocates_bmtxt(tmp_path):
 def test_diffprep_split_outputs(tmp_path):
     """``DIFFPREPSplitOutputs`` splits the corrected 4D DWI + bmtxt into
     per-volume triples, finds the b=0s, and emits identity ITK affines."""
-    _require('FSLBVecsToTORTOISEBmatrix', 'TORTOISEBmatrixToFSLBVecs')
+    # deoblique=True routes the gradients through mrtrix's mrinfo -dwgrad.
+    _require('FSLBVecsToTORTOISEBmatrix', 'TORTOISEBmatrixToFSLBVecs', 'mrinfo')
     from qsiprep.interfaces.tortoise import DIFFPREPSplitOutputs, make_bmat_file
 
     bvals = [0, 1000, 1000]
@@ -278,6 +494,79 @@ def test_diffprep_split_outputs(tmp_path):
     for xfm in res.outputs.forward_transforms:
         text = open(xfm).read()
         assert 'Parameters: 1 0 0 0 1 0 0 0 1 0 0 0' in text
+
+
+def test_diffprep_split_outputs_deobliques_gradients(tmp_path):
+    """Gradients go through qsiprep's mrtrix RAS+ conversion, not raw FSL bvecs.
+
+    ``TORTOISEBmatrixToFSLBVecs`` emits FSL-convention (voxel-frame) bvecs, which
+    depend on the image's orientation and obliquity. ``split_bvals_bvecs`` with
+    ``deoblique=True`` runs them through ``mrinfo -dwgrad -fslgrad`` -- the same
+    tested conversion ``SplitDWIsFSL(deoblique_bvecs=True)`` gives the eddy
+    backend.
+
+    Assert the interface's output matches that conversion rather than the raw
+    bvecs. On an oblique grid the two differ, so flipping the flag back fails
+    here; DIFFPREP's own grid is normally axis-aligned (TORTOISE resamples onto
+    the ACPC structural), which is why such a regression would otherwise be
+    invisible.
+    """
+    import nibabel as nb
+
+    _require('FSLBVecsToTORTOISEBmatrix', 'TORTOISEBmatrixToFSLBVecs', 'mrinfo')
+    from qsiprep.interfaces.images import split_bvals_bvecs
+    from qsiprep.interfaces.tortoise import DIFFPREPSplitOutputs, bmtxt_to_fsl, make_bmat_file
+
+    bvals = [0, 1000, 1000]
+    bvecs = [[0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [1.0, 0.0, 0.0]]
+    bval_file, bvec_file = _write_fsl_gradients(tmp_path, bvals, bvecs)
+    bmtxt = make_bmat_file(str(bval_file), str(bvec_file))
+
+    # A deliberately oblique grid (~10 degrees about z), where the two differ.
+    theta = np.deg2rad(10.0)
+    affine = np.eye(4)
+    affine[:3, :3] = np.array(
+        [
+            [np.cos(theta), -np.sin(theta), 0.0],
+            [np.sin(theta), np.cos(theta), 0.0],
+            [0.0, 0.0, 1.0],
+        ]
+    )
+    corrected = tmp_path / 'oblique.nii'
+    nb.Nifti1Image(np.zeros((4, 4, 4, 3), dtype='float32'), affine).to_filename(str(corrected))
+
+    run_dir = tmp_path / 'split_oblique'
+    run_dir.mkdir()
+    res = DIFFPREPSplitOutputs(
+        corrected_dwi_file=str(corrected),
+        corrected_bmtxt_file=str(bmtxt),
+        b0_threshold=100,
+    ).run(cwd=str(run_dir))
+    emitted = np.array([np.loadtxt(f) for f in res.outputs.bvec_files])
+
+    # Reproduce both candidate conversions from the same bmatrix, against the
+    # per-volume images the interface itself wrote.
+    ref_dir = tmp_path / 'reference'
+    (ref_dir / 'on').mkdir(parents=True)
+    (ref_dir / 'off').mkdir(parents=True)
+    ref_bval, ref_bvec = bmtxt_to_fsl(str(bmtxt), str(ref_dir))
+    imgs = list(res.outputs.dwi_files)
+    _, deob_files = split_bvals_bvecs(
+        ref_bval, ref_bvec, imgs, deoblique=True, working_dir=str(ref_dir / 'on')
+    )
+    _, raw_files = split_bvals_bvecs(
+        ref_bval, ref_bvec, imgs, deoblique=False, working_dir=str(ref_dir / 'off')
+    )
+    deobliqued = np.array([np.loadtxt(f) for f in deob_files])
+    raw = np.array([np.loadtxt(f) for f in raw_files])
+
+    assert np.allclose(
+        emitted, deobliqued, atol=1e-5
+    ), f'gradients are not the mrtrix RAS+ ones:\n{emitted}\nvs\n{deobliqued}'
+    # And on this grid that is a real difference, so the assertion has teeth.
+    assert not np.allclose(
+        deobliqued, raw, atol=1e-3
+    ), 'oblique fixture failed to distinguish the two conversions'
 
 
 # ---------------------------------------------------------------------------
@@ -711,26 +1000,70 @@ def test_rpe_series_is_shelled(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_t2w_available_for_sdc():
-    """t2w_sdc is requested only when a T2w exists AND anat processing runs.
-
-    With --anat-modality none there is no anatomical workflow, so t2w_unfatsat is
-    never produced; requesting T2w SDC then leaves the DRBUDDI structural / the
-    extended report's t2w_n4 with an empty input (the CI failure).
-    """
+@pytest.fixture()
+def t2w_gate_config():
+    """Pin every config knob _t2w_available_for_sdc reads, and restore after."""
     from qsiprep import config
+
+    saved = {
+        k: getattr(config.workflow, k, None)
+        for k in ('anat_modality', 'pepolar_method', 'hmc_model')
+    }
+    config.workflow.anat_modality = 't1w'
+    config.workflow.pepolar_method = 'TOPUP'
+    config.workflow.hmc_model = 'eddy'
+    try:
+        yield config
+    finally:
+        for k, v in saved.items():
+            setattr(config.workflow, k, v)
+
+
+T2W_SUBJECT = {'t2w': ['/data/sub-01_T2w.nii.gz']}
+
+
+def test_t2w_available_for_sdc_requires_anat_processing(t2w_gate_config):
+    """With --anat-modality none there is no anatomical workflow, so t2w_unfatsat
+    is never produced; requesting T2w SDC then leaves the DRBUDDI structural / the
+    extended report's t2w_n4 with an empty input (the CI failure)."""
     from qsiprep.workflows.base import _t2w_available_for_sdc
 
-    orig = getattr(config.workflow, 'anat_modality', 't1w')
-    try:
-        config.workflow.anat_modality = 't1w'
-        assert _t2w_available_for_sdc({'t2w': ['/data/sub-01_T2w.nii.gz']}) is True
-        assert _t2w_available_for_sdc({}) is False
-        # The fix: a T2w present but no anat processing -> do NOT do T2w SDC.
-        config.workflow.anat_modality = 'none'
-        assert _t2w_available_for_sdc({'t2w': ['/data/sub-01_T2w.nii.gz']}) is False
-    finally:
-        config.workflow.anat_modality = orig
+    t2w_gate_config.workflow.pepolar_method = 'DRBUDDI'
+    assert _t2w_available_for_sdc(T2W_SUBJECT) is True
+    assert _t2w_available_for_sdc({}) is False
+
+    t2w_gate_config.workflow.anat_modality = 'none'
+    assert _t2w_available_for_sdc(T2W_SUBJECT) is False
+
+
+def test_t2w_available_for_sdc_requires_a_consuming_backend(t2w_gate_config):
+    """t2w_unfatsat only exists when the backend has a stage that consumes it.
+
+    ``additional_t2ws`` -- the only thing that makes init_anat_preproc_wf build its
+    T2w branch -- was gated on --pepolar-method alone. The diffprep_* T2Wreg path
+    consumes the T2w without any PEPOLAR data and is not gated on that flag, so a
+    plain ``--hmc-model diffprep_* --ignore fieldmaps`` run requested T2w SDC while
+    nothing produced the image, and DIFFPREP died with
+    ``epi_mode="T2Wreg" requires a structural_image``.
+    """
+    from qsiprep.workflows.base import _t2w_available_for_sdc, _t2w_sdc_backend_enabled
+
+    # eddy + TOPUP: nothing consumes a T2w, so do not claim T2w SDC.
+    assert _t2w_sdc_backend_enabled() is False
+    assert _t2w_available_for_sdc(T2W_SUBJECT) is False
+
+    # DRBUDDI consumes it as its multimodal --structural.
+    t2w_gate_config.workflow.pepolar_method = 'TOPUP+DRBUDDI'
+    assert _t2w_sdc_backend_enabled() is True
+    assert _t2w_available_for_sdc(T2W_SUBJECT) is True
+
+    # The regression: diffprep_* consumes it via --epi T2Wreg regardless of
+    # --pepolar-method.
+    t2w_gate_config.workflow.pepolar_method = 'TOPUP'
+    for model in ('diffprep_motion', 'diffprep_quadratic', 'diffprep_cubic'):
+        t2w_gate_config.workflow.hmc_model = model
+        assert _t2w_sdc_backend_enabled() is True, model
+        assert _t2w_available_for_sdc(T2W_SUBJECT) is True, model
 
 
 def test_extended_pepolar_report_t2w_n4_gets_input():
@@ -824,6 +1157,7 @@ def _base_config():
     config.workflow.b0_threshold = 100
     config.workflow.pepolar_method = 'drbuddi'
     config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
+    config.workflow.gpu = None  # --gpu not given, so legacy use_cuda keys apply
     config.execution.sloppy = False
     return config
 
@@ -880,11 +1214,67 @@ def test_init_diffprep_hmc_wf_contract_hmc_only():
 
 
 def test_init_diffprep_hmc_wf_t2wreg():
-    """No fieldmap + T2w -> TORTOISE T2Wreg baked in (sdc_method='T2Wreg')."""
+    """No fieldmap + T2w -> TORTOISE T2Wreg (sdc_method='T2Wreg')."""
     _base_config()
     wf = _build(_scan_groups(None), t2w_sdc=True)
     assert wf.get_node('diffprep').inputs.epi_mode == 'T2Wreg'
     assert wf.get_node('outputnode').inputs.sdc_method == 'T2Wreg'
+
+
+def _connect_fields(wf, src, dst):
+    edge = wf._graph.get_edge_data(wf.get_node(src), wf.get_node(dst))
+    return [] if edge is None else list(edge['connect'])
+
+
+def test_t2wreg_sdc_travels_as_a_warp_not_baked_in():
+    """The EPI field must reach to_dwi_ref_warps so qsiprep resamples once.
+
+    Taking TORTOISE's FinalData instead would bake in its StructuralAlignment,
+    performing coregistration and ACPC inside HMC. Routing the displacement field
+    to ``to_dwi_ref_warps`` puts this branch on the same footing as DRBUDDI: the
+    correction composes with HMC and coregistration in a single resampling.
+    """
+    _base_config()
+    wf = _build(_scan_groups(None), t2w_sdc=True, name='t2wreg_warp')
+
+    out_fields = [dst for _, dst in _connect_fields(wf, 'diffprep', 'outputnode')]
+    assert 'to_dwi_ref_warps' in out_fields
+    # The report needs the before/after pair and the structural actually used.
+    for field in ('b0_up_image', 'b0_up_corrected_image', 't2w_image'):
+        assert field in out_fields, field
+
+
+def test_t2wreg_coregistration_uses_the_corrected_b0():
+    """Coregistration must see the undistorted b=0.
+
+    DIFFPREP's output is pre-EPI on this path, so the warp has to be applied to
+    the b=0 before it becomes the coregistration reference -- otherwise the
+    dwi->anat registration is computed on distorted data.
+    """
+    _base_config()
+    wf = _build(_scan_groups(None), t2w_sdc=True, name='t2wreg_coreg')
+
+    apply_sdc = wf.get_node('apply_sdc_to_b0')
+    assert apply_sdc is not None, 'expected the b=0 to be unwarped before coregistration'
+    assert ('b0_average', 'input_image') in _connect_fields(wf, 'extract_b0s', 'apply_sdc_to_b0')
+    assert 'transforms' in [dst for _, dst in _connect_fields(wf, 'diffprep', 'apply_sdc_to_b0')]
+    assert ('output_image', 'inputnode.b0_template') in _connect_fields(
+        wf, 'apply_sdc_to_b0', 'b0_ref_for_coreg'
+    )
+    # The raw b=0 must NOT also feed the reference, or the corrected one is moot.
+    assert ('b0_average', 'inputnode.b0_template') not in _connect_fields(
+        wf, 'extract_b0s', 'b0_ref_for_coreg'
+    )
+
+
+def test_non_t2wreg_coregistration_uses_the_b0_directly():
+    """Without an in-TORTOISE EPI stage there is nothing to unwarp first."""
+    _base_config()
+    wf = _build(_scan_groups(None), t2w_sdc=False, name='no_t2wreg_coreg')
+    assert wf.get_node('apply_sdc_to_b0') is None
+    assert ('b0_average', 'inputnode.b0_template') in _connect_fields(
+        wf, 'extract_b0s', 'b0_ref_for_coreg'
+    )
 
 
 def test_init_diffprep_hmc_wf_syn_without_t2w():
@@ -1097,3 +1487,65 @@ def test_init_diffprep_hmc_wf_topup_rejected():
             _build(_scan_groups('epi', epi=['/data/sub-01_epi.nii.gz']), False)
     finally:
         config.workflow.pepolar_method = 'drbuddi'
+
+
+def test_sloppy_epi_working_res_only_under_sloppy():
+    """The working-grid override is emitted for --sloppy and nowhere else.
+
+    A stock (unpatched) TORTOISE rejects --epi_working_res, so a normal run must
+    not emit it. 2.5mm is a deliberate speed choice for smoke tests, not a
+    validated registration resolution.
+    """
+    from qsiprep.interfaces.tortoise import SLOPPY_EPI_WORKING_RES, sloppy_epi_working_res
+
+    config = _base_config()
+    try:
+        config.execution.sloppy = False
+        assert sloppy_epi_working_res() == {}
+
+        config.execution.sloppy = True
+        assert sloppy_epi_working_res() == {'epi_working_res': SLOPPY_EPI_WORKING_RES}
+    finally:
+        config.execution.sloppy = False
+
+
+def test_drbuddi_epi_working_res_on_the_command_line(tmp_path):
+    """The trait renders as --epi_working_res, and is absent when unset."""
+    from qsiprep.interfaces.tortoise import DRBUDDI
+
+    for name in ('up.nii', 'up.bmtxt', 'up.json', 'down.nii'):
+        (tmp_path / name).write_text('')
+    kwargs = {
+        'blip_up_image': str(tmp_path / 'up.nii'),
+        'blip_up_bmat': str(tmp_path / 'up.bmtxt'),
+        'blip_up_json': str(tmp_path / 'up.json'),
+        'blip_down_image': str(tmp_path / 'down.nii'),
+        'fieldmap_type': 'rpe_series',
+    }
+    assert '--epi_working_res' not in DRBUDDI(**kwargs).cmdline
+    assert '--epi_working_res 2.5' in DRBUDDI(epi_working_res=2.5, **kwargs).cmdline
+
+
+def test_sloppy_reaches_the_drbuddi_node(tmp_path):
+    """--sloppy propagates all the way to the DRBUDDI node's command line."""
+    from qsiprep.interfaces.tortoise import SLOPPY_EPI_WORKING_RES
+
+    # GatherDRBUDDIInputs takes epi_fmaps as a File trait, so the reverse-PE
+    # series has to exist on disk for the workflow to build.
+    rpe = tmp_path / 'sub-01_dir-PA_dwi.nii.gz'
+    _write_dummy_nii(rpe)
+    groups = _scan_groups('rpe_series', rpe_series=[str(rpe)])
+
+    config = _base_config()
+    try:
+        config.execution.sloppy = True
+        wf = _build(groups, t2w_sdc=False, name='sloppy_on')
+        node = wf.get_node('drbuddi_sdc_wf.drbuddi')
+        assert node.inputs.epi_working_res == SLOPPY_EPI_WORKING_RES
+
+        config.execution.sloppy = False
+        wf_off = _build(groups, t2w_sdc=False, name='sloppy_off')
+        node_off = wf_off.get_node('drbuddi_sdc_wf.drbuddi')
+        assert not isdefined(node_off.inputs.epi_working_res)
+    finally:
+        config.execution.sloppy = False
