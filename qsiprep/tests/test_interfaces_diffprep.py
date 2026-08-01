@@ -1549,3 +1549,50 @@ def test_sloppy_reaches_the_drbuddi_node(tmp_path):
         assert not isdefined(node_off.inputs.epi_working_res)
     finally:
         config.execution.sloppy = False
+
+
+def test_t2wreg_is_recognised_as_sdc_for_reporting():
+    """The reportlet gate must recognise T2Wreg, which carries no fieldmap.
+
+    Before this, ``fieldmap_type is None`` fell through both gates in
+    ``init_dwi_preproc_wf`` and T2Wreg silently produced no SDC figure, while the
+    identical correction tagged ``syn`` did produce one.
+    """
+    from qsiprep.workflows.dwi.base import _doing_t2wreg
+
+    config = _base_config()
+    try:
+        config.workflow.hmc_model = 'diffprep_quadratic'
+        assert _doing_t2wreg(None, '/path/to/T2w.nii.gz') is True
+        assert _doing_t2wreg('syn', '/path/to/T2w.nii.gz') is True
+
+        # No T2w -> no T2Wreg -> nothing to show.
+        assert _doing_t2wreg(None, '') is False
+        # Reverse-PE goes through DRBUDDI's own extended reports instead.
+        assert _doing_t2wreg('rpe_series', '/path/to/T2w.nii.gz') is False
+        assert _doing_t2wreg('epi', '/path/to/T2w.nii.gz') is False
+
+        # Other backends do not run T2Wreg at all.
+        config.workflow.hmc_model = 'eddy'
+        assert _doing_t2wreg(None, '/path/to/T2w.nii.gz') is False
+    finally:
+        config.workflow.hmc_model = 'eddy'
+
+
+def test_t2wreg_reportlet_desc_is_registered_in_the_report_spec():
+    """A desc absent from reports-spec.yml is written to disk but never shown."""
+    import yaml
+
+    from qsiprep.data import load as load_data
+
+    spec = yaml.safe_load(load_data('reports-spec.yml').read_text())
+    descs = set()
+    for section in spec['sections']:
+        for r in section.get('reportlets', []):
+            bids = r.get('bids')
+            if not isinstance(bids, dict):
+                continue
+            desc = bids.get('desc')
+            # some entries carry a list of descs
+            descs.update(desc if isinstance(desc, list) else [desc])
+    assert 'sdcT2w' in descs
