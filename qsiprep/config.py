@@ -562,6 +562,8 @@ class workflow(_Config):
     Or make a template? Either 'iterative' or 'first'"""
     b0_to_t1w_transform = None
     """Transformation model for intramodal registration."""
+    anat_biascorrect = None
+    """Whether to N4-correct anatomicals: ``n4``, ``auto`` or ``none``."""
     b1_biascorrect_stage = None
     """The stage of processing at which to apply B1 bias correction. Either "final" (after
     resampling), "none" (skipped entirely) or "legacy" (before concatenation)."""

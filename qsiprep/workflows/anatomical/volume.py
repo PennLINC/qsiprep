@@ -67,6 +67,8 @@ def init_anat_preproc_wf(
     num_additional_t2ws,
     has_rois,
     anatomical_template,
+    do_biascorr=True,
+    t2w_do_biascorr=True,
     name='anat_preproc_wf',
 ):
     r"""
@@ -252,7 +254,9 @@ and used as an anatomical reference throughout the workflow.
     )
 
     # Ensure there is 1 and only 1 anatomical reference
-    anat_reference_wf = init_anat_template_wf(num_images=num_anat_images)
+    anat_reference_wf = init_anat_template_wf(
+        num_images=num_anat_images, do_biascorr=do_biascorr
+    )
 
     # Do some padding to prevent memory issues in the synth workflows
     pad_anat_reference_wf = init_dl_prep_wf()
@@ -330,6 +334,7 @@ FreeSurfer version {FS_VERSION}. """
         ])  # fmt:skip
     elif num_additional_t2ws > 0:
         t2w_preproc_wf = init_t2w_preproc_wf(
+            do_biascorr=t2w_do_biascorr,
             num_t2ws=num_additional_t2ws,
             name='t2w_preproc_wf',
         )
@@ -473,7 +478,7 @@ FreeSurfer version {FS_VERSION}. """
     return workflow
 
 
-def init_t2w_preproc_wf(num_t2ws, name='t2w_preproc_wf'):
+def init_t2w_preproc_wf(num_t2ws, do_biascorr=True, name='t2w_preproc_wf'):
     """If T1w is the anatomical contrast, you may also want to process the T2ws for
     worlflows that can use them (ie DRBUDDI). This"""
     workflow = Workflow(name=name)
@@ -487,7 +492,9 @@ def init_t2w_preproc_wf(num_t2ws, name='t2w_preproc_wf'):
     )
 
     # Ensure there is 1 and only 1 T2w reference
-    anat_reference_wf = init_anat_template_wf(num_images=num_t2ws)
+    anat_reference_wf = init_anat_template_wf(
+        num_images=num_t2ws, do_biascorr=do_biascorr
+    )
     # ^ this also provides some boilerplate.
     workflow.__postdesc__ = """\
 The additional T2w reference image was registered to the T1w-ACPC reference
@@ -545,7 +552,92 @@ image using an affine transformation in antsRegistration.
     return workflow
 
 
-def init_anat_template_wf(num_images) -> Workflow:
+def _dilate_mask(in_file, iterations=8):
+    """Dilate a binary mask so it bounds the brain with slack.
+
+    The mask is generated on one image but used as the fixed-image mask for
+    registering every image to the template, so it has to tolerate the very
+    between-image motion the registration exists to remove. Dilating is the cheap
+    way to buy that tolerance: the goal is only to exclude face, jaw and neck, not
+    to delineate the brain precisely.
+    """
+    from pathlib import Path
+
+    import nibabel as nb
+    import numpy as np
+    from scipy import ndimage
+
+    img = nb.load(in_file)
+    data = np.asanyarray(img.dataobj) > 0
+    dilated = ndimage.binary_dilation(data, iterations=int(iterations))
+    out_file = str(Path.cwd() / 'dilated_mask.nii.gz')
+    out = nb.Nifti1Image(dilated.astype('uint8'), img.affine, img.header)
+    out.set_data_dtype('uint8')
+    out.to_filename(out_file)
+    return out_file
+
+
+def anat_biascorrect_enabled(image_files=None):
+    """Should N4 bias correction run on these anatomical images?
+
+    ``--anat-biascorrect`` governs anatomicals only; ``--b1-biascorrect-stage``
+    governs the DWIs and never reaches this path.
+
+    ``auto`` inspects the BIDS ``ImageType`` metadata for ``NORM``, which is how
+    Siemens (among others) flags that intensity normalization was already applied
+    on the console. Running N4 on already-normalized data can introduce artifacts
+    rather than remove them.
+
+    N4 is skipped only when EVERY input image is marked normalized. A mixed set
+    still needs correction to be merged sensibly, and an image whose metadata is
+    missing is treated as un-normalized -- the conservative direction, since
+    running N4 unnecessarily is milder than skipping it when it was needed.
+    """
+    mode = config.workflow.anat_biascorrect or 'n4'
+    if mode == 'n4':
+        return True
+    if mode == 'none':
+        return False
+
+    if not image_files:
+        config.loggers.workflow.warning(
+            '--anat-biascorrect auto: no anatomical files to inspect; running N4.'
+        )
+        return True
+    layout = config.execution.layout
+    if layout is None:
+        config.loggers.workflow.warning(
+            '--anat-biascorrect auto: no BIDS layout available; running N4.'
+        )
+        return True
+
+    normalized = []
+    for img in image_files:
+        try:
+            image_type = layout.get_metadata(img).get('ImageType') or []
+        except Exception:  # noqa: BLE001 - metadata is best-effort
+            image_type = []
+        normalized.append(any(str(t).upper() == 'NORM' for t in image_type))
+
+    if all(normalized):
+        config.loggers.workflow.info(
+            '--anat-biascorrect auto: all %d anatomical image(s) are marked NORM in '
+            'ImageType; skipping N4.',
+            len(normalized),
+        )
+        return False
+    if any(normalized):
+        config.loggers.workflow.warning(
+            '--anat-biascorrect auto: %d of %d anatomical images are marked NORM. '
+            'Running N4 on all of them, since a mixed set cannot be merged '
+            'consistently otherwise.',
+            sum(normalized),
+            len(normalized),
+        )
+    return True
+
+
+def init_anat_template_wf(num_images, do_biascorr=True) -> Workflow:
     r"""
     This workflow generates a canonically oriented structural template from
     input anatomical images.
@@ -649,15 +741,24 @@ A {contrast}-reference map was computed after registration of
                 return in_list[0]
             return in_list
 
-        n4_correct = pe.Node(n4_interface, name='n4_correct', n_procs=omp_nthreads)
-
         outputnode.inputs.template_transforms = [str(load_data('itkIdentityTransform.txt'))]
 
         workflow.connect([
             (anat_conform, outputnode, [(('out_file', _get_first), 'template')]),
-            (anat_conform, n4_correct, [(('out_file', _get_first), 'input_image')]),
-            (n4_correct, outputnode, [('output_image', 'bias_corrected')]),
         ])  # fmt:skip
+
+        if do_biascorr:
+            n4_correct = pe.Node(n4_interface, name='n4_correct', n_procs=omp_nthreads)
+            workflow.connect([
+                (anat_conform, n4_correct, [(('out_file', _get_first), 'input_image')]),
+                (n4_correct, outputnode, [('output_image', 'bias_corrected')]),
+            ])  # fmt:skip
+        else:
+            # `bias_corrected` is the name of the port, not a promise; downstream
+            # consumers just need the conformed image.
+            workflow.connect([
+                (anat_conform, outputnode, [(('out_file', _get_first), 'bias_corrected')]),
+            ])  # fmt:skip
 
         return workflow
 
@@ -666,11 +767,22 @@ A {contrast}-reference map was computed after registration of
     #     in log-transformed intensity units. Therefore, it is not a linear
     #     combination of fields and N4 fails with merged images.
     # 1b. Align and merge if several T1w images are provided
-    n4_correct = pe.MapNode(
-        n4_interface, iterfield='input_image', name='n4_correct', n_procs=omp_nthreads
-    )
+    if do_biascorr:
+        n4_correct = pe.MapNode(
+            n4_interface, iterfield='input_image', name='n4_correct', n_procs=omp_nthreads
+        )
 
-    # Make an unbiased template, same as used for b=0 registration
+    # Make an unbiased template, same as used for b=0 registration.
+    #
+    # The merge registration is MASKED. Unmasked, a rigid fit across sessions is
+    # driven partly by face, jaw and neck -- structures that move relative to the
+    # brain when head placement changes -- so non-brain tissue can pull the brains
+    # out of alignment and blur the resulting template.
+    #
+    # One mask suffices: the fixed image in every registration is the template, so
+    # the mask only has to be in template space. It is generated from the first
+    # conformed image and dilated to leave slack for the between-image motion the
+    # registration is there to remove.
     align_to = config.workflow.subject_anatomical_reference
     anat_merge_wf = init_b0_hmc_wf(
         align_to='first' if (align_to == 'first-lex') else 'iterative',
@@ -678,11 +790,45 @@ A {contrast}-reference map was computed after registration of
         name='anat_merge_wf',
         boilerplate=False,
         prioritize_omp=True,
+        use_masks=True,
     )
 
+    def _first(in_list):
+        if isinstance(in_list, list | tuple):
+            return in_list[0]
+        return in_list
+
+    merge_mask_prep_wf = init_dl_prep_wf(name='merge_mask_prep_wf')
+    merge_mask_wf = init_synthstrip_wf(do_padding=True, name='merge_mask_wf')
+    dilate_merge_mask = pe.Node(
+        niu.Function(
+            input_names=['in_file', 'iterations'],
+            output_names=['out_file'],
+            function=_dilate_mask,
+        ),
+        name='dilate_merge_mask',
+    )
+    dilate_merge_mask.inputs.iterations = 8
+
     workflow.connect([
-        (anat_conform, n4_correct, [('out_file', 'input_image')]),
-        (n4_correct, anat_merge_wf, [('output_image', 'inputnode.b0_images')]),
+        (anat_conform, merge_mask_prep_wf, [(('out_file', _first), 'inputnode.image')]),
+        (merge_mask_prep_wf, merge_mask_wf, [('outputnode.padded_image', 'inputnode.padded_image')]),
+        (anat_conform, merge_mask_wf, [(('out_file', _first), 'inputnode.original_image')]),
+        (merge_mask_wf, dilate_merge_mask, [('outputnode.brain_mask', 'in_file')]),
+        (dilate_merge_mask, anat_merge_wf, [('out_file', 'inputnode.template_mask')]),
+    ])  # fmt:skip
+
+    if do_biascorr:
+        workflow.connect([
+            (anat_conform, n4_correct, [('out_file', 'input_image')]),
+            (n4_correct, anat_merge_wf, [('output_image', 'inputnode.b0_images')]),
+        ])  # fmt:skip
+    else:
+        workflow.connect([
+            (anat_conform, anat_merge_wf, [('out_file', 'inputnode.b0_images')]),
+        ])  # fmt:skip
+
+    workflow.connect([
         (anat_merge_wf, outputnode, [
             ('outputnode.final_template', 'template'),
             ('outputnode.final_template', 'bias_corrected'),

@@ -437,6 +437,22 @@ def _build_parser(**kwargs):
         help='DEPRECATED: see --b1-biascorrect-stage',
     )
     g_conf.add_argument(
+        '--anat-biascorrect',
+        action='store',
+        choices=['n4', 'auto', 'none'],
+        default='n4',
+        help=(
+            'Whether to run N4 bias field correction on ANATOMICAL images. '
+            'Note this is separate from --b1-biascorrect-stage, which only governs '
+            'the DWIs. '
+            '"n4" (default) always runs it. '
+            '"none" never does -- appropriate when the scanner already normalized '
+            'intensity, where N4 can introduce artifacts. '
+            '"auto" skips it when the BIDS ImageType metadata contains "NORM", '
+            'which is how Siemens and others flag console-applied normalization.'
+        ),
+    )
+    g_conf.add_argument(
         '--b1-biascorrect-stage',
         action='store',
         choices=['final', 'none', 'legacy'],

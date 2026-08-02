@@ -52,7 +52,7 @@ from ..interfaces import (
 from ..utils.bids import collect_data
 from ..utils.grouping import group_dwi_scans
 from ..utils.misc import fix_multi_source_name
-from .anatomical.volume import init_anat_preproc_wf
+from .anatomical.volume import anat_biascorrect_enabled, init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
 from .dwi.distortion_group_merge import init_distortion_group_merge_wf
 from .dwi.finalize import init_dwi_finalize_wf
@@ -315,11 +315,17 @@ to workflows in *QSIPrep*'s documentation]\
     info_modality = (
         'dwi' if config.workflow.anat_modality == 'none' else config.workflow.anat_modality.lower()
     )
+    # --anat-biascorrect auto needs the actual files to read ImageType from, and
+    # this is the only scope where they are available -- the anatomical workflows
+    # receive counts, not paths. Resolved separately per contrast so a normalized
+    # T1w does not silently decide the T2w's fate (or vice versa).
     anat_preproc_wf = init_anat_preproc_wf(
         num_anat_images=num_anat_images,
         num_additional_t2ws=additional_t2ws,
         has_rois=bool(subject_data['roi']),
         anatomical_template=anatomical_template,
+        do_biascorr=anat_biascorrect_enabled(subject_data.get(info_modality)),
+        t2w_do_biascorr=anat_biascorrect_enabled(subject_data.get('t2w')),
     )
 
     workflow.connect([
