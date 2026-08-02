@@ -458,11 +458,13 @@ def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
     """TORTOISE DIFFPREP on a NON-shelled (CS-DSI) reverse-PE series + DRBUDDI.
 
     Unlike ``test_diffprep_drbuddi_rpe_series`` (DTI-regime, shelled), this uses a
-    downsampled CS-DSI HASC55 AP+PA acquisition. Its q-space grid is not
-    tensor-fittable, so the backend takes the **Tier-2 predicted-shell path**: it
-    synthesizes a ``[b0 + 32*b1000]`` shell per phase-encoding direction and hands
-    those to DRBUDDI (rather than the raw corrected series). This is the CS-DSI
-    ``rpe_series`` coverage that was previously missing.
+    downsampled CS-DSI HASC55 AP+PA acquisition. It exercises a non-shelled
+    q-space grid through the **stock DRBUDDI path**, which is what qsiprep now
+    does for such data: DRBUDDI's plain tensor fit is well enough conditioned on
+    real HASC55 to drive the correction, landing within ~0.002 correlation of a
+    synthesized-shell target for roughly half the runtime. Shell synthesis
+    remains available as an opt-in (``drbuddi_synth_shell_bval`` in
+    ``--diffprep-config``) for data where the plain fit does look poor.
 
     The fixture also ships a T2w, so a heavier variant (drop ``--anat-modality
     none``) can additionally exercise the DRBUDDI multimodal-T2w branch.
@@ -505,7 +507,7 @@ def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
     ]
 
     # No expected-output manifest yet: assert the per-direction DIFFPREP +
-    # predicted-shell synthesis + DRBUDDI path completes end to end.
+    # DRBUDDI path completes end to end on non-shelled data.
     _run_and_generate(TEST_NAME, parameters, test_main=False, check_outputs=False)
 
 

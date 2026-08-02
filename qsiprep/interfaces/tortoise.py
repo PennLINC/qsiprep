@@ -42,11 +42,29 @@ from .images import split_bvals_bvecs, to_lps
 
 LOGGER = logging.getLogger('nipype.interface')
 
+#: --sloppy working-grid resolution for DRBUDDI/EPIREG, in mm. TORTOISE's own
+#: rule upsamples to <=1mm regardless of the acquisition, which dominates
+#: runtime and memory; smoke tests do not need sub-voxel registration.
+SLOPPY_EPI_WORKING_RES = 2.5
+
 SLOPPY_DRBUDDI = (
     '--DRBUDDI_stage '
     r'\[learning_rate=\{0.4\},cfs=\{4:2:1\},field_smoothing=\{9:0\},'
     r'metrics=\{MSJac:CC\},restrict_constrain=\{1:1\}\] '
 )
+
+
+def sloppy_epi_working_res():
+    """DRBUDDI/EPIREG working-grid kwargs for ``--sloppy``, else empty.
+
+    Returned as kwargs so a stock (unpatched) TORTOISE is unaffected in normal
+    runs -- the flag is only emitted when ``--sloppy`` is set.
+    """
+    from .. import config
+
+    if config.execution.sloppy:
+        return {'epi_working_res': SLOPPY_EPI_WORKING_RES}
+    return {}
 
 
 class TORTOISEInputSpec(CommandLineInputSpec):
@@ -57,10 +75,16 @@ class TORTOISECommandLine(CommandLine):
     """Support for TORTOISE commands that utilize OpenMP
     Sets the environment variable 'OMP_NUM_THREADS' to the number
     of threads specified by the input num_threads.
+
+    Subclasses that ship a CUDA build set ``_cuda_cmd`` and expose a ``use_cuda``
+    input; see :meth:`_use_cuda`.
     """
 
     input_spec = TORTOISEInputSpec
     _num_threads = None
+    #: Name of the CUDA build of ``_cmd``, when one exists. ``None`` disables
+    #: GPU switching for this interface.
+    _cuda_cmd = None
 
     def __init__(self, **inputs):
         super().__init__(**inputs)
@@ -72,16 +96,45 @@ class TORTOISECommandLine(CommandLine):
         if not isdefined(self.inputs.num_threads) and self._num_threads:
             self.inputs.num_threads = int(self._num_threads)
         self._num_threads_update()
+        if self._cuda_cmd is not None:
+            self.inputs.on_trait_change(self._use_cuda, 'use_cuda')
+            self._use_cuda()
 
     def _num_threads_update(self):
         if self.inputs.num_threads:
             self.inputs.environ.update({'OMP_NUM_THREADS': str(self.inputs.num_threads)})
+
+    def _use_cuda(self):
+        """Select the CPU or CUDA build of this TORTOISE tool.
+
+        Mirrors ``ExtendedEddy._use_cuda``, but without a PATH scan: FSL encodes
+        the CUDA version in the binary name (``eddy_cuda11.0``) whereas TORTOISE
+        ships a fixed ``_cuda`` suffix (``TORTOISEProcess_cuda``, ``DRBUDDI_cuda``).
+
+        The caller is responsible for exposing the GPU to the container
+        (``docker run --gpus all`` / ``apptainer --nv``), exactly as for
+        ``eddy_cuda``.
+
+        NOTE: the CUDA build is not numerically identical to the CPU one -- on
+        the T2Wreg path it converges to a visibly different (smaller, smoother)
+        deformation field. Treat switching as a change in results, not just speed.
+        """
+        want_cuda = isdefined(self.inputs.use_cuda) and self.inputs.use_cuda
+        # type(self)._cmd is the CPU name; self._cmd below is an instance attr.
+        self._cmd = self._cuda_cmd if want_cuda else type(self)._cmd
 
     def run(self, **inputs):
         if 'num_threads' in inputs:
             self.inputs.num_threads = inputs['num_threads']
         self._num_threads_update()
         return super().run(**inputs)
+
+
+_USE_CUDA_TRAIT_DESC = (
+    'Run the CUDA build of this TORTOISE tool (<cmd>_cuda) instead of the CPU '
+    'build. The GPU must be exposed to the container (docker --gpus all / '
+    'apptainer --nv). Results are NOT identical to the CPU build.'
+)
 
 
 class _GatherDRBUDDIInputsInputSpec(TORTOISEInputSpec):
@@ -284,7 +337,33 @@ class _DRBUDDIInputSpec(TORTOISEInputSpec):
     sloppy = traits.Bool(
         False, argstr=SLOPPY_DRBUDDI, desc='use underpowered (sloppy) registration for speed'
     )
+    #: Opt-in: have TORTOISE fit MAPMRI and synthesize a single tensor-fittable
+    #: shell to build DRBUDDI's [b0, FA] registration target, instead of fitting
+    #: a tensor to the q-space grid directly. Only useful for non-shelled
+    #: (CS-DSI) data whose plain-tensor fit gives a poor correction -- measured
+    #: benefit on typical HASC55 data is small (see docs), and it roughly doubles
+    #: DRBUDDI runtime on GPU. Requires a patched TORTOISE exposing the flag.
+    synth_shell_bval = traits.Float(
+        argstr='--DRBUDDI_synth_shell_bval %g',
+        desc='b-value of the shell synthesized for the DRBUDDI target (0 = off)',
+    )
+    synth_shell_ndirs = traits.Int(
+        argstr='--DRBUDDI_synth_shell_ndirs %d',
+        desc='number of directions in the synthesized shell (default 30)',
+    )
+    epi_working_res = traits.Float(
+        argstr='--epi_working_res %g',
+        desc=(
+            'Resolution (mm) of the internal registration grid used by DRBUDDI '
+            'and EPIREG. TORTOISE otherwise derives it from the structural (or '
+            'the DWI when no structural is given) divided by 1.3 until the mean '
+            'is <= 1mm, which upsamples well past the acquired resolution: 1.7mm '
+            'data becomes a 0.77mm grid, 9.5x the memory for no evident gain. '
+            'Requires a patched TORTOISE that exposes --epi_working_res.'
+        ),
+    )
     disable_itk_threads = traits.Bool(True, usedefault=True, argstr='--disable_itk_threads')
+    use_cuda = traits.Bool(False, usedefault=True, desc=_USE_CUDA_TRAIT_DESC)
 
 
 class _DRBUDDIOutputSpec(TraitedSpec):
@@ -310,6 +389,7 @@ class DRBUDDI(TORTOISECommandLine):
     input_spec = _DRBUDDIInputSpec
     output_spec = _DRBUDDIOutputSpec
     _cmd = 'DRBUDDI'
+    _cuda_cmd = 'DRBUDDI_cuda'
 
     def _format_arg(self, name, spec, value):
         """Trick to get blip_down_bmat symlinked without an arg"""
@@ -861,6 +941,7 @@ class _DIFFPREPInputSpec(TORTOISEInputSpec):
         '(e.g. ["--big_delta", "0.030"]).',
     )
     disable_itk_threads = traits.Bool(True, usedefault=True, argstr='--disable_itk_threads')
+    use_cuda = traits.Bool(False, usedefault=True, desc=_USE_CUDA_TRAIT_DESC)
     epi_mode = traits.Enum(
         'off',
         'T2Wreg',
@@ -876,12 +957,21 @@ class _DIFFPREPInputSpec(TORTOISEInputSpec):
 
 
 class _DIFFPREPOutputSpec(TraitedSpec):
-    corrected_dwi_file = File(exists=True, desc='Motion + eddy (+ optional EPI) corrected 4D DWI.')
+    corrected_dwi_file = File(
+        exists=True, desc='Motion + eddy corrected 4D DWI, in the input grid.'
+    )
     corrected_bmtxt_file = File(exists=True, desc='Motion-rotated 6-col bmatrix.')
     transformations_file = File(
         exists=True,
         desc='Per-volume 24-parameter Okan-quadratic transforms as written by DIFFPREP.',
     )
+    # epi_mode == 'T2Wreg' only. The EPI stage's displacement field is emitted as
+    # a transform rather than baked into the image, so qsiprep can compose it with
+    # HMC and coregistration and resample once -- the same contract DRBUDDI has.
+    sdc_warp = File(desc='EPI (susceptibility) displacement field, in the DWI world frame.')
+    b0_up_image = File(desc='b=0 before the EPI correction (for the SDC report).')
+    b0_up_corrected_image = File(desc='b=0 after the EPI correction (for the SDC report).')
+    structural_image = File(desc='The T2w TORTOISE actually registered against.')
 
 
 class DIFFPREP(TORTOISECommandLine):
@@ -898,6 +988,7 @@ class DIFFPREP(TORTOISECommandLine):
     input_spec = _DIFFPREPInputSpec
     output_spec = _DIFFPREPOutputSpec
     _cmd = 'TORTOISEProcess'
+    _cuda_cmd = 'TORTOISEProcess_cuda'
 
     # Hardcoded flags that put TORTOISE into "DIFFPREP-only" mode. qsiprep
     # already runs its own denoising / gibbs / SDC stages, so we explicitly
@@ -960,27 +1051,54 @@ class DIFFPREP(TORTOISECommandLine):
         temp_proc = op.join(op.dirname(base_nii), stem + '_temp_proc')
         proc_base = op.join(temp_proc, stem + '_proc')
 
-        # The rotated bmatrix and per-volume transforms always come from the
-        # motion+eddy step (EPI is a spatial warp and does not rotate gradients).
-        outputs['corrected_bmtxt_file'] = proc_base + '_moteddy.bmtxt'
+        # The per-volume transforms are the motion+eddy parameters themselves, so
+        # they always come from that step regardless of what follows.
         outputs['transformations_file'] = proc_base + '_moteddy_transformations.txt'
 
+        # Motion+eddy output, in the input's own grid. This is what qsiprep wants
+        # in EVERY case -- including T2Wreg, see below.
+        outputs['corrected_dwi_file'] = proc_base + '_moteddy.nii'
+        outputs['corrected_bmtxt_file'] = proc_base + '_moteddy.bmtxt'
+
         if self.inputs.epi_mode == 'T2Wreg':
-            # With EPI correction enabled, the fully-corrected DWI is TORTOISE's
-            # FINALDATA output (post-EPI), which lands in the node cwd as
-            # ``*_TORTOISE_final.nii`` -- NOT the pre-EPI ``_proc_moteddy`` image.
-            # NOTE: exact stem/location must be confirmed against the real
-            # TORTOISE binary; the T2Wreg path is flagged for a container test.
-            cwd = os.getcwd()
-            finals = sorted(f for f in os.listdir(cwd) if f.endswith('_TORTOISE_final.nii'))
-            if not finals:
+            # Deliberately NOT the ``*_TORTOISE_final.nii`` FINALDATA image.
+            #
+            # Passing ``-s`` runs two stages beyond the EPI correction:
+            # StructuralAlignment rigidly registers the b=0 to the structural, and
+            # FinalData resamples everything into that frame with the bmatrix
+            # rotated to match. Taking FINALDATA therefore pulls coregistration and
+            # ACPC alignment forward into HMC, which is qsiprep's job later on --
+            # measured on real data, ~12 deg of the alignment happened inside
+            # DIFFPREP and qsiprep's own b0->anat step was left with 1.7 deg.
+            #
+            # The EPI stage also writes its displacement field, in the DWI's world
+            # frame, so emit that as a transform instead. qsiprep composes it with
+            # HMC and coregistration and resamples once -- exactly the contract the
+            # standalone DRBUDDI path already uses (its ``deformation_FINV`` becomes
+            # ``sdc_warps``). Verified: applying this field to the moteddy b=0 with
+            # antsApplyTransforms reproduces TORTOISE's own ``blip_up_b0_corrected``
+            # at r = 0.997.
+            #
+            # There is no way to stop TORTOISE before StructuralAlignment
+            # (``--step`` only sets the *start* step), so those stages still run;
+            # their output is simply unused.
+            sdc_warp = op.join(temp_proc, 'deformation_FINV.nii.gz')
+            if not op.exists(sdc_warp):
                 raise FileNotFoundError(
-                    'epi_mode="T2Wreg": expected a *_TORTOISE_final.nii output in '
-                    f'{cwd}, found none.'
+                    f'epi_mode="T2Wreg": expected the EPI displacement field {sdc_warp}, '
+                    'found none.'
                 )
-            outputs['corrected_dwi_file'] = op.join(cwd, finals[0])
-        else:
-            outputs['corrected_dwi_file'] = proc_base + '_moteddy.nii'
+            outputs['sdc_warp'] = sdc_warp
+            # Named outputs so nipype's remove_unnecessary_outputs keeps them --
+            # they are the before/after pair the SDC report needs.
+            for key, fname in (
+                ('b0_up_image', 'blip_up_b0.nii'),
+                ('b0_up_corrected_image', 'blip_up_b0_corrected.nii'),
+                ('structural_image', 'structural_used.nii'),
+            ):
+                candidate = op.join(temp_proc, fname)
+                if op.exists(candidate):
+                    outputs[key] = candidate
         return outputs
 
 
@@ -1102,11 +1220,25 @@ class DIFFPREPSplitOutputs(SimpleInterface):
             vol_img.to_filename(vol_path)
             per_vol_dwis.append(vol_path)
 
-        # Split the FSL gradients into per-volume txt files
+        # Split the FSL gradients into per-volume txt files.
+        #
+        # deoblique=True routes the gradients through qsiprep's mrtrix-based
+        # RAS+ conversion (``bvec_to_rasb`` -> ``mrinfo -dwgrad -fslgrad``), the
+        # same path ``SplitDWIsFSL(deoblique_bvecs=True)`` uses for the eddy
+        # backend. TORTOISEBmatrixToFSLBVecs emits FSL-convention (voxel-frame)
+        # bvecs, which are orientation- and obliquity-dependent; the mrtrix
+        # conversion removes that dependence.
+        #
+        # In practice DIFFPREP's output grid is axis-aligned -- on the T2Wreg
+        # path TORTOISE resamples onto the ACPC-gridded T2w, and measured on
+        # real data this flag moves the gradients by 0.02 deg. It matters when
+        # the output grid is oblique (2.5 deg on a raw-T2w structural), so use
+        # the tested conversion rather than relying on the grid staying
+        # axis-aligned.
         per_vol_bvals, per_vol_bvecs = split_bvals_bvecs(
             bval_path,
             bvec_path,
-            deoblique=False,
+            deoblique=True,
             img_files=per_vol_dwis,
             working_dir=runtime.cwd,
         )

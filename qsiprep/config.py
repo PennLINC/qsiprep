@@ -588,6 +588,8 @@ class workflow(_Config):
     """Remove the mean from fieldmaps."""
     force_syn = None
     """Run *fieldmap-less* susceptibility-derived distortions estimation."""
+    gpu = None
+    """Tasks to run on the GPU (see ``qsiprep.utils.gpu``)."""
     hmc_model = None
     """Model used to generate target images for hmc."""
     hmc_transform = None

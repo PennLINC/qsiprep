@@ -27,6 +27,7 @@
 import sys
 
 from .. import config
+from ..utils.gpu import GPU_ALIASES, GPU_TASKS
 
 
 def _build_parser(**kwargs):
@@ -326,6 +327,29 @@ def _build_parser(**kwargs):
             'parts of the workflow (a space delimited list). '
             '"fieldmaps" will completely disable susceptibility distortion correction, '
             'whether using field maps or reverse phase-encoded dMRI runs.'
+        ),
+    )
+    g_conf.add_argument(
+        '--gpu',
+        required=False,
+        action='store',
+        nargs='+',
+        # None (not given) is distinct from ["none"] (explicitly off): when the
+        # flag is absent, a legacy "use_cuda" in --eddy-config/--diffprep-config
+        # still decides, so those runs do not silently drop to CPU.
+        default=None,
+        choices=sorted(GPU_TASKS) + list(GPU_ALIASES),
+        help=(
+            'Run selected tasks on the GPU (a space delimited list). GPU memory is '
+            'usually the binding constraint rather than the pipeline, so tasks are '
+            'selected individually: an 8 GB card typically runs "eddy", "diffprep" '
+            'and "drbuddi" but not "synthstrip" or "synthseg". "all" enables every '
+            'task, "none" (the default) disables all of them. The GPU must also be '
+            'exposed to the container ("docker run --gpus all" / '
+            '"apptainer run --nv"). NOTE: GPU builds are not numerically identical '
+            'to their CPU counterparts, so this changes results, not just runtime. '
+            'When given, this overrides "use_cuda" in --eddy-config / '
+            '--diffprep-config; when omitted entirely, those keys still apply.'
         ),
     )
     g_conf.add_argument(
@@ -728,6 +752,14 @@ def parse_args(args=None, namespace=None):
         from ..utils.misc import validate_diffprep_config
 
         validate_diffprep_config(opts.diffprep_config)
+
+    if opts.gpu:
+        from ..utils.gpu import check_gpu_available
+
+        # Raises if no CUDA device is visible or a GPU build is missing. Doing
+        # this here costs seconds; discovering it inside a node costs the whole
+        # anatomical workflow.
+        check_gpu_available(opts.gpu)
 
     config.execution.log_level = int(max(25 - 5 * opts.verbose_count, logging.DEBUG))
     config.from_dict(vars(opts), init=['nipype'])

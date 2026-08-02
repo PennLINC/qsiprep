@@ -21,6 +21,7 @@ import json
 import os.path as op
 from importlib.resources import files
 
+from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
@@ -37,17 +38,15 @@ from ...interfaces.tortoise import (
     DIFFPREPSplitOutputs,
     DRBUDDIAggregateOutputs,
     MergeVolumes4D,
-    SplitCorrectedByGroup,
     SplitDWIsByDistortionGroup,
-    StageDRBUDDIPair,
     SynthesizeDWIs,
     TORTOISEConvert,
-    WriteBmatTORTOISE,
-    WriteDRBUDDIJSON,
     WriteFSLGradFiles,
     equally_distributed_directions,
+    sloppy_epi_working_res as _sloppy_epi_res,
     generate_diffprep_boilerplate,
 )
+from ...utils.gpu import gpu_enabled
 from ...utils.resources import as_path
 from ..fieldmap.base import init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf
@@ -57,6 +56,11 @@ from .util import init_dwi_reference_wf
 # in its own JSON input -- TORTOISE consumes "i", "j", "k" (with optional "-")
 # straight from the BIDS sidecar.
 _VALID_PE = {'i', 'i-', 'j', 'j-', 'k', 'k-'}
+
+
+def _listify(value):
+    """Wrap a single transform path in a list for MapNode/MultiObject inputs."""
+    return [value]
 
 
 def _load_diffprep_config(config_path):
@@ -69,9 +73,21 @@ def _load_diffprep_config(config_path):
     cfg.setdefault('is_human_brain', True)
     cfg.setdefault('rot_eddy_center', 'isocenter')
     cfg.setdefault('extra_args', [])
+    # Run the CUDA builds (TORTOISEProcess_cuda / DRBUDDI_cuda) instead of the
+    # CPU ones. Mirrors "use_cuda" in eddy_params.json; the GPU still has to be
+    # exposed to the container (docker --gpus all / apptainer --nv). Note this
+    # changes results, not just runtime -- the CUDA build converges to a
+    # different deformation field.
+    cfg.setdefault('use_cuda', False)
     # None => auto-detect whether a reverse-PE series is tensor-fittable
     # as-is (see _rpe_series_is_shelled). true/false forces the decision.
     cfg.setdefault('rpe_series_shelled', None)
+    # Opt-in MAPMRI shell synthesis for DRBUDDI's registration target. 0/None =
+    # off, which is the default: on typical non-shelled data the plain tensor
+    # fit is within ~0.002 correlation of the synthesized one and costs half the
+    # runtime. Set e.g. 1000 when the SDC report looks poor on CS-DSI data.
+    cfg.setdefault('drbuddi_synth_shell_bval', None)
+    cfg.setdefault('drbuddi_synth_shell_ndirs', 30)
     return cfg
 
 
@@ -388,146 +404,6 @@ def _init_diffprep_predict_shell_wf(
     return workflow
 
 
-def _build_rpe_synthesis_sdc(
-    workflow, inputnode, outputnode, split_outputs, mask_source, scan_groups, dwi_metadata, t2w_sdc
-):
-    """DRBUDDI SDC for a **non-shelled** reverse-PE series (e.g. CS-DSI).
-
-    DRBUDDI's ``rpe_series`` path fits its own ``[b0, FA]`` per direction; on a
-    q-space grid that fit is ill-conditioned. So per PE direction we synthesize a
-    tensor-fittable ``[b0 + 32*b1000]`` shell (3dSHORE prediction on the
-    already-corrected volumes) and hand THOSE to the ``DRBUDDI`` interface. The
-    predicted shell of a side lives in the same distorted geometry as that side's
-    real volumes, so the deformation DRBUDDI estimates is applied to the *real*
-    data via the **stock** :class:`DRBUDDIAggregateOutputs` (unchanged), using the
-    real series' per-volume ``blip_assignments``.
-
-    This mirrors the validated ``csdsi_preproc`` recipe (stage synthesized shells,
-    call DRBUDDI directly), adapted to qsiprep's single-``scan_groups`` path where
-    one DRBUDDI run corrects both directions. ``init_drbuddi_wf`` is intentionally
-    NOT reused here: its ``GatherDRBUDDIInputs`` rebuilds DRBUDDI's registration
-    images from the real (non-shelled) series, which is exactly what we must avoid.
-    """
-    split_corrected = pe.Node(SplitCorrectedByGroup(), name='split_corrected_by_group')
-    workflow.connect([
-        (split_outputs, split_corrected, [
-            ('dwi_files', 'dwi_files'),
-            ('bval_files', 'bval_files'),
-            ('bvec_files', 'bvec_files'),
-            ('forward_transforms', 'forward_transforms'),
-            ('b0_indices', 'b0_indices'),
-        ]),
-        (inputnode, split_corrected, [('original_files', 'original_files')]),
-    ])  # fmt:skip
-
-    stage_pair = pe.Node(StageDRBUDDIPair(), name='stage_drbuddi_pair')
-    for side in ('up', 'down'):
-        b0_mean = pe.Node(B0Mean(), name=f'{side}_b0_mean')
-        predict = _init_diffprep_predict_shell_wf(name=f'predict_{side}_shell')
-        write_bmat = pe.Node(WriteBmatTORTOISE(), name=f'{side}_write_bmat')
-        workflow.connect([
-            (split_corrected, b0_mean, [(f'{side}_b0_files', 'b0_images')]),
-            (split_corrected, predict, [
-                (f'{side}_dwi_files', 'inputnode.dwi_files'),
-                (f'{side}_bval_files', 'inputnode.bval_files'),
-                (f'{side}_bvec_files', 'inputnode.bvec_files'),
-                (f'{side}_transforms', 'inputnode.transforms'),
-                (f'{side}_b0_indices', 'inputnode.b0_indices'),
-            ]),
-            (b0_mean, predict, [('average_image', 'inputnode.b0_template')]),
-            (mask_source, predict, [('outputnode.dwi_mask', 'inputnode.b0_template_mask')]),
-            (predict, write_bmat, [
-                ('outputnode.predicted_bvec_file', 'bvec_file'),
-                ('outputnode.predicted_bval_file', 'bval_file'),
-            ]),
-            (predict, stage_pair, [('outputnode.predicted_4d', f'{side}_image')]),
-            (write_bmat, stage_pair, [('bmat_file', f'{side}_bmat')]),
-        ])  # fmt:skip
-
-    write_json = pe.Node(
-        WriteDRBUDDIJSON(phase_encoding_direction=scan_groups['dwi_series_pedir']),
-        name='write_drbuddi_json',
-    )
-    if dwi_metadata:
-        if 'TotalReadoutTime' in dwi_metadata:
-            write_json.inputs.total_readout_time = float(dwi_metadata['TotalReadoutTime'])
-        if 'EchoTime' in dwi_metadata:
-            write_json.inputs.echo_time = float(dwi_metadata['EchoTime'])
-
-    drbuddi = pe.Node(
-        DRBUDDI(
-            fieldmap_type='rpe_series',
-            num_threads=config.nipype.omp_nthreads,
-            sloppy=config.execution.sloppy,
-            start_with_diffeomorphic_for_rigid_reg=config.execution.sloppy,
-        ),
-        name='drbuddi',
-        n_procs=config.nipype.omp_nthreads,
-    )
-
-    aggregate = pe.Node(
-        DRBUDDIAggregateOutputs(fieldmap_type='rpe_series'), name='aggregate_drbuddi'
-    )
-
-    workflow.connect([
-        (stage_pair, drbuddi, [
-            ('up_image', 'blip_up_image'),
-            ('up_bmat', 'blip_up_bmat'),
-            ('down_image', 'blip_down_image'),
-            ('down_bmat', 'blip_down_bmat'),
-        ]),
-        (write_json, drbuddi, [('out_json', 'blip_up_json')]),
-        (split_corrected, aggregate, [('blip_assignments', 'blip_assignments')]),
-        (drbuddi, aggregate, [
-            ('undistorted_reference', 'undistorted_reference'),
-            ('bdown_to_bup_rigid_trans_h5', 'bdown_to_bup_rigid_trans_h5'),
-            ('blip_down_b0', 'blip_down_b0'),
-            ('blip_down_b0_corrected', 'blip_down_b0_corrected'),
-            ('blip_down_b0_corrected_jac', 'blip_down_b0_corrected_jac'),
-            ('blip_down_b0_quad', 'blip_down_b0_quad'),
-            ('blip_up_b0', 'blip_up_b0'),
-            ('blip_up_b0_corrected', 'blip_up_b0_corrected'),
-            ('blip_up_b0_corrected_jac', 'blip_up_b0_corrected_jac'),
-            ('blip_up_b0_quad', 'blip_up_b0_quad'),
-            ('deformation_finv', 'deformation_finv'),
-            ('deformation_minv', 'deformation_minv'),
-            ('blip_up_FA', 'blip_up_FA'),
-            ('blip_down_FA', 'blip_down_FA'),
-            ('structural_image', 'structural_image'),
-        ]),
-    ])  # fmt:skip
-
-    if t2w_sdc:
-        # Only DRBUDDI takes the T2w; aggregate_drbuddi.structural_image is fed
-        # from drbuddi.structural_image above (matching stock init_drbuddi_wf).
-        # Connecting inputnode here too would double-connect that input and make
-        # nipype raise at build time.
-        workflow.connect([
-            (inputnode, drbuddi, [('t2w_unfatsat', 'structural_image')]),
-        ])  # fmt:skip
-
-    outputnode.inputs.sdc_method = 'DRBUDDI (predicted shell)'
-    outputnode.inputs.fieldmap_type = 'rpe_series'
-    workflow.connect([
-        (aggregate, outputnode, [
-            ('sdc_warps', 'to_dwi_ref_warps'),
-            ('sdc_scaling_images', 'sdc_scaling_images'),
-            ('up_fa_corrected_image', 'up_fa_corrected_image'),
-            ('down_fa_corrected_image', 'down_fa_corrected_image'),
-            ('b0_ref', 'b0_template'),
-        ]),
-        (drbuddi, outputnode, [
-            ('blip_up_b0', 'b0_up_image'),
-            ('blip_down_b0', 'b0_down_image'),
-            ('blip_up_b0_corrected', 'b0_up_corrected_image'),
-            ('blip_down_b0_corrected', 'b0_down_corrected_image'),
-            ('blip_up_FA', 'up_fa_image'),
-            ('blip_down_FA', 'down_fa_image'),
-            ('structural_image', 't2w_image'),
-        ]),
-    ])  # fmt:skip
-
-
 def init_diffprep_hmc_wf(
     scan_groups,
     source_file,
@@ -629,12 +505,21 @@ def init_diffprep_hmc_wf(
 
     # Load any user-supplied DIFFPREP config (or our defaults)
     diffprep_cfg = _load_diffprep_config(config.workflow.diffprep_config)
+    # --gpu wins over "use_cuda" in --diffprep-config (gpu_enabled warns on
+    # conflict). DIFFPREP and DRBUDDI are selectable separately because they are
+    # separate binaries with different GPU-memory appetites. Only treat the value
+    # as user intent when the user actually supplied the config file -- otherwise
+    # the shipped default would "conflict" with --gpu on every run.
+    _legacy_use_cuda = diffprep_cfg['use_cuda'] if config.workflow.diffprep_config else None
+    diffprep_gpu = gpu_enabled('diffprep', config_file_value=_legacy_use_cuda)
+    drbuddi_gpu = gpu_enabled('drbuddi', config_file_value=_legacy_use_cuda)
 
     # For a reverse-PE series, decide up front whether DRBUDDI can tensor-fit
     # the corrected series as-is (shelled) or needs a synthesized single shell
     # for its [b0, FA] target (non-shelled, e.g. CS-DSI). See
     # _rpe_series_is_shelled. The DIFFPREP split/recombine stage below is the
     # same either way; only the DRBUDDI-input derivation differs.
+    synth_shell_bval = diffprep_cfg.get('drbuddi_synth_shell_bval')
     rpe_shelled = None
     if fieldmap_type == 'rpe_series':
         rpe_shelled = _rpe_series_is_shelled(
@@ -683,6 +568,7 @@ def init_diffprep_hmc_wf(
         rot_eddy_center=diffprep_cfg['rot_eddy_center'],
         extra_args=diffprep_cfg['extra_args'],
         epi_mode=epi_mode,
+        use_cuda=diffprep_gpu,
         **sloppy_kwargs,
     )
 
@@ -797,8 +683,8 @@ def init_diffprep_hmc_wf(
         (extract_b0s, enhance_pre_sdc, [('b0_average', 'b0_file')]),
         (enhance_pre_sdc, outputnode, [('enhanced_file', 'pre_sdc_template')]),
 
-        # b0 reference for coregistration
-        (extract_b0s, b0_ref_for_coreg, [('b0_average', 'inputnode.b0_template')]),
+        # b0 reference for coregistration (b0_template is wired below: on the
+        # T2Wreg path it has to be the SDC-corrected b=0, not the raw one)
         (inputnode, b0_ref_for_coreg, [
             ('t1_brain', 'inputnode.t1_brain'),
             ('t1_mask', 'inputnode.t1_mask'),
@@ -825,6 +711,28 @@ def init_diffprep_hmc_wf(
         (calculate_cnr, outputnode, [('cnr_image', 'cnr_map')]),
     ])  # fmt:skip
 
+    # The b=0 that coregistration sees must be susceptibility-corrected. On every
+    # other path DIFFPREP's output already is (there is no in-TORTOISE SDC, so the
+    # correction is a downstream warp) -- but on the T2Wreg path the EPI stage ran
+    # and we deliberately took its *pre*-EPI image, so apply the field here.
+    if use_t2wreg:
+        apply_sdc_to_b0 = pe.Node(
+            ants.ApplyTransforms(interpolation='LanczosWindowedSinc', float=True),
+            name='apply_sdc_to_b0',
+        )
+        workflow.connect([
+            (extract_b0s, apply_sdc_to_b0, [
+                ('b0_average', 'input_image'),
+                ('b0_average', 'reference_image'),
+            ]),
+            (corrected_node, apply_sdc_to_b0, [(('sdc_warp', _listify), 'transforms')]),
+            (apply_sdc_to_b0, b0_ref_for_coreg, [('output_image', 'inputnode.b0_template')]),
+        ])  # fmt:skip
+    else:
+        workflow.connect([
+            (extract_b0s, b0_ref_for_coreg, [('b0_average', 'inputnode.b0_template')]),
+        ])  # fmt:skip
+
     # -----------------------------------------------------------------------
     # SDC decision tree (TORTOISE-native where possible)
     # -----------------------------------------------------------------------
@@ -838,36 +746,37 @@ def init_diffprep_hmc_wf(
                 '--hmc-model diffprep_*; choose --pepolar-method DRBUDDI.'
             )
 
-        # Non-shelled reverse-PE series: DRBUDDI cannot tensor-fit a usable
-        # [b0, FA] from a q-space grid, so synthesize a single shell per PE
-        # direction and hand those to DRBUDDI (see _build_rpe_synthesis_sdc).
-        if fieldmap_type == 'rpe_series' and not rpe_shelled:
-            config.loggers.workflow.warning(
-                'Non-shelled reverse-PE series detected: using the EXPERIMENTAL '
-                'predicted-shell DRBUDDI path (a tensor-fittable shell is '
-                'synthesized per phase-encoding direction). This path has no '
-                'CS-DSI CI dataset yet and must be validated against real data; '
-                'inspect the SDC report. Override detection with '
-                '"rpe_series_shelled" in --diffprep-config.'
+        # Non-shelled reverse-PE series (CS-DSI) used to be routed to a
+        # qsiprep-side predicted-shell workflow on the theory that DRBUDDI
+        # cannot tensor-fit a usable [b0, FA] from a q-space grid. Measurement
+        # does not support that: the plain-tensor FA resolves corpus callosum,
+        # internal capsule and corona radiata on real HASC55 data, and drives
+        # DRBUDDI to within ~0.002 correlation of a synthesized-shell target.
+        # So non-shelled series now take the same stock path as everything else,
+        # and synthesis is available as an opt-in for the cases where the plain
+        # fit does look poor -- see "drbuddi_synth_shell_bval" below.
+        if fieldmap_type == 'rpe_series' and not rpe_shelled and not synth_shell_bval:
+            config.loggers.workflow.info(
+                'Non-shelled reverse-PE series detected. Using the standard '
+                'DRBUDDI path with a plain tensor fit. If susceptibility '
+                'correction looks poor in the SDC report, set '
+                '"drbuddi_synth_shell_bval": 1000 in --diffprep-config to have '
+                'TORTOISE synthesize a tensor-fittable shell per phase-encoding '
+                'direction instead.'
             )
-            _build_rpe_synthesis_sdc(
-                workflow,
-                inputnode,
-                outputnode,
-                split_outputs,
-                b0_ref_for_coreg,
-                scan_groups,
-                dwi_metadata,
-                t2w_sdc,
-            )
-            return workflow
 
         # ``epi`` fieldmaps and *shelled* reverse-PE series go through the stock
         # DRBUDDI workflow unchanged: for rpe_series the per-direction DIFFPREP
         # stage above already produced a single recombined series in the original
         # merged order, so GatherDRBUDDIInputs re-splits it into up/down exactly
         # as it does for the FSL backend.
-        drbuddi_wf = init_drbuddi_wf(scan_groups=scan_groups, t2w_sdc=t2w_sdc)
+        drbuddi_wf = init_drbuddi_wf(
+            scan_groups=scan_groups,
+            t2w_sdc=t2w_sdc,
+            use_cuda=drbuddi_gpu,
+            synth_shell_bval=synth_shell_bval,
+            synth_shell_ndirs=diffprep_cfg.get('drbuddi_synth_shell_ndirs', 30),
+        )
 
         workflow.connect([
             (split_outputs, drbuddi_wf, [
@@ -899,11 +808,22 @@ def init_diffprep_hmc_wf(
         ])  # fmt:skip
         return workflow
 
-    # 2. Fieldmap-less with a T2w -> TORTOISE T2Wreg (already baked into DIFFPREP)
+    # 2. Fieldmap-less with a T2w -> TORTOISE T2Wreg. The EPI stage's displacement
+    #    field is carried out as a warp (see DIFFPREP._list_outputs) rather than
+    #    baked in, so it composes with HMC and coregistration and the data is
+    #    resampled once -- the same contract as the DRBUDDI branch above. This
+    #    keeps DIFFPREP's output in the native grid and leaves coregistration and
+    #    ACPC alignment to qsiprep instead of TORTOISE's StructuralAlignment.
     if use_t2wreg:
         outputnode.inputs.sdc_method = 'T2Wreg'
         workflow.connect([
             (b0_ref_for_coreg, outputnode, [('outputnode.ref_image', 'b0_template')]),
+            (corrected_node, outputnode, [
+                (('sdc_warp', _listify), 'to_dwi_ref_warps'),
+                ('b0_up_image', 'b0_up_image'),
+                ('b0_up_corrected_image', 'b0_up_corrected_image'),
+                ('structural_image', 't2w_image'),
+            ]),
         ])  # fmt:skip
         return workflow
 

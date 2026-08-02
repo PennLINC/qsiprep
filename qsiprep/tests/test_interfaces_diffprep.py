@@ -899,52 +899,6 @@ def test_split_corrected_by_group(tmp_path):
     assert len(_aslist(res.outputs.down_b0_files)) == 1
 
 
-def test_init_diffprep_hmc_wf_rpe_series_non_shelled_synthesizes(tmp_path):
-    """A non-shelled reverse-PE series routes to the predicted-shell DRBUDDI path
-    instead of the stock DRBUDDI workflow."""
-    import json as _json
-
-    config = _base_config()
-    cfg = tmp_path / 'diffprep_config.json'
-    cfg.write_text(_json.dumps({'rpe_series_shelled': False}))
-    config.workflow.diffprep_config = str(cfg)
-    try:
-        wf = _build(
-            _scan_groups('rpe_series', rpe_series=['/data/sub-01_dir-PA_dwi.nii.gz']),
-            t2w_sdc=False,
-            name='dp_rpe_syn',
-        )
-        # Synthesis nodes present; stock DRBUDDI workflow is NOT built.
-        for node in (
-            'split_corrected_by_group',
-            'up_b0_mean',
-            'down_b0_mean',
-            'stage_drbuddi_pair',
-            'drbuddi',
-            'aggregate_drbuddi',
-        ):
-            assert wf.get_node(node) is not None, node
-        assert wf.get_node('predict_up_shell') is not None
-        assert wf.get_node('predict_down_shell') is not None
-        assert wf.get_node('drbuddi_sdc_wf') is None
-        # The per-direction DIFFPREP split still runs (non-shelled needs it too).
-        assert wf.get_node('recombine_rpe_groups') is not None
-        assert wf.get_node('outputnode').inputs.sdc_method == 'DRBUDDI (predicted shell)'
-
-        # With a T2w available the synthesis path must still build: DRBUDDI takes
-        # the structural, but aggregate_drbuddi.structural_image must NOT be
-        # double-connected (once from drbuddi, once from inputnode) or nipype
-        # raises at build time.
-        wf_t2w = _build(
-            _scan_groups('rpe_series', rpe_series=['/data/sub-01_dir-PA_dwi.nii.gz']),
-            t2w_sdc=True,
-            name='dp_rpe_syn_t2w',
-        )
-        assert wf_t2w.get_node('drbuddi') is not None
-    finally:
-        config.workflow.diffprep_config = None
-
-
 def test_rpe_series_is_shelled(tmp_path):
     """The shelled/non-shelled detector distinguishes a DTI/HARDI shell from a
     CS-DSI q-space grid, and honours the config override."""
@@ -1082,63 +1036,6 @@ def test_extended_pepolar_report_t2w_n4_gets_input():
     wf_no_t2w = init_extended_pepolar_report_wf(segment_t2w=False)
     assert wf_no_t2w.get_node('t2w_n4') is None
     assert wf_no_t2w.get_node('map_seg') is not None
-
-
-def _build_nonshelled_rpe(tmp_path, t2w_sdc, name):
-    """Build the DIFFPREP rpe_series wf forced down the non-shelled (synthesis)
-    path, with T2w SDC on/off."""
-    import json as _json
-
-    from qsiprep import config
-
-    cfg = tmp_path / f'{name}_cfg.json'
-    cfg.write_text(_json.dumps({'rpe_series_shelled': False}))
-    config.workflow.diffprep_config = str(cfg)
-    try:
-        return _build(
-            _scan_groups('rpe_series', rpe_series=['/data/sub-01_dir-PA_dwi.nii.gz']),
-            t2w_sdc=t2w_sdc,
-            name=name,
-        )
-    finally:
-        config.workflow.diffprep_config = None
-
-
-def test_diffprep_synthesis_t2w_structural_wiring(tmp_path):
-    """In the predicted-shell DRBUDDI path, when T2w SDC is on the T2w is fed to
-    DRBUDDI as its structural and DRBUDDI's used structural flows out as
-    t2w_image (which feeds the extended report's t2w_n4). aggregate_drbuddi takes
-    the structural ONLY from drbuddi -- a second source would double-connect and
-    raise at build (the review-caught bug)."""
-    _base_config()
-    wf = _build_nonshelled_rpe(tmp_path, t2w_sdc=True, name='dp_t2w_on')
-    inputnode = wf.get_node('inputnode')
-    drbuddi = wf.get_node('drbuddi')
-    outputnode = wf.get_node('outputnode')
-    aggregate = wf.get_node('aggregate_drbuddi')
-
-    e_in = wf._graph.get_edge_data(inputnode, drbuddi)
-    assert e_in is not None
-    assert ('t2w_unfatsat', 'structural_image') in e_in['connect']
-
-    e_out = wf._graph.get_edge_data(drbuddi, outputnode)
-    assert ('structural_image', 't2w_image') in e_out['connect']
-
-    e_agg = wf._graph.get_edge_data(drbuddi, aggregate)
-    assert ('structural_image', 'structural_image') in e_agg['connect']
-
-    # T2w SDC off: DRBUDDI must NOT be handed a structural.
-    wf_off = _build_nonshelled_rpe(tmp_path, t2w_sdc=False, name='dp_t2w_off')
-    e_in_off = wf_off._graph.get_edge_data(
-        wf_off.get_node('inputnode'), wf_off.get_node('drbuddi')
-    )
-    off_connects = e_in_off['connect'] if e_in_off else []
-    assert not any(in_field == 'structural_image' for _, in_field in off_connects)
-
-
-# ---------------------------------------------------------------------------
-# Dispatch + workflow wiring (pure Python)
-# ---------------------------------------------------------------------------
 
 
 def test_diffprep_order_helper():
@@ -1596,3 +1493,92 @@ def test_t2wreg_reportlet_desc_is_registered_in_the_report_spec():
             # some entries carry a list of descs
             descs.update(desc if isinstance(desc, list) else [desc])
     assert 'sdcT2w' in descs
+
+
+def test_non_shelled_rpe_series_uses_the_stock_drbuddi_path(tmp_path):
+    """Non-shelled reverse-PE series no longer auto-synthesize.
+
+    The old behaviour routed CS-DSI data to a qsiprep-side predicted-shell
+    workflow, on the theory that DRBUDDI cannot tensor-fit a usable [b0, FA] from
+    a q-space grid. Measurement contradicted that: the plain-tensor FA resolves
+    corpus callosum, internal capsule and corona radiata on real HASC55 data and
+    lands within ~0.002 correlation of a synthesized-shell target for half the
+    runtime. Synthesis is now opt-in via --diffprep-config.
+    """
+    import json as _json
+
+    rpe = tmp_path / 'sub-01_dir-PA_dwi.nii.gz'
+    _write_dummy_nii(rpe)
+
+    config = _base_config()
+    cfg = tmp_path / 'nonshelled.json'
+    cfg.write_text(_json.dumps({'rpe_series_shelled': False}))
+    config.workflow.diffprep_config = str(cfg)
+    try:
+        wf = _build(
+            _scan_groups('rpe_series', rpe_series=[str(rpe)]),
+            t2w_sdc=False,
+            name='dp_nonshelled',
+        )
+        # Stock DRBUDDI workflow, not the removed synthesis path.
+        assert wf.get_node('drbuddi_sdc_wf') is not None
+        assert wf.get_node('predict_up_shell') is None
+        assert wf.get_node('predict_down_shell') is None
+        # The per-direction DIFFPREP split still runs -- that is independent of
+        # how DRBUDDI's target is built.
+        assert wf.get_node('recombine_rpe_groups') is not None
+    finally:
+        config.workflow.diffprep_config = None
+
+
+def test_drbuddi_synth_shell_is_opt_in(tmp_path):
+    """The synthesis flags reach DRBUDDI only when explicitly configured.
+
+    A stock (unpatched) TORTOISE rejects --DRBUDDI_synth_shell_bval, so absence
+    must mean the flag is never emitted -- not emitted as 0.
+    """
+    import json as _json
+
+    rpe = tmp_path / 'sub-01_dir-PA_dwi.nii.gz'
+    _write_dummy_nii(rpe)
+    groups = _scan_groups('rpe_series', rpe_series=[str(rpe)])
+
+    config = _base_config()
+    try:
+        # default: off, and no trait set at all
+        wf = _build(groups, t2w_sdc=False, name='dp_synth_off')
+        node = wf.get_node('drbuddi_sdc_wf.drbuddi')
+        # cmdline is not buildable here -- blip_up_image arrives by connection
+        # at runtime. Flag rendering is covered by test_drbuddi_synth_shell_cmdline.
+        assert not isdefined(node.inputs.synth_shell_bval)
+        assert not isdefined(node.inputs.synth_shell_ndirs)
+
+        # opt-in
+        cfg = tmp_path / 'synth_on.json'
+        cfg.write_text(_json.dumps({'drbuddi_synth_shell_bval': 1000}))
+        config.workflow.diffprep_config = str(cfg)
+        wf_on = _build(groups, t2w_sdc=False, name='dp_synth_on')
+        node_on = wf_on.get_node('drbuddi_sdc_wf.drbuddi')
+        assert node_on.inputs.synth_shell_bval == 1000
+        assert node_on.inputs.synth_shell_ndirs == 30
+    finally:
+        config.workflow.diffprep_config = None
+
+
+def test_drbuddi_synth_shell_cmdline(tmp_path):
+    """The traits render as the TORTOISE flags."""
+    from qsiprep.interfaces.tortoise import DRBUDDI
+
+    for name in ('up.nii', 'up.bmtxt', 'up.json', 'down.nii'):
+        (tmp_path / name).write_text('')
+    kwargs = {
+        'blip_up_image': str(tmp_path / 'up.nii'),
+        'blip_up_bmat': str(tmp_path / 'up.bmtxt'),
+        'blip_up_json': str(tmp_path / 'up.json'),
+        'blip_down_image': str(tmp_path / 'down.nii'),
+        'fieldmap_type': 'rpe_series',
+    }
+    assert '--DRBUDDI_synth_shell_bval' not in DRBUDDI(**kwargs).cmdline
+    cmd = DRBUDDI(synth_shell_bval=1000, synth_shell_ndirs=30, **kwargs).cmdline
+    assert '--DRBUDDI_synth_shell_bval 1000' in cmd
+    assert '--DRBUDDI_synth_shell_ndirs 30' in cmd

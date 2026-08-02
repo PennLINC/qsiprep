@@ -33,7 +33,7 @@ def download_test_data(dset, data_dir=None):
             'https://upenn.box.com/shared/static/j5mxts5wu0em1toafmrlzdndves1jnfv.xz'
         ),
         # CS-DSI (HASC55) reverse-PE *series*, downsampled + defaced -- exercises
-        # the non-shelled DIFFPREP rpe_series path (predicted-shell DRBUDDI).
+        # the non-shelled DIFFPREP rpe_series path through stock DRBUDDI.
         # Extracts to a ``csdsi_hasc55/`` BIDS root (sub-2345/ses-1, AP+PA HASC55
         # + defaced T1w/T2w).
         'csdsi_rpe_series': (
