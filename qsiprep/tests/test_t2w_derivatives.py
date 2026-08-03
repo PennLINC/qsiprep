@@ -209,7 +209,7 @@ def test_base_sinks_the_acpc_template_not_the_raw_one():
     from qsiprep.workflows import base
 
     src = inspect.getsource(base)
-    start = src.index('ds_intramodal_template')
-    window = src[start:start + 1200]
-    assert "'outputnode.intramodal_template_acpc'" in window
-    assert "('outputnode.intramodal_template', 'in_file')" not in window
+    # Check the connection itself, not proximity in the file -- nodes get added
+    # between the sink and its connect block over time.
+    assert "('outputnode.intramodal_template_acpc', 'in_file')" in src
+    assert "('outputnode.intramodal_template', 'in_file')" not in src
