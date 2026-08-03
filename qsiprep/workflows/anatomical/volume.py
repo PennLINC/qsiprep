@@ -1099,7 +1099,11 @@ def init_synthstrip_wf(do_padding=False, unfatsat=False, name='synthstrip_wf') -
             # Threads are always fixed to 1 in the run.
             # ``gpu`` adds -g; SynthStrip needs far more GPU memory than the
             # dMRI tools, hence per-task --gpu selection.
-            FixHeaderSynthStrip(gpu=gpu_enabled('synthstrip')),
+            # use_gpu mirrors gpu purely so nipype's is_gpu_node() sees this
+            # node and counts it against the GPU budget.
+            FixHeaderSynthStrip(
+                gpu=gpu_enabled('synthstrip'), use_gpu=gpu_enabled('synthstrip')
+            ),
             name='synthstrip',
             n_procs=config.nipype.omp_nthreads,
         )
@@ -1171,6 +1175,8 @@ def init_synthseg_wf() -> Workflow:
                 fast=config.execution.sloppy,
                 num_threads=1,  # Hard code to 1
                 cpu=not gpu_enabled('synthseg'),
+                # inverted polarity: `cpu` is opt-OUT, so use_gpu is its negation
+                use_gpu=gpu_enabled('synthseg'),
             ),
             n_procs=config.nipype.omp_nthreads,
             name='synthseg',
