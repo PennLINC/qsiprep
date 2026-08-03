@@ -608,6 +608,10 @@ to workflows in *QSIPrep*'s documentation]\
                         'inputnode.intramodal_template_to_t1_warp',
                     ),
                     ('outputnode.intramodal_template', 'inputnode.intramodal_template'),
+                    (
+                        'outputnode.intramodal_template_wm_seg',
+                        'inputnode.intramodal_template_wm_seg',
+                    ),
                 ]),
             ])  # fmt:skip
 

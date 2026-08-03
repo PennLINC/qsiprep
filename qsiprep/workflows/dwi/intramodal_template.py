@@ -16,6 +16,7 @@ from ... import config
 from ...data import load as load_data
 from ...interfaces import DerivativesDataSink
 from ...interfaces.ants import MultivariateTemplateConstruction2
+from ...interfaces.images import ExtractWM
 from .hmc import init_b0_hmc_wf
 from .registration import init_b0_to_anat_registration_wf
 
@@ -98,6 +99,7 @@ def init_intramodal_template_wf(
             + [
                 'intramodal_template',
                 'intramodal_template_acpc',
+                'intramodal_template_wm_seg',
                 'intramodal_template_to_t1_affine',
                 'intramodal_template_to_t1_warp',
             ]
@@ -211,6 +213,38 @@ def init_intramodal_template_wf(
     ])  # fmt:skip
     workflow.connect(
         template_node, template_field, template_to_acpc, 'input_image'
+    )  # fmt:skip
+
+    # White matter contours for the registration reportlet.
+    #
+    # The ordering works out: b0_coreg_wf registers the TEMPLATE to the anatomy,
+    # so the template<->anat affine exists once the template is built and before
+    # anything downstream needs it. Inverting it carries the anatomical
+    # segmentation the other way, into template space. Same idiom as
+    # init_fmap_unwarp_report_wf (MultiLabel + invert_transform_flags).
+    #
+    # NOTE: itk_b0_to_t1 is an affine, so inversion is exact. A nonlinear
+    # intramodal transform would need its inverse warp instead -- but that
+    # transform is template->anat regardless of the intramodal transform type,
+    # so this stays valid for Rigid/Affine/SyN alike.
+    seg_to_template = pe.Node(
+        ants.ApplyTransforms(
+            dimension=3,
+            float=True,
+            interpolation='MultiLabel',
+            invert_transform_flags=[True],
+        ),
+        name='seg_to_template',
+    )
+    template_wm = pe.Node(ExtractWM(), name='template_wm')
+    workflow.connect([
+        (inputnode, seg_to_template, [('t1_seg', 'input_image')]),
+        (b0_coreg_wf, seg_to_template, [('outputnode.itk_b0_to_t1', 'transforms')]),
+        (seg_to_template, template_wm, [('output_image', 'in_seg')]),
+        (template_wm, outputnode, [('out', 'intramodal_template_wm_seg')]),
+    ])  # fmt:skip
+    workflow.connect(
+        template_node, template_field, seg_to_template, 'reference_image'
     )  # fmt:skip
 
     return workflow

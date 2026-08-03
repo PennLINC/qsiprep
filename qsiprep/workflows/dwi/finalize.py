@@ -8,12 +8,14 @@ Final steps on the preprocessed data
 
 import os
 
+from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 
 from ... import config
+from ...data import load as load_data
 from ...interfaces import DerivativesDataSink
 from ...interfaces.bids import DerivativesSidecar
 from ...interfaces.dsi_studio import DSIStudioBTable
@@ -185,6 +187,7 @@ def init_dwi_finalize_wf(
                 'bvec_files',
                 'b0_ref_image',
                 'intramodal_template',
+                'intramodal_template_wm_seg',
                 'b0_indices',
                 'dwi_mask',
                 'original_files',
@@ -234,7 +237,32 @@ def init_dwi_finalize_wf(
         name='outputnode',
     )
     if config.workflow.intramodal_template_iters > 0:
-        b0_to_im_template = pe.Node(SimpleBeforeAfterRPT(), name='b0_to_im_template')
+        # This used to flicker the session's b=0 against the group template: two
+        # different images in two different spaces, with the "after" frame
+        # byte-identical for every session. It could not distinguish a good
+        # registration from a failed one, which is the only thing it exists for.
+        #
+        # Now it shows ONE image -- this session's b=0 -- in template space,
+        # before and after its own transform, with white-matter contours from the
+        # anatomy held fixed as landmarks.
+        b0_to_template_grid = pe.Node(
+            ants.ApplyTransforms(interpolation='LanczosWindowedSinc', float=True),
+            name='b0_to_template_grid',
+        )
+        b0_to_template_grid.inputs.transforms = [str(load_data('itkIdentityTransform.txt'))]
+
+        b0_aligned_to_template = pe.Node(
+            ants.ApplyTransforms(interpolation='LanczosWindowedSinc', float=True),
+            name='b0_aligned_to_template',
+        )
+
+        b0_to_im_template = pe.Node(
+            SimpleBeforeAfterRPT(
+                before_label='b=0 (header only)',
+                after_label='b=0 aligned to template',
+            ),
+            name='b0_to_im_template',
+        )
         ds_report_intramodal = pe.Node(
             DerivativesDataSink(
                 datatype='figures',
@@ -248,10 +276,20 @@ def init_dwi_finalize_wf(
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
         workflow.connect([
-            (inputnode, b0_to_im_template, [
-                ('intramodal_template', 'after'),
-                ('b0_ref_image', 'before'),
+            # Both frames land on the template grid so the only difference
+            # between them is the transform being assessed.
+            (inputnode, b0_to_template_grid, [
+                ('b0_ref_image', 'input_image'),
+                ('intramodal_template', 'reference_image'),
             ]),
+            (inputnode, b0_aligned_to_template, [
+                ('b0_ref_image', 'input_image'),
+                ('intramodal_template', 'reference_image'),
+                ('b0_to_intramodal_template_transforms', 'transforms'),
+            ]),
+            (b0_to_template_grid, b0_to_im_template, [('output_image', 'before')]),
+            (b0_aligned_to_template, b0_to_im_template, [('output_image', 'after')]),
+            (inputnode, b0_to_im_template, [('intramodal_template_wm_seg', 'wm_seg')]),
             (b0_to_im_template, ds_report_intramodal, [('out_report', 'in_file')]),
         ])  # fmt:skip
 
