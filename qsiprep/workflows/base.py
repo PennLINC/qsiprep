@@ -420,13 +420,14 @@ to workflows in *QSIPrep*'s documentation]\
             raise Exception('Cannot make an intramodal with less than 2 groups.')
         make_intramodal_template = True
 
+    anat_source_file = fix_multi_source_name(
+        subject_data[info_modality],
+        dwi_only=config.workflow.anat_modality == 'none',
+        include_session=config.workflow.subject_anatomical_reference == 'sessionwise',
+        anatomical_contrast=config.workflow.anat_modality,
+    )
     intramodal_template_wf = init_intramodal_template_wf(
-        t1w_source_file=fix_multi_source_name(
-            subject_data[info_modality],
-            dwi_only=config.workflow.anat_modality == 'none',
-            include_session=config.workflow.subject_anatomical_reference == 'sessionwise',
-            anatomical_contrast=config.workflow.anat_modality,
-        ),
+        t1w_source_file=anat_source_file,
         inputs_list=sorted(outputs_to_files.keys()),
         # Both of these were previously never passed, so --intramodal-template-transform
         # and --intramodal-template-iters had no effect: every template was
@@ -435,6 +436,32 @@ to workflows in *QSIPrep*'s documentation]\
         num_iterations=config.workflow.intramodal_template_iters or 2,
         name='intramodal_template_wf',
     )
+
+    if make_intramodal_template:
+        # The intramodal template is the average of every session's b=0 reference,
+        # and until now existed only inside a report figure. Writing it into the
+        # anat directory means one listing shows the subject-level products
+        # side by side: the T1w, the two T2ws, and the b=0 average they align to.
+        ds_intramodal_template = pe.Node(
+            DerivativesDataSink(
+                source_file=anat_source_file,
+                base_directory=config.execution.output_dir,
+                datatype='anat',
+                space='ACPC',
+                desc='intramodal',
+                suffix='dwiref',
+                extension='.nii.gz',
+                compress=True,
+            ),
+            name='ds_intramodal_template',
+            run_without_submitting=True,
+        )
+        workflow.connect([
+            (intramodal_template_wf, ds_intramodal_template, [
+                ('outputnode.intramodal_template', 'in_file'),
+            ]),
+        ])  # fmt:skip
+
 
     if make_intramodal_template:
         workflow.connect([

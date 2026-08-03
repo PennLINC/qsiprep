@@ -83,3 +83,45 @@ def test_t2w_sinks_are_distinct_outputs(node_name, desc):
     node = next(n for n in wf._get_all_nodes() if n.name == node_name)
     assert node.inputs.desc == desc
     assert node.inputs.space == 'ACPC'
+
+
+def test_intramodal_template_is_written_to_anat():
+    """The b=0 average across sessions existed only inside a report figure.
+
+    Writing it into the anat directory means one listing shows every
+    subject-level product together: T1w, both T2ws, and the b=0 average.
+    """
+    from qsiprep.interfaces import DerivativesDataSink
+
+    node = DerivativesDataSink(
+        source_file='/data/sub-01_T1w.nii.gz',
+        base_directory='/tmp/out',
+        datatype='anat',
+        space='ACPC',
+        desc='intramodal',
+        suffix='dwiref',
+        extension='.nii.gz',
+        compress=True,
+    )
+    assert node.inputs.datatype == 'anat'
+    assert node.inputs.suffix == 'dwiref'
+    assert node.inputs.space == 'ACPC'
+    assert node.inputs.desc == 'intramodal'
+
+
+def test_average_images_normalizes_intensities():
+    """Sessions differ in scaling, so the template average must normalize.
+
+    ANTs AverageImages(normalize=True) rescales each input before averaging;
+    without it a brighter session dominates the template. The warp average is
+    deliberately NOT normalized -- displacement fields are not intensities.
+    """
+    import inspect
+
+    from qsiprep.workflows.dwi import hmc, intramodal_template
+
+    for mod in (hmc, intramodal_template):
+        src = inspect.getsource(mod)
+        for line in src.splitlines():
+            if 'AverageImages(' in line and 'warp' not in line.lower():
+                assert 'normalize=True' in line, line
