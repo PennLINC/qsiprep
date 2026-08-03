@@ -97,6 +97,7 @@ def init_intramodal_template_wf(
             fields=output_names
             + [
                 'intramodal_template',
+                'intramodal_template_acpc',
                 'intramodal_template_to_t1_affine',
                 'intramodal_template_to_t1_warp',
             ]
@@ -193,6 +194,23 @@ def init_intramodal_template_wf(
 
     workflow.connect(
         template_node, template_field, b0_coreg_wf, 'inputnode.ref_b0_brain'
+    )  # fmt:skip
+
+    # The template lives in its own midpoint space, ~57mm from ACPC. Anything
+    # written out has to go through the coregistration b0_coreg_wf already
+    # computes, or it is unusable next to the anatomicals -- and mislabelled if
+    # tagged space-ACPC.
+    template_to_acpc = pe.Node(
+        ants.ApplyTransforms(interpolation='LanczosWindowedSinc', float=True),
+        name='template_to_acpc',
+    )
+    workflow.connect([
+        (inputnode, template_to_acpc, [('t1_brain', 'reference_image')]),
+        (b0_coreg_wf, template_to_acpc, [('outputnode.itk_b0_to_t1', 'transforms')]),
+        (template_to_acpc, outputnode, [('output_image', 'intramodal_template_acpc')]),
+    ])  # fmt:skip
+    workflow.connect(
+        template_node, template_field, template_to_acpc, 'input_image'
     )  # fmt:skip
 
     return workflow

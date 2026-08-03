@@ -177,3 +177,39 @@ def test_existing_dwiref_and_anat_paths_still_build():
         dict(subject='01', datatype='anat', suffix='T1w', space='ACPC',
              desc='preproc', extension='.nii.gz'), patterns, strict=False
     ) == 'sub-01/anat/sub-01_space-ACPC_desc-preproc_T1w.nii.gz'
+
+
+def test_intramodal_template_is_resampled_before_being_written():
+    """The written template must be the ACPC-resampled one.
+
+    outputnode.intramodal_template lives in the template's own midpoint space --
+    measured ~57mm from ACPC in y on real data. Writing that tagged space-ACPC
+    produces a file that silently fails to overlay the anatomicals, which is the
+    worst kind of wrong: it looks like a valid derivative.
+    """
+    from qsiprep.workflows.dwi.intramodal_template import init_intramodal_template_wf
+
+    _config()
+    wf = init_intramodal_template_wf(
+        inputs_list=['a', 'b'],
+        t1w_source_file='/data/sub-01_T1w.nii.gz',
+        transform='Rigid',
+        num_iterations=2,
+        name='acpc_check',
+    )
+    node = next((n for n in wf._get_all_nodes() if n.name == 'template_to_acpc'), None)
+    assert node is not None, 'template is never resampled into ACPC'
+    assert 'intramodal_template_acpc' in wf.get_node('outputnode').outputs.copyable_trait_names()
+
+
+def test_base_sinks_the_acpc_template_not_the_raw_one():
+    """Guard the specific mistake: sinking the un-resampled template."""
+    import inspect
+
+    from qsiprep.workflows import base
+
+    src = inspect.getsource(base)
+    start = src.index('ds_intramodal_template')
+    window = src[start:start + 1200]
+    assert "'outputnode.intramodal_template_acpc'" in window
+    assert "('outputnode.intramodal_template', 'in_file')" not in window

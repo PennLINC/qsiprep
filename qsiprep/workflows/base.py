@@ -458,7 +458,11 @@ to workflows in *QSIPrep*'s documentation]\
         )
         workflow.connect([
             (intramodal_template_wf, ds_intramodal_template, [
-                ('outputnode.intramodal_template', 'in_file'),
+                # The ACPC-resampled template, NOT outputnode.intramodal_template:
+                # that one is in the template's own midpoint space, ~57mm from
+                # ACPC, and writing it tagged space-ACPC produces a file that does
+                # not overlay the anatomicals.
+                ('outputnode.intramodal_template_acpc', 'in_file'),
             ]),
         ])  # fmt:skip
 
