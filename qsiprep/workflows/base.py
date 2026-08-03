@@ -482,6 +482,41 @@ to workflows in *QSIPrep*'s documentation]\
             name='ds_intramodal_to_acpc',
             run_without_submitting=True,
         )
+        ds_template_qc = pe.Node(
+            DerivativesDataSink(
+                source_file=anat_source_file,
+                base_directory=config.execution.output_dir,
+                datatype='anat',
+                desc='templateQC',
+                suffix='dwiref',
+                extension='.tsv',
+            ),
+            name='ds_template_qc',
+            run_without_submitting=True,
+        )
+        ds_template_agreement = pe.Node(
+            DerivativesDataSink(
+                source_file=anat_source_file,
+                base_directory=config.execution.output_dir,
+                datatype='anat',
+                space='ACPC',
+                desc='agreement',
+                suffix='dwiref',
+                extension='.nii.gz',
+                compress=True,
+            ),
+            name='ds_template_agreement',
+            run_without_submitting=True,
+        )
+        workflow.connect([
+            (intramodal_template_wf, ds_template_qc, [
+                ('outputnode.template_qc_file', 'in_file'),
+            ]),
+            (intramodal_template_wf, ds_template_agreement, [
+                ('outputnode.template_agreement_map', 'in_file'),
+            ]),
+        ])  # fmt:skip
+
         workflow.connect([
             (intramodal_template_wf, ds_intramodal_to_acpc, [
                 ('outputnode.intramodal_template_to_t1_affine', 'in_file'),

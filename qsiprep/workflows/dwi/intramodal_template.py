@@ -17,6 +17,7 @@ from ...data import load as load_data
 from ...interfaces import DerivativesDataSink
 from ...interfaces.ants import MultivariateTemplateConstruction2
 from ...interfaces.images import ExtractWM
+from ...interfaces.template_qc import TemplateQC
 from .hmc import init_b0_hmc_wf
 from .registration import init_b0_to_anat_registration_wf
 
@@ -100,6 +101,8 @@ def init_intramodal_template_wf(
                 'intramodal_template',
                 'intramodal_template_acpc',
                 'intramodal_template_wm_seg',
+                'template_qc_file',
+                'template_agreement_map',
                 'intramodal_template_to_t1_affine',
                 'intramodal_template_to_t1_warp',
             ]
@@ -119,6 +122,9 @@ def init_intramodal_template_wf(
     # Previously the transform was never passed here, so every intramodal template
     # was BSplineSyN regardless of --intramodal-template-transform, silently
     # nonlinearly warping genuine between-session differences into agreement.
+    # Per-input agreement with the template. Numbers sort; montages do not.
+    template_qc = pe.Node(TemplateQC(labels=list(inputs_list)), name='template_qc')
+
     linear_only = transform in ('Rigid', 'Affine')
 
     workflow.connect([
@@ -144,6 +150,10 @@ def init_intramodal_template_wf(
             ]),
             (linear_template_wf, outputnode, [
                 ('outputnode.final_template', 'intramodal_template'),
+            ]),
+            (linear_template_wf, template_qc, [
+                ('outputnode.aligned_images', 'aligned_images'),
+                (('outputnode.forward_transforms', _list_squeeze), 'transforms'),
             ]),
         ])  # fmt:skip
         template_node, template_field = linear_template_wf, 'outputnode.final_template'
@@ -214,6 +224,15 @@ def init_intramodal_template_wf(
     workflow.connect(
         template_node, template_field, template_to_acpc, 'input_image'
     )  # fmt:skip
+    workflow.connect(
+        template_node, template_field, template_qc, 'template'
+    )  # fmt:skip
+    workflow.connect([
+        (template_qc, outputnode, [
+            ('out_file', 'template_qc_file'),
+            ('agreement_map', 'template_agreement_map'),
+        ]),
+    ])  # fmt:skip
 
     # White matter contours for the registration reportlet.
     #
