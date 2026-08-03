@@ -238,7 +238,9 @@ def _as_list(value):
     return value if isinstance(value, list) else [value]
 
 
-def linear_alignment_workflow(transform='Rigid', iternum=0, omp_nthreads=1, use_masks=False):
+def linear_alignment_workflow(
+    transform='Rigid', iternum=0, omp_nthreads=1, use_masks=False, initialize_com=False
+):
     """
     Takes a template image and a set of input images, does
     a linear alignment to the template and updates it with the
@@ -264,6 +266,13 @@ def linear_alignment_workflow(transform='Rigid', iternum=0, omp_nthreads=1, use_
     precision = 'sloppy' if config.execution.sloppy else 'precise'
     ants_settings = str(load_data(f'shoreline_{precision}_{transform}.json'))
     reg = ants.Registration(from_file=ants_settings, num_threads=omp_nthreads)
+    if initialize_com:
+        # The shoreline settings carry no initialization and only two resolution
+        # levels, which assumes the inputs already overlap. That holds for b=0
+        # volumes within one scan, but not across sessions, where table position
+        # can differ by centimetres -- more than a Rigid metric recovers from.
+        # Aligning centres of mass first gives the optimizer a sane starting point.
+        reg.inputs.initial_moving_transform_com = 1
     iter_reg = pe.MapNode(
         reg, name='reg_%03d' % iternum, iterfield=['moving_image'], n_procs=omp_nthreads
     )
@@ -319,8 +328,11 @@ def init_b0_hmc_wf(
     name='b0_hmc_wf',
     prioritize_omp=False,
     use_masks=False,
+    initialize_com=False,
+    num_iters=None,
 ) -> Workflow:
-    num_iters = 2
+    if num_iters is None:
+        num_iters = 2
     if align_to is None:
         align_to = config.workflow.b0_motion_corr_to
     if transform is None:
@@ -367,7 +379,8 @@ def init_b0_hmc_wf(
                              iter_templates, 'in1')  # fmt:skip
 
         initial_reg = linear_alignment_workflow(
-            iternum=0, omp_nthreads=omp_nthreads, use_masks=use_masks
+            iternum=0, omp_nthreads=omp_nthreads, use_masks=use_masks,
+            initialize_com=initialize_com,
         )
         if use_masks:
             alignment_wf.connect(inputnode, 'template_mask',
@@ -380,7 +393,8 @@ def init_b0_hmc_wf(
         for iternum in range(1, num_iters):
             reg_iters.append(
                 linear_alignment_workflow(
-                    iternum=iternum, omp_nthreads=omp_nthreads, use_masks=use_masks
+                    iternum=iternum, omp_nthreads=omp_nthreads, use_masks=use_masks,
+                    initialize_com=initialize_com,
                 )
             )
             if use_masks:
@@ -409,7 +423,8 @@ def init_b0_hmc_wf(
             f'a {transform} registration. '
         )
         reg_to_first = linear_alignment_workflow(
-            iternum=0, omp_nthreads=omp_nthreads, use_masks=use_masks
+            iternum=0, omp_nthreads=omp_nthreads, use_masks=use_masks,
+            initialize_com=initialize_com,
         )
         if use_masks:
             alignment_wf.connect(inputnode, 'template_mask',

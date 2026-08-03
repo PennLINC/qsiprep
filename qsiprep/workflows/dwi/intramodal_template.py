@@ -25,6 +25,7 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 def init_intramodal_template_wf(
     inputs_list,
     t1w_source_file,
+    transform='BSplineSyN',
     num_iterations=2,
     mem_gb=3,
     name='intramodal_template_wf',
@@ -108,23 +109,61 @@ def init_intramodal_template_wf(
     for output_num, output_name in enumerate(output_names):
         workflow.connect(split_outputs, 'out%d' % (output_num + 1), outputnode, output_name)
 
-    runtime_opts = {'num_cores': 1, 'parallel_control': 0}
-    if omp_nthreads > 1:
-        runtime_opts = {'num_cores': omp_nthreads, 'parallel_control': 2}
-    ants_mvtc2 = pe.Node(
-        MultivariateTemplateConstruction2(
-            dimension=3, iteration_limit=num_iterations, **runtime_opts
-        ),
-        name='ants_mvtc2',
-        n_procs=omp_nthreads,
-    )
+    # antsMultivariateTemplateConstruction2 only offers BSplineSyN/SyN/Affine, so
+    # linear-only templates are built with init_b0_hmc_wf instead. That also lets
+    # Rigid be offered at all -- it is not in the mvtc2 enum.
+    #
+    # Previously the transform was never passed here, so every intramodal template
+    # was BSplineSyN regardless of --intramodal-template-transform, silently
+    # nonlinearly warping genuine between-session differences into agreement.
+    linear_only = transform in ('Rigid', 'Affine')
 
     workflow.connect([
         (merge_inputs, rename_inputs, [('out', 'in_file')]),
-        (rename_inputs, ants_mvtc2, [('out_file', 'input_images')]),
-        (ants_mvtc2, split_outputs, [('forward_transforms', 'inlist')]),
-        (ants_mvtc2, outputnode, [('templates', 'intramodal_template')]),
     ])  # fmt:skip
+
+    if linear_only:
+        # initialize_com because sessions can differ by centimetres of table
+        # position, which the shoreline settings' two resolution levels and
+        # absent initialization will not recover from.
+        linear_template_wf = init_b0_hmc_wf(
+            align_to='iterative',
+            transform=transform,
+            num_iters=max(int(num_iterations), 2),
+            initialize_com=True,
+            boilerplate=False,
+            name='intramodal_linear_template',
+        )
+        workflow.connect([
+            (rename_inputs, linear_template_wf, [('out_file', 'inputnode.b0_images')]),
+            (linear_template_wf, split_outputs, [
+                (('outputnode.forward_transforms', _list_squeeze), 'inlist'),
+            ]),
+            (linear_template_wf, outputnode, [
+                ('outputnode.final_template', 'intramodal_template'),
+            ]),
+        ])  # fmt:skip
+        template_node, template_field = linear_template_wf, 'outputnode.final_template'
+    else:
+        runtime_opts = {'num_cores': 1, 'parallel_control': 0}
+        if omp_nthreads > 1:
+            runtime_opts = {'num_cores': omp_nthreads, 'parallel_control': 2}
+        ants_mvtc2 = pe.Node(
+            MultivariateTemplateConstruction2(
+                dimension=3,
+                iteration_limit=num_iterations,
+                transform=transform,
+                **runtime_opts,
+            ),
+            name='ants_mvtc2',
+            n_procs=omp_nthreads,
+        )
+        workflow.connect([
+            (rename_inputs, ants_mvtc2, [('out_file', 'input_images')]),
+            (ants_mvtc2, split_outputs, [('forward_transforms', 'inlist')]),
+            (ants_mvtc2, outputnode, [('templates', 'intramodal_template')]),
+        ])  # fmt:skip
+        template_node, template_field = ants_mvtc2, 'templates'
 
     # calculate dwi registration to T1w
     b0_coreg_wf = init_b0_to_anat_registration_wf(write_report=True)
@@ -146,12 +185,15 @@ def init_intramodal_template_wf(
             ('t1_seg', 'inputnode.t1_seg'),
             ('subject_id', 'inputnode.subject_id'),
         ]),
-        (ants_mvtc2, b0_coreg_wf, [('templates', 'inputnode.ref_b0_brain')]),
         (b0_coreg_wf, ds_report_imtcoreg, [('outputnode.report', 'in_file')]),
         (b0_coreg_wf, outputnode, [
             ('outputnode.itk_b0_to_t1', 'intramodal_template_to_t1_affine'),
         ]),
     ])  # fmt:skip
+
+    workflow.connect(
+        template_node, template_field, b0_coreg_wf, 'inputnode.ref_b0_brain'
+    )  # fmt:skip
 
     return workflow
 

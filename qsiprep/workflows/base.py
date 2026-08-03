@@ -428,6 +428,11 @@ to workflows in *QSIPrep*'s documentation]\
             anatomical_contrast=config.workflow.anat_modality,
         ),
         inputs_list=sorted(outputs_to_files.keys()),
+        # Both of these were previously never passed, so --intramodal-template-transform
+        # and --intramodal-template-iters had no effect: every template was
+        # BSplineSyN with 2 iterations regardless of what the user asked for.
+        transform=config.workflow.intramodal_template_transform,
+        num_iterations=config.workflow.intramodal_template_iters or 2,
         name='intramodal_template_wf',
     )
 
