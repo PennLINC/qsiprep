@@ -454,7 +454,9 @@ FreeSurfer version {FS_VERSION}. """
         ]),
     ])  # fmt:skip
 
-    anat_derivatives_wf = init_anat_derivatives_wf(anatomical_template=anatomical_template)
+    anat_derivatives_wf = init_anat_derivatives_wf(
+        anatomical_template=anatomical_template, has_t2w=num_additional_t2ws > 0
+    )
 
     workflow.connect([
         (anat_reference_wf, anat_derivatives_wf, [
@@ -473,6 +475,19 @@ FreeSurfer version {FS_VERSION}. """
             ('t1_2_mni', 'inputnode.t1_2_mni'),
         ]),
     ])  # fmt:skip
+
+    if num_additional_t2ws > 0:
+        # Both T2w products were computed and then dropped on the floor. Write
+        # them out: t2_preproc is the merged (unbiased) T2w template in ACPC;
+        # t2w_unfatsat is the image TORTOISE T2Wreg and DRBUDDI actually register
+        # to, derived from the conformed template, and NOT the same image.
+        workflow.connect([
+            (inputnode, anat_derivatives_wf, [('t2w', 'inputnode.t2w_source_files')]),
+            (t2w_preproc_wf, anat_derivatives_wf, [
+                ('outputnode.t2_preproc', 'inputnode.t2_preproc'),
+                ('outputnode.t2w_unfatsat', 'inputnode.t2w_unfatsat'),
+            ]),
+        ])  # fmt:skip
 
     workflow.__desc__ = desc
     return workflow
@@ -1306,7 +1321,7 @@ def _template_to_report_entities(template):
     return {'space': space, 'cohort': cohort}
 
 
-def init_anat_derivatives_wf(anatomical_template) -> Workflow:
+def init_anat_derivatives_wf(anatomical_template, has_t2w=False) -> Workflow:
     """
     Set up a battery of datasinks to store derivatives in the right location
     """
@@ -1326,6 +1341,15 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
                 't1_2_mni_reverse_transform',
                 't1_2_mni',
                 't1_aseg',
+                # T2w products. Both are already computed on any run with a T2w and
+                # were previously discarded: t2_preproc is the merged (unbiased)
+                # T2w template resampled into ACPC, t2w_unfatsat is the
+                # fat-suppressed variant that actually drives TORTOISE T2Wreg and
+                # DRBUDDI. They are separate images -- see init_t2w_preproc_wf --
+                # so both are worth writing.
+                't2w_source_files',
+                't2_preproc',
+                't2w_unfatsat',
             ]
         ),
         name='inputnode',
@@ -1341,6 +1365,47 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
     t1_name.inputs.include_session = config.workflow.subject_anatomical_reference == 'sessionwise'
     t1_name.inputs.anatomical_contrast = config.workflow.anat_modality
     t1_name.inputs.dwi_only = False
+
+    if has_t2w:
+        # DerivativesDataSink takes the suffix from source_file, so the T2w sinks
+        # need their own name node. Reusing t1_name would emit *_T1w.nii.gz and
+        # clobber the real T1w derivative.
+        t2_name = pe.Node(
+            niu.Function(
+                function=fix_multi_source_name,
+                input_names=['in_files', 'dwi_only', 'include_session', 'anatomical_contrast'],
+            ),
+            name='t2_name',
+        )
+        t2_name.inputs.include_session = (
+            config.workflow.subject_anatomical_reference == 'sessionwise'
+        )
+        t2_name.inputs.anatomical_contrast = 'T2w'
+        t2_name.inputs.dwi_only = False
+
+        ds_t2_preproc = pe.Node(
+            DerivativesDataSink(
+                compress=True,
+                base_directory=config.execution.output_dir,
+                space='ACPC',
+                desc='preproc',
+                keep_dtype=True,
+            ),
+            name='ds_t2_preproc',
+            run_without_submitting=True,
+        )
+
+        ds_t2w_unfatsat = pe.Node(
+            DerivativesDataSink(
+                compress=True,
+                base_directory=config.execution.output_dir,
+                space='ACPC',
+                desc='unfatsat',
+                keep_dtype=True,
+            ),
+            name='ds_t2w_unfatsat',
+            run_without_submitting=True,
+        )
 
     ds_t1_preproc = pe.Node(
         DerivativesDataSink(
@@ -1470,6 +1535,15 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
         (t1_name, ds_t1_mask, [('out', 'source_file')]),
         (t1_name, ds_t1_seg, [('out', 'source_file')]),
     ])  # fmt:skip
+
+    if has_t2w:
+        workflow.connect([
+            (inputnode, t2_name, [('t2w_source_files', 'in_files')]),
+            (inputnode, ds_t2_preproc, [('t2_preproc', 'in_file')]),
+            (inputnode, ds_t2w_unfatsat, [('t2w_unfatsat', 'in_file')]),
+            (t2_name, ds_t2_preproc, [('out', 'source_file')]),
+            (t2_name, ds_t2w_unfatsat, [('out', 'source_file')]),
+        ])  # fmt:skip
 
     if not config.execution.skip_anat_based_spatial_normalization:
         workflow.connect([
