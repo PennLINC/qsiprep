@@ -559,6 +559,13 @@ def init_diffprep_hmc_wf(
         sloppy_kwargs = {}
 
     diffprep_kwargs = dict(
+        # Without this, OMP_NUM_THREADS is never set and TORTOISE helps itself to
+        # every core on the machine -- a run with --nthreads 12 --omp-nthreads 12
+        # logged "Using up to 24 CPU cores." nipype then schedules other work
+        # against a 12-thread declaration that is a factor of two short, so the
+        # CPU is oversubscribed and any concurrency tuning is built on a false
+        # accounting. DRBUDDI and SynthesizeDWIs already declare this.
+        num_threads=config.nipype.omp_nthreads,
         correction_mode=effective_correction_mode,
         b0_id=diffprep_cfg['b0_id'],
         is_human_brain=diffprep_cfg['is_human_brain'],

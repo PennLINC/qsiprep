@@ -1599,3 +1599,54 @@ def test_drbuddi_synth_shell_cmdline(tmp_path):
     cmd = DRBUDDI(synth_shell_bval=1000, synth_shell_ndirs=30, **kwargs).cmdline
     assert '--DRBUDDI_synth_shell_bval 1000' in cmd
     assert '--DRBUDDI_synth_shell_ndirs 30' in cmd
+
+
+def test_diffprep_node_declares_its_threads():
+    """DIFFPREP must bound OMP_NUM_THREADS, or nipype's accounting is fiction.
+
+    diffprep_kwargs never passed num_threads, so OMP_NUM_THREADS was unset and
+    TORTOISE used every core on the machine: a run with --nthreads 12
+    --omp-nthreads 12 logged "Using up to 24 CPU cores." nipype meanwhile
+    scheduled other work against a 12-thread declaration, oversubscribing the CPU
+    by 2x and invalidating any concurrency tuning built on top of it.
+    """
+    config = _base_config()
+    config.nipype.omp_nthreads = 7
+    wf = _build(_scan_groups(None), t2w_sdc=False, name='threads_declared')
+    node = wf.get_node('diffprep')
+    assert node.inputs.num_threads == 7
+    # nipype's own accounting must match what the tool is allowed to use
+    assert node.n_procs == 7
+
+
+def test_diffprep_interface_exports_omp_num_threads_to_the_subprocess():
+    """The env var goes on inputs.environ (passed to the child), not os.environ."""
+    from qsiprep.interfaces.tortoise import DIFFPREP
+
+    assert DIFFPREP(num_threads=5).inputs.environ.get('OMP_NUM_THREADS') == '5'
+
+
+def test_rpe_series_diffprep_nodes_also_declare_threads():
+    """The per-PE-direction DIFFPREP nodes share diffprep_kwargs, so they inherit it."""
+    config = _base_config()
+    config.nipype.omp_nthreads = 6
+    rpe = _scan_groups('rpe_series', rpe_series=['/data/sub-01_dir-PA_dwi.nii.gz'])
+    import nibabel as nb
+    import numpy as np
+
+    # the rpe path needs the partner series to exist
+    import tempfile
+    from pathlib import Path
+
+    tmp = Path(tempfile.mkdtemp())
+    partner = tmp / 'sub-01_dir-PA_dwi.nii.gz'
+    nb.Nifti1Image(np.zeros((4, 4, 4, 6), dtype='float32'), np.eye(4)).to_filename(str(partner))
+    rpe = _scan_groups('rpe_series', rpe_series=[str(partner)])
+
+    wf = _build(rpe, t2w_sdc=False, name='rpe_threads')
+    group_nodes = [
+        n for n in wf._get_all_nodes() if n.name.startswith('diffprep_g')
+    ]
+    assert group_nodes, 'no per-group DIFFPREP nodes found'
+    for node in group_nodes:
+        assert node.inputs.num_threads == 6
