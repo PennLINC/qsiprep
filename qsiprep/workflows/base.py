@@ -417,8 +417,18 @@ to workflows in *QSIPrep*'s documentation]\
     make_intramodal_template = False
     if config.workflow.intramodal_template_iters > 0:
         if len(outputs_to_files) < 2:
-            raise Exception('Cannot make an intramodal with less than 2 groups.')
-        make_intramodal_template = True
+            # Having one group is a normal condition, not a user error: a cohort
+            # routinely mixes single- and multi-session subjects. Raising here
+            # meant one flag could fail a large fraction of a dataset outright,
+            # so skip the template for this subject and carry on.
+            config.loggers.workflow.warning(
+                'Skipping the intramodal template for sub-%s: it needs at least 2 '
+                'DWI groups and this subject has %d. Everything else is unaffected.',
+                subject_id,
+                len(outputs_to_files),
+            )
+        else:
+            make_intramodal_template = True
 
     anat_source_file = fix_multi_source_name(
         subject_data[info_modality],

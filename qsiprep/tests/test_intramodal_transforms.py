@@ -84,3 +84,21 @@ def test_both_sinks_are_wired_in_base():
     assert 'ds_intramodal_to_acpc' in src
     assert 'ds_orig_to_intramodal' in src
     assert "'outputnode.intramodal_template_to_t1_affine', 'in_file'" in src
+
+
+def test_single_group_subject_skips_the_template_instead_of_failing():
+    """A one-session subject must not fail the run.
+
+    Cohorts routinely mix single- and multi-session subjects: in CRASH, 24 of 59
+    subjects have one session. Raising here meant a single
+    --intramodal-template-iters flag failed 41% of the dataset outright.
+    """
+    import inspect
+
+    from qsiprep.workflows import base
+
+    src = inspect.getsource(base.init_single_subject_wf)
+    assert "raise Exception('Cannot make an intramodal with less than 2 groups.')" not in src
+    assert 'Skipping the intramodal template' in src
+    # and the flag must still be honoured when there ARE enough groups
+    assert 'make_intramodal_template = True' in src
