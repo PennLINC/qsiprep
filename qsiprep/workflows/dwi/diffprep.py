@@ -559,12 +559,23 @@ def init_diffprep_hmc_wf(
         sloppy_kwargs = {}
 
     diffprep_kwargs = dict(
-        # Without this, OMP_NUM_THREADS is never set and TORTOISE helps itself to
-        # every core on the machine -- a run with --nthreads 12 --omp-nthreads 12
-        # logged "Using up to 24 CPU cores." nipype then schedules other work
-        # against a 12-thread declaration that is a factor of two short, so the
-        # CPU is oversubscribed and any concurrency tuning is built on a false
-        # accounting. DRBUDDI and SynthesizeDWIs already declare this.
+        # Sets OMP_NUM_THREADS for consistency with DRBUDDI and SynthesizeDWIs,
+        # but be aware it does NOT bound TORTOISEProcess. Measured on a real
+        # session (24-core host, 72-volume workload):
+        #
+        #   unconstrained                            ~2071% CPU
+        #   OMP_NUM_THREADS=4                        ~1893%
+        #   ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS=4   ~2003%
+        #
+        # TORTOISEProcess spawns threads from hardware concurrency and has no
+        # flag to limit it -- its --ncores option documents itself as applying
+        # "ONLY to the DRBUDDI executable and not TORTOISEProcess".
+        #
+        # Practical consequence for scheduling: this node really occupies ~20 of
+        # 24 cores whenever it runs, so n_procs should be set close to the total
+        # (i.e. run with --omp-nthreads == --nthreads) or nipype will schedule
+        # work alongside it that the machine cannot actually accommodate.
+        # Constraining it for real needs cgroups (docker --cpus/--cpuset-cpus).
         num_threads=config.nipype.omp_nthreads,
         correction_mode=effective_correction_mode,
         b0_id=diffprep_cfg['b0_id'],

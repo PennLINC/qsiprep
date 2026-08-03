@@ -1602,13 +1602,13 @@ def test_drbuddi_synth_shell_cmdline(tmp_path):
 
 
 def test_diffprep_node_declares_its_threads():
-    """DIFFPREP must bound OMP_NUM_THREADS, or nipype's accounting is fiction.
+    """DIFFPREP should declare its threads, consistent with the other TORTOISE nodes.
 
-    diffprep_kwargs never passed num_threads, so OMP_NUM_THREADS was unset and
-    TORTOISE used every core on the machine: a run with --nthreads 12
-    --omp-nthreads 12 logged "Using up to 24 CPU cores." nipype meanwhile
-    scheduled other work against a 12-thread declaration, oversubscribing the CPU
-    by 2x and invalidating any concurrency tuning built on top of it.
+    Caveat, measured rather than assumed: OMP_NUM_THREADS does NOT actually bound
+    TORTOISEProcess (~1893% CPU at OMP_NUM_THREADS=4 versus ~2071% unconstrained
+    on a 24-core host), and neither does ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS.
+    This keeps the declaration consistent and correct for tools that do honour it;
+    it does not make the node's CPU use match n_procs.
     """
     config = _base_config()
     config.nipype.omp_nthreads = 7
