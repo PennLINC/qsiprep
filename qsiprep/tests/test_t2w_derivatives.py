@@ -125,3 +125,55 @@ def test_average_images_normalizes_intensities():
         for line in src.splitlines():
             if 'AverageImages(' in line and 'warp' not in line.lower():
                 assert 'normalize=True' in line, line
+
+
+def test_anat_dwiref_path_builds():
+    """The subject-level b=0 template goes in anat/, next to the T1w and T2ws.
+
+    qsiprep ships its own path patterns (data/io_spec.json) and already extends
+    the anat suffix list with a non-BIDS entry (imtcoreg), so adding dwiref is
+    consistent with how this spec is maintained. Without the pattern the sink
+    raises 'Could not build path with entities' and takes the whole run down.
+    """
+    import json
+
+    from bids.layout.writing import build_path
+
+    from qsiprep.data import load as load_data
+
+    patterns = json.loads(load_data('io_spec.json').read_text())['default_path_patterns']
+
+    out = build_path(
+        dict(
+            subject='01',
+            datatype='anat',
+            suffix='dwiref',
+            space='ACPC',
+            desc='intramodal',
+            extension='.nii.gz',
+        ),
+        patterns,
+        strict=False,
+    )
+    assert out == 'sub-01/anat/sub-01_space-ACPC_desc-intramodal_dwiref.nii.gz'
+
+
+def test_existing_dwiref_and_anat_paths_still_build():
+    """Extending the anat suffix list must not disturb existing outputs."""
+    import json
+
+    from bids.layout.writing import build_path
+
+    from qsiprep.data import load as load_data
+
+    patterns = json.loads(load_data('io_spec.json').read_text())['default_path_patterns']
+
+    assert build_path(
+        dict(subject='01', session='1', datatype='dwi', suffix='dwiref',
+             space='ACPC', extension='.nii.gz'), patterns, strict=False
+    ) == 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_dwiref.nii.gz'
+
+    assert build_path(
+        dict(subject='01', datatype='anat', suffix='T1w', space='ACPC',
+             desc='preproc', extension='.nii.gz'), patterns, strict=False
+    ) == 'sub-01/anat/sub-01_space-ACPC_desc-preproc_T1w.nii.gz'
