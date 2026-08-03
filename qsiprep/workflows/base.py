@@ -456,6 +456,28 @@ to workflows in *QSIPrep*'s documentation]\
             name='ds_intramodal_template',
             run_without_submitting=True,
         )
+        # Without this the intramodal space is a dead end: nothing can be mapped
+        # into or out of it after the fact. It is also the transform needed to
+        # check that the template itself was written in the right space.
+        ds_intramodal_to_acpc = pe.Node(
+            DerivativesDataSink(
+                source_file=anat_source_file,
+                base_directory=config.execution.output_dir,
+                datatype='anat',
+                mode='image',
+                extension='.mat',
+                **{'from': 'intramodal', 'to': 'ACPC'},
+                suffix='xfm',
+            ),
+            name='ds_intramodal_to_acpc',
+            run_without_submitting=True,
+        )
+        workflow.connect([
+            (intramodal_template_wf, ds_intramodal_to_acpc, [
+                ('outputnode.intramodal_template_to_t1_affine', 'in_file'),
+            ]),
+        ])  # fmt:skip
+
         workflow.connect([
             (intramodal_template_wf, ds_intramodal_template, [
                 # The ACPC-resampled template, NOT outputnode.intramodal_template:
@@ -549,6 +571,28 @@ to workflows in *QSIPrep*'s documentation]\
         if make_intramodal_template:
             input_name = f'inputnode.{output_wfname}_b0_template'
             output_name = f'outputnode.{output_wfname}_transform'
+            # Per-group hop into the template space. Paired with
+            # from-intramodal_to-ACPC above, this closes the round trip:
+            # BIDS b=0 -> intramodal -> ACPC -> MNI, and back.
+            ds_orig_to_intramodal = pe.Node(
+                DerivativesDataSink(
+                    source_file=source_file,
+                    base_directory=config.execution.output_dir,
+                    datatype='anat',
+                    mode='image',
+                    extension='.mat',
+                    **{'from': 'orig', 'to': 'intramodal'},
+                    suffix='xfm',
+                ),
+                name=f'ds_orig_to_intramodal_{output_wfname}',
+                run_without_submitting=True,
+            )
+            workflow.connect([
+                (intramodal_template_wf, ds_orig_to_intramodal, [
+                    (output_name, 'in_file'),
+                ]),
+            ])  # fmt:skip
+
             workflow.connect([
                 (dwi_preproc_wf, intramodal_template_wf, [
                     ('outputnode.b0_ref_image', input_name),
