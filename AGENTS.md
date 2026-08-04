@@ -88,10 +88,21 @@ The config module is the single source of truth for runtime parameters. Never pa
 
 ### Docker
 
-- Each app has a custom base image: `pennlinc/<pkg>_build:<version>`.
-- The `Dockerfile` installs the app via `pip install` into the base image.
-- Entrypoint is the CLI command (e.g., `/opt/conda/envs/<pkg>/bin/<pkg>`).
-- Labels follow the `org.label-schema` convention.
+- Each app has a base image with runtime dependencies (`Dockerfile.base`) and a main `Dockerfile` that installs the Python environment and the app itself.
+- All four apps use **Pixi**-based multi-stage Docker builds: `Dockerfile.base` owns non-Python/non-conda runtime dependencies, while `Dockerfile` uses pixi to create `build`, `test`, and production targets from `pixi.lock`.
+- Base image naming is uniform across the four repos: `pennlinc/<pkg>-base:<YYYYMMDD>`, pinned via `ARG BASE_IMAGE` on the first line of `Dockerfile`.
+- Entrypoint is the CLI binary in the pixi environment (e.g., `/app/.pixi/envs/<env>/bin/<pkg>`).
+- Labels follow the `org.label-schema` convention; the `test` target additionally carries `org.opencontainers.image.revision`, which CI uses to refuse running tests against a stale image.
+- The base image is rebuilt only when its `BASE_IMAGE` tag is absent from Docker Hub. Editing `Dockerfile.base` without bumping the date tag does **not** trigger a rebuild.
+- qsiprep is the only one of the four with **no templateflow prefetch stage** — the other three bake templates into the image via `scripts/fetch_templates.py`, so qsiprep downloads them at runtime instead.
+
+### CircleCI
+
+- All four repos use CircleCI **dynamic configuration**. `.circleci/config.yml` is a `setup: true` workflow that runs the `path-filtering` orb and hands off to `.circleci/continue_config.yml`, which holds the real pipeline. A docs-only push leaves `has_code_changes` false and skips the expensive matrix.
+- `continue_config.yml` defines two workflows: `run_tests` (branch pushes, gated on `has_code_changes`) and `deploy` (tag pushes only, which skips the matrix since the tagged commit already passed on `main`). qsiprep's `deploy` additionally runs `deploy_pypi`.
+- `image_prep` builds the base image (only if its tag is missing), the `test` image, and — on `main` and tags only — the production image, then pushes to Docker Hub. Integration jobs consume the test image from a local registry seeded out of the build cache.
+- The build cache uses two keys: a workflow-scoped key that downstream jobs read from (unique per run, so always written) and a shared `-deps-` key on `Dockerfile` + `pixi.lock` checksums that lets a later run skip the build entirely. Downstream jobs must not read the deps key — CircleCI caches are immutable, so it can point at an older run's image.
+- Docker Hub credentials are **not** named consistently yet: aslprep and xcp_d use `$DOCKERHUB_USERNAME`/`$DOCKERHUB_TOKEN`, qsiprep and qsirecon use `$DOCKER_USER`/`$DOCKER_PASS`. Logins are guarded by a `[[ -n ... ]]` check, so an unset variable skips login silently rather than failing.
 
 ### Release Process
 
@@ -142,8 +153,8 @@ QSIPrep is a BIDS App for preprocessing diffusion MRI (dMRI/DWI) data. It handle
 | Linter | ruff ~= 0.4.3 |
 | Pre-commit | Yes (ruff v0.6.2) |
 | Tox | Yes |
-| Docker base | `pennlinc/qsiprep_build:<ver>` |
-| Dockerfile | Multi-stage wheel build |
+| Docker base | `pennlinc/qsiprep-base:<YYYYMMDD>` |
+| Dockerfile | Pixi-based multi-stage (`build`, `test`, `qsiprep`) |
 
 ### Key Directories
 
@@ -184,7 +195,7 @@ This roadmap covers harmonization work across all four PennLINC BIDS Apps (qsipr
 ### Phase 3: Shared infrastructure
 
 11. **Extract a reusable GitHub Actions workflow** for lint + codespell + build checks, hosted in a shared repo (e.g., `PennLINC/.github`).
-12. **Standardize Dockerfile patterns** -- adopt multi-stage wheel builds (as qsiprep does) across all four repos.
+12. ~~**Standardize Dockerfile patterns**~~ -- done: all four repos now use pixi-based multi-stage builds with `pennlinc/<pkg>-base:<YYYYMMDD>` base images.
 13. **Create a shared `pennlinc-style` package or cookiecutter template** providing `pyproject.toml` lint/test config, `.pre-commit-config.yaml`, `tox.ini`, and CI workflows.
 14. **Evaluate `nipreps-versions` calver** -- the `raw-options = { version_scheme = "nipreps-calver" }` line is commented out in all four repos. Decide whether to adopt it.
 

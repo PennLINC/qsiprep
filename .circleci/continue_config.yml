@@ -11,6 +11,12 @@ parameters:
 orbs:
   codecov: codecov/codecov@4.1.0
 
+# ── Reusable anchors ──────────────────────────────────────────────────
+
+# Default machine executor — used by jobs that run containers but do NOT
+# execute `docker build`. docker_layer_caching is deliberately off here
+# because it adds a ~200-credit surcharge per job and is only useful for
+# jobs that actually build images.
 _machine_defaults: &machine_defaults
   environment:
     TZ: "/usr/share/zoneinfo/America/New_York"
@@ -19,6 +25,8 @@ _machine_defaults: &machine_defaults
   working_directory: /tmp/src/qsiprep
   resource_class: large
 
+# Machine executor with docker_layer_caching — for jobs that run
+# `docker build` and benefit from warm layer caches.
 _machine_with_dlc: &machine_with_dlc
   environment:
     TZ: "/usr/share/zoneinfo/America/New_York"
@@ -28,16 +36,27 @@ _machine_with_dlc: &machine_with_dlc
   working_directory: /tmp/src/qsiprep
   resource_class: large
 
+# Shared filter block for run_tests workflow jobs — branch pushes only.
+# Tags are handled by the separate `deploy` workflow so the full integration
+# matrix is not re-run on every release (tests have already passed on the
+# main commit the tag points to).
 _default_filters: &default_filters
   tags:
     ignore: /.*/
 
+# Filter for the deploy workflow — tag pushes only, no branches.
 _tag_filters: &tag_filters
   tags:
     only: /.*/
   branches:
     ignore: /.*/
 
+# NOTE: qsiprep and qsirecon authenticate with $DOCKER_USER/$DOCKER_PASS,
+# while aslprep and xcp_d use $DOCKERHUB_USERNAME/$DOCKERHUB_TOKEN. The
+# names are deliberately left divergent until the CircleCI project env vars
+# are confirmed — the guard below means a missing variable silently skips
+# login rather than failing loudly, so renaming without setting the new var
+# would break pushes at the end of a long build.
 _docker_auth: &docker_auth
   name: Docker authentication
   command: |
@@ -48,6 +67,10 @@ _docker_auth: &docker_auth
 _setup_docker_registry: &setup_docker_registry
   name: Set up local Docker registry
   command: |
+    # registry:2 is ~25 MB and pulls in a couple of seconds over the
+    # authenticated Docker Hub connection we already have, so there's no
+    # point caching a `docker save` tarball of it — that only makes the
+    # build cache bigger and slower to save/restore.
     docker pull registry:2
     docker run -d -p 5000:5000 --restart=always --name=registry \
         -v /tmp/docker:/var/lib/registry registry:2
@@ -62,6 +85,12 @@ commands:
   restore_build_and_data:
     description: Restore workflow Docker image cache and test data cache, then start the registry
     steps:
+      # Restore the workflow-scoped key, not the shared deps key. CircleCI
+      # caches are immutable: if image_prep rebuilt the test image but the
+      # deps key already existed, its save_cache would be a no-op and this
+      # job would pull a stale image from an earlier run's registry. The
+      # workflow-scoped key is unique per run, so it always reflects the
+      # image image_prep actually produced.
       - restore_cache:
           keys:
             - build-v6-workflow-{{ .Environment.CIRCLE_WORKFLOW_ID }}-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
@@ -105,6 +134,10 @@ commands:
       - run:
           name: Prune non-QC artifacts
           when: always
+          # HTML reports and everything they embed (figures/ SVG/PNG/GIF,
+          # linked TSVs) must survive — they're how outputs get visually
+          # QC'd. Only strip large binary derivatives that the reports
+          # don't render, plus test/pycache debris.
           command: |
             find /tmp/out/ -name "*.nii.gz" -type f -delete 2>/dev/null || true
             find /tmp/out/ \( \
@@ -159,6 +192,7 @@ jobs:
             if ! docker manifest inspect $BASE_IMAGE > /dev/null 2>&1; then
               echo "Base image $BASE_IMAGE not found, building..."
               docker build -f Dockerfile.base \
+                --pull \
                 --platform linux/amd64 \
                 -t $BASE_IMAGE \
                 -t $BASE_IMAGE_NAME:latest .
@@ -300,6 +334,12 @@ jobs:
           command: |
             mkdir -p /tmp/images
             touch /tmp/images/imageprep-success.marker
+      # Two keys on purpose. The workflow-scoped key is unique per run so it
+      # is always written, guaranteeing downstream jobs restore the image
+      # this run actually produced. The deps key is shared across runs with
+      # identical Docker inputs and is what lets a later run skip the build
+      # entirely; it is a no-op once it exists, which is why it cannot be
+      # the key downstream jobs read from.
       - save_cache:
           key: build-v6-workflow-{{ .Environment.CIRCLE_WORKFLOW_ID }}-{{ checksum "Dockerfile" }}-{{ checksum "pixi.lock" }}
           paths:
@@ -312,6 +352,9 @@ jobs:
             - /tmp/images
 
   get_data:
+    # Network- and IO-bound only — no Docker daemon needed, so run on the
+    # docker executor (cimg/base:stable, ~10 credits/min) instead of the
+    # machine executor (100 credits/min).
     docker:
       - image: cimg/base:stable
     working_directory: /tmp/src/qsiprep
@@ -386,7 +429,6 @@ jobs:
             - /tmp/data
 
   integration_test:
-    <<: *machine_defaults
     parameters:
       marker:
         type: string
@@ -396,6 +438,15 @@ jobs:
       skip_marker:
         type: string
         default: ""
+      resource_class:
+        type: string
+        default: large
+    environment:
+      TZ: "/usr/share/zoneinfo/America/New_York"
+    machine:
+      image: default
+    working_directory: /tmp/src/qsiprep
+    resource_class: << parameters.resource_class >>
     steps:
       - checkout:
           path: /tmp/src/qsiprep
@@ -453,6 +504,9 @@ jobs:
             - .coverage.unit_tests
 
   merge_coverage:
+    # Runs `pip install coverage && coverage combine && coverage xml` — no
+    # Docker daemon needed. The docker executor (cimg/python, ~10 credits/min)
+    # is ~10x cheaper per minute than the machine executor it used to run on.
     docker:
       - image: cimg/python:3.12
     working_directory: /tmp/src/qsiprep
