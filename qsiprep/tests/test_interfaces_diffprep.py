@@ -1650,3 +1650,22 @@ def test_rpe_series_diffprep_nodes_also_declare_threads():
     assert group_nodes, 'no per-group DIFFPREP nodes found'
     for node in group_nodes:
         assert node.inputs.num_threads == 6
+
+
+def test_diffprep_passes_ncores_to_tortoise():
+    """--ncores is the only knob that actually bounds TORTOISEProcess.
+
+    num_threads sets OMP_NUM_THREADS, which TORTOISE overrides via
+    omp_set_num_threads(); measured ~1893% CPU with OMP_NUM_THREADS=4 on a
+    24-core host. --ncores is read directly by the patched TORTOISE and is an
+    absolute count, which is what a batch scheduler grants -- the alternative,
+    PercentOfCpuCoresToUse, is applied to the host core count and ignores
+    cgroup/affinity limits.
+    """
+    config = _base_config()
+    config.nipype.omp_nthreads = 8
+    wf = _build(_scan_groups(None), t2w_sdc=False, name='ncores_wired')
+    node = wf.get_node('diffprep')
+    assert node.inputs.ncores == 8
+    # nipype's accounting and the process's real budget must agree
+    assert node.n_procs == 8

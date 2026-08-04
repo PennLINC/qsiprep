@@ -873,6 +873,17 @@ def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False):
 
 
 class _DIFFPREPInputSpec(TORTOISEInputSpec):
+    #: Absolute CPU core count. TORTOISEProcess sizes its thread pool from the
+    #: PercentOfCpuCoresToUse setting applied to the HOST core count -- which
+    #: ignores cgroups and CPU affinity, so under a batch scheduler a job granted
+    #: 8 cores on a 128-core node would size itself for 128. It also calls
+    #: omp_set_num_threads(), overriding OMP_NUM_THREADS, so the environment
+    #: cannot bound it either (measured: ~1893% CPU with OMP_NUM_THREADS=4).
+    #: Requires the patched TORTOISE that reads --ncores in TORTOISEProcess.
+    ncores = traits.Int(
+        argstr='--ncores %d',
+        desc='absolute number of CPU cores TORTOISE may use',
+    )
     dwi_file = File(
         exists=True,
         mandatory=True,

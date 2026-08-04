@@ -577,6 +577,10 @@ def init_diffprep_hmc_wf(
         # work alongside it that the machine cannot actually accommodate.
         # Constraining it for real needs cgroups (docker --cpus/--cpuset-cpus).
         num_threads=config.nipype.omp_nthreads,
+        # The knob that actually works. Unlike num_threads above, this reaches
+        # TORTOISEProcess and bounds it, so nipype's n_procs declaration and the
+        # process's real CPU use finally agree.
+        ncores=config.nipype.omp_nthreads,
         correction_mode=effective_correction_mode,
         b0_id=diffprep_cfg['b0_id'],
         is_human_brain=diffprep_cfg['is_human_brain'],
