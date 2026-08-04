@@ -239,7 +239,12 @@ def _as_list(value):
 
 
 def linear_alignment_workflow(
-    transform='Rigid', iternum=0, omp_nthreads=1, use_masks=False, initialize_com=False
+    transform='Rigid',
+    iternum=0,
+    omp_nthreads=1,
+    use_masks=False,
+    initialize_com=False,
+    settings='shoreline',
 ):
     """
     Takes a template image and a set of input images, does
@@ -264,7 +269,7 @@ def linear_alignment_workflow(
         name='outputnode',
     )
     precision = 'sloppy' if config.execution.sloppy else 'precise'
-    ants_settings = str(load_data(f'shoreline_{precision}_{transform}.json'))
+    ants_settings = str(load_data(f'{settings}_{precision}_{transform}.json'))
     reg = ants.Registration(from_file=ants_settings, num_threads=omp_nthreads)
     if initialize_com:
         # The shoreline settings carry no initialization and only two resolution
@@ -330,7 +335,19 @@ def init_b0_hmc_wf(
     use_masks=False,
     initialize_com=False,
     num_iters=None,
+    settings='shoreline',
 ) -> Workflow:
+    """Align a set of images, optionally building an unbiased template from them.
+
+    ``settings`` selects the antsRegistration parameter family. The default,
+    ``shoreline``, is tuned for within-scan b=0 motion correction: noisy, 2 mm,
+    contrast that varies between volumes. ``unbiased_template`` is for template
+    creation from anatomicals or b=0 references, where the images are high-SNR
+    and share contrast; it differs only in using a convergence threshold that
+    actually fires (1e-06 rather than 1e-08). Measured on 0.94 mm T1w against the
+    merge template: 16x faster, reaching an identical metric value to five
+    decimal places. See test_template_registration_settings.py.
+    """
     if num_iters is None:
         num_iters = 2
     if align_to is None:
@@ -380,7 +397,7 @@ def init_b0_hmc_wf(
 
         initial_reg = linear_alignment_workflow(
             iternum=0, omp_nthreads=omp_nthreads, use_masks=use_masks,
-            initialize_com=initialize_com,
+            initialize_com=initialize_com, settings=settings,
         )
         if use_masks:
             alignment_wf.connect(inputnode, 'template_mask',
@@ -394,7 +411,7 @@ def init_b0_hmc_wf(
             reg_iters.append(
                 linear_alignment_workflow(
                     iternum=iternum, omp_nthreads=omp_nthreads, use_masks=use_masks,
-                    initialize_com=initialize_com,
+                    initialize_com=initialize_com, settings=settings,
                 )
             )
             if use_masks:

@@ -826,6 +826,7 @@ A {contrast}-reference map was computed after registration of
         boilerplate=False,
         prioritize_omp=True,
         use_masks=True,
+        settings='unbiased_template',
     )
 
     def _first(in_list):

@@ -141,6 +141,7 @@ def init_intramodal_template_wf(
             num_iters=max(int(num_iterations), 2),
             initialize_com=True,
             boilerplate=False,
+            settings='unbiased_template',
             name='intramodal_linear_template',
         )
         workflow.connect([
