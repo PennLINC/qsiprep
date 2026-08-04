@@ -447,7 +447,7 @@ def init_dwi_denoising_wf(
 
         dwi_denoise_window = config.workflow.dwi_denoise_window
         auto_str = ''
-        if (denoise_method == 'dwidenoise') and dwi_denoise_window == 'auto':
+        if denoise_method.startswith('dwidenoise') and dwi_denoise_window == 'auto':
             # Configure the denoising window
             import numpy as np
 
@@ -462,7 +462,8 @@ def init_dwi_denoising_wf(
         if denoise_method.startswith('dwidenoise') and use_phase:
             desc += (
                 'Magnitude and phase DWI data were combined into a complex-valued file, '
-                'then denoised using the Marchenko-Pastur PCA method implemented in dwidenoise '
+                'then denoised using the Marchenko-Pastur PCA method implemented in '
+                f'{denoise_method} '
                 '[@mrtrix3; @dwidenoise1; @dwidenoise2; @cordero2019complex] '
                 f'with a{auto_str} window size of {dwi_denoise_window} voxels. '
                 'After denoising, the complex-valued data were split back into magnitude and '
@@ -499,7 +500,10 @@ def init_dwi_denoising_wf(
                 )
             else:
                 denoiser = pe.Node(
-                    DWIDenoise(extent=dwi_denoise_window),
+                    DWIDenoise(
+                        extent=(dwi_denoise_window, dwi_denoise_window, dwi_denoise_window),
+                        nthreads=omp_nthreads,
+                    ),
                     name='denoiser',
                     n_procs=omp_nthreads,
                 )
@@ -520,10 +524,10 @@ def init_dwi_denoising_wf(
                 (split_complex, buffernodes[-1], [('out_file', 'dwi_file')]),
             ])  # fmt:skip
 
-        elif denoise_method.startswith('dwidenoise2'):
+        elif denoise_method.startswith('dwidenoise'):
             desc += (
                 'DWI data were '
-                'denoised using the Marchenko-Pastur PCA method implemented in dwidenoise2 '
+                f'denoised using the Marchenko-Pastur PCA method implemented in {denoise_method} '
                 '[@mrtrix3; @dwidenoise1; @dwidenoise2; @cordero2019complex] '
                 f'with a{auto_str} window size of {dwi_denoise_window} voxels. '
             )
@@ -531,18 +535,22 @@ def init_dwi_denoising_wf(
 
             if denoise_method == 'dwidenoise2':
                 dwidenoise_inputs = {
-                    'shape': 'cuboid',
-                    'extent': (dwi_denoise_window, dwi_denoise_window, dwi_denoise_window),
-                    # Fixed odd extents are incompatible with the changing subsampling parity of
-                    # iterative mode, so reproduce legacy fixed-window behavior in one pass.
-                    'onepass': True,
-                    'subsample': 1,
+                    'shape': 'sphere',
+                    'radius': dwi_denoise_window,
                     'nthreads': omp_nthreads,
                 }
-                if dwidenoise_params.get('shape') == 'sphere':
-                    for parameter in ('extent', 'onepass', 'subsample'):
+                if dwidenoise_params.get('shape') == 'cuboid':
+                    for parameter in ('radius',):
                         if parameter not in dwidenoise_params:
                             dwidenoise_inputs.pop(parameter)
+
+                    # cuboid uses extent instead of radius
+                    dwidenoise_inputs['extent'] = (
+                        dwi_denoise_window,
+                        dwi_denoise_window,
+                        dwi_denoise_window,
+                    )
+
                 dwidenoise_inputs.update(dwidenoise_params)
                 denoiser = pe.Node(
                     DWIDenoise2(**dwidenoise_inputs),
@@ -551,7 +559,10 @@ def init_dwi_denoising_wf(
                 )
             else:
                 denoiser = pe.Node(
-                    DWIDenoise(extent=dwi_denoise_window),
+                    DWIDenoise(
+                        extent=(dwi_denoise_window, dwi_denoise_window, dwi_denoise_window),
+                        nthreads=omp_nthreads,
+                    ),
                     name='denoiser',
                     n_procs=omp_nthreads,
                 )

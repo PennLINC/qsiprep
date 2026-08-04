@@ -1,4 +1,4 @@
-"""Tests for the qsiprep.interfaces.dipy module."""
+"""Tests for the qsiprep.interfaces.mrtrix module."""
 
 import os
 
@@ -47,8 +47,8 @@ def test_dwidenoise2(datasets, tmp_path_factory):
     in_img = nb.load(in_file)
 
     interface = mrtrix.DWIDenoise2(
-        shape='cuboid',
-        extent=(5, 5, 5),
+        shape='sphere',
+        radius=3,
         onepass=True,
         subsample=1,
         in_file=in_file,
@@ -98,6 +98,53 @@ def test_dwidenoise2_kernel_options_are_mutually_exclusive(tmp_path):
             radius=2.5,
             extent=(5, 5, 5),
         )
+
+
+@pytest.mark.parametrize('use_phase', [False, True])
+def test_dwidenoise_workflow_uses_dwidenoise(monkeypatch, use_phase):
+    """Build a DWIDenoise node, not Patch2Self, when ``dwidenoise`` is requested."""
+    monkeypatch.setattr(config.workflow, 'denoise_method', 'dwidenoise')
+    monkeypatch.setattr(config.workflow, 'dwi_denoise_window', 5)
+    monkeypatch.setattr(config.workflow, 'unringing_method', 'none')
+    monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
+    monkeypatch.setattr(config.nipype, 'omp_nthreads', 1)
+
+    workflow = init_dwi_denoising_wf(
+        source_file='sub-01_dwi.nii.gz',
+        partial_fourier=1.0,
+        phase_encoding_direction='j',
+        n_volumes=30,
+        use_phase=use_phase,
+        do_biascorr=False,
+    )
+    denoiser = workflow.get_node('denoiser')
+
+    assert isinstance(denoiser.interface, mrtrix.DWIDenoise)
+    assert denoiser.inputs.extent == (5, 5, 5)
+    assert denoiser.inputs.nthreads == 1
+
+
+@pytest.mark.parametrize('denoise_method', ['dwidenoise', 'dwidenoise2'])
+def test_dwidenoise_workflow_resolves_auto_window(monkeypatch, denoise_method):
+    """Resolve the default ``auto`` window size for every dwidenoise variant."""
+    monkeypatch.setattr(config.workflow, 'denoise_method', denoise_method)
+    monkeypatch.setattr(config.workflow, 'dwi_denoise_window', 'auto')
+    monkeypatch.setattr(config.workflow, 'unringing_method', 'none')
+    monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
+    monkeypatch.setattr(config.nipype, 'omp_nthreads', 1)
+
+    workflow = init_dwi_denoising_wf(
+        source_file='sub-01_dwi.nii.gz',
+        partial_fourier=1.0,
+        phase_encoding_direction='j',
+        n_volumes=30,
+        use_phase=False,
+        do_biascorr=False,
+    )
+    denoiser = workflow.get_node('denoiser')
+
+    # cbrt(30) rounded up to the closest odd integer
+    assert denoiser.inputs.extent == (5, 5, 5)
 
 
 def test_dwidenoise2_cli_parameters_reach_workflow(monkeypatch):
