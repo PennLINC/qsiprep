@@ -97,15 +97,36 @@ def test_mask_restricts_the_map(series, tmp_path):
     assert out[mask > 0].mean() > 0
 
 
-def test_tsnr_is_wired_into_derivatives():
-    """It must reach the output tree, not just exist as an interface."""
-    import inspect
+def test_tsnr_is_wired_into_derivatives(tmp_path):
+    """It must reach the output tree, not just exist as an interface.
 
-    from qsiprep.workflows.dwi import derivatives
+    Checks the built graph rather than the source text, so a renamed inputnode
+    field or a dropped connection fails here instead of eight hours into a run.
+    """
+    from qsiprep import config
+    from qsiprep.workflows.dwi.derivatives import init_dwi_derivatives_wf
 
-    src = inspect.getsource(derivatives)
-    assert "desc='tsnr'" in src
-    assert "(tsnr, ds_tsnr, [('out_file', 'in_file')])" in src
+    config.execution.output_dir = str(tmp_path)
+    config.workflow.hmc_model = 'diffprep_quadratic'
+    config.workflow.write_local_bvecs = False
+
+    wf = init_dwi_derivatives_wf('/data/sub-01/ses-1/dwi/sub-01_ses-1_dwi.nii.gz')
+    nodes = {n.name: n for n in wf._get_all_nodes()}
+    assert 'tsnr' in nodes and 'ds_tsnr' in nodes
+
+    edges = {(u.name, v.name): d['connect'] for u, v, d in wf._graph.edges(data=True)}
     # computed on the final resampled series, with its own bvals and mask
-    assert "('dwi_t1', 'dwi_file')" in src
-    assert "('bvals_t1', 'bval_file')" in src
+    assert set(edges[('inputnode', 'tsnr')]) == {
+        ('dwi_t1', 'dwi_file'),
+        ('bvals_t1', 'bval_file'),
+        ('dwi_mask_t1', 'mask_file'),
+    }
+    assert edges[('tsnr', 'ds_tsnr')] == [('out_file', 'in_file')]
+
+    sink = nodes['ds_tsnr'].inputs
+    assert (sink.desc, sink.space, sink.suffix, sink.extension) == (
+        'tsnr',
+        'ACPC',
+        'dwi',
+        '.nii.gz',
+    )
