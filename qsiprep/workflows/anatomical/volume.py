@@ -45,6 +45,7 @@ from ... import config
 from ...data import load as load_data
 from ...interfaces import Conform, DerivativesDataSink
 from ...interfaces.anatomical import DesaturateSkull, GetTemplate, VoxelSizeChooser
+from ...interfaces.ants import ImageMath
 from ...interfaces.freesurfer import (
     FixHeaderSynthStrip,
     MockSynthSeg,
@@ -630,7 +631,7 @@ def anat_biascorrect_enabled(image_files=None):
     for img in image_files:
         try:
             image_type = layout.get_metadata(img).get('ImageType') or []
-        except Exception:  # noqa: BLE001 - metadata is best-effort
+        except Exception:
             image_type = []
         normalized.append(any(str(t).upper() == 'NORM' for t in image_type))
 
@@ -735,6 +736,20 @@ A {contrast}-reference map was computed after registration of
         ]),
     ])  # fmt:skip
 
+    # N4 fits its field by least squares in the LOG domain, so a handful of
+    # near-zero voxels become enormous negative outliers and can drag the whole
+    # field with them. Measured on CRASH sub-2463p: an unclipped fit produced a
+    # field spanning 98x within the brain (superior/inferior 2.69) where the same
+    # subject's other session gave 1.5x -- from inputs that were statistically
+    # indistinguishable. Clipping the tails first is what niworkflows does ahead
+    # of every N4 call it makes (niworkflows/anat/ants.py); qsiprep was calling
+    # N4 bare. See init_finalize_denoising_wf for the DWI-side counterpart.
+    truncate_interface = ImageMath(
+        dimension=3,
+        operation='TruncateImageIntensity',
+        secondary_arg='0.01 0.999 256',
+    )
+
     # To match what was done in antsBrainExtraction.sh
     # -c "[ 50x50x50x50,0.0000001 ]"
     # -s 4
@@ -763,9 +778,11 @@ A {contrast}-reference map was computed after registration of
         ])  # fmt:skip
 
         if do_biascorr:
+            truncate_intensity = pe.Node(truncate_interface, name='truncate_intensity')
             n4_correct = pe.Node(n4_interface, name='n4_correct', n_procs=omp_nthreads)
             workflow.connect([
-                (anat_conform, n4_correct, [(('out_file', _get_first), 'input_image')]),
+                (anat_conform, truncate_intensity, [(('out_file', _get_first), 'in_file')]),
+                (truncate_intensity, n4_correct, [('out_file', 'input_image')]),
                 (n4_correct, outputnode, [('output_image', 'bias_corrected')]),
             ])  # fmt:skip
         else:
@@ -783,6 +800,9 @@ A {contrast}-reference map was computed after registration of
     #     combination of fields and N4 fails with merged images.
     # 1b. Align and merge if several T1w images are provided
     if do_biascorr:
+        truncate_intensity = pe.MapNode(
+            truncate_interface, iterfield='in_file', name='truncate_intensity'
+        )
         n4_correct = pe.MapNode(
             n4_interface, iterfield='input_image', name='n4_correct', n_procs=omp_nthreads
         )
@@ -835,7 +855,8 @@ A {contrast}-reference map was computed after registration of
 
     if do_biascorr:
         workflow.connect([
-            (anat_conform, n4_correct, [('out_file', 'input_image')]),
+            (anat_conform, truncate_intensity, [('out_file', 'in_file')]),
+            (truncate_intensity, n4_correct, [('out_file', 'input_image')]),
             (n4_correct, anat_merge_wf, [('output_image', 'inputnode.b0_images')]),
         ])  # fmt:skip
     else:

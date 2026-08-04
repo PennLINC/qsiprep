@@ -17,6 +17,7 @@ from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 from ... import config
 from ...data import load as load_data
 from ...interfaces import DerivativesDataSink
+from ...interfaces.bias import N4WeightMask
 from ...interfaces.bids import DerivativesSidecar
 from ...interfaces.dsi_studio import DSIStudioBTable
 from ...interfaces.dwi_merge import MergeFinalConfounds, SplitResampledDWIs
@@ -569,6 +570,21 @@ def init_finalize_denoising_wf(
     )
 
     if do_biascorr:
+        # dwibiascorrect hands this mask to N4 as a WEIGHT image (-w), not a mask
+        # (-x), so its binary values become the per-voxel weights of a
+        # least-squares fit on log intensities. Dark voxels inside the mask are
+        # therefore huge outliers. Damp them first -- see interfaces/bias.py.
+        # This affects only what biascorr fits; dwi_mask_t1 goes downstream
+        # unchanged.
+        n4_weights = pe.Node(N4WeightMask(), name='n4_weights')
+        workflow.connect([
+            (inputnode, n4_weights, [
+                ('dwi_t1', 'dwi_file'),
+                ('dwi_t1_bval', 'bval_file'),
+                ('dwi_mask_t1', 'mask_file'),
+            ]),
+        ])  # fmt:skip
+
         if not split_biascorr:
             biascorr = pe.Node(
                 DWIBiasCorrect(method='ants', bzero_max=config.workflow.b0_threshold),
@@ -590,8 +606,8 @@ def init_finalize_denoising_wf(
                     ('dwi_t1', 'in_file'),
                     ('dwi_t1_bval', 'in_bval'),
                     ('dwi_t1_bvec', 'in_bvec'),
-                    ('dwi_mask_t1', 'mask'),
                 ]),
+                (n4_weights, biascorr, [('out_file', 'mask')]),
                 (biascorr, ds_report_biascorr, [('out_report', 'in_file')]),
                 (biascorr, bias_corrected, [
                     ('out_file', 'dwi_t1'),
@@ -642,7 +658,7 @@ def init_finalize_denoising_wf(
                     )
                 )
                 workflow.connect([
-                    (inputnode, biascorrs[-1], [('dwi_mask_t1', 'mask')]),
+                    (n4_weights, biascorrs[-1], [('out_file', 'mask')]),
                     (scan_split, biascorrs[-1], [
                         ('dwi_file_%d' % scan_num, 'in_file'),
                         ('bval_file_%d' % scan_num, 'in_bval'),
