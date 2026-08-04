@@ -13,6 +13,7 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
 from ... import config
 from ...interfaces import DerivativesDataSink
+from ...interfaces.tsnr import DWITSNR
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
@@ -93,6 +94,25 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
         workflow.connect([(inputnode, ds_optimization, [('hmc_optimization_data', 'in_file')])])
 
     # 4D DWI in ACPC space
+    # Temporal SNR over the b=0 volumes. Computed here, on the final resampled
+    # series, so it reflects what the user actually gets rather than an
+    # intermediate. See interfaces/tsnr.py for why b=0 only.
+    tsnr = pe.Node(DWITSNR(), name='tsnr', mem_gb=DEFAULT_MEMORY_MIN_GB)
+    ds_tsnr = pe.Node(
+        DerivativesDataSink(
+            source_file=source_file,
+            base_directory=output_dir,
+            space='ACPC',
+            desc='tsnr',
+            suffix='dwi',
+            extension='.nii.gz',
+            compress=True,
+        ),
+        name='ds_tsnr',
+        run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB,
+    )
+
     ds_dwi_t1 = pe.Node(
         DerivativesDataSink(
             source_file=source_file,
@@ -206,6 +226,12 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
     )
 
     workflow.connect([
+        (inputnode, tsnr, [
+            ('dwi_t1', 'dwi_file'),
+            ('bvals_t1', 'bval_file'),
+            ('dwi_mask_t1', 'mask_file'),
+        ]),
+        (tsnr, ds_tsnr, [('out_file', 'in_file')]),
         (inputnode, ds_dwi_t1, [('dwi_t1', 'in_file')]),
         (inputnode, ds_bvals_t1, [('bvals_t1', 'in_file')]),
         (inputnode, ds_bvecs_t1, [('bvecs_t1', 'in_file')]),
