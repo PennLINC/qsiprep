@@ -24,8 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: pipx run ruff check .
-      - run: pipx run ruff format --diff .
+      - run: pipx run --spec ruff==0.14.11 ruff check .
+      - run: pipx run --spec ruff==0.14.11 ruff format --diff .
 
   codespell:
     name: Check for spelling errors
