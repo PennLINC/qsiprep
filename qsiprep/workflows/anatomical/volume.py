@@ -750,6 +750,23 @@ A {contrast}-reference map was computed after registration of
         secondary_arg='0.01 0.999 256',
     )
 
+    # The truncated image is for ESTIMATING the field only. Dividing the original
+    # by that field keeps the clipping out of the data: on a real T1w the 99.9th
+    # percentile clip drops the ceiling from 1404 to 457 and flattens 12845 brain
+    # voxels (the top 0.4%) to a constant, which would otherwise be baked into
+    # desc-preproc_T1w and into the merge template.
+    #
+    # This is what niworkflows does -- its truncated image feeds only the
+    # preliminary N4 that drives brain masking, while `bias_corrected` comes from
+    # N4 run on the untruncated original (niworkflows/anat/ants.py, inu_n4 vs
+    # inu_n4_final) -- and it matches dwibiascorrect on the DWI side, where the
+    # output is the full original series divided by the estimated field.
+    apply_bias_interface = ImageMath(
+        dimension=3,
+        operation='/',
+        out_file='inu_corrected.nii.gz',
+    )
+
     # To match what was done in antsBrainExtraction.sh
     # -c "[ 50x50x50x50,0.0000001 ]"
     # -s 4
@@ -757,6 +774,7 @@ A {contrast}-reference map was computed after registration of
     n4_interface = N4BiasFieldCorrection(
         dimension=3,
         copy_header=True,
+        save_bias=True,
         n_iterations=[50, 50, 50, 50],
         convergence_threshold=0.0000001,
         shrink_factor=4,
@@ -780,10 +798,13 @@ A {contrast}-reference map was computed after registration of
         if do_biascorr:
             truncate_intensity = pe.Node(truncate_interface, name='truncate_intensity')
             n4_correct = pe.Node(n4_interface, name='n4_correct', n_procs=omp_nthreads)
+            apply_bias = pe.Node(apply_bias_interface, name='apply_bias')
             workflow.connect([
                 (anat_conform, truncate_intensity, [(('out_file', _get_first), 'in_file')]),
                 (truncate_intensity, n4_correct, [('out_file', 'input_image')]),
-                (n4_correct, outputnode, [('output_image', 'bias_corrected')]),
+                (anat_conform, apply_bias, [(('out_file', _get_first), 'in_file')]),
+                (n4_correct, apply_bias, [('bias_image', 'secondary_file')]),
+                (apply_bias, outputnode, [('out_file', 'bias_corrected')]),
             ])  # fmt:skip
         else:
             # `bias_corrected` is the name of the port, not a promise; downstream
@@ -805,6 +826,9 @@ A {contrast}-reference map was computed after registration of
         )
         n4_correct = pe.MapNode(
             n4_interface, iterfield='input_image', name='n4_correct', n_procs=omp_nthreads
+        )
+        apply_bias = pe.MapNode(
+            apply_bias_interface, iterfield=['in_file', 'secondary_file'], name='apply_bias'
         )
 
     # Make an unbiased template, same as used for b=0 registration.
@@ -858,7 +882,9 @@ A {contrast}-reference map was computed after registration of
         workflow.connect([
             (anat_conform, truncate_intensity, [('out_file', 'in_file')]),
             (truncate_intensity, n4_correct, [('out_file', 'input_image')]),
-            (n4_correct, anat_merge_wf, [('output_image', 'inputnode.b0_images')]),
+            (anat_conform, apply_bias, [('out_file', 'in_file')]),
+            (n4_correct, apply_bias, [('bias_image', 'secondary_file')]),
+            (apply_bias, anat_merge_wf, [('out_file', 'inputnode.b0_images')]),
         ])  # fmt:skip
     else:
         workflow.connect([

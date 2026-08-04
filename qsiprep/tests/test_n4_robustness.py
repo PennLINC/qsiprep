@@ -160,8 +160,16 @@ def test_biascorr_receives_the_conditioned_weights_not_the_raw_mask(tmp_path):
     assert ('dwi_mask_t1', 'mask') not in edges.get(('inputnode', 'biascorr'), [])
 
 
-def test_anatomical_n4_truncates_first(tmp_path):
-    """Both the single-image and multi-image paths must clip before N4."""
+def test_anatomical_n4_estimates_on_truncated_but_corrects_the_original(tmp_path):
+    """Truncation must not reach the data, only the field estimate.
+
+    Clipping at the 99.9th percentile drops a real T1w's ceiling from 1404 to 457
+    and flattens the top 0.4% of brain voxels. Feeding that to the merge -- and
+    to desc-preproc_T1w -- would bake the clipping in. niworkflows keeps its
+    truncated image on the preliminary N4 only (inu_n4 vs inu_n4_final), and
+    dwibiascorrect likewise divides the full original series by the estimated
+    field.
+    """
     from qsiprep.workflows.anatomical.volume import init_anat_template_wf
 
     _config().execution.output_dir = str(tmp_path)
@@ -169,19 +177,37 @@ def test_anatomical_n4_truncates_first(tmp_path):
     for num_images in (1, 3):
         wf = init_anat_template_wf(num_images=num_images, do_biascorr=True)
         nodes = {n.name: n for n in wf._get_all_nodes()}
-        assert 'truncate_intensity' in nodes, f'no truncation for num_images={num_images}'
+        for needed in ('truncate_intensity', 'n4_correct', 'apply_bias'):
+            assert needed in nodes, f'{needed} missing for num_images={num_images}'
 
         edges = {(u.name, v.name): d['connect'] for u, v, d in wf._graph.edges(data=True)}
-        assert edges[('truncate_intensity', 'n4_correct')] == [('out_file', 'input_image')], (
-            f'N4 is not fed by the truncation for num_images={num_images}'
-        )
-        # nothing else may reach N4's input
+
+        # N4 sees the truncated image, and nothing else
         into_n4 = [k for k in edges if k[1] == 'n4_correct']
         assert into_n4 == [('truncate_intensity', 'n4_correct')], into_n4
+        assert edges[('truncate_intensity', 'n4_correct')] == [('out_file', 'input_image')]
 
+        # the correction is applied to the ORIGINAL conformed image
+        src = 'anat_conform'
+        into_apply = dict(edges[(src, 'apply_bias')])
+        assert (
+            'in_file' in into_apply.values()
+            or ('out_file', 'in_file') in edges[(src, 'apply_bias')]
+        ), edges[(src, 'apply_bias')]
+        assert edges[('n4_correct', 'apply_bias')] == [('bias_image', 'secondary_file')]
+
+        # and it is apply_bias, not n4_correct, that feeds downstream
+        consumers = [k[1] for k in edges if k[0] == 'apply_bias']
+        assert consumers, 'apply_bias output goes nowhere'
+        assert not any(k[0] == 'n4_correct' and k[1] != 'apply_bias' for k in edges), (
+            'the N4 output image still reaches something downstream'
+        )
+
+        assert nodes['n4_correct'].interface.inputs.save_bias is True
         trunc = nodes['truncate_intensity'].interface.inputs
         assert trunc.operation == 'TruncateImageIntensity'
         assert trunc.secondary_arg == '0.01 0.999 256'
+        assert nodes['apply_bias'].interface.inputs.operation == '/'
 
 
 def test_anatomical_truncation_absent_when_biascorr_is_off(tmp_path):
@@ -192,3 +218,4 @@ def test_anatomical_truncation_absent_when_biascorr_is_off(tmp_path):
     names = {n.name for n in wf._get_all_nodes()}
     assert 'truncate_intensity' not in names
     assert 'n4_correct' not in names
+    assert 'apply_bias' not in names
