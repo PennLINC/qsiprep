@@ -27,6 +27,7 @@ from ...interfaces.mrtrix import (
     DWIDenoise,
     DWIDenoise2,
     MRDeGibbs,
+    MRTrixGradientTable,
     PolarToComplex,
 )
 from ...interfaces.nilearn import MaskEPI, Merge
@@ -418,6 +419,14 @@ def init_dwi_denoising_wf(
 
     # Which steps to apply?
     denoise_method, dwidenoise_params = parse_denoise_method(config.workflow.denoise_method)
+    if denoise_method == 'dwidenoise2' and not use_phase:
+        demodulation = dwidenoise_params.get('demodulate', 'none')
+        if demodulation != 'none':
+            raise ValueError(
+                f'dwidenoise2 cannot apply {demodulation!r} phase demodulation to '
+                'magnitude-only data. Provide phase data or use "demodulate:none".'
+            )
+
     unringing_method = config.workflow.unringing_method
     do_denoise = denoise_method in ('patch2self', 'dwidenoise', 'dwidenoise2')
     do_unringing = config.workflow.unringing_method in ('mrdegibbs', 'rpg')
@@ -426,6 +435,23 @@ def init_dwi_denoising_wf(
     # How many steps in the denoising pipeline
     num_steps = sum(map(int, [do_denoise, do_unringing, do_biascorr, harmonize_b0s]))
     merge_confounds = pe.Node(niu.Merge(num_steps), name='merge_confounds')
+
+    # A single brain mask is shared by the denoising and bias correction steps. It is built
+    # from the raw series because denoising runs first, so the mask cannot be derived from
+    # the output of any earlier step.
+    # ``dwidenoise`` restricts the voxels it processes to this mask, whereas ``dwidenoise2``
+    # has no -mask option, so there the mask only sets the contour drawn on the report.
+    mask_denoiser = denoise_method.startswith('dwidenoise')
+    if mask_denoiser or do_biascorr:
+        get_b0s = pe.Node(ExtractB0s(b0_threshold=config.workflow.b0_threshold), name='get_b0s')
+        quick_mask = pe.Node(MaskEPI(lower_cutoff=0.02), name='quick_mask')
+        workflow.connect([
+            (inputnode, get_b0s, [
+                ('dwi_file', 'dwi_series'),
+                ('bval_file', 'bval_file'),
+            ]),
+            (get_b0s, quick_mask, [('b0_series', 'in_files')]),
+        ])  # fmt:skip
 
     # Add the steps
     step_num = 1  # Merge inputs start at 1
@@ -459,7 +485,11 @@ def init_dwi_denoising_wf(
             )
             auto_str = 'n automatically-determined'
 
-        if denoise_method.startswith('dwidenoise') and use_phase:
+        # Only the dwidenoise variants can denoise complex-valued data.
+        # Any other method ignores the phase data and denoises the magnitude data alone.
+        denoise_complex = denoise_method.startswith('dwidenoise') and use_phase
+
+        if denoise_complex:
             desc += (
                 'Magnitude and phase DWI data were combined into a complex-valued file, '
                 'then denoised using the Marchenko-Pastur PCA method implemented in '
@@ -578,13 +608,28 @@ def init_dwi_denoising_wf(
                 n_procs=omp_nthreads,
             )
 
-        if denoise_method in ('dwidenoise2', 'patch2self'):
+        if denoise_method == 'patch2self':
             workflow.connect([(inputnode, denoiser, [('bval_file', 'bval_file')])])
+        elif denoise_method == 'dwidenoise2':
+            # dwidenoise2 needs the gradient table to demean by shell. The standalone
+            # dwidenoise2 build misreads the two files given to its -fslgrad option, so
+            # supply the gradients as a single MRtrix-format table instead.
+            gradient_table = pe.Node(MRTrixGradientTable(), name='gradient_table')
+            workflow.connect([
+                (inputnode, gradient_table, [
+                    ('bval_file', 'bval_file'),
+                    ('bvec_file', 'bvec_file'),
+                ]),
+                (gradient_table, denoiser, [('gradient_file', 'grad_file')]),
+            ])  # fmt:skip
 
-        if denoise_method == 'dwidenoise2':
-            workflow.connect([(inputnode, denoiser, [('bvec_file', 'bvec_file')])])
+        workflow.connect([
+            (quick_mask, denoiser, [('out_mask', 'mask')])
+            # The noise image is a derivative, so it always comes straight from the denoiser
+            (denoiser, outputnode, [('noise_image', 'noise_image')]),
+        ])  # fmt:skip
 
-        if (denoise_method != 'none') and not use_phase:
+        if not denoise_complex:
             workflow.connect([
                 (buffernodes[-2], denoiser, [('dwi_file', 'in_file')]),
                 (denoiser, ds_report_denoising, [('out_report', 'in_file')]),
@@ -666,19 +711,14 @@ def init_dwi_denoising_wf(
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
-        get_b0s = pe.Node(ExtractB0s(b0_threshold=config.workflow.b0_threshold), name='get_b0s')
-        quick_mask = pe.Node(MaskEPI(lower_cutoff=0.02), name='quick_mask')
-
         # Add buffernode for bias-corrected DWI
         buffernodes.append(get_buffernode())
 
         workflow.connect([
             (buffernodes[-2], biascorr, [('dwi_file', 'in_file')]),
-            (buffernodes[-2], get_b0s, [('dwi_file', 'dwi_series')]),
-            (inputnode, get_b0s, [('bval_file', 'bval_file')]),
-            (get_b0s, quick_mask, [('b0_series', 'in_files')]),
             (quick_mask, biascorr, [('out_mask', 'mask')]),
             (biascorr, buffernodes[-1], [('out_file', 'dwi_file')]),
+            (biascorr, outputnode, [('bias_image', 'bias_image')]),
             (biascorr, ds_report_biascorr, [('out_report', 'in_file')]),
             (biascorr, merge_confounds, [('nmse_text', f'in{step_num}')]),
             (inputnode, biascorr, [

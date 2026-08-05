@@ -84,6 +84,16 @@ def test_parse_denoise_method_rejects_invalid_specs(spec):
         parse_denoise_method(spec)
 
 
+def test_parse_denoise_method_rejects_cuboid_shape():
+    """Reject cuboid kernels, which need an even extent that QSIPrep never produces."""
+    with pytest.raises(ValueError, match='not supported yet'):
+        parse_denoise_method('dwidenoise2;shape:cuboid')
+
+    method, parameters = parse_denoise_method('dwidenoise2;shape:sphere')
+    assert method == 'dwidenoise2'
+    assert parameters == {'shape': 'sphere'}
+
+
 def test_denoise_method_cli_parameter(tmp_path):
     spec = 'dwidenoise2;demodulate:nonlinear;decomposition:bdcsvd'
     opts = _build_parser().parse_args(

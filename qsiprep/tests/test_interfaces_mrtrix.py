@@ -96,3 +96,20 @@ def test_dwidenoise2_kernel_options_are_mutually_exclusive(tmp_path):
             radius=2.5,
             extent=(5, 5, 5),
         )
+
+
+def test_dwidenoise2_formats_fslgrad(tmp_path):
+    """Pass the bvec and bval files to dwidenoise2 as a single -fslgrad option."""
+    in_file = tmp_path / 'dwi.nii.gz'
+    bvec_file = tmp_path / 'dwi.bvec'
+    bval_file = tmp_path / 'dwi.bval'
+    for path in (in_file, bvec_file, bval_file):
+        path.touch()
+
+    interface = mrtrix.DWIDenoise2(
+        in_file=in_file,
+        bvec_file=bvec_file,
+        bval_file=bval_file,
+    )
+
+    assert f'-fslgrad {bvec_file} {bval_file}' in interface.cmdline

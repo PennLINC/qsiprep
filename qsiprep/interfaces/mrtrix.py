@@ -183,7 +183,7 @@ class DWIDenoise(SeriesPreprocReport, MRTrix3Base):
 
 class DWIDenoise2InputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
     in_file = File(exists=True, argstr='%s', position=-2, mandatory=True, desc='input DWI image')
-    mask = File(exists=True, desc='mask image used only to define the visual report contour')
+    mask = File(exists=True, desc='mask image')
     onepass = traits.Bool(argstr='-onepass', desc='estimate noise and denoise in one pass')
     datatype = traits.Enum(
         'float32',
@@ -416,7 +416,9 @@ class DWIDenoise2(SeriesPreprocReport, MRTrix3Base):
         if name in ('extent', 'subsample') and not isinstance(value, int):
             value = ','.join(str(item) for item in value)
         elif name == 'bvec_file':
-            value = (value, self.inputs.bval_file)
+            # -fslgrad takes both files, so format them here rather than passing a tuple
+            # to a File trait, which nipype would try to shell-quote as a single value.
+            return spec.argstr % (value, self.inputs.bval_file)
         return super()._format_arg(name, spec, value)
 
     def _parse_inputs(self, skip=None):

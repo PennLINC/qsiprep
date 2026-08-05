@@ -85,6 +85,10 @@ def parse_denoise_method(spec):
             choices = _DWIDENOISE_ENUM_PARAMETERS[name]
             if value not in choices:
                 raise ValueError(f'Invalid value for {name!r}: {value!r}; choose from {choices}')
+            if name == 'shape' and value == 'cuboid':
+                # dwidenoise2 rejects an odd -extent, but the denoising window is always
+                # rounded up to an odd number, so cuboid kernels can't be used yet.
+                raise ValueError("'shape:cuboid' is not supported yet; use 'shape:sphere' instead")
             parsed_value = value
         elif name == 'onepass':
             bool_values = {'true': True, 'false': False, '1': True, '0': False}
