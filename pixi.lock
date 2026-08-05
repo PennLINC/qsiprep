@@ -6633,7 +6633,7 @@ packages:
   timestamp: 1770223702917
 - pypi: ./
   name: qsiprep
-  version: 26.1.0.dev22+g5d3d201fd.d20260805
+  version: 26.1.0.dev23+g3b3dfa7c4
   sha256: bd7fb016e12de0225e99c652a13d7fbde8f1b2674c0940b098284364e0133e3d
   requires_dist:
   - acres
@@ -6721,7 +6721,7 @@ packages:
   editable: true
 - pypi: ./
   name: qsiprep
-  version: 26.1.0.dev22+g5d3d201fd.d20260805
+  version: 26.1.0.dev23+g3b3dfa7c4
   sha256: bd7fb016e12de0225e99c652a13d7fbde8f1b2674c0940b098284364e0133e3d
   requires_dist:
   - acres
