@@ -184,7 +184,12 @@ class DWIDenoise(SeriesPreprocReport, MRTrix3Base):
 class DWIDenoise2InputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
     in_file = File(exists=True, argstr='%s', position=-2, mandatory=True, desc='input DWI image')
     mask = File(exists=True, desc='mask image')
-    onepass = traits.Bool(argstr='-onepass', desc='estimate noise and denoise in one pass')
+    # The sliding-window kernel and the subsampling factor are properties of the
+    # multi-resolution schedule rather than command-line options
+    schedule = traits.Str(
+        argstr='-schedule %s',
+        desc='name of a bundled noise estimation schedule, or a path to a schedule file',
+    )
     datatype = traits.Enum(
         'float32',
         'float64',
@@ -198,10 +203,11 @@ class DWIDenoise2InputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
         desc='patch decomposition method',
     )
     estimator = traits.Enum(
-        'Exp1',
-        'Exp2',
-        'Med',
-        'MRM2023',
+        'exp1',
+        'exp2',
+        'med',
+        'mrm2023',
+        'tbme2022',
         argstr='-estimator %s',
         desc='noise level estimator',
     )
@@ -215,39 +221,11 @@ class DWIDenoise2InputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
     fixed_rank = traits.Int(
         argstr='-fixed_rank %d', xor=('noise_in',), desc='fixed input signal rank'
     )
-    shape = traits.Enum(
-        'sphere',
-        'cuboid',
-        argstr='-shape %s',
-        desc='sliding spatial window shape',
-    )
-    radius = traits.Float(
-        argstr='-radius %g',
-        xor=('extent',),
-        desc='absolute spherical kernel radius in mm',
-    )
-    aspect_ratio = traits.Float(
-        argstr='-aspect_ratio %g',
-        desc='ratio of kernel voxels to input volumes',
-    )
-    minvoxels = traits.Int(argstr='-minvoxels %d', desc='minimum voxels in a spherical kernel')
-    extent = traits.Either(
-        traits.Int,
-        traits.Tuple(traits.Int, traits.Int, traits.Int),
-        argstr='-extent %s',
-        xor=('radius',),
-        desc='cuboid window size as one integer or a triplet',
-    )
-    subsample = traits.Either(
-        traits.Int,
-        traits.Tuple(traits.Int, traits.Int, traits.Int),
-        argstr='-subsample %s',
-        desc='PCA kernel subsampling factor as one integer or a triplet',
-    )
     demodulate = traits.Enum(
         'none',
         'linear',
-        'nonlinear',
+        'hann',
+        'apc',
         argstr='-demodulate %s',
         desc='phase demodulation mode',
     )
@@ -263,10 +241,28 @@ class DWIDenoise2InputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
         argstr='-demean %s',
         desc='demeaning method before PCA',
     )
-    vst = File(
-        exists=True,
-        argstr='-vst %s',
-        desc='noise map for variance-stabilising transformation',
+    noise_dof = traits.Int(
+        argstr='-noise_dof %d',
+        desc='receive channels combined by sum-of-squares reconstruction of magnitude data',
+    )
+    vst_method = traits.Enum(
+        'none',
+        'linear',
+        'foi',
+        'koay',
+        'mom',
+        argstr='-vst_method %s',
+        desc='variance-stabilising transform applied before PCA',
+    )
+    preserve_noise_bias = traits.Bool(
+        argstr='-preserve_noise_bias',
+        desc='retain the noise-floor bias in magnitude output instead of removing it',
+    )
+    debias_anchor = traits.Enum(
+        'sample',
+        'group_mean',
+        argstr='-debias_anchor %s',
+        desc='operating point at which the variance-stabilising inverse is evaluated',
     )
     preconditioned_input = File(
         argstr='-preconditioned_input %s',
@@ -413,21 +409,11 @@ class DWIDenoise2(SeriesPreprocReport, MRTrix3Base):
     output_spec = DWIDenoise2OutputSpec
 
     def _format_arg(self, name, spec, value):
-        if name in ('extent', 'subsample') and not isinstance(value, int):
-            value = ','.join(str(item) for item in value)
-        elif name == 'bvec_file':
+        if name == 'bvec_file':
             # -fslgrad takes both files, so format them here rather than passing a tuple
             # to a File trait, which nipype would try to shell-quote as a single value.
             return spec.argstr % (value, self.inputs.bval_file)
         return super()._format_arg(name, spec, value)
-
-    def _parse_inputs(self, skip=None):
-        shape = self.inputs.shape if isdefined(self.inputs.shape) else 'sphere'
-        if shape == 'sphere' and isdefined(self.inputs.extent):
-            raise ValueError("'extent' cannot be used when 'shape' is 'sphere'")
-        if shape == 'cuboid' and isdefined(self.inputs.radius):
-            raise ValueError("'radius' cannot be used when 'shape' is 'cuboid'")
-        return super()._parse_inputs(skip=skip)
 
     def _get_plotting_images(self):
         input_dwi = load_img(self.inputs.in_file)

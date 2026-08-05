@@ -14,3 +14,4 @@ DSDTI_FMAP_URL=https://upenn.box.com/shared/static/rxr6qbi6ezku9gw3esfpnvqlcxaw7
 DSCSDSI_FMAP_URL=https://upenn.box.com/shared/static/l561psez1ojzi4p3a12eidaw9vbizwdc.gz
 MATERNAL_BRAIN_PROJECT_URL=https://upenn.box.com/shared/static/tkahg1ctipmfihvpa1gmibvcv0gb721h.xz
 FORREST_GUMP_URL=https://upenn.box.com/shared/static/qat58an322bzzyixrrsk7cmf52q3bepq.xz
+NIBS_URL=https://upenn.box.com/shared/static/bkllff4ik51jy9ju6nben2r5zrq4a5me.xz

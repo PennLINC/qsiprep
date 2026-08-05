@@ -393,11 +393,13 @@ def _build_parser(**kwargs):
         help=(
             'Window size in voxels for image-based denoising: odd integer or "auto". '
             'Any non-"auto" value must be an odd, positive integer. '
-            'If using the "dwidenoise" denoising method, '
-            'the "auto" option will calculate a window size '
+            'This argument only applies to the "dwidenoise" denoising method, '
+            'where the "auto" option will calculate a window size '
             'based on the number of volumes according to the method described by the '
             'dwidenoise documentation. '
-            'If using the "patch2self" denoising method, this argument will not be used.'
+            'It is not used by the "patch2self" or "dwidenoise2" methods: dwidenoise2 sizes '
+            'its patches per iteration from its multi-resolution schedule, which is selected '
+            'with "dwidenoise2;schedule:<name>" instead.'
         ),
     )
     g_conf.add_argument(
@@ -675,6 +677,32 @@ How to combine images across distorted groups.
     return parser
 
 
+def check_denoise_window(denoise_method, dwi_denoise_window):
+    """Report a ``--dwi-denoise-window`` that the selected denoising method will ignore.
+
+    Only ``dwidenoise`` takes a window size. Leaving the others to silently ignore it would
+    hide a request that never took effect.
+    """
+    if dwi_denoise_window == 'auto':
+        # The default, so an unused value is not a sign that anything was misunderstood
+        return
+
+    if denoise_method == 'patch2self':
+        config.loggers.cli.error(
+            'The --dwi-denoise-window option is not used when --denoise-method=patch2self'
+        )
+    elif denoise_method == 'dwidenoise2':
+        config.loggers.cli.warning(
+            'The --dwi-denoise-window option is not used when --denoise-method=dwidenoise2. '
+            'dwidenoise2 sizes its patches per iteration from its multi-resolution schedule, '
+            'which can be selected with "dwidenoise2;schedule:<name>" instead.'
+        )
+    elif denoise_method == 'none':
+        config.loggers.cli.warning(
+            'The --dwi-denoise-window option is not used when --denoise-method=none'
+        )
+
+
 def parse_args(args=None, namespace=None):
     """Parse args and run further checks on the command line."""
     import logging
@@ -767,15 +795,7 @@ def parse_args(args=None, namespace=None):
 
     # Validate the tricky options here
     denoise_method, _ = parse_denoise_method(config.workflow.denoise_method)
-    if config.workflow.dwi_denoise_window != 'auto':
-        if denoise_method == 'patch2self':
-            config.loggers.cli.error(
-                'The --dwi-denoise-window option is not used when --denoise-method=patch2self'
-            )
-        elif denoise_method == 'none':
-            config.loggers.cli.warning(
-                'The --dwi-denoise-window option is not used when --denoise-method=none'
-            )
+    check_denoise_window(denoise_method, config.workflow.dwi_denoise_window)
 
     bids_dir = config.execution.bids_dir
     output_dir = config.execution.output_dir

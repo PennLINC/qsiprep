@@ -383,6 +383,7 @@ jobs:
             echo "export DSCSDSI_FMAP_URL=$DSCSDSI_FMAP_URL" >> "$BASH_ENV"
             echo "export MATERNAL_BRAIN_PROJECT_URL=$MATERNAL_BRAIN_PROJECT_URL" >> "$BASH_ENV"
             echo "export FORREST_GUMP_URL=$FORREST_GUMP_URL" >> "$BASH_ENV"
+            echo "export NIBS_URL=$NIBS_URL" >> "$BASH_ENV"
       - run:
           name: Download integration datasets
           command: |
@@ -423,6 +424,7 @@ jobs:
             download_one DSCSDSI_fmap "$DSCSDSI_FMAP_URL"
             download_one maternal_brain_project "$MATERNAL_BRAIN_PROJECT_URL"
             download_one forrest_gump "$FORREST_GUMP_URL"
+            download_one nibs "$NIBS_URL"
       - save_cache:
           key: data-v2-{{ checksum ".circleci/data_versions.txt" }}
           paths:

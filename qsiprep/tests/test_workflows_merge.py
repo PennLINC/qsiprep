@@ -43,18 +43,9 @@ def test_dwidenoise_workflow_uses_dwidenoise(monkeypatch, use_phase):
     assert denoiser.inputs.nthreads == 1
 
 
-@pytest.mark.parametrize(
-    ('denoise_method', 'kernel_input'),
-    [
-        # dwidenoise takes a cuboid extent, while dwidenoise2 defaults to a spherical
-        # kernel, which is sized with a radius instead
-        ('dwidenoise', {'extent': (5, 5, 5)}),
-        ('dwidenoise2', {'radius': 5.0}),
-    ],
-)
-def test_dwidenoise_workflow_resolves_auto_window(monkeypatch, denoise_method, kernel_input):
-    """Resolve the default ``auto`` window size for every dwidenoise variant."""
-    monkeypatch.setattr(config.workflow, 'denoise_method', denoise_method)
+def test_dwidenoise_workflow_resolves_auto_window(monkeypatch):
+    """Resolve the default ``auto`` window size into a cuboid extent for dwidenoise."""
+    monkeypatch.setattr(config.workflow, 'denoise_method', 'dwidenoise')
     monkeypatch.setattr(config.workflow, 'dwi_denoise_window', 'auto')
     monkeypatch.setattr(config.workflow, 'unringing_method', 'none')
     monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
@@ -72,8 +63,36 @@ def test_dwidenoise_workflow_resolves_auto_window(monkeypatch, denoise_method, k
     denoiser = workflow.get_node('denoiser')
 
     # cbrt(30) rounded up to the closest odd integer
-    for name, value in kernel_input.items():
-        assert getattr(denoiser.inputs, name) == value
+    assert denoiser.inputs.extent == (5, 5, 5)
+
+
+def test_dwidenoise2_workflow_ignores_denoise_window(monkeypatch):
+    """Leave the kernel to dwidenoise2's schedule rather than the requested window.
+
+    dwidenoise2 sizes its patches per iteration from its multi-resolution schedule and
+    exposes no kernel options, so ``--dwi-denoise-window`` cannot apply to it.
+    """
+    monkeypatch.setattr(config.workflow, 'denoise_method', 'dwidenoise2')
+    monkeypatch.setattr(config.workflow, 'dwi_denoise_window', 5)
+    monkeypatch.setattr(config.workflow, 'unringing_method', 'none')
+    monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
+    monkeypatch.setattr(config.workflow, 'b0_threshold', 100)
+    monkeypatch.setattr(config.nipype, 'omp_nthreads', 1)
+
+    workflow = init_dwi_denoising_wf(
+        source_file='sub-01_dwi.nii.gz',
+        partial_fourier=1.0,
+        phase_encoding_direction='j',
+        n_volumes=30,
+        use_phase=False,
+        do_biascorr=False,
+    )
+    denoiser = workflow.get_node('denoiser')
+
+    for removed in ('shape', 'radius', 'extent', 'subsample'):
+        assert not hasattr(denoiser.inputs, removed)
+    # No schedule is requested either, so dwidenoise2 uses its bundled default
+    assert not isdefined(denoiser.inputs.schedule)
 
 
 def test_dwidenoise2_cli_parameters_reach_workflow(monkeypatch):
@@ -81,7 +100,7 @@ def test_dwidenoise2_cli_parameters_reach_workflow(monkeypatch):
     monkeypatch.setattr(
         config.workflow,
         'denoise_method',
-        'dwidenoise2;demodulate:nonlinear;decomposition:bdcsvd',
+        'dwidenoise2;demodulate:hann;decomposition:bdcsvd',
     )
     monkeypatch.setattr(config.workflow, 'dwi_denoise_window', 5)
     monkeypatch.setattr(config.workflow, 'unringing_method', 'none')
@@ -100,14 +119,14 @@ def test_dwidenoise2_cli_parameters_reach_workflow(monkeypatch):
     )
     denoiser = workflow.get_node('denoiser')
 
-    assert denoiser.inputs.demodulate == 'nonlinear'
+    assert denoiser.inputs.demodulate == 'hann'
     assert denoiser.inputs.decomposition == 'bdcsvd'
     # Parameters that weren't requested are left at the dwidenoise2 defaults
-    assert not isdefined(denoiser.inputs.onepass)
-    assert not isdefined(denoiser.inputs.subsample)
+    assert not isdefined(denoiser.inputs.estimator)
+    assert not isdefined(denoiser.inputs.schedule)
 
 
-@pytest.mark.parametrize('denoise_method', ['dwidenoise', 'dwidenoise2'])
+@pytest.mark.parametrize('denoise_method', ['dwidenoise', 'dwidenoise2', 'patch2self'])
 def test_denoising_wf_builds_one_mask_for_denoising_and_biascorr(monkeypatch, denoise_method):
     """Build the brain mask once and hand it to both the denoiser and bias correction."""
     monkeypatch.setattr(config.workflow, 'denoise_method', denoise_method)
@@ -147,7 +166,7 @@ def test_denoising_wf_builds_one_mask_for_denoising_and_biascorr(monkeypatch, de
     }
 
 
-@pytest.mark.parametrize('demodulate', ['linear', 'nonlinear'])
+@pytest.mark.parametrize('demodulate', ['linear', 'hann', 'apc'])
 def test_dwidenoise2_rejects_demodulation_without_phase(monkeypatch, demodulate):
     """Reject phase demodulation unless phase data are available.
 
@@ -185,7 +204,7 @@ def _run_denoising_wf(
     use_phase,
     dwi_denoise_window='auto',
 ):
-    """Build and execute a denoising workflow on the nibs-ci DWI series.
+    """Build and execute a denoising workflow on the nibs DWI series.
 
     Unringing, bias correction and b=0 harmonization are all disabled so that only the
     denoising step is exercised.
@@ -255,14 +274,12 @@ def _sink_output(sink_dir, field):
     return matches[0]
 
 
-def _assert_denoiser_is_masked(nodes, denoise_method, raw_file):
-    """Check that the dwidenoise variants are handed a brain mask built from the raw data."""
-    uses_mask = denoise_method.startswith('dwidenoise')
-    assert ('quick_mask' in nodes) is uses_mask
-    if not uses_mask:
-        assert not isdefined(nodes['denoiser'].inputs.mask)
-        return
+def _assert_denoiser_is_masked(nodes, raw_file):
+    """Check that the denoiser is handed a brain mask built from the raw data.
 
+    Every method gets the mask. ``dwidenoise`` restricts the voxels it processes to it,
+    while ``dwidenoise2`` and ``patch2self`` use it only for the report contour.
+    """
     mask_file = nodes['quick_mask'].result.outputs.out_mask
     assert nodes['denoiser'].inputs.mask == mask_file
 
@@ -312,19 +329,15 @@ def _assert_denoising_outputs(nodes, sink_dir, raw_file):
         pytest.param(
             'dwidenoise', 'auto', mrtrix.DWIDenoise, {'extent': (5, 5, 5)}, id='dwidenoise_auto'
         ),
+        # Every option is left at its default, so the bundled 'default' schedule sizes the
+        # kernel and the mrm2023 estimator is used
+        pytest.param('dwidenoise2', 'auto', mrtrix.DWIDenoise2, {}, id='dwidenoise2_default'),
         pytest.param(
-            'dwidenoise2',
+            'dwidenoise2;decomposition:selfadjoint',
             'auto',
             mrtrix.DWIDenoise2,
-            {'shape': 'sphere', 'radius': 5.0},
-            id='dwidenoise2_sphere',
-        ),
-        pytest.param(
-            'dwidenoise2;decomposition:bdcsvd',
-            'auto',
-            mrtrix.DWIDenoise2,
-            {'decomposition': 'bdcsvd'},
-            id='dwidenoise2_bdcsvd',
+            {'decomposition': 'selfadjoint'},
+            id='dwidenoise2_selfadjoint',
         ),
         pytest.param(
             'dwidenoise2;filter_method:optthresh',
@@ -334,19 +347,20 @@ def _assert_denoising_outputs(nodes, sink_dir, raw_file):
             id='dwidenoise2_optthresh',
         ),
         pytest.param(
-            'dwidenoise2;estimator:MRM2023',
+            'dwidenoise2;estimator:exp2',
             'auto',
             mrtrix.DWIDenoise2,
-            {'estimator': 'MRM2023'},
-            id='dwidenoise2_mrm2023',
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason=(
-                    'the MRM2023 estimator returns a noise map with negative values '
-                    '(~41% of voxels, down to -15.7 on this series), while every other '
-                    'estimator stays positive'
-                ),
-            ),
+            {'estimator': 'exp2'},
+            id='dwidenoise2_exp2',
+        ),
+        # A named schedule only resolves if the bundled schedules were installed alongside
+        # the executable, so this also covers the container build
+        pytest.param(
+            'dwidenoise2;schedule:legacy',
+            'auto',
+            mrtrix.DWIDenoise2,
+            {'schedule': 'legacy'},
+            id='dwidenoise2_legacy_schedule',
         ),
         pytest.param('patch2self', 'auto', Patch2Self, {}, id='patch2self'),
     ],
@@ -379,7 +393,7 @@ def test_denoising_wf_magnitude(
     assert 'combine_complex' not in nodes
     assert 'split_complex' not in nodes
 
-    _assert_denoiser_is_masked(nodes, denoise_method, nibs_dwi['dwi_file'])
+    _assert_denoiser_is_masked(nodes, nibs_dwi['dwi_file'])
     _assert_denoising_outputs(nodes, sink_dir, nibs_dwi['dwi_file'])
 
 
@@ -387,11 +401,11 @@ def test_denoising_wf_magnitude(
     ('denoise_method', 'interface', 'expected_inputs'),
     [
         pytest.param('dwidenoise', mrtrix.DWIDenoise, {'extent': (5, 5, 5)}, id='dwidenoise'),
-        pytest.param('dwidenoise2', mrtrix.DWIDenoise2, {'shape': 'sphere'}, id='dwidenoise2'),
+        pytest.param('dwidenoise2', mrtrix.DWIDenoise2, {}, id='dwidenoise2'),
         pytest.param(
-            'dwidenoise2;demodulate:nonlinear',
+            'dwidenoise2;demodulate:hann',
             mrtrix.DWIDenoise2,
-            {'demodulate': 'nonlinear'},
+            {'demodulate': 'hann'},
             id='dwidenoise2_demodulate',
         ),
         pytest.param('patch2self', Patch2Self, {}, id='patch2self_ignores_phase'),
@@ -431,5 +445,5 @@ def test_denoising_wf_complex(
         complex_img = nb.load(nodes['combine_complex'].result.outputs.out_file)
         assert np.issubdtype(complex_img.header.get_data_dtype(), np.complexfloating)
 
-    _assert_denoiser_is_masked(nodes, denoise_method, nibs_dwi['dwi_file'])
+    _assert_denoiser_is_masked(nodes, nibs_dwi['dwi_file'])
     _assert_denoising_outputs(nodes, sink_dir, nibs_dwi['dwi_file'])

@@ -4,6 +4,7 @@ import os
 
 import nibabel as nb
 import pytest
+from traits.trait_errors import TraitError
 
 from qsiprep.interfaces import mrtrix
 
@@ -45,10 +46,6 @@ def test_dwidenoise2(datasets, tmp_path_factory):
     in_img = nb.load(in_file)
 
     interface = mrtrix.DWIDenoise2(
-        shape='sphere',
-        radius=3,
-        onepass=True,
-        subsample=1,
         in_file=in_file,
         nthreads=1,
     )
@@ -68,34 +65,26 @@ def test_dwidenoise2(datasets, tmp_path_factory):
 
 
 @pytest.mark.parametrize(
-    ('shape', 'kernel_option', 'error'),
-    [
-        ('sphere', {'extent': (5, 5, 5)}, "'extent' cannot be used"),
-        ('cuboid', {'radius': 2.5}, "'radius' cannot be used"),
-    ],
+    'kernel_option',
+    ['shape', 'radius', 'extent', 'aspect_ratio', 'minvoxels', 'subsample', 'onepass'],
 )
-def test_dwidenoise2_kernel_shape_validation(tmp_path, shape, kernel_option, error):
-    """Reject kernel options that do not apply to the selected shape."""
-    in_file = tmp_path / 'dwi.nii.gz'
-    in_file.touch()
-    interface = mrtrix.DWIDenoise2(in_file=in_file, shape=shape, **kernel_option)
-
-    with pytest.raises(ValueError, match=error):
-        _ = interface.cmdline
-
-
-def test_dwidenoise2_kernel_options_are_mutually_exclusive(tmp_path):
-    """Reject simultaneous spherical and cuboid kernel size options."""
+def test_dwidenoise2_has_no_kernel_options(tmp_path, kernel_option):
+    """The kernel and subsampling come from the schedule, not from command-line options."""
     in_file = tmp_path / 'dwi.nii.gz'
     in_file.touch()
 
-    with pytest.raises(OSError, match='mutually exclusive'):
-        mrtrix.DWIDenoise2(
-            in_file=in_file,
-            shape='sphere',
-            radius=2.5,
-            extent=(5, 5, 5),
-        )
+    with pytest.raises(TraitError, match='undefined'):
+        mrtrix.DWIDenoise2(in_file=in_file, **{kernel_option: 1})
+
+
+def test_dwidenoise2_passes_schedule(tmp_path):
+    """Select a bundled noise estimation schedule by name."""
+    in_file = tmp_path / 'dwi.nii.gz'
+    in_file.touch()
+
+    interface = mrtrix.DWIDenoise2(in_file=in_file, schedule='vlarge')
+
+    assert '-schedule vlarge' in interface.cmdline
 
 
 def test_dwidenoise2_formats_fslgrad(tmp_path):

@@ -8,33 +8,40 @@ import numpy as np
 
 LOGGER = logging.getLogger('nipype.interface')
 
+# The sliding-window kernel and the subsampling factor are no longer command-line options:
+# they are properties of the multi-resolution schedule, chosen with 'schedule'. QSIPrep uses
+# the bundled 'default' schedule unless one is requested, so --dwi-denoise-window does not
+# apply to dwidenoise2.
 _DWIDENOISE_ENUM_PARAMETERS = {
-    'datatype': ('float32', 'float64'),
-    'decomposition': ('bdcsvd', 'selfadjoint'),
-    'estimator': ('Exp1', 'Exp2', 'Med', 'MRM2023'),
-    'shape': ('sphere', 'cuboid'),
-    'demodulate': ('none', 'linear', 'nonlinear'),
-    'demean': ('none', 'volume_groups', 'shells', 'all'),
-    'filter_method': ('optshrink', 'optthresh', 'truncate'),
     'aggregator': ('exclusive', 'gaussian', 'invl0', 'rank', 'uniform'),
+    'datatype': ('float32', 'float64'),
+    'debias_anchor': ('sample', 'group_mean'),
+    'decomposition': ('bdcsvd', 'selfadjoint'),
+    'demean': ('none', 'volume_groups', 'shells', 'all'),
+    'demodulate': ('none', 'linear', 'hann', 'apc'),
+    'estimator': ('exp1', 'exp2', 'med', 'mrm2023', 'tbme2022'),
+    'filter_method': ('optshrink', 'optthresh', 'truncate'),
+    'vst_method': ('none', 'linear', 'foi', 'koay', 'mom'),
 }
 _DWIDENOISE_STRING_PARAMETERS = {
     'demod_axes',
-    'vst',
+    'eigenspectra',
+    'lamplus',
+    'max_dist',
+    'noise_image',
+    'patchcount',
     'preconditioned_input',
     'preconditioned_output',
-    'noise_image',
-    'lamplus',
-    'rank_pcanonzero',
     'rank_input',
     'rank_output',
-    'variance_removed',
-    'eigenspectra',
-    'max_dist',
-    'voxelcount',
-    'patchcount',
+    'rank_pcanonzero',
+    'rankpermm_in',
+    'rankpermm_out',
+    'schedule',
     'sum_aggregation',
     'sum_optshrink',
+    'variance_removed',
+    'voxelcount',
     'grad_file',
     'bvec_file',
     'bval_file',
@@ -43,24 +50,30 @@ _DWIDENOISE_PARAMETERS = (
     set(_DWIDENOISE_ENUM_PARAMETERS)
     | _DWIDENOISE_STRING_PARAMETERS
     | {
-        'onepass',
-        'noise_in',
+        'aggregator_fwhm',
         'fixed_rank',
-        'radius',
-        'aspect_ratio',
-        'minvoxels',
-        'extent',
-        'subsample',
+        'noise_dof',
+        'noise_in',
+        'preserve_noise_bias',
         'residual_statistics',
     }
 )
 
 
-def parse_denoise_method(spec):
+def parse_denoise_method(spec, use_phase=None):
     """Parse a denoising method and semicolon-delimited parameters.
 
     Parameters for dwidenoise2 use ``name:value`` syntax, for example
-    ``dwidenoise2;demodulate:nonlinear;decomposition:bdcsvd``.
+    ``dwidenoise2;demodulate:apc;decomposition:bdcsvd``.
+
+    Parameters
+    ----------
+    spec : str
+        The ``--denoise-method`` specification.
+    use_phase : bool or None
+        Whether phase data are available for the series being denoised. ``None`` means
+        that is not known yet, as when the CLI validates the specification before any
+        scan has been selected, and skips the checks that depend on it.
     """
     elements = spec.split(';')
     method = elements[0].strip()
@@ -85,31 +98,22 @@ def parse_denoise_method(spec):
             choices = _DWIDENOISE_ENUM_PARAMETERS[name]
             if value not in choices:
                 raise ValueError(f'Invalid value for {name!r}: {value!r}; choose from {choices}')
-            if name == 'shape' and value == 'cuboid':
-                # dwidenoise2 rejects an odd -extent, but the denoising window is always
-                # rounded up to an odd number, so cuboid kernels can't be used yet.
-                raise ValueError("'shape:cuboid' is not supported yet; use 'shape:sphere' instead")
             parsed_value = value
-        elif name == 'onepass':
+        elif name == 'preserve_noise_bias':
             bool_values = {'true': True, 'false': False, '1': True, '0': False}
             try:
                 parsed_value = bool_values[value.lower()]
             except KeyError as exc:
                 raise ValueError(f'Invalid boolean value for {name!r}: {value!r}') from exc
-        elif name in ('fixed_rank', 'minvoxels'):
+        elif name in ('fixed_rank', 'noise_dof'):
             parsed_value = int(value)
-        elif name in ('radius', 'aspect_ratio'):
+        elif name == 'aggregator_fwhm':
             parsed_value = float(value)
         elif name == 'noise_in':
             try:
                 parsed_value = float(value)
             except ValueError:
                 parsed_value = value
-        elif name in ('extent', 'subsample'):
-            values = tuple(int(item.strip()) for item in value.split(','))
-            if len(values) not in (1, 3):
-                raise ValueError(f'{name!r} must contain one or three integers')
-            parsed_value = values[0] if len(values) == 1 else values
         elif name == 'residual_statistics':
             parsed_value = tuple(item.strip() for item in value.split(','))
             if len(parsed_value) != 3 or not all(parsed_value):
@@ -119,7 +123,188 @@ def parse_denoise_method(spec):
 
         parameters[name] = parsed_value
 
+    if method == 'dwidenoise2' and use_phase is False:
+        demodulation = parameters.get('demodulate', 'none')
+        if demodulation != 'none':
+            raise ValueError(
+                f'dwidenoise2 cannot apply {demodulation!r} phase demodulation to '
+                'magnitude-only data. Provide phase data or use "demodulate:none".'
+            )
+
     return method, parameters
+
+
+_DWIDENOISE2_DEFAULTS = {
+    # Defaults of the dwidenoise2 build QSIPrep ships, read from its source. The boilerplate
+    # describes these too, so that the methods reflect what actually ran rather than only the
+    # parameters QSIPrep set explicitly.
+    'aggregator': 'gaussian',
+    'decomposition': 'bdcsvd',
+    # 'apc' is the default for complex data; magnitude data are never demodulated
+    'demodulate': 'apc',
+    # 'shells' is the default whenever a gradient table is available, which QSIPrep always
+    # supplies
+    'demean': 'shells',
+    'estimator': 'mrm2023',
+    'schedule': 'default',
+}
+
+_DWIDENOISE2_ESTIMATORS = {
+    'exp1': 'the Marchenko-Pastur threshold search of the original `dwidenoise` [@dwidenoise1]',
+    'exp2': 'a refined Marchenko-Pastur threshold search [@cordero2019complex]',
+    'med': 'the median eigenvalue [@gavish2014]',
+    'mrm2023': 'a Marchenko-Pastur fit generalized to multi-dimensional data [@olesen2023]',
+    'tbme2022': 'a multiple-moment generalized quarter-circle estimator [@zhu2022]',
+}
+
+_DWIDENOISE2_FILTERS = {
+    'optshrink': (
+        'optimal shrinkage of the singular values, which minimizes the Frobenius norm '
+        '[@cordero2019complex]'
+    ),
+    'optthresh': 'an optimal hard threshold on the singular values [@gavish2014]',
+    'truncate': 'hard truncation, as in the original `dwidenoise` [@dwidenoise1]',
+}
+
+_DWIDENOISE2_DEMODULATION = {
+    'apc': (
+        'noise-adaptive phase correction, which re-estimates the background phase at every '
+        'noise level iteration [@pizzolato2020]'
+    ),
+    'hann': 'a fixed nonlinear phase estimate from a Hann-windowed k-space filter [@patron2024]',
+    'linear': 'a strictly linear phase term regressed from each k-space [@cordero2019complex]',
+}
+
+_DWIDENOISE2_DEMEAN = {
+    'shells': 'the mean signal of each *b*-value shell was regressed out',
+    'volume_groups': 'the mean signal of each volume group was regressed out',
+    'all': 'the mean signal across all volumes was regressed out',
+}
+
+
+def _join_clauses(clauses):
+    """Join clauses into a comma-separated list with a trailing 'and'."""
+    if len(clauses) == 1:
+        return clauses[0]
+
+    return f'{", ".join(clauses[:-1])} and {clauses[-1]}'
+
+
+def describe_dwidenoise2(parameters, complex_data):
+    """Describe a ``dwidenoise2`` call for the methods boilerplate.
+
+    ``dwidenoise2`` applies a number of methods beyond the original ``dwidenoise``, most of
+    them on by default, and each carries its own citation. Describing only the parameters
+    QSIPrep passed explicitly would therefore both understate what ran and omit references
+    the authors ask for, so unset options are described using the defaults of the shipped
+    build. The conditions attached to each citation follow the reference list that
+    ``dwidenoise2`` prints in its own help.
+
+    Parameters
+    ----------
+    parameters : dict
+        DWIDenoise2 parameters, as returned by :func:`parse_denoise_method`.
+    complex_data : bool
+        Whether ``dwidenoise2`` is run on complex-valued data. Phase demodulation only
+        applies to complex data, and only magnitude data need a nonlinear
+        variance-stabilizing transform.
+
+    Returns
+    -------
+    str
+        Boilerplate text with inline ``[@citation]`` keys, beginning with 'denoised using'
+        so that the caller can supply its own subject.
+    """
+    used = {**_DWIDENOISE2_DEFAULTS, **parameters}
+    # The kernel size and the number of PCAs are set per iteration by the schedule rather
+    # than by a fixed window
+    schedule = used['schedule']
+    schedule_desc = (
+        'its default schedule' if schedule == 'default' else f'the {schedule!r} schedule'
+    )
+
+    sentences = [
+        'denoised using the Marchenko-Pastur PCA method [@dwidenoise1; @dwidenoise2] as '
+        'implemented in `dwidenoise2` [@dwidenoise2software; @cordero2019complex], which '
+        'estimates the noise level over a multi-resolution series of iterations following '
+        f'{schedule_desc}, sizing the sliding-window patch for noise estimation and for '
+        'denoising separately.'
+    ]
+
+    preconditioning = []
+    if complex_data and used['demodulate'] != 'none':
+        demodulation = _DWIDENOISE2_DEMODULATION[used['demodulate']]
+        preconditioning.append(
+            f'the complex-valued data were phase-demodulated using {demodulation}'
+        )
+    if used['demean'] != 'none':
+        preconditioning.append(_DWIDENOISE2_DEMEAN[used['demean']])
+
+    # Complex data are Gaussian, so they always take the linear transform; magnitude data
+    # get a nonlinear one to account for the non-central chi noise distribution
+    vst_method = used.get('vst_method', 'linear' if complex_data else 'foi')
+    if not complex_data and vst_method in ('foi', 'koay', 'mom'):
+        vst = (
+            'a nonlinear variance-stabilizing transform was applied to render the '
+            'non-central chi distributed magnitude data approximately Gaussian and '
+            'homoscedastic [@foi2011; @ma2020]'
+        )
+        if vst_method == 'koay':
+            vst += ', inverted with an analytically exact correction scheme [@koay2006]'
+        if 'noise_dof' in used:
+            vst += f', assuming {used["noise_dof"]} receive channels'
+        preconditioning.append(vst)
+    elif vst_method == 'linear':
+        preconditioning.append('the data were scaled by the local noise level')
+
+    if preconditioning:
+        sentences.append(f'Prior to PCA, {_join_clauses(preconditioning)}.')
+
+    decomposition = (
+        'a bidirectional divide-and-conquer SVD'
+        if used['decomposition'] == 'bdcsvd'
+        else 'a self-adjoint eigendecomposition'
+    )
+    if 'noise_in' in used:
+        estimation = 'the noise level was taken from a pre-estimated noise map'
+    elif 'fixed_rank' in used:
+        estimation = f'the signal rank was fixed at {used["fixed_rank"]}'
+    else:
+        estimation = (
+            'the noise level was estimated from the eigenspectrum using '
+            f'{_DWIDENOISE2_ESTIMATORS[used["estimator"]]}'
+        )
+    sentences.append(f'Each patch was decomposed with {decomposition}, and {estimation}.')
+
+    # dwidenoise2 truncates rather than shrinks when the rank is given rather than estimated
+    default_filter = 'truncate' if 'fixed_rank' in used else 'optshrink'
+    filter_method = used.get('filter_method', default_filter)
+    reconstruction = (
+        f'Component contributions were filtered by {_DWIDENOISE2_FILTERS[filter_method]}'
+    )
+    if used['aggregator'] == 'exclusive':
+        reconstruction += (
+            ', and each voxel was reconstructed solely from the patch centered on it.'
+        )
+    elif used['aggregator'] == 'gaussian':
+        reconstruction += (
+            ', and each voxel was reconstructed from every overlapping patch, weighted by a '
+            'Gaussian function of its distance to each patch center [@manjon2013].'
+        )
+    else:
+        reconstruction += (
+            ', and each voxel was reconstructed from every overlapping patch, combined with '
+            f'{used["aggregator"]} weighting [@manjon2013].'
+        )
+    sentences.append(reconstruction)
+
+    if not complex_data and not used.get('preserve_noise_bias', False):
+        sentences.append(
+            'The inverse transform was evaluated at the exact-unbiased operating point, '
+            'removing the noise-floor bias from the denoised magnitude data.'
+        )
+
+    return ' '.join(sentences) + ' '
 
 
 def safe_unit_vector(vector):
