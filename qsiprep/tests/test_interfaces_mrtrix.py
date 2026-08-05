@@ -3,10 +3,16 @@
 import os
 
 import nibabel as nb
+import numpy as np
 import pytest
 from traits.trait_errors import TraitError
 
 from qsiprep.interfaces import mrtrix
+
+
+def _field_of_view(img):
+    """Return the spatial extent of an image in mm."""
+    return np.array(img.shape[:3]) * np.array(img.header.get_zooms()[:3])
 
 
 def test_dwidenoise(datasets, tmp_path_factory):
@@ -57,8 +63,17 @@ def test_dwidenoise2(datasets, tmp_path_factory):
 
     assert os.path.isfile(results.outputs.noise_image)
     noise_img = nb.load(results.outputs.noise_image)
-    assert noise_img.shape == in_img.shape[:3]
     assert noise_img.ndim == 3
+    # dwidenoise2 estimates the noise level on a subsampled grid, so the noise map is
+    # coarser than the input rather than voxel-for-voxel with it, and the subsampling
+    # factor is a property of the schedule rather than something QSIPrep sets.
+    assert all(n <= i for n, i in zip(noise_img.shape, in_img.shape[:3], strict=True))
+    # Whatever factor the schedule uses, the coarse grid has to cover the input: its
+    # extent is the input's rounded up to a whole number of its own (larger) voxels, so
+    # it can never fall short, nor overshoot by a full voxel.
+    overshoot = _field_of_view(noise_img) - _field_of_view(in_img)
+    assert np.all(overshoot > -1e-4)
+    assert np.all(overshoot < np.array(noise_img.header.get_zooms()[:3]))
 
     assert os.path.isfile(results.outputs.out_report)
     assert os.path.isfile(results.outputs.nmse_text)
