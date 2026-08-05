@@ -52,6 +52,8 @@ dependencies = [
     "pytest-xdist",
     "templateflow",
     "tensorflow[and-cuda]",
+    # FreeSurfer's mri_synthseg requires Keras 2 (see SynthSeg interface)
+    "tf-keras",
     "torch",
 ]
 dynamic = ["version"]

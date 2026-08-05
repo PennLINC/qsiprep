@@ -410,6 +410,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/df/9a/f5b1f4b2c08295ae1cb8760d1fb6043485459f0d8c107dd900e76a6ba25d/tensorflow-2.17.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/66/7f/e36ae148c2f03d61ca1bff24bc13a0fef6d6825c966abef73fc6f880a23b/tensorflow_io_gcs_filesystem-0.37.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/33/d1/8bb87d21e9aeb323cc03034f5eaf2c8f69841e40e4853c2627edf8111ed3/termcolor-3.3.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/21/8b/75f7572ec0273ed8da50bc19defe08aaaafcc15fda3407db53f49acec814/tf_keras-2.17.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/32/d5/f9a850d79b0851d1d4ef6456097579a9005b31fea68726a4ae5f2d82ddd9/threadpoolctl-3.6.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/5d/06/bd0a6097da704a7a7c34a94cfd771c3ea3c2f405dd214e790d22c93f6be1/tifffile-2025.5.10-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/01/79/1f2d34ad7034ee1c7ffc1cf8bf0f8213af2a81df6ecdb3997ecec107c09d/torch-2.13.0-cp311-cp311-manylinux_2_28_x86_64.whl
@@ -861,6 +862,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/df/9a/f5b1f4b2c08295ae1cb8760d1fb6043485459f0d8c107dd900e76a6ba25d/tensorflow-2.17.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/66/7f/e36ae148c2f03d61ca1bff24bc13a0fef6d6825c966abef73fc6f880a23b/tensorflow_io_gcs_filesystem-0.37.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/33/d1/8bb87d21e9aeb323cc03034f5eaf2c8f69841e40e4853c2627edf8111ed3/termcolor-3.3.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/21/8b/75f7572ec0273ed8da50bc19defe08aaaafcc15fda3407db53f49acec814/tf_keras-2.17.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/32/d5/f9a850d79b0851d1d4ef6456097579a9005b31fea68726a4ae5f2d82ddd9/threadpoolctl-3.6.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/5d/06/bd0a6097da704a7a7c34a94cfd771c3ea3c2f405dd214e790d22c93f6be1/tifffile-2025.5.10-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/01/79/1f2d34ad7034ee1c7ffc1cf8bf0f8213af2a81df6ecdb3997ecec107c09d/torch-2.13.0-cp311-cp311-manylinux_2_28_x86_64.whl
@@ -1288,6 +1290,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/df/9a/f5b1f4b2c08295ae1cb8760d1fb6043485459f0d8c107dd900e76a6ba25d/tensorflow-2.17.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/66/7f/e36ae148c2f03d61ca1bff24bc13a0fef6d6825c966abef73fc6f880a23b/tensorflow_io_gcs_filesystem-0.37.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/33/d1/8bb87d21e9aeb323cc03034f5eaf2c8f69841e40e4853c2627edf8111ed3/termcolor-3.3.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/21/8b/75f7572ec0273ed8da50bc19defe08aaaafcc15fda3407db53f49acec814/tf_keras-2.17.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/32/d5/f9a850d79b0851d1d4ef6456097579a9005b31fea68726a4ae5f2d82ddd9/threadpoolctl-3.6.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/5d/06/bd0a6097da704a7a7c34a94cfd771c3ea3c2f405dd214e790d22c93f6be1/tifffile-2025.5.10-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/01/79/1f2d34ad7034ee1c7ffc1cf8bf0f8213af2a81df6ecdb3997ecec107c09d/torch-2.13.0-cp311-cp311-manylinux_2_28_x86_64.whl
@@ -6630,8 +6633,8 @@ packages:
   timestamp: 1770223702917
 - pypi: ./
   name: qsiprep
-  version: 26.1.0.dev19+ge582f6c36
-  sha256: 0b7261e46be056ad7fea1b4509df67550d2af2e591228a5f21df3a005127d26a
+  version: 26.1.0.dev22+g5d3d201fd.d20260805
+  sha256: bd7fb016e12de0225e99c652a13d7fbde8f1b2674c0940b098284364e0133e3d
   requires_dist:
   - acres
   - coverage
@@ -6665,6 +6668,7 @@ packages:
   - svgutils<=0.3.4
   - templateflow
   - tensorflow[and-cuda]
+  - tf-keras
   - torch
   - transforms3d
   - vtk
@@ -6717,8 +6721,8 @@ packages:
   editable: true
 - pypi: ./
   name: qsiprep
-  version: 26.1.0.dev19+ge582f6c36
-  sha256: 0b7261e46be056ad7fea1b4509df67550d2af2e591228a5f21df3a005127d26a
+  version: 26.1.0.dev22+g5d3d201fd.d20260805
+  sha256: bd7fb016e12de0225e99c652a13d7fbde8f1b2674c0940b098284364e0133e3d
   requires_dist:
   - acres
   - coverage
@@ -6752,6 +6756,7 @@ packages:
   - svgutils<=0.3.4
   - templateflow
   - tensorflow[and-cuda]
+  - tf-keras
   - torch
   - transforms3d
   - vtk
@@ -7687,6 +7692,13 @@ packages:
   - pytest ; extra == 'tests'
   - pytest-cov ; extra == 'tests'
   requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/21/8b/75f7572ec0273ed8da50bc19defe08aaaafcc15fda3407db53f49acec814/tf_keras-2.17.0-py3-none-any.whl
+  name: tf-keras
+  version: 2.17.0
+  sha256: cc97717e4dc08487f327b0740a984043a9e0123c7a4e21206711669d3ec41c88
+  requires_dist:
+  - tensorflow>=2.17,<2.18
+  requires_python: '>=3.9'
 - pypi: https://files.pythonhosted.org/packages/32/d5/f9a850d79b0851d1d4ef6456097579a9005b31fea68726a4ae5f2d82ddd9/threadpoolctl-3.6.0-py3-none-any.whl
   name: threadpoolctl
   version: 3.6.0

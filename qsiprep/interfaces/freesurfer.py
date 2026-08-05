@@ -262,6 +262,12 @@ class SynthSeg(FSCommandOpenMP):
     output_spec = _SynthSegOutputSpec
     _cmd = 'mri_synthseg'
 
+    def __init__(self, **inputs):
+        super().__init__(**inputs)
+        # mri_synthseg builds its network with Keras 2-only APIs (e.g., Model.output
+        # returning a tensor rather than a list), so point tf.keras at tf-keras.
+        self.inputs.environ.update({'TF_USE_LEGACY_KERAS': '1'})
+
     def _format_arg(self, name, trait_spec, value):
         # Hardcode threads to be 1
         if name == 'num_threads':
