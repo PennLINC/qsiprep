@@ -85,8 +85,8 @@ RUN chmod -R go=u $HOME
 WORKDIR /tmp
 
 FROM base AS test
-COPY --from=build /app/.pixi/envs/test /app/.pixi/envs/test
-COPY --from=build /test-shell-hook.sh /shell-hook.sh
+COPY --link --from=build /app/.pixi/envs/test /app/.pixi/envs/test
+COPY --link --from=build /test-shell-hook.sh /shell-hook.sh
 RUN cat /shell-hook.sh >> $HOME/.bashrc
 ENV PATH="/app/.pixi/envs/test/bin:$PATH"
 ENV FSLDIR="/app/.pixi/envs/test"
@@ -94,8 +94,8 @@ ARG VCS_REF
 LABEL org.opencontainers.image.revision=$VCS_REF
 
 FROM base AS qsiprep
-COPY --from=build /app/.pixi/envs/qsiprep /app/.pixi/envs/qsiprep
-COPY --from=build /shell-hook.sh /shell-hook.sh
+COPY --link --from=build /app/.pixi/envs/qsiprep /app/.pixi/envs/qsiprep
+COPY --link --from=build /shell-hook.sh /shell-hook.sh
 RUN cat /shell-hook.sh >> $HOME/.bashrc
 ENV PATH="/app/.pixi/envs/qsiprep/bin:$PATH"
 ENV FSLDIR="/app/.pixi/envs/qsiprep"

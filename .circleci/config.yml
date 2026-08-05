@@ -1,14 +1,31 @@
 version: 2.1
 
-# Dynamic config: setup workflow
-# The real pipeline lives in continue_config.yml. This setup workflow inspects
-# the diff of the pushed commit and sets two pipeline parameters.
+# ── Dynamic config: setup workflow ────────────────────────────────────
+# The real pipeline lives in continue_config.yml. This setup workflow
+# inspects the diff of the pushed commit and sets two pipeline parameters:
+#
+#   has_any_changes   true if the push contains any changed files
+#   has_code_changes  true if any changed file is under qsiprep/, scripts/,
+#                     docker/, .circleci/, or is a build/config file
+#                     (Dockerfile*, pyproject.toml, pixi.lock, tox.ini,
+#                     Makefile, .dockerignore)
+#
+# The continue workflow runs when has_code_changes is true OR when there
+# is no diff at all (tag builds, initial clones). A push that only touches
+# documentation (README, *.rst, *.md, CITATION.cff, .github/**, etc.)
+# leaves has_code_changes false and is skipped.
+#
+# `[skip ci]` / `[ci skip]` in a commit message is honored natively by
+# CircleCI at the VCS webhook level and needs no explicit handling here.
 
 setup: true
 
 orbs:
   # Version 2 uses the shell-based implementation and avoids the Python/pip
   # bootstrap path that breaks when get-pip.py drops older Python versions.
+  # The 1.x line pipes `https://bootstrap.pypa.io/get-pip.py` into the orb's
+  # default Python (now 3.9), which get-pip no longer supports, failing the
+  # filter step with "This script does not work on Python 3.9".
   path-filtering: circleci/path-filtering@2
 
 workflows:
@@ -23,6 +40,10 @@ workflows:
           filters:
             tags:
               only: /.*/
+          # NOTE: path-filtering wraps each pattern with implicit `^...$`
+          # anchors, so every regex must match the *full* file path, not just
+          # a prefix. Prefix-style patterns therefore need an explicit `.*`
+          # suffix; single-file patterns match literally.
           mapping: |
             .*                has_any_changes   true
             qsiprep/.*        has_code_changes  true
