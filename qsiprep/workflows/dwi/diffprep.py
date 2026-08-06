@@ -581,6 +581,14 @@ def init_diffprep_hmc_wf(
         # TORTOISEProcess and bounds it, so nipype's n_procs declaration and the
         # process's real CPU use finally agree.
         ncores=config.nipype.omp_nthreads,
+        # Only forwarded when explicitly set: the right value depends on the
+        # GPU/CPU balance of the node, and TORTOISE's own default should stand
+        # rather than qsiprep inventing one.
+        **(
+            {'gpu_cpu_ratio': config.workflow.tortoise_gpu_cpu_ratio}
+            if config.workflow.tortoise_gpu_cpu_ratio
+            else {}
+        ),
         correction_mode=effective_correction_mode,
         b0_id=diffprep_cfg['b0_id'],
         is_human_brain=diffprep_cfg['is_human_brain'],

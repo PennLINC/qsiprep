@@ -453,6 +453,24 @@ def _build_parser(**kwargs):
         ),
     )
     g_conf.add_argument(
+        '--tortoise-gpu-cpu-ratio',
+        action='store',
+        type=int,
+        default=None,
+        help=(
+            'How many volumes DIFFPREP gives the GPU per pass, against one per CPU '
+            'thread, during motion and eddy correction. TORTOISE does not move the '
+            'series onto the GPU the way eddy_cuda does: it treats the GPU as one '
+            'more worker, so the number of passes is '
+            'ceil(nvolumes / (ngpus * ratio + omp-nthreads - ngpus)). '
+            'It describes the machine, not the data -- roughly how many volumes the '
+            'GPU gets through while one CPU core does one. Only worth setting when '
+            'the GPU is fast relative to the core count, since its influence falls '
+            'as --omp-nthreads rises (about 68%% of volumes at 8 cores, 19%% at 64). '
+            'Requires the patched TORTOISE. Unset leaves TORTOISE at its default of 15.'
+        ),
+    )
+    g_conf.add_argument(
         '--b1-biascorrect-stage',
         action='store',
         choices=['final', 'none', 'legacy'],

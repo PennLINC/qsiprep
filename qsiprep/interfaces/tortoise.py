@@ -884,6 +884,16 @@ class _DIFFPREPInputSpec(TORTOISEInputSpec):
         argstr='--ncores %d',
         desc='absolute number of CPU cores TORTOISE may use',
     )
+    #: Volumes the GPU handles per pass against one per CPU thread, in DIFFPREP's
+    #: motion & eddy registration. TORTOISE does not offload the series to the
+    #: GPU the way eddy_cuda does -- it treats the GPU as one more worker, so
+    #: npass = ceil(Nvols / (NGPUs*ratio + ncores - NGPUs)). Upstream hardcodes
+    #: 15, which is a property of the machine rather than the data. Left unset
+    #: TORTOISE keeps its own default.
+    gpu_cpu_ratio = traits.Int(
+        argstr='--gpu_cpu_ratio %d',
+        desc='volumes the GPU processes per pass, against one per CPU thread',
+    )
     dwi_file = File(
         exists=True,
         mandatory=True,
