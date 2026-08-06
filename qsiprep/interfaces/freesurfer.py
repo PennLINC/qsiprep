@@ -264,9 +264,19 @@ class SynthSeg(FSCommandOpenMP):
 
     def __init__(self, **inputs):
         super().__init__(**inputs)
-        # mri_synthseg builds its network with Keras 2-only APIs (e.g., Model.output
-        # returning a tensor rather than a list), so point tf.keras at tf-keras.
-        self.inputs.environ.update({'TF_USE_LEGACY_KERAS': '1'})
+        self.inputs.environ.update(
+            {
+                # mri_synthseg builds its network with Keras 2-only APIs (e.g., Model.output
+                # returning a tensor rather than a list), so point tf.keras at tf-keras.
+                'TF_USE_LEGACY_KERAS': '1',
+                # TensorFlow enables oneDNN by default as of 2.9. For a full-size brain at
+                # 1mm that raises mri_synthseg's peak memory from ~13GB to ~16GB, which
+                # OOMs machines that used to run it fine. oneDNN is ~2x faster on CPU, but
+                # this node is hardcoded to one thread anyway, so trade the speed for the
+                # memory headroom.
+                'TF_ENABLE_ONEDNN_OPTS': '0',
+            }
+        )
 
     def _format_arg(self, name, trait_spec, value):
         # Hardcode threads to be 1

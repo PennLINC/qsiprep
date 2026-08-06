@@ -213,6 +213,7 @@ ENV \
     ARTHOME="/opt/art" \
     DIPY_HOME=/home/qsiprep/.dipy \
     TF_USE_LEGACY_KERAS=1 \
+    TF_ENABLE_ONEDNN_OPTS=0 \
     QT_PLUGIN_PATH="/usr/lib/x86_64-linux-gnu/qt5/plugins" \
     QML2_IMPORT_PATH="/usr/lib/x86_64-linux-gnu/qt5/qml" \
     LD_LIBRARY_PATH="/opt/conda/envs/qsiprep/lib/python3.10/site-packages/nvidia/cudnn/lib:/opt/freesurfer/lib:${LD_LIBRARY_PATH}"

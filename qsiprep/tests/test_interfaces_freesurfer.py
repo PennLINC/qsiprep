@@ -64,10 +64,11 @@ def test_synthstrip_interface(datasets, tmp_path_factory):
     assert mask_img.shape == in_img.shape
 
 
-def test_synthseg_uses_legacy_keras():
-    """mri_synthseg's vendored network code is Keras 2-only, so tf.keras must be tf-keras."""
+def test_synthseg_tensorflow_environ():
+    """mri_synthseg needs Keras 2, and oneDNN pushes its peak memory past 15GB."""
     interface = freesurfer.SynthSeg()
     assert interface.inputs.environ['TF_USE_LEGACY_KERAS'] == '1'
+    assert interface.inputs.environ['TF_ENABLE_ONEDNN_OPTS'] == '0'
 
 
 @pytest.mark.synthstrip
