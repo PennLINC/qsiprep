@@ -288,7 +288,9 @@ def _build_rpe_diffprep_stage(
     ])  # fmt:skip
 
     for group_id in (1, 2):
-        convert = pe.Node(TORTOISEConvert(), name=f'tortoise_convert_g{group_id}')
+        convert = pe.Node(
+            TORTOISEConvert(), name=f'tortoise_convert_g{group_id}', mem_gb=2.0
+        )
         write_json = _write_pe_json_node(f'write_pe_json_g{group_id}')
         diffprep = pe.Node(
             DIFFPREP(**diffprep_kwargs),
@@ -615,7 +617,15 @@ def init_diffprep_hmc_wf(
         )
     else:
         # Convert gzipped niftis + FSL gradients into TORTOISE format (.nii + .bmtxt).
-        tortoise_convert = pe.Node(TORTOISEConvert(), name='tortoise_convert')
+        # Declares its real footprint so nipype's memory scheduling can bound it.
+        # It decompresses a whole 4D series into an uncompressed .nii -- ~1.3 GB of
+        # output for a 279-volume acquisition, and the kernel recorded 1.69 GB RSS
+        # for one of these when it OOM-killed a 3-subject run. Undeclared, nipype
+        # budgeted the 0.20 GB default and happily ran eight at once on 24 cores,
+        # which is 13 GB of unaccounted memory on a 30 GB box.
+        tortoise_convert = pe.Node(
+            TORTOISEConvert(), name='tortoise_convert', mem_gb=2.0
+        )
 
         # TORTOISE reads PhaseEncodingDirection from a BIDS-style JSON next to the
         # .nii. Generate one so DIFFPREP (and T2Wreg) can pick the right phase axis.
