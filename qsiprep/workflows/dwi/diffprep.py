@@ -47,7 +47,7 @@ from ...utils.gpu import gpu_enabled
 from ...utils.resources import as_path
 from ..fieldmap.base import init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf
-from .util import init_dwi_reference_wf
+from .util import tortoise_convert_mem_gb, init_dwi_reference_wf
 
 # BIDS PhaseEncodingDirection axes already match what TORTOISEProcess expects
 # in its own JSON input -- TORTOISE consumes "i", "j", "k" (with optional "-")
@@ -252,7 +252,7 @@ def _write_pe_json_node(name):
 
 
 def _build_rpe_diffprep_stage(
-    workflow, inputnode, diffprep_kwargs, pe_axis, b0_threshold, n_procs
+    workflow, inputnode, diffprep_kwargs, pe_axis, b0_threshold, n_procs, mem_gb
 ):
     """Wire the per-phase-encoding-direction DIFFPREP stage for ``rpe_series``.
 
@@ -289,7 +289,7 @@ def _build_rpe_diffprep_stage(
 
     for group_id in (1, 2):
         convert = pe.Node(
-            TORTOISEConvert(), name=f'tortoise_convert_g{group_id}', mem_gb=2.0
+            TORTOISEConvert(), name=f'tortoise_convert_g{group_id}', mem_gb=mem_gb
         )
         write_json = _write_pe_json_node(f'write_pe_json_g{group_id}')
         diffprep = pe.Node(
@@ -495,6 +495,14 @@ def init_diffprep_hmc_wf(
     fieldmap_info = scan_groups['fieldmap_info']
     fieldmap_type = fieldmap_info['suffix']
 
+    # TORTOISEConvert holds the whole series as float32; size it from the data
+    # rather than guessing, so a longer or higher-resolution acquisition is
+    # budgeted correctly instead of inheriting a number tuned for CRASH.
+    _convert_inputs = list(scan_groups.get('dwi_series', []))
+    if fieldmap_type == 'rpe_series':
+        _convert_inputs += list(scan_groups.get('rpe_series', []))
+    convert_mem_gb = tortoise_convert_mem_gb(_convert_inputs)
+
     # TORTOISE-native T2Wreg replaces SyN for the fieldmap-less case when a T2w
     # structural is available: DIFFPREP runs the ``--epi T2Wreg`` stage in the
     # same TORTOISEProcess call and bakes the correction into its output.
@@ -614,6 +622,7 @@ def init_diffprep_hmc_wf(
             pe_axis=pe_dir[0],
             b0_threshold=config.workflow.b0_threshold,
             n_procs=config.nipype.omp_nthreads,
+            mem_gb=convert_mem_gb,
         )
     else:
         # Convert gzipped niftis + FSL gradients into TORTOISE format (.nii + .bmtxt).
@@ -624,7 +633,7 @@ def init_diffprep_hmc_wf(
         # budgeted the 0.20 GB default and happily ran eight at once on 24 cores,
         # which is 13 GB of unaccounted memory on a 30 GB box.
         tortoise_convert = pe.Node(
-            TORTOISEConvert(), name='tortoise_convert', mem_gb=2.0
+            TORTOISEConvert(), name='tortoise_convert', mem_gb=convert_mem_gb
         )
 
         # TORTOISE reads PhaseEncodingDirection from a BIDS-style JSON next to the

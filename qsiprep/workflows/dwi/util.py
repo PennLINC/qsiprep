@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 
 import nibabel as nb
+import numpy as np
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
@@ -178,6 +179,36 @@ def _create_mem_gb(dwi_fname):
     }
 
     return dwi_nvols, mem_gb
+
+
+def tortoise_convert_mem_gb(dwi_files):
+    """Peak memory for ``TORTOISEConvert``, derived from the series geometry.
+
+    Sized from the voxel count rather than the file size, because neither of the
+    obvious shortcuts is right. The interface does
+    ``load_img(..., dtype='float32')`` and writes float32, so the working set is
+    ``nvoxels * 4`` whatever the input dtype: CRASH is ``uint16`` on disk, so the
+    array dtype underestimates by 2x, and ``_create_mem_gb``'s ``filesize`` --
+    which is ``os.path.getsize`` on the *gzipped* file -- underestimates by 3.4x.
+
+    Ground truth on a 279-volume 128x128x69 series: 0.34 GB gzipped, 0.59 GB as
+    uint16, **1.17 GB as float32** (matching the converted .nii exactly). The
+    kernel recorded 1.69 GB RSS when it OOM-killed one of these, a factor of
+    ~1.45 for the transient source array and interpreter overhead.
+    """
+    total_voxels = 0
+    for fname in dwi_files:
+        try:
+            total_voxels += int(np.prod(nb.load(fname).shape))
+        except Exception:
+            # unreadable at build time (docs builds pass fake paths); fall back
+            # to the on-disk size, knowing it understates a compressed input
+            try:
+                total_voxels += os.path.getsize(fname) // 4
+            except OSError:
+                continue
+    float32_gb = total_voxels * 4 / (1024**3)
+    return max(float32_gb * 1.5, DEFAULT_MEMORY_MIN_GB)
 
 
 def _get_concatenated_bids_name(dwi_group):
