@@ -560,13 +560,13 @@ def test_diffprep_split_outputs_deobliques_gradients(tmp_path):
     deobliqued = np.array([np.loadtxt(f) for f in deob_files])
     raw = np.array([np.loadtxt(f) for f in raw_files])
 
-    assert np.allclose(
-        emitted, deobliqued, atol=1e-5
-    ), f'gradients are not the mrtrix RAS+ ones:\n{emitted}\nvs\n{deobliqued}'
+    assert np.allclose(emitted, deobliqued, atol=1e-5), (
+        f'gradients are not the mrtrix RAS+ ones:\n{emitted}\nvs\n{deobliqued}'
+    )
     # And on this grid that is a real difference, so the assertion has teeth.
-    assert not np.allclose(
-        deobliqued, raw, atol=1e-3
-    ), 'oblique fixture failed to distinguish the two conversions'
+    assert not np.allclose(deobliqued, raw, atol=1e-3), (
+        'oblique fixture failed to distinguish the two conversions'
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -954,7 +954,7 @@ def test_rpe_series_is_shelled(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture()
+@pytest.fixture
 def t2w_gate_config():
     """Pin every config knob _t2w_available_for_sdc reads, and restore after."""
     from qsiprep import config
@@ -1331,17 +1331,21 @@ def test_init_diffprep_hmc_wf_rpe_series_pe_axis(tmp_path):
     assert split.inputs.pe_axis == 'j'
 
 
-def test_drbuddi_sloppy_skips_rigid_diffeo_loop(tmp_path):
-    """--sloppy should also cheapen DRBUDDI's initial registration.
+def test_drbuddi_never_sends_parser_disabled_flags(tmp_path):
+    """Two DRBUDDI options are disabled in TORTOISE's parser; never send them.
 
-    This covers shared code (``init_drbuddi_wf`` is used by the FSL backend
-    too), but DRBUDDI is the SDC half of the DIFFPREP backend. ``sloppy``
-    already replaces the diffeomorphic schedule via --DRBUDDI_stage, which has
-    no effect on Step1; this additionally skips Step1's rigid+diffeo+rigid loop.
+    ``--DRBUDDI_start_with_diffeomorphic_for_rigid_reg`` and
+    ``--DRBUDDI_disable_initial_rigid`` are both commented out of
+    DRBUDDI_parserBase.cxx, along with their getters, so neither can change the
+    registration. Worse, DRBUDDI rejects an unrecognised parameter by printing
+    "Unknown command line parameter" and then exiting 0 -- nipype records that
+    as success and the run dies afterwards collecting the
+    bdown_to_bup_rigidtrans.hdf5 that was never written.
 
-    Deliberately NOT --DRBUDDI_disable_initial_rigid: that suppresses
+    ``sloppy`` must therefore cheapen DRBUDDI through --DRBUDDI_stage alone.
+    (``--DRBUDDI_disable_initial_rigid`` would also suppress
     ``bdown_to_bup_rigid_trans_h5``, which DRBUDDIAggregateOutputs dereferences
-    unguarded on the rpe_series FA branch.
+    unguarded on the rpe_series FA branch.)
     """
     from qsiprep.interfaces.tortoise import DRBUDDI
 
@@ -1358,21 +1362,34 @@ def test_drbuddi_sloppy_skips_rigid_diffeo_loop(tmp_path):
         'blip_down_image': str(down),
         'blip_up_json': str(up_json),
     }
-    flag = '--DRBUDDI_start_with_diffeomorphic_for_rigid_reg'
+    disabled = (
+        '--DRBUDDI_start_with_diffeomorphic_for_rigid_reg',
+        '--DRBUDDI_disable_initial_rigid',
+    )
 
-    sloppy_cmd = DRBUDDI(
-        sloppy=True, start_with_diffeomorphic_for_rigid_reg=True, **common
-    ).cmdline
-    assert flag in sloppy_cmd
-    assert '--DRBUDDI_stage' in sloppy_cmd
-    # the destructive lever stays off so the rigid transform is still produced
-    assert '--DRBUDDI_disable_initial_rigid' not in sloppy_cmd
+    for sloppy in (True, False):
+        cmd = DRBUDDI(sloppy=sloppy, **common).cmdline
+        for flag in disabled:
+            assert flag not in cmd, f'{flag} is rejected by DRBUDDI (sloppy={sloppy})'
 
-    prod_cmd = DRBUDDI(
-        sloppy=False, start_with_diffeomorphic_for_rigid_reg=False, **common
-    ).cmdline
-    assert flag not in prod_cmd
-    assert '--DRBUDDI_stage' not in prod_cmd
+    # sloppy still has to do its job, just through the stage schedule
+    assert '--DRBUDDI_stage' in DRBUDDI(sloppy=True, **common).cmdline
+    assert '--DRBUDDI_stage' not in DRBUDDI(sloppy=False, **common).cmdline
+
+    # ...and the workflow must not set either trait, under sloppy or not
+    rpe = tmp_path / 'sub-01_dir-PA_dwi.nii.gz'
+    _write_dummy_nii(rpe)
+    groups = _scan_groups('rpe_series', rpe_series=[str(rpe)])
+    config = _base_config()
+    try:
+        for sloppy in (True, False):
+            config.execution.sloppy = sloppy
+            wf = _build(groups, t2w_sdc=False, name=f'no_disabled_flags_{sloppy}')
+            node = wf.get_node('drbuddi_sdc_wf.drbuddi')
+            assert not isdefined(node.inputs.start_with_diffeomorphic_for_rigid_reg)
+            assert not isdefined(node.inputs.disable_initial_rigid)
+    finally:
+        config.execution.sloppy = False
 
 
 def test_init_diffprep_hmc_wf_topup_rejected():
