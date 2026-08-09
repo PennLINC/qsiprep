@@ -10,7 +10,7 @@ from qsiprep.utils.gpu import (
 )
 
 
-@pytest.fixture()
+@pytest.fixture
 def gpu_config():
     """Pin ``config.workflow.gpu`` and restore it afterwards.
 

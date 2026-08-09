@@ -29,21 +29,18 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from ... import config
 from ...interfaces.gradients import ExtractB0s, SliceQC
 from ...interfaces.nilearn import EnhanceB0
-from ...interfaces.shoreline import B0Mean, CalculateCNR, ExtractDWIsForModel, SignalPrediction
+from ...interfaces.shoreline import CalculateCNR, ExtractDWIsForModel, SignalPrediction
 from ...interfaces.tortoise import (
     DIFFPREP,
-    DRBUDDI,
     ConcatenateDIFFPREPGroups,
     DIFFPREPMotionParams,
     DIFFPREPSplitOutputs,
-    DRBUDDIAggregateOutputs,
     MergeVolumes4D,
     SplitDWIsByDistortionGroup,
     SynthesizeDWIs,
     TORTOISEConvert,
     WriteFSLGradFiles,
     equally_distributed_directions,
-    sloppy_epi_working_res as _sloppy_epi_res,
     generate_diffprep_boilerplate,
 )
 from ...utils.gpu import gpu_enabled

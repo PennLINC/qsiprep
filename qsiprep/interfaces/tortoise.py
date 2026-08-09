@@ -1740,9 +1740,7 @@ class WriteBmatTORTOISE(SimpleInterface):
 
 
 class _WriteDRBUDDIJSONInputSpec(BaseInterfaceInputSpec):
-    phase_encoding_direction = traits.Enum(
-        'i', 'i-', 'j', 'j-', 'k', 'k-', mandatory=True
-    )
+    phase_encoding_direction = traits.Enum('i', 'i-', 'j', 'j-', 'k', 'k-', mandatory=True)
     echo_time = traits.Float()
     total_readout_time = traits.Float()
 

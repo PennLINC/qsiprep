@@ -80,7 +80,11 @@ doc = [
     "sphinxcontrib-bibtex",
 ]
 dev = [
-    "ruff ~= 0.4.3",
+    # Keep this pin in sync with the ruff pin in .github/workflows/lint.yml and
+    # the rev in .pre-commit-config.yaml. A looser spec here installs a ruff
+    # that disagrees with CI -- 0.4.x and 0.15.x report inverted PT001, so
+    # "fixing" lint locally introduced CI failures.
+    "ruff == 0.15.21",
     "pre-commit",
 ]
 tests = [
