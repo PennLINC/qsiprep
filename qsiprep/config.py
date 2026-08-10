@@ -565,8 +565,6 @@ class workflow(_Config):
     anat_biascorrect = None
     """Whether to N4-correct anatomicals: ``n4``, ``auto`` or ``none``."""
     b1_biascorrect_stage = None
-    tortoise_gpu_cpu_ratio = None
-    """Volumes the GPU takes per DIFFPREP pass; None leaves TORTOISE's default."""
     """The stage of processing at which to apply B1 bias correction. Either "final" (after
     resampling), "none" (skipped entirely) or "legacy" (before concatenation)."""
     denoise_after_combining = False
@@ -620,6 +618,8 @@ class workflow(_Config):
     """Process all dwis separately - do not attempt concatenation."""
     shoreline_iters = None
     """How many iterations to run SHORELine."""
+    tortoise_gpu_cpu_ratio = None
+    """Volumes the GPU takes per DIFFPREP pass; None leaves TORTOISE's default."""
     unringing_method = None
     """Method for Gibbs-ringing removal. Either "none", "mrdegibbs" or "rpg"."""
     use_syn_sdc = None
