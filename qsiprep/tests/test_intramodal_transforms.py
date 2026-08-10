@@ -61,13 +61,26 @@ def test_existing_transform_paths_unchanged():
     pats = _patterns()
     for ents, expected in (
         (
-            dict(subject='01', session='3', datatype='anat', suffix='xfm', mode='image',
-                 extension='.mat', **{'from': 'orig', 'to': 'anat'}),
+            dict(
+                subject='01',
+                session='3',
+                datatype='anat',
+                suffix='xfm',
+                mode='image',
+                extension='.mat',
+                **{'from': 'orig', 'to': 'anat'},
+            ),
             'sub-01/ses-3/anat/sub-01_ses-3_from-orig_to-anat_mode-image_xfm.mat',
         ),
         (
-            dict(subject='01', datatype='anat', suffix='xfm', mode='image',
-                 extension='.h5', **{'from': 'ACPC', 'to': 'MNI152NLin2009cAsym'}),
+            dict(
+                subject='01',
+                datatype='anat',
+                suffix='xfm',
+                mode='image',
+                extension='.h5',
+                **{'from': 'ACPC', 'to': 'MNI152NLin2009cAsym'},
+            ),
             'sub-01/anat/sub-01_from-ACPC_to-MNI152NLin2009cAsym_mode-image_xfm.h5',
         ),
     ):

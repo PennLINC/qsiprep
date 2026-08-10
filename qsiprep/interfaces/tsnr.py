@@ -57,8 +57,7 @@ class DWITSNR(SimpleInterface):
             from nipype import logging
 
             logging.getLogger('nipype.interface').warning(
-                'DWITSNR: %d b=0 volume(s) found; TSNR needs at least 2. '
-                'Writing an empty map.',
+                'DWITSNR: %d b=0 volume(s) found; TSNR needs at least 2. Writing an empty map.',
                 b0_idx.size,
             )
             tsnr = np.zeros(img.shape[:3], dtype='float32')

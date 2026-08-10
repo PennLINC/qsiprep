@@ -144,14 +144,14 @@ def test_anat_dwiref_path_builds():
     patterns = json.loads(load_data('io_spec.json').read_text())['default_path_patterns']
 
     out = build_path(
-        dict(
-            subject='01',
-            datatype='anat',
-            suffix='dwiref',
-            space='ACPC',
-            desc='intramodal',
-            extension='.nii.gz',
-        ),
+        {
+            'subject': '01',
+            'datatype': 'anat',
+            'suffix': 'dwiref',
+            'space': 'ACPC',
+            'desc': 'intramodal',
+            'extension': '.nii.gz',
+        },
         patterns,
         strict=False,
     )
@@ -168,15 +168,37 @@ def test_existing_dwiref_and_anat_paths_still_build():
 
     patterns = json.loads(load_data('io_spec.json').read_text())['default_path_patterns']
 
-    assert build_path(
-        dict(subject='01', session='1', datatype='dwi', suffix='dwiref',
-             space='ACPC', extension='.nii.gz'), patterns, strict=False
-    ) == 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_dwiref.nii.gz'
+    assert (
+        build_path(
+            {
+                'subject': '01',
+                'session': '1',
+                'datatype': 'dwi',
+                'suffix': 'dwiref',
+                'space': 'ACPC',
+                'extension': '.nii.gz',
+            },
+            patterns,
+            strict=False,
+        )
+        == 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_dwiref.nii.gz'
+    )
 
-    assert build_path(
-        dict(subject='01', datatype='anat', suffix='T1w', space='ACPC',
-             desc='preproc', extension='.nii.gz'), patterns, strict=False
-    ) == 'sub-01/anat/sub-01_space-ACPC_desc-preproc_T1w.nii.gz'
+    assert (
+        build_path(
+            {
+                'subject': '01',
+                'datatype': 'anat',
+                'suffix': 'T1w',
+                'space': 'ACPC',
+                'desc': 'preproc',
+                'extension': '.nii.gz',
+            },
+            patterns,
+            strict=False,
+        )
+        == 'sub-01/anat/sub-01_space-ACPC_desc-preproc_T1w.nii.gz'
+    )
 
 
 def test_intramodal_template_is_resampled_before_being_written():

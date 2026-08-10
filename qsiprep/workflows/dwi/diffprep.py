@@ -47,7 +47,7 @@ from ...utils.gpu import gpu_enabled
 from ...utils.resources import as_path
 from ..fieldmap.base import init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf
-from .util import tortoise_convert_mem_gb, init_dwi_reference_wf
+from .util import init_dwi_reference_wf, tortoise_convert_mem_gb
 
 # BIDS PhaseEncodingDirection axes already match what TORTOISEProcess expects
 # in its own JSON input -- TORTOISE consumes "i", "j", "k" (with optional "-")
@@ -288,9 +288,7 @@ def _build_rpe_diffprep_stage(
     ])  # fmt:skip
 
     for group_id in (1, 2):
-        convert = pe.Node(
-            TORTOISEConvert(), name=f'tortoise_convert_g{group_id}', mem_gb=mem_gb
-        )
+        convert = pe.Node(TORTOISEConvert(), name=f'tortoise_convert_g{group_id}', mem_gb=mem_gb)
         write_json = _write_pe_json_node(f'write_pe_json_g{group_id}')
         diffprep = pe.Node(
             DIFFPREP(**diffprep_kwargs),

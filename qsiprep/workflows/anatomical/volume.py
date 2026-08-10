@@ -255,9 +255,7 @@ and used as an anatomical reference throughout the workflow.
     )
 
     # Ensure there is 1 and only 1 anatomical reference
-    anat_reference_wf = init_anat_template_wf(
-        num_images=num_anat_images, do_biascorr=do_biascorr
-    )
+    anat_reference_wf = init_anat_template_wf(num_images=num_anat_images, do_biascorr=do_biascorr)
 
     # Do some padding to prevent memory issues in the synth workflows
     pad_anat_reference_wf = init_dl_prep_wf()
@@ -508,9 +506,7 @@ def init_t2w_preproc_wf(num_t2ws, do_biascorr=True, name='t2w_preproc_wf'):
     )
 
     # Ensure there is 1 and only 1 T2w reference
-    anat_reference_wf = init_anat_template_wf(
-        num_images=num_t2ws, do_biascorr=do_biascorr
-    )
+    anat_reference_wf = init_anat_template_wf(num_images=num_t2ws, do_biascorr=do_biascorr)
     # ^ this also provides some boilerplate.
     workflow.__postdesc__ = """\
 The additional T2w reference image was registered to the T1w-ACPC reference
@@ -872,7 +868,11 @@ A {contrast}-reference map was computed after registration of
 
     workflow.connect([
         (anat_conform, merge_mask_prep_wf, [(('out_file', _first), 'inputnode.image')]),
-        (merge_mask_prep_wf, merge_mask_wf, [('outputnode.padded_image', 'inputnode.padded_image')]),
+        (
+            merge_mask_prep_wf,
+            merge_mask_wf,
+            [('outputnode.padded_image', 'inputnode.padded_image')],
+        ),
         (anat_conform, merge_mask_wf, [(('out_file', _first), 'inputnode.original_image')]),
         (merge_mask_wf, dilate_merge_mask, [('outputnode.brain_mask', 'in_file')]),
         (dilate_merge_mask, anat_merge_wf, [('out_file', 'inputnode.template_mask')]),
@@ -1149,9 +1149,7 @@ def init_synthstrip_wf(do_padding=False, unfatsat=False, name='synthstrip_wf') -
             # dMRI tools, hence per-task --gpu selection.
             # use_gpu mirrors gpu purely so nipype's is_gpu_node() sees this
             # node and counts it against the GPU budget.
-            FixHeaderSynthStrip(
-                gpu=gpu_enabled('synthstrip'), use_gpu=gpu_enabled('synthstrip')
-            ),
+            FixHeaderSynthStrip(gpu=gpu_enabled('synthstrip'), use_gpu=gpu_enabled('synthstrip')),
             name='synthstrip',
             n_procs=config.nipype.omp_nthreads,
         )

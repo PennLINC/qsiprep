@@ -79,5 +79,5 @@ def test_both_report_frames_land_on_the_template_grid():
 
     src = inspect.getsource(finalize)
     start = src.index('b0_to_template_grid = pe.Node')
-    window = src[start:start + 2500]
+    window = src[start : start + 2500]
     assert window.count("('intramodal_template', 'reference_image')") == 2

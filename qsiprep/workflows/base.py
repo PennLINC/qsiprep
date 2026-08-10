@@ -533,7 +533,6 @@ to workflows in *QSIPrep*'s documentation]\
             ]),
         ])  # fmt:skip
 
-
     if make_intramodal_template:
         workflow.connect([
             (anat_preproc_wf, intramodal_template_wf, [

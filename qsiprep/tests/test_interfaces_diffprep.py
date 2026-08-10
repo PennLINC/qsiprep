@@ -1631,12 +1631,12 @@ def test_rpe_series_diffprep_nodes_also_declare_threads():
     config = _base_config()
     config.nipype.omp_nthreads = 6
     rpe = _scan_groups('rpe_series', rpe_series=['/data/sub-01_dir-PA_dwi.nii.gz'])
-    import nibabel as nb
-    import numpy as np
-
     # the rpe path needs the partner series to exist
     import tempfile
     from pathlib import Path
+
+    import nibabel as nb
+    import numpy as np
 
     tmp = Path(tempfile.mkdtemp())
     partner = tmp / 'sub-01_dir-PA_dwi.nii.gz'
@@ -1644,9 +1644,7 @@ def test_rpe_series_diffprep_nodes_also_declare_threads():
     rpe = _scan_groups('rpe_series', rpe_series=[str(partner)])
 
     wf = _build(rpe, t2w_sdc=False, name='rpe_threads')
-    group_nodes = [
-        n for n in wf._get_all_nodes() if n.name.startswith('diffprep_g')
-    ]
+    group_nodes = [n for n in wf._get_all_nodes() if n.name.startswith('diffprep_g')]
     assert group_nodes, 'no per-group DIFFPREP nodes found'
     for node in group_nodes:
         assert node.inputs.num_threads == 6

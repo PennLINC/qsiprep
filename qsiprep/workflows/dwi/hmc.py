@@ -396,8 +396,11 @@ def init_b0_hmc_wf(
                              iter_templates, 'in1')  # fmt:skip
 
         initial_reg = linear_alignment_workflow(
-            iternum=0, omp_nthreads=omp_nthreads, use_masks=use_masks,
-            initialize_com=initialize_com, settings=settings,
+            iternum=0,
+            omp_nthreads=omp_nthreads,
+            use_masks=use_masks,
+            initialize_com=initialize_com,
+            settings=settings,
         )
         if use_masks:
             alignment_wf.connect(inputnode, 'template_mask',
@@ -410,8 +413,11 @@ def init_b0_hmc_wf(
         for iternum in range(1, num_iters):
             reg_iters.append(
                 linear_alignment_workflow(
-                    iternum=iternum, omp_nthreads=omp_nthreads, use_masks=use_masks,
-                    initialize_com=initialize_com, settings=settings,
+                    iternum=iternum,
+                    omp_nthreads=omp_nthreads,
+                    use_masks=use_masks,
+                    initialize_com=initialize_com,
+                    settings=settings,
                 )
             )
             if use_masks:
@@ -440,7 +446,9 @@ def init_b0_hmc_wf(
             f'a {transform} registration. '
         )
         reg_to_first = linear_alignment_workflow(
-            iternum=0, omp_nthreads=omp_nthreads, use_masks=use_masks,
+            iternum=0,
+            omp_nthreads=omp_nthreads,
+            use_masks=use_masks,
             initialize_com=initialize_com,
         )
         if use_masks:

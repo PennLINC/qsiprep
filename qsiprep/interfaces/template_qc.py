@@ -21,7 +21,6 @@ from nipype.interfaces.base import (
     traits,
 )
 
-
 #: Below this, the median absolute deviation is treated as degenerate.
 _MIN_SPREAD = 1e-4
 #: Absolute correlation drop below the median that counts as an outlier when the
@@ -171,8 +170,8 @@ class TemplateQC(SimpleInterface):
             cov[~np.isfinite(cov)] = 0.0
         else:
             cov = np.zeros(template.shape, dtype='float32')
-        nb.Nifti1Image(cov.astype('float32'), template_img.affine, template_img.header).to_filename(
-            agreement
-        )
+        nb.Nifti1Image(
+            cov.astype('float32'), template_img.affine, template_img.header
+        ).to_filename(agreement)
         self._results['agreement_map'] = agreement
         return runtime
