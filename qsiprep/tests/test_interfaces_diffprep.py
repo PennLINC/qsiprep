@@ -156,7 +156,12 @@ def test_use_cuda_is_not_passed_on_the_command_line(tmp_path):
 
 
 def test_diffprep_config_use_cuda_default_and_override(tmp_path):
-    """The ``use_cuda`` key is opt-in in --diffprep-config and defaults to CPU."""
+    """``use_cuda`` gets no default: only a user-set value counts as intent.
+
+    The shipped diffprep_params.json sets it to False, a user file may set it
+    either way, and a user file without the key must leave it absent so
+    gpu_enabled() does not mistake a default for a choice.
+    """
     import json as _json
 
     from qsiprep.workflows.dwi.diffprep import _load_diffprep_config
@@ -169,7 +174,7 @@ def test_diffprep_config_use_cuda_default_and_override(tmp_path):
 
     cfg_absent = tmp_path / 'no_cuda_key.json'
     cfg_absent.write_text(_json.dumps({'b0_id': 0}))
-    assert _load_diffprep_config(str(cfg_absent))['use_cuda'] is False
+    assert 'use_cuda' not in _load_diffprep_config(str(cfg_absent))
 
 
 def test_diffprep_wf_honours_use_cuda(tmp_path):
