@@ -53,6 +53,18 @@ def _cnr_description(hmc_model):
     return desc
 
 
+def _tsnr_meta(n_b0, median_tsnr):
+    """Sidecar metadata for the TSNR map."""
+    return {
+        'Description': (
+            'Temporal SNR (mean/SD across the b=0 volumes) of the final '
+            'resampled series. With few b=0 volumes the estimate is noisy.'
+        ),
+        'NumberOfB0Volumes': n_b0,
+        'MedianTSNR': median_tsnr,
+    }
+
+
 LOGGER = logging.getLogger('nipype.workflow')
 
 
@@ -93,18 +105,26 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
         )
         workflow.connect([(inputnode, ds_optimization, [('hmc_optimization_data', 'in_file')])])
 
-    # 4D DWI in ACPC space
-    # Temporal SNR over the b=0 volumes. Computed here, on the final resampled
-    # series, so it reflects what the user actually gets rather than an
-    # intermediate. See interfaces/tsnr.py for why b=0 only.
+    # Temporal SNR over the b=0 volumes, computed on the final resampled series
+    # so it reflects what the user actually gets. See interfaces/tsnr.py for why
+    # b=0 only.
     tsnr = pe.Node(DWITSNR(), name='tsnr', mem_gb=DEFAULT_MEMORY_MIN_GB)
+    tsnr_meta = pe.Node(
+        niu.Function(
+            input_names=['n_b0', 'median_tsnr'],
+            output_names=['meta_dict'],
+            function=_tsnr_meta,
+        ),
+        name='tsnr_meta',
+        run_without_submitting=True,
+    )
     ds_tsnr = pe.Node(
         DerivativesDataSink(
             source_file=source_file,
             base_directory=output_dir,
             space='ACPC',
-            desc='tsnr',
-            suffix='dwi',
+            statistic='tsnr',
+            suffix='dwimap',
             extension='.nii.gz',
             compress=True,
         ),
@@ -112,6 +132,8 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
+
+    # 4D DWI in ACPC space
 
     ds_dwi_t1 = pe.Node(
         DerivativesDataSink(
@@ -231,7 +253,12 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             ('bvals_t1', 'bval_file'),
             ('dwi_mask_t1', 'mask_file'),
         ]),
+        (tsnr, tsnr_meta, [
+            ('n_b0', 'n_b0'),
+            ('median_tsnr', 'median_tsnr'),
+        ]),
         (tsnr, ds_tsnr, [('out_file', 'in_file')]),
+        (tsnr_meta, ds_tsnr, [('meta_dict', 'meta_dict')]),
         (inputnode, ds_dwi_t1, [('dwi_t1', 'in_file')]),
         (inputnode, ds_bvals_t1, [('bvals_t1', 'in_file')]),
         (inputnode, ds_bvecs_t1, [('bvecs_t1', 'in_file')]),

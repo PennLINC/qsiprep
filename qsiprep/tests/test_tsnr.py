@@ -126,10 +126,13 @@ def test_tsnr_is_wired_into_derivatives(tmp_path):
     }
     assert edges[('tsnr', 'ds_tsnr')] == [('out_file', 'in_file')]
 
+    # sidecar metadata (b=0 count, median) travels with the map
+    assert edges[('tsnr_meta', 'ds_tsnr')] == [('meta_dict', 'meta_dict')]
+
     sink = nodes['ds_tsnr'].inputs
-    assert (sink.desc, sink.space, sink.suffix, sink.extension) == (
+    assert (sink.statistic, sink.space, sink.suffix, sink.extension) == (
         'tsnr',
         'ACPC',
-        'dwi',
+        'dwimap',
         '.nii.gz',
     )

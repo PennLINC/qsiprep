@@ -6,9 +6,7 @@ contrast, acquired throughout the run, so their variance is dominated by noise
 and residual motion rather than by diffusion weighting.
 
 Computing it over all volumes instead would measure diffusion contrast, not
-noise, and would look worst exactly where the data is most informative. The
-number of b=0 volumes is therefore reported alongside the map -- with only a
-handful the estimate is noisy and should not be over-read.
+noise, and would look worst exactly where the data is most informative.
 """
 
 import nibabel as nb
