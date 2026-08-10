@@ -450,6 +450,7 @@ def init_b0_hmc_wf(
             omp_nthreads=omp_nthreads,
             use_masks=use_masks,
             initialize_com=initialize_com,
+            settings=settings,
         )
         if use_masks:
             alignment_wf.connect(inputnode, 'template_mask',
