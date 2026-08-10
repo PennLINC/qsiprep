@@ -2,18 +2,10 @@
 
 ``dwibiascorrect ants`` hands the brain mask to N4 as a *weight* image
 (``-w``, never ``-x`` -- see ``mrtrix3/dwibiascorrect/ants.py``). That weight is
-binary, so every voxel inside the mask counts equally in what is a least-squares
-fit performed on log intensities. A b=0 EPI always contains some near-zero
-voxels -- susceptibility dropout near the sinuses and ear canals, and the ragged
-edge of the mask itself -- and in the log domain those are enormous negative
-outliers. Least squares is not robust to them.
-
-The fit is then near-degenerate rather than merely noisy, which is why it can
-diverge on one session and not on the next from statistically indistinguishable
-input. Measured on CRASH sub-2463p ses-1: the field spanned 98x within the brain
-(superior/inferior 2.69) against 1.5x for the same subject's ses-2. Excluding
-near-background voxels from the *weights* brought it to 1.9x (superior/inferior
-0.84) -- i.e. back in line with the healthy session.
+binary, so every voxel inside the mask counts equally in a least-squares fit
+performed on log intensities -- and the near-zero voxels a b=0 EPI always
+contains (susceptibility dropout, the ragged mask edge) become enormous negative
+outliers there, which can make the fit diverge.
 
 This dampens the weights rather than shrinking the mask, so the correction is
 still applied everywhere the mask covers; only the influence of unreliable

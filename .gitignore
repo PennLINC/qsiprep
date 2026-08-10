@@ -105,9 +105,7 @@ notebooks/*
 !.pixi/config.toml
 .cursor/rules/cursorenv.mdc
 
-# Interface outputs land in the working directory when a SimpleInterface is run
-# by hand (nipype writes to runtime.cwd). Keep them out of the tree so a
-# `git add -A` cannot sweep them in.
+# Stray nipype interface outputs from running interfaces by hand
 /tsnr.nii.gz
 /n4_weights.nii.gz
 /template_agreement.nii.gz

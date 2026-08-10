@@ -1,13 +1,8 @@
 """TORTOISEConvert's memory must be sized from the data, not guessed.
 
 It loads with ``dtype='float32'`` and writes float32, so its working set is
-``nvoxels * 4`` whatever the input dtype. Undeclared, nipype assumed the 0.20 GB
-default and ran eight at once on 24 cores; the kernel OOM-killed one at 1.69 GB
-RSS and took an 11-hour 3-subject run down with BrokenProcessPool.
-
-Neither obvious shortcut works: CRASH is uint16 on disk, so the array dtype
-understates by 2x, and the gzipped file size (what ``_create_mem_gb`` reports)
-understates by 3.4x.
+``nvoxels * 4`` whatever the on-disk dtype; the array dtype and the gzipped
+file size both understate it.
 """
 
 import numpy as np

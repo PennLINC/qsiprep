@@ -1,13 +1,7 @@
 """Quality metrics for a subject-level template built from several images.
 
-Answers "how do the individual images stack up against each other?" with numbers
-rather than figures. Numbers sort, so an outlier announces itself instead of
-waiting for someone to notice it in a montage.
-
-This was written after a session (sub-0001a ses-8) that looked unremarkable in
-every per-session figure but sat at 0.889 correlation to the template while every
-other session was 0.959-0.975. That gap was obvious the moment it was tabulated
-and invisible before.
+Numbers rather than figures: an outlying input sorts to the top of a table,
+where a montage relies on someone noticing it.
 """
 
 import numpy as np

@@ -62,6 +62,12 @@ ANTS_VERSION = BrainExtraction().version or '<ver>'
 FS_VERSION = '7.3.1'
 
 
+def _get_first(in_list):
+    if isinstance(in_list, list | tuple):
+        return in_list[0]
+    return in_list
+
+
 #  pylint: disable=R0914
 def init_anat_preproc_wf(
     num_anat_images,
@@ -476,10 +482,9 @@ FreeSurfer version {FS_VERSION}. """
     ])  # fmt:skip
 
     if num_additional_t2ws > 0:
-        # Both T2w products were computed and then dropped on the floor. Write
-        # them out: t2_preproc is the merged (unbiased) T2w template in ACPC;
-        # t2w_unfatsat is the image TORTOISE T2Wreg and DRBUDDI actually register
-        # to, derived from the conformed template, and NOT the same image.
+        # t2_preproc is the merged (unbiased) T2w template in ACPC; t2w_unfatsat
+        # is the image TORTOISE T2Wreg and DRBUDDI actually register to. They
+        # are different images, so both are written.
         workflow.connect([
             (inputnode, anat_derivatives_wf, [('t2w', 'inputnode.t2w_source_files')]),
             (t2w_preproc_wf, anat_derivatives_wf, [
@@ -597,8 +602,8 @@ def anat_biascorrect_enabled(image_files=None):
 
     ``auto`` inspects the BIDS ``ImageType`` metadata for ``NORM``, which is how
     Siemens (among others) flags that intensity normalization was already applied
-    on the console. Running N4 on already-normalized data can introduce artifacts
-    rather than remove them.
+    on the console. Note that console normalization does not remove the need for
+    N4; ``auto`` and ``none`` are for deliberately skipping it anyway.
 
     N4 is skipped only when EVERY input image is marked normalized. A mixed set
     still needs correction to be merged sensibly, and an image whose metadata is
@@ -627,7 +632,7 @@ def anat_biascorrect_enabled(image_files=None):
     for img in image_files:
         try:
             image_type = layout.get_metadata(img).get('ImageType') or []
-        except Exception:
+        except (OSError, ValueError, KeyError):
             image_type = []
         normalized.append(any(str(t).upper() == 'NORM' for t in image_type))
 
@@ -732,31 +737,21 @@ A {contrast}-reference map was computed after registration of
         ]),
     ])  # fmt:skip
 
-    # N4 fits its field by least squares in the LOG domain, so a handful of
-    # near-zero voxels become enormous negative outliers and can drag the whole
-    # field with them. Measured on CRASH sub-2463p: an unclipped fit produced a
-    # field spanning 98x within the brain (superior/inferior 2.69) where the same
-    # subject's other session gave 1.5x -- from inputs that were statistically
-    # indistinguishable. Clipping the tails first is what niworkflows does ahead
-    # of every N4 call it makes (niworkflows/anat/ants.py); qsiprep was calling
-    # N4 bare. See init_finalize_denoising_wf for the DWI-side counterpart.
+    # N4 fits its field by least squares in the log domain, where near-zero
+    # voxels are enormous negative outliers that can drag the whole field.
+    # Clipping the tails first is what niworkflows does ahead of every N4 call
+    # (niworkflows/anat/ants.py). See init_finalize_denoising_wf for the
+    # DWI-side counterpart.
     truncate_interface = ImageMath(
         dimension=3,
         operation='TruncateImageIntensity',
         secondary_arg='0.01 0.999 256',
     )
 
-    # The truncated image is for ESTIMATING the field only. Dividing the original
-    # by that field keeps the clipping out of the data: on a real T1w the 99.9th
-    # percentile clip drops the ceiling from 1404 to 457 and flattens 12845 brain
-    # voxels (the top 0.4%) to a constant, which would otherwise be baked into
-    # desc-preproc_T1w and into the merge template.
-    #
-    # This is what niworkflows does -- its truncated image feeds only the
-    # preliminary N4 that drives brain masking, while `bias_corrected` comes from
-    # N4 run on the untruncated original (niworkflows/anat/ants.py, inu_n4 vs
-    # inu_n4_final) -- and it matches dwibiascorrect on the DWI side, where the
-    # output is the full original series divided by the estimated field.
+    # The truncated image is for ESTIMATING the field only; dividing the
+    # original by that field keeps the clipping out of the data. Otherwise the
+    # flattened intensity ceiling would be baked into desc-preproc_T1w and the
+    # merge template.
     apply_bias_interface = ImageMath(
         dimension=3,
         operation='/',
@@ -779,12 +774,6 @@ A {contrast}-reference map was computed after registration of
     )
 
     if num_images == 1:
-
-        def _get_first(in_list):
-            if isinstance(in_list, list | tuple):
-                return in_list[0]
-            return in_list
-
         outputnode.inputs.template_transforms = [str(load_data('itkIdentityTransform.txt'))]
 
         workflow.connect([
@@ -827,17 +816,12 @@ A {contrast}-reference map was computed after registration of
             apply_bias_interface, iterfield=['in_file', 'secondary_file'], name='apply_bias'
         )
 
-    # Make an unbiased template, same as used for b=0 registration.
-    #
-    # The merge registration is MASKED. Unmasked, a rigid fit across sessions is
-    # driven partly by face, jaw and neck -- structures that move relative to the
-    # brain when head placement changes -- so non-brain tissue can pull the brains
-    # out of alignment and blur the resulting template.
-    #
-    # One mask suffices: the fixed image in every registration is the template, so
-    # the mask only has to be in template space. It is generated from the first
-    # conformed image and dilated to leave slack for the between-image motion the
-    # registration is there to remove.
+    # Make an unbiased template, same as used for b=0 registration. The merge
+    # registration is masked: unmasked, face/jaw/neck -- which move relative to
+    # the brain between sessions -- can pull the brains out of alignment. One
+    # mask suffices because the fixed image in every registration is the
+    # template; it is built from the first conformed image and dilated for
+    # slack.
     align_to = config.workflow.subject_anatomical_reference
     anat_merge_wf = init_b0_hmc_wf(
         align_to='first' if (align_to == 'first-lex') else 'iterative',
@@ -848,11 +832,6 @@ A {contrast}-reference map was computed after registration of
         use_masks=True,
         settings='unbiased_template',
     )
-
-    def _first(in_list):
-        if isinstance(in_list, list | tuple):
-            return in_list[0]
-        return in_list
 
     merge_mask_prep_wf = init_dl_prep_wf(name='merge_mask_prep_wf')
     merge_mask_wf = init_synthstrip_wf(do_padding=True, name='merge_mask_wf')
@@ -867,13 +846,13 @@ A {contrast}-reference map was computed after registration of
     dilate_merge_mask.inputs.iterations = 8
 
     workflow.connect([
-        (anat_conform, merge_mask_prep_wf, [(('out_file', _first), 'inputnode.image')]),
+        (anat_conform, merge_mask_prep_wf, [(('out_file', _get_first), 'inputnode.image')]),
         (
             merge_mask_prep_wf,
             merge_mask_wf,
             [('outputnode.padded_image', 'inputnode.padded_image')],
         ),
-        (anat_conform, merge_mask_wf, [(('out_file', _first), 'inputnode.original_image')]),
+        (anat_conform, merge_mask_wf, [(('out_file', _get_first), 'inputnode.original_image')]),
         (merge_mask_wf, dilate_merge_mask, [('outputnode.brain_mask', 'in_file')]),
         (dilate_merge_mask, anat_merge_wf, [('out_file', 'inputnode.template_mask')]),
     ])  # fmt:skip
@@ -1218,7 +1197,6 @@ def init_synthseg_wf() -> Workflow:
                 fast=config.execution.sloppy,
                 num_threads=1,  # Hard code to 1
                 cpu=not gpu_enabled('synthseg'),
-                # inverted polarity: `cpu` is opt-OUT, so use_gpu is its negation
                 use_gpu=gpu_enabled('synthseg'),
             ),
             n_procs=config.nipype.omp_nthreads,
@@ -1390,12 +1368,9 @@ def init_anat_derivatives_wf(anatomical_template, has_t2w=False) -> Workflow:
                 't1_2_mni_reverse_transform',
                 't1_2_mni',
                 't1_aseg',
-                # T2w products. Both are already computed on any run with a T2w and
-                # were previously discarded: t2_preproc is the merged (unbiased)
-                # T2w template resampled into ACPC, t2w_unfatsat is the
-                # fat-suppressed variant that actually drives TORTOISE T2Wreg and
-                # DRBUDDI. They are separate images -- see init_t2w_preproc_wf --
-                # so both are worth writing.
+                # t2_preproc is the merged T2w template in ACPC; t2w_unfatsat
+                # is the fat-suppressed variant that drives TORTOISE T2Wreg and
+                # DRBUDDI. Separate images -- see init_t2w_preproc_wf.
                 't2w_source_files',
                 't2_preproc',
                 't2w_unfatsat',

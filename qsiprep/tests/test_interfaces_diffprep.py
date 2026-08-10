@@ -195,8 +195,8 @@ def test_diffprep_wf_honours_use_cuda(tmp_path):
 def _stage_diffprep_outputs(tmp_path, t2wreg):
     """Recreate the file tree TORTOISEProcess leaves behind in a node's cwd.
 
-    Mirrors what the real binary produced for sub-0001a ses-1: the motion+eddy
-    step writes ``<stem>_temp_proc/<stem>_proc_moteddy.*``, and when ``-s`` is
+    The motion+eddy step writes ``<stem>_temp_proc/<stem>_proc_moteddy.*``,
+    and when ``-s`` is
     given the StructuralAlignment + FinalData stages additionally write
     ``<stem>_TORTOISE_final.nii`` and its own reoriented ``.bmtxt`` in the cwd.
     """
@@ -1438,20 +1438,15 @@ def test_diffprep_interface_exports_omp_num_threads_to_the_subprocess():
     assert DIFFPREP(num_threads=5).inputs.environ.get('OMP_NUM_THREADS') == '5'
 
 
-def test_rpe_series_diffprep_nodes_also_declare_threads():
+def test_rpe_series_diffprep_nodes_also_declare_threads(tmp_path):
     """The per-PE-direction DIFFPREP nodes share diffprep_kwargs, so they inherit it."""
-    config = _base_config()
-    config.nipype.omp_nthreads = 6
-    rpe = _scan_groups('rpe_series', rpe_series=['/data/sub-01_dir-PA_dwi.nii.gz'])
-    # the rpe path needs the partner series to exist
-    import tempfile
-    from pathlib import Path
-
     import nibabel as nb
     import numpy as np
 
-    tmp = Path(tempfile.mkdtemp())
-    partner = tmp / 'sub-01_dir-PA_dwi.nii.gz'
+    config = _base_config()
+    config.nipype.omp_nthreads = 6
+    # the rpe path needs the partner series to exist
+    partner = tmp_path / 'sub-01_dir-PA_dwi.nii.gz'
     nb.Nifti1Image(np.zeros((4, 4, 4, 6), dtype='float32'), np.eye(4)).to_filename(str(partner))
     rpe = _scan_groups('rpe_series', rpe_series=[str(partner)])
 
@@ -1465,12 +1460,8 @@ def test_rpe_series_diffprep_nodes_also_declare_threads():
 def test_diffprep_passes_ncores_to_tortoise():
     """--ncores is the only knob that actually bounds TORTOISEProcess.
 
-    num_threads sets OMP_NUM_THREADS, which TORTOISE overrides via
-    omp_set_num_threads(); measured ~1893% CPU with OMP_NUM_THREADS=4 on a
-    24-core host. --ncores is read directly by the patched TORTOISE and is an
-    absolute count, which is what a batch scheduler grants -- the alternative,
-    PercentOfCpuCoresToUse, is applied to the host core count and ignores
-    cgroup/affinity limits.
+    num_threads only sets OMP_NUM_THREADS, which TORTOISE overrides via
+    omp_set_num_threads().
     """
     config = _base_config()
     config.nipype.omp_nthreads = 8

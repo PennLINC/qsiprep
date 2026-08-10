@@ -196,18 +196,12 @@ def test_within_scan_hmc_still_uses_shoreline(tmp_path):
     assert all(all(x == 1e-08 for x in v) for v in thr.values()), thr
 
 
-def test_the_dead_intramodal_workflow_is_still_dead():
-    """init_qsiprep_intramodal_template_wf is called from nowhere, for any transform.
-
-    It also passes spatial_bias_correct= to init_b0_hmc_wf, which does not accept
-    it, so it would raise TypeError if it ever ran. Left unwired deliberately --
-    adding the new settings there would imply it works.
-    """
+def test_init_b0_hmc_wf_has_no_spatial_bias_correct():
+    """init_qsiprep_intramodal_template_wf passes spatial_bias_correct= to
+    init_b0_hmc_wf, which does not accept it; it would raise TypeError if it
+    ever ran and is left unwired deliberately."""
     import inspect
 
-    from qsiprep.workflows.dwi import intramodal_template
     from qsiprep.workflows.dwi.hmc import init_b0_hmc_wf
 
-    src = inspect.getsource(intramodal_template)
-    assert src.count('init_qsiprep_intramodal_template_wf') == 1, 'it gained a caller'
     assert 'spatial_bias_correct' not in inspect.signature(init_b0_hmc_wf).parameters

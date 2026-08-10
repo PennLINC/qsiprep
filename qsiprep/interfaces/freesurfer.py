@@ -229,11 +229,8 @@ class _SynthSegInputSpec(FSTraitedSpecOpenMP):
     num_threads = traits.Int(
         default=1, argstr='--threads %d', usedefault=True, desc='Number of threads to use'
     )
-    # nipype's scheduler only recognises a GPU node via `use_cuda` or `use_gpu`
-    # (engine/nodes.py: is_gpu_node). This tool spells its GPU request
-    # differently, so without this alias the node runs on the device while the
-    # scheduler counts it as pure CPU and freely schedules other GPU work
-    # alongside it. No argstr: it exists purely for resource accounting.
+    # No argstr; exists only so nipype's is_gpu_node() sees this node (see the
+    # matching trait on _SynthStripInputSpec).
     use_gpu = traits.Bool(False, usedefault=True, desc='for nipype GPU scheduling only')
     fast = traits.Bool(argstr='--fast', desc='fast predictions (lower quality).')
     robust = traits.Bool(argstr='--robust', desc='use robust predictions (slower).')
