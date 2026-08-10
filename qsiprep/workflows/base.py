@@ -76,16 +76,12 @@ def _t2w_available_for_sdc(subject_data):
     """Whether a T2w should drive susceptibility distortion correction.
 
     True only when the subject has a T2w, anatomical processing runs
-    (``--anat-modality`` != ``none``), **and** the selected backend actually has a
-    T2w-consuming stage. The T2w consumers -- DRBUDDI's multimodal ``--structural``,
-    TORTOISE ``--epi T2Wreg``, and the extended pepolar report's ``t2w_n4`` -- all
-    take the anatomical workflow's ``t2w_unfatsat``. That output is never produced
-    in dwi-only mode, and it is only produced at all when ``init_anat_preproc_wf``
-    is asked for additional T2ws (see ``additional_t2ws`` in
-    :func:`init_single_subject_wf`, which must stay in sync with this). Requesting
-    T2w-based SDC without it leaves those nodes with an empty input -- the failure
-    the ``t2w_n4`` node hit in CI, and the ``epi_mode="T2Wreg" requires a
-    structural_image`` crash on the fieldmap-less DIFFPREP path.
+    (``--anat-modality`` != ``none``), and the selected backend actually has a
+    T2w-consuming stage. Every T2w consumer takes the anatomical workflow's
+    ``t2w_unfatsat``, which is only produced when ``init_anat_preproc_wf`` is
+    asked for additional T2ws (see ``additional_t2ws`` in
+    :func:`init_single_subject_wf`, which must stay in sync with this).
+    Requesting T2w-based SDC without it leaves those nodes with an empty input.
     """
     return (
         bool(subject_data.get('t2w'))
@@ -215,14 +211,9 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
         anatomical_template = f'{anatomical_template}+{cohort}'
 
     # The anatomical workflow only builds its T2w branch -- and therefore only
-    # produces ``t2w_unfatsat`` -- when asked for additional T2ws. Every consumer
-    # of that output must be reflected here or it is left without an input:
-    #   * DRBUDDI's multimodal ``--structural`` (gated on --pepolar-method)
-    #   * TORTOISE ``--epi T2Wreg``, which the diffprep_* backends use for the
-    #     fieldmap-less case and which is NOT gated on --pepolar-method
-    #   * the extended pepolar report's t2w_n4
-    # Keep this in sync with _t2w_available_for_sdc, which decides whether those
-    # consumers get switched on.
+    # produces ``t2w_unfatsat`` -- when asked for additional T2ws. Keep this in
+    # sync with _t2w_available_for_sdc, which decides whether the consumers of
+    # that output get switched on.
     additional_t2ws = 0
     if _t2w_sdc_backend_enabled() and subject_data['t2w']:
         additional_t2ws = len(subject_data['t2w'])

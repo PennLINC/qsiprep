@@ -28,9 +28,7 @@ from ...interfaces.tortoise import (
     DRBUDDIAggregateOutputs,
     GatherDRBUDDIInputs,
     generate_drbuddi_boilerplate,
-)
-from ...interfaces.tortoise import (
-    sloppy_epi_working_res as _sloppy_epi_res,
+    sloppy_epi_working_res,
 )
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -195,23 +193,15 @@ def init_drbuddi_wf(
             fieldmap_type=fieldmap_info['suffix'],
             num_threads=config.nipype.omp_nthreads,
             sloppy=config.execution.sloppy,
-            **_sloppy_epi_res(),
+            **sloppy_epi_working_res(),
             **_synth_shell_kwargs(synth_shell_bval, synth_shell_ndirs),
             use_cuda=use_cuda,
-            # NOTE: --DRBUDDI_start_with_diffeomorphic_for_rigid_reg is
-            # deliberately NOT set, even though cheapening Step1's
-            # rigid+diffeo+rigid loop looks like the obvious companion to
-            # ``sloppy`` (which only replaces the diffeomorphic schedule, via
-            # --DRBUDDI_stage). TORTOISE has that option commented out of its
-            # parser and its getter is dead code, so it cannot change anything --
-            # and DRBUDDI *rejects* it, printing "Unknown command line parameter"
-            # and then exiting 0. nipype reads that as success and the run dies
-            # afterwards on the missing bdown_to_bup_rigidtrans.hdf5.
-            #
-            # --DRBUDDI_disable_initial_rigid is disabled in the parser the same
-            # way, and would additionally suppress bdown_to_bup_rigid_trans_h5,
-            # which DRBUDDIAggregateOutputs dereferences unguarded on the
-            # rpe_series FA branch. Neither flag is safe to send.
+            # NOTE: --DRBUDDI_start_with_diffeomorphic_for_rigid_reg and
+            # --DRBUDDI_disable_initial_rigid look like natural companions to
+            # ``sloppy``, but both are commented out of TORTOISE's parser:
+            # DRBUDDI prints "Unknown command line parameter", exits 0 (which
+            # nipype reads as success), and the run dies later on missing
+            # outputs. Neither flag is safe to send.
         ),
         name='drbuddi',
         n_procs=config.nipype.omp_nthreads,
