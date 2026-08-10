@@ -252,6 +252,7 @@ def _build_rpe_diffprep_stage(
     split_groups = pe.Node(
         SplitDWIsByDistortionGroup(pe_axis=pe_axis, b0_threshold=b0_threshold),
         name='split_rpe_groups',
+        mem_gb=mem_gb,
     )
     workflow.connect([
         (inputnode, split_groups, [
@@ -262,7 +263,7 @@ def _build_rpe_diffprep_stage(
         ]),
     ])  # fmt:skip
 
-    recombine = pe.Node(ConcatenateDIFFPREPGroups(), name='recombine_rpe_groups')
+    recombine = pe.Node(ConcatenateDIFFPREPGroups(), name='recombine_rpe_groups', mem_gb=mem_gb)
     workflow.connect([
         (split_groups, recombine, [('group_assignments', 'group_assignments')]),
     ])  # fmt:skip
@@ -390,13 +391,12 @@ def init_diffprep_hmc_wf(
     fieldmap_info = scan_groups['fieldmap_info']
     fieldmap_type = fieldmap_info['suffix']
 
-    # TORTOISEConvert holds the whole series as float32; size it from the data
-    # rather than guessing, so a longer or higher-resolution acquisition is
-    # budgeted correctly instead of inheriting a number tuned for CRASH.
+    # Several nodes below hold the whole series as float32; size their memory
+    # from the data rather than guessing.
     _convert_inputs = list(scan_groups.get('dwi_series', []))
     if fieldmap_type == 'rpe_series':
-        _convert_inputs += list(scan_groups.get('rpe_series', []))
-    convert_mem_gb = tortoise_convert_mem_gb(_convert_inputs)
+        _convert_inputs += list(fieldmap_info.get('rpe_series', []))
+    series_mem_gb = tortoise_convert_mem_gb(_convert_inputs)
 
     # TORTOISE-native T2Wreg replaces SyN for the fieldmap-less case when a T2w
     # structural is available: DIFFPREP runs the ``--epi T2Wreg`` stage in the
@@ -444,27 +444,11 @@ def init_diffprep_hmc_wf(
         sloppy_kwargs = {}
 
     diffprep_kwargs = dict(
-        # Sets OMP_NUM_THREADS for consistency with DRBUDDI and SynthesizeDWIs,
-        # but be aware it does NOT bound TORTOISEProcess. Measured on a real
-        # session (24-core host, 72-volume workload):
-        #
-        #   unconstrained                            ~2071% CPU
-        #   OMP_NUM_THREADS=4                        ~1893%
-        #   ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS=4   ~2003%
-        #
-        # TORTOISEProcess spawns threads from hardware concurrency and has no
-        # flag to limit it -- its --ncores option documents itself as applying
-        # "ONLY to the DRBUDDI executable and not TORTOISEProcess".
-        #
-        # Practical consequence for scheduling: this node really occupies ~20 of
-        # 24 cores whenever it runs, so n_procs should be set close to the total
-        # (i.e. run with --omp-nthreads == --nthreads) or nipype will schedule
-        # work alongside it that the machine cannot actually accommodate.
-        # Constraining it for real needs cgroups (docker --cpus/--cpuset-cpus).
+        # num_threads only sets OMP_NUM_THREADS, which TORTOISEProcess ignores
+        # (it sizes its thread pool from hardware concurrency and calls
+        # omp_set_num_threads itself); ncores is the knob that actually bounds
+        # it, so nipype's n_procs declaration and real CPU use agree.
         num_threads=config.nipype.omp_nthreads,
-        # The knob that actually works. Unlike num_threads above, this reaches
-        # TORTOISEProcess and bounds it, so nipype's n_procs declaration and the
-        # process's real CPU use finally agree.
         ncores=config.nipype.omp_nthreads,
         # Only forwarded when explicitly set: the right value depends on the
         # GPU/CPU balance of the node, and TORTOISE's own default should stand
@@ -497,18 +481,12 @@ def init_diffprep_hmc_wf(
             pe_axis=pe_dir[0],
             b0_threshold=config.workflow.b0_threshold,
             n_procs=config.nipype.omp_nthreads,
-            mem_gb=convert_mem_gb,
+            mem_gb=series_mem_gb,
         )
     else:
         # Convert gzipped niftis + FSL gradients into TORTOISE format (.nii + .bmtxt).
-        # Declares its real footprint so nipype's memory scheduling can bound it.
-        # It decompresses a whole 4D series into an uncompressed .nii -- ~1.3 GB of
-        # output for a 279-volume acquisition, and the kernel recorded 1.69 GB RSS
-        # for one of these when it OOM-killed a 3-subject run. Undeclared, nipype
-        # budgeted the 0.20 GB default and happily ran eight at once on 24 cores,
-        # which is 13 GB of unaccounted memory on a 30 GB box.
         tortoise_convert = pe.Node(
-            TORTOISEConvert(), name='tortoise_convert', mem_gb=convert_mem_gb
+            TORTOISEConvert(), name='tortoise_convert', mem_gb=series_mem_gb
         )
 
         # TORTOISE reads PhaseEncodingDirection from a BIDS-style JSON next to the
@@ -546,6 +524,7 @@ def init_diffprep_hmc_wf(
     split_outputs = pe.Node(
         DIFFPREPSplitOutputs(b0_threshold=config.workflow.b0_threshold),
         name='split_outputs',
+        mem_gb=series_mem_gb,
     )
 
     motion_params = pe.Node(DIFFPREPMotionParams(), name='motion_params')
@@ -572,6 +551,7 @@ def init_diffprep_hmc_wf(
         SynthesizeDWIs(num_threads=config.nipype.omp_nthreads),
         name='synth_dwis',
         n_procs=config.nipype.omp_nthreads,
+        mem_gb=series_mem_gb,
     )
     slice_qc = pe.Node(SliceQC(), name='slice_qc')
 

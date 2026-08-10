@@ -182,25 +182,18 @@ def _create_mem_gb(dwi_fname):
 
 
 def tortoise_convert_mem_gb(dwi_files):
-    """Peak memory for ``TORTOISEConvert``, derived from the series geometry.
+    """Peak memory for nodes that hold a whole DWI series as float32.
 
-    Sized from the voxel count rather than the file size, because neither of the
-    obvious shortcuts is right. The interface does
-    ``load_img(..., dtype='float32')`` and writes float32, so the working set is
-    ``nvoxels * 4`` whatever the input dtype: CRASH is ``uint16`` on disk, so the
-    array dtype underestimates by 2x, and ``_create_mem_gb``'s ``filesize`` --
-    which is ``os.path.getsize`` on the *gzipped* file -- underestimates by 3.4x.
-
-    Ground truth on a 279-volume 128x128x69 series: 0.34 GB gzipped, 0.59 GB as
-    uint16, **1.17 GB as float32** (matching the converted .nii exactly). The
-    kernel recorded 1.69 GB RSS when it OOM-killed one of these, a factor of
-    ~1.45 for the transient source array and interpreter overhead.
+    Sized from the voxel count rather than the file size: the consumers load
+    with ``dtype='float32'``, so the working set is ``nvoxels * 4`` whatever the
+    on-disk dtype, and a gzipped file size badly understates it. The 1.5 factor
+    covers the transient source array and interpreter overhead.
     """
     total_voxels = 0
     for fname in dwi_files:
         try:
             total_voxels += int(np.prod(nb.load(fname).shape))
-        except Exception:
+        except (OSError, nb.filebasedimages.ImageFileError):
             # unreadable at build time (docs builds pass fake paths); fall back
             # to the on-disk size, knowing it understates a compressed input
             try:
