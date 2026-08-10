@@ -1,18 +1,103 @@
 """Utility functions for tests."""
 
+import json
 import lzma
 import os
 import tarfile
 from glob import glob
 from gzip import GzipFile
 from io import BytesIO
+from pathlib import Path
 
+import nibabel as nb
+import numpy as np
 import requests
 from nipype import logging
+from niworkflows.utils.testing import generate_bids_skeleton
 
 from qsiprep import config
 
 LOGGER = logging.getLogger('nipype.utils')
+
+# A complex-valued DWI acquisition: the magnitude and phase parts of one run.
+# Neither part carries its own gradients or metadata, so both must reach the
+# shared, non-part-specific files through the BIDS inheritance principle.
+COMPLEX_DWI_SKELETON = {
+    '01': [
+        {
+            'dwi': [
+                {'part': 'mag', 'suffix': 'dwi'},
+                {'part': 'phase', 'suffix': 'dwi'},
+            ],
+        },
+    ],
+}
+
+# Gradients shared by every part of the acquisition above.
+SHARED_DWI_GRADIENTS = {
+    'sub-01/dwi/sub-01_dwi.bval': '0 1000\n',
+    'sub-01/dwi/sub-01_dwi.bvec': '1 0\n0 1\n0 0\n',
+}
+
+# The complex-valued equivalent for an EPI fieldmap, with a shared "secret" bval.
+COMPLEX_EPI_SKELETON = {
+    '01': [
+        {
+            'fmap': [
+                {'dir': 'PA', 'part': 'mag', 'suffix': 'epi'},
+                {'dir': 'PA', 'part': 'phase', 'suffix': 'epi'},
+            ],
+        },
+    ],
+}
+
+SHARED_EPI_GRADIENTS = {'sub-01/fmap/sub-01_dir-PA_epi.bval': '0 2000 0\n'}
+
+
+def build_test_dataset(root, skeleton, extra_files=None, n_volumes=1, affine=None):
+    """Build a small BIDS dataset from a ``generate_bids_skeleton`` description.
+
+    ``generate_bids_skeleton`` only creates empty ``.nii.gz`` files, and it can
+    only write a sidecar next to the image it describes. This wrapper fills the
+    images with real data so they can be loaded, and writes any additional files
+    the skeleton cannot express -- sidecars placed higher up the hierarchy for
+    the inheritance principle, and ``.bval``/``.bvec`` files.
+
+    Parameters
+    ----------
+    root : :obj:`str` or :obj:`pathlib.Path`
+        Where to build the dataset. Must not already exist.
+    skeleton : :obj:`dict`
+        A ``generate_bids_skeleton`` dataset description.
+    extra_files : :obj:`dict`, optional
+        Maps a dataset-relative path to its contents. A :obj:`dict` value is
+        written as JSON, a :obj:`str` value verbatim.
+    n_volumes : :obj:`int`, optional
+        Number of volumes to give each generated image. The default of 1 writes
+        3D images.
+    affine : :obj:`numpy.ndarray`, optional
+        Affine to give each generated image. Defaults to an identity affine,
+        which is RAS+.
+
+    Returns
+    -------
+    :obj:`pathlib.Path`
+        The dataset root.
+    """
+    root = Path(root)
+    generate_bids_skeleton(str(root), skeleton)
+
+    affine = np.eye(4) if affine is None else affine
+    shape = (2, 2, 2) if n_volumes == 1 else (2, 2, 2, n_volumes)
+    for nifti_file in sorted(root.glob('**/*.nii.gz')):
+        nb.Nifti1Image(np.zeros(shape, dtype=np.float32), affine).to_filename(nifti_file)
+
+    for relative_path, contents in (extra_files or {}).items():
+        target = root / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(contents) if isinstance(contents, dict) else contents)
+
+    return root
 
 
 def download_test_data(dset, data_dir=None):

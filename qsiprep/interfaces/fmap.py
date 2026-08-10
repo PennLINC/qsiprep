@@ -36,7 +36,7 @@ from nipype.interfaces.base import (
 )
 from nipype.interfaces.fsl.epi import TOPUP, TOPUPInputSpec
 from nipype.interfaces.mixins import reporting
-from nipype.utils.filemanip import fname_presuffix, split_filename
+from nipype.utils.filemanip import fname_presuffix
 from niworkflows.viz.utils import (
     SVGNS,
     compose_view,
@@ -47,11 +47,17 @@ from niworkflows.viz.utils import (
 )
 from svgutils.transform import SVGFigure
 
+from ..utils.bids import load_sidecar
+from .epi_fmap import (
+    _merge_metadata,
+    acqp_lines,
+    load_epi_dwi_fieldmaps,
+    read_nifti_sidecar,
+)
 from .images import to_lps
 from .reports import topup_selection_to_report
 
 LOGGER = logging.getLogger('nipype.interface')
-CRITICAL_KEYS = ['PhaseEncodingDirection', 'TotalReadoutTime', 'EffectiveEchoSpacing']
 
 
 class _ParallelTOPUPInputSpec(TOPUPInputSpec):
@@ -114,12 +120,10 @@ class B0RPEFieldmap(SimpleInterface):
         )
         LOGGER.info(fmap_report)
 
-        # Get b=0 images and metadata from all the input images
-        b0_fieldmap_metadata = []
-        for image_path in set(original_files):
-            pth, fname, _ = split_filename(image_path)
-            original_json = op.join(pth, fname) + '.json'
-            b0_fieldmap_metadata.append(original_json)
+        # Get metadata from all the input images, honoring the inheritance principle
+        b0_fieldmap_metadata = [
+            load_sidecar(image_path) for image_path in sorted(set(original_files))
+        ]
 
         # Warn the user if the metadata does not match
         merged_metadata = _merge_metadata(b0_fieldmap_metadata)
@@ -159,26 +163,6 @@ class B0RPEFieldmap(SimpleInterface):
         self._results['fmap_file'] = image_list
         self._results['fmap_info'] = json_list
         return runtime
-
-
-def _merge_metadata(metadatas):
-    # Combine metadata from merged b=0 images
-    if not metadatas:
-        return {}
-
-    merged_metadata = metadatas[0]
-    for next_metadata in metadatas[1:]:
-        for critical_key in CRITICAL_KEYS:
-            current_value = merged_metadata.get(critical_key)
-            next_value = next_metadata.get(critical_key)
-            if not current_value == next_value:
-                LOGGER.warning(
-                    '%s inconsistent in fieldmaps: %s, %s',
-                    critical_key,
-                    str(current_value),
-                    str(next_value),
-                )
-    return merged_metadata
 
 
 class FieldToRadSInputSpec(BaseInterfaceInputSpec):
@@ -696,248 +680,6 @@ def _delta_te(in_values, te1=None, te2=None):
     return abs(float(te2) - float(te1))
 
 
-def read_nifti_sidecar(json_file):
-    if not json_file.endswith('.json'):
-        json_file = fname_presuffix(json_file, suffix='.json', use_ext=False)
-        if not op.exists(json_file):
-            raise Exception('No corresponding json file found')
-
-    with open(json_file) as f:
-        metadata = json.load(f)
-    pe_dir = metadata['PhaseEncodingDirection']
-    slice_times = metadata.get('SliceTiming')
-    trt = metadata.get('TotalReadoutTime')
-    if trt is None:
-        pass
-    return {'PhaseEncodingDirection': pe_dir, 'SliceTiming': slice_times, 'TotalReadoutTime': trt}
-
-
-acqp_lines = {
-    'i': '1 0 0 %.6f',
-    'j': '0 1 0 %.6f',
-    'k': '0 0 1 %.6f',
-    'i-': '-1 0 0 %.6f',
-    'j-': '0 -1 0 %.6f',
-    'k-': '0 0 -1 %.6f',
-}
-
-
-def get_topup_inputs_from(
-    dwi_file,
-    bval_file,
-    b0_threshold,
-    topup_prefix,
-    bids_origin_files,
-    epi_fmaps=None,
-    max_per_spec=3,
-    topup_requested=False,
-):
-    """Create a datain spec and a slspec from a concatenated dwi series.
-
-    Create inputs for TOPUP that come from data in ``dwi/`` and epi fieldmaps in ``fmap/``.
-    The ``nii_file`` input may be the result of concatenating a number of scans with different
-    distortions present. The original source of each volume in ``nii_file`` is listed in
-    ``bids_origin_files``.
-
-    The strategy is to select ``max_per_spec`` b=0 images from each distortion group.
-    Here, distortion group uses the FSL definition of a phase encoding direction and
-    total readout time, as specified in the datain file used by TOPUP (i.e. "0 -1 0 0.087").
-
-
-    Case: Two opposing PE direction dwi series
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-    For example if the following b=0 images are found at the following indices into
-    ``nii_file``:
-
-    ============ ============================= ==================
-    Image Index  BIDS source file for a b=0    Distortion Group
-    ------------ ----------------------------- ------------------
-    0            sub-1_dir-AP_run-1_dwi.nii.gz ``0 -1 0 0.087``
-    15           sub-1_dir-AP_run-1_dwi.nii.gz ``0 -1 0 0.087``
-    30           sub-1_dir-AP_run-1_dwi.nii.gz ``0 -1 0 0.087``
-    45           sub-1_dir-AP_run-1_dwi.nii.gz ``0 -1 0 0.087``
-    60           sub-1_dir-AP_run-2_dwi.nii.gz ``0 -1 0 0.087``
-    75           sub-1_dir-AP_run-2_dwi.nii.gz ``0 -1 0 0.087``
-    90           sub-1_dir-AP_run-2_dwi.nii.gz ``0 -1 0 0.087``
-    105          sub-1_dir-AP_run-2_dwi.nii.gz ``0 -1 0 0.087``
-    120          sub-1_dir-PA_run-1_dwi.nii.gz ``0 1 0 0.087``
-    135          sub-1_dir-PA_run-1_dwi.nii.gz ``0 1 0 0.087``
-    150          sub-1_dir-PA_run-1_dwi.nii.gz ``0 1 0 0.087``
-    165          sub-1_dir-PA_run-1_dwi.nii.gz ``0 1 0 0.087``
-    ============ ============================= ==================
-
-    This will select images 0, 45 and 105 to represent the distortion group ``0 -1 0 0.087`` and
-    images 120, 135 and 165 to represent ``0 1 0 0.087``. The ``--datain`` file would then
-    contain::
-
-        0 -1 0 0.087
-        0 -1 0 0.087
-        0 -1 0 0.087
-        0 1 0 0.087
-        0 1 0 0.087
-        0 1 0 0.087
-
-    Case: one DWI series and an EPI fieldmap
-    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-    If a reverse-phase encoding fieldmap image (or images) are passed in through ``epi_fmaps``,
-    these will undergo the same selection process using ``max_per_spec``. The images will be
-    added to the *end* of the image series, though, to ensure that the fieldmap correction will
-    be aligned to the first b=0 image in ``nii_file``. For example if ``nii_file`` contains
-
-    ============ ============================= ==================
-    Image Index  BIDS source file for a b=0    Distortion Group
-    ------------ ----------------------------- ------------------
-    0            sub-1_dir-AP_run-1_dwi.nii.gz ``0 -1 0 0.087``
-    15           sub-1_dir-AP_run-1_dwi.nii.gz ``0 -1 0 0.087``
-    30           sub-1_dir-AP_run-1_dwi.nii.gz ``0 -1 0 0.087``
-    45           sub-1_dir-AP_run-1_dwi.nii.gz ``0 -1 0 0.087``
-    ============ ============================= ==================
-
-    and the file from fmaps contains
-
-    ============ ============================= ==================
-    Image Index  BIDS source file for a b=0    Distortion Group
-    ------------ ----------------------------- ------------------
-    0            sub-1_dir-PA_epi.nii.gz       ``0 1 0 0.087``
-    1            sub-1_dir-PA_epi.nii.gz       ``0 1 0 0.087``
-    ============ ============================= ==================
-
-    images 0, 15 and 45 would be selected to represent ``0 -1 0 0.087`` and images 0 and 1
-    would be selected to represent ``0 1 0 0.087``, resulting in a ``--datain`` file that
-    contains::
-
-        0 -1 0 0.087
-        0 -1 0 0.087
-        0 -1 0 0.087
-        0 1 0 0.087
-        0 1 0 0.087
-
-
-    Parameters:
-    ===========
-
-        nii_file : str
-            A 4D DWI Series
-        b0_indices: array-like
-            indices into nii_file that can be used by topup
-        topup_prefix: str
-            file prefix for topup inputs
-        bids_origin_files: list
-            A list with the original bids file of each image in ``nii_file``. This is
-            necessary because merging may have happened earlier in the pipeline
-        epi_fmaps:
-            A list of b=0 images from the fmaps/ directory.
-        max_per_spec: int
-            The maximum number of b=0 images to extract from a PE direction / image set
-
-    """
-
-    # Start with the DWI file. Determine which images are b=0
-    bvals = np.loadtxt(bval_file)
-    b0_indices = np.flatnonzero(bvals < b0_threshold)
-    if not b0_indices.size:
-        raise RuntimeError('No b=0 images available for TOPUP from the dwi.')
-    dwi_nii = image.load_img(dwi_file)
-    # Gather images from just the dwi series
-    dwi_spec_lines, dwi_imain, dwi_report, _ = topup_inputs_from_4d_file(
-        dwi_nii,
-        b0_indices,
-        bids_origin_files,
-        image_source='combined DWI series',
-        max_per_spec=max_per_spec,
-    )
-
-    # If there are EPI fieldmaps, add them to the END of the topup spec
-    if epi_fmaps and isdefined(epi_fmaps):
-        topup_imain, topup_spec_lines, fmap_report = add_epi_fmaps_to_dwi_b0s(
-            epi_fmaps, b0_threshold, max_per_spec, dwi_spec_lines, dwi_imain
-        )
-        topup_text = dwi_report + fmap_report
-    else:
-        topup_imain = dwi_imain
-        topup_spec_lines = dwi_spec_lines
-        topup_text = dwi_report
-
-    imain_output = topup_prefix + 'imain.nii.gz'
-    imain_img = to_lps(topup_imain, new_axcodes=('L', 'A', 'S'))
-    assert imain_img.shape[3] == len(topup_spec_lines)
-    imain_img.to_filename(imain_output)
-
-    # Write the datain text file and make sure it's usable if it's needed
-    if len(set(topup_spec_lines)) < 2 and topup_requested:
-        print(topup_spec_lines)
-        raise Exception(
-            'Unable to run TOPUP: not enough distortion groups. '
-            'Check "IntendedFor" fields or consider using --ignore fieldmaps.'
-        )
-
-    datain_file = topup_prefix + 'datain.txt'
-    with open(datain_file, 'w') as f:
-        f.write('\n'.join(topup_spec_lines))
-
-    return datain_file, imain_output, topup_text
-
-
-def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
-    """Creates a 4D image of b=0s from a list of input images.
-
-    Parameters:
-    -----------
-
-    fmap_list: list
-        List of paths to epi fieldmap images
-    b0_threshold: int
-        Maximum b value for an image to be considered a b=0
-
-    Returns:
-    --------
-
-    concatenated_images: spatial image
-        The b=0 volumes concatenated into a 4D image
-    b0_indices: list
-        List of the original indices of the images in ``concatenated_images``
-    original_files: list
-        List of the original files where each b=0 image came from.
-
-    """
-    # Add in the rpe data, if it exists
-    b0_indices = []
-    original_files = []
-    image_series = []
-
-    for fmap_file in fmap_list:
-        pth, fname, _ = split_filename(fmap_file)
-        potential_bval_file = op.join(pth, fname) + '.bval'
-        starting_index = len(original_files)
-        fmap_img = image.load_img(fmap_file)
-        image_series.append(fmap_img)
-        num_images = 1 if fmap_img.ndim == 3 else fmap_img.shape[3]
-        original_files += [fmap_file] * num_images
-
-        # Which images are b=0 images?
-        if op.exists(potential_bval_file):
-            bvals = np.loadtxt(potential_bval_file)
-            too_large = np.flatnonzero(bvals > b0_threshold)
-            too_large_values = bvals[too_large]
-            if too_large.size:
-                LOGGER.warning(
-                    'Excluding volumes %s from the %s because b=%s is greater than %d',
-                    str(too_large),
-                    fmap_file,
-                    str(too_large_values),
-                    b0_threshold,
-                )
-            _b0_indices = np.flatnonzero(bvals < b0_threshold) + starting_index
-        else:
-            _b0_indices = np.arange(num_images) + starting_index
-        b0_indices += _b0_indices.tolist()
-
-    concatenated_images = image.concat_imgs(image_series, auto_resample=True)
-    return concatenated_images, b0_indices, original_files
-
-
 def topup_inputs_from_4d_file(
     nii_file,
     b0_indices,
@@ -1085,39 +827,6 @@ def add_epi_fmaps_to_dwi_b0s(epi_fmaps, b0_threshold, max_per_spec, dwi_spec_lin
     )
 
     return topup_imain, topup_spec_lines, new_report
-
-
-def get_distortion_grouping(origin_file_list):
-    """Discover which distortion groups are present, then assign each volume to a group."""
-    unique_files = sorted(set(origin_file_list))
-    unique_acqps = []
-    line_lookup = {}
-    for unique_dwi in unique_files:
-        spec = read_nifti_sidecar(unique_dwi)
-        spec_line = acqp_lines[spec['PhaseEncodingDirection']]
-        acqp_line = spec_line % spec['TotalReadoutTime']
-        if acqp_line not in unique_acqps:
-            unique_acqps.append(acqp_line)
-        line_lookup[unique_dwi] = unique_acqps.index(acqp_line) + 1
-
-    group_numbers = [line_lookup[dwi_file] for dwi_file in origin_file_list]
-    return unique_acqps, group_numbers
-
-
-def eddy_inputs_from_dwi_files(origin_file_list, eddy_prefix):
-    unique_acqps, group_numbers = get_distortion_grouping(origin_file_list)
-
-    # Create the acqp file
-    acqp_file = eddy_prefix + 'acqp.txt'
-    with open(acqp_file, 'w') as f:
-        f.write('\n'.join(unique_acqps))
-
-    # Create the index file
-    index_file = eddy_prefix + 'index.txt'
-    with open(index_file, 'w') as f:
-        f.write(' '.join(map(str, group_numbers)))
-
-    return acqp_file, index_file
 
 
 class _ApplyScalingImagesInputSpec(ApplyTransformsInputSpec):

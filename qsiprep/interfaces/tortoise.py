@@ -34,8 +34,7 @@ from .denoise import (
     SeriesPreprocReportInputSpec,
     SeriesPreprocReportOutputSpec,
 )
-from .epi_fmap import get_best_b0_topup_inputs_from, safe_get_3d_image
-from .fmap import get_distortion_grouping
+from .epi_fmap import get_best_b0_topup_inputs_from, get_distortion_grouping, safe_get_3d_image
 from .gradients import write_concatenated_fsl_gradients
 from .images import split_bvals_bvecs, to_lps
 
