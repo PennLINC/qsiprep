@@ -42,9 +42,9 @@ from .images import split_bvals_bvecs, to_lps
 
 LOGGER = logging.getLogger('nipype.interface')
 
-#: --sloppy working-grid resolution for DRBUDDI/EPIREG, in mm. TORTOISE's own
-#: rule upsamples to <=1mm regardless of the acquisition, which dominates
-#: runtime and memory; smoke tests do not need sub-voxel registration.
+# --sloppy working-grid resolution for DRBUDDI/EPIREG, in mm. TORTOISE's own
+# rule upsamples to <=1mm regardless of the acquisition, which dominates
+# runtime and memory; smoke tests do not need sub-voxel registration.
 SLOPPY_EPI_WORKING_RES = 2.5
 
 SLOPPY_DRBUDDI = (
@@ -82,8 +82,8 @@ class TORTOISECommandLine(CommandLine):
 
     input_spec = TORTOISEInputSpec
     _num_threads = None
-    #: Name of the CUDA build of ``_cmd``, when one exists. ``None`` disables
-    #: GPU switching for this interface.
+    # Name of the CUDA build of ``_cmd``, when one exists. None disables GPU
+    # switching for this interface.
     _cuda_cmd = None
 
     def __init__(self, **inputs):
@@ -107,17 +107,8 @@ class TORTOISECommandLine(CommandLine):
     def _use_cuda(self):
         """Select the CPU or CUDA build of this TORTOISE tool.
 
-        Mirrors ``ExtendedEddy._use_cuda``, but without a PATH scan: FSL encodes
-        the CUDA version in the binary name (``eddy_cuda11.0``) whereas TORTOISE
-        ships a fixed ``_cuda`` suffix (``TORTOISEProcess_cuda``, ``DRBUDDI_cuda``).
-
-        The caller is responsible for exposing the GPU to the container
-        (``docker run --gpus all`` / ``apptainer --nv``), exactly as for
-        ``eddy_cuda``.
-
-        NOTE: the CUDA build is not numerically identical to the CPU one -- on
-        the T2Wreg path it converges to a visibly different (smaller, smoother)
-        deformation field. Treat switching as a change in results, not just speed.
+        The CUDA build is not numerically identical to the CPU one, so switching
+        changes results, not just runtime.
         """
         want_cuda = isdefined(self.inputs.use_cuda) and self.inputs.use_cuda
         # type(self)._cmd is the CPU name; self._cmd below is an instance attr.
@@ -337,12 +328,9 @@ class _DRBUDDIInputSpec(TORTOISEInputSpec):
     sloppy = traits.Bool(
         False, argstr=SLOPPY_DRBUDDI, desc='use underpowered (sloppy) registration for speed'
     )
-    #: Opt-in: have TORTOISE fit MAPMRI and synthesize a single tensor-fittable
-    #: shell to build DRBUDDI's [b0, FA] registration target, instead of fitting
-    #: a tensor to the q-space grid directly. Only useful for non-shelled
-    #: (CS-DSI) data whose plain-tensor fit gives a poor correction -- measured
-    #: benefit on typical HASC55 data is small (see docs), and it roughly doubles
-    #: DRBUDDI runtime on GPU. Requires a patched TORTOISE exposing the flag.
+    # Opt-in: have TORTOISE synthesize a single tensor-fittable shell for
+    # DRBUDDI's [b0, FA] registration target instead of fitting a tensor to the
+    # q-space grid directly. Requires a patched TORTOISE exposing the flag.
     synth_shell_bval = traits.Float(
         argstr='--DRBUDDI_synth_shell_bval %g',
         desc='b-value of the shell synthesized for the DRBUDDI target (0 = off)',
@@ -1061,27 +1049,14 @@ class DIFFPREP(TORTOISECommandLine):
         outputs['corrected_bmtxt_file'] = proc_base + '_moteddy.bmtxt'
 
         if self.inputs.epi_mode == 'T2Wreg':
-            # Deliberately NOT the ``*_TORTOISE_final.nii`` FINALDATA image.
-            #
-            # Passing ``-s`` runs two stages beyond the EPI correction:
-            # StructuralAlignment rigidly registers the b=0 to the structural, and
-            # FinalData resamples everything into that frame with the bmatrix
-            # rotated to match. Taking FINALDATA therefore pulls coregistration and
-            # ACPC alignment forward into HMC, which is qsiprep's job later on --
-            # measured on real data, ~12 deg of the alignment happened inside
-            # DIFFPREP and qsiprep's own b0->anat step was left with 1.7 deg.
-            #
-            # The EPI stage also writes its displacement field, in the DWI's world
-            # frame, so emit that as a transform instead. qsiprep composes it with
-            # HMC and coregistration and resamples once -- exactly the contract the
-            # standalone DRBUDDI path already uses (its ``deformation_FINV`` becomes
-            # ``sdc_warps``). Verified: applying this field to the moteddy b=0 with
-            # antsApplyTransforms reproduces TORTOISE's own ``blip_up_b0_corrected``
-            # at r = 0.997.
-            #
-            # There is no way to stop TORTOISE before StructuralAlignment
-            # (``--step`` only sets the *start* step), so those stages still run;
-            # their output is simply unused.
+            # Deliberately NOT the ``*_TORTOISE_final.nii`` FINALDATA image:
+            # passing ``-s`` also runs StructuralAlignment + FinalData, which
+            # would pull coregistration and ACPC alignment forward into HMC.
+            # Emit the EPI stage's displacement field instead, so qsiprep
+            # composes it with HMC and coregistration and resamples once -- the
+            # same contract as the standalone DRBUDDI path. There is no way to
+            # stop TORTOISE before StructuralAlignment (``--step`` only sets the
+            # *start* step); those stages still run and their output is unused.
             sdc_warp = op.join(temp_proc, 'deformation_FINV.nii.gz')
             if not op.exists(sdc_warp):
                 raise FileNotFoundError(
@@ -1220,21 +1195,11 @@ class DIFFPREPSplitOutputs(SimpleInterface):
             vol_img.to_filename(vol_path)
             per_vol_dwis.append(vol_path)
 
-        # Split the FSL gradients into per-volume txt files.
-        #
-        # deoblique=True routes the gradients through qsiprep's mrtrix-based
-        # RAS+ conversion (``bvec_to_rasb`` -> ``mrinfo -dwgrad -fslgrad``), the
-        # same path ``SplitDWIsFSL(deoblique_bvecs=True)`` uses for the eddy
-        # backend. TORTOISEBmatrixToFSLBVecs emits FSL-convention (voxel-frame)
-        # bvecs, which are orientation- and obliquity-dependent; the mrtrix
-        # conversion removes that dependence.
-        #
-        # In practice DIFFPREP's output grid is axis-aligned -- on the T2Wreg
-        # path TORTOISE resamples onto the ACPC-gridded T2w, and measured on
-        # real data this flag moves the gradients by 0.02 deg. It matters when
-        # the output grid is oblique (2.5 deg on a raw-T2w structural), so use
-        # the tested conversion rather than relying on the grid staying
-        # axis-aligned.
+        # deoblique=True routes the gradients through the same mrtrix-based RAS+
+        # conversion ``SplitDWIsFSL(deoblique_bvecs=True)`` uses for the eddy
+        # backend: TORTOISEBmatrixToFSLBVecs emits FSL-convention (voxel-frame)
+        # bvecs, which are orientation- and obliquity-dependent, and the
+        # conversion removes that dependence when the output grid is oblique.
         per_vol_bvals, per_vol_bvecs = split_bvals_bvecs(
             bval_path,
             bvec_path,
@@ -1516,343 +1481,6 @@ class ConcatenateDIFFPREPGroups(SimpleInterface):
         self._results['corrected_bmtxt_file'] = corrected_bmtxt
         self._results['transformations_file'] = transforms_file
         return runtime
-
-
-# ---------------------------------------------------------------------------
-# Predicted-shell DRBUDDI inputs for non-shelled reverse-PE series (CS-DSI).
-#
-# These are faithful ports of the validated csdsi-preproc offshoot
-# (``csdsi_preproc/interfaces.py`` / ``predict.py``). For a non-shelled series,
-# DRBUDDI's own tensor fit is ill-conditioned, so we synthesize a tensor-fittable
-# ``[b0 + N*b1000]`` shell per phase-encoding direction (via qsiprep's 3dSHORE
-# ``SignalPrediction``) and hand THOSE to DRBUDDI's rpe_series path so it can
-# derive a usable ``[b0, FA]`` registration target. The deformation DRBUDDI
-# estimates is then applied to the *real* corrected data (the synthesized shells
-# live in the same distorted space as their side's real volumes).
-# ---------------------------------------------------------------------------
-
-
-class _SplitCorrectedByGroupInputSpec(BaseInterfaceInputSpec):
-    dwi_files = InputMultiObject(File(exists=True), mandatory=True)
-    bval_files = InputMultiObject(File(exists=True), mandatory=True)
-    bvec_files = InputMultiObject(File(exists=True), mandatory=True)
-    forward_transforms = traits.List(mandatory=True)
-    b0_indices = traits.List(traits.Int(), mandatory=True)
-    original_files = InputMultiObject(File(exists=True), mandatory=True)
-
-
-class _SplitCorrectedByGroupOutputSpec(TraitedSpec):
-    up_dwi_files = OutputMultiObject(File(exists=True))
-    up_bval_files = OutputMultiObject(File(exists=True))
-    up_bvec_files = OutputMultiObject(File(exists=True))
-    up_transforms = traits.List()
-    up_b0_indices = traits.List(traits.Int())
-    up_b0_files = OutputMultiObject(File(exists=True))
-    down_dwi_files = OutputMultiObject(File(exists=True))
-    down_bval_files = OutputMultiObject(File(exists=True))
-    down_bvec_files = OutputMultiObject(File(exists=True))
-    down_transforms = traits.List()
-    down_b0_indices = traits.List(traits.Int())
-    down_b0_files = OutputMultiObject(File(exists=True))
-    blip_assignments = traits.List(traits.Str())
-
-
-class SplitCorrectedByGroup(SimpleInterface):
-    """Split the recombined per-volume corrected series into up/down groups.
-
-    Unlike :func:`split_into_up_and_down_niis` (which concatenates each side into
-    a 4D file for DRBUDDI's b0-only path), this keeps the *per-volume* lists that
-    the predicted-shell synthesis needs, and reports per-side b=0 positions plus
-    the ``blip_assignments`` (one ``'up'``/``'down'`` per volume, in the original
-    order) that :class:`DRBUDDIAggregateOutputs` uses to distribute the warps.
-    """
-
-    input_spec = _SplitCorrectedByGroupInputSpec
-    output_spec = _SplitCorrectedByGroupOutputSpec
-
-    def _run_interface(self, runtime):
-        assignments = _distortion_group_assignments(self.inputs.original_files)
-        n = len(self.inputs.dwi_files)
-        if not (
-            n
-            == len(self.inputs.bval_files)
-            == len(self.inputs.bvec_files)
-            == len(self.inputs.forward_transforms)
-            == len(assignments)
-        ):
-            raise ValueError('SplitCorrectedByGroup: per-volume inputs disagree in length.')
-
-        b0_set = set(self.inputs.b0_indices)
-        sides = {
-            1: {'dwi': [], 'bval': [], 'bvec': [], 'xf': [], 'b0_idx': [], 'b0_files': []},
-            2: {'dwi': [], 'bval': [], 'bvec': [], 'xf': [], 'b0_idx': [], 'b0_files': []},
-        }
-        blip_assignments = []
-        for i, group_id in enumerate(assignments):
-            side = sides[group_id]
-            local_idx = len(side['dwi'])
-            side['dwi'].append(self.inputs.dwi_files[i])
-            side['bval'].append(self.inputs.bval_files[i])
-            side['bvec'].append(self.inputs.bvec_files[i])
-            side['xf'].append(self.inputs.forward_transforms[i])
-            if i in b0_set:
-                side['b0_idx'].append(local_idx)
-                side['b0_files'].append(self.inputs.dwi_files[i])
-            blip_assignments.append('up' if group_id == 1 else 'down')
-
-        for group_id, prefix in ((1, 'up'), (2, 'down')):
-            side = sides[group_id]
-            if not side['b0_files']:
-                raise ValueError(
-                    f'SplitCorrectedByGroup: the {prefix} phase-encoding group has no '
-                    'b=0 volume; cannot anchor a predicted shell for it.'
-                )
-            self._results[f'{prefix}_dwi_files'] = side['dwi']
-            self._results[f'{prefix}_bval_files'] = side['bval']
-            self._results[f'{prefix}_bvec_files'] = side['bvec']
-            self._results[f'{prefix}_transforms'] = side['xf']
-            self._results[f'{prefix}_b0_indices'] = side['b0_idx']
-            self._results[f'{prefix}_b0_files'] = side['b0_files']
-        self._results['blip_assignments'] = blip_assignments
-        return runtime
-
-
-class _MergeVolumes4DInputSpec(BaseInterfaceInputSpec):
-    b0_image = File(exists=True, mandatory=True, desc='3D b=0; written as volume 0')
-    predicted_images = InputMultiObject(
-        File(exists=True), mandatory=True, desc='3D predicted volumes appended after the b=0'
-    )
-
-
-class _MergeVolumes4DOutputSpec(TraitedSpec):
-    merged_4d = File(exists=True)
-
-
-class MergeVolumes4D(SimpleInterface):
-    """Stack one b=0 + N predicted 3D volumes into a single 4D NIfTI (numpy-only).
-
-    Ported from ``csdsi_preproc.interfaces.MergeVolumes4D``. All inputs must
-    share the b=0's grid; no resampling.
-    """
-
-    input_spec = _MergeVolumes4DInputSpec
-    output_spec = _MergeVolumes4DOutputSpec
-
-    def _run_interface(self, runtime):
-        b0 = nb.load(self.inputs.b0_image)
-        b0_data = b0.get_fdata(dtype=np.float32)
-        if b0_data.ndim != 3:
-            raise ValueError(f'b0_image must be 3D, got shape {b0_data.shape}')
-        n_pred = len(self.inputs.predicted_images)
-        out = np.empty(b0_data.shape + (n_pred + 1,), dtype=np.float32)
-        out[..., 0] = b0_data
-        for i, path in enumerate(self.inputs.predicted_images):
-            vol = nb.load(path).get_fdata(dtype=np.float32)
-            if vol.shape != b0_data.shape:
-                raise ValueError(
-                    f'predicted_images[{i}] shape {vol.shape} mismatches b0 {b0_data.shape}'
-                )
-            out[..., i + 1] = vol
-        out_path = op.abspath('predicted_4d.nii.gz')
-        nb.Nifti1Image(out, b0.affine, b0.header).to_filename(out_path)
-        self._results['merged_4d'] = out_path
-        return runtime
-
-
-class _WriteFSLGradFilesInputSpec(BaseInterfaceInputSpec):
-    bvecs = traits.Array(mandatory=True, desc='(N, 3) bvecs; written as FSL (3, N)')
-    bvals = traits.Array(mandatory=True, desc='(N,) bvals; written as a single row')
-
-
-class _WriteFSLGradFilesOutputSpec(TraitedSpec):
-    bvec_file = File(exists=True)
-    bval_file = File(exists=True)
-
-
-class WriteFSLGradFiles(SimpleInterface):
-    """Persist an in-memory ``(bvecs, bvals)`` pair to FSL-format text files.
-
-    Ported from ``csdsi_preproc.interfaces.WriteFSLGradFiles``.
-    """
-
-    input_spec = _WriteFSLGradFilesInputSpec
-    output_spec = _WriteFSLGradFilesOutputSpec
-
-    def _run_interface(self, runtime):
-        bvecs = np.asarray(self.inputs.bvecs, dtype=np.float64)
-        bvals = np.asarray(self.inputs.bvals, dtype=np.float64).ravel()
-        if bvecs.ndim != 2 or bvecs.shape[1] != 3:
-            raise ValueError(f'bvecs must have shape (N, 3); got {bvecs.shape}')
-        if bvals.size != bvecs.shape[0]:
-            raise ValueError(f'bvecs/bvals length mismatch: {bvecs.shape[0]} vs {bvals.size}')
-        bvec_path = op.abspath('predicted_shell.bvec')
-        bval_path = op.abspath('predicted_shell.bval')
-        np.savetxt(bvec_path, bvecs.T, fmt='%.8f')
-        np.savetxt(bval_path, bvals.reshape(1, -1), fmt='%g')
-        self._results['bvec_file'] = bvec_path
-        self._results['bval_file'] = bval_path
-        return runtime
-
-
-class _WriteBmatTORTOISEInputSpec(BaseInterfaceInputSpec):
-    bvec_file = File(exists=True, mandatory=True, desc='FSL bvec (3 x N)')
-    bval_file = File(exists=True, mandatory=True, desc='FSL bval (1 x N)')
-
-
-class _WriteBmatTORTOISEOutputSpec(TraitedSpec):
-    bmat_file = File(exists=True)
-
-
-class WriteBmatTORTOISE(SimpleInterface):
-    """Convert FSL ``(bvecs, bvals)`` to a TORTOISE ``.bmtxt`` (pure-Python).
-
-    Ported from ``csdsi_preproc.interfaces.WriteBmatTORTOISE``. Each row is the
-    six unique elements of ``B = b * outer(g, g)``: ``Bxx Bxy Bxz Byy Byz Bzz``
-    (all zero for b=0). Equivalent to the ``FSLBVecsToTORTOISEBmatrix`` binary
-    :func:`make_bmat_file` shells out to, but needs no TORTOISE install.
-    """
-
-    input_spec = _WriteBmatTORTOISEInputSpec
-    output_spec = _WriteBmatTORTOISEOutputSpec
-
-    def _run_interface(self, runtime):
-        bvals = np.loadtxt(self.inputs.bval_file).ravel()
-        bvecs = np.loadtxt(self.inputs.bvec_file)
-        if bvecs.ndim != 2:
-            raise ValueError(f'Unexpected bvec shape {bvecs.shape}')
-        if bvecs.shape[0] == 3 and bvecs.shape[1] != 3:
-            bvecs = bvecs.T
-        if bvecs.shape != (bvals.size, 3):
-            raise ValueError(f'Inconsistent bvec/bval lengths: {bvecs.shape[0]} vs {bvals.size}')
-        out_path = op.abspath('predicted_shell.bmtxt')
-        with open(out_path, 'w') as fobj:
-            for b, g in zip(bvals, bvecs, strict=True):
-                if b <= 0.0:
-                    fobj.write('0 0 0 0 0 0\n')
-                    continue
-                gx, gy, gz = float(g[0]), float(g[1]), float(g[2])
-                fobj.write(
-                    f'{b * gx * gx:.10g} {b * gx * gy:.10g} {b * gx * gz:.10g} '
-                    f'{b * gy * gy:.10g} {b * gy * gz:.10g} {b * gz * gz:.10g}\n'
-                )
-        self._results['bmat_file'] = out_path
-        return runtime
-
-
-class _WriteDRBUDDIJSONInputSpec(BaseInterfaceInputSpec):
-    phase_encoding_direction = traits.Enum('i', 'i-', 'j', 'j-', 'k', 'k-', mandatory=True)
-    echo_time = traits.Float()
-    total_readout_time = traits.Float()
-
-
-class _WriteDRBUDDIJSONOutputSpec(TraitedSpec):
-    out_json = File(exists=True)
-
-
-class WriteDRBUDDIJSON(SimpleInterface):
-    """Write a minimal BIDS sidecar for DRBUDDI's ``--up_json`` (ported).
-
-    Mirrors ``GatherDRBUDDIInputs``'s JSON (PhaseEncodingDirection only), with
-    optional EchoTime/TotalReadoutTime when available.
-    """
-
-    input_spec = _WriteDRBUDDIJSONInputSpec
-    output_spec = _WriteDRBUDDIJSONOutputSpec
-
-    def _run_interface(self, runtime):
-        import json
-
-        sidecar = {'PhaseEncodingDirection': self.inputs.phase_encoding_direction}
-        if isdefined(self.inputs.echo_time):
-            sidecar['EchoTime'] = float(self.inputs.echo_time)
-        if isdefined(self.inputs.total_readout_time):
-            sidecar['TotalReadoutTime'] = float(self.inputs.total_readout_time)
-        out_path = op.join(runtime.cwd, 'blip_up.json')
-        with open(out_path, 'w') as fobj:
-            json.dump(sidecar, fobj)
-        self._results['out_json'] = out_path
-        return runtime
-
-
-class _StageDRBUDDIPairInputSpec(BaseInterfaceInputSpec):
-    up_image = File(exists=True, mandatory=True)
-    up_bmat = File(exists=True, mandatory=True)
-    down_image = File(exists=True, mandatory=True)
-    down_bmat = File(exists=True, mandatory=True)
-
-
-class _StageDRBUDDIPairOutputSpec(TraitedSpec):
-    up_image = File(exists=True)
-    up_bmat = File(exists=True)
-    down_image = File(exists=True)
-    down_bmat = File(exists=True)
-
-
-class StageDRBUDDIPair(SimpleInterface):
-    """Stage an up/down shell pair into DRBUDDI's filename contract (ported).
-
-    DRBUDDI auto-discovers each image's b-matrix as a sibling ``<stem>.bmtxt``.
-    Both predicted shells are otherwise named ``predicted_4d.nii.gz`` with
-    ``predicted_shell.bmtxt`` siblings, which breaks that pairing (and the
-    identically-named ``copyfile=True`` images collide-and-rename out of sync in
-    DRBUDDI's cwd). Restaging to ``blip_up.{nii,bmtxt}`` / ``blip_down.{nii,bmtxt}``
-    (distinct stems; bmtxt matched to image) fixes it. Images are written
-    **decompressed float32** ``.nii`` -- DRBUDDI segfaults on ``.nii.gz`` DWI
-    series, exactly as ``split_into_up_and_down_niis`` emits uncompressed ``.nii``.
-    """
-
-    input_spec = _StageDRBUDDIPairInputSpec
-    output_spec = _StageDRBUDDIPairOutputSpec
-
-    def _run_interface(self, runtime):
-        for side, image, bmat in (
-            ('up', self.inputs.up_image, self.inputs.up_bmat),
-            ('down', self.inputs.down_image, self.inputs.down_bmat),
-        ):
-            image_dst = op.join(runtime.cwd, f'blip_{side}.nii')
-            img = nim.load_img(image, dtype='float32')
-            img.set_data_dtype('float32')
-            img.to_filename(image_dst)
-            bmat_dst = op.join(runtime.cwd, f'blip_{side}.bmtxt')
-            shutil.copyfile(bmat, bmat_dst)
-            self._results[f'{side}_image'] = image_dst
-            self._results[f'{side}_bmat'] = bmat_dst
-        return runtime
-
-
-def equally_distributed_directions(n=32, bval=1000.0, seed=42):
-    """Return ``(bvecs, bvals)`` for ``[1 b=0 + n b=bval]`` prediction targets.
-
-    Ported from ``csdsi_preproc.interfaces.equally_distributed_directions``.
-    Uses :func:`dipy.core.sphere.disperse_charges` (electrostatic repulsion on a
-    hemisphere) with a fixed RNG seed so the direction set -- and therefore every
-    predicted shell -- is identical across runs and across the up/down sides,
-    making the two sides directly comparable to DRBUDDI. ``bvecs`` is ``(n+1, 3)``
-    with a ``(0, 0, 0)`` first row; ``bvals`` is ``[0, bval, ..., bval]``.
-    """
-    from dipy.core.sphere import HemiSphere, disperse_charges
-
-    rng = np.random.RandomState(seed)
-    theta = np.pi * rng.rand(n)
-    phi = 2.0 * np.pi * rng.rand(n)
-    hsph_dispersed, _ = disperse_charges(HemiSphere(theta=theta, phi=phi), iters=5000)
-    sphere_bvecs = np.asarray(hsph_dispersed.vertices, dtype=np.float64)
-    bvecs = np.vstack([np.zeros((1, 3), dtype=np.float64), sphere_bvecs])
-    bvals = np.concatenate([np.zeros(1), np.full(n, float(bval))])
-    return bvecs, bvals
-
-
-def write_diffprep_json(json_file, phase_encoding_direction, working_dir=None):
-    """Write a minimal BIDS sidecar JSON next to a DWI nifti so that
-    TORTOISEProcess can read PhaseEncodingDirection from it. Returns the path
-    of the file written."""
-    import json
-
-    target = op.join(working_dir, op.basename(json_file)) if working_dir else json_file
-    payload = {'PhaseEncodingDirection': phase_encoding_direction}
-    with open(target, 'w') as fobj:
-        json.dump(payload, fobj)
-    return target
 
 
 def _tortoise_heuristic_deltas(bmtxt_file):

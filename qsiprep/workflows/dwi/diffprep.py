@@ -29,18 +29,15 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from ... import config
 from ...interfaces.gradients import ExtractB0s, SliceQC
 from ...interfaces.nilearn import EnhanceB0
-from ...interfaces.shoreline import CalculateCNR, ExtractDWIsForModel, SignalPrediction
+from ...interfaces.shoreline import CalculateCNR
 from ...interfaces.tortoise import (
     DIFFPREP,
     ConcatenateDIFFPREPGroups,
     DIFFPREPMotionParams,
     DIFFPREPSplitOutputs,
-    MergeVolumes4D,
     SplitDWIsByDistortionGroup,
     SynthesizeDWIs,
     TORTOISEConvert,
-    WriteFSLGradFiles,
-    equally_distributed_directions,
     generate_diffprep_boilerplate,
 )
 from ...utils.gpu import gpu_enabled
@@ -70,19 +67,11 @@ def _load_diffprep_config(config_path):
     cfg.setdefault('is_human_brain', True)
     cfg.setdefault('rot_eddy_center', 'isocenter')
     cfg.setdefault('extra_args', [])
-    # Run the CUDA builds (TORTOISEProcess_cuda / DRBUDDI_cuda) instead of the
-    # CPU ones. Mirrors "use_cuda" in eddy_params.json; the GPU still has to be
-    # exposed to the container (docker --gpus all / apptainer --nv). Note this
-    # changes results, not just runtime -- the CUDA build converges to a
-    # different deformation field.
-    cfg.setdefault('use_cuda', False)
-    # None => auto-detect whether a reverse-PE series is tensor-fittable
-    # as-is (see _rpe_series_is_shelled). true/false forces the decision.
+    # No default for "use_cuda": its absence must stay observable so a shipped
+    # default is never mistaken for user intent (see _legacy_use_cuda below).
     cfg.setdefault('rpe_series_shelled', None)
-    # Opt-in MAPMRI shell synthesis for DRBUDDI's registration target. 0/None =
-    # off, which is the default: on typical non-shelled data the plain tensor
-    # fit is within ~0.002 correlation of the synthesized one and costs half the
-    # runtime. Set e.g. 1000 when the SDC report looks poor on CS-DSI data.
+    # Opt-in MAPMRI shell synthesis for DRBUDDI's registration target;
+    # None/0 = off.
     cfg.setdefault('drbuddi_synth_shell_bval', None)
     cfg.setdefault('drbuddi_synth_shell_ndirs', 30)
     return cfg
@@ -140,26 +129,18 @@ def _rpe_series_is_shelled(
 ):
     """Decide whether a reverse-PE series is tensor-fittable as-is.
 
-    DRBUDDI's ``rpe_series`` path fits its own tensor per phase-encoding
-    direction and uses ``[b0, FA]`` as a 2-channel registration target. That
-    tensor fit is well-conditioned only for DTI / multi-shell HARDI, not for a
-    CS-DSI q-space grid, where DRBUDDI would silently produce a poor A0/FA.
+    All reverse-PE series take the same DRBUDDI path; this classification only
+    determines whether an informational message suggests enabling
+    ``"drbuddi_synth_shell_bval"`` for non-shelled data (see the SDC section of
+    :func:`init_diffprep_hmc_wf`).
 
-    Each phase-encoding direction is evaluated **independently** (see
-    :func:`_side_is_shelled`) -- pooling the two directions would double every
-    shell's population and tip a grid over the ``min_shell_dirs`` threshold. The
-    series is treated as shelled only if **both** directions are. A user override
-    (``--diffprep-config`` ``"rpe_series_shelled"``) wins. When the b-values
-    cannot be read -- e.g. docs/graph builds with placeholder paths -- we default
-    to shelled, which is safe for real data because BIDS DWI always ships
-    ``.bval`` files.
-
-    .. note::
-       This is a heuristic; validate it against real data and override with
-       ``"rpe_series_shelled": true|false`` in ``--diffprep-config`` if a
-       particular acquisition is misclassified. The safe error direction is
-       toward *non*-shelled (synthesis), which produces a valid result on shelled
-       data too; a grid wrongly called shelled yields silently wrong SDC.
+    Each phase-encoding direction is evaluated independently (see
+    :func:`_side_is_shelled`): pooling the two directions would double every
+    shell's population and tip a q-space grid over the ``min_shell_dirs``
+    threshold. The series counts as shelled only if both directions are. A user
+    override (``--diffprep-config`` ``"rpe_series_shelled"``) wins, and
+    unreadable b-values (e.g. docs/graph builds with placeholder paths) default
+    to shelled.
     """
     import numpy as np
 
@@ -201,11 +182,14 @@ def _rpe_series_is_shelled(
 
 
 def _resolve_phase_encoding(pe_dir):
-    """Validate a BIDS PhaseEncodingDirection value. Falls back to 'j'
-    (anterior-posterior) when missing or not recognised -- which is what most
-    clinical DWI protocols use."""
+    """Validate a BIDS PhaseEncodingDirection value, falling back to 'j'."""
     if pe_dir in _VALID_PE:
         return pe_dir
+    config.loggers.workflow.warning(
+        'PhaseEncodingDirection %r is missing or unrecognized; assuming "j" '
+        '(anterior-posterior) for DIFFPREP.',
+        pe_dir,
+    )
     return 'j'
 
 
@@ -214,14 +198,10 @@ def _write_sidecar_json(nii_file, phase_encoding_direction, working_dir=None):
     basename as ``nii_file`` so TORTOISEProcess can read PhaseEncodingDirection
     from it.
 
-    The JSON is written into **this node's own working directory** (the
-    function-node cwd), NOT into the directory ``nii_file`` lives in. Only the
-    basename of ``nii_file`` is used (so the sidecar stem matches the ``.nii``
-    TORTOISE looks up); its directory is intentionally discarded. Writing into
-    the node's own cwd keeps each node's outputs inside its own directory, so
-    the standard nipype ``copyfile=True`` propagation to the ``diffprep`` node
-    carries a valid sidecar regardless of how the upstream node's cache was
-    cleared.
+    The sidecar goes into this node's own cwd, not next to ``nii_file``; only
+    the basename is reused. Keeping the output in the node's directory lets the
+    ``copyfile=True`` propagation to the ``diffprep`` node stage a valid sidecar
+    even after the upstream node's cache is cleared.
     """
     import json
     import os
@@ -316,89 +296,6 @@ def _build_rpe_diffprep_stage(
         ])  # fmt:skip
 
     return recombine
-
-
-def _init_diffprep_predict_shell_wf(
-    n_directions=32, bval=1000.0, minimal_q_distance=2.0, name='predict_shell_wf'
-):
-    """Synthesize a tensor-fittable ``[b0 + n*bval]`` shell for one PE side.
-
-    Adapted from the validated ``csdsi_preproc.predict.init_predict_shell_wf``,
-    but **without** its per-volume HMC ``ApplyTransforms`` step: DIFFPREP has
-    already baked motion+eddy correction into the volumes (identity affines from
-    :class:`DIFFPREPSplitOutputs`), so the corrected non-b=0 volumes are already
-    aligned and feed straight into 3dSHORE :class:`SignalPrediction`. Volume 0 of
-    the emitted shell is the side's own b=0 mean (measured, not predicted); the
-    ``n`` non-zero directions are the deterministic
-    :func:`equally_distributed_directions` set, so the up and down shells are
-    directly comparable to DRBUDDI.
-    """
-    workflow = Workflow(name=name)
-    bvecs_full, bvals_full = equally_distributed_directions(n=n_directions, bval=bval)
-    target_bvecs = bvecs_full[1:]
-    target_bvals = bvals_full[1:]
-
-    inputnode = pe.Node(
-        niu.IdentityInterface(
-            fields=[
-                'dwi_files',
-                'bvec_files',
-                'bval_files',
-                'transforms',
-                'b0_indices',
-                'b0_template',
-                'b0_template_mask',
-            ]
-        ),
-        name='inputnode',
-    )
-    outputnode = pe.Node(
-        niu.IdentityInterface(
-            fields=['predicted_4d', 'predicted_bvec_file', 'predicted_bval_file']
-        ),
-        name='outputnode',
-    )
-
-    extract = pe.Node(ExtractDWIsForModel(), name='extract_non_b0')
-    predict = pe.MapNode(
-        SignalPrediction(model='3dSHORE', minimal_q_distance=minimal_q_distance),
-        iterfield=['bvec_to_predict', 'bval_to_predict'],
-        name='predict_directions',
-    )
-    predict.inputs.bvec_to_predict = list(target_bvecs)
-    predict.inputs.bval_to_predict = list(target_bvals.astype(float))
-
-    merge_4d = pe.Node(MergeVolumes4D(), name='merge_4d')
-    write_grad = pe.Node(WriteFSLGradFiles(), name='write_grad')
-    write_grad.inputs.bvecs = bvecs_full
-    write_grad.inputs.bvals = bvals_full
-
-    workflow.connect([
-        (inputnode, extract, [
-            ('dwi_files', 'dwi_files'),
-            ('bval_files', 'bval_files'),
-            ('bvec_files', 'bvec_files'),
-            ('transforms', 'transforms'),
-            ('b0_indices', 'b0_indices'),
-        ]),
-        (extract, predict, [
-            ('model_dwi_files', 'aligned_dwis'),
-            ('model_bvecs', 'aligned_bvecs'),
-            ('model_bvals', 'bvals'),
-        ]),
-        (inputnode, predict, [
-            ('b0_template', 'aligned_b0_mean'),
-            ('b0_template_mask', 'aligned_mask'),
-        ]),
-        (inputnode, merge_4d, [('b0_template', 'b0_image')]),
-        (predict, merge_4d, [('predicted_image', 'predicted_images')]),
-        (merge_4d, outputnode, [('merged_4d', 'predicted_4d')]),
-        (write_grad, outputnode, [
-            ('bvec_file', 'predicted_bvec_file'),
-            ('bval_file', 'predicted_bval_file'),
-        ]),
-    ])  # fmt:skip
-    return workflow
 
 
 def init_diffprep_hmc_wf(
@@ -502,20 +399,12 @@ def init_diffprep_hmc_wf(
 
     # Load any user-supplied DIFFPREP config (or our defaults)
     diffprep_cfg = _load_diffprep_config(config.workflow.diffprep_config)
-    # --gpu wins over "use_cuda" in --diffprep-config (gpu_enabled warns on
-    # conflict). DIFFPREP and DRBUDDI are selectable separately because they are
-    # separate binaries with different GPU-memory appetites. Only treat the value
-    # as user intent when the user actually supplied the config file -- otherwise
-    # the shipped default would "conflict" with --gpu on every run.
-    _legacy_use_cuda = diffprep_cfg['use_cuda'] if config.workflow.diffprep_config else None
+    # "use_cuda" counts as user intent only when the user's own config file sets
+    # it -- the shipped default must not "conflict" with --gpu on every run.
+    _legacy_use_cuda = diffprep_cfg.get('use_cuda') if config.workflow.diffprep_config else None
     diffprep_gpu = gpu_enabled('diffprep', config_file_value=_legacy_use_cuda)
     drbuddi_gpu = gpu_enabled('drbuddi', config_file_value=_legacy_use_cuda)
 
-    # For a reverse-PE series, decide up front whether DRBUDDI can tensor-fit
-    # the corrected series as-is (shelled) or needs a synthesized single shell
-    # for its [b0, FA] target (non-shelled, e.g. CS-DSI). See
-    # _rpe_series_is_shelled. The DIFFPREP split/recombine stage below is the
-    # same either way; only the DRBUDDI-input derivation differs.
     synth_shell_bval = diffprep_cfg.get('drbuddi_synth_shell_bval')
     rpe_shelled = None
     if fieldmap_type == 'rpe_series':
@@ -527,24 +416,12 @@ def init_diffprep_hmc_wf(
 
     pe_dir = _resolve_phase_encoding((dwi_metadata or {}).get('PhaseEncodingDirection'))
 
-    # --sloppy asks for underpowered-but-fast registration (the same contract
-    # DRBUDDI honours via its own ``sloppy`` input). Every DWI is registered to
-    # the b=0 regardless; what costs the time is TORTOISE's *second* pass, which
-    # fits DTI+MAPMRI to the corrected data, synthesizes a contrast-matched
-    # target per volume and re-registers against it. That pass is gated on
-    # ``iterative = (is_human_brain && high_bval) || s2v || repol``, and
-    # ``--niter 0`` sets ``iterative=false`` outright (DIFFPREP.cxx:1359).
-    #
-    # Use ONLY --niter 0 here. Clearing ``is_human_brain`` would reach the same
-    # flag but is not a speed knob: it also makes DIFFPREP's auto-masking read a
-    # ``<stem>_noise.nii`` (DIFFPREP.cxx:2349) and changes structural-target
-    # masking on the T2Wreg path (TORTOISE.cxx:1079).
-    #
-    # ``--niter 0`` only bites on high-b (>1200) data, so it alone does not bound
-    # runtime for DTI-regime test data. The first pass -- which always runs --
-    # fits a 24-parameter quadratic per volume; dropping to rigid ('motion') is
-    # what actually bounds it. Both are sloppy-only; production runs still get
-    # the correction mode the user asked for.
+    # --sloppy uses ONLY --niter 0 plus rigid-only correction. Clearing
+    # ``is_human_brain`` would also disable the iterative pass but is not a
+    # speed knob: it changes DIFFPREP's auto-masking and the T2Wreg structural
+    # masking. And --niter 0 alone does not bound runtime on low-b data (the
+    # always-run first pass fits a 24-parameter quadratic per volume), so the
+    # correction mode is dropped to 'motion' as well.
     effective_correction_mode = correction_mode
     if config.execution.sloppy:
         effective_correction_mode = 'motion'
@@ -730,12 +607,13 @@ def init_diffprep_hmc_wf(
             (extract_b0s, b0_ref_for_coreg, [('b0_average', 'inputnode.b0_template')]),
         ])  # fmt:skip
 
-    # -----------------------------------------------------------------------
-    # SDC decision tree (TORTOISE-native where possible)
-    # -----------------------------------------------------------------------
+    # SDC decision tree (TORTOISE-native where possible).
 
     # 1. PEPOLAR -> DRBUDDI. Both an ``epi`` fieldmap (a reverse-PE b=0/EPI in
-    #    fmap/) and a reverse-PE *series* (``rpe_series``) land here.
+    #    fmap/) and a reverse-PE *series* (``rpe_series``) land here. Non-shelled
+    #    series take the same path; DRBUDDI's plain tensor fit is adequate for a
+    #    q-space grid, and shell synthesis is opt-in via
+    #    "drbuddi_synth_shell_bval" for the cases where it is not.
     if fieldmap_type in ('epi', 'rpe_series'):
         if 'topup' in config.workflow.pepolar_method.lower():
             raise Exception(
@@ -743,15 +621,6 @@ def init_diffprep_hmc_wf(
                 '--hmc-model diffprep_*; choose --pepolar-method DRBUDDI.'
             )
 
-        # Non-shelled reverse-PE series (CS-DSI) used to be routed to a
-        # qsiprep-side predicted-shell workflow on the theory that DRBUDDI
-        # cannot tensor-fit a usable [b0, FA] from a q-space grid. Measurement
-        # does not support that: the plain-tensor FA resolves corpus callosum,
-        # internal capsule and corona radiata on real HASC55 data, and drives
-        # DRBUDDI to within ~0.002 correlation of a synthesized-shell target.
-        # So non-shelled series now take the same stock path as everything else,
-        # and synthesis is available as an opt-in for the cases where the plain
-        # fit does look poor -- see "drbuddi_synth_shell_bval" below.
         if fieldmap_type == 'rpe_series' and not rpe_shelled and not synth_shell_bval:
             config.loggers.workflow.info(
                 'Non-shelled reverse-PE series detected. Using the standard '
@@ -762,11 +631,10 @@ def init_diffprep_hmc_wf(
                 'direction instead.'
             )
 
-        # ``epi`` fieldmaps and *shelled* reverse-PE series go through the stock
-        # DRBUDDI workflow unchanged: for rpe_series the per-direction DIFFPREP
-        # stage above already produced a single recombined series in the original
-        # merged order, so GatherDRBUDDIInputs re-splits it into up/down exactly
-        # as it does for the FSL backend.
+        # For rpe_series the per-direction DIFFPREP stage above already produced
+        # a single recombined series in the original merged order, so
+        # GatherDRBUDDIInputs re-splits it into up/down exactly as it does for
+        # the FSL backend.
         drbuddi_wf = init_drbuddi_wf(
             scan_groups=scan_groups,
             t2w_sdc=t2w_sdc,
