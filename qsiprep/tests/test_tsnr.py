@@ -7,9 +7,9 @@ import pytest
 def _write(path, data, affine=None):
     import nibabel as nb
 
-    nb.Nifti1Image(data.astype('float32'), affine if affine is not None else np.eye(4)).to_filename(
-        str(path)
-    )
+    nb.Nifti1Image(
+        data.astype('float32'), affine if affine is not None else np.eye(4)
+    ).to_filename(str(path))
     return str(path)
 
 
@@ -40,24 +40,24 @@ def series(tmp_path):
     return dwi, str(bval)
 
 
-def test_tsnr_uses_only_b0_volumes(series):
+def test_tsnr_uses_only_b0_volumes(series, tmp_path):
     """Mean/SD should reflect the b=0 set: ~100/5 = ~20, not the DW mixture."""
     from qsiprep.interfaces.tsnr import DWITSNR
 
     dwi, bval = series
-    res = DWITSNR(dwi_file=dwi, bval_file=bval).run()
+    res = DWITSNR(dwi_file=dwi, bval_file=bval).run(cwd=str(tmp_path))
     assert res.outputs.n_b0 == 8
     # if DW volumes leaked in, the SD would balloon and TSNR would collapse
     assert 12 < res.outputs.median_tsnr < 32
 
 
-def test_tsnr_map_geometry_matches_input(series):
+def test_tsnr_map_geometry_matches_input(series, tmp_path):
     import nibabel as nb
 
     from qsiprep.interfaces.tsnr import DWITSNR
 
     dwi, bval = series
-    res = DWITSNR(dwi_file=dwi, bval_file=bval).run()
+    res = DWITSNR(dwi_file=dwi, bval_file=bval).run(cwd=str(tmp_path))
     out, ref = nb.load(res.outputs.out_file), nb.load(dwi)
     assert out.shape == ref.shape[:3]
     assert np.allclose(out.affine, ref.affine)
@@ -70,12 +70,14 @@ def test_single_b0_yields_empty_map_not_garbage(tmp_path):
     from qsiprep.interfaces.tsnr import DWITSNR
 
     rng = np.random.default_rng(1)
-    data = np.stack([np.full((6, 6, 6), 100.0) + rng.normal(0, 3, (6, 6, 6)) for _ in range(4)], -1)
+    data = np.stack(
+        [np.full((6, 6, 6), 100.0) + rng.normal(0, 3, (6, 6, 6)) for _ in range(4)], -1
+    )
     dwi = _write(tmp_path / 'one.nii.gz', data)
     bval = tmp_path / 'one.bval'
     bval.write_text('0 1000 2000 3000\n')
 
-    res = DWITSNR(dwi_file=dwi, bval_file=bval).run()
+    res = DWITSNR(dwi_file=dwi, bval_file=bval).run(cwd=str(tmp_path))
     assert res.outputs.n_b0 == 1
     assert res.outputs.median_tsnr == 0.0
     assert np.allclose(np.asanyarray(nb.load(res.outputs.out_file).dataobj), 0)
@@ -91,7 +93,7 @@ def test_mask_restricts_the_map(series, tmp_path):
     mask[2:6, 2:6, 2:6] = 1
     mask_f = _write(tmp_path / 'mask.nii.gz', mask)
 
-    res = DWITSNR(dwi_file=dwi, bval_file=bval, mask_file=mask_f).run()
+    res = DWITSNR(dwi_file=dwi, bval_file=bval, mask_file=mask_f).run(cwd=str(tmp_path))
     out = np.asanyarray(nb.load(res.outputs.out_file).dataobj)
     assert np.allclose(out[mask == 0], 0), 'values leaked outside the mask'
     assert out[mask > 0].mean() > 0
@@ -112,7 +114,8 @@ def test_tsnr_is_wired_into_derivatives(tmp_path):
 
     wf = init_dwi_derivatives_wf('/data/sub-01/ses-1/dwi/sub-01_ses-1_dwi.nii.gz')
     nodes = {n.name: n for n in wf._get_all_nodes()}
-    assert 'tsnr' in nodes and 'ds_tsnr' in nodes
+    assert 'tsnr' in nodes
+    assert 'ds_tsnr' in nodes
 
     edges = {(u.name, v.name): d['connect'] for u, v, d in wf._graph.edges(data=True)}
     # computed on the final resampled series, with its own bvals and mask

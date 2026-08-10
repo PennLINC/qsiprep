@@ -61,13 +61,13 @@ def dwi_with_dropout(tmp_path):
     return dwi, str(bval), mask_f, mask, dropout
 
 
-def test_dropout_voxels_are_removed_from_the_weights(dwi_with_dropout):
+def test_dropout_voxels_are_removed_from_the_weights(dwi_with_dropout, tmp_path):
     import nibabel as nb
 
     from qsiprep.interfaces.bias import N4WeightMask
 
     dwi, bval, mask_f, mask, dropout = dwi_with_dropout
-    res = N4WeightMask(dwi_file=dwi, bval_file=bval, mask_file=mask_f).run()
+    res = N4WeightMask(dwi_file=dwi, bval_file=bval, mask_file=mask_f).run(cwd=str(tmp_path))
     w = np.asanyarray(nb.load(res.outputs.out_file).dataobj) > 0
 
     assert not w[dropout].any(), 'dropout voxels still carry weight'
@@ -77,13 +77,13 @@ def test_dropout_voxels_are_removed_from_the_weights(dwi_with_dropout):
     assert res.outputs.n_dropped == int(dropout.sum())
 
 
-def test_geometry_is_preserved(dwi_with_dropout):
+def test_geometry_is_preserved(dwi_with_dropout, tmp_path):
     import nibabel as nb
 
     from qsiprep.interfaces.bias import N4WeightMask
 
     dwi, bval, mask_f, _, _ = dwi_with_dropout
-    res = N4WeightMask(dwi_file=dwi, bval_file=bval, mask_file=mask_f).run()
+    res = N4WeightMask(dwi_file=dwi, bval_file=bval, mask_file=mask_f).run(cwd=str(tmp_path))
     out, ref = nb.load(res.outputs.out_file), nb.load(mask_f)
     assert out.shape == ref.shape
     assert np.allclose(out.affine, ref.affine)
@@ -115,7 +115,7 @@ def test_a_mostly_dark_mask_is_passed_through_untouched(tmp_path):
     bval.write_text('0 2000\n')
     mask_f = _write(tmp_path / 'm.nii.gz', mask.astype('float32'))
 
-    res = N4WeightMask(dwi_file=dwi, bval_file=bval, mask_file=mask_f).run()
+    res = N4WeightMask(dwi_file=dwi, bval_file=bval, mask_file=mask_f).run(cwd=str(tmp_path))
     w = np.asanyarray(nb.load(res.outputs.out_file).dataobj) > 0
     assert res.outputs.n_dropped == 0
     assert res.outputs.fraction_dropped == 0.0
