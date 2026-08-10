@@ -37,14 +37,9 @@ def _doing_t2wreg(fieldmap_type, t2w_sdc):
     """True when SDC is TORTOISE's T2Wreg (DIFFPREP, fieldmap-less, T2w present).
 
     Mirrors ``use_t2wreg`` in :mod:`qsiprep.workflows.dwi.diffprep`. T2Wreg does
-    real susceptibility distortion correction but carries no fieldmap, so with
-    ``fieldmap_type is None`` it falls through both reportlet gates and silently
-    produces no figure -- even though every input the report needs is already
-    computed and plumbed to the outputnode.
-
-    This also removes an asymmetry: the *same* correction on a group tagged
-    ``syn`` did get a reportlet, purely because 'syn' is not in the exclusion
-    tuple the gate tests against.
+    real susceptibility distortion correction but carries no fieldmap, so
+    without this predicate the ``fieldmap_type is None`` case would fall through
+    the reportlet gate and produce no SDC figure.
     """
     return (
         (config.workflow.hmc_model or '').startswith('diffprep_')

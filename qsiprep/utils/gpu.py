@@ -5,9 +5,7 @@
 Several tools QSIPrep drives ship both a CPU and a GPU build, but they disagree
 on how the choice is expressed: ``eddy`` and the TORTOISE tools switch to a
 differently-named executable, ``mri_synthstrip`` takes an opt-in ``-g`` flag, and
-``mri_synthseg`` takes an opt-**out** ``--cpu`` flag. Historically the first two
-were reachable only through per-tool JSON config files and the last two were not
-reachable at all.
+``mri_synthseg`` takes an opt-out ``--cpu`` flag.
 
 The trouble with a single on/off switch is that GPU memory, not the pipeline, is
 usually the binding constraint: an 8 GB card comfortably runs DIFFPREP, DRBUDDI
@@ -23,9 +21,9 @@ import subprocess
 
 LOGGER = logging.getLogger('nipype.workflow')
 
-#: Tasks that can run on a GPU, mapped to the executable that must be present.
-#: ``None`` means the task uses the same executable as its CPU form and only
-#: changes a flag.
+# Tasks that can run on a GPU, mapped to the executable that must be present.
+# None means the task uses the same executable as its CPU form and only changes
+# a flag.
 GPU_TASKS = {
     'eddy': None,  # resolved at check time by _find_eddy_cuda()
     'diffprep': 'TORTOISEProcess_cuda',
@@ -34,7 +32,7 @@ GPU_TASKS = {
     'synthseg': 'mri_synthseg',
 }
 
-#: Accepted by ``--gpu`` in addition to the task names above.
+# Accepted by --gpu in addition to the task names above.
 GPU_ALIASES = ('all', 'none')
 
 

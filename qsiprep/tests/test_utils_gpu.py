@@ -27,11 +27,6 @@ def gpu_config():
         config.workflow.gpu = saved
 
 
-# ---------------------------------------------------------------------------
-# resolve_gpu_tasks
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.parametrize(
     ('requested', 'expected'),
     [
@@ -54,11 +49,6 @@ def test_every_task_is_individually_selectable():
     """The point of --gpu taking a list: an 8 GB card runs some tasks, not others."""
     for task in GPU_TASKS:
         assert resolve_gpu_tasks([task]) == {task}
-
-
-# ---------------------------------------------------------------------------
-# gpu_enabled
-# ---------------------------------------------------------------------------
 
 
 def test_gpu_enabled_reads_the_cli_list(gpu_config):
@@ -132,11 +122,6 @@ def test_agreement_with_the_config_file_is_quiet(gpu_config, caplog):
     assert 'conflicts' not in caplog.text
 
 
-# ---------------------------------------------------------------------------
-# check_gpu_available (preflight)
-# ---------------------------------------------------------------------------
-
-
 def test_preflight_is_a_noop_without_gpu_tasks(monkeypatch):
     """No --gpu means no GPU probing at all, on any machine."""
     import qsiprep.utils.gpu as gpu_mod
@@ -189,11 +174,6 @@ def test_gpu_visible_is_false_without_nvidia_smi(monkeypatch):
     monkeypatch.setattr(gpu_mod.shutil, 'which', lambda _: None)
     monkeypatch.setattr(gpu_mod.os.path, 'exists', lambda _: False)
     assert gpu_mod._gpu_visible() is False
-
-
-# ---------------------------------------------------------------------------
-# Reaching the interfaces
-# ---------------------------------------------------------------------------
 
 
 def test_synthstrip_and_synthseg_reach_the_gpu(gpu_config):

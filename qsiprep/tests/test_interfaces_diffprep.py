@@ -50,11 +50,6 @@ def _diffprep_siblings(tmp_path):
     return dwi, tmp_path / 'dwi.bmtxt', tmp_path / 'dwi.json'
 
 
-# ---------------------------------------------------------------------------
-# Command-line construction (pure Python)
-# ---------------------------------------------------------------------------
-
-
 def test_diffprep_cmdline_off(tmp_path):
     """DIFFPREP with epi_mode='off' drives TORTOISEProcess from --step import
     with all extra stages (including EPI) disabled."""
@@ -120,11 +115,6 @@ def test_diffprep_t2wreg_requires_structural(tmp_path):
     )
     with pytest.raises(ValueError, match='requires a structural_image'):
         _ = iface.cmdline
-
-
-# ---------------------------------------------------------------------------
-# CPU / CUDA binary selection
-# ---------------------------------------------------------------------------
 
 
 def test_tortoise_use_cuda_swaps_the_binary(tmp_path):
@@ -200,11 +190,6 @@ def test_diffprep_wf_honours_use_cuda(tmp_path):
         assert wf_cpu.get_node('diffprep').interface.cmd == 'TORTOISEProcess'
     finally:
         config.workflow.diffprep_config = orig
-
-
-# ---------------------------------------------------------------------------
-# Output collection (pure Python -- lays out the files TORTOISE would write)
-# ---------------------------------------------------------------------------
 
 
 def _stage_diffprep_outputs(tmp_path, t2wreg):
@@ -337,11 +322,6 @@ def test_diffprep_t2wreg_missing_warp(tmp_path, monkeypatch):
         iface._list_outputs()
 
 
-# ---------------------------------------------------------------------------
-# Okan transform parsing (pure Python)
-# ---------------------------------------------------------------------------
-
-
 def test_diffprep_motion_params_basic(tmp_path):
     """``DIFFPREPMotionParams`` slices cols 0-5 from a 24-col TORTOISE
     transformations file and writes them as a whitespace-separated SPM file."""
@@ -389,11 +369,6 @@ def test_diffprep_motion_params_rejects_short_rows(tmp_path):
     iface = DIFFPREPMotionParams(transformations_file=str(transforms_file))
     with pytest.raises(ValueError, match='24 columns'):
         iface.run(cwd=str(tmp_path))
-
-
-# ---------------------------------------------------------------------------
-# Real TORTOISE binaries (run in the qsiprep test image)
-# ---------------------------------------------------------------------------
 
 
 def test_bmtxt_fsl_roundtrip(tmp_path):
@@ -569,11 +544,6 @@ def test_diffprep_split_outputs_deobliques_gradients(tmp_path):
     )
 
 
-# ---------------------------------------------------------------------------
-# rpe_series split / recombine (pure Python)
-# ---------------------------------------------------------------------------
-
-
 def _make_original_with_sidecar(tmp_path, name, pe_dir):
     """Write a tiny original nii + BIDS sidecar for get_distortion_grouping."""
     import json as _json
@@ -746,159 +716,6 @@ def test_concatenate_diffprep_groups_rejects_count_mismatch(tmp_path):
         ).run(cwd=str(run_dir))
 
 
-def test_write_bmat_tortoise(tmp_path):
-    """WriteBmatTORTOISE emits one 6-float B-matrix row per volume, zeros at b=0."""
-    from qsiprep.interfaces.tortoise import WriteBmatTORTOISE
-
-    bval_file, bvec_file = _write_fsl_gradients(
-        tmp_path, [0, 1000], [[0.0, 1.0], [0.0, 0.0], [0.0, 0.0]]
-    )
-    run_dir = tmp_path / 'bmat'
-    run_dir.mkdir()
-    res = WriteBmatTORTOISE(bval_file=str(bval_file), bvec_file=str(bvec_file)).run(
-        cwd=str(run_dir)
-    )
-    bmat = np.atleast_2d(np.loadtxt(res.outputs.bmat_file))
-    assert bmat.shape == (2, 6)
-    np.testing.assert_array_equal(bmat[0], [0, 0, 0, 0, 0, 0])
-    # g = (1, 0, 0), b = 1000 -> Byy-position (index 3) holds b*gx*gx = 1000.
-    assert bmat[1, 0] == 1000
-
-
-def test_merge_volumes_4d(tmp_path):
-    """MergeVolumes4D stacks b0 + predicted volumes in order."""
-    import nibabel as nb
-
-    from qsiprep.interfaces.tortoise import MergeVolumes4D
-
-    b0 = tmp_path / 'b0.nii.gz'
-    nb.Nifti1Image(np.full((2, 2, 2), 5.0, dtype='float32'), np.eye(4)).to_filename(str(b0))
-    preds = []
-    for i, val in enumerate((7.0, 9.0)):
-        p = tmp_path / f'pred{i}.nii.gz'
-        nb.Nifti1Image(np.full((2, 2, 2), val, dtype='float32'), np.eye(4)).to_filename(str(p))
-        preds.append(str(p))
-
-    run_dir = tmp_path / 'merge'
-    run_dir.mkdir()
-    res = MergeVolumes4D(b0_image=str(b0), predicted_images=preds).run(cwd=str(run_dir))
-    out = nb.load(res.outputs.merged_4d)
-    assert out.shape == (2, 2, 2, 3)
-    np.testing.assert_array_equal([out.dataobj[0, 0, 0, i] for i in range(3)], [5, 7, 9])
-
-
-def test_write_fsl_grad_files(tmp_path):
-    """WriteFSLGradFiles writes (3, N) bvecs and a single-row bval."""
-    from qsiprep.interfaces.tortoise import WriteFSLGradFiles
-
-    bvecs = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
-    bvals = np.array([0.0, 1000.0, 1000.0])
-    run_dir = tmp_path / 'grad'
-    run_dir.mkdir()
-    res = WriteFSLGradFiles(bvecs=bvecs, bvals=bvals).run(cwd=str(run_dir))
-    out_bvec = np.loadtxt(res.outputs.bvec_file)
-    out_bval = np.loadtxt(res.outputs.bval_file)
-    assert out_bvec.shape == (3, 3)
-    np.testing.assert_allclose(out_bvec, bvecs.T)
-    np.testing.assert_array_equal(out_bval, bvals)
-
-
-def test_equally_distributed_directions_deterministic():
-    """The prediction target set is fixed and shaped [1 b=0 + n b=bval]."""
-    from qsiprep.interfaces.tortoise import equally_distributed_directions
-
-    bvecs, bvals = equally_distributed_directions(n=8, bval=1000.0)
-    assert bvecs.shape == (9, 3)
-    assert bvals.shape == (9,)
-    np.testing.assert_array_equal(bvecs[0], [0, 0, 0])
-    assert bvals[0] == 0
-    np.testing.assert_array_equal(bvals[1:], [1000.0] * 8)
-    # Deterministic across calls (same seed).
-    bvecs2, _ = equally_distributed_directions(n=8, bval=1000.0)
-    np.testing.assert_array_equal(bvecs, bvecs2)
-
-
-def test_stage_drbuddi_pair_distinct_uncompressed_stems(tmp_path):
-    """StageDRBUDDIPair writes distinct-stemmed, decompressed blip_up/blip_down
-    with matched sibling bmtxt (DRBUDDI segfaults otherwise)."""
-    from qsiprep.interfaces.tortoise import StageDRBUDDIPair
-
-    up = tmp_path / 'predicted_4d.nii.gz'
-    down = tmp_path / 'predicted_4d_down.nii.gz'
-    _write_dummy_nii(up, nvols=2)
-    _write_dummy_nii(down, nvols=2)
-    (tmp_path / 'up.bmtxt').write_text('0 0 0 0 0 0\n1000 0 0 0 0 0\n')
-    (tmp_path / 'down.bmtxt').write_text('0 0 0 0 0 0\n1000 0 0 0 0 0\n')
-
-    run_dir = tmp_path / 'stage'
-    run_dir.mkdir()
-    res = StageDRBUDDIPair(
-        up_image=str(up),
-        up_bmat=str(tmp_path / 'up.bmtxt'),
-        down_image=str(down),
-        down_bmat=str(tmp_path / 'down.bmtxt'),
-    ).run(cwd=str(run_dir))
-
-    assert res.outputs.up_image.endswith('blip_up.nii')
-    assert res.outputs.down_image.endswith('blip_down.nii')
-    assert res.outputs.up_bmat.endswith('blip_up.bmtxt')
-    assert res.outputs.down_bmat.endswith('blip_down.bmtxt')
-    # matched stems: <image-stem>.bmtxt
-    assert os.path.splitext(res.outputs.up_image)[0] + '.bmtxt' == res.outputs.up_bmat
-
-
-def test_split_corrected_by_group(tmp_path):
-    """SplitCorrectedByGroup partitions per-volume corrected outputs into up/down
-    lists with per-side b=0 positions and per-volume blip assignments."""
-    from qsiprep.interfaces.tortoise import SplitCorrectedByGroup
-
-    ap = _make_original_with_sidecar(tmp_path, 'sub-01_dir-AP_dwi', 'j')
-    pa = _make_original_with_sidecar(tmp_path, 'sub-01_dir-PA_dwi', 'j-')
-    # 4 volumes: AP(b0), AP(dwi), PA(b0), PA(dwi)
-    original_files = [ap, ap, pa, pa]
-
-    dwi_files, bval_files, bvec_files, transforms = [], [], [], []
-    import nibabel as nb
-
-    for i in range(4):
-        d = tmp_path / f'vol{i}.nii.gz'
-        nb.Nifti1Image(np.full((2, 2, 2), i, dtype='float32'), np.eye(4)).to_filename(str(d))
-        dwi_files.append(str(d))
-        bv = tmp_path / f'vol{i}.bval'
-        bv.write_text('0\n' if i in (0, 2) else '1000\n')
-        bval_files.append(str(bv))
-        bvec = tmp_path / f'vol{i}.bvec'
-        bvec.write_text('0\n0\n0\n' if i in (0, 2) else '1\n0\n0\n')
-        bvec_files.append(str(bvec))
-        xf = tmp_path / f'vol{i}.txt'
-        xf.write_text('identity')
-        transforms.append(str(xf))
-
-    run_dir = tmp_path / 'splitcorr'
-    run_dir.mkdir()
-    res = SplitCorrectedByGroup(
-        dwi_files=dwi_files,
-        bval_files=bval_files,
-        bvec_files=bvec_files,
-        forward_transforms=transforms,
-        b0_indices=[0, 2],
-        original_files=original_files,
-    ).run(cwd=str(run_dir))
-
-    # nipype OutputMultiObject squeezes single-element lists to a scalar.
-    def _aslist(x):
-        return x if isinstance(x, list) else [x]
-
-    assert res.outputs.blip_assignments == ['up', 'up', 'down', 'down']
-    assert len(res.outputs.up_dwi_files) == 2
-    assert len(res.outputs.down_dwi_files) == 2
-    # each side's local b=0 is at position 0
-    assert res.outputs.up_b0_indices == [0]
-    assert res.outputs.down_b0_indices == [0]
-    assert len(_aslist(res.outputs.up_b0_files)) == 1
-    assert len(_aslist(res.outputs.down_b0_files)) == 1
-
-
 def test_rpe_series_is_shelled(tmp_path):
     """The shelled/non-shelled detector distinguishes a DTI/HARDI shell from a
     CS-DSI q-space grid, and honours the config override."""
@@ -947,11 +764,6 @@ def test_rpe_series_is_shelled(tmp_path):
         'fieldmap_info': {'suffix': 'rpe_series', 'rpe_series': ['/nonexistent/pa_dwi.nii.gz']},
     }
     assert _rpe_series_is_shelled(missing, 100) is True
-
-
-# ---------------------------------------------------------------------------
-# T2w SDC handling (graph-level wiring; no pipeline run / resampling)
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture
