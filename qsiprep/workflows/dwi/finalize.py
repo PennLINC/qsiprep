@@ -42,6 +42,7 @@ def init_dwi_finalize_wf(
     source_file,
     output_prefix,
     write_derivatives=True,
+    make_intramodal_template=False,
 ):
     """
     This workflow controls the resampling parts of the dwi preprocessing workflow.
@@ -237,15 +238,13 @@ def init_dwi_finalize_wf(
         ),
         name='outputnode',
     )
-    if config.workflow.intramodal_template_iters > 0:
-        # This used to flicker the session's b=0 against the group template: two
-        # different images in two different spaces, with the "after" frame
-        # byte-identical for every session. It could not distinguish a good
-        # registration from a failed one, which is the only thing it exists for.
-        #
-        # Now it shows ONE image -- this session's b=0 -- in template space,
-        # before and after its own transform, with white-matter contours from the
-        # anatomy held fixed as landmarks.
+    # ``make_intramodal_template`` (not just the config setting) gates this
+    # block: with a single DWI group the template is skipped upstream and the
+    # intramodal inputs are never connected, so these nodes must not exist.
+    if config.workflow.intramodal_template_iters > 0 and make_intramodal_template:
+        # The reportlet shows one image -- this session's b=0 -- on the template
+        # grid before and after its own transform, with white-matter contours
+        # from the anatomy held fixed as landmarks.
         b0_to_template_grid = pe.Node(
             ants.ApplyTransforms(interpolation='LanczosWindowedSinc', float=True),
             name='b0_to_template_grid',

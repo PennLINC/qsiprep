@@ -118,13 +118,6 @@ def init_intramodal_template_wf(
     # antsMultivariateTemplateConstruction2 only offers BSplineSyN/SyN/Affine, so
     # linear-only templates are built with init_b0_hmc_wf instead. That also lets
     # Rigid be offered at all -- it is not in the mvtc2 enum.
-    #
-    # Previously the transform was never passed here, so every intramodal template
-    # was BSplineSyN regardless of --intramodal-template-transform, silently
-    # nonlinearly warping genuine between-session differences into agreement.
-    # Per-input agreement with the template. Numbers sort; montages do not.
-    template_qc = pe.Node(TemplateQC(labels=list(inputs_list)), name='template_qc')
-
     linear_only = transform in ('Rigid', 'Affine')
 
     workflow.connect([
@@ -144,6 +137,9 @@ def init_intramodal_template_wf(
             settings='unbiased_template',
             name='intramodal_linear_template',
         )
+        # Per-input agreement with the template, linear-only: mvtc2 does not
+        # expose the per-input aligned images TemplateQC needs.
+        template_qc = pe.Node(TemplateQC(labels=list(inputs_list)), name='template_qc')
         workflow.connect([
             (rename_inputs, linear_template_wf, [('out_file', 'inputnode.b0_images')]),
             (linear_template_wf, split_outputs, [
@@ -153,8 +149,13 @@ def init_intramodal_template_wf(
                 ('outputnode.final_template', 'intramodal_template'),
             ]),
             (linear_template_wf, template_qc, [
+                ('outputnode.final_template', 'template'),
                 ('outputnode.aligned_images', 'aligned_images'),
                 (('outputnode.forward_transforms', _list_squeeze), 'transforms'),
+            ]),
+            (template_qc, outputnode, [
+                ('out_file', 'template_qc_file'),
+                ('agreement_map', 'template_agreement_map'),
             ]),
         ])  # fmt:skip
         template_node, template_field = linear_template_wf, 'outputnode.final_template'
@@ -209,10 +210,9 @@ def init_intramodal_template_wf(
         template_node, template_field, b0_coreg_wf, 'inputnode.ref_b0_brain'
     )  # fmt:skip
 
-    # The template lives in its own midpoint space, ~57mm from ACPC. Anything
-    # written out has to go through the coregistration b0_coreg_wf already
-    # computes, or it is unusable next to the anatomicals -- and mislabelled if
-    # tagged space-ACPC.
+    # The template lives in its own midpoint space, not ACPC: anything written
+    # out has to go through the coregistration b0_coreg_wf computes, or it would
+    # be mislabelled if tagged space-ACPC.
     template_to_acpc = pe.Node(
         ants.ApplyTransforms(interpolation='LanczosWindowedSinc', float=True),
         name='template_to_acpc',
@@ -225,28 +225,11 @@ def init_intramodal_template_wf(
     workflow.connect(
         template_node, template_field, template_to_acpc, 'input_image'
     )  # fmt:skip
-    workflow.connect(
-        template_node, template_field, template_qc, 'template'
-    )  # fmt:skip
-    workflow.connect([
-        (template_qc, outputnode, [
-            ('out_file', 'template_qc_file'),
-            ('agreement_map', 'template_agreement_map'),
-        ]),
-    ])  # fmt:skip
 
-    # White matter contours for the registration reportlet.
-    #
-    # The ordering works out: b0_coreg_wf registers the TEMPLATE to the anatomy,
-    # so the template<->anat affine exists once the template is built and before
-    # anything downstream needs it. Inverting it carries the anatomical
-    # segmentation the other way, into template space. Same idiom as
-    # init_fmap_unwarp_report_wf (MultiLabel + invert_transform_flags).
-    #
-    # NOTE: itk_b0_to_t1 is an affine, so inversion is exact. A nonlinear
-    # intramodal transform would need its inverse warp instead -- but that
-    # transform is template->anat regardless of the intramodal transform type,
-    # so this stays valid for Rigid/Affine/SyN alike.
+    # White matter contours for the registration reportlet: invert the
+    # template->anat affine to carry the anatomical segmentation into template
+    # space. itk_b0_to_t1 is an affine regardless of the intramodal transform
+    # type, so the exact inversion stays valid for Rigid/Affine/SyN alike.
     seg_to_template = pe.Node(
         ants.ApplyTransforms(
             dimension=3,

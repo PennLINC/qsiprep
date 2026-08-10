@@ -430,19 +430,17 @@ to workflows in *QSIPrep*'s documentation]\
     intramodal_template_wf = init_intramodal_template_wf(
         t1w_source_file=anat_source_file,
         inputs_list=sorted(outputs_to_files.keys()),
-        # Both of these were previously never passed, so --intramodal-template-transform
-        # and --intramodal-template-iters had no effect: every template was
-        # BSplineSyN with 2 iterations regardless of what the user asked for.
         transform=config.workflow.intramodal_template_transform,
         num_iterations=config.workflow.intramodal_template_iters or 2,
         name='intramodal_template_wf',
     )
+    # TemplateQC and the per-group orig->intramodal transform export exist only
+    # for linear templates: mvtc2 exposes no per-input aligned images, and its
+    # per-group transform is an [affine, warp] pair that does not fit a
+    # single-file .mat sink.
+    intramodal_linear = config.workflow.intramodal_template_transform in ('Rigid', 'Affine')
 
     if make_intramodal_template:
-        # The intramodal template is the average of every session's b=0 reference,
-        # and until now existed only inside a report figure. Writing it into the
-        # anat directory means one listing shows the subject-level products
-        # side by side: the T1w, the two T2ws, and the b=0 average they align to.
         ds_intramodal_template = pe.Node(
             DerivativesDataSink(
                 source_file=anat_source_file,
@@ -458,8 +456,7 @@ to workflows in *QSIPrep*'s documentation]\
             run_without_submitting=True,
         )
         # Without this the intramodal space is a dead end: nothing can be mapped
-        # into or out of it after the fact. It is also the transform needed to
-        # check that the template itself was written in the right space.
+        # into or out of it after the fact.
         ds_intramodal_to_acpc = pe.Node(
             DerivativesDataSink(
                 source_file=anat_source_file,
@@ -473,40 +470,41 @@ to workflows in *QSIPrep*'s documentation]\
             name='ds_intramodal_to_acpc',
             run_without_submitting=True,
         )
-        ds_template_qc = pe.Node(
-            DerivativesDataSink(
-                source_file=anat_source_file,
-                base_directory=config.execution.output_dir,
-                datatype='anat',
-                desc='templateQC',
-                suffix='dwiref',
-                extension='.tsv',
-            ),
-            name='ds_template_qc',
-            run_without_submitting=True,
-        )
-        ds_template_agreement = pe.Node(
-            DerivativesDataSink(
-                source_file=anat_source_file,
-                base_directory=config.execution.output_dir,
-                datatype='anat',
-                space='ACPC',
-                desc='agreement',
-                suffix='dwiref',
-                extension='.nii.gz',
-                compress=True,
-            ),
-            name='ds_template_agreement',
-            run_without_submitting=True,
-        )
-        workflow.connect([
-            (intramodal_template_wf, ds_template_qc, [
-                ('outputnode.template_qc_file', 'in_file'),
-            ]),
-            (intramodal_template_wf, ds_template_agreement, [
-                ('outputnode.template_agreement_map', 'in_file'),
-            ]),
-        ])  # fmt:skip
+        if intramodal_linear:
+            ds_template_qc = pe.Node(
+                DerivativesDataSink(
+                    source_file=anat_source_file,
+                    base_directory=config.execution.output_dir,
+                    datatype='anat',
+                    desc='templateQC',
+                    suffix='dwiref',
+                    extension='.tsv',
+                ),
+                name='ds_template_qc',
+                run_without_submitting=True,
+            )
+            ds_template_agreement = pe.Node(
+                DerivativesDataSink(
+                    source_file=anat_source_file,
+                    base_directory=config.execution.output_dir,
+                    datatype='anat',
+                    space='ACPC',
+                    desc='agreement',
+                    suffix='dwiref',
+                    extension='.nii.gz',
+                    compress=True,
+                ),
+                name='ds_template_agreement',
+                run_without_submitting=True,
+            )
+            workflow.connect([
+                (intramodal_template_wf, ds_template_qc, [
+                    ('outputnode.template_qc_file', 'in_file'),
+                ]),
+                (intramodal_template_wf, ds_template_agreement, [
+                    ('outputnode.template_agreement_map', 'in_file'),
+                ]),
+            ])  # fmt:skip
 
         workflow.connect([
             (intramodal_template_wf, ds_intramodal_to_acpc, [
@@ -517,9 +515,8 @@ to workflows in *QSIPrep*'s documentation]\
         workflow.connect([
             (intramodal_template_wf, ds_intramodal_template, [
                 # The ACPC-resampled template, NOT outputnode.intramodal_template:
-                # that one is in the template's own midpoint space, ~57mm from
-                # ACPC, and writing it tagged space-ACPC produces a file that does
-                # not overlay the anatomicals.
+                # that one is in the template's own midpoint space, and tagging
+                # it space-ACPC would mislabel it.
                 ('outputnode.intramodal_template_acpc', 'in_file'),
             ]),
         ])  # fmt:skip
@@ -556,6 +553,7 @@ to workflows in *QSIPrep*'s documentation]\
             output_prefix=output_fname,
             source_file=source_file,
             write_derivatives=not merging_distortion_groups,
+            make_intramodal_template=make_intramodal_template,
         )
 
         workflow.connect([
@@ -606,27 +604,28 @@ to workflows in *QSIPrep*'s documentation]\
         if make_intramodal_template:
             input_name = f'inputnode.{output_wfname}_b0_template'
             output_name = f'outputnode.{output_wfname}_transform'
-            # Per-group hop into the template space. Paired with
-            # from-intramodal_to-ACPC above, this closes the round trip:
-            # BIDS b=0 -> intramodal -> ACPC -> MNI, and back.
-            ds_orig_to_intramodal = pe.Node(
-                DerivativesDataSink(
-                    source_file=source_file,
-                    base_directory=config.execution.output_dir,
-                    datatype='anat',
-                    mode='image',
-                    extension='.mat',
-                    **{'from': 'orig', 'to': 'intramodal'},
-                    suffix='xfm',
-                ),
-                name=f'ds_orig_to_intramodal_{output_wfname}',
-                run_without_submitting=True,
-            )
-            workflow.connect([
-                (intramodal_template_wf, ds_orig_to_intramodal, [
-                    (output_name, 'in_file'),
-                ]),
-            ])  # fmt:skip
+            if intramodal_linear:
+                # Per-group hop into the template space. Paired with
+                # from-intramodal_to-ACPC above, this closes the round trip:
+                # BIDS b=0 -> intramodal -> ACPC -> MNI, and back.
+                ds_orig_to_intramodal = pe.Node(
+                    DerivativesDataSink(
+                        source_file=source_file,
+                        base_directory=config.execution.output_dir,
+                        datatype='anat',
+                        mode='image',
+                        extension='.mat',
+                        **{'from': 'orig', 'to': 'intramodal'},
+                        suffix='xfm',
+                    ),
+                    name=f'ds_orig_to_intramodal_{output_wfname}',
+                    run_without_submitting=True,
+                )
+                workflow.connect([
+                    (intramodal_template_wf, ds_orig_to_intramodal, [
+                        (output_name, 'in_file'),
+                    ]),
+                ])  # fmt:skip
 
             workflow.connect([
                 (dwi_preproc_wf, intramodal_template_wf, [
