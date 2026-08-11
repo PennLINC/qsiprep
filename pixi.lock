@@ -6190,8 +6190,8 @@ packages:
   timestamp: 1770223379599
 - pypi: ./
   name: qsiprep
-  version: 26.1.0.dev1+g8f9024671
-  sha256: a66eb8178bffd14f95c22dff1207d107c1516678100401eefc8f238ebae6e36e
+  version: 26.1.0.dev52+g2cdbd9f8f
+  sha256: 41c484a0b1d27928c2af5d1431bfc3b260447b28c0e0c69df06a01a6a4282704
   requires_dist:
   - acres
   - coverage
@@ -6245,7 +6245,7 @@ packages:
   - pytest-xdist ; extra == 'all'
   - python-levenshtein ; extra == 'all'
   - recommonmark ; extra == 'all'
-  - ruff~=0.4.3 ; extra == 'all'
+  - ruff==0.15.21 ; extra == 'all'
   - sphinx-argparse ; extra == 'all'
   - sphinx-markdown-tables ; extra == 'all'
   - sphinx-rtd-theme ; extra == 'all'
@@ -6253,7 +6253,7 @@ packages:
   - sphinxcontrib-apidoc ; extra == 'all'
   - sphinxcontrib-bibtex ; extra == 'all'
   - pre-commit ; extra == 'dev'
-  - ruff~=0.4.3 ; extra == 'dev'
+  - ruff==0.15.21 ; extra == 'dev'
   - dipy ; extra == 'doc'
   - doctest-ignore-unicode ; extra == 'doc'
   - lxml-html-clean ; extra == 'doc'
@@ -6278,8 +6278,8 @@ packages:
   editable: true
 - pypi: ./
   name: qsiprep
-  version: 26.1.0.dev1+g8f9024671
-  sha256: a66eb8178bffd14f95c22dff1207d107c1516678100401eefc8f238ebae6e36e
+  version: 26.1.0.dev52+g2cdbd9f8f
+  sha256: 41c484a0b1d27928c2af5d1431bfc3b260447b28c0e0c69df06a01a6a4282704
   requires_dist:
   - acres
   - coverage
@@ -6333,7 +6333,7 @@ packages:
   - pytest-xdist ; extra == 'all'
   - python-levenshtein ; extra == 'all'
   - recommonmark ; extra == 'all'
-  - ruff~=0.4.3 ; extra == 'all'
+  - ruff==0.15.21 ; extra == 'all'
   - sphinx-argparse ; extra == 'all'
   - sphinx-markdown-tables ; extra == 'all'
   - sphinx-rtd-theme ; extra == 'all'
@@ -6341,7 +6341,7 @@ packages:
   - sphinxcontrib-apidoc ; extra == 'all'
   - sphinxcontrib-bibtex ; extra == 'all'
   - pre-commit ; extra == 'dev'
-  - ruff~=0.4.3 ; extra == 'dev'
+  - ruff==0.15.21 ; extra == 'dev'
   - dipy ; extra == 'doc'
   - doctest-ignore-unicode ; extra == 'doc'
   - lxml-html-clean ; extra == 'doc'

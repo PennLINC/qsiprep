@@ -15,6 +15,7 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from ... import config
 from ...interfaces.gradients import CombineMotions, GradientRotation, SliceQC
 from ...interfaces.images import SplitDWIsBvals, TSplit
+from ...utils.gpu import gpu_enabled
 from ..fieldmap.base import init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf
 
@@ -184,6 +185,7 @@ def init_qsiprep_hmcsdc_wf(
         drbuddi_wf = init_drbuddi_wf(
             scan_groups=scan_groups,
             t2w_sdc=t2w_sdc,
+            use_cuda=gpu_enabled('drbuddi'),
         )
 
         # apply the head motion correction transforms
