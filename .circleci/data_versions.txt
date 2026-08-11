@@ -9,6 +9,7 @@ TWOSES_URL=https://upenn.box.com/shared/static/c949fjjhhen3ihgnzhkdw5jympm327pp.
 MULTISHELL_OUTPUT_URL=https://upenn.box.com/shared/static/hr7xnxicbx9iqndv1yl35bhtd61fpalp.xz
 SINGLESHELL_OUTPUT_URL=https://upenn.box.com/shared/static/9jhf0eo3ml6ojrlxlz6lej09ny12efgg.gz
 DRBUDDI_RPE_SERIES_URL=https://upenn.box.com/shared/static/j5mxts5wu0em1toafmrlzdndves1jnfv.xz
+CSDSI_RPE_SERIES_URL=https://upenn.box.com/shared/static/3mmagbtddgb4lpmlc5vs4jnsyf1etp3d.xz
 DRBUDDI_EPI_URL=https://upenn.box.com/shared/static/plyuee1nbj9v8eck03s38ojji8tkspwr.xz
 DSDTI_FMAP_URL=https://upenn.box.com/shared/static/rxr6qbi6ezku9gw3esfpnvqlcxaw7n5n.gz
 DSCSDSI_FMAP_URL=https://upenn.box.com/shared/static/l561psez1ojzi4p3a12eidaw9vbizwdc.gz

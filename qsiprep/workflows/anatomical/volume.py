@@ -54,6 +54,7 @@ from ...interfaces.freesurfer import (
 )
 from ...interfaces.itk import AffineToRigid, DisassembleTransform
 from ...interfaces.niworkflows import RobustMNINormalizationRPT
+from ...utils.gpu import gpu_enabled
 from ...utils.misc import fix_multi_source_name
 
 ANTS_VERSION = BrainExtraction().version or '<ver>'
@@ -934,7 +935,8 @@ def init_synthstrip_wf(do_padding=False, unfatsat=False, name='synthstrip_wf') -
 
     if not config.execution.sloppy:
         synthstrip = pe.Node(
-            FixHeaderSynthStrip(),  # Threads are always fixed to 1 in the run
+            # Threads are always fixed to 1 in the run.
+            FixHeaderSynthStrip(gpu=gpu_enabled('synthstrip')),
             name='synthstrip',
             n_procs=config.nipype.omp_nthreads,
         )
@@ -999,7 +1001,13 @@ def init_synthseg_wf() -> Workflow:
 
     if not config.execution.sloppy:
         synthseg = pe.Node(
-            SynthSeg(fast=config.execution.sloppy, num_threads=1),  # Hard code to 1
+            # Inverted polarity: SynthSeg takes an opt-out --cpu flag, unlike
+            # every other GPU-capable tool here.
+            SynthSeg(
+                fast=config.execution.sloppy,
+                num_threads=1,  # Hard code to 1
+                cpu=not gpu_enabled('synthseg'),
+            ),
             n_procs=config.nipype.omp_nthreads,
             name='synthseg',
         )

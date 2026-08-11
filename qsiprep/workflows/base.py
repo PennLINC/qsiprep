@@ -60,6 +60,36 @@ from .dwi.intramodal_template import init_intramodal_template_wf
 from .dwi.util import get_source_file
 
 
+def _t2w_sdc_backend_enabled():
+    """Whether the selected backend has a stage that can consume a T2w for SDC.
+
+    DRBUDDI's multimodal ``--structural`` is reached only when ``--pepolar-method``
+    asks for DRBUDDI; TORTOISE ``--epi T2Wreg`` is reached from the ``diffprep_*``
+    backends for the fieldmap-less case and is **not** gated on ``--pepolar-method``.
+    """
+    return 'drbuddi' in (config.workflow.pepolar_method or '').lower() or (
+        config.workflow.hmc_model or ''
+    ).startswith('diffprep_')
+
+
+def _t2w_available_for_sdc(subject_data):
+    """Whether a T2w should drive susceptibility distortion correction.
+
+    True only when the subject has a T2w, anatomical processing runs
+    (``--anat-modality`` != ``none``), and the selected backend actually has a
+    T2w-consuming stage. Every T2w consumer takes the anatomical workflow's
+    ``t2w_unfatsat``, which is only produced when ``init_anat_preproc_wf`` is
+    asked for additional T2ws (see ``additional_t2ws`` in
+    :func:`init_single_subject_wf`, which must stay in sync with this).
+    Requesting T2w-based SDC without it leaves those nodes with an empty input.
+    """
+    return (
+        bool(subject_data.get('t2w'))
+        and config.workflow.anat_modality != 'none'
+        and _t2w_sdc_backend_enabled()
+    )
+
+
 def init_qsiprep_wf():
     """Organize the execution of qsiprep, with a sub-workflow for each subject.
 
@@ -180,8 +210,12 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
         cohort = cohort_by_months(anatomical_template, age)
         anatomical_template = f'{anatomical_template}+{cohort}'
 
+    # The anatomical workflow only builds its T2w branch -- and therefore only
+    # produces ``t2w_unfatsat`` -- when asked for additional T2ws. Keep this in
+    # sync with _t2w_available_for_sdc, which decides whether the consumers of
+    # that output get switched on.
     additional_t2ws = 0
-    if 'drbuddi' in config.workflow.pepolar_method.lower() and subject_data['t2w']:
+    if _t2w_sdc_backend_enabled() and subject_data['t2w']:
         additional_t2ws = len(subject_data['t2w'])
 
     # Inspect the dwi data and provide advice on pipeline choices
@@ -405,7 +439,7 @@ to workflows in *QSIPrep*'s documentation]\
             scan_groups=dwi_info,
             output_prefix=output_fname,
             source_file=source_file,
-            t2w_sdc=bool(subject_data.get('t2w')),
+            t2w_sdc=_t2w_available_for_sdc(subject_data),
             anatomical_template=anatomical_template,
         )
         dwi_finalize_wf = init_dwi_finalize_wf(
