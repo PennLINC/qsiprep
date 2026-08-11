@@ -28,14 +28,30 @@ from ...interfaces.tortoise import (
     DRBUDDIAggregateOutputs,
     GatherDRBUDDIInputs,
     generate_drbuddi_boilerplate,
+    sloppy_epi_working_res,
 )
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
+def _synth_shell_kwargs(bval, ndirs):
+    """DRBUDDI shell-synthesis kwargs, or empty when the opt-in is off.
+
+    Returned as kwargs rather than passed as 0 so that a stock (unpatched)
+    TORTOISE, which does not know --DRBUDDI_synth_shell_bval, is unaffected
+    unless the user explicitly asks for synthesis.
+    """
+    if not bval or bval <= 0:
+        return {}
+    return {'synth_shell_bval': float(bval), 'synth_shell_ndirs': int(ndirs)}
+
+
 def init_drbuddi_wf(
     scan_groups,
     t2w_sdc,
+    use_cuda=False,
+    synth_shell_bval=None,
+    synth_shell_ndirs=30,
 ):
     """
     This workflow implements the heuristics to choose a
@@ -69,6 +85,12 @@ def init_drbuddi_wf(
     ----------
     scan_groups : dict of distortion groupings
         Inputs configuration for distortion correction
+    use_cuda : :obj:`bool`
+        Run ``DRBUDDI_cuda`` instead of ``DRBUDDI``. The GPU must be exposed to
+        the container. Results differ from the CPU build, so this is not purely
+        a speed knob. Callers pass ``gpu_enabled('drbuddi')``, which is driven by
+        ``--gpu`` (with ``"use_cuda"`` in ``--diffprep-config`` as a legacy
+        fallback).
     t2w_sdc : bool
         Should a T2w image be included in the DRBUDDI run?
 
@@ -171,6 +193,15 @@ def init_drbuddi_wf(
             fieldmap_type=fieldmap_info['suffix'],
             num_threads=config.nipype.omp_nthreads,
             sloppy=config.execution.sloppy,
+            **sloppy_epi_working_res(),
+            **_synth_shell_kwargs(synth_shell_bval, synth_shell_ndirs),
+            use_cuda=use_cuda,
+            # NOTE: --DRBUDDI_start_with_diffeomorphic_for_rigid_reg and
+            # --DRBUDDI_disable_initial_rigid look like natural companions to
+            # ``sloppy``, but both are commented out of TORTOISE's parser:
+            # DRBUDDI prints "Unknown command line parameter", exits 0 (which
+            # nipype reads as success), and the run dies later on missing
+            # outputs. Neither flag is safe to send.
         ),
         name='drbuddi',
         n_procs=config.nipype.omp_nthreads,

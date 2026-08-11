@@ -16,6 +16,8 @@ from ... import config
 from ...data import load as load_data
 from ...interfaces import DerivativesDataSink
 from ...interfaces.ants import MultivariateTemplateConstruction2
+from ...interfaces.images import ExtractWM
+from ...interfaces.template_qc import TemplateQC
 from .hmc import init_b0_hmc_wf
 from .registration import init_b0_to_anat_registration_wf
 
@@ -25,6 +27,7 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 def init_intramodal_template_wf(
     inputs_list,
     t1w_source_file,
+    transform='BSplineSyN',
     num_iterations=2,
     mem_gb=3,
     name='intramodal_template_wf',
@@ -96,6 +99,10 @@ def init_intramodal_template_wf(
             fields=output_names
             + [
                 'intramodal_template',
+                'intramodal_template_acpc',
+                'intramodal_template_wm_seg',
+                'template_qc_file',
+                'template_agreement_map',
                 'intramodal_template_to_t1_affine',
                 'intramodal_template_to_t1_warp',
             ]
@@ -108,23 +115,70 @@ def init_intramodal_template_wf(
     for output_num, output_name in enumerate(output_names):
         workflow.connect(split_outputs, 'out%d' % (output_num + 1), outputnode, output_name)
 
-    runtime_opts = {'num_cores': 1, 'parallel_control': 0}
-    if omp_nthreads > 1:
-        runtime_opts = {'num_cores': omp_nthreads, 'parallel_control': 2}
-    ants_mvtc2 = pe.Node(
-        MultivariateTemplateConstruction2(
-            dimension=3, iteration_limit=num_iterations, **runtime_opts
-        ),
-        name='ants_mvtc2',
-        n_procs=omp_nthreads,
-    )
+    # antsMultivariateTemplateConstruction2 only offers BSplineSyN/SyN/Affine, so
+    # linear-only templates are built with init_b0_hmc_wf instead. That also lets
+    # Rigid be offered at all -- it is not in the mvtc2 enum.
+    linear_only = transform in ('Rigid', 'Affine')
 
     workflow.connect([
         (merge_inputs, rename_inputs, [('out', 'in_file')]),
-        (rename_inputs, ants_mvtc2, [('out_file', 'input_images')]),
-        (ants_mvtc2, split_outputs, [('forward_transforms', 'inlist')]),
-        (ants_mvtc2, outputnode, [('templates', 'intramodal_template')]),
     ])  # fmt:skip
+
+    if linear_only:
+        # initialize_com because sessions can differ by centimetres of table
+        # position, which the shoreline settings' two resolution levels and
+        # absent initialization will not recover from.
+        linear_template_wf = init_b0_hmc_wf(
+            align_to='iterative',
+            transform=transform,
+            num_iters=max(int(num_iterations), 2),
+            initialize_com=True,
+            boilerplate=False,
+            settings='unbiased_template',
+            name='intramodal_linear_template',
+        )
+        # Per-input agreement with the template, linear-only: mvtc2 does not
+        # expose the per-input aligned images TemplateQC needs.
+        template_qc = pe.Node(TemplateQC(labels=list(inputs_list)), name='template_qc')
+        workflow.connect([
+            (rename_inputs, linear_template_wf, [('out_file', 'inputnode.b0_images')]),
+            (linear_template_wf, split_outputs, [
+                (('outputnode.forward_transforms', _list_squeeze), 'inlist'),
+            ]),
+            (linear_template_wf, outputnode, [
+                ('outputnode.final_template', 'intramodal_template'),
+            ]),
+            (linear_template_wf, template_qc, [
+                ('outputnode.final_template', 'template'),
+                ('outputnode.aligned_images', 'aligned_images'),
+                (('outputnode.forward_transforms', _list_squeeze), 'transforms'),
+            ]),
+            (template_qc, outputnode, [
+                ('out_file', 'template_qc_file'),
+                ('agreement_map', 'template_agreement_map'),
+            ]),
+        ])  # fmt:skip
+        template_node, template_field = linear_template_wf, 'outputnode.final_template'
+    else:
+        runtime_opts = {'num_cores': 1, 'parallel_control': 0}
+        if omp_nthreads > 1:
+            runtime_opts = {'num_cores': omp_nthreads, 'parallel_control': 2}
+        ants_mvtc2 = pe.Node(
+            MultivariateTemplateConstruction2(
+                dimension=3,
+                iteration_limit=num_iterations,
+                transform=transform,
+                **runtime_opts,
+            ),
+            name='ants_mvtc2',
+            n_procs=omp_nthreads,
+        )
+        workflow.connect([
+            (rename_inputs, ants_mvtc2, [('out_file', 'input_images')]),
+            (ants_mvtc2, split_outputs, [('forward_transforms', 'inlist')]),
+            (ants_mvtc2, outputnode, [('templates', 'intramodal_template')]),
+        ])  # fmt:skip
+        template_node, template_field = ants_mvtc2, 'templates'
 
     # calculate dwi registration to T1w
     b0_coreg_wf = init_b0_to_anat_registration_wf(write_report=True)
@@ -146,12 +200,55 @@ def init_intramodal_template_wf(
             ('t1_seg', 'inputnode.t1_seg'),
             ('subject_id', 'inputnode.subject_id'),
         ]),
-        (ants_mvtc2, b0_coreg_wf, [('templates', 'inputnode.ref_b0_brain')]),
         (b0_coreg_wf, ds_report_imtcoreg, [('outputnode.report', 'in_file')]),
         (b0_coreg_wf, outputnode, [
             ('outputnode.itk_b0_to_t1', 'intramodal_template_to_t1_affine'),
         ]),
     ])  # fmt:skip
+
+    workflow.connect(
+        template_node, template_field, b0_coreg_wf, 'inputnode.ref_b0_brain'
+    )  # fmt:skip
+
+    # The template lives in its own midpoint space, not ACPC: anything written
+    # out has to go through the coregistration b0_coreg_wf computes, or it would
+    # be mislabelled if tagged space-ACPC.
+    template_to_acpc = pe.Node(
+        ants.ApplyTransforms(interpolation='LanczosWindowedSinc', float=True),
+        name='template_to_acpc',
+    )
+    workflow.connect([
+        (inputnode, template_to_acpc, [('t1_brain', 'reference_image')]),
+        (b0_coreg_wf, template_to_acpc, [('outputnode.itk_b0_to_t1', 'transforms')]),
+        (template_to_acpc, outputnode, [('output_image', 'intramodal_template_acpc')]),
+    ])  # fmt:skip
+    workflow.connect(
+        template_node, template_field, template_to_acpc, 'input_image'
+    )  # fmt:skip
+
+    # White matter contours for the registration reportlet: invert the
+    # template->anat affine to carry the anatomical segmentation into template
+    # space. itk_b0_to_t1 is an affine regardless of the intramodal transform
+    # type, so the exact inversion stays valid for Rigid/Affine/SyN alike.
+    seg_to_template = pe.Node(
+        ants.ApplyTransforms(
+            dimension=3,
+            float=True,
+            interpolation='MultiLabel',
+            invert_transform_flags=[True],
+        ),
+        name='seg_to_template',
+    )
+    template_wm = pe.Node(ExtractWM(), name='template_wm')
+    workflow.connect([
+        (inputnode, seg_to_template, [('t1_seg', 'input_image')]),
+        (b0_coreg_wf, seg_to_template, [('outputnode.itk_b0_to_t1', 'transforms')]),
+        (seg_to_template, template_wm, [('output_image', 'in_seg')]),
+        (template_wm, outputnode, [('out', 'intramodal_template_wm_seg')]),
+    ])  # fmt:skip
+    workflow.connect(
+        template_node, template_field, seg_to_template, 'reference_image'
+    )  # fmt:skip
 
     return workflow
 

@@ -453,6 +453,7 @@ class execution(_Config):
         'bids_dir',
         'bids_database_dir',
         'dataset_links',
+        'diffprep_config',
         'eddy_config',
         'layout',
         'log_dir',
@@ -561,6 +562,8 @@ class workflow(_Config):
     Or make a template? Either 'iterative' or 'first'"""
     b0_to_t1w_transform = None
     """Transformation model for intramodal registration."""
+    anat_biascorrect = None
+    """Whether to N4-correct anatomicals: ``n4``, ``auto`` or ``none``."""
     b1_biascorrect_stage = None
     """The stage of processing at which to apply B1 bias correction. Either "final" (after
     resampling), "none" (skipped entirely) or "legacy" (before concatenation)."""
@@ -577,6 +580,8 @@ class workflow(_Config):
     """DEPRECATED: see --b1-biascorrect-stage."""
     dwi_only = False
     """DEPRECATED: True if anat_modality is 'none'."""
+    diffprep_config = None
+    """Configuration JSON for running TORTOISE DIFFPREP."""
     eddy_config = None
     """Configuration for running Eddy."""
     fmap_bspline = None
@@ -585,6 +590,8 @@ class workflow(_Config):
     """Remove the mean from fieldmaps."""
     force_syn = None
     """Run *fieldmap-less* susceptibility-derived distortions estimation."""
+    gpu = None
+    """Tasks to run on the GPU (see ``qsiprep.utils.gpu``)."""
     hmc_model = None
     """Model used to generate target images for hmc."""
     hmc_transform = None
@@ -611,6 +618,8 @@ class workflow(_Config):
     """Process all dwis separately - do not attempt concatenation."""
     shoreline_iters = None
     """How many iterations to run SHORELine."""
+    tortoise_gpu_cpu_ratio = None
+    """Volumes the GPU takes per DIFFPREP pass; None leaves TORTOISE's default."""
     unringing_method = None
     """Method for Gibbs-ringing removal. Either "none", "mrdegibbs" or "rpg"."""
     use_syn_sdc = None

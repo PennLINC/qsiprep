@@ -27,6 +27,7 @@
 import sys
 
 from .. import config
+from ..utils.gpu import GPU_ALIASES, GPU_TASKS
 
 
 def _build_parser(**kwargs):
@@ -329,6 +330,29 @@ def _build_parser(**kwargs):
         ),
     )
     g_conf.add_argument(
+        '--gpu',
+        required=False,
+        action='store',
+        nargs='+',
+        # None (not given) is distinct from ["none"] (explicitly off): when the
+        # flag is absent, a legacy "use_cuda" in --eddy-config/--diffprep-config
+        # still decides, so those runs do not silently drop to CPU.
+        default=None,
+        choices=sorted(GPU_TASKS) + list(GPU_ALIASES),
+        help=(
+            'Run selected tasks on the GPU (a space delimited list). GPU memory is '
+            'usually the binding constraint rather than the pipeline, so tasks are '
+            'selected individually: an 8 GB card typically runs "eddy", "diffprep" '
+            'and "drbuddi" but not "synthstrip" or "synthseg". "all" enables every '
+            'task, "none" (the default) disables all of them. The GPU must also be '
+            'exposed to the container ("docker run --gpus all" / '
+            '"apptainer run --nv"). NOTE: GPU builds are not numerically identical '
+            'to their CPU counterparts, so this changes results, not just runtime. '
+            'When given, this overrides "use_cuda" in --eddy-config / '
+            '--diffprep-config; when omitted entirely, those keys still apply.'
+        ),
+    )
+    g_conf.add_argument(
         '--infant',
         action='store_true',
         help='Configure pipelines to process infant brains. '
@@ -411,6 +435,22 @@ def _build_parser(**kwargs):
         '--dwi-no-biascorr',
         action='store_true',
         help='DEPRECATED: see --b1-biascorrect-stage',
+    )
+    g_conf.add_argument(
+        '--anat-biascorrect',
+        action='store',
+        choices=['n4', 'auto', 'none'],
+        default='n4',
+        help=(
+            'Whether to run N4 bias field correction on ANATOMICAL images. '
+            'Note this is separate from --b1-biascorrect-stage, which only governs '
+            'the DWIs. '
+            '"n4" (default) always runs it; scanner-side intensity normalization '
+            '(e.g. Siemens NORM) does not remove the need for it. '
+            '"none" never runs it. '
+            '"auto" skips it when the BIDS ImageType metadata contains "NORM", '
+            'which is how Siemens and others flag console-applied normalization.'
+        ),
     )
     g_conf.add_argument(
         '--b1-biascorrect-stage',
@@ -532,11 +572,25 @@ How to combine images across distorted groups.
         '--hmc-model',
         action='store',
         default='eddy',
-        choices=['none', '3dSHORE', 'eddy', 'tensor'],
+        choices=[
+            'none',
+            '3dSHORE',
+            'eddy',
+            'tensor',
+            'diffprep_motion',
+            'diffprep_quadratic',
+            'diffprep_cubic',
+        ],
         help='model used to generate target images for hmc. If "none" the '
         'non-b0 images will be warped using the same transform as their '
         'nearest b0 image. If "3dSHORE", SHORELine will be used. if "tensor", '
-        'SHORELine iterations with a tensor model will be used',
+        'SHORELine iterations with a tensor model will be used. The '
+        '"diffprep_*" options run TORTOISE DIFFPREP: "diffprep_motion" '
+        'corrects rigid head motion only, "diffprep_quadratic" adds '
+        '24-parameter quadratic eddy-current correction (recommended for '
+        'non-shelled / CS-DSI schemes), "diffprep_cubic" adds cubic eddy '
+        'correction. DIFFPREP works on arbitrary q-space (no shells '
+        'required).',
     )
     g_moco.add_argument(
         '--eddy-config',
@@ -545,6 +599,33 @@ How to combine images across distorted groups.
         'json is specified, a default one will be used. The current default '
         'json can be found here: '
         'https://github.com/PennLINC/qsiprep/blob/main/qsiprep/data/eddy_params.json',
+    )
+    g_moco.add_argument(
+        '--diffprep-config',
+        action='store',
+        help='path to a json file with settings for the call to TORTOISE '
+        'DIFFPREP (used only when --hmc-model is one of the diffprep_* '
+        'options). If no json is specified, a default one will be used. The '
+        'current default can be found here: '
+        'https://github.com/PennLINC/qsiprep/blob/main/qsiprep/data/diffprep_params.json',
+    )
+    g_moco.add_argument(
+        '--tortoise-gpu-cpu-ratio',
+        action='store',
+        type=int,
+        default=None,
+        help=(
+            'How many volumes DIFFPREP gives the GPU per pass, against one per CPU '
+            'thread, during motion and eddy correction. TORTOISE does not move the '
+            'series onto the GPU the way eddy_cuda does: it treats the GPU as one '
+            'more worker, so the number of passes is '
+            'ceil(nvolumes / (ngpus * ratio + omp-nthreads - ngpus)). '
+            'It describes the machine, not the data -- roughly how many volumes the '
+            'GPU gets through while one CPU core does one. Only worth setting when '
+            'the GPU is fast relative to the core count, since its influence falls '
+            'as --omp-nthreads rises (about 68%% of volumes at 8 cores, 19%% at 64). '
+            'Requires the patched TORTOISE. Unset leaves TORTOISE at its default of 15.'
+        ),
     )
     g_moco.add_argument(
         '--shoreline-iters',
@@ -700,6 +781,19 @@ def parse_args(args=None, namespace=None):
         from ..utils.misc import validate_eddy_config
 
         validate_eddy_config(opts.eddy_config)
+
+    if opts.diffprep_config:
+        from ..utils.misc import validate_diffprep_config
+
+        validate_diffprep_config(opts.diffprep_config)
+
+    if opts.gpu:
+        from ..utils.gpu import check_gpu_available
+
+        # Raises if no CUDA device is visible or a GPU build is missing. Doing
+        # this here costs seconds; discovering it inside a node costs the whole
+        # anatomical workflow.
+        check_gpu_available(opts.gpu)
 
     config.execution.log_level = int(max(25 - 5 * opts.verbose_count, logging.DEBUG))
     config.from_dict(vars(opts), init=['nipype'])

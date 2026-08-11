@@ -319,6 +319,199 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
 
 
 @pytest.mark.integration
+@pytest.mark.diffprep
+def test_diffprep(data_dir, output_dir, working_dir):
+    """TORTOISE DIFFPREP head-motion/eddy correction on non-shelled data.
+
+    This tests the following features:
+    - The TORTOISE DIFFPREP HMC backend (--hmc-model diffprep_quadratic) on a
+      compressed-sensing DSI (non-shelled) scheme, where FSL eddy cannot run
+    - The fieldmap-less path: with no fieldmap and no T2w, DIFFPREP performs
+      head-motion/eddy correction only and does not error out
+    - Skipping B1 biascorrection
+
+    Inputs
+    ------
+    - DSCSDSI BIDS data (data/DSCSDSI_nofmap)
+    """
+    TEST_NAME = 'diffprep'
+
+    dataset_dir = download_test_data('DSCSDSI', data_dir)
+    # XXX: Having to modify dataset_dirs is suboptimal.
+    dataset_dir = os.path.join(dataset_dir, 'DSCSDSI_nofmap')
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        'participant',
+        f'-w={work_dir}',
+        '--sloppy',
+        '--b1-biascorrect-stage=none',
+        '--hmc-model=diffprep_quadratic',
+        '--output-resolution=5',
+    ]
+
+    _run_and_generate(TEST_NAME, parameters, test_main=False)
+
+
+@pytest.mark.integration
+@pytest.mark.diffprep_drbuddi
+def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
+    """TORTOISE DIFFPREP head-motion correction followed by DRBUDDI SDC.
+
+    This tests the following features:
+    - The TORTOISE DIFFPREP HMC backend combined with reverse phase-encoded
+      (blip-up/blip-down) DRBUDDI susceptibility distortion correction, i.e.
+      that the backend performs SDC rather than erroring when a fieldmap is
+      present
+    - Denoising is skipped
+
+    Uses an ``epi`` fieldmap (a reverse-PE b=0/EPI in fmap/). The reverse-PE
+    *series* (rpe_series) case is covered separately in
+    ``test_diffprep_drbuddi_rpe_series``, which exercises the per-direction
+    DIFFPREP split/recombine before DRBUDDI.
+
+    Inputs
+    ------
+    - qsiprep epi fieldmap results (data/drbuddi_epi)
+    """
+    TEST_NAME = 'diffprep_drbuddi'
+
+    dataset_dir = download_test_data('drbuddi_epi', data_dir)
+    # XXX: Having to modify dataset_dirs is suboptimal.
+    dataset_dir = os.path.join(dataset_dir, 'tinytensor_epi')
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        'participant',
+        f'-w={work_dir}',
+        '--sloppy',
+        '--anat-modality=none',
+        '--denoise-method=none',
+        '--b1-biascorrect-stage=none',
+        '--hmc-model=diffprep_quadratic',
+        '--pepolar-method=DRBUDDI',
+        '--output-resolution=2',
+    ]
+
+    # See test_diffprep: no expected-output manifest yet, so the assertion is
+    # that DIFFPREP + DRBUDDI SDC completes end to end.
+    _run_and_generate(TEST_NAME, parameters, test_main=False, check_outputs=False)
+
+
+@pytest.mark.integration
+@pytest.mark.diffprep_rpe_series
+def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
+    """TORTOISE DIFFPREP HMC on a reverse-PE *series* (rpe_series) + DRBUDDI SDC.
+
+    Unlike ``test_diffprep_drbuddi`` (which uses an ``epi`` fieldmap), this feeds
+    two opposing-PE DWI *series*. qsiprep merges them into one 4D file for FSL
+    eddy; the DIFFPREP backend re-splits that merge back into its two PE groups,
+    runs DIFFPREP once per direction, recombines, and hands the flat list to the
+    stock DRBUDDI path. This exercises the Tier-1 (shelled) rpe_series path.
+
+    The ``tinytensor_rpe_series`` dataset is a DTI-regime (shelled) acquisition,
+    so DRBUDDI's own [b0, FA] tensor fit is well-conditioned and no predicted-
+    shell synthesis is needed. A non-shelled (CS-DSI) reverse-PE-series dataset
+    is still required to exercise the Tier-2 synthesis path end to end.
+
+    Inputs
+    ------
+    - qsiprep reverse-PE-series results (data/drbuddi_rpe_series)
+    """
+    TEST_NAME = 'diffprep_rpe_series'
+
+    dataset_dir = download_test_data('drbuddi_rpe_series', data_dir)
+    # XXX: Having to modify dataset_dirs is suboptimal.
+    dataset_dir = os.path.join(dataset_dir, 'tinytensor_rpe_series')
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        'participant',
+        f'-w={work_dir}',
+        '--sloppy',
+        '--anat-modality=none',
+        '--denoise-method=none',
+        '--b0-motion-corr-to=first',
+        '--b1-biascorrect-stage=none',
+        '--hmc-model=diffprep_quadratic',
+        '--pepolar-method=DRBUDDI',
+        '--output-resolution=5',
+    ]
+
+    # No expected-output manifest yet: assert the split/recombine + DRBUDDI SDC
+    # path completes end to end.
+    _run_and_generate(TEST_NAME, parameters, test_main=False, check_outputs=False)
+
+
+@pytest.mark.integration
+@pytest.mark.diffprep_csdsi_rpe_series
+def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
+    """TORTOISE DIFFPREP on a NON-shelled (CS-DSI) reverse-PE series + DRBUDDI.
+
+    Unlike ``test_diffprep_drbuddi_rpe_series`` (DTI-regime, shelled), this uses a
+    downsampled CS-DSI HASC55 AP+PA acquisition. It exercises a non-shelled
+    q-space grid through the **stock DRBUDDI path**, which is what qsiprep now
+    does for such data: DRBUDDI's plain tensor fit is well enough conditioned on
+    real HASC55 to drive the correction, landing within ~0.002 correlation of a
+    synthesized-shell target for roughly half the runtime. Shell synthesis
+    remains available as an opt-in (``drbuddi_synth_shell_bval`` in
+    ``--diffprep-config``) for data where the plain fit does look poor.
+
+    The fixture also ships a T2w, so a heavier variant (drop ``--anat-modality
+    none``) can additionally exercise the DRBUDDI multimodal-T2w branch.
+
+    Inputs
+    ------
+    - Downsampled CS-DSI HASC55 reverse-PE series (data/csdsi_rpe_series)
+    """
+    TEST_NAME = 'diffprep_csdsi_rpe_series'
+
+    # Test data pending upload to Box (see qsiprep/tests/utils.py). Skip cleanly
+    # until the archive is available rather than failing the download.
+    try:
+        dataset_dir = download_test_data('csdsi_rpe_series', data_dir)
+    except Exception as exc:  # noqa: BLE001
+        pytest.skip(f'csdsi_rpe_series test data not available yet: {exc}')
+
+    # XXX: Having to modify dataset_dirs is suboptimal.
+    dataset_dir = os.path.join(dataset_dir, 'csdsi_hasc55')
+    # A failed placeholder download can leave an empty dir behind; skip if the
+    # BIDS root isn't actually present.
+    if not os.path.isdir(dataset_dir):
+        pytest.skip('csdsi_rpe_series test data not available yet (placeholder URL).')
+    out_dir = os.path.join(output_dir, TEST_NAME)
+    work_dir = os.path.join(working_dir, TEST_NAME)
+
+    parameters = [
+        dataset_dir,
+        out_dir,
+        'participant',
+        f'-w={work_dir}',
+        '--sloppy',
+        '--anat-modality=none',
+        '--denoise-method=none',
+        '--b0-motion-corr-to=first',
+        '--b1-biascorrect-stage=none',
+        '--hmc-model=diffprep_quadratic',
+        '--pepolar-method=DRBUDDI',
+        '--output-resolution=5',
+    ]
+
+    # No expected-output manifest yet: assert the per-direction DIFFPREP +
+    # DRBUDDI path completes end to end on non-shelled data.
+    _run_and_generate(TEST_NAME, parameters, test_main=False, check_outputs=False)
+
+
+@pytest.mark.integration
 @pytest.mark.dsdti_nofmap
 def test_dsdti_nofmap(data_dir, output_dir, working_dir):
     """DSCDTI_nofmap test.
@@ -633,6 +826,34 @@ def test_forrest_gump_patch2self(data_dir, output_dir, working_dir):
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)
+
+
+@pytest.mark.parametrize('model', ['diffprep_motion', 'diffprep_quadratic', 'diffprep_cubic'])
+def test_parser_accepts_diffprep_hmc_models(model, tmp_path):
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    opts = parser.parse_args(
+        [str(bids), str(out), 'participant', '--hmc-model', model, '--output-resolution', '2']
+    )
+    assert opts.hmc_model == model
+
+
+def test_validate_diffprep_config_missing(tmp_path):
+    from qsiprep.utils.misc import validate_diffprep_config
+
+    with pytest.raises(ValueError, match='does not exist'):
+        validate_diffprep_config(str(tmp_path / 'nope.json'))
+
+
+def test_validate_diffprep_config_default_is_valid():
+    from qsiprep.data import load as load_data
+    from qsiprep.utils.misc import validate_diffprep_config
+
+    validate_diffprep_config(str(load_data('diffprep_params.json')))
 
 
 def _check_arg_specified(argname, arglist):
