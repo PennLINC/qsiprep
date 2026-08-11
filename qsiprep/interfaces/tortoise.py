@@ -861,6 +861,21 @@ def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False):
 
 
 class _DIFFPREPInputSpec(TORTOISEInputSpec):
+    # TORTOISEProcess sizes its thread pool from the HOST core count (ignoring
+    # cgroups/affinity) and calls omp_set_num_threads() itself, so neither
+    # OMP_NUM_THREADS nor its percent setting can bound it under a scheduler;
+    # --ncores is an absolute count read by the patched TORTOISE.
+    ncores = traits.Int(
+        argstr='--ncores %d',
+        desc='absolute number of CPU cores TORTOISE may use',
+    )
+    # TORTOISE treats the GPU as one more worker rather than offloading the
+    # series (npass = ceil(Nvols / (NGPUs*ratio + ncores - NGPUs))); the right
+    # ratio is a property of the machine. Left unset, TORTOISE keeps its default.
+    gpu_cpu_ratio = traits.Int(
+        argstr='--gpu_cpu_ratio %d',
+        desc='volumes the GPU processes per pass, against one per CPU thread',
+    )
     dwi_file = File(
         exists=True,
         mandatory=True,

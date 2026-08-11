@@ -562,6 +562,8 @@ class workflow(_Config):
     Or make a template? Either 'iterative' or 'first'"""
     b0_to_t1w_transform = None
     """Transformation model for intramodal registration."""
+    anat_biascorrect = None
+    """Whether to N4-correct anatomicals: ``n4``, ``auto`` or ``none``."""
     b1_biascorrect_stage = None
     """The stage of processing at which to apply B1 bias correction. Either "final" (after
     resampling), "none" (skipped entirely) or "legacy" (before concatenation)."""
@@ -616,6 +618,8 @@ class workflow(_Config):
     """Process all dwis separately - do not attempt concatenation."""
     shoreline_iters = None
     """How many iterations to run SHORELine."""
+    tortoise_gpu_cpu_ratio = None
+    """Volumes the GPU takes per DIFFPREP pass; None leaves TORTOISE's default."""
     unringing_method = None
     """Method for Gibbs-ringing removal. Either "none", "mrdegibbs" or "rpg"."""
     use_syn_sdc = None

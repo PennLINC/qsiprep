@@ -104,3 +104,10 @@ notebooks/*
 .pixi/*
 !.pixi/config.toml
 .cursor/rules/cursorenv.mdc
+
+# Stray nipype interface outputs from running interfaces by hand
+/tsnr.nii.gz
+/n4_weights.nii.gz
+/template_agreement.nii.gz
+/*_bias.nii.gz
+/*.nii

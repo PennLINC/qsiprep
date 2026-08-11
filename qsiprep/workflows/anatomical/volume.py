@@ -45,6 +45,7 @@ from ... import config
 from ...data import load as load_data
 from ...interfaces import Conform, DerivativesDataSink
 from ...interfaces.anatomical import DesaturateSkull, GetTemplate, VoxelSizeChooser
+from ...interfaces.ants import ImageMath
 from ...interfaces.freesurfer import (
     FixHeaderSynthStrip,
     MockSynthSeg,
@@ -61,12 +62,20 @@ ANTS_VERSION = BrainExtraction().version or '<ver>'
 FS_VERSION = '7.3.1'
 
 
+def _get_first(in_list):
+    if isinstance(in_list, list | tuple):
+        return in_list[0]
+    return in_list
+
+
 #  pylint: disable=R0914
 def init_anat_preproc_wf(
     num_anat_images,
     num_additional_t2ws,
     has_rois,
     anatomical_template,
+    do_biascorr=True,
+    t2w_do_biascorr=True,
     name='anat_preproc_wf',
 ):
     r"""
@@ -252,7 +261,7 @@ and used as an anatomical reference throughout the workflow.
     )
 
     # Ensure there is 1 and only 1 anatomical reference
-    anat_reference_wf = init_anat_template_wf(num_images=num_anat_images)
+    anat_reference_wf = init_anat_template_wf(num_images=num_anat_images, do_biascorr=do_biascorr)
 
     # Do some padding to prevent memory issues in the synth workflows
     pad_anat_reference_wf = init_dl_prep_wf()
@@ -330,6 +339,7 @@ FreeSurfer version {FS_VERSION}. """
         ])  # fmt:skip
     elif num_additional_t2ws > 0:
         t2w_preproc_wf = init_t2w_preproc_wf(
+            do_biascorr=t2w_do_biascorr,
             num_t2ws=num_additional_t2ws,
             name='t2w_preproc_wf',
         )
@@ -449,7 +459,9 @@ FreeSurfer version {FS_VERSION}. """
         ]),
     ])  # fmt:skip
 
-    anat_derivatives_wf = init_anat_derivatives_wf(anatomical_template=anatomical_template)
+    anat_derivatives_wf = init_anat_derivatives_wf(
+        anatomical_template=anatomical_template, has_t2w=num_additional_t2ws > 0
+    )
 
     workflow.connect([
         (anat_reference_wf, anat_derivatives_wf, [
@@ -469,11 +481,23 @@ FreeSurfer version {FS_VERSION}. """
         ]),
     ])  # fmt:skip
 
+    if num_additional_t2ws > 0:
+        # t2_preproc is the merged (unbiased) T2w template in ACPC; t2w_unfatsat
+        # is the image TORTOISE T2Wreg and DRBUDDI actually register to. They
+        # are different images, so both are written.
+        workflow.connect([
+            (inputnode, anat_derivatives_wf, [('t2w', 'inputnode.t2w_source_files')]),
+            (t2w_preproc_wf, anat_derivatives_wf, [
+                ('outputnode.t2_preproc', 'inputnode.t2_preproc'),
+                ('outputnode.t2w_unfatsat', 'inputnode.t2w_unfatsat'),
+            ]),
+        ])  # fmt:skip
+
     workflow.__desc__ = desc
     return workflow
 
 
-def init_t2w_preproc_wf(num_t2ws, name='t2w_preproc_wf'):
+def init_t2w_preproc_wf(num_t2ws, do_biascorr=True, name='t2w_preproc_wf'):
     """If T1w is the anatomical contrast, you may also want to process the T2ws for
     worlflows that can use them (ie DRBUDDI). This"""
     workflow = Workflow(name=name)
@@ -487,7 +511,7 @@ def init_t2w_preproc_wf(num_t2ws, name='t2w_preproc_wf'):
     )
 
     # Ensure there is 1 and only 1 T2w reference
-    anat_reference_wf = init_anat_template_wf(num_images=num_t2ws)
+    anat_reference_wf = init_anat_template_wf(num_images=num_t2ws, do_biascorr=do_biascorr)
     # ^ this also provides some boilerplate.
     workflow.__postdesc__ = """\
 The additional T2w reference image was registered to the T1w-ACPC reference
@@ -545,7 +569,92 @@ image using an affine transformation in antsRegistration.
     return workflow
 
 
-def init_anat_template_wf(num_images) -> Workflow:
+def _dilate_mask(in_file, iterations=8):
+    """Dilate a binary mask so it bounds the brain with slack.
+
+    The mask is generated on one image but used as the fixed-image mask for
+    registering every image to the template, so it has to tolerate the very
+    between-image motion the registration exists to remove. Dilating is the cheap
+    way to buy that tolerance: the goal is only to exclude face, jaw and neck, not
+    to delineate the brain precisely.
+    """
+    from pathlib import Path
+
+    import nibabel as nb
+    import numpy as np
+    from scipy import ndimage
+
+    img = nb.load(in_file)
+    data = np.asanyarray(img.dataobj) > 0
+    dilated = ndimage.binary_dilation(data, iterations=int(iterations))
+    out_file = str(Path.cwd() / 'dilated_mask.nii.gz')
+    out = nb.Nifti1Image(dilated.astype('uint8'), img.affine, img.header)
+    out.set_data_dtype('uint8')
+    out.to_filename(out_file)
+    return out_file
+
+
+def anat_biascorrect_enabled(image_files=None):
+    """Should N4 bias correction run on these anatomical images?
+
+    ``--anat-biascorrect`` governs anatomicals only; ``--b1-biascorrect-stage``
+    governs the DWIs and never reaches this path.
+
+    ``auto`` inspects the BIDS ``ImageType`` metadata for ``NORM``, which is how
+    Siemens (among others) flags that intensity normalization was already applied
+    on the console. Note that console normalization does not remove the need for
+    N4; ``auto`` and ``none`` are for deliberately skipping it anyway.
+
+    N4 is skipped only when EVERY input image is marked normalized. A mixed set
+    still needs correction to be merged sensibly, and an image whose metadata is
+    missing is treated as un-normalized -- the conservative direction, since
+    running N4 unnecessarily is milder than skipping it when it was needed.
+    """
+    mode = config.workflow.anat_biascorrect or 'n4'
+    if mode == 'n4':
+        return True
+    if mode == 'none':
+        return False
+
+    if not image_files:
+        config.loggers.workflow.warning(
+            '--anat-biascorrect auto: no anatomical files to inspect; running N4.'
+        )
+        return True
+    layout = config.execution.layout
+    if layout is None:
+        config.loggers.workflow.warning(
+            '--anat-biascorrect auto: no BIDS layout available; running N4.'
+        )
+        return True
+
+    normalized = []
+    for img in image_files:
+        try:
+            image_type = layout.get_metadata(img).get('ImageType') or []
+        except (OSError, ValueError, KeyError):
+            image_type = []
+        normalized.append(any(str(t).upper() == 'NORM' for t in image_type))
+
+    if all(normalized):
+        config.loggers.workflow.info(
+            '--anat-biascorrect auto: all %d anatomical image(s) are marked NORM in '
+            'ImageType; skipping N4.',
+            len(normalized),
+        )
+        return False
+    if any(normalized):
+        config.loggers.workflow.warning(
+            '--anat-biascorrect auto: %d of %d anatomical images are marked NORM. '
+            'Running N4 on all of them, since a mixed set cannot be merged '
+            'consistently otherwise.',
+            sum(normalized),
+            len(normalized),
+        )
+    return True
+
+
+def init_anat_template_wf(num_images, do_biascorr=True) -> Workflow:
     r"""
     This workflow generates a canonically oriented structural template from
     input anatomical images.
@@ -628,6 +737,27 @@ A {contrast}-reference map was computed after registration of
         ]),
     ])  # fmt:skip
 
+    # N4 fits its field by least squares in the log domain, where near-zero
+    # voxels are enormous negative outliers that can drag the whole field.
+    # Clipping the tails first is what niworkflows does ahead of every N4 call
+    # (niworkflows/anat/ants.py). See init_finalize_denoising_wf for the
+    # DWI-side counterpart.
+    truncate_interface = ImageMath(
+        dimension=3,
+        operation='TruncateImageIntensity',
+        secondary_arg='0.01 0.999 256',
+    )
+
+    # The truncated image is for ESTIMATING the field only; dividing the
+    # original by that field keeps the clipping out of the data. Otherwise the
+    # flattened intensity ceiling would be baked into desc-preproc_T1w and the
+    # merge template.
+    apply_bias_interface = ImageMath(
+        dimension=3,
+        operation='/',
+        out_file='inu_corrected.nii.gz',
+    )
+
     # To match what was done in antsBrainExtraction.sh
     # -c "[ 50x50x50x50,0.0000001 ]"
     # -s 4
@@ -635,6 +765,7 @@ A {contrast}-reference map was computed after registration of
     n4_interface = N4BiasFieldCorrection(
         dimension=3,
         copy_header=True,
+        save_bias=True,
         n_iterations=[50, 50, 50, 50],
         convergence_threshold=0.0000001,
         shrink_factor=4,
@@ -643,21 +774,29 @@ A {contrast}-reference map was computed after registration of
     )
 
     if num_images == 1:
-
-        def _get_first(in_list):
-            if isinstance(in_list, list | tuple):
-                return in_list[0]
-            return in_list
-
-        n4_correct = pe.Node(n4_interface, name='n4_correct', n_procs=omp_nthreads)
-
         outputnode.inputs.template_transforms = [str(load_data('itkIdentityTransform.txt'))]
 
         workflow.connect([
             (anat_conform, outputnode, [(('out_file', _get_first), 'template')]),
-            (anat_conform, n4_correct, [(('out_file', _get_first), 'input_image')]),
-            (n4_correct, outputnode, [('output_image', 'bias_corrected')]),
         ])  # fmt:skip
+
+        if do_biascorr:
+            truncate_intensity = pe.Node(truncate_interface, name='truncate_intensity')
+            n4_correct = pe.Node(n4_interface, name='n4_correct', n_procs=omp_nthreads)
+            apply_bias = pe.Node(apply_bias_interface, name='apply_bias')
+            workflow.connect([
+                (anat_conform, truncate_intensity, [(('out_file', _get_first), 'in_file')]),
+                (truncate_intensity, n4_correct, [('out_file', 'input_image')]),
+                (anat_conform, apply_bias, [(('out_file', _get_first), 'in_file')]),
+                (n4_correct, apply_bias, [('bias_image', 'secondary_file')]),
+                (apply_bias, outputnode, [('out_file', 'bias_corrected')]),
+            ])  # fmt:skip
+        else:
+            # `bias_corrected` is the name of the port, not a promise; downstream
+            # consumers just need the conformed image.
+            workflow.connect([
+                (anat_conform, outputnode, [(('out_file', _get_first), 'bias_corrected')]),
+            ])  # fmt:skip
 
         return workflow
 
@@ -666,11 +805,23 @@ A {contrast}-reference map was computed after registration of
     #     in log-transformed intensity units. Therefore, it is not a linear
     #     combination of fields and N4 fails with merged images.
     # 1b. Align and merge if several T1w images are provided
-    n4_correct = pe.MapNode(
-        n4_interface, iterfield='input_image', name='n4_correct', n_procs=omp_nthreads
-    )
+    if do_biascorr:
+        truncate_intensity = pe.MapNode(
+            truncate_interface, iterfield='in_file', name='truncate_intensity'
+        )
+        n4_correct = pe.MapNode(
+            n4_interface, iterfield='input_image', name='n4_correct', n_procs=omp_nthreads
+        )
+        apply_bias = pe.MapNode(
+            apply_bias_interface, iterfield=['in_file', 'secondary_file'], name='apply_bias'
+        )
 
-    # Make an unbiased template, same as used for b=0 registration
+    # Make an unbiased template, same as used for b=0 registration. The merge
+    # registration is masked: unmasked, face/jaw/neck -- which move relative to
+    # the brain between sessions -- can pull the brains out of alignment. One
+    # mask suffices because the fixed image in every registration is the
+    # template; it is built from the first conformed image and dilated for
+    # slack.
     align_to = config.workflow.subject_anatomical_reference
     anat_merge_wf = init_b0_hmc_wf(
         align_to='first' if (align_to == 'first-lex') else 'iterative',
@@ -678,11 +829,48 @@ A {contrast}-reference map was computed after registration of
         name='anat_merge_wf',
         boilerplate=False,
         prioritize_omp=True,
+        use_masks=True,
+        settings='unbiased_template',
     )
 
+    merge_mask_prep_wf = init_dl_prep_wf(name='merge_mask_prep_wf')
+    merge_mask_wf = init_synthstrip_wf(do_padding=True, name='merge_mask_wf')
+    dilate_merge_mask = pe.Node(
+        niu.Function(
+            input_names=['in_file', 'iterations'],
+            output_names=['out_file'],
+            function=_dilate_mask,
+        ),
+        name='dilate_merge_mask',
+    )
+    dilate_merge_mask.inputs.iterations = 8
+
     workflow.connect([
-        (anat_conform, n4_correct, [('out_file', 'input_image')]),
-        (n4_correct, anat_merge_wf, [('output_image', 'inputnode.b0_images')]),
+        (anat_conform, merge_mask_prep_wf, [(('out_file', _get_first), 'inputnode.image')]),
+        (
+            merge_mask_prep_wf,
+            merge_mask_wf,
+            [('outputnode.padded_image', 'inputnode.padded_image')],
+        ),
+        (anat_conform, merge_mask_wf, [(('out_file', _get_first), 'inputnode.original_image')]),
+        (merge_mask_wf, dilate_merge_mask, [('outputnode.brain_mask', 'in_file')]),
+        (dilate_merge_mask, anat_merge_wf, [('out_file', 'inputnode.template_mask')]),
+    ])  # fmt:skip
+
+    if do_biascorr:
+        workflow.connect([
+            (anat_conform, truncate_intensity, [('out_file', 'in_file')]),
+            (truncate_intensity, n4_correct, [('out_file', 'input_image')]),
+            (anat_conform, apply_bias, [('out_file', 'in_file')]),
+            (n4_correct, apply_bias, [('bias_image', 'secondary_file')]),
+            (apply_bias, anat_merge_wf, [('out_file', 'inputnode.b0_images')]),
+        ])  # fmt:skip
+    else:
+        workflow.connect([
+            (anat_conform, anat_merge_wf, [('out_file', 'inputnode.b0_images')]),
+        ])  # fmt:skip
+
+    workflow.connect([
         (anat_merge_wf, outputnode, [
             ('outputnode.final_template', 'template'),
             ('outputnode.final_template', 'bias_corrected'),
@@ -936,7 +1124,9 @@ def init_synthstrip_wf(do_padding=False, unfatsat=False, name='synthstrip_wf') -
     if not config.execution.sloppy:
         synthstrip = pe.Node(
             # Threads are always fixed to 1 in the run.
-            FixHeaderSynthStrip(gpu=gpu_enabled('synthstrip')),
+            # use_gpu mirrors gpu so nipype's scheduler counts this node
+            # against the GPU budget (see the trait in interfaces/freesurfer.py).
+            FixHeaderSynthStrip(gpu=gpu_enabled('synthstrip'), use_gpu=gpu_enabled('synthstrip')),
             name='synthstrip',
             n_procs=config.nipype.omp_nthreads,
         )
@@ -1007,6 +1197,7 @@ def init_synthseg_wf() -> Workflow:
                 fast=config.execution.sloppy,
                 num_threads=1,  # Hard code to 1
                 cpu=not gpu_enabled('synthseg'),
+                use_gpu=gpu_enabled('synthseg'),
             ),
             n_procs=config.nipype.omp_nthreads,
             name='synthseg',
@@ -1157,7 +1348,7 @@ def _template_to_report_entities(template):
     return {'space': space, 'cohort': cohort}
 
 
-def init_anat_derivatives_wf(anatomical_template) -> Workflow:
+def init_anat_derivatives_wf(anatomical_template, has_t2w=False) -> Workflow:
     """
     Set up a battery of datasinks to store derivatives in the right location
     """
@@ -1177,6 +1368,12 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
                 't1_2_mni_reverse_transform',
                 't1_2_mni',
                 't1_aseg',
+                # t2_preproc is the merged T2w template in ACPC; t2w_unfatsat
+                # is the fat-suppressed variant that drives TORTOISE T2Wreg and
+                # DRBUDDI. Separate images -- see init_t2w_preproc_wf.
+                't2w_source_files',
+                't2_preproc',
+                't2w_unfatsat',
             ]
         ),
         name='inputnode',
@@ -1192,6 +1389,47 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
     t1_name.inputs.include_session = config.workflow.subject_anatomical_reference == 'sessionwise'
     t1_name.inputs.anatomical_contrast = config.workflow.anat_modality
     t1_name.inputs.dwi_only = False
+
+    if has_t2w:
+        # DerivativesDataSink takes the suffix from source_file, so the T2w sinks
+        # need their own name node. Reusing t1_name would emit *_T1w.nii.gz and
+        # clobber the real T1w derivative.
+        t2_name = pe.Node(
+            niu.Function(
+                function=fix_multi_source_name,
+                input_names=['in_files', 'dwi_only', 'include_session', 'anatomical_contrast'],
+            ),
+            name='t2_name',
+        )
+        t2_name.inputs.include_session = (
+            config.workflow.subject_anatomical_reference == 'sessionwise'
+        )
+        t2_name.inputs.anatomical_contrast = 'T2w'
+        t2_name.inputs.dwi_only = False
+
+        ds_t2_preproc = pe.Node(
+            DerivativesDataSink(
+                compress=True,
+                base_directory=config.execution.output_dir,
+                space='ACPC',
+                desc='preproc',
+                keep_dtype=True,
+            ),
+            name='ds_t2_preproc',
+            run_without_submitting=True,
+        )
+
+        ds_t2w_unfatsat = pe.Node(
+            DerivativesDataSink(
+                compress=True,
+                base_directory=config.execution.output_dir,
+                space='ACPC',
+                desc='unfatsat',
+                keep_dtype=True,
+            ),
+            name='ds_t2w_unfatsat',
+            run_without_submitting=True,
+        )
 
     ds_t1_preproc = pe.Node(
         DerivativesDataSink(
@@ -1321,6 +1559,15 @@ def init_anat_derivatives_wf(anatomical_template) -> Workflow:
         (t1_name, ds_t1_mask, [('out', 'source_file')]),
         (t1_name, ds_t1_seg, [('out', 'source_file')]),
     ])  # fmt:skip
+
+    if has_t2w:
+        workflow.connect([
+            (inputnode, t2_name, [('t2w_source_files', 'in_files')]),
+            (inputnode, ds_t2_preproc, [('t2_preproc', 'in_file')]),
+            (inputnode, ds_t2w_unfatsat, [('t2w_unfatsat', 'in_file')]),
+            (t2_name, ds_t2_preproc, [('out', 'source_file')]),
+            (t2_name, ds_t2w_unfatsat, [('out', 'source_file')]),
+        ])  # fmt:skip
 
     if not config.execution.skip_anat_based_spatial_normalization:
         workflow.connect([

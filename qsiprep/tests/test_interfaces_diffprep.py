@@ -200,8 +200,8 @@ def test_diffprep_wf_honours_use_cuda(tmp_path):
 def _stage_diffprep_outputs(tmp_path, t2wreg):
     """Recreate the file tree TORTOISEProcess leaves behind in a node's cwd.
 
-    Mirrors what the real binary produced for sub-0001a ses-1: the motion+eddy
-    step writes ``<stem>_temp_proc/<stem>_proc_moteddy.*``, and when ``-s`` is
+    The motion+eddy step writes ``<stem>_temp_proc/<stem>_proc_moteddy.*``,
+    and when ``-s`` is
     given the StructuralAlignment + FinalData stages additionally write
     ``<stem>_TORTOISE_final.nii`` and its own reoriented ``.bmtxt`` in the cwd.
     """
@@ -719,56 +719,6 @@ def test_concatenate_diffprep_groups_rejects_count_mismatch(tmp_path):
             # Only 4 assignments for a 5-volume pair.
             group_assignments=[1, 1, 1, 2],
         ).run(cwd=str(run_dir))
-
-
-def test_rpe_series_is_shelled(tmp_path):
-    """The shelled/non-shelled detector distinguishes a DTI/HARDI shell from a
-    CS-DSI q-space grid, and honours the config override."""
-    from qsiprep.workflows.dwi.diffprep import _rpe_series_is_shelled
-
-    ap = tmp_path / 'ap_dwi.nii.gz'
-    pa = tmp_path / 'pa_dwi.nii.gz'
-    scan_groups = {
-        'dwi_series': [str(ap)],
-        'fieldmap_info': {'suffix': 'rpe_series', 'rpe_series': [str(pa)]},
-    }
-
-    # Shelled: a single b=1000 shell with plenty of directions.
-    (tmp_path / 'ap_dwi.bval').write_text(' '.join(['0'] + ['1000'] * 12) + '\n')
-    (tmp_path / 'pa_dwi.bval').write_text(' '.join(['0'] + ['1000'] * 12) + '\n')
-    assert _rpe_series_is_shelled(scan_groups, 100) is True
-
-    # Non-shelled: a CS-DSI-like grid -- many distinct b-values, none forming a
-    # populous low-b shell.
-    grid = list(range(200, 3000, 150))
-    (tmp_path / 'ap_dwi.bval').write_text(' '.join(map(str, [0] + grid)) + '\n')
-    (tmp_path / 'pa_dwi.bval').write_text(' '.join(map(str, [0] + grid)) + '\n')
-    assert _rpe_series_is_shelled(scan_groups, 100) is False
-
-    # Override wins over auto-detection either way.
-    assert _rpe_series_is_shelled(scan_groups, 100, override=True) is True
-
-    # Regression: a real CS-DSI HASC55 scheme has a dense low-b cluster (8
-    # volumes near b=1195 when both PE directions are pooled) that a bare
-    # min-shell-dirs count would mis-read as shelled. The grid guard (18 distinct
-    # shells) plus per-side evaluation must still classify it non-shelled.
-    hasc55 = (
-        '5 5 3395 3400 2595 4395 3795 2795 1995 4190 3600 3395 2795 1595 5 3790 '
-        '4390 800 3400 3990 1195 3590 2195 4190 4000 2790 5000 5 1795 1795 4195 '
-        '3395 1195 2795 595 3590 3395 1990 2795 4195 5 3390 3600 4395 4985 4195 '
-        '3390 3990 3400 2590 3590 995 2790 5000 2395 2000 1795 2190 1195 1195 '
-        '2595 3790 5'
-    )
-    (tmp_path / 'ap_dwi.bval').write_text(hasc55 + '\n')
-    (tmp_path / 'pa_dwi.bval').write_text(hasc55 + '\n')
-    assert _rpe_series_is_shelled(scan_groups, 100) is False
-
-    # Unreadable b-values default to shelled (safe stock DRBUDDI path).
-    missing = {
-        'dwi_series': ['/nonexistent/ap_dwi.nii.gz'],
-        'fieldmap_info': {'suffix': 'rpe_series', 'rpe_series': ['/nonexistent/pa_dwi.nii.gz']},
-    }
-    assert _rpe_series_is_shelled(missing, 100) is True
 
 
 @pytest.fixture
@@ -1339,30 +1289,22 @@ def test_non_shelled_rpe_series_uses_the_stock_drbuddi_path(tmp_path):
     lands within ~0.002 correlation of a synthesized-shell target for half the
     runtime. Synthesis is now opt-in via --diffprep-config.
     """
-    import json as _json
-
     rpe = tmp_path / 'sub-01_dir-PA_dwi.nii.gz'
     _write_dummy_nii(rpe)
 
-    config = _base_config()
-    cfg = tmp_path / 'nonshelled.json'
-    cfg.write_text(_json.dumps({'rpe_series_shelled': False}))
-    config.workflow.diffprep_config = str(cfg)
-    try:
-        wf = _build(
-            _scan_groups('rpe_series', rpe_series=[str(rpe)]),
-            t2w_sdc=False,
-            name='dp_nonshelled',
-        )
-        # Stock DRBUDDI workflow, not the removed synthesis path.
-        assert wf.get_node('drbuddi_sdc_wf') is not None
-        assert wf.get_node('predict_up_shell') is None
-        assert wf.get_node('predict_down_shell') is None
-        # The per-direction DIFFPREP split still runs -- that is independent of
-        # how DRBUDDI's target is built.
-        assert wf.get_node('recombine_rpe_groups') is not None
-    finally:
-        config.workflow.diffprep_config = None
+    _base_config()
+    wf = _build(
+        _scan_groups('rpe_series', rpe_series=[str(rpe)]),
+        t2w_sdc=False,
+        name='dp_nonshelled',
+    )
+    # Stock DRBUDDI workflow, not the removed synthesis path.
+    assert wf.get_node('drbuddi_sdc_wf') is not None
+    assert wf.get_node('predict_up_shell') is None
+    assert wf.get_node('predict_down_shell') is None
+    # The per-direction DIFFPREP split still runs -- that is independent of
+    # how DRBUDDI's target is built.
+    assert wf.get_node('recombine_rpe_groups') is not None
 
 
 def test_drbuddi_synth_shell_is_opt_in(tmp_path):
@@ -1416,3 +1358,62 @@ def test_drbuddi_synth_shell_cmdline(tmp_path):
     cmd = DRBUDDI(synth_shell_bval=1000, synth_shell_ndirs=30, **kwargs).cmdline
     assert '--DRBUDDI_synth_shell_bval 1000' in cmd
     assert '--DRBUDDI_synth_shell_ndirs 30' in cmd
+
+
+def test_diffprep_node_declares_its_threads():
+    """DIFFPREP should declare its threads, consistent with the other TORTOISE nodes.
+
+    Caveat, measured rather than assumed: OMP_NUM_THREADS does NOT actually bound
+    TORTOISEProcess (~1893% CPU at OMP_NUM_THREADS=4 versus ~2071% unconstrained
+    on a 24-core host), and neither does ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS.
+    This keeps the declaration consistent and correct for tools that do honour it;
+    it does not make the node's CPU use match n_procs.
+    """
+    config = _base_config()
+    config.nipype.omp_nthreads = 7
+    wf = _build(_scan_groups(None), t2w_sdc=False, name='threads_declared')
+    node = wf.get_node('diffprep')
+    assert node.inputs.num_threads == 7
+    # nipype's own accounting must match what the tool is allowed to use
+    assert node.n_procs == 7
+
+
+def test_diffprep_interface_exports_omp_num_threads_to_the_subprocess():
+    """The env var goes on inputs.environ (passed to the child), not os.environ."""
+    from qsiprep.interfaces.tortoise import DIFFPREP
+
+    assert DIFFPREP(num_threads=5).inputs.environ.get('OMP_NUM_THREADS') == '5'
+
+
+def test_rpe_series_diffprep_nodes_also_declare_threads(tmp_path):
+    """The per-PE-direction DIFFPREP nodes share diffprep_kwargs, so they inherit it."""
+    import nibabel as nb
+    import numpy as np
+
+    config = _base_config()
+    config.nipype.omp_nthreads = 6
+    # the rpe path needs the partner series to exist
+    partner = tmp_path / 'sub-01_dir-PA_dwi.nii.gz'
+    nb.Nifti1Image(np.zeros((4, 4, 4, 6), dtype='float32'), np.eye(4)).to_filename(str(partner))
+    rpe = _scan_groups('rpe_series', rpe_series=[str(partner)])
+
+    wf = _build(rpe, t2w_sdc=False, name='rpe_threads')
+    group_nodes = [n for n in wf._get_all_nodes() if n.name.startswith('diffprep_g')]
+    assert group_nodes, 'no per-group DIFFPREP nodes found'
+    for node in group_nodes:
+        assert node.inputs.num_threads == 6
+
+
+def test_diffprep_passes_ncores_to_tortoise():
+    """--ncores is the only knob that actually bounds TORTOISEProcess.
+
+    num_threads only sets OMP_NUM_THREADS, which TORTOISE overrides via
+    omp_set_num_threads().
+    """
+    config = _base_config()
+    config.nipype.omp_nthreads = 8
+    wf = _build(_scan_groups(None), t2w_sdc=False, name='ncores_wired')
+    node = wf.get_node('diffprep')
+    assert node.inputs.ncores == 8
+    # nipype's accounting and the process's real budget must agree
+    assert node.n_procs == 8

@@ -437,6 +437,22 @@ def _build_parser(**kwargs):
         help='DEPRECATED: see --b1-biascorrect-stage',
     )
     g_conf.add_argument(
+        '--anat-biascorrect',
+        action='store',
+        choices=['n4', 'auto', 'none'],
+        default='n4',
+        help=(
+            'Whether to run N4 bias field correction on ANATOMICAL images. '
+            'Note this is separate from --b1-biascorrect-stage, which only governs '
+            'the DWIs. '
+            '"n4" (default) always runs it; scanner-side intensity normalization '
+            '(e.g. Siemens NORM) does not remove the need for it. '
+            '"none" never runs it. '
+            '"auto" skips it when the BIDS ImageType metadata contains "NORM", '
+            'which is how Siemens and others flag console-applied normalization.'
+        ),
+    )
+    g_conf.add_argument(
         '--b1-biascorrect-stage',
         action='store',
         choices=['final', 'none', 'legacy'],
@@ -592,6 +608,24 @@ How to combine images across distorted groups.
         'options). If no json is specified, a default one will be used. The '
         'current default can be found here: '
         'https://github.com/PennLINC/qsiprep/blob/main/qsiprep/data/diffprep_params.json',
+    )
+    g_moco.add_argument(
+        '--tortoise-gpu-cpu-ratio',
+        action='store',
+        type=int,
+        default=None,
+        help=(
+            'How many volumes DIFFPREP gives the GPU per pass, against one per CPU '
+            'thread, during motion and eddy correction. TORTOISE does not move the '
+            'series onto the GPU the way eddy_cuda does: it treats the GPU as one '
+            'more worker, so the number of passes is '
+            'ceil(nvolumes / (ngpus * ratio + omp-nthreads - ngpus)). '
+            'It describes the machine, not the data -- roughly how many volumes the '
+            'GPU gets through while one CPU core does one. Only worth setting when '
+            'the GPU is fast relative to the core count, since its influence falls '
+            'as --omp-nthreads rises (about 68%% of volumes at 8 cores, 19%% at 64). '
+            'Requires the patched TORTOISE. Unset leaves TORTOISE at its default of 15.'
+        ),
     )
     g_moco.add_argument(
         '--shoreline-iters',
