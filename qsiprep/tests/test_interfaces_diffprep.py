@@ -721,56 +721,6 @@ def test_concatenate_diffprep_groups_rejects_count_mismatch(tmp_path):
         ).run(cwd=str(run_dir))
 
 
-def test_rpe_series_is_shelled(tmp_path):
-    """The shelled/non-shelled detector distinguishes a DTI/HARDI shell from a
-    CS-DSI q-space grid, and honours the config override."""
-    from qsiprep.workflows.dwi.diffprep import _rpe_series_is_shelled
-
-    ap = tmp_path / 'ap_dwi.nii.gz'
-    pa = tmp_path / 'pa_dwi.nii.gz'
-    scan_groups = {
-        'dwi_series': [str(ap)],
-        'fieldmap_info': {'suffix': 'rpe_series', 'rpe_series': [str(pa)]},
-    }
-
-    # Shelled: a single b=1000 shell with plenty of directions.
-    (tmp_path / 'ap_dwi.bval').write_text(' '.join(['0'] + ['1000'] * 12) + '\n')
-    (tmp_path / 'pa_dwi.bval').write_text(' '.join(['0'] + ['1000'] * 12) + '\n')
-    assert _rpe_series_is_shelled(scan_groups, 100) is True
-
-    # Non-shelled: a CS-DSI-like grid -- many distinct b-values, none forming a
-    # populous low-b shell.
-    grid = list(range(200, 3000, 150))
-    (tmp_path / 'ap_dwi.bval').write_text(' '.join(map(str, [0] + grid)) + '\n')
-    (tmp_path / 'pa_dwi.bval').write_text(' '.join(map(str, [0] + grid)) + '\n')
-    assert _rpe_series_is_shelled(scan_groups, 100) is False
-
-    # Override wins over auto-detection either way.
-    assert _rpe_series_is_shelled(scan_groups, 100, override=True) is True
-
-    # Regression: a real CS-DSI HASC55 scheme has a dense low-b cluster (8
-    # volumes near b=1195 when both PE directions are pooled) that a bare
-    # min-shell-dirs count would mis-read as shelled. The grid guard (18 distinct
-    # shells) plus per-side evaluation must still classify it non-shelled.
-    hasc55 = (
-        '5 5 3395 3400 2595 4395 3795 2795 1995 4190 3600 3395 2795 1595 5 3790 '
-        '4390 800 3400 3990 1195 3590 2195 4190 4000 2790 5000 5 1795 1795 4195 '
-        '3395 1195 2795 595 3590 3395 1990 2795 4195 5 3390 3600 4395 4985 4195 '
-        '3390 3990 3400 2590 3590 995 2790 5000 2395 2000 1795 2190 1195 1195 '
-        '2595 3790 5'
-    )
-    (tmp_path / 'ap_dwi.bval').write_text(hasc55 + '\n')
-    (tmp_path / 'pa_dwi.bval').write_text(hasc55 + '\n')
-    assert _rpe_series_is_shelled(scan_groups, 100) is False
-
-    # Unreadable b-values default to shelled (safe stock DRBUDDI path).
-    missing = {
-        'dwi_series': ['/nonexistent/ap_dwi.nii.gz'],
-        'fieldmap_info': {'suffix': 'rpe_series', 'rpe_series': ['/nonexistent/pa_dwi.nii.gz']},
-    }
-    assert _rpe_series_is_shelled(missing, 100) is True
-
-
 @pytest.fixture
 def t2w_gate_config():
     """Pin every config knob _t2w_available_for_sdc reads, and restore after."""
@@ -1339,30 +1289,22 @@ def test_non_shelled_rpe_series_uses_the_stock_drbuddi_path(tmp_path):
     lands within ~0.002 correlation of a synthesized-shell target for half the
     runtime. Synthesis is now opt-in via --diffprep-config.
     """
-    import json as _json
-
     rpe = tmp_path / 'sub-01_dir-PA_dwi.nii.gz'
     _write_dummy_nii(rpe)
 
-    config = _base_config()
-    cfg = tmp_path / 'nonshelled.json'
-    cfg.write_text(_json.dumps({'rpe_series_shelled': False}))
-    config.workflow.diffprep_config = str(cfg)
-    try:
-        wf = _build(
-            _scan_groups('rpe_series', rpe_series=[str(rpe)]),
-            t2w_sdc=False,
-            name='dp_nonshelled',
-        )
-        # Stock DRBUDDI workflow, not the removed synthesis path.
-        assert wf.get_node('drbuddi_sdc_wf') is not None
-        assert wf.get_node('predict_up_shell') is None
-        assert wf.get_node('predict_down_shell') is None
-        # The per-direction DIFFPREP split still runs -- that is independent of
-        # how DRBUDDI's target is built.
-        assert wf.get_node('recombine_rpe_groups') is not None
-    finally:
-        config.workflow.diffprep_config = None
+    _base_config()
+    wf = _build(
+        _scan_groups('rpe_series', rpe_series=[str(rpe)]),
+        t2w_sdc=False,
+        name='dp_nonshelled',
+    )
+    # Stock DRBUDDI workflow, not the removed synthesis path.
+    assert wf.get_node('drbuddi_sdc_wf') is not None
+    assert wf.get_node('predict_up_shell') is None
+    assert wf.get_node('predict_down_shell') is None
+    # The per-direction DIFFPREP split still runs -- that is independent of
+    # how DRBUDDI's target is built.
+    assert wf.get_node('recombine_rpe_groups') is not None
 
 
 def test_drbuddi_synth_shell_is_opt_in(tmp_path):

@@ -18,7 +18,6 @@ This mirrors the SDC coverage of :func:`~qsiprep.workflows.dwi.fsl.init_fsl_hmc_
 """
 
 import json
-import os.path as op
 from importlib.resources import files
 
 from nipype.interfaces import ants
@@ -69,116 +68,11 @@ def _load_diffprep_config(config_path):
     cfg.setdefault('extra_args', [])
     # No default for "use_cuda": its absence must stay observable so a shipped
     # default is never mistaken for user intent (see _legacy_use_cuda below).
-    cfg.setdefault('rpe_series_shelled', None)
     # Opt-in MAPMRI shell synthesis for DRBUDDI's registration target;
     # None/0 = off.
     cfg.setdefault('drbuddi_synth_shell_bval', None)
     cfg.setdefault('drbuddi_synth_shell_ndirs', 30)
     return cfg
-
-
-def _sibling_bval(nii_file):
-    """Return the FSL ``.bval`` sibling path for a BIDS DWI nii."""
-    for ext in ('.nii.gz', '.nii'):
-        if nii_file.endswith(ext):
-            return nii_file[: -len(ext)] + '.bval'
-    return op.splitext(nii_file)[0] + '.bval'
-
-
-def _side_is_shelled(bvals, b0_threshold, tol, max_tensor_bval, min_shell_dirs, max_shells):
-    """Is one phase-encoding direction a tensor-fittable set of shells?
-
-    Two conditions must both hold:
-
-    1. **Grid guard** -- the non-b=0 b-values cluster into at most ``max_shells``
-       distinct shells. A CS-DSI q-space grid fragments into many shells (real
-       HASC55 has ~18), while DTI has 1 and multi-shell HARDI a handful. This is
-       the decisive test: a grid can still pack ``>= min_shell_dirs`` samples
-       near some low-b radius (HASC55 has 4 near b=1195 per side, 8 when both PE
-       directions are pooled), so a low-b population count *alone* misclassifies
-       it as shelled.
-    2. **Tensor-fittability** -- at least one shell in
-       ``[b0_threshold, max_tensor_bval]`` holds ``>= min_shell_dirs`` volumes,
-       so DRBUDDI's own low-b tensor fit is well-conditioned.
-    """
-    import numpy as np
-    from dipy.core.gradients import unique_bvals_tolerance
-
-    non_b0 = np.asarray(bvals, float)
-    non_b0 = non_b0[non_b0 >= b0_threshold]
-    if non_b0.size == 0:
-        return False
-    centres = unique_bvals_tolerance(non_b0, tol=tol)
-    if len(centres) > max_shells:
-        return False
-    return any(
-        b0_threshold <= centre <= max_tensor_bval
-        and int(np.sum(np.abs(non_b0 - centre) <= tol)) >= min_shell_dirs
-        for centre in centres
-    )
-
-
-def _rpe_series_is_shelled(
-    scan_groups,
-    b0_threshold,
-    override=None,
-    tol=100.0,
-    max_tensor_bval=1500.0,
-    min_shell_dirs=6,
-    max_shells=7,
-):
-    """Decide whether a reverse-PE series is tensor-fittable as-is.
-
-    All reverse-PE series take the same DRBUDDI path; this classification only
-    determines whether an informational message suggests enabling
-    ``"drbuddi_synth_shell_bval"`` for non-shelled data (see the SDC section of
-    :func:`init_diffprep_hmc_wf`).
-
-    Each phase-encoding direction is evaluated independently (see
-    :func:`_side_is_shelled`): pooling the two directions would double every
-    shell's population and tip a q-space grid over the ``min_shell_dirs``
-    threshold. The series counts as shelled only if both directions are. A user
-    override (``--diffprep-config`` ``"rpe_series_shelled"``) wins, and
-    unreadable b-values (e.g. docs/graph builds with placeholder paths) default
-    to shelled.
-    """
-    import numpy as np
-
-    if override is not None:
-        return bool(override)
-
-    fieldmap_info = scan_groups['fieldmap_info']
-    side_file_lists = [
-        list(scan_groups.get('dwi_series', [])),
-        list(fieldmap_info.get('rpe_series', [])),
-    ]
-
-    per_side_bvals = []
-    for side_files in side_file_lists:
-        if not side_files:
-            continue
-        side = []
-        for nii in side_files:
-            bval_path = _sibling_bval(nii)
-            try:
-                side.append(np.loadtxt(bval_path).reshape(-1))
-            except (OSError, ValueError):
-                config.loggers.workflow.warning(
-                    'rpe_series shelled/non-shelled detection could not read %s; '
-                    'defaulting to the shelled (stock DRBUDDI) path. Set '
-                    '"rpe_series_shelled" in --diffprep-config to override.',
-                    bval_path,
-                )
-                return True
-        per_side_bvals.append(np.concatenate(side))
-
-    if not per_side_bvals:
-        return True
-
-    return all(
-        _side_is_shelled(bvals, b0_threshold, tol, max_tensor_bval, min_shell_dirs, max_shells)
-        for bvals in per_side_bvals
-    )
 
 
 def _resolve_phase_encoding(pe_dir):
@@ -414,13 +308,6 @@ def init_diffprep_hmc_wf(
     drbuddi_gpu = gpu_enabled('drbuddi', config_file_value=_legacy_use_cuda)
 
     synth_shell_bval = diffprep_cfg.get('drbuddi_synth_shell_bval')
-    rpe_shelled = None
-    if fieldmap_type == 'rpe_series':
-        rpe_shelled = _rpe_series_is_shelled(
-            scan_groups,
-            config.workflow.b0_threshold,
-            override=diffprep_cfg.get('rpe_series_shelled'),
-        )
 
     pe_dir = _resolve_phase_encoding((dwi_metadata or {}).get('PhaseEncodingDirection'))
 
@@ -646,16 +533,6 @@ def init_diffprep_hmc_wf(
             raise Exception(
                 'TOPUP-based pepolar correction is not supported with '
                 '--hmc-model diffprep_*; choose --pepolar-method DRBUDDI.'
-            )
-
-        if fieldmap_type == 'rpe_series' and not rpe_shelled and not synth_shell_bval:
-            config.loggers.workflow.info(
-                'Non-shelled reverse-PE series detected. Using the standard '
-                'DRBUDDI path with a plain tensor fit. If susceptibility '
-                'correction looks poor in the SDC report, set '
-                '"drbuddi_synth_shell_bval": 1000 in --diffprep-config to have '
-                'TORTOISE synthesize a tensor-fittable shell per phase-encoding '
-                'direction instead.'
             )
 
         # For rpe_series the per-direction DIFFPREP stage above already produced
