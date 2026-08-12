@@ -605,8 +605,6 @@ class workflow(_Config):
     """Transformation used for building the intramodal template."""
     subject_anatomical_reference = None
     """How should the anatomical space be defined: sessionwise, unbiased or first-lex"""
-    longitudinal = False
-    """Run FreeSurfer ``recon-all`` with the ``-longitudinal`` flag. [Deprecated]"""
     no_b0_harmonization = False
     """Skip re-scaling dwi scans to have matching b=0 intensities."""
     output_resolution = None

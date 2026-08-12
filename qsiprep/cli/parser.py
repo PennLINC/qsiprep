@@ -45,46 +45,31 @@ def _build_parser(**kwargs):
     deprecations = {
         # parser attribute name: (replacement flag, version slated to be removed in)
         'dwi_only': ('--anat-modality none', '27.0.0'),
-        'prefer_dedicated_fmaps': (None, '0.23.0'),
-        'dwi_no_biascorr': ('--b1-biascorrect-stage none', '0.23.0'),
-        'b0_motion_corr_to': (None, '0.23.0'),
-        'b0_to_t1w_transform': ('--b0-t0-anat-transform', '0.23.0'),
-        'longitudinal': ('--subject-anatomical-reference unbiased', '0.24.0'),
+        'prefer_dedicated_fmaps': (None, '27.0.0'),
+        'dwi_no_biascorr': ('--b1-biascorrect-stage none', '27.0.0'),
+        'b0_motion_corr_to': (None, '27.0.0'),
+        'b0_to_t1w_transform': ('--b0-t0-anat-transform', '27.0.0'),
+        'longitudinal': ('--subject-anatomical-reference unbiased', '27.0.0'),
     }
 
-    def _warn_deprecated(option_strings, dest):
-        new_opt, rem_vers = deprecations.get(dest, (None, None))
-        msg = (
-            f'{option_strings} has been deprecated and will be removed in '
-            f'{rem_vers or "a later version"}.'
-        )
-        if new_opt:
-            msg += f' Please use `{new_opt}` instead.'
-        print(msg, file=sys.stderr)
-
     class DeprecatedAction(Action):
+        """Warn that a deprecated flag is ignored, and drop it from the namespace."""
+
         def __init__(self, option_strings, dest, **kwargs):
             super().__init__(option_strings, dest, nargs=0, **kwargs)
 
         def __call__(self, parser, namespace, values, option_string=None):
-            _warn_deprecated(self.option_strings, self.dest)
+            new_opt, rem_vers = deprecations.get(self.dest, (None, None))
+            msg = (
+                f'{self.option_strings} has been deprecated and has no effect. '
+                f'It will be removed in {rem_vers or "a later version"}.'
+            )
+            if new_opt:
+                msg += f' Please use `{new_opt}` instead.'
+            print(msg, file=sys.stderr)
             # Remove the attribute if it exists (argparse may have set it)
             if hasattr(namespace, self.dest):
                 delattr(namespace, self.dest)
-
-    class DeprecatedStoreTrueAction(Action):
-        """Warn about a deprecated flag, but keep its value.
-
-        Unlike :class:`DeprecatedAction`, which drops the option entirely, this keeps
-        the flag usable so it can be translated into its replacement after parsing.
-        """
-
-        def __init__(self, option_strings, dest, **kwargs):
-            super().__init__(option_strings, dest, nargs=0, default=False, **kwargs)
-
-        def __call__(self, parser, namespace, values, option_string=None):
-            _warn_deprecated(self.option_strings, self.dest)
-            setattr(namespace, self.dest, True)
 
     class ToDict(Action):
         def __call__(self, parser, namespace, values, option_string=None):
@@ -322,11 +307,8 @@ def _build_parser(**kwargs):
     g_subset.add_argument('--anat-only', action='store_true', help='Run anatomical workflows only')
     g_subset.add_argument(
         '--dwi-only',
-        action=DeprecatedStoreTrueAction,
-        help=(
-            'DEPRECATED: use `--anat-modality none` instead. '
-            'Ignore anatomical (T1w/T2w) data and process DWIs only.'
-        ),
+        action=DeprecatedAction,
+        help='DEPRECATED: this option has no effect. Use `--anat-modality none` instead.',
     )
     g_subset.add_argument(
         '--boilerplate-only',
@@ -391,7 +373,10 @@ def _build_parser(**kwargs):
     g_conf.add_argument(
         '--longitudinal',
         action=DeprecatedAction,
-        help='Treat dataset as longitudinal - may increase runtime',
+        help=(
+            'DEPRECATED: this option has no effect. '
+            'Use `--subject-anatomical-reference unbiased` instead.'
+        ),
     )
     g_conf.add_argument(
         '--subject-anatomical-reference',
@@ -801,30 +786,6 @@ def check_denoise_window(denoise_method, dwi_denoise_window):
         )
 
 
-def _resolve_deprecated_dwi_only(opts, parser):
-    """Translate the deprecated ``--dwi-only`` flag into ``--anat-modality none``.
-
-    The translation happens here, rather than in the argparse action, so that the two
-    options may be given in either order. ``dwi_only`` is dropped from the namespace so
-    that it never reaches the config object.
-
-    ``--anat-modality`` left at its default is treated as unset; anything else was asked
-    for explicitly and contradicts ``--dwi-only``, so it is an error rather than a
-    silently overridden choice.
-    """
-    dwi_only = vars(opts).pop('dwi_only', False)
-    if not dwi_only:
-        return
-
-    if opts.anat_modality not in (parser.get_default('anat_modality'), 'none'):
-        parser.error(
-            f'--dwi-only conflicts with --anat-modality {opts.anat_modality}. '
-            '--dwi-only is deprecated; use --anat-modality none instead.'
-        )
-
-    opts.anat_modality = 'none'
-
-
 def parse_args(args=None, namespace=None):
     """Parse args and run further checks on the command line."""
     import logging
@@ -837,8 +798,6 @@ def parse_args(args=None, namespace=None):
     opts = parser.parse_args(args, namespace)
 
     # Warn about deprecated options
-    _resolve_deprecated_dwi_only(opts, parser)
-
     if opts.subject_anatomical_reference == 'first-alphabetically':
         config.loggers.cli.warning(
             '--subject-anatomical-reference=first-alphabetically has been deprecated '

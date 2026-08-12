@@ -249,63 +249,55 @@ def minimal_args(tmp_path):
     return [str(bids_dir), str(tmp_path / 'out'), 'participant', '--output-resolution', '2']
 
 
-def test_dwi_only_warns_and_sets_anat_modality(minimal_args, capsys):
-    """--dwi-only is deprecated, but still selects --anat-modality none."""
-    from qsiprep.cli.parser import _build_parser, _resolve_deprecated_dwi_only
+# (deprecated flag, the option that replaces it, that option's replacement value)
+DEPRECATED_FLAGS = [
+    ('--dwi-only', '--anat-modality', 'none'),
+    ('--longitudinal', '--subject-anatomical-reference', 'unbiased'),
+]
+
+
+def _dest(option):
+    """Turn an option string back into the namespace attribute it sets."""
+    return option.lstrip('-').replace('-', '_')
+
+
+@pytest.mark.parametrize(('flag', 'option', 'value'), DEPRECATED_FLAGS)
+def test_deprecated_flag_warns_and_is_ignored(minimal_args, capsys, flag, option, value):
+    """A deprecated flag warns that it does nothing, and names its replacement."""
+    from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
-    opts = parser.parse_args([*minimal_args, '--dwi-only'])
+    opts = parser.parse_args([*minimal_args, flag])
 
-    assert '--dwi-only' in capsys.readouterr().err
+    warning = capsys.readouterr().err
+    assert flag in warning
+    assert 'no effect' in warning
+    assert f'{option} {value}' in warning
 
-    _resolve_deprecated_dwi_only(opts, parser)
+    # The flag must not change anything, including its replacement
+    assert getattr(opts, _dest(option)) == parser.get_default(_dest(option))
+    # ...and it must not reach the config object
+    assert not hasattr(opts, _dest(flag))
 
-    assert opts.anat_modality == 'none'
-    # The deprecated attribute must not reach the config object
-    assert not hasattr(opts, 'dwi_only')
 
+@pytest.mark.parametrize(('flag', 'option', 'value'), DEPRECATED_FLAGS)
+def test_deprecated_flag_does_not_override_replacement(minimal_args, flag, option, value):
+    """Giving both the deprecated flag and its replacement is not an error."""
+    from qsiprep.cli.parser import _build_parser
 
-def test_dwi_only_is_order_independent(minimal_args):
-    """--dwi-only and an explicit --anat-modality none agree in either order."""
-    from qsiprep.cli.parser import _build_parser, _resolve_deprecated_dwi_only
-
-    for extra_args in (
-        ['--dwi-only', '--anat-modality', 'none'],
-        ['--anat-modality', 'none', '--dwi-only'],
-    ):
+    for extra_args in ([flag, option, value], [option, value, flag]):
         parser = _build_parser()
         opts = parser.parse_args(minimal_args + extra_args)
-        _resolve_deprecated_dwi_only(opts, parser)
-        assert opts.anat_modality == 'none'
+        assert getattr(opts, _dest(option)) == value
 
 
-@pytest.mark.parametrize(
-    'extra_args',
-    [
-        ['--dwi-only', '--anat-modality', 'T2w'],
-        ['--anat-modality', 'T2w', '--dwi-only'],
-    ],
-)
-def test_dwi_only_conflicts_with_anat_modality(minimal_args, extra_args):
-    """Combining --dwi-only with a contradictory --anat-modality is an error."""
-    from qsiprep.cli.parser import _build_parser, _resolve_deprecated_dwi_only
+@pytest.mark.parametrize(('flag', 'option', 'value'), DEPRECATED_FLAGS)
+def test_replacement_option_is_not_deprecated(minimal_args, capsys, flag, option, value):
+    """The replacement option is silent and takes effect."""
+    from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
-    opts = parser.parse_args(minimal_args + extra_args)
-
-    with pytest.raises(SystemExit):
-        _resolve_deprecated_dwi_only(opts, parser)
-
-
-def test_anat_modality_none_is_not_deprecated(minimal_args, capsys):
-    """The replacement option is silent and untouched by the deprecation shim."""
-    from qsiprep.cli.parser import _build_parser, _resolve_deprecated_dwi_only
-
-    parser = _build_parser()
-    opts = parser.parse_args([*minimal_args, '--anat-modality', 'none'])
+    opts = parser.parse_args([*minimal_args, option, value])
 
     assert capsys.readouterr().err == ''
-
-    _resolve_deprecated_dwi_only(opts, parser)
-
-    assert opts.anat_modality == 'none'
+    assert getattr(opts, _dest(option)) == value

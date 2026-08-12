@@ -931,8 +931,8 @@ It is possible to use *QSIPrep* to process *only* diffusion-weighted images. In
 the case of infant data, where robust skull-stripping methods are not
 currently available, or where anatomical preprocessing has already been
 performed in another pipeline, the user can specify ``--anat-modality none``.
-(The ``--dwi-only`` flag is a deprecated alias for this and will be removed in
-a later version.)
+(The deprecated ``--dwi-only`` flag no longer has any effect and will be
+removed in a later version.)
 
 Instead of registering the b=0 template image to the skull-stripped T1w
 image, the b=0 template is registered directly to a template and only the
