@@ -28,6 +28,7 @@ import sys
 
 from .. import config
 from ..utils.gpu import GPU_ALIASES, GPU_TASKS
+from ..utils.misc import parse_denoise_method
 
 
 def _build_parser(**kwargs):
@@ -122,6 +123,13 @@ def _build_parser(**kwargs):
 
         return value
 
+    def _denoise_method(value, parser):
+        try:
+            parse_denoise_method(value)
+        except ValueError as exc:
+            parser.error(f'Invalid --denoise-method specification: {exc}')
+        return value
+
     def _to_gb(value):
         scale = {'G': 1, 'T': 10**3, 'M': 1e-3, 'K': 1e-6, 'B': 1e-9}
         digits = ''.join([c for c in value if c.isdigit()])
@@ -178,6 +186,7 @@ def _build_parser(**kwargs):
     IsFile = partial(_is_file, parser=parser)
     PositiveInt = partial(_min_one, parser=parser)
     IntOrAuto = partial(_int_or_auto, parser=parser)
+    DenoiseMethod = partial(_denoise_method, parser=parser)
     BIDSFilter = partial(_bids_filter, parser=parser)
 
     # Arguments as specified by BIDS-Apps
@@ -408,20 +417,27 @@ def _build_parser(**kwargs):
         help=(
             'Window size in voxels for image-based denoising: odd integer or "auto". '
             'Any non-"auto" value must be an odd, positive integer. '
-            'If using the "dwidenoise" denoising method, '
-            'the "auto" option will calculate a window size '
+            'This argument only applies to the "dwidenoise" denoising method, '
+            'where the "auto" option will calculate a window size '
             'based on the number of volumes according to the method described by the '
             'dwidenoise documentation. '
-            'If using the "patch2self" denoising method, this argument will not be used.'
+            'It is not used by the "patch2self" or "dwidenoise2" methods: dwidenoise2 sizes '
+            'its patches per iteration from its multi-resolution schedule, which is selected '
+            'with "dwidenoise2;schedule:<name>" instead.'
         ),
     )
     g_conf.add_argument(
         '--denoise-method',
         action='store',
-        choices=['dwidenoise', 'patch2self', 'none'],
+        type=DenoiseMethod,
         default='dwidenoise',
-        help='Image-based denoising method. Either "dwidenoise" (MRtrix), '
-        '"patch2self" (DIPY) or "none". (default: dwidenoise)',
+        help=(
+            'Image-based denoising method: "dwidenoise" (MRtrix), "dwidenoise2", '
+            '"patch2self" (DIPY), or "none".\n'
+            'dwidenoise2 parameters may follow the method as semicolon-delimited '
+            'name:value pairs, for example '
+            '"dwidenoise2;demodulate:linear;decomposition:bdcsvd".'
+        ),
     )
     g_conf.add_argument(
         '--unringing-method',
@@ -475,7 +491,7 @@ def _build_parser(**kwargs):
     g_conf.add_argument(
         '--denoise-after-combining',
         action='store_true',
-        help='run ``dwidenoise`` after combining dwis, but before motion correction',
+        help='run denoising after combining dwis, but before motion correction',
     )
     g_conf.add_argument(
         '--separate-all-dwis',
@@ -739,6 +755,32 @@ How to combine images across distorted groups.
     return parser
 
 
+def check_denoise_window(denoise_method, dwi_denoise_window):
+    """Report a ``--dwi-denoise-window`` that the selected denoising method will ignore.
+
+    Only ``dwidenoise`` takes a window size. Leaving the others to silently ignore it would
+    hide a request that never took effect.
+    """
+    if dwi_denoise_window == 'auto':
+        # The default, so an unused value is not a sign that anything was misunderstood
+        return
+
+    if denoise_method == 'patch2self':
+        config.loggers.cli.error(
+            'The --dwi-denoise-window option is not used when --denoise-method=patch2self'
+        )
+    elif denoise_method == 'dwidenoise2':
+        config.loggers.cli.warning(
+            'The --dwi-denoise-window option is not used when --denoise-method=dwidenoise2. '
+            'dwidenoise2 sizes its patches per iteration from its multi-resolution schedule, '
+            'which can be selected with "dwidenoise2;schedule:<name>" instead.'
+        )
+    elif denoise_method == 'none':
+        config.loggers.cli.warning(
+            'The --dwi-denoise-window option is not used when --denoise-method=none'
+        )
+
+
 def parse_args(args=None, namespace=None):
     """Parse args and run further checks on the command line."""
     import logging
@@ -843,15 +885,20 @@ def parse_args(args=None, namespace=None):
         )
 
     # Validate the tricky options here
-    if config.workflow.dwi_denoise_window != 'auto':
-        if config.workflow.denoise_method == 'patch2self':
-            config.loggers.cli.error(
-                'The --dwi-denoise-window option is not used when --denoise-method=patch2self'
-            )
-        elif config.workflow.denoise_method == 'none':
-            config.loggers.cli.warning(
-                'The --dwi-denoise-window option is not used when --denoise-method=none'
-            )
+    denoise_method, denoise_params = parse_denoise_method(config.workflow.denoise_method)
+    check_denoise_window(denoise_method, config.workflow.dwi_denoise_window)
+    if (
+        config.workflow.denoise_after_combining
+        and denoise_params.get('demodulate', 'none') != 'none'
+    ):
+        # Temporary workaround for a bug in dwidenoise2: the concatenated series
+        # cannot be denoised with phase data.
+        parser.error(
+            '--denoise-after-combining cannot be used with phase demodulation '
+            f'("demodulate:{denoise_params["demodulate"]}"). '
+            'Remove the demodulate parameter and use "--ignore phase" to denoise '
+            'the magnitude data only.'
+        )
 
     bids_dir = config.execution.bids_dir
     output_dir = config.execution.output_dir
