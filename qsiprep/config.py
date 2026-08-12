@@ -579,8 +579,6 @@ class workflow(_Config):
     """Window size in voxels for image-based denoising, integer or "auto"."""
     dwi_no_biascorr = None
     """DEPRECATED: see --b1-biascorrect-stage."""
-    dwi_only = False
-    """DEPRECATED: True if anat_modality is 'none'."""
     diffprep_config = None
     """Configuration JSON for running TORTOISE DIFFPREP."""
     eddy_config = None

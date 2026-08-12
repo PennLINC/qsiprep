@@ -71,7 +71,7 @@ template. For this reason, spatial normalization is typically done *after*
 models are fit.
 
 All outputs will be registered to the T1w image (or the
-AC-PC aligned b=0 template if ``--dwi-only`` was specified) but will have
+AC-PC aligned b=0 template if ``--anat-modality none`` was specified) but will have
 an isotropic voxel size. Furthermore, all outputs are aligned according to the
 AC-PC convention: the coordinates are changed from the native scanner
 coordinates to a new system where $0, 0, 0$ is where the midline intersects

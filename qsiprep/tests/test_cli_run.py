@@ -239,3 +239,73 @@ def test_collect_data(tmpdir, name, skeleton, sessions, n_anats):
     )[0]
     assert len(subj_data['t1w']) == n_anats[2], pprint.pformat(subj_data)
     assert len(subj_data['t2w']) == 0, pprint.pformat(subj_data)
+
+
+@pytest.fixture
+def minimal_args(tmp_path):
+    """Return the arguments every qsiprep call needs, for parser-level tests."""
+    bids_dir = tmp_path / 'bids'
+    bids_dir.mkdir()
+    return [str(bids_dir), str(tmp_path / 'out'), 'participant', '--output-resolution', '2']
+
+
+def test_dwi_only_warns_and_sets_anat_modality(minimal_args, capsys):
+    """--dwi-only is deprecated, but still selects --anat-modality none."""
+    from qsiprep.cli.parser import _build_parser, _resolve_deprecated_dwi_only
+
+    parser = _build_parser()
+    opts = parser.parse_args([*minimal_args, '--dwi-only'])
+
+    assert '--dwi-only' in capsys.readouterr().err
+
+    _resolve_deprecated_dwi_only(opts, parser)
+
+    assert opts.anat_modality == 'none'
+    # The deprecated attribute must not reach the config object
+    assert not hasattr(opts, 'dwi_only')
+
+
+def test_dwi_only_is_order_independent(minimal_args):
+    """--dwi-only and an explicit --anat-modality none agree in either order."""
+    from qsiprep.cli.parser import _build_parser, _resolve_deprecated_dwi_only
+
+    for extra_args in (
+        ['--dwi-only', '--anat-modality', 'none'],
+        ['--anat-modality', 'none', '--dwi-only'],
+    ):
+        parser = _build_parser()
+        opts = parser.parse_args(minimal_args + extra_args)
+        _resolve_deprecated_dwi_only(opts, parser)
+        assert opts.anat_modality == 'none'
+
+
+@pytest.mark.parametrize(
+    'extra_args',
+    [
+        ['--dwi-only', '--anat-modality', 'T2w'],
+        ['--anat-modality', 'T2w', '--dwi-only'],
+    ],
+)
+def test_dwi_only_conflicts_with_anat_modality(minimal_args, extra_args):
+    """Combining --dwi-only with a contradictory --anat-modality is an error."""
+    from qsiprep.cli.parser import _build_parser, _resolve_deprecated_dwi_only
+
+    parser = _build_parser()
+    opts = parser.parse_args(minimal_args + extra_args)
+
+    with pytest.raises(SystemExit):
+        _resolve_deprecated_dwi_only(opts, parser)
+
+
+def test_anat_modality_none_is_not_deprecated(minimal_args, capsys):
+    """The replacement option is silent and untouched by the deprecation shim."""
+    from qsiprep.cli.parser import _build_parser, _resolve_deprecated_dwi_only
+
+    parser = _build_parser()
+    opts = parser.parse_args([*minimal_args, '--anat-modality', 'none'])
+
+    assert capsys.readouterr().err == ''
+
+    _resolve_deprecated_dwi_only(opts, parser)
+
+    assert opts.anat_modality == 'none'

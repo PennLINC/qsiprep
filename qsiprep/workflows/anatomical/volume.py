@@ -448,7 +448,8 @@ FreeSurfer version {FS_VERSION}. """
         ]),
         (inputnode, anat_reports_wf, [
             ((config.workflow.anat_modality.lower(), fix_multi_source_name,
-              False, config.workflow.anat_modality),
+              config.workflow.subject_anatomical_reference == 'sessionwise',
+              config.workflow.anat_modality),
              'inputnode.source_file')]),
         (anat_reference_wf, anat_reports_wf, [
             ('outputnode.out_report', 'inputnode.t1_conform_report'),
@@ -1382,13 +1383,12 @@ def init_anat_derivatives_wf(anatomical_template, has_t2w=False) -> Workflow:
     t1_name = pe.Node(
         niu.Function(
             function=fix_multi_source_name,
-            input_names=['in_files', 'dwi_only', 'include_session', 'anatomical_contrast'],
+            input_names=['in_files', 'include_session', 'anatomical_contrast'],
         ),
         name='t1_name',
     )
     t1_name.inputs.include_session = config.workflow.subject_anatomical_reference == 'sessionwise'
     t1_name.inputs.anatomical_contrast = config.workflow.anat_modality
-    t1_name.inputs.dwi_only = False
 
     if has_t2w:
         # DerivativesDataSink takes the suffix from source_file, so the T2w sinks
@@ -1397,7 +1397,7 @@ def init_anat_derivatives_wf(anatomical_template, has_t2w=False) -> Workflow:
         t2_name = pe.Node(
             niu.Function(
                 function=fix_multi_source_name,
-                input_names=['in_files', 'dwi_only', 'include_session', 'anatomical_contrast'],
+                input_names=['in_files', 'include_session', 'anatomical_contrast'],
             ),
             name='t2_name',
         )
@@ -1405,7 +1405,6 @@ def init_anat_derivatives_wf(anatomical_template, has_t2w=False) -> Workflow:
             config.workflow.subject_anatomical_reference == 'sessionwise'
         )
         t2_name.inputs.anatomical_contrast = 'T2w'
-        t2_name.inputs.dwi_only = False
 
         ds_t2_preproc = pe.Node(
             DerivativesDataSink(
