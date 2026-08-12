@@ -432,22 +432,6 @@ def init_dwi_denoising_wf(
     num_steps = sum(map(int, [do_denoise, do_unringing, do_biascorr, harmonize_b0s]))
     merge_confounds = pe.Node(niu.Merge(num_steps), name='merge_confounds')
 
-    # A single brain mask is shared by the denoising and bias correction steps. It is built
-    # from the raw series because denoising runs first, so the mask cannot be derived from
-    # the output of any earlier step.
-    # ``dwidenoise`` restricts the voxels it processes to this mask, whereas ``dwidenoise2``
-    # has no -mask option, so there the mask only sets the contour drawn on the report.
-    if do_denoise or do_biascorr:
-        get_b0s = pe.Node(ExtractB0s(b0_threshold=config.workflow.b0_threshold), name='get_b0s')
-        quick_mask = pe.Node(MaskEPI(lower_cutoff=0.02), name='quick_mask')
-        workflow.connect([
-            (inputnode, get_b0s, [
-                ('dwi_file', 'dwi_series'),
-                ('bval_file', 'bval_file'),
-            ]),
-            (get_b0s, quick_mask, [('b0_series', 'in_files')]),
-        ])  # fmt:skip
-
     # Add the steps
     step_num = 1  # Merge inputs start at 1
     last_step = ''
@@ -481,9 +465,9 @@ def init_dwi_denoising_wf(
                 n_procs=omp_nthreads,
             )
 
-            # dwidenoise2 needs the gradient table to demean by shell. The standalone
-            # dwidenoise2 build misreads the two files given to its -fslgrad option, so
-            # supply the gradients as a single MRtrix-format table instead.
+            # dwidenoise2 needs the gradient table to demean by shell. Temporary
+            # workaround for a bug in dwidenoise2: supply the gradients as a single
+            # MRtrix-format table instead of using -fslgrad.
             gradient_table = pe.Node(MRTrixGradientTable(), name='gradient_table')
             workflow.connect([
                 (inputnode, gradient_table, [
@@ -555,7 +539,6 @@ def init_dwi_denoising_wf(
 
         # Wiring that is the same for every denoising method
         workflow.connect([
-            (quick_mask, denoiser, [('out_mask', 'mask')]),
             (denoiser, ds_report_denoising, [('out_report', 'in_file')]),
             (denoiser, merge_confounds, [('nmse_text', f'in{step_num}')]),
             # The noise image is a derivative, so it always comes straight from the denoiser
@@ -657,6 +640,8 @@ def init_dwi_denoising_wf(
         last_step = True
 
         biascorr = pe.Node(DWIBiasCorrect(method='ants'), name='biascorr', n_procs=omp_nthreads)
+        get_b0s = pe.Node(ExtractB0s(b0_threshold=config.workflow.b0_threshold), name='get_b0s')
+        quick_mask = pe.Node(MaskEPI(lower_cutoff=0.02), name='quick_mask')
         ds_report_biascorr = pe.Node(
             DerivativesDataSink(
                 datatype='figures',
@@ -672,6 +657,9 @@ def init_dwi_denoising_wf(
 
         workflow.connect([
             (buffernodes[-2], biascorr, [('dwi_file', 'in_file')]),
+            (buffernodes[-2], get_b0s, [('dwi_file', 'dwi_series')]),
+            (inputnode, get_b0s, [('bval_file', 'bval_file')]),
+            (get_b0s, quick_mask, [('b0_series', 'in_files')]),
             (quick_mask, biascorr, [('out_mask', 'mask')]),
             (biascorr, buffernodes[-1], [('out_file', 'dwi_file')]),
             (biascorr, outputnode, [('bias_image', 'bias_image')]),

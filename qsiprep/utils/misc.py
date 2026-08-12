@@ -8,10 +8,6 @@ import numpy as np
 
 LOGGER = logging.getLogger('nipype.interface')
 
-# The sliding-window kernel and the subsampling factor are no longer command-line options:
-# they are properties of the multi-resolution schedule, chosen with 'schedule'. QSIPrep uses
-# the bundled 'default' schedule unless one is requested, so --dwi-denoise-window does not
-# apply to dwidenoise2.
 _DWIDENOISE_ENUM_PARAMETERS = {
     'aggregator': ('exclusive', 'gaussian', 'invl0', 'rank', 'uniform'),
     'datatype': ('float32', 'float64'),
@@ -35,8 +31,6 @@ _DWIDENOISE_STRING_PARAMETERS = {
     'rank_input',
     'rank_output',
     'rank_pcanonzero',
-    'rankpermm_in',
-    'rankpermm_out',
     'schedule',
     'sum_aggregation',
     'sum_optshrink',
@@ -50,7 +44,6 @@ _DWIDENOISE_PARAMETERS = (
     set(_DWIDENOISE_ENUM_PARAMETERS)
     | _DWIDENOISE_STRING_PARAMETERS
     | {
-        'aggregator_fwhm',
         'fixed_rank',
         'noise_dof',
         'noise_in',
@@ -107,8 +100,6 @@ def parse_denoise_method(spec, use_phase=None):
                 raise ValueError(f'Invalid boolean value for {name!r}: {value!r}') from exc
         elif name in ('fixed_rank', 'noise_dof'):
             parsed_value = int(value)
-        elif name == 'aggregator_fwhm':
-            parsed_value = float(value)
         elif name == 'noise_in':
             try:
                 parsed_value = float(value)
@@ -134,16 +125,11 @@ def parse_denoise_method(spec, use_phase=None):
     return method, parameters
 
 
+# dwidenoise2's own defaults, mirrored here so the boilerplate describes what actually ran
 _DWIDENOISE2_DEFAULTS = {
-    # Defaults of the dwidenoise2 build QSIPrep ships, read from its source. The boilerplate
-    # describes these too, so that the methods reflect what actually ran rather than only the
-    # parameters QSIPrep set explicitly.
     'aggregator': 'gaussian',
     'decomposition': 'bdcsvd',
-    # 'apc' is the default for complex data; magnitude data are never demodulated
     'demodulate': 'apc',
-    # 'shells' is the default whenever a gradient table is available, which QSIPrep always
-    # supplies
     'demean': 'shells',
     'estimator': 'mrm2023',
     'schedule': 'default',

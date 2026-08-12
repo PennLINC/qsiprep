@@ -15,6 +15,7 @@ from nipype.pipeline import engine as pe
 from qsiprep import config
 from qsiprep.interfaces import mrtrix
 from qsiprep.interfaces.dipy import Patch2Self
+from qsiprep.tests.utils import field_of_view
 from qsiprep.workflows.dwi.merge import init_dwi_denoising_wf
 
 
@@ -127,8 +128,8 @@ def test_dwidenoise2_cli_parameters_reach_workflow(monkeypatch):
 
 
 @pytest.mark.parametrize('denoise_method', ['dwidenoise', 'dwidenoise2', 'patch2self'])
-def test_denoising_wf_builds_one_mask_for_denoising_and_biascorr(monkeypatch, denoise_method):
-    """Build the brain mask once and hand it to both the denoiser and bias correction."""
+def test_denoising_wf_masks_only_biascorr(monkeypatch, denoise_method):
+    """Build the brain mask for bias correction only; the denoisers get no mask."""
     monkeypatch.setattr(config.workflow, 'denoise_method', denoise_method)
     monkeypatch.setattr(config.workflow, 'dwi_denoise_window', 5)
     monkeypatch.setattr(config.workflow, 'unringing_method', 'none')
@@ -156,13 +157,13 @@ def test_denoising_wf_builds_one_mask_for_denoising_and_biascorr(monkeypatch, de
         if src is quick_mask
         for _, dest_field in data['connect']
     }
-    assert consumers == {('denoiser', 'mask'), ('biascorr', 'mask')}
+    assert consumers == {('biascorr', 'mask')}
 
-    # The mask has to come from the raw series: denoising runs first, so deriving it from
-    # any later buffer would be circular
+    # The mask comes from the series feeding bias correction, not the raw data
     get_b0s = workflow.get_node('get_b0s')
     assert {src.name for src, dest, _ in workflow._graph.edges(data=True) if dest is get_b0s} == {
-        'inputnode'
+        'inputnode',
+        'buffer01',
     }
 
 
@@ -262,11 +263,6 @@ def _run_denoising_wf(
     return {node.name: node for node in graph.nodes}, sink_dir
 
 
-def _field_of_view(img):
-    """Return the spatial extent of an image in mm."""
-    return np.array(img.shape[:3]) * np.array(img.header.get_zooms()[:3])
-
-
 def _sink_output(sink_dir, field):
     """Return the single file the DataSink wrote for ``field``."""
     matches = sorted((sink_dir / field).glob('*'))
@@ -274,23 +270,10 @@ def _sink_output(sink_dir, field):
     return matches[0]
 
 
-def _assert_denoiser_is_masked(nodes, raw_file):
-    """Check that the denoiser is handed a brain mask built from the raw data.
-
-    Every method gets the mask. ``dwidenoise`` restricts the voxels it processes to it,
-    while ``dwidenoise2`` and ``patch2self`` use it only for the report contour.
-    """
-    mask_file = nodes['quick_mask'].result.outputs.out_mask
-    assert nodes['denoiser'].inputs.mask == mask_file
-
-    raw_img = nb.load(raw_file)
-    mask_img = nb.load(mask_file)
-    assert mask_img.shape == raw_img.shape[:3]
-    assert np.allclose(mask_img.affine, raw_img.affine)
-    # A mask that selected everything or nothing would silently defeat the point
-    mask_data = mask_img.get_fdata()
-    assert set(np.unique(mask_data)) <= {0.0, 1.0}
-    assert 0 < mask_data.sum() < mask_data.size
+def _assert_denoiser_is_not_masked(nodes):
+    """Check that the denoiser processes the full FOV rather than a masked subset."""
+    assert 'quick_mask' not in nodes
+    assert not isdefined(nodes['denoiser'].inputs.mask)
 
 
 def _assert_denoising_outputs(nodes, sink_dir, raw_file):
@@ -307,9 +290,7 @@ def _assert_denoising_outputs(nodes, sink_dir, raw_file):
 
     noise_img = nb.load(_sink_output(sink_dir, 'noise_image'))
     assert noise_img.ndim == 3
-    # dwidenoise2 subsamples by default, so its noise map sits on a coarser grid than the
-    # input. Whatever the grid, it has to cover the same field of view.
-    assert np.allclose(_field_of_view(noise_img), _field_of_view(raw_img), rtol=0.05)
+    assert np.allclose(field_of_view(noise_img), field_of_view(raw_img), rtol=0.05)
     noise_data = noise_img.get_fdata()
     finite = np.isfinite(noise_data)
     assert finite.any()
@@ -393,7 +374,7 @@ def test_denoising_wf_magnitude(
     assert 'combine_complex' not in nodes
     assert 'split_complex' not in nodes
 
-    _assert_denoiser_is_masked(nodes, nibs_dwi['dwi_file'])
+    _assert_denoiser_is_not_masked(nodes)
     _assert_denoising_outputs(nodes, sink_dir, nibs_dwi['dwi_file'])
 
 
@@ -445,5 +426,5 @@ def test_denoising_wf_complex(
         complex_img = nb.load(nodes['combine_complex'].result.outputs.out_file)
         assert np.issubdtype(complex_img.header.get_data_dtype(), np.complexfloating)
 
-    _assert_denoiser_is_masked(nodes, nibs_dwi['dwi_file'])
+    _assert_denoiser_is_not_masked(nodes)
     _assert_denoising_outputs(nodes, sink_dir, nibs_dwi['dwi_file'])

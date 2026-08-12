@@ -87,6 +87,13 @@ def download_test_data(dset, data_dir=None):
     return out_dir
 
 
+def field_of_view(img):
+    """Return the spatial extent of an image in mm."""
+    import numpy as np
+
+    return np.array(img.shape[:3]) * np.array(img.header.get_zooms()[:3])
+
+
 def get_test_data_path():
     """Return the path to test datasets, terminated with separator.
 

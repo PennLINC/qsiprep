@@ -38,7 +38,7 @@ def test_dsdti_fmap(data_dir, output_dir, working_dir):
     This tests the following features:
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
-    - dwidenoise is enabled explicitly.
+    - dwidenoise is enabled implicitly.
 
     Inputs
     ------
@@ -60,8 +60,6 @@ def test_dsdti_fmap(data_dir, output_dir, working_dir):
         '--write-graph',
         '--mem-mb=4096',
         '--output-resolution=5',
-        '--denoise-method=dwidenoise2;shape:cuboid;subsample:1;demodulate:none;demean:none;'
-        'filter_method:truncate;aggregator:exclusive',
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)

@@ -49,7 +49,7 @@ def datasets(data_dir):
 def nibs_dwi(data_dir):
     """Locate the nibs DWI series used to test the denoising workflow.
 
-    The series is small (48x48x29x76) and has both magnitude and phase data, so it can
+    The series is small and has both magnitude and phase data, so it can
     exercise the complex-valued denoising paths without a long runtime.
 
     Tests using this fixture are skipped when the dataset is unavailable, which keeps

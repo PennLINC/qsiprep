@@ -436,10 +436,7 @@ def _build_parser(**kwargs):
             '"patch2self" (DIPY), or "none".\n'
             'dwidenoise2 parameters may follow the method as semicolon-delimited '
             'name:value pairs, for example '
-            '"dwidenoise2;demodulate:nonlinear;decomposition:bdcsvd".\n'
-            'To approximate legacy "dwidenoise" with "dwidenoise2", use '
-            '"dwidenoise2;shape:cuboid;subsample:1;demodulate:none;demean:none;'
-            'filter_method:truncate;aggregator:exclusive".'
+            '"dwidenoise2;demodulate:linear;decomposition:bdcsvd".'
         ),
     )
     g_conf.add_argument(
@@ -888,8 +885,20 @@ def parse_args(args=None, namespace=None):
         )
 
     # Validate the tricky options here
-    denoise_method, _ = parse_denoise_method(config.workflow.denoise_method)
+    denoise_method, denoise_params = parse_denoise_method(config.workflow.denoise_method)
     check_denoise_window(denoise_method, config.workflow.dwi_denoise_window)
+    if (
+        config.workflow.denoise_after_combining
+        and denoise_params.get('demodulate', 'none') != 'none'
+    ):
+        # Temporary workaround for a bug in dwidenoise2: the concatenated series
+        # cannot be denoised with phase data.
+        parser.error(
+            '--denoise-after-combining cannot be used with phase demodulation '
+            f'("demodulate:{denoise_params["demodulate"]}"). '
+            'Remove the demodulate parameter and use "--ignore phase" to denoise '
+            'the magnitude data only.'
+        )
 
     bids_dir = config.execution.bids_dir
     output_dir = config.execution.output_dir

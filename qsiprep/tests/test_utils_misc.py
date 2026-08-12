@@ -52,7 +52,7 @@ def test_angle_between_finite_for_zero_vector():
 def test_parse_denoise_method_parameters():
     method, parameters = parse_denoise_method(
         'dwidenoise2;demodulate:hann;decomposition:bdcsvd;'
-        'preserve_noise_bias:true;noise_dof:8;aggregator_fwhm:2.5;schedule:vlarge',
+        'preserve_noise_bias:true;noise_dof:8;schedule:vlarge',
         use_phase=True,
     )
 
@@ -62,7 +62,6 @@ def test_parse_denoise_method_parameters():
         'decomposition': 'bdcsvd',
         'preserve_noise_bias': True,
         'noise_dof': 8,
-        'aggregator_fwhm': 2.5,
         'schedule': 'vlarge',
     }
 
@@ -109,6 +108,16 @@ def test_parse_denoise_method_rejects_demodulation_without_phase(demodulate):
     # The CLI validates the specification before it knows whether phase data exist, so an
     # unknown phase state skips the check rather than guessing
     assert parse_denoise_method(spec) == ('dwidenoise2', {'demodulate': demodulate})
+
+
+def test_denoise_parameters_match_interface():
+    """Every allowlisted dwidenoise2 parameter must be a trait on DWIDenoise2InputSpec."""
+    from qsiprep.interfaces.mrtrix import DWIDenoise2
+    from qsiprep.utils.misc import _DWIDENOISE_PARAMETERS
+
+    trait_names = set(DWIDenoise2.input_spec().trait_names())
+    missing = sorted(_DWIDENOISE_PARAMETERS - trait_names)
+    assert not missing
 
 
 def test_denoise_method_cli_parameter(tmp_path):
