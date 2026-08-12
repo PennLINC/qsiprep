@@ -640,8 +640,6 @@ def init_dwi_denoising_wf(
         last_step = True
 
         biascorr = pe.Node(DWIBiasCorrect(method='ants'), name='biascorr', n_procs=omp_nthreads)
-        get_b0s = pe.Node(ExtractB0s(b0_threshold=config.workflow.b0_threshold), name='get_b0s')
-        quick_mask = pe.Node(MaskEPI(lower_cutoff=0.02), name='quick_mask')
         ds_report_biascorr = pe.Node(
             DerivativesDataSink(
                 datatype='figures',
@@ -652,6 +650,9 @@ def init_dwi_denoising_wf(
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
+        get_b0s = pe.Node(ExtractB0s(b0_threshold=config.workflow.b0_threshold), name='get_b0s')
+        quick_mask = pe.Node(MaskEPI(lower_cutoff=0.02), name='quick_mask')
+
         # Add buffernode for bias-corrected DWI
         buffernodes.append(get_buffernode())
 
