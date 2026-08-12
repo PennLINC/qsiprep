@@ -98,7 +98,7 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--boilerplate',
         '--sloppy',
-        '--denoise-method=dwidenoise',
+        '--denoise-method=dwidenoise2',
         '--b0-motion-corr-to=first',
         '--write-graph',
         '--mem-mb=4096',
@@ -759,7 +759,7 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.forrest_gump
 def test_forrest_gump(data_dir, output_dir, working_dir):
-    """Run QSIPrep on Forrest Gump data with dwidenoise denoising.
+    """Run QSIPrep on Forrest Gump data without dwidenoise denoising.
 
     The dataset was built from the Forrest Gump dataset:
     https://openneuro.org/datasets/ds000113/versions/1.3.0

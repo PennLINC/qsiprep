@@ -346,6 +346,42 @@ Contents:
  - data/singleshell_output/qsiprep/sub-PNC/figures/sub-PNC_t1_2_mni.svg
  - data/singleshell_output/qsiprep/sub-PNC.html
 
+
+nibs:
+-----
+
+Downsampled NIBS data acquired with the HBCD protocol, with both magnitude and
+phase parts, used to exercise the complex-valued denoising workflows.
+
+Contents:
+^^^^^^^^^
+
+ - data/nibs/dataset_description.json
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-AP_dwi.bval
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-AP_dwi.bvec
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-AP_part-mag_dwi.bval
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-AP_part-mag_dwi.bvec
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-AP_part-mag_dwi.json
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-AP_part-mag_dwi.nii.gz
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-AP_part-mag_sbref.json
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-AP_part-mag_sbref.nii.gz
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-AP_part-phase_dwi.json
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-AP_part-phase_dwi.nii.gz
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-AP_part-phase_sbref.json
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-AP_part-phase_sbref.nii.gz
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-PA_dwi.bval
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-PA_dwi.bvec
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-PA_part-mag_dwi.bval
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-PA_part-mag_dwi.bvec
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-PA_part-mag_dwi.json
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-PA_part-mag_dwi.nii.gz
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-PA_part-mag_sbref.json
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-PA_part-mag_sbref.nii.gz
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-PA_part-phase_dwi.json
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-PA_part-phase_dwi.nii.gz
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-PA_part-phase_sbref.json
+ - data/nibs/sub-22449/ses-01/dwi/sub-22449_ses-01_dir-PA_part-phase_sbref.nii.gz
+
 DOC
 
 
@@ -438,6 +474,18 @@ get_bids_data() {
         "https://upenn.box.com/shared/static/plyuee1nbj9v8eck03s38ojji8tkspwr.xz"
       tar xvfJ tinytensors_epi.tar.xz -C ${WORKDIR}/data
       rm tinytensors_epi.tar.xz
+    fi
+
+    # Downsampled NIBS (complex-valued HBCD protocol)
+    # Unlike the other archives, this one has no top-level directory, so it is extracted
+    # into a directory of its own rather than into data/ directly.
+    if [[ ${DS} = nibs ]]; then
+      mkdir -p ${WORKDIR}/data/nibs
+      ${WGET} \
+        -O nibs.tar.xz \
+        "https://upenn.box.com/shared/static/bkllff4ik51jy9ju6nben2r5zrq4a5me.xz"
+      tar xvfJ nibs.tar.xz -C ${WORKDIR}/data/nibs
+      rm nibs.tar.xz
     fi
 
     #  name: Get data for fieldmap tests

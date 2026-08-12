@@ -46,6 +46,7 @@ def download_test_data(dset, data_dir=None):
             'https://upenn.box.com/shared/static/tkahg1ctipmfihvpa1gmibvcv0gb721h.xz'
         ),
         'forrest_gump': 'https://upenn.box.com/shared/static/qat58an322bzzyixrrsk7cmf52q3bepq.xz',
+        'nibs': 'https://upenn.box.com/shared/static/bkllff4ik51jy9ju6nben2r5zrq4a5me.xz',
     }
     if dset == '*':
         for k in URLS:
@@ -84,6 +85,13 @@ def download_test_data(dset, data_dir=None):
             raise ValueError(f'Unknown file type for {dset} ({url})')
 
     return out_dir
+
+
+def field_of_view(img):
+    """Return the spatial extent of an image in mm."""
+    import numpy as np
+
+    return np.array(img.shape[:3]) * np.array(img.header.get_zooms()[:3])
 
 
 def get_test_data_path():
