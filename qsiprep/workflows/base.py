@@ -52,12 +52,42 @@ from ..interfaces import (
 from ..utils.bids import collect_data
 from ..utils.grouping import group_dwi_scans
 from ..utils.misc import fix_multi_source_name
-from .anatomical.volume import init_anat_preproc_wf
+from .anatomical.volume import anat_biascorrect_enabled, init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
 from .dwi.distortion_group_merge import init_distortion_group_merge_wf
 from .dwi.finalize import init_dwi_finalize_wf
 from .dwi.intramodal_template import init_intramodal_template_wf
 from .dwi.util import get_source_file
+
+
+def _t2w_sdc_backend_enabled():
+    """Whether the selected backend has a stage that can consume a T2w for SDC.
+
+    DRBUDDI's multimodal ``--structural`` is reached only when ``--pepolar-method``
+    asks for DRBUDDI; TORTOISE ``--epi T2Wreg`` is reached from the ``diffprep_*``
+    backends for the fieldmap-less case and is **not** gated on ``--pepolar-method``.
+    """
+    return 'drbuddi' in (config.workflow.pepolar_method or '').lower() or (
+        config.workflow.hmc_model or ''
+    ).startswith('diffprep_')
+
+
+def _t2w_available_for_sdc(subject_data):
+    """Whether a T2w should drive susceptibility distortion correction.
+
+    True only when the subject has a T2w, anatomical processing runs
+    (``--anat-modality`` != ``none``), and the selected backend actually has a
+    T2w-consuming stage. Every T2w consumer takes the anatomical workflow's
+    ``t2w_unfatsat``, which is only produced when ``init_anat_preproc_wf`` is
+    asked for additional T2ws (see ``additional_t2ws`` in
+    :func:`init_single_subject_wf`, which must stay in sync with this).
+    Requesting T2w-based SDC without it leaves those nodes with an empty input.
+    """
+    return (
+        bool(subject_data.get('t2w'))
+        and config.workflow.anat_modality != 'none'
+        and _t2w_sdc_backend_enabled()
+    )
 
 
 def init_qsiprep_wf():
@@ -180,8 +210,12 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
         cohort = cohort_by_months(anatomical_template, age)
         anatomical_template = f'{anatomical_template}+{cohort}'
 
+    # The anatomical workflow only builds its T2w branch -- and therefore only
+    # produces ``t2w_unfatsat`` -- when asked for additional T2ws. Keep this in
+    # sync with _t2w_available_for_sdc, which decides whether the consumers of
+    # that output get switched on.
     additional_t2ws = 0
-    if 'drbuddi' in config.workflow.pepolar_method.lower() and subject_data['t2w']:
+    if _t2w_sdc_backend_enabled() and subject_data['t2w']:
         additional_t2ws = len(subject_data['t2w'])
 
     # Inspect the dwi data and provide advice on pipeline choices
@@ -272,11 +306,17 @@ to workflows in *QSIPrep*'s documentation]\
     info_modality = (
         'dwi' if config.workflow.anat_modality == 'none' else config.workflow.anat_modality.lower()
     )
+    # --anat-biascorrect auto needs the actual files to read ImageType from, and
+    # this is the only scope where they are available -- the anatomical workflows
+    # receive counts, not paths. Resolved separately per contrast so a normalized
+    # T1w does not silently decide the T2w's fate (or vice versa).
     anat_preproc_wf = init_anat_preproc_wf(
         num_anat_images=num_anat_images,
         num_additional_t2ws=additional_t2ws,
         has_rois=bool(subject_data['roi']),
         anatomical_template=anatomical_template,
+        do_biascorr=anat_biascorrect_enabled(subject_data.get(info_modality)),
+        t2w_do_biascorr=anat_biascorrect_enabled(subject_data.get('t2w')),
     )
 
     workflow.connect([
@@ -368,19 +408,118 @@ to workflows in *QSIPrep*'s documentation]\
     make_intramodal_template = False
     if config.workflow.intramodal_template_iters > 0:
         if len(outputs_to_files) < 2:
-            raise Exception('Cannot make an intramodal with less than 2 groups.')
-        make_intramodal_template = True
+            # Having one group is a normal condition, not a user error: a cohort
+            # routinely mixes single- and multi-session subjects. Raising here
+            # meant one flag could fail a large fraction of a dataset outright,
+            # so skip the template for this subject and carry on.
+            config.loggers.workflow.warning(
+                'Skipping the intramodal template for sub-%s: it needs at least 2 '
+                'DWI groups and this subject has %d. Everything else is unaffected.',
+                subject_id,
+                len(outputs_to_files),
+            )
+        else:
+            make_intramodal_template = True
 
+    anat_source_file = fix_multi_source_name(
+        subject_data[info_modality],
+        dwi_only=config.workflow.anat_modality == 'none',
+        include_session=config.workflow.subject_anatomical_reference == 'sessionwise',
+        anatomical_contrast=config.workflow.anat_modality,
+    )
     intramodal_template_wf = init_intramodal_template_wf(
-        t1w_source_file=fix_multi_source_name(
-            subject_data[info_modality],
-            dwi_only=config.workflow.anat_modality == 'none',
-            include_session=config.workflow.subject_anatomical_reference == 'sessionwise',
-            anatomical_contrast=config.workflow.anat_modality,
-        ),
+        t1w_source_file=anat_source_file,
         inputs_list=sorted(outputs_to_files.keys()),
+        transform=config.workflow.intramodal_template_transform,
+        num_iterations=config.workflow.intramodal_template_iters or 2,
         name='intramodal_template_wf',
     )
+    # TemplateQC and the per-group orig->intramodal transform export exist only
+    # for linear templates: mvtc2 exposes no per-input aligned images, and its
+    # per-group transform is an [affine, warp] pair that does not fit a
+    # single-file .mat sink.
+    intramodal_linear = config.workflow.intramodal_template_transform in ('Rigid', 'Affine')
+
+    if make_intramodal_template:
+        ds_intramodal_template = pe.Node(
+            DerivativesDataSink(
+                source_file=anat_source_file,
+                base_directory=config.execution.output_dir,
+                datatype='anat',
+                space='ACPC',
+                desc='intramodal',
+                suffix='dwiref',
+                extension='.nii.gz',
+                compress=True,
+            ),
+            name='ds_intramodal_template',
+            run_without_submitting=True,
+        )
+        # Without this the intramodal space is a dead end: nothing can be mapped
+        # into or out of it after the fact.
+        ds_intramodal_to_acpc = pe.Node(
+            DerivativesDataSink(
+                source_file=anat_source_file,
+                base_directory=config.execution.output_dir,
+                datatype='anat',
+                mode='image',
+                extension='.mat',
+                **{'from': 'intramodal', 'to': 'ACPC'},
+                suffix='xfm',
+            ),
+            name='ds_intramodal_to_acpc',
+            run_without_submitting=True,
+        )
+        if intramodal_linear:
+            ds_template_qc = pe.Node(
+                DerivativesDataSink(
+                    source_file=anat_source_file,
+                    base_directory=config.execution.output_dir,
+                    datatype='anat',
+                    desc='templateQC',
+                    suffix='dwiref',
+                    extension='.tsv',
+                ),
+                name='ds_template_qc',
+                run_without_submitting=True,
+            )
+            ds_template_agreement = pe.Node(
+                DerivativesDataSink(
+                    source_file=anat_source_file,
+                    base_directory=config.execution.output_dir,
+                    datatype='anat',
+                    space='ACPC',
+                    desc='agreement',
+                    suffix='dwiref',
+                    extension='.nii.gz',
+                    compress=True,
+                ),
+                name='ds_template_agreement',
+                run_without_submitting=True,
+            )
+            workflow.connect([
+                (intramodal_template_wf, ds_template_qc, [
+                    ('outputnode.template_qc_file', 'in_file'),
+                ]),
+                (intramodal_template_wf, ds_template_agreement, [
+                    ('outputnode.template_agreement_map', 'in_file'),
+                ]),
+            ])  # fmt:skip
+
+        workflow.connect([
+            (intramodal_template_wf, ds_intramodal_to_acpc, [
+                ('outputnode.intramodal_template_to_t1_affine', 'in_file'),
+            ]),
+        ])  # fmt:skip
+
+        workflow.connect([
+            (intramodal_template_wf, ds_intramodal_template, [
+                # The ACPC-resampled template, NOT outputnode.intramodal_template:
+                # that one is in the template's own midpoint space, and tagging
+                # it space-ACPC would mislabel it.
+                ('outputnode.intramodal_template_acpc', 'in_file'),
+            ]),
+        ])  # fmt:skip
 
     if make_intramodal_template:
         workflow.connect([
@@ -405,7 +544,7 @@ to workflows in *QSIPrep*'s documentation]\
             scan_groups=dwi_info,
             output_prefix=output_fname,
             source_file=source_file,
-            t2w_sdc=bool(subject_data.get('t2w')),
+            t2w_sdc=_t2w_available_for_sdc(subject_data),
             anatomical_template=anatomical_template,
         )
         dwi_finalize_wf = init_dwi_finalize_wf(
@@ -414,6 +553,7 @@ to workflows in *QSIPrep*'s documentation]\
             output_prefix=output_fname,
             source_file=source_file,
             write_derivatives=not merging_distortion_groups,
+            make_intramodal_template=make_intramodal_template,
         )
 
         workflow.connect([
@@ -464,6 +604,29 @@ to workflows in *QSIPrep*'s documentation]\
         if make_intramodal_template:
             input_name = f'inputnode.{output_wfname}_b0_template'
             output_name = f'outputnode.{output_wfname}_transform'
+            if intramodal_linear:
+                # Per-group hop into the template space. Paired with
+                # from-intramodal_to-ACPC above, this closes the round trip:
+                # BIDS b=0 -> intramodal -> ACPC -> MNI, and back.
+                ds_orig_to_intramodal = pe.Node(
+                    DerivativesDataSink(
+                        source_file=source_file,
+                        base_directory=config.execution.output_dir,
+                        datatype='anat',
+                        mode='image',
+                        extension='.mat',
+                        **{'from': 'orig', 'to': 'intramodal'},
+                        suffix='xfm',
+                    ),
+                    name=f'ds_orig_to_intramodal_{output_wfname}',
+                    run_without_submitting=True,
+                )
+                workflow.connect([
+                    (intramodal_template_wf, ds_orig_to_intramodal, [
+                        (output_name, 'in_file'),
+                    ]),
+                ])  # fmt:skip
+
             workflow.connect([
                 (dwi_preproc_wf, intramodal_template_wf, [
                     ('outputnode.b0_ref_image', input_name),
@@ -479,6 +642,10 @@ to workflows in *QSIPrep*'s documentation]\
                         'inputnode.intramodal_template_to_t1_warp',
                     ),
                     ('outputnode.intramodal_template', 'inputnode.intramodal_template'),
+                    (
+                        'outputnode.intramodal_template_wm_seg',
+                        'inputnode.intramodal_template_wm_seg',
+                    ),
                 ]),
             ])  # fmt:skip
 

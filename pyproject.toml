@@ -81,7 +81,11 @@ doc = [
     "sphinxcontrib-bibtex",
 ]
 dev = [
-    "ruff ~= 0.4.3",
+    # Keep this pin in sync with the ruff pin in .github/workflows/lint.yml and
+    # the rev in .pre-commit-config.yaml. A looser spec here installs a ruff
+    # that disagrees with CI -- 0.4.x and 0.15.x report inverted PT001, so
+    # "fixing" lint locally introduced CI failures.
+    "ruff == 0.15.21",
     "pre-commit",
 ]
 tests = [
@@ -264,6 +268,10 @@ markers = [
     "drbuddi_shoreline_epi: test 10",
     "drbuddi_tensorline_epi: test 11",
     "dscsdsi: test 12",
+    "diffprep: TORTOISE DIFFPREP HMC on non-shelled data",
+    "diffprep_drbuddi: TORTOISE DIFFPREP HMC with DRBUDDI SDC",
+    "diffprep_rpe_series: TORTOISE DIFFPREP HMC with reverse-PE-series DRBUDDI SDC",
+    "diffprep_csdsi_rpe_series: TORTOISE DIFFPREP HMC on a non-shelled CS-DSI reverse-PE series",
     "dsdti_nofmap: test 13",
     "dsdti_synfmap: test 14",
     "dsdti_topup: test 15",

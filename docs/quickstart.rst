@@ -118,7 +118,45 @@ grid sampling (DSI) and random q-space sampling (CS-DSI).
 The option ``none`` will register all the b=0 images to one another and the
 b>0 images will have the transform from the nearest b=0 image applied. This
 is not recommended. Between ``eddy`` and ``3dSHORE``, all sampling schemes
-can be motion corrected.
+can be motion corrected, though eddy-current correction for non-shelled data
+requires the DIFFPREP options described below.
+
+For non-shelled acquisitions such as compressed-sensing DSI (CS-DSI), FSL
+``eddy`` cannot be used, and ``3dSHORE`` corrects motion but does not correct
+eddy currents. In these cases, TORTOISE DIFFPREP is available via
+``--hmc-model``:
+
+- ``diffprep_motion`` — rigid head-motion correction only.
+- ``diffprep_quadratic`` — rigid motion plus 24-parameter quadratic
+  eddy-current correction (recommended).
+- ``diffprep_cubic`` — rigid motion plus cubic eddy-current correction.
+
+These options run TORTOISE v4 DIFFPREP, which fits a signal model over
+arbitrary q-space and therefore does not require shells. Advanced TORTOISE
+settings can be supplied with ``--diffprep-config``.
+
+The ``diffprep_*`` backends also perform susceptibility distortion correction,
+preferring TORTOISE-native tools:
+
+- **Reverse phase-encoded** data is corrected with DRBUDDI
+  (``--pepolar-method DRBUDDI``; ``TOPUP`` is not supported with the DIFFPREP
+  backends). This covers both an ``epi`` fieldmap (a blip-up/blip-down b=0 or EPI
+  in ``fmap/``) and a reverse phase-encoded *DWI series* (``rpe_series``). For a
+  reverse-PE series, DIFFPREP is run **once per phase-encoding direction** (a
+  single run models one phase axis for the whole file), then the corrected
+  directions are recombined before DRBUDDI. Non-shelled (e.g. CS-DSI) reverse-PE
+  series take the same DRBUDDI path, using DRBUDDI's plain tensor fit for its
+  ``[b0, FA]`` registration target. If that correction looks poor in the SDC
+  report, set ``"drbuddi_synth_shell_bval"`` (e.g. ``1000``) in
+  ``--diffprep-config`` to have TORTOISE synthesize a tensor-fittable shell per
+  phase-encoding direction instead.
+- **GRE / phase-difference fieldmaps** are handled by *QSIPrep*'s standard
+  fieldmap machinery (the deformation is applied downstream).
+- With **no fieldmap but a T2-weighted image** available, TORTOISE's
+  ``--epi T2Wreg`` structural correction is used (replacing fieldmap-less SyN for
+  this backend); if no T2w is available, fieldmap-less SyN is used when requested.
+- With no fieldmap and no T2w, head-motion/eddy correction is performed without
+  susceptibility correction.
 
 
 ******************************************

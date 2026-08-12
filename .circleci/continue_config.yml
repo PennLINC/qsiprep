@@ -378,11 +378,13 @@ jobs:
             echo "export MULTISHELL_OUTPUT_URL=$MULTISHELL_OUTPUT_URL" >> "$BASH_ENV"
             echo "export SINGLESHELL_OUTPUT_URL=$SINGLESHELL_OUTPUT_URL" >> "$BASH_ENV"
             echo "export DRBUDDI_RPE_SERIES_URL=$DRBUDDI_RPE_SERIES_URL" >> "$BASH_ENV"
+            echo "export CSDSI_RPE_SERIES_URL=$CSDSI_RPE_SERIES_URL" >> "$BASH_ENV"
             echo "export DRBUDDI_EPI_URL=$DRBUDDI_EPI_URL" >> "$BASH_ENV"
             echo "export DSDTI_FMAP_URL=$DSDTI_FMAP_URL" >> "$BASH_ENV"
             echo "export DSCSDSI_FMAP_URL=$DSCSDSI_FMAP_URL" >> "$BASH_ENV"
             echo "export MATERNAL_BRAIN_PROJECT_URL=$MATERNAL_BRAIN_PROJECT_URL" >> "$BASH_ENV"
             echo "export FORREST_GUMP_URL=$FORREST_GUMP_URL" >> "$BASH_ENV"
+            echo "export NIBS_URL=$NIBS_URL" >> "$BASH_ENV"
       - run:
           name: Download integration datasets
           command: |
@@ -418,11 +420,13 @@ jobs:
             download_one multishell_output "$MULTISHELL_OUTPUT_URL"
             download_one singleshell_output "$SINGLESHELL_OUTPUT_URL"
             download_one drbuddi_rpe_series "$DRBUDDI_RPE_SERIES_URL"
+            download_one csdsi_rpe_series "$CSDSI_RPE_SERIES_URL"
             download_one drbuddi_epi "$DRBUDDI_EPI_URL"
             download_one DSDTI_fmap "$DSDTI_FMAP_URL"
             download_one DSCSDSI_fmap "$DSCSDSI_FMAP_URL"
             download_one maternal_brain_project "$MATERNAL_BRAIN_PROJECT_URL"
             download_one forrest_gump "$FORREST_GUMP_URL"
+            download_one nibs "$NIBS_URL"
       - save_cache:
           key: data-v2-{{ checksum ".circleci/data_versions.txt" }}
           paths:
@@ -572,6 +576,10 @@ workflows:
                 - drbuddi_tensorline_epi
                 - drbuddi_shoreline_epi
                 - drbuddi_rpe
+                - diffprep
+                - diffprep_drbuddi
+                - diffprep_rpe_series
+                - diffprep_csdsi_rpe_series
                 - maternal_brain_project
                 - forrest_gump
                 - forrest_gump_patch2self
@@ -595,6 +603,10 @@ workflows:
             - drbuddi_tensorline_epi
             - drbuddi_shoreline_epi
             - drbuddi_rpe
+            - diffprep
+            - diffprep_drbuddi
+            - diffprep_rpe_series
+            - diffprep_csdsi_rpe_series
             - maternal_brain_project
             - forrest_gump
             - forrest_gump_patch2self
