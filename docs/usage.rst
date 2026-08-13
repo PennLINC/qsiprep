@@ -150,5 +150,5 @@ Debugging
 Logs and crashfiles are outputted into the
 ``<output dir>/qsiprep/sub-<participant_label>/log`` directory.
 Information on how to customize and understand these files can be found on the
-`nipype debugging <http://nipype.readthedocs.io/en/latest/users/debug.html>`_
-page.
+`Errors and Crashes <https://miykael.github.io/nipype_tutorial/notebooks/basic_error_and_crashes.html>`_
+page of the Nipype Tutorial.

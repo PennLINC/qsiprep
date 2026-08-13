@@ -609,7 +609,7 @@ def _tohz(in_file, range_hz, newpath=None):
 def phdiff2fmap(in_file, delta_te, newpath=None):
     r"""
     Converts the input phase-difference map into a fieldmap in Hz,
-    using the eq. (1) of [Hutton2002]_:
+    using the eq. (1) of :footcite:t:`hutton2002`:
 
     .. math::
 
@@ -622,6 +622,10 @@ def phdiff2fmap(in_file, delta_te, newpath=None):
     .. math::
 
         \Delta B_0 (\text{Hz}) = \frac{\Delta \Theta}{2\pi \Delta\text{TE}}
+
+    **References**
+
+    .. footbibliography::
 
     """
     import math
