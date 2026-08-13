@@ -232,6 +232,19 @@ Visual Reports
 ==============
 
 *QSIPrep* outputs summary reports, written to ``<output_dir>/qsiprep/sub-<subject_label>.html``.
+With ``--subject-anatomical-reference sessionwise`` there is one report per session,
+named ``sub-<subject_label>_ses-<session_label>.html``, instead of one report per subject.
+
+The directory the reports are written to is controlled by ``--report-output-level``,
+which may be ``root`` (the output directory), ``subject`` (``<output_dir>/qsiprep/sub-<subject_label>/``),
+or ``session``
+(``<output_dir>/qsiprep/sub-<subject_label>/ses-<session_label>/``).
+The default, ``auto``, uses the session level for session-wise reports and the root
+otherwise.
+Session-level reports are only possible when each report covers a single session,
+so reports spanning multiple sessions, or data without a session level,
+are written to the subject level with a warning.
+
 These reports provide a quick way to make visual inspection of the results easy.
 One useful graphic is the animation of the q-space sampling scheme before and after the pipeline.
 Here is a sampling scheme from a DSI scan:
