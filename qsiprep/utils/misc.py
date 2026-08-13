@@ -335,16 +335,25 @@ def fix_multi_T1w_source_name(in_files):
     return os.path.join(base, f'sub-{subject_label}_T1w.nii.gz')
 
 
-def fix_multi_source_name(in_files, dwi_only, include_session, anatomical_contrast='T1w'):
+def fix_multi_source_name(in_files, include_session, anatomical_contrast='T1w'):
     """Make up a generic source name when there are multiple source files.
+
+    An ``anatomical_contrast`` of ``'none'`` means the anatomical reference is derived
+    from the DWIs themselves, so the name is built from the DWI files instead.
 
     >>> fix_multi_source_name(
     ...     ['/path/to/sub-045_ses-test_T1w.nii.gz', '/path/to/sub-045_ses-retest_T1w.nii.gz'],
     ...     False,
-    ...     False,
     ...     'T1w',
     ... )
     '/path/to/sub-045_T1w.nii.gz'
+
+    >>> fix_multi_source_name(
+    ...     ['/path/to/dwi/sub-045_ses-test_dwi.nii.gz'],
+    ...     False,
+    ...     'none',
+    ... )
+    '/path/to/anat/sub-045_dwi.nii.gz'
     """
     import os
 
@@ -360,7 +369,7 @@ def fix_multi_source_name(in_files, dwi_only, include_session, anatomical_contra
     base = os.sep.join(folders)
 
     subject_label = in_file.split('_', 1)[0].split('-')[1]
-    if dwi_only:
+    if anatomical_contrast == 'none':
         anatomical_contrast = 'dwi'
         base = base.replace('/dwi', '/anat')
 

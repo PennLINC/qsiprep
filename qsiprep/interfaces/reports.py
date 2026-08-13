@@ -219,7 +219,7 @@ class DiffusionSummaryInputSpec(BaseInterfaceInputSpec):
     impute_slice_threshold = traits.CFloat(desc='threshold for imputing a slice')
     hmc_transform = traits.Str(mandatory=True, desc='transform used during HMC')
     hmc_model = traits.Str(desc='model used for hmc')
-    b0_to_t1w_transform = traits.Enum('Rigid', 'Affine', desc='Transform type for coregistration')
+    b0_to_anat_transform = traits.Enum('Rigid', 'Affine', desc='Transform type for coregistration')
     denoise_method = traits.Str(desc='method used for image denoising')
     dwi_denoise_window = traits.Either(
         traits.Int(), traits.Str(), desc='window size for dwidenoise'
@@ -253,7 +253,7 @@ class DiffusionSummary(SummaryInterface):
         return DIFFUSION_TEMPLATE.format(
             pedir=pedir,
             sdc=self.inputs.distortion_correction,
-            coregistration=self.inputs.b0_to_t1w_transform,
+            coregistration=self.inputs.b0_to_anat_transform,
             hmc_transform=self.inputs.hmc_transform,
             hmc_model=self.inputs.hmc_model,
             denoise_method=self.inputs.denoise_method,
