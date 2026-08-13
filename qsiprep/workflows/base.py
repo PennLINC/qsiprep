@@ -251,7 +251,6 @@ to workflows in *QSIPrep*'s documentation]\
     bidssrc = pe.Node(
         BIDSDataGrabber(
             subject_data=subject_data,  # Data has already been selected with sub/ses filters
-            dwi_only=config.workflow.anat_modality == 'none',
             anat_only=config.workflow.anat_only,
             anatomical_contrast=config.workflow.anat_modality,
         ),
@@ -324,7 +323,6 @@ to workflows in *QSIPrep*'s documentation]\
         (bidssrc, bids_info, [
             ((info_modality,
               fix_multi_source_name,
-              config.workflow.anat_modality == 'none',
               config.workflow.subject_anatomical_reference == 'sessionwise',
               config.workflow.anat_modality),
              'in_file'),
@@ -341,7 +339,6 @@ to workflows in *QSIPrep*'s documentation]\
         (bidssrc, ds_report_summary, [
             ((info_modality,
               fix_multi_source_name,
-              config.workflow.anat_modality == 'none',
               config.workflow.subject_anatomical_reference == 'sessionwise',
               config.workflow.anat_modality),
              'source_file'),
@@ -350,7 +347,6 @@ to workflows in *QSIPrep*'s documentation]\
         (bidssrc, ds_report_about, [
             ((info_modality,
               fix_multi_source_name,
-              config.workflow.anat_modality == 'none',
               config.workflow.subject_anatomical_reference == 'sessionwise',
               config.workflow.anat_modality),
              'source_file'),
@@ -423,7 +419,6 @@ to workflows in *QSIPrep*'s documentation]\
 
     anat_source_file = fix_multi_source_name(
         subject_data[info_modality],
-        dwi_only=config.workflow.anat_modality == 'none',
         include_session=config.workflow.subject_anatomical_reference == 'sessionwise',
         anatomical_contrast=config.workflow.anat_modality,
     )

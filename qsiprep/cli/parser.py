@@ -30,44 +30,133 @@ from .. import config
 from ..utils.gpu import GPU_ALIASES, GPU_TASKS
 from ..utils.misc import parse_denoise_method
 
+B0_TO_ANAT_TRANSFORM_DEFAULT = 'Rigid'
+"""Default for ``--b0-to-anat-transform``.
+
+Applied after parsing rather than by argparse, because the option is declared with
+``default=SUPPRESS`` so that its mutual exclusion with the deprecated
+``--b0-to-t1w-transform`` is checked reliably.
+"""
+
 
 def _build_parser(**kwargs):
     """Build parser object.
 
     ``kwargs`` are passed to ``argparse.ArgumentParser`` (mainly useful for debugging).
     """
-    from argparse import Action, ArgumentDefaultsHelpFormatter, ArgumentParser
+    from argparse import (
+        SUPPRESS,
+        Action,
+        ArgumentDefaultsHelpFormatter,
+        ArgumentParser,
+    )
     from functools import partial
     from pathlib import Path
 
     from packaging.version import Version
 
+    # Deprecated options: {option string: (version it is removed in, what happens instead)}
     deprecations = {
-        # parser attribute name: (replacement flag, version slated to be removed in)
-        'dwi_only': ('--anat-modality none', '0.23.0'),
-        'prefer_dedicated_fmaps': (None, '0.23.0'),
-        'dwi_no_biascorr': ('--b1-biascorrect-stage none', '0.23.0'),
-        'b0_motion_corr_to': (None, '0.23.0'),
-        'b0_to_t1w_transform': ('--b0-t0-anat-transform', '0.23.0'),
-        'longitudinal': ('--subject-anatomical-reference unbiased', '0.24.0'),
+        '--dwi-only': ('27.0.0', 'Enabling `--anat-modality none` instead.'),
+        '--dwi-no-biascorr': ('27.0.0', 'Enabling `--b1-biascorrect-stage none` instead.'),
+        '--longitudinal': (
+            '27.0.0',
+            'Enabling `--subject-anatomical-reference unbiased` instead.',
+        ),
+        '--prefer-dedicated-fmaps': (
+            '27.0.0',
+            'It has no effect. Which fieldmap is applied to which DWI series is determined '
+            'by the fieldmaps\' "B0FieldIdentifier"/"B0FieldSource" (or "IntendedFor") '
+            'metadata.',
+        ),
+        '--b0-motion-corr-to': (
+            '27.0.0',
+            'Later versions will always use the "iterative" approach.',
+        ),
+        '--b0-to-t1w-transform': ('27.0.0', 'Please use `--b0-to-anat-transform` instead.'),
     }
 
+    # Deprecated flags that enable their replacement automatically:
+    # {option string: (replacement option, its namespace attribute, the value it is set to)}
+    forwarded_deprecations = {
+        '--dwi-only': ('--anat-modality', 'anat_modality', 'none'),
+        '--dwi-no-biascorr': ('--b1-biascorrect-stage', 'b1_biascorrect_stage', 'none'),
+        '--longitudinal': (
+            '--subject-anatomical-reference',
+            'subject_anatomical_reference',
+            'unbiased',
+        ),
+    }
+
+    def _warn_deprecated(option_string):
+        removed_in, detail = deprecations[option_string]
+        print(
+            f'{option_string} has been deprecated and will be removed in {removed_in}. {detail}',
+            file=sys.stderr,
+        )
+
     class DeprecatedAction(Action):
-        def __init__(self, option_strings, dest, **kwargs):
-            super().__init__(option_strings, dest, nargs=0, **kwargs)
+        """Warn that a deprecated option is ignored, and keep it out of the namespace.
+
+        Declared with ``default=SUPPRESS`` so the dest never reaches the config object.
+        """
+
+        def __init__(self, option_strings, dest, nargs=0, **kwargs):
+            super().__init__(option_strings, dest, nargs=nargs, **kwargs)
 
         def __call__(self, parser, namespace, values, option_string=None):
-            new_opt, rem_vers = deprecations.get(self.dest, (None, None))
-            msg = (
-                f'{self.option_strings} has been deprecated and will be removed in '
-                f'{rem_vers or "a later version"}.'
-            )
-            if new_opt:
-                msg += f' Please use `{new_opt}` instead.'
-            print(msg, file=sys.stderr)
-            # Remove the attribute if it exists (argparse may have set it)
-            if hasattr(namespace, self.dest):
-                delattr(namespace, self.dest)
+            _warn_deprecated(option_string or self.option_strings[0])
+
+    class DeprecatedForwardAction(Action):
+        """Warn about a deprecated flag, and record that its replacement must be enabled.
+
+        The replacement is applied after the whole command line has been read, so the
+        outcome does not depend on the order the options were given in.
+        """
+
+        def __init__(self, option_strings, dest, nargs=0, **kwargs):
+            super().__init__(option_strings, dest, nargs=nargs, **kwargs)
+
+        def __call__(self, parser, namespace, values, option_string=None):
+            option_string = option_string or self.option_strings[0]
+            _warn_deprecated(option_string)
+            pending = getattr(namespace, '_forwarded_deprecations', [])
+            namespace._forwarded_deprecations = [*pending, option_string]
+
+    class DeprecatedStoreAction(Action):
+        """Warn about a deprecated option, then store its value like ``store`` would."""
+
+        def __call__(self, parser, namespace, values, option_string=None):
+            _warn_deprecated(option_string or self.option_strings[0])
+            setattr(namespace, self.dest, values)
+
+    class DeprecationForwardingParser(ArgumentParser):
+        """Enables the replacements for any deprecated options that were given."""
+
+        def parse_known_args(self, args=None, namespace=None):
+            namespace, extras = super().parse_known_args(args, namespace)
+
+            for option_string in getattr(namespace, '_forwarded_deprecations', []):
+                replacement, dest, value = forwarded_deprecations[option_string]
+                current = getattr(namespace, dest)
+                if current not in (self.get_default(dest), value):
+                    self.error(
+                        f'{option_string} enables `{replacement} {value}`, which conflicts '
+                        f'with the requested `{replacement} {current}`.'
+                    )
+                setattr(namespace, dest, value)
+            if hasattr(namespace, '_forwarded_deprecations'):
+                del namespace._forwarded_deprecations
+
+            # --b0-to-t1w-transform was renamed; the two are mutually exclusive, so at
+            # most one of them is set here.
+            if hasattr(namespace, 'b0_to_t1w_transform'):
+                namespace.b0_to_anat_transform = namespace.b0_to_t1w_transform
+                del namespace.b0_to_t1w_transform
+            if not hasattr(namespace, 'b0_to_anat_transform'):
+                namespace.b0_to_anat_transform = B0_TO_ANAT_TRANSFORM_DEFAULT
+
+            return namespace, extras
 
     class ToDict(Action):
         def __call__(self, parser, namespace, values, option_string=None):
@@ -177,7 +266,7 @@ def _build_parser(**kwargs):
     currentv = Version(config.environment.version)
     is_release = not any((currentv.is_devrelease, currentv.is_prerelease, currentv.is_postrelease))
 
-    parser = ArgumentParser(
+    parser = DeprecationForwardingParser(
         description=f'{verstr}: q-Space Image Preprocessing workflows',
         formatter_class=ArgumentDefaultsHelpFormatter,
         **kwargs,
@@ -305,8 +394,9 @@ def _build_parser(**kwargs):
     g_subset.add_argument('--anat-only', action='store_true', help='Run anatomical workflows only')
     g_subset.add_argument(
         '--dwi-only',
-        action='store_true',
-        help='ignore anatomical (T1w/T2w) data and process DWIs only',
+        action=DeprecatedForwardAction,
+        default=SUPPRESS,
+        help='DEPRECATED: this flag now enables `--anat-modality none`. Use that instead.',
     )
     g_subset.add_argument(
         '--boilerplate-only',
@@ -384,8 +474,12 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         '--longitudinal',
-        action=DeprecatedAction,
-        help='Treat dataset as longitudinal - may increase runtime',
+        action=DeprecatedForwardAction,
+        default=SUPPRESS,
+        help=(
+            'DEPRECATED: this flag now enables `--subject-anatomical-reference unbiased`. '
+            'Use that instead.'
+        ),
     )
     g_conf.add_argument(
         '--subject-anatomical-reference',
@@ -463,8 +557,9 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         '--dwi-no-biascorr',
-        action='store_true',
-        help='DEPRECATED: see --b1-biascorrect-stage',
+        action=DeprecatedForwardAction,
+        default=SUPPRESS,
+        help='DEPRECATED: this flag now enables `--b1-biascorrect-stage none`. Use that instead.',
     )
     g_conf.add_argument(
         '--anat-biascorrect',
@@ -546,13 +641,28 @@ How to combine images across distorted groups.
     )
 
     g_coreg = parser.add_argument_group('Options for dwi-to-Anatomical coregistration')
-    g_coreg.add_argument(
-        '--b0-to-t1w-transform',
+    # Both are declared with default=SUPPRESS so that "was this given?" is just
+    # hasattr. argparse's own mutual-exclusion check compares the parsed value against
+    # the default by identity, which would miss `--b0-to-anat-transform Rigid` when
+    # 'Rigid' happens to be interned; against SUPPRESS it always fires. The default is
+    # applied in DeprecationForwardingParser instead.
+    g_b0_to_anat = g_coreg.add_mutually_exclusive_group()
+    g_b0_to_anat.add_argument(
+        '--b0-to-anat-transform',
         action='store',
-        default='Rigid',
+        default=SUPPRESS,
         choices=['Rigid', 'Affine'],
-        help='Degrees of freedom when registering b0 to anatomical images. '
-        '6 degrees (rotation and translation) are used by default.',
+        help='Degrees of freedom when registering b0 to anatomical images: '
+        '6 (Rigid, rotation and translation) or 12 (Affine). '
+        f'(default: {B0_TO_ANAT_TRANSFORM_DEFAULT})',
+    )
+    g_b0_to_anat.add_argument(
+        '--b0-to-t1w-transform',
+        action=DeprecatedStoreAction,
+        default=SUPPRESS,
+        choices=['Rigid', 'Affine'],
+        help='DEPRECATED: renamed to `--b0-to-anat-transform`, which this option now sets. '
+        'Use that instead.',
     )
     g_coreg.add_argument(
         '--intramodal-template-iters',
@@ -585,11 +695,12 @@ How to combine images across distorted groups.
     g_moco = parser.add_argument_group('Specific options for motion correction and coregistration')
     g_moco.add_argument(
         '--b0-motion-corr-to',
-        action='store',
+        action=DeprecatedStoreAction,
         default='iterative',
         choices=['iterative', 'first'],
-        help='align to the "first" b0 volume or do an "iterative" registration'
-        ' of all b0 images to their midpoint image (default: iterative)',
+        help='DEPRECATED: align to the "first" b0 volume or do an "iterative" registration '
+        'of all b0 images to their midpoint image. '
+        'Later versions will always use "iterative".',
     )
     g_moco.add_argument(
         '--hmc-transform',
@@ -667,6 +778,14 @@ How to combine images across distorted groups.
 
     # Fieldmap options
     g_fmap = parser.add_argument_group('Specific options for handling fieldmaps')
+    g_fmap.add_argument(
+        '--prefer-dedicated-fmaps',
+        action=DeprecatedAction,
+        default=SUPPRESS,
+        help='DEPRECATED: this flag has no effect. Which fieldmap is applied to which DWI '
+        'series is determined by the fieldmaps\' "B0FieldIdentifier"/"B0FieldSource" '
+        '(or "IntendedFor") metadata.',
+    )
     g_fmap.add_argument(
         '--pepolar-method',
         action='store',
