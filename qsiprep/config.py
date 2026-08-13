@@ -428,6 +428,8 @@ class execution(_Config):
     # the command line) as spatial references for outputs."""
     reports_only = False
     """Only build the reports, based on the reportlets found in a cached working directory."""
+    report_output_level = None
+    """Directory level at which the HTML reports should be written."""
     run_uuid = f'{strftime("%Y%m%d-%H%M%S")}_{uuid4()}'
     """Unique identifier of this particular run."""
     participant_label = None
@@ -559,9 +561,11 @@ class workflow(_Config):
     """Any value in the .bval file less than this will be considered a b=0 image."""
     b0_motion_corr_to = None
     """Perform SHORELine's initial b=0-based registration to first volume?
-    Or make a template? Either 'iterative' or 'first'"""
-    b0_to_t1w_transform = None
-    """Transformation model for intramodal registration."""
+    Or make a template? Either 'iterative' or 'first'. DEPRECATED: later versions will
+    always use 'iterative'."""
+    b0_to_anat_transform = None
+    """Transformation model for b=0-to-anatomical coregistration. Either 'Rigid' or
+    'Affine'."""
     anat_biascorrect = None
     """Whether to N4-correct anatomicals: ``n4``, ``auto`` or ``none``."""
     b1_biascorrect_stage = None
@@ -577,10 +581,6 @@ class workflow(_Config):
     """How to combine images across distortion groups (concatenate, average or none)."""
     dwi_denoise_window = None
     """Window size in voxels for image-based denoising, integer or "auto"."""
-    dwi_no_biascorr = None
-    """DEPRECATED: see --b1-biascorrect-stage."""
-    dwi_only = False
-    """DEPRECATED: True if anat_modality is 'none'."""
     diffprep_config = None
     """Configuration JSON for running TORTOISE DIFFPREP."""
     eddy_config = None
@@ -607,8 +607,6 @@ class workflow(_Config):
     """Transformation used for building the intramodal template."""
     subject_anatomical_reference = None
     """How should the anatomical space be defined: sessionwise, unbiased or first-lex"""
-    longitudinal = False
-    """Run FreeSurfer ``recon-all`` with the ``-longitudinal`` flag. [Deprecated]"""
     no_b0_harmonization = False
     """Skip re-scaling dwi scans to have matching b=0 intensities."""
     output_resolution = None

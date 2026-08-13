@@ -71,7 +71,7 @@ template. For this reason, spatial normalization is typically done *after*
 models are fit.
 
 All outputs will be registered to the T1w image (or the
-AC-PC aligned b=0 template if ``--dwi-only`` was specified) but will have
+AC-PC aligned b=0 template if ``--anat-modality none`` was specified) but will have
 an isotropic voxel size. Furthermore, all outputs are aligned according to the
 AC-PC convention: the coordinates are changed from the native scanner
 coordinates to a new system where $0, 0, 0$ is where the midline intersects
@@ -168,30 +168,30 @@ to apply to most generic sequences. Depending on your sequence
 and sampling scheme, you can elect to enable, disable or alter the behavior
 of these steps to better match your data.
 
-+-----------------+-----------------------------+---------------------------+------------------------------+
-|                 |         Denoising           |      Gibbs Unringing      |    B1 Bias Field Correction  |
-+=================+=============================+===========================+==============================+
-| Description     |   Reduce random noise       |   Remove spatial ringing  |    Remove spatial non-       |
-|                 |   in images.                |   artifact from images.   |    uniformity of images.     |
-+-----------------+-----------------------------+---------------------------+------------------------------+
-| Algorithms      |  ``dwidenoise`` (MRtrix3)   | ``mrdegibbs`` (MRtrix3)   | ``dwibiascorrect``           |
-|                 |  ``patch2self`` (DIPY)      |                           | (ANTs/MRtrix3)               |
-+-----------------+-----------------------------+---------------------------+------------------------------+
-| Default         |  ``dwidenoise`` (MRtrix3)   | None applied              | ``dwibiascorrect``           |
-|                 |                             |                           | (ANTs/MRtrix3)               |
-+-----------------+-----------------------------+---------------------------+------------------------------+
-| Disable with    |  ``--denoise-method none``  | Disabled by default       | ``--dwi-no-biascorr``        |
-+-----------------+-----------------------------+---------------------------+------------------------------+
-| Change behavior |  ``--dwi-denoise-window N`` | ``--unringing-method``    | No parameters                |
-| with            |  changes denoising window   | enables Gibbs unringing   |                              |
-|                 |  to N voxels                |                           |                              |
-+-----------------+-----------------------------+---------------------------+------------------------------+
-| Notes           |  Set the window to ``auto`` | Technically only supposed | Uses                         |
-|                 |  or a specific voxel number | to be run on full Fourier | N4BiasFieldCorrection on     |
-|                 |                             | acquisitions.             | b=0 images, applies          |
-|                 |                             |                           | correction to the whole      |
-|                 |                             |                           | series                       |
-+-----------------+-----------------------------+---------------------------+------------------------------+
++-----------------+-----------------------------+---------------------------+----------------------------------+
+|                 |         Denoising           |      Gibbs Unringing      |    B1 Bias Field Correction      |
++=================+=============================+===========================+==================================+
+| Description     |   Reduce random noise       |   Remove spatial ringing  |    Remove spatial non-           |
+|                 |   in images.                |   artifact from images.   |    uniformity of images.         |
++-----------------+-----------------------------+---------------------------+----------------------------------+
+| Algorithms      |  ``dwidenoise`` (MRtrix3)   | ``mrdegibbs`` (MRtrix3)   | ``dwibiascorrect``               |
+|                 |  ``patch2self`` (DIPY)      |                           | (ANTs/MRtrix3)                   |
++-----------------+-----------------------------+---------------------------+----------------------------------+
+| Default         |  ``dwidenoise`` (MRtrix3)   | None applied              | ``dwibiascorrect``               |
+|                 |                             |                           | (ANTs/MRtrix3)                   |
++-----------------+-----------------------------+---------------------------+----------------------------------+
+| Disable with    |  ``--denoise-method none``  | Disabled by default       | ``--b1-biascorrect-stage none``  |
++-----------------+-----------------------------+---------------------------+----------------------------------+
+| Change behavior |  ``--dwi-denoise-window N`` | ``--unringing-method``    | ``--b1-biascorrect-stage``       |
+| with            |  changes denoising window   | enables Gibbs unringing   | selects the stage: final         |
+|                 |  to N voxels                |                           | (default), none or legacy        |
++-----------------+-----------------------------+---------------------------+----------------------------------+
+| Notes           |  Set the window to ``auto`` | Technically only supposed | Uses                             |
+|                 |  or a specific voxel number | to be run on full Fourier | N4BiasFieldCorrection on         |
+|                 |                             | acquisitions.             | b=0 images, applies              |
+|                 |                             |                           | correction to the whole          |
+|                 |                             |                           | series                           |
++-----------------+-----------------------------+---------------------------+----------------------------------+
 
 Not included in this table is the b=0 intensity harmonization step, which
 applies simple scaling if there is more than one NIfTI file being processed.
