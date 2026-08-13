@@ -1129,11 +1129,12 @@ class DIFFPREPMotionParams(SimpleInterface):
 
     The output columns are the leading 6 parameters of TORTOISE's
     ``OkanQuadraticTransform`` in SPM realignment-parameter order
-    (translation_x/y/z in mm of LPS physical coordinate, rotation_x/y/z as
-    Euler angles in radians). The remaining 18 Okan parameters encode the
-    eddy-current polynomial + rotation/eddy centre and are intentionally
-    dropped -- they are not rigid head motion. Units match the eddy and
-    SHORELine SPM motion files (translation mm, rotation radians).
+    (translation_x/y/z in mm, rotation_x/y/z as Euler angles in radians),
+    converted from TORTOISE's native LPS to **RAS+** so they match the
+    eddy/SHORELine motion files (which qsiprep now also exports in RAS via
+    :func:`~qsiprep.interfaces.gradients.get_ras_motion_params`). The remaining
+    18 Okan parameters encode the eddy-current polynomial + rotation/eddy
+    centre and are intentionally dropped -- they are not rigid head motion.
     """
 
     input_spec = _DIFFPREPMotionParamsInputSpec
@@ -1142,7 +1143,10 @@ class DIFFPREPMotionParams(SimpleInterface):
     def _run_interface(self, runtime):
         rows = _read_okan_transformations(self.inputs.transformations_file)
         params = np.asarray(rows, dtype=float)
-        spm_motion = params[:, :6]
+        # Okan params are LPS physical; LPS->RAS is a 180deg rotation about z,
+        # so negate the x and y components of both translation and rotation.
+        spm_motion = params[:, :6].copy()
+        spm_motion[:, [0, 1, 3, 4]] *= -1.0
         spm_motion_file = fname_presuffix(
             self.inputs.transformations_file,
             suffix='_spm_rp.txt',

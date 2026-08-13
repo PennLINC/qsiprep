@@ -243,7 +243,7 @@ class CombineMotions(SimpleInterface):
         output_spm_fname = os.path.join(runtime.cwd, 'spm_movpar.txt')
         ref_file = self.inputs.ref_file
         for motion_file in self.inputs.transform_files:
-            collected_motion.append(get_fsl_motion_params(motion_file, ref_file, runtime.cwd))
+            collected_motion.append(get_ras_motion_params(motion_file, ref_file))
 
         final_motion = np.row_stack(collected_motion)
         cols = [
@@ -719,6 +719,50 @@ def get_fsl_motion_params(itk_file, ref_file, working_dir):
     scale = Z
     shear = S
 
+    return np.concatenate([scale, shear, rotation, translation])
+
+
+def get_ras_motion_params(itk_file, ref_file):
+    """Decompose a per-volume rigid transform into **RAS+** motion parameters.
+
+    Mirror of :func:`get_fsl_motion_params`, but the translation (mm) and
+    rotation (rotation-vector radians) are expressed in the scanner-independent
+    RAS+ world frame instead of FSL's radiological frame. eddy/SHORELine report
+    FSL and DIFFPREP reports LPS; decomposing every backend's transform in RAS
+    removes those per-backend axis flips, so the exported motion is directly
+    comparable to RAS-defined ground truth regardless of grid orientation.
+    """
+    import SimpleITK as sitk
+
+    tfm = sitk.ReadTransform(itk_file)
+    try:
+        aff = sitk.AffineTransform(tfm)
+    except RuntimeError:  # composite with a single affine
+        aff = sitk.AffineTransform(sitk.CompositeTransform(tfm).GetNthTransform(0))
+    mat = np.array(aff.GetMatrix()).reshape(3, 3)
+    center = np.array(aff.GetCenter())
+    offset = np.array(aff.GetTranslation())
+    # ITK stores transforms in LPS: y = mat @ (x - center) + center + offset
+    m_lps = np.eye(4)
+    m_lps[:3, :3] = mat
+    m_lps[:3, 3] = offset + center - mat @ center
+    # LPS -> RAS flips x and y
+    conv = np.diag([-1.0, -1.0, 1.0, 1.0])
+    m_ras = conv @ m_lps @ conv
+
+    _, rotmat, scale, shear = decompose44(m_ras)
+    rotation = R.from_matrix(rotmat).as_rotvec()
+
+    src_img = nb.load(ref_file)
+    src_center = (np.array(src_img.shape[:3]) - 1) / 2
+    center_mm = nb.affines.apply_affine(src_img.affine, src_center) - src_img.affine[:3, 3]
+    translation = np.zeros(3)
+    for i in range(3):
+        translation[i] = (m_ras[i, 3] - center_mm[i]) + (
+            m_ras[i, 0] * center_mm[0]
+            + m_ras[i, 1] * center_mm[1]
+            + m_ras[i, 2] * center_mm[2]
+        )
     return np.concatenate([scale, shear, rotation, translation])
 
 
