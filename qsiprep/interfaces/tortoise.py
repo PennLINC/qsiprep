@@ -1121,6 +1121,7 @@ class _DIFFPREPMotionParamsInputSpec(BaseInterfaceInputSpec):
 
 class _DIFFPREPMotionParamsOutputSpec(TraitedSpec):
     spm_motion_file = File(exists=True)
+    diffprep_ec_file = File(exists=True)
 
 
 class DIFFPREPMotionParams(SimpleInterface):
@@ -1155,6 +1156,16 @@ class DIFFPREPMotionParams(SimpleInterface):
         )
         np.savetxt(spm_motion_file, spm_motion)
         self._results['spm_motion_file'] = spm_motion_file
+
+        # Okan eddy-current + rotation/eddy-centre parameters (cols 6-23) -> headed TSV
+        # confounds columns (diffprep_ec_NN): ~3 linear x/y/z + quadratic + centres.
+        ec = params[:, 6:24]
+        ec_file = fname_presuffix(
+            self.inputs.transformations_file, suffix='_ec.tsv', use_ext=False, newpath=runtime.cwd
+        )
+        header = '\t'.join(f'diffprep_ec_{i:02d}' for i in range(ec.shape[1]))
+        np.savetxt(ec_file, ec, delimiter='\t', header=header, comments='')
+        self._results['diffprep_ec_file'] = ec_file
         return runtime
 
 

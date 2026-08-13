@@ -303,12 +303,30 @@ class ExtendedEddy(fsl.Eddy):
         return super()._format_arg(name, spec, value)
 
 
+def _fsl_to_ras_axis_flip(ref_file):
+    """Per-axis ±1 to convert FSL rigid params to RAS+ for ``ref_file``.
+
+    FSL reports motion in its radiological voxel frame; the RAS direction of each
+    axis follows the sign of the affine diagonal, with FSL flipping x for a
+    neurological (positive-determinant) image. Applied to both translation and
+    (in-frame Euler) rotation components. Assumes an axis-aligned affine, which
+    holds for essentially all DWI acquisitions.
+    """
+    aff = nb.load(ref_file).affine[:3, :3]
+    flip = np.sign(np.diag(aff))
+    if np.linalg.det(aff) > 0:
+        flip[0] *= -1
+    return flip
+
+
 class Eddy2SPMMotionInputSpec(BaseInterfaceInputSpec):
     eddy_motion = File(exists=True)
+    ref_file = File(exists=True, desc='reference image defining the FSL<->RAS axis convention')
 
 
 class Eddy2SPMMotionOututSpec(TraitedSpec):
     spm_motion_file = File(exists=True)
+    eddy_ec_file = File(exists=True)
 
 
 class Eddy2SPMMotion(SimpleInterface):
@@ -316,14 +334,33 @@ class Eddy2SPMMotion(SimpleInterface):
     output_spec = Eddy2SPMMotionOututSpec
 
     def _run_interface(self, runtime):
-        # Load the eddy motion params File
+        # eddy_parameters columns: 0-5 are rigid motion (3 translation mm, 3 rotation rad) in
+        # FSL's radiological frame; the remaining columns are the eddy-current field
+        # coefficients (10 for --flm=quadratic: ~3 linear x/y/z + ~6 quadratic + 1 spare).
         eddy_motion = np.loadtxt(self.inputs.eddy_motion)
-        spm_motion = eddy_motion[:, :6]
+        if eddy_motion.ndim == 1:
+            eddy_motion = eddy_motion[np.newaxis, :]
+
+        # Rigid motion, converted FSL -> RAS+ so it matches the SHORELine/DIFFPREP export.
+        spm_motion = eddy_motion[:, :6].astype(float)
+        if isdefined(self.inputs.ref_file):
+            flip = _fsl_to_ras_axis_flip(self.inputs.ref_file)
+            spm_motion[:, :3] *= flip
+            spm_motion[:, 3:6] *= flip
         spm_motion_file = fname_presuffix(
             self.inputs.eddy_motion, suffix='spm_rp.txt', use_ext=False, newpath=runtime.cwd
         )
         np.savetxt(spm_motion_file, spm_motion)
         self._results['spm_motion_file'] = spm_motion_file
+
+        # Eddy-current field coefficients -> headed TSV confounds columns (eddy_ec_NN).
+        ec = np.atleast_2d(eddy_motion[:, 6:])
+        ec_file = fname_presuffix(
+            self.inputs.eddy_motion, suffix='eddy_ec.tsv', use_ext=False, newpath=runtime.cwd
+        )
+        header = '\t'.join(f'eddy_ec_{i:02d}' for i in range(ec.shape[1]))
+        np.savetxt(ec_file, ec, delimiter='\t', header=header, comments='')
+        self._results['eddy_ec_file'] = ec_file
 
         return runtime
 

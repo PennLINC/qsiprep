@@ -70,6 +70,7 @@ was also calculated.
             fields=[
                 'sliceqc_file',
                 'motion_params',
+                'ec_file',
                 'bval_file',
                 'bvec_file',
                 'original_files',
@@ -79,7 +80,8 @@ was also calculated.
         name='inputnode',
     )
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=['confounds_file', 'imputed_images']), name='outputnode'
+        niu.IdentityInterface(fields=['confounds_file', 'imputed_images', 'confounds_metadata']),
+        name='outputnode',
     )
 
     # Frame displacement
@@ -102,13 +104,17 @@ was also calculated.
         (add_motion_headers, concat, [('out_file', 'motion')]),
         (inputnode, concat, [
             ('sliceqc_file', 'sliceqc_file'),
+            ('ec_file', 'ec'),
             ('bval_file', 'original_bvals'),
             ('bvec_file', 'original_bvecs'),
             ('original_files', 'original_files'),
             ('denoising_confounds', 'denoising_confounds'),
         ]),
         # Set outputs
-        (concat, outputnode, [('confounds_file', 'confounds_file')]),
+        (concat, outputnode, [
+            ('confounds_file', 'confounds_file'),
+            ('confounds_metadata', 'confounds_metadata'),
+        ]),
     ])  # fmt:skip
 
     return workflow

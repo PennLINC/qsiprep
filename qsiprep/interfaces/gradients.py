@@ -759,9 +759,7 @@ def get_ras_motion_params(itk_file, ref_file):
     translation = np.zeros(3)
     for i in range(3):
         translation[i] = (m_ras[i, 3] - center_mm[i]) + (
-            m_ras[i, 0] * center_mm[0]
-            + m_ras[i, 1] * center_mm[1]
-            + m_ras[i, 2] * center_mm[2]
+            m_ras[i, 0] * center_mm[0] + m_ras[i, 1] * center_mm[1] + m_ras[i, 2] * center_mm[2]
         )
     return np.concatenate([scale, shear, rotation, translation])
 
