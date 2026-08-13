@@ -96,16 +96,16 @@ the package is large or non-release versions are required.
 The image `must be rebuilt <#rebuilding-docker-image>`_ after any
 dependency changes.
 
-Python dependencies should generally be included in the ``REQUIRES``
-list in `qsiprep/info.py
-<https://github.com/pennlinc/qsiprep/blob/29133e5e9f92aae4b23dd897f9733885a60be311/qsiprep/info.py#L46-L61>`_.
+Python dependencies should generally be included in the ``dependencies``
+list in `pyproject.toml
+<https://github.com/pennlinc/qsiprep/blob/main/pyproject.toml>`_.
 If the latest version in `PyPI <https://pypi.org/>`_ is sufficient,
 then no further action is required.
 
 For large Python dependencies where there will be a benefit to
 pre-compiled binaries, `conda <https://github.com/conda/conda>`_ packages
-may also be added to the ``conda install`` line in the `Dockerfile
-<https://github.com/pennlinc/qsiprep/blob/29133e5e9f92aae4b23dd897f9733885a60be311/Dockerfile#L46>`_.
+may also be added to the `Dockerfile
+<https://github.com/pennlinc/qsiprep/blob/main/Dockerfile>`_.
 
 Non-Python dependencies must also be installed in the Dockerfile, via a
 ``RUN`` command.

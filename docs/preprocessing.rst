@@ -89,7 +89,7 @@ of the file you will send to ``--bids-filter-file``. The queries in *QSIPrep* ar
 
 Each query has several "entities", which can be modified by filters. The list of
 supported entities is `here
-<https://github.com/bids-standard/pybids/blob/master/bids/layout/config/bids.json>`__.
+<https://github.com/bids-standard/pybids/blob/main/src/bids/layout/config/bids.json>`__.
 To filter data, modify the queries by changing one or more of the supported
 entities in the BIDS filter file. The general format of the filter file is::
 
@@ -417,7 +417,7 @@ A single-line tsv file (``desc-image_qc.tsv``) is created for each output
 image. This file is particularly useful for comparing the relative quality
 across subjects before deciding who to include in a group analysis. The
 columns in this file come from DSI Studio's QC calculation and is described
-in [Yeh2019]_. Columns prefixed by ``raw_`` reflect QC measurements from the
+in :footcite:t:`yeh2019`. Columns prefixed by ``raw_`` reflect QC measurements from the
 data before preprocessing. Columns prefixed by ``t1_`` or ``mni_`` contain QC
 metrics calculated on the preprocessed data. Motion parameter summaries are
 also provided, such as the mean and max of framewise displacement
@@ -568,7 +568,7 @@ Handling Lesions and abnormalities
 
 When processing images from patients with focal brain lesions (e.g., stroke, tumor
 resection), it is possible to provide a lesion mask to be used during spatial
-normalization to MNI-space [Brett2001]_.
+normalization to MNI-space :footcite:p:`brett2001`.
 ANTs will use this mask to minimize warping of healthy tissue into damaged
 areas (or vice-versa).
 Lesion masks should be binary NIfTI images (damaged areas = 1, everywhere else = 0)
@@ -891,7 +891,7 @@ The are three kinds of SDC available in *QSIPrep*:
 
   1. :ref:`sdc_pepolar` (also called **blip-up/blip-down**):
      This is the implementation from sdcflows, using 3dQwarp to
-     correct a DWI series using a fieldmap in the fmaps directory [Jezzard1995]_.
+     correct a DWI series using a fieldmap in the fmaps directory :footcite:p:`jezzard1995`.
      The reverse phase encoding direction scan can come from the fieldmaps directory
      or the dwi directory. If using :ref:`fsl_wf`, then ``TOPUP`` is used for this correction.
      Also relevant is :ref:`best_b0`.
