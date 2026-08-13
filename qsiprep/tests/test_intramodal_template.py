@@ -20,6 +20,7 @@ def _config():
 
     config.execution.sloppy = False
     config.nipype.omp_nthreads = 1
+    config.workflow.b0_to_anat_transform = 'Rigid'
     return config
 
 

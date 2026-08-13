@@ -24,7 +24,7 @@ from pathlib import Path
 
 from nireports.assembler.report import Report
 
-from qsiprep import data
+from qsiprep import config, data
 
 
 def run_reports(
@@ -65,68 +65,82 @@ def run_reports(
 
 
 def generate_reports(
-    processing_list, output_level, output_dir, run_uuid, bootstrap_file=None, work_dir=None
+    processing_list,
+    subject_anatomical_reference,
+    report_output_level,
+    output_dir,
+    run_uuid,
+    bootstrap_file=None,
+    work_dir=None,
 ):
     """Generate reports for a list of processing groups.
 
     Parameters
     ----------
-    output_level {"sessionwise", "unbiased", "first-lex"}
+    processing_list : :obj:`list` of :obj:`tuple`
+        (subject label, list of session labels) for each processing group.
+    subject_anatomical_reference : {"sessionwise", "unbiased", "first-lex"}
+        Determines what each report covers.
+        With "sessionwise" there is one report per session,
+        otherwise there is one report per subject.
+    report_output_level : {"root", "subject", "session"}
+        Directory level at which the reports are written.
+        Session-level reports are only possible for session-wise reports,
+        so subject-wise reports fall back to the subject level with a warning.
     """
+    bootstrap_file = data.load('reports-spec.yml') if bootstrap_file is None else bootstrap_file
+
     errors = []
     for subject_label, session_list in processing_list:
-        subject_id = subject_label[4:] if subject_label.startswith('sub-') else subject_label
+        subject_id = subject_label.removeprefix('sub-')
 
-        if bootstrap_file is not None:
-            # If a config file is precised, we do not override it
-            html_report = 'report.html'
+        if subject_anatomical_reference == 'sessionwise' and session_list:
+            # With session-wise anatomical processing,
+            # the session-wise anatomical reports are in here too.
+            session_ids = [session.removeprefix('ses-') for session in session_list]
         else:
-            # If there are only a few session for this subject,
-            # we aggregate them in a single visual report.
-            bootstrap_file = data.load('reports-spec.yml')
-            html_report = 'report.html'
+            # The report covers the subject as a whole.
+            session_ids = [None]
 
-        # We only make this one if it's all the sessions or just the anat and not sessionwise
-        if output_level != 'sessionwise':
+        for session_id in session_ids:
+            output_level = report_output_level
+            if output_level == 'session' and session_id is None:
+                output_level = 'subject'
+                config.loggers.workflow.warning(
+                    'Session-level reports were requested, '
+                    f'but the report for subject {subject_id} covers no single session. '
+                    'Writing out reports to subject level.'
+                )
+
+            if session_id is None:
+                html_report = f'sub-{subject_id}.html'
+                errorname = f'report-{run_uuid}-{subject_label}.err'
+                session_entity = {}
+            else:
+                html_report = f'sub-{subject_id}_ses-{session_id}.html'
+                errorname = f'report-{run_uuid}-{subject_label}-{session_id}.err'
+                session_entity = {'session': session_id}
+
+            if output_level == 'root':
+                report_dir = Path(output_dir)
+            elif output_level == 'subject':
+                report_dir = Path(output_dir) / f'sub-{subject_id}'
+            else:
+                report_dir = Path(output_dir) / f'sub-{subject_id}' / f'ses-{session_id}'
+
             report_error = run_reports(
-                output_dir,
+                report_dir,
                 subject_label,
                 run_uuid,
                 bootstrap_file=bootstrap_file,
                 out_filename=html_report,
                 reportlets_dir=output_dir,
-                errorname=f'report-{run_uuid}-{subject_label}.err',
+                errorname=errorname,
                 subject=subject_label,
+                **session_entity,
             )
             # If the report generation failed, append the subject label for which it failed
             if report_error is not None:
                 errors.append(report_error)
-
-        else:
-            # Beyond a certain number of sessions per subject,
-            # we separate the dwi reports per session
-            # If output_level is "sessionwise",
-            # the session-wise anatomical reports are in here too
-            session_list = [ses[4:] if ses.startswith('ses-') else ses for ses in session_list]
-
-            for session_label in session_list:
-                bootstrap_file = data.load('reports-spec.yml')
-                session_dir = output_dir / f'sub-{subject_id}' / f'ses-{session_label}'
-                html_report = f'sub-{subject_id}_ses-{session_label}.html'
-
-                report_error = run_reports(
-                    session_dir,
-                    subject_label,
-                    run_uuid,
-                    bootstrap_file=bootstrap_file,
-                    out_filename=html_report,
-                    reportlets_dir=output_dir,
-                    errorname=f'report-{run_uuid}-{subject_label}-{session_label}.err',
-                    subject=subject_label,
-                    session=session_label,
-                )
-                # If the report generation failed, append the subject label for which it failed
-                if report_error is not None:
-                    errors.append(report_error)
 
     return errors
