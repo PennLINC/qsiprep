@@ -428,6 +428,8 @@ class execution(_Config):
     # the command line) as spatial references for outputs."""
     reports_only = False
     """Only build the reports, based on the reportlets found in a cached working directory."""
+    report_output_level = None
+    """Directory level at which the HTML reports should be written."""
     run_uuid = f'{strftime("%Y%m%d-%H%M%S")}_{uuid4()}'
     """Unique identifier of this particular run."""
     participant_label = None

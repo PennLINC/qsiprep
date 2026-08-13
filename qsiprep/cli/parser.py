@@ -412,6 +412,20 @@ def _build_parser(**kwargs):
         help="Only generate reports, don't run workflows. This will only rerun report "
         'aggregation, not reportlet generation for specific nodes.',
     )
+    g_subset.add_argument(
+        '--report-output-level',
+        action='store',
+        choices=['auto', 'root', 'subject', 'session'],
+        default='auto',
+        help='Where should the HTML reports be written? '
+        '"root" will write them to the output directory. '
+        '"subject" will write them into each subject\'s directory. '
+        '"session" will write them into each session\'s directory. '
+        'The default is "auto", which is "session" when '
+        '--subject-anatomical-reference is "sessionwise" and "root" otherwise. '
+        'Reports that cover more than one session, or data without a session level, '
+        'are written to the subject level instead of the session level, with a warning.',
+    )
 
     g_conf = parser.add_argument_group('Workflow configuration')
     g_conf.add_argument(
@@ -919,6 +933,12 @@ def parse_args(args=None, namespace=None):
             'Please use --subject-anatomical-reference=first-lex instead.'
         )
         opts.subject_anatomical_reference = 'first-lex'
+
+    # Reports follow the anatomical processing level unless the user asked for a specific one
+    if opts.report_output_level == 'auto':
+        opts.report_output_level = (
+            'session' if opts.subject_anatomical_reference == 'sessionwise' else 'root'
+        )
 
     # Change anatomical_template based on infant parameter
     opts.anatomical_template = 'MNI152NLin2009cAsym'

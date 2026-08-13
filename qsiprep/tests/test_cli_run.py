@@ -147,6 +147,51 @@ long2 = {
 
 
 @pytest.mark.parametrize(
+    ('reference', 'requested', 'expected'),
+    [
+        ('sessionwise', 'auto', 'session'),
+        ('unbiased', 'auto', 'root'),
+        ('first-lex', 'auto', 'root'),
+        ('sessionwise', 'root', 'root'),
+        ('unbiased', 'session', 'session'),
+        ('unbiased', 'subject', 'subject'),
+    ],
+)
+def test_report_output_level(tmpdir, reference, requested, expected):
+    """Test that --report-output-level=auto is resolved from the anatomical reference."""
+    from qsiprep import config
+    from qsiprep.cli.parser import parse_args
+
+    full_name = f'report_output_level_{reference}_{requested}'
+
+    bids_dir = tmpdir / full_name
+    generate_bids_skeleton(str(bids_dir), long)
+
+    work_dir = tmpdir / f'work_{full_name}'
+    config.from_dict({'bids_dir': str(bids_dir), 'work_dir': str(work_dir)}, init=True)
+
+    parse_args(
+        [
+            str(bids_dir),
+            str(tmpdir / f'out_{full_name}'),
+            'participant',
+            '--participant-label',
+            '01',
+            '--subject-anatomical-reference',
+            reference,
+            '--report-output-level',
+            requested,
+            '--output-resolution',
+            '2',
+            '--work-dir',
+            str(work_dir),
+            '--skip-bids-validation',
+        ],
+    )
+    assert config.execution.report_output_level == expected
+
+
+@pytest.mark.parametrize(
     ('name', 'skeleton', 'reference', 'expected'),
     [
         ('long', long, 'sessionwise', [['01', ['01']], ['01', ['02']]]),
