@@ -593,20 +593,17 @@ How to combine images across distorted groups.
             '3dSHORE',
             'eddy',
             'tensor',
-            'diffprep_motion',
-            'diffprep_quadratic',
-            'diffprep_cubic',
+            'tortoise',
         ],
         help='model used to generate target images for hmc. If "none" the '
         'non-b0 images will be warped using the same transform as their '
         'nearest b0 image. If "3dSHORE", SHORELine will be used. if "tensor", '
-        'SHORELine iterations with a tensor model will be used. The '
-        '"diffprep_*" options run TORTOISE DIFFPREP: "diffprep_motion" '
-        'corrects rigid head motion only, "diffprep_quadratic" adds '
-        '24-parameter quadratic eddy-current correction (recommended for '
-        'non-shelled / CS-DSI schemes), "diffprep_cubic" adds cubic eddy '
-        'correction. DIFFPREP works on arbitrary q-space (no shells '
-        'required).',
+        'SHORELine iterations with a tensor model will be used. '
+        '"tortoise" uses TORTOISE DIFFPREP; '
+        'by default this performs rigid head motion correction and '
+        '24-parameter quadratic eddy-current correction. '
+        '"tortoise" works on arbitrary q-space (no shells required). '
+        'For fine-grained control over "tortoise" settings, use --diffprep-config.',
     )
     g_moco.add_argument(
         '--eddy-config',
@@ -620,8 +617,8 @@ How to combine images across distorted groups.
         '--diffprep-config',
         action='store',
         help='path to a json file with settings for the call to TORTOISE '
-        'DIFFPREP (used only when --hmc-model is one of the diffprep_* '
-        'options). If no json is specified, a default one will be used. The '
+        'DIFFPREP (used only when --hmc-model is tortoise). '
+        'If no json is specified, a default one will be used. The '
         'current default can be found here: '
         'https://github.com/PennLINC/qsiprep/blob/main/qsiprep/data/diffprep_params.json',
     )

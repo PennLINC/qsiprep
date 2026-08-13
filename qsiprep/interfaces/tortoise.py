@@ -802,19 +802,15 @@ def bmtxt_to_fsl(bmtxt_file, working_dir=None):
     return base + '.bvals', base + '.bvecs'
 
 
-def generate_diffprep_boilerplate(correction_mode):
+def generate_diffprep_boilerplate():
     """Methods boilerplate describing the DIFFPREP HMC backend."""
 
-    mode_desc = {
-        'motion': 'rigid head motion only',
-        'quadratic': 'rigid head motion together with quadratic eddy currents',
-        'cubic': 'rigid head motion together with cubic eddy currents',
-    }[correction_mode]
     return (
         f'\n\nHead motion correction was performed with DIFFPREP '
         f'[@diffprep], part of the TORTOISE [@tortoisev4] software package, '
-        f'in {correction_mode} mode (correcting {mode_desc}). DIFFPREP fits a '
-        'SHORE/MAPMRI signal model to the data and iteratively registers each '
+        'correcting rigid head motion together with quadratic eddy currents. '
+        'DIFFPREP fits a SHORE/MAPMRI signal model to the data and iteratively '
+        'registers each '
         "volume to a model-predicted target using TORTOISE's 24-parameter "
         'Okan-quadratic transform. The corrected volumes and motion-rotated '
         'bmatrix were then passed to the rest of the pipeline.\n\n'

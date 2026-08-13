@@ -761,9 +761,9 @@ def test_t2w_available_for_sdc_requires_a_consuming_backend(t2w_gate_config):
     """t2w_unfatsat only exists when the backend has a stage that consumes it.
 
     ``additional_t2ws`` -- the only thing that makes init_anat_preproc_wf build its
-    T2w branch -- was gated on --pepolar-method alone. The diffprep_* T2Wreg path
+    T2w branch -- was gated on --pepolar-method alone. The tortoise T2Wreg path
     consumes the T2w without any PEPOLAR data and is not gated on that flag, so a
-    plain ``--hmc-model diffprep_* --ignore fieldmaps`` run requested T2w SDC while
+    plain ``--hmc-model tortoise --ignore fieldmaps`` run requested T2w SDC while
     nothing produced the image, and DIFFPREP died with
     ``epi_mode="T2Wreg" requires a structural_image``.
     """
@@ -778,13 +778,12 @@ def test_t2w_available_for_sdc_requires_a_consuming_backend(t2w_gate_config):
     assert _t2w_sdc_backend_enabled() is True
     assert _t2w_available_for_sdc(T2W_SUBJECT) is True
 
-    # The regression: diffprep_* consumes it via --epi T2Wreg regardless of
+    # The regression: 'tortoise' consumes it via --epi T2Wreg regardless of
     # --pepolar-method.
     t2w_gate_config.workflow.pepolar_method = 'TOPUP'
-    for model in ('diffprep_motion', 'diffprep_quadratic', 'diffprep_cubic'):
-        t2w_gate_config.workflow.hmc_model = model
-        assert _t2w_sdc_backend_enabled() is True, model
-        assert _t2w_available_for_sdc(T2W_SUBJECT) is True, model
+    t2w_gate_config.workflow.hmc_model = 'tortoise'
+    assert _t2w_sdc_backend_enabled() is True, 'tortoise'
+    assert _t2w_available_for_sdc(T2W_SUBJECT) is True, 'tortoise'
 
 
 def test_extended_pepolar_report_t2w_n4_gets_input():
@@ -803,14 +802,6 @@ def test_extended_pepolar_report_t2w_n4_gets_input():
     wf_no_t2w = init_extended_pepolar_report_wf(segment_t2w=False)
     assert wf_no_t2w.get_node('t2w_n4') is None
     assert wf_no_t2w.get_node('map_seg') is not None
-
-
-def test_diffprep_order_helper():
-    from qsiprep.workflows.dwi.base import _diffprep_order
-
-    assert _diffprep_order('diffprep_motion') == 'motion'
-    assert _diffprep_order('diffprep_quadratic') == 'quadratic'
-    assert _diffprep_order('diffprep_cubic') == 'cubic'
 
 
 def _base_config():
@@ -1243,7 +1234,7 @@ def test_t2wreg_is_recognised_as_sdc_for_reporting():
 
     config = _base_config()
     try:
-        config.workflow.hmc_model = 'diffprep_quadratic'
+        config.workflow.hmc_model = 'tortoise'
         assert _doing_t2wreg(None, '/path/to/T2w.nii.gz') is True
         assert _doing_t2wreg('syn', '/path/to/T2w.nii.gz') is True
 

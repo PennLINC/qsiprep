@@ -112,7 +112,7 @@ def _config(**overrides):
     config.workflow.subject_anatomical_reference = 'unbiased'
     config.workflow.b0_threshold = 100
     config.workflow.hmc_transform = 'Rigid'
-    config.workflow.hmc_model = 'diffprep_quadratic'
+    config.workflow.hmc_model = 'tortoise'
     config.workflow.b0_motion_corr_to = 'iterative'
     for key, value in overrides.items():
         setattr(config.workflow, key, value)

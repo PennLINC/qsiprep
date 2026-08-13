@@ -124,23 +124,18 @@ requires the DIFFPREP options described below.
 For non-shelled acquisitions such as compressed-sensing DSI (CS-DSI), FSL
 ``eddy`` cannot be used, and ``3dSHORE`` corrects motion but does not correct
 eddy currents. In these cases, TORTOISE DIFFPREP is available via
-``--hmc-model``:
+``--hmc-model tortoise``.
 
-- ``diffprep_motion`` — rigid head-motion correction only.
-- ``diffprep_quadratic`` — rigid motion plus 24-parameter quadratic
-  eddy-current correction (recommended).
-- ``diffprep_cubic`` — rigid motion plus cubic eddy-current correction.
-
-These options run TORTOISE v4 DIFFPREP, which fits a signal model over
+This option runs TORTOISE v4 DIFFPREP, which fits a signal model over
 arbitrary q-space and therefore does not require shells. Advanced TORTOISE
 settings can be supplied with ``--diffprep-config``.
 
-The ``diffprep_*`` backends also perform susceptibility distortion correction,
+The ``tortoise`` backend also performs susceptibility distortion correction,
 preferring TORTOISE-native tools:
 
 - **Reverse phase-encoded** data is corrected with DRBUDDI
-  (``--pepolar-method DRBUDDI``; ``TOPUP`` is not supported with the DIFFPREP
-  backends). This covers both an ``epi`` fieldmap (a blip-up/blip-down b=0 or EPI
+  (``--pepolar-method DRBUDDI``; ``TOPUP`` is not supported with the tortoise
+  backend). This covers both an ``epi`` fieldmap (a blip-up/blip-down b=0 or EPI
   in ``fmap/``) and a reverse phase-encoded *DWI series* (``rpe_series``). For a
   reverse-PE series, DIFFPREP is run **once per phase-encoding direction** (a
   single run models one phase axis for the whole file), then the corrected

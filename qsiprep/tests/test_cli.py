@@ -324,7 +324,7 @@ def test_diffprep(data_dir, output_dir, working_dir):
     """TORTOISE DIFFPREP head-motion/eddy correction on non-shelled data.
 
     This tests the following features:
-    - The TORTOISE DIFFPREP HMC backend (--hmc-model diffprep_quadratic) on a
+    - The TORTOISE DIFFPREP HMC backend (--hmc-model tortoise) on a
       compressed-sensing DSI (non-shelled) scheme, where FSL eddy cannot run
     - The fieldmap-less path: with no fieldmap and no T2w, DIFFPREP performs
       head-motion/eddy correction only and does not error out
@@ -349,7 +349,7 @@ def test_diffprep(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--sloppy',
         '--b1-biascorrect-stage=none',
-        '--hmc-model=diffprep_quadratic',
+        '--hmc-model=tortoise',
         '--output-resolution=5',
     ]
 
@@ -394,7 +394,7 @@ def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
         '--anat-modality=none',
         '--denoise-method=none',
         '--b1-biascorrect-stage=none',
-        '--hmc-model=diffprep_quadratic',
+        '--hmc-model=tortoise',
         '--pepolar-method=DRBUDDI',
         '--output-resolution=2',
     ]
@@ -442,7 +442,7 @@ def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         '--b0-motion-corr-to=first',
         '--b1-biascorrect-stage=none',
-        '--hmc-model=diffprep_quadratic',
+        '--hmc-model=tortoise',
         '--pepolar-method=DRBUDDI',
         '--output-resolution=5',
     ]
@@ -501,7 +501,7 @@ def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         '--b0-motion-corr-to=first',
         '--b1-biascorrect-stage=none',
-        '--hmc-model=diffprep_quadratic',
+        '--hmc-model=tortoise',
         '--pepolar-method=DRBUDDI',
         '--output-resolution=5',
     ]
@@ -828,8 +828,8 @@ def test_forrest_gump_patch2self(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
-@pytest.mark.parametrize('model', ['diffprep_motion', 'diffprep_quadratic', 'diffprep_cubic'])
-def test_parser_accepts_diffprep_hmc_models(model, tmp_path):
+@pytest.mark.parametrize('model', ['tortoise'])
+def test_parser_accepts_tortoise(model, tmp_path):
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()

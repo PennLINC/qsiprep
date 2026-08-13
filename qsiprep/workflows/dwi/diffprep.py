@@ -230,7 +230,7 @@ def init_diffprep_hmc_wf(
         Workflow name.
     """
     workflow = Workflow(name=name)
-    workflow.__desc__ = generate_diffprep_boilerplate(correction_mode)
+    workflow.__desc__ = generate_diffprep_boilerplate()
 
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -532,7 +532,7 @@ def init_diffprep_hmc_wf(
         if 'topup' in config.workflow.pepolar_method.lower():
             raise Exception(
                 'TOPUP-based pepolar correction is not supported with '
-                '--hmc-model diffprep_*; choose --pepolar-method DRBUDDI.'
+                '--hmc-model tortoise; choose --pepolar-method DRBUDDI.'
             )
 
         # For rpe_series the per-direction DIFFPREP stage above already produced
