@@ -802,18 +802,33 @@ def bmtxt_to_fsl(bmtxt_file, working_dir=None):
     return base + '.bvals', base + '.bvecs'
 
 
-def generate_diffprep_boilerplate():
-    """Methods boilerplate describing the DIFFPREP HMC backend."""
+def generate_diffprep_boilerplate(correction_mode):
+    """Methods boilerplate describing the DIFFPREP HMC backend.
 
+    ``correction_mode`` comes from ``--diffprep-config`` (default
+    ``quadratic``), so the transform model has to be named from it rather than
+    assumed.
+    """
+    mode_desc = {
+        'motion': ('rigid head motion only', 'rigid-body transform'),
+        'quadratic': (
+            'rigid head motion together with quadratic eddy currents',
+            '24-parameter Okan-quadratic transform',
+        ),
+        'cubic': (
+            'rigid head motion together with cubic eddy currents',
+            'cubic transform',
+        ),
+    }
+    corrects, transform = mode_desc[correction_mode]
     return (
-        f'\n\nHead motion correction was performed with DIFFPREP '
-        f'[@diffprep], part of the TORTOISE [@tortoisev4] software package, '
-        'correcting rigid head motion together with quadratic eddy currents. '
-        'DIFFPREP fits a SHORE/MAPMRI signal model to the data and iteratively '
-        'registers each '
-        "volume to a model-predicted target using TORTOISE's 24-parameter "
-        'Okan-quadratic transform. The corrected volumes and motion-rotated '
-        'bmatrix were then passed to the rest of the pipeline.\n\n'
+        '\n\nHead motion correction was performed with DIFFPREP '
+        '[@diffprep], part of the TORTOISE [@tortoisev4] software package, '
+        f'in {correction_mode} mode (correcting {corrects}). DIFFPREP fits a '
+        'SHORE/MAPMRI signal model to the data and iteratively registers each '
+        f"volume to a model-predicted target using TORTOISE's {transform}. "
+        'The corrected volumes and motion-rotated bmatrix were then passed to '
+        'the rest of the pipeline.\n\n'
     )
 
 

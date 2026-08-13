@@ -197,6 +197,63 @@ def test_diffprep_wf_honours_use_cuda(tmp_path):
         config.workflow.diffprep_config = orig
 
 
+def test_diffprep_correction_mode_defaults_to_quadratic():
+    """``correction_mode`` is a --diffprep-config key, defaulting to quadratic.
+
+    The CLI exposes one ``--hmc-model tortoise`` rather than a value per mode,
+    so the config JSON is the only way to reach ``motion`` or ``cubic``.
+    """
+    from qsiprep.workflows.dwi.diffprep import _load_diffprep_config
+
+    assert _load_diffprep_config(None)['correction_mode'] == 'quadratic'
+
+
+def test_diffprep_wf_honours_correction_mode(tmp_path):
+    """A correction_mode in --diffprep-config reaches the DIFFPREP node."""
+    import json as _json
+
+    config = _base_config()
+    cfg = tmp_path / 'cubic_cfg.json'
+    cfg.write_text(_json.dumps({'correction_mode': 'cubic'}))
+    orig = config.workflow.diffprep_config
+    try:
+        config.workflow.diffprep_config = str(cfg)
+        wf = _build(_scan_groups(), t2w_sdc=False, name='mode_cubic')
+        assert wf.get_node('diffprep').inputs.correction_mode == 'cubic'
+
+        config.workflow.diffprep_config = None
+        wf_default = _build(_scan_groups(), t2w_sdc=False, name='mode_default')
+        assert wf_default.get_node('diffprep').inputs.correction_mode == 'quadratic'
+    finally:
+        config.workflow.diffprep_config = orig
+
+
+def test_diffprep_boilerplate_describes_the_configured_mode(tmp_path):
+    """The methods section must describe the mode that actually ran.
+
+    ``correction_mode`` is selectable through --diffprep-config, so boilerplate
+    that hardcodes "quadratic eddy currents" would misreport a motion-only or
+    cubic run.
+    """
+    import json as _json
+
+    config = _base_config()
+    cfg = tmp_path / 'boilerplate_cfg.json'
+    cfg.write_text(_json.dumps({'correction_mode': 'motion'}))
+    orig = config.workflow.diffprep_config
+    try:
+        config.workflow.diffprep_config = str(cfg)
+        wf = _build(_scan_groups(), t2w_sdc=False, name='boiler_motion')
+        assert 'rigid head motion only' in wf.__desc__
+        assert 'quadratic eddy' not in wf.__desc__
+
+        config.workflow.diffprep_config = None
+        wf_quad = _build(_scan_groups(), t2w_sdc=False, name='boiler_quad')
+        assert 'quadratic eddy currents' in wf_quad.__desc__
+    finally:
+        config.workflow.diffprep_config = orig
+
+
 def _stage_diffprep_outputs(tmp_path, t2wreg):
     """Recreate the file tree TORTOISEProcess leaves behind in a node's cwd.
 
@@ -834,7 +891,6 @@ def _build(scan_groups, t2w_sdc, name='dp'):
         scan_groups=scan_groups,
         source_file='/data/sub-01_dwi.nii.gz',
         t2w_sdc=t2w_sdc,
-        correction_mode='quadratic',
         dwi_metadata={'PhaseEncodingDirection': 'j'},
         name=name,
     )
@@ -944,10 +1000,9 @@ def test_init_diffprep_hmc_wf_syn_without_t2w():
 def test_cnr_model_label_is_bids_valid():
     """The ``model`` entity names the signal model and must be alphanumeric.
 
-    ``diffprep_quadratic`` could not be parsed back -- ``_`` is the BIDS entity
-    separator -- and DIFFPREP emits no CNR of its own, so the diffprep backends
-    report the MAPMRI model the CNR is actually derived from. Every other
-    backend must be left exactly as it was.
+    DIFFPREP emits no CNR of its own, so the ``tortoise`` backend reports the
+    MAPMRI model the CNR is actually derived from rather than its own name.
+    Every other backend must be left exactly as it was.
     """
     import re
 
@@ -956,11 +1011,10 @@ def test_cnr_model_label_is_bids_valid():
     for unchanged in ('3dSHORE', 'eddy', 'tensor', 'none'):
         assert _cnr_model_label(unchanged) == unchanged
 
-    for diffprep_model in ('diffprep_motion', 'diffprep_quadratic', 'diffprep_cubic'):
-        assert _cnr_model_label(diffprep_model) == 'MAPMRI'
+    assert _cnr_model_label('tortoise') == 'MAPMRI'
 
     entity = re.compile(r'^[a-zA-Z0-9]+$')
-    for model in ('3dSHORE', 'eddy', 'tensor', 'none', 'diffprep_quadratic'):
+    for model in ('3dSHORE', 'eddy', 'tensor', 'none', 'tortoise'):
         assert entity.match(_cnr_model_label(model)), model
 
 
@@ -971,7 +1025,7 @@ def test_cnr_description_flags_in_sample_bias():
     baseline = _cnr_description('3dSHORE')
     assert baseline == 'Contrast-to-noise ratio map for the HMC step.'
 
-    diffprep_desc = _cnr_description('diffprep_quadratic')
+    diffprep_desc = _cnr_description('tortoise')
     assert 'MAPMRI' in diffprep_desc
     assert 'in-sample' in diffprep_desc
     assert 'not quantitatively comparable' in diffprep_desc

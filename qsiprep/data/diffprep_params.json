@@ -1,4 +1,5 @@
 {
+  "correction_mode": "quadratic",
   "b0_id": -1,
   "is_human_brain": true,
   "rot_eddy_center": "isocenter",

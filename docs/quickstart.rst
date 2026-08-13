@@ -109,17 +109,19 @@ Head motion correction model
 ****************************
 
 Although FSL's ``eddy`` is technically model-free, it is an option for
-``--hmc-model`` along with ``3dSHORE`` and ``none``. Choosing ``eddy`` (the
-default) runs FSL's ``eddy`` for head motion correction and eddy current
-correction. This will work for single-shell and multi-shell sampling schemes.
-The ``3dSHORE`` (aka "SHORELine") option works for multi-shell, Cartesian
-grid sampling (DSI) and random q-space sampling (CS-DSI).
+``--hmc-model`` along with ``3dSHORE``, ``tensor``, ``tortoise`` and ``none``.
+Choosing ``eddy`` (the default) runs FSL's ``eddy`` for head motion correction
+and eddy current correction. This will work for single-shell and multi-shell
+sampling schemes. The ``3dSHORE`` (aka "SHORELine") option works for
+multi-shell, Cartesian grid sampling (DSI) and random q-space sampling
+(CS-DSI), and ``tensor`` runs the same SHORELine iterations with a tensor
+model.
 
 The option ``none`` will register all the b=0 images to one another and the
 b>0 images will have the transform from the nearest b=0 image applied. This
 is not recommended. Between ``eddy`` and ``3dSHORE``, all sampling schemes
 can be motion corrected, though eddy-current correction for non-shelled data
-requires the DIFFPREP options described below.
+requires the DIFFPREP option described below.
 
 For non-shelled acquisitions such as compressed-sensing DSI (CS-DSI), FSL
 ``eddy`` cannot be used, and ``3dSHORE`` corrects motion but does not correct
@@ -127,8 +129,11 @@ eddy currents. In these cases, TORTOISE DIFFPREP is available via
 ``--hmc-model tortoise``.
 
 This option runs TORTOISE v4 DIFFPREP, which fits a signal model over
-arbitrary q-space and therefore does not require shells. Advanced TORTOISE
-settings can be supplied with ``--diffprep-config``.
+arbitrary q-space and therefore does not require shells. By default it
+corrects rigid head motion together with 24-parameter quadratic eddy currents.
+Advanced TORTOISE settings can be supplied with ``--diffprep-config``,
+including ``"correction_mode"``, which selects between ``"motion"`` (rigid
+head motion only), ``"quadratic"`` (the default) and ``"cubic"``.
 
 The ``tortoise`` backend also performs susceptibility distortion correction,
 preferring TORTOISE-native tools:

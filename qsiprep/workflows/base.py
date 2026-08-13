@@ -67,9 +67,10 @@ def _t2w_sdc_backend_enabled():
     asks for DRBUDDI; TORTOISE ``--epi T2Wreg`` is reached from the ``tortoise``
     backend for the fieldmap-less case and is **not** gated on ``--pepolar-method``.
     """
-    return 'drbuddi' in (config.workflow.pepolar_method or '').lower() or (
-        config.workflow.hmc_model or ''
-    ) == 'tortoise'
+    return (
+        'drbuddi' in (config.workflow.pepolar_method or '').lower()
+        or config.workflow.hmc_model == 'tortoise'
+    )
 
 
 def _t2w_available_for_sdc(subject_data):

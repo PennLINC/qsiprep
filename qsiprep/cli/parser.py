@@ -617,7 +617,9 @@ How to combine images across distorted groups.
         '--diffprep-config',
         action='store',
         help='path to a json file with settings for the call to TORTOISE '
-        'DIFFPREP (used only when --hmc-model is tortoise). '
+        'DIFFPREP (used only when --hmc-model is tortoise). This is also where '
+        'the correction mode is chosen: "correction_mode" may be "motion" '
+        '(rigid only), "quadratic" (the default) or "cubic". '
         'If no json is specified, a default one will be used. The '
         'current default can be found here: '
         'https://github.com/PennLINC/qsiprep/blob/main/qsiprep/data/diffprep_params.json',

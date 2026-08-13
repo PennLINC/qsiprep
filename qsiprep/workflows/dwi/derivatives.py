@@ -19,14 +19,10 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 # The BIDS ``model`` entity on the CNR derivative names the *signal model* the
 # CNR was computed from, not the HMC backend -- for the older backends the two
-# strings simply coincide (3dSHORE, tensor, eddy). The ``diffprep_*`` backends
-# break that: DIFFPREP itself emits no CNR, so qsiprep derives one from the
-# MAPMRI fit it already runs for slice QC. ``diffprep_quadratic`` would also be
-# an invalid entity value -- ``_`` is the BIDS entity separator, so
-# ``model-diffprep_quadratic_stat-cnr`` cannot be parsed back.
-_CNR_MODEL_LABELS = {
-    'tortoise': 'MAPMRI'
-}
+# strings simply coincide (3dSHORE, tensor, eddy). The ``tortoise`` backend
+# breaks that: DIFFPREP itself emits no CNR, so qsiprep derives one from the
+# MAPMRI fit it already runs for slice QC, and the entity must name MAPMRI.
+_CNR_MODEL_LABELS = {'tortoise': 'MAPMRI'}
 
 
 def _cnr_model_label(hmc_model):

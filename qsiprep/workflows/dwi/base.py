@@ -42,7 +42,7 @@ def _doing_t2wreg(fieldmap_type, t2w_sdc):
     the reportlet gate and produce no SDC figure.
     """
     return (
-        (config.workflow.hmc_model or '') == 'tortoise'
+        config.workflow.hmc_model == 'tortoise'
         and fieldmap_type in (None, 'syn')
         and bool(t2w_sdc)
     )
@@ -291,7 +291,6 @@ def init_dwi_preproc_wf(
             source_file=source_file,
             dwi_metadata=dwi_metadata,
             t2w_sdc=t2w_sdc,
-            correction_mode='quadratic',
             name='hmc_sdc_wf',
         )
 
