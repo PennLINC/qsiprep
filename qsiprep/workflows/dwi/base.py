@@ -321,7 +321,10 @@ def init_dwi_preproc_wf(
 
     if not dwi_only:
         # calculate dwi registration to T1w
-        b0_coreg_wf = init_b0_to_anat_registration_wf(write_report=True)
+        b0_coreg_wf = init_b0_to_anat_registration_wf(
+            write_report=True,
+            transform_type=config.workflow.b0_to_anat_transform,
+        )
     else:
         b0_coreg_wf = init_direct_b0_acpc_wf(write_report=True)
 
@@ -440,7 +443,7 @@ def init_dwi_preproc_wf(
         DiffusionSummary(
             pe_direction=scan_groups['dwi_series_pedir'],
             hmc_model=config.workflow.hmc_model,
-            b0_to_t1w_transform=config.workflow.b0_to_t1w_transform,
+            b0_to_anat_transform=config.workflow.b0_to_anat_transform,
             hmc_transform=config.workflow.hmc_transform,
             denoise_method=config.workflow.denoise_method,
             dwi_denoise_window=config.workflow.dwi_denoise_window,

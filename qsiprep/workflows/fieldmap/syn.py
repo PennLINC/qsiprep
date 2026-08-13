@@ -81,7 +81,7 @@ def init_syn_sdc_wf(bold_pe=None, atlas_threshold=2):
     This workflow takes a skull-stripped T1w image and reference b0 image and
     estimates a susceptibility distortion correction warp, using ANTs symmetric
     normalization (SyN) and the average fieldmap atlas described in
-    [Treiber2016]_.
+    :footcite:t:`fieldmapless3`.
 
     SyN deformation is restricted to the phase-encoding (PE) direction.
     If no PE direction is specified, anterior-posterior PE is assumed.
@@ -89,8 +89,8 @@ def init_syn_sdc_wf(bold_pe=None, atlas_threshold=2):
     SyN deformation is also restricted to regions that are expected to have a
     >2mm (approximately 1 voxel) warp, based on the fieldmap atlas.
 
-    This technique is a variation on those developed in [Huntenburg2014]_ and
-    [Wang2017]_.
+    This technique is a variation on those developed in
+    :footcite:t:`fieldmapless2` and :footcite:t:`fieldmapless1`.
 
     .. workflow ::
         :graph2use: orig
@@ -123,6 +123,10 @@ def init_syn_sdc_wf(bold_pe=None, atlas_threshold=2):
             ANTs
         out_mask
             mask of the unwarped input file
+
+    **References**
+
+    .. footbibliography::
 
     """
     omp_nthreads = config.nipype.omp_nthreads

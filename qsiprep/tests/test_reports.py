@@ -1,5 +1,186 @@
 """Tests for visual report assembly."""
 
+from pathlib import Path
+
+import pytest
+
+
+@pytest.fixture
+def collect_reports(monkeypatch):
+    """Replace run_reports with a recorder of the report directories and filenames."""
+    from qsiprep.reports import core
+
+    calls = []
+
+    def _fake_run_reports(
+        output_dir, subject_label, run_uuid, out_filename='report.html', **kwargs
+    ):
+        calls.append((Path(output_dir), out_filename))
+        return None
+
+    monkeypatch.setattr(core, 'run_reports', _fake_run_reports)
+    return calls
+
+
+def test_generate_reports_root_level(tmp_path, collect_reports):
+    """Subject-wise reports are written to the output directory root."""
+    from qsiprep.reports.core import generate_reports
+
+    errors = generate_reports(
+        processing_list=[['01', ['01', '02']]],
+        subject_anatomical_reference='unbiased',
+        report_output_level='root',
+        output_dir=tmp_path,
+        run_uuid='madeoutuuid',
+    )
+
+    assert not errors
+    assert collect_reports == [(tmp_path, 'sub-01.html')]
+
+
+def test_generate_reports_subject_level(tmp_path, collect_reports):
+    """Subject-level reports are written into the subject directory."""
+    from qsiprep.reports.core import generate_reports
+
+    generate_reports(
+        processing_list=[['01', ['01', '02']]],
+        subject_anatomical_reference='unbiased',
+        report_output_level='subject',
+        output_dir=tmp_path,
+        run_uuid='madeoutuuid',
+    )
+
+    assert collect_reports == [(tmp_path / 'sub-01', 'sub-01.html')]
+
+
+def test_generate_reports_session_level(tmp_path, collect_reports):
+    """Session-wise reports are written into the session directory."""
+    from qsiprep.reports.core import generate_reports
+
+    generate_reports(
+        processing_list=[['01', ['01']], ['01', ['02']]],
+        subject_anatomical_reference='sessionwise',
+        report_output_level='session',
+        output_dir=tmp_path,
+        run_uuid='madeoutuuid',
+    )
+
+    assert collect_reports == [
+        (tmp_path / 'sub-01' / 'ses-01', 'sub-01_ses-01.html'),
+        (tmp_path / 'sub-01' / 'ses-02', 'sub-01_ses-02.html'),
+    ]
+
+
+def test_generate_reports_session_level_root_output(tmp_path, collect_reports):
+    """Session-wise reports keep their session-specific names at the root level."""
+    from qsiprep.reports.core import generate_reports
+
+    generate_reports(
+        processing_list=[['01', ['01']]],
+        subject_anatomical_reference='sessionwise',
+        report_output_level='root',
+        output_dir=tmp_path,
+        run_uuid='madeoutuuid',
+    )
+
+    assert collect_reports == [(tmp_path, 'sub-01_ses-01.html')]
+
+
+def test_generate_reports_session_level_without_sessions(tmp_path, collect_reports, caplog):
+    """Cross-sectional data fall back to subject-level reports with a warning."""
+    from qsiprep.reports.core import generate_reports
+
+    generate_reports(
+        processing_list=[['01', []]],
+        subject_anatomical_reference='sessionwise',
+        report_output_level='session',
+        output_dir=tmp_path,
+        run_uuid='madeoutuuid',
+    )
+
+    assert collect_reports == [(tmp_path / 'sub-01', 'sub-01.html')]
+    assert 'Writing out reports to subject level' in caplog.text
+
+
+def test_generate_reports_session_level_with_subject_wise_reports(
+    tmp_path, collect_reports, caplog
+):
+    """Reports spanning multiple sessions fall back to subject level with a warning."""
+    from qsiprep.reports.core import generate_reports
+
+    generate_reports(
+        processing_list=[['01', ['01', '02']]],
+        subject_anatomical_reference='unbiased',
+        report_output_level='session',
+        output_dir=tmp_path,
+        run_uuid='madeoutuuid',
+    )
+
+    assert collect_reports == [(tmp_path / 'sub-01', 'sub-01.html')]
+    assert 'Writing out reports to subject level' in caplog.text
+
+
+def test_generate_reports_session_fallback_is_not_sticky(tmp_path, collect_reports):
+    """A subject without sessions does not downgrade later subjects' reports."""
+    from qsiprep.reports.core import generate_reports
+
+    generate_reports(
+        processing_list=[['01', []], ['02', ['01']]],
+        subject_anatomical_reference='sessionwise',
+        report_output_level='session',
+        output_dir=tmp_path,
+        run_uuid='madeoutuuid',
+    )
+
+    assert collect_reports == [
+        (tmp_path / 'sub-01', 'sub-01.html'),
+        (tmp_path / 'sub-02' / 'ses-01', 'sub-02_ses-01.html'),
+    ]
+
+
+def test_generate_reports_strips_entity_prefixes(tmp_path, collect_reports):
+    """Subject and session labels may include their BIDS prefixes."""
+    from qsiprep.reports.core import generate_reports
+
+    generate_reports(
+        processing_list=[['sub-01', ['ses-01']]],
+        subject_anatomical_reference='sessionwise',
+        report_output_level='session',
+        output_dir=tmp_path,
+        run_uuid='madeoutuuid',
+    )
+
+    assert collect_reports == [(tmp_path / 'sub-01' / 'ses-01', 'sub-01_ses-01.html')]
+
+
+def test_generate_reports_session_level_finds_reportlets(tmp_path):
+    """A report nested in a session directory still picks up reportlets at the output root."""
+    from qsiprep.reports.core import generate_reports
+
+    figures_dir = tmp_path / 'sub-01' / 'ses-01' / 'figures'
+    figures_dir.mkdir(parents=True)
+    reportlet = figures_dir / 'sub-01_ses-01_dseg.svg'
+    reportlet.write_text(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"></svg>',
+        encoding='utf-8',
+    )
+
+    errors = generate_reports(
+        processing_list=[['01', ['01']]],
+        subject_anatomical_reference='sessionwise',
+        report_output_level='session',
+        output_dir=tmp_path,
+        run_uuid='madeoutuuid',
+    )
+
+    assert not errors
+    out_report = tmp_path / 'sub-01' / 'ses-01' / 'sub-01_ses-01.html'
+    assert out_report.is_file()
+    # The reportlet is referenced relative to the report, not the output root
+    assert f'src="./{reportlet.relative_to(out_report.parent)}"' in out_report.read_text(
+        encoding='utf-8'
+    )
+
 
 def test_template_to_report_entities():
     from qsiprep.workflows.anatomical.volume import _template_to_report_entities
