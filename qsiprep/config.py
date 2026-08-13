@@ -559,9 +559,11 @@ class workflow(_Config):
     """Any value in the .bval file less than this will be considered a b=0 image."""
     b0_motion_corr_to = None
     """Perform SHORELine's initial b=0-based registration to first volume?
-    Or make a template? Either 'iterative' or 'first'"""
-    b0_to_t1w_transform = None
-    """Transformation model for intramodal registration."""
+    Or make a template? Either 'iterative' or 'first'. DEPRECATED: later versions will
+    always use 'iterative'."""
+    b0_to_anat_transform = None
+    """Transformation model for b=0-to-anatomical coregistration. Either 'Rigid' or
+    'Affine'."""
     anat_biascorrect = None
     """Whether to N4-correct anatomicals: ``n4``, ``auto`` or ``none``."""
     b1_biascorrect_stage = None
@@ -577,8 +579,6 @@ class workflow(_Config):
     """How to combine images across distortion groups (concatenate, average or none)."""
     dwi_denoise_window = None
     """Window size in voxels for image-based denoising, integer or "auto"."""
-    dwi_no_biascorr = None
-    """DEPRECATED: see --b1-biascorrect-stage."""
     diffprep_config = None
     """Configuration JSON for running TORTOISE DIFFPREP."""
     eddy_config = None

@@ -249,21 +249,24 @@ def minimal_args(tmp_path):
     return [str(bids_dir), str(tmp_path / 'out'), 'participant', '--output-resolution', '2']
 
 
-# (deprecated flag, the option that replaces it, that option's replacement value)
-DEPRECATED_FLAGS = [
-    ('--dwi-only', '--anat-modality', 'none'),
-    ('--longitudinal', '--subject-anatomical-reference', 'unbiased'),
-]
-
-
 def _dest(option):
     """Turn an option string back into the namespace attribute it sets."""
     return option.lstrip('-').replace('-', '_')
 
 
-@pytest.mark.parametrize(('flag', 'option', 'value'), DEPRECATED_FLAGS)
-def test_deprecated_flag_warns_and_is_ignored(minimal_args, capsys, flag, option, value):
-    """A deprecated flag warns that it does nothing, and names its replacement."""
+# (deprecated flag, the option it enables, the value that option is set to)
+FORWARDED_FLAGS = [
+    ('--dwi-only', '--anat-modality', 'none'),
+    ('--longitudinal', '--subject-anatomical-reference', 'unbiased'),
+    ('--dwi-no-biascorr', '--b1-biascorrect-stage', 'none'),
+]
+
+
+@pytest.mark.parametrize(('flag', 'option', 'value'), FORWARDED_FLAGS)
+def test_forwarded_flag_warns_and_enables_its_replacement(
+    minimal_args, capsys, flag, option, value
+):
+    """A deprecated flag warns, names its replacement, and turns it on."""
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -271,27 +274,45 @@ def test_deprecated_flag_warns_and_is_ignored(minimal_args, capsys, flag, option
 
     warning = capsys.readouterr().err
     assert flag in warning
-    assert 'no effect' in warning
+    assert 'deprecated' in warning
     assert f'{option} {value}' in warning
 
-    # The flag must not change anything, including its replacement
-    assert getattr(opts, _dest(option)) == parser.get_default(_dest(option))
-    # ...and it must not reach the config object
+    assert getattr(opts, _dest(option)) == value
+    # The deprecated flag itself must not reach the config object
     assert not hasattr(opts, _dest(flag))
 
 
-@pytest.mark.parametrize(('flag', 'option', 'value'), DEPRECATED_FLAGS)
-def test_deprecated_flag_does_not_override_replacement(minimal_args, flag, option, value):
-    """Giving both the deprecated flag and its replacement is not an error."""
+@pytest.mark.parametrize(('flag', 'option', 'value'), FORWARDED_FLAGS)
+def test_forwarded_flag_agrees_with_an_explicit_replacement(minimal_args, flag, option, value):
+    """Asking for the same thing twice is not a conflict, in either order."""
     from qsiprep.cli.parser import _build_parser
 
     for extra_args in ([flag, option, value], [option, value, flag]):
-        parser = _build_parser()
-        opts = parser.parse_args(minimal_args + extra_args)
+        opts = _build_parser().parse_args(minimal_args + extra_args)
         assert getattr(opts, _dest(option)) == value
 
 
-@pytest.mark.parametrize(('flag', 'option', 'value'), DEPRECATED_FLAGS)
+@pytest.mark.parametrize(('flag', 'option', 'value'), FORWARDED_FLAGS)
+def test_forwarded_flag_conflicting_with_its_replacement_is_an_error(
+    minimal_args, capsys, flag, option, value
+):
+    """Silently picking a winner would hide half of what the user asked for."""
+    from qsiprep.cli.parser import _build_parser
+
+    # A value the flag does not forward to
+    other = {
+        'anat_modality': 'T2w',
+        'subject_anatomical_reference': 'sessionwise',
+        'b1_biascorrect_stage': 'legacy',
+    }[_dest(option)]
+
+    for extra_args in ([flag, option, other], [option, other, flag]):
+        with pytest.raises(SystemExit):
+            _build_parser().parse_args(minimal_args + extra_args)
+        assert 'conflicts with' in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(('flag', 'option', 'value'), FORWARDED_FLAGS)
 def test_replacement_option_is_not_deprecated(minimal_args, capsys, flag, option, value):
     """The replacement option is silent and takes effect."""
     from qsiprep.cli.parser import _build_parser
@@ -301,3 +322,80 @@ def test_replacement_option_is_not_deprecated(minimal_args, capsys, flag, option
 
     assert capsys.readouterr().err == ''
     assert getattr(opts, _dest(option)) == value
+
+
+def test_prefer_dedicated_fmaps_warns_and_is_ignored(minimal_args, capsys):
+    """The flag is gone from the workflow, so it only warns."""
+    from qsiprep.cli.parser import _build_parser
+
+    opts = _build_parser().parse_args([*minimal_args, '--prefer-dedicated-fmaps'])
+
+    warning = capsys.readouterr().err
+    assert '--prefer-dedicated-fmaps' in warning
+    assert 'no effect' in warning
+    assert 'B0FieldIdentifier' in warning
+    assert not hasattr(opts, 'prefer_dedicated_fmaps')
+
+
+@pytest.mark.parametrize('value', ['iterative', 'first'])
+def test_b0_motion_corr_to_warns_but_still_works(minimal_args, capsys, value):
+    """Deprecated, but it still selects the SHORELine b=0 alignment strategy."""
+    from qsiprep.cli.parser import _build_parser
+
+    opts = _build_parser().parse_args([*minimal_args, '--b0-motion-corr-to', value])
+
+    warning = capsys.readouterr().err
+    assert '--b0-motion-corr-to' in warning
+    assert 'iterative' in warning
+    assert opts.b0_motion_corr_to == value
+
+
+def test_b0_motion_corr_to_is_silent_by_default(minimal_args, capsys):
+    from qsiprep.cli.parser import _build_parser
+
+    opts = _build_parser().parse_args(minimal_args)
+
+    assert capsys.readouterr().err == ''
+    assert opts.b0_motion_corr_to == 'iterative'
+
+
+@pytest.mark.parametrize('value', ['Rigid', 'Affine'])
+def test_b0_to_t1w_transform_forwards_its_value(minimal_args, capsys, value):
+    """The renamed option keeps working, and sets the new one."""
+    from qsiprep.cli.parser import _build_parser
+
+    opts = _build_parser().parse_args([*minimal_args, '--b0-to-t1w-transform', value])
+
+    warning = capsys.readouterr().err
+    assert '--b0-to-t1w-transform' in warning
+    assert '--b0-to-anat-transform' in warning
+    assert opts.b0_to_anat_transform == value
+    assert not hasattr(opts, 'b0_to_t1w_transform')
+
+
+@pytest.mark.parametrize('value', ['Rigid', 'Affine'])
+def test_b0_to_anat_transform_is_not_deprecated(minimal_args, capsys, value):
+    from qsiprep.cli.parser import _build_parser
+
+    opts = _build_parser().parse_args([*minimal_args, '--b0-to-anat-transform', value])
+
+    assert capsys.readouterr().err == ''
+    assert opts.b0_to_anat_transform == value
+
+
+def test_b0_to_anat_transform_defaults_to_rigid(minimal_args):
+    from qsiprep.cli.parser import _build_parser
+
+    opts = _build_parser().parse_args(minimal_args)
+    assert opts.b0_to_anat_transform == 'Rigid'
+
+
+def test_b0_transform_options_are_mutually_exclusive(minimal_args, capsys):
+    """Both name the same setting, so giving both is ambiguous."""
+    from qsiprep.cli.parser import _build_parser
+
+    with pytest.raises(SystemExit):
+        _build_parser().parse_args(
+            [*minimal_args, '--b0-to-anat-transform', 'Rigid', '--b0-to-t1w-transform', 'Affine']
+        )
+    assert 'not allowed with' in capsys.readouterr().err

@@ -181,7 +181,10 @@ def init_intramodal_template_wf(
         template_node, template_field = ants_mvtc2, 'templates'
 
     # calculate dwi registration to T1w
-    b0_coreg_wf = init_b0_to_anat_registration_wf(write_report=True)
+    b0_coreg_wf = init_b0_to_anat_registration_wf(
+        write_report=True,
+        transform_type=config.workflow.b0_to_anat_transform,
+    )
     ds_report_imtcoreg = pe.Node(
         DerivativesDataSink(
             datatype='figures',

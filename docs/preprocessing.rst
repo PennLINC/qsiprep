@@ -136,8 +136,8 @@ concatenated. Specifically, image denoising (using ``dwidenoise`` or
 ``patch2self``) can be disabled with ``--denoise-method none``. Gibbs
 unringing (using ``mrdegibbs``) is disabled by default but can be enabled
 with ``--unringing-method mrdegibbs``. B1 bias field correction is applied by
-default (using ``dwibiascorrect``) and can be disabled with the
-``--dwi-no-biascorr`` option. The intensity of b=0 images is harmonized
+default (using ``dwibiascorrect``) and can be disabled with
+``--b1-biascorrect-stage none``. The intensity of b=0 images is harmonized
 across scans (i.e. scaled to an average value) by default, but this can be
 turned off using ``--dwi-no-b0-harmonization``.
 
@@ -628,7 +628,7 @@ DWI preprocessing
         ignore=[],
         b0_threshold=100,
         motion_corr_to='iterative',
-        b0_to_t1w_transform='Rigid',
+        b0_to_anat_transform='Rigid',
         hmc_model='3dSHORE',
         hmc_transform='Rigid',
         shoreline_iters=2,
@@ -931,8 +931,8 @@ It is possible to use *QSIPrep* to process *only* diffusion-weighted images. In
 the case of infant data, where robust skull-stripping methods are not
 currently available, or where anatomical preprocessing has already been
 performed in another pipeline, the user can specify ``--anat-modality none``.
-(The deprecated ``--dwi-only`` flag no longer has any effect and will be
-removed in a later version.)
+(The deprecated ``--dwi-only`` flag now enables ``--anat-modality none``
+automatically, and will be removed in a later version.)
 
 Instead of registering the b=0 template image to the skull-stripped T1w
 image, the b=0 template is registered directly to a template and only the
