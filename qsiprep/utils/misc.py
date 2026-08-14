@@ -437,7 +437,8 @@ def validate_diffprep_config(diffprep_config):
     Raises
     ------
     ValueError
-        If the DIFFPREP configuration file does not exist or is not valid JSON.
+        If the DIFFPREP configuration file does not exist, is not valid JSON,
+        or sets an unsupported ``correction_mode``.
     """
     import json
     import os
@@ -445,7 +446,18 @@ def validate_diffprep_config(diffprep_config):
     if not os.path.exists(diffprep_config):
         raise ValueError(f'DIFFPREP configuration file {diffprep_config} does not exist.')
     with open(diffprep_config) as f:
-        json.load(f)
+        cfg = json.load(f)
+
+    # Checked here so a typo fails at parse time rather than as a KeyError
+    # while the DIFFPREP workflow is being built.
+    valid_modes = ('motion', 'quadratic', 'cubic')
+    correction_mode = cfg.get('correction_mode', 'quadratic')
+    if correction_mode not in valid_modes:
+        raise ValueError(
+            f'DIFFPREP configuration file {diffprep_config} sets '
+            f'correction_mode={correction_mode!r}; must be one of '
+            f'{", ".join(valid_modes)}.'
+        )
 
     return
 
