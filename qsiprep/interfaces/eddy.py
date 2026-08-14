@@ -28,8 +28,7 @@ from nipype.interfaces.base import (
 from nipype.utils.filemanip import fname_presuffix, split_filename
 
 from ..data import load as load_data
-from .epi_fmap import get_best_b0_topup_inputs_from
-from .fmap import eddy_inputs_from_dwi_files
+from .epi_fmap import eddy_inputs_from_dwi_files, get_best_b0_topup_inputs_from
 
 LOGGER = logging.getLogger('nipype.interface')
 

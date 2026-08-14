@@ -148,7 +148,7 @@ QSIPrep is a BIDS App for preprocessing diffusion MRI (dMRI/DWI) data. It handle
 | Package name | `qsiprep` |
 | Default branch | `main` |
 | Entry point | `qsiprep.cli.run:main` |
-| Python requirement | `>=3.10` |
+| Python requirement | `>=3.11` |
 | Build backend | hatchling + hatch-vcs + cython + numpy |
 | Linter | ruff ~= 0.4.3 |
 | Pre-commit | Yes (ruff v0.6.2) |

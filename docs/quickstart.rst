@@ -71,7 +71,7 @@ template. For this reason, spatial normalization is typically done *after*
 models are fit.
 
 All outputs will be registered to the T1w image (or the
-AC-PC aligned b=0 template if ``--dwi-only`` was specified) but will have
+AC-PC aligned b=0 template if ``--anat-modality none`` was specified) but will have
 an isotropic voxel size. Furthermore, all outputs are aligned according to the
 AC-PC convention: the coordinates are changed from the native scanner
 coordinates to a new system where $0, 0, 0$ is where the midline intersects
@@ -109,38 +109,38 @@ Head motion correction model
 ****************************
 
 Although FSL's ``eddy`` is technically model-free, it is an option for
-``--hmc-model`` along with ``3dSHORE`` and ``none``. Choosing ``eddy`` (the
-default) runs FSL's ``eddy`` for head motion correction and eddy current
-correction. This will work for single-shell and multi-shell sampling schemes.
-The ``3dSHORE`` (aka "SHORELine") option works for multi-shell, Cartesian
-grid sampling (DSI) and random q-space sampling (CS-DSI).
+``--hmc-model`` along with ``3dSHORE``, ``tensor``, ``tortoise`` and ``none``.
+Choosing ``eddy`` (the default) runs FSL's ``eddy`` for head motion correction
+and eddy current correction. This will work for single-shell and multi-shell
+sampling schemes. The ``3dSHORE`` (aka "SHORELine") option works for
+multi-shell, Cartesian grid sampling (DSI) and random q-space sampling
+(CS-DSI), and ``tensor`` runs the same SHORELine iterations with a tensor
+model.
 
 The option ``none`` will register all the b=0 images to one another and the
 b>0 images will have the transform from the nearest b=0 image applied. This
 is not recommended. Between ``eddy`` and ``3dSHORE``, all sampling schemes
 can be motion corrected, though eddy-current correction for non-shelled data
-requires the DIFFPREP options described below.
+requires the DIFFPREP option described below.
 
 For non-shelled acquisitions such as compressed-sensing DSI (CS-DSI), FSL
 ``eddy`` cannot be used, and ``3dSHORE`` corrects motion but does not correct
 eddy currents. In these cases, TORTOISE DIFFPREP is available via
-``--hmc-model``:
+``--hmc-model tortoise``.
 
-- ``diffprep_motion`` — rigid head-motion correction only.
-- ``diffprep_quadratic`` — rigid motion plus 24-parameter quadratic
-  eddy-current correction (recommended).
-- ``diffprep_cubic`` — rigid motion plus cubic eddy-current correction.
+This option runs TORTOISE v4 DIFFPREP, which fits a signal model over
+arbitrary q-space and therefore does not require shells. By default it
+corrects rigid head motion together with 24-parameter quadratic eddy currents.
+Advanced TORTOISE settings can be supplied with ``--diffprep-config``,
+including ``"correction_mode"``, which selects between ``"motion"`` (rigid
+head motion only), ``"quadratic"`` (the default) and ``"cubic"``.
 
-These options run TORTOISE v4 DIFFPREP, which fits a signal model over
-arbitrary q-space and therefore does not require shells. Advanced TORTOISE
-settings can be supplied with ``--diffprep-config``.
-
-The ``diffprep_*`` backends also perform susceptibility distortion correction,
+The ``tortoise`` backend also performs susceptibility distortion correction,
 preferring TORTOISE-native tools:
 
 - **Reverse phase-encoded** data is corrected with DRBUDDI
-  (``--pepolar-method DRBUDDI``; ``TOPUP`` is not supported with the DIFFPREP
-  backends). This covers both an ``epi`` fieldmap (a blip-up/blip-down b=0 or EPI
+  (``--pepolar-method DRBUDDI``; ``TOPUP`` is not supported with the tortoise
+  backend). This covers both an ``epi`` fieldmap (a blip-up/blip-down b=0 or EPI
   in ``fmap/``) and a reverse phase-encoded *DWI series* (``rpe_series``). For a
   reverse-PE series, DIFFPREP is run **once per phase-encoding direction** (a
   single run models one phase axis for the whole file), then the corrected
@@ -168,30 +168,30 @@ to apply to most generic sequences. Depending on your sequence
 and sampling scheme, you can elect to enable, disable or alter the behavior
 of these steps to better match your data.
 
-+-----------------+-----------------------------+---------------------------+------------------------------+
-|                 |         Denoising           |      Gibbs Unringing      |    B1 Bias Field Correction  |
-+=================+=============================+===========================+==============================+
-| Description     |   Reduce random noise       |   Remove spatial ringing  |    Remove spatial non-       |
-|                 |   in images.                |   artifact from images.   |    uniformity of images.     |
-+-----------------+-----------------------------+---------------------------+------------------------------+
-| Algorithms      |  ``dwidenoise`` (MRtrix3)   | ``mrdegibbs`` (MRtrix3)   | ``dwibiascorrect``           |
-|                 |  ``patch2self`` (DIPY)      |                           | (ANTs/MRtrix3)               |
-+-----------------+-----------------------------+---------------------------+------------------------------+
-| Default         |  ``dwidenoise`` (MRtrix3)   | None applied              | ``dwibiascorrect``           |
-|                 |                             |                           | (ANTs/MRtrix3)               |
-+-----------------+-----------------------------+---------------------------+------------------------------+
-| Disable with    |  ``--denoise-method none``  | Disabled by default       | ``--dwi-no-biascorr``        |
-+-----------------+-----------------------------+---------------------------+------------------------------+
-| Change behavior |  ``--dwi-denoise-window N`` | ``--unringing-method``    | No parameters                |
-| with            |  changes denoising window   | enables Gibbs unringing   |                              |
-|                 |  to N voxels                |                           |                              |
-+-----------------+-----------------------------+---------------------------+------------------------------+
-| Notes           |  Set the window to ``auto`` | Technically only supposed | Uses                         |
-|                 |  or a specific voxel number | to be run on full Fourier | N4BiasFieldCorrection on     |
-|                 |                             | acquisitions.             | b=0 images, applies          |
-|                 |                             |                           | correction to the whole      |
-|                 |                             |                           | series                       |
-+-----------------+-----------------------------+---------------------------+------------------------------+
++-----------------+-----------------------------+---------------------------+----------------------------------+
+|                 |         Denoising           |      Gibbs Unringing      |    B1 Bias Field Correction      |
++=================+=============================+===========================+==================================+
+| Description     |   Reduce random noise       |   Remove spatial ringing  |    Remove spatial non-           |
+|                 |   in images.                |   artifact from images.   |    uniformity of images.         |
++-----------------+-----------------------------+---------------------------+----------------------------------+
+| Algorithms      |  ``dwidenoise`` (MRtrix3)   | ``mrdegibbs`` (MRtrix3)   | ``dwibiascorrect``               |
+|                 |  ``patch2self`` (DIPY)      |                           | (ANTs/MRtrix3)                   |
++-----------------+-----------------------------+---------------------------+----------------------------------+
+| Default         |  ``dwidenoise`` (MRtrix3)   | None applied              | ``dwibiascorrect``               |
+|                 |                             |                           | (ANTs/MRtrix3)                   |
++-----------------+-----------------------------+---------------------------+----------------------------------+
+| Disable with    |  ``--denoise-method none``  | Disabled by default       | ``--b1-biascorrect-stage none``  |
++-----------------+-----------------------------+---------------------------+----------------------------------+
+| Change behavior |  ``--dwi-denoise-window N`` | ``--unringing-method``    | ``--b1-biascorrect-stage``       |
+| with            |  changes denoising window   | enables Gibbs unringing   | selects the stage: final         |
+|                 |  to N voxels                |                           | (default), none or legacy        |
++-----------------+-----------------------------+---------------------------+----------------------------------+
+| Notes           |  Set the window to ``auto`` | Technically only supposed | Uses                             |
+|                 |  or a specific voxel number | to be run on full Fourier | N4BiasFieldCorrection on         |
+|                 |                             | acquisitions.             | b=0 images, applies              |
+|                 |                             |                           | correction to the whole          |
+|                 |                             |                           | series                           |
++-----------------+-----------------------------+---------------------------+----------------------------------+
 
 Not included in this table is the b=0 intensity harmonization step, which
 applies simple scaling if there is more than one NIfTI file being processed.

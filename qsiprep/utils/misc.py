@@ -335,16 +335,25 @@ def fix_multi_T1w_source_name(in_files):
     return os.path.join(base, f'sub-{subject_label}_T1w.nii.gz')
 
 
-def fix_multi_source_name(in_files, dwi_only, include_session, anatomical_contrast='T1w'):
+def fix_multi_source_name(in_files, include_session, anatomical_contrast='T1w'):
     """Make up a generic source name when there are multiple source files.
+
+    An ``anatomical_contrast`` of ``'none'`` means the anatomical reference is derived
+    from the DWIs themselves, so the name is built from the DWI files instead.
 
     >>> fix_multi_source_name(
     ...     ['/path/to/sub-045_ses-test_T1w.nii.gz', '/path/to/sub-045_ses-retest_T1w.nii.gz'],
     ...     False,
-    ...     False,
     ...     'T1w',
     ... )
     '/path/to/sub-045_T1w.nii.gz'
+
+    >>> fix_multi_source_name(
+    ...     ['/path/to/dwi/sub-045_ses-test_dwi.nii.gz'],
+    ...     False,
+    ...     'none',
+    ... )
+    '/path/to/anat/sub-045_dwi.nii.gz'
     """
     import os
 
@@ -360,7 +369,7 @@ def fix_multi_source_name(in_files, dwi_only, include_session, anatomical_contra
     base = os.sep.join(folders)
 
     subject_label = in_file.split('_', 1)[0].split('-')[1]
-    if dwi_only:
+    if anatomical_contrast == 'none':
         anatomical_contrast = 'dwi'
         base = base.replace('/dwi', '/anat')
 
@@ -428,7 +437,8 @@ def validate_diffprep_config(diffprep_config):
     Raises
     ------
     ValueError
-        If the DIFFPREP configuration file does not exist or is not valid JSON.
+        If the DIFFPREP configuration file does not exist, is not valid JSON,
+        or sets an unsupported ``correction_mode``.
     """
     import json
     import os
@@ -436,7 +446,18 @@ def validate_diffprep_config(diffprep_config):
     if not os.path.exists(diffprep_config):
         raise ValueError(f'DIFFPREP configuration file {diffprep_config} does not exist.')
     with open(diffprep_config) as f:
-        json.load(f)
+        cfg = json.load(f)
+
+    # Checked here so a typo fails at parse time rather than as a KeyError
+    # while the DIFFPREP workflow is being built.
+    valid_modes = ('motion', 'quadratic', 'cubic')
+    correction_mode = cfg.get('correction_mode', 'quadratic')
+    if correction_mode not in valid_modes:
+        raise ValueError(
+            f'DIFFPREP configuration file {diffprep_config} sets '
+            f'correction_mode={correction_mode!r}; must be one of '
+            f'{", ".join(valid_modes)}.'
+        )
 
     return
 

@@ -324,7 +324,7 @@ def test_diffprep(data_dir, output_dir, working_dir):
     """TORTOISE DIFFPREP head-motion/eddy correction on non-shelled data.
 
     This tests the following features:
-    - The TORTOISE DIFFPREP HMC backend (--hmc-model diffprep_quadratic) on a
+    - The TORTOISE DIFFPREP HMC backend (--hmc-model tortoise) on a
       compressed-sensing DSI (non-shelled) scheme, where FSL eddy cannot run
     - The fieldmap-less path: with no fieldmap and no T2w, DIFFPREP performs
       head-motion/eddy correction only and does not error out
@@ -349,7 +349,7 @@ def test_diffprep(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--sloppy',
         '--b1-biascorrect-stage=none',
-        '--hmc-model=diffprep_quadratic',
+        '--hmc-model=tortoise',
         '--output-resolution=5',
     ]
 
@@ -394,7 +394,7 @@ def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
         '--anat-modality=none',
         '--denoise-method=none',
         '--b1-biascorrect-stage=none',
-        '--hmc-model=diffprep_quadratic',
+        '--hmc-model=tortoise',
         '--pepolar-method=DRBUDDI',
         '--output-resolution=2',
     ]
@@ -442,7 +442,7 @@ def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         '--b0-motion-corr-to=first',
         '--b1-biascorrect-stage=none',
-        '--hmc-model=diffprep_quadratic',
+        '--hmc-model=tortoise',
         '--pepolar-method=DRBUDDI',
         '--output-resolution=5',
     ]
@@ -501,7 +501,7 @@ def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         '--b0-motion-corr-to=first',
         '--b1-biascorrect-stage=none',
-        '--hmc-model=diffprep_quadratic',
+        '--hmc-model=tortoise',
         '--pepolar-method=DRBUDDI',
         '--output-resolution=5',
     ]
@@ -828,8 +828,8 @@ def test_forrest_gump_patch2self(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
-@pytest.mark.parametrize('model', ['diffprep_motion', 'diffprep_quadratic', 'diffprep_cubic'])
-def test_parser_accepts_diffprep_hmc_models(model, tmp_path):
+def test_parser_accepts_tortoise(tmp_path):
+    """``tortoise`` is the single --hmc-model value for the DIFFPREP backend."""
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -837,9 +837,32 @@ def test_parser_accepts_diffprep_hmc_models(model, tmp_path):
     bids.mkdir()
     out = tmp_path / 'out'
     opts = parser.parse_args(
-        [str(bids), str(out), 'participant', '--hmc-model', model, '--output-resolution', '2']
+        [str(bids), str(out), 'participant', '--hmc-model', 'tortoise', '--output-resolution', '2']
     )
-    assert opts.hmc_model == model
+    assert opts.hmc_model == 'tortoise'
+
+
+def test_parser_rejects_removed_diffprep_hmc_models(tmp_path):
+    """The per-mode values were replaced by "tortoise" + --diffprep-config."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    for removed in ('diffprep_motion', 'diffprep_quadratic', 'diffprep_cubic'):
+        with pytest.raises(SystemExit):
+            parser.parse_args(
+                [
+                    str(bids),
+                    str(out),
+                    'participant',
+                    '--hmc-model',
+                    removed,
+                    '--output-resolution',
+                    '2',
+                ]
+            )
 
 
 def test_validate_diffprep_config_missing(tmp_path):
@@ -854,6 +877,29 @@ def test_validate_diffprep_config_default_is_valid():
     from qsiprep.utils.misc import validate_diffprep_config
 
     validate_diffprep_config(str(load_data('diffprep_params.json')))
+
+
+def test_validate_diffprep_config_rejects_bad_correction_mode(tmp_path):
+    """A typo must fail at parse time, not deep inside workflow construction."""
+    import json
+
+    from qsiprep.utils.misc import validate_diffprep_config
+
+    cfg = tmp_path / 'bad_mode.json'
+    cfg.write_text(json.dumps({'correction_mode': 'quadratik'}))
+    with pytest.raises(ValueError, match='correction_mode'):
+        validate_diffprep_config(str(cfg))
+
+
+def test_validate_diffprep_config_accepts_each_correction_mode(tmp_path):
+    import json
+
+    from qsiprep.utils.misc import validate_diffprep_config
+
+    for mode in ('motion', 'quadratic', 'cubic'):
+        cfg = tmp_path / f'{mode}.json'
+        cfg.write_text(json.dumps({'correction_mode': mode}))
+        validate_diffprep_config(str(cfg))
 
 
 def _check_arg_specified(argname, arglist):
@@ -933,7 +979,8 @@ def _run_and_generate(test_name, parameters, test_main=False, check_outputs=True
         write_derivative_description(config.execution.bids_dir, config.execution.output_dir)
         failed_reports = generate_reports(
             processing_list=config.execution.processing_list,
-            output_level=config.workflow.subject_anatomical_reference,
+            subject_anatomical_reference=config.workflow.subject_anatomical_reference,
+            report_output_level=config.execution.report_output_level,
             output_dir=config.execution.output_dir,
             run_uuid=config.execution.run_uuid,
         )

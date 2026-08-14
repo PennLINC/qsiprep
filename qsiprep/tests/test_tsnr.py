@@ -109,7 +109,7 @@ def test_tsnr_is_wired_into_derivatives(tmp_path):
     from qsiprep.workflows.dwi.derivatives import init_dwi_derivatives_wf
 
     config.execution.output_dir = str(tmp_path)
-    config.workflow.hmc_model = 'diffprep_quadratic'
+    config.workflow.hmc_model = 'tortoise'
     config.workflow.write_local_bvecs = False
 
     wf = init_dwi_derivatives_wf('/data/sub-01/ses-1/dwi/sub-01_ses-1_dwi.nii.gz')

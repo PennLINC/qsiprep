@@ -66,6 +66,9 @@ def _load_diffprep_config(config_path):
     cfg.setdefault('is_human_brain', True)
     cfg.setdefault('rot_eddy_center', 'isocenter')
     cfg.setdefault('extra_args', [])
+    # --hmc-model exposes a single "tortoise" value, so this is the only way to
+    # reach DIFFPREP's rigid-only ('motion') or 'cubic' eddy modes.
+    cfg.setdefault('correction_mode', 'quadratic')
     # No default for "use_cuda": its absence must stay observable so a shipped
     # default is never mistaken for user intent (see _legacy_use_cuda below).
     # Opt-in MAPMRI shell synthesis for DRBUDDI's registration target;
@@ -197,7 +200,6 @@ def init_diffprep_hmc_wf(
     scan_groups,
     source_file,
     t2w_sdc,
-    correction_mode='quadratic',
     dwi_metadata=None,
     name='diffprep_hmc_wf',
 ):
@@ -221,16 +223,12 @@ def init_diffprep_hmc_wf(
         Whether a T2w image is available for distortion correction (used for
         DRBUDDI's multi-modal registration and for the fieldmap-less T2Wreg
         path).
-    correction_mode : str
-        One of ``'motion'`` (rigid only), ``'quadratic'`` (recommended), or
-        ``'cubic'``. Forwarded to TORTOISE as ``-c``.
     dwi_metadata : dict, optional
         BIDS sidecar metadata (used for the PE direction and for SDC).
     name : str
         Workflow name.
     """
     workflow = Workflow(name=name)
-    workflow.__desc__ = generate_diffprep_boilerplate(correction_mode)
 
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -311,6 +309,8 @@ def init_diffprep_hmc_wf(
 
     pe_dir = _resolve_phase_encoding((dwi_metadata or {}).get('PhaseEncodingDirection'))
 
+    correction_mode = diffprep_cfg['correction_mode']
+
     # --sloppy uses ONLY --niter 0 plus rigid-only correction. Clearing
     # ``is_human_brain`` would also disable the iterative pass but is not a
     # speed knob: it changes DIFFPREP's auto-masking and the T2Wreg structural
@@ -329,6 +329,10 @@ def init_diffprep_hmc_wf(
         )
     else:
         sloppy_kwargs = {}
+
+    # Described after the --sloppy downgrade so the methods section reports the
+    # correction that actually ran, not the one that was asked for.
+    workflow.__desc__ = generate_diffprep_boilerplate(effective_correction_mode)
 
     diffprep_kwargs = dict(
         # num_threads only sets OMP_NUM_THREADS, which TORTOISEProcess ignores
@@ -532,7 +536,7 @@ def init_diffprep_hmc_wf(
         if 'topup' in config.workflow.pepolar_method.lower():
             raise Exception(
                 'TOPUP-based pepolar correction is not supported with '
-                '--hmc-model diffprep_*; choose --pepolar-method DRBUDDI.'
+                '--hmc-model tortoise; choose --pepolar-method DRBUDDI.'
             )
 
         # For rpe_series the per-direction DIFFPREP stage above already produced

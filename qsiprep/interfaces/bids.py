@@ -165,13 +165,12 @@ class BIDSDataGrabber(SimpleInterface):
 
     def __init__(self, *args, **kwargs):
         anat_only = kwargs.pop('anat_only')
-        dwi_only = kwargs.pop('dwi_only')
         anatomical_contrast = kwargs.pop('anatomical_contrast')
         self._anatomical_contrast = anatomical_contrast
         super().__init__(*args, **kwargs)
         if anat_only is not None:
             self._require_funcs = not anat_only
-        self._no_anat_necessary = bool(dwi_only) or anatomical_contrast == 'none'
+        self._no_anat_necessary = anatomical_contrast == 'none'
 
     def _run_interface(self, runtime):
         bids_dict = self.inputs.subject_data
@@ -182,7 +181,9 @@ class BIDSDataGrabber(SimpleInterface):
         if not bids_dict['t1w']:
             message = f'No T1w images found for subject sub-{self.inputs.subject_id}'
             if self._no_anat_necessary:
-                LOGGER.info('%s, but no problem because --dwi-only was selected.', message)
+                LOGGER.info(
+                    '%s, but no problem because --anat-modality none was selected.', message
+                )
             elif self._anatomical_contrast != 'T1w':
                 LOGGER.info(
                     '%s, but no problem because --anat-modality %s was selected.',
@@ -195,7 +196,9 @@ class BIDSDataGrabber(SimpleInterface):
         if not bids_dict['t2w']:
             message = f'No T2w images found for subject sub-{self.inputs.subject_id}'
             if self._no_anat_necessary:
-                LOGGER.info('%s, but no problem because --dwi-only was selected.', message)
+                LOGGER.info(
+                    '%s, but no problem because --anat-modality none was selected.', message
+                )
             elif self._anatomical_contrast != 'T2w':
                 LOGGER.info(
                     '%s, but no problem because --anat-modality %s was selected.',
