@@ -64,12 +64,13 @@ def _t2w_sdc_backend_enabled():
     """Whether the selected backend has a stage that can consume a T2w for SDC.
 
     DRBUDDI's multimodal ``--structural`` is reached only when ``--pepolar-method``
-    asks for DRBUDDI; TORTOISE ``--epi T2Wreg`` is reached from the ``diffprep_*``
-    backends for the fieldmap-less case and is **not** gated on ``--pepolar-method``.
+    asks for DRBUDDI; TORTOISE ``--epi T2Wreg`` is reached from the ``tortoise``
+    backend for the fieldmap-less case and is **not** gated on ``--pepolar-method``.
     """
-    return 'drbuddi' in (config.workflow.pepolar_method or '').lower() or (
-        config.workflow.hmc_model or ''
-    ).startswith('diffprep_')
+    return (
+        'drbuddi' in (config.workflow.pepolar_method or '').lower()
+        or config.workflow.hmc_model == 'tortoise'
+    )
 
 
 def _t2w_available_for_sdc(subject_data):
@@ -251,7 +252,6 @@ to workflows in *QSIPrep*'s documentation]\
     bidssrc = pe.Node(
         BIDSDataGrabber(
             subject_data=subject_data,  # Data has already been selected with sub/ses filters
-            dwi_only=config.workflow.anat_modality == 'none',
             anat_only=config.workflow.anat_only,
             anatomical_contrast=config.workflow.anat_modality,
         ),
@@ -324,7 +324,6 @@ to workflows in *QSIPrep*'s documentation]\
         (bidssrc, bids_info, [
             ((info_modality,
               fix_multi_source_name,
-              config.workflow.anat_modality == 'none',
               config.workflow.subject_anatomical_reference == 'sessionwise',
               config.workflow.anat_modality),
              'in_file'),
@@ -341,7 +340,6 @@ to workflows in *QSIPrep*'s documentation]\
         (bidssrc, ds_report_summary, [
             ((info_modality,
               fix_multi_source_name,
-              config.workflow.anat_modality == 'none',
               config.workflow.subject_anatomical_reference == 'sessionwise',
               config.workflow.anat_modality),
              'source_file'),
@@ -350,7 +348,6 @@ to workflows in *QSIPrep*'s documentation]\
         (bidssrc, ds_report_about, [
             ((info_modality,
               fix_multi_source_name,
-              config.workflow.anat_modality == 'none',
               config.workflow.subject_anatomical_reference == 'sessionwise',
               config.workflow.anat_modality),
              'source_file'),
@@ -423,7 +420,6 @@ to workflows in *QSIPrep*'s documentation]\
 
     anat_source_file = fix_multi_source_name(
         subject_data[info_modality],
-        dwi_only=config.workflow.anat_modality == 'none',
         include_session=config.workflow.subject_anatomical_reference == 'sessionwise',
         anatomical_contrast=config.workflow.anat_modality,
     )

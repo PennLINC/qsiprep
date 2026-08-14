@@ -197,6 +197,63 @@ def test_diffprep_wf_honours_use_cuda(tmp_path):
         config.workflow.diffprep_config = orig
 
 
+def test_diffprep_correction_mode_defaults_to_quadratic():
+    """``correction_mode`` is a --diffprep-config key, defaulting to quadratic.
+
+    The CLI exposes one ``--hmc-model tortoise`` rather than a value per mode,
+    so the config JSON is the only way to reach ``motion`` or ``cubic``.
+    """
+    from qsiprep.workflows.dwi.diffprep import _load_diffprep_config
+
+    assert _load_diffprep_config(None)['correction_mode'] == 'quadratic'
+
+
+def test_diffprep_wf_honours_correction_mode(tmp_path):
+    """A correction_mode in --diffprep-config reaches the DIFFPREP node."""
+    import json as _json
+
+    config = _base_config()
+    cfg = tmp_path / 'cubic_cfg.json'
+    cfg.write_text(_json.dumps({'correction_mode': 'cubic'}))
+    orig = config.workflow.diffprep_config
+    try:
+        config.workflow.diffprep_config = str(cfg)
+        wf = _build(_scan_groups(), t2w_sdc=False, name='mode_cubic')
+        assert wf.get_node('diffprep').inputs.correction_mode == 'cubic'
+
+        config.workflow.diffprep_config = None
+        wf_default = _build(_scan_groups(), t2w_sdc=False, name='mode_default')
+        assert wf_default.get_node('diffprep').inputs.correction_mode == 'quadratic'
+    finally:
+        config.workflow.diffprep_config = orig
+
+
+def test_diffprep_boilerplate_describes_the_configured_mode(tmp_path):
+    """The methods section must describe the mode that actually ran.
+
+    ``correction_mode`` is selectable through --diffprep-config, so boilerplate
+    that hardcodes "quadratic eddy currents" would misreport a motion-only or
+    cubic run.
+    """
+    import json as _json
+
+    config = _base_config()
+    cfg = tmp_path / 'boilerplate_cfg.json'
+    cfg.write_text(_json.dumps({'correction_mode': 'motion'}))
+    orig = config.workflow.diffprep_config
+    try:
+        config.workflow.diffprep_config = str(cfg)
+        wf = _build(_scan_groups(), t2w_sdc=False, name='boiler_motion')
+        assert 'rigid head motion only' in wf.__desc__
+        assert 'quadratic eddy' not in wf.__desc__
+
+        config.workflow.diffprep_config = None
+        wf_quad = _build(_scan_groups(), t2w_sdc=False, name='boiler_quad')
+        assert 'quadratic eddy currents' in wf_quad.__desc__
+    finally:
+        config.workflow.diffprep_config = orig
+
+
 def _stage_diffprep_outputs(tmp_path, t2wreg):
     """Recreate the file tree TORTOISEProcess leaves behind in a node's cwd.
 
@@ -761,9 +818,9 @@ def test_t2w_available_for_sdc_requires_a_consuming_backend(t2w_gate_config):
     """t2w_unfatsat only exists when the backend has a stage that consumes it.
 
     ``additional_t2ws`` -- the only thing that makes init_anat_preproc_wf build its
-    T2w branch -- was gated on --pepolar-method alone. The diffprep_* T2Wreg path
+    T2w branch -- was gated on --pepolar-method alone. The tortoise T2Wreg path
     consumes the T2w without any PEPOLAR data and is not gated on that flag, so a
-    plain ``--hmc-model diffprep_* --ignore fieldmaps`` run requested T2w SDC while
+    plain ``--hmc-model tortoise --ignore fieldmaps`` run requested T2w SDC while
     nothing produced the image, and DIFFPREP died with
     ``epi_mode="T2Wreg" requires a structural_image``.
     """
@@ -778,13 +835,12 @@ def test_t2w_available_for_sdc_requires_a_consuming_backend(t2w_gate_config):
     assert _t2w_sdc_backend_enabled() is True
     assert _t2w_available_for_sdc(T2W_SUBJECT) is True
 
-    # The regression: diffprep_* consumes it via --epi T2Wreg regardless of
+    # The regression: 'tortoise' consumes it via --epi T2Wreg regardless of
     # --pepolar-method.
     t2w_gate_config.workflow.pepolar_method = 'TOPUP'
-    for model in ('diffprep_motion', 'diffprep_quadratic', 'diffprep_cubic'):
-        t2w_gate_config.workflow.hmc_model = model
-        assert _t2w_sdc_backend_enabled() is True, model
-        assert _t2w_available_for_sdc(T2W_SUBJECT) is True, model
+    t2w_gate_config.workflow.hmc_model = 'tortoise'
+    assert _t2w_sdc_backend_enabled() is True, 'tortoise'
+    assert _t2w_available_for_sdc(T2W_SUBJECT) is True, 'tortoise'
 
 
 def test_extended_pepolar_report_t2w_n4_gets_input():
@@ -803,14 +859,6 @@ def test_extended_pepolar_report_t2w_n4_gets_input():
     wf_no_t2w = init_extended_pepolar_report_wf(segment_t2w=False)
     assert wf_no_t2w.get_node('t2w_n4') is None
     assert wf_no_t2w.get_node('map_seg') is not None
-
-
-def test_diffprep_order_helper():
-    from qsiprep.workflows.dwi.base import _diffprep_order
-
-    assert _diffprep_order('diffprep_motion') == 'motion'
-    assert _diffprep_order('diffprep_quadratic') == 'quadratic'
-    assert _diffprep_order('diffprep_cubic') == 'cubic'
 
 
 def _base_config():
@@ -843,7 +891,6 @@ def _build(scan_groups, t2w_sdc, name='dp'):
         scan_groups=scan_groups,
         source_file='/data/sub-01_dwi.nii.gz',
         t2w_sdc=t2w_sdc,
-        correction_mode='quadratic',
         dwi_metadata={'PhaseEncodingDirection': 'j'},
         name=name,
     )
@@ -953,10 +1000,9 @@ def test_init_diffprep_hmc_wf_syn_without_t2w():
 def test_cnr_model_label_is_bids_valid():
     """The ``model`` entity names the signal model and must be alphanumeric.
 
-    ``diffprep_quadratic`` could not be parsed back -- ``_`` is the BIDS entity
-    separator -- and DIFFPREP emits no CNR of its own, so the diffprep backends
-    report the MAPMRI model the CNR is actually derived from. Every other
-    backend must be left exactly as it was.
+    DIFFPREP emits no CNR of its own, so the ``tortoise`` backend reports the
+    MAPMRI model the CNR is actually derived from rather than its own name.
+    Every other backend must be left exactly as it was.
     """
     import re
 
@@ -965,11 +1011,10 @@ def test_cnr_model_label_is_bids_valid():
     for unchanged in ('3dSHORE', 'eddy', 'tensor', 'none'):
         assert _cnr_model_label(unchanged) == unchanged
 
-    for diffprep_model in ('diffprep_motion', 'diffprep_quadratic', 'diffprep_cubic'):
-        assert _cnr_model_label(diffprep_model) == 'MAPMRI'
+    assert _cnr_model_label('tortoise') == 'MAPMRI'
 
     entity = re.compile(r'^[a-zA-Z0-9]+$')
-    for model in ('3dSHORE', 'eddy', 'tensor', 'none', 'diffprep_quadratic'):
+    for model in ('3dSHORE', 'eddy', 'tensor', 'none', 'tortoise'):
         assert entity.match(_cnr_model_label(model)), model
 
 
@@ -980,7 +1025,7 @@ def test_cnr_description_flags_in_sample_bias():
     baseline = _cnr_description('3dSHORE')
     assert baseline == 'Contrast-to-noise ratio map for the HMC step.'
 
-    diffprep_desc = _cnr_description('diffprep_quadratic')
+    diffprep_desc = _cnr_description('tortoise')
     assert 'MAPMRI' in diffprep_desc
     assert 'in-sample' in diffprep_desc
     assert 'not quantitatively comparable' in diffprep_desc
@@ -1243,7 +1288,7 @@ def test_t2wreg_is_recognised_as_sdc_for_reporting():
 
     config = _base_config()
     try:
-        config.workflow.hmc_model = 'diffprep_quadratic'
+        config.workflow.hmc_model = 'tortoise'
         assert _doing_t2wreg(None, '/path/to/T2w.nii.gz') is True
         assert _doing_t2wreg('syn', '/path/to/T2w.nii.gz') is True
 

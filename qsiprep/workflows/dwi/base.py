@@ -42,16 +42,10 @@ def _doing_t2wreg(fieldmap_type, t2w_sdc):
     the reportlet gate and produce no SDC figure.
     """
     return (
-        (config.workflow.hmc_model or '').startswith('diffprep_')
+        config.workflow.hmc_model == 'tortoise'
         and fieldmap_type in (None, 'syn')
         and bool(t2w_sdc)
     )
-
-
-def _diffprep_order(hmc_model):
-    """Map a ``diffprep_*`` hmc_model string to a TORTOISE DIFFPREP correction
-    mode (``motion`` / ``quadratic`` / ``cubic``)."""
-    return hmc_model.split('_', 1)[1]
 
 
 def init_dwi_preproc_wf(
@@ -286,7 +280,7 @@ def init_dwi_preproc_wf(
             name='hmc_sdc_wf',
         )
 
-    elif config.workflow.hmc_model.startswith('diffprep_'):
+    elif config.workflow.hmc_model == 'tortoise':
         # The DIFFPREP backend performs its own SDC internally (DRBUDDI for
         # reverse-PE, TORTOISE T2Wreg for the fieldmap-less-with-T2w case, or
         # qsiprep's init_sdc_wf for GRE/phase/SyN) -- exactly as init_fsl_hmc_wf
@@ -297,7 +291,6 @@ def init_dwi_preproc_wf(
             source_file=source_file,
             dwi_metadata=dwi_metadata,
             t2w_sdc=t2w_sdc,
-            correction_mode=_diffprep_order(config.workflow.hmc_model),
             name='hmc_sdc_wf',
         )
 
@@ -328,7 +321,10 @@ def init_dwi_preproc_wf(
 
     if not dwi_only:
         # calculate dwi registration to T1w
-        b0_coreg_wf = init_b0_to_anat_registration_wf(write_report=True)
+        b0_coreg_wf = init_b0_to_anat_registration_wf(
+            write_report=True,
+            transform_type=config.workflow.b0_to_anat_transform,
+        )
     else:
         b0_coreg_wf = init_direct_b0_acpc_wf(write_report=True)
 
@@ -447,7 +443,7 @@ def init_dwi_preproc_wf(
         DiffusionSummary(
             pe_direction=scan_groups['dwi_series_pedir'],
             hmc_model=config.workflow.hmc_model,
-            b0_to_t1w_transform=config.workflow.b0_to_t1w_transform,
+            b0_to_anat_transform=config.workflow.b0_to_anat_transform,
             hmc_transform=config.workflow.hmc_transform,
             denoise_method=config.workflow.denoise_method,
             dwi_denoise_window=config.workflow.dwi_denoise_window,

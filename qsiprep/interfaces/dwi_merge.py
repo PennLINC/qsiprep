@@ -22,7 +22,7 @@ from nipype.utils.filemanip import fname_presuffix
 
 from ..utils.misc import safe_unit_vector
 from ..workflows.dwi.util import _get_concatenated_bids_name
-from .fmap import get_distortion_grouping
+from .epi_fmap import get_distortion_grouping
 
 LOGGER = logging.getLogger('nipype.workflow')
 MAX_COMBINED_SCANS = 100

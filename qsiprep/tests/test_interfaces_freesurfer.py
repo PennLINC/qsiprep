@@ -64,6 +64,13 @@ def test_synthstrip_interface(datasets, tmp_path_factory):
     assert mask_img.shape == in_img.shape
 
 
+def test_synthseg_tensorflow_environ():
+    """mri_synthseg needs Keras 2, and oneDNN pushes its peak memory past 15GB."""
+    interface = freesurfer.SynthSeg()
+    assert interface.inputs.environ['TF_USE_LEGACY_KERAS'] == '1'
+    assert interface.inputs.environ['TF_ENABLE_ONEDNN_OPTS'] == '0'
+
+
 @pytest.mark.synthstrip
 def test_synthseg_interface(datasets, tmp_path_factory):
     """Test qsiprep.interfaces.freesurfer.SynthSeg."""

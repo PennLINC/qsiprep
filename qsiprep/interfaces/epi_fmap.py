@@ -1,6 +1,5 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-import json
 import os.path as op
 from collections import defaultdict
 from pathlib import Path
@@ -10,9 +9,10 @@ import numpy as np
 import pandas as pd
 from nilearn.image import concat_imgs, index_img, load_img
 from nipype import logging
-from nipype.utils.filemanip import fname_presuffix, split_filename
+from nipype.utils.filemanip import fname_presuffix
 
 from .. import config
+from ..utils.bids import find_bval, load_sidecar
 from .gradients import concatenate_bvals
 from .images import to_lps
 from .reports import topup_selection_to_report
@@ -41,20 +41,42 @@ def _merge_metadata(metadatas):
     return merged_metadata
 
 
-def read_nifti_sidecar(json_file):
-    if not json_file.endswith('.json'):
-        json_file = fname_presuffix(json_file, suffix='.json', use_ext=False)
-        if not op.exists(json_file):
-            raise Exception('No corresponding json file found')
+def read_nifti_sidecar(bids_file):
+    """Read the distortion-relevant metadata that applies to a BIDS file.
 
-    with open(json_file) as f:
-        metadata = json.load(f)
-    pe_dir = metadata['PhaseEncodingDirection']
-    slice_times = metadata.get('SliceTiming')
-    trt = metadata.get('TotalReadoutTime')
-    if trt is None:
-        pass
-    return {'PhaseEncodingDirection': pe_dir, 'SliceTiming': slice_times, 'TotalReadoutTime': trt}
+    Metadata is resolved with the BIDS inheritance principle, so sidecars in the
+    dataset root, subject, and session directories are merged in along with any
+    sidecar sitting beside ``bids_file`` itself.
+
+    Parameters
+    ----------
+    bids_file : :obj:`str`
+        Path to a file in a BIDS dataset.
+
+    Returns
+    -------
+    :obj:`dict`
+        With keys ``PhaseEncodingDirection``, ``SliceTiming`` and
+        ``TotalReadoutTime``. The latter two are ``None`` when unavailable.
+
+    Raises
+    ------
+    ValueError
+        If no sidecar applies to ``bids_file``, or if the metadata does not
+        include a phase encoding direction.
+    """
+    metadata = load_sidecar(bids_file)
+    if not metadata:
+        raise ValueError(f'No metadata found for {bids_file}')
+
+    if 'PhaseEncodingDirection' not in metadata:
+        raise ValueError(f'No PhaseEncodingDirection in the metadata for {bids_file}')
+
+    return {
+        'PhaseEncodingDirection': metadata['PhaseEncodingDirection'],
+        'SliceTiming': metadata.get('SliceTiming'),
+        'TotalReadoutTime': metadata.get('TotalReadoutTime'),
+    }
 
 
 acqp_lines = {
@@ -95,8 +117,7 @@ def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
     image_series = []
 
     for fmap_file in fmap_list:
-        pth, fname, _ = split_filename(fmap_file)
-        potential_bval_file = op.join(pth, fname) + '.bval'
+        potential_bval_file = find_bval(fmap_file)
         starting_index = len(original_files)
         fmap_img = load_img(fmap_file)
         image_series.append(fmap_img)
@@ -104,7 +125,7 @@ def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
         original_files += [fmap_file] * num_images
 
         # Which images are b=0 images?
-        if op.exists(potential_bval_file):
+        if potential_bval_file is not None:
             # If there is a secret bval file, check that it's allowed
             bvals = np.loadtxt(potential_bval_file, ndmin=1)
             if fmap_img.ndim == 3 and len(bvals) == 1:
