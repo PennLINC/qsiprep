@@ -32,8 +32,11 @@ The cost is that a new :class:`~.models.EstimationMethod` touches five places
    and a narration branch in each ``_describe_*`` function.
 5. Tests - a scenario skeleton, inference assertions, and regenerated golden
    reports (``QSIPREP_REGEN_GROUPING_REPORTS=1``).
+6. ``adapters.py`` - the legacy ``fieldmap_info`` shape the method maps to
+   (or a clear ``NotImplementedError`` when it has none yet).
 """
 
+from .adapters import backend_for_config, to_legacy_scan_groups
 from .inference import build_grouping
 from .metadata import index_subject
 from .models import (
@@ -61,12 +64,14 @@ __all__ = [
     'GroupingError',
     'GroupingIssue',
     'Provenance',
+    'backend_for_config',
     'build_dwi_grouping',
     'check_backend',
     'describe_processing',
     'full_report',
     'index_subject',
     'report_text',
+    'to_legacy_scan_groups',
 ]
 
 
