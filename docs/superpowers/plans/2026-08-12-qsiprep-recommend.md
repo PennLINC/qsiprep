@@ -6,11 +6,23 @@
 
 **Architecture:** A new `qsiprep/recommend/` package with a one-way pipeline: `probe.py` turns BIDS into `SubjectFacts` dataclasses (the only pybids-aware module, reusing `collect_data` and `group_dwi_scans`), `profiles.py` groups subjects by acquisition signature, `rules.py` is an ordered registry of pure functions from facts to `Recommendation`s, and `report.py` renders text. A thin CLI in `qsiprep/cli/recommend.py` orchestrates them.
 
-**Tech Stack:** Python 3.10+, pybids (`<0.16`), nibabel, numpy, pytest, Sphinx (`sphinxarg.ext`, custom directive). No new dependencies.
+**Tech Stack:** Python 3.11+ (`requires-python = ">=3.11"` as of #1077), pybids (`<0.16`), nibabel, numpy, pytest, Sphinx (`sphinxarg.ext`, custom directive). No new dependencies.
 
 **Spec:** `docs/superpowers/specs/2026-08-12-qsiprep-recommend-design.md`
 
 **Issue:** https://github.com/PennLINC/qsiprep/issues/1081
+
+**Revised:** 2026-08-14, after merging main into `recommender-cli`. The changes that touch this plan:
+
+| PR | Change | Effect here |
+|---|---|---|
+| #1085 | `--hmc-model diffprep_motion/quadratic/cubic` collapsed into `--hmc-model tortoise`; the mode moved to `"correction_mode"` in `--diffprep-config` | Tasks 6, 10, 11 |
+| #1083 | Deprecated options now warn and forward; `deprecations` is keyed by option string; `--b0-to-t1w-transform` renamed to `--b0-to-anat-transform` | Task 11, out-of-scope list |
+| #1080 | `load_sidecar` / `find_bval` / `find_bvec` added to `qsiprep.utils.bids`, honoring the BIDS inheritance principle | Tasks 2, 3 |
+| #1071 | `--denoise-method` accepts `dwidenoise2` and a `;name:value` parameter spec instead of `choices` | Tasks 7, 11 |
+| #1087 | New `--report-output-level` | Task 8 |
+| #1077 | Python 3.11, DIPY 1.12 | Tech stack |
+| #1088 | Prose citations in `docs/` moved from hyperlinks to BibTeX entries in `qsiprep/data/boilerplate.bib` | Task 12 (nothing to do; `docs/recommend.rst` cites no literature) |
 
 ## Global Constraints
 
@@ -26,7 +38,7 @@
 - Unit tests must not be marked `integration` — `addopts = '-m "not integration"'` means unmarked tests run by default, which is what we want.
 - Constants fixed by the spec: b=0 threshold 100 s/mm², shell clustering tolerance 100 s/mm², at most 4 shells, at least 6 directions per shell, fewer than 30 volumes triggers the denoising warning, voxel sizes round to 2 decimal places, infant cutoff 60 months.
 - Recommendation severities are exactly: `recommended`, `consider`, `note`, `warning`, `undetermined`.
-- No rule may emit a flag that `qsiprep.cli.parser._build_parser()` does not define, and none may emit `--dwi-only`.
+- No rule may emit a flag that `qsiprep.cli.parser._build_parser()` does not define, and none may emit a flag registered with one of the parser's deprecation actions (`DeprecatedAction`, `DeprecatedForwardAction`, `DeprecatedStoreAction`) — as of #1083 that is `--dwi-only`, `--dwi-no-biascorr`, `--longitudinal`, `--prefer-dedicated-fmaps`, `--b0-motion-corr-to`, and `--b0-to-t1w-transform`.
 
 ---
 
@@ -322,6 +334,8 @@ git commit -m "Add fact vocabulary and sampling-scheme classification for the re
 
 **Why this exists:** `generate_bids_skeleton` writes zero-length `.nii.gz` files. The probe reads voxel sizes from NIfTI headers and b-values from `.bval` files, and `collect_data` raises `RuntimeError` on any DWI that is not 4D. So the fixtures need real, tiny images.
 
+**Since #1080:** `qsiprep.utils.bids.find_bval` / `find_bvec` / `load_sidecar` resolve gradient tables and sidecars through the BIDS inheritance principle, and `docs/usage.rst` no longer tells users to duplicate `.bval`/`.bvec` per `part` entity. Once the base factory works, add a `shared_gradients=False` option to `make_dataset` that writes one `sub-<label>_dwi.bval`/`.bvec` pair beside the `part-mag`/`part-phase` images instead of one pair each, and a probe test asserting the b-values still resolve. That path is untestable with per-file gradients.
+
 - [ ] **Step 1: Write the failing test**
 
 Create `qsiprep/tests/test_recommend_probe.py`:
@@ -566,6 +580,7 @@ git commit -m "Add BIDS fixture factory for recommender tests"
 **Reference — shapes this task depends on:**
 - `collect_data(bids_dir_or_layout, participant_label, session_id=None, filters=None, bids_validate=True, ignore=None)` returns `(subj_data, layout)`; `subj_data` has keys `fmap`, `t2w`, `t1w`, `roi`, `dwi`, each a sorted list of paths.
 - `group_dwi_scans(layout, subject_data, combine_scans=True, ignore_fieldmaps=False)` returns `(groups, concatenation_grouping)`; each group dict has `dwi_series`, `fieldmap_info`, `dwi_series_pedir`, `concatenated_bids_name`. `fieldmap_info['suffix']` is `None`, `'epi'`, `'dwi'`, `'rpe_series'`, `'phasediff'`, etc.
+- `load_sidecar(path) -> dict` and `find_bval(path) -> str | None` in `qsiprep.utils.bids` (added in #1080) resolve metadata and gradients by walking the file's BIDS ancestors, merging sidecars most-specific-last. Use these instead of `layout.get_metadata` / `layout.get_bval`: they are what the rest of QSIPrep now uses, they need no layout, and they get inherited `.bval` files right.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -717,7 +732,10 @@ Create `qsiprep/recommend/probe.py`:
 This is the only module in :mod:`qsiprep.recommend` that knows about pybids.
 It reuses QSIPrep's own ingress -- :func:`~qsiprep.utils.bids.collect_data` and
 :func:`~qsiprep.utils.grouping.group_dwi_scans` -- so that anything the report
-says about scan grouping is what QSIPrep will actually do.
+says about scan grouping is what QSIPrep will actually do. Sidecars and
+gradient tables come from :func:`~qsiprep.utils.bids.load_sidecar` and
+:func:`~qsiprep.utils.bids.find_bval`, which apply the BIDS inheritance
+principle the same way the rest of QSIPrep does.
 """
 
 from __future__ import annotations
@@ -729,7 +747,13 @@ import nibabel as nb
 import numpy as np
 from bids.layout import BIDSLayout
 
-from ..utils.bids import collect_data, collect_participants, parse_bids_for_age_months
+from ..utils.bids import (
+    collect_data,
+    collect_participants,
+    find_bval,
+    load_sidecar,
+    parse_bids_for_age_months,
+)
 from ..utils.grouping import group_dwi_scans
 from .facts import GroupFacts, SeriesFacts, SubjectFacts, classify_sampling_scheme
 
@@ -819,7 +843,7 @@ def probe_subject(layout, bids_dir, subject, session_id=None, filters=None):
         ignore_fieldmaps=False,
     )
 
-    series = tuple(_series_facts(path, layout) for path in subject_data['dwi'])
+    series = tuple(_series_facts(path) for path in subject_data['dwi'])
     group_facts = tuple(
         GroupFacts(
             concatenated_bids_name=group.get('concatenated_bids_name', ''),
@@ -851,21 +875,21 @@ def probe_subject(layout, bids_dir, subject, session_id=None, filters=None):
     )
 
 
-def _series_facts(path, layout) -> SeriesFacts:
+def _series_facts(path) -> SeriesFacts:
     """Reduce one DWI file to a :class:`~qsiprep.recommend.facts.SeriesFacts`."""
     img = nb.load(path)
     zooms = img.header.get_zooms()
     voxel_size = tuple(round(float(zoom), 2) for zoom in zooms[:3])
     n_volumes = int(img.shape[3]) if img.ndim == 4 else 1
 
-    bvals = _load_bvals(path, layout)
+    bvals = _load_bvals(path)
     if bvals is None:
         is_shelled, shells, n_unique, n_b0s = False, (), 0, 0
     else:
         is_shelled, shells, n_unique = classify_sampling_scheme(bvals)
         n_b0s = int(np.sum(np.asarray(bvals, dtype=float) < 100))
 
-    metadata = layout.get_metadata(path)
+    metadata = load_sidecar(path)
     image_type = metadata.get('ImageType') or []
 
     return SeriesFacts(
@@ -883,9 +907,13 @@ def _series_facts(path, layout) -> SeriesFacts:
     )
 
 
-def _load_bvals(dwi_file, layout):
-    """Return the b-values for ``dwi_file``, or ``None`` when they cannot be found."""
-    bval_file = layout.get_bval(dwi_file)
+def _load_bvals(dwi_file):
+    """Return the b-values for ``dwi_file``, or ``None`` when they cannot be found.
+
+    ``find_bval`` follows the BIDS inheritance principle, so a ``sub-01_dwi.bval``
+    shared by ``part-mag`` and ``part-phase`` images resolves for both.
+    """
+    bval_file = find_bval(dwi_file)
     if not bval_file or not os.path.exists(bval_file):
         return None
     return np.loadtxt(bval_file, ndmin=1)
@@ -896,7 +924,7 @@ def _load_bvals(dwi_file, layout):
 Run: `micromamba run -n lincapps python -m pytest qsiprep/tests/test_recommend_probe.py -v`
 Expected: PASS, 8 tests
 
-If `collect_participants(layout, ...)` rejects a layout argument, pass `bids_dir` instead — check its signature at `qsiprep/utils/bids.py:106` and adapt. If `layout.get_bval` does not exist in the installed pybids, replace `_load_bvals` with a sibling-file lookup that swaps the `.nii.gz`/`.nii` extension for `.bval`.
+If `collect_participants(layout, ...)` rejects a layout argument, pass `bids_dir` instead — check its signature at `qsiprep/utils/bids.py:301` and adapt.
 
 - [ ] **Step 5: Lint**
 
@@ -1406,12 +1434,12 @@ def test_shelled_data_gets_no_hmc_recommendation():
     assert '--hmc-model' not in flags_from(result)
 
 
-def test_non_shelled_data_recommends_diffprep_quadratic():
+def test_non_shelled_data_recommends_tortoise():
     facts = subject(series=(series(is_shelled=False, shells=(300, 2500), n_unique_bvals=40),))
 
     result = evaluate(facts)
 
-    assert flags_from(result)['--hmc-model'] == 'diffprep_quadratic'
+    assert flags_from(result)['--hmc-model'] == 'tortoise'
 
 
 def test_unreadable_bvals_leave_hmc_undetermined():
@@ -1422,7 +1450,7 @@ def test_unreadable_bvals_leave_hmc_undetermined():
     assert any(rec.flag == '--hmc-model' for rec in undetermined)
 
 
-def test_diffprep_with_reverse_pe_recommends_drbuddi():
+def test_tortoise_with_reverse_pe_recommends_drbuddi():
     facts = subject(series=(series(is_shelled=False, shells=(300, 2500), n_unique_bvals=40),))
 
     result = flags_from(evaluate(facts))
@@ -1440,7 +1468,7 @@ def test_no_fieldmap_recommends_syn_sdc():
     assert flags_from(evaluate(facts))['--use-syn-sdc'] == 'warn'
 
 
-def test_no_fieldmap_with_t2w_and_diffprep_is_a_note():
+def test_no_fieldmap_with_t2w_and_tortoise_is_a_note():
     facts = subject(
         series=(series(is_shelled=False, shells=(300, 2500), n_unique_bvals=40),),
         groups=(GroupFacts('sub-01', 1, None, 'j'),),
@@ -1502,6 +1530,10 @@ Append to `qsiprep/recommend/rules.py`:
 ```python
 #: Fieldmap suffixes that indicate reverse phase-encoded data is available.
 REVERSE_PE_SUFFIXES = ('epi', 'dwi', 'rpe_series')
+#: The --hmc-model value that selects TORTOISE DIFFPREP. Named here because two
+#: later rules branch on it; #1085 replaced the three "diffprep_*" values with
+#: this single one, moving the correction mode into --diffprep-config.
+HMC_TORTOISE = 'tortoise'
 
 
 @rule(
@@ -1537,12 +1569,14 @@ def hmc_model(facts, decisions):
             rationale=(
                 f'The sampling scheme is not shelled ({n_unique} unique b-values), and FSL '
                 'eddy requires shells. TORTOISE DIFFPREP fits a signal model over arbitrary '
-                'q-space and adds 24-parameter quadratic eddy-current correction. Use '
-                '"3dSHORE" instead if you want motion correction without eddy correction.'
+                'q-space and, by default, adds 24-parameter quadratic eddy-current '
+                'correction; set "correction_mode" in --diffprep-config to "motion" or '
+                '"cubic" to change that. Use "3dSHORE" instead if you want motion '
+                'correction without eddy correction.'
             ),
             severity='recommended',
             flag='--hmc-model',
-            value='diffprep_quadratic',
+            value='tortoise',
             docs_anchor='quickstart: head motion correction model',
         )
     ]
@@ -1550,14 +1584,13 @@ def hmc_model(facts, decisions):
 
 @rule(
     name='pepolar_method',
-    condition='reverse phase-encoded data with a diffprep_* head-motion model',
+    condition='reverse phase-encoded data with the tortoise head-motion model',
     docs_anchor='quickstart: head motion correction model',
     flags=('--pepolar-method',),
 )
 def pepolar_method(facts, decisions):
-    """TOPUP is not supported with the DIFFPREP backends."""
-    hmc = decisions.get('--hmc-model') or ''
-    if not hmc.startswith('diffprep'):
+    """TOPUP is not supported with the tortoise backend."""
+    if decisions.get('--hmc-model') != HMC_TORTOISE:
         return []
 
     if not any(group.fieldmap_suffix in REVERSE_PE_SUFFIXES for group in facts.groups):
@@ -1566,7 +1599,7 @@ def pepolar_method(facts, decisions):
     return [
         Recommendation(
             rationale=(
-                'Reverse phase-encoded data is present and the DIFFPREP backends do not '
+                'Reverse phase-encoded data is present and the tortoise backend does not '
                 'support TOPUP; DRBUDDI is TORTOISE\'s native distortion correction.'
             ),
             severity='recommended',
@@ -1589,7 +1622,7 @@ def sdc_fallback(facts, decisions):
         return []
 
     hmc = decisions.get('--hmc-model') or 'eddy'
-    if hmc.startswith('diffprep') and facts.has_t2w:
+    if hmc == HMC_TORTOISE and facts.has_t2w:
         return [
             Recommendation(
                 rationale=(
@@ -1725,6 +1758,8 @@ git commit -m "Add core hmc, sdc, and resolution recommendation rules"
 **Interfaces:**
 - Consumes: everything from Tasks 5 and 6.
 - Produces: registered rules `unringing_method`, `b1_biascorrect_stage`, `denoise_volume_count`.
+
+**Note on `--denoise-method` (#1071):** it is no longer an argparse `choices` list — it is a free-form spec string (`dwidenoise`, `dwidenoise2`, `patch2self`, `none`, optionally followed by `;name:value` pairs for `dwidenoise2`) validated by `qsiprep.utils.misc.parse_denoise_method`. No rule here emits it; `denoise_volume_count` only mentions `--denoise-method none` in prose. Do not add a `dwidenoise2` rule: no documentation recommends it for any data condition yet.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2120,7 +2155,9 @@ def anatomical_reference(facts, decisions):
                 f'Subjects have {len(facts.sessions)} sessions. '
                 '--subject-anatomical-reference decides whether they share one anatomical '
                 'space ("first-lex", the default, or "unbiased") or get one per session '
-                '("sessionwise"). This is a study-design decision the data cannot settle.'
+                '("sessionwise"). This is a study-design decision the data cannot settle. '
+                'It also decides where the HTML reports are written, unless '
+                '--report-output-level overrides it.'
             ),
             severity='note',
             docs_anchor='usage: --subject-anatomical-reference',
@@ -2257,7 +2294,9 @@ def denoise_after_combining(facts, decisions):
                 'Runs will be concatenated, so denoising could run on the combined series '
                 'instead of each run separately. More volumes give MP-PCA more to work with, '
                 'but large between-scan head motion can hurt it. There is little data to '
-                'guide this choice; check Framewise Displacement where a new series begins.'
+                'guide this choice; check Framewise Displacement where a new series begins. '
+                'Note that this cannot be combined with dwidenoise2 phase demodulation '
+                '("--denoise-method dwidenoise2;demodulate:...").'
             ),
             severity='consider',
             flag='--denoise-after-combining',
@@ -2355,7 +2394,7 @@ def _subject(subject_id='01', **overrides):
 
 def test_command_includes_recommended_and_consider_flags():
     recommendations = [
-        Recommendation('a', 'recommended', '--hmc-model', 'diffprep_quadratic'),
+        Recommendation('a', 'recommended', '--hmc-model', 'tortoise'),
         Recommendation('b', 'consider', '--use-syn-sdc', 'warn'),
         Recommendation('c', 'note'),
         Recommendation('d', 'warning'),
@@ -2364,7 +2403,7 @@ def test_command_includes_recommended_and_consider_flags():
     command = build_command('/in', '/out', recommendations)
 
     assert command.startswith('qsiprep /in /out participant')
-    assert '--hmc-model diffprep_quadratic' in command
+    assert '--hmc-model tortoise' in command
     assert '--use-syn-sdc warn' in command
 
 
@@ -2679,7 +2718,7 @@ git commit -m "Render recommender output as plain text"
 
 **Files:**
 - Create: `qsiprep/cli/recommend.py`
-- Modify: `pyproject.toml:105-107` (the `[project.scripts]` table)
+- Modify: `pyproject.toml:106-107` (the `[project.scripts]` table)
 - Test: `qsiprep/tests/test_recommend_cli.py`
 
 **Interfaces:**
@@ -2697,15 +2736,62 @@ import pytest
 
 from qsiprep.cli.parser import _build_parser
 from qsiprep.cli.recommend import main
-from qsiprep.recommend.rules import RULES
+from qsiprep.recommend.facts import GroupFacts, SeriesFacts, SubjectFacts
+from qsiprep.recommend.rules import RULES, evaluate
 from qsiprep.tests.recommend_fixtures import DwiSpec, make_dataset
 
-#: Flags no rule may emit, with the reason.
-NEVER_EMIT = {
-    # Listed in the parser's `deprecations` dict, but registered as a plain
-    # store_true, so it is not caught by the DeprecatedAction check below.
-    '--dwi-only': 'deprecated in favor of --anat-modality none',
-}
+
+def _series(**overrides):
+    defaults = {
+        'path': '/data/sub-01_dwi.nii.gz',
+        'n_volumes': 33,
+        'n_b0s': 3,
+        'shells': (1000,),
+        'is_shelled': True,
+        'n_unique_bvals': 1,
+        'voxel_size': (2.0, 2.0, 2.0),
+        'pe_direction': 'j',
+        'partial_fourier': 0.75,
+        'image_type': ('ORIGINAL', 'PRIMARY', 'NORM'),
+    }
+    defaults.update(overrides)
+    return SeriesFacts(**defaults)
+
+
+#: Subjects chosen so that between them every value-emitting rule fires at least
+#: once. Used to check emitted values against the parser's `choices`.
+REPRESENTATIVE_SUBJECTS = [
+    SubjectFacts(
+        subject_id='shelled',
+        series=(_series(),),
+        groups=(GroupFacts('sub-01', 1, 'epi', 'j'),),
+        has_t1w=True,
+    ),
+    SubjectFacts(
+        subject_id='nonshelled',
+        series=(_series(is_shelled=False, shells=(300, 2500), n_unique_bvals=40),),
+        groups=(GroupFacts('sub-02', 1, 'rpe_series', 'j'),),
+        has_t1w=True,
+    ),
+    SubjectFacts(
+        subject_id='nofmap-t2w-infant',
+        sessions=('A', 'B'),
+        series=(_series(partial_fourier=1.0),),
+        groups=(GroupFacts('sub-03', 1, None, 'j'),),
+        has_t2w=True,
+        age_months=9,
+    ),
+    SubjectFacts(
+        subject_id='no-anat',
+        series=(_series(),),
+        groups=(GroupFacts('sub-04', 1, None, 'j'),),
+    ),
+]
+
+#: Action classes the parser uses for deprecated options (see #1083). Every
+#: deprecated option is registered with one of these, so this is the whole test:
+#: there is no longer a hand-maintained list of flags to avoid.
+DEPRECATED_ACTIONS = ('DeprecatedAction', 'DeprecatedForwardAction', 'DeprecatedStoreAction')
 
 
 def _parser_actions():
@@ -2728,11 +2814,37 @@ def test_no_rule_emits_a_deprecated_flag():
 
     for rule in RULES:
         for flag in rule.flags:
-            assert flag not in NEVER_EMIT, f'rule "{rule.name}" emits {flag}: {NEVER_EMIT[flag]}'
             action_name = type(actions[flag]).__name__
-            assert action_name != 'DeprecatedAction', (
+            assert action_name not in DEPRECATED_ACTIONS, (
                 f'rule "{rule.name}" emits deprecated flag {flag}'
             )
+
+
+def test_deprecated_flags_are_detectable():
+    # Guards the test above: if the parser stops using these action classes,
+    # test_no_rule_emits_a_deprecated_flag would silently pass for everything.
+    actions = _parser_actions()
+
+    for flag in ('--dwi-only', '--longitudinal', '--b0-to-t1w-transform'):
+        assert type(actions[flag]).__name__ in DEPRECATED_ACTIONS
+
+
+@pytest.mark.parametrize('facts', REPRESENTATIVE_SUBJECTS, ids=lambda f: f.subject_id)
+def test_every_recommended_value_is_a_valid_choice(facts):
+    # #1085 renamed --hmc-model's values without renaming the flag, which this
+    # catches and test_every_rule_flag_exists_in_the_qsiprep_parser does not.
+    # Actions with no `choices` (e.g. --denoise-method since #1071) are skipped.
+    actions = _parser_actions()
+
+    for recommendation in evaluate(facts):
+        if recommendation.flag is None or recommendation.value is None:
+            continue
+        choices = getattr(actions[recommendation.flag], 'choices', None)
+        if not choices:
+            continue
+        assert recommendation.value in choices, (
+            f'{recommendation.flag} {recommendation.value} is not one of {choices}'
+        )
 
 
 def test_cli_prints_a_report_and_exits_zero(tmp_path, capsys):
@@ -2747,7 +2859,7 @@ def test_cli_prints_a_report_and_exits_zero(tmp_path, capsys):
     output = capsys.readouterr().out
 
     assert status == 0
-    assert '--hmc-model diffprep_quadratic' in output
+    assert '--hmc-model tortoise' in output
     assert 'qsiprep' in output
 
 
@@ -2773,7 +2885,7 @@ def test_printed_command_parses_with_the_qsiprep_parser(tmp_path, capsys):
     # Drop the positional bids_dir, output_dir, and analysis level.
     parsed = _build_parser().parse_args(args[:2] + ['participant'] + args[3:])
 
-    assert parsed.hmc_model == 'diffprep_quadratic'
+    assert parsed.hmc_model == 'tortoise'
 
 
 def test_missing_bids_dir_exits_one(tmp_path, capsys):
@@ -2945,7 +3057,7 @@ if __name__ == '__main__':
 
 - [ ] **Step 4: Register the console script**
 
-Edit `pyproject.toml`, replacing the `[project.scripts]` table at lines 105-107:
+Edit `pyproject.toml`, replacing the `[project.scripts]` table at lines 106-107:
 
 ```toml
 [project.scripts]
@@ -2956,9 +3068,11 @@ qsiprep-recommend = "qsiprep.cli.recommend:main"
 - [ ] **Step 5: Run tests to verify they pass**
 
 Run: `micromamba run -n lincapps python -m pytest qsiprep/tests/test_recommend_cli.py -v`
-Expected: PASS, 7 tests
+Expected: PASS, 12 tests (7 originals, `test_deprecated_flags_are_detectable`, and 4 parametrized cases of `test_every_recommended_value_is_a_valid_choice`)
 
 If `test_printed_command_parses_with_the_qsiprep_parser` fails because the output contains more than one occurrence of `qsiprep `, extract the command with a regex anchored to the last line block instead of `split`.
+
+`_build_parser()` returns a `DeprecationForwardingParser` since #1083, whose `parse_known_args` applies the `--b0-to-anat-transform` default and resolves forwarded deprecations. `parse_args` routes through it, so nothing in this test needs to change for that — but do not call `parse_known_args` on the result and then inspect `namespace.b0_to_t1w_transform`, which no longer exists after parsing.
 
 - [ ] **Step 6: Run the whole recommender suite**
 
@@ -2979,7 +3093,7 @@ git commit -m "Add the qsiprep-recommend command-line entry point"
 **Files:**
 - Create: `docs/sphinxext/recommend_rules.py`
 - Create: `docs/recommend.rst`
-- Modify: `docs/conf.py:45-58` (extensions list)
+- Modify: `docs/conf.py:45-60` (extensions list)
 - Modify: `docs/index.rst` (toctree)
 - Modify: `docs/quickstart.rst` (pointer near the head-motion section)
 - Modify: `docs/preprocessing.rst:200` (the `--combine-all-dwis` fix)
@@ -3056,6 +3170,8 @@ extensions = [
     ...
 ]
 ```
+
+The list ends at line 60 now, with `sphinxcontrib.bibtex` last; insert `'recommend_rules'` alphabetically as shown, not at the end. `docs/recommend.rst` cites no literature, so #1088's move to BibTeX references does not reach it. The `.. include:: links.rst` line follows the convention of the other pages; `links.rst` is only external link targets, so it costs nothing and is there if the page later links out.
 
 - [ ] **Step 3: Write the documentation page**
 
@@ -3177,7 +3293,9 @@ git commit -m "Document qsiprep-recommend and generate its rule table from the r
 Recorded so the implementer does not add them on impulse:
 
 - **Image-based probes**, including running N4 on anatomicals and b=0 images to decide on B1 bias correction (requested in the issue comments). `probe.py` is the seam where this would attach later.
-- **A `dwidenoise2` recommendation** based on complex or phase data. No documentation supports one.
+- **A `dwidenoise2` recommendation** based on complex or phase data. #1071 shipped the method and its `;name:value` parameter spec, but no documentation recommends it for any data condition, so there is nothing to encode. `SubjectFacts.has_phase_data` is already collected for when there is.
+- **A `--diffprep-config` recommendation.** #1085 moved the DIFFPREP correction mode into that JSON file. `quadratic` is the default and the documented recommendation, so the only content a generated config could carry is a value QSIPrep already uses. The `hmc_model` rationale points at the flag instead.
+- **A `--report-output-level` rule** (#1087). Its `auto` default already follows `--subject-anatomical-reference`; the multi-session note mentions it.
 - **`--anat-biascorrect auto`** on NORM anatomicals. The parser's own help says scanner-side normalization does not remove the need for N4.
 - **Validating a user-supplied command line.**
-- **Fixing the `--dwi-only` deprecation inconsistency** in `qsiprep/cli/parser.py`. The flag is listed in the `deprecations` dict but registered as a plain `store_true`, so it never warns. Worth a separate issue; the recommender simply never emits it.
+- **Reconciling `--infant` with `--anat-modality`.** `docs/preprocessing.rst` advises `--anat-modality none` alongside `--infant` (it said `--dwi-only` before #1083), while `--anat-modality`'s help says `--infant` forces T2w. The recommender follows the parser and stays silent about `--anat-modality` when it recommends `--infant`; the documentation conflict is worth its own issue.

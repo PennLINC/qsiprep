@@ -1,6 +1,7 @@
 # qsiprep-recommend design
 
 Date: 2026-08-12
+Revised: 2026-08-14, for PRs #1071, #1077, #1080, #1083, #1085, #1087, #1088
 Issue: https://github.com/PennLINC/qsiprep/issues/1081
 Branch: `recommender-cli`
 
@@ -8,7 +9,7 @@ Branch: `recommender-cli`
 
 TORTOISE support added many new ways to configure a QSIPrep run. Users cannot
 easily tell which flags their data call for, even though the documentation
-already states the answers (for example, `--hmc-model diffprep_quadratic` for
+already states the answers (for example, `--hmc-model tortoise` for
 non-shelled CS-DSI data). `qsiprep-recommend` reads a BIDS dataset and prints
 the flags the documentation recommends for that data, with the reasoning.
 
@@ -54,6 +55,14 @@ Reuse is the point: when the report says three runs will be concatenated, that
 is the grouping QSIPrep will actually compute, not a lookalike. The cost is
 pybids indexing time on large datasets, bounded by `--participant-label`.
 
+Sidecar metadata and gradient tables are read through the layout-free helpers
+`qsiprep.utils.bids.load_sidecar`, `find_bval`, and `find_bvec`, added in
+\#1080, rather than through `layout.get_metadata` / `layout.get_bval`. Those
+helpers implement the BIDS inheritance principle directly, so a
+`sub-01_dwi.bval` that applies to both `part-mag` and `part-phase` images
+resolves correctly — the arrangement `docs/usage.rst` used to tell users to
+avoid, and no longer does.
+
 The per-subject result is reduced to a `SubjectFacts` dataclass holding:
 
 - sampling scheme classification and shell structure
@@ -87,12 +96,16 @@ An ordered registry of pure functions from facts to
 change or a choice the data cannot settle. Order is
 explicit and declared, because some rules read earlier decisions: the
 `--pepolar-method DRBUDDI` recommendation follows from the `--hmc-model
-diffprep_*` decision, not directly from the data. Rules receive a `decisions`
+tortoise` decision, not directly from the data. Rules receive a `decisions`
 mapping of what earlier rules concluded. No dependency-graph machinery.
 
 Two ordering constraints matter: `pepolar_method` and `sdc_fallback` run after
 `hmc_model`, and `anat_modality` runs after `infant`, because `--infant` forces
-a T2w anatomical reference and the two flags must not both be emitted.
+a T2w anatomical reference and the two flags must not both be emitted. (Note
+that `docs/preprocessing.rst` advises `--anat-modality none` alongside
+`--infant` to sidestep infant skull-stripping, while `--anat-modality`'s own
+help text says T2w is forced under `--infant`. The parser wins: the recommender
+stays silent about `--anat-modality` whenever it recommends `--infant`.)
 
 Rules abstain when the metadata they need is absent; they never guess.
 
@@ -106,14 +119,25 @@ base is unit-testable with no BIDS dataset on disk.
 | Rule | Condition | Emits |
 |---|---|---|
 | `hmc_model` | after dropping b < `b0_threshold` (100 s/mm^2), remaining b-values cluster within a 100 s/mm^2 tolerance into <=4 clusters of >=6 directions each | nothing; the `eddy` default is correct |
-| | otherwise, non-shelled (DSI / CS-DSI) | `--hmc-model diffprep_quadratic`, noting `3dSHORE` as the motion-only alternative |
-| `pepolar_method` | reverse-PE data present and a `diffprep_*` decision was made | `--pepolar-method DRBUDDI` (TOPUP is unsupported with those backends) |
-| `sdc_fallback` | no fieldmap, no reverse-PE, `diffprep_*`, T2w present | note: TORTOISE `--epi T2Wreg` applies automatically |
+| | otherwise, non-shelled (DSI / CS-DSI) | `--hmc-model tortoise`, noting `3dSHORE` as the motion-only alternative |
+| `pepolar_method` | reverse-PE data present and a `tortoise` decision was made | `--pepolar-method DRBUDDI` (TOPUP is unsupported with that backend) |
+| `sdc_fallback` | no fieldmap, no reverse-PE, `tortoise`, T2w present | note: TORTOISE `--epi T2Wreg` applies automatically |
 | | no fieldmap, no reverse-PE, otherwise | `--use-syn-sdc warn` (consider) |
 | `output_resolution` | always | largest input voxel dimension, rounded to 2 decimal places; warns on anisotropic voxels or mixed voxel sizes within a profile |
 | `distortion_group_merge` | a complete series duplicated in opposing PE directions | `--distortion-group-merge average` (consider; `concat` is the alternative) |
 
+\#1085 collapsed the three `diffprep_*` values into a single `--hmc-model
+tortoise`; the correction mode moved into the `--diffprep-config` JSON as
+`"correction_mode"` (`motion`, `quadratic` — the default — or `cubic`). The
+`hmc_model` rule therefore emits one value and mentions `--diffprep-config` in
+its rationale rather than choosing between three flag values. `hmc_model` is
+also the only rule affected by the rename, because `decisions['--hmc-model']`
+is now compared for equality with `'tortoise'` instead of tested with
+`startswith('diffprep')`.
+
 ### Denoising
+
+# TODO: Recommend dwidenoise or dwidenoise2 if phase data are available.
 
 | Rule | Condition | Emits |
 |---|---|---|
@@ -122,6 +146,13 @@ base is unit-testable with no BIDS dataset on disk.
 | `b1_biascorrect_stage` | DWI `ImageType` contains `NORM` | `--b1-biascorrect-stage none` |
 | `denoise_volume_count` | fewer than 30 volumes in the denoising unit | warning that MP-PCA has little data to work with |
 
+`--denoise-method` is no longer an argparse `choices` list: since #1071 it is a
+free-form spec string parsed by `qsiprep.utils.misc.parse_denoise_method`
+(`dwidenoise`, `dwidenoise2`, `patch2self`, `none`, with
+`dwidenoise2;name:value;...` parameters). No rule emits it, but it is the
+reason the value-level invariant test below skips any action whose `choices`
+is `None` rather than assuming every flag has an enumerated set of values.
+
 ### Anatomical and cohort
 
 | Rule | Condition | Emits |
@@ -129,7 +160,7 @@ base is unit-testable with no BIDS dataset on disk.
 | `anat_modality` | no T1w, T2w present, and `--infant` was not recommended | `--anat-modality T2w` |
 | | neither present | `--anat-modality none` |
 | `infant` | age <= 60 months, read via `parse_bids_for_age_months` from `participants.tsv` or `sessions.tsv` (an `MNIInfant` cohort exists up to 60 months) | `--infant`, naming the cohort `cohort_by_months` would select |
-| `anatomical_reference` | more than one session per subject | note: `sessionwise` vs `first-lex` is a study-design decision |
+| `anatomical_reference` | more than one session per subject | note: `sessionwise` vs `first-lex` is a study-design decision, and it also determines where reports land unless `--report-output-level` says otherwise |
 
 ### Grouping
 
@@ -141,14 +172,25 @@ base is unit-testable with no BIDS dataset on disk.
 
 ### Deliberate omissions
 
-- **No phase/complex to `dwidenoise2` rule.** `dwidenoise2` exists, but no
+- **No phase/complex to `dwidenoise2` rule.** #1071 shipped `dwidenoise2` and
+  its parameter spec (`dwidenoise2;demodulate:linear;...`), but no
   documentation recommends it for any data condition. Inventing a rule would
-  violate the premise that recommendations match the documentation.
+  violate the premise that recommendations match the documentation. This is the
+  most likely rule to add once the docs take a position, and `SubjectFacts`
+  already carries `has_phase_data` for it.
 - **No `--anat-biascorrect auto` on NORM anatomicals.** The parser's help states
   that scanner-side normalization "does not remove the need for it", so
   recommending `auto` would contradict QSIPrep itself.
-- **`--dwi-only` is never emitted.** It appears in the parser's `deprecations`
-  map; the rule emits `--anat-modality none` instead.
+- **No `--report-output-level` rule.** #1087 added the flag, but its `auto`
+  default already follows `--subject-anatomical-reference`, so there is nothing
+  the data can add. The multi-session note mentions it instead.
+- **Deprecated flags are never emitted.** #1083 turned the parser's
+  `deprecations` map into `{option string: (removal version, what happens
+  instead)}` and gave every deprecated option a `Deprecated*Action`, so the
+  registry test can detect them by action class. This covers `--dwi-only`
+  (the rule emits `--anat-modality none` instead), `--longitudinal`,
+  `--dwi-no-biascorr`, `--prefer-dedicated-fmaps`, `--b0-motion-corr-to`, and
+  `--b0-to-t1w-transform` (renamed to `--b0-to-anat-transform`).
 
 ## Documentation synchronization
 
@@ -203,11 +245,11 @@ Detected
   Partial Fourier   0.75
 
 Recommended
-  --hmc-model diffprep_quadratic
+  --hmc-model tortoise
       Non-shelled scheme; FSL eddy requires shells, while TORTOISE DIFFPREP
       fits a signal model over arbitrary q-space.  [quickstart: hmc model]
   --pepolar-method DRBUDDI
-      TOPUP is not supported with the diffprep_* backends.  [quickstart]
+      TOPUP is not supported with the tortoise backend.  [quickstart]
 
 Consider
   --unringing-method rpg
@@ -223,7 +265,7 @@ Not determined
 
 qsiprep /data/HBN /path/to/outputs participant \
   --output-resolution 2.0 \
-  --hmc-model diffprep_quadratic \
+  --hmc-model tortoise \
   --pepolar-method DRBUDDI \
   --unringing-method rpg \
   --participant-label sub-01 sub-02 sub-03 ...
@@ -285,15 +327,23 @@ is reusable beyond it.
 
 Fixtures to cover: single-shell with a PA epi fieldmap; CS-DSI non-shelled;
 HCP-style dual-PE multi-shell; no fieldmap; no T1w; multi-run with and without
-`MultipartID`; and a heterogeneous dataset that must split into two profiles.
+`MultipartID`; a heterogeneous dataset that must split into two profiles; and,
+since #1080, complex-valued DWI whose `.bval`/`.bvec` are inherited from a
+`part`-less sibling rather than duplicated per `part`, which `usage.rst` now
+presents as the correct layout.
 
 **`test_recommend_cli.py`** runs the entry point end to end on a fixture and
 asserts exit status 0 and — the key invariant — that the printed command parses
 cleanly through QSIPrep's own `_build_parser()`.
 
 A registry-wide check asserts that no rule can emit a flag absent from
-`_build_parser()` or present in its `deprecations` dict, so a flag rename
-breaks CI rather than quietly producing bad advice.
+`_build_parser()` or registered with one of the parser's deprecation actions
+(`DeprecatedAction`, `DeprecatedForwardAction`, `DeprecatedStoreAction`), so a
+flag rename or a new deprecation breaks CI rather than quietly producing bad
+advice. That check is what would have caught the `diffprep_* -> tortoise`
+rename in #1085 had the recommender already existed, and it is why
+`--hmc-model`'s *value* deserves a companion assertion against the action's
+`choices`.
 
 ## Packaging
 
