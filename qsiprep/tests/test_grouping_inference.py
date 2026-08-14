@@ -80,7 +80,7 @@ def test_abcd_style_ignore_fieldmaps(tmp_path):
     grouping = load_scenario('abcd_style', tmp_path, ignore_fieldmaps=True)
     assert not grouping.estimations
     assert set(grouping.application.values()) == {None}
-    assert all(rec.datatype == 'dwi' for rec in grouping.files.values())
+    assert not any(rec.datatype == 'fmap' for rec in grouping.files.values())
 
 
 def test_bidsuri_intendedfor(tmp_path):
@@ -373,3 +373,278 @@ def test_name_collision(tmp_path):
 
     grouping = load_scenario('name_collision', tmp_path / 'nonstrict', strict=False)
     assert 'output-name-collision' in issue_codes(grouping.errors)
+
+
+def test_fieldmapless_t2w(tmp_path):
+    """No fieldmap + a T2w: the inferred T2Wreg fallback applies."""
+    grouping = load_scenario('fieldmapless_t2w', tmp_path)
+
+    assert list(grouping.estimations) == ['auto+t2wreg']
+    estimation = grouping.estimations['auto+t2wreg']
+    assert estimation.method is EstimationMethod.ANAT_CONTRAST
+    assert estimation.provenance is Provenance.INFERRED
+    assert basenames(estimation.sources) == ['sub-01_T2w.nii.gz']
+
+    dwi_path = grouping.dwi_files[0]
+    assert grouping.application[dwi_path] == 'auto+t2wreg'
+    assert grouping.application_provenance[dwi_path] is Provenance.INFERRED
+
+    # tortoise executes T2Wreg; fsl/mixed only warn (nobody demanded it)
+    assert not check_backend(grouping, 'tortoise')
+    for backend in ('fsl', 'mixed'):
+        anat_issues = [
+            issue
+            for issue in check_backend(grouping, backend)
+            if issue.code == 'anat-sdc-unsupported'
+        ]
+        assert anat_issues
+        assert anat_issues[0].severity == 'warning'
+
+
+def test_fieldmapless_t1w_only(tmp_path):
+    """No fieldmap and no T2w: genuinely uncorrectable by default."""
+    grouping = load_scenario('fieldmapless_t1w_only', tmp_path)
+
+    assert not grouping.estimations
+    assert set(grouping.application.values()) == {None}
+    for backend in ('fsl', 'tortoise', 'mixed'):
+        assert 'no-sdc' in issue_codes(check_backend(grouping, backend))
+
+
+def test_fieldmapless_t1w_only_synb0(tmp_path):
+    """use_synb0 corrects the same data via a synthetic b=0 from the T1w."""
+    grouping = load_scenario('fieldmapless_t1w_only', tmp_path, use_synb0=True)
+
+    assert list(grouping.estimations) == ['auto+synb0']
+    estimation = grouping.estimations['auto+synb0']
+    assert estimation.method is EstimationMethod.SYNB0
+    assert estimation.provenance is Provenance.FORCED
+    assert basenames(estimation.sources) == ['sub-01_T1w.nii.gz']
+
+    dwi_path = grouping.dwi_files[0]
+    assert grouping.application[dwi_path] == 'auto+synb0'
+
+    # The synthetic b=0 is a target every backend can consume: TOPUP's missing
+    # blip (fsl/mixed) or the T2Wreg registration target (tortoise/mixed)
+    for backend in ('fsl', 'tortoise', 'mixed'):
+        assert not check_backend(grouping, backend)
+
+
+def test_t2w_hcp_pepolar_wins(tmp_path):
+    """A real PEPOLAR pair always beats the fieldmap-less fallback."""
+    grouping = load_scenario('t2w_hcp', tmp_path)
+
+    assert list(grouping.estimations) == ['auto+pepolar+j']
+    assert set(grouping.application.values()) == {'auto+pepolar+j'}
+    # The T2w is still indexed (DRBUDDI can use it as a structural target)
+    assert grouping.anat_files('T2w')
+
+
+def test_t2w_hcp_force_t2wreg(tmp_path):
+    """force_t2wreg overrides the PEPOLAR pairing for every series."""
+    grouping = load_scenario('t2w_hcp', tmp_path, force_t2wreg=True)
+
+    estimation = grouping.estimations['auto+t2wreg']
+    assert estimation.provenance is Provenance.FORCED
+    assert set(grouping.application.values()) == {'auto+t2wreg'}
+    assert all(prov is Provenance.FORCED for prov in grouping.application_provenance.values())
+    # The losing PEPOLAR estimation stays visible (unapplied) so the report's
+    # "(also eligible: ...)" line resolves to something the reader can look up
+    assert 'auto+pepolar+j' in grouping.estimations
+
+    # Demanded-but-unsupported is an error on fsl/mixed
+    for backend in ('fsl', 'mixed'):
+        anat_issues = [
+            issue
+            for issue in check_backend(grouping, backend)
+            if issue.code == 'anat-sdc-unsupported'
+        ]
+        assert anat_issues
+        assert anat_issues[0].severity == 'error'
+    assert not check_backend(grouping, 'tortoise')
+
+
+def test_force_t2wreg_requires_t2w(tmp_path):
+    """Forcing T2Wreg without a T2w is a hard error."""
+    with pytest.raises(GroupingError, match='t2wreg-requires-t2w'):
+        load_scenario('hcp_style', tmp_path, force_t2wreg=True)
+
+
+def test_curated_t2wreg(tmp_path):
+    """A T2w B0FieldIdentifier named by a DWI's B0FieldSource: curated T2Wreg."""
+    grouping = load_scenario('curated_t2wreg', tmp_path)
+
+    assert list(grouping.estimations) == ['anatreg']
+    estimation = grouping.estimations['anatreg']
+    assert estimation.method is EstimationMethod.ANAT_CONTRAST
+    assert estimation.provenance is Provenance.CURATED
+
+    dwi_path = grouping.dwi_files[0]
+    assert grouping.application[dwi_path] == 'anatreg'
+    assert grouping.application_provenance[dwi_path] is Provenance.CURATED
+
+    assert not check_backend(grouping, 'tortoise')
+    anat_issues = [
+        issue for issue in check_backend(grouping, 'fsl') if issue.code == 'anat-sdc-unsupported'
+    ]
+    assert anat_issues
+    assert anat_issues[0].severity == 'error'
+
+
+def test_synb0_missing_pedir(tmp_path):
+    """SyNb0 on a series without PhaseEncodingDirection is a hard error."""
+    with pytest.raises(GroupingError, match='synb0-missing-pedir'):
+        load_scenario('missing_pedir', tmp_path, use_synb0=True)
+
+    grouping = load_scenario('missing_pedir', tmp_path / 'nonstrict', use_synb0=True, strict=False)
+    assert 'synb0-missing-pedir' in issue_codes(grouping.errors)
+    # The series that does have PE info still gets its SyNb0 estimation
+    assert 'auto+synb0' in grouping.estimations
+
+
+def test_shell_mix(tmp_path):
+    """Shelled + non-shelled series in one output: eddy errors, TORTOISE warns."""
+    grouping = load_scenario('shell_mix', tmp_path)
+
+    assert set(basenames(grouping.dwi_files)) == {
+        'sub-01_dir-AP_dwi.nii.gz',
+        'sub-01_dir-PA_dwi.nii.gz',
+    }
+    shelled_states = {
+        grouping.files[path].filename: grouping.files[path].shelled for path in grouping.dwi_files
+    }
+    assert shelled_states == {
+        'sub-01_dir-AP_dwi.nii.gz': True,
+        'sub-01_dir-PA_dwi.nii.gz': False,
+    }
+
+    # One PEPOLAR estimation, one output holding both series
+    (concat,) = grouping.concatenation_groups.values()
+    assert len(concat.dwi_files) == 2
+
+    for backend in ('fsl', 'mixed'):
+        codes = issue_codes(check_backend(grouping, backend))
+        assert 'eddy-requires-shelled' in codes
+    tortoise_issues = check_backend(grouping, 'tortoise')
+    assert 'mixed-shelled-nonshelled' in issue_codes(tortoise_issues)
+    assert all(issue.severity == 'warning' for issue in tortoise_issues)
+
+
+def test_nonshelled_pair(tmp_path):
+    """All-non-shelled data: eddy errors; TORTOISE is clean (no mixture)."""
+    grouping = load_scenario('nonshelled_pair', tmp_path)
+
+    assert all(grouping.files[path].shelled is False for path in grouping.dwi_files)
+    for backend in ('fsl', 'mixed'):
+        assert 'eddy-requires-shelled' in issue_codes(check_backend(grouping, backend))
+    tortoise_codes = issue_codes(check_backend(grouping, 'tortoise'))
+    assert 'mixed-shelled-nonshelled' not in tortoise_codes
+    assert 'eddy-requires-shelled' not in tortoise_codes
+
+
+def test_shelling_undetermined_skips_checks(tmp_path):
+    """Fixtures without bval files leave shelled undetermined: no data checks."""
+    grouping = load_scenario('hcp_style', tmp_path)
+    assert all(grouping.files[path].shelled is None for path in grouping.dwi_files)
+    for backend in ('fsl', 'tortoise', 'mixed'):
+        codes = issue_codes(check_backend(grouping, backend))
+        assert 'eddy-requires-shelled' not in codes
+        assert 'mixed-shelled-nonshelled' not in codes
+
+
+def test_maxb_mismatch(tmp_path):
+    """Very different maximum b-values in one output draw a warning."""
+    grouping = load_scenario('maxb_mismatch', tmp_path)
+
+    max_bvals = {
+        grouping.files[p].filename: grouping.files[p].max_bval for p in grouping.dwi_files
+    }
+    assert max_bvals == {
+        'sub-01_dir-AP_dwi.nii.gz': 1000.0,
+        'sub-01_dir-PA_dwi.nii.gz': 3000.0,
+    }
+    assert 'maxb-mismatch' in issue_codes(grouping.warnings)
+
+
+def test_fov_shift(tmp_path):
+    """A rigid FoV offset warns (with unverifiable shim evidence here)."""
+    grouping = load_scenario('fov_shift', tmp_path)
+
+    (issue,) = [i for i in grouping.issues if i.code == 'fov-shifted']
+    assert issue.severity == 'warning'
+    assert 'cannot be verified' in issue.message
+    assert '11.2 mm' in issue.message
+
+
+def test_fov_oblique(tmp_path):
+    """Differently-oriented FoVs error by default; ignore_fov downgrades."""
+    with pytest.raises(GroupingError, match='fov-oblique'):
+        load_scenario('fov_oblique', tmp_path)
+
+    grouping = load_scenario('fov_oblique', tmp_path / 'nonstrict', strict=False)
+    (issue,) = [i for i in grouping.issues if i.code == 'fov-oblique']
+    assert issue.severity == 'error'
+    assert '5.0 degrees' in issue.message
+
+    grouping = load_scenario('fov_oblique', tmp_path / 'ignored', ignore_fov=True)
+    (issue,) = [i for i in grouping.issues if i.code == 'fov-oblique']
+    assert issue.severity == 'warning'
+
+
+def test_fov_grid_mismatch_is_not_ignorable(tmp_path):
+    """Different voxel grids are a hard error even with ignore_fov."""
+    with pytest.raises(GroupingError, match='fov-grid-mismatch'):
+        load_scenario('fov_grid', tmp_path)
+
+    with pytest.raises(GroupingError, match='fov-grid-mismatch'):
+        load_scenario('fov_grid', tmp_path / 'still-strict', ignore_fov=True)
+
+
+def test_mixed_refinement_needs_rpe_series(tmp_path):
+    """A second DRBUDDI stage without reverse-PE dMRI series draws a warning.
+
+    abcd_style (epi fmap only, no T2w): the warning says correction is
+    single-stage. abcd_t2w (same + T2w): the warning says the second stage is
+    T2Wreg instead, and the preview narrates it.
+    """
+    from qsiprep.grouping import describe_processing
+
+    grouping = load_scenario('abcd_style', tmp_path)
+    (issue,) = [
+        i for i in check_backend(grouping, 'mixed') if i.code == 'drbuddi-refinement-not-useful'
+    ]
+    assert 'probably not useful' in issue.message
+    assert 'single-stage' in issue.message
+
+    grouping = load_scenario('abcd_t2w', tmp_path)
+    (issue,) = [
+        i for i in check_backend(grouping, 'mixed') if i.code == 'drbuddi-refinement-not-useful'
+    ]
+    assert 'T2Wreg against a structural image' in issue.message
+    assert 'T2Wreg registers the eddy-corrected b=0 to the T2w image' in describe_processing(
+        grouping, 'mixed'
+    )
+
+
+def test_mixed_refinement_with_rpe_series(tmp_path):
+    """With reverse-PE dMRI series the DRBUDDI refinement stage is legitimate."""
+    from qsiprep.grouping import describe_processing
+
+    grouping = load_scenario('t2w_hcp', tmp_path)
+    assert 'drbuddi-refinement-not-useful' not in issue_codes(check_backend(grouping, 'mixed'))
+    preview = describe_processing(grouping, 'mixed')
+    assert 'DRBUDDI re-estimates distortion along the j axis' in preview
+    # The T2w still rides along as DRBUDDI's structural target
+    assert 'structural registration target' in preview
+
+
+def test_synb0_overrides_t2w_as_structural_target(tmp_path):
+    """With use_synb0, the synthetic b=0 replaces the T2w as DRBUDDI's
+    structural target, even though the PEPOLAR estimation is unchanged."""
+    from qsiprep.grouping import describe_processing
+
+    grouping = load_scenario('t2w_hcp', tmp_path, use_synb0=True)
+    # The real fieldmap still wins the application contest
+    assert set(grouping.application.values()) == {'auto+pepolar+j'}
+    preview = describe_processing(grouping, 'tortoise')
+    assert 'a SyNb0 synthetic b=0 (from sub-01_T1w.nii.gz, in place of the T2w image)' in preview

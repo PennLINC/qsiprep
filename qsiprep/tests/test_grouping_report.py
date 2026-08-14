@@ -29,6 +29,11 @@ CASES = [(scenario, {}, scenario) for scenario in SCENARIOS] + [
     ('hcp_style', {'separate_all_dwis': True}, 'hcp_style_separate_all_dwis'),
     ('reshim', {'ignore_shims': True}, 'reshim_ignore_shims'),
     ('abcd_style', {'ignore_fieldmaps': True}, 'abcd_style_ignore_fieldmaps'),
+    ('t2w_hcp', {'force_t2wreg': True}, 't2w_hcp_force_t2wreg'),
+    ('fieldmapless_t1w_only', {'use_synb0': True}, 'fieldmapless_t1w_only_synb0'),
+    ('missing_pedir', {'use_synb0': True}, 'missing_pedir_synb0'),
+    ('fov_oblique', {'ignore_fov': True}, 'fov_oblique_ignore_fov'),
+    ('t2w_hcp', {'use_synb0': True}, 't2w_hcp_synb0'),
 ]
 
 

@@ -1,0 +1,14 @@
+# A single DWI series with no fieldmap of any kind, but the subject has a
+# T2w. Expected: an inferred T2Wreg (ANAT_CONTRAST) estimation is applied as
+# the fieldmap-less fallback; the tortoise preview states T2Wreg definitely,
+# and the fsl preview warns that it cannot execute it.
+'01':
+  - anat:
+      - suffix: T1w
+      - suffix: T2w
+    dwi:
+      - dir: AP
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05

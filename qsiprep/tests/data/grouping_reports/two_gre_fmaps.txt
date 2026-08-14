@@ -40,12 +40,12 @@ Output "sub-01_dir-AP" (2 series):
   4. A fieldmap is computed from the GRE phase difference acquisition and applied to unwarp the DIFFPREP output.
   5. The corrected series is written as one output file.
 
-Processing preview: Two-stage path (TOPUP + eddy, then DRBUDDI refinement)
---------------------------------------------------------------------------
+Processing preview: Two-stage path (TOPUP + eddy, then DRBUDDI or T2Wreg refinement)
+------------------------------------------------------------------------------------
 
 Output "sub-01_dir-AP" (2 series):
   1. Each series is denoised on its own, then all 2 series are concatenated. (--denoise-after-combining reverses this order.)
-  2. Without a PEPOLAR fieldmap the DRBUDDI second stage adds nothing: processing follows the FSL path.
+  2. Without a PEPOLAR fieldmap the DRBUDDI second stage adds nothing: processing follows the FSL path (fieldmap-based correction).
   3. The corrected series is written as one output file.
   !! WARNING [mixed-non-pepolar]: Estimation 'auto+fmap+sub-01_acq-run1' is not PEPOLAR; the DRBUDDI second stage only refines PEPOLAR corrections, so 'sub-01_dir-AP' will get single-stage correction.
   !! WARNING [mixed-non-pepolar]: Estimation 'auto+fmap+sub-01_acq-run2' is not PEPOLAR; the DRBUDDI second stage only refines PEPOLAR corrections, so 'sub-01_dir-AP' will get single-stage correction.

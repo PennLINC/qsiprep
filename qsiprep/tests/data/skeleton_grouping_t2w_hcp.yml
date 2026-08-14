@@ -1,0 +1,20 @@
+# An AP/PA pair plus a T2w. Expected by default: the inferred PEPOLAR
+# estimation wins (a real fieldmap always beats fieldmap-less), and the
+# tortoise/mixed previews note DRBUDDI's multimodal use of the T2w as a
+# structural target. With force_t2wreg=True: a FORCED T2Wreg estimation
+# overrides the PEPOLAR pairing for every series.
+'01':
+  - anat:
+      - suffix: T1w
+      - suffix: T2w
+    dwi:
+      - dir: AP
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+      - dir: PA
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05

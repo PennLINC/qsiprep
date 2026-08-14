@@ -9,11 +9,14 @@ Output "sub-01_acq-legacy" (MultipartID auto+concat+0 [inferred]): 1 series
 Output "sub-01_dir-AP" (MultipartID auto+concat+1 [inferred]): 1 series
   Distortion group sub-01_dir-AP (PE j-, TRT 0.05s):
     - sub-01_dir-AP_dwi.nii.gz
-    corrected by: nothing (no fieldmap found)
+    corrected by: auto+synb0 [cli-override]
 
-Fieldmap estimations: none found.
+Fieldmap estimations:
+  auto+synb0 [cli-override]: SyNb0 synthetic b=0
+    - sub-01_T1w.nii.gz
 
 Notes:
+  ERROR [synb0-missing-pedir]: SyNb0 was requested, but these DWI series have no PhaseEncodingDirection, which the synthetic-b=0 correction requires.
   WARNING [missing-pedir]: sub-01_acq-legacy_dwi.nii.gz has no PhaseEncodingDirection; it cannot be combined with other series or corrected with a PEPOLAR fieldmap.
 
 Processing preview: FSL path (TOPUP fieldmap estimation + eddy HMC/SDC)
@@ -27,9 +30,10 @@ Output "sub-01_acq-legacy" (1 single series):
 
 Output "sub-01_dir-AP" (1 single series):
   1. The series is denoised.
-  2. eddy corrects head motion and eddy currents. No fieldmap is available and this subject has no T2w image: susceptibility distortion is NOT corrected.
-  3. The corrected series is written as one output file.
-  !! WARNING [no-sdc]: Output 'sub-01_dir-AP' has no fieldmap and this subject has no T2w image (or the series lacks PhaseEncodingDirection): no susceptibility distortion correction will be performed.
+  2. SyNb0 synthesizes an undistorted b=0 image from the T1w (sub-01_T1w.nii.gz).
+  3. TOPUP estimates the susceptibility field from the acquired b=0 images plus the synthetic b=0, which enters as a zero-readout-time volume (an extra row in the acquisition-parameters file).
+  4. eddy corrects head motion, eddy currents, and susceptibility distortion in one model, using the TOPUP field.
+  5. The corrected series is written as one output file.
 
 Processing preview: TORTOISE path (DIFFPREP HMC + DRBUDDI SDC)
 --------------------------------------------------------------
@@ -44,9 +48,8 @@ Output "sub-01_acq-legacy" (1 single series):
 Output "sub-01_dir-AP" (1 single series):
   1. The series is denoised.
   2. DIFFPREP corrects head motion and eddy currents.
-  3. No fieldmap is available and this subject has no T2w image: susceptibility distortion is NOT corrected.
+  3. SyNb0 synthesizes an undistorted b=0 image from the T1w (sub-01_T1w.nii.gz); DIFFPREP registers the data to it (T2Wreg mode) to estimate and correct distortion.
   4. The corrected series is written as one output file.
-  !! WARNING [no-sdc]: Output 'sub-01_dir-AP' has no fieldmap and this subject has no T2w image (or the series lacks PhaseEncodingDirection): no susceptibility distortion correction will be performed.
 
 Processing preview: Two-stage path (TOPUP + eddy, then DRBUDDI or T2Wreg refinement)
 ------------------------------------------------------------------------------------
@@ -59,6 +62,6 @@ Output "sub-01_acq-legacy" (1 single series):
 
 Output "sub-01_dir-AP" (1 single series):
   1. The series is denoised.
-  2. No fieldmap is available and this subject has no T2w image: susceptibility distortion is NOT corrected.
-  3. The corrected series is written as one output file.
-  !! WARNING [no-sdc]: Output 'sub-01_dir-AP' has no fieldmap and this subject has no T2w image (or the series lacks PhaseEncodingDirection): no susceptibility distortion correction will be performed.
+  2. SyNb0 synthesizes an undistorted b=0 image from the T1w (sub-01_T1w.nii.gz); TOPUP treats it as a zero-readout-time volume and eddy applies the resulting field.
+  3. T2Wreg registers the eddy-corrected b=0 to the synthetic b=0, refining the TOPUP correction.
+  4. The corrected series is written as one output file.

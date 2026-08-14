@@ -16,21 +16,38 @@ from __future__ import annotations
 
 import os.path as op
 from collections import defaultdict
+from typing import NamedTuple
 
-from .models import DWIGrouping, EstimationMethod, FieldmapEstimation
-from .validation import BACKEND_DESCRIPTIONS, check_backend
+from .models import DWIGrouping, EstimationMethod
+from .validation import (
+    BACKEND_DESCRIPTIONS,
+    check_backend,
+    dwi_bidirectional_axes,
+    structural_target,
+)
 
 _METHOD_LABELS = {
     EstimationMethod.PEPOLAR: 'PEPOLAR (reverse phase-encoding)',
     EstimationMethod.DIRECT: 'precomputed fieldmap',
     EstimationMethod.PHASEDIFF: 'GRE phase difference',
     EstimationMethod.PHASES: 'GRE two-phase',
-    EstimationMethod.ANAT_CONTRAST: 'anatomical registration',
+    EstimationMethod.SYNB0: 'SyNb0 synthetic b=0',
+    EstimationMethod.ANAT_CONTRAST: 'T2w registration (T2Wreg)',
 }
 
 
 def _basename(path: str) -> str:
     return op.basename(path)
+
+
+def _shell_tag(record) -> str:
+    """Bracketed sampling-scheme annotation for a DWI file line."""
+    if record.shelled is True:
+        shells = '/'.join(str(int(centre)) for centre in record.shells)
+        return f' [shelled: b={shells}]'
+    if record.shelled is False:
+        return ' [non-shelled q-space sampling]'
+    return ''
 
 
 def report_text(grouping: DWIGrouping) -> str:
@@ -50,7 +67,7 @@ def report_text(grouping: DWIGrouping) -> str:
         for dgroup in grouping.distortion_groups_in(multipart_id):
             lines.append(f'  Distortion group {dgroup.key} ({dgroup.signature.describe()}):')
             for path in dgroup.dwi_files:
-                lines.append(f'    - {_basename(path)}')
+                lines.append(f'    - {_basename(path)}{_shell_tag(grouping.files[path])}')
             if dgroup.b0field_source is None:
                 lines.append('    corrected by: nothing (no fieldmap found)')
             else:
@@ -73,11 +90,13 @@ def report_text(grouping: DWIGrouping) -> str:
         lines.append('')
 
     if grouping.estimations:
+        applied_ids = {b0field_id for b0field_id in grouping.application.values() if b0field_id}
         lines.append('Fieldmap estimations:')
         for b0field_id, estimation in sorted(grouping.estimations.items()):
+            unused = '' if b0field_id in applied_ids else ' (not used)'
             lines.append(
                 f'  {b0field_id} {estimation.provenance.tag()}: '
-                f'{_METHOD_LABELS[estimation.method]}'
+                f'{_METHOD_LABELS[estimation.method]}{unused}'
             )
             for path in estimation.sources:
                 lines.append(f'    - {_basename(path)}')
@@ -110,15 +129,6 @@ def _group_estimations(grouping: DWIGrouping, multipart_id: str) -> dict[str, li
         if dgroup.b0field_source is not None:
             corrected[dgroup.b0field_source].append(dgroup.key)
     return corrected
-
-
-def _pepolar_signature_count(grouping: DWIGrouping, estimation: FieldmapEstimation) -> int:
-    signatures = set()
-    for path in estimation.sources:
-        record = grouping.files.get(path)
-        if record is not None and record.is_epi_like and record.signature.pe_dir:
-            signatures.add(record.signature.key)
-    return len(signatures)
 
 
 def _split_polarities(grouping: DWIGrouping, multipart_id: str, axis: str):
@@ -188,18 +198,74 @@ def _borrow_note(grouping: DWIGrouping, multipart_id: str, b0field_id: str) -> s
     )
 
 
+class MethodGroups(NamedTuple):
+    """A group's applied estimation ids, split by how backends treat them."""
+
+    pepolar: list[str]
+    gre: list[str]
+    synb0: list[str]
+    anat: list[str]
+
+
+def _ids_by_kind(grouping, corrected) -> MethodGroups:
+    kinds = MethodGroups([], [], [], [])
+    for b0field_id in sorted(corrected):
+        method = grouping.estimations[b0field_id].method
+        if method is EstimationMethod.PEPOLAR:
+            kinds.pepolar.append(b0field_id)
+        elif method is EstimationMethod.SYNB0:
+            kinds.synb0.append(b0field_id)
+        elif method is EstimationMethod.ANAT_CONTRAST:
+            kinds.anat.append(b0field_id)
+        else:
+            kinds.gre.append(b0field_id)
+    return kinds
+
+
+def _no_sdc_sentence(grouping) -> str:
+    """Definite no-correction wording: the grouping knows the T2w inventory."""
+    if grouping.anat_files('T2w'):
+        # A T2w exists but no estimation was applied: only possible when the
+        # series has no usable PE information.
+        return (
+            'No fieldmap could be set up (missing phase encoding '
+            'information): susceptibility distortion is NOT corrected.'
+        )
+    return (
+        'No fieldmap is available and this subject has no T2w image: '
+        'susceptibility distortion is NOT corrected.'
+    )
+
+
+def _structural_phrase(grouping) -> str | None:
+    """Name the structural target registration-based stages would use."""
+    target = structural_target(grouping)
+    if target is None:
+        return None
+    kind, paths = target
+    names = ', '.join(_basename(path) for path in paths)
+    if kind == 'synb0':
+        override = ', in place of the T2w image' if grouping.anat_files('T2w') else ''
+        return f'a SyNb0 synthetic b=0 (from {names}{override})'
+    return f'the T2w image ({names})'
+
+
+def _structural_note(grouping) -> str | None:
+    """DRBUDDI's multimodal --structural line, when a target exists."""
+    phrase = _structural_phrase(grouping)
+    if phrase is None:
+        return None
+    return (
+        f'     DRBUDDI additionally uses {phrase} as a structural '
+        'registration target (multimodal correction).'
+    )
+
+
 def _describe_fsl(lines, grouping, multipart_id, corrected):
     step = 2
-    pepolar_ids = [
-        b0field_id
-        for b0field_id in sorted(corrected)
-        if grouping.estimations[b0field_id].is_pepolar
-    ]
-    gre_ids = [
-        b0field_id
-        for b0field_id in sorted(corrected)
-        if not grouping.estimations[b0field_id].is_pepolar
-    ]
+    kinds = _ids_by_kind(grouping, corrected)
+    pepolar_ids = kinds.pepolar
+    gre_ids = kinds.gre
 
     if pepolar_ids:
         all_sources = set()
@@ -244,6 +310,25 @@ def _describe_fsl(lines, grouping, multipart_id, corrected):
             'assigned to its distortion group in the eddy index file.'
         )
         step += 1
+    elif kinds.synb0:
+        for b0field_id in kinds.synb0:
+            estimation = grouping.estimations[b0field_id]
+            t1w_names = ', '.join(_basename(path) for path in estimation.sources)
+            lines.append(
+                f'  {step}. SyNb0 synthesizes an undistorted b=0 image from the T1w ({t1w_names}).'
+            )
+            step += 1
+        lines.append(
+            f'  {step}. TOPUP estimates the susceptibility field from the acquired '
+            'b=0 images plus the synthetic b=0, which enters as a zero-readout-time '
+            'volume (an extra row in the acquisition-parameters file).'
+        )
+        step += 1
+        lines.append(
+            f'  {step}. eddy corrects head motion, eddy currents, and susceptibility '
+            'distortion in one model, using the TOPUP field.'
+        )
+        step += 1
     elif gre_ids:
         for b0field_id in gre_ids:
             estimation = grouping.estimations[b0field_id]
@@ -258,10 +343,16 @@ def _describe_fsl(lines, grouping, multipart_id, corrected):
             'is applied to unwarp the results.'
         )
         step += 1
+    elif kinds.anat:
+        lines.append(
+            f'  {step}. eddy corrects head motion and eddy currents. The selected '
+            'correction is a T2w registration (T2Wreg), which only the TORTOISE '
+            'path implements: distortion is NOT corrected on this path.'
+        )
+        step += 1
     else:
         lines.append(
-            f'  {step}. eddy corrects head motion and eddy currents. No fieldmap is '
-            'available: susceptibility distortion is NOT corrected.'
+            f'  {step}. eddy corrects head motion and eddy currents. ' + _no_sdc_sentence(grouping)
         )
         step += 1
 
@@ -271,16 +362,9 @@ def _describe_fsl(lines, grouping, multipart_id, corrected):
 def _describe_tortoise(lines, grouping, multipart_id, corrected):
     step = 2
     member_dgroups = grouping.distortion_groups_in(multipart_id)
-    pepolar_ids = [
-        b0field_id
-        for b0field_id in sorted(corrected)
-        if grouping.estimations[b0field_id].is_pepolar
-    ]
-    gre_ids = [
-        b0field_id
-        for b0field_id in sorted(corrected)
-        if not grouping.estimations[b0field_id].is_pepolar
-    ]
+    kinds = _ids_by_kind(grouping, corrected)
+    pepolar_ids = kinds.pepolar
+    gre_ids = kinds.gre
 
     if len(member_dgroups) > 1:
         keys = ', '.join(dgroup.key for dgroup in member_dgroups)
@@ -308,6 +392,28 @@ def _describe_tortoise(lines, grouping, multipart_id, corrected):
             note = _borrow_note(grouping, multipart_id, b0field_id)
             if note:
                 lines.append(f'     {note}')
+        structural = _structural_note(grouping)
+        if structural:
+            lines.append(structural)
+    elif kinds.synb0:
+        for b0field_id in kinds.synb0:
+            estimation = grouping.estimations[b0field_id]
+            t1w_names = ', '.join(_basename(path) for path in estimation.sources)
+            lines.append(
+                f'  {step}. SyNb0 synthesizes an undistorted b=0 image from the T1w '
+                f'({t1w_names}); DIFFPREP registers the data to it (T2Wreg mode) '
+                'to estimate and correct distortion.'
+            )
+            step += 1
+    elif kinds.anat:
+        for b0field_id in kinds.anat:
+            estimation = grouping.estimations[b0field_id]
+            t2w_names = ', '.join(_basename(path) for path in estimation.sources)
+            lines.append(
+                f'  {step}. DIFFPREP registers the b=0 image to the T2w '
+                f'({t2w_names}) to estimate and correct distortion (T2Wreg).'
+            )
+            step += 1
     elif gre_ids:
         for b0field_id in gre_ids:
             estimation = grouping.estimations[b0field_id]
@@ -318,11 +424,7 @@ def _describe_tortoise(lines, grouping, multipart_id, corrected):
             )
             step += 1
     else:
-        lines.append(
-            f'  {step}. No fieldmap is available. If a T2w image was acquired, '
-            'DRBUDDI registers the b=0 image to it to estimate distortion '
-            '(T2Wreg); otherwise distortion is NOT corrected.'
-        )
+        lines.append(f'  {step}. ' + _no_sdc_sentence(grouping))
         step += 1
 
     lines.append(f'  {step}. The corrected series is written as one output file.')
@@ -330,11 +432,8 @@ def _describe_tortoise(lines, grouping, multipart_id, corrected):
 
 def _describe_mixed(lines, grouping, multipart_id, corrected):
     step = 2
-    pepolar_ids = [
-        b0field_id
-        for b0field_id in sorted(corrected)
-        if grouping.estimations[b0field_id].is_pepolar
-    ]
+    kinds = _ids_by_kind(grouping, corrected)
+    pepolar_ids = kinds.pepolar
 
     if pepolar_ids:
         lines.append(
@@ -346,23 +445,77 @@ def _describe_mixed(lines, grouping, multipart_id, corrected):
             f'  {step}. eddy corrects head motion and eddy currents using the TOPUP field.'
         )
         step += 1
-        for b0field_id in pepolar_ids:
-            estimation = grouping.estimations[b0field_id]
-            for axis in sorted(estimation.bidirectional_axes):
+        # The refinement stage depends on the data: DRBUDDI needs reverse
+        # phase-encoded dMRI *series* (a lone reverse b=0 was already consumed
+        # by TOPUP); otherwise T2Wreg against a structural target, or nothing.
+        refine_axes = sorted(
+            {
+                axis
+                for b0field_id in pepolar_ids
+                for axis in dwi_bidirectional_axes(grouping, grouping.estimations[b0field_id])
+            }
+        )
+        if refine_axes:
+            for axis in refine_axes:
                 lines.append(
                     f'  {step}. DRBUDDI re-estimates distortion along the {axis} axis '
-                    'from the eddy-corrected blip-up/blip-down data, refining the '
-                    'TOPUP correction.'
+                    'from the eddy-corrected blip-up/blip-down dMRI series, refining '
+                    'the TOPUP correction.'
                 )
                 step += 1
-            note = _borrow_note(grouping, multipart_id, b0field_id)
-            if note:
-                lines.append(f'     {note}')
-    else:
+            for b0field_id in pepolar_ids:
+                note = _borrow_note(grouping, multipart_id, b0field_id)
+                if note:
+                    lines.append(f'     {note}')
+            structural = _structural_note(grouping)
+            if structural:
+                lines.append(structural)
+        else:
+            phrase = _structural_phrase(grouping)
+            if phrase:
+                lines.append(
+                    f'  {step}. There is no reverse phase-encoded dMRI series for '
+                    f'DRBUDDI to refine with; instead, T2Wreg registers the '
+                    f'eddy-corrected b=0 to {phrase}, refining the TOPUP correction.'
+                )
+                step += 1
+            else:
+                lines.append(
+                    f'  {step}. There is no reverse phase-encoded dMRI series for '
+                    'DRBUDDI to refine with, and no T2w or synthetic b=0 for a '
+                    'T2Wreg stage: correction is single-stage (TOPUP + eddy).'
+                )
+                step += 1
+    elif kinds.synb0:
+        for b0field_id in kinds.synb0:
+            estimation = grouping.estimations[b0field_id]
+            t1w_names = ', '.join(_basename(path) for path in estimation.sources)
+            lines.append(
+                f'  {step}. SyNb0 synthesizes an undistorted b=0 image from the T1w '
+                f'({t1w_names}); TOPUP treats it as a zero-readout-time volume and '
+                'eddy applies the resulting field.'
+            )
+            step += 1
+        lines.append(
+            f'  {step}. T2Wreg registers the eddy-corrected b=0 to the synthetic '
+            'b=0, refining the TOPUP correction.'
+        )
+        step += 1
+    elif kinds.anat:
+        lines.append(
+            f'  {step}. The selected correction is a T2w registration (T2Wreg), '
+            'which only the TORTOISE path implements: processing follows the FSL '
+            'path with NO distortion correction.'
+        )
+        step += 1
+    elif kinds.gre:
         lines.append(
             f'  {step}. Without a PEPOLAR fieldmap the DRBUDDI second stage adds '
-            'nothing: processing follows the FSL path.'
+            'nothing: processing follows the FSL path (fieldmap-based correction).'
         )
+        step += 1
+    else:
+        lines.append(f'  {step}. ' + _no_sdc_sentence(grouping))
         step += 1
 
     lines.append(f'  {step}. The corrected series is written as one output file.')

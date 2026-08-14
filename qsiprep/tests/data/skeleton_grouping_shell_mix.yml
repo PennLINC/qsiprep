@@ -1,0 +1,20 @@
+# A shelled multi-shell AP series paired with a non-shelled (CS-DSI-style)
+# PA series. The bval content is written by the test loader (see
+# SCENARIO_BVALS in qsiprep/tests/grouping_scenarios.py). Expected: one
+# PEPOLAR estimation and one output; the fsl/mixed paths error because eddy
+# cannot run on the non-shelled series, and the tortoise path prints the
+# informational mixed-sampling warning.
+'01':
+  - anat:
+      - suffix: T1w
+    dwi:
+      - dir: AP
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+      - dir: PA
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05

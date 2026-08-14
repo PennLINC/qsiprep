@@ -29,6 +29,7 @@ Output "sub-01_dir-AP" (1 single series):
   1. The series is denoised.
   2. DIFFPREP corrects head motion and eddy currents.
   3. DRBUDDI estimates distortion along the j axis from the blip-up (borrowed series) and blip-down (sub-01_dir-AP) data and applies the correction to every volume.
+     DRBUDDI additionally uses the T2w image (sub-01_T2w.nii.gz) as a structural registration target (multimodal correction).
   4. The corrected series is written as one output file.
 
 Processing preview: Two-stage path (TOPUP + eddy, then DRBUDDI or T2Wreg refinement)
@@ -38,6 +39,6 @@ Output "sub-01_dir-AP" (1 single series):
   1. The series is denoised.
   2. TOPUP estimates an initial susceptibility field from the b=0 images (as in the FSL path).
   3. eddy corrects head motion and eddy currents using the TOPUP field.
-  4. There is no reverse phase-encoded dMRI series for DRBUDDI to refine with, and no T2w or synthetic b=0 for a T2Wreg stage: correction is single-stage (TOPUP + eddy).
+  4. There is no reverse phase-encoded dMRI series for DRBUDDI to refine with; instead, T2Wreg registers the eddy-corrected b=0 to the T2w image (sub-01_T2w.nii.gz), refining the TOPUP correction.
   5. The corrected series is written as one output file.
-  !! WARNING [drbuddi-refinement-not-useful]: Estimation 'auto+fmap+sub-01_dir-PA_epi' has no reverse phase-encoded dMRI series: a DRBUDDI second stage would reuse the same b=0 images TOPUP already consumed and is probably not useful. No T2w or SyNb0 synthetic b=0 is available for a T2Wreg second stage either, so 'sub-01_dir-AP' gets single-stage (TOPUP+eddy) correction.
+  !! WARNING [drbuddi-refinement-not-useful]: Estimation 'auto+fmap+sub-01_dir-PA_epi' has no reverse phase-encoded dMRI series: a DRBUDDI second stage would reuse the same b=0 images TOPUP already consumed and is probably not useful. The second stage is T2Wreg against a structural image instead.

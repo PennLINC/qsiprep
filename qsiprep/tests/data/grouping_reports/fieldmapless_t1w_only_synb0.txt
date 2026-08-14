@@ -1,0 +1,39 @@
+DWI grouping for sub-01
+=======================
+
+Output "sub-01_dir-AP" (MultipartID auto+concat+0 [inferred]): 1 series
+  Distortion group sub-01_dir-AP (PE j-, TRT 0.05s):
+    - sub-01_dir-AP_dwi.nii.gz
+    corrected by: auto+synb0 [cli-override]
+
+Fieldmap estimations:
+  auto+synb0 [cli-override]: SyNb0 synthetic b=0
+    - sub-01_T1w.nii.gz
+
+Processing preview: FSL path (TOPUP fieldmap estimation + eddy HMC/SDC)
+-----------------------------------------------------------------------
+
+Output "sub-01_dir-AP" (1 single series):
+  1. The series is denoised.
+  2. SyNb0 synthesizes an undistorted b=0 image from the T1w (sub-01_T1w.nii.gz).
+  3. TOPUP estimates the susceptibility field from the acquired b=0 images plus the synthetic b=0, which enters as a zero-readout-time volume (an extra row in the acquisition-parameters file).
+  4. eddy corrects head motion, eddy currents, and susceptibility distortion in one model, using the TOPUP field.
+  5. The corrected series is written as one output file.
+
+Processing preview: TORTOISE path (DIFFPREP HMC + DRBUDDI SDC)
+--------------------------------------------------------------
+
+Output "sub-01_dir-AP" (1 single series):
+  1. The series is denoised.
+  2. DIFFPREP corrects head motion and eddy currents.
+  3. SyNb0 synthesizes an undistorted b=0 image from the T1w (sub-01_T1w.nii.gz); DIFFPREP registers the data to it (T2Wreg mode) to estimate and correct distortion.
+  4. The corrected series is written as one output file.
+
+Processing preview: Two-stage path (TOPUP + eddy, then DRBUDDI or T2Wreg refinement)
+------------------------------------------------------------------------------------
+
+Output "sub-01_dir-AP" (1 single series):
+  1. The series is denoised.
+  2. SyNb0 synthesizes an undistorted b=0 image from the T1w (sub-01_T1w.nii.gz); TOPUP treats it as a zero-readout-time volume and eddy applies the resulting field.
+  3. T2Wreg registers the eddy-corrected b=0 to the synthetic b=0, refining the TOPUP correction.
+  4. The corrected series is written as one output file.

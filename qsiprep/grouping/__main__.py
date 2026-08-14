@@ -48,6 +48,15 @@ def _build_parser():
         help='Treat all ShimSetting values as compatible.',
     )
     parser.add_argument(
+        '--ignore-fov',
+        action='store_true',
+        help=(
+            'Concatenate series with differently-oriented fields of view anyway '
+            '(distortion corrections will be misapplied). Grid-size mismatches '
+            'still error.'
+        ),
+    )
+    parser.add_argument(
         '--separate-all-dwis',
         action='store_true',
         help='Every DWI series becomes its own output.',
@@ -56,6 +65,16 @@ def _build_parser():
         '--ignore-fieldmaps',
         action='store_true',
         help='Skip fmap/; only the reverse phase-encoding DWI heuristic applies.',
+    )
+    parser.add_argument(
+        '--force-t2wreg',
+        action='store_true',
+        help='Override all fieldmaps with T2w-registration SDC (TORTOISE T2Wreg).',
+    )
+    parser.add_argument(
+        '--use-synb0',
+        action='store_true',
+        help='Give fieldmap-less series a SyNb0 synthetic-b=0 estimation from the T1w.',
     )
     return parser
 
@@ -92,6 +111,9 @@ def main(argv=None):
             separate_all_dwis=args.separate_all_dwis,
             ignore_fieldmaps=args.ignore_fieldmaps,
             ignore_shims=args.ignore_shims,
+            ignore_fov=args.ignore_fov,
+            force_t2wreg=args.force_t2wreg,
+            use_synb0=args.use_synb0,
             strict=False,
         )
         print(report_text(grouping))

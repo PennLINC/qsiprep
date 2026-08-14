@@ -18,7 +18,6 @@ concatenation membership are independent by design.
 
 from __future__ import annotations
 
-import os.path as op
 from collections import defaultdict
 from itertools import combinations
 
@@ -32,6 +31,7 @@ from .models import (
     FileRecord,
     Provenance,
     derive_output_name,
+    strip_nii_ext,
 )
 from .validation import GroupingIssue, error, warning
 
@@ -40,12 +40,14 @@ _METHOD_RANK = {
     EstimationMethod.DIRECT: 1,
     EstimationMethod.PHASEDIFF: 2,
     EstimationMethod.PHASES: 3,
-    EstimationMethod.ANAT_CONTRAST: 4,
+    EstimationMethod.SYNB0: 4,
+    EstimationMethod.ANAT_CONTRAST: 5,
 }
 _PROVENANCE_RANK = {
     Provenance.CURATED: 0,
     Provenance.TRANSLATED: 1,
-    Provenance.INFERRED: 2,
+    Provenance.FORCED: 2,
+    Provenance.INFERRED: 3,
 }
 
 
@@ -56,10 +58,7 @@ def _entity_stem(path: str) -> str:
     share the stem ``sub-01_acq-x``, which is how sidecar-companion files
     (phasediff + magnitudes, phase1 + phase2) are recognized.
     """
-    fname = op.basename(path)
-    for ext in ('.nii.gz', '.nii'):
-        if fname.endswith(ext):
-            fname = fname[: -len(ext)]
+    fname = strip_nii_ext(path)
     return fname.rsplit('_', 1)[0] if '_' in fname else fname
 
 
@@ -71,6 +70,10 @@ def _classify_method(records: list[FileRecord]) -> EstimationMethod | None:
         return EstimationMethod.PHASEDIFF
     if 'phase1' in suffixes and 'phase2' in suffixes:
         return EstimationMethod.PHASES
+    # An anatomical source marks a fieldmap-less registration estimation, even
+    # when EPI files share the identifier (they are its registration movers).
+    if suffixes.intersection(('T1w', 'T2w')):
+        return EstimationMethod.ANAT_CONTRAST
     if any(record.is_epi_like for record in records):
         return EstimationMethod.PEPOLAR
     return None
@@ -109,13 +112,12 @@ def _check_estimation_shims(
     estimation_id: str,
     records: list[FileRecord],
     ignore_shims: bool,
-    severity: str,
+    make_issue,  # `error` for curated estimations, `warning` for translated
     issues: list[GroupingIssue],
 ):
     epi_like = [record for record in records if record.is_epi_like]
     for rec_a, rec_b in combinations(epi_like, 2):
         if not rec_a.signature.compatible_shim(rec_b.signature, ignore_shims=ignore_shims):
-            make_issue = error if severity == 'error' else warning
             issues.append(
                 make_issue(
                     'estimation-shim-mismatch',
@@ -202,7 +204,7 @@ def resolve_estimations(
                         estimation.sources,
                     )
                 )
-            _check_estimation_shims(identifier, members, ignore_shims, 'error', issues)
+            _check_estimation_shims(identifier, members, ignore_shims, error, issues)
         estimations[identifier] = estimation
         targets[identifier] = {
             record.path
@@ -274,7 +276,7 @@ def resolve_estimations(
         base_id = AUTO_PREFIX + 'fmap+' + derive_output_name([record.path for record in members])
         b0field_id = _unique_id(base_id, estimations)
         estimation = _make_estimation(b0field_id, method, fmap_sources, Provenance.TRANSLATED)
-        _check_estimation_shims(b0field_id, fmap_sources, ignore_shims, 'warning', issues)
+        _check_estimation_shims(b0field_id, fmap_sources, ignore_shims, warning, issues)
         estimations[b0field_id] = estimation
         targets[b0field_id] = set(cluster_targets)
 
@@ -450,6 +452,141 @@ def resolve_application(
         )
 
     return application, provenance, candidates_out, issues
+
+
+def _anat_for_session(records, session, suffix):
+    """Anatomical images for a session: same session, else session-less, else any."""
+    anat = [record for record in records if record.is_anat and record.suffix == suffix]
+    for candidates in (
+        [record for record in anat if record.session == session],
+        [record for record in anat if record.session is None],
+        anat,
+    ):
+        if candidates:
+            return sorted(candidates, key=lambda record: record.path)
+    return []
+
+
+def resolve_fieldmapless(
+    records: list[FileRecord],
+    estimations: dict[str, FieldmapEstimation],
+    application: dict[str, str | None],
+    provenance: dict[str, Provenance],
+    candidates: dict[str, tuple[str, ...]],
+    force_t2wreg: bool = False,
+    use_synb0: bool = False,
+):
+    """Apply the fieldmap-less ladder to the application map (in place).
+
+    Order: ``force_t2wreg`` overrides every DWI's fieldmap with a T2w
+    registration (T2Wreg) estimation; ``use_synb0`` gives still-uncorrected
+    series a SyNb0 synthetic-b=0 estimation; finally, uncorrected series in a
+    subject with a T2w fall back to an inferred T2Wreg estimation (today's
+    automatic TORTOISE behavior, made explicit).
+
+    Anatomical estimations are created per session, with the anatomical
+    image(s) as their only sources - the DWIs they correct are targets, since
+    each output registers its own b=0. A DWI without a PhaseEncodingDirection
+    cannot be corrected along an axis: it is skipped by the fallback and is a
+    hard error when SyNb0 was explicitly requested.
+    """
+    issues: list[GroupingIssue] = []
+    dwi_records = {record.path: record for record in records if record.is_dwi}
+
+    def _apply(paths, session, method, id_stem, suffix, prov):
+        anat = _anat_for_session(records, session, suffix)
+        if not anat:
+            return False
+        id_parts = [AUTO_PREFIX + id_stem]
+        if session:
+            id_parts.append(f'ses-{session}')
+        b0field_id = '+'.join(id_parts)
+        if b0field_id not in estimations:
+            estimations[b0field_id] = _make_estimation(b0field_id, method, anat, prov)
+        for path in paths:
+            application[path] = b0field_id
+            provenance[path] = prov
+            candidates[path] = (b0field_id, *candidates.get(path, ()))
+        return True
+
+    by_session = defaultdict(list)
+    for path, record in sorted(dwi_records.items()):
+        by_session[record.session].append(path)
+
+    if force_t2wreg:
+        if use_synb0:
+            issues.append(
+                warning(
+                    'synb0-overridden',
+                    'Both T2Wreg and SyNb0 were requested; forcing T2Wreg wins '
+                    'and SyNb0 is not used.',
+                )
+            )
+        for session, paths in sorted(by_session.items(), key=lambda kv: str(kv[0])):
+            if not _apply(
+                paths, session, EstimationMethod.ANAT_CONTRAST, 't2wreg', 'T2w', Provenance.FORCED
+            ):
+                issues.append(
+                    error(
+                        't2wreg-requires-t2w',
+                        'T2w-registration SDC (T2Wreg) was requested, but this subject '
+                        'has no T2w image.',
+                        tuple(paths),
+                    )
+                )
+        return issues
+
+    if use_synb0:
+        for session, paths in sorted(by_session.items(), key=lambda kv: str(kv[0])):
+            uncorrected = [path for path in paths if application[path] is None]
+            if not uncorrected:
+                continue
+            missing_pedir = [
+                path for path in uncorrected if dwi_records[path].signature.pe_dir is None
+            ]
+            if missing_pedir:
+                issues.append(
+                    error(
+                        'synb0-missing-pedir',
+                        'SyNb0 was requested, but these DWI series have no '
+                        'PhaseEncodingDirection, which the synthetic-b=0 correction '
+                        'requires.',
+                        tuple(missing_pedir),
+                    )
+                )
+            correctable = [path for path in uncorrected if path not in missing_pedir]
+            if correctable and not _apply(
+                correctable, session, EstimationMethod.SYNB0, 'synb0', 'T1w', Provenance.FORCED
+            ):
+                issues.append(
+                    error(
+                        'synb0-requires-t1w',
+                        'SyNb0 was requested, but this subject has no T1w image to '
+                        'synthesize an undistorted b=0 from.',
+                        tuple(correctable),
+                    )
+                )
+
+    # Automatic fallback: a subject with a T2w gets T2Wreg for anything that
+    # still has no fieldmap (executable on the TORTOISE path only - the
+    # backend checks say so explicitly).
+    for session, paths in sorted(by_session.items(), key=lambda kv: str(kv[0])):
+        fallback = [
+            path
+            for path in paths
+            if application[path] is None and dwi_records[path].signature.pe_dir is not None
+        ]
+        if fallback:
+            _apply(
+                fallback,
+                session,
+                EstimationMethod.ANAT_CONTRAST,
+                't2wreg',
+                'T2w',
+                Provenance.INFERRED,
+            )
+
+    return issues
 
 
 def build_distortion_groups(
@@ -659,6 +796,9 @@ def build_grouping(
     subject_id: str,
     separate_all_dwis: bool = False,
     ignore_shims: bool = False,
+    ignore_fov: bool = False,
+    force_t2wreg: bool = False,
+    use_synb0: bool = False,
     extra_issues: list[GroupingIssue] | None = None,
 ) -> DWIGrouping:
     """Assemble the full :class:`~.models.DWIGrouping` from indexed records."""
@@ -672,13 +812,29 @@ def build_grouping(
     )
     issues.extend(application_issues)
 
-    # Drop heuristic estimations that ended up correcting nothing; curated and
-    # translated ones are kept (and flagged) since a person asked for them.
+    issues.extend(
+        resolve_fieldmapless(
+            records,
+            estimations,
+            application,
+            app_provenance,
+            candidates,
+            force_t2wreg=force_t2wreg,
+            use_synb0=use_synb0,
+        )
+    )
+
+    # Drop heuristic estimations nothing references. Ones that lost an
+    # application contest survive (so reports can show what "(also eligible)"
+    # ids refer to); curated and translated ones are always kept and flagged,
+    # since a person asked for them.
     applied_ids = {b0field_id for b0field_id in application.values() if b0field_id}
+    candidate_ids = {b0field_id for ids in candidates.values() for b0field_id in ids}
     for b0field_id in sorted(set(estimations) - applied_ids):
         estimation = estimations[b0field_id]
         if estimation.provenance is Provenance.INFERRED:
-            del estimations[b0field_id]
+            if b0field_id not in candidate_ids:
+                del estimations[b0field_id]
         else:
             issues.append(
                 warning(
@@ -707,6 +863,16 @@ def build_grouping(
     )
     issues.extend(concat_issues)
 
+    from .validation import check_data_compatibility
+
+    issues.extend(
+        check_data_compatibility(
+            {record.path: record for record in records if record.is_dwi},
+            concatenation_groups,
+            ignore_fov=ignore_fov,
+        )
+    )
+
     return DWIGrouping(
         subject_id=subject_id,
         files={record.path: record for record in records},
@@ -717,4 +883,5 @@ def build_grouping(
         distortion_groups=distortion_groups,
         concatenation_groups=concatenation_groups,
         issues=issues,
+        synb0_requested=use_synb0,
     )
