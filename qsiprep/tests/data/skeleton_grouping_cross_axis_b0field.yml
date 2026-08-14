@@ -1,0 +1,36 @@
+# A curated B0FieldIdentifier spanning two phase encoding axes (j and i).
+# TOPUP can use all four directions together; DRBUDDI cannot. Expected:
+# valid grouping; fsl preview fine; tortoise/mixed previews raise the
+# cross-axis error.
+'01':
+  - anat:
+      - suffix: T1w
+    dwi:
+      - dir: AP
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: topupall
+          B0FieldSource: topupall
+      - dir: PA
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: topupall
+          B0FieldSource: topupall
+      - dir: RL
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'i-'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: topupall
+          B0FieldSource: topupall
+      - dir: LR
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'i'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: topupall
+          B0FieldSource: topupall

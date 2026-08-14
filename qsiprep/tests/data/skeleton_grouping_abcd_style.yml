@@ -1,0 +1,20 @@
+# ABCD-style acquisition: one AP DWI series plus a reverse phase-encoded EPI
+# fieldmap linked with IntendedFor. Expected: one TRANSLATED PEPOLAR
+# estimation whose sources are the epi fmap AND the target DWI; the fmap
+# never appears in any output.
+'01':
+  - anat:
+      - suffix: T1w
+    fmap:
+      - dir: PA
+        suffix: epi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05
+          IntendedFor: ['dwi/sub-01_dir-AP_dwi.nii.gz']
+    dwi:
+      - dir: AP
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05

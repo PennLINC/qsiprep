@@ -1,0 +1,60 @@
+DWI grouping for sub-01
+=======================
+
+Output "sub-01" (MultipartID auto+concat+0 [inferred]): 7 series
+  Distortion group sub-01_acq-A_dir-PA (PE j, TRT 0.05s):
+    - sub-01_acq-A_dir-PA_dwi.nii.gz
+    corrected by: auto+pepolar+j [inferred]
+  Distortion group sub-01_acq-B_dir-AP (PE j-, TRT 0.08s):
+    - sub-01_acq-B_dir-AP_run-1_dwi.nii.gz
+    - sub-01_acq-B_dir-AP_run-2_dwi.nii.gz
+    corrected by: auto+pepolar+j [inferred]
+  Distortion group sub-01_acq-B_dir-PA (PE j, TRT 0.08s):
+    - sub-01_acq-B_dir-PA_run-1_dwi.nii.gz
+    - sub-01_acq-B_dir-PA_run-2_dwi.nii.gz
+    corrected by: auto+pepolar+j [inferred]
+  Distortion group sub-01_dir-AP (PE j-, TRT 0.05s):
+    - sub-01_acq-A_dir-AP_dwi.nii.gz
+    - sub-01_acq-C_dir-AP_dwi.nii.gz
+    corrected by: auto+pepolar+j [inferred]
+
+Fieldmap estimations:
+  auto+pepolar+j [inferred]: PEPOLAR (reverse phase-encoding)
+    - sub-01_acq-A_dir-AP_dwi.nii.gz
+    - sub-01_acq-A_dir-PA_dwi.nii.gz
+    - sub-01_acq-B_dir-AP_run-1_dwi.nii.gz
+    - sub-01_acq-B_dir-AP_run-2_dwi.nii.gz
+    - sub-01_acq-B_dir-PA_run-1_dwi.nii.gz
+    - sub-01_acq-B_dir-PA_run-2_dwi.nii.gz
+    - sub-01_acq-C_dir-AP_dwi.nii.gz
+    phase encoding axes: j (bidirectional)
+
+Processing preview: FSL path (TOPUP fieldmap estimation + eddy HMC/SDC)
+-----------------------------------------------------------------------
+
+Output "sub-01" (7 series):
+  1. Each series is denoised on its own, then all 7 series are concatenated. (--denoise-after-combining reverses this order.)
+  2. TOPUP estimates the susceptibility field from b=0 images spanning 4 distortion groups (4 rows in the acquisition-parameters file).
+  3. eddy corrects head motion, eddy currents, and susceptibility distortion in one model, using the TOPUP field. Every volume is assigned to its distortion group in the eddy index file.
+  4. The corrected series is written as one output file.
+
+Processing preview: TORTOISE path (DIFFPREP HMC + DRBUDDI SDC)
+--------------------------------------------------------------
+
+Output "sub-01" (7 series):
+  1. Each series is denoised on its own, then all 7 series are concatenated. (--denoise-after-combining reverses this order.)
+  2. DIFFPREP corrects head motion and eddy currents separately for each distortion group (sub-01_acq-A_dir-PA, sub-01_acq-B_dir-AP, sub-01_acq-B_dir-PA, sub-01_dir-AP).
+  3. DRBUDDI estimates distortion along the j axis from the blip-up (sub-01_acq-A_dir-PA, sub-01_acq-B_dir-PA) and blip-down (sub-01_acq-B_dir-AP, sub-01_dir-AP) data and applies the correction to every volume.
+  4. The corrected series is written as one output file.
+  !! ERROR [drbuddi-too-many-signatures]: Estimation 'auto+pepolar+j' draws on more than two distortion signatures. DRBUDDI takes exactly one blip-up and one blip-down group; harmonize the acquisitions or curate per-pair B0FieldIdentifiers to correct 'sub-01'.
+
+Processing preview: Two-stage path (TOPUP + eddy, then DRBUDDI refinement)
+--------------------------------------------------------------------------
+
+Output "sub-01" (7 series):
+  1. Each series is denoised on its own, then all 7 series are concatenated. (--denoise-after-combining reverses this order.)
+  2. TOPUP estimates an initial susceptibility field from the b=0 images (as in the FSL path).
+  3. eddy corrects head motion and eddy currents using the TOPUP field.
+  4. DRBUDDI re-estimates distortion along the j axis from the eddy-corrected blip-up/blip-down data, refining the TOPUP correction.
+  5. The corrected series is written as one output file.
+  !! ERROR [drbuddi-too-many-signatures]: Estimation 'auto+pepolar+j' draws on more than two distortion signatures. DRBUDDI takes exactly one blip-up and one blip-down group; harmonize the acquisitions or curate per-pair B0FieldIdentifiers to correct 'sub-01'.

@@ -1,0 +1,66 @@
+DWI grouping for sub-01
+=======================
+
+Output "sub-01_dir-AP" (MultipartID partA [curated]): 2 series
+  Distortion group sub-01_dir-AP (PE j-, TRT 0.05s):
+    - sub-01_dir-AP_run-1_dwi.nii.gz
+    - sub-01_dir-AP_run-2_dwi.nii.gz
+    corrected by: nothing (no fieldmap found)
+
+Output "sub-01_dir-AP" (MultipartID partB [curated]): 2 series
+  Distortion group sub-01_dir-AP+2 (PE j-, TRT 0.05s):
+    - sub-01_dir-AP_run-3_dwi.nii.gz
+    - sub-01_dir-AP_run-4_dwi.nii.gz
+    corrected by: nothing (no fieldmap found)
+
+Fieldmap estimations: none found.
+
+Notes:
+  ERROR [output-name-collision]: Two output groups ('partA' and 'partB') would both be named 'sub-01_dir-AP'. Add distinguishing entities to the filenames or curate MultipartID to give them distinct memberships.
+
+Processing preview: FSL path (TOPUP fieldmap estimation + eddy HMC/SDC)
+-----------------------------------------------------------------------
+
+Output "sub-01_dir-AP" (2 series):
+  1. Each series is denoised on its own, then all 2 series are concatenated. (--denoise-after-combining reverses this order.)
+  2. eddy corrects head motion and eddy currents. No fieldmap is available: susceptibility distortion is NOT corrected.
+  3. The corrected series is written as one output file.
+  !! WARNING [no-sdc]: Output 'sub-01_dir-AP' has no fieldmap. No susceptibility distortion correction will be performed.
+
+Output "sub-01_dir-AP" (2 series):
+  1. Each series is denoised on its own, then all 2 series are concatenated. (--denoise-after-combining reverses this order.)
+  2. eddy corrects head motion and eddy currents. No fieldmap is available: susceptibility distortion is NOT corrected.
+  3. The corrected series is written as one output file.
+  !! WARNING [no-sdc]: Output 'sub-01_dir-AP' has no fieldmap. No susceptibility distortion correction will be performed.
+
+Processing preview: TORTOISE path (DIFFPREP HMC + DRBUDDI SDC)
+--------------------------------------------------------------
+
+Output "sub-01_dir-AP" (2 series):
+  1. Each series is denoised on its own, then all 2 series are concatenated. (--denoise-after-combining reverses this order.)
+  2. DIFFPREP corrects head motion and eddy currents.
+  3. No fieldmap is available. If a T2w image was acquired, DRBUDDI registers the b=0 image to it to estimate distortion (T2Wreg); otherwise distortion is NOT corrected.
+  4. The corrected series is written as one output file.
+  !! WARNING [no-sdc]: Output 'sub-01_dir-AP' has no fieldmap. The TORTOISE path can register the b=0 to a T2w image (T2Wreg) if one was acquired; otherwise no susceptibility distortion correction will be performed.
+
+Output "sub-01_dir-AP" (2 series):
+  1. Each series is denoised on its own, then all 2 series are concatenated. (--denoise-after-combining reverses this order.)
+  2. DIFFPREP corrects head motion and eddy currents.
+  3. No fieldmap is available. If a T2w image was acquired, DRBUDDI registers the b=0 image to it to estimate distortion (T2Wreg); otherwise distortion is NOT corrected.
+  4. The corrected series is written as one output file.
+  !! WARNING [no-sdc]: Output 'sub-01_dir-AP' has no fieldmap. The TORTOISE path can register the b=0 to a T2w image (T2Wreg) if one was acquired; otherwise no susceptibility distortion correction will be performed.
+
+Processing preview: Two-stage path (TOPUP + eddy, then DRBUDDI refinement)
+--------------------------------------------------------------------------
+
+Output "sub-01_dir-AP" (2 series):
+  1. Each series is denoised on its own, then all 2 series are concatenated. (--denoise-after-combining reverses this order.)
+  2. Without a PEPOLAR fieldmap the DRBUDDI second stage adds nothing: processing follows the FSL path.
+  3. The corrected series is written as one output file.
+  !! WARNING [no-sdc]: Output 'sub-01_dir-AP' has no fieldmap. The TORTOISE path can register the b=0 to a T2w image (T2Wreg) if one was acquired; otherwise no susceptibility distortion correction will be performed.
+
+Output "sub-01_dir-AP" (2 series):
+  1. Each series is denoised on its own, then all 2 series are concatenated. (--denoise-after-combining reverses this order.)
+  2. Without a PEPOLAR fieldmap the DRBUDDI second stage adds nothing: processing follows the FSL path.
+  3. The corrected series is written as one output file.
+  !! WARNING [no-sdc]: Output 'sub-01_dir-AP' has no fieldmap. The TORTOISE path can register the b=0 to a T2w image (T2Wreg) if one was acquired; otherwise no susceptibility distortion correction will be performed.

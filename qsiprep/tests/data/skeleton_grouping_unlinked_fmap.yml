@@ -1,0 +1,24 @@
+# An EPI fieldmap with no IntendedFor and no B0FieldIdentifier: it cannot be
+# linked to anything and is not used. The two DWI series still pair with
+# each other via the heuristic. Expected: unlinked-fmap warning, one
+# inferred axis-j estimation from the DWIs only.
+'01':
+  - anat:
+      - suffix: T1w
+    fmap:
+      - dir: PA
+        suffix: epi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05
+    dwi:
+      - dir: AP
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+      - dir: PA
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05

@@ -1,0 +1,35 @@
+# Partially curated dataset: run-1 AP+PA carry B0FieldIdentifier/Source,
+# run-2 AP+PA carry nothing. Expected: curated estimation for run-1 files,
+# inferred axis estimation for run-2 files, mixed-provenance warning.
+'01':
+  - anat:
+      - suffix: T1w
+    dwi:
+      - dir: AP
+        run: '1'
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: pepolar01
+          B0FieldSource: pepolar01
+      - dir: PA
+        run: '1'
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: pepolar01
+          B0FieldSource: pepolar01
+      - dir: AP
+        run: '2'
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+      - dir: PA
+        run: '2'
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05
