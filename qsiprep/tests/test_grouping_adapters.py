@@ -15,7 +15,13 @@ import pytest
 from bids.layout import BIDSLayout
 from niworkflows.utils.testing import generate_bids_skeleton
 
-from qsiprep.grouping import backend_for_config, build_dwi_grouping, to_legacy_scan_groups
+from qsiprep.grouping import (
+    EstimationMethod,
+    backend_for_config,
+    build_dwi_grouping,
+    to_legacy_scan_groups,
+    to_preproc_units,
+)
 from qsiprep.tests.grouping_scenarios import load_scenario
 from qsiprep.tests.utils import get_test_data_path
 from qsiprep.utils.grouping import group_dwi_scans
@@ -185,3 +191,54 @@ def test_synb0_not_implemented(tmp_path):
     grouping = load_scenario('fieldmapless_t1w_only', tmp_path, strict=False, use_synb0=True)
     with pytest.raises(NotImplementedError, match='SyNb0'):
         to_legacy_scan_groups(grouping)
+
+
+# -- Native PreprocUnit surface ------------------------------------------------
+
+
+def _units(scenario, tmp_path, **kwargs):
+    return to_preproc_units(load_scenario(scenario, tmp_path, strict=False, **kwargs))
+
+
+def test_preproc_units_match_legacy_partition(tmp_path):
+    """Units and legacy scan groups are the same partition, named identically."""
+    grouping = load_scenario('mixed_trt', tmp_path, strict=False)
+    units = to_preproc_units(grouping)
+    legacy, _ = to_legacy_scan_groups(grouping)
+    assert [unit.output_name for unit in units] == [g['concatenated_bids_name'] for g in legacy]
+
+
+def test_preproc_unit_pepolar_bidirectional(tmp_path):
+    """A reverse-PE pair exposes its plus/minus split natively."""
+    (unit,) = _units('mixed_trt', tmp_path)
+    assert unit.method is EstimationMethod.PEPOLAR
+    assert unit.has_bidirectional_dwi
+    assert _basenames(list(unit.plus_files)) == ['sub-01_dir-PA_dwi.nii.gz']
+    assert _basenames(list(unit.minus_files)) == ['sub-01_dir-AP_dwi.nii.gz']
+    assert unit.pe_dir == 'j'
+    assert unit.extra_b0 == ()
+
+
+def test_preproc_unit_extra_b0_from_epi_fmap(tmp_path):
+    """A dedicated epi fieldmap is exposed as an extra b=0 source, not a member."""
+    (unit,) = _units('abcd_style', tmp_path)
+    assert unit.method is EstimationMethod.PEPOLAR
+    assert not unit.has_bidirectional_dwi
+    assert _basenames(list(unit.extra_b0)) == ['sub-01_dir-PA_epi.nii.gz']
+    assert unit.pe_dir == 'j-'
+
+
+def test_preproc_unit_gre_files(tmp_path):
+    """A GRE unit exposes its fieldmap files keyed by BIDS suffix."""
+    (unit,) = _units('gre_phasediff', tmp_path)
+    assert unit.method is EstimationMethod.PHASEDIFF
+    gre = {suffix: op.basename(path) for suffix, path in unit.gre_files().items()}
+    assert gre['phasediff'] == 'sub-01_phasediff.nii.gz'
+    assert gre['magnitude1'] == 'sub-01_magnitude1.nii.gz'
+
+
+def test_preproc_unit_uncorrected(tmp_path):
+    """A series with no fieldmap has no estimation and no method."""
+    units = _units('missing_pedir', tmp_path)
+    assert units
+    assert all(unit.estimation is None and unit.method is None for unit in units)

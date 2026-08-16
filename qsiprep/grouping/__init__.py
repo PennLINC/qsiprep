@@ -36,7 +36,7 @@ The cost is that a new :class:`~.models.EstimationMethod` touches five places
    (or a clear ``NotImplementedError`` when it has none yet).
 """
 
-from .adapters import backend_for_config, to_legacy_scan_groups
+from .adapters import PreprocUnit, backend_for_config, to_legacy_scan_groups, to_preproc_units
 from .inference import build_grouping
 from .metadata import index_subject
 from .models import (
@@ -63,6 +63,7 @@ __all__ = [
     'FileRecord',
     'GroupingError',
     'GroupingIssue',
+    'PreprocUnit',
     'Provenance',
     'backend_for_config',
     'build_dwi_grouping',
@@ -72,6 +73,7 @@ __all__ = [
     'index_subject',
     'report_text',
     'to_legacy_scan_groups',
+    'to_preproc_units',
 ]
 
 
