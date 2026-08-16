@@ -42,6 +42,15 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from packaging.version import Version
 
 from .. import config
+from ..grouping import (
+    GroupingError,
+    backend_for_config,
+    build_dwi_grouping,
+    check_backend,
+    describe_processing,
+    report_text,
+    to_legacy_scan_groups,
+)
 from ..interfaces import (
     AboutSummary,
     BIDSDataGrabber,
@@ -50,7 +59,6 @@ from ..interfaces import (
     SubjectSummary,
 )
 from ..utils.bids import collect_data
-from ..utils.grouping import group_dwi_scans
 from ..utils.misc import fix_multi_source_name
 from .anatomical.volume import anat_biascorrect_enabled, init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
@@ -358,15 +366,34 @@ to workflows in *QSIPrep*'s documentation]\
     if config.workflow.anat_only:
         return workflow
 
-    # Handle the grouping of multiple dwi files within a session
-    # concatenation_scheme maps the outputs to their final concatenation group
-    dwi_fmap_groups, concatenation_scheme = group_dwi_scans(
+    # Group the subject's DWI scans from BIDS metadata alone, 
+    # then validate against the backend selected by the CLI.
+    backend = backend_for_config(config.workflow.hmc_model, config.workflow.pepolar_method)
+    grouping = build_dwi_grouping(
         layout=config.execution.layout,
         subject_data=subject_data,
-        combine_scans=not config.workflow.separate_all_dwis,
+        separate_all_dwis=config.workflow.separate_all_dwis,
         ignore_fieldmaps='fieldmaps' in config.workflow.ignore,
+        ignore_shims='shims' in config.workflow.ignore,
+        ignore_fov='fov' in config.workflow.ignore,
+        strict=False,
     )
-    config.loggers.workflow.info(dwi_fmap_groups)
+    grouping_errors = grouping.errors + [
+        issue for issue in check_backend(grouping, backend) if issue.severity == 'error'
+    ]
+    for issue in grouping.warnings:
+        config.loggers.workflow.warning(issue.render())
+    config.loggers.workflow.info(report_text(grouping))
+    config.loggers.workflow.info(describe_processing(grouping, backend))
+    if grouping_errors:
+        rendered = '\n'.join(issue.render() for issue in grouping_errors)
+        raise GroupingError(
+            f'The DWI grouping for sub-{subject_id} has {len(grouping_errors)} '
+            f'unresolvable problem(s):\n{rendered}'
+        )
+
+    # concatenation_scheme maps the outputs to their final concatenation group
+    dwi_fmap_groups, concatenation_scheme = to_legacy_scan_groups(grouping)
 
     # If a merge is happening at the end, make sure
     if merging_distortion_groups:
@@ -397,9 +424,6 @@ to workflows in *QSIPrep*'s documentation]\
     outputs_to_files = {
         dwi_group['concatenated_bids_name']: dwi_group for dwi_group in dwi_fmap_groups
     }
-    if config.workflow.force_syn:
-        for group_name in outputs_to_files:
-            outputs_to_files[group_name]['fieldmap_info'] = {'suffix': 'syn'}
     summary.inputs.dwi_groupings = outputs_to_files
 
     make_intramodal_template = False
