@@ -140,6 +140,9 @@ class _GatherDRBUDDIInputsInputSpec(TORTOISEInputSpec):
     raw_image_sdc = traits.Bool(True, usedefault=True)
     fieldmap_type = traits.Enum('epi', 'rpe_series', mandatory=True)
     dwi_series_pedir = traits.Enum('i', 'i-', 'j', 'j-', 'k', 'k-', mandatory=True)
+    sidecars = traits.Dict(
+        desc='per-file PE/readout metadata from the grouping model, to spare sidecar reads'
+    )
 
 
 class _GatherDRBUDDIInputsOutputSpec(TraitedSpec):
@@ -157,6 +160,8 @@ class GatherDRBUDDIInputs(SimpleInterface):
     output_spec = _GatherDRBUDDIInputsOutputSpec
 
     def _run_interface(self, runtime):
+        sidecars = self.inputs.sidecars if isdefined(self.inputs.sidecars) else None
+
         # Write the metadata
         up_json = op.join(runtime.cwd, 'blip_up.json')
         with open(up_json, 'w') as up_jsonf:
@@ -189,6 +194,7 @@ class GatherDRBUDDIInputs(SimpleInterface):
                 original_images=self.inputs.original_files,
                 prefix=op.join(runtime.cwd, 'drbuddi'),
                 make_bmat=True,
+                sidecars=sidecars,
             )
 
         elif self.inputs.fieldmap_type == 'epi':
@@ -203,6 +209,7 @@ class GatherDRBUDDIInputs(SimpleInterface):
                 epi_fmaps=self.inputs.epi_fmaps,
                 max_per_spec=True,
                 raw_image_sdc=self.inputs.raw_image_sdc,
+                sidecars=sidecars,
             )
 
             b0s_df = pd.read_table(b0_tsv)
@@ -231,6 +238,7 @@ class GatherDRBUDDIInputs(SimpleInterface):
                 prefix=op.join(runtime.cwd, 'drbuddi'),
                 make_bmat=False,
                 assignments_only=True,
+                sidecars=sidecars,
             )
             self._results['blip_up_bmat'] = write_dummy_bmtxt(blip_up_nii)
             self._results['blip_down_bmat'] = write_dummy_bmtxt(blip_down_nii)
@@ -702,10 +710,11 @@ def split_into_up_and_down_niis(
     prefix,
     make_bmat=True,
     assignments_only=False,
+    sidecars=None,
 ):
     """Takes the concatenated output from pre_hmc_wf and split it into "up" and "down"
     decompressed nifti files with float32 datatypes."""
-    group_names, group_assignments = get_distortion_grouping(original_images)
+    group_names, group_assignments = get_distortion_grouping(original_images, sidecars)
 
     if not len(set(group_names)) == 2 and not assignments_only:
         raise Exception('DRBUDDI requires exactly one blip up and one blip down')
@@ -1254,7 +1263,7 @@ class DIFFPREPSplitOutputs(SimpleInterface):
         return runtime
 
 
-def _distortion_group_assignments(original_files):
+def _distortion_group_assignments(original_files, sidecars=None):
     """Return a per-volume group label in ``{1, 2}`` for a reverse-PE series.
 
     Wraps :func:`get_distortion_grouping` (which numbers groups by the order
@@ -1264,7 +1273,7 @@ def _distortion_group_assignments(original_files):
     inside ``GatherDRBUDDIInputs``, so the diffprep split and DRBUDDI's re-split
     agree on which volumes are the "+"/"up" side.
     """
-    _, raw_groups = get_distortion_grouping(original_files)
+    _, raw_groups = get_distortion_grouping(original_files, sidecars)
     n_groups = len(set(raw_groups))
     if n_groups != 2:
         raise ValueError(
@@ -1301,6 +1310,9 @@ class _SplitDWIsByDistortionGroupInputSpec(BaseInterfaceInputSpec):
         'documents provenance; it does not change the eddy model.',
     )
     b0_threshold = traits.CInt(100, usedefault=True)
+    sidecars = traits.Dict(
+        desc='per-file PE/readout metadata from the grouping model, to spare sidecar reads'
+    )
 
 
 class _SplitDWIsByDistortionGroupOutputSpec(TraitedSpec):
@@ -1336,7 +1348,8 @@ class SplitDWIsByDistortionGroup(SimpleInterface):
     output_spec = _SplitDWIsByDistortionGroupOutputSpec
 
     def _run_interface(self, runtime):
-        assignments = _distortion_group_assignments(self.inputs.original_files)
+        sidecars = self.inputs.sidecars if isdefined(self.inputs.sidecars) else None
+        assignments = _distortion_group_assignments(self.inputs.original_files, sidecars)
 
         dwi_img = nb.load(self.inputs.dwi_file)
         nvols = 1 if dwi_img.ndim < 4 else dwi_img.shape[3]

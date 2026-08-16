@@ -242,3 +242,16 @@ def test_preproc_unit_uncorrected(tmp_path):
     units = _units('missing_pedir', tmp_path)
     assert units
     assert all(unit.estimation is None and unit.method is None for unit in units)
+
+
+def test_sidecar_overrides_carry_pe_and_readout(tmp_path):
+    """The override map carries each series' PE dir and readout time from the model."""
+    (unit,) = _units('mixed_trt', tmp_path)
+    overrides = unit.sidecar_overrides()
+    assert set(_basenames(list(overrides))) == {
+        'sub-01_dir-AP_dwi.nii.gz',
+        'sub-01_dir-PA_dwi.nii.gz',
+    }
+    for spec in overrides.values():
+        assert spec['PhaseEncodingDirection'] in ('j', 'j-')
+        assert 'TotalReadoutTime' in spec

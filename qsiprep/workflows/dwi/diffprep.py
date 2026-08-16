@@ -129,7 +129,7 @@ def _write_pe_json_node(name):
 
 
 def _build_rpe_diffprep_stage(
-    workflow, inputnode, diffprep_kwargs, pe_axis, b0_threshold, n_procs, mem_gb
+    workflow, inputnode, diffprep_kwargs, pe_axis, b0_threshold, n_procs, mem_gb, sidecars
 ):
     """Wire the per-phase-encoding-direction DIFFPREP stage for ``rpe_series``.
 
@@ -147,7 +147,7 @@ def _build_rpe_diffprep_stage(
         The ``ConcatenateDIFFPREPGroups`` node providing the recombined triple.
     """
     split_groups = pe.Node(
-        SplitDWIsByDistortionGroup(pe_axis=pe_axis, b0_threshold=b0_threshold),
+        SplitDWIsByDistortionGroup(pe_axis=pe_axis, b0_threshold=b0_threshold, sidecars=sidecars),
         name='split_rpe_groups',
         mem_gb=mem_gb,
     )
@@ -364,6 +364,7 @@ def init_diffprep_hmc_wf(
             b0_threshold=config.workflow.b0_threshold,
             n_procs=config.nipype.omp_nthreads,
             mem_gb=series_mem_gb,
+            sidecars=unit.sidecar_overrides(),
         )
     else:
         # Convert gzipped niftis + FSL gradients into TORTOISE format (.nii + .bmtxt).

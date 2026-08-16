@@ -181,6 +181,8 @@ def init_drbuddi_wf(
             b0_threshold=config.workflow.b0_threshold,
             raw_image_sdc=True,
             fieldmap_type=fieldmap_type,
+            # Model-derived metadata so the up/down blip split skips sidecar reads.
+            sidecars=unit.sidecar_overrides(),
         ),
         name='gather_drbuddi_inputs',
     )

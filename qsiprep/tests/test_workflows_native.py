@@ -116,6 +116,47 @@ def test_fsl_hmc_no_fieldmap_builds():
     assert wf.get_node('topup') is None
 
 
+def test_eddy_grouping_from_sidecars_needs_no_disk():
+    """eddy's acqp/index build from the model's sidecar map, not from disk."""
+    from qsiprep.interfaces.epi_fmap import get_distortion_grouping
+
+    ap, pa = '/nope/sub-01_dir-AP_dwi.nii.gz', '/nope/sub-01_dir-PA_dwi.nii.gz'
+    origins = [ap] * 3 + [pa] * 3
+    sidecars = {
+        ap: {'PhaseEncodingDirection': 'j', 'TotalReadoutTime': 0.05},
+        pa: {'PhaseEncodingDirection': 'j-', 'TotalReadoutTime': 0.05},
+    }
+    acqps, groups = get_distortion_grouping(origins, sidecars=sidecars)
+    assert acqps == ['0 1 0 0.050000', '0 -1 0 0.050000']
+    assert groups == [1, 1, 1, 2, 2, 2]
+
+
+def test_drbuddi_blip_assignments_from_sidecars_needs_no_disk():
+    """DRBUDDI's per-volume blip labels come from the sidecar map, not from disk."""
+    from qsiprep.interfaces.tortoise import split_into_up_and_down_niis
+
+    ap, pa = '/nope/sub-01_dir-AP_dwi.nii.gz', '/nope/sub-01_dir-PA_dwi.nii.gz'
+    origins = [ap, ap, pa, pa]
+    sidecars = {
+        ap: {'PhaseEncodingDirection': 'j', 'TotalReadoutTime': 0.05},
+        pa: {'PhaseEncodingDirection': 'j-', 'TotalReadoutTime': 0.05},
+    }
+    # assignments_only reads no files; per-volume lists just need matching length.
+    per_vol = ['v0', 'v1', 'v2', 'v3']
+    assignments = split_into_up_and_down_niis(
+        dwi_files=per_vol,
+        bval_files=per_vol,
+        bvec_files=per_vol,
+        original_images=origins,
+        prefix='/tmp/unused',
+        make_bmat=False,
+        assignments_only=True,
+        sidecars=sidecars,
+    )
+    # First volume's group is "up"; opposite polarity is "down".
+    assert assignments == ['up', 'up', 'down', 'down']
+
+
 # NOTE: the SHORELine path (init_qsiprep_hmcsdc_wf) is deprecated and its
 # construction depends on init_dwi_hmc_wf internals that need a fuller config
 # than a smoke warrants; the CI ``drbuddi_shoreline_epi`` / ``drbuddi_tensorline_epi``

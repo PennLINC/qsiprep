@@ -176,6 +176,9 @@ def init_fsl_hmc_wf(
             b0_threshold=config.workflow.b0_threshold,
             raw_image_sdc=False,
             eddy_config=eddy_cfg_file,
+            # Model-derived PE/readout metadata so eddy's acqp/index and TOPUP's
+            # datain are built without re-reading sidecars from disk.
+            sidecars=unit.sidecar_overrides(),
         ),
         name='gather_inputs',
     )

@@ -162,6 +162,30 @@ class PreprocUnit:
         """Sidecar metadata of a source file, already read into the model."""
         return dict(self.grouping.files[path].metadata)
 
+    def sidecar_overrides(self) -> dict[str, dict]:
+        """Per-file distortion metadata, so eddy/DRBUDDI skip re-reading sidecars.
+
+        Keyed by file path; each value carries the ``PhaseEncodingDirection`` and
+        ``TotalReadoutTime`` the model parsed (plus ``SliceTiming`` from the raw
+        sidecar) for every DWI series and estimation source. Files with no known
+        phase-encoding direction are omitted, so consumers fall back to disk.
+        """
+        paths = set(self.dwi_files)
+        if self.estimation is not None:
+            paths |= set(self.estimation.sources)
+
+        overrides = {}
+        for path in paths:
+            record = self.grouping.files.get(path)
+            if record is None or record.signature.pe_dir is None:
+                continue
+            overrides[path] = {
+                'PhaseEncodingDirection': record.signature.pe_dir,
+                'TotalReadoutTime': record.signature.readout_time,
+                'SliceTiming': record.metadata.get('SliceTiming'),
+            }
+        return overrides
+
     def to_legacy_dict(self) -> dict:
         """Render this unit as a legacy ``group_dwi_scans`` scan-group dict."""
         return {

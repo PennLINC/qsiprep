@@ -399,9 +399,7 @@ def init_dwi_finalize_wf(
 
     # Write a metadata sidecar for the derivatives
     merged_sidecar = pe.Node(
-        DerivativesSidecar(
-            sidecar_data=unit_to_sidecar(unit), source_file=source_file
-        ),
+        DerivativesSidecar(sidecar_data=unit_to_sidecar(unit), source_file=source_file),
         name='merged_sidecar',
     )
     ds_merged_sidecar = pe.Node(
