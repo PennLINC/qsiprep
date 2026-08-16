@@ -39,10 +39,9 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 def init_fsl_hmc_wf(
-    scan_groups,
+    unit,
     source_file,
     t2w_sdc,
-    dwi_metadata=None,
     slice_quality='outlier_n_sqr_stdev_map',
     name='fsl_hmc_wf',
 ):
@@ -63,8 +62,8 @@ def init_fsl_hmc_wf(
 
     **Parameters**
 
-        scan_groups: dict
-            dictionary with fieldmaps and warp space information for the dwis
+        unit: :class:`~qsiprep.grouping.adapters.PreprocUnit`
+            the DWI series to correct together and the fieldmap that corrects them
         impute_slice_threshold: float
             threshold for a slice to be replaced with imputed values. Overrides the
             parameter in ``eddy_config`` if set to a number > 0.
@@ -285,21 +284,23 @@ def init_fsl_hmc_wf(
 
     # Fieldmap correction to be done in LAS+: TOPUP for rpe series or epi fieldmap
     # If a topupref is provided, use it for TOPUP
-    fieldmap_type = scan_groups['fieldmap_info']['suffix'] or ''
+    if unit.is_pepolar:
+        fieldmap_type = 'rpe_series' if unit.has_bidirectional_dwi else 'epi'
+    elif unit.is_gre:
+        fieldmap_type = unit.gre_suffix
+    else:
+        fieldmap_type = ''
     workflow.__desc__ = boilerplate_from_eddy_config(
         eddy_args, fieldmap_type, config.workflow.pepolar_method
     )
 
     # Are we running TOPUP?
-    if (
-        fieldmap_type in ('epi', 'rpe_series')
-        and 'topup' in config.workflow.pepolar_method.lower()
-    ):
+    if unit.is_pepolar and 'topup' in config.workflow.pepolar_method.lower():
         # If there are EPI fieldmaps in fmaps/, make sure they get to TOPUP. It will always use
         # b=0 images from the DWI series regardless
         gather_inputs.inputs.topup_requested = True
-        if 'epi' in scan_groups['fieldmap_info']:
-            gather_inputs.inputs.epi_fmaps = scan_groups['fieldmap_info']['epi']
+        if unit.extra_b0:
+            gather_inputs.inputs.epi_fmaps = list(unit.extra_b0)
 
         outputnode.inputs.sdc_method = 'TOPUP'
         topup = pe.Node(
@@ -397,20 +398,17 @@ def init_fsl_hmc_wf(
             (pre_eddy_b0_ref_wf, eddy, [('outputnode.dwi_mask', 'in_mask')]),
         ])  # fmt:skip
 
-    if (
-        fieldmap_type in ('epi', 'rpe_series')
-        and 'drbuddi' in config.workflow.pepolar_method.lower()
-    ):
+    if unit.is_pepolar and 'drbuddi' in config.workflow.pepolar_method.lower():
         outputnode.inputs.sdc_method = 'DRBUDDI'
         config.loggers.workflow.info('Running DRBUDDI for SDC')
 
         # Let gather_inputs know we're doing pepolar, even though it's not topup
         gather_inputs.inputs.topup_requested = True
-        if 'epi' in scan_groups['fieldmap_info']:
-            gather_inputs.inputs.epi_fmaps = scan_groups['fieldmap_info']['epi']
+        if unit.extra_b0:
+            gather_inputs.inputs.epi_fmaps = list(unit.extra_b0)
 
         drbuddi_wf = init_drbuddi_wf(
-            scan_groups=scan_groups,
+            unit=unit,
             t2w_sdc=t2w_sdc,
             use_cuda=gpu_enabled('drbuddi'),
         )
@@ -446,13 +444,10 @@ def init_fsl_hmc_wf(
 
         return workflow
 
-    if fieldmap_type in ('fieldmap', 'syn') or fieldmap_type.startswith('phase'):
+    if unit.is_gre:
         config.loggers.workflow.info(f'Computing fieldmap directly from {fieldmap_type}')
         outputnode.inputs.sdc_method = fieldmap_type
-        b0_sdc_wf = init_sdc_wf(
-            scan_groups['fieldmap_info'],
-            dwi_metadata,
-        )
+        b0_sdc_wf = init_sdc_wf(unit, unit.dwi_metadata)
 
         workflow.connect([
             # Send to SDC workflow

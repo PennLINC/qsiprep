@@ -42,49 +42,43 @@ from ... import config
 
 # Fieldmap workflows
 from .pepolar import init_pepolar_unwarp_wf
-from .syn import init_syn_sdc_wf
 from .unwarp import init_sdc_unwarp_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_sdc_wf(fieldmap_info, dwi_meta):
+def init_sdc_wf(unit, dwi_meta):
     """
     This workflow implements the heuristics to choose a
-    :abbr:`SDC (susceptibility distortion correction)` strategy.
-    When no field map information is present within the BIDS inputs,
-    the EXPERIMENTAL "fieldmap-less SyN" can be performed, using
-    the ``--use-syn`` argument. When ``--force-syn`` is specified,
-    then the "fieldmap-less SyN" is always executed and reported
-    despite of other fieldmaps available with higher priority.
-    In the latter case (some sort of fieldmap(s) is available and
-    ``--force-syn`` is requested), then the :abbr:`SDC (susceptibility
-    distortion correction)` method applied is that with the
-    highest priority.
+    :abbr:`SDC (susceptibility distortion correction)` strategy for a
+    scanner-measured fieldmap (PEPOLAR or GRE). Units with no measured
+    fieldmap pass through unchanged; the fieldmap-less T2Wreg and SyNb0 cases
+    are handled by the TORTOISE backend, not here.
 
     .. workflow::
         :graph2use: orig
         :simple_form: yes
 
         from qsiprep.workflows.fieldmap import init_sdc_wf
+        from qsiprep.tests.preproc_factory import make_preproc_unit
+        from qsiprep.grouping.models import EstimationMethod
         wf = init_sdc_wf(
-            fieldmap_info={
-                'suffix': 'epi',
-                'epi': \
-                    'sub-03/ses-2/fmap/sub-03_ses-2_run-1_epi.nii.gz',
-                'metadata': {'PhaseEncodingDirection': 'j-'}
-            },
-            dwi_meta={
-                'PhaseEncodingDirection': 'j',
-            },
+            make_preproc_unit(
+                ['/data/sub-03/dwi/sub-03_dwi.nii.gz'],
+                method=EstimationMethod.PEPOLAR,
+                pe_dir='j',
+                estimation_sources=[
+                    '/data/sub-03/dwi/sub-03_dwi.nii.gz',
+                    '/data/sub-03/fmap/sub-03_epi.nii.gz',
+                ],
+            ),
+            dwi_meta={'PhaseEncodingDirection': 'j'},
         )
 
     Parameters
     ----------
-    fmaps : list of pybids dicts
-        A list of dictionaries with the available fieldmaps
-        (and their metadata using the key ``'metadata'`` for the
-        case of *epi* fieldmaps)
+    unit : :class:`~qsiprep.grouping.adapters.PreprocUnit`
+        The DWI series to correct and the fieldmap that corrects them
     dwi_meta : dict
         BIDS metadata dictionary corresponding to the DWI run
 
@@ -123,7 +117,7 @@ def init_sdc_wf(fieldmap_info, dwi_meta):
 
     """
     omp_nthreads = config.nipype.omp_nthreads
-    workflow = Workflow(name='sdc_wf' if fieldmap_info['suffix'] is not None else 'sdc_bypass_wf')
+    workflow = Workflow(name='sdc_wf' if unit.has_scanner_measured_fieldmap else 'sdc_bypass_wf')
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
@@ -145,8 +139,9 @@ def init_sdc_wf(fieldmap_info, dwi_meta):
         name='outputnode',
     )
 
-    # No fieldmaps - forward inputs to outputs
-    if fieldmap_info.get('suffix') is None:
+    # No scanner-measured fieldmap - forward inputs to outputs. (The fieldmap-less
+    # T2Wreg and SyNb0 cases are handled by the TORTOISE backend, not here.)
+    if not unit.has_scanner_measured_fieldmap:
         workflow.__postdesc__ = 'No susceptibility distortion correction was performed.'
         outputnode.inputs.method = 'None'
         workflow.connect([
@@ -164,12 +159,12 @@ co-registration with the anatomical reference.
 """
 
     # PEPOLAR path
-    if fieldmap_info['suffix'] in ('epi', 'rpe_series', 'dwi'):
-        outputnode.inputs.method = (
-            f'PEB/PEPOLAR (phase-encoding based / PE-POLARity): {fieldmap_info["suffix"]}'
-        )
+    if unit.is_pepolar:
+        outputnode.inputs.method = 'PEB/PEPOLAR (phase-encoding based / PE-POLARity)'
 
-        epi_fmaps = fieldmap_info[fieldmap_info['suffix']]
+        # The reverse blip is the opposite-polarity DWI series when both are
+        # present, otherwise the dedicated epi fieldmap(s).
+        epi_fmaps = list(unit.minus_files) if unit.has_bidirectional_dwi else list(unit.extra_b0)
 
         # We have already sorted by compatible
         sdc_unwarp_wf = init_pepolar_unwarp_wf(
@@ -188,31 +183,30 @@ co-registration with the anatomical reference.
         ])  # fmt:skip
 
     # FIELDMAP path
-    if fieldmap_info['suffix'] == 'fieldmap' or fieldmap_info['suffix'].startswith('phase'):
-        outputnode.inputs.method = f'FMB ({fieldmap_info["suffix"]}-based)'
+    if unit.is_gre:
+        gre = unit.gre_files()
+        outputnode.inputs.method = f'FMB ({unit.gre_suffix}-based)'
         # Import specific workflows here, so we don't break everything with one
         # unused workflow.
-        if fieldmap_info['suffix'] == 'fieldmap':
+        if unit.gre_suffix == 'fieldmap':
             from .fmap import init_fmap_wf
 
             fmap_estimator_wf = init_fmap_wf()
             # set inputs
-            fmap_estimator_wf.inputs.inputnode.fieldmap = fieldmap_info['fieldmap']
-            fmap_estimator_wf.inputs.inputnode.magnitude = fieldmap_info['magnitude']
+            fmap_estimator_wf.inputs.inputnode.fieldmap = gre['fieldmap']
+            fmap_estimator_wf.inputs.inputnode.magnitude = gre['magnitude']
 
         else:
             from .phdiff import init_phdiff_wf
 
-            fmap_estimator_wf = init_phdiff_wf(phasetype=fieldmap_info['suffix'])
+            fmap_estimator_wf = init_phdiff_wf(phasetype=unit.gre_suffix)
             # set inputs
-            if fieldmap_info['suffix'] == 'phasediff':
-                fmap_estimator_wf.inputs.inputnode.phasediff = fieldmap_info['phasediff']
-                fmap_estimator_wf.inputs.inputnode.phase_meta = (
-                    config.execution.layout.get_metadata(fieldmap_info['phasediff'])
-                )
+            if unit.gre_suffix == 'phasediff':
+                fmap_estimator_wf.inputs.inputnode.phasediff = gre['phasediff']
+                fmap_estimator_wf.inputs.inputnode.phase_meta = unit.metadata_for(gre['phasediff'])
             else:
                 # Check that fieldmap is not bipolar
-                fmap_polarity = fieldmap_info['metadata'].get('DiffusionScheme', None)
+                fmap_polarity = unit.metadata_for(gre['phase1']).get('DiffusionScheme', None)
                 if fmap_polarity == 'Bipolar':
                     config.loggers.workflow.warning(
                         'Bipolar fieldmaps are not supported. Ignoring'
@@ -230,19 +224,14 @@ co-registration with the anatomical reference.
                 if fmap_polarity is None:
                     config.loggers.workflow.warning('Assuming phase images are Monopolar')
 
-                fmap_estimator_wf.inputs.inputnode.phasediff = [
-                    fieldmap_info['phase1'],
-                    fieldmap_info['phase2'],
-                ]
+                fmap_estimator_wf.inputs.inputnode.phasediff = [gre['phase1'], gre['phase2']]
                 fmap_estimator_wf.inputs.inputnode.phase_meta = [
-                    config.execution.layout.get_metadata(fieldmap_info['phase1']),
-                    config.execution.layout.get_metadata(fieldmap_info['phase2']),
+                    unit.metadata_for(gre['phase1']),
+                    unit.metadata_for(gre['phase2']),
                 ]
 
             fmap_estimator_wf.inputs.inputnode.magnitude = [
-                fmap_
-                for key, fmap_ in sorted(fieldmap_info.items())
-                if key.startswith('magnitude')
+                path for suffix, path in sorted(gre.items()) if suffix.startswith('magnitude')
             ]
 
         sdc_unwarp_wf = init_sdc_unwarp_wf(name='sdc_unwarp_wf')
@@ -261,23 +250,6 @@ co-registration with the anatomical reference.
             ]),
             (sdc_unwarp_wf, outputnode, [('outputnode.out_hz', 'fieldmap_hz')]),
         ])  # fmt:skip
-
-    # FIELDMAP-less path
-    if fieldmap_info['suffix'] == 'syn':
-        syn_sdc_wf = init_syn_sdc_wf(
-            bold_pe=dwi_meta.get('PhaseEncodingDirection', None),
-        )
-
-        workflow.connect([
-            (inputnode, syn_sdc_wf, [
-                ('t1_brain', 'inputnode.t1_brain'),
-                ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-                ('b0_ref', 'inputnode.bold_ref'),
-                ('template', 'inputnode.template'),
-            ]),
-        ])  # fmt:skip
-        outputnode.inputs.method = 'FLB ("fieldmap-less", SyN-based)'
-        sdc_unwarp_wf = syn_sdc_wf
 
     workflow.connect([
         (sdc_unwarp_wf, outputnode, [

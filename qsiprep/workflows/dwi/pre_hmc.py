@@ -23,8 +23,7 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 def init_dwi_pre_hmc_wf(
-    scan_groups,
-    preprocess_rpe_series,
+    unit,
     orientation,
     source_file,
     calculate_qc=True,
@@ -36,17 +35,20 @@ def init_dwi_pre_hmc_wf(
 
     In the general case, a single warped group will be sent to this workflow. However,
     since eddy expects a single 4D input file, two warped groups can be processed
-    separately and merged into a 4D file. This happens when ``preprocess_rpe_series`` is
-    ``True``. FSL's eddy also requires data in LAS+ orientation.
+    separately and merged into a 4D file. This happens when the unit has both phase
+    encoding polarities (``unit.has_bidirectional_dwi``). FSL's eddy also requires
+    data in LAS+ orientation.
 
     .. workflow::
         :graph2use: orig
         :simple_form: yes
 
         from qsiprep.workflows.dwi.pre_hmc import init_dwi_pre_hmc_wf
-        wf = init_dwi_pre_hmc_wf(['/completely/made/up/path/sub-01_dwi.nii.gz'],
-                                  preprocess_rpe_series=False,
-                                  orientation="LPS",
+        from qsiprep.tests.preproc_factory import make_preproc_unit
+        wf = init_dwi_pre_hmc_wf(
+            make_preproc_unit(['/completely/made/up/path/sub-01_dwi.nii.gz']),
+            orientation="LPS",
+            source_file='/completely/made/up/path/sub-01_dwi.nii.gz')
 
     **Parameters**
 
@@ -92,9 +94,6 @@ def init_dwi_pre_hmc_wf(
         ),
         name='outputnode',
     )
-    dwi_series_pedir = scan_groups['dwi_series_pedir']
-    dwi_series = scan_groups['dwi_series']
-
     workflow.__postdesc__ = gen_denoising_boilerplate()
 
     # Doing biascorr here is the old way.
@@ -104,16 +103,11 @@ def init_dwi_pre_hmc_wf(
         config.loggers.workflow.warning('Applying bias correction before merging. Check results!')
 
     # Special case: Two reverse PE DWI series are going to get combined for eddy
-    if preprocess_rpe_series:
+    if unit.has_bidirectional_dwi:
         workflow.__desc__ = 'Images were grouped into two phase encoding polarity groups. '
-        rpe_series = scan_groups['fieldmap_info']['rpe_series']
-        # Merge, denoise, split, hmc on the plus series
-        plus_files, minus_files = (
-            (rpe_series, dwi_series)
-            if dwi_series_pedir.endswith('-')
-            else (dwi_series, rpe_series)
-        )
-        pe_axis = dwi_series_pedir[0]
+        plus_files = list(unit.plus_files)
+        minus_files = list(unit.minus_files)
+        pe_axis = unit.pe_axis
         plus_source_file = get_source_file(plus_files, suffix='_PEplus')
         merge_plus = init_merge_and_denoise_wf(
             raw_dwi_files=plus_files,
@@ -217,10 +211,10 @@ def init_dwi_pre_hmc_wf(
 
     workflow.__postdesc__ += '\n\n'
     merge_dwis = init_merge_and_denoise_wf(
-        raw_dwi_files=dwi_series,
+        raw_dwi_files=list(unit.dwi_files),
         orientation=orientation,
         calculate_qc=True,
-        phase_id=dwi_series_pedir,
+        phase_id=unit.pe_dir,
         do_biascorr=do_biascorr,
         source_file=source_file,
     )

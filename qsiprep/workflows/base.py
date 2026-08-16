@@ -49,7 +49,7 @@ from ..grouping import (
     check_backend,
     describe_processing,
     report_text,
-    to_legacy_scan_groups,
+    to_preproc_units,
 )
 from ..interfaces import (
     AboutSummary,
@@ -366,7 +366,7 @@ to workflows in *QSIPrep*'s documentation]\
     if config.workflow.anat_only:
         return workflow
 
-    # Group the subject's DWI scans from BIDS metadata alone, 
+    # Group the subject's DWI scans from BIDS metadata alone,
     # then validate against the backend selected by the CLI.
     backend = backend_for_config(config.workflow.hmc_model, config.workflow.pepolar_method)
     grouping = build_dwi_grouping(
@@ -392,8 +392,11 @@ to workflows in *QSIPrep*'s documentation]\
             f'unresolvable problem(s):\n{rendered}'
         )
 
-    # concatenation_scheme maps the outputs to their final concatenation group
-    dwi_fmap_groups, concatenation_scheme = to_legacy_scan_groups(grouping)
+    # Each PreprocUnit is one HMC+SDC run. concatenation_scheme maps the outputs
+    # to their final concatenation group (identity until post-HMC concatenation
+    # of distinct distortion groups is wired up).
+    preproc_units = to_preproc_units(grouping)
+    concatenation_scheme = {unit.output_name: unit.output_name for unit in preproc_units}
 
     # If a merge is happening at the end, make sure
     if merging_distortion_groups:
@@ -421,10 +424,8 @@ to workflows in *QSIPrep*'s documentation]\
                 ]),
             ])  # fmt:skip
 
-    outputs_to_files = {
-        dwi_group['concatenated_bids_name']: dwi_group for dwi_group in dwi_fmap_groups
-    }
-    summary.inputs.dwi_groupings = outputs_to_files
+    outputs_to_files = {unit.output_name: unit for unit in preproc_units}
+    summary.inputs.dwi_groupings = grouping.to_dict()
 
     make_intramodal_template = False
     if config.workflow.intramodal_template_iters > 0:
@@ -557,18 +558,18 @@ to workflows in *QSIPrep*'s documentation]\
         ])  # fmt:skip
 
     # create a processing pipeline for the dwis in each session
-    for output_fname, dwi_info in outputs_to_files.items():
-        source_file = get_source_file(dwi_info['dwi_series'], output_fname, suffix='_dwi')
+    for output_fname, unit in outputs_to_files.items():
+        source_file = get_source_file(list(unit.dwi_files), output_fname, suffix='_dwi')
         output_wfname = output_fname.replace('-', '_')
         dwi_preproc_wf = init_dwi_preproc_wf(
-            scan_groups=dwi_info,
+            unit=unit,
             output_prefix=output_fname,
             source_file=source_file,
             t2w_sdc=_t2w_available_for_sdc(subject_data),
             anatomical_template=anatomical_template,
         )
         dwi_finalize_wf = init_dwi_finalize_wf(
-            scan_groups=dwi_info,
+            unit=unit,
             name=dwi_preproc_wf.name.replace('dwi_preproc', 'dwi_finalize'),
             output_prefix=output_fname,
             source_file=source_file,

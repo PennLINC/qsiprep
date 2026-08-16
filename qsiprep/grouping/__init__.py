@@ -36,7 +36,13 @@ The cost is that a new :class:`~.models.EstimationMethod` touches five places
    (or a clear ``NotImplementedError`` when it has none yet).
 """
 
-from .adapters import PreprocUnit, backend_for_config, to_legacy_scan_groups, to_preproc_units
+from .adapters import (
+    PreprocUnit,
+    backend_for_config,
+    to_legacy_scan_groups,
+    to_preproc_units,
+    unit_to_sidecar,
+)
 from .inference import build_grouping
 from .metadata import index_subject
 from .models import (
@@ -74,6 +80,7 @@ __all__ = [
     'report_text',
     'to_legacy_scan_groups',
     'to_preproc_units',
+    'unit_to_sidecar',
 ]
 
 

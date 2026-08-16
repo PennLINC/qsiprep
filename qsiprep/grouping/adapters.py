@@ -17,6 +17,8 @@ working while the refactor proceeds.
 from __future__ import annotations
 
 import dataclasses
+import math
+import os.path as op
 from collections import defaultdict
 
 from .models import (
@@ -151,6 +153,15 @@ class PreprocUnit:
         """GRE fieldmap file paths keyed by BIDS suffix (phasediff/magnitude*/...)."""
         return {self.grouping.files[path].suffix: path for path in self.estimation.sources}
 
+    @property
+    def gre_suffix(self) -> str:
+        """The primary GRE file suffix ('phasediff'/'phase1'/'fieldmap')."""
+        return _GRE_SUFFIX[self.method]
+
+    def metadata_for(self, path: str) -> dict:
+        """Sidecar metadata of a source file, already read into the model."""
+        return dict(self.grouping.files[path].metadata)
+
     def to_legacy_dict(self) -> dict:
         """Render this unit as a legacy ``group_dwi_scans`` scan-group dict."""
         return {
@@ -228,6 +239,49 @@ def to_preproc_units(grouping: DWIGrouping) -> list[PreprocUnit]:
                     )
                 )
     return units
+
+
+def _metadata_values_agree(first, second) -> bool:
+    if isinstance(first, float) and isinstance(second, float):
+        return math.isclose(first, second)
+    return first == second
+
+
+def unit_to_sidecar(unit: PreprocUnit) -> dict:
+    """Build the derivatives sidecar describing how an output was produced.
+
+    Metadata comes from the grouping model's file records rather than being
+    re-read from disk. Keys shared (and equal) across every member series are
+    promoted to the top level; the per-series metadata is kept under
+    ``SourceMetadata``.
+    """
+    scan_metadata: dict[str, dict] = {}
+    common: dict | None = None
+    for record in unit.dwi_records:
+        name = op.basename(record.path)
+        meta = dict(record.metadata)
+        scan_metadata[name] = meta
+        if common is None:
+            common = dict(meta)
+        else:
+            common = {
+                key: value
+                for key, value in common.items()
+                if key in meta and _metadata_values_agree(value, meta[key])
+            }
+
+    sidecar = dict(common or {})
+    sidecar['ScanGrouping'] = {
+        'output_name': unit.output_name,
+        'method': unit.method.value if unit.method else None,
+        'dwi_series': [op.basename(path) for path in unit.dwi_files],
+        'fieldmap_sources': [op.basename(path) for path in unit.estimation.sources]
+        if unit.estimation
+        else [],
+    }
+    sidecar['SourceMetadata'] = scan_metadata
+    sidecar['Sources'] = sorted(scan_metadata)
+    return sidecar
 
 
 def to_legacy_scan_groups(grouping: DWIGrouping) -> tuple[list[dict], dict]:

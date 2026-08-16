@@ -13,8 +13,8 @@ import os.path as op
 from qsiprep.grouping.adapters import PreprocUnit
 from qsiprep.grouping.models import (
     AUTO_PREFIX,
-    DWIGrouping,
     DistortionSignature,
+    DWIGrouping,
     EstimationMethod,
     FieldmapEstimation,
     FileRecord,

@@ -187,11 +187,11 @@ def test_diffprep_wf_honours_use_cuda(tmp_path):
     orig = config.workflow.diffprep_config
     try:
         config.workflow.diffprep_config = str(cfg)
-        wf = _build(_scan_groups(), t2w_sdc=False, name='cuda_on')
+        wf = _build(_make_unit(), t2w_sdc=False, name='cuda_on')
         assert wf.get_node('diffprep').interface.cmd == 'TORTOISEProcess_cuda'
 
         config.workflow.diffprep_config = None
-        wf_cpu = _build(_scan_groups(), t2w_sdc=False, name='cuda_off')
+        wf_cpu = _build(_make_unit(), t2w_sdc=False, name='cuda_off')
         assert wf_cpu.get_node('diffprep').interface.cmd == 'TORTOISEProcess'
     finally:
         config.workflow.diffprep_config = orig
@@ -218,11 +218,11 @@ def test_diffprep_wf_honours_correction_mode(tmp_path):
     orig = config.workflow.diffprep_config
     try:
         config.workflow.diffprep_config = str(cfg)
-        wf = _build(_scan_groups(), t2w_sdc=False, name='mode_cubic')
+        wf = _build(_make_unit(), t2w_sdc=False, name='mode_cubic')
         assert wf.get_node('diffprep').inputs.correction_mode == 'cubic'
 
         config.workflow.diffprep_config = None
-        wf_default = _build(_scan_groups(), t2w_sdc=False, name='mode_default')
+        wf_default = _build(_make_unit(), t2w_sdc=False, name='mode_default')
         assert wf_default.get_node('diffprep').inputs.correction_mode == 'quadratic'
     finally:
         config.workflow.diffprep_config = orig
@@ -243,12 +243,12 @@ def test_diffprep_boilerplate_describes_the_configured_mode(tmp_path):
     orig = config.workflow.diffprep_config
     try:
         config.workflow.diffprep_config = str(cfg)
-        wf = _build(_scan_groups(), t2w_sdc=False, name='boiler_motion')
+        wf = _build(_make_unit(), t2w_sdc=False, name='boiler_motion')
         assert 'rigid head motion only' in wf.__desc__
         assert 'quadratic eddy' not in wf.__desc__
 
         config.workflow.diffprep_config = None
-        wf_quad = _build(_scan_groups(), t2w_sdc=False, name='boiler_quad')
+        wf_quad = _build(_make_unit(), t2w_sdc=False, name='boiler_quad')
         assert 'quadratic eddy currents' in wf_quad.__desc__
     finally:
         config.workflow.diffprep_config = orig
@@ -874,24 +874,51 @@ def _base_config():
     return config
 
 
-def _scan_groups(suffix=None, **extra):
-    fieldmap_info = {'suffix': suffix}
-    fieldmap_info.update(extra)
-    return {
-        'dwi_series': ['/data/sub-01_dwi.nii.gz'],
-        'fieldmap_info': fieldmap_info,
-        'dwi_series_pedir': 'j',
-    }
+def _make_unit(suffix=None, **extra):
+    """Build the PreprocUnit for a DIFFPREP test case.
+
+    ``suffix`` mirrors the old scan-group vocabulary: ``None`` fieldmap-less,
+    ``'rpe_series'`` a reverse-PE partner series, ``'epi'`` a dedicated epi
+    fieldmap, or a GRE suffix (``'phasediff'``/``'fieldmap'``).
+    """
+    from qsiprep.grouping.models import EstimationMethod
+    from qsiprep.tests.preproc_factory import make_preproc_unit
+
+    dwi = '/data/sub-01_dwi.nii.gz'
+    if suffix == 'rpe_series':
+        partners = list(extra['rpe_series'])
+        return make_preproc_unit(
+            [dwi, *partners],
+            method=EstimationMethod.PEPOLAR,
+            pe_dirs={dwi: 'j', **dict.fromkeys(partners, 'j-')},
+        )
+    if suffix == 'epi':
+        return make_preproc_unit(
+            [dwi],
+            method=EstimationMethod.PEPOLAR,
+            pe_dir='j',
+            estimation_sources=[dwi, *extra['epi']],
+        )
+    if suffix in ('phasediff', 'fieldmap'):
+        return make_preproc_unit(
+            [dwi],
+            method=EstimationMethod.PHASEDIFF
+            if suffix == 'phasediff'
+            else EstimationMethod.DIRECT,
+            pe_dir='j',
+            estimation_sources=list(extra.get('sources', [])),
+        )
+    # None (or the retired 'syn'): fieldmap-less.
+    return make_preproc_unit([dwi], method=None, pe_dir='j')
 
 
-def _build(scan_groups, t2w_sdc, name='dp'):
+def _build(unit, t2w_sdc, name='dp'):
     from qsiprep.workflows.dwi.diffprep import init_diffprep_hmc_wf
 
     return init_diffprep_hmc_wf(
-        scan_groups=scan_groups,
+        unit=unit,
         source_file='/data/sub-01_dwi.nii.gz',
         t2w_sdc=t2w_sdc,
-        dwi_metadata={'PhaseEncodingDirection': 'j'},
         name=name,
     )
 
@@ -899,7 +926,7 @@ def _build(scan_groups, t2w_sdc, name='dp'):
 def test_init_diffprep_hmc_wf_contract_hmc_only():
     """No fieldmap + no T2w -> HMC-only, sdc_method='None', full contract."""
     _base_config()
-    wf = _build(_scan_groups(None), t2w_sdc=False)
+    wf = _build(_make_unit(None), t2w_sdc=False)
 
     outputnode = wf.get_node('outputnode')
     required = {
@@ -927,7 +954,7 @@ def test_init_diffprep_hmc_wf_contract_hmc_only():
 def test_init_diffprep_hmc_wf_t2wreg():
     """No fieldmap + T2w -> TORTOISE T2Wreg (sdc_method='T2Wreg')."""
     _base_config()
-    wf = _build(_scan_groups(None), t2w_sdc=True)
+    wf = _build(_make_unit(None), t2w_sdc=True)
     assert wf.get_node('diffprep').inputs.epi_mode == 'T2Wreg'
     assert wf.get_node('outputnode').inputs.sdc_method == 'T2Wreg'
 
@@ -946,7 +973,7 @@ def test_t2wreg_sdc_travels_as_a_warp_not_baked_in():
     correction composes with HMC and coregistration in a single resampling.
     """
     _base_config()
-    wf = _build(_scan_groups(None), t2w_sdc=True, name='t2wreg_warp')
+    wf = _build(_make_unit(None), t2w_sdc=True, name='t2wreg_warp')
 
     out_fields = [dst for _, dst in _connect_fields(wf, 'diffprep', 'outputnode')]
     assert 'to_dwi_ref_warps' in out_fields
@@ -963,7 +990,7 @@ def test_t2wreg_coregistration_uses_the_corrected_b0():
     dwi->anat registration is computed on distorted data.
     """
     _base_config()
-    wf = _build(_scan_groups(None), t2w_sdc=True, name='t2wreg_coreg')
+    wf = _build(_make_unit(None), t2w_sdc=True, name='t2wreg_coreg')
 
     apply_sdc = wf.get_node('apply_sdc_to_b0')
     assert apply_sdc is not None, 'expected the b=0 to be unwarped before coregistration'
@@ -981,20 +1008,19 @@ def test_t2wreg_coregistration_uses_the_corrected_b0():
 def test_non_t2wreg_coregistration_uses_the_b0_directly():
     """Without an in-TORTOISE EPI stage there is nothing to unwarp first."""
     _base_config()
-    wf = _build(_scan_groups(None), t2w_sdc=False, name='no_t2wreg_coreg')
+    wf = _build(_make_unit(None), t2w_sdc=False, name='no_t2wreg_coreg')
     assert wf.get_node('apply_sdc_to_b0') is None
     assert ('b0_average', 'inputnode.b0_template') in _connect_fields(
         wf, 'extract_b0s', 'b0_ref_for_coreg'
     )
 
 
-def test_init_diffprep_hmc_wf_syn_without_t2w():
-    """Fieldmap-less SyN request with no T2w falls back to init_sdc_wf, and the
-    DIFFPREP call leaves TORTOISE's own EPI stage off."""
+def test_init_diffprep_hmc_wf_fieldmapless_without_t2w():
+    """Fieldmap-less with no T2w is HMC only: no SDC node, TORTOISE's EPI stage off."""
     _base_config()
-    wf = _build(_scan_groups('syn'), t2w_sdc=False)
+    wf = _build(_make_unit(None), t2w_sdc=False)
     assert wf.get_node('diffprep').inputs.epi_mode == 'off'
-    assert wf.get_node('sdc_wf') is not None
+    assert wf.get_node('sdc_wf') is None
 
 
 def test_cnr_model_label_is_bids_valid():
@@ -1034,7 +1060,7 @@ def test_cnr_description_flags_in_sample_bias():
 def test_init_diffprep_hmc_wf_cnr_is_computed_not_placeholder():
     """cnr_map must come from CalculateCNR on the MAPMRI synthesis, not zeros."""
     _base_config()
-    wf = _build(_scan_groups(None), t2w_sdc=False, name='dp_cnr')
+    wf = _build(_make_unit(None), t2w_sdc=False, name='dp_cnr')
 
     node = wf.get_node('calculate_cnr')
     assert node is not None
@@ -1061,7 +1087,7 @@ def test_init_diffprep_hmc_wf_honours_sloppy():
     """
     config = _base_config()
 
-    wf = _build(_scan_groups(None), t2w_sdc=False, name='dp_notsloppy')
+    wf = _build(_make_unit(None), t2w_sdc=False, name='dp_notsloppy')
     node = wf.get_node('diffprep')
     assert node.inputs.is_human_brain is True
     assert not isdefined(node.inputs.niter)
@@ -1070,7 +1096,7 @@ def test_init_diffprep_hmc_wf_honours_sloppy():
 
     config.execution.sloppy = True
     try:
-        wf = _build(_scan_groups(None), t2w_sdc=False, name='dp_sloppy')
+        wf = _build(_make_unit(None), t2w_sdc=False, name='dp_sloppy')
         node = wf.get_node('diffprep')
         assert node.inputs.niter == 0
         # --niter 0 only bites on high-b data, so the always-run first pass is
@@ -1097,7 +1123,7 @@ def test_init_diffprep_hmc_wf_rpe_series_runs_per_direction(tmp_path):
     rpe = tmp_path / 'sub-01_dir-PA_dwi.nii.gz'
     _write_dummy_nii(rpe, nvols=2)
     wf = _build(
-        _scan_groups('rpe_series', rpe_series=[str(rpe)]),
+        _make_unit('rpe_series', rpe_series=[str(rpe)]),
         t2w_sdc=False,
         name='dp_rpe',
     )
@@ -1135,7 +1161,7 @@ def test_init_diffprep_hmc_wf_rpe_series_pe_axis(tmp_path):
     rpe = tmp_path / 'sub-01_dir-PA_dwi.nii.gz'
     _write_dummy_nii(rpe, nvols=2)
     wf = _build(
-        _scan_groups('rpe_series', rpe_series=[str(rpe)]),
+        _make_unit('rpe_series', rpe_series=[str(rpe)]),
         t2w_sdc=False,
         name='dp_rpe_axis',
     )
@@ -1191,7 +1217,7 @@ def test_drbuddi_never_sends_parser_disabled_flags(tmp_path):
     # ...and the workflow must not set either trait, under sloppy or not
     rpe = tmp_path / 'sub-01_dir-PA_dwi.nii.gz'
     _write_dummy_nii(rpe)
-    groups = _scan_groups('rpe_series', rpe_series=[str(rpe)])
+    groups = _make_unit('rpe_series', rpe_series=[str(rpe)])
     config = _base_config()
     try:
         for sloppy in (True, False):
@@ -1204,13 +1230,19 @@ def test_drbuddi_never_sends_parser_disabled_flags(tmp_path):
         config.execution.sloppy = False
 
 
-def test_init_diffprep_hmc_wf_topup_rejected():
-    """DIFFPREP cannot use eddy-internal TOPUP; ask for DRBUDDI instead."""
+def test_init_diffprep_hmc_wf_pepolar_always_uses_drbuddi(tmp_path):
+    """TORTOISE corrects PEPOLAR with DRBUDDI regardless of --pepolar-method.
+
+    The builder no longer rejects TOPUP itself; backend feasibility is owned by
+    the grouping validation / config layer, not the workflow builders.
+    """
+    epi = tmp_path / 'sub-01_epi.nii.gz'
+    _write_dummy_nii(epi)
     config = _base_config()
     config.workflow.pepolar_method = 'TOPUP'
     try:
-        with pytest.raises(Exception, match='TOPUP'):
-            _build(_scan_groups('epi', epi=['/data/sub-01_epi.nii.gz']), False)
+        wf = _build(_make_unit('epi', epi=[str(epi)]), False)
+        assert wf.get_node('drbuddi_sdc_wf') is not None
     finally:
         config.workflow.pepolar_method = 'drbuddi'
 
@@ -1260,7 +1292,7 @@ def test_sloppy_reaches_the_drbuddi_node(tmp_path):
     # series has to exist on disk for the workflow to build.
     rpe = tmp_path / 'sub-01_dir-PA_dwi.nii.gz'
     _write_dummy_nii(rpe)
-    groups = _scan_groups('rpe_series', rpe_series=[str(rpe)])
+    groups = _make_unit('rpe_series', rpe_series=[str(rpe)])
 
     config = _base_config()
     try:
@@ -1289,18 +1321,19 @@ def test_t2wreg_is_recognised_as_sdc_for_reporting():
     config = _base_config()
     try:
         config.workflow.hmc_model = 'tortoise'
-        assert _doing_t2wreg(None, '/path/to/T2w.nii.gz') is True
-        assert _doing_t2wreg('syn', '/path/to/T2w.nii.gz') is True
+        assert _doing_t2wreg(_make_unit(None), '/path/to/T2w.nii.gz') is True
 
         # No T2w -> no T2Wreg -> nothing to show.
-        assert _doing_t2wreg(None, '') is False
-        # Reverse-PE goes through DRBUDDI's own extended reports instead.
-        assert _doing_t2wreg('rpe_series', '/path/to/T2w.nii.gz') is False
-        assert _doing_t2wreg('epi', '/path/to/T2w.nii.gz') is False
+        assert _doing_t2wreg(_make_unit(None), '') is False
+        # A measured fieldmap goes through its own SDC reports instead.
+        rpe = _make_unit('rpe_series', rpe_series=['/data/sub-01_dir-PA_dwi.nii.gz'])
+        assert _doing_t2wreg(rpe, '/path/to/T2w.nii.gz') is False
+        epi = _make_unit('epi', epi=['/data/sub-01_epi.nii.gz'])
+        assert _doing_t2wreg(epi, '/path/to/T2w.nii.gz') is False
 
         # Other backends do not run T2Wreg at all.
         config.workflow.hmc_model = 'eddy'
-        assert _doing_t2wreg(None, '/path/to/T2w.nii.gz') is False
+        assert _doing_t2wreg(_make_unit(None), '/path/to/T2w.nii.gz') is False
     finally:
         config.workflow.hmc_model = 'eddy'
 
@@ -1339,7 +1372,7 @@ def test_non_shelled_rpe_series_uses_the_stock_drbuddi_path(tmp_path):
 
     _base_config()
     wf = _build(
-        _scan_groups('rpe_series', rpe_series=[str(rpe)]),
+        _make_unit('rpe_series', rpe_series=[str(rpe)]),
         t2w_sdc=False,
         name='dp_nonshelled',
     )
@@ -1362,7 +1395,7 @@ def test_drbuddi_synth_shell_is_opt_in(tmp_path):
 
     rpe = tmp_path / 'sub-01_dir-PA_dwi.nii.gz'
     _write_dummy_nii(rpe)
-    groups = _scan_groups('rpe_series', rpe_series=[str(rpe)])
+    groups = _make_unit('rpe_series', rpe_series=[str(rpe)])
 
     config = _base_config()
     try:
@@ -1416,7 +1449,7 @@ def test_diffprep_node_declares_its_threads():
     """
     config = _base_config()
     config.nipype.omp_nthreads = 7
-    wf = _build(_scan_groups(None), t2w_sdc=False, name='threads_declared')
+    wf = _build(_make_unit(None), t2w_sdc=False, name='threads_declared')
     node = wf.get_node('diffprep')
     assert node.inputs.num_threads == 7
     # nipype's own accounting must match what the tool is allowed to use
@@ -1440,7 +1473,7 @@ def test_rpe_series_diffprep_nodes_also_declare_threads(tmp_path):
     # the rpe path needs the partner series to exist
     partner = tmp_path / 'sub-01_dir-PA_dwi.nii.gz'
     nb.Nifti1Image(np.zeros((4, 4, 4, 6), dtype='float32'), np.eye(4)).to_filename(str(partner))
-    rpe = _scan_groups('rpe_series', rpe_series=[str(partner)])
+    rpe = _make_unit('rpe_series', rpe_series=[str(partner)])
 
     wf = _build(rpe, t2w_sdc=False, name='rpe_threads')
     group_nodes = [n for n in wf._get_all_nodes() if n.name.startswith('diffprep_g')]
@@ -1457,7 +1490,7 @@ def test_diffprep_passes_ncores_to_tortoise():
     """
     config = _base_config()
     config.nipype.omp_nthreads = 8
-    wf = _build(_scan_groups(None), t2w_sdc=False, name='ncores_wired')
+    wf = _build(_make_unit(None), t2w_sdc=False, name='ncores_wired')
     node = wf.get_node('diffprep')
     assert node.inputs.ncores == 8
     # nipype's accounting and the process's real budget must agree

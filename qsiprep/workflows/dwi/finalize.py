@@ -16,6 +16,7 @@ from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 
 from ... import config
 from ...data import load as load_data
+from ...grouping import unit_to_sidecar
 from ...interfaces import DerivativesDataSink
 from ...interfaces.bias import N4WeightMask
 from ...interfaces.bids import DerivativesSidecar
@@ -25,7 +26,6 @@ from ...interfaces.gradients import ExtractB0s
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SeriesQC
-from ...utils.bids import scan_groups_to_sidecar
 from .derivatives import init_dwi_derivatives_wf
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
 from .resampling import init_dwi_trans_wf
@@ -37,7 +37,7 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 def init_dwi_finalize_wf(
-    scan_groups,
+    unit,
     name,
     source_file,
     output_prefix,
@@ -145,21 +145,12 @@ def init_dwi_finalize_wf(
             MRTrix-style gradient table
 
     """
-    # Check the inputs
-    if config.execution.layout is not None:
-        all_dwis = scan_groups['dwi_series']
-        if 'rpe_series' in scan_groups:
-            all_dwis += scan_groups['rpe_series']
-    else:
-        all_dwis = ['/fake/testing/path.nii.gz']
+    all_dwis = list(unit.dwi_files)
 
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
 
-    doing_topup = (
-        scan_groups['fieldmap_info']['suffix'] in ('epi', 'rpe_series')
-        and 'topup' in config.workflow.pepolar_method.lower()
-    )
+    doing_topup = unit.is_pepolar and 'topup' in config.workflow.pepolar_method.lower()
 
     # Determine resource usage
     for scan in all_dwis:
@@ -409,7 +400,7 @@ def init_dwi_finalize_wf(
     # Write a metadata sidecar for the derivatives
     merged_sidecar = pe.Node(
         DerivativesSidecar(
-            sidecar_data=scan_groups_to_sidecar(scan_groups), source_file=source_file
+            sidecar_data=unit_to_sidecar(unit), source_file=source_file
         ),
         name='merged_sidecar',
     )

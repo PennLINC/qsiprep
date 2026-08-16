@@ -197,10 +197,9 @@ def _build_rpe_diffprep_stage(
 
 
 def init_diffprep_hmc_wf(
-    scan_groups,
+    unit,
     source_file,
     t2w_sdc,
-    dwi_metadata=None,
     name='diffprep_hmc_wf',
 ):
     """HMC + SDC workflow that uses TORTOISEV4 DIFFPREP for motion + eddy
@@ -215,16 +214,14 @@ def init_diffprep_hmc_wf(
 
     Parameters
     ----------
-    scan_groups : dict
-        Same scan-groups dict the other HMC backends consume.
+    unit : :class:`~qsiprep.grouping.adapters.PreprocUnit`
+        The DWI series to correct together and the fieldmap that corrects them.
     source_file : str
         Path to the source DWI file (used for report naming).
     t2w_sdc : bool
         Whether a T2w image is available for distortion correction (used for
         DRBUDDI's multi-modal registration and for the fieldmap-less T2Wreg
         path).
-    dwi_metadata : dict, optional
-        BIDS sidecar metadata (used for the PE direction and for SDC).
     name : str
         Workflow name.
     """
@@ -280,20 +277,14 @@ def init_diffprep_hmc_wf(
         name='outputnode',
     )
 
-    fieldmap_info = scan_groups['fieldmap_info']
-    fieldmap_type = fieldmap_info['suffix']
-
     # Several nodes below hold the whole series as float32; size their memory
     # from the data rather than guessing.
-    _convert_inputs = list(scan_groups.get('dwi_series', []))
-    if fieldmap_type == 'rpe_series':
-        _convert_inputs += list(fieldmap_info.get('rpe_series', []))
-    series_mem_gb = tortoise_convert_mem_gb(_convert_inputs)
+    series_mem_gb = tortoise_convert_mem_gb(list(unit.dwi_files))
 
     # TORTOISE-native T2Wreg replaces SyN for the fieldmap-less case when a T2w
     # structural is available: DIFFPREP runs the ``--epi T2Wreg`` stage in the
     # same TORTOISEProcess call and bakes the correction into its output.
-    is_fieldmapless = fieldmap_type is None or fieldmap_type == 'syn'
+    is_fieldmapless = not unit.has_scanner_measured_fieldmap
     use_t2wreg = is_fieldmapless and bool(t2w_sdc)
     epi_mode = 'T2Wreg' if use_t2wreg else 'off'
 
@@ -307,7 +298,7 @@ def init_diffprep_hmc_wf(
 
     synth_shell_bval = diffprep_cfg.get('drbuddi_synth_shell_bval')
 
-    pe_dir = _resolve_phase_encoding((dwi_metadata or {}).get('PhaseEncodingDirection'))
+    pe_dir = _resolve_phase_encoding(unit.pe_dir or None)
 
     correction_mode = diffprep_cfg['correction_mode']
 
@@ -364,7 +355,7 @@ def init_diffprep_hmc_wf(
     # a whole file), then recombined; every other case is a single DIFFPREP run.
     # Both expose the identical ``corrected_dwi_file`` / ``corrected_bmtxt_file``
     # / ``transformations_file`` triple via ``corrected_node``.
-    if fieldmap_type == 'rpe_series':
+    if unit.has_bidirectional_dwi:
         corrected_node = _build_rpe_diffprep_stage(
             workflow,
             inputnode,
@@ -532,19 +523,13 @@ def init_diffprep_hmc_wf(
     #    series take the same path; DRBUDDI's plain tensor fit is adequate for a
     #    q-space grid, and shell synthesis is opt-in via
     #    "drbuddi_synth_shell_bval" for the cases where it is not.
-    if fieldmap_type in ('epi', 'rpe_series'):
-        if 'topup' in config.workflow.pepolar_method.lower():
-            raise Exception(
-                'TOPUP-based pepolar correction is not supported with '
-                '--hmc-model tortoise; choose --pepolar-method DRBUDDI.'
-            )
-
+    if unit.is_pepolar:
         # For rpe_series the per-direction DIFFPREP stage above already produced
         # a single recombined series in the original merged order, so
         # GatherDRBUDDIInputs re-splits it into up/down exactly as it does for
         # the FSL backend.
         drbuddi_wf = init_drbuddi_wf(
-            scan_groups=scan_groups,
+            unit=unit,
             t2w_sdc=t2w_sdc,
             use_cuda=drbuddi_gpu,
             synth_shell_bval=synth_shell_bval,
@@ -600,12 +585,10 @@ def init_diffprep_hmc_wf(
         ])  # fmt:skip
         return workflow
 
-    # 3. GRE / phase fieldmaps, or SyN fallback (no T2w) -> qsiprep's init_sdc_wf.
-    #    The warp is applied downstream (to_dwi_ref_warps), decoupled from HMC.
-    if fieldmap_type in ('fieldmap', 'syn') or (
-        fieldmap_type is not None and fieldmap_type.startswith('phase')
-    ):
-        b0_sdc_wf = init_sdc_wf(scan_groups['fieldmap_info'], dwi_metadata)
+    # 3. GRE / phase fieldmaps -> qsiprep's init_sdc_wf. The warp is applied
+    #    downstream (to_dwi_ref_warps), decoupled from HMC.
+    if unit.is_gre:
+        b0_sdc_wf = init_sdc_wf(unit, unit.dwi_metadata)
         b0_sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
 
         workflow.connect([
