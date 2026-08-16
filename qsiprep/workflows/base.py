@@ -31,6 +31,7 @@ qsiprep base processing workflows
 
 """
 
+import os
 import sys
 from collections import defaultdict
 from copy import deepcopy
@@ -425,7 +426,14 @@ to workflows in *QSIPrep*'s documentation]\
             ])  # fmt:skip
 
     outputs_to_files = {unit.output_name: unit for unit in preproc_units}
-    summary.inputs.dwi_groupings = grouping.to_dict()
+    summary.inputs.dwi_groupings = {
+        unit.output_name: {
+            'pe_dir': unit.pe_dir,
+            'dwi_files': [os.path.basename(path) for path in unit.dwi_files],
+            'fieldmap': unit.method.value if unit.method else None,
+        }
+        for unit in preproc_units
+    }
 
     make_intramodal_template = False
     if config.workflow.intramodal_template_iters > 0:

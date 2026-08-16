@@ -116,6 +116,59 @@ def test_fsl_hmc_no_fieldmap_builds():
     assert wf.get_node('topup') is None
 
 
+def test_subject_summary_renders_native_groupings():
+    """The subject report renders the per-output grouping dict base.py builds.
+
+    Regression: base.py fed SubjectSummary the grouping model instead of this
+    shape, crashing the ``summary`` node on every subject.
+    """
+    from qsiprep.interfaces.reports import SubjectSummary
+
+    summary = SubjectSummary(
+        t1w=[],
+        subject_id='01',
+        template='MNI152NLin2009cAsym',
+        dwi_groupings={
+            'sub-01': {
+                'pe_dir': 'j',
+                'dwi_files': ['sub-01_dir-PA_dwi.nii.gz'],
+                'fieldmap': 'pepolar',
+            },
+            'sub-01_dir-AP': {
+                'pe_dir': 'j-',
+                'dwi_files': ['sub-01_dir-AP_dwi.nii.gz'],
+                'fieldmap': None,
+            },
+        },
+    )
+    segment = summary._generate_segment()
+    assert 'sub-01_dir-AP' in segment
+    assert 'Fieldmap type: pepolar' in segment
+
+
+@pytest.mark.parametrize(
+    ('pe_direction', 'expected'),
+    [('j', 'Anterior-Posterior'), ('i-', 'Left-Right'), (None, 'MISSING')],
+)
+def test_diffusion_summary_renders_pe_direction(tmp_path, pe_direction, expected):
+    """DiffusionSummary tolerates a missing PE direction (base.py maps '' -> None)."""
+    from qsiprep.interfaces.reports import DiffusionSummary
+
+    report = tmp_path / 'validation.html'
+    report.write_text('<p>ok</p>\n')
+    summary = DiffusionSummary(
+        distortion_correction='TOPUP',
+        pe_direction=pe_direction,
+        hmc_transform='Affine',
+        hmc_model='eddy',
+        b0_to_anat_transform='Rigid',
+        denoise_method='dwidenoise',
+        dwi_denoise_window=5,
+        validation_reports=[str(report)],
+    )
+    assert expected in summary._generate_segment()
+
+
 def test_eddy_grouping_from_sidecars_needs_no_disk():
     """eddy's acqp/index build from the model's sidecar map, not from disk."""
     from qsiprep.interfaces.epi_fmap import get_distortion_grouping

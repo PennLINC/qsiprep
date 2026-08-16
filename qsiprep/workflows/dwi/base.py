@@ -414,7 +414,8 @@ def init_dwi_preproc_wf(
 
     summary = pe.Node(
         DiffusionSummary(
-            pe_direction=unit.pe_dir,
+            # '' (no PE info) -> None, which the summary renders as "MISSING".
+            pe_direction=unit.pe_dir or None,
             hmc_model=config.workflow.hmc_model,
             b0_to_anat_transform=config.workflow.b0_to_anat_transform,
             hmc_transform=config.workflow.hmc_transform,
