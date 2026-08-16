@@ -169,6 +169,129 @@ def test_diffusion_summary_renders_pe_direction(tmp_path, pe_direction, expected
     assert expected in summary._generate_segment()
 
 
+def test_init_sdc_wf_phasediff_builds_without_a_layout(monkeypatch):
+    """The GRE path reads phase metadata off the unit, not config.execution.layout.
+
+    Regression guard for the removed layout.get_metadata re-reads: with no layout
+    set, the old code raised; the model carries the metadata now.
+    """
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')  # phdiff only checks the env is set
+    _cfg(layout=None)
+    from qsiprep.workflows.fieldmap import init_sdc_wf
+
+    unit = make_preproc_unit(
+        ['/data/sub-01_dwi.nii.gz'],
+        method=EstimationMethod.PHASEDIFF,
+        pe_dir='j-',
+        estimation_sources=['/data/sub-01_phasediff.nii.gz', '/data/sub-01_magnitude1.nii.gz'],
+        metadata={'EchoTime1': 0.004, 'EchoTime2': 0.006},
+    )
+    wf = init_sdc_wf(unit, dwi_meta={'PhaseEncodingDirection': 'j-'})
+    assert 'FMB' in wf.get_node('outputnode').inputs.method
+
+
+def test_init_sdc_wf_bipolar_two_phase_bypasses(monkeypatch):
+    """A two-phase GRE tagged Bipolar bypasses SDC (unsupported), off the model."""
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')  # phdiff only checks the env is set
+    _cfg(layout=None)
+    from qsiprep.workflows.fieldmap import init_sdc_wf
+
+    unit = make_preproc_unit(
+        ['/data/sub-01_dwi.nii.gz'],
+        method=EstimationMethod.PHASES,
+        pe_dir='j-',
+        estimation_sources=[
+            '/data/sub-01_phase1.nii.gz',
+            '/data/sub-01_phase2.nii.gz',
+            '/data/sub-01_magnitude1.nii.gz',
+        ],
+        metadata={'DiffusionScheme': 'Bipolar'},
+    )
+    wf = init_sdc_wf(unit, dwi_meta={'PhaseEncodingDirection': 'j-'})
+    assert wf.get_node('outputnode').inputs.method == 'None'
+
+
+def test_dwi_preproc_wf_drbuddi_without_t2w_builds(tmp_path, monkeypatch):
+    """The DRBUDDI extended-report block builds when no T2w is available.
+
+    Regression: init_dwi_preproc_wf's ``else`` branch called
+    init_extended_pepolar_report_wf() with no args (segment_t2w is required),
+    crashing every DRBUDDI dataset that lacked a T2w.
+    """
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    cfg = _cfg(hmc_model='tortoise', pepolar_method='DRBUDDI', layout=_StubLayout())
+    cfg.workflow.anat_modality = 't1w'
+    cfg.workflow.b0_to_anat_transform = 'Rigid'
+    cfg.workflow.hmc_transform = 'Affine'
+    cfg.workflow.diffprep_config = None
+    cfg.workflow.tortoise_gpu_cpu_ratio = None
+    cfg.workflow.gpu = None
+    cfg.workflow.impute_slice_threshold = 0
+    from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
+
+    wf = init_dwi_preproc_wf(
+        _rpe_unit(tmp_path),
+        t2w_sdc=False,
+        output_prefix='sub-01',
+        source_file=SRC,
+        anatomical_template='MNI152NLin2009cAsym',
+    )
+    assert wf.get_node('extended_pepolar_report_wf') is not None
+
+
+def test_drbuddi_wf_feeds_sidecar_map_and_discriminator(tmp_path):
+    """The DRBUDDI builder feeds the model's sidecar map (no silent disk fallback).
+
+    Also checks the reverse-PE-series vs epi discriminator is derived from the
+    unit rather than re-read at runtime.
+    """
+    _cfg(hmc_model='tortoise', pepolar_method='DRBUDDI')
+    from qsiprep.workflows.fieldmap import init_drbuddi_wf
+
+    wf = init_drbuddi_wf(_rpe_unit(tmp_path), t2w_sdc=False)
+    gather = wf.get_node('gather_drbuddi_inputs')
+    assert wf.get_node('drbuddi') is not None
+    # Both series carry their PE direction into the map, so nothing is re-read.
+    assert set(gather.inputs.sidecars) == {
+        str(tmp_path / 'sub-01_dir-AP_dwi.nii.gz'),
+        str(tmp_path / 'sub-01_dir-PA_dwi.nii.gz'),
+    }
+    assert gather.inputs.fieldmap_type == 'rpe_series'
+
+
+def test_unit_sidecar_round_trips_through_derivatives_sidecar(tmp_path):
+    """finalize's sidecar node writes valid JSON from the model (no disk reads).
+
+    unit_to_sidecar runs at execution via DerivativesSidecar, which json-dumps
+    with sort_keys=True -- so the payload must be JSON-serializable with string
+    keys. Exercises that whole contract without touching a BIDS layout.
+    """
+    import json
+
+    from qsiprep.grouping.adapters import unit_to_sidecar
+    from qsiprep.interfaces.bids import DerivativesSidecar
+
+    unit = make_preproc_unit(
+        ['/data/sub-01_dir-AP_dwi.nii.gz', '/data/sub-01_dir-PA_dwi.nii.gz'],
+        method=EstimationMethod.PEPOLAR,
+        pe_dirs={
+            '/data/sub-01_dir-AP_dwi.nii.gz': 'j',
+            '/data/sub-01_dir-PA_dwi.nii.gz': 'j-',
+        },
+        metadata={'EchoTime': 0.1},
+    )
+    node = DerivativesSidecar(
+        sidecar_data=unit_to_sidecar(unit),
+        source_file=str(tmp_path / 'sub-01_dwi.nii.gz'),
+    )
+    result = node.run(cwd=str(tmp_path))
+    written = json.loads(open(result.outputs.derivatives_json).read())
+    # Metadata shared by both series is promoted to the top level.
+    assert written['EchoTime'] == 0.1
+    assert written['ScanGrouping']['method'] == 'pepolar'
+    assert written['Sources'] == ['sub-01_dir-AP_dwi.nii.gz', 'sub-01_dir-PA_dwi.nii.gz']
+
+
 def test_eddy_grouping_from_sidecars_needs_no_disk():
     """eddy's acqp/index build from the model's sidecar map, not from disk."""
     from qsiprep.interfaces.epi_fmap import get_distortion_grouping

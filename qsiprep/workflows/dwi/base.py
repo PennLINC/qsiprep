@@ -357,10 +357,9 @@ def init_dwi_preproc_wf(
 
     # DRBUDDI has some extra reports that we want to save. Make sure we get them!
     if unit.is_pepolar and 'drbuddi' in config.workflow.pepolar_method.lower():
-        if t2w_sdc:
-            extended_pepolar_report_wf = init_extended_pepolar_report_wf(segment_t2w=t2w_sdc)
-        else:
-            extended_pepolar_report_wf = init_extended_pepolar_report_wf()
+        # segment_t2w is a boolean flag (the T2w image itself arrives via the
+        # inputnode); pass the availability bool straight through.
+        extended_pepolar_report_wf = init_extended_pepolar_report_wf(segment_t2w=t2w_sdc)
 
         ds_report_fa_sdc = pe.Node(
             DerivativesMaybeDataSink(
