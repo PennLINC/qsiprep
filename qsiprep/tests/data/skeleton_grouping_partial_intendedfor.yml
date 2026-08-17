@@ -1,0 +1,26 @@
+# Partial IntendedFor linkage: the epi fmap names only the AP series, so AP
+# is corrected via the translated estimation. The PA series is unlinked, and
+# its only reverse phase-encoded partner (AP) is linked - linked series are
+# never pooled with unlinked ones, so PA gets NO inferred PEPOLAR estimation
+# (reverse-pe-not-pooled warning) and, with no T2w, no correction.
+'01':
+  - anat:
+      - suffix: T1w
+    fmap:
+      - dir: PA
+        suffix: epi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05
+          IntendedFor: dwi/sub-01_dir-AP_dwi.nii.gz
+    dwi:
+      - dir: AP
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+      - dir: PA
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05

@@ -24,9 +24,9 @@ from itertools import combinations
 from .models import (
     AUTO_PREFIX,
     ConcatenationGroup,
+    CorrectionMethod,
     DistortionGroup,
     DWIGrouping,
-    EstimationMethod,
     FieldmapEstimation,
     FileRecord,
     Provenance,
@@ -36,13 +36,13 @@ from .models import (
 from .validation import GroupingIssue, error, warning
 
 _METHOD_RANK = {
-    EstimationMethod.PEPOLAR: 0,
-    EstimationMethod.DIRECT: 1,
-    EstimationMethod.PHASEDIFF: 2,
-    EstimationMethod.PHASES: 3,
-    EstimationMethod.SYNB0: 4,
-    EstimationMethod.ANAT_CONTRAST: 5,
-    EstimationMethod.SYN: 6,
+    CorrectionMethod.PEPOLAR: 0,
+    CorrectionMethod.DIRECT: 1,
+    CorrectionMethod.PHASEDIFF: 2,
+    CorrectionMethod.PHASES: 3,
+    CorrectionMethod.SYNB0: 4,
+    CorrectionMethod.T2WREG: 5,
+    CorrectionMethod.NIPREPS_SYN: 6,
 }
 _PROVENANCE_RANK = {
     Provenance.CURATED: 0,
@@ -63,20 +63,20 @@ def _entity_stem(path: str) -> str:
     return fname.rsplit('_', 1)[0] if '_' in fname else fname
 
 
-def _classify_method(records: list[FileRecord]) -> EstimationMethod | None:
+def _classify_method(records: list[FileRecord]) -> CorrectionMethod | None:
     suffixes = {record.suffix for record in records}
     if 'fieldmap' in suffixes:
-        return EstimationMethod.DIRECT
+        return CorrectionMethod.DIRECT
     if 'phasediff' in suffixes:
-        return EstimationMethod.PHASEDIFF
+        return CorrectionMethod.PHASEDIFF
     if 'phase1' in suffixes and 'phase2' in suffixes:
-        return EstimationMethod.PHASES
+        return CorrectionMethod.PHASES
     # An anatomical source marks a fieldmap-less registration estimation, even
     # when EPI files share the identifier (they are its registration movers).
     if suffixes.intersection(('T1w', 'T2w')):
-        return EstimationMethod.ANAT_CONTRAST
+        return CorrectionMethod.T2WREG
     if any(record.is_epi_like for record in records):
-        return EstimationMethod.PEPOLAR
+        return CorrectionMethod.PEPOLAR
     return None
 
 
@@ -94,7 +94,7 @@ def _pe_axes(records: list[FileRecord]) -> tuple[frozenset, frozenset]:
 
 def _make_estimation(
     b0field_id: str,
-    method: EstimationMethod,
+    method: CorrectionMethod,
     records: list[FileRecord],
     provenance: Provenance,
 ) -> FieldmapEstimation:
@@ -188,7 +188,7 @@ def resolve_estimations(
             )
             continue
         estimation = _make_estimation(identifier, method, members, Provenance.CURATED)
-        if method is EstimationMethod.PEPOLAR:
+        if method is CorrectionMethod.PEPOLAR:
             signatures = {
                 record.signature.key
                 for record in members
@@ -212,6 +212,18 @@ def resolve_estimations(
             for record in records
             if record.is_dwi and identifier in record.b0field_sources
         }
+
+    for record in records:
+        if record.datatype == 'fmap' and record.b0field_identifiers and record.intended_for:
+            issues.append(
+                warning(
+                    'intendedfor-superseded',
+                    f'{record.filename} carries both B0FieldIdentifier and IntendedFor. '
+                    'IntendedFor is deprecated; the B0FieldIdentifier/B0FieldSource links '
+                    'are used exclusively and the IntendedFor entries are ignored.',
+                    (record.path,),
+                )
+            )
 
     # ------------------------------------------------------------------ E2
     # Cluster uncurated fmap files by entity stem so sidecar companions
@@ -258,17 +270,17 @@ def resolve_estimations(
     # fmaps intended for the same series jointly estimate one field.
     merged_pepolar = {}
     for members, cluster_targets, method in translated:
-        if method is EstimationMethod.PEPOLAR:
+        if method is CorrectionMethod.PEPOLAR:
             key = frozenset(cluster_targets)
             merged_pepolar.setdefault(key, []).extend(members)
     translated_final = [
-        (members, set(key), EstimationMethod.PEPOLAR)
+        (members, set(key), CorrectionMethod.PEPOLAR)
         for key, members in sorted(merged_pepolar.items(), key=lambda kv: sorted(kv[0]))
-    ] + [item for item in translated if item[2] is not EstimationMethod.PEPOLAR]
+    ] + [item for item in translated if item[2] is not CorrectionMethod.PEPOLAR]
 
     for members, cluster_targets, method in translated_final:
         fmap_sources = list(members)
-        if method is EstimationMethod.PEPOLAR:
+        if method is CorrectionMethod.PEPOLAR:
             # The target DWIs participate in a PEPOLAR estimation: their b=0
             # images supply the other phase encoding direction(s).
             fmap_sources = members + [
@@ -282,18 +294,36 @@ def resolve_estimations(
         targets[b0field_id] = set(cluster_targets)
 
     # ------------------------------------------------------------------ E3
+    # Series already linked to a fieldmap by curation are never pooled by the
+    # heuristic - whether the link is B0FieldIdentifier/B0FieldSource on the
+    # series itself or an IntendedFor naming it from fmap/. A curator who
+    # linked some series and not others did not want them mixed.
+    intendedfor_covered = set()
+    for b0field_id, estimation in estimations.items():
+        if estimation.provenance is Provenance.TRANSLATED:
+            intendedfor_covered.update(targets[b0field_id])
+
     dwi_records = [record for record in records if record.is_dwi]
     for session, session_records in sorted(
         _by_session(dwi_records).items(), key=lambda kv: str(kv[0])
     ):
         shim_groups = _shim_groups(session_records, ignore_shims, issues)
         for shim_index, shim_records in enumerate(shim_groups):
+            pooled = [
+                record
+                for record in shim_records
+                if not (
+                    record.b0field_identifiers
+                    or record.b0field_sources
+                    or record.path in intendedfor_covered
+                )
+            ]
             polarities = defaultdict(set)
-            for record in shim_records:
+            for record in pooled:
                 if record.signature.pe_axis:
                     polarities[record.signature.pe_axis].add(record.signature.pe_polarity)
             for axis in sorted(axis for axis, pols in polarities.items() if len(pols) == 2):
-                members = [record for record in shim_records if record.signature.pe_axis == axis]
+                members = [record for record in pooled if record.signature.pe_axis == axis]
                 id_parts = [AUTO_PREFIX + 'pepolar']
                 if session:
                     id_parts.append(f'ses-{session}')
@@ -302,12 +332,35 @@ def resolve_estimations(
                 id_parts.append(axis)
                 b0field_id = _unique_id('+'.join(id_parts), estimations)
                 estimation = _make_estimation(
-                    b0field_id, EstimationMethod.PEPOLAR, members, Provenance.INFERRED
+                    b0field_id, CorrectionMethod.PEPOLAR, members, Provenance.INFERRED
                 )
                 estimations[b0field_id] = estimation
                 # An inferred axis estimation corrects exactly the series it
                 # was built from - including single-polarity "borrowers".
                 targets[b0field_id] = {record.path for record in members}
+
+            # Unlinked series whose only reverse phase-encoded partners are
+            # linked get no inferred estimation. Say so.
+            linked_polarities = defaultdict(set)
+            for record in shim_records:
+                if record not in pooled and record.signature.pe_axis:
+                    linked_polarities[record.signature.pe_axis].add(record.signature.pe_polarity)
+            for axis, pols in sorted(polarities.items()):
+                if len(pols) == 2 or not (pols | linked_polarities[axis]) > pols:
+                    continue
+                stranded = [record for record in pooled if record.signature.pe_axis == axis]
+                issues.append(
+                    warning(
+                        'reverse-pe-not-pooled',
+                        f'{", ".join(record.filename for record in stranded)}: the only '
+                        'reverse phase-encoded series on this axis are already linked '
+                        'to fieldmaps by curated metadata (B0FieldIdentifier/'
+                        'B0FieldSource or IntendedFor), and linked series are never '
+                        'pooled with unlinked ones. Curate the metadata on every '
+                        'series (or on none) to control this.',
+                        tuple(record.path for record in stranded),
+                    )
+                )
 
     return estimations, targets, issues
 
@@ -536,7 +589,7 @@ def resolve_fieldmapless(
             )
         for session, paths in sorted(by_session.items(), key=lambda kv: str(kv[0])):
             if not _apply(
-                paths, session, EstimationMethod.ANAT_CONTRAST, 't2wreg', 'T2w', Provenance.FORCED
+                paths, session, CorrectionMethod.T2WREG, 't2wreg', 'T2w', Provenance.FORCED
             ):
                 issues.append(
                     error(
@@ -580,7 +633,7 @@ def resolve_fieldmapless(
                 )
             correctable = [path for path in uncorrected if path not in missing_pedir]
             if correctable and not _apply(
-                correctable, session, EstimationMethod.SYNB0, 'synb0', 'T1w', Provenance.FORCED
+                correctable, session, CorrectionMethod.SYNB0, 'synb0', 'T1w', Provenance.FORCED
             ):
                 issues.append(
                     error(
@@ -611,7 +664,7 @@ def resolve_fieldmapless(
                 )
             correctable = [path for path in uncorrected if path not in missing_pedir]
             if correctable and not _apply(
-                correctable, session, EstimationMethod.SYN, 'syn', 'T1w', Provenance.FORCED
+                correctable, session, CorrectionMethod.NIPREPS_SYN, 'syn', 'T1w', Provenance.FORCED
             ):
                 issues.append(
                     error(
@@ -635,7 +688,7 @@ def resolve_fieldmapless(
             _apply(
                 fallback,
                 session,
-                EstimationMethod.ANAT_CONTRAST,
+                CorrectionMethod.T2WREG,
                 't2wreg',
                 'T2w',
                 Provenance.INFERRED,
@@ -649,10 +702,11 @@ def build_distortion_groups(
     application: dict[str, str | None],
     separate_all_dwis: bool,
 ) -> dict[str, DistortionGroup]:
-    """Partition DWI files by (signature, applied estimation, curation walls).
+    """Group DWI files that share a distortion and a correction.
 
-    Curated MultipartIDs (and ``separate_all_dwis``) are part of the partition
-    key so that a distortion group can never span two outputs.
+    Files are grouped by their distortion parameters, the fieldmap applied to
+    them, and their output (MultipartID or ``separate_all_dwis``), so a single
+    group can never span two fieldmaps or two output files.
     """
     dwi_records = [record for record in records if record.is_dwi]
     buckets = defaultdict(list)
@@ -705,6 +759,7 @@ def build_concatenation_groups(
             stem = _entity_stem(dgroup.dwi_files[0])
             assignments[key] = (AUTO_PREFIX + 'single+' + stem, Provenance.INFERRED)
     elif curated_ids:
+        uncurated_files = []
         for key, dgroup in distortion_groups.items():
             multipart_id = dwi_records[dgroup.dwi_files[0]].multipart_id
             if multipart_id:
@@ -721,6 +776,18 @@ def build_concatenation_groups(
             else:
                 stem = _entity_stem(dgroup.dwi_files[0])
                 assignments[key] = (AUTO_PREFIX + 'single+' + stem, Provenance.INFERRED)
+                uncurated_files.extend(dgroup.dwi_files)
+        if uncurated_files:
+            issues.append(
+                warning(
+                    'partial-multipart',
+                    f'{len(uncurated_files)} DWI series have no MultipartID while other '
+                    'series in this subject do. Series without one are NOT combined '
+                    'with anything: each becomes its own output. Set MultipartID on '
+                    'every series (or on none) to control concatenation explicitly.',
+                    tuple(sorted(uncurated_files)),
+                )
+            )
     else:
         # Inferred: union-find over distortion groups, per session.
         parent = {key: key for key in distortion_groups}

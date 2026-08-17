@@ -5,7 +5,7 @@ workflow builders still consume. Two things are checked here:
 
 - **Differential parity** against the retired ``group_dwi_scans`` on the shared
   skeleton fixtures, with every intended divergence asserted explicitly.
-- **Per-method shapes**: that each :class:`~qsiprep.grouping.models.EstimationMethod`
+- **Per-method shapes**: that each :class:`~qsiprep.grouping.models.CorrectionMethod`
   renders the ``fieldmap_info`` the downstream workflows expect.
 """
 
@@ -16,7 +16,7 @@ from bids.layout import BIDSLayout
 from niworkflows.utils.testing import generate_bids_skeleton
 
 from qsiprep.grouping import (
-    EstimationMethod,
+    CorrectionMethod,
     backend_for_config,
     build_dwi_grouping,
     to_legacy_scan_groups,
@@ -187,9 +187,9 @@ def test_uncorrected_group_has_no_fieldmap(tmp_path):
 
 
 def test_syn_legacy_and_unit_shape(tmp_path):
-    """SyN units expose is_syn and render the legacy 'syn' fieldmap shape."""
+    """SyN units expose is_nipreps_syn and render the legacy 'syn' fieldmap shape."""
     (unit,) = _units('fieldmapless_t1w_only', tmp_path, use_nipreps_syn_sdc=True)
-    assert unit.is_syn
+    assert unit.is_nipreps_syn
     assert not unit.has_scanner_measured_fieldmap
     assert unit.to_legacy_dict()['fieldmap_info'] == {'suffix': 'syn'}
 
@@ -219,7 +219,7 @@ def test_preproc_units_match_legacy_partition(tmp_path):
 def test_preproc_unit_pepolar_bidirectional(tmp_path):
     """A reverse-PE pair exposes its plus/minus split natively."""
     (unit,) = _units('mixed_trt', tmp_path)
-    assert unit.method is EstimationMethod.PEPOLAR
+    assert unit.method is CorrectionMethod.PEPOLAR
     assert unit.has_bidirectional_dwi
     assert _basenames(list(unit.plus_files)) == ['sub-01_dir-PA_dwi.nii.gz']
     assert _basenames(list(unit.minus_files)) == ['sub-01_dir-AP_dwi.nii.gz']
@@ -230,7 +230,7 @@ def test_preproc_unit_pepolar_bidirectional(tmp_path):
 def test_preproc_unit_extra_b0_from_epi_fmap(tmp_path):
     """A dedicated epi fieldmap is exposed as an extra b=0 source, not a member."""
     (unit,) = _units('abcd_style', tmp_path)
-    assert unit.method is EstimationMethod.PEPOLAR
+    assert unit.method is CorrectionMethod.PEPOLAR
     assert not unit.has_bidirectional_dwi
     assert _basenames(list(unit.extra_b0)) == ['sub-01_dir-PA_epi.nii.gz']
     assert unit.pe_dir == 'j-'
@@ -239,7 +239,7 @@ def test_preproc_unit_extra_b0_from_epi_fmap(tmp_path):
 def test_preproc_unit_gre_files(tmp_path):
     """A GRE unit exposes its fieldmap files keyed by BIDS suffix."""
     (unit,) = _units('gre_phasediff', tmp_path)
-    assert unit.method is EstimationMethod.PHASEDIFF
+    assert unit.method is CorrectionMethod.PHASEDIFF
     gre = {suffix: op.basename(path) for suffix, path in unit.gre_files().items()}
     assert gre['phasediff'] == 'sub-01_phasediff.nii.gz'
     assert gre['magnitude1'] == 'sub-01_magnitude1.nii.gz'

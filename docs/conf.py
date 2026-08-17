@@ -43,21 +43,23 @@ needs_sphinx = '4.2.0'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'nbsphinx',
+    'myst_nb',  # notebooks and markdown (replaces nbsphinx + recommonmark)
     'nipype.sphinxext.apidoc',
     'nipype.sphinxext.plot_workflow',
-    'recommonmark',
     'sphinx.ext.autodoc',
     'sphinx.ext.coverage',
     'sphinx.ext.doctest',
     'sphinx.ext.intersphinx',
     'sphinx.ext.linkcode',
     'sphinx.ext.mathjax',
-    'sphinx_markdown_tables',
     'sphinxarg.ext',  # argparse extension
     'sphinxcontrib.apidoc',
     'sphinxcontrib.bibtex',
 ]
+
+# Notebooks are committed with their outputs; do not re-execute during the
+# docs build (the grouping tutorial would need qsiprep importable).
+nb_execution_mode = 'off'
 
 # Mock modules in autodoc:
 autodoc_mock_imports = [

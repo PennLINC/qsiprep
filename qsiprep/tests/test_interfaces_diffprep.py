@@ -881,7 +881,7 @@ def _make_unit(suffix=None, **extra):
     ``'rpe_series'`` a reverse-PE partner series, ``'epi'`` a dedicated epi
     fieldmap, or a GRE suffix (``'phasediff'``/``'fieldmap'``).
     """
-    from qsiprep.grouping.models import EstimationMethod
+    from qsiprep.grouping.models import CorrectionMethod
     from qsiprep.tests.preproc_factory import make_preproc_unit
 
     dwi = '/data/sub-01_dwi.nii.gz'
@@ -889,22 +889,22 @@ def _make_unit(suffix=None, **extra):
         partners = list(extra['rpe_series'])
         return make_preproc_unit(
             [dwi, *partners],
-            method=EstimationMethod.PEPOLAR,
+            method=CorrectionMethod.PEPOLAR,
             pe_dirs={dwi: 'j', **dict.fromkeys(partners, 'j-')},
         )
     if suffix == 'epi':
         return make_preproc_unit(
             [dwi],
-            method=EstimationMethod.PEPOLAR,
+            method=CorrectionMethod.PEPOLAR,
             pe_dir='j',
             estimation_sources=[dwi, *extra['epi']],
         )
     if suffix in ('phasediff', 'fieldmap'):
         return make_preproc_unit(
             [dwi],
-            method=EstimationMethod.PHASEDIFF
+            method=CorrectionMethod.PHASEDIFF
             if suffix == 'phasediff'
-            else EstimationMethod.DIRECT,
+            else CorrectionMethod.DIRECT,
             pe_dir='j',
             estimation_sources=list(extra.get('sources', [])),
         )

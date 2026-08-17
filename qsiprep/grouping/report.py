@@ -15,10 +15,11 @@ Two views are provided:
 from __future__ import annotations
 
 import os.path as op
+import re
 from collections import defaultdict
 from typing import NamedTuple
 
-from .models import DWIGrouping, EstimationMethod
+from .models import CorrectionMethod, DWIGrouping
 from .validation import (
     BACKEND_DESCRIPTIONS,
     check_backend,
@@ -27,13 +28,13 @@ from .validation import (
 )
 
 _METHOD_LABELS = {
-    EstimationMethod.PEPOLAR: 'PEPOLAR (reverse phase-encoding)',
-    EstimationMethod.DIRECT: 'precomputed fieldmap',
-    EstimationMethod.PHASEDIFF: 'GRE phase difference',
-    EstimationMethod.PHASES: 'GRE two-phase',
-    EstimationMethod.SYNB0: 'SyNb0 synthetic b=0',
-    EstimationMethod.ANAT_CONTRAST: 'T2w registration (T2Wreg)',
-    EstimationMethod.SYN: 'fieldmap-less SyN',
+    CorrectionMethod.PEPOLAR: 'PEPOLAR (reverse phase-encoding)',
+    CorrectionMethod.DIRECT: 'precomputed fieldmap',
+    CorrectionMethod.PHASEDIFF: 'GRE phase difference',
+    CorrectionMethod.PHASES: 'GRE two-phase',
+    CorrectionMethod.SYNB0: 'SyNb0 synthetic b=0',
+    CorrectionMethod.T2WREG: 'T2w registration (T2Wreg)',
+    CorrectionMethod.NIPREPS_SYN: 'fieldmap-less SyN',
 }
 
 
@@ -142,6 +143,37 @@ def _split_polarities(grouping: DWIGrouping, multipart_id: str, axis: str):
     return up, down
 
 
+def _output_step_lines(grouping, backend, multipart_id, backend_issues) -> list[str]:
+    """The numbered step lines for one output, as printed by describe_processing."""
+    concat = grouping.concatenation_groups[multipart_id]
+    lines = []
+
+    # --- Pre-HMC stage (identical across backends) -------------------
+    n_series = len(concat.dwi_files)
+    if n_series > 1:
+        lines.append(
+            '  1. Each series is denoised on its own, then all '
+            f'{n_series} series are concatenated. '
+            '(--denoise-after-combining reverses this order.)'
+        )
+    else:
+        lines.append('  1. The series is denoised.')
+
+    corrected = _group_estimations(grouping, multipart_id)
+
+    if backend == 'fsl':
+        _describe_fsl(lines, grouping, multipart_id, corrected)
+    elif backend == 'tortoise':
+        _describe_tortoise(lines, grouping, multipart_id, corrected)
+    else:
+        _describe_mixed(lines, grouping, multipart_id, corrected)
+
+    for issue in backend_issues:
+        if issue.scope in (None, multipart_id):
+            lines.append(f'  !! {issue.render()}')
+    return lines
+
+
 def describe_processing(grouping: DWIGrouping, backend: str) -> str:
     """Preview what ``backend`` would do with this grouping.
 
@@ -160,32 +192,34 @@ def describe_processing(grouping: DWIGrouping, backend: str) -> str:
         n_series = len(concat.dwi_files)
         plural = 'series' if n_series != 1 else 'single series'
         lines.append(f'Output "{concat.output_name}" ({n_series} {plural}):')
-
-        # --- Pre-HMC stage (identical across backends) -------------------
-        if n_series > 1:
-            lines.append(
-                '  1. Each series is denoised on its own, then all '
-                f'{n_series} series are concatenated. '
-                '(--denoise-after-combining reverses this order.)'
-            )
-        else:
-            lines.append('  1. The series is denoised.')
-
-        corrected = _group_estimations(grouping, multipart_id)
-        group_errors = [issue for issue in backend_issues if issue.scope in (None, multipart_id)]
-
-        if backend == 'fsl':
-            _describe_fsl(lines, grouping, multipart_id, corrected)
-        elif backend == 'tortoise':
-            _describe_tortoise(lines, grouping, multipart_id, corrected)
-        else:
-            _describe_mixed(lines, grouping, multipart_id, corrected)
-
-        for issue in group_errors:
-            lines.append(f'  !! {issue.render()}')
+        lines.extend(_output_step_lines(grouping, backend, multipart_id, backend_issues))
         lines.append('')
 
     return '\n'.join(lines)
+
+
+def processing_steps(grouping: DWIGrouping, backend: str) -> dict[str, list[str]]:
+    """The describe_processing steps, structured for non-text renderings.
+
+    Returns ``{output_name: [step, ...]}`` where each step is the text of one
+    numbered line with its continuation notes folded in. Backend feasibility
+    issues keep their leading ``'!! '`` marker so renderers can style them.
+    """
+    backend_issues = check_backend(grouping, backend)
+    result = {}
+    for multipart_id, concat in sorted(grouping.concatenation_groups.items()):
+        steps = []
+        for line in _output_step_lines(grouping, backend, multipart_id, backend_issues):
+            text = line.strip()
+            numbered = re.match(r'\d+\.\s+(.*)', text)
+            if numbered:
+                steps.append(numbered.group(1))
+            elif text.startswith('!!') or not steps:
+                steps.append(text)
+            else:
+                steps[-1] += ' ' + text
+        result[concat.output_name] = steps
+    return result
 
 
 def _borrow_note(grouping: DWIGrouping, multipart_id: str, b0field_id: str) -> str | None:
@@ -213,13 +247,13 @@ def _ids_by_kind(grouping, corrected) -> MethodGroups:
     kinds = MethodGroups([], [], [], [], [])
     for b0field_id in sorted(corrected):
         method = grouping.estimations[b0field_id].method
-        if method is EstimationMethod.PEPOLAR:
+        if method is CorrectionMethod.PEPOLAR:
             kinds.pepolar.append(b0field_id)
-        elif method is EstimationMethod.SYNB0:
+        elif method is CorrectionMethod.SYNB0:
             kinds.synb0.append(b0field_id)
-        elif method is EstimationMethod.ANAT_CONTRAST:
+        elif method is CorrectionMethod.T2WREG:
             kinds.anat.append(b0field_id)
-        elif method is EstimationMethod.SYN:
+        elif method is CorrectionMethod.NIPREPS_SYN:
             kinds.syn.append(b0field_id)
         else:
             kinds.gre.append(b0field_id)

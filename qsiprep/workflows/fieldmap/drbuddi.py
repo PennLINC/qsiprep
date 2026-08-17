@@ -64,13 +64,13 @@ def init_drbuddi_wf(
 
         from qsiprep.workflows.fieldmap import init_drbuddi_wf
         from qsiprep.tests.preproc_factory import make_preproc_unit
-        from qsiprep.grouping.models import EstimationMethod
+        from qsiprep.grouping.models import CorrectionMethod
         ap = 'data/tinytensor/sub-tinytensors/dwi/sub-tinytensors_dir-AP_dwi.nii.gz'
         pa = 'data/tinytensor/sub-tinytensors/dwi/sub-tinytensors_dir-PA_dwi.nii.gz'
         wf = init_drbuddi_wf(
             make_preproc_unit(
                 [ap, pa],
-                method=EstimationMethod.PEPOLAR,
+                method=CorrectionMethod.PEPOLAR,
                 pe_dirs={ap: 'j', pa: 'j-'},
             ),
             t2w_sdc=False,

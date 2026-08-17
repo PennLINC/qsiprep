@@ -20,10 +20,10 @@ Adding a new estimation method
 ------------------------------
 The (method x backend) behavior matrix is deliberately spelled out as prose
 branches rather than a rules table, because the preview text is the product.
-The cost is that a new :class:`~.models.EstimationMethod` touches five places
+The cost is that a new :class:`~.models.CorrectionMethod` touches five places
 (SYNB0 is the worked example in each):
 
-1. :class:`~.models.EstimationMethod` - add the member.
+1. :class:`~.models.CorrectionMethod` - add the member.
 2. ``inference.py`` - produce it: ``_classify_method`` for curated sources
    and/or a step in ``resolve_fieldmapless``; rank it in ``_METHOD_RANK``.
 3. ``validation.check_backend`` - which backends can execute it, and whether
@@ -44,13 +44,14 @@ from .adapters import (
     unit_to_sidecar,
 )
 from .inference import build_grouping
+from .interactive import render_html
 from .metadata import index_subject
 from .models import (
     ConcatenationGroup,
+    CorrectionMethod,
     DistortionGroup,
     DistortionSignature,
     DWIGrouping,
-    EstimationMethod,
     FieldmapEstimation,
     FileRecord,
     Provenance,
@@ -64,7 +65,7 @@ __all__ = [
     'DistortionGroup',
     'DistortionSignature',
     'DWIGrouping',
-    'EstimationMethod',
+    'CorrectionMethod',
     'FieldmapEstimation',
     'FileRecord',
     'GroupingError',
@@ -77,6 +78,7 @@ __all__ = [
     'describe_processing',
     'full_report',
     'index_subject',
+    'render_html',
     'report_text',
     'to_legacy_scan_groups',
     'to_preproc_units',

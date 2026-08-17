@@ -61,11 +61,11 @@ def init_sdc_wf(unit, dwi_meta):
 
         from qsiprep.workflows.fieldmap import init_sdc_wf
         from qsiprep.tests.preproc_factory import make_preproc_unit
-        from qsiprep.grouping.models import EstimationMethod
+        from qsiprep.grouping.models import CorrectionMethod
         wf = init_sdc_wf(
             make_preproc_unit(
                 ['/data/sub-03/dwi/sub-03_dwi.nii.gz'],
-                method=EstimationMethod.PEPOLAR,
+                method=CorrectionMethod.PEPOLAR,
                 pe_dir='j',
                 estimation_sources=[
                     '/data/sub-03/dwi/sub-03_dwi.nii.gz',
@@ -117,7 +117,7 @@ def init_sdc_wf(unit, dwi_meta):
 
     """
     omp_nthreads = config.nipype.omp_nthreads
-    does_sdc = unit.has_scanner_measured_fieldmap or unit.is_syn
+    does_sdc = unit.has_scanner_measured_fieldmap or unit.is_nipreps_syn
     workflow = Workflow(name='sdc_wf' if does_sdc else 'sdc_bypass_wf')
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -253,7 +253,7 @@ co-registration with the anatomical reference.
         ])  # fmt:skip
 
     # FIELDMAP-less classic SyN path
-    if unit.is_syn:
+    if unit.is_nipreps_syn:
         from .syn import init_syn_sdc_wf
 
         syn_sdc_wf = init_syn_sdc_wf(bold_pe=dwi_meta.get('PhaseEncodingDirection', None))

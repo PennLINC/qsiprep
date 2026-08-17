@@ -14,7 +14,7 @@ would do with the data. Nothing is processed and nothing is written.
 import argparse
 import sys
 
-from . import build_dwi_grouping, describe_processing, report_text
+from . import build_dwi_grouping, describe_processing, render_html, report_text
 from .validation import BACKENDS
 
 
@@ -76,7 +76,24 @@ def _build_parser():
         action='store_true',
         help='Give fieldmap-less series a SyNb0 synthetic-b=0 estimation from the T1w.',
     )
+    parser.add_argument(
+        '--html',
+        metavar='PATH',
+        help='Also write a self-contained explanatory HTML page for the grouping. '
+        'With more than one subject, the subject label is inserted before the '
+        'extension.',
+    )
     return parser
+
+
+def _per_subject_path(path: str, subject: str, multi: bool) -> str:
+    """Insert ``sub-<label>`` before the extension when writing many subjects."""
+    if not multi:
+        return path
+    base, dot, ext = path.rpartition('.')
+    stem = base if dot else path
+    suffix = f'.{ext}' if dot else ''
+    return f'{stem}_sub-{subject}{suffix}'
 
 
 def main(argv=None):
@@ -119,6 +136,12 @@ def main(argv=None):
         print(report_text(grouping))
         for backend in args.backend:
             print(describe_processing(grouping, backend))
+        multi = len(subjects) > 1
+        if args.html:
+            path = _per_subject_path(args.html, subject, multi)
+            with open(path, 'w') as fobj:
+                fobj.write(render_html(grouping, backend=args.backend[0]))
+            print(f'sub-{subject}: wrote {path}')
         if grouping.errors:
             exit_code = 1
 

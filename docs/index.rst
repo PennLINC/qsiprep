@@ -17,6 +17,7 @@ Contents
    quickstart
    usage
    preprocessing
+   notebooks/grouping_tutorial
    reconstruction
    contributors
    changes

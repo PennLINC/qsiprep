@@ -6,10 +6,12 @@ provenance), which estimation corrects which file, how distortion and
 concatenation groups partition, and which issues fire.
 """
 
+import os.path as op
+
 import pytest
 
 from qsiprep.grouping import GroupingError, Provenance, check_backend
-from qsiprep.grouping.models import EstimationMethod
+from qsiprep.grouping.models import CorrectionMethod
 from qsiprep.tests.grouping_scenarios import basenames, load_scenario
 
 
@@ -24,7 +26,7 @@ def test_hcp_style(tmp_path):
     assert list(grouping.estimations) == ['auto+pepolar+j']
     estimation = grouping.estimations['auto+pepolar+j']
     assert estimation.provenance is Provenance.INFERRED
-    assert estimation.method is EstimationMethod.PEPOLAR
+    assert estimation.method is CorrectionMethod.PEPOLAR
     assert len(estimation.sources) == 4
     assert estimation.bidirectional_axes == {'j'}
 
@@ -60,7 +62,7 @@ def test_abcd_style(tmp_path):
     (b0field_id,) = grouping.estimations
     estimation = grouping.estimations[b0field_id]
     assert estimation.provenance is Provenance.TRANSLATED
-    assert estimation.method is EstimationMethod.PEPOLAR
+    assert estimation.method is CorrectionMethod.PEPOLAR
     # The epi fmap AND the target DWI are both sources
     assert sorted(basenames(estimation.sources)) == [
         'sub-01_dir-AP_dwi.nii.gz',
@@ -103,12 +105,27 @@ def test_curated_b0field(tmp_path):
     assert list(grouping.estimations) == ['pepolar']
     estimation = grouping.estimations['pepolar']
     assert estimation.provenance is Provenance.CURATED
-    assert estimation.method is EstimationMethod.PEPOLAR
+    assert estimation.method is CorrectionMethod.PEPOLAR
 
     dwi_path = grouping.dwi_files[0]
     assert grouping.application[dwi_path] == 'pepolar'
     assert grouping.application_provenance[dwi_path] is Provenance.CURATED
     assert not grouping.issues
+
+
+def test_intendedfor_superseded(tmp_path):
+    """A fmap with both B0FieldIdentifier and IntendedFor uses B0Field only."""
+    grouping = load_scenario('intendedfor_superseded', tmp_path)
+
+    assert 'intendedfor-superseded' in issue_codes(grouping.warnings)
+
+    by_name = {op.basename(path): path for path in grouping.dwi_files}
+    run1 = by_name['sub-01_dir-AP_run-1_dwi.nii.gz']
+    run2 = by_name['sub-01_dir-AP_run-2_dwi.nii.gz']
+    # run-1 is corrected via B0FieldSource; run-2 (only the ignored IntendedFor
+    # pointed at it) gets no fieldmap.
+    assert grouping.application[run1] == 'pepolar01'
+    assert grouping.application[run2] is None
 
 
 def test_cluster_multipart(tmp_path):
@@ -224,10 +241,82 @@ def test_partial_curation(tmp_path):
     assert all('run-2' in path for path in inferred)
     assert 'mixed-application-provenance' in issue_codes(grouping.warnings)
 
+    # Curated series are never pooled into the inferred axis estimation:
+    # its sources are the uncurated run-2 files only.
+    assert basenames(grouping.estimations['auto+pepolar+j'].sources) == [
+        'sub-01_dir-AP_run-2_dwi.nii.gz',
+        'sub-01_dir-PA_run-2_dwi.nii.gz',
+    ]
+
     # Same signature, different fieldmaps: run-1 and run-2 AP stay in
     # different distortion groups but share the single output.
     assert len(grouping.distortion_groups) == 4
     assert len(grouping.concatenation_groups) == 1
+
+
+def test_partial_curation_stranded(tmp_path):
+    """An uncurated series whose only reverse-PE partners are curated is not
+    pooled with them; it falls through to the fieldmap-less ladder instead."""
+    grouping = load_scenario('partial_curation_stranded', tmp_path)
+
+    # No inferred PEPOLAR estimation exists: the run-2 series has no
+    # uncurated partner and the curated pair is off limits.
+    assert not [
+        estimation
+        for estimation in grouping.estimations.values()
+        if estimation.provenance is Provenance.INFERRED and estimation.is_pepolar
+    ]
+    assert 'reverse-pe-not-pooled' in issue_codes(grouping.warnings)
+
+    # The stranded series is corrected by the inferred T2Wreg fallback.
+    (run2,) = [path for path in grouping.dwi_files if 'run-2' in path]
+    applied = grouping.application[run2]
+    assert grouping.estimations[applied].method is CorrectionMethod.T2WREG
+
+
+def test_partial_intendedfor(tmp_path):
+    """IntendedFor links wall a series off from the heuristic pool exactly
+    like B0Field* curation does."""
+    grouping = load_scenario('partial_intendedfor', tmp_path)
+
+    # The linked AP series is corrected by the translated estimation; no
+    # inferred PEPOLAR estimation exists for the unlinked PA series.
+    assert not [
+        estimation
+        for estimation in grouping.estimations.values()
+        if estimation.provenance is Provenance.INFERRED and estimation.is_pepolar
+    ]
+    (ap,) = [path for path in grouping.dwi_files if 'dir-AP' in path]
+    (pa,) = [path for path in grouping.dwi_files if 'dir-PA' in path]
+    applied = grouping.application[ap]
+    assert grouping.estimations[applied].provenance is Provenance.TRANSLATED
+    assert grouping.application[pa] is None
+    assert 'reverse-pe-not-pooled' in issue_codes(grouping.warnings)
+
+
+def test_partial_multipart(tmp_path):
+    """Series without a MultipartID are not combined when other series have
+    one: each becomes its own output, with a warning."""
+    grouping = load_scenario('partial_multipart', tmp_path)
+
+    outputs = {
+        concat.output_name: basenames(concat.dwi_files)
+        for concat in grouping.concatenation_groups.values()
+    }
+    assert outputs == {
+        'sub-01_run-1': [
+            'sub-01_dir-AP_run-1_dwi.nii.gz',
+            'sub-01_dir-PA_run-1_dwi.nii.gz',
+        ],
+        'sub-01_dir-AP_run-2': ['sub-01_dir-AP_run-2_dwi.nii.gz'],
+        'sub-01_dir-PA_run-2': ['sub-01_dir-PA_run-2_dwi.nii.gz'],
+    }
+    assert 'partial-multipart' in issue_codes(grouping.warnings)
+
+    # With no B0Field curation anywhere, all four series still share the
+    # single inferred estimation (concatenation and estimation membership
+    # are independent).
+    assert set(grouping.application.values()) == {'auto+pepolar+j'}
 
 
 def test_cross_axis_b0field(tmp_path):
@@ -262,7 +351,7 @@ def test_gre_phasediff(tmp_path):
     grouping = load_scenario('gre_phasediff', tmp_path)
 
     (estimation,) = grouping.estimations.values()
-    assert estimation.method is EstimationMethod.PHASEDIFF
+    assert estimation.method is CorrectionMethod.PHASEDIFF
     assert estimation.provenance is Provenance.TRANSLATED
     # The DWI does not participate in a GRE estimation
     assert sorted(basenames(estimation.sources)) == [
@@ -283,7 +372,7 @@ def test_two_gre_fmaps(tmp_path):
     grouping = load_scenario('two_gre_fmaps', tmp_path)
 
     assert len(grouping.estimations) == 2
-    assert all(est.method is EstimationMethod.PHASEDIFF for est in grouping.estimations.values())
+    assert all(est.method is CorrectionMethod.PHASEDIFF for est in grouping.estimations.values())
     (concat,) = grouping.concatenation_groups.values()
     assert concat.output_name == 'sub-01_dir-AP'
     assert len(concat.distortion_groups) == 2
@@ -381,7 +470,7 @@ def test_fieldmapless_t2w(tmp_path):
 
     assert list(grouping.estimations) == ['auto+t2wreg']
     estimation = grouping.estimations['auto+t2wreg']
-    assert estimation.method is EstimationMethod.ANAT_CONTRAST
+    assert estimation.method is CorrectionMethod.T2WREG
     assert estimation.provenance is Provenance.INFERRED
     assert basenames(estimation.sources) == ['sub-01_T2w.nii.gz']
 
@@ -417,7 +506,7 @@ def test_fieldmapless_t1w_only_synb0(tmp_path):
 
     assert list(grouping.estimations) == ['auto+synb0']
     estimation = grouping.estimations['auto+synb0']
-    assert estimation.method is EstimationMethod.SYNB0
+    assert estimation.method is CorrectionMethod.SYNB0
     assert estimation.provenance is Provenance.FORCED
     assert basenames(estimation.sources) == ['sub-01_T1w.nii.gz']
 
@@ -436,7 +525,7 @@ def test_fieldmapless_t1w_only_syn(tmp_path):
 
     assert list(grouping.estimations) == ['auto+syn']
     estimation = grouping.estimations['auto+syn']
-    assert estimation.method is EstimationMethod.SYN
+    assert estimation.method is CorrectionMethod.NIPREPS_SYN
     assert estimation.provenance is Provenance.FORCED
     assert basenames(estimation.sources) == ['sub-01_T1w.nii.gz']
 
@@ -454,8 +543,8 @@ def test_syn_never_overrides_a_real_fieldmap(tmp_path):
     grouping = load_scenario('gre_phasediff', tmp_path, use_nipreps_syn_sdc=True)
 
     methods = {est.method for est in grouping.estimations.values()}
-    assert EstimationMethod.SYN not in methods
-    assert EstimationMethod.PHASEDIFF in methods
+    assert CorrectionMethod.NIPREPS_SYN not in methods
+    assert CorrectionMethod.PHASEDIFF in methods
 
 
 def test_ignore_sdc_disables_all_correction(tmp_path):
@@ -533,7 +622,7 @@ def test_curated_t2wreg(tmp_path):
 
     assert list(grouping.estimations) == ['anatreg']
     estimation = grouping.estimations['anatreg']
-    assert estimation.method is EstimationMethod.ANAT_CONTRAST
+    assert estimation.method is CorrectionMethod.T2WREG
     assert estimation.provenance is Provenance.CURATED
 
     dwi_path = grouping.dwi_files[0]

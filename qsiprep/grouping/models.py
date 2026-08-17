@@ -9,7 +9,7 @@ Everything in this module is expressed in BIDS vocabulary:
 - :class:`ConcatenationGroup` corresponds to a ``MultipartID``: which DWI
   files are concatenated in the output derivatives.
 - :class:`DistortionGroup` is derived (never curated): the files that share
-  one susceptibility warp *and* one correction.
+  one susceptibility distortion *and* one correction.
 
 When the user has curated these fields in their sidecars the values are used
 verbatim; otherwise equivalent values are inferred and tagged with their
@@ -55,7 +55,7 @@ class Provenance(enum.StrEnum):
         return f'[{self.value}]'
 
 
-class EstimationMethod(enum.StrEnum):
+class CorrectionMethod(enum.StrEnum):
     """How a fieldmap is estimated from its source files."""
 
     PEPOLAR = 'pepolar'  # EPI images with differing phase encoding
@@ -63,15 +63,15 @@ class EstimationMethod(enum.StrEnum):
     PHASEDIFF = 'phasediff'  # phase difference + magnitude(s)
     PHASES = 'two_phases'  # phase1 + phase2 + magnitude(s)
     SYNB0 = 'synb0'  # fieldmap-less: synthetic undistorted b=0 from the T1w
-    ANAT_CONTRAST = 'anat_reg'  # fieldmap-less: b=0 registration to a T2w (T2Wreg)
-    SYN = 'syn'  # fieldmap-less: ANTs SyN registration to a template (classic)
+    T2WREG = 'anat_reg'  # fieldmap-less: b=0 registration to a T2w (T2Wreg)
+    NIPREPS_SYN = 'syn'  # fieldmap-less: ANTs SyN registration to a template (classic)
 
 
 @dataclasses.dataclass(frozen=True)
 class DistortionSignature:
-    """The acquisition parameters that determine a susceptibility warp.
+    """The acquisition parameters that determine a susceptibility distortion.
 
-    Two EPI images acquired with the same signature are distorted the same
+    Two EPI images acquired with the same values here are distorted the same
     way. ``parallel_factor`` and ``multiband_factor`` are informational and
     do not participate in equality: they are already reflected in
     ``readout_time`` when it is reported correctly.
@@ -236,7 +236,7 @@ class FieldmapEstimation:
     """A set of files that jointly estimate one fieldmap (one B0FieldIdentifier)."""
 
     b0field_id: str
-    method: EstimationMethod
+    method: CorrectionMethod
     sources: tuple[str, ...]  # file paths, sorted
     provenance: Provenance
     # Derived from EPI-like sources (empty for GRE methods):
@@ -245,16 +245,17 @@ class FieldmapEstimation:
 
     @property
     def is_pepolar(self) -> bool:
-        return self.method is EstimationMethod.PEPOLAR
+        return self.method is CorrectionMethod.PEPOLAR
 
 
 @dataclasses.dataclass(frozen=True)
 class DistortionGroup:
-    """DWI files sharing one susceptibility warp and one correction.
+    """DWI files sharing one susceptibility distortion and one correction.
 
-    Derived, never curated: the partition key is
-    ``(signature.key, applied estimation, concatenation membership)``, so a
-    distortion group can never span two fieldmaps or two output files.
+    Always derived, never taken from sidecars: files are grouped by their
+    distortion parameters, the fieldmap applied to them, and the output they
+    are concatenated into, so a group can never span two fieldmaps or two
+    output files.
     """
 
     key: str  # stable human-readable id, e.g. 'ses-1_acq-98dir_dir-AP'

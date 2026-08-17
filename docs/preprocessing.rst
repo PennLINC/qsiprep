@@ -228,6 +228,8 @@ Outputs of *QSIPrep*
      image quality.
 
 
+.. _visual_reports:
+
 Visual Reports
 ==============
 

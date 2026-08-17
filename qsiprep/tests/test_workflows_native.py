@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from qsiprep import config
-from qsiprep.grouping.models import EstimationMethod
+from qsiprep.grouping.models import CorrectionMethod
 from qsiprep.tests.preproc_factory import make_preproc_unit
 
 SRC = '/data/sub-01_dwi.nii.gz'
@@ -75,7 +75,7 @@ def _rpe_unit(tmp_path):
     partner = _write_dwi(tmp_path / 'sub-01_dir-PA_dwi.nii.gz')
     return make_preproc_unit(
         [main, partner],
-        method=EstimationMethod.PEPOLAR,
+        method=CorrectionMethod.PEPOLAR,
         pe_dirs={main: 'j', partner: 'j-'},
     )
 
@@ -181,7 +181,7 @@ def test_init_sdc_wf_phasediff_builds_without_a_layout(monkeypatch):
 
     unit = make_preproc_unit(
         ['/data/sub-01_dwi.nii.gz'],
-        method=EstimationMethod.PHASEDIFF,
+        method=CorrectionMethod.PHASEDIFF,
         pe_dir='j-',
         estimation_sources=['/data/sub-01_phasediff.nii.gz', '/data/sub-01_magnitude1.nii.gz'],
         metadata={'EchoTime1': 0.004, 'EchoTime2': 0.006},
@@ -197,7 +197,7 @@ def test_init_sdc_wf_dispatches_classic_syn():
 
     unit = make_preproc_unit(
         ['/data/sub-01_dwi.nii.gz'],
-        method=EstimationMethod.SYN,
+        method=CorrectionMethod.NIPREPS_SYN,
         pe_dir='j',
         estimation_sources=['/data/sub-01_T1w.nii.gz'],
     )
@@ -214,7 +214,7 @@ def test_init_sdc_wf_bipolar_two_phase_bypasses(monkeypatch):
 
     unit = make_preproc_unit(
         ['/data/sub-01_dwi.nii.gz'],
-        method=EstimationMethod.PHASES,
+        method=CorrectionMethod.PHASES,
         pe_dir='j-',
         estimation_sources=[
             '/data/sub-01_phase1.nii.gz',
@@ -289,7 +289,7 @@ def test_unit_sidecar_round_trips_through_derivatives_sidecar(tmp_path):
 
     unit = make_preproc_unit(
         ['/data/sub-01_dir-AP_dwi.nii.gz', '/data/sub-01_dir-PA_dwi.nii.gz'],
-        method=EstimationMethod.PEPOLAR,
+        method=CorrectionMethod.PEPOLAR,
         pe_dirs={
             '/data/sub-01_dir-AP_dwi.nii.gz': 'j',
             '/data/sub-01_dir-PA_dwi.nii.gz': 'j-',

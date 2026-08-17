@@ -13,9 +13,9 @@ import os.path as op
 from qsiprep.grouping.adapters import PreprocUnit
 from qsiprep.grouping.models import (
     AUTO_PREFIX,
+    CorrectionMethod,
     DistortionSignature,
     DWIGrouping,
-    EstimationMethod,
     FieldmapEstimation,
     FileRecord,
     Provenance,
@@ -53,7 +53,7 @@ def _datatype_of(suffix: str) -> str:
 def make_preproc_unit(
     dwi_files,
     *,
-    method: EstimationMethod | None = None,
+    method: CorrectionMethod | None = None,
     pe_dir: str = 'j',
     pe_dirs: dict[str, str] | None = None,
     estimation_sources=None,

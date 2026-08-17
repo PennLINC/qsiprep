@@ -17,7 +17,7 @@ import dataclasses
 import os.path as op
 from collections import defaultdict
 
-from .models import DWIGrouping, EstimationMethod, FieldmapEstimation, Provenance
+from .models import CorrectionMethod, DWIGrouping, FieldmapEstimation, Provenance
 
 #: Backends a grouping can be previewed/validated against.
 BACKENDS = ('fsl', 'tortoise', 'mixed')
@@ -346,7 +346,7 @@ def check_backend(grouping: DWIGrouping, backend: str) -> list[GroupingIssue]:
         for b0field_id in sorted(estimations):
             estimation = grouping.estimations[b0field_id]
 
-            if estimation.method is EstimationMethod.ANAT_CONTRAST:
+            if estimation.method is CorrectionMethod.T2WREG:
                 # T2Wreg lives in TORTOISE's DIFFPREP; the FSL path (and the
                 # fsl-based first stage of the mixed path) cannot reach it.
                 if backend in ('fsl', 'mixed'):
@@ -369,7 +369,7 @@ def check_backend(grouping: DWIGrouping, backend: str) -> list[GroupingIssue]:
                     )
                 continue
 
-            if estimation.method is EstimationMethod.SYNB0:
+            if estimation.method is CorrectionMethod.SYNB0:
                 # The synthetic b=0 is a target image: TOPUP's missing blip on
                 # the fsl path, the registration target for T2Wreg-style
                 # stages on the tortoise and mixed paths. Every backend can

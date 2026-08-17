@@ -291,7 +291,7 @@ def init_fsl_hmc_wf(
         fieldmap_type = 'rpe_series' if unit.has_bidirectional_dwi else 'epi'
     elif unit.is_gre:
         fieldmap_type = unit.gre_suffix
-    elif unit.is_syn:
+    elif unit.is_nipreps_syn:
         fieldmap_type = 'syn'
     else:
         fieldmap_type = ''
@@ -449,7 +449,7 @@ def init_fsl_hmc_wf(
 
         return workflow
 
-    if unit.is_gre or unit.is_syn:
+    if unit.is_gre or unit.is_nipreps_syn:
         config.loggers.workflow.info(f'Computing fieldmap directly from {fieldmap_type}')
         outputnode.inputs.sdc_method = fieldmap_type
         b0_sdc_wf = init_sdc_wf(unit, unit.dwi_metadata)

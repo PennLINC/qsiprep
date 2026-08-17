@@ -22,8 +22,8 @@ import os.path as op
 from collections import defaultdict
 
 from .models import (
+    CorrectionMethod,
     DWIGrouping,
-    EstimationMethod,
     FieldmapEstimation,
     FileRecord,
     derive_output_name,
@@ -31,9 +31,9 @@ from .models import (
 
 #: Which sidecar suffixes name the GRE files of each estimation method.
 _GRE_SUFFIX = {
-    EstimationMethod.PHASEDIFF: 'phasediff',
-    EstimationMethod.PHASES: 'phase1',
-    EstimationMethod.DIRECT: 'fieldmap',
+    CorrectionMethod.PHASEDIFF: 'phasediff',
+    CorrectionMethod.PHASES: 'phase1',
+    CorrectionMethod.DIRECT: 'fieldmap',
 }
 
 
@@ -68,7 +68,7 @@ class PreprocUnit:
     estimation: FieldmapEstimation | None
 
     @property
-    def method(self) -> EstimationMethod | None:
+    def method(self) -> CorrectionMethod | None:
         return self.estimation.method if self.estimation else None
 
     @property
@@ -77,7 +77,7 @@ class PreprocUnit:
 
     @property
     def is_pepolar(self) -> bool:
-        return self.method is EstimationMethod.PEPOLAR
+        return self.method is CorrectionMethod.PEPOLAR
 
     @property
     def is_gre(self) -> bool:
@@ -87,12 +87,12 @@ class PreprocUnit:
     @property
     def using_t2w_for_sdc(self) -> bool:
         """True for fieldmap-less TORTOISE T2Wreg: register the b=0 to a T2w."""
-        return self.method is EstimationMethod.ANAT_CONTRAST
+        return self.method is CorrectionMethod.T2WREG
 
     @property
-    def is_syn(self) -> bool:
+    def is_nipreps_syn(self) -> bool:
         """True for fieldmap-less classic ANTs SyN registration (SyN-SDC)."""
-        return self.method is EstimationMethod.SYN
+        return self.method is CorrectionMethod.NIPREPS_SYN
 
     @property
     def has_scanner_measured_fieldmap(self) -> bool:
@@ -225,14 +225,14 @@ class PreprocUnit:
             info['metadata'] = dict(self.grouping.files[primary].metadata)
             return info
 
-        if self.method is EstimationMethod.ANAT_CONTRAST:
+        if self.method is CorrectionMethod.T2WREG:
             # T2Wreg is expressed downstream as fieldmap-less with t2w_sdc=True.
             return {'suffix': None}
 
-        if self.method is EstimationMethod.SYN:
+        if self.method is CorrectionMethod.NIPREPS_SYN:
             return {'suffix': 'syn'}
 
-        if self.method is EstimationMethod.SYNB0:
+        if self.method is CorrectionMethod.SYNB0:
             raise NotImplementedError(
                 f"SyNb0 estimation '{self.estimation.b0field_id}' has no legacy workflow "
                 'shape; the synthesis workflow is added with the SyNb0 integration.'

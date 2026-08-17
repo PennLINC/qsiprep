@@ -47,4 +47,4 @@ their current feature sets. These other
 |                               | QSIPrep           | Tractoflow | PreQual | MRtrix3_connectome |
 | ----------------------------- | :---------------: | :--------: | :-----: | :----------------: |
 | Automated methods boilerplate |         ✔         |     ✘      |    ✘    |         ✘          |
-| HTML Preprocessing Report     | [NiWorkflows-based](preprocessing.html#visual-reports) |     ✘      | Custom  |      EddyQuad      |
+| HTML Preprocessing Report     | {ref}`NiWorkflows-based <visual_reports>` |     ✘      | Custom  |      EddyQuad      |
