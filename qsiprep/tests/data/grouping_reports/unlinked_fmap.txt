@@ -16,7 +16,7 @@ Fieldmap estimations:
     phase encoding axes: j (bidirectional)
 
 Notes:
-  WARNING [unlinked-fmap]: sub-01_dir-PA_epi.nii.gz in fmap/ has no IntendedFor or B0FieldIdentifier linking it to a DWI series, so it will not be used. Add B0FieldIdentifier/B0FieldSource (preferred) or IntendedFor metadata to use it.
+  WARNING [unlinked-fmap]: sub-01_dir-PA_epi.nii.gz in fmap/ has no B0FieldIdentifier or IntendedFor linking it to a DWI series, so it will not be used. Add B0FieldIdentifier/B0FieldSource metadata to use it. (IntendedFor is also honored, but deprecated.)
 
 Processing preview: FSL path (TOPUP fieldmap estimation + eddy HMC/SDC)
 -----------------------------------------------------------------------

@@ -79,8 +79,9 @@ _METHOD_EXPLANATIONS = {
 _WHY_ESTIMATION = {
     Provenance.CURATED: 'You set <code>B0FieldIdentifier</code> in these sidecars '
     '&mdash; used as-is.',
-    Provenance.TRANSLATED: 'Built from <code>IntendedFor</code> in the fieldmap sidecar. '
-    'Setting <code>B0FieldIdentifier</code>/<code>B0FieldSource</code> takes precedence.',
+    Provenance.TRANSLATED: 'Built from the deprecated <code>IntendedFor</code> field in the '
+    'fieldmap sidecar. Prefer <code>B0FieldIdentifier</code>/<code>B0FieldSource</code>, '
+    'which take precedence.',
     Provenance.FORCED: 'Requested by a command-line flag.',
     Provenance.INFERRED: 'QSIPrep found scans with opposite phase encoding and paired '
     'them automatically. Set <code>B0FieldIdentifier</code>/<code>B0FieldSource</code> '
@@ -229,9 +230,9 @@ def _header(grouping: DWIGrouping) -> list[str]:
         f'<span class="chip" style="background:{fill};border-color:{stroke}">{label}</span>'
         for label, (fill, stroke) in [
             ('you curated it', _PROVENANCE_COLORS['curated']),
-            ('from IntendedFor', _PROVENANCE_COLORS['intendedfor']),
             ('command-line flag', _PROVENANCE_COLORS['cli-override']),
             ('QSIPrep guessed', _PROVENANCE_COLORS['inferred']),
+            ('from IntendedFor (deprecated)', _PROVENANCE_COLORS['intendedfor']),
         ]
     )
     return [

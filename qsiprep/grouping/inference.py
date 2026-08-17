@@ -245,9 +245,10 @@ def resolve_estimations(
                     warning(
                         'unlinked-fmap',
                         f'{", ".join(record.filename for record in epi_like)} in fmap/ has '
-                        'no IntendedFor or B0FieldIdentifier linking it to a DWI series, '
+                        'no B0FieldIdentifier or IntendedFor linking it to a DWI series, '
                         'so it will not be used. Add B0FieldIdentifier/B0FieldSource '
-                        '(preferred) or IntendedFor metadata to use it.',
+                        'metadata to use it. (IntendedFor is also honored, but '
+                        'deprecated.)',
                         tuple(record.path for record in epi_like),
                     )
                 )
