@@ -186,6 +186,14 @@ def test_uncorrected_group_has_no_fieldmap(tmp_path):
     assert all(group['fieldmap_info'] == {'suffix': None} for group in scan_groups)
 
 
+def test_syn_legacy_and_unit_shape(tmp_path):
+    """SyN units expose is_syn and render the legacy 'syn' fieldmap shape."""
+    (unit,) = _units('fieldmapless_t1w_only', tmp_path, use_nipreps_syn_sdc=True)
+    assert unit.is_syn
+    assert not unit.has_scanner_measured_fieldmap
+    assert unit.to_legacy_dict()['fieldmap_info'] == {'suffix': 'syn'}
+
+
 def test_synb0_not_implemented(tmp_path):
     """SyNb0 has no legacy shape yet; the adapter says so loudly."""
     grouping = load_scenario('fieldmapless_t1w_only', tmp_path, strict=False, use_synb0=True)

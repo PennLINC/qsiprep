@@ -1,0 +1,37 @@
+DWI grouping for sub-01
+=======================
+
+Output "sub-01_dir-AP" (MultipartID auto+concat+0 [inferred]): 1 series
+  Distortion group sub-01_dir-AP (PE j-, TRT 0.05s):
+    - sub-01_dir-AP_dwi.nii.gz
+    corrected by: auto+syn [cli-override]
+
+Fieldmap estimations:
+  auto+syn [cli-override]: fieldmap-less SyN
+    - sub-01_T1w.nii.gz
+
+Processing preview: FSL path (TOPUP fieldmap estimation + eddy HMC/SDC)
+-----------------------------------------------------------------------
+
+Output "sub-01_dir-AP" (1 single series):
+  1. The series is denoised.
+  2. eddy corrects head motion and eddy currents; a standalone fieldmap-less SyN warp (constrained ANTs registration of the T1w to a fieldmap atlas: sub-01_T1w.nii.gz) is applied to unwarp the results.
+  3. The corrected series is written as one output file.
+
+Processing preview: TORTOISE path (DIFFPREP HMC + DRBUDDI SDC)
+--------------------------------------------------------------
+
+Output "sub-01_dir-AP" (1 single series):
+  1. The series is denoised.
+  2. DIFFPREP corrects head motion and eddy currents.
+  3. A standalone fieldmap-less SyN warp is estimated by a constrained ANTs registration of the T1w (sub-01_T1w.nii.gz) to a fieldmap atlas, and applied to unwarp the DIFFPREP output.
+  4. The corrected series is written as one output file.
+
+Processing preview: Two-stage path (TOPUP + eddy, then DRBUDDI or T2Wreg refinement)
+------------------------------------------------------------------------------------
+
+Output "sub-01_dir-AP" (1 single series):
+  1. The series is denoised.
+  2. Without a PEPOLAR fieldmap the DRBUDDI second stage adds nothing: processing follows the FSL path with a fieldmap-less SyN warp.
+  3. The corrected series is written as one output file.
+  !! WARNING [mixed-non-pepolar]: Estimation 'auto+syn' is not PEPOLAR; the DRBUDDI second stage only refines PEPOLAR corrections, so 'sub-01_dir-AP' will get single-stage correction.

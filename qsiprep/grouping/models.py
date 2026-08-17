@@ -64,6 +64,7 @@ class EstimationMethod(enum.StrEnum):
     PHASES = 'two_phases'  # phase1 + phase2 + magnitude(s)
     SYNB0 = 'synb0'  # fieldmap-less: synthetic undistorted b=0 from the T1w
     ANAT_CONTRAST = 'anat_reg'  # fieldmap-less: b=0 registration to a T2w (T2Wreg)
+    SYN = 'syn'  # fieldmap-less: ANTs SyN registration to a template (classic)
 
 
 @dataclasses.dataclass(frozen=True)

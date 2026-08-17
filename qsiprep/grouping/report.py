@@ -33,6 +33,7 @@ _METHOD_LABELS = {
     EstimationMethod.PHASES: 'GRE two-phase',
     EstimationMethod.SYNB0: 'SyNb0 synthetic b=0',
     EstimationMethod.ANAT_CONTRAST: 'T2w registration (T2Wreg)',
+    EstimationMethod.SYN: 'fieldmap-less SyN',
 }
 
 
@@ -205,10 +206,11 @@ class MethodGroups(NamedTuple):
     gre: list[str]
     synb0: list[str]
     anat: list[str]
+    syn: list[str]
 
 
 def _ids_by_kind(grouping, corrected) -> MethodGroups:
-    kinds = MethodGroups([], [], [], [])
+    kinds = MethodGroups([], [], [], [], [])
     for b0field_id in sorted(corrected):
         method = grouping.estimations[b0field_id].method
         if method is EstimationMethod.PEPOLAR:
@@ -217,6 +219,8 @@ def _ids_by_kind(grouping, corrected) -> MethodGroups:
             kinds.synb0.append(b0field_id)
         elif method is EstimationMethod.ANAT_CONTRAST:
             kinds.anat.append(b0field_id)
+        elif method is EstimationMethod.SYN:
+            kinds.syn.append(b0field_id)
         else:
             kinds.gre.append(b0field_id)
     return kinds
@@ -350,6 +354,16 @@ def _describe_fsl(lines, grouping, multipart_id, corrected):
             'path implements: distortion is NOT corrected on this path.'
         )
         step += 1
+    elif kinds.syn:
+        for b0field_id in kinds.syn:
+            estimation = grouping.estimations[b0field_id]
+            names = ', '.join(_basename(path) for path in estimation.sources)
+            lines.append(
+                f'  {step}. eddy corrects head motion and eddy currents; a standalone '
+                'fieldmap-less SyN warp (constrained ANTs registration of the T1w to a '
+                f'fieldmap atlas: {names}) is applied to unwarp the results.'
+            )
+            step += 1
     else:
         lines.append(
             f'  {step}. eddy corrects head motion and eddy currents. ' + _no_sdc_sentence(grouping)
@@ -421,6 +435,16 @@ def _describe_tortoise(lines, grouping, multipart_id, corrected):
                 f'  {step}. A fieldmap is computed from the '
                 f'{_METHOD_LABELS[estimation.method]} acquisition and applied to '
                 'unwarp the DIFFPREP output.'
+            )
+            step += 1
+    elif kinds.syn:
+        for b0field_id in kinds.syn:
+            estimation = grouping.estimations[b0field_id]
+            t1w_names = ', '.join(_basename(path) for path in estimation.sources)
+            lines.append(
+                f'  {step}. A standalone fieldmap-less SyN warp is estimated by a '
+                f'constrained ANTs registration of the T1w ({t1w_names}) to a fieldmap '
+                'atlas, and applied to unwarp the DIFFPREP output.'
             )
             step += 1
     else:
@@ -512,6 +536,12 @@ def _describe_mixed(lines, grouping, multipart_id, corrected):
         lines.append(
             f'  {step}. Without a PEPOLAR fieldmap the DRBUDDI second stage adds '
             'nothing: processing follows the FSL path (fieldmap-based correction).'
+        )
+        step += 1
+    elif kinds.syn:
+        lines.append(
+            f'  {step}. Without a PEPOLAR fieldmap the DRBUDDI second stage adds '
+            'nothing: processing follows the FSL path with a fieldmap-less SyN warp.'
         )
         step += 1
     else:

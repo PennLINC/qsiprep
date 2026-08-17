@@ -91,8 +91,10 @@ def build_dwi_grouping(
     ignore_fieldmaps=False,
     ignore_shims=False,
     ignore_fov=False,
+    ignore_sdc=False,
     force_t2wreg=False,
     use_synb0=False,
+    use_nipreps_syn_sdc=False,
     strict=True,
 ):
     """Group one subject's DWI scans.
@@ -119,6 +121,11 @@ def build_dwi_grouping(
         Downgrade the differing-orientation field-of-view error to a warning
         and proceed, accepting misapplied distortion corrections. Grid-size
         mismatches remain errors: they cannot be stacked at all.
+    ignore_sdc : bool
+        Disable susceptibility distortion correction entirely: no fieldmaps, no
+        reverse-PE heuristic, and no fieldmap-less fallback. Every series is
+        left uncorrected but is still grouped and concatenated for HMC. Stronger
+        than ``ignore_fieldmaps`` (which only skips ``fmap/``).
     force_t2wreg : bool
         Correct every DWI series by registering its b=0 to the subject's T2w
         (TORTOISE T2Wreg), overriding any fieldmaps. Errors if no T2w exists.
@@ -126,6 +133,12 @@ def build_dwi_grouping(
         Give series that have no fieldmap a SyNb0 synthetic-b=0 estimation
         synthesized from the T1w. Never overrides a real fieldmap. Errors if
         no T1w exists or a target series lacks PhaseEncodingDirection.
+    use_nipreps_syn_sdc : bool
+        Correct series that have no fieldmap with the standalone niworkflows
+        SyN-SDC: a constrained ANTs SyN registration of an inverted T1w (or a
+        synthetic b=0) to a fieldmap atlas. Never overrides a real fieldmap and
+        is never combined with SyNb0 (SyNb0 wins if both are set). Errors if no
+        T1w exists or a target series lacks PhaseEncodingDirection.
     strict : bool
         Raise :class:`~.validation.GroupingError` if any error-severity issue
         is found. With ``strict=False`` the grouping is returned with its
@@ -145,8 +158,10 @@ def build_dwi_grouping(
         separate_all_dwis=separate_all_dwis,
         ignore_shims=ignore_shims,
         ignore_fov=ignore_fov,
+        ignore_sdc=ignore_sdc,
         force_t2wreg=force_t2wreg,
         use_synb0=use_synb0,
+        use_nipreps_syn_sdc=use_nipreps_syn_sdc,
         extra_issues=index_issues,
     )
     if strict:

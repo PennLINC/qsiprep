@@ -434,12 +434,14 @@ def _build_parser(**kwargs):
         action='store',
         nargs='+',
         default=[],
-        choices=['fieldmaps', 't2w', 'phase'],
+        choices=['fieldmaps', 't2w', 'phase', 'sdc'],
         help=(
             'Ignore selected aspects of the input dataset to disable corresponding '
             'parts of the workflow (a space delimited list). '
-            '"fieldmaps" will completely disable susceptibility distortion correction, '
-            'whether using field maps or reverse phase-encoded dMRI runs.'
+            '"fieldmaps" skips the fmap/ directory, but reverse phase-encoded dMRI '
+            'runs still drive susceptibility distortion correction. "sdc" disables '
+            'susceptibility distortion correction entirely (field maps, reverse-PE '
+            'runs, and fieldmap-less methods all off).'
         ),
     )
     g_conf.add_argument(

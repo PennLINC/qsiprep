@@ -191,6 +191,13 @@ def test_drbuddi_rpe(data_dir, output_dir, working_dir):
         '--b0-motion-corr-to=first',
         '--b1-biascorrect-stage=none',
         '--pepolar-method=DRBUDDI',
+        # The dataset ships epi fieldmaps whose IntendedFor points at the DWIs,
+        # so the modern grouping would correct each DWI with its own epi fmap
+        # (two outputs). This test exercises the blip-up/blip-down DWI *series*
+        # through DRBUDDI, so ignore fmap/ and let the reverse-PE DWI pair drive
+        # SDC into a single concatenated output.
+        '--ignore',
+        'fieldmaps',
         f'--eddy-config={eddy_config}',
         '--output-resolution=5',
     ]
@@ -587,7 +594,13 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
         '--sloppy',
         f'--eddy-config={eddy_config}',
         '--denoise-method=none',
-        '--force-syn',
+        # The dataset ships a PA epi fieldmap (IntendedFor the DWI), so the
+        # modern grouping would correct via TOPUP. This test exercises
+        # fieldmap-less SyN-SDC instead: ignore fmap/ and request SyN. (Replaces
+        # the removed data-dropping --force-syn, which forced SyN over the fmap.)
+        '--ignore',
+        'fieldmaps',
+        '--use-syn-sdc',
         '--b1-biascorrect-stage=final',
         '--output-resolution=5',
     ]

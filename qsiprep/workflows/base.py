@@ -377,6 +377,8 @@ to workflows in *QSIPrep*'s documentation]\
         ignore_fieldmaps='fieldmaps' in config.workflow.ignore,
         ignore_shims='shims' in config.workflow.ignore,
         ignore_fov='fov' in config.workflow.ignore,
+        ignore_sdc='sdc' in config.workflow.ignore,
+        use_nipreps_syn_sdc=bool(config.workflow.use_syn_sdc),
         strict=False,
     )
     grouping_errors = grouping.errors + [

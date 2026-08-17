@@ -90,6 +90,11 @@ class PreprocUnit:
         return self.method is EstimationMethod.ANAT_CONTRAST
 
     @property
+    def is_syn(self) -> bool:
+        """True for fieldmap-less classic ANTs SyN registration (SyN-SDC)."""
+        return self.method is EstimationMethod.SYN
+
+    @property
     def has_scanner_measured_fieldmap(self) -> bool:
         """True when a field the scanner measured (PEPOLAR or GRE) corrects these series.
 
@@ -223,6 +228,9 @@ class PreprocUnit:
         if self.method is EstimationMethod.ANAT_CONTRAST:
             # T2Wreg is expressed downstream as fieldmap-less with t2w_sdc=True.
             return {'suffix': None}
+
+        if self.method is EstimationMethod.SYN:
+            return {'suffix': 'syn'}
 
         if self.method is EstimationMethod.SYNB0:
             raise NotImplementedError(

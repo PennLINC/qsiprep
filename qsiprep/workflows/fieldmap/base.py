@@ -117,7 +117,8 @@ def init_sdc_wf(unit, dwi_meta):
 
     """
     omp_nthreads = config.nipype.omp_nthreads
-    workflow = Workflow(name='sdc_wf' if unit.has_scanner_measured_fieldmap else 'sdc_bypass_wf')
+    does_sdc = unit.has_scanner_measured_fieldmap or unit.is_syn
+    workflow = Workflow(name='sdc_wf' if does_sdc else 'sdc_bypass_wf')
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
@@ -139,9 +140,9 @@ def init_sdc_wf(unit, dwi_meta):
         name='outputnode',
     )
 
-    # No scanner-measured fieldmap - forward inputs to outputs. (The fieldmap-less
-    # T2Wreg and SyNb0 cases are handled by the TORTOISE backend, not here.)
-    if not unit.has_scanner_measured_fieldmap:
+    # No SDC to do here - forward inputs to outputs. (The fieldmap-less T2Wreg and
+    # SyNb0 cases are handled by the TORTOISE backend; classic SyN is handled below.)
+    if not does_sdc:
         workflow.__postdesc__ = 'No susceptibility distortion correction was performed.'
         outputnode.inputs.method = 'None'
         workflow.connect([
@@ -250,6 +251,22 @@ co-registration with the anatomical reference.
             ]),
             (sdc_unwarp_wf, outputnode, [('outputnode.out_hz', 'fieldmap_hz')]),
         ])  # fmt:skip
+
+    # FIELDMAP-less classic SyN path
+    if unit.is_syn:
+        from .syn import init_syn_sdc_wf
+
+        syn_sdc_wf = init_syn_sdc_wf(bold_pe=dwi_meta.get('PhaseEncodingDirection', None))
+        outputnode.inputs.method = 'FLB ("fieldmap-less", SyN-based)'
+        workflow.connect([
+            (inputnode, syn_sdc_wf, [
+                ('t1_brain', 'inputnode.t1_brain'),
+                ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
+                ('b0_ref', 'inputnode.bold_ref'),
+                ('template', 'inputnode.template'),
+            ]),
+        ])  # fmt:skip
+        sdc_unwarp_wf = syn_sdc_wf
 
     workflow.connect([
         (sdc_unwarp_wf, outputnode, [

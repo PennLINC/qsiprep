@@ -44,6 +44,7 @@ def _doing_t2wreg(unit, t2w_sdc):
     return (
         config.workflow.hmc_model == 'tortoise'
         and not unit.has_scanner_measured_fieldmap
+        and not unit.is_syn
         and bool(t2w_sdc)
     )
 
@@ -323,7 +324,7 @@ def init_dwi_preproc_wf(
     # PEPOLAR (epi, rpe series) will produce potentially much more detailed reports
     doing_topup = unit.is_pepolar and 'topup' in config.workflow.pepolar_method.lower()
     doing_t2wreg = _doing_t2wreg(unit, t2w_sdc)
-    if unit.is_gre or doing_topup or doing_t2wreg:
+    if unit.is_gre or unit.is_syn or doing_topup or doing_t2wreg:
         fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
         ds_report_sdc = pe.Node(
             DerivativesDataSink(

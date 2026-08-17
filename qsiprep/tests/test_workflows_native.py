@@ -190,6 +190,22 @@ def test_init_sdc_wf_phasediff_builds_without_a_layout(monkeypatch):
     assert 'FMB' in wf.get_node('outputnode').inputs.method
 
 
+def test_init_sdc_wf_dispatches_classic_syn():
+    """A SyN unit is not bypassed: init_sdc_wf builds the classic SyN sub-workflow."""
+    _cfg(layout=None)
+    from qsiprep.workflows.fieldmap import init_sdc_wf
+
+    unit = make_preproc_unit(
+        ['/data/sub-01_dwi.nii.gz'],
+        method=EstimationMethod.SYN,
+        pe_dir='j',
+        estimation_sources=['/data/sub-01_T1w.nii.gz'],
+    )
+    wf = init_sdc_wf(unit, dwi_meta={'PhaseEncodingDirection': 'j'})
+    assert wf.name == 'sdc_wf'  # not the bypass workflow
+    assert any('syn' in node.name.lower() for node in wf._get_all_nodes())
+
+
 def test_init_sdc_wf_bipolar_two_phase_bypasses(monkeypatch):
     """A two-phase GRE tagged Bipolar bypasses SDC (unsupported), off the model."""
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')  # phdiff only checks the env is set

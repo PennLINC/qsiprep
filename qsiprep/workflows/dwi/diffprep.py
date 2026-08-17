@@ -285,7 +285,8 @@ def init_diffprep_hmc_wf(
     # structural is available: DIFFPREP runs the ``--epi T2Wreg`` stage in the
     # same TORTOISEProcess call and bakes the correction into its output.
     is_fieldmapless = not unit.has_scanner_measured_fieldmap
-    use_t2wreg = is_fieldmapless and bool(t2w_sdc)
+    # Classic SyN is fieldmap-less too, but has its own path (init_sdc_wf below).
+    use_t2wreg = is_fieldmapless and bool(t2w_sdc) and not unit.is_syn
     epi_mode = 'T2Wreg' if use_t2wreg else 'off'
 
     # Load any user-supplied DIFFPREP config (or our defaults)
@@ -586,9 +587,10 @@ def init_diffprep_hmc_wf(
         ])  # fmt:skip
         return workflow
 
-    # 3. GRE / phase fieldmaps -> qsiprep's init_sdc_wf. The warp is applied
-    #    downstream (to_dwi_ref_warps), decoupled from HMC.
-    if unit.is_gre:
+    # 3. GRE / phase fieldmaps, or classic fieldmap-less SyN -> qsiprep's
+    #    init_sdc_wf. The warp is applied downstream (to_dwi_ref_warps),
+    #    decoupled from HMC.
+    if unit.is_gre or unit.is_syn:
         b0_sdc_wf = init_sdc_wf(unit, unit.dwi_metadata)
         b0_sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
 

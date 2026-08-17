@@ -430,6 +430,63 @@ def test_fieldmapless_t1w_only_synb0(tmp_path):
         assert not check_backend(grouping, backend)
 
 
+def test_fieldmapless_t1w_only_syn(tmp_path):
+    """use_nipreps_syn_sdc corrects the same data via a classic ANTs SyN registration."""
+    grouping = load_scenario('fieldmapless_t1w_only', tmp_path, use_nipreps_syn_sdc=True)
+
+    assert list(grouping.estimations) == ['auto+syn']
+    estimation = grouping.estimations['auto+syn']
+    assert estimation.method is EstimationMethod.SYN
+    assert estimation.provenance is Provenance.FORCED
+    assert basenames(estimation.sources) == ['sub-01_T1w.nii.gz']
+
+    dwi_path = grouping.dwi_files[0]
+    assert grouping.application[dwi_path] == 'auto+syn'
+
+    # SyN routes through init_sdc_wf on every backend: feasible everywhere (the
+    # mixed path only warns that DRBUDDI has nothing to refine).
+    for backend in ('fsl', 'tortoise', 'mixed'):
+        assert not [i for i in check_backend(grouping, backend) if i.severity == 'error']
+
+
+def test_syn_never_overrides_a_real_fieldmap(tmp_path):
+    """use_nipreps_syn_sdc is a fallback: a series with a fieldmap keeps it."""
+    grouping = load_scenario('gre_phasediff', tmp_path, use_nipreps_syn_sdc=True)
+
+    methods = {est.method for est in grouping.estimations.values()}
+    assert EstimationMethod.SYN not in methods
+    assert EstimationMethod.PHASEDIFF in methods
+
+
+def test_ignore_sdc_disables_all_correction(tmp_path):
+    """``ignore_sdc`` leaves every series uncorrected -- fieldmaps AND reverse-PE.
+
+    ``mixed_trt`` is an opposite-PE pair that normally gets a PEPOLAR estimation
+    from the reverse-PE heuristic, so a lack of estimations proves the heuristic
+    (not just fmap/ indexing) is off. Opposite-PE series stay separate outputs,
+    since merging them without SDC would stack opposing distortions.
+    """
+    grouping = load_scenario('mixed_trt', tmp_path, ignore_sdc=True)
+
+    assert not grouping.estimations
+    assert set(grouping.application.values()) == {None}
+    output_names = sorted(c.output_name for c in grouping.concatenation_groups.values())
+    assert output_names == ['sub-01_dir-AP', 'sub-01_dir-PA']
+
+
+def test_syn_missing_pedir(tmp_path):
+    """SyN on a series without PhaseEncodingDirection is a hard error."""
+    with pytest.raises(GroupingError, match='syn-missing-pedir'):
+        load_scenario('missing_pedir', tmp_path, use_nipreps_syn_sdc=True)
+
+    grouping = load_scenario(
+        'missing_pedir', tmp_path / 'nonstrict', use_nipreps_syn_sdc=True, strict=False
+    )
+    assert 'syn-missing-pedir' in issue_codes(grouping.errors)
+    # The series that does have PE info still gets its SyN estimation.
+    assert 'auto+syn' in grouping.estimations
+
+
 def test_t2w_hcp_pepolar_wins(tmp_path):
     """A real PEPOLAR pair always beats the fieldmap-less fallback."""
     grouping = load_scenario('t2w_hcp', tmp_path)

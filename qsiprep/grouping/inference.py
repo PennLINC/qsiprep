@@ -42,6 +42,7 @@ _METHOD_RANK = {
     EstimationMethod.PHASES: 3,
     EstimationMethod.SYNB0: 4,
     EstimationMethod.ANAT_CONTRAST: 5,
+    EstimationMethod.SYN: 6,
 }
 _PROVENANCE_RANK = {
     Provenance.CURATED: 0,
@@ -475,20 +476,31 @@ def resolve_fieldmapless(
     candidates: dict[str, tuple[str, ...]],
     force_t2wreg: bool = False,
     use_synb0: bool = False,
+    use_nipreps_syn_sdc: bool = False,
 ):
     """Apply the fieldmap-less ladder to the application map (in place).
 
-    Order: ``force_t2wreg`` overrides every DWI's fieldmap with a T2w
-    registration (T2Wreg) estimation; ``use_synb0`` gives still-uncorrected
-    series a SyNb0 synthetic-b=0 estimation; finally, uncorrected series in a
-    subject with a T2w fall back to an inferred T2Wreg estimation (today's
-    automatic TORTOISE behavior, made explicit).
+    The fieldmap-less methods are mutually exclusive per run - each corrects a
+    series entirely on its own, never layered together:
+
+    - ``force_t2wreg`` overrides every DWI's fieldmap with a T2w registration
+      (T2Wreg) estimation and overrides the other two if they were also asked
+      for.
+    - ``use_nipreps_syn_sdc`` is the standalone niworkflows SyN-SDC: a
+      constrained ANTs SyN registration of an inverted T1w (or a synthetic b=0)
+      to a fieldmap atlas. It corrects every still-uncorrected series and is
+      never combined with SyNb0 (SyNb0 wins if both are requested).
+    - ``use_synb0`` gives still-uncorrected series a SyNb0 synthetic-b=0
+      estimation.
+    - Finally, uncorrected series in a subject with a T2w fall back to an
+      inferred T2Wreg estimation (today's automatic TORTOISE behavior, made
+      explicit).
 
     Anatomical estimations are created per session, with the anatomical
     image(s) as their only sources - the DWIs they correct are targets, since
     each output registers its own b=0. A DWI without a PhaseEncodingDirection
     cannot be corrected along an axis: it is skipped by the fallback and is a
-    hard error when SyNb0 was explicitly requested.
+    hard error when SyNb0 or SyN-SDC was explicitly requested.
     """
     issues: list[GroupingIssue] = []
     dwi_records = {record.path: record for record in records if record.is_dwi}
@@ -514,12 +526,12 @@ def resolve_fieldmapless(
         by_session[record.session].append(path)
 
     if force_t2wreg:
-        if use_synb0:
+        if use_synb0 or use_nipreps_syn_sdc:
             issues.append(
                 warning(
-                    'synb0-overridden',
-                    'Both T2Wreg and SyNb0 were requested; forcing T2Wreg wins '
-                    'and SyNb0 is not used.',
+                    'fieldmapless-overridden',
+                    'Forcing T2Wreg overrides the other fieldmap-less methods; '
+                    'SyNb0 and SyN-SDC are not used.',
                 )
             )
         for session, paths in sorted(by_session.items(), key=lambda kv: str(kv[0])):
@@ -535,6 +547,18 @@ def resolve_fieldmapless(
                     )
                 )
         return issues
+
+    # SyN-SDC is a standalone fieldmap-less workflow; it is never layered with
+    # SyNb0. If both are requested, SyNb0 wins and SyN-SDC is dropped.
+    if use_synb0 and use_nipreps_syn_sdc:
+        issues.append(
+            warning(
+                'syn-sdc-standalone',
+                'SyN-SDC is a standalone fieldmap-less method and cannot be combined '
+                'with SyNb0; SyNb0 is used and SyN-SDC is not.',
+            )
+        )
+        use_nipreps_syn_sdc = False
 
     if use_synb0:
         for session, paths in sorted(by_session.items(), key=lambda kv: str(kv[0])):
@@ -563,6 +587,37 @@ def resolve_fieldmapless(
                         'synb0-requires-t1w',
                         'SyNb0 was requested, but this subject has no T1w image to '
                         'synthesize an undistorted b=0 from.',
+                        tuple(correctable),
+                    )
+                )
+
+    if use_nipreps_syn_sdc:
+        for session, paths in sorted(by_session.items(), key=lambda kv: str(kv[0])):
+            uncorrected = [path for path in paths if application[path] is None]
+            if not uncorrected:
+                continue
+            missing_pedir = [
+                path for path in uncorrected if dwi_records[path].signature.pe_dir is None
+            ]
+            if missing_pedir:
+                issues.append(
+                    error(
+                        'syn-missing-pedir',
+                        'SyN-SDC was requested, but these DWI series have no '
+                        'PhaseEncodingDirection, which the fieldmap-less SyN correction '
+                        'requires.',
+                        tuple(missing_pedir),
+                    )
+                )
+            correctable = [path for path in uncorrected if path not in missing_pedir]
+            if correctable and not _apply(
+                correctable, session, EstimationMethod.SYN, 'syn', 'T1w', Provenance.FORCED
+            ):
+                issues.append(
+                    error(
+                        'syn-requires-t1w',
+                        'SyN-SDC was requested, but this subject has no T1w image to '
+                        'register against a template.',
                         tuple(correctable),
                     )
                 )
@@ -797,53 +852,66 @@ def build_grouping(
     separate_all_dwis: bool = False,
     ignore_shims: bool = False,
     ignore_fov: bool = False,
+    ignore_sdc: bool = False,
     force_t2wreg: bool = False,
     use_synb0: bool = False,
+    use_nipreps_syn_sdc: bool = False,
     extra_issues: list[GroupingIssue] | None = None,
 ) -> DWIGrouping:
     """Assemble the full :class:`~.models.DWIGrouping` from indexed records."""
     issues = list(extra_issues or [])
 
-    estimations, targets, estimation_issues = resolve_estimations(records, ignore_shims)
-    issues.extend(estimation_issues)
+    if ignore_sdc:
+        # No susceptibility distortion correction at all: no fieldmaps, no
+        # reverse-PE heuristic, no fieldmap-less fallback. Every series is left
+        # uncorrected, but still grouped and concatenated for head-motion
+        # correction.
+        estimations = {}
+        application = {record.path: None for record in records if record.is_dwi}
+        app_provenance = {}
+        candidates = {}
+    else:
+        estimations, targets, estimation_issues = resolve_estimations(records, ignore_shims)
+        issues.extend(estimation_issues)
 
-    application, app_provenance, candidates, application_issues = resolve_application(
-        records, estimations, targets
-    )
-    issues.extend(application_issues)
-
-    issues.extend(
-        resolve_fieldmapless(
-            records,
-            estimations,
-            application,
-            app_provenance,
-            candidates,
-            force_t2wreg=force_t2wreg,
-            use_synb0=use_synb0,
+        application, app_provenance, candidates, application_issues = resolve_application(
+            records, estimations, targets
         )
-    )
+        issues.extend(application_issues)
 
-    # Drop heuristic estimations nothing references. Ones that lost an
-    # application contest survive (so reports can show what "(also eligible)"
-    # ids refer to); curated and translated ones are always kept and flagged,
-    # since a person asked for them.
-    applied_ids = {b0field_id for b0field_id in application.values() if b0field_id}
-    candidate_ids = {b0field_id for ids in candidates.values() for b0field_id in ids}
-    for b0field_id in sorted(set(estimations) - applied_ids):
-        estimation = estimations[b0field_id]
-        if estimation.provenance is Provenance.INFERRED:
-            if b0field_id not in candidate_ids:
-                del estimations[b0field_id]
-        else:
-            issues.append(
-                warning(
-                    'estimation-unused',
-                    f"Fieldmap estimation '{b0field_id}' "
-                    f'{estimation.provenance.tag()} does not correct any DWI series.',
-                    estimation.sources,
-                )
+        issues.extend(
+            resolve_fieldmapless(
+                records,
+                estimations,
+                application,
+                app_provenance,
+                candidates,
+                force_t2wreg=force_t2wreg,
+                use_synb0=use_synb0,
+                use_nipreps_syn_sdc=use_nipreps_syn_sdc,
             )
+        )
+
+        # Drop heuristic estimations nothing references. Ones that lost an
+        # application contest survive (so reports can show what "(also eligible)"
+        # ids refer to); curated and translated ones are always kept and flagged,
+        # since a person asked for them.
+        applied_ids = {b0field_id for b0field_id in application.values() if b0field_id}
+        candidate_ids = {b0field_id for ids in candidates.values() for b0field_id in ids}
+        for b0field_id in sorted(set(estimations) - applied_ids):
+            estimation = estimations[b0field_id]
+            if estimation.provenance is Provenance.INFERRED:
+                if b0field_id not in candidate_ids:
+                    del estimations[b0field_id]
+            else:
+                issues.append(
+                    warning(
+                        'estimation-unused',
+                        f"Fieldmap estimation '{b0field_id}' "
+                        f'{estimation.provenance.tag()} does not correct any DWI series.',
+                        estimation.sources,
+                    )
+                )
 
     distortion_groups = build_distortion_groups(records, application, separate_all_dwis)
 
