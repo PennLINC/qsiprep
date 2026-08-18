@@ -57,9 +57,12 @@ extensions = [
     'sphinxcontrib.bibtex',
 ]
 
-# Notebooks are committed with their outputs; do not re-execute during the
-# docs build (the grouping tutorial would need qsiprep importable).
-nb_execution_mode = 'off'
+# Notebooks are MyST markdown (clean git diffs, no committed outputs) and
+# are executed during the docs build, which doubles as a regression test
+# for their demos. 'cache' skips re-execution when a notebook is unchanged.
+nb_execution_mode = 'cache'
+nb_execution_raise_on_error = True
+nb_execution_timeout = 300
 
 # Mock modules in autodoc:
 autodoc_mock_imports = [
