@@ -19,14 +19,12 @@ from __future__ import annotations
 import dataclasses
 import math
 import os.path as op
-from collections import defaultdict
 
 from .models import (
     CorrectionMethod,
     DWIGrouping,
     FieldmapEstimation,
     FileRecord,
-    derive_output_name,
 )
 
 #: Which sidecar suffixes name the GRE files of each estimation method.
@@ -242,35 +240,34 @@ class PreprocUnit:
 
 
 def to_preproc_units(grouping: DWIGrouping) -> list[PreprocUnit]:
-    """Partition a grouping into the per-run :class:`PreprocUnit` list."""
+    """One :class:`PreprocUnit` per correction unit: each is one HMC+SDC run."""
     units = []
-    for concat in sorted(grouping.concatenation_groups.values(), key=lambda c: c.output_name):
-        by_estimation = defaultdict(list)
-        for dgroup in grouping.distortion_groups_in(concat.multipart_id):
-            by_estimation[dgroup.b0field_source].append(dgroup)
-
-        for b0field_id, dgroups in sorted(by_estimation.items(), key=lambda item: item[0] or ''):
-            if b0field_id is None:
-                for dgroup in dgroups:
-                    units.append(
-                        PreprocUnit(
-                            grouping=grouping,
-                            output_name=derive_output_name(dgroup.dwi_files),
-                            dwi_files=tuple(dgroup.dwi_files),
-                            estimation=None,
-                        )
-                    )
-            else:
-                member_dwi = sorted({path for dgroup in dgroups for path in dgroup.dwi_files})
-                units.append(
-                    PreprocUnit(
-                        grouping=grouping,
-                        output_name=derive_output_name(member_dwi),
-                        dwi_files=tuple(member_dwi),
-                        estimation=grouping.estimations[b0field_id],
-                    )
-                )
+    for unit_key in sorted(grouping.correction_units):
+        unit = grouping.correction_units[unit_key]
+        estimation = grouping.estimations[unit.b0field_source] if unit.b0field_source else None
+        units.append(
+            PreprocUnit(
+                grouping=grouping,
+                output_name=unit.key,
+                dwi_files=unit.dwi_files,
+                estimation=estimation,
+            )
+        )
     return units
+
+
+def concatenation_scheme(grouping: DWIGrouping) -> dict[str, str]:
+    """Correction-unit key -> final output name, from the model's packaging.
+
+    Identity for outputs with a single unit; a final output spanning several
+    units maps each unit's preprocessed result to the shared final name, to
+    be combined by the distortion-group-merge workflow.
+    """
+    return {
+        unit_key: concat.output_name
+        for concat in grouping.concatenation_groups.values()
+        for unit_key in concat.correction_units
+    }
 
 
 def _metadata_values_agree(first, second) -> bool:
@@ -321,9 +318,8 @@ def to_legacy_scan_groups(grouping: DWIGrouping) -> tuple[list[dict], dict]:
 
     ``scan_groups`` matches the contract of the retired
     :func:`qsiprep.utils.grouping.group_dwi_scans`; ``concatenation_scheme``
-    maps every scan group's name to itself (post-HMC concatenation of
-    distinct distortion groups is left to a later change).
+    maps each scan group (one per correction unit) to the final output its
+    corrected result is combined into.
     """
     scan_groups = [unit.to_legacy_dict() for unit in to_preproc_units(grouping)]
-    names = [group['concatenated_bids_name'] for group in scan_groups]
-    return scan_groups, {name: name for name in names}
+    return scan_groups, concatenation_scheme(grouping)

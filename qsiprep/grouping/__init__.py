@@ -39,6 +39,7 @@ The cost is that a new :class:`~.models.CorrectionMethod` touches five places
 from .adapters import (
     PreprocUnit,
     backend_for_config,
+    concatenation_scheme,
     to_legacy_scan_groups,
     to_preproc_units,
     unit_to_sidecar,
@@ -75,6 +76,7 @@ __all__ = [
     'backend_for_config',
     'build_dwi_grouping',
     'check_backend',
+    'concatenation_scheme',
     'describe_processing',
     'full_report',
     'index_subject',

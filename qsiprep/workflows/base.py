@@ -52,6 +52,9 @@ from ..grouping import (
     report_text,
     to_preproc_units,
 )
+from ..grouping import (
+    concatenation_scheme as derive_concatenation_scheme,
+)
 from ..interfaces import (
     AboutSummary,
     BIDSDataGrabber,
@@ -379,6 +382,7 @@ to workflows in *QSIPrep*'s documentation]\
         ignore_fov='fov' in config.workflow.ignore,
         ignore_sdc='sdc' in config.workflow.ignore,
         use_nipreps_syn_sdc=bool(config.workflow.use_syn_sdc),
+        distortion_group_merge=config.workflow.distortion_group_merge,
         strict=False,
     )
     grouping_errors = grouping.errors + [
@@ -395,11 +399,10 @@ to workflows in *QSIPrep*'s documentation]\
             f'unresolvable problem(s):\n{rendered}'
         )
 
-    # Each PreprocUnit is one HMC+SDC run. concatenation_scheme maps the outputs
-    # to their final concatenation group (identity until post-HMC concatenation
-    # of distinct distortion groups is wired up).
+    # Each PreprocUnit is one HMC+SDC run. concatenation_scheme maps each
+    # unit's preprocessed result to the final output it is combined into.
     preproc_units = to_preproc_units(grouping)
-    concatenation_scheme = {unit.output_name: unit.output_name for unit in preproc_units}
+    concatenation_scheme = derive_concatenation_scheme(grouping)
 
     # If a merge is happening at the end, make sure
     if merging_distortion_groups:

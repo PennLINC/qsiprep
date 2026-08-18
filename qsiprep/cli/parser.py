@@ -614,14 +614,14 @@ def _build_parser(**kwargs):
         '--distortion-group-merge',
         action='store',
         choices=['concat', 'average', 'none'],
-        default='none',
+        default='concat',
         help="""\
-How to combine images across distorted groups.
- - concat: append images in the 4th dimension
+How to combine the corrected results of an output's correction units.
+ - concat: Default. Append images in the 4th dimension
  - average: if a whole sequence was duplicated in both PE
             directions, average the corrected images of the same
             q-space coordinate
- - none: Default. Keep distorted groups separate
+ - none: keep each correction unit as its own output
 """,
     )
     g_conf.add_argument(

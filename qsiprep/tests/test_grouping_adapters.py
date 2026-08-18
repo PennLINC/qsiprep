@@ -272,3 +272,20 @@ def test_sidecar_overrides_carry_pe_and_readout(tmp_path):
     for spec in overrides.values():
         assert spec['PhaseEncodingDirection'] in ('j', 'j-')
         assert 'TotalReadoutTime' in spec
+
+
+def test_concatenation_scheme_multi_unit(tmp_path):
+    """Two corrected units in one final output map to the shared final name."""
+
+    scan_groups, scheme = _adapt('two_gre_fmaps', tmp_path)
+    assert scheme == {
+        'sub-01_dir-AP_run-1': 'sub-01_dir-AP',
+        'sub-01_dir-AP_run-2': 'sub-01_dir-AP',
+    }
+    assert {group['concatenated_bids_name'] for group in scan_groups} == set(scheme)
+
+
+def test_concatenation_scheme_identity_for_single_unit(tmp_path):
+    """A single-unit output maps to itself."""
+    _, scheme = _adapt('hcp_style', tmp_path)
+    assert scheme == {'sub-01': 'sub-01'}
