@@ -414,6 +414,11 @@ to workflows in *QSIPrep*'s documentation]\
 
         merging_group_workflows = {}
         for merged_group in merged_group_names:
+            # Outputs with a single correction unit keep the direct path:
+            # there is nothing to merge, and the legacy merge workflow is
+            # only exercised when corrected units actually combine.
+            if len(merged_to_subgroups[merged_group]) < 2:
+                continue
             merging_group_workflows[merged_group] = init_distortion_group_merge_wf(
                 merging_strategy=config.workflow.distortion_group_merge,
                 source_file=merged_group + '_dwi.nii.gz',
@@ -586,7 +591,10 @@ to workflows in *QSIPrep*'s documentation]\
             name=dwi_preproc_wf.name.replace('dwi_preproc', 'dwi_finalize'),
             output_prefix=output_fname,
             source_file=source_file,
-            write_derivatives=not merging_distortion_groups,
+            write_derivatives=not (
+                merging_distortion_groups
+                and concatenation_scheme[output_fname] in merging_group_workflows
+            ),
             make_intramodal_template=make_intramodal_template,
         )
 
@@ -683,7 +691,12 @@ to workflows in *QSIPrep*'s documentation]\
                 ]),
             ])  # fmt:skip
 
-        if merging_distortion_groups:
+        final_merge_wf = (
+            merging_group_workflows.get(concatenation_scheme[output_fname])
+            if merging_distortion_groups
+            else None
+        )
+        if final_merge_wf is not None:
             image_name = f'inputnode.{output_wfname}_image'
             bval_name = f'inputnode.{output_wfname}_bval'
             bvec_name = f'inputnode.{output_wfname}_bvec'
@@ -694,7 +707,6 @@ to workflows in *QSIPrep*'s documentation]\
             b0_ref_name = f'inputnode.{output_wfname}_b0_ref'
             cnr_name = f'inputnode.{output_wfname}_cnr'
             carpetplot_name = f'inputnode.{output_wfname}_carpetplot_data'
-            final_merge_wf = merging_group_workflows[concatenation_scheme[output_fname]]
             workflow.connect([
                 (dwi_finalize_wf, final_merge_wf, [
                     ('outputnode.bvals_t1', bval_name),
