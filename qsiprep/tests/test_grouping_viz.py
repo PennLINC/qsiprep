@@ -65,3 +65,19 @@ def test_render_html_is_self_contained(tmp_path):
     page = render_html(grouping)
     assert 'src="http' not in page
     assert 'href="http' not in page
+
+
+@pytest.mark.parametrize('scenario', SCENARIOS)
+def test_render_html_shows_correction_units(tmp_path, scenario):
+    """Multi-unit outputs render an explicit unit tier and a final-combine
+    note; single-unit outputs stay uncluttered."""
+    grouping = load_scenario(scenario, tmp_path, strict=False)
+    page = render_html(grouping)
+    multi_unit_outputs = [
+        concat
+        for concat in grouping.concatenation_groups.values()
+        if len(concat.correction_units) > 1
+    ]
+    expected_units = sum(len(c.correction_units) for c in multi_unit_outputs)
+    assert page.count('class="cunit"') == expected_units
+    assert page.count('class="final-concat"') == len(multi_unit_outputs)

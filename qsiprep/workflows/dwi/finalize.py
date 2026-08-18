@@ -291,14 +291,14 @@ def init_dwi_finalize_wf(
         template='ACPC',
         mem_gb=mem_gb['resampled'],
         use_compression=False,
-        concatenate=write_derivatives,
+        concatenate=True,
         doing_topup=doing_topup,
     )
 
     # Apply denoising to the interpolated data if requested
     final_denoise_wf = init_finalize_denoising_wf(
         source_file=source_file,
-        do_biascorr=config.workflow.b1_biascorrect_stage == 'final' and write_derivatives,
+        do_biascorr=config.workflow.b1_biascorrect_stage == 'final',
         num_dwi_acquisitions=len(all_dwis),
     )
 

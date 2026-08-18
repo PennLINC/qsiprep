@@ -149,6 +149,12 @@ h2{font-size:15px;margin:26px 0 10px;color:#334155}
 .shells{color:#0e7490;font-size:10.5px;background:#ecfeff;border-radius:4px;padding:0 5px}
 .borrow{font-size:11.5px;color:#475569;margin:4px 14px;background:#f8fafc;
   border:1px dashed #cbd5e1;border-radius:7px;padding:6px 10px}
+.cunit{border:1.5px dashed #94a3b8;border-radius:9px;margin:8px 12px;padding:0 0 4px;
+  background:#f8fafc}
+.cunit .dgroup{margin:6px 10px;background:#fff}
+.cu-head{font-size:11px;color:#475569;padding:7px 12px 0}
+.cu-note{color:#94a3b8;margin-left:6px}
+.final-concat{font-size:11.5px;font-weight:600;color:#334155;margin:6px 14px 8px}
 .preview{margin:8px 12px 6px;font-size:12px;background:#f1f5f9;border-radius:8px;
   padding:7px 12px}
 .preview summary{cursor:pointer;color:#334155;font-size:12px}
@@ -397,24 +403,42 @@ def _output_boxes(grouping: DWIGrouping, letters: dict[str, str], backend: str) 
             f'border-color:{cstroke}">{_esc(concat.provenance.value)}</span> '
             f'{why}</p>'
         )
-        for dgroup in grouping.distortion_groups_in(multipart_id):
-            stroke, correction = _correction_phrase(grouping, dgroup, letters)
-            signature = dgroup.signature
-            trt = (
-                f'readout {signature.readout_time:g}&thinsp;s'
-                if signature.readout_time is not None
-                else ''
-            )
+        units = grouping.correction_units_in(multipart_id)
+        multi_unit = len(units) > 1
+        for unit in units:
+            if multi_unit:
+                parts.append(
+                    f'<div class="cunit"><div class="cu-head">Correction unit '
+                    f'<b>{_esc(unit.key)}</b> <span class="cu-note">one pipeline, '
+                    'one susceptibility correction</span></div>'
+                )
+            for dgroup_key in unit.distortion_groups:
+                dgroup = grouping.distortion_groups[dgroup_key]
+                stroke, correction = _correction_phrase(grouping, dgroup, letters)
+                signature = dgroup.signature
+                trt = (
+                    f'readout {signature.readout_time:g}&thinsp;s'
+                    if signature.readout_time is not None
+                    else ''
+                )
+                parts.append(
+                    f'<div class="dgroup" style="border-left-color:{stroke}">'
+                    f'<div class="dg-head"><span class="pol">{_polarity_glyph(signature.pe_dir)}'
+                    f'</span> <b>{_esc(dgroup.key)}</b>'
+                    f'<span class="dg-sig">{_pe_phrase(signature.pe_dir)}'
+                    f'{" &middot; " + trt if trt else ""}</span>'
+                    f'<span class="dg-corr">{correction}</span></div>'
+                )
+                parts.extend(_scan_row(grouping, path, letters) for path in dgroup.dwi_files)
+                parts.append('</div>')
+            if multi_unit:
+                parts.append('</div>')
+        if multi_unit:
             parts.append(
-                f'<div class="dgroup" style="border-left-color:{stroke}">'
-                f'<div class="dg-head"><span class="pol">{_polarity_glyph(signature.pe_dir)}'
-                f'</span> <b>{_esc(dgroup.key)}</b>'
-                f'<span class="dg-sig">{_pe_phrase(signature.pe_dir)}'
-                f'{" &middot; " + trt if trt else ""}</span>'
-                f'<span class="dg-corr">{correction}</span></div>'
+                f'<p class="final-concat">&#10515; The corrected results of these '
+                f'{len(units)} units are resampled onto one grid and combined into '
+                'this output file.</p>'
             )
-            parts.extend(_scan_row(grouping, path, letters) for path in dgroup.dwi_files)
-            parts.append('</div>')
 
         for eid, paths in sorted(grouping.borrowed_sources(multipart_id).items()):
             _, stroke = _PROVENANCE_COLORS[_prov_value(grouping.estimations[eid].provenance)]
