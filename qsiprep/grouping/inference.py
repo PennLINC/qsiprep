@@ -6,8 +6,11 @@ not, this module fills in equivalent values, with strict precedence:
 
 1. **Curated** ``B0FieldIdentifier``/``B0FieldSource`` (step E1) always win.
 2. **IntendedFor** on fmap/ files is translated into estimations (step E2).
-3. A **heuristic** pairs reverse phase-encoded DWI series (step E3), which
-   handles HCP-style acquisitions with zero curation.
+3. A **heuristic** groups DWI series with differing phase encoding into one
+   PEPOLAR estimation (step E3), which handles HCP-style acquisitions with
+   zero curation. It runs only in sessions with no curated fieldmap linkage
+   at all: once anything in a session is curated, QSIPrep stops guessing
+   for the rest of it.
 
 The heuristic operates per (session, shim-compatible bucket), so a DWI series
 with no reverse-PE partner of its own can still *borrow* compatible series
@@ -18,7 +21,7 @@ concatenation membership are independent by design.
 
 from __future__ import annotations
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from itertools import combinations
 
 from .models import (
@@ -295,73 +298,82 @@ def resolve_estimations(
         targets[b0field_id] = set(cluster_targets)
 
     # ------------------------------------------------------------------ E3
-    # Series already linked to a fieldmap by curation are never pooled by the
-    # heuristic - whether the link is B0FieldIdentifier/B0FieldSource on the
-    # series itself or an IntendedFor naming it from fmap/. A curator who
-    # linked some series and not others did not want them mixed.
+    # The reverse phase-encoding heuristic runs only in sessions with NO
+    # curated fieldmap linkage at all. In an uncurated dataset, absent
+    # metadata means "nobody looked" and guessing is a service; once any
+    # series in the session is linked - by B0FieldIdentifier/B0FieldSource
+    # or by an IntendedFor naming it - absent metadata means "somebody
+    # looked and chose not to link these", so QSIPrep stops guessing.
+    # (Fieldmap-less correction still applies: unlike sidecar metadata, it
+    # is under the user's control at the command line.)
     intendedfor_covered = set()
     for b0field_id, estimation in estimations.items():
         if estimation.provenance is Provenance.TRANSLATED:
             intendedfor_covered.update(targets[b0field_id])
 
+    #: Sessions where any file carries B0Field* metadata (a curated fmap or
+    #: anat counts even if no DWI sources it: the curator was here).
+    curated_sessions = {
+        record.session
+        for record in records
+        if record.b0field_identifiers or record.b0field_sources
+    }
+
+    def _linked(record: FileRecord) -> bool:
+        return bool(
+            record.b0field_identifiers
+            or record.b0field_sources
+            or record.path in intendedfor_covered
+        )
+
     dwi_records = [record for record in records if record.is_dwi]
     for session, session_records in sorted(
         _by_session(dwi_records).items(), key=lambda kv: str(kv[0])
     ):
-        shim_groups = _shim_groups(session_records, ignore_shims, issues)
-        for shim_index, shim_records in enumerate(shim_groups):
-            pooled = [
-                record
-                for record in shim_records
-                if not (
-                    record.b0field_identifiers
-                    or record.b0field_sources
-                    or record.path in intendedfor_covered
-                )
-            ]
-            polarities = defaultdict(set)
-            for record in pooled:
-                if record.signature.pe_axis:
-                    polarities[record.signature.pe_axis].add(record.signature.pe_polarity)
-            for axis in sorted(axis for axis, pols in polarities.items() if len(pols) == 2):
-                members = [record for record in pooled if record.signature.pe_axis == axis]
-                id_parts = [AUTO_PREFIX + 'pepolar']
-                if session:
-                    id_parts.append(f'ses-{session}')
-                if len(shim_groups) > 1:
-                    id_parts.append(f'shim{shim_index + 1}')
-                id_parts.append(axis)
-                b0field_id = _unique_id('+'.join(id_parts), estimations)
-                estimation = _make_estimation(
-                    b0field_id, CorrectionMethod.PEPOLAR, members, Provenance.INFERRED
-                )
-                estimations[b0field_id] = estimation
-                # An inferred axis estimation corrects exactly the series it
-                # was built from - including single-polarity "borrowers".
-                targets[b0field_id] = {record.path for record in members}
-
-            # Unlinked series whose only reverse phase-encoded partners are
-            # linked get no inferred estimation. Say so.
-            linked_polarities = defaultdict(set)
-            for record in shim_records:
-                if record not in pooled and record.signature.pe_axis:
-                    linked_polarities[record.signature.pe_axis].add(record.signature.pe_polarity)
-            for axis, pols in sorted(polarities.items()):
-                if len(pols) == 2 or not (pols | linked_polarities[axis]) > pols:
-                    continue
-                stranded = [record for record in pooled if record.signature.pe_axis == axis]
+        unlinked = [record for record in session_records if not _linked(record)]
+        if session in curated_sessions or len(unlinked) < len(session_records):
+            if unlinked:
+                names = ', '.join(record.filename for record in unlinked)
                 issues.append(
                     warning(
-                        'reverse-pe-not-pooled',
-                        f'{", ".join(record.filename for record in stranded)}: the only '
-                        'reverse phase-encoded series on this axis are already linked '
-                        'to fieldmaps by curated metadata (B0FieldIdentifier/'
-                        'B0FieldSource or IntendedFor), and linked series are never '
-                        'pooled with unlinked ones. Curate the metadata on every '
-                        'series (or on none) to control this.',
-                        tuple(record.path for record in stranded),
+                        'reverse-pe-not-inferred',
+                        f'{names}: this session has curated fieldmap metadata, so '
+                        'QSIPrep does not infer reverse phase-encoding pairings for '
+                        'the remaining series. Add B0FieldIdentifier/B0FieldSource '
+                        'to correct them (fieldmap-less correction can still be '
+                        'requested at the command line).',
+                        tuple(record.path for record in unlinked),
                     )
                 )
+            continue
+
+        shim_groups = _shim_groups(session_records, ignore_shims, issues)
+        for shim_index, shim_records in enumerate(shim_groups):
+            encoded = [record for record in shim_records if record.signature.pe_dir]
+            directions = {record.signature.pe_dir for record in encoded}
+            if len(directions) < 2:
+                continue
+            # Any two differing phase encodings jointly determine the
+            # susceptibility field - opposite polarity on one axis is the
+            # well-conditioned special case, not a requirement - so ALL
+            # differing-PE series in the bucket estimate one field together.
+            # Whether a backend can consume the resulting shape (multiple
+            # axes, unpaired polarities) is check_backend's business.
+            axes = ''.join(sorted({record.signature.pe_axis for record in encoded}))
+            id_parts = [AUTO_PREFIX + 'pepolar']
+            if session:
+                id_parts.append(f'ses-{session}')
+            if len(shim_groups) > 1:
+                id_parts.append(f'shim{shim_index + 1}')
+            id_parts.append(axes)
+            b0field_id = _unique_id('+'.join(id_parts), estimations)
+            estimation = _make_estimation(
+                b0field_id, CorrectionMethod.PEPOLAR, encoded, Provenance.INFERRED
+            )
+            estimations[b0field_id] = estimation
+            # The inferred estimation corrects exactly the series it was
+            # built from - including single-direction "borrowers".
+            targets[b0field_id] = {record.path for record in encoded}
 
     return estimations, targets, issues
 
@@ -817,16 +829,31 @@ def build_concatenation_groups(
                     group_a.b0field_source is not None
                     and group_a.b0field_source == group_b.b0field_source
                 )
+                # Corrected by different fieldmaps: merged only when both
+                # estimations are qsiprep's own (inferred or flag-driven).
+                # A curated estimation boundary implies an output boundary -
+                # the backends apply one susceptibility correction per output,
+                # so merging across it would blend the curated fields.
                 both_corrected = (
                     group_a.b0field_source is not None
                     and group_b.b0field_source is not None
                     and group_a.signature.compatible_shim(
                         group_b.signature, ignore_shims=ignore_shims
                     )
+                    and all(
+                        estimations[source].provenance
+                        not in (Provenance.CURATED, Provenance.TRANSLATED)
+                        for source in (group_a.b0field_source, group_b.b0field_source)
+                    )
                 )
+                # Same distortion AND same correction (including both
+                # uncorrected): stack freely. Same distortion but different
+                # correction can only arise under partial curation, where
+                # stacking would mix corrected with uncorrected volumes.
                 identical_signature = (
                     group_a.signature.pe_dir is not None
                     and group_a.signature.key == group_b.signature.key
+                    and group_a.b0field_source == group_b.b0field_source
                 )
                 if same_estimation or both_corrected or identical_signature:
                     if both_corrected and not (same_estimation or identical_signature):
@@ -865,12 +892,39 @@ def build_concatenation_groups(
     for key, (multipart_id, provenance) in assignments.items():
         members_by_id[multipart_id].append((key, provenance))
 
+    derived = {}
+    for multipart_id, members in sorted(members_by_id.items()):
+        keys = tuple(sorted(key for key, _ in members))
+        dwi_files = tuple(
+            sorted(path for key in keys for path in distortion_groups[key].dwi_files)
+        )
+        derived[multipart_id] = (keys, dwi_files, members[0][1], derive_output_name(dwi_files))
+
+    # When derived names collide, a curated MultipartID steps in as the acq-
+    # label of its output's name. Groups without one (inferred, or a
+    # MultipartID that sanitizes to nothing) keep the collision error below.
+    name_counts = Counter(name for _, _, _, name in derived.values())
+    for multipart_id, (keys, dwi_files, provenance, output_name) in derived.items():
+        if name_counts[output_name] < 2 or provenance is not Provenance.CURATED:
+            continue
+        label = ''.join(ch for ch in multipart_id if ch.isalnum())
+        if not label:
+            continue
+        disambiguated = derive_output_name(dwi_files, acq=label)
+        issues.append(
+            warning(
+                'output-name-disambiguated',
+                f"Multiple outputs would be named '{output_name}'; MultipartID "
+                f"'{multipart_id}' becomes the acq- label of its output instead: "
+                f"'{disambiguated}'.",
+                dwi_files,
+            )
+        )
+        derived[multipart_id] = (keys, dwi_files, provenance, disambiguated)
+
     concatenation_groups: dict[str, ConcatenationGroup] = {}
     output_names: dict[str, str] = {}
-    for multipart_id, members in sorted(members_by_id.items()):
-        keys = sorted(key for key, _ in members)
-        dwi_files = sorted(path for key in keys for path in distortion_groups[key].dwi_files)
-        output_name = derive_output_name(dwi_files)
+    for multipart_id, (keys, dwi_files, provenance, output_name) in derived.items():
         if output_name in output_names:
             issues.append(
                 error(
@@ -879,15 +933,15 @@ def build_concatenation_groups(
                     f"'{multipart_id}') would both be named '{output_name}'. "
                     'Add distinguishing entities to the filenames or curate '
                     'MultipartID to give them distinct memberships.',
-                    tuple(dwi_files),
+                    dwi_files,
                 )
             )
         output_names[output_name] = multipart_id
         concatenation_groups[multipart_id] = ConcatenationGroup(
             multipart_id=multipart_id,
-            provenance=members[0][1],
-            distortion_groups=tuple(keys),
-            dwi_files=tuple(dwi_files),
+            provenance=provenance,
+            distortion_groups=keys,
+            dwi_files=dwi_files,
             output_name=output_name,
         )
 

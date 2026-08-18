@@ -225,58 +225,75 @@ def test_reshim_ignored(tmp_path):
     assert 'shims-ignored' in issue_codes(grouping.warnings)
 
 
+def test_cross_axis_unpaired(tmp_path):
+    """i- and j series with no same-axis partner still pool: any two
+    differing phase encodings jointly determine the field. TOPUP consumes
+    the estimation; DRBUDDI errors."""
+    grouping = load_scenario('cross_axis_unpaired', tmp_path)
+
+    (b0field_id,) = grouping.estimations
+    assert b0field_id == 'auto+pepolar+ij'
+    estimation = grouping.estimations[b0field_id]
+    assert estimation.provenance is Provenance.INFERRED
+    assert estimation.method is CorrectionMethod.PEPOLAR
+    assert estimation.pe_axes == {'i', 'j'}
+    assert estimation.bidirectional_axes == frozenset()
+
+    # Both series are corrected by the pooled estimation, in one output.
+    assert set(grouping.application.values()) == {b0field_id}
+    (concat,) = grouping.concatenation_groups.values()
+    assert concat.output_name == 'sub-01'
+
+    # Backend feasibility is check_backend's call, not the model's.
+    assert not [i for i in check_backend(grouping, 'fsl') if i.severity == 'error']
+    assert 'drbuddi-no-opposing-pair' in issue_codes(check_backend(grouping, 'tortoise'))
+
+
 def test_partial_curation(tmp_path):
-    """Curated series keep their curation; the rest are inferred; warned."""
+    """Curation anywhere in a session disables the heuristic for the rest of
+    it: the uncurated run-2 pair is NOT paired with itself."""
     grouping = load_scenario('partial_curation', tmp_path)
 
-    assert set(grouping.estimations) == {'pepolar01', 'auto+pepolar+j'}
-    provenance_by_run = {
-        path: grouping.application_provenance[path] for path in grouping.dwi_files
-    }
-    curated = [path for path, prov in provenance_by_run.items() if prov is Provenance.CURATED]
-    inferred = [path for path, prov in provenance_by_run.items() if prov is Provenance.INFERRED]
-    assert len(curated) == 2
-    assert len(inferred) == 2
-    assert all('run-1' in path for path in curated)
-    assert all('run-2' in path for path in inferred)
-    assert 'mixed-application-provenance' in issue_codes(grouping.warnings)
+    assert set(grouping.estimations) == {'pepolar01'}
+    for path in grouping.dwi_files:
+        if 'run-1' in path:
+            assert grouping.application[path] == 'pepolar01'
+            assert grouping.application_provenance[path] is Provenance.CURATED
+        else:
+            assert grouping.application[path] is None
+    assert 'reverse-pe-not-inferred' in issue_codes(grouping.warnings)
 
-    # Curated series are never pooled into the inferred axis estimation:
-    # its sources are the uncurated run-2 files only.
-    assert basenames(grouping.estimations['auto+pepolar+j'].sources) == [
-        'sub-01_dir-AP_run-2_dwi.nii.gz',
-        'sub-01_dir-PA_run-2_dwi.nii.gz',
-    ]
-
-    # Same signature, different fieldmaps: run-1 and run-2 AP stay in
-    # different distortion groups but share the single output.
+    # Corrected and uncorrected series never share an output: the curated
+    # pair concatenates; each uncorrected run-2 series stands alone.
+    outputs = sorted(concat.output_name for concat in grouping.concatenation_groups.values())
+    assert outputs == ['sub-01_dir-AP_run-2', 'sub-01_dir-PA_run-2', 'sub-01_run-1']
     assert len(grouping.distortion_groups) == 4
-    assert len(grouping.concatenation_groups) == 1
 
 
 def test_partial_curation_stranded(tmp_path):
-    """An uncurated series whose only reverse-PE partners are curated is not
-    pooled with them; it falls through to the fieldmap-less ladder instead."""
+    """An uncurated series in a curated session gets no inferred PEPOLAR;
+    the fieldmap-less ladder (user-controllable at the CLI) still applies."""
     grouping = load_scenario('partial_curation_stranded', tmp_path)
 
-    # No inferred PEPOLAR estimation exists: the run-2 series has no
-    # uncurated partner and the curated pair is off limits.
     assert not [
         estimation
         for estimation in grouping.estimations.values()
         if estimation.provenance is Provenance.INFERRED and estimation.is_pepolar
     ]
-    assert 'reverse-pe-not-pooled' in issue_codes(grouping.warnings)
+    assert 'reverse-pe-not-inferred' in issue_codes(grouping.warnings)
 
-    # The stranded series is corrected by the inferred T2Wreg fallback.
+    # The unlinked series is corrected by the inferred T2Wreg fallback, in
+    # its own output (a curated boundary is an output boundary).
     (run2,) = [path for path in grouping.dwi_files if 'run-2' in path]
     applied = grouping.application[run2]
     assert grouping.estimations[applied].method is CorrectionMethod.T2WREG
+    outputs = sorted(concat.output_name for concat in grouping.concatenation_groups.values())
+    assert outputs == ['sub-01_dir-AP_run-2', 'sub-01_run-1']
 
 
 def test_partial_intendedfor(tmp_path):
-    """IntendedFor links wall a series off from the heuristic pool exactly
-    like B0Field* curation does."""
+    """IntendedFor counts as curation: it disables the heuristic for the
+    session's remaining series exactly like B0Field* metadata does."""
     grouping = load_scenario('partial_intendedfor', tmp_path)
 
     # The linked AP series is corrected by the translated estimation; no
@@ -291,7 +308,7 @@ def test_partial_intendedfor(tmp_path):
     applied = grouping.application[ap]
     assert grouping.estimations[applied].provenance is Provenance.TRANSLATED
     assert grouping.application[pa] is None
-    assert 'reverse-pe-not-pooled' in issue_codes(grouping.warnings)
+    assert 'reverse-pe-not-inferred' in issue_codes(grouping.warnings)
 
 
 def test_partial_multipart(tmp_path):
@@ -368,30 +385,30 @@ def test_gre_phasediff(tmp_path):
 
 
 def test_two_gre_fmaps(tmp_path):
-    """Independently corrected runs concatenate (rule b), loudly."""
+    """A curated correction boundary implies an output boundary: runs with
+    their own fieldmaps are not concatenated (backends apply one correction
+    per output, so merging would blend the curated fields)."""
     grouping = load_scenario('two_gre_fmaps', tmp_path)
 
     assert len(grouping.estimations) == 2
     assert all(est.method is CorrectionMethod.PHASEDIFF for est in grouping.estimations.values())
-    (concat,) = grouping.concatenation_groups.values()
-    assert concat.output_name == 'sub-01_dir-AP'
-    assert len(concat.distortion_groups) == 2
-    assert 'inferred-concat-merge' in issue_codes(grouping.warnings)
+    outputs = sorted(concat.output_name for concat in grouping.concatenation_groups.values())
+    assert outputs == ['sub-01_dir-AP_run-1', 'sub-01_dir-AP_run-2']
+    assert 'inferred-concat-merge' not in issue_codes(grouping.warnings)
 
 
 def test_same_ped_own_fmaps(tmp_path):
-    """Same-PED runs with per-run fmaps: separate fieldmaps, one output."""
+    """Same-PED runs with per-run fmaps: separate fieldmaps AND separate
+    outputs - identical signatures no longer merge across corrections."""
     grouping = load_scenario('same_ped_own_fmaps', tmp_path)
 
     assert len(grouping.estimations) == 2
     applications = {grouping.application[path] for path in grouping.dwi_files}
     assert len(applications) == 2  # each run has its own estimation
 
-    (concat,) = grouping.concatenation_groups.values()
-    assert concat.output_name == 'sub-01_dir-AP'
-    # Identical signatures merge quietly - this is not a rule-b merge
+    outputs = sorted(concat.output_name for concat in grouping.concatenation_groups.values())
+    assert outputs == ['sub-01_dir-AP_run-1', 'sub-01_dir-AP_run-2']
     assert 'inferred-concat-merge' not in issue_codes(grouping.warnings)
-    assert len(concat.distortion_groups) == 2
 
 
 def test_unlinked_fmap(tmp_path):
@@ -455,12 +472,24 @@ def test_multi_session(tmp_path):
         assert len(sessions) == 1
 
 
-def test_name_collision(tmp_path):
-    """Two outputs deriving the same BIDS name is a hard error."""
-    with pytest.raises(GroupingError, match='output-name-collision'):
-        load_scenario('name_collision', tmp_path)
+def test_name_collision_disambiguated_by_multipart(tmp_path):
+    """Colliding outputs with curated MultipartIDs are renamed: the
+    MultipartID becomes the acq- label of the output name."""
+    grouping = load_scenario('name_collision', tmp_path)
 
-    grouping = load_scenario('name_collision', tmp_path / 'nonstrict', strict=False)
+    outputs = sorted(concat.output_name for concat in grouping.concatenation_groups.values())
+    assert outputs == ['sub-01_acq-partA_dir-AP', 'sub-01_acq-partB_dir-AP']
+    assert 'output-name-disambiguated' in issue_codes(grouping.warnings)
+    assert 'output-name-collision' not in issue_codes(grouping.errors)
+
+
+def test_name_collision_without_multipart_is_an_error(tmp_path):
+    """With no curated MultipartID to promote into an acq- label, colliding
+    output names remain a hard error."""
+    with pytest.raises(GroupingError, match='output-name-collision'):
+        load_scenario('name_collision_inferred', tmp_path)
+
+    grouping = load_scenario('name_collision_inferred', tmp_path / 'nonstrict', strict=False)
     assert 'output-name-collision' in issue_codes(grouping.errors)
 
 

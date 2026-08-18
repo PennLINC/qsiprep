@@ -1,0 +1,37 @@
+# Two inferred concatenation groups (per-axis curated fieldmaps, no
+# MultipartID) whose derived names both reduce to 'sub-01'. With no curated
+# MultipartID to promote into an acq- label, the output-name-collision error
+# stands, telling the user to curate MultipartID (which now genuinely fixes
+# the name).
+'01':
+  - anat:
+      - suffix: T1w
+    dwi:
+      - dir: RL
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'i'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: pepolar_i
+          B0FieldSource: pepolar_i
+      - dir: LR
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'i-'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: pepolar_i
+          B0FieldSource: pepolar_i
+      - dir: PA
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: pepolar_j
+          B0FieldSource: pepolar_j
+      - dir: AP
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: pepolar_j
+          B0FieldSource: pepolar_j

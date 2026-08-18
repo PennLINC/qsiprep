@@ -427,6 +427,14 @@ def _describe_tortoise(lines, grouping, multipart_id, corrected):
     if pepolar_ids:
         for b0field_id in pepolar_ids:
             estimation = grouping.estimations[b0field_id]
+            if not estimation.bidirectional_axes:
+                lines.append(
+                    f"  {step}. DRBUDDI cannot use estimation '{b0field_id}': its "
+                    'sources have differing phase encodings but no opposing '
+                    '(blip-up/blip-down) pair on any single axis.'
+                )
+                step += 1
+                continue
             for axis in sorted(estimation.bidirectional_axes):
                 up, down = _split_polarities(grouping, multipart_id, axis)
                 up_names = ', '.join(dgroup.key for dgroup in up) or 'borrowed series'

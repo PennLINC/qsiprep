@@ -269,6 +269,11 @@ def _blip_diagram(grouping: DWIGrouping, estimation) -> list[str]:
             )
         else:
             parts.append(f'<div class="blips one-way">{_esc(axis)} axis: one direction only</div>')
+    if len(estimation.pe_axes) > 1 and not estimation.bidirectional_axes:
+        parts.append(
+            '<div class="blips">&#8646; no same-axis pair: the differing '
+            'encodings are compared across axes</div>'
+        )
     return parts
 
 

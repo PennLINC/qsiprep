@@ -38,14 +38,6 @@ def _basenames(value):
     return value
 
 
-def _normalize(scan_groups):
-    """Order-independent, basename-only rendering of a scan_groups list."""
-    return sorted(
-        (_basenames(group) for group in scan_groups),
-        key=lambda group: (group['concatenated_bids_name'], group['dwi_series']),
-    )
-
-
 def _load_skeleton(name, tmp_path):
     bids_dir = tmp_path / name
     generate_bids_skeleton(str(bids_dir), op.join(get_test_data_path(), f'{name}.yml'))
@@ -79,14 +71,31 @@ def test_backend_for_config(hmc_model, pepolar_method, expected):
     assert backend_for_config(hmc_model, pepolar_method) == expected
 
 
-def test_multiped_matches_legacy(tmp_path):
-    """No fieldmaps, four PE directions: the adapter reproduces group_dwi_scans."""
+def test_multiped_pools_all_directions(tmp_path):
+    """No fieldmaps, four PE directions: one pooled estimation, one output.
+
+    Legacy built one reverse-PE output per axis. Any two differing phase
+    encodings jointly determine the susceptibility field, so the model pools
+    all four series into a single estimation and output; whether a backend
+    can consume that shape is check_backend's call (TOPUP can, DRBUDDI
+    raises drbuddi-cross-axis).
+    """
     layout, subject_data = _load_skeleton('skeleton_simple_multiped', tmp_path)
     legacy, _ = group_dwi_scans(layout, subject_data)
     grouping = build_dwi_grouping(layout, subject_data, strict=False)
     new, scheme = to_legacy_scan_groups(grouping)
 
-    assert _normalize(new) == _normalize(legacy)
+    assert len(legacy) == 2  # legacy: one output per axis
+
+    (estimation,) = grouping.estimations.values()
+    assert estimation.pe_axes == {'i', 'j'}
+    assert estimation.bidirectional_axes == {'i', 'j'}
+
+    (group,) = new
+    names = _basenames(group)
+    assert group['concatenated_bids_name'] == 'sub-01'
+    assert names['fieldmap_info']['suffix'] == 'rpe_series'
+    assert len(names['dwi_series']) + len(names['fieldmap_info']['rpe_series']) == 4
     assert scheme == {name: name for name in scheme}
 
 

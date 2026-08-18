@@ -427,13 +427,17 @@ def strip_nii_ext(filename: str) -> str:
     return op.splitext(basename)[0]
 
 
-def derive_output_name(paths) -> str:
+def derive_output_name(paths, acq: str | None = None) -> str:
     """Derive the BIDS name for the concatenation of ``paths``.
 
     The single implementation of what used to exist twice (in
     ``qsiprep.utils.grouping.get_concatenated_bids_name`` and
     ``qsiprep.workflows.dwi.util._get_concatenated_bids_name``): keep the
     entities from the whitelist that all files share.
+
+    ``acq`` forces that (already sanitized) label into the ``acq-`` entity,
+    replacing any acq value derived from the files. Used to disambiguate
+    colliding output names with the curated MultipartID.
 
     Examples
     --------
@@ -449,6 +453,8 @@ def derive_output_name(paths) -> str:
     'sub-1'
     >>> derive_output_name(['/data/sub-1/dwi/sub-1_dir-AP_dwi.nii.gz'])
     'sub-1_dir-AP'
+    >>> derive_output_name(['/data/sub-1/dwi/sub-1_dir-AP_dwi.nii.gz'], acq='partA')
+    'sub-1_acq-partA_dir-AP'
     """
     paths = sorted(paths)
     if len(paths) == 1:
@@ -466,6 +472,12 @@ def derive_output_name(paths) -> str:
             if len(bids_keys[key]) == 1
         ]
         fname = '_'.join(common)
+
+    if acq:
+        tokens = [token for token in fname.split('_') if not token.startswith('acq-')]
+        position = 2 if len(tokens) > 1 and tokens[1].startswith('ses-') else 1
+        tokens.insert(position, f'acq-{acq}')
+        fname = '_'.join(tokens)
 
     if fname.endswith('_dwi'):
         fname = fname[:-4]

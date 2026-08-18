@@ -1,6 +1,7 @@
 # Curated MultipartIDs that produce two outputs with the same derived BIDS
-# name (both reduce to 'sub-01_dir-AP'). Expected: output-name-collision
-# error telling the user to distinguish the groups.
+# name (both reduce to 'sub-01_dir-AP'). Expected: each MultipartID becomes
+# the acq- label of its output (sub-01_acq-partA_dir-AP /
+# sub-01_acq-partB_dir-AP) with an output-name-disambiguated warning.
 '01':
   - anat:
       - suffix: T1w
