@@ -22,6 +22,7 @@ from qsiprep.tests.utils import get_test_data_path
 SCENARIOS = [
     'abcd_style',
     'abcd_t2w',
+    'acq_multipart',
     'b0only_fmap_with_bvals',
     'bidsuri_intendedfor',
     'cluster_multipart',

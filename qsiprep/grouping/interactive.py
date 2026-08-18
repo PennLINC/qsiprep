@@ -384,6 +384,9 @@ def _output_boxes(grouping: DWIGrouping, letters: dict[str, str], backend: str) 
     for multipart_id, concat in sorted(grouping.concatenation_groups.items()):
         cfill, cstroke = _PROVENANCE_COLORS[_prov_value(concat.provenance)]
         n_scans = len(concat.dwi_files)
+        why = _WHY_CONCAT.get(concat.provenance, _esc(concat.provenance.value))
+        if concat.provenance is Provenance.CURATED and multipart_id.startswith('acq-'):
+            why += ' The <code>acq-</code> prefix also names the output file.'
         parts.append(
             '<div class="output">'
             f'<div class="out-head"><span class="out-icon">&#128190;</span>'
@@ -392,7 +395,7 @@ def _output_boxes(grouping: DWIGrouping, letters: dict[str, str], backend: str) 
             f'scan{"s" if n_scans != 1 else ""} combined</span></div>'
             f'<p class="why out-why"><span class="chip small" style="background:{cfill};'
             f'border-color:{cstroke}">{_esc(concat.provenance.value)}</span> '
-            f'{_WHY_CONCAT.get(concat.provenance, _esc(concat.provenance.value))}</p>'
+            f'{why}</p>'
         )
         for dgroup in grouping.distortion_groups_in(multipart_id):
             stroke, correction = _correction_phrase(grouping, dgroup, letters)

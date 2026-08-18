@@ -6,11 +6,13 @@ provenance), which estimation corrects which file, how distortion and
 concatenation groups partition, and which issues fire.
 """
 
+import dataclasses
 import os.path as op
 
 import pytest
 
 from qsiprep.grouping import GroupingError, Provenance, check_backend
+from qsiprep.grouping.inference import build_grouping
 from qsiprep.grouping.models import CorrectionMethod
 from qsiprep.tests.grouping_scenarios import basenames, load_scenario
 
@@ -283,12 +285,14 @@ def test_partial_curation_stranded(tmp_path):
     assert 'reverse-pe-not-inferred' in issue_codes(grouping.warnings)
 
     # The unlinked series is corrected by the inferred T2Wreg fallback, in
-    # its own output (a curated boundary is an output boundary).
+    # its own correction unit; both units are corrected, so their corrected
+    # results are concatenated into ONE final output.
     (run2,) = [path for path in grouping.dwi_files if 'run-2' in path]
     applied = grouping.application[run2]
     assert grouping.estimations[applied].method is CorrectionMethod.T2WREG
-    outputs = sorted(concat.output_name for concat in grouping.concatenation_groups.values())
-    assert outputs == ['sub-01_dir-AP_run-2', 'sub-01_run-1']
+    (concat,) = grouping.concatenation_groups.values()
+    assert concat.output_name == 'sub-01'
+    assert len(concat.correction_units) == 2
 
 
 def test_partial_intendedfor(tmp_path):
@@ -320,13 +324,17 @@ def test_partial_multipart(tmp_path):
         concat.output_name: basenames(concat.dwi_files)
         for concat in grouping.concatenation_groups.values()
     }
+    # The uncurated run-2 pair shares one correction unit (one estimation
+    # corrects both), so that unit becomes one standalone output.
     assert outputs == {
         'sub-01_run-1': [
             'sub-01_dir-AP_run-1_dwi.nii.gz',
             'sub-01_dir-PA_run-1_dwi.nii.gz',
         ],
-        'sub-01_dir-AP_run-2': ['sub-01_dir-AP_run-2_dwi.nii.gz'],
-        'sub-01_dir-PA_run-2': ['sub-01_dir-PA_run-2_dwi.nii.gz'],
+        'sub-01_run-2': [
+            'sub-01_dir-AP_run-2_dwi.nii.gz',
+            'sub-01_dir-PA_run-2_dwi.nii.gz',
+        ],
     }
     assert 'partial-multipart' in issue_codes(grouping.warnings)
 
@@ -385,30 +393,31 @@ def test_gre_phasediff(tmp_path):
 
 
 def test_two_gre_fmaps(tmp_path):
-    """A curated correction boundary implies an output boundary: runs with
-    their own fieldmaps are not concatenated (backends apply one correction
-    per output, so merging would blend the curated fields)."""
+    """Runs with their own fieldmaps are separate correction units; their
+    corrected results are concatenated into one final output."""
     grouping = load_scenario('two_gre_fmaps', tmp_path)
 
     assert len(grouping.estimations) == 2
     assert all(est.method is CorrectionMethod.PHASEDIFF for est in grouping.estimations.values())
-    outputs = sorted(concat.output_name for concat in grouping.concatenation_groups.values())
-    assert outputs == ['sub-01_dir-AP_run-1', 'sub-01_dir-AP_run-2']
-    assert 'inferred-concat-merge' not in issue_codes(grouping.warnings)
+    (concat,) = grouping.concatenation_groups.values()
+    assert concat.output_name == 'sub-01_dir-AP'
+    units = grouping.correction_units_in(concat.multipart_id)
+    assert len(units) == 2
+    assert {unit.b0field_source for unit in units} == set(grouping.estimations)
 
 
 def test_same_ped_own_fmaps(tmp_path):
-    """Same-PED runs with per-run fmaps: separate fieldmaps AND separate
-    outputs - identical signatures no longer merge across corrections."""
+    """Same-PED runs with per-run fmaps: separate correction units (never
+    blend the fields), one final output of the corrected results."""
     grouping = load_scenario('same_ped_own_fmaps', tmp_path)
 
     assert len(grouping.estimations) == 2
     applications = {grouping.application[path] for path in grouping.dwi_files}
     assert len(applications) == 2  # each run has its own estimation
 
-    outputs = sorted(concat.output_name for concat in grouping.concatenation_groups.values())
-    assert outputs == ['sub-01_dir-AP_run-1', 'sub-01_dir-AP_run-2']
-    assert 'inferred-concat-merge' not in issue_codes(grouping.warnings)
+    (concat,) = grouping.concatenation_groups.values()
+    assert concat.output_name == 'sub-01_dir-AP'
+    assert len(concat.correction_units) == 2
 
 
 def test_unlinked_fmap(tmp_path):
@@ -472,25 +481,49 @@ def test_multi_session(tmp_path):
         assert len(sessions) == 1
 
 
-def test_name_collision_disambiguated_by_multipart(tmp_path):
-    """Colliding outputs with curated MultipartIDs are renamed: the
-    MultipartID becomes the acq- label of the output name."""
-    grouping = load_scenario('name_collision', tmp_path)
+def test_acq_multipartid_names_output(tmp_path):
+    """A MultipartID beginning with 'acq-' renames the output's acq- entity,
+    so the same layout that collides in name_collision is fine here."""
+    grouping = load_scenario('acq_multipart', tmp_path)
 
-    outputs = sorted(concat.output_name for concat in grouping.concatenation_groups.values())
-    assert outputs == ['sub-01_acq-partA_dir-AP', 'sub-01_acq-partB_dir-AP']
-    assert 'output-name-disambiguated' in issue_codes(grouping.warnings)
+    outputs = {
+        concat.multipart_id: concat.output_name
+        for concat in grouping.concatenation_groups.values()
+    }
+    assert outputs == {
+        'acq-partA': 'sub-01_acq-partA_dir-AP',
+        'acq-partB': 'sub-01_acq-partB_dir-AP',
+    }
     assert 'output-name-collision' not in issue_codes(grouping.errors)
 
 
-def test_name_collision_without_multipart_is_an_error(tmp_path):
-    """With no curated MultipartID to promote into an acq- label, colliding
-    output names remain a hard error."""
-    with pytest.raises(GroupingError, match='output-name-collision'):
-        load_scenario('name_collision_inferred', tmp_path)
+def test_acq_multipartid_invalid_label(tmp_path):
+    """An 'acq-' MultipartID whose label is not a valid BIDS label errors."""
+    grouping = load_scenario('acq_multipart', tmp_path, strict=False)
+    records = [record for record in grouping.files.values() if record.is_dwi]
+    bad = dataclasses.replace(records[0], multipart_id='acq-part_A')
+    regrouped = build_grouping([bad, *records[1:]], subject_id='01')
+    assert 'multipartid-acq-invalid' in issue_codes(regrouped.errors)
 
-    grouping = load_scenario('name_collision_inferred', tmp_path / 'nonstrict', strict=False)
+
+def test_name_collision(tmp_path):
+    """Colliding output names are a hard error; the fix is 'acq-' MultipartIDs."""
+    with pytest.raises(GroupingError, match='output-name-collision'):
+        load_scenario('name_collision', tmp_path)
+
+    grouping = load_scenario('name_collision', tmp_path / 'nonstrict', strict=False)
     assert 'output-name-collision' in issue_codes(grouping.errors)
+
+
+def test_per_axis_curated_fmaps_merge_after_correction(tmp_path):
+    """Per-axis curated estimations form separate units whose corrected
+    results package into one final output (formerly a name collision)."""
+    grouping = load_scenario('name_collision_inferred', tmp_path)
+
+    (concat,) = grouping.concatenation_groups.values()
+    assert concat.output_name == 'sub-01'
+    assert len(concat.correction_units) == 2
+    assert 'output-name-collision' not in issue_codes(grouping.errors)
 
 
 def test_fieldmapless_t2w(tmp_path):

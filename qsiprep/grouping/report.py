@@ -124,49 +124,70 @@ def report_text(grouping: DWIGrouping) -> str:
     return '\n'.join(lines)
 
 
-def _group_estimations(grouping: DWIGrouping, multipart_id: str) -> dict[str, list[str]]:
-    """estimation id -> keys of member distortion groups it corrects."""
+def _unit_corrected(grouping: DWIGrouping, unit) -> dict[str, list[str]]:
+    """estimation id -> keys of the unit's distortion groups it corrects."""
     corrected = defaultdict(list)
-    for dgroup in grouping.distortion_groups_in(multipart_id):
+    for key in unit.distortion_groups:
+        dgroup = grouping.distortion_groups[key]
         if dgroup.b0field_source is not None:
-            corrected[dgroup.b0field_source].append(dgroup.key)
+            corrected[dgroup.b0field_source].append(key)
     return corrected
 
 
-def _split_polarities(grouping: DWIGrouping, multipart_id: str, axis: str):
-    """Member distortion groups on ``axis``, split into (blip-up, blip-down)."""
+def _split_polarities(dgroups, axis: str):
+    """Distortion groups on ``axis``, split into (blip-up, blip-down)."""
     up, down = [], []
-    for dgroup in grouping.distortion_groups_in(multipart_id):
+    for dgroup in dgroups:
         if dgroup.signature.pe_axis != axis:
             continue
         (up if dgroup.signature.pe_polarity == 1 else down).append(dgroup)
     return up, down
 
 
+def _describe_unit(lines, grouping, backend, multipart_id, unit, step) -> int:
+    """One correction unit's HMC+SDC steps; returns the next step number."""
+    corrected = _unit_corrected(grouping, unit)
+    dgroups = [grouping.distortion_groups[key] for key in unit.distortion_groups]
+    if backend == 'fsl':
+        return _describe_fsl(lines, grouping, multipart_id, corrected, dgroups, step)
+    if backend == 'tortoise':
+        return _describe_tortoise(lines, grouping, multipart_id, corrected, dgroups, step)
+    return _describe_mixed(lines, grouping, multipart_id, corrected, dgroups, step)
+
+
 def _output_step_lines(grouping, backend, multipart_id, backend_issues) -> list[str]:
     """The numbered step lines for one output, as printed by describe_processing."""
     concat = grouping.concatenation_groups[multipart_id]
+    units = grouping.correction_units_in(multipart_id)
+    n_series = len(concat.dwi_files)
     lines = []
 
-    # --- Pre-HMC stage (identical across backends) -------------------
-    n_series = len(concat.dwi_files)
-    if n_series > 1:
+    if len(units) == 1:
+        if n_series > 1:
+            lines.append(
+                '  1. Each series is denoised on its own, then all '
+                f'{n_series} series are concatenated. '
+                '(--denoise-after-combining reverses this order.)'
+            )
+        else:
+            lines.append('  1. The series is denoised.')
+        step = _describe_unit(lines, grouping, backend, multipart_id, units[0], step=2)
+        lines.append(f'  {step}. The corrected series is written as one output file.')
+    else:
         lines.append(
-            '  1. Each series is denoised on its own, then all '
-            f'{n_series} series are concatenated. '
-            '(--denoise-after-combining reverses this order.)'
+            f'  1. Each series is denoised on its own. The {n_series} series span '
+            f'{len(units)} correction units; each unit is concatenated and '
+            'corrected in its own pipeline.'
         )
-    else:
-        lines.append('  1. The series is denoised.')
-
-    corrected = _group_estimations(grouping, multipart_id)
-
-    if backend == 'fsl':
-        _describe_fsl(lines, grouping, multipart_id, corrected)
-    elif backend == 'tortoise':
-        _describe_tortoise(lines, grouping, multipart_id, corrected)
-    else:
-        _describe_mixed(lines, grouping, multipart_id, corrected)
+        step = 2
+        for unit in units:
+            names = ', '.join(_basename(path) for path in unit.dwi_files)
+            lines.append(f"  {step}. Correction unit '{unit.key}' ({names}):")
+            step = _describe_unit(lines, grouping, backend, multipart_id, unit, step + 1)
+        lines.append(
+            f'  {step}. The corrected results of the {len(units)} units are '
+            'resampled onto one grid and concatenated into one output file.'
+        )
 
     for issue in backend_issues:
         if issue.scope in (None, multipart_id):
@@ -299,8 +320,7 @@ def _structural_note(grouping) -> str | None:
     )
 
 
-def _describe_fsl(lines, grouping, multipart_id, corrected):
-    step = 2
+def _describe_fsl(lines, grouping, multipart_id, corrected, dgroups, step):
     kinds = _ids_by_kind(grouping, corrected)
     pepolar_ids = kinds.pepolar
     gre_ids = kinds.gre
@@ -335,12 +355,6 @@ def _describe_fsl(lines, grouping, multipart_id, corrected):
             note = _borrow_note(grouping, multipart_id, b0field_id)
             if note:
                 lines.append(f'     {note}')
-        if len(pepolar_ids) > 1:
-            lines.append(
-                f'     Note: {len(pepolar_ids)} separate fieldmap estimations feed '
-                'this output; the FSL path estimates one combined field from all '
-                'of their b=0 images.'
-            )
         step += 1
         lines.append(
             f'  {step}. eddy corrects head motion, eddy currents, and susceptibility '
@@ -404,18 +418,16 @@ def _describe_fsl(lines, grouping, multipart_id, corrected):
         )
         step += 1
 
-    lines.append(f'  {step}. The corrected series is written as one output file.')
+    return step
 
 
-def _describe_tortoise(lines, grouping, multipart_id, corrected):
-    step = 2
-    member_dgroups = grouping.distortion_groups_in(multipart_id)
+def _describe_tortoise(lines, grouping, multipart_id, corrected, dgroups, step):
     kinds = _ids_by_kind(grouping, corrected)
     pepolar_ids = kinds.pepolar
     gre_ids = kinds.gre
 
-    if len(member_dgroups) > 1:
-        keys = ', '.join(dgroup.key for dgroup in member_dgroups)
+    if len(dgroups) > 1:
+        keys = ', '.join(dgroup.key for dgroup in dgroups)
         lines.append(
             f'  {step}. DIFFPREP corrects head motion and eddy currents separately '
             f'for each distortion group ({keys}).'
@@ -436,7 +448,7 @@ def _describe_tortoise(lines, grouping, multipart_id, corrected):
                 step += 1
                 continue
             for axis in sorted(estimation.bidirectional_axes):
-                up, down = _split_polarities(grouping, multipart_id, axis)
+                up, down = _split_polarities(dgroups, axis)
                 up_names = ', '.join(dgroup.key for dgroup in up) or 'borrowed series'
                 down_names = ', '.join(dgroup.key for dgroup in down) or 'borrowed series'
                 lines.append(
@@ -493,11 +505,10 @@ def _describe_tortoise(lines, grouping, multipart_id, corrected):
         lines.append(f'  {step}. ' + _no_sdc_sentence(grouping))
         step += 1
 
-    lines.append(f'  {step}. The corrected series is written as one output file.')
+    return step
 
 
-def _describe_mixed(lines, grouping, multipart_id, corrected):
-    step = 2
+def _describe_mixed(lines, grouping, multipart_id, corrected, dgroups, step):
     kinds = _ids_by_kind(grouping, corrected)
     pepolar_ids = kinds.pepolar
 
@@ -590,7 +601,7 @@ def _describe_mixed(lines, grouping, multipart_id, corrected):
         lines.append(f'  {step}. ' + _no_sdc_sentence(grouping))
         step += 1
 
-    lines.append(f'  {step}. The corrected series is written as one output file.')
+    return step
 
 
 def full_report(grouping: DWIGrouping) -> str:

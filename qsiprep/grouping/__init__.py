@@ -13,7 +13,7 @@ is inferred and tagged with its provenance. The output,
 processing backend arranges that data is the business of adapters and the
 previews in :mod:`~.report`.
 
-Run ``python -m qsiprep.grouping /path/to/bids`` to print the grouping and
+Run ``qsiprep-group /path/to/bids`` to print the grouping and
 per-backend processing previews for a dataset.
 
 Adding a new estimation method
@@ -97,6 +97,7 @@ def build_dwi_grouping(
     force_t2wreg=False,
     use_synb0=False,
     use_nipreps_syn_sdc=False,
+    distortion_group_merge='concat',
     strict=True,
 ):
     """Group one subject's DWI scans.
@@ -135,6 +136,12 @@ def build_dwi_grouping(
         Give series that have no fieldmap a SyNb0 synthetic-b=0 estimation
         synthesized from the T1w. Never overrides a real fieldmap. Errors if
         no T1w exists or a target series lacks PhaseEncodingDirection.
+    distortion_group_merge : str or None
+        How the corrected results of a final output's correction units are
+        combined: ``'concat'`` (default) concatenates them, ``'average'``
+        averages matched volumes (opposite-PE duplicate schemes), and
+        ``'none'`` keeps every correction unit as its own output (``None``
+        is treated as ``'concat'``).
     use_nipreps_syn_sdc : bool
         Correct series that have no fieldmap with the standalone niworkflows
         SyN-SDC: a constrained ANTs SyN registration of an inverted T1w (or a
@@ -164,6 +171,7 @@ def build_dwi_grouping(
         force_t2wreg=force_t2wreg,
         use_synb0=use_synb0,
         use_nipreps_syn_sdc=use_nipreps_syn_sdc,
+        distortion_group_merge=distortion_group_merge,
         extra_issues=index_issues,
     )
     if strict:

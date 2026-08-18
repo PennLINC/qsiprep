@@ -103,6 +103,7 @@ all = ["qsiprep[dev,doc,maint,tests]"]
 
 [project.scripts]
 qsiprep = "qsiprep.cli.run:main"
+qsiprep-group = "qsiprep.cli.group:main"
 
 #
 # Hatch configurations

@@ -21,13 +21,15 @@ concatenation membership are independent by design.
 
 from __future__ import annotations
 
-from collections import Counter, defaultdict
+import re
+from collections import defaultdict
 from itertools import combinations
 
 from .models import (
     AUTO_PREFIX,
     ConcatenationGroup,
     CorrectionMethod,
+    CorrectionUnit,
     DistortionGroup,
     DWIGrouping,
     FieldmapEstimation,
@@ -744,20 +746,95 @@ def build_distortion_groups(
     return groups
 
 
+def build_correction_units(
+    records: list[FileRecord],
+    distortion_groups: dict[str, DistortionGroup],
+    separate_all_dwis: bool,
+) -> dict[str, CorrectionUnit]:
+    """Partition distortion groups into correction units.
+
+    A unit's raw series are stacked into one HMC+SDC pipeline, so its groups
+    must share ONE applied correction: the same estimation (a PEPOLAR pair's
+    two polarities, corrected jointly), or identical signatures with the
+    identical correction. Units never span sessions or MultipartIDs.
+    """
+    dwi_records = {record.path: record for record in records if record.is_dwi}
+
+    parent = {key: key for key in distortion_groups}
+
+    def find(key):
+        while parent[key] != key:
+            parent[key] = parent[parent[key]]
+            key = parent[key]
+        return key
+
+    def union(key_a, key_b):
+        root_a, root_b = find(key_a), find(key_b)
+        if root_a != root_b:
+            parent[max(root_a, root_b)] = min(root_a, root_b)
+
+    if not separate_all_dwis:
+        by_wall = defaultdict(list)
+        for key, dgroup in distortion_groups.items():
+            record = dwi_records[dgroup.dwi_files[0]]
+            by_wall[(record.session, record.multipart_id)].append(key)
+        for wall_keys in by_wall.values():
+            for key_a, key_b in combinations(sorted(wall_keys), 2):
+                group_a = distortion_groups[key_a]
+                group_b = distortion_groups[key_b]
+                same_application = group_a.b0field_source == group_b.b0field_source
+                same_estimation = same_application and group_a.b0field_source is not None
+                identical_signature = (
+                    same_application
+                    and group_a.signature.pe_dir is not None
+                    and group_a.signature.key == group_b.signature.key
+                )
+                if same_estimation or identical_signature:
+                    union(key_a, key_b)
+
+    components = defaultdict(list)
+    for key in distortion_groups:
+        components[find(key)].append(key)
+
+    units: dict[str, CorrectionUnit] = {}
+    for _, member_keys in sorted(components.items()):
+        member_keys = tuple(sorted(member_keys))
+        dwi_files = tuple(
+            sorted(path for key in member_keys for path in distortion_groups[key].dwi_files)
+        )
+        unit_key = _unique_id(derive_output_name(dwi_files), units)
+        units[unit_key] = CorrectionUnit(
+            key=unit_key,
+            distortion_groups=member_keys,
+            dwi_files=dwi_files,
+            b0field_source=distortion_groups[member_keys[0]].b0field_source,
+        )
+    return units
+
+
 def build_concatenation_groups(
     records: list[FileRecord],
     distortion_groups: dict[str, DistortionGroup],
-    estimations: dict[str, FieldmapEstimation],
+    correction_units: dict[str, CorrectionUnit],
     separate_all_dwis: bool,
-    ignore_shims: bool,
+    distortion_group_merge: str = 'concat',
 ):
-    """Decide which distortion groups are concatenated in the outputs."""
+    """Package correction units into final outputs.
+
+    Each unit is preprocessed independently; a final output spanning several
+    units concatenates (or averages, per ``distortion_group_merge``) their
+    *corrected* results. Curated MultipartIDs define the final outputs
+    verbatim. Otherwise, all corrected units in a session are packaged into
+    one final output ('concat'/'average') or kept separate ('none');
+    uncorrected units always stand alone - corrected and uncorrected volumes
+    never share a file.
+    """
     issues: list[GroupingIssue] = []
     dwi_records = {record.path: record for record in records if record.is_dwi}
     curated_ids = {record.multipart_id for record in dwi_records.values() if record.multipart_id}
 
-    # Assign each distortion group to a MultipartID
-    assignments: dict[str, tuple[str, Provenance]] = {}  # dgroup key -> (id, provenance)
+    # Assign each correction unit to a MultipartID
+    assignments: dict[str, tuple[str, Provenance]] = {}  # unit key -> (id, provenance)
 
     if separate_all_dwis:
         if curated_ids:
@@ -768,13 +845,13 @@ def build_concatenation_groups(
                     'in the sidecars: every DWI series will be a separate output.',
                 )
             )
-        for key, dgroup in distortion_groups.items():
-            stem = _entity_stem(dgroup.dwi_files[0])
+        for key, unit in correction_units.items():
+            stem = _entity_stem(unit.dwi_files[0])
             assignments[key] = (AUTO_PREFIX + 'single+' + stem, Provenance.INFERRED)
     elif curated_ids:
         uncurated_files = []
-        for key, dgroup in distortion_groups.items():
-            multipart_id = dwi_records[dgroup.dwi_files[0]].multipart_id
+        for key, unit in correction_units.items():
+            multipart_id = dwi_records[unit.dwi_files[0]].multipart_id
             if multipart_id:
                 if multipart_id.startswith(AUTO_PREFIX):
                     issues.append(
@@ -782,109 +859,53 @@ def build_concatenation_groups(
                             'reserved-multipartid-prefix',
                             f"MultipartID '{multipart_id}' uses the reserved "
                             f"'{AUTO_PREFIX}' prefix. Rename it in your sidecars.",
-                            dgroup.dwi_files,
+                            unit.dwi_files,
                         )
                     )
                 assignments[key] = (multipart_id, Provenance.CURATED)
             else:
-                stem = _entity_stem(dgroup.dwi_files[0])
+                stem = _entity_stem(unit.dwi_files[0])
                 assignments[key] = (AUTO_PREFIX + 'single+' + stem, Provenance.INFERRED)
-                uncurated_files.extend(dgroup.dwi_files)
+                uncurated_files.extend(unit.dwi_files)
         if uncurated_files:
             issues.append(
                 warning(
                     'partial-multipart',
                     f'{len(uncurated_files)} DWI series have no MultipartID while other '
-                    'series in this subject do. Series without one are NOT combined '
-                    'with anything: each becomes its own output. Set MultipartID on '
-                    'every series (or on none) to control concatenation explicitly.',
+                    'series in this subject do. Series without one are NOT packaged '
+                    'with the curated groups: each of their correction units becomes '
+                    'its own output. Set MultipartID on every series (or on none) to '
+                    'control the packaging explicitly.',
                     tuple(sorted(uncurated_files)),
                 )
             )
     else:
-        # Inferred: union-find over distortion groups, per session.
-        parent = {key: key for key in distortion_groups}
-
-        def find(key):
-            while parent[key] != key:
-                parent[key] = parent[parent[key]]
-                key = parent[key]
-            return key
-
-        def union(key_a, key_b):
-            root_a, root_b = find(key_a), find(key_b)
-            if root_a != root_b:
-                parent[max(root_a, root_b)] = min(root_a, root_b)
-
+        # Inferred: per session, corrected units package into one final
+        # output (their corrected results concatenate cleanly, whatever the
+        # shim or estimation boundaries between them). Uncorrected units
+        # stand alone.
         by_session = defaultdict(list)
-        for key, dgroup in distortion_groups.items():
-            by_session[dwi_records[dgroup.dwi_files[0]].session].append(key)
+        for key, unit in correction_units.items():
+            by_session[dwi_records[unit.dwi_files[0]].session].append(key)
 
-        loud_merges = []
-        for session_keys in by_session.values():
-            for key_a, key_b in combinations(sorted(session_keys), 2):
-                group_a = distortion_groups[key_a]
-                group_b = distortion_groups[key_b]
-                same_estimation = (
-                    group_a.b0field_source is not None
-                    and group_a.b0field_source == group_b.b0field_source
-                )
-                # Corrected by different fieldmaps: merged only when both
-                # estimations are qsiprep's own (inferred or flag-driven).
-                # A curated estimation boundary implies an output boundary -
-                # the backends apply one susceptibility correction per output,
-                # so merging across it would blend the curated fields.
-                both_corrected = (
-                    group_a.b0field_source is not None
-                    and group_b.b0field_source is not None
-                    and group_a.signature.compatible_shim(
-                        group_b.signature, ignore_shims=ignore_shims
-                    )
-                    and all(
-                        estimations[source].provenance
-                        not in (Provenance.CURATED, Provenance.TRANSLATED)
-                        for source in (group_a.b0field_source, group_b.b0field_source)
-                    )
-                )
-                # Same distortion AND same correction (including both
-                # uncorrected): stack freely. Same distortion but different
-                # correction can only arise under partial curation, where
-                # stacking would mix corrected with uncorrected volumes.
-                identical_signature = (
-                    group_a.signature.pe_dir is not None
-                    and group_a.signature.key == group_b.signature.key
-                    and group_a.b0field_source == group_b.b0field_source
-                )
-                if same_estimation or both_corrected or identical_signature:
-                    if both_corrected and not (same_estimation or identical_signature):
-                        loud_merges.append((key_a, key_b))
-                    union(key_a, key_b)
+        packages: list[tuple[str | None, list[str]]] = []  # (session, unit keys)
+        for session, session_keys in sorted(by_session.items(), key=lambda kv: str(kv[0])):
+            corrected = sorted(key for key in session_keys if correction_units[key].b0field_source)
+            uncorrected = sorted(
+                key for key in session_keys if not correction_units[key].b0field_source
+            )
+            if distortion_group_merge == 'none':
+                packages.extend((session, [key]) for key in corrected)
+            elif corrected:
+                packages.append((session, corrected))
+            packages.extend((session, [key]) for key in uncorrected)
 
-        components = defaultdict(list)
-        for key in distortion_groups:
-            components[find(key)].append(key)
-
-        for merge_a, merge_b in loud_merges:
-            if find(merge_a) == find(merge_b):
-                issues.append(
-                    warning(
-                        'inferred-concat-merge',
-                        f"Distortion groups '{merge_a}' and '{merge_b}' are corrected "
-                        'by different fieldmaps but share a session and shim '
-                        'settings, so their outputs will be concatenated. Use '
-                        'MultipartID (or separate_all_dwis) to keep them separate.',
-                        distortion_groups[merge_a].dwi_files
-                        + distortion_groups[merge_b].dwi_files,
-                    )
-                )
-
-        for index, (_, component) in enumerate(sorted(components.items(), key=lambda kv: kv[0])):
-            session = dwi_records[distortion_groups[component[0]].dwi_files[0]].session
+        for index, (session, unit_keys) in enumerate(packages):
             id_parts = [AUTO_PREFIX + 'concat']
             if session:
                 id_parts.append(f'ses-{session}')
             id_parts.append(str(index))
-            for key in component:
+            for key in unit_keys:
                 assignments[key] = ('+'.join(id_parts), Provenance.INFERRED)
 
     # Materialize the groups
@@ -892,47 +913,50 @@ def build_concatenation_groups(
     for key, (multipart_id, provenance) in assignments.items():
         members_by_id[multipart_id].append((key, provenance))
 
-    derived = {}
+    concatenation_groups: dict[str, ConcatenationGroup] = {}
+    output_names: dict[str, str] = {}
     for multipart_id, members in sorted(members_by_id.items()):
-        keys = tuple(sorted(key for key, _ in members))
+        unit_keys = tuple(sorted(key for key, _ in members))
+        keys = tuple(
+            sorted(
+                dgroup_key
+                for unit_key in unit_keys
+                for dgroup_key in correction_units[unit_key].distortion_groups
+            )
+        )
         dwi_files = tuple(
             sorted(path for key in keys for path in distortion_groups[key].dwi_files)
         )
-        derived[multipart_id] = (keys, dwi_files, members[0][1], derive_output_name(dwi_files))
+        provenance = members[0][1]
 
-    # When derived names collide, a curated MultipartID steps in as the acq-
-    # label of its output's name. Groups without one (inferred, or a
-    # MultipartID that sanitizes to nothing) keep the collision error below.
-    name_counts = Counter(name for _, _, _, name in derived.values())
-    for multipart_id, (keys, dwi_files, provenance, output_name) in derived.items():
-        if name_counts[output_name] < 2 or provenance is not Provenance.CURATED:
-            continue
-        label = ''.join(ch for ch in multipart_id if ch.isalnum())
-        if not label:
-            continue
-        disambiguated = derive_output_name(dwi_files, acq=label)
-        issues.append(
-            warning(
-                'output-name-disambiguated',
-                f"Multiple outputs would be named '{output_name}'; MultipartID "
-                f"'{multipart_id}' becomes the acq- label of its output instead: "
-                f"'{disambiguated}'.",
-                dwi_files,
-            )
-        )
-        derived[multipart_id] = (keys, dwi_files, provenance, disambiguated)
+        # A curated MultipartID of the form 'acq-<label>' does double duty:
+        # it groups the series AND renames the acq- entity of the output.
+        acq = None
+        if provenance is Provenance.CURATED and multipart_id.startswith('acq-'):
+            label = multipart_id[len('acq-') :]
+            if re.fullmatch('[0-9a-zA-Z]+', label):
+                acq = label
+            else:
+                issues.append(
+                    error(
+                        'multipartid-acq-invalid',
+                        f"MultipartID '{multipart_id}' begins with 'acq-', which names "
+                        f"the output's acq- entity, but '{label}' is not a valid BIDS "
+                        'label (alphanumeric characters only). Rename it.',
+                        dwi_files,
+                    )
+                )
+        output_name = derive_output_name(dwi_files, acq=acq)
 
-    concatenation_groups: dict[str, ConcatenationGroup] = {}
-    output_names: dict[str, str] = {}
-    for multipart_id, (keys, dwi_files, provenance, output_name) in derived.items():
         if output_name in output_names:
             issues.append(
                 error(
                     'output-name-collision',
                     f"Two output groups ('{output_names[output_name]}' and "
                     f"'{multipart_id}') would both be named '{output_name}'. "
-                    'Add distinguishing entities to the filenames or curate '
-                    'MultipartID to give them distinct memberships.',
+                    'Add distinguishing entities to the filenames, or use '
+                    "'acq-'-prefixed MultipartIDs (e.g. 'acq-multishell') to "
+                    'name the outputs explicitly.',
                     dwi_files,
                 )
             )
@@ -941,27 +965,32 @@ def build_concatenation_groups(
             multipart_id=multipart_id,
             provenance=provenance,
             distortion_groups=keys,
+            correction_units=unit_keys,
             dwi_files=dwi_files,
             output_name=output_name,
         )
 
-    # An estimation whose targets span outputs is legal (borrowing), but the
-    # user should know the same fieldmap will be estimated for each output.
-    for b0field_id, estimation in sorted(estimations.items()):
-        spanned = {
-            multipart_id
-            for multipart_id, concat in concatenation_groups.items()
-            for key in concat.distortion_groups
-            if distortion_groups[key].b0field_source == b0field_id
-        }
-        if len(spanned) > 1:
+    # An estimation whose targets span correction units is legal (borrowing),
+    # but the user should know the same fieldmap will be estimated once per
+    # unit pipeline.
+    spanned_units = defaultdict(set)
+    for unit_key, unit in correction_units.items():
+        if unit.b0field_source is not None:
+            spanned_units[unit.b0field_source].add(unit_key)
+    for b0field_id, unit_keys in sorted(spanned_units.items()):
+        if len(unit_keys) > 1:
+            files = tuple(
+                sorted(
+                    path for unit_key in unit_keys for path in correction_units[unit_key].dwi_files
+                )
+            )
             issues.append(
                 warning(
                     'estimation-spans-outputs',
                     f"Fieldmap estimation '{b0field_id}' corrects DWI series in "
-                    f'{len(spanned)} different outputs; it will be estimated once '
-                    'per output.',
-                    estimation.sources,
+                    f'{len(unit_keys)} different correction units; it will be '
+                    'estimated once per unit.',
+                    files,
                 )
             )
 
@@ -978,9 +1007,16 @@ def build_grouping(
     force_t2wreg: bool = False,
     use_synb0: bool = False,
     use_nipreps_syn_sdc: bool = False,
+    distortion_group_merge: str | None = 'concat',
     extra_issues: list[GroupingIssue] | None = None,
 ) -> DWIGrouping:
     """Assemble the full :class:`~.models.DWIGrouping` from indexed records."""
+    distortion_group_merge = distortion_group_merge or 'concat'
+    if distortion_group_merge not in ('concat', 'average', 'none'):
+        raise ValueError(
+            f"distortion_group_merge must be 'concat', 'average', or 'none', "
+            f'not {distortion_group_merge!r}.'
+        )
     issues = list(extra_issues or [])
 
     if ignore_sdc:
@@ -1048,16 +1084,26 @@ def build_grouping(
                 )
             )
 
+    correction_units = build_correction_units(records, distortion_groups, separate_all_dwis)
+
     concatenation_groups, concat_issues = build_concatenation_groups(
-        records, distortion_groups, estimations, separate_all_dwis, ignore_shims
+        records,
+        distortion_groups,
+        correction_units,
+        separate_all_dwis,
+        distortion_group_merge,
     )
     issues.extend(concat_issues)
 
     from .validation import check_data_compatibility
 
+    # Raw series are stacked per correction unit, so grid/FoV compatibility
+    # is a unit-level requirement. Across units the final concatenation
+    # happens after resampling to the output grid.
     issues.extend(
         check_data_compatibility(
             {record.path: record for record in records if record.is_dwi},
+            correction_units,
             concatenation_groups,
             ignore_fov=ignore_fov,
         )
@@ -1071,6 +1117,7 @@ def build_grouping(
         application_provenance=app_provenance,
         application_candidates=candidates,
         distortion_groups=distortion_groups,
+        correction_units=correction_units,
         concatenation_groups=concatenation_groups,
         issues=issues,
         synb0_requested=use_synb0,

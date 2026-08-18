@@ -1,7 +1,8 @@
-# Curated MultipartIDs (without the 'acq-' naming prefix) that produce two
-# outputs with the same derived BIDS name (both reduce to 'sub-01_dir-AP').
-# Expected: output-name-collision error advising 'acq-'-prefixed
-# MultipartIDs, which name the outputs explicitly (see acq_multipart).
+# MultipartIDs with the 'acq-' prefix do double duty: they group the series
+# AND rename the acq- entity of the output. Same file layout as
+# name_collision, but the outputs are named explicitly
+# (sub-01_acq-partA_dir-AP / sub-01_acq-partB_dir-AP): no collision, no
+# warning.
 '01':
   - anat:
       - suffix: T1w
@@ -12,25 +13,25 @@
         metadata:
           PhaseEncodingDirection: 'j-'
           TotalReadoutTime: 0.05
-          MultipartID: partA
+          MultipartID: acq-partA
       - dir: AP
         run: '2'
         suffix: dwi
         metadata:
           PhaseEncodingDirection: 'j-'
           TotalReadoutTime: 0.05
-          MultipartID: partA
+          MultipartID: acq-partA
       - dir: AP
         run: '3'
         suffix: dwi
         metadata:
           PhaseEncodingDirection: 'j-'
           TotalReadoutTime: 0.05
-          MultipartID: partB
+          MultipartID: acq-partB
       - dir: AP
         run: '4'
         suffix: dwi
         metadata:
           PhaseEncodingDirection: 'j-'
           TotalReadoutTime: 0.05
-          MultipartID: partB
+          MultipartID: acq-partB

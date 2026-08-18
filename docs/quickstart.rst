@@ -56,6 +56,29 @@ It is beneficial to have as much data as possible available for head motion corr
 However, the denoising preprocessing step has important caveats that should be considered.
 For a discussion see :ref:`merge_denoise`.
 
+.. _preview_grouping:
+
+Previewing how your data will be grouped
+========================================
+
+Before running any processing, you can ask *QSIPrep* exactly how it will
+interpret your dataset - which scans estimate each fieldmap, which fieldmap
+corrects which scan, and which scans end up combined in each output file::
+
+  qsiprep-group /path/to/bids --html grouping.html
+
+This prints a per-subject grouping report (every decision tagged with its
+provenance: curated by you, translated from ``IntendedFor``, requested by a
+flag, or inferred) plus a plain-language preview of what each processing
+backend would do with the data. The ``--html`` page is a self-contained
+visual explainer you can open in any browser. Nothing is processed and
+nothing is written to your dataset.
+
+If a grouping decision surprises you, the report names the sidecar field to
+set - ``B0FieldIdentifier``, ``B0FieldSource``, or ``MultipartID`` - to make
+your intent explicit. For a hands-on walkthrough of how each field changes
+the grouping, see the :doc:`grouping tutorial <notebooks/grouping_tutorial>`.
+
 
 ******************
 Specifying outputs

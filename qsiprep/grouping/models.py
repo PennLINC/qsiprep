@@ -265,12 +265,36 @@ class DistortionGroup:
 
 
 @dataclasses.dataclass(frozen=True)
+class CorrectionUnit:
+    """Distortion groups preprocessed through one pipeline with one correction.
+
+    The middle tier between :class:`DistortionGroup` and
+    :class:`ConcatenationGroup`: a unit's raw series are concatenated before
+    head-motion correction and receive ONE susceptibility correction. A final
+    output that spans several units concatenates the units' *corrected*
+    results afterward - correction boundaries (a curated fieldmap, a re-shim)
+    are unit boundaries, never a reason to blend fields.
+    """
+
+    key: str  # stable human-readable id, unique among units
+    distortion_groups: tuple[str, ...]  # DistortionGroup keys, sorted
+    dwi_files: tuple[str, ...]  # union of members, sorted
+    b0field_source: str | None  # the one estimation correcting this unit
+
+
+@dataclasses.dataclass(frozen=True)
 class ConcatenationGroup:
-    """DWI files concatenated into one output (one MultipartID)."""
+    """DWI files packaged into one final output (one MultipartID).
+
+    The corrected results of the member :class:`CorrectionUnit`\\ s are
+    concatenated (or averaged, per ``distortion_group_merge``) into the file
+    named ``output_name``.
+    """
 
     multipart_id: str  # curated MultipartID or 'auto+...'
     provenance: Provenance
     distortion_groups: tuple[str, ...]  # DistortionGroup keys, sorted
+    correction_units: tuple[str, ...]  # CorrectionUnit keys, sorted
     dwi_files: tuple[str, ...]  # union of members, sorted
     output_name: str  # e.g. 'sub-1_ses-1' - the concatenated BIDS name
 
@@ -293,7 +317,8 @@ class DWIGrouping:
     application_provenance: dict[str, Provenance]
     application_candidates: dict[str, tuple[str, ...]]  # dwi path -> all candidate ids
     distortion_groups: dict[str, DistortionGroup]
-    concatenation_groups: dict[str, ConcatenationGroup]
+    correction_units: dict[str, CorrectionUnit] = dataclasses.field(default_factory=dict)
+    concatenation_groups: dict[str, ConcatenationGroup] = dataclasses.field(default_factory=dict)
     issues: list = dataclasses.field(default_factory=list)
     #: SyNb0 was requested: a synthetic undistorted b=0 is available as the
     #: structural target for registration-based stages, overriding any T2w.
@@ -321,6 +346,11 @@ class DWIGrouping:
         """The member distortion groups of a concatenation group."""
         concat = self.concatenation_groups[multipart_id]
         return [self.distortion_groups[key] for key in concat.distortion_groups]
+
+    def correction_units_in(self, multipart_id: str) -> list[CorrectionUnit]:
+        """The member correction units of a concatenation group."""
+        concat = self.concatenation_groups[multipart_id]
+        return [self.correction_units[key] for key in concat.correction_units]
 
     def borrowed_sources(self, multipart_id: str) -> dict[str, list[str]]:
         """DWI series used by this concatenation group's fieldmap estimation
@@ -397,10 +427,19 @@ class DWIGrouping:
                 }
                 for key, group in sorted(self.distortion_groups.items())
             },
+            'correction_units': {
+                key: {
+                    'distortion_groups': list(unit.distortion_groups),
+                    'dwi_files': list(unit.dwi_files),
+                    'b0field_source': unit.b0field_source,
+                }
+                for key, unit in sorted(self.correction_units.items())
+            },
             'concatenation_groups': {
                 multipart_id: {
                     'provenance': group.provenance.value,
                     'distortion_groups': list(group.distortion_groups),
+                    'correction_units': list(group.correction_units),
                     'dwi_files': list(group.dwi_files),
                     'output_name': group.output_name,
                 }

@@ -32,7 +32,7 @@ Fieldmap estimations:
     phase encoding axes: j (bidirectional)
 
 Notes:
-  WARNING [estimation-spans-outputs]: Fieldmap estimation 'auto+pepolar+j' corrects DWI series in 2 different outputs; it will be estimated once per output.
+  WARNING [estimation-spans-outputs]: Fieldmap estimation 'auto+pepolar+j' corrects DWI series in 2 different correction units; it will be estimated once per unit.
 
 Processing preview: FSL path (TOPUP fieldmap estimation + eddy HMC/SDC)
 -----------------------------------------------------------------------

@@ -120,27 +120,36 @@ MAXB_TOLERANCE = 100.0
 
 def check_data_compatibility(
     records: dict,
+    correction_units: dict,
     concatenation_groups: dict,
     ignore_fov: bool = False,
 ) -> list[GroupingIssue]:
-    """Backend-independent data checks on each output's member series.
+    """Backend-independent data checks on the grouped series.
 
     These read properties of the images themselves (b-values, NIfTI grids)
     and therefore run at grouping time, once, rather than per backend:
 
-    - **Maximum b-value spread**: scanners often adjust acquisition
-      parameters (TE, gradient timings) when the maximum b-value changes, so
-      concatenating a b=1000 series with a b=3000 series deserves a warning.
-    - **Field of view**: the series concatenated into one output must share a
-      sampling grid. A pure translation offset is fixable by overwriting
-      affines (warning, with shim evidence); differing orientations break
-      axis-aligned distortion correction (error, downgradable with
-      ``ignore_fov``); differing matrix/voxel sizes cannot be stacked at all
-      (error, not downgradable).
+    - **Maximum b-value spread** (per final output): scanners often adjust
+      acquisition parameters (TE, gradient timings) when the maximum b-value
+      changes, so concatenating a b=1000 series with a b=3000 series
+      deserves a warning.
+    - **Field of view** (per correction unit - raw series are only ever
+      stacked within a unit; final concatenation happens after resampling):
+      a pure translation offset is fixable by overwriting affines (warning,
+      with shim evidence); differing orientations break axis-aligned
+      distortion correction (error, downgradable with ``ignore_fov``);
+      differing matrix/voxel sizes cannot be stacked at all (error, not
+      downgradable).
 
     Series whose b-values or headers could not be read are skipped.
     """
     issues: list[GroupingIssue] = []
+
+    unit_scope = {
+        unit_key: multipart_id
+        for multipart_id, concat in concatenation_groups.items()
+        for unit_key in concat.correction_units
+    }
 
     for multipart_id, concat in sorted(concatenation_groups.items()):
         members = [records[path] for path in concat.dwi_files if path in records]
@@ -166,6 +175,10 @@ def check_data_compatibility(
                     scope=multipart_id,
                 )
             )
+
+    for unit_key, unit in sorted(correction_units.items()):
+        multipart_id = unit_scope.get(unit_key)
+        members = [records[path] for path in unit.dwi_files if path in records]
 
         # --- field of view -------------------------------------------------
         gridded = [record for record in members if record.grid is not None]
@@ -196,7 +209,7 @@ def check_data_compatibility(
             issues.append(
                 error(
                     'fov-grid-mismatch',
-                    f"Series concatenated in output '{concat.output_name}' are "
+                    f"Series stacked in correction unit '{unit.key}' are "
                     f'sampled on different voxel grids ({names}: matrix size or '
                     'voxel size differs). They cannot be stacked volumewise. '
                     f'Either {separate_advice}, or resample them to a common '
@@ -217,7 +230,7 @@ def check_data_compatibility(
             issues.append(
                 make_issue(
                     'fov-oblique',
-                    f"Series concatenated in output '{concat.output_name}' have "
+                    f"Series stacked in correction unit '{unit.key}' have "
                     f'differently-oriented fields of view (slice orientations '
                     f'differ by up to {max_rotation:.1f} degrees). Susceptibility '
                     'and eddy-current distortions act along the acquisition axes, '
@@ -248,7 +261,7 @@ def check_data_compatibility(
             issues.append(
                 warning(
                     'fov-shifted',
-                    f"Series concatenated in output '{concat.output_name}' share "
+                    f"Series stacked in correction unit '{unit.key}' share "
                     f'a grid but their fields of view are offset by up to '
                     f'{max_shift:.1f} mm. The affines can be overwritten to align '
                     'them, but many scanners force a re-shim when the field of '

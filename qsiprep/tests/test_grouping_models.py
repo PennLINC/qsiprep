@@ -185,6 +185,7 @@ class TestShimEvidence:
     def _run(shim_a, shim_b):
         from qsiprep.grouping.models import (
             ConcatenationGroup,
+            CorrectionUnit,
             DistortionSignature,
             FileRecord,
             Provenance,
@@ -205,14 +206,21 @@ class TestShimEvidence:
             '/d/a_dwi.nii.gz': record('/d/a_dwi.nii.gz', shim_a, (0, 0, 0)),
             '/d/b_dwi.nii.gz': record('/d/b_dwi.nii.gz', shim_b, (10.0, 0, 0)),
         }
+        unit = CorrectionUnit(
+            key='sub-01',
+            distortion_groups=('a', 'b'),
+            dwi_files=tuple(records),
+            b0field_source=None,
+        )
         concat = ConcatenationGroup(
             multipart_id='auto+concat+0',
             provenance=Provenance.INFERRED,
             distortion_groups=('a', 'b'),
+            correction_units=('sub-01',),
             dwi_files=tuple(records),
             output_name='sub-01',
         )
-        issues = check_data_compatibility(records, {'auto+concat+0': concat})
+        issues = check_data_compatibility(records, {'sub-01': unit}, {'auto+concat+0': concat})
         (issue,) = [i for i in issues if i.code == 'fov-shifted']
         return issue.message
 

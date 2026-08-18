@@ -1,8 +1,7 @@
-# Two inferred concatenation groups (per-axis curated fieldmaps, no
-# MultipartID) whose derived names both reduce to 'sub-01'. With no curated
-# MultipartID to promote into an acq- label, the output-name-collision error
-# stands, telling the user to curate MultipartID (which now genuinely fixes
-# the name).
+# Per-axis curated fieldmaps, no MultipartID: two correction units (one per
+# curated estimation - their fields are never blended). Both units are
+# corrected, so their corrected results package into ONE final output
+# ('sub-01'). Under the old one-level model this was a name collision.
 '01':
   - anat:
       - suffix: T1w

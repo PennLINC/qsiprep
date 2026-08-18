@@ -46,16 +46,20 @@ def scan(
     name,
     folder='dwi',
     suffix=None,
-    pe_dir='j-',
-    readout=0.05,
-    shim=None,
+    PhaseEncodingDirection='j-',
+    TotalReadoutTime=0.05,
+    ShimSetting=None,
     session=None,
-    b0field_id=(),
-    b0field_source=(),
-    multipart_id=None,
-    intended_for=(),
+    B0FieldIdentifier=(),
+    B0FieldSource=(),
+    MultipartID=None,
+    IntendedFor=(),
 ):
-    """One imaging file plus the sidecar fields that grouping reads."""
+    """One imaging file plus its sidecar metadata.
+
+    The keyword arguments are named after the exact BIDS sidecar fields
+    they simulate, so each demo reads like the JSON you would write.
+    """
     suffix = suffix or ('dwi' if folder == 'dwi' else 'epi')
     sess = f'ses-{session}/' if session else ''
     as_tuple = lambda v: (v,) if isinstance(v, str) else tuple(v)  # noqa: E731
@@ -65,12 +69,14 @@ def scan(
         suffix=suffix,
         session=session,
         signature=DistortionSignature(
-            pe_dir=pe_dir, readout_time=readout, shim=tuple(shim) if shim else None
+            pe_dir=PhaseEncodingDirection,
+            readout_time=TotalReadoutTime,
+            shim=tuple(ShimSetting) if ShimSetting else None,
         ),
-        b0field_identifiers=as_tuple(b0field_id),
-        b0field_sources=as_tuple(b0field_source),
-        multipart_id=multipart_id,
-        intended_for=as_tuple(intended_for),
+        b0field_identifiers=as_tuple(B0FieldIdentifier),
+        b0field_sources=as_tuple(B0FieldSource),
+        multipart_id=MultipartID,
+        intended_for=as_tuple(IntendedFor),
     )
 
 
@@ -128,8 +134,8 @@ This is the zero-curation "HCP-style" case: acquire blip-up and blip-down, get
 susceptibility correction for free.
 
 ```{code-cell} ipython3
-ap = scan('sub-01_dir-AP_dwi.nii.gz', pe_dir='j-')
-pa = scan('sub-01_dir-PA_dwi.nii.gz', pe_dir='j')
+ap = scan('sub-01_dir-AP_dwi.nii.gz', PhaseEncodingDirection='j-')
+pa = scan('sub-01_dir-PA_dwi.nii.gz', PhaseEncodingDirection='j')
 g = group(ap, pa)
 show(g, height=780)
 ```
@@ -147,8 +153,8 @@ into one estimation too. Whether a given tool can consume that shape is a
 mix of encodings, while DRBUDDI needs a same-axis opposing pair and says so:
 
 ```{code-cell} ipython3
-lr = scan('sub-01_dir-LR_dwi.nii.gz', pe_dir='i-')
-pa = scan('sub-01_dir-PA_dwi.nii.gz', pe_dir='j')
+lr = scan('sub-01_dir-LR_dwi.nii.gz', PhaseEncodingDirection='i-')
+pa = scan('sub-01_dir-PA_dwi.nii.gz', PhaseEncodingDirection='j')
 g = group(lr, pa)
 print(report_text(g))
 print(describe_processing(g, 'tortoise'))
@@ -171,15 +177,15 @@ identical — only the sidecars changed. The estimation now has **your** name
 ```{code-cell} ipython3
 ap = scan(
     'sub-01_dir-AP_dwi.nii.gz',
-    pe_dir='j-',
-    b0field_id='pepolar_fmap',
-    b0field_source='pepolar_fmap',
+    PhaseEncodingDirection='j-',
+    B0FieldIdentifier='pepolar_fmap',
+    B0FieldSource='pepolar_fmap',
 )
 pa = scan(
     'sub-01_dir-PA_dwi.nii.gz',
-    pe_dir='j',
-    b0field_id='pepolar_fmap',
-    b0field_source='pepolar_fmap',
+    PhaseEncodingDirection='j',
+    B0FieldIdentifier='pepolar_fmap',
+    B0FieldSource='pepolar_fmap',
 )
 g = group(ap, pa)
 show(g, height=780)
@@ -193,15 +199,15 @@ it:
 ```{code-cell} ipython3
 dwi = scan(
     'sub-01_dir-AP_dwi.nii.gz',
-    pe_dir='j-',
-    b0field_id='epi_fmap',
-    b0field_source='epi_fmap',
+    PhaseEncodingDirection='j-',
+    B0FieldIdentifier='epi_fmap',
+    B0FieldSource='epi_fmap',
 )
 fmap = scan(
     'sub-01_dir-PA_epi.nii.gz',
     folder='fmap',
-    pe_dir='j',
-    b0field_id='epi_fmap',
+    PhaseEncodingDirection='j',
+    B0FieldIdentifier='epi_fmap',
 )
 g = group(dwi, fmap)
 show(g, height=700)
@@ -223,10 +229,10 @@ to analyze). Four runs, one output:
 
 ```{code-cell} ipython3
 runs = [
-    scan('sub-01_dir-AP_run-1_dwi.nii.gz', pe_dir='j-'),
-    scan('sub-01_dir-AP_run-2_dwi.nii.gz', pe_dir='j-'),
-    scan('sub-01_dir-PA_run-1_dwi.nii.gz', pe_dir='j'),
-    scan('sub-01_dir-PA_run-2_dwi.nii.gz', pe_dir='j'),
+    scan('sub-01_dir-AP_run-1_dwi.nii.gz', PhaseEncodingDirection='j-'),
+    scan('sub-01_dir-AP_run-2_dwi.nii.gz', PhaseEncodingDirection='j-'),
+    scan('sub-01_dir-PA_run-1_dwi.nii.gz', PhaseEncodingDirection='j'),
+    scan('sub-01_dir-PA_run-2_dwi.nii.gz', PhaseEncodingDirection='j'),
 ]
 g = group(*runs)
 print(report_text(g))
@@ -241,10 +247,10 @@ up in the other output:
 
 ```{code-cell} ipython3
 runs = [
-    scan('sub-01_dir-AP_run-1_dwi.nii.gz', pe_dir='j-', multipart_id='part1'),
-    scan('sub-01_dir-AP_run-2_dwi.nii.gz', pe_dir='j-', multipart_id='part2'),
-    scan('sub-01_dir-PA_run-1_dwi.nii.gz', pe_dir='j', multipart_id='part1'),
-    scan('sub-01_dir-PA_run-2_dwi.nii.gz', pe_dir='j', multipart_id='part2'),
+    scan('sub-01_dir-AP_run-1_dwi.nii.gz', PhaseEncodingDirection='j-', MultipartID='part1'),
+    scan('sub-01_dir-AP_run-2_dwi.nii.gz', PhaseEncodingDirection='j-', MultipartID='part2'),
+    scan('sub-01_dir-PA_run-1_dwi.nii.gz', PhaseEncodingDirection='j', MultipartID='part1'),
+    scan('sub-01_dir-PA_run-2_dwi.nii.gz', PhaseEncodingDirection='j', MultipartID='part2'),
 ]
 g = group(*runs)
 show(g, height=900)
@@ -253,6 +259,22 @@ show(g, height=900)
 The dashed "borrows b=0 volumes from…" sentences make this visible: borrowed
 scans improve the *fieldmap*, but their diffusion volumes are **not** written
 into that output file.
+
+**Naming the outputs.** A MultipartID that begins with `acq-` does double
+duty: it still groups the scans, and its label becomes the `acq-` entity of
+the output filename. This is also the fix when two outputs would otherwise
+derive the same name (QSIPrep refuses to guess a name for you — colliding
+names are a hard error until you name the groups):
+
+```{code-cell} ipython3
+runs = [
+    scan('sub-01_dir-AP_dwi.nii.gz', PhaseEncodingDirection='j-', MultipartID='acq-multishell'),
+    scan('sub-01_dir-PA_dwi.nii.gz', PhaseEncodingDirection='j', MultipartID='acq-multishell'),
+]
+g = group(*runs)
+(concat,) = g.concatenation_groups.values()
+print(concat.multipart_id, '->', concat.output_name)
+```
 
 ## 5. Partial curation: curating some scans and not others
 
@@ -272,51 +294,53 @@ correct each other, you would have given them a `B0FieldIdentifier` too:
 runs = [
     scan(
         'sub-01_dir-AP_run-1_dwi.nii.gz',
-        pe_dir='j-',
-        b0field_id='pepolar01',
-        b0field_source='pepolar01',
+        PhaseEncodingDirection='j-',
+        B0FieldIdentifier='pepolar01',
+        B0FieldSource='pepolar01',
     ),
     scan(
         'sub-01_dir-PA_run-1_dwi.nii.gz',
-        pe_dir='j',
-        b0field_id='pepolar01',
-        b0field_source='pepolar01',
+        PhaseEncodingDirection='j',
+        B0FieldIdentifier='pepolar01',
+        B0FieldSource='pepolar01',
     ),
-    scan('sub-01_dir-AP_run-2_dwi.nii.gz', pe_dir='j-'),
-    scan('sub-01_dir-PA_run-2_dwi.nii.gz', pe_dir='j'),
+    scan('sub-01_dir-AP_run-2_dwi.nii.gz', PhaseEncodingDirection='j-'),
+    scan('sub-01_dir-PA_run-2_dwi.nii.gz', PhaseEncodingDirection='j'),
 ]
 g = group(*runs)
 show(g, height=900)
 ```
 
-Note the outputs: a curated correction boundary is also an **output
-boundary**. The corrected run-1 pair concatenates into one file, and the
-uncorrected run-2 scans each stand alone — the backends apply one
-susceptibility correction per output, so stacking corrected and uncorrected
-volumes into one file would be worse than either problem.
+Note the outputs: a correction boundary is a **correction-unit boundary** —
+each unit is concatenated and corrected in its own pipeline, with exactly one
+susceptibility correction. Corrected and uncorrected volumes never share a
+final file, so the corrected run-1 pair becomes one output while the
+uncorrected run-2 scans stand alone.
 
 The safety net for unlinked scans is the **fieldmap-less ladder**, which
 stays available because — unlike sidecar metadata — it is under your control
 at run time (`--use-syn-sdc`, `--use-synb0`, or the automatic T2w fallback).
 Add a T2w to the same subject and run-2 is rescued, visibly tagged
-*inferred*, in its own output:
+*inferred*, in its own correction unit — and because every unit is now
+corrected, their corrected results are concatenated into a single final
+output:
 
 ```{code-cell} ipython3
-t2w = scan('sub-01_T2w.nii.gz', folder='anat', suffix='T2w', pe_dir=None, readout=None)
+t2w = scan('sub-01_T2w.nii.gz', folder='anat', suffix='T2w', PhaseEncodingDirection=None, TotalReadoutTime=None)
 g = group(*runs, t2w)
 print(report_text(g))
 ```
 
 **Partial `MultipartID`** works the same way: series carrying one are combined
-as asked, and series without one are *not* combined with anything — each
-becomes its own output file:
+as asked, and series without one are *not* packaged with the curated groups —
+each of their correction units becomes its own output file:
 
 ```{code-cell} ipython3
 runs = [
-    scan('sub-01_dir-AP_run-1_dwi.nii.gz', pe_dir='j-', multipart_id='combined'),
-    scan('sub-01_dir-PA_run-1_dwi.nii.gz', pe_dir='j', multipart_id='combined'),
-    scan('sub-01_dir-AP_run-2_dwi.nii.gz', pe_dir='j-'),
-    scan('sub-01_dir-PA_run-2_dwi.nii.gz', pe_dir='j'),
+    scan('sub-01_dir-AP_run-1_dwi.nii.gz', PhaseEncodingDirection='j-', MultipartID='combined'),
+    scan('sub-01_dir-PA_run-1_dwi.nii.gz', PhaseEncodingDirection='j', MultipartID='combined'),
+    scan('sub-01_dir-AP_run-2_dwi.nii.gz', PhaseEncodingDirection='j-'),
+    scan('sub-01_dir-PA_run-2_dwi.nii.gz', PhaseEncodingDirection='j'),
 ]
 g = group(*runs)
 for concat in g.concatenation_groups.values():
@@ -327,24 +351,25 @@ for issue in g.warnings:
 ```
 
 Note that the *estimation* still pools all four scans (none of them carries
-`B0Field*` curation, and estimation membership is independent of
-concatenation) — so each single-scan output borrows the others' b=0 images
-for its fieldmap.
+`B0Field*` curation, and estimation membership is independent of the
+packaging) — so each output borrows the others' b=0 images for its fieldmap.
 
 ## 6. `ShimSetting`: when the scanner re-shims
 
 The scanner's shim state is part of the distortion signature. If run-2 was
 acquired after a re-shim (different `ShimSetting` values), its distortion no
-longer matches run-1 — so QSIPrep refuses to treat them as interchangeable:
-the runs split into separate outputs and separate estimation pools, with a
-warning explaining why.
+longer matches run-1 — so the runs get separate estimation pools and separate
+correction units, each corrected with its own field, with a warning
+explaining why. Because both units end up corrected, their corrected results
+are then concatenated into one final output — the shim boundary changes how
+the data are *corrected*, not how they are *packaged*.
 
 ```{code-cell} ipython3
 runs = [
-    scan('sub-01_dir-AP_run-1_dwi.nii.gz', pe_dir='j-', shim=(1.0, 2.0, 3.0)),
-    scan('sub-01_dir-PA_run-1_dwi.nii.gz', pe_dir='j', shim=(1.0, 2.0, 3.0)),
-    scan('sub-01_dir-AP_run-2_dwi.nii.gz', pe_dir='j-', shim=(9.0, 9.0, 9.0)),
-    scan('sub-01_dir-PA_run-2_dwi.nii.gz', pe_dir='j', shim=(9.0, 9.0, 9.0)),
+    scan('sub-01_dir-AP_run-1_dwi.nii.gz', PhaseEncodingDirection='j-', ShimSetting=(1.0, 2.0, 3.0)),
+    scan('sub-01_dir-PA_run-1_dwi.nii.gz', PhaseEncodingDirection='j', ShimSetting=(1.0, 2.0, 3.0)),
+    scan('sub-01_dir-AP_run-2_dwi.nii.gz', PhaseEncodingDirection='j-', ShimSetting=(9.0, 9.0, 9.0)),
+    scan('sub-01_dir-PA_run-2_dwi.nii.gz', PhaseEncodingDirection='j', ShimSetting=(9.0, 9.0, 9.0)),
 ]
 g = group(*runs)
 print(report_text(g))
@@ -365,9 +390,9 @@ fallbacks. If the subject has a T2w image, it infers a **T2w registration**
 (T2Wreg) correction — the distorted b=0 is registered to the undistorted T2w:
 
 ```{code-cell} ipython3
-dwi = scan('sub-01_dir-AP_dwi.nii.gz', pe_dir='j-')
-t1w = scan('sub-01_T1w.nii.gz', folder='anat', suffix='T1w', pe_dir=None, readout=None)
-t2w = scan('sub-01_T2w.nii.gz', folder='anat', suffix='T2w', pe_dir=None, readout=None)
+dwi = scan('sub-01_dir-AP_dwi.nii.gz', PhaseEncodingDirection='j-')
+t1w = scan('sub-01_T1w.nii.gz', folder='anat', suffix='T1w', PhaseEncodingDirection=None, TotalReadoutTime=None)
+t2w = scan('sub-01_T2w.nii.gz', folder='anat', suffix='T2w', PhaseEncodingDirection=None, TotalReadoutTime=None)
 g = group(dwi, t1w, t2w)
 show(g, height=680, backend='tortoise')
 ```
@@ -394,8 +419,8 @@ and then refines with DRBUDDI.
 
 ```{code-cell} ipython3
 runs = [
-    scan('sub-01_dir-AP_dwi.nii.gz', pe_dir='j-'),
-    scan('sub-01_dir-PA_dwi.nii.gz', pe_dir='j'),
+    scan('sub-01_dir-AP_dwi.nii.gz', PhaseEncodingDirection='j-'),
+    scan('sub-01_dir-PA_dwi.nii.gz', PhaseEncodingDirection='j'),
 ]
 g = group(*runs)
 for backend in ('fsl', 'tortoise', 'mixed'):
@@ -415,12 +440,12 @@ legacy mechanism. **Do not use it for new curation**; use
 `B0FieldIdentifier`/`B0FieldSource` (section 3) instead.
 
 ```{code-cell} ipython3
-dwi = scan('sub-01_dir-AP_dwi.nii.gz', pe_dir='j-')
+dwi = scan('sub-01_dir-AP_dwi.nii.gz', PhaseEncodingDirection='j-')
 fmap = scan(
     'sub-01_dir-PA_epi.nii.gz',
     folder='fmap',
-    pe_dir='j',
-    intended_for=dwi.path,
+    PhaseEncodingDirection='j',
+    IntendedFor=dwi.path,
 )
 g = group(dwi, fmap)
 show(g, height=700)
@@ -435,16 +460,16 @@ and `B0FieldIdentifier`, the `B0Field*` links are used exclusively and the
 ```{code-cell} ipython3
 dwi = scan(
     'sub-01_dir-AP_dwi.nii.gz',
-    pe_dir='j-',
-    b0field_id='my_fmap',  # its b=0 volumes feed the estimation...
-    b0field_source='my_fmap',  # ...and the estimation corrects it
+    PhaseEncodingDirection='j-',
+    B0FieldIdentifier='my_fmap',  # its b=0 volumes feed the estimation...
+    B0FieldSource='my_fmap',  # ...and the estimation corrects it
 )
 fmap = scan(
     'sub-01_dir-PA_epi.nii.gz',
     folder='fmap',
-    pe_dir='j',
-    b0field_id='my_fmap',
-    intended_for=dwi.path,  # ignored: B0FieldIdentifier supersedes it
+    PhaseEncodingDirection='j',
+    B0FieldIdentifier='my_fmap',
+    IntendedFor=dwi.path,  # ignored: B0FieldIdentifier supersedes it
 )
 g = group(dwi, fmap)
 for issue in g.issues:
@@ -457,13 +482,13 @@ for the rest of it. Here the fieldmap is intended only for the AP series, so
 the unlinked PA series gets no estimation and goes uncorrected:
 
 ```{code-cell} ipython3
-ap = scan('sub-01_dir-AP_dwi.nii.gz', pe_dir='j-')
-pa = scan('sub-01_dir-PA_dwi.nii.gz', pe_dir='j')
+ap = scan('sub-01_dir-AP_dwi.nii.gz', PhaseEncodingDirection='j-')
+pa = scan('sub-01_dir-PA_dwi.nii.gz', PhaseEncodingDirection='j')
 fmap = scan(
     'sub-01_dir-PA_epi.nii.gz',
     folder='fmap',
-    pe_dir='j',
-    intended_for=ap.path,  # links AP only; PA is left unlinked
+    PhaseEncodingDirection='j',
+    IntendedFor=ap.path,  # links AP only; PA is left unlinked
 )
 g = group(ap, pa, fmap)
 print(report_text(g))
@@ -478,7 +503,7 @@ Everything above runs from a real BIDS directory too — without processing
 anything:
 
 ```bash
-python -m qsiprep.grouping /path/to/bids --html grouping.html
+qsiprep-group /path/to/bids --html grouping.html
 ```
 
 prints the grouping report plus all three backend previews, and writes the
