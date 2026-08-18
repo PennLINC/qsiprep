@@ -691,7 +691,15 @@ def harmonize_b0s(dwi_files, bvals, b0_threshold, do_harmonization):
     b0_means = []
     for dwi_file, bval_file in zip(dwi_files, bvals, strict=False):
         dwi_nii = load_img(dwi_file)
-        _bvals = np.loadtxt(bval_file)
+        if dwi_nii.ndim == 3:
+            # A single-volume correction unit: promote to 4D so volume
+            # indexing and concatenation see a consistent shape.
+            dwi_nii = nb.Nifti1Image(
+                np.asanyarray(dwi_nii.dataobj)[..., np.newaxis],
+                dwi_nii.affine,
+                dwi_nii.header,
+            )
+        _bvals = np.atleast_1d(np.loadtxt(bval_file))
         b0_indices = np.flatnonzero(_bvals < b0_threshold)
         if b0_indices.size == 0:
             LOGGER.warning(f'No b<{b0_threshold} images found in {dwi_file}')
