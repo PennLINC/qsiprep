@@ -13,7 +13,6 @@ from nipype.interfaces import utility as niu
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
 from ... import config
-from ...data import load as load_data
 from ...interfaces import DerivativesDataSink
 from ...interfaces.ants import MultivariateTemplateConstruction2
 from ...interfaces.images import ExtractWM
