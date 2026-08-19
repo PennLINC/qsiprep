@@ -64,8 +64,9 @@ def init_intramodal_template_wf(
     omp_nthreads = config.nipype.omp_nthreads
     workflow = Workflow(name=name)
     workflow.__desc__ = (
-        'An unbiased DWI reference image was constructed from b=0 volumes across runs and '
-        'sessions, allowing each run to be registered to the same AC-PC space. '
+        'An unbiased DWI reference image was constructed by coregistering all b=0 volumes across '
+        'runs and sessions to each other, allowing each run to be registered to the same AC-PC '
+        'reference image. '
     )
 
     input_names = [name.replace('-', '_') + '_b0_template' for name in inputs_list]
@@ -180,7 +181,7 @@ def init_intramodal_template_wf(
     else:
         workflow.__desc__ += (
             'The unbiased b=0 template was constructed using '
-            f'antsMultivariateTemplateConstruction2, using {transform} transforms.'
+            f'antsMultivariateTemplateConstruction2.sh, using {transform} transforms.'
         )
         runtime_opts = {'num_cores': 1, 'parallel_control': 0}
         if omp_nthreads > 1:
