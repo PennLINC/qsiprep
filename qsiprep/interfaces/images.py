@@ -271,6 +271,116 @@ CONFORMATION_TEMPLATE = """\t\t<h3 class="elem-title">Anatomical Conformation</h
 DISCARD_TEMPLATE = """\t\t\t\t<li><abbr title="{path}">{basename}</abbr></li>"""
 
 
+class _TemplateDimensionsInputSpec(BaseInterfaceInputSpec):
+    anat_type = traits.Enum('T1w', 'T2w', usedefault=True, desc='Anatomical image type')
+    anat_list = InputMultiObject(
+        File(exists=True), xor=['t1w_list'], desc='input anatomical images'
+    )
+    t1w_list = InputMultiObject(
+        File(exists=True),
+        xor=['anat_list'],
+        deprecated='1.14.0',
+        new_name='anat_list',
+    )
+    max_scale = traits.Float(
+        3.0, usedefault=True, desc='Maximum scaling factor in images to accept'
+    )
+
+
+class _TemplateDimensionsOutputSpec(TraitedSpec):
+    t1w_valid_list = OutputMultiObject(exists=True, desc='valid T1w images')
+    anat_valid_list = OutputMultiObject(exists=True, desc='valid anatomical images')
+    target_zooms = traits.Tuple(
+        traits.Float, traits.Float, traits.Float, desc='Target zoom information'
+    )
+    target_shape = traits.Tuple(
+        traits.Int, traits.Int, traits.Int, desc='Target shape information'
+    )
+    out_report = File(exists=True, desc='conformation report')
+
+
+class TemplateDimensions(SimpleInterface):
+    """
+    Finds template target dimensions for a series of anatomical images, filtering low-resolution
+    images, if necessary.
+
+    Along each axis, the minimum voxel size (zoom) and the maximum number of voxels (shape) are
+    found across images.
+
+    The ``max_scale`` parameter sets a bound on the degree of up-sampling performed.
+    By default, an image with a voxel size greater than 3x the smallest voxel size
+    (calculated separately for each dimension) will be discarded.
+
+    To select images that require no scaling (i.e. all have smallest voxel sizes),
+    set ``max_scale=1``.
+
+    NOTE: This is copied from niworkflows, but with changes to reflect QSIPrep-specific processing
+    such as LPS orientation instead of RAS.
+    """
+
+    input_spec = _TemplateDimensionsInputSpec
+    output_spec = _TemplateDimensionsOutputSpec
+
+    def _generate_segment(self, discards, dims, zooms):
+        items = [
+            DISCARD_TEMPLATE.format(path=path, basename=os.path.basename(path))
+            for path in discards
+        ]
+        discard_list = '\n'.join(['\t\t\t<ul>'] + items + ['\t\t\t</ul>']) if items else ''
+        zoom_fmt = '{:.02g}mm x {:.02g}mm x {:.02g}mm'.format(*zooms)
+        return CONFORMATION_TEMPLATE.format(
+            anat=self.inputs.anat_type,
+            n_anat=len(self.inputs.anat_list),
+            dims='x'.join(map(str, dims)),
+            zooms=zoom_fmt,
+            n_discards=len(discards),
+            discard_list=discard_list,
+        )
+
+    def _run_interface(self, runtime):
+        # Load images, orient as RAS, collect shape and zoom data
+        if not self.inputs.anat_list:  # Deprecate: 1.14.0
+            self.inputs.anat_list = self.inputs.t1w_list
+
+        in_names = np.array(self.inputs.anat_list)
+        orig_imgs = np.vectorize(nb.load)(in_names)
+        reoriented = np.vectorize(nb.as_closest_canonical)(orig_imgs)
+        all_zooms = np.array([img.header.get_zooms()[:3] for img in reoriented])
+        all_shapes = np.array([img.shape[:3] for img in reoriented])
+
+        # Identify images that would require excessive up-sampling
+        valid = np.ones(all_zooms.shape[0], dtype=bool)
+        while valid.any():
+            target_zooms = all_zooms[valid].min(axis=0)
+            scales = all_zooms[valid] / target_zooms
+            if np.all(scales < self.inputs.max_scale):
+                break
+            valid[valid] ^= np.any(scales == scales.max(), axis=1)
+
+        # Ignore dropped images
+        valid_fnames = np.atleast_1d(in_names[valid]).tolist()
+        self._results['anat_valid_list'] = valid_fnames
+        self._results['t1w_valid_list'] = valid_fnames  # Deprecate: 1.14.0
+
+        # Set target shape information
+        target_zooms = all_zooms[valid].min(axis=0)
+        target_shape = all_shapes[valid].max(axis=0)
+
+        self._results['target_zooms'] = tuple(target_zooms.tolist())
+        self._results['target_shape'] = tuple(target_shape.tolist())
+
+        # Create report
+        dropped_images = in_names[~valid]
+        segment = self._generate_segment(dropped_images, target_shape, target_zooms)
+        out_report = os.path.join(runtime.cwd, 'report.html')
+        with open(out_report, 'w') as fobj:
+            fobj.write(segment)
+
+        self._results['out_report'] = out_report
+
+        return runtime
+
+
 class ConformInputSpec(BaseInterfaceInputSpec):
     in_file = File(mandatory=True, desc='Input image')
     target_zooms = traits.Tuple(
