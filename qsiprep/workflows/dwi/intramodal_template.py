@@ -64,6 +64,11 @@ def init_intramodal_template_wf(
     """
     omp_nthreads = config.nipype.omp_nthreads
     workflow = Workflow(name=name)
+    workflow.__desc__ = (
+        'An unbiased DWI reference image was constructed from b=0 volumes across runs and '
+        'sessions, allowing each run to be registered to the same AC-PC space. '
+    )
+
     input_names = [name.replace('-', '_') + '_b0_template' for name in inputs_list]
     output_names = [name.replace('-', '_') + '_transform' for name in inputs_list]
 
@@ -127,6 +132,11 @@ def init_intramodal_template_wf(
     # Rigid be offered at all -- it is not in the mvtc2 enum.
     linear_only = transform in ('Rigid', 'Affine')
     if linear_only:
+        workflow.__desc__ += (
+            f'The unbiased b=0 template was constructed over {num_iterations} iterations '
+            f'of {transform} registrations.'
+        )
+
         # initialize_com because sessions can differ by centimetres of table
         # position, which the shoreline settings' two resolution levels and
         # absent initialization will not recover from.
@@ -166,6 +176,10 @@ def init_intramodal_template_wf(
 
         template_node, template_field = linear_template_wf, 'outputnode.final_template'
     else:
+        workflow.__desc__ += (
+            'The unbiased b=0 template was constructed using '
+            f'antsMultivariateTemplateConstruction2, using {transform} transforms.'
+        )
         runtime_opts = {'num_cores': 1, 'parallel_control': 0}
         if omp_nthreads > 1:
             runtime_opts = {'num_cores': omp_nthreads, 'parallel_control': 2}
