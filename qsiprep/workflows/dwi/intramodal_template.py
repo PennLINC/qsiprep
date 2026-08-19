@@ -130,7 +130,8 @@ def init_intramodal_template_wf(
     # antsMultivariateTemplateConstruction2 only offers BSplineSyN/SyN/Affine, so
     # linear-only templates are built with init_b0_hmc_wf instead. That also lets
     # Rigid be offered at all -- it is not in the mvtc2 enum.
-    # aMTC2's Affine option doesn't work well, so we use init_b0_hmc_wf for that instead.
+    # aMTC2's Affine option produces equivalent results to init_b0_hmc_wf, but is slower,
+    # so we just use init_b0_hmc_wf for Affine.
     linear_only = transform in ('Rigid', 'Affine')
     if linear_only:
         workflow.__desc__ += (
