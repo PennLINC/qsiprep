@@ -39,6 +39,8 @@ def init_intramodal_template_wf(
     ----------
     inputs_list: list of inputs
         List if identifiers for the input b=0 images.
+    t1w_source_file : str
+        Generalized anatomical image path that accounts for entities in all inputs.
     transform: 'Rigid', 'Affine', 'BSplineSyN'
         Which transform to ultimately use. If 'BSplineSyN', first 2 iterations of Affine will
         be run.

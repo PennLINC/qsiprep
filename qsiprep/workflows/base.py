@@ -426,8 +426,8 @@ to workflows in *QSIPrep*'s documentation]\
         )
 
         intramodal_template_wf = init_intramodal_template_wf(
-            t1w_source_file=anat_source_file,
             inputs_list=sorted(outputs_to_files.keys()),
+            t1w_source_file=anat_source_file,
             transform=config.workflow.intramodal_template_transform,
             num_iterations=config.workflow.intramodal_template_iters or 2,
             name='intramodal_template_wf',
