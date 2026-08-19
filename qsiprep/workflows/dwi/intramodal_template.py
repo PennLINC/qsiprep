@@ -109,7 +109,7 @@ def init_intramodal_template_wf(
 
     merge_inputs = pe.Node(niu.Merge(len(input_names)), name='merge_inputs')
     for input_num, input_name in enumerate(input_names):
-        workflow.connect(inputnode, input_name, merge_inputs, 'in%d' % (input_num + 1))
+        workflow.connect([(inputnode, merge_inputs, [(input_name, f'in{input_num + 1}')])])
 
     rename_inputs = pe.MapNode(
         niu.Rename(keep_ext=True),
@@ -121,10 +121,11 @@ def init_intramodal_template_wf(
     workflow.connect([(merge_inputs, rename_inputs, [('out', 'in_file')])])
 
     split_outputs = pe.Node(
-        niu.Split(splits=[1] * len(input_names), squeeze=True), name='split_outputs'
+        niu.Split(splits=[1] * len(input_names), squeeze=True),
+        name='split_outputs',
     )
     for output_num, output_name in enumerate(output_names):
-        workflow.connect(split_outputs, 'out%d' % (output_num + 1), outputnode, output_name)
+        workflow.connect([(split_outputs, outputnode, [(f'out{output_num + 1}', output_name)])])
 
     # antsMultivariateTemplateConstruction2 only offers BSplineSyN/SyN/Affine, so
     # linear-only templates are built with init_b0_hmc_wf instead. That also lets
