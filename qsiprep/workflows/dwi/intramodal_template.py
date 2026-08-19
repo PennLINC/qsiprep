@@ -20,6 +20,7 @@ from ...interfaces.images import ExtractWM
 from ...interfaces.template_qc import TemplateQC
 from .hmc import init_b0_hmc_wf
 from .registration import init_b0_to_anat_registration_wf
+from .util import _list_squeeze
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
@@ -256,7 +257,3 @@ def init_intramodal_template_wf(
     ])  # fmt:skip
 
     return workflow
-
-
-def _list_squeeze(in_list):
-    return [item[0] for item in in_list]
