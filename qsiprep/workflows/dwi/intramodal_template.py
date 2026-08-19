@@ -30,7 +30,6 @@ def init_intramodal_template_wf(
     t1w_source_file,
     transform='BSplineSyN',
     num_iterations=2,
-    mem_gb=3,
     name='intramodal_template_wf',
 ):
     """Create an unbiased intramodal template for a subject. This aligns the b=0 references
