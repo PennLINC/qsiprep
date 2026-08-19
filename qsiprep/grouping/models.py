@@ -198,7 +198,10 @@ class FileRecord:
     # Curated fields, verbatim (empty/None when absent):
     b0field_identifiers: tuple[str, ...] = ()
     b0field_sources: tuple[str, ...] = ()
-    multipart_id: str | None = None
+    # A single MultipartID is the common case; a list means the series is
+    # curated into several overlapping output groups (benchmarking) and is
+    # preprocessed once per group. Empty means uncurated.
+    multipart_id: tuple[str, ...] = ()
     intended_for: tuple[str, ...] = ()  # resolved absolute paths (fmap only)
     metadata: Mapping[str, Any] = dataclasses.field(default_factory=dict)
     # Read from the sibling .bval file (dwi only); None = undetermined:
@@ -262,6 +265,10 @@ class DistortionGroup:
     signature: DistortionSignature
     dwi_files: tuple[str, ...]  # sorted
     b0field_source: str | None  # estimation id that corrects this group
+    # The one output scope this group was built for: a curated MultipartID,
+    # or None (inferred/separate). A series curated into several groups yields
+    # one DistortionGroup per scope, so the scope is carried, never re-derived.
+    multipart_scope: str | None = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -280,6 +287,9 @@ class CorrectionUnit:
     distortion_groups: tuple[str, ...]  # DistortionGroup keys, sorted
     dwi_files: tuple[str, ...]  # union of members, sorted
     b0field_source: str | None  # the one estimation correcting this unit
+    # The output scope this unit was built for (see DistortionGroup); all of a
+    # unit's distortion groups share it.
+    multipart_scope: str | None = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -390,7 +400,7 @@ class DWIGrouping:
                     'shim': list(rec.signature.shim) if rec.signature.shim else None,
                     'b0field_identifiers': list(rec.b0field_identifiers),
                     'b0field_sources': list(rec.b0field_sources),
-                    'multipart_id': rec.multipart_id,
+                    'multipart_id': list(rec.multipart_id),
                     'intended_for': list(rec.intended_for),
                     'shelled': rec.shelled,
                     'shells': list(rec.shells),
@@ -424,6 +434,7 @@ class DWIGrouping:
                     'shim': list(group.signature.shim) if group.signature.shim else None,
                     'dwi_files': list(group.dwi_files),
                     'b0field_source': group.b0field_source,
+                    'multipart_scope': group.multipart_scope,
                 }
                 for key, group in sorted(self.distortion_groups.items())
             },
@@ -432,6 +443,7 @@ class DWIGrouping:
                     'distortion_groups': list(unit.distortion_groups),
                     'dwi_files': list(unit.dwi_files),
                     'b0field_source': unit.b0field_source,
+                    'multipart_scope': unit.multipart_scope,
                 }
                 for key, unit in sorted(self.correction_units.items())
             },

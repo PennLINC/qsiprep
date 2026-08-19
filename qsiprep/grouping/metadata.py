@@ -250,7 +250,7 @@ def _record_from_file(
         signature=build_signature(metadata),
         b0field_identifiers=_normalize_to_tuple(metadata.get('B0FieldIdentifier')),
         b0field_sources=_normalize_to_tuple(metadata.get('B0FieldSource')),
-        multipart_id=metadata.get('MultipartID'),
+        multipart_id=_normalize_to_tuple(metadata.get('MultipartID')),
         intended_for=intended_for,
         metadata=metadata,
         shelled=shelled,

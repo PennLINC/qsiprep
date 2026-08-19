@@ -138,9 +138,17 @@ def _check_estimation_shims(
             return
 
 
-def _unique_id(base: str, taken) -> str:
+def _unique_id(base: str, taken, scope: str | None = None) -> str:
     if base not in taken:
         return base
+    # The same series curated into several output groups yields identically
+    # named distortion groups/units; disambiguate with the output scope (a
+    # readable MultipartID) before falling back to a numeric suffix.
+    if scope:
+        scoped = f'{base}_{scope}'
+        if scoped not in taken:
+            return scoped
+        base = scoped
     counter = 2
     while f'{base}+{counter}' in taken:
         counter += 1
@@ -721,27 +729,36 @@ def build_distortion_groups(
 
     Files are grouped by their distortion parameters, the fieldmap applied to
     them, and their output (MultipartID or ``separate_all_dwis``), so a single
-    group can never span two fieldmaps or two output files.
+    group can never span two fieldmaps or two output files. A series curated
+    into several MultipartIDs (benchmarking) contributes to one group per
+    output scope, so the group's scope is stored, never re-derived.
     """
     dwi_records = [record for record in records if record.is_dwi]
     buckets = defaultdict(list)
     for record in dwi_records:
         if separate_all_dwis:
-            wall = record.path
+            walls = (record.path,)
         else:
-            wall = record.multipart_id
-        buckets[(record.session, record.signature.key, application[record.path], wall)].append(
-            record
-        )
+            # `or (None,)` keeps uncurated series (empty MultipartID) in a
+            # single None-scoped group.
+            walls = record.multipart_id or (None,)
+        for wall in walls:
+            buckets[(record.session, record.signature.key, application[record.path], wall)].append(
+                record
+            )
 
     groups: dict[str, DistortionGroup] = {}
-    for (_, _, applied, _), members in sorted(buckets.items(), key=lambda kv: kv[1][0].path):
-        key = _unique_id(derive_output_name([record.path for record in members]), groups)
+    for (_, _, applied, wall), members in sorted(buckets.items(), key=lambda kv: kv[1][0].path):
+        scope = None if separate_all_dwis else wall
+        key = _unique_id(
+            derive_output_name([record.path for record in members]), groups, scope=scope
+        )
         groups[key] = DistortionGroup(
             key=key,
             signature=members[0].signature,
             dwi_files=tuple(sorted(record.path for record in members)),
             b0field_source=applied,
+            multipart_scope=scope,
         )
     return groups
 
@@ -777,7 +794,7 @@ def build_correction_units(
         by_wall = defaultdict(list)
         for key, dgroup in distortion_groups.items():
             record = dwi_records[dgroup.dwi_files[0]]
-            by_wall[(record.session, record.multipart_id)].append(key)
+            by_wall[(record.session, dgroup.multipart_scope)].append(key)
         for wall_keys in by_wall.values():
             for key_a, key_b in combinations(sorted(wall_keys), 2):
                 group_a = distortion_groups[key_a]
@@ -802,12 +819,16 @@ def build_correction_units(
         dwi_files = tuple(
             sorted(path for key in member_keys for path in distortion_groups[key].dwi_files)
         )
-        unit_key = _unique_id(derive_output_name(dwi_files), units)
+        # A unit never spans scopes (union-find ran within each), so any
+        # member's scope is the unit's.
+        scope = distortion_groups[member_keys[0]].multipart_scope
+        unit_key = _unique_id(derive_output_name(dwi_files), units, scope=scope)
         units[unit_key] = CorrectionUnit(
             key=unit_key,
             distortion_groups=member_keys,
             dwi_files=dwi_files,
             b0field_source=distortion_groups[member_keys[0]].b0field_source,
+            multipart_scope=scope,
         )
     return units
 
@@ -831,7 +852,7 @@ def build_concatenation_groups(
     """
     issues: list[GroupingIssue] = []
     dwi_records = {record.path: record for record in records if record.is_dwi}
-    curated_ids = {record.multipart_id for record in dwi_records.values() if record.multipart_id}
+    curated_ids = {mid for record in dwi_records.values() for mid in record.multipart_id}
 
     # Assign each correction unit to a MultipartID
     assignments: dict[str, tuple[str, Provenance]] = {}  # unit key -> (id, provenance)
@@ -851,7 +872,7 @@ def build_concatenation_groups(
     elif curated_ids:
         uncurated_files = []
         for key, unit in correction_units.items():
-            multipart_id = dwi_records[unit.dwi_files[0]].multipart_id
+            multipart_id = unit.multipart_scope
             if multipart_id:
                 if multipart_id.startswith(AUTO_PREFIX):
                     issues.append(
@@ -877,6 +898,22 @@ def build_concatenation_groups(
                     'its own output. Set MultipartID on every series (or on none) to '
                     'control the packaging explicitly.',
                     tuple(sorted(uncurated_files)),
+                )
+            )
+        # Benchmarking mode: a series listing several MultipartIDs is a
+        # deliberate request to preprocess it once per group. Surface it
+        # loudly - the same raw data lands in multiple outputs on purpose.
+        overlapping = sorted(
+            record.path for record in dwi_records.values() if len(record.multipart_id) > 1
+        )
+        if overlapping:
+            issues.append(
+                warning(
+                    'multipart-overlap',
+                    f'Benchmarking mode: {len(overlapping)} DWI series with multiple '
+                    'MultipartIDs; each is preprocessed once per group and appears in '
+                    'each of those outputs.',
+                    tuple(overlapping),
                 )
             )
     else:

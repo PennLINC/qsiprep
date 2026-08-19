@@ -397,6 +397,94 @@ def test_multipart_splits_estimation(tmp_path):
         assert len(borrowed['auto+pepolar+j']) == 2
 
 
+def test_benchmark_multipart_shared_field(tmp_path):
+    """A list-valued MultipartID preprocesses one series once per output.
+
+    dir-AP is curated into both a solo output and the reverse pair; the single
+    inferred field is shared, so the solo output borrows dir-PA's b=0 across
+    the virtual-acquisition boundary while the pair is self-contained.
+    """
+    grouping = load_scenario('benchmark_multipart', tmp_path)
+
+    records = {op.basename(p): rec for p, rec in grouping.files.items() if rec.is_dwi}
+    assert records['sub-01_dir-AP_dwi.nii.gz'].multipart_id == ('acq-solo', 'acq-pair')
+    assert records['sub-01_dir-PA_dwi.nii.gz'].multipart_id == ('acq-pair',)
+
+    outputs = {
+        concat.multipart_id: sorted(basenames(concat.dwi_files))
+        for concat in grouping.concatenation_groups.values()
+    }
+    assert outputs == {
+        'acq-solo': ['sub-01_dir-AP_dwi.nii.gz'],
+        'acq-pair': ['sub-01_dir-AP_dwi.nii.gz', 'sub-01_dir-PA_dwi.nii.gz'],
+    }
+
+    # dir-AP is preprocessed twice: one correction unit per output scope.
+    ap_path = next(p for p in grouping.dwi_files if 'dir-AP' in p)
+    ap_scopes = {
+        unit.multipart_scope
+        for unit in grouping.correction_units.values()
+        if ap_path in unit.dwi_files
+    }
+    assert ap_scopes == {'acq-solo', 'acq-pair'}
+
+    # Shared field: the solo output borrows dir-PA; the pair borrows nothing.
+    assert basenames(grouping.borrowed_sources('acq-solo')['auto+pepolar+j']) == [
+        'sub-01_dir-PA_dwi.nii.gz'
+    ]
+    assert grouping.borrowed_sources('acq-pair') == {}
+
+    codes = issue_codes(grouping.warnings)
+    assert 'multipart-overlap' in codes
+    assert 'estimation-spans-outputs' in codes
+
+    # Borrowing is fine on TOPUP+eddy and on DRBUDDI (solo falls back to T2Wreg).
+    for backend in ('fsl', 'tortoise'):
+        assert not [i for i in check_backend(grouping, backend) if i.severity == 'error']
+
+
+def test_benchmark_isolated_fields(tmp_path):
+    """Curated B0FieldIdentifiers isolate two fields inference would pool.
+
+    Two reverse-PE pairs with identical acquisition parameters are held apart
+    by curation; even combined into one output they stay separate correction
+    units and borrow nothing - the opposite of the shared-field benchmark.
+    """
+    grouping = load_scenario('benchmark_isolated_fields', tmp_path)
+
+    assert sorted(grouping.estimations) == ['fieldHi', 'fieldLo']
+    for estimation in grouping.estimations.values():
+        assert estimation.provenance is Provenance.CURATED
+
+    outputs = {
+        concat.multipart_id: concat.output_name
+        for concat in grouping.concatenation_groups.values()
+    }
+    assert outputs == {
+        'first': 'sub-01_acq-hi',
+        'second': 'sub-01_acq-lo',
+        'both': 'sub-01',
+    }
+
+    # The combined output holds two isolated units and borrows nothing.
+    both = grouping.concatenation_groups['both']
+    assert len(both.correction_units) == 2
+    assert grouping.borrowed_sources('both') == {}
+
+    # Each pair is preprocessed twice: its solo output and the combined one.
+    hi_ap = next(p for p in grouping.dwi_files if 'acq-hi_dir-AP' in p)
+    hi_scopes = {
+        unit.multipart_scope
+        for unit in grouping.correction_units.values()
+        if hi_ap in unit.dwi_files
+    }
+    assert hi_scopes == {'first', 'both'}
+
+    codes = issue_codes(grouping.warnings)
+    assert 'multipart-overlap' in codes
+    assert 'estimation-spans-outputs' in codes
+
+
 def test_gre_phasediff(tmp_path):
     """phasediff + magnitudes via IntendedFor: a TRANSLATED GRE estimation."""
     grouping = load_scenario('gre_phasediff', tmp_path)
@@ -531,7 +619,7 @@ def test_acq_multipartid_invalid_label(tmp_path):
     """An 'acq-' MultipartID whose label is not a valid BIDS label errors."""
     grouping = load_scenario('acq_multipart', tmp_path, strict=False)
     records = [record for record in grouping.files.values() if record.is_dwi]
-    bad = dataclasses.replace(records[0], multipart_id='acq-part_A')
+    bad = dataclasses.replace(records[0], multipart_id=('acq-part_A',))
     regrouped = build_grouping([bad, *records[1:]], subject_id='01')
     assert 'multipartid-acq-invalid' in issue_codes(regrouped.errors)
 

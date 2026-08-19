@@ -24,6 +24,8 @@ SCENARIOS = [
     'abcd_t2w',
     'acq_multipart',
     'b0only_fmap_with_bvals',
+    'benchmark_isolated_fields',
+    'benchmark_multipart',
     'bidsuri_intendedfor',
     'cluster_multipart',
     'cluster_nomultipart',

@@ -31,12 +31,18 @@ def test_render_html_covers_the_grouping(tmp_path, scenario):
 
 
 @pytest.mark.parametrize('scenario', SCENARIOS)
-def test_render_html_shows_each_scan_exactly_once(tmp_path, scenario):
-    """Scans appear as one row each; estimation membership is a chip, not a
-    second listing of the filename."""
+def test_render_html_shows_each_scan_once_per_output(tmp_path, scenario):
+    """A scan appears as one row per output it belongs to: exactly once in the
+    common case, and once per virtual acquisition when a benchmarking
+    MultipartID list places it in several outputs. Estimation membership is a
+    chip, not a second listing of the filename."""
     grouping = load_scenario(scenario, tmp_path, strict=False)
     page = render_html(grouping)
-    assert page.count('class="scan"') == len(grouping.dwi_files)
+    # The page renders one scan row per distortion-group membership; every
+    # distortion group belongs to exactly one output, so this equals the total
+    # of each output's series count.
+    expected = sum(len(dgroup.dwi_files) for dgroup in grouping.distortion_groups.values())
+    assert page.count('class="scan"') == expected
 
 
 def test_render_html_previews_every_backend(tmp_path):

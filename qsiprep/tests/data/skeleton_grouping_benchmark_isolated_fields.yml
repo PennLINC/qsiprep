@@ -1,0 +1,51 @@
+# Benchmarking mode where curated B0FieldIdentifiers ISOLATE the fields of the
+# virtual acquisitions. Two reverse-PE pairs with identical acquisition
+# parameters that inference would otherwise pool into one estimation are kept
+# apart by curation (fieldHi vs fieldLo). The benchmark compares each pair
+# alone against the two combined:
+#   first: acq-hi pair, corrected by fieldHi.
+#   second: acq-lo pair, corrected by fieldLo.
+#   both: all four series - two separate correction units, fieldHi and fieldLo
+#         each isolated, concatenated only after correction (no borrowing).
+# Each pair is preprocessed twice. This is the opposite of
+# benchmark_multipart: the B0Fields isolate rather than share.
+'01':
+  - anat:
+      - suffix: T1w
+    dwi:
+      - acq: hi
+        dir: AP
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: fieldHi
+          B0FieldSource: fieldHi
+          MultipartID: [first, both]
+      - acq: hi
+        dir: PA
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: fieldHi
+          B0FieldSource: fieldHi
+          MultipartID: [first, both]
+      - acq: lo
+        dir: AP
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: fieldLo
+          B0FieldSource: fieldLo
+          MultipartID: [second, both]
+      - acq: lo
+        dir: PA
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: fieldLo
+          B0FieldSource: fieldLo
+          MultipartID: [second, both]
