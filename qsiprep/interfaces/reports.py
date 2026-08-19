@@ -656,7 +656,10 @@ def calculate_motion_summary(confounds_tsv):
             'max_rel_rotation': [np.nan],
             'max_rel_translation': [np.nan],
         }
-    df = pd.read_csv(confounds_tsv, delimiter='\t')
+    # Single-unit confounds are tab-separated (.tsv); the distortion-group merge
+    # feeds MergeDWIs' comma-separated merged confounds (.csv).
+    sep = ',' if str(confounds_tsv).endswith('.csv') else '\t'
+    df = pd.read_csv(confounds_tsv, delimiter=sep)
 
     # the default case where each output image comes from one input image
     if 'trans_x' in df.columns:

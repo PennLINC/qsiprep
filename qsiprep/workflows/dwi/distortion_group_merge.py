@@ -75,12 +75,14 @@ def init_distortion_group_merge_wf(
         The input images merged into a single image (averaged or concatenated)
     merged_bval
         The bvals corresponding to merged_image
-    merged_bvec
-        The bvecs corresponding to merged_image
-    merged_qc
-        The Before/After QC file
-    merged_interactive_report
-        The interactive report data
+    bvecs_t1
+        The bvecs corresponding to merged_image, in ACPC space
+    t1_b0_ref
+        The b=0 reference of the merged series, in ACPC space
+    dwi_mask_t1
+        Brain mask for the merged series, in ACPC space
+    cnr_map_t1
+        Contrast-to-noise map for the merged series
     """
 
     workflow = Workflow(name=name)
@@ -106,19 +108,13 @@ def init_distortion_group_merge_wf(
             fields=[
                 'merged_image',
                 'merged_bval',
-                'merged_bvec',
-                'merged_qc',
-                'merged_cnr_map',
                 'dwi_mask_t1',
                 'cnr_map_t1',
-                'merged_bval',
                 'bvecs_t1',
                 'btable_t1',
-                'local_bvecs_t1',
                 't1_b0_ref',
                 'confounds',
                 'gradient_table_t1',
-                'hmc_optimization_data',
             ]
         ),
         name='outputnode',
@@ -163,7 +159,6 @@ def init_distortion_group_merge_wf(
     if merging_strategy.lower() == 'average':
         distortion_merger = pe.Node(AveragePEPairs(), name='distortion_merger')
         workflow.connect([
-            (merge_original_bvec, distortion_merger, [('out', 'original_bvec_files')]),
             (merge_carpetplot_data, distortion_merger, [('out', 'carpetplot_data')]),
         ])  # fmt:skip
     elif merging_strategy.startswith('concat'):
@@ -179,6 +174,7 @@ def init_distortion_group_merge_wf(
         (merge_images, distortion_merger, [('out', 'dwi_files')]),
         (merge_bval, distortion_merger, [('out', 'bval_files')]),
         (merge_bvec, distortion_merger, [('out', 'bvec_files')]),
+        (merge_original_bvec, distortion_merger, [('out', 'original_bvec_files')]),
         (merge_original_image, distortion_merger, [('out', 'bids_dwi_files')]),
         (merge_raw_concatenated_image, distortion_merger, [('out', 'raw_concatenated_files')]),
         (merge_b0_refs, distortion_merger, [('out', 'b0_refs')]),
@@ -291,11 +287,9 @@ def init_distortion_group_merge_wf(
             ('cnr_map_t1', 'inputnode.cnr_map_t1'),
             ('merged_bval', 'inputnode.bvals_t1'),
             ('bvecs_t1', 'inputnode.bvecs_t1'),
-            ('local_bvecs_t1', 'inputnode.local_bvecs_t1'),
             ('t1_b0_ref', 'inputnode.t1_b0_ref'),
             ('gradient_table_t1', 'inputnode.gradient_table_t1'),
             ('btable_t1', 'inputnode.btable_t1'),
-            ('hmc_optimization_data', 'inputnode.hmc_optimization_data'),
         ]),
     ])  # fmt:skip
 
