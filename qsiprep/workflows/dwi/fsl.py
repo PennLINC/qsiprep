@@ -299,8 +299,15 @@ def init_fsl_hmc_wf(
         eddy_args, fieldmap_type, config.workflow.pepolar_method
     )
 
+    # DRBUDDI's single pass corrects one matched blip pair, so a multi-axis or
+    # multi-readout unit skips the DRBUDDI stage; the mixed path (TOPUP+DRBUDDI)
+    # still corrects it as single-stage TOPUP+eddy, which pools every blip group.
+    _pepolar = config.workflow.pepolar_method.lower()
+    run_topup = unit.is_pepolar and 'topup' in _pepolar
+    run_drbuddi = unit.is_pepolar and 'drbuddi' in _pepolar and unit.is_single_blip_pair
+
     # Are we running TOPUP?
-    if unit.is_pepolar and 'topup' in config.workflow.pepolar_method.lower():
+    if run_topup:
         # If there are EPI fieldmaps in fmaps/, make sure they get to TOPUP. It will always use
         # b=0 images from the DWI series regardless
         gather_inputs.inputs.topup_requested = True
@@ -403,7 +410,7 @@ def init_fsl_hmc_wf(
             (pre_eddy_b0_ref_wf, eddy, [('outputnode.dwi_mask', 'in_mask')]),
         ])  # fmt:skip
 
-    if unit.is_pepolar and 'drbuddi' in config.workflow.pepolar_method.lower():
+    if run_drbuddi:
         outputnode.inputs.sdc_method = 'DRBUDDI'
         config.loggers.workflow.info('Running DRBUDDI for SDC')
 

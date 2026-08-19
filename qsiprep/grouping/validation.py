@@ -81,20 +81,53 @@ def _pepolar_signature_count(grouping: DWIGrouping, estimation: FieldmapEstimati
     return len(signatures)
 
 
-def dwi_bidirectional_axes(grouping: DWIGrouping, estimation: FieldmapEstimation) -> frozenset:
-    """Axes covered by *dMRI series* in both polarities among the sources.
+def blip_pair_polarities(grouping: DWIGrouping, estimation: FieldmapEstimation) -> dict:
+    """Blip-pair identity ``(pe_axis, readout_time, shim)`` -> polarities present.
 
-    Unlike :attr:`FieldmapEstimation.bidirectional_axes` (which counts epi
-    fieldmaps too), this answers "is there reverse phase-encoded dMRI data?" -
-    the requirement for DRBUDDI to *refine* an eddy correction, since a lone
-    reverse b=0 was already consumed by TOPUP and adds nothing more.
+    DRBUDDI corrects one matched blip-up/blip-down pair at a time: two EPI-like
+    sources that share this identity (same axis, readout time and shim) and carry
+    opposite polarity. A group with both polarities is a complete pair; one
+    polarity is unpaired. (TOPUP, by contrast, pools every group into a single
+    estimation regardless of readout.)
     """
-    polarities = defaultdict(set)
+    polarities: dict[tuple, set] = defaultdict(set)
     for path in estimation.sources:
         record = grouping.files.get(path)
-        if record is not None and record.is_dwi and record.signature.pe_axis:
-            polarities[record.signature.pe_axis].add(record.signature.pe_polarity)
-    return frozenset(axis for axis, pols in polarities.items() if len(pols) == 2)
+        if record is not None and record.is_epi_like and record.signature.pe_dir:
+            sig = record.signature
+            polarities[(sig.pe_axis, sig.readout_time, sig.shim)].add(sig.pe_polarity)
+    return dict(polarities)
+
+
+def blip_sort_key(key: tuple) -> tuple:
+    """Deterministic ordering for blip-pair keys (readout/shim may be None)."""
+    axis, readout, shim = key
+    return (axis, float('-inf') if readout is None else readout, str(shim))
+
+
+def describe_blip_group(key: tuple) -> str:
+    """Human-readable label for a blip-pair identity, e.g. 'axis j, TRT 0.05s'."""
+    axis, readout, _shim = key
+    return f'axis {axis}' + (f', TRT {readout:g}s' if readout is not None else '')
+
+
+def dwi_blip_pairs(grouping: DWIGrouping, estimation: FieldmapEstimation) -> list:
+    """Blip-pair identities with reverse phase-encoded *dMRI series* in both
+    polarities among the sources - the matched pairs DRBUDDI can *refine*.
+
+    Unlike :func:`blip_pair_polarities` (which counts epi fieldmaps too), a lone
+    reverse b=0 was already consumed by TOPUP and adds nothing more; only a
+    reverse-PE dMRI pair carries new information. Keys on the full blip-pair
+    identity (axis, readout time and shim), since DRBUDDI needs a readout match.
+    Sorted.
+    """
+    polarities: dict[tuple, set] = defaultdict(set)
+    for path in estimation.sources:
+        record = grouping.files.get(path)
+        if record is not None and record.is_dwi and record.signature.pe_dir:
+            sig = record.signature
+            polarities[(sig.pe_axis, sig.readout_time, sig.shim)].add(sig.pe_polarity)
+    return sorted((key for key, pols in polarities.items() if len(pols) == 2), key=blip_sort_key)
 
 
 def structural_target(grouping: DWIGrouping) -> tuple[str, list[str]] | None:
@@ -421,7 +454,7 @@ def check_backend(grouping: DWIGrouping, backend: str) -> list[GroupingIssue]:
                             scope=multipart_id,
                         )
                     )
-            elif backend == 'mixed' and not dwi_bidirectional_axes(grouping, estimation):
+            elif backend == 'mixed' and not dwi_blip_pairs(grouping, estimation):
                 # DRBUDDI refinement needs reverse phase-encoded dMRI *series*;
                 # a lone reverse b=0 (epi fieldmap) was already consumed by
                 # TOPUP, so a second DRBUDDI pass would reuse the same
@@ -448,42 +481,49 @@ def check_backend(grouping: DWIGrouping, backend: str) -> list[GroupingIssue]:
                     )
                 )
             else:  # tortoise, and mixed with reverse-PE dMRI: DRBUDDI runs
-                if len(estimation.bidirectional_axes) == 0:
+                # DRBUDDI's single pass corrects one matched blip pair (same axis,
+                # readout time and shim, opposite polarity) at a time.
+                pairs = blip_pair_polarities(grouping, estimation)
+                unpaired = sorted(
+                    (key for key, pols in pairs.items() if len(pols) < 2), key=blip_sort_key
+                )
+                if backend == 'tortoise' and unpaired:
+                    # TORTOISE routes each blip group on its own: complete pairs to
+                    # DRBUDDI, an unpaired group to the fieldmap-less fallback. Not
+                    # fatal - it just cannot use DRBUDDI.
+                    groups = '; '.join(describe_blip_group(key) for key in unpaired)
+                    fallback = (
+                        'corrected by T2Wreg against the T2w instead'
+                        if grouping.anat_files('T2w')
+                        else 'left uncorrected (no T2w for a T2Wreg fallback)'
+                    )
                     issues.append(
-                        error(
+                        warning(
                             'drbuddi-no-opposing-pair',
-                            f"Estimation '{b0field_id}' has no axis with both "
-                            f'phase encoding polarities. DRBUDDI requires an '
-                            f'opposing (blip-up/blip-down) pair to correct '
-                            f"'{concat.output_name}'.",
+                            f"Estimation '{b0field_id}' has blip group(s) with no "
+                            f'opposing (blip-up/blip-down) pair: {groups}. DRBUDDI '
+                            f'needs a matched pair, so on the TORTOISE path those '
+                            f'series are {fallback}. Add the missing reverse blip(s) '
+                            f"to use DRBUDDI for '{concat.output_name}'.",
                             estimation.sources,
                             scope=multipart_id,
                         )
                     )
-                elif len(estimation.pe_axes) > 1:
-                    issues.append(
-                        error(
-                            'drbuddi-cross-axis',
-                            f"Estimation '{b0field_id}' includes sources on "
-                            f'multiple phase encoding axes '
-                            f'({", ".join(sorted(estimation.pe_axes))}). DRBUDDI '
-                            f'estimates distortion along a single axis; split this '
-                            f'estimation per axis (e.g. with per-axis '
-                            f'B0FieldIdentifiers) to use it for '
-                            f"'{concat.output_name}'.",
-                            estimation.sources,
-                            scope=multipart_id,
-                        )
+                elif backend == 'mixed' and len(pairs) > 1:
+                    # The mixed path pools every group into one TOPUP+eddy, but the
+                    # single-pass DRBUDDI refinement handles only one matched pair,
+                    # so a multi-group unit gets single-stage TOPUP+eddy.
+                    labels = '; '.join(
+                        describe_blip_group(key) for key in sorted(pairs, key=blip_sort_key)
                     )
-                elif _pepolar_signature_count(grouping, estimation) > 2:
                     issues.append(
-                        error(
-                            'drbuddi-too-many-signatures',
-                            f"Estimation '{b0field_id}' draws on more than two "
-                            f'distortion signatures. DRBUDDI takes exactly one '
-                            f'blip-up and one blip-down group; harmonize the '
-                            f'acquisitions or curate per-pair B0FieldIdentifiers '
-                            f"to correct '{concat.output_name}'.",
+                        warning(
+                            'drbuddi-refinement-multigroup',
+                            f"Estimation '{b0field_id}' spans {len(pairs)} blip groups "
+                            f'({labels}). TOPUP+eddy corrects them together, but the '
+                            f'DRBUDDI refinement handles one matched pair at a time, so '
+                            f"'{concat.output_name}' gets single-stage TOPUP+eddy "
+                            'correction (no DRBUDDI refinement).',
                             estimation.sources,
                             scope=multipart_id,
                         )

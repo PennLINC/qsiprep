@@ -400,9 +400,11 @@ to workflows in *QSIPrep*'s documentation]\
         )
 
     # Each PreprocUnit is one HMC+SDC run. concatenation_scheme maps each
-    # unit's preprocessed result to the final output it is combined into.
-    preproc_units = to_preproc_units(grouping)
-    concatenation_scheme = derive_concatenation_scheme(grouping)
+    # unit's preprocessed result to the final output it is combined into. The
+    # backend can split a unit (TORTOISE, multi-axis PEPOLAR), so both must see
+    # it and agree on the resulting unit names.
+    preproc_units = to_preproc_units(grouping, backend)
+    concatenation_scheme = derive_concatenation_scheme(grouping, backend)
 
     # If a merge is happening at the end, make sure
     if merging_distortion_groups:

@@ -19,6 +19,7 @@ from qsiprep.grouping import (
     CorrectionMethod,
     backend_for_config,
     build_dwi_grouping,
+    concatenation_scheme,
     to_legacy_scan_groups,
     to_preproc_units,
 )
@@ -76,14 +77,14 @@ def test_multiped_pools_all_directions(tmp_path):
 
     Legacy built one reverse-PE output per axis. Any two differing phase
     encodings jointly determine the susceptibility field, so the model pools
-    all four series into a single estimation and output; whether a backend
-    can consume that shape is check_backend's call (TOPUP can, DRBUDDI
-    raises drbuddi-cross-axis).
+    all four series into a single estimation and output. FSL keeps that pooled
+    shape (one TOPUP+eddy); TORTOISE splits it per axis - see
+    ``test_multiped_tortoise_splits_per_axis``.
     """
     layout, subject_data = _load_skeleton('skeleton_simple_multiped', tmp_path)
     legacy, _ = group_dwi_scans(layout, subject_data)
     grouping = build_dwi_grouping(layout, subject_data, strict=False)
-    new, scheme = to_legacy_scan_groups(grouping)
+    new, scheme = to_legacy_scan_groups(grouping)  # fsl default: pooled
 
     assert len(legacy) == 2  # legacy: one output per axis
 
@@ -97,6 +98,94 @@ def test_multiped_pools_all_directions(tmp_path):
     assert names['fieldmap_info']['suffix'] == 'rpe_series'
     assert len(names['dwi_series']) + len(names['fieldmap_info']['rpe_series']) == 4
     assert scheme == {name: name for name in scheme}
+
+
+def test_multiped_tortoise_splits_per_axis(tmp_path):
+    """TORTOISE splits the pooled multi-axis cluster into one unit per axis.
+
+    The four-direction cluster is a single pooled estimation (one TOPUP+eddy for
+    FSL), but DRBUDDI corrects one axis at a time. For the tortoise backend the
+    adapter yields one PreprocUnit per phase-encoding axis, each an opposing
+    pair seeing only its own axis, and the concatenation scheme maps both to the
+    shared final output so the corrected results are recombined by the merge.
+    """
+    layout, subject_data = _load_skeleton('skeleton_simple_multiped', tmp_path)
+    grouping = build_dwi_grouping(layout, subject_data, strict=False)
+
+    # FSL keeps one pooled unit, identity scheme.
+    fsl_units = to_preproc_units(grouping, backend='fsl')
+    assert [unit.output_name for unit in fsl_units] == ['sub-01']
+
+    # TORTOISE: one unit per axis, both bidirectional, both -> 'sub-01'.
+    units = to_preproc_units(grouping, backend='tortoise')
+    assert len(units) == 2
+    assert all(unit.has_bidirectional_dwi for unit in units)
+    assert {unit.pe_axis for unit in units} == {'i', 'j'}
+    for unit in units:
+        # each split unit sees only its own axis - no cross-axis borrowing
+        assert {grouping.files[path].signature.pe_axis for path in unit.dwi_files} == {
+            unit.pe_axis
+        }
+        assert unit.extra_b0 == ()
+
+    scheme = concatenation_scheme(grouping, backend='tortoise')
+    assert set(scheme) == {unit.output_name for unit in units}  # keyed by unit name
+    assert len(scheme) == 2  # two distinct per-axis unit names
+    assert set(scheme.values()) == {'sub-01'}
+
+
+def test_multi_readout_splits_per_pair(tmp_path):
+    """TORTOISE splits one axis at two readout times into per-readout pairs.
+
+    DRBUDDI must match the readout time along with the axis, so a pooled
+    estimation carrying two blip pairs on the same axis (acq-fast/acq-slow)
+    becomes one per-readout PreprocUnit, each seeing only its own readout; FSL
+    keeps the single pooled estimation.
+    """
+    grouping = load_scenario('multi_readout', tmp_path, strict=False)
+
+    assert [unit.output_name for unit in to_preproc_units(grouping, backend='fsl')] == ['sub-01']
+
+    units = to_preproc_units(grouping, backend='tortoise')
+    assert {unit.output_name for unit in units} == {'sub-01_acq-fast', 'sub-01_acq-slow'}
+    for unit in units:
+        assert unit.has_bidirectional_dwi
+        assert unit.pe_axis == 'j'
+        readouts = {grouping.files[path].signature.readout_time for path in unit.dwi_files}
+        assert len(readouts) == 1  # one readout time per split unit
+        assert unit.extra_b0 == ()
+
+    scheme = concatenation_scheme(grouping, backend='tortoise')
+    assert scheme == {'sub-01_acq-fast': 'sub-01', 'sub-01_acq-slow': 'sub-01'}
+
+    # The pooled FSL/mixed unit is multi-group (mixed skips DRBUDDI for it); each
+    # per-pair TORTOISE sub-unit is a single blip pair that DRBUDDI can consume.
+    (pooled,) = to_preproc_units(grouping, backend='fsl')
+    assert not pooled.is_single_blip_pair
+    assert all(unit.is_single_blip_pair for unit in units)
+
+
+def test_partial_pair_routes_pair_and_singleton(tmp_path):
+    """TORTOISE routes each blip group on its own: the matched pair to DRBUDDI,
+    the unmatched singleton to the fieldmap-less fallback (estimation dropped, so
+    the workflow does T2Wreg with a T2w). Both concatenate into one output.
+    """
+    grouping = load_scenario('partial_pair', tmp_path, strict=False)
+
+    units = {unit.output_name: unit for unit in to_preproc_units(grouping, backend='tortoise')}
+    assert set(units) == {'sub-01_acq-fast', 'sub-01_acq-slow_dir-AP'}
+
+    pair = units['sub-01_acq-fast']
+    assert pair.is_pepolar  # DRBUDDI pair
+    assert pair.has_bidirectional_dwi
+
+    singleton = units['sub-01_acq-slow_dir-AP']
+    assert singleton.estimation is None  # fieldmap-less -> T2Wreg / HMC-only
+    assert not singleton.has_scanner_measured_fieldmap
+
+    assert set(concatenation_scheme(grouping, backend='tortoise').values()) == {'sub-01'}
+    # FSL keeps the single pooled unit.
+    assert [unit.output_name for unit in to_preproc_units(grouping, backend='fsl')] == ['sub-01']
 
 
 def test_relpaths_curation_outranks_reverse_pe(tmp_path):

@@ -30,9 +30,9 @@ Processing preview: TORTOISE path (DIFFPREP HMC + DRBUDDI SDC)
 Output "sub-01" (2 series):
   1. Each series is denoised on its own, then all 2 series are concatenated. (--denoise-after-combining reverses this order.)
   2. DIFFPREP corrects head motion and eddy currents separately for each distortion group (sub-01_dir-LR, sub-01_dir-PA).
-  3. DRBUDDI cannot use estimation 'auto+pepolar+ij': its sources have differing phase encodings but no opposing (blip-up/blip-down) pair on any single axis.
+  3. DRBUDDI has no opposing blip for axis i, TRT 0.05s; axis j, TRT 0.05s, so they are left uncorrected (no T2w for a T2Wreg fallback).
   4. The corrected series is written as one output file.
-  !! ERROR [drbuddi-no-opposing-pair]: Estimation 'auto+pepolar+ij' has no axis with both phase encoding polarities. DRBUDDI requires an opposing (blip-up/blip-down) pair to correct 'sub-01'.
+  !! WARNING [drbuddi-no-opposing-pair]: Estimation 'auto+pepolar+ij' has blip group(s) with no opposing (blip-up/blip-down) pair: axis i, TRT 0.05s; axis j, TRT 0.05s. DRBUDDI needs a matched pair, so on the TORTOISE path those series are left uncorrected (no T2w for a T2Wreg fallback). Add the missing reverse blip(s) to use DRBUDDI for 'sub-01'.
 
 Processing preview: Two-stage path (TOPUP + eddy, then DRBUDDI or T2Wreg refinement)
 ------------------------------------------------------------------------------------

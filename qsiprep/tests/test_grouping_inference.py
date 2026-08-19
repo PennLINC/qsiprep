@@ -165,10 +165,10 @@ def test_cluster_multipart(tmp_path):
     # The estimation spans all three outputs
     assert 'estimation-spans-outputs' in issue_codes(grouping.warnings)
 
-    # fsl can use all four signatures; DRBUDDI cannot take more than two
-    assert not [i for i in check_backend(grouping, 'fsl') if i.severity == 'error']
-    tortoise_codes = issue_codes(check_backend(grouping, 'tortoise'))
-    assert 'drbuddi-too-many-signatures' in tortoise_codes
+    # fsl pools all four signatures; DRBUDDI takes each matched blip pair (one per
+    # readout time, 0.05 and 0.08) on its own, so this is feasible on both paths.
+    for backend in ('fsl', 'tortoise'):
+        assert not [i for i in check_backend(grouping, backend) if i.severity == 'error']
 
 
 def test_cluster_nomultipart(tmp_path):
@@ -345,7 +345,9 @@ def test_partial_multipart(tmp_path):
 
 
 def test_cross_axis_b0field(tmp_path):
-    """A curated identifier spanning axes works for TOPUP, not DRBUDDI."""
+    """A curated identifier spanning axes works for every backend when each
+    axis is its own opposing pair: TOPUP pools all four directions, and DRBUDDI
+    (tortoise / mixed) corrects one axis at a time and recombines."""
     grouping = load_scenario('cross_axis_b0field', tmp_path)
 
     estimation = grouping.estimations['topupall']
@@ -353,9 +355,33 @@ def test_cross_axis_b0field(tmp_path):
     assert estimation.bidirectional_axes == {'i', 'j'}
     assert not grouping.errors
 
-    assert not [i for i in check_backend(grouping, 'fsl') if i.severity == 'error']
-    for backend in ('tortoise', 'mixed'):
-        assert 'drbuddi-cross-axis' in issue_codes(check_backend(grouping, backend))
+    for backend in ('fsl', 'tortoise', 'mixed'):
+        issues = check_backend(grouping, backend)
+        assert 'drbuddi-cross-axis' not in issue_codes(issues)
+        assert not [i for i in issues if i.severity == 'error']
+
+
+def test_partial_pair_fallback(tmp_path):
+    """A matched blip pair plus an unmatched singleton, pooled in one estimation.
+
+    DRBUDDI corrects the pair; the singleton has no opposing blip, so on the
+    TORTOISE path it falls back to T2Wreg (a T2w is present) - a warning, not an
+    error, so nothing aborts. The mixed path corrects the singleton with
+    TOPUP+eddy and does not flag it."""
+    grouping = load_scenario('partial_pair', tmp_path)
+
+    for backend in ('fsl', 'tortoise', 'mixed'):
+        assert not [i for i in check_backend(grouping, backend) if i.severity == 'error']
+
+    tortoise = check_backend(grouping, 'tortoise')
+    unpaired = [i for i in tortoise if i.code == 'drbuddi-no-opposing-pair']
+    assert unpaired
+    assert all(i.severity == 'warning' for i in unpaired)
+    # On the mixed path the singleton is corrected by TOPUP+eddy; the multi-group
+    # unit just gets single-stage (the single-pass DRBUDDI refinement is skipped).
+    mixed = check_backend(grouping, 'mixed')
+    assert 'drbuddi-no-opposing-pair' not in issue_codes(mixed)
+    assert 'drbuddi-refinement-multigroup' in issue_codes(mixed)
 
 
 def test_multipart_splits_estimation(tmp_path):
@@ -461,9 +487,13 @@ def test_mixed_trt(tmp_path):
     assert len(grouping.distortion_groups) == 2
     (concat,) = grouping.concatenation_groups.values()
     assert concat.output_name == 'sub-01'
-    # Exactly two signatures: fine for TOPUP (two acqp rows) and DRBUDDI
+    # TOPUP pools the two readout times (two acqp rows). DRBUDDI needs the readout
+    # time matched within a blip pair, which these opposing PEs lack - but nothing
+    # aborts: the TORTOISE path falls the series back to T2Wreg/HMC-only with a
+    # warning, and the mixed path corrects via TOPUP+eddy.
     for backend in ('fsl', 'tortoise', 'mixed'):
         assert not [i for i in check_backend(grouping, backend) if i.severity == 'error']
+    assert 'drbuddi-no-opposing-pair' in issue_codes(check_backend(grouping, 'tortoise'))
 
 
 def test_multi_session(tmp_path):

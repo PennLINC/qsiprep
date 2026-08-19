@@ -19,6 +19,9 @@ no PE information, no SDC at all                missing_pedir
 partial curation: curation disables inference   partial_curation
 borrowing + estimation-spans-outputs            multipart_splits_estimation
 cross-axis pooling (DRBUDDI infeasible)         cross_axis_unpaired
+cross-axis split (per-axis DRBUDDI, recombined) cross_axis_b0field
+multi-readout split (per-readout DRBUDDI)       multi_readout
+matched pair + singleton (DRBUDDI + T2Wreg)     partial_pair
 shelled/non-shelled tags + mixture warning      shell_mix
 eddy-requires-shelled error                     nonshelled_pair
 =============================================== ============================
@@ -66,6 +69,9 @@ GOLDEN_CASES = [
     ('partial_curation', {}, 'partial_curation'),
     ('multipart_splits_estimation', {}, 'multipart_splits_estimation'),
     ('cross_axis_unpaired', {}, 'cross_axis_unpaired'),
+    ('cross_axis_b0field', {}, 'cross_axis_b0field'),
+    ('multi_readout', {}, 'multi_readout'),
+    ('partial_pair', {}, 'partial_pair'),
     ('shell_mix', {}, 'shell_mix'),
     ('nonshelled_pair', {}, 'nonshelled_pair'),
 ]

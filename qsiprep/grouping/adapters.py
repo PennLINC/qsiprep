@@ -19,13 +19,16 @@ from __future__ import annotations
 import dataclasses
 import math
 import os.path as op
+from collections import Counter, defaultdict
 
 from .models import (
     CorrectionMethod,
     DWIGrouping,
     FieldmapEstimation,
     FileRecord,
+    derive_output_name,
 )
+from .validation import blip_pair_polarities, blip_sort_key
 
 #: Which sidecar suffixes name the GRE files of each estimation method.
 _GRE_SUFFIX = {
@@ -143,6 +146,21 @@ class PreprocUnit:
         return bool(self.plus_files) and bool(self.minus_files)
 
     @property
+    def is_single_blip_pair(self) -> bool:
+        """True when the correction sources form exactly one matched blip pair.
+
+        One axis, readout time and shim with both polarities - the shape the
+        single-pass DRBUDDI stage consumes (it builds one blip-up and one
+        blip-down image). Multi-axis or multi-readout PEPOLAR units are not, so
+        the mixed path skips their DRBUDDI refinement and relies on TOPUP+eddy;
+        TORTOISE never sees one, since the adapter has already split it per pair.
+        """
+        if self.estimation is None or not self.is_pepolar:
+            return False
+        pairs = blip_pair_polarities(self.grouping, self.estimation)
+        return len(pairs) == 1 and all(len(polarities) == 2 for polarities in pairs.values())
+
+    @property
     def pe_dir(self) -> str:
         """The phase-encoding direction reported for the corrected series.
 
@@ -239,35 +257,155 @@ class PreprocUnit:
         raise ValueError(f'Unhandled estimation method {self.method!r}')  # pragma: no cover
 
 
-def to_preproc_units(grouping: DWIGrouping) -> list[PreprocUnit]:
-    """One :class:`PreprocUnit` per correction unit: each is one HMC+SDC run."""
-    units = []
-    for unit_key in sorted(grouping.correction_units):
-        unit = grouping.correction_units[unit_key]
-        estimation = grouping.estimations[unit.b0field_source] if unit.b0field_source else None
-        units.append(
+def _blip_pair_key(grouping: DWIGrouping, path: str) -> tuple:
+    """The blip-pair identity ``(pe_axis, readout_time, shim)`` of a source file."""
+    sig = grouping.files[path].signature
+    return (sig.pe_axis, sig.readout_time, sig.shim)
+
+
+def _decomposes_on_tortoise(
+    grouping: DWIGrouping, unit, estimation: FieldmapEstimation | None, backend: str
+) -> bool:
+    """True when TORTOISE must break a PEPOLAR unit into per-blip-group sub-units.
+
+    DRBUDDI corrects one matched blip pair - same axis, readout time and shim,
+    opposite polarity - at a time, so each of a unit's blip groups is routed on
+    its own: a complete pair to DRBUDDI, an unpaired group to the fieldmap-less
+    fallback (DIFFPREP T2Wreg with a T2w, else HMC-only). Decompose whenever the
+    unit spans more than one blip group, or any of its groups is unpaired; a lone
+    complete pair stays one DRBUDDI unit. Completeness is judged against the
+    estimation, so a borrowed opposite blip still counts. FSL/mixed keep the
+    pooled unit; backend knowledge lives here, never in the model.
+    """
+    if backend != 'tortoise' or estimation is None or not estimation.is_pepolar:
+        return False
+    pair_pols = blip_pair_polarities(grouping, estimation)
+    unit_keys = {_blip_pair_key(grouping, path) for path in unit.dwi_files}
+    unpaired = any(len(pair_pols.get(key, ())) < 2 for key in unit_keys)
+    return len(unit_keys) > 1 or unpaired
+
+
+def _estimation_on_pair(
+    grouping: DWIGrouping, estimation: FieldmapEstimation, pair_key: tuple
+) -> FieldmapEstimation:
+    """A copy of ``estimation`` restricted to the sources in one blip pair.
+
+    Keeps ``extra_b0``/borrowing matched: a per-pair DRBUDDI run must only see the
+    b=0 sources (DWIs and epi fieldmaps) that share its axis, readout time and
+    shim - not merely its axis.
+    """
+    sources = tuple(
+        path
+        for path in estimation.sources
+        if path in grouping.files and _blip_pair_key(grouping, path) == pair_key
+    )
+    return dataclasses.replace(
+        estimation,
+        sources=sources,
+        pe_axes=frozenset({pair_key[0]}),
+        bidirectional_axes=frozenset({pair_key[0]}),
+    )
+
+
+def _decompose_unit(
+    grouping: DWIGrouping, unit, estimation: FieldmapEstimation
+) -> list[PreprocUnit]:
+    """One PreprocUnit per blip group of a PEPOLAR unit.
+
+    A complete pair keeps DRBUDDI (PEPOLAR, estimation restricted to that pair);
+    an unpaired group becomes fieldmap-less (``estimation=None``) so DIFFPREP
+    falls back to T2Wreg with a T2w, or leaves it uncorrected. Names come from
+    each group's files, kept as-is where already distinct (e.g. ``acq-``/``run-``
+    that differs by readout) and disambiguated by axis - then a per-axis index -
+    only where the pooled names would collide (two groups differing only in
+    ``dir-``).
+    """
+    pair_pols = blip_pair_polarities(grouping, estimation)
+    by_pair: dict[tuple, list[str]] = defaultdict(list)
+    for path in unit.dwi_files:
+        by_pair[_blip_pair_key(grouping, path)].append(path)
+    pair_keys = sorted(by_pair, key=blip_sort_key)
+    files = {key: tuple(sorted(by_pair[key])) for key in pair_keys}
+    base = {key: derive_output_name(list(files[key])) for key in pair_keys}
+    base_counts = Counter(base.values())
+    axis_index: dict[tuple, int] = defaultdict(int)
+
+    subunits = []
+    for key in pair_keys:
+        if base_counts[base[key]] == 1:
+            name = base[key]
+        else:
+            axis = key[0]
+            same_axis = sum(1 for k in pair_keys if base[k] == base[key] and k[0] == axis)
+            if same_axis > 1:
+                axis_index[(base[key], axis)] += 1
+                acq = f'{axis}{axis_index[(base[key], axis)]}'
+            else:
+                acq = axis
+            name = derive_output_name(list(files[key]), acq=acq)
+        complete = len(pair_pols.get(key, ())) == 2
+        subunits.append(
             PreprocUnit(
                 grouping=grouping,
-                output_name=unit.key,
-                dwi_files=unit.dwi_files,
-                estimation=estimation,
+                output_name=name,
+                dwi_files=files[key],
+                estimation=_estimation_on_pair(grouping, estimation, key) if complete else None,
             )
         )
-    return units
+    return subunits
 
 
-def concatenation_scheme(grouping: DWIGrouping) -> dict[str, str]:
-    """Correction-unit key -> final output name, from the model's packaging.
+def _units_and_finals(grouping: DWIGrouping, backend: str):
+    """Yield ``(PreprocUnit, final_output_name)`` for every unit, backend-aware.
 
-    Identity for outputs with a single unit; a final output spanning several
-    units maps each unit's preprocessed result to the shared final name, to
-    be combined by the distortion-group-merge workflow.
+    Shared by :func:`to_preproc_units` and :func:`concatenation_scheme` so the
+    unit list and the concatenation scheme always agree on the (possibly split)
+    unit names - ``base.py`` indexes the scheme by each unit's ``output_name``.
     """
-    return {
+    final_of = {
         unit_key: concat.output_name
         for concat in grouping.concatenation_groups.values()
         for unit_key in concat.correction_units
     }
+    for unit_key in sorted(grouping.correction_units):
+        unit = grouping.correction_units[unit_key]
+        estimation = grouping.estimations[unit.b0field_source] if unit.b0field_source else None
+        final = final_of.get(unit.key, unit.key)
+        if _decomposes_on_tortoise(grouping, unit, estimation, backend):
+            for subunit in _decompose_unit(grouping, unit, estimation):
+                yield subunit, final
+        else:
+            yield (
+                PreprocUnit(
+                    grouping=grouping,
+                    output_name=unit.key,
+                    dwi_files=unit.dwi_files,
+                    estimation=estimation,
+                ),
+                final,
+            )
+
+
+def to_preproc_units(grouping: DWIGrouping, backend: str = 'fsl') -> list[PreprocUnit]:
+    """One :class:`PreprocUnit` per correction unit: each is one HMC+SDC run.
+
+    For the ``tortoise`` backend a PEPOLAR unit is broken into one unit per blip
+    group - complete pairs to DRBUDDI, unpaired groups to the fieldmap-less
+    fallback (see :func:`_decomposes_on_tortoise`); every other unit is one
+    PreprocUnit.
+    """
+    return [unit for unit, _final in _units_and_finals(grouping, backend)]
+
+
+def concatenation_scheme(grouping: DWIGrouping, backend: str = 'fsl') -> dict[str, str]:
+    """PreprocUnit output name -> final output name, from the model's packaging.
+
+    Identity for outputs with a single unit; a final output spanning several
+    units - including the per-axis sub-units of a TORTOISE split - maps each
+    unit's preprocessed result to the shared final name, to be combined by the
+    distortion-group-merge workflow.
+    """
+    return {unit.output_name: final for unit, final in _units_and_finals(grouping, backend)}
 
 
 def _metadata_values_agree(first, second) -> bool:
@@ -313,13 +451,13 @@ def unit_to_sidecar(unit: PreprocUnit) -> dict:
     return sidecar
 
 
-def to_legacy_scan_groups(grouping: DWIGrouping) -> tuple[list[dict], dict]:
+def to_legacy_scan_groups(grouping: DWIGrouping, backend: str = 'fsl') -> tuple[list[dict], dict]:
     """Render a grouping as ``(scan_groups, concatenation_scheme)``.
 
     ``scan_groups`` matches the contract of the retired
     :func:`qsiprep.utils.grouping.group_dwi_scans`; ``concatenation_scheme``
-    maps each scan group (one per correction unit) to the final output its
-    corrected result is combined into.
+    maps each scan group (one per correction unit, or per axis under a TORTOISE
+    split) to the final output its corrected result is combined into.
     """
-    scan_groups = [unit.to_legacy_dict() for unit in to_preproc_units(grouping)]
-    return scan_groups, concatenation_scheme(grouping)
+    scan_groups = [unit.to_legacy_dict() for unit in to_preproc_units(grouping, backend)]
+    return scan_groups, concatenation_scheme(grouping, backend)

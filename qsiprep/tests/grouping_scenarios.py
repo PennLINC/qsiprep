@@ -42,6 +42,7 @@ SCENARIOS = [
     'maxb_mismatch',
     'missing_pedir',
     'mixed_trt',
+    'multi_readout',
     'multi_session',
     'multipart_splits_estimation',
     'name_collision',
@@ -51,6 +52,7 @@ SCENARIOS = [
     'partial_curation_stranded',
     'partial_intendedfor',
     'partial_multipart',
+    'partial_pair',
     'reshim',
     'same_ped_own_fmaps',
     'shell_mix',
@@ -78,6 +80,17 @@ SCENARIO_BVALS = {
     'maxb_mismatch': {
         'sub-01_dir-AP_dwi.nii.gz': ' '.join(['0'] + ['1000'] * 6),
         'sub-01_dir-PA_dwi.nii.gz': ' '.join(['0'] + ['3000'] * 6),
+    },
+    'multi_readout': {
+        'sub-01_acq-fast_dir-AP_dwi.nii.gz': SHELLED_BVALS,
+        'sub-01_acq-fast_dir-PA_dwi.nii.gz': SHELLED_BVALS,
+        'sub-01_acq-slow_dir-AP_dwi.nii.gz': SHELLED_BVALS,
+        'sub-01_acq-slow_dir-PA_dwi.nii.gz': SHELLED_BVALS,
+    },
+    'partial_pair': {
+        'sub-01_acq-fast_dir-AP_dwi.nii.gz': SHELLED_BVALS,
+        'sub-01_acq-fast_dir-PA_dwi.nii.gz': SHELLED_BVALS,
+        'sub-01_acq-slow_dir-AP_dwi.nii.gz': SHELLED_BVALS,
     },
 }
 

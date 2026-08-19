@@ -16,14 +16,17 @@ from __future__ import annotations
 
 import os.path as op
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from typing import NamedTuple
 
 from .models import CorrectionMethod, DWIGrouping
 from .validation import (
     BACKEND_DESCRIPTIONS,
+    blip_pair_polarities,
+    blip_sort_key,
     check_backend,
-    dwi_bidirectional_axes,
+    describe_blip_group,
+    dwi_blip_pairs,
     structural_target,
 )
 
@@ -134,13 +137,15 @@ def _unit_corrected(grouping: DWIGrouping, unit) -> dict[str, list[str]]:
     return corrected
 
 
-def _split_polarities(dgroups, axis: str):
-    """Distortion groups on ``axis``, split into (blip-up, blip-down)."""
+def _split_polarities(dgroups, pair_key: tuple):
+    """Distortion groups in one blip pair (pe_axis, readout, shim), split into
+    (blip-up, blip-down)."""
     up, down = [], []
     for dgroup in dgroups:
-        if dgroup.signature.pe_axis != axis:
+        sig = dgroup.signature
+        if (sig.pe_axis, sig.readout_time, sig.shim) != pair_key:
             continue
-        (up if dgroup.signature.pe_polarity == 1 else down).append(dgroup)
+        (up if sig.pe_polarity == 1 else down).append(dgroup)
     return up, down
 
 
@@ -439,22 +444,43 @@ def _describe_tortoise(lines, grouping, multipart_id, corrected, dgroups, step):
     if pepolar_ids:
         for b0field_id in pepolar_ids:
             estimation = grouping.estimations[b0field_id]
-            if not estimation.bidirectional_axes:
+            pairs = blip_pair_polarities(grouping, estimation)
+            complete = sorted(
+                (key for key, pols in pairs.items() if len(pols) == 2), key=blip_sort_key
+            )
+            unpaired = sorted(
+                (key for key, pols in pairs.items() if len(pols) < 2), key=blip_sort_key
+            )
+            if len(complete) > 1:
+                labels = '; '.join(describe_blip_group(key) for key in complete)
                 lines.append(
-                    f"  {step}. DRBUDDI cannot use estimation '{b0field_id}': its "
-                    'sources have differing phase encodings but no opposing '
-                    '(blip-up/blip-down) pair on any single axis.'
+                    f'     Estimation forms {len(complete)} blip pairs ({labels}); each is '
+                    'corrected in its own DIFFPREP+DRBUDDI pipeline and the corrected '
+                    'results are combined.'
                 )
-                step += 1
-                continue
-            for axis in sorted(estimation.bidirectional_axes):
-                up, down = _split_polarities(dgroups, axis)
+            axis_counts = Counter(key[0] for key in complete)
+            for key in complete:
+                up, down = _split_polarities(dgroups, key)
                 up_names = ', '.join(dgroup.key for dgroup in up) or 'borrowed series'
                 down_names = ', '.join(dgroup.key for dgroup in down) or 'borrowed series'
+                where = f'the {key[0]} axis'
+                if key[1] is not None and axis_counts[key[0]] > 1:
+                    where += f' (TRT {key[1]:g}s)'
                 lines.append(
-                    f'  {step}. DRBUDDI estimates distortion along the {axis} axis '
+                    f'  {step}. DRBUDDI estimates distortion along {where} '
                     f'from the blip-up ({up_names}) and blip-down ({down_names}) '
                     'data and applies the correction to every volume.'
+                )
+                step += 1
+            if unpaired:
+                groups = '; '.join(describe_blip_group(key) for key in unpaired)
+                fallback = (
+                    'DIFFPREP registers them to the T2w instead (T2Wreg)'
+                    if grouping.anat_files('T2w')
+                    else 'they are left uncorrected (no T2w for a T2Wreg fallback)'
+                )
+                lines.append(
+                    f'  {step}. DRBUDDI has no opposing blip for {groups}, so {fallback}.'
                 )
                 step += 1
             note = _borrow_note(grouping, multipart_id, b0field_id)
@@ -525,29 +551,21 @@ def _describe_mixed(lines, grouping, multipart_id, corrected, dgroups, step):
         # The refinement stage depends on the data: DRBUDDI needs reverse
         # phase-encoded dMRI *series* (a lone reverse b=0 was already consumed
         # by TOPUP); otherwise T2Wreg against a structural target, or nothing.
-        refine_axes = sorted(
+        all_pairs: dict = {}
+        for b0field_id in pepolar_ids:
+            all_pairs.update(blip_pair_polarities(grouping, grouping.estimations[b0field_id]))
+        refine_pairs = sorted(
             {
-                axis
+                key
                 for b0field_id in pepolar_ids
-                for axis in dwi_bidirectional_axes(grouping, grouping.estimations[b0field_id])
-            }
+                for key in dwi_blip_pairs(grouping, grouping.estimations[b0field_id])
+            },
+            key=blip_sort_key,
         )
-        if refine_axes:
-            for axis in refine_axes:
-                lines.append(
-                    f'  {step}. DRBUDDI re-estimates distortion along the {axis} axis '
-                    'from the eddy-corrected blip-up/blip-down dMRI series, refining '
-                    'the TOPUP correction.'
-                )
-                step += 1
-            for b0field_id in pepolar_ids:
-                note = _borrow_note(grouping, multipart_id, b0field_id)
-                if note:
-                    lines.append(f'     {note}')
-            structural = _structural_note(grouping)
-            if structural:
-                lines.append(structural)
-        else:
+        if not refine_pairs:
+            # No reverse-PE dMRI pair for DRBUDDI to refine (a lone reverse b=0 was
+            # already consumed by TOPUP): T2Wreg against a structural target, else
+            # single-stage.
             phrase = _structural_phrase(grouping)
             if phrase:
                 lines.append(
@@ -563,6 +581,37 @@ def _describe_mixed(lines, grouping, multipart_id, corrected, dgroups, step):
                     'T2Wreg stage: correction is single-stage (TOPUP + eddy).'
                 )
                 step += 1
+        elif len(all_pairs) > 1:
+            # DRBUDDI's single pass corrects one matched pair; a multi-group unit
+            # gets single-stage TOPUP+eddy (which pools every group correctly).
+            labels = '; '.join(
+                describe_blip_group(key) for key in sorted(all_pairs, key=blip_sort_key)
+            )
+            lines.append(
+                f'  {step}. The estimation spans {len(all_pairs)} blip groups ({labels}); '
+                'TOPUP+eddy corrects them together, but the single-pass DRBUDDI refinement '
+                'covers one matched pair, so no DRBUDDI refinement is applied.'
+            )
+            step += 1
+        else:
+            axis_counts = Counter(key[0] for key in refine_pairs)
+            for key in refine_pairs:
+                where = f'the {key[0]} axis'
+                if key[1] is not None and axis_counts[key[0]] > 1:
+                    where += f' (TRT {key[1]:g}s)'
+                lines.append(
+                    f'  {step}. DRBUDDI re-estimates distortion along {where} '
+                    'from the eddy-corrected blip-up/blip-down dMRI series, refining '
+                    'the TOPUP correction.'
+                )
+                step += 1
+            for b0field_id in pepolar_ids:
+                note = _borrow_note(grouping, multipart_id, b0field_id)
+                if note:
+                    lines.append(f'     {note}')
+            structural = _structural_note(grouping)
+            if structural:
+                lines.append(structural)
     elif kinds.synb0:
         for b0field_id in kinds.synb0:
             estimation = grouping.estimations[b0field_id]
