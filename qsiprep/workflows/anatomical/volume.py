@@ -38,6 +38,7 @@ from nipype.interfaces.ants import BrainExtraction, N4BiasFieldCorrection
 from nipype.interfaces.base import traits
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
+from niworkflows.interfaces.images import TemplateDimensions
 from niworkflows.interfaces.reportlets.masks import ROIsPlot
 
 from ... import config
@@ -53,7 +54,7 @@ from ...interfaces.freesurfer import (
     SynthSeg,
 )
 from ...interfaces.itk import AffineToRigid, DisassembleTransform
-from ...interfaces.images import TemplateDimensions
+from ...interfaces.images import AnatomicalReportlet
 from ...interfaces.niworkflows import RobustMNINormalizationRPT
 from ...utils.gpu import gpu_enabled
 from ...utils.misc import fix_multi_source_name
@@ -458,8 +459,12 @@ FreeSurfer version {FS_VERSION}. """
               config.workflow.subject_anatomical_reference == 'sessionwise',
               anat_modality),
              'inputnode.source_file')]),
+            (anat_modality.lower(), 'inputnode.anat_list'),
         (anat_reference_wf, anat_reports_wf, [
-            ('outputnode.out_report', 'inputnode.t1_conform_report'),
+            ('outputnode.valid_list', 'inputnode.valid_list'),
+        ]),
+        (reorient_tpl_brain_to_lps, anat_reports_wf, [
+            ('out_file', 'inputnode.reference_image'),
         ]),
         (seg_rpt, anat_reports_wf, [('out_report', 'inputnode.seg_report')]),
         (anat_normalization_wf, anat_reports_wf, [
@@ -729,23 +734,25 @@ A {contrast}-reference map was computed after registration of
 
     omp_nthreads = config.nipype.omp_nthreads
 
-    # 0. Reorient anatomical image(s) to LPS and resample to common voxel space
+    # 0. Prepare anatomical image(s)
+    # Determine which anatomical images are close enough in resolution to be merged
     template_dimensions = pe.Node(TemplateDimensions(), name='template_dimensions')
+
+    # Conform to LPS and resample to common voxel space
     anat_conform = pe.MapNode(
-        Conform(deoblique_header=True), iterfield='in_file', name='anat_conform'
+        Conform(deoblique_header=True),
+        iterfield='in_file',
+        name='anat_conform',
     )
 
     workflow.connect([
-        (inputnode, template_dimensions, [('images', 't1w_list')]),
+        (inputnode, template_dimensions, [('images', 'anat_list')]),
         (template_dimensions, anat_conform, [
-            ('t1w_valid_list', 'in_file'),
+            ('anat_valid_list', 'in_file'),
             ('target_zooms', 'target_zooms'),
             ('target_shape', 'target_shape'),
         ]),
-        (template_dimensions, outputnode, [
-            ('out_report', 'out_report'),
-            ('t1w_valid_list', 'valid_list'),
-        ]),
+        (template_dimensions, outputnode, [('anat_valid_list', 'valid_list')]),
     ])  # fmt:skip
 
     # N4 fits its field by least squares in the log domain, where near-zero
@@ -1280,6 +1287,8 @@ def init_anat_reports_wf(anatomical_template) -> Workflow:
     """
     Set up a battery of datasinks to store reports in the right location
     """
+    anat_modality = config.workflow.anat_modality
+
     workflow = Workflow(name='anat_reports_wf')
 
     inputnode = pe.Node(
@@ -1290,21 +1299,40 @@ def init_anat_reports_wf(anatomical_template) -> Workflow:
                 'seg_report',
                 't1_2_mni_report',
                 'recon_report',
+                'anat_list',
+                'valid_list',
+                'reference_image',
             ]
         ),
         name='inputnode',
     )
 
-    ds_report_t1_conform = pe.Node(
+    anat_reportlet = pe.Node(
+        AnatomicalReportlet(anat_type=anat_modality),
+        name='anat_reportlet',
+    )
+    workflow.connect([
+        (inputnode, anat_reportlet, [
+            ('anat_list', 'anat_list'),
+            ('valid_list', 'valid_list'),
+            ('reference_image', 'reference_image'),
+        ]),
+    ])  # fmt:skip
+
+    ds_report_anat_conform = pe.Node(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
             datatype='figures',
             desc='conform',
             suffix=config.workflow.anat_modality,
         ),
-        name='ds_report_t1_conform',
+        name='ds_report_anat_conform',
         run_without_submitting=True,
     )
+    workflow.connect([
+        (inputnode, ds_report_anat_conform, [('source_file', 'source_file')]),
+        (anat_reportlet, ds_report_anat_conform, [('out_report', 'in_file')]),
+    ])  # fmt:skip
 
     template_entities = _template_to_report_entities(anatomical_template)
     ds_report_t1_2_mni = pe.Node(
@@ -1329,10 +1357,6 @@ def init_anat_reports_wf(anatomical_template) -> Workflow:
     )
 
     workflow.connect([
-        (inputnode, ds_report_t1_conform, [
-            ('source_file', 'source_file'),
-            ('t1_conform_report', 'in_file'),
-        ]),
         (inputnode, ds_report_t1_seg_mask, [
             ('source_file', 'source_file'),
             ('seg_report', 'in_file'),
