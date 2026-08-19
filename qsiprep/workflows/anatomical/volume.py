@@ -458,8 +458,9 @@ FreeSurfer version {FS_VERSION}. """
             ((anat_modality.lower(), fix_multi_source_name,
               config.workflow.subject_anatomical_reference == 'sessionwise',
               anat_modality),
-             'inputnode.source_file')]),
+             'inputnode.source_file'),
             (anat_modality.lower(), 'inputnode.anat_list'),
+        ]),
         (anat_reference_wf, anat_reports_wf, [
             ('outputnode.valid_list', 'inputnode.valid_list'),
         ]),
