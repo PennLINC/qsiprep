@@ -53,8 +53,8 @@ from ...interfaces.freesurfer import (
     PrepareSynthStripGrid,
     SynthSeg,
 )
-from ...interfaces.itk import AffineToRigid, DisassembleTransform
 from ...interfaces.images import AnatomicalReportlet
+from ...interfaces.itk import AffineToRigid, DisassembleTransform
 from ...interfaces.niworkflows import RobustMNINormalizationRPT
 from ...utils.gpu import gpu_enabled
 from ...utils.misc import fix_multi_source_name
@@ -746,13 +746,13 @@ A {contrast}-reference map was computed after registration of
     )
 
     workflow.connect([
-        (inputnode, template_dimensions, [('images', 'anat_list')]),
+        (inputnode, template_dimensions, [('images', 't1w_list')]),
         (template_dimensions, anat_conform, [
-            ('anat_valid_list', 'in_file'),
+            ('t1w_valid_list', 'in_file'),
             ('target_zooms', 'target_zooms'),
             ('target_shape', 'target_shape'),
         ]),
-        (template_dimensions, outputnode, [('anat_valid_list', 'valid_list')]),
+        (template_dimensions, outputnode, [('t1w_valid_list', 'valid_list')]),
     ])  # fmt:skip
 
     # N4 fits its field by least squares in the log domain, where near-zero
@@ -1302,7 +1302,7 @@ def init_anat_reports_wf(anatomical_template) -> Workflow:
                 'anat_list',
                 'valid_list',
                 'reference_image',
-            ]
+            ],
         ),
         name='inputnode',
     )

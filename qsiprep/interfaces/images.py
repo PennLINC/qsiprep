@@ -298,7 +298,7 @@ class AnatomicalReportlet(SimpleInterface):
         ref_img = nb.load(self.inputs.reference_image)
         zooms = ref_img.header.get_zooms()
         dims = ref_img.shape
-        discards = sorted(list(set(self.inputs.anat_list) - set(self.inputs.valid_list)))
+        discards = sorted(set(self.inputs.anat_list) - set(self.inputs.valid_list))
         items = [
             DISCARD_TEMPLATE.format(path=path, basename=os.path.basename(path))
             for path in discards
