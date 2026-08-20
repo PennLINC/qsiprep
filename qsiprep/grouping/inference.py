@@ -172,6 +172,12 @@ def resolve_estimations(
     by_path = {record.path: record for record in records}
 
     # ------------------------------------------------------------------ E1
+    # A B0FieldIdentifier must be unique within a subject: the files that
+    # jointly estimate one field share a shim, so they cannot span sessions
+    # (the scanner is reshimmed between them). A session-less source (a shared
+    # fmap) declares the identifier once and is fine, but the same identifier
+    # declared by files in two different sessions is invalid curation - error
+    # and skip it; the user must give each session its own identifier.
     curated_members = defaultdict(list)
     for record in records:
         for identifier in record.b0field_identifiers:
@@ -184,6 +190,23 @@ def resolve_estimations(
                     'reserved-b0field-prefix',
                     f"B0FieldIdentifier '{identifier}' uses the reserved '{AUTO_PREFIX}' "
                     'prefix. Rename it in your sidecars.',
+                    tuple(record.path for record in members),
+                )
+            )
+            continue
+        declaring_sessions = sorted(
+            {record.session for record in members if record.session is not None}, key=str
+        )
+        if len(declaring_sessions) > 1:
+            sessions_txt = ', '.join(f'ses-{session}' for session in declaring_sessions)
+            issues.append(
+                error(
+                    'b0field-multisession',
+                    f"B0FieldIdentifier '{identifier}' is declared by files in "
+                    f'{len(declaring_sessions)} sessions ({sessions_txt}). A '
+                    'B0FieldIdentifier must be unique within a subject: the scanner is '
+                    'reshimmed between sessions, so one fieldmap cannot span them. Give '
+                    f"each session its own identifier (e.g. '{identifier}_ses-...').",
                     tuple(record.path for record in members),
                 )
             )
@@ -829,6 +852,7 @@ def build_correction_units(
             dwi_files=dwi_files,
             b0field_source=distortion_groups[member_keys[0]].b0field_source,
             multipart_scope=scope,
+            session=dwi_records[dwi_files[0]].session,
         )
     return units
 
@@ -945,14 +969,34 @@ def build_concatenation_groups(
             for key in unit_keys:
                 assignments[key] = ('+'.join(id_parts), Provenance.INFERRED)
 
-    # Materialize the groups
-    members_by_id = defaultdict(list)
+    # Materialize the groups. Each correction unit belongs to one session
+    # (units never span sessions), so a curated MultipartID - or an inferred
+    # id - reused across sessions makes one output per session, never a
+    # cross-session concatenation. The dict key stays the bare id when it
+    # occurs in a single session (the common case, so single-session keys are
+    # unchanged) and is session-qualified only when the same id recurs across
+    # sessions.
+    members_by_group = defaultdict(list)  # (session, id) -> [(unit key, provenance)]
     for key, (multipart_id, provenance) in assignments.items():
-        members_by_id[multipart_id].append((key, provenance))
+        members_by_group[(correction_units[key].session, multipart_id)].append((key, provenance))
+
+    sessions_per_id = defaultdict(set)
+    for session, multipart_id in members_by_group:
+        sessions_per_id[multipart_id].add(session)
+
+    def _group_key(session, multipart_id):
+        if len(sessions_per_id[multipart_id]) == 1:
+            return multipart_id
+        return f'{multipart_id}+ses-{session}'
+
+    materialized = [
+        (_group_key(session, multipart_id), multipart_id, members)
+        for (session, multipart_id), members in members_by_group.items()
+    ]
 
     concatenation_groups: dict[str, ConcatenationGroup] = {}
     output_names: dict[str, str] = {}
-    for multipart_id, members in sorted(members_by_id.items()):
+    for group_key, multipart_id, members in sorted(materialized, key=lambda item: item[0]):
         unit_keys = tuple(sorted(key for key, _ in members))
         keys = tuple(
             sorted(
@@ -998,7 +1042,7 @@ def build_concatenation_groups(
                 )
             )
         output_names[output_name] = multipart_id
-        concatenation_groups[multipart_id] = ConcatenationGroup(
+        concatenation_groups[group_key] = ConcatenationGroup(
             multipart_id=multipart_id,
             provenance=provenance,
             distortion_groups=keys,

@@ -290,6 +290,9 @@ class CorrectionUnit:
     # The output scope this unit was built for (see DistortionGroup); all of a
     # unit's distortion groups share it.
     multipart_scope: str | None = None
+    # The one session this unit belongs to (units never span sessions).
+    # Carried so curated concatenation scopes per session without re-deriving.
+    session: str | None = None
 
 
 @dataclasses.dataclass(frozen=True)

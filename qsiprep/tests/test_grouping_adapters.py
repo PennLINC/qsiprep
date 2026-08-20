@@ -165,6 +165,31 @@ def test_multi_readout_splits_per_pair(tmp_path):
     assert all(unit.is_single_blip_pair for unit in units)
 
 
+def test_single_unit_acq_output_exposes_multipartid_label(tmp_path):
+    """A single-unit curated ``acq-`` output must expose its MultipartID label
+    as the final output name, distinct from the entity-derived unit key.
+
+    ``base.py`` names each single-unit output's derivatives from the concatenation
+    scheme's final name (not the unit key), so this is what carries a curated
+    ``acq-<label>`` into the derivative filenames. Regression guard: when this
+    was the identity, single-unit benchmark outputs lost their labels (e.g.
+    ``acq-dsi258`` fell back to a bare name).
+    """
+    grouping = load_scenario('benchmark_multipart', tmp_path, strict=False)
+
+    # Every output here is a single correction unit (no cross-unit merge).
+    scheme = concatenation_scheme(grouping, backend='fsl')
+    assert scheme == {
+        'sub-01_dir-AP': 'sub-01_acq-solo_dir-AP',
+        'sub-01': 'sub-01_acq-pair',
+    }
+    # The final name adds the curated label and differs from the unit key, so
+    # naming derivatives from it (not the key) is what preserves the label.
+    for unit_key, final_name in scheme.items():
+        assert final_name.startswith('sub-01_acq-')
+        assert final_name != unit_key
+
+
 def test_partial_pair_routes_pair_and_singleton(tmp_path):
     """TORTOISE routes each blip group on its own: the matched pair to DRBUDDI,
     the unmatched singleton to the fieldmap-less fallback (estimation dropped, so

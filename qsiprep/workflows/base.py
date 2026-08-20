@@ -579,11 +579,23 @@ to workflows in *QSIPrep*'s documentation]\
 
     # create a processing pipeline for the dwis in each session
     for output_fname, unit in outputs_to_files.items():
-        source_file = get_source_file(list(unit.dwi_files), output_fname, suffix='_dwi')
+        # naming_name is this output's display name: a single-unit output uses
+        # its final name (carrying a curated 'acq-<label>' MultipartID), while a
+        # unit that merges into a multi-unit output keeps its per-unit key -- it
+        # is a sub-part, not an output, and its siblings would collide. It drives
+        # the derivatives (source_file), the preproc work-dir (output_prefix ->
+        # _get_wf_name; finalize follows via `name`), and the series-QC row
+        # (finalize output_prefix -> SeriesQC), so /work and every derivative
+        # carry the same label. Every lookup below stays keyed on output_fname
+        # (the unit key); only this display name changes.
+        final_output_name = concatenation_scheme[output_fname]
+        merged_here = merging_distortion_groups and final_output_name in merging_group_workflows
+        naming_name = output_fname if merged_here else final_output_name
+        source_file = get_source_file(list(unit.dwi_files), naming_name, suffix='_dwi')
         output_wfname = output_fname.replace('-', '_')
         dwi_preproc_wf = init_dwi_preproc_wf(
             unit=unit,
-            output_prefix=output_fname,
+            output_prefix=naming_name,
             source_file=source_file,
             t2w_sdc=_t2w_available_for_sdc(subject_data),
             anatomical_template=anatomical_template,
@@ -591,7 +603,7 @@ to workflows in *QSIPrep*'s documentation]\
         dwi_finalize_wf = init_dwi_finalize_wf(
             unit=unit,
             name=dwi_preproc_wf.name.replace('dwi_preproc', 'dwi_finalize'),
-            output_prefix=output_fname,
+            output_prefix=naming_name,
             source_file=source_file,
             write_derivatives=not (
                 merging_distortion_groups

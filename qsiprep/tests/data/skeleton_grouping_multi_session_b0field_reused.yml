@@ -1,0 +1,39 @@
+# Invalid curation: the SAME B0FieldIdentifier 'dwi_b0_field' is declared by
+# files in two different sessions. A B0FieldIdentifier must be unique within a
+# subject - the scanner is reshimmed between sessions, so one field cannot span
+# them. Expected: a 'b0field-multisession' error, the field is skipped, and the
+# DWIs that name it as B0FieldSource are left unresolved. The user must give
+# each session its own identifier (dwi_b0_field_ses1 / dwi_b0_field_ses2).
+'01':
+  - session: '1'
+    anat:
+      - suffix: T1w
+    dwi:
+      - dir: AP
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: dwi_b0_field
+          B0FieldSource: dwi_b0_field
+      - dir: PA
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: dwi_b0_field
+  - session: '2'
+    dwi:
+      - dir: AP
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: dwi_b0_field
+          B0FieldSource: dwi_b0_field
+      - dir: PA
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: dwi_b0_field

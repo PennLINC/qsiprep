@@ -974,3 +974,81 @@ def test_synb0_overrides_t2w_as_structural_target(tmp_path):
     assert set(grouping.application.values()) == {'auto+pepolar+j'}
     preview = describe_processing(grouping, 'tortoise')
     assert 'a SyNb0 synthetic b=0 (from sub-01_T1w.nii.gz, in place of the T2w image)' in preview
+
+
+def _session_of(path):
+    """The ses- entity of a BIDS path, e.g. 'ses-1'."""
+    return op.basename(path).split('_')[1]
+
+
+def test_multi_session_curated_multipart(tmp_path):
+    """A curated MultipartID reused across sessions makes one output per
+    session, never a cross-session concatenation of the two timepoints.
+
+    Anatomicals live in ses-1 only, so a real run pools both sessions into one
+    grouping call; the reused 'acq-combined' must still be scoped per session.
+    Each session carries its OWN (BIDS-unique) B0FieldIdentifier.
+    """
+    grouping = load_scenario('multi_session_curated_multipart', tmp_path)
+
+    # Unique per-session curated PEPOLAR fields - one per session, no pooling.
+    assert set(grouping.estimations) == {'dwi_b0_field_ses1', 'dwi_b0_field_ses2'}
+    for est in grouping.estimations.values():
+        assert est.provenance is Provenance.CURATED
+        assert est.method is CorrectionMethod.PEPOLAR
+        assert len({_session_of(src) for src in est.sources}) == 1
+    assert not grouping.errors
+
+    # Two outputs, one per session, both labelled acq-combined; neither mixes
+    # files from two sessions.
+    assert {c.output_name for c in grouping.concatenation_groups.values()} == {
+        'sub-01_ses-1_acq-combined',
+        'sub-01_ses-2_acq-combined',
+    }
+    for concat in grouping.concatenation_groups.values():
+        assert concat.multipart_id == 'acq-combined'
+        assert concat.provenance is Provenance.CURATED
+        assert len({_session_of(f) for f in concat.dwi_files}) == 1
+
+    # Each DWI is corrected by its own session's field.
+    ses_field = {'ses-1': 'dwi_b0_field_ses1', 'ses-2': 'dwi_b0_field_ses2'}
+    for path in grouping.dwi_files:
+        assert grouping.application[path] == ses_field[_session_of(path)]
+
+
+def test_multi_session_b0field_reused(tmp_path):
+    """The same B0FieldIdentifier declared across sessions is invalid - a field
+    cannot span a reshim - so it errors and is skipped, leaving the DWIs that
+    named it uncorrected."""
+    grouping = load_scenario('multi_session_b0field_reused', tmp_path, strict=False)
+
+    assert 'b0field-multisession' in issue_codes(grouping.errors)
+    # The reused identifier builds no estimation...
+    assert 'dwi_b0_field' not in grouping.estimations
+    # ...so the DWIs that named it as B0FieldSource are left unresolved.
+    assert 'unresolvable-b0fieldsource' in issue_codes(grouping.errors)
+    assert all(source is None for source in grouping.application.values())
+
+
+def test_multi_session_shared_fmap(tmp_path):
+    """A session-less fmap shared across sessions is one field (a cross-session
+    wildcard), not split per session."""
+    grouping = load_scenario('multi_session_shared_fmap', tmp_path)
+
+    # A single shared field keeps its bare id - not split into per-session ids.
+    assert list(grouping.estimations) == ['shared_field']
+    est = grouping.estimations['shared_field']
+    assert est.provenance is Provenance.CURATED
+    assert est.method is CorrectionMethod.PEPOLAR
+    # Its sources are the two session-less epi fmaps.
+    assert len(est.sources) == 2
+    assert all(op.basename(src).startswith('sub-01_dir-') for src in est.sources)
+
+    # DWIs in both sessions resolve to the one shared field.
+    assert {grouping.application[path] for path in grouping.dwi_files} == {'shared_field'}
+
+    # Still one output per session.
+    assert {c.output_name for c in grouping.concatenation_groups.values()} == {
+        'sub-01_ses-1_dir-AP',
+        'sub-01_ses-2_dir-AP',
+    }
