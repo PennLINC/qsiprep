@@ -12,14 +12,14 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "Topic :: Scientific/Engineering :: Image Recognition",
     "License :: OSI Approved :: BSD License",
-    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
 ]
 license = {file = "LICENSE"}
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
-    'importlib_resources; python_version < "3.11"',
+    'importlib_resources; python_version < "3.12"',
     "acres",
-    "dipy>=1.11.0,<1.12.0",
+    "dipy>=1.12.0,<1.13.0",
     "fury",
     "indexed_gzip <= 1.8.7",
     "jinja2 < 3.1",
@@ -51,8 +51,9 @@ dependencies = [
     "pytest-env",
     "pytest-xdist",
     "templateflow",
-    "tensorflow",
-    "tensorflow-gpu == 2.8.4",
+    "tensorflow[and-cuda]",
+    # FreeSurfer's mri_synthseg requires Keras 2 (see SynthSeg interface)
+    "tf-keras",
     "torch",
 ]
 dynamic = ["version"]
@@ -80,7 +81,11 @@ doc = [
     "sphinxcontrib-bibtex",
 ]
 dev = [
-    "ruff ~= 0.4.3",
+    # Keep this pin in sync with the ruff pin in .github/workflows/lint.yml and
+    # the rev in .pre-commit-config.yaml. A looser spec here installs a ruff
+    # that disagrees with CI -- 0.4.x and 0.15.x report inverted PT001, so
+    # "fixing" lint locally introduced CI failures.
+    "ruff == 0.15.21",
     "pre-commit",
 ]
 tests = [
@@ -155,7 +160,7 @@ qsiprep = { path = ".", editable = false }
 numpy = ">=1.26,<1.27"
 
 [tool.pixi.dependencies]
-python = "3.10.*"
+python = "3.11.*"
 nodejs = "20.*"
 mkl = "*"
 mkl-service = "*"
@@ -263,6 +268,10 @@ markers = [
     "drbuddi_shoreline_epi: test 10",
     "drbuddi_tensorline_epi: test 11",
     "dscsdsi: test 12",
+    "diffprep: TORTOISE DIFFPREP HMC on non-shelled data",
+    "diffprep_drbuddi: TORTOISE DIFFPREP HMC with DRBUDDI SDC",
+    "diffprep_rpe_series: TORTOISE DIFFPREP HMC with reverse-PE-series DRBUDDI SDC",
+    "diffprep_csdsi_rpe_series: TORTOISE DIFFPREP HMC on a non-shelled CS-DSI reverse-PE series",
     "dsdti_nofmap: test 13",
     "dsdti_synfmap: test 14",
     "dsdti_topup: test 15",

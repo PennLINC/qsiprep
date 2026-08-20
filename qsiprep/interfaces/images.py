@@ -9,7 +9,6 @@ Image tools interfaces
 
 import glob
 import os
-import re
 from subprocess import PIPE, Popen
 from textwrap import indent
 
@@ -33,6 +32,8 @@ from nipype.interfaces.base import (
 )
 from nipype.utils.filemanip import fname_presuffix
 from niworkflows.interfaces.header import _ValidateImageInputSpec
+
+from ..utils.bids import find_bval, find_bvec
 
 # from qsiprep.interfaces.images import (
 #    nii_ones_like,
@@ -397,30 +398,6 @@ class ConformDwiOutputSpec(TraitedSpec):
     out_report = File(exists=True, desc='HTML segment containing warning')
 
 
-def _find_gradient_file(dwi_file, ext):
-    """Locate the bval/bvec file (``ext``) associated with a DWI image.
-
-    The gradient file is normally named like the DWI image but with a ``.bval``
-    or ``.bvec`` extension. For complex-valued acquisitions the magnitude and
-    phase images share a single pair of gradient files that omit the ``part-``
-    entity (e.g. ``..._dwi.bval`` for ``..._part-mag_dwi.nii.gz``), so fall back
-    to a ``part``-stripped name when the part-specific file is absent. If
-    neither exists, the part-specific candidate is returned unchanged so the
-    caller's existing ``os.path.exists`` handling applies.
-    """
-    candidate = fname_presuffix(dwi_file, suffix=ext, use_ext=False)
-    if os.path.exists(candidate):
-        return candidate
-
-    stripped = re.sub(r'_part-[A-Za-z0-9]+', '', dwi_file)
-    if stripped != dwi_file:
-        stripped_candidate = fname_presuffix(stripped, suffix=ext, use_ext=False)
-        if os.path.exists(stripped_candidate):
-            return stripped_candidate
-
-    return candidate
-
-
 class ConformDwi(SimpleInterface):
     """Conform a series of dwi images to enable merging.
     Performs three basic functions:
@@ -440,18 +417,23 @@ class ConformDwi(SimpleInterface):
         suffix = '_' + orientation
         out_fname = fname_presuffix(fname, suffix=suffix, newpath=runtime.cwd)
 
-        # If not defined, find it
-        if isdefined(self.inputs.bval_file):
-            bval_fname = self.inputs.bval_file
-        else:
-            bval_fname = _find_gradient_file(fname, '.bval')
+        # If not defined, find it. The BIDS inheritance principle applies, so a
+        # part-mag and a part-phase image can share a single sub-<label>_dwi.bval.
+        bval_fname = (
+            self.inputs.bval_file if isdefined(self.inputs.bval_file) else find_bval(fname)
+        )
+        bvec_fname = (
+            self.inputs.bvec_file if isdefined(self.inputs.bvec_file) else find_bvec(fname)
+        )
 
-        if isdefined(self.inputs.bvec_file):
-            bvec_fname = self.inputs.bvec_file
+        if bval_fname is not None:
+            self._results['bval_file'] = bval_fname
         else:
-            bvec_fname = _find_gradient_file(fname, '.bvec')
+            LOGGER.info('No bval file found for %s', fname)
 
-        out_bvec_fname = fname_presuffix(bvec_fname, suffix=suffix, newpath=runtime.cwd)
+        if bvec_fname is None:
+            LOGGER.info('No bvec file found for %s', fname)
+
         validator = ValidateImage(in_file=fname)
         validated = validator.run()
         self._results['out_report'] = validated.outputs.out_report
@@ -474,8 +456,9 @@ class ConformDwi(SimpleInterface):
             self._results['dwi_file'] = out_fname
 
             # Flip the bvecs
-            if os.path.exists(bvec_fname):
+            if bvec_fname is not None:
                 LOGGER.info('Reorienting %s to %s', bvec_fname, orientation)
+                out_bvec_fname = fname_presuffix(bvec_fname, suffix=suffix, newpath=runtime.cwd)
                 bvec_array = np.loadtxt(bvec_fname)
                 if not bvec_array.shape[0] == transform_orientation.shape[0]:
                     raise ValueError('Unrecognized bvec format')
@@ -484,14 +467,12 @@ class ConformDwi(SimpleInterface):
                     output_array[this_axnum] = bvec_array[int(axnum)] * flip
                 np.savetxt(out_bvec_fname, output_array, fmt='%.8f ')
                 self._results['bvec_file'] = out_bvec_fname
-                self._results['bval_file'] = bval_fname
 
         else:
             LOGGER.info('Not applying reorientation to %s: already in %s', fname, orientation)
             self._results['dwi_file'] = fname
-            if os.path.exists(bvec_fname):
+            if bvec_fname is not None:
                 self._results['bvec_file'] = bvec_fname
-                self._results['bval_file'] = bval_fname
 
         return runtime
 

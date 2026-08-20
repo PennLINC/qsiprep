@@ -175,7 +175,8 @@ def main():
         # Generate reports phase
         failed_reports = generate_reports(
             processing_list=config.execution.processing_list,
-            output_level=config.workflow.subject_anatomical_reference,
+            subject_anatomical_reference=config.workflow.subject_anatomical_reference,
+            report_output_level=config.execution.report_output_level,
             output_dir=config.execution.output_dir,
             run_uuid=config.execution.run_uuid,
         )

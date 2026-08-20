@@ -5,8 +5,8 @@ ARG TAG_MRTRIX3=26.1.0
 ARG TAG_3TISSUE=26.1.0
 ARG TAG_DSISTUDIO=26.1.2
 ARG TAG_AFNI=AFNI_25.2.09
-ARG TAG_TORTOISE=26.1.3
-ARG TAG_TORTOISECUDA=26.1.3
+ARG TAG_TORTOISE=26.8.0
+ARG TAG_TORTOISECUDA=26.8.0
 ARG TAG_SYNB0=26.1.2
 
 FROM pennlinc/qsiprep-freesurfer:${TAG_FREESURFER} AS build_freesurfer
@@ -212,6 +212,8 @@ ENV \
     IS_DOCKER_8395080871=1 \
     ARTHOME="/opt/art" \
     DIPY_HOME=/home/qsiprep/.dipy \
+    TF_USE_LEGACY_KERAS=1 \
+    TF_ENABLE_ONEDNN_OPTS=0 \
     QT_PLUGIN_PATH="/usr/lib/x86_64-linux-gnu/qt5/plugins" \
     QML2_IMPORT_PATH="/usr/lib/x86_64-linux-gnu/qt5/qml" \
     LD_LIBRARY_PATH="/opt/conda/envs/qsiprep/lib/python3.10/site-packages/nvidia/cudnn/lib:/opt/freesurfer/lib:${LD_LIBRARY_PATH}"

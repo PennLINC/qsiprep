@@ -31,3 +31,5 @@ sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-slice_qc.json
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_dwiref.nii.gz
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_model-eddy_stat-cnr_dwimap.json
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_model-eddy_stat-cnr_dwimap.nii.gz
+sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_stat-tsnr_dwimap.json
+sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_stat-tsnr_dwimap.nii.gz

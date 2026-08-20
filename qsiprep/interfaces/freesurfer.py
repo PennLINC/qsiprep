@@ -151,6 +151,12 @@ class _SynthStripInputSpec(FSTraitedSpecOpenMP):
     no_csf = traits.Bool(argstr='--no-csf', desc='Exclude CSF from brain border.')
     border = traits.Int(argstr='-b %d', desc='Mask border threshold in mm. Default is 1.')
     gpu = traits.Bool(argstr='-g')
+    # nipype's scheduler only recognises a GPU node via `use_cuda` or `use_gpu`
+    # (engine/nodes.py: is_gpu_node). This tool spells its GPU request
+    # differently, so without this alias the node runs on the device while the
+    # scheduler counts it as pure CPU and freely schedules other GPU work
+    # alongside it. No argstr: it exists purely for resource accounting.
+    use_gpu = traits.Bool(False, usedefault=True, desc='for nipype GPU scheduling only')
     out_brain = File(
         argstr='-o %s',
         name_template='%s_brain.nii.gz',
@@ -223,6 +229,9 @@ class _SynthSegInputSpec(FSTraitedSpecOpenMP):
     num_threads = traits.Int(
         default=1, argstr='--threads %d', usedefault=True, desc='Number of threads to use'
     )
+    # No argstr; exists only so nipype's is_gpu_node() sees this node (see the
+    # matching trait on _SynthStripInputSpec).
+    use_gpu = traits.Bool(False, usedefault=True, desc='for nipype GPU scheduling only')
     fast = traits.Bool(argstr='--fast', desc='fast predictions (lower quality).')
     robust = traits.Bool(argstr='--robust', desc='use robust predictions (slower).')
     out_seg = File(
@@ -261,6 +270,22 @@ class SynthSeg(FSCommandOpenMP):
     input_spec = _SynthSegInputSpec
     output_spec = _SynthSegOutputSpec
     _cmd = 'mri_synthseg'
+
+    def __init__(self, **inputs):
+        super().__init__(**inputs)
+        self.inputs.environ.update(
+            {
+                # mri_synthseg builds its network with Keras 2-only APIs (e.g., Model.output
+                # returning a tensor rather than a list), so point tf.keras at tf-keras.
+                'TF_USE_LEGACY_KERAS': '1',
+                # TensorFlow enables oneDNN by default as of 2.9. For a full-size brain at
+                # 1mm that raises mri_synthseg's peak memory from ~13GB to ~16GB, which
+                # OOMs machines that used to run it fine. oneDNN is ~2x faster on CPU, but
+                # this node is hardcoded to one thread anyway, so trade the speed for the
+                # memory headroom.
+                'TF_ENABLE_ONEDNN_OPTS': '0',
+            }
+        )
 
     def _format_arg(self, name, trait_spec, value):
         # Hardcode threads to be 1

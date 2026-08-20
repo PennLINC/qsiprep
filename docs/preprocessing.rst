@@ -89,7 +89,7 @@ of the file you will send to ``--bids-filter-file``. The queries in *QSIPrep* ar
 
 Each query has several "entities", which can be modified by filters. The list of
 supported entities is `here
-<https://github.com/bids-standard/pybids/blob/master/bids/layout/config/bids.json>`__.
+<https://github.com/bids-standard/pybids/blob/main/src/bids/layout/config/bids.json>`__.
 To filter data, modify the queries by changing one or more of the supported
 entities in the BIDS filter file. The general format of the filter file is::
 
@@ -124,7 +124,6 @@ You can enable regular expressions for more detailed filtering, for example::
   }
 
 will do a case-insensitive match of "mprage" within the "t1w" query.
-
 
 Preprocessing HCP-style
 =======================
@@ -172,6 +171,19 @@ Visual Reports
 ==============
 
 *QSIPrep* outputs summary reports, written to ``<output_dir>/qsiprep/sub-<subject_label>.html``.
+With ``--subject-anatomical-reference sessionwise`` there is one report per session,
+named ``sub-<subject_label>_ses-<session_label>.html``, instead of one report per subject.
+
+The directory the reports are written to is controlled by ``--report-output-level``,
+which may be ``root`` (the output directory), ``subject`` (``<output_dir>/qsiprep/sub-<subject_label>/``),
+or ``session``
+(``<output_dir>/qsiprep/sub-<subject_label>/ses-<session_label>/``).
+The default, ``auto``, uses the session level for session-wise reports and the root
+otherwise.
+Session-level reports are only possible when each report covers a single session,
+so reports spanning multiple sessions, or data without a session level,
+are written to the subject level with a warning.
+
 These reports provide a quick way to make visual inspection of the results easy.
 One useful graphic is the animation of the q-space sampling scheme before and after the pipeline.
 Here is a sampling scheme from a DSI scan:
@@ -344,9 +356,8 @@ A single-line tsv file (``desc-image_qc.tsv``) is created for each output
 image. This file is particularly useful for comparing the relative quality
 across subjects before deciding who to include in a group analysis. The
 columns in this file come from DSI Studio's QC calculation and is described
-in :footcite:t:`yeh2019differential`.
-Columns prefixed by ``raw_`` reflect QC measurements from the data before preprocessing.
-Columns prefixed by ``t1_`` or ``mni_`` contain QC
+in :footcite:t:`yeh2019`. Columns prefixed by ``raw_`` reflect QC measurements from the
+data before preprocessing. Columns prefixed by ``t1_`` or ``mni_`` contain QC
 metrics calculated on the preprocessed data. Motion parameter summaries are
 also provided, such as the mean and max of framewise displacement
 (``mean_fd``, ``max_fd``). The max and mean absolute values for translation
@@ -430,13 +441,13 @@ leverage fast and powerful tools from FreeSurfer, namely ``SynthStrip`` and
 Many imaging protocols acquire some high-resolution, undistorted anatomical
 reference scans. *QSIPrep* can use either T1-weighted or T2-weighted 3D images as
 the *anatomical reference*. To specify which contrast you'd like to use for your
-anatomical reference, be sure to specify ``--anatomical-contrast`` as either
-``T1w``, ``T2w`` or ``none``. Specifying ``none`` is equivalent to the previous
-option of ``--dwi-only``, where no anatomical images are used from the input
+anatomical reference, be sure to specify ``--anat-modality`` as either
+``T1w``, ``T2w`` or ``none``. Specifying ``none`` replaces the deprecated
+``--dwi-only`` option, where no anatomical images are used from the input
 data and the AC-PC alignment is based either on the adult or infant MNI
 templates.
 
-We discourage the use of ``--anatomical-contrast none`` in most cases. It is
+We discourage the use of ``--anat-modality none`` in most cases. It is
 very rare to have dMRI data without any kind of T1w or T2w image from the
 same individual.
 
@@ -531,7 +542,7 @@ Processing Infant Data
 When processing infant DWI data, users may add ``--infant`` to their
 *QSIPrep* call. This will swap the default MNI152NLin2009cAsym template
 with the MNI infant template. It is highly advisable to also include
-``--dwi-only`` to avoid problems with T1w skull-stripping.
+``--anat-modality none`` to avoid problems with T1w skull-stripping.
 
 
 .. _dwi_overview:
@@ -1046,7 +1057,9 @@ Using only DWI data (bypassing the T1w workflows)
 It is possible to use *QSIPrep* to process *only* diffusion-weighted images. In
 the case of infant data, where robust skull-stripping methods are not
 currently available, or where anatomical preprocessing has already been
-performed in another pipeline, the user can specify ``--dwi-only``.
+performed in another pipeline, the user can specify ``--anat-modality none``.
+(The deprecated ``--dwi-only`` flag now enables ``--anat-modality none``
+automatically, and will be removed in a later version.)
 
 Instead of registering the b=0 template image to the skull-stripped T1w
 image, the b=0 template is registered directly to a template and only the

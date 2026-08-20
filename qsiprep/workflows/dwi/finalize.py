@@ -8,13 +8,16 @@ Final steps on the preprocessed data
 
 import os
 
+from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 
 from ... import config
+from ...data import load as load_data
 from ...interfaces import DerivativesDataSink
+from ...interfaces.bias import N4WeightMask
 from ...interfaces.bids import DerivativesSidecar
 from ...interfaces.dsi_studio import DSIStudioBTable
 from ...interfaces.dwi_merge import MergeFinalConfounds, SplitResampledDWIs
@@ -39,6 +42,7 @@ def init_dwi_finalize_wf(
     source_file,
     output_prefix,
     write_derivatives=True,
+    make_intramodal_template=False,
 ):
     """
     This workflow controls the resampling parts of the dwi preprocessing workflow.
@@ -185,6 +189,7 @@ def init_dwi_finalize_wf(
                 'bvec_files',
                 'b0_ref_image',
                 'intramodal_template',
+                'intramodal_template_wm_seg',
                 'b0_indices',
                 'dwi_mask',
                 'original_files',
@@ -233,8 +238,31 @@ def init_dwi_finalize_wf(
         ),
         name='outputnode',
     )
-    if config.workflow.intramodal_template_iters > 0:
-        b0_to_im_template = pe.Node(SimpleBeforeAfterRPT(), name='b0_to_im_template')
+    # ``make_intramodal_template`` (not just the config setting) gates this
+    # block: with a single DWI group the template is skipped upstream and the
+    # intramodal inputs are never connected, so these nodes must not exist.
+    if config.workflow.intramodal_template_iters > 0 and make_intramodal_template:
+        # The reportlet shows one image -- this session's b=0 -- on the template
+        # grid before and after its own transform, with white-matter contours
+        # from the anatomy held fixed as landmarks.
+        b0_to_template_grid = pe.Node(
+            ants.ApplyTransforms(interpolation='LanczosWindowedSinc', float=True),
+            name='b0_to_template_grid',
+        )
+        b0_to_template_grid.inputs.transforms = [str(load_data('itkIdentityTransform.txt'))]
+
+        b0_aligned_to_template = pe.Node(
+            ants.ApplyTransforms(interpolation='LanczosWindowedSinc', float=True),
+            name='b0_aligned_to_template',
+        )
+
+        b0_to_im_template = pe.Node(
+            SimpleBeforeAfterRPT(
+                before_label='b=0 (header only)',
+                after_label='b=0 aligned to template',
+            ),
+            name='b0_to_im_template',
+        )
         ds_report_intramodal = pe.Node(
             DerivativesDataSink(
                 datatype='figures',
@@ -248,10 +276,20 @@ def init_dwi_finalize_wf(
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
         workflow.connect([
-            (inputnode, b0_to_im_template, [
-                ('intramodal_template', 'after'),
-                ('b0_ref_image', 'before'),
+            # Both frames land on the template grid so the only difference
+            # between them is the transform being assessed.
+            (inputnode, b0_to_template_grid, [
+                ('b0_ref_image', 'input_image'),
+                ('intramodal_template', 'reference_image'),
             ]),
+            (inputnode, b0_aligned_to_template, [
+                ('b0_ref_image', 'input_image'),
+                ('intramodal_template', 'reference_image'),
+                ('b0_to_intramodal_template_transforms', 'transforms'),
+            ]),
+            (b0_to_template_grid, b0_to_im_template, [('output_image', 'before')]),
+            (b0_aligned_to_template, b0_to_im_template, [('output_image', 'after')]),
+            (inputnode, b0_to_im_template, [('intramodal_template_wm_seg', 'wm_seg')]),
             (b0_to_im_template, ds_report_intramodal, [('out_report', 'in_file')]),
         ])  # fmt:skip
 
@@ -531,6 +569,21 @@ def init_finalize_denoising_wf(
     )
 
     if do_biascorr:
+        # dwibiascorrect hands this mask to N4 as a WEIGHT image (-w), not a mask
+        # (-x), so its binary values become the per-voxel weights of a
+        # least-squares fit on log intensities. Dark voxels inside the mask are
+        # therefore huge outliers. Damp them first -- see interfaces/bias.py.
+        # This affects only what biascorr fits; dwi_mask_t1 goes downstream
+        # unchanged.
+        n4_weights = pe.Node(N4WeightMask(), name='n4_weights')
+        workflow.connect([
+            (inputnode, n4_weights, [
+                ('dwi_t1', 'dwi_file'),
+                ('dwi_t1_bval', 'bval_file'),
+                ('dwi_mask_t1', 'mask_file'),
+            ]),
+        ])  # fmt:skip
+
         if not split_biascorr:
             biascorr = pe.Node(
                 DWIBiasCorrect(method='ants', bzero_max=config.workflow.b0_threshold),
@@ -552,8 +605,8 @@ def init_finalize_denoising_wf(
                     ('dwi_t1', 'in_file'),
                     ('dwi_t1_bval', 'in_bval'),
                     ('dwi_t1_bvec', 'in_bvec'),
-                    ('dwi_mask_t1', 'mask'),
                 ]),
+                (n4_weights, biascorr, [('out_file', 'mask')]),
                 (biascorr, ds_report_biascorr, [('out_report', 'in_file')]),
                 (biascorr, bias_corrected, [
                     ('out_file', 'dwi_t1'),
@@ -604,7 +657,7 @@ def init_finalize_denoising_wf(
                     )
                 )
                 workflow.connect([
-                    (inputnode, biascorrs[-1], [('dwi_mask_t1', 'mask')]),
+                    (n4_weights, biascorrs[-1], [('out_file', 'mask')]),
                     (scan_split, biascorrs[-1], [
                         ('dwi_file_%d' % scan_num, 'in_file'),
                         ('bval_file_%d' % scan_num, 'in_bval'),

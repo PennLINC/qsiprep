@@ -1,18 +1,103 @@
 """Utility functions for tests."""
 
+import json
 import lzma
 import os
 import tarfile
 from glob import glob
 from gzip import GzipFile
 from io import BytesIO
+from pathlib import Path
 
+import nibabel as nb
+import numpy as np
 import requests
 from nipype import logging
+from niworkflows.utils.testing import generate_bids_skeleton
 
 from qsiprep import config
 
 LOGGER = logging.getLogger('nipype.utils')
+
+# A complex-valued DWI acquisition: the magnitude and phase parts of one run.
+# Neither part carries its own gradients or metadata, so both must reach the
+# shared, non-part-specific files through the BIDS inheritance principle.
+COMPLEX_DWI_SKELETON = {
+    '01': [
+        {
+            'dwi': [
+                {'part': 'mag', 'suffix': 'dwi'},
+                {'part': 'phase', 'suffix': 'dwi'},
+            ],
+        },
+    ],
+}
+
+# Gradients shared by every part of the acquisition above.
+SHARED_DWI_GRADIENTS = {
+    'sub-01/dwi/sub-01_dwi.bval': '0 1000\n',
+    'sub-01/dwi/sub-01_dwi.bvec': '1 0\n0 1\n0 0\n',
+}
+
+# The complex-valued equivalent for an EPI fieldmap, with a shared "secret" bval.
+COMPLEX_EPI_SKELETON = {
+    '01': [
+        {
+            'fmap': [
+                {'dir': 'PA', 'part': 'mag', 'suffix': 'epi'},
+                {'dir': 'PA', 'part': 'phase', 'suffix': 'epi'},
+            ],
+        },
+    ],
+}
+
+SHARED_EPI_GRADIENTS = {'sub-01/fmap/sub-01_dir-PA_epi.bval': '0 2000 0\n'}
+
+
+def build_test_dataset(root, skeleton, extra_files=None, n_volumes=1, affine=None):
+    """Build a small BIDS dataset from a ``generate_bids_skeleton`` description.
+
+    ``generate_bids_skeleton`` only creates empty ``.nii.gz`` files, and it can
+    only write a sidecar next to the image it describes. This wrapper fills the
+    images with real data so they can be loaded, and writes any additional files
+    the skeleton cannot express -- sidecars placed higher up the hierarchy for
+    the inheritance principle, and ``.bval``/``.bvec`` files.
+
+    Parameters
+    ----------
+    root : :obj:`str` or :obj:`pathlib.Path`
+        Where to build the dataset. Must not already exist.
+    skeleton : :obj:`dict`
+        A ``generate_bids_skeleton`` dataset description.
+    extra_files : :obj:`dict`, optional
+        Maps a dataset-relative path to its contents. A :obj:`dict` value is
+        written as JSON, a :obj:`str` value verbatim.
+    n_volumes : :obj:`int`, optional
+        Number of volumes to give each generated image. The default of 1 writes
+        3D images.
+    affine : :obj:`numpy.ndarray`, optional
+        Affine to give each generated image. Defaults to an identity affine,
+        which is RAS+.
+
+    Returns
+    -------
+    :obj:`pathlib.Path`
+        The dataset root.
+    """
+    root = Path(root)
+    generate_bids_skeleton(str(root), skeleton)
+
+    affine = np.eye(4) if affine is None else affine
+    shape = (2, 2, 2) if n_volumes == 1 else (2, 2, 2, n_volumes)
+    for nifti_file in sorted(root.glob('**/*.nii.gz')):
+        nb.Nifti1Image(np.zeros(shape, dtype=np.float32), affine).to_filename(nifti_file)
+
+    for relative_path, contents in (extra_files or {}).items():
+        target = root / relative_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(json.dumps(contents) if isinstance(contents, dict) else contents)
+
+    return root
 
 
 def download_test_data(dset, data_dir=None):
@@ -32,6 +117,13 @@ def download_test_data(dset, data_dir=None):
         'drbuddi_rpe_series': (
             'https://upenn.box.com/shared/static/j5mxts5wu0em1toafmrlzdndves1jnfv.xz'
         ),
+        # CS-DSI (HASC55) reverse-PE *series*, downsampled + defaced -- exercises
+        # the non-shelled DIFFPREP rpe_series path through stock DRBUDDI.
+        # Extracts to a ``csdsi_hasc55/`` BIDS root (sub-2345/ses-1, AP+PA HASC55
+        # + defaced T1w/T2w).
+        'csdsi_rpe_series': (
+            'https://upenn.box.com/shared/static/3mmagbtddgb4lpmlc5vs4jnsyf1etp3d.xz'
+        ),
         'drbuddi_epi': 'https://upenn.box.com/shared/static/plyuee1nbj9v8eck03s38ojji8tkspwr.xz',
         'DSDTI_fmap': 'https://upenn.box.com/shared/static/rxr6qbi6ezku9gw3esfpnvqlcxaw7n5n.gz',
         'DSCSDSI_fmap': 'https://upenn.box.com/shared/static/l561psez1ojzi4p3a12eidaw9vbizwdc.gz',
@@ -39,6 +131,7 @@ def download_test_data(dset, data_dir=None):
             'https://upenn.box.com/shared/static/tkahg1ctipmfihvpa1gmibvcv0gb721h.xz'
         ),
         'forrest_gump': 'https://upenn.box.com/shared/static/qat58an322bzzyixrrsk7cmf52q3bepq.xz',
+        'nibs': 'https://upenn.box.com/shared/static/bkllff4ik51jy9ju6nben2r5zrq4a5me.xz',
     }
     if dset == '*':
         for k in URLS:
@@ -77,6 +170,13 @@ def download_test_data(dset, data_dir=None):
             raise ValueError(f'Unknown file type for {dset} ({url})')
 
     return out_dir
+
+
+def field_of_view(img):
+    """Return the spatial extent of an image in mm."""
+    import numpy as np
+
+    return np.array(img.shape[:3]) * np.array(img.header.get_zooms()[:3])
 
 
 def get_test_data_path():

@@ -25,13 +25,16 @@ from ...interfaces.mrtrix import (
     ComplexToMagnitude,
     DWIBiasCorrect,
     DWIDenoise,
+    DWIDenoise2,
     MRDeGibbs,
+    MRTrixGradientTable,
     PolarToComplex,
 )
 from ...interfaces.nilearn import MaskEPI, Merge
 from ...interfaces.phase import PhaseCorrect
 from ...interfaces.tortoise import Gibbs
 from ...utils.bids import IMPORTANT_DWI_FIELDS, update_metadata_from_nifti_header
+from ...utils.misc import describe_dwidenoise2, parse_denoise_method
 from .qc import init_modelfree_qc_wf
 from .util import _get_wf_name
 
@@ -421,9 +424,13 @@ def init_dwi_denoising_wf(
     ])  # fmt:skip
 
     # Which steps to apply?
-    denoise_method = config.workflow.denoise_method
+    denoise_method, dwidenoise2_params = parse_denoise_method(
+        config.workflow.denoise_method,
+        use_phase=use_phase,
+    )
+
     unringing_method = config.workflow.unringing_method
-    do_denoise = denoise_method in ('patch2self', 'dwidenoise')
+    do_denoise = denoise_method in ('patch2self', 'dwidenoise', 'dwidenoise2')
     do_unringing = config.workflow.unringing_method in ('mrdegibbs', 'rpg')
     harmonize_b0s = not config.workflow.no_b0_harmonization
 
@@ -449,47 +456,56 @@ def init_dwi_denoising_wf(
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
 
-        dwi_denoise_window = config.workflow.dwi_denoise_window
-        auto_str = ''
-        if denoise_method == 'dwidenoise' and dwi_denoise_window == 'auto':
-            # Configure the denoising window
-            import numpy as np
+        # Only the dwidenoise variants can denoise complex-valued data.
+        # Any other method ignores the phase data and denoises the magnitude data alone.
+        denoise_complex = denoise_method.startswith('dwidenoise') and use_phase
 
-            dwi_denoise_window = closest_odd(int(np.ceil(np.cbrt(n_volumes))))
-            dwi_denoise_window = max(dwi_denoise_window, 3)
-            config.loggers.workflow.info(
-                f'Automatically using {dwi_denoise_window}, {dwi_denoise_window}, '
-                f'{dwi_denoise_window} window for dwidenoise'
-            )
-            auto_str = 'n automatically-determined'
+        # Complex-valued output can optionally be phase-corrected instead of being
+        # split straight back to magnitude. Only "dwidenoise" (not "dwidenoise2") is
+        # validated for this; see --dwi-phase-correction.
+        phase_correction = config.workflow.dwi_phase_correction
+        do_phase_correct = (
+            denoise_complex
+            and denoise_method == 'dwidenoise'
+            and phase_correction in ('tv', 'tvc', 'dc')
+        )
 
-        if (denoise_method == 'dwidenoise') and use_phase:
-            desc += (
-                'Magnitude and phase DWI data were combined into a complex-valued file, '
-                'then denoised using the Marchenko-Pastur PCA method implemented in dwidenoise '
-                '[@mrtrix3; @dwidenoise1; @dwidenoise2; @cordero2019complex] '
-                f'with a{auto_str} window size of {dwi_denoise_window} voxels. '
-            )
-            last_step = 'After MP-PCA, '
-
-            # If there are phase files available, then we can use dwidenoise
-            # on the complex-valued data.
-            phase_to_radians = pe.Node(
-                PhaseToRad(),
-                name='phase_to_radians',
+        # Build the denoiser. The node is the same whether it is handed magnitude-only or
+        # complex-valued data; only the data feeding it differs, which is wired up below.
+        if denoise_method == 'dwidenoise2':
+            # dwidenoise2 sizes its patches per iteration from its multi-resolution schedule,
+            # so there is no kernel to configure and dwi_denoise_window does not apply here.
+            denoiser = pe.Node(
+                DWIDenoise2(nthreads=omp_nthreads, **dwidenoise2_params),
+                name='denoiser',
                 n_procs=omp_nthreads,
             )
-            workflow.connect([(inputnode, phase_to_radians, [('dwi_phase_file', 'phase_file')])])
 
-            combine_complex = pe.Node(
-                PolarToComplex(),
-                name='combine_complex',
-                n_procs=omp_nthreads,
-            )
+            # dwidenoise2 needs the gradient table to demean by shell. Temporary
+            # workaround for a bug in dwidenoise2: supply the gradients as a single
+            # MRtrix-format table instead of using -fslgrad.
+            gradient_table = pe.Node(MRTrixGradientTable(), name='gradient_table')
             workflow.connect([
-                (buffernodes[-2], combine_complex, [('dwi_file', 'mag_file')]),
-                (phase_to_radians, combine_complex, [('phase_file', 'phase_file')]),
+                (inputnode, gradient_table, [
+                    ('bval_file', 'bval_file'),
+                    ('bvec_file', 'bvec_file'),
+                ]),
+                (gradient_table, denoiser, [('gradient_file', 'grad_file')]),
             ])  # fmt:skip
+        elif denoise_method == 'dwidenoise':
+            dwi_denoise_window = config.workflow.dwi_denoise_window
+            auto_str = ''
+            if dwi_denoise_window == 'auto':
+                # Configure the denoising window
+                import numpy as np
+
+                dwi_denoise_window = closest_odd(int(np.ceil(np.cbrt(n_volumes))))
+                dwi_denoise_window = max(dwi_denoise_window, 3)
+                config.loggers.workflow.info(
+                    f'Automatically using {dwi_denoise_window}, {dwi_denoise_window}, '
+                    f'{dwi_denoise_window} window for dwidenoise'
+                )
+                auto_str = 'n automatically-determined'
 
             denoiser = pe.Node(
                 DWIDenoise(
@@ -499,26 +515,85 @@ def init_dwi_denoising_wf(
                 name='denoiser',
                 n_procs=omp_nthreads,
             )
+        else:
+            denoiser = pe.Node(
+                Patch2Self(),
+                name='denoiser',
+                n_procs=omp_nthreads,
+            )
+            workflow.connect([(inputnode, denoiser, [('bval_file', 'bval_file')])])
 
-            workflow.connect([
-                (combine_complex, denoiser, [('out_file', 'in_file')]),
-                (denoiser, ds_report_denoising, [('out_report', 'in_file')]),
-                (denoiser, merge_confounds, [('nmse_text', f'in{step_num}')]),
-            ])  # fmt:skip
+        if denoise_method.startswith('dwidenoise'):
+            if denoise_method == 'dwidenoise2':
+                # dwidenoise2 turns on a number of methods by default, each with its own
+                # citation, so the description is compiled from the parameters in effect
+                mppca_desc = describe_dwidenoise2(dwidenoise2_params, complex_data=denoise_complex)
+            else:
+                complex_cite = '; @cordero2019complex' if denoise_complex else ''
+                mppca_desc = (
+                    'denoised using the Marchenko-Pastur PCA method implemented in dwidenoise '
+                    f'[@mrtrix3; @dwidenoise1; @dwidenoise2{complex_cite}] '
+                    f'with a{auto_str} window size of {dwi_denoise_window} voxels. '
+                )
 
-            phase_correction = config.workflow.dwi_phase_correction
-            if phase_correction in ('tv', 'tvc', 'dc'):
+            if denoise_complex and do_phase_correct:
                 method_name = {
                     'tv': 'total-variation rephasing [@eichner2015real]',
                     'tvc': 'complex-valued total-variation rephasing [@eichner2015real]',
                     'dc': 'decorrelated phase filtering [@sprenger2017real]',
                 }[phase_correction]
                 desc += (
-                    'After denoising, the complex-valued data were phase-corrected '
-                    f'using {method_name}, and the real channel was retained for '
-                    'subsequent processing. '
+                    'Magnitude and phase DWI data were combined into a complex-valued file, then '
+                    f'{mppca_desc}'
+                    f'After denoising, the complex-valued data were phase-corrected using '
+                    f'{method_name}, and the real channel was retained for subsequent processing. '
                 )
+            elif denoise_complex:
+                desc += (
+                    'Magnitude and phase DWI data were combined into a complex-valued file, then '
+                    f'{mppca_desc}'
+                    'After denoising, the complex-valued data were split back into magnitude and '
+                    'phase, and the denoised magnitude data were retained. '
+                )
+            else:
+                desc += f'DWI data were {mppca_desc}'
 
+            last_step = 'After MP-PCA, '
+        else:
+            desc += (
+                "DWI data were denoised using DiPy's Patch2Self algorithm [@dipy; @patch2self] "
+                'with an automatically-defined window size. '
+            )
+            last_step = 'After `patch2self`, '
+
+        # Wiring that is the same for every denoising method
+        workflow.connect([
+            (denoiser, ds_report_denoising, [('out_report', 'in_file')]),
+            (denoiser, merge_confounds, [('nmse_text', f'in{step_num}')]),
+            # The noise image is a derivative, so it always comes straight from the denoiser
+            (denoiser, outputnode, [('noise_image', 'noise_image')]),
+        ])  # fmt:skip
+
+        # The denoiser's input and output are all that the complex-valued path changes
+        if denoise_complex:
+            phase_to_radians = pe.Node(
+                PhaseToRad(),
+                name='phase_to_radians',
+                n_procs=omp_nthreads,
+            )
+            combine_complex = pe.Node(
+                PolarToComplex(),
+                name='combine_complex',
+                n_procs=omp_nthreads,
+            )
+            workflow.connect([
+                (inputnode, phase_to_radians, [('dwi_phase_file', 'phase_file')]),
+                (buffernodes[-2], combine_complex, [('dwi_file', 'mag_file')]),
+                (phase_to_radians, combine_complex, [('phase_file', 'phase_file')]),
+                (combine_complex, denoiser, [('out_file', 'in_file')]),
+            ])  # fmt:skip
+
+            if do_phase_correct:
                 phase_correct = pe.Node(
                     PhaseCorrect(
                         method=phase_correction,
@@ -538,65 +613,25 @@ def init_dwi_denoising_wf(
                     run_without_submitting=True,
                     mem_gb=DEFAULT_MEMORY_MIN_GB,
                 )
-
                 workflow.connect([
                     (denoiser, phase_correct, [('out_file', 'complex_file')]),
                     (phase_correct, buffernodes[-1], [('out_file', 'dwi_file')]),
                     (phase_correct, ds_report_phasecorr, [('out_report', 'in_file')]),
                 ])  # fmt:skip
             else:
-                desc += (
-                    'After denoising, the complex-valued data were split back into '
-                    'magnitude and phase, and the denoised magnitude data were retained. '
-                )
-
                 split_complex = pe.Node(
                     ComplexToMagnitude(),
                     name='split_complex',
                     n_procs=omp_nthreads,
                 )
-
                 workflow.connect([
                     (denoiser, split_complex, [('out_file', 'complex_file')]),
                     (split_complex, buffernodes[-1], [('out_file', 'dwi_file')]),
                 ])  # fmt:skip
-
-        elif denoise_method == 'dwidenoise':
-            desc += (
-                'DWI data were '
-                'denoised using the Marchenko-Pastur PCA method implemented in dwidenoise '
-                '[@mrtrix3; @dwidenoise1; @dwidenoise2; @cordero2019complex] '
-                f'with a{auto_str} window size of {dwi_denoise_window} voxels. '
-            )
-            last_step = 'After MP-PCA, '
-
-            denoiser = pe.Node(
-                DWIDenoise(
-                    extent=(dwi_denoise_window, dwi_denoise_window, dwi_denoise_window),
-                    nthreads=omp_nthreads,
-                ),
-                name='denoiser',
-                n_procs=omp_nthreads,
-            )
         else:
-            desc += (
-                "DWI data were denoised using DiPy's Patch2Self algorithm [@dipy; @patch2self] "
-                'with an automatically-defined window size. '
-            )
-            last_step = 'After `patch2self`, '
-            denoiser = pe.Node(
-                Patch2Self(),
-                name='denoiser',
-                n_procs=omp_nthreads,
-            )
-            workflow.connect([(inputnode, denoiser, [('bval_file', 'bval_file')])])
-
-        if (denoise_method in ('dwidenoise', 'patch2self')) and not use_phase:
             workflow.connect([
                 (buffernodes[-2], denoiser, [('dwi_file', 'in_file')]),
-                (denoiser, ds_report_denoising, [('out_report', 'in_file')]),
                 (denoiser, buffernodes[-1], [('out_file', 'dwi_file')]),
-                (denoiser, merge_confounds, [('nmse_text', f'in{step_num}')]),
             ])  # fmt:skip
 
         step_num += 1
@@ -686,6 +721,7 @@ def init_dwi_denoising_wf(
             (get_b0s, quick_mask, [('b0_series', 'in_files')]),
             (quick_mask, biascorr, [('out_mask', 'mask')]),
             (biascorr, buffernodes[-1], [('out_file', 'dwi_file')]),
+            (biascorr, outputnode, [('bias_image', 'bias_image')]),
             (biascorr, ds_report_biascorr, [('out_report', 'in_file')]),
             (biascorr, merge_confounds, [('nmse_text', f'in{step_num}')]),
             (inputnode, biascorr, [

@@ -27,6 +27,16 @@
 import sys
 
 from .. import config
+from ..utils.gpu import GPU_ALIASES, GPU_TASKS
+from ..utils.misc import parse_denoise_method
+
+B0_TO_ANAT_TRANSFORM_DEFAULT = 'Rigid'
+"""Default for ``--b0-to-anat-transform``.
+
+Applied after parsing rather than by argparse, because the option is declared with
+``default=SUPPRESS`` so that its mutual exclusion with the deprecated
+``--b0-to-t1w-transform`` is checked reliably.
+"""
 
 
 def _build_parser(**kwargs):
@@ -34,38 +44,119 @@ def _build_parser(**kwargs):
 
     ``kwargs`` are passed to ``argparse.ArgumentParser`` (mainly useful for debugging).
     """
-    from argparse import Action, ArgumentDefaultsHelpFormatter, ArgumentParser
+    from argparse import (
+        SUPPRESS,
+        Action,
+        ArgumentDefaultsHelpFormatter,
+        ArgumentParser,
+    )
     from functools import partial
     from pathlib import Path
 
     from packaging.version import Version
 
+    # Deprecated options: {option string: (version it is removed in, what happens instead)}
     deprecations = {
-        # parser attribute name: (replacement flag, version slated to be removed in)
-        'dwi_only': ('--anat-modality none', '0.23.0'),
-        'prefer_dedicated_fmaps': (None, '0.23.0'),
-        'dwi_no_biascorr': ('--b1-biascorrect-stage none', '0.23.0'),
-        'b0_motion_corr_to': (None, '0.23.0'),
-        'b0_to_t1w_transform': ('--b0-t0-anat-transform', '0.23.0'),
-        'longitudinal': ('--subject-anatomical-reference unbiased', '0.24.0'),
+        '--dwi-only': ('27.0.0', 'Enabling `--anat-modality none` instead.'),
+        '--dwi-no-biascorr': ('27.0.0', 'Enabling `--b1-biascorrect-stage none` instead.'),
+        '--longitudinal': (
+            '27.0.0',
+            'Enabling `--subject-anatomical-reference unbiased` instead.',
+        ),
+        '--prefer-dedicated-fmaps': (
+            '27.0.0',
+            'It has no effect. Which fieldmap is applied to which DWI series is determined '
+            'by the fieldmaps\' "B0FieldIdentifier"/"B0FieldSource" (or "IntendedFor") '
+            'metadata.',
+        ),
+        '--b0-motion-corr-to': (
+            '27.0.0',
+            'Later versions will always use the "iterative" approach.',
+        ),
+        '--b0-to-t1w-transform': ('27.0.0', 'Please use `--b0-to-anat-transform` instead.'),
     }
 
+    # Deprecated flags that enable their replacement automatically:
+    # {option string: (replacement option, its namespace attribute, the value it is set to)}
+    forwarded_deprecations = {
+        '--dwi-only': ('--anat-modality', 'anat_modality', 'none'),
+        '--dwi-no-biascorr': ('--b1-biascorrect-stage', 'b1_biascorrect_stage', 'none'),
+        '--longitudinal': (
+            '--subject-anatomical-reference',
+            'subject_anatomical_reference',
+            'unbiased',
+        ),
+    }
+
+    def _warn_deprecated(option_string):
+        removed_in, detail = deprecations[option_string]
+        print(
+            f'{option_string} has been deprecated and will be removed in {removed_in}. {detail}',
+            file=sys.stderr,
+        )
+
     class DeprecatedAction(Action):
-        def __init__(self, option_strings, dest, **kwargs):
-            super().__init__(option_strings, dest, nargs=0, **kwargs)
+        """Warn that a deprecated option is ignored, and keep it out of the namespace.
+
+        Declared with ``default=SUPPRESS`` so the dest never reaches the config object.
+        """
+
+        def __init__(self, option_strings, dest, nargs=0, **kwargs):
+            super().__init__(option_strings, dest, nargs=nargs, **kwargs)
 
         def __call__(self, parser, namespace, values, option_string=None):
-            new_opt, rem_vers = deprecations.get(self.dest, (None, None))
-            msg = (
-                f'{self.option_strings} has been deprecated and will be removed in '
-                f'{rem_vers or "a later version"}.'
-            )
-            if new_opt:
-                msg += f' Please use `{new_opt}` instead.'
-            print(msg, file=sys.stderr)
-            # Remove the attribute if it exists (argparse may have set it)
-            if hasattr(namespace, self.dest):
-                delattr(namespace, self.dest)
+            _warn_deprecated(option_string or self.option_strings[0])
+
+    class DeprecatedForwardAction(Action):
+        """Warn about a deprecated flag, and record that its replacement must be enabled.
+
+        The replacement is applied after the whole command line has been read, so the
+        outcome does not depend on the order the options were given in.
+        """
+
+        def __init__(self, option_strings, dest, nargs=0, **kwargs):
+            super().__init__(option_strings, dest, nargs=nargs, **kwargs)
+
+        def __call__(self, parser, namespace, values, option_string=None):
+            option_string = option_string or self.option_strings[0]
+            _warn_deprecated(option_string)
+            pending = getattr(namespace, '_forwarded_deprecations', [])
+            namespace._forwarded_deprecations = [*pending, option_string]
+
+    class DeprecatedStoreAction(Action):
+        """Warn about a deprecated option, then store its value like ``store`` would."""
+
+        def __call__(self, parser, namespace, values, option_string=None):
+            _warn_deprecated(option_string or self.option_strings[0])
+            setattr(namespace, self.dest, values)
+
+    class DeprecationForwardingParser(ArgumentParser):
+        """Enables the replacements for any deprecated options that were given."""
+
+        def parse_known_args(self, args=None, namespace=None):
+            namespace, extras = super().parse_known_args(args, namespace)
+
+            for option_string in getattr(namespace, '_forwarded_deprecations', []):
+                replacement, dest, value = forwarded_deprecations[option_string]
+                current = getattr(namespace, dest)
+                if current not in (self.get_default(dest), value):
+                    self.error(
+                        f'{option_string} enables `{replacement} {value}`, which conflicts '
+                        f'with the requested `{replacement} {current}`.'
+                    )
+                setattr(namespace, dest, value)
+            if hasattr(namespace, '_forwarded_deprecations'):
+                del namespace._forwarded_deprecations
+
+            # --b0-to-t1w-transform was renamed; the two are mutually exclusive, so at
+            # most one of them is set here.
+            if hasattr(namespace, 'b0_to_t1w_transform'):
+                namespace.b0_to_anat_transform = namespace.b0_to_t1w_transform
+                del namespace.b0_to_t1w_transform
+            if not hasattr(namespace, 'b0_to_anat_transform'):
+                namespace.b0_to_anat_transform = B0_TO_ANAT_TRANSFORM_DEFAULT
+
+            return namespace, extras
 
     class ToDict(Action):
         def __call__(self, parser, namespace, values, option_string=None):
@@ -121,6 +212,13 @@ def _build_parser(**kwargs):
 
         return value
 
+    def _denoise_method(value, parser):
+        try:
+            parse_denoise_method(value)
+        except ValueError as exc:
+            parser.error(f'Invalid --denoise-method specification: {exc}')
+        return value
+
     def _to_gb(value):
         scale = {'G': 1, 'T': 10**3, 'M': 1e-3, 'K': 1e-6, 'B': 1e-9}
         digits = ''.join([c for c in value if c.isdigit()])
@@ -168,7 +266,7 @@ def _build_parser(**kwargs):
     currentv = Version(config.environment.version)
     is_release = not any((currentv.is_devrelease, currentv.is_prerelease, currentv.is_postrelease))
 
-    parser = ArgumentParser(
+    parser = DeprecationForwardingParser(
         description=f'{verstr}: q-Space Image Preprocessing workflows',
         formatter_class=ArgumentDefaultsHelpFormatter,
         **kwargs,
@@ -177,6 +275,7 @@ def _build_parser(**kwargs):
     IsFile = partial(_is_file, parser=parser)
     PositiveInt = partial(_min_one, parser=parser)
     IntOrAuto = partial(_int_or_auto, parser=parser)
+    DenoiseMethod = partial(_denoise_method, parser=parser)
     BIDSFilter = partial(_bids_filter, parser=parser)
 
     # Arguments as specified by BIDS-Apps
@@ -295,8 +394,9 @@ def _build_parser(**kwargs):
     g_subset.add_argument('--anat-only', action='store_true', help='Run anatomical workflows only')
     g_subset.add_argument(
         '--dwi-only',
-        action='store_true',
-        help='ignore anatomical (T1w/T2w) data and process DWIs only',
+        action=DeprecatedForwardAction,
+        default=SUPPRESS,
+        help='DEPRECATED: this flag now enables `--anat-modality none`. Use that instead.',
     )
     g_subset.add_argument(
         '--boilerplate-only',
@@ -311,6 +411,20 @@ def _build_parser(**kwargs):
         default=False,
         help="Only generate reports, don't run workflows. This will only rerun report "
         'aggregation, not reportlet generation for specific nodes.',
+    )
+    g_subset.add_argument(
+        '--report-output-level',
+        action='store',
+        choices=['auto', 'root', 'subject', 'session'],
+        default='auto',
+        help='Where should the HTML reports be written? '
+        '"root" will write them to the output directory. '
+        '"subject" will write them into each subject\'s directory. '
+        '"session" will write them into each session\'s directory. '
+        'The default is "auto", which is "session" when '
+        '--subject-anatomical-reference is "sessionwise" and "root" otherwise. '
+        'Reports that cover more than one session, or data without a session level, '
+        'are written to the subject level instead of the session level, with a warning.',
     )
 
     g_conf = parser.add_argument_group('Workflow configuration')
@@ -329,6 +443,29 @@ def _build_parser(**kwargs):
         ),
     )
     g_conf.add_argument(
+        '--gpu',
+        required=False,
+        action='store',
+        nargs='+',
+        # None (not given) is distinct from ["none"] (explicitly off): when the
+        # flag is absent, a legacy "use_cuda" in --eddy-config/--diffprep-config
+        # still decides, so those runs do not silently drop to CPU.
+        default=None,
+        choices=sorted(GPU_TASKS) + list(GPU_ALIASES),
+        help=(
+            'Run selected tasks on the GPU (a space delimited list). GPU memory is '
+            'usually the binding constraint rather than the pipeline, so tasks are '
+            'selected individually: an 8 GB card typically runs "eddy", "diffprep" '
+            'and "drbuddi" but not "synthstrip" or "synthseg". "all" enables every '
+            'task, "none" (the default) disables all of them. The GPU must also be '
+            'exposed to the container ("docker run --gpus all" / '
+            '"apptainer run --nv"). NOTE: GPU builds are not numerically identical '
+            'to their CPU counterparts, so this changes results, not just runtime. '
+            'When given, this overrides "use_cuda" in --eddy-config / '
+            '--diffprep-config; when omitted entirely, those keys still apply.'
+        ),
+    )
+    g_conf.add_argument(
         '--infant',
         action='store_true',
         help='Configure pipelines to process infant brains. '
@@ -337,8 +474,12 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         '--longitudinal',
-        action=DeprecatedAction,
-        help='Treat dataset as longitudinal - may increase runtime',
+        action=DeprecatedForwardAction,
+        default=SUPPRESS,
+        help=(
+            'DEPRECATED: this flag now enables `--subject-anatomical-reference unbiased`. '
+            'Use that instead.'
+        ),
     )
     g_conf.add_argument(
         '--subject-anatomical-reference',
@@ -384,21 +525,26 @@ def _build_parser(**kwargs):
         help=(
             'Window size in voxels for image-based denoising: odd integer or "auto". '
             'Any non-"auto" value must be an odd, positive integer. '
-            'If using the "dwidenoise" denoising method, '
-            'the "auto" option will calculate a window size '
+            'This argument only applies to the "dwidenoise" denoising method, '
+            'where the "auto" option will calculate a window size '
             'based on the number of volumes according to the method described by the '
             'dwidenoise documentation. '
-            'If using the "patch2self" denoising method, this argument will not be used.'
+            'It is not used by the "patch2self" or "dwidenoise2" methods: dwidenoise2 sizes '
+            'its patches per iteration from its multi-resolution schedule, which is selected '
+            'with "dwidenoise2;schedule:<name>" instead.'
         ),
     )
     g_conf.add_argument(
         '--denoise-method',
         action='store',
-        choices=['dwidenoise', 'patch2self', 'none'],
+        type=DenoiseMethod,
         default='dwidenoise',
         help=(
-            'Image-based denoising method. '
-            'Either "dwidenoise" (MRtrix), "patch2self" (DIPY) or "none".'
+            'Image-based denoising method: "dwidenoise" (MRtrix), "dwidenoise2", '
+            '"patch2self" (DIPY), or "none".\n'
+            'dwidenoise2 parameters may follow the method as semicolon-delimited '
+            'name:value pairs, for example '
+            '"dwidenoise2;demodulate:linear;decomposition:bdcsvd".'
         ),
     )
     g_conf.add_argument(
@@ -427,8 +573,25 @@ def _build_parser(**kwargs):
     )
     g_conf.add_argument(
         '--dwi-no-biascorr',
-        action='store_true',
-        help='DEPRECATED: see --b1-biascorrect-stage',
+        action=DeprecatedForwardAction,
+        default=SUPPRESS,
+        help='DEPRECATED: this flag now enables `--b1-biascorrect-stage none`. Use that instead.',
+    )
+    g_conf.add_argument(
+        '--anat-biascorrect',
+        action='store',
+        choices=['n4', 'auto', 'none'],
+        default='n4',
+        help=(
+            'Whether to run N4 bias field correction on ANATOMICAL images. '
+            'Note this is separate from --b1-biascorrect-stage, which only governs '
+            'the DWIs. '
+            '"n4" (default) always runs it; scanner-side intensity normalization '
+            '(e.g. Siemens NORM) does not remove the need for it. '
+            '"none" never runs it. '
+            '"auto" skips it when the BIDS ImageType metadata contains "NORM", '
+            'which is how Siemens and others flag console-applied normalization.'
+        ),
     )
     g_conf.add_argument(
         '--b1-biascorrect-stage',
@@ -453,7 +616,7 @@ def _build_parser(**kwargs):
     g_conf.add_argument(
         '--denoise-after-combining',
         action='store_true',
-        help='run ``dwidenoise`` after combining dwis, but before motion correction',
+        help='run denoising after combining dwis, but before motion correction',
     )
     g_conf.add_argument(
         '--separate-all-dwis',
@@ -494,13 +657,28 @@ How to combine images across distorted groups.
     )
 
     g_coreg = parser.add_argument_group('Options for dwi-to-Anatomical coregistration')
-    g_coreg.add_argument(
-        '--b0-to-t1w-transform',
+    # Both are declared with default=SUPPRESS so that "was this given?" is just
+    # hasattr. argparse's own mutual-exclusion check compares the parsed value against
+    # the default by identity, which would miss `--b0-to-anat-transform Rigid` when
+    # 'Rigid' happens to be interned; against SUPPRESS it always fires. The default is
+    # applied in DeprecationForwardingParser instead.
+    g_b0_to_anat = g_coreg.add_mutually_exclusive_group()
+    g_b0_to_anat.add_argument(
+        '--b0-to-anat-transform',
         action='store',
-        default='Rigid',
+        default=SUPPRESS,
         choices=['Rigid', 'Affine'],
-        help='Degrees of freedom when registering b0 to anatomical images. '
-        '6 degrees (rotation and translation) are used by default.',
+        help='Degrees of freedom when registering b0 to anatomical images: '
+        '6 (Rigid, rotation and translation) or 12 (Affine). '
+        f'(default: {B0_TO_ANAT_TRANSFORM_DEFAULT})',
+    )
+    g_b0_to_anat.add_argument(
+        '--b0-to-t1w-transform',
+        action=DeprecatedStoreAction,
+        default=SUPPRESS,
+        choices=['Rigid', 'Affine'],
+        help='DEPRECATED: renamed to `--b0-to-anat-transform`, which this option now sets. '
+        'Use that instead.',
     )
     g_coreg.add_argument(
         '--intramodal-template-iters',
@@ -533,11 +711,12 @@ How to combine images across distorted groups.
     g_moco = parser.add_argument_group('Specific options for motion correction and coregistration')
     g_moco.add_argument(
         '--b0-motion-corr-to',
-        action='store',
+        action=DeprecatedStoreAction,
         default='iterative',
         choices=['iterative', 'first'],
-        help='align to the "first" b0 volume or do an "iterative" registration'
-        ' of all b0 images to their midpoint image (default: iterative)',
+        help='DEPRECATED: align to the "first" b0 volume or do an "iterative" registration '
+        'of all b0 images to their midpoint image. '
+        'Later versions will always use "iterative".',
     )
     g_moco.add_argument(
         '--hmc-transform',
@@ -550,11 +729,22 @@ How to combine images across distorted groups.
         '--hmc-model',
         action='store',
         default='eddy',
-        choices=['none', '3dSHORE', 'eddy', 'tensor'],
+        choices=[
+            'none',
+            '3dSHORE',
+            'eddy',
+            'tensor',
+            'tortoise',
+        ],
         help='model used to generate target images for hmc. If "none" the '
         'non-b0 images will be warped using the same transform as their '
         'nearest b0 image. If "3dSHORE", SHORELine will be used. if "tensor", '
-        'SHORELine iterations with a tensor model will be used',
+        'SHORELine iterations with a tensor model will be used. '
+        '"tortoise" uses TORTOISE DIFFPREP; '
+        'by default this performs rigid head motion correction and '
+        '24-parameter quadratic eddy-current correction. '
+        '"tortoise" works on arbitrary q-space (no shells required). '
+        'For fine-grained control over "tortoise" settings, use --diffprep-config.',
     )
     g_moco.add_argument(
         '--eddy-config',
@@ -563,6 +753,35 @@ How to combine images across distorted groups.
         'json is specified, a default one will be used. The current default '
         'json can be found here: '
         'https://github.com/PennLINC/qsiprep/blob/main/qsiprep/data/eddy_params.json',
+    )
+    g_moco.add_argument(
+        '--diffprep-config',
+        action='store',
+        help='path to a json file with settings for the call to TORTOISE '
+        'DIFFPREP (used only when --hmc-model is tortoise). This is also where '
+        'the correction mode is chosen: "correction_mode" may be "motion" '
+        '(rigid only), "quadratic" (the default) or "cubic". '
+        'If no json is specified, a default one will be used. The '
+        'current default can be found here: '
+        'https://github.com/PennLINC/qsiprep/blob/main/qsiprep/data/diffprep_params.json',
+    )
+    g_moco.add_argument(
+        '--tortoise-gpu-cpu-ratio',
+        action='store',
+        type=int,
+        default=None,
+        help=(
+            'How many volumes DIFFPREP gives the GPU per pass, against one per CPU '
+            'thread, during motion and eddy correction. TORTOISE does not move the '
+            'series onto the GPU the way eddy_cuda does: it treats the GPU as one '
+            'more worker, so the number of passes is '
+            'ceil(nvolumes / (ngpus * ratio + omp-nthreads - ngpus)). '
+            'It describes the machine, not the data -- roughly how many volumes the '
+            'GPU gets through while one CPU core does one. Only worth setting when '
+            'the GPU is fast relative to the core count, since its influence falls '
+            'as --omp-nthreads rises (about 68%% of volumes at 8 cores, 19%% at 64). '
+            'Requires the patched TORTOISE. Unset leaves TORTOISE at its default of 15.'
+        ),
     )
     g_moco.add_argument(
         '--shoreline-iters',
@@ -574,6 +793,14 @@ How to combine images across distorted groups.
 
     # Fieldmap options
     g_fmap = parser.add_argument_group('Specific options for handling fieldmaps')
+    g_fmap.add_argument(
+        '--prefer-dedicated-fmaps',
+        action=DeprecatedAction,
+        default=SUPPRESS,
+        help='DEPRECATED: this flag has no effect. Which fieldmap is applied to which DWI '
+        'series is determined by the fieldmaps\' "B0FieldIdentifier"/"B0FieldSource" '
+        '(or "IntendedFor") metadata.',
+    )
     g_fmap.add_argument(
         '--pepolar-method',
         action='store',
@@ -676,6 +903,32 @@ How to combine images across distorted groups.
     return parser
 
 
+def check_denoise_window(denoise_method, dwi_denoise_window):
+    """Report a ``--dwi-denoise-window`` that the selected denoising method will ignore.
+
+    Only ``dwidenoise`` takes a window size. Leaving the others to silently ignore it would
+    hide a request that never took effect.
+    """
+    if dwi_denoise_window == 'auto':
+        # The default, so an unused value is not a sign that anything was misunderstood
+        return
+
+    if denoise_method == 'patch2self':
+        config.loggers.cli.error(
+            'The --dwi-denoise-window option is not used when --denoise-method=patch2self'
+        )
+    elif denoise_method == 'dwidenoise2':
+        config.loggers.cli.warning(
+            'The --dwi-denoise-window option is not used when --denoise-method=dwidenoise2. '
+            'dwidenoise2 sizes its patches per iteration from its multi-resolution schedule, '
+            'which can be selected with "dwidenoise2;schedule:<name>" instead.'
+        )
+    elif denoise_method == 'none':
+        config.loggers.cli.warning(
+            'The --dwi-denoise-window option is not used when --denoise-method=none'
+        )
+
+
 def parse_args(args=None, namespace=None):
     """Parse args and run further checks on the command line."""
     import logging
@@ -695,6 +948,12 @@ def parse_args(args=None, namespace=None):
             'Please use --subject-anatomical-reference=first-lex instead.'
         )
         opts.subject_anatomical_reference = 'first-lex'
+
+    # Reports follow the anatomical processing level unless the user asked for a specific one
+    if opts.report_output_level == 'auto':
+        opts.report_output_level = (
+            'session' if opts.subject_anatomical_reference == 'sessionwise' else 'root'
+        )
 
     # Change anatomical_template based on infant parameter
     opts.anatomical_template = 'MNI152NLin2009cAsym'
@@ -718,6 +977,19 @@ def parse_args(args=None, namespace=None):
         from ..utils.misc import validate_eddy_config
 
         validate_eddy_config(opts.eddy_config)
+
+    if opts.diffprep_config:
+        from ..utils.misc import validate_diffprep_config
+
+        validate_diffprep_config(opts.diffprep_config)
+
+    if opts.gpu:
+        from ..utils.gpu import check_gpu_available
+
+        # Raises if no CUDA device is visible or a GPU build is missing. Doing
+        # this here costs seconds; discovering it inside a node costs the whole
+        # anatomical workflow.
+        check_gpu_available(opts.gpu)
 
     config.execution.log_level = int(max(25 - 5 * opts.verbose_count, logging.DEBUG))
     config.from_dict(vars(opts), init=['nipype'])
@@ -767,15 +1039,20 @@ def parse_args(args=None, namespace=None):
         )
 
     # Validate the tricky options here
-    if config.workflow.dwi_denoise_window != 'auto':
-        if config.workflow.denoise_method == 'patch2self':
-            config.loggers.cli.error(
-                'The --dwi-denoise-window option is not used when --denoise-method=patch2self'
-            )
-        elif config.workflow.denoise_method == 'none':
-            config.loggers.cli.warning(
-                'The --dwi-denoise-window option is not used when --denoise-method=none'
-            )
+    denoise_method, denoise_params = parse_denoise_method(config.workflow.denoise_method)
+    check_denoise_window(denoise_method, config.workflow.dwi_denoise_window)
+    if (
+        config.workflow.denoise_after_combining
+        and denoise_params.get('demodulate', 'none') != 'none'
+    ):
+        # Temporary workaround for a bug in dwidenoise2: the concatenated series
+        # cannot be denoised with phase data.
+        parser.error(
+            '--denoise-after-combining cannot be used with phase demodulation '
+            f'("demodulate:{denoise_params["demodulate"]}"). '
+            'Remove the demodulate parameter and use "--ignore phase" to denoise '
+            'the magnitude data only.'
+        )
 
     if config.workflow.dwi_phase_correction != 'none':
         if config.workflow.denoise_method != 'dwidenoise':
