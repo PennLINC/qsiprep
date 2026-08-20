@@ -133,6 +133,7 @@ def init_fsl_hmc_wf(
                 'sdc_method',
                 'slice_quality',
                 'motion_params',
+                'ec_file',
                 'cnr_map',
                 'bvec_files_to_transform',
                 'dwi_files_to_transform',
@@ -273,7 +274,11 @@ def init_fsl_hmc_wf(
             (slice_quality, 'hmc_optimization_data'),
         ]),
         (eddy, spm_motion, [('out_parameter', 'eddy_motion')]),
-        (spm_motion, outputnode, [('spm_motion_file', 'motion_params')]),
+        (inputnode, spm_motion, [('dwi_file', 'ref_file')]),
+        (spm_motion, outputnode, [
+            ('spm_motion_file', 'motion_params'),
+            ('eddy_ec_file', 'ec_file'),
+        ]),
         # Create a b=0 reference from Eddy's output
         (back_to_lps, extract_b0_series, [
             ('dwi_file', 'dwi_series'),

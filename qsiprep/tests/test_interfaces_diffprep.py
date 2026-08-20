@@ -386,7 +386,9 @@ def test_diffprep_t2wreg_missing_warp(tmp_path, monkeypatch):
 
 def test_diffprep_motion_params_basic(tmp_path):
     """``DIFFPREPMotionParams`` slices cols 0-5 from a 24-col TORTOISE
-    transformations file and writes them as a whitespace-separated SPM file."""
+    transformations file, converts them from LPS to RAS+ (negating the x/y
+    translation and rotation components), and writes them as a
+    whitespace-separated SPM file."""
     from qsiprep.interfaces.tortoise import DIFFPREPMotionParams
 
     n_volumes = 4
@@ -402,7 +404,9 @@ def test_diffprep_motion_params_basic(tmp_path):
 
     spm = np.loadtxt(res.outputs.spm_motion_file)
     assert spm.shape == (n_volumes, 6)
-    np.testing.assert_allclose(spm, full[:, :6], atol=1e-5)
+    expected = full[:, :6].copy()
+    expected[:, [0, 1, 3, 4]] *= -1.0
+    np.testing.assert_allclose(spm, expected, atol=1e-5)
 
 
 def test_diffprep_motion_params_plain_whitespace(tmp_path):
@@ -419,7 +423,9 @@ def test_diffprep_motion_params_plain_whitespace(tmp_path):
 
     spm = np.loadtxt(res.outputs.spm_motion_file)
     assert spm.shape == (6,)
-    np.testing.assert_allclose(spm, full[0, :6])
+    expected = full[0, :6].copy()
+    expected[[0, 1, 3, 4]] *= -1.0
+    np.testing.assert_allclose(spm, expected)
 
 
 def test_diffprep_motion_params_rejects_short_rows(tmp_path):
