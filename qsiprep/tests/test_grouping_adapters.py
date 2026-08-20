@@ -172,10 +172,10 @@ def test_single_unit_acq_output_exposes_multipartid_label(tmp_path):
     ``base.py`` names each single-unit output's derivatives from the concatenation
     scheme's final name (not the unit key), so this is what carries a curated
     ``acq-<label>`` into the derivative filenames. Regression guard: when this
-    was the identity, single-unit benchmark outputs lost their labels (e.g.
-    ``acq-dsi258`` fell back to a bare name).
+    was the identity, single-unit virtual-acquisition outputs lost their
+    labels (e.g. ``acq-dsi258`` fell back to a bare name).
     """
-    grouping = load_scenario('benchmark_multipart', tmp_path, strict=False)
+    grouping = load_scenario('virtual_acq_multipart', tmp_path, strict=False)
 
     # Every output here is a single correction unit (no cross-unit merge).
     scheme = concatenation_scheme(grouping, backend='fsl')

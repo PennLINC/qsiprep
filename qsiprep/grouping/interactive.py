@@ -387,11 +387,11 @@ def _output_boxes(grouping: DWIGrouping, letters: dict[str, str], backend: str) 
         '<section><h2>Step 2 &mdash; Outputs: which scans are combined, '
         'and how each is corrected</h2>'
     ]
-    for multipart_id, concat in sorted(grouping.concatenation_groups.items()):
+    for concat_key, concat in sorted(grouping.concatenation_groups.items()):
         cfill, cstroke = _PROVENANCE_COLORS[_prov_value(concat.provenance)]
         n_scans = len(concat.dwi_files)
         why = _WHY_CONCAT.get(concat.provenance, _esc(concat.provenance.value))
-        if concat.provenance is Provenance.CURATED and multipart_id.startswith('acq-'):
+        if concat.provenance is Provenance.CURATED and concat.multipart_id.startswith('acq-'):
             why += ' The <code>acq-</code> prefix also names the output file.'
         parts.append(
             '<div class="output">'
@@ -403,7 +403,7 @@ def _output_boxes(grouping: DWIGrouping, letters: dict[str, str], backend: str) 
             f'border-color:{cstroke}">{_esc(concat.provenance.value)}</span> '
             f'{why}</p>'
         )
-        units = grouping.correction_units_in(multipart_id)
+        units = grouping.correction_units_in(concat_key)
         multi_unit = len(units) > 1
         for unit in units:
             if multi_unit:
@@ -440,7 +440,7 @@ def _output_boxes(grouping: DWIGrouping, letters: dict[str, str], backend: str) 
                 'this output file.</p>'
             )
 
-        for eid, paths in sorted(grouping.borrowed_sources(multipart_id).items()):
+        for eid, paths in sorted(grouping.borrowed_sources(concat_key).items()):
             _, stroke = _PROVENANCE_COLORS[_prov_value(grouping.estimations[eid].provenance)]
             names = ', '.join(f'<code>{_esc(_basename(path))}</code>' for path in paths)
             parts.append(

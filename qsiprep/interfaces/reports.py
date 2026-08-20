@@ -169,8 +169,10 @@ class SubjectSummary(SummaryInterface):
         if self.inputs.t2w:
             t2w_seg = f'(+ {len(self.inputs.t2w):d} T2-weighted)'
 
-        # Add text for how the dwis are grouped
-        n_dwis = 0
+        # Add text for how the dwis are grouped. A file may be a member of
+        # several outputs (virtual acquisition mode), so inputs are counted
+        # uniquely.
+        input_files = set()
         n_outputs = 0
         groupings = ''
         if isdefined(self.inputs.dwi_groupings):
@@ -183,7 +185,7 @@ class SubjectSummary(SummaryInterface):
                 ]
                 for dwi_file in group_info['dwi_files']:
                     files_desc.append(f'\t\t\t\t\t<li> {dwi_file} </li>')
-                    n_dwis += 1
+                    input_files.add(dwi_file)
                 if group_info['fieldmap'] is not None:
                     files_desc.append(f'\t\t\t\t<li>Fieldmap type: {group_info["fieldmap"]} </li>')
                 files_desc.append('</ul>')
@@ -195,7 +197,7 @@ class SubjectSummary(SummaryInterface):
             subject_id=self.inputs.subject_id,
             n_t1s=len(self.inputs.t1w),
             t2w=t2w_seg,
-            n_dwis=n_dwis,
+            n_dwis=len(input_files),
             n_outputs=n_outputs,
             groupings=groupings,
             output_spaces=['ACPC', self.inputs.template],

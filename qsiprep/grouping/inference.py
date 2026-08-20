@@ -34,6 +34,7 @@ from .models import (
     DWIGrouping,
     FieldmapEstimation,
     FileRecord,
+    GroupingPolicy,
     Provenance,
     derive_output_name,
     strip_nii_ext,
@@ -172,12 +173,9 @@ def resolve_estimations(
     by_path = {record.path: record for record in records}
 
     # ------------------------------------------------------------------ E1
-    # A B0FieldIdentifier must be unique within a subject: the files that
-    # jointly estimate one field share a shim, so they cannot span sessions
-    # (the scanner is reshimmed between them). A session-less source (a shared
-    # fmap) declares the identifier once and is fine, but the same identifier
-    # declared by files in two different sessions is invalid curation - error
-    # and skip it; the user must give each session its own identifier.
+    # A B0FieldIdentifier must be unique within a subject: sessions are
+    # reshimmed, so one field cannot span them. Session-less sources (a
+    # shared fmap) declare it once and are exempt.
     curated_members = defaultdict(list)
     for record in records:
         for identifier in record.b0field_identifiers:
@@ -753,7 +751,7 @@ def build_distortion_groups(
     Files are grouped by their distortion parameters, the fieldmap applied to
     them, and their output (MultipartID or ``separate_all_dwis``), so a single
     group can never span two fieldmaps or two output files. A series curated
-    into several MultipartIDs (benchmarking) contributes to one group per
+    into several MultipartIDs (virtual acquisitions) contributes to one group per
     output scope, so the group's scope is stored, never re-derived.
     """
     dwi_records = [record for record in records if record.is_dwi]
@@ -762,9 +760,9 @@ def build_distortion_groups(
         if separate_all_dwis:
             walls = (record.path,)
         else:
-            # `or (None,)` keeps uncurated series (empty MultipartID) in a
-            # single None-scoped group.
-            walls = record.multipart_id or (None,)
+            # Dedupe repeated sidecar ids; `or (None,)` keeps uncurated
+            # series (empty MultipartID) in a single None-scoped group.
+            walls = tuple(dict.fromkeys(record.multipart_id)) or (None,)
         for wall in walls:
             buckets[(record.session, record.signature.key, application[record.path], wall)].append(
                 record
@@ -794,56 +792,32 @@ def build_correction_units(
     """Partition distortion groups into correction units.
 
     A unit's raw series are stacked into one HMC+SDC pipeline, so its groups
-    must share ONE applied correction: the same estimation (a PEPOLAR pair's
-    two polarities, corrected jointly), or identical signatures with the
-    identical correction. Units never span sessions or MultipartIDs.
+    must share ONE applied correction: within a (session, MultipartID scope)
+    wall, the groups applying the same non-null estimation form one unit (a
+    PEPOLAR pair's two polarities, corrected jointly); uncorrected groups -
+    and every group under ``separate_all_dwis`` - stand alone. Units never
+    span sessions or MultipartIDs.
     """
     dwi_records = {record.path: record for record in records if record.is_dwi}
 
-    parent = {key: key for key in distortion_groups}
-
-    def find(key):
-        while parent[key] != key:
-            parent[key] = parent[parent[key]]
-            key = parent[key]
-        return key
-
-    def union(key_a, key_b):
-        root_a, root_b = find(key_a), find(key_b)
-        if root_a != root_b:
-            parent[max(root_a, root_b)] = min(root_a, root_b)
-
-    if not separate_all_dwis:
-        by_wall = defaultdict(list)
-        for key, dgroup in distortion_groups.items():
+    buckets: dict[tuple, list[str]] = defaultdict(list)
+    for key, dgroup in distortion_groups.items():
+        if separate_all_dwis or dgroup.b0field_source is None:
+            bucket = ('single', key)
+        else:
             record = dwi_records[dgroup.dwi_files[0]]
-            by_wall[(record.session, dgroup.multipart_scope)].append(key)
-        for wall_keys in by_wall.values():
-            for key_a, key_b in combinations(sorted(wall_keys), 2):
-                group_a = distortion_groups[key_a]
-                group_b = distortion_groups[key_b]
-                same_application = group_a.b0field_source == group_b.b0field_source
-                same_estimation = same_application and group_a.b0field_source is not None
-                identical_signature = (
-                    same_application
-                    and group_a.signature.pe_dir is not None
-                    and group_a.signature.key == group_b.signature.key
-                )
-                if same_estimation or identical_signature:
-                    union(key_a, key_b)
-
-    components = defaultdict(list)
-    for key in distortion_groups:
-        components[find(key)].append(key)
+            bucket = ('shared', record.session, dgroup.multipart_scope, dgroup.b0field_source)
+        buckets[bucket].append(key)
 
     units: dict[str, CorrectionUnit] = {}
-    for _, member_keys in sorted(components.items()):
+    # Order by smallest member key so unit-key disambiguation is deterministic.
+    for member_keys in sorted(buckets.values(), key=min):
         member_keys = tuple(sorted(member_keys))
         dwi_files = tuple(
             sorted(path for key in member_keys for path in distortion_groups[key].dwi_files)
         )
-        # A unit never spans scopes (union-find ran within each), so any
-        # member's scope is the unit's.
+        # A unit never spans scopes (the partition key includes the scope), so
+        # any member's scope is the unit's.
         scope = distortion_groups[member_keys[0]].multipart_scope
         unit_key = _unique_id(derive_output_name(dwi_files), units, scope=scope)
         units[unit_key] = CorrectionUnit(
@@ -924,7 +898,7 @@ def build_concatenation_groups(
                     tuple(sorted(uncurated_files)),
                 )
             )
-        # Benchmarking mode: a series listing several MultipartIDs is a
+        # Virtual acquisition mode: a series listing several MultipartIDs is a
         # deliberate request to preprocess it once per group. Surface it
         # loudly - the same raw data lands in multiple outputs on purpose.
         overlapping = sorted(
@@ -934,7 +908,7 @@ def build_concatenation_groups(
             issues.append(
                 warning(
                     'multipart-overlap',
-                    f'Benchmarking mode: {len(overlapping)} DWI series with multiple '
+                    f'Virtual acquisition mode: {len(overlapping)} DWI series with multiple '
                     'MultipartIDs; each is preprocessed once per group and appears in '
                     'each of those outputs.',
                     tuple(overlapping),
@@ -969,13 +943,9 @@ def build_concatenation_groups(
             for key in unit_keys:
                 assignments[key] = ('+'.join(id_parts), Provenance.INFERRED)
 
-    # Materialize the groups. Each correction unit belongs to one session
-    # (units never span sessions), so a curated MultipartID - or an inferred
-    # id - reused across sessions makes one output per session, never a
-    # cross-session concatenation. The dict key stays the bare id when it
-    # occurs in a single session (the common case, so single-session keys are
-    # unchanged) and is session-qualified only when the same id recurs across
-    # sessions.
+    # An id reused across sessions makes one output per session, never a
+    # cross-session concatenation. The dict key is the bare id, session-
+    # qualified only when the id recurs across sessions.
     members_by_group = defaultdict(list)  # (session, id) -> [(unit key, provenance)]
     for key, (multipart_id, provenance) in assignments.items():
         members_by_group[(correction_units[key].session, multipart_id)].append((key, provenance))
@@ -990,13 +960,13 @@ def build_concatenation_groups(
         return f'{multipart_id}+ses-{session}'
 
     materialized = [
-        (_group_key(session, multipart_id), multipart_id, members)
+        (_group_key(session, multipart_id), session, multipart_id, members)
         for (session, multipart_id), members in members_by_group.items()
     ]
 
     concatenation_groups: dict[str, ConcatenationGroup] = {}
     output_names: dict[str, str] = {}
-    for group_key, multipart_id, members in sorted(materialized, key=lambda item: item[0]):
+    for group_key, session, multipart_id, members in sorted(materialized):
         unit_keys = tuple(sorted(key for key, _ in members))
         keys = tuple(
             sorted(
@@ -1049,6 +1019,8 @@ def build_concatenation_groups(
             correction_units=unit_keys,
             dwi_files=dwi_files,
             output_name=output_name,
+            key=group_key,
+            session=session,
         )
 
     # An estimation whose targets span correction units is legal (borrowing),
@@ -1082,6 +1054,7 @@ def build_grouping(
     records: list[FileRecord],
     subject_id: str,
     separate_all_dwis: bool = False,
+    ignore_fieldmaps: bool = False,
     ignore_shims: bool = False,
     ignore_fov: bool = False,
     ignore_sdc: bool = False,
@@ -1091,13 +1064,28 @@ def build_grouping(
     distortion_group_merge: str | None = 'concat',
     extra_issues: list[GroupingIssue] | None = None,
 ) -> DWIGrouping:
-    """Assemble the full :class:`~.models.DWIGrouping` from indexed records."""
+    """Assemble the full :class:`~.models.DWIGrouping` from indexed records.
+
+    ``ignore_fieldmaps`` took effect during indexing; it is accepted here only
+    so the recorded :class:`~.models.GroupingPolicy` is complete.
+    """
     distortion_group_merge = distortion_group_merge or 'concat'
     if distortion_group_merge not in ('concat', 'average', 'none'):
         raise ValueError(
             f"distortion_group_merge must be 'concat', 'average', or 'none', "
             f'not {distortion_group_merge!r}.'
         )
+    policy = GroupingPolicy(
+        separate_all_dwis=separate_all_dwis,
+        ignore_fieldmaps=ignore_fieldmaps,
+        ignore_shims=ignore_shims,
+        ignore_fov=ignore_fov,
+        ignore_sdc=ignore_sdc,
+        force_t2wreg=force_t2wreg,
+        use_synb0=use_synb0,
+        use_nipreps_syn_sdc=use_nipreps_syn_sdc,
+        distortion_group_merge=distortion_group_merge,
+    )
     issues = list(extra_issues or [])
 
     if ignore_sdc:
@@ -1152,6 +1140,34 @@ def build_grouping(
                     )
                 )
 
+        # One estimation correcting several sessions is only reachable through
+        # explicit session-less curation (a shared fmap/); honored, but worth
+        # a warning since sessions usually mean a reshim.
+        record_by_path = {record.path: record for record in records}
+        applied_sessions = defaultdict(set)
+        for path, chosen in application.items():
+            if chosen is not None and record_by_path[path].session is not None:
+                applied_sessions[chosen].add(record_by_path[path].session)
+        for b0field_id, sessions in sorted(applied_sessions.items()):
+            if len(sessions) > 1:
+                sessions_txt = ', '.join(f'ses-{session}' for session in sorted(sessions, key=str))
+                issues.append(
+                    warning(
+                        'cross-session-fieldmap-application',
+                        f"Fieldmap estimation '{b0field_id}' corrects DWI series in "
+                        f'multiple sessions ({sessions_txt}). The linkage is explicit '
+                        'and will be honored, but sessions are usually re-shimmed - '
+                        'verify that one fieldmap really applies to all of them.',
+                        tuple(
+                            sorted(
+                                path
+                                for path, chosen in application.items()
+                                if chosen == b0field_id
+                            )
+                        ),
+                    )
+                )
+
     distortion_groups = build_distortion_groups(records, application, separate_all_dwis)
 
     for record in records:
@@ -1190,7 +1206,7 @@ def build_grouping(
         )
     )
 
-    return DWIGrouping(
+    grouping = DWIGrouping(
         subject_id=subject_id,
         files={record.path: record for record in records},
         estimations=estimations,
@@ -1202,4 +1218,16 @@ def build_grouping(
         concatenation_groups=concatenation_groups,
         issues=issues,
         synb0_requested=use_synb0,
+        policy=policy,
     )
+
+    from .integrity import check_model_integrity
+
+    violations = check_model_integrity(grouping)
+    if violations:
+        rendered = '\n  - '.join(violations)
+        raise RuntimeError(
+            'Internal grouping model inconsistency (this is a qsiprep bug, '
+            f'not a data problem):\n  - {rendered}'
+        )
+    return grouping

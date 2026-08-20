@@ -18,8 +18,8 @@ SyNb0 overriding a real T2w structural target   t2w_hcp_synb0
 no PE information, no SDC at all                missing_pedir
 partial curation: curation disables inference   partial_curation
 borrowing + estimation-spans-outputs            multipart_splits_estimation
-benchmarking: one series in several outputs     benchmark_multipart
-benchmarking: curated fields isolated combined  benchmark_isolated_fields
+virtual acqs: one series in several outputs     virtual_acq_multipart
+virtual acqs: curated fields isolated combined  virtual_acq_isolated_fields
 cross-axis pooling (DRBUDDI infeasible)         cross_axis_unpaired
 cross-axis split (per-axis DRBUDDI, recombined) cross_axis_b0field
 multi-readout split (per-readout DRBUDDI)       multi_readout
@@ -70,8 +70,8 @@ GOLDEN_CASES = [
     ('missing_pedir', {}, 'missing_pedir'),
     ('partial_curation', {}, 'partial_curation'),
     ('multipart_splits_estimation', {}, 'multipart_splits_estimation'),
-    ('benchmark_multipart', {}, 'benchmark_multipart'),
-    ('benchmark_isolated_fields', {}, 'benchmark_isolated_fields'),
+    ('virtual_acq_multipart', {}, 'virtual_acq_multipart'),
+    ('virtual_acq_isolated_fields', {}, 'virtual_acq_isolated_fields'),
     ('multi_session_curated_multipart', {}, 'multi_session_curated_multipart'),
     ('multi_session_b0field_reused', {}, 'multi_session_b0field_reused'),
     ('multi_session_shared_fmap', {}, 'multi_session_shared_fmap'),

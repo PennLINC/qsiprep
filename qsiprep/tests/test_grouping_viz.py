@@ -33,9 +33,9 @@ def test_render_html_covers_the_grouping(tmp_path, scenario):
 @pytest.mark.parametrize('scenario', SCENARIOS)
 def test_render_html_shows_each_scan_once_per_output(tmp_path, scenario):
     """A scan appears as one row per output it belongs to: exactly once in the
-    common case, and once per virtual acquisition when a benchmarking
-    MultipartID list places it in several outputs. Estimation membership is a
-    chip, not a second listing of the filename."""
+    common case, and once per virtual acquisition when a MultipartID list
+    places it in several outputs. Estimation membership is a chip, not a
+    second listing of the filename."""
     grouping = load_scenario(scenario, tmp_path, strict=False)
     page = render_html(grouping)
     # The page renders one scan row per distortion-group membership; every

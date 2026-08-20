@@ -23,7 +23,7 @@ Fieldmap estimations:
     phase encoding axes: j (bidirectional)
 
 Notes:
-  WARNING [multipart-overlap]: Benchmarking mode: 1 DWI series with multiple MultipartIDs; each is preprocessed once per group and appears in each of those outputs.
+  WARNING [multipart-overlap]: Virtual acquisition mode: 1 DWI series with multiple MultipartIDs; each is preprocessed once per group and appears in each of those outputs.
   WARNING [estimation-spans-outputs]: Fieldmap estimation 'auto+pepolar+j' corrects DWI series in 2 different correction units; it will be estimated once per unit.
 
 Processing preview: FSL path (TOPUP fieldmap estimation + eddy HMC/SDC)

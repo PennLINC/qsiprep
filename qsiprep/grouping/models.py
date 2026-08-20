@@ -199,7 +199,7 @@ class FileRecord:
     b0field_identifiers: tuple[str, ...] = ()
     b0field_sources: tuple[str, ...] = ()
     # A single MultipartID is the common case; a list means the series is
-    # curated into several overlapping output groups (benchmarking) and is
+    # curated into several overlapping output groups (virtual acquisitions) and is
     # preprocessed once per group. Empty means uncurated.
     multipart_id: tuple[str, ...] = ()
     intended_for: tuple[str, ...] = ()  # resolved absolute paths (fmap only)
@@ -290,29 +290,52 @@ class CorrectionUnit:
     # The output scope this unit was built for (see DistortionGroup); all of a
     # unit's distortion groups share it.
     multipart_scope: str | None = None
-    # The one session this unit belongs to (units never span sessions).
-    # Carried so curated concatenation scopes per session without re-deriving.
-    session: str | None = None
+    session: str | None = None  # units never span sessions
 
 
 @dataclasses.dataclass(frozen=True)
 class ConcatenationGroup:
-    """DWI files packaged into one final output (one MultipartID).
+    """DWI files packaged into one final output.
 
     The corrected results of the member :class:`CorrectionUnit`\\ s are
     concatenated (or averaged, per ``distortion_group_merge``) into the file
-    named ``output_name``.
+    named ``output_name``. User-facing text shows ``multipart_id`` and
+    ``output_name``, never ``key``.
     """
 
-    multipart_id: str  # curated MultipartID or 'auto+...'
+    multipart_id: str  # curated MultipartID or 'auto+...' - the membership label
     provenance: Provenance
     distortion_groups: tuple[str, ...]  # DistortionGroup keys, sorted
     correction_units: tuple[str, ...]  # CorrectionUnit keys, sorted
     dwi_files: tuple[str, ...]  # union of members, sorted
     output_name: str  # e.g. 'sub-1_ses-1' - the concatenated BIDS name
+    # Map key in DWIGrouping.concatenation_groups: multipart_id, session-
+    # qualified when the id recurs across sessions. Never BIDS metadata.
+    key: str = ''
+    session: str | None = None  # outputs never span sessions
 
 
-@dataclasses.dataclass
+#: Version of the ``DWIGrouping.to_dict`` JSON layout; bump on incompatible
+#: shape changes.
+SCHEMA_VERSION = 1
+
+
+@dataclasses.dataclass(frozen=True)
+class GroupingPolicy:
+    """The options a grouping was built under, serialized with the plan."""
+
+    separate_all_dwis: bool = False
+    ignore_fieldmaps: bool = False
+    ignore_shims: bool = False
+    ignore_fov: bool = False
+    ignore_sdc: bool = False
+    force_t2wreg: bool = False
+    use_synb0: bool = False
+    use_nipreps_syn_sdc: bool = False
+    distortion_group_merge: str = 'concat'
+
+
+@dataclasses.dataclass(frozen=True)
 class DWIGrouping:
     """The complete grouping decision for one subject.
 
@@ -321,6 +344,9 @@ class DWIGrouping:
     correction source exists. ``application_candidates`` retains every
     estimation that *could* have corrected the file, so reports can show what
     lost and why.
+
+    Frozen; the dict/list fields must not be mutated after construction -
+    reports, adapters, and workflow construction share this one object.
     """
 
     subject_id: str
@@ -336,6 +362,8 @@ class DWIGrouping:
     #: SyNb0 was requested: a synthetic undistorted b=0 is available as the
     #: structural target for registration-based stages, overriding any T2w.
     synb0_requested: bool = False
+    #: The options this grouping was built under (see :class:`GroupingPolicy`).
+    policy: GroupingPolicy = dataclasses.field(default_factory=GroupingPolicy)
 
     @property
     def dwi_files(self) -> list[str]:
@@ -355,28 +383,29 @@ class DWIGrouping:
     def warnings(self) -> list:
         return [issue for issue in self.issues if issue.severity == 'warning']
 
-    def distortion_groups_in(self, multipart_id: str) -> list[DistortionGroup]:
-        """The member distortion groups of a concatenation group."""
-        concat = self.concatenation_groups[multipart_id]
+    def distortion_groups_in(self, concat_key: str) -> list[DistortionGroup]:
+        """The member distortion groups of a concatenation group (by its key)."""
+        concat = self.concatenation_groups[concat_key]
         return [self.distortion_groups[key] for key in concat.distortion_groups]
 
-    def correction_units_in(self, multipart_id: str) -> list[CorrectionUnit]:
-        """The member correction units of a concatenation group."""
-        concat = self.concatenation_groups[multipart_id]
+    def correction_units_in(self, concat_key: str) -> list[CorrectionUnit]:
+        """The member correction units of a concatenation group (by its key)."""
+        concat = self.concatenation_groups[concat_key]
         return [self.correction_units[key] for key in concat.correction_units]
 
-    def borrowed_sources(self, multipart_id: str) -> dict[str, list[str]]:
+    def borrowed_sources(self, concat_key: str) -> dict[str, list[str]]:
         """DWI series used by this concatenation group's fieldmap estimation
         that are not members of the group (the "borrowing" case).
 
-        fmap/ sources are not "borrowed" - being outside the outputs is their
-        normal role. Returns a mapping of estimation id -> sorted list of
-        borrowed DWI paths.
+        ``concat_key`` is the ``concatenation_groups`` map key. fmap/ sources
+        are not "borrowed" - being outside the outputs is their normal role.
+        Returns a mapping of estimation id -> sorted list of borrowed DWI
+        paths.
         """
-        concat = self.concatenation_groups[multipart_id]
+        concat = self.concatenation_groups[concat_key]
         members = set(concat.dwi_files)
         borrowed = {}
-        for dgroup in self.distortion_groups_in(multipart_id):
+        for dgroup in self.distortion_groups_in(concat_key):
             if dgroup.b0field_source is None:
                 continue
             estimation = self.estimations[dgroup.b0field_source]
@@ -392,7 +421,10 @@ class DWIGrouping:
     def to_dict(self) -> dict:
         """JSON-serializable rendering of the full grouping."""
         return {
+            'schema_version': SCHEMA_VERSION,
             'subject_id': self.subject_id,
+            'policy': dataclasses.asdict(self.policy),
+            'synb0_requested': self.synb0_requested,
             'files': {
                 path: {
                     'datatype': rec.datatype,
@@ -430,6 +462,9 @@ class DWIGrouping:
             'application_provenance': {
                 path: prov.value for path, prov in sorted(self.application_provenance.items())
             },
+            'application_candidates': {
+                path: list(ids) for path, ids in sorted(self.application_candidates.items())
+            },
             'distortion_groups': {
                 key: {
                     'pe_dir': group.signature.pe_dir,
@@ -447,18 +482,21 @@ class DWIGrouping:
                     'dwi_files': list(unit.dwi_files),
                     'b0field_source': unit.b0field_source,
                     'multipart_scope': unit.multipart_scope,
+                    'session': unit.session,
                 }
                 for key, unit in sorted(self.correction_units.items())
             },
             'concatenation_groups': {
-                multipart_id: {
+                key: {
+                    'multipart_id': group.multipart_id,
+                    'session': group.session,
                     'provenance': group.provenance.value,
                     'distortion_groups': list(group.distortion_groups),
                     'correction_units': list(group.correction_units),
                     'dwi_files': list(group.dwi_files),
                     'output_name': group.output_name,
                 }
-                for multipart_id, group in sorted(self.concatenation_groups.items())
+                for key, group in sorted(self.concatenation_groups.items())
             },
             'issues': [
                 {
@@ -482,16 +520,11 @@ def strip_nii_ext(filename: str) -> str:
 
 
 def derive_output_name(paths, acq: str | None = None) -> str:
-    """Derive the BIDS name for the concatenation of ``paths``.
-
-    The single implementation of what used to exist twice (in
-    ``qsiprep.utils.grouping.get_concatenated_bids_name`` and
-    ``qsiprep.workflows.dwi.util._get_concatenated_bids_name``): keep the
-    entities from the whitelist that all files share.
+    """Derive the BIDS name for the concatenation of ``paths``: the
+    whitelisted entities all files share.
 
     ``acq`` forces that (already sanitized) label into the ``acq-`` entity,
-    replacing any acq value derived from the files. Used to disambiguate
-    colliding output names with the curated MultipartID.
+    replacing any acq value derived from the files.
 
     Examples
     --------

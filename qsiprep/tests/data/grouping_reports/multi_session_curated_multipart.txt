@@ -1,7 +1,7 @@
 DWI grouping for sub-01
 =======================
 
-Output "sub-01_ses-1_acq-combined" (MultipartID acq-combined+ses-1 [curated]): 2 series
+Output "sub-01_ses-1_acq-combined" (MultipartID acq-combined [curated]): 2 series
   Distortion group sub-01_ses-1_dir-AP (PE j-, TRT 0.05s):
     - sub-01_ses-1_dir-AP_dwi.nii.gz
     corrected by: dwi_b0_field_ses1 [curated]
@@ -9,7 +9,7 @@ Output "sub-01_ses-1_acq-combined" (MultipartID acq-combined+ses-1 [curated]): 2
     - sub-01_ses-1_dir-PA_dwi.nii.gz
     corrected by: dwi_b0_field_ses1 [curated]
 
-Output "sub-01_ses-2_acq-combined" (MultipartID acq-combined+ses-2 [curated]): 2 series
+Output "sub-01_ses-2_acq-combined" (MultipartID acq-combined [curated]): 2 series
   Distortion group sub-01_ses-2_dir-AP (PE j-, TRT 0.05s):
     - sub-01_ses-2_dir-AP_dwi.nii.gz
     corrected by: dwi_b0_field_ses2 [curated]

@@ -18,6 +18,7 @@ Fieldmap estimations:
     phase encoding axes: j (bidirectional)
 
 Notes:
+  WARNING [cross-session-fieldmap-application]: Fieldmap estimation 'shared_field' corrects DWI series in multiple sessions (ses-1, ses-2). The linkage is explicit and will be honored, but sessions are usually re-shimmed - verify that one fieldmap really applies to all of them.
   WARNING [estimation-spans-outputs]: Fieldmap estimation 'shared_field' corrects DWI series in 2 different correction units; it will be estimated once per unit.
 
 Processing preview: FSL path (TOPUP fieldmap estimation + eddy HMC/SDC)

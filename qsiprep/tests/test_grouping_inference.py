@@ -397,14 +397,14 @@ def test_multipart_splits_estimation(tmp_path):
         assert len(borrowed['auto+pepolar+j']) == 2
 
 
-def test_benchmark_multipart_shared_field(tmp_path):
+def test_virtual_acq_multipart_shared_field(tmp_path):
     """A list-valued MultipartID preprocesses one series once per output.
 
     dir-AP is curated into both a solo output and the reverse pair; the single
     inferred field is shared, so the solo output borrows dir-PA's b=0 across
     the virtual-acquisition boundary while the pair is self-contained.
     """
-    grouping = load_scenario('benchmark_multipart', tmp_path)
+    grouping = load_scenario('virtual_acq_multipart', tmp_path)
 
     records = {op.basename(p): rec for p, rec in grouping.files.items() if rec.is_dwi}
     assert records['sub-01_dir-AP_dwi.nii.gz'].multipart_id == ('acq-solo', 'acq-pair')
@@ -443,14 +443,14 @@ def test_benchmark_multipart_shared_field(tmp_path):
         assert not [i for i in check_backend(grouping, backend) if i.severity == 'error']
 
 
-def test_benchmark_isolated_fields(tmp_path):
+def test_virtual_acq_isolated_fields(tmp_path):
     """Curated B0FieldIdentifiers isolate two fields inference would pool.
 
     Two reverse-PE pairs with identical acquisition parameters are held apart
     by curation; even combined into one output they stay separate correction
-    units and borrow nothing - the opposite of the shared-field benchmark.
+    units and borrow nothing - the opposite of the shared-field variant.
     """
-    grouping = load_scenario('benchmark_isolated_fields', tmp_path)
+    grouping = load_scenario('virtual_acq_isolated_fields', tmp_path)
 
     assert sorted(grouping.estimations) == ['fieldHi', 'fieldLo']
     for estimation in grouping.estimations.values():
@@ -983,12 +983,7 @@ def _session_of(path):
 
 def test_multi_session_curated_multipart(tmp_path):
     """A curated MultipartID reused across sessions makes one output per
-    session, never a cross-session concatenation of the two timepoints.
-
-    Anatomicals live in ses-1 only, so a real run pools both sessions into one
-    grouping call; the reused 'acq-combined' must still be scoped per session.
-    Each session carries its OWN (BIDS-unique) B0FieldIdentifier.
-    """
+    session, never a cross-session concatenation of the two timepoints."""
     grouping = load_scenario('multi_session_curated_multipart', tmp_path)
 
     # Unique per-session curated PEPOLAR fields - one per session, no pooling.
@@ -1017,9 +1012,8 @@ def test_multi_session_curated_multipart(tmp_path):
 
 
 def test_multi_session_b0field_reused(tmp_path):
-    """The same B0FieldIdentifier declared across sessions is invalid - a field
-    cannot span a reshim - so it errors and is skipped, leaving the DWIs that
-    named it uncorrected."""
+    """A B0FieldIdentifier declared in two sessions errors and is skipped,
+    leaving the DWIs that named it uncorrected."""
     grouping = load_scenario('multi_session_b0field_reused', tmp_path, strict=False)
 
     assert 'b0field-multisession' in issue_codes(grouping.errors)

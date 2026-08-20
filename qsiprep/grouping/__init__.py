@@ -55,6 +55,7 @@ from .models import (
     DWIGrouping,
     FieldmapEstimation,
     FileRecord,
+    GroupingPolicy,
     Provenance,
 )
 from .report import describe_processing, full_report, report_text
@@ -71,6 +72,7 @@ __all__ = [
     'FileRecord',
     'GroupingError',
     'GroupingIssue',
+    'GroupingPolicy',
     'PreprocUnit',
     'Provenance',
     'backend_for_config',
@@ -167,6 +169,7 @@ def build_dwi_grouping(
         records,
         subject_id=subject_id,
         separate_all_dwis=separate_all_dwis,
+        ignore_fieldmaps=ignore_fieldmaps,
         ignore_shims=ignore_shims,
         ignore_fov=ignore_fov,
         ignore_sdc=ignore_sdc,

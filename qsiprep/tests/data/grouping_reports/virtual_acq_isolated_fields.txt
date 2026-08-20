@@ -42,7 +42,7 @@ Fieldmap estimations:
     phase encoding axes: j (bidirectional)
 
 Notes:
-  WARNING [multipart-overlap]: Benchmarking mode: 4 DWI series with multiple MultipartIDs; each is preprocessed once per group and appears in each of those outputs.
+  WARNING [multipart-overlap]: Virtual acquisition mode: 4 DWI series with multiple MultipartIDs; each is preprocessed once per group and appears in each of those outputs.
   WARNING [estimation-spans-outputs]: Fieldmap estimation 'fieldHi' corrects DWI series in 2 different correction units; it will be estimated once per unit.
   WARNING [estimation-spans-outputs]: Fieldmap estimation 'fieldLo' corrects DWI series in 2 different correction units; it will be estimated once per unit.
 

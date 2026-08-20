@@ -1,12 +1,7 @@
-# Two sessions, each a curated PEPOLAR pair with its OWN B0FieldIdentifier
-# (dwi_b0_field_ses1 / dwi_b0_field_ses2 - identifiers are unique within the
-# subject, as BIDS requires). Both sessions' AP+PA share the SAME curated
-# MultipartID 'acq-combined' - which is qsiprep's output-grouping field, not a
-# BIDS fieldmap id, so reusing it across sessions is a deliberate test-retest
-# request. Anatomicals are ses-1 only, so a real run pools both sessions into
-# one grouping call (first-lex); grouping must still keep the MultipartID per
-# session - two outputs (sub-01_ses-1_acq-combined, sub-01_ses-2_acq-combined),
-# never one session-less merge of the two timepoints.
+# Two sessions, each a curated PEPOLAR pair with its own B0FieldIdentifier,
+# both sharing the curated MultipartID 'acq-combined'. Expected: the reused
+# MultipartID scopes per session - two outputs (sub-01_ses-1_acq-combined,
+# sub-01_ses-2_acq-combined), never one session-less merge.
 '01':
   - session: '1'
     anat:

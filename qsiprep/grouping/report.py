@@ -63,13 +63,13 @@ def report_text(grouping: DWIGrouping) -> str:
     lines.append('=' * len(title))
     lines.append('')
 
-    for multipart_id, concat in sorted(grouping.concatenation_groups.items()):
+    for concat_key, concat in sorted(grouping.concatenation_groups.items()):
         lines.append(
             f'Output "{concat.output_name}" '
-            f'(MultipartID {multipart_id} {concat.provenance.tag()}): '
+            f'(MultipartID {concat.multipart_id} {concat.provenance.tag()}): '
             f'{len(concat.dwi_files)} series'
         )
-        for dgroup in grouping.distortion_groups_in(multipart_id):
+        for dgroup in grouping.distortion_groups_in(concat_key):
             lines.append(f'  Distortion group {dgroup.key} ({dgroup.signature.describe()}):')
             for path in dgroup.dwi_files:
                 lines.append(f'    - {_basename(path)}{_shell_tag(grouping.files[path])}')
@@ -85,7 +85,7 @@ def report_text(grouping: DWIGrouping) -> str:
                 ]
                 if losing:
                     lines.append(f'    (also eligible: {", ".join(losing)})')
-        borrowed = grouping.borrowed_sources(multipart_id)
+        borrowed = grouping.borrowed_sources(concat_key)
         for b0field_id, paths in sorted(borrowed.items()):
             lines.append(
                 f'  Borrows for fieldmap estimation ({b0field_id}), not included in this output:'

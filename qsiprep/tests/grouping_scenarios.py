@@ -24,8 +24,6 @@ SCENARIOS = [
     'abcd_t2w',
     'acq_multipart',
     'b0only_fmap_with_bvals',
-    'benchmark_isolated_fields',
-    'benchmark_multipart',
     'bidsuri_intendedfor',
     'cluster_multipart',
     'cluster_nomultipart',
@@ -64,6 +62,8 @@ SCENARIOS = [
     't2w_hcp',
     'two_gre_fmaps',
     'unlinked_fmap',
+    'virtual_acq_isolated_fields',
+    'virtual_acq_multipart',
 ]
 
 #: A two-shell (b=1000/2000) scheme: unambiguously shelled.

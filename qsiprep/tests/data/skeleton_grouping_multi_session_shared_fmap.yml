@@ -1,8 +1,7 @@
-# Wildcard guard: one SESSION-LESS PEPOLAR fmap (sub-01/fmap, an AP/PA epi
-# pair) declares B0FieldIdentifier 'shared_field'; DWIs in BOTH sessions name
-# it as their B0FieldSource. A shared session-less fieldmap is legal BIDS and
-# must NOT be split per session - it stays one estimation applied across both
-# sessions (the session-less members join every session's resolution).
+# One session-less PEPOLAR fmap (sub-01/fmap) declares 'shared_field'; DWIs
+# in both sessions name it as B0FieldSource. Expected: one estimation applied
+# across both sessions (with a cross-session-fieldmap-application warning),
+# not split per session.
 '01':
   - anat:
       - suffix: T1w

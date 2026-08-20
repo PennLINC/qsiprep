@@ -62,7 +62,7 @@ def scan(
     """
     suffix = suffix or ('dwi' if folder == 'dwi' else 'epi')
     sess = f'ses-{session}/' if session else ''
-    as_tuple = lambda v: (v,) if isinstance(v, str) else tuple(v)  # noqa: E731
+    as_tuple = lambda v: (v,) if isinstance(v, str) else tuple(v or ())  # noqa: E731
     return FileRecord(
         path=f'{SUBJECT}/{sess}{folder}/{name}',
         datatype='anat' if suffix in ('T1w', 'T2w') else folder,
@@ -75,7 +75,7 @@ def scan(
         ),
         b0field_identifiers=as_tuple(B0FieldIdentifier),
         b0field_sources=as_tuple(B0FieldSource),
-        multipart_id=MultipartID,
+        multipart_id=as_tuple(MultipartID),
         intended_for=as_tuple(IntendedFor),
     )
 
