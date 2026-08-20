@@ -259,7 +259,7 @@ class IntraModalMerge(SimpleInterface):
 
 CONFORMATION_TEMPLATE = """\t\t<h3 class="elem-title">Anatomical Conformation</h3>
 \t\t<ul class="elem-desc">
-\t\t\t<li>Input T1w images: {n_t1w}</li>
+\t\t\t<li>Input {anat} images: {n_anat}</li>
 \t\t\t<li>Output orientation: LPS</li>
 \t\t\t<li>Output dimensions: {dims}</li>
 \t\t\t<li>Output voxel size: {zooms}</li>
@@ -269,6 +269,57 @@ CONFORMATION_TEMPLATE = """\t\t<h3 class="elem-title">Anatomical Conformation</h
 """
 
 DISCARD_TEMPLATE = """\t\t\t\t<li><abbr title="{path}">{basename}</abbr></li>"""
+
+
+class _AnatomicalReportletInputSpec(BaseInterfaceInputSpec):
+    anat_type = traits.Enum('T1w', 'T2w', usedefault=True, desc='Anatomical image type')
+    anat_list = InputMultiObject(
+        File(exists=True),
+        desc='input anatomical images',
+    )
+    valid_list = InputMultiObject(
+        File(exists=True),
+        desc='Valid input anatomical images',
+    )
+    reference_image = File(mandatory=True, desc='Reference image (LPS-oriented template)')
+
+
+class _AnatomicalReportletOutputSpec(TraitedSpec):
+    out_report = File(exists=True, desc='Anatomical image report')
+
+
+class AnatomicalReportlet(SimpleInterface):
+    """Summarize anatomical outputs."""
+
+    input_spec = _AnatomicalReportletInputSpec
+    output_spec = _AnatomicalReportletOutputSpec
+
+    def _run_interface(self, runtime):
+        ref_img = nb.load(self.inputs.reference_image)
+        zooms = ref_img.header.get_zooms()
+        dims = ref_img.shape
+        discards = sorted(set(self.inputs.anat_list) - set(self.inputs.valid_list))
+        items = [
+            DISCARD_TEMPLATE.format(path=path, basename=os.path.basename(path))
+            for path in discards
+        ]
+        discard_list = '\n'.join(['\t\t\t<ul>'] + items + ['\t\t\t</ul>']) if items else ''
+        zoom_fmt = '{:.02g}mm x {:.02g}mm x {:.02g}mm'.format(*zooms)
+        segment = CONFORMATION_TEMPLATE.format(
+            anat=self.inputs.anat_type,
+            n_anat=len(self.inputs.anat_list),
+            dims='x'.join(map(str, dims)),
+            zooms=zoom_fmt,
+            n_discards=len(discards),
+            discard_list=discard_list,
+        )
+        out_report = os.path.join(runtime.cwd, 'report.html')
+        with open(out_report, 'w') as fobj:
+            fobj.write(segment)
+
+        self._results['out_report'] = out_report
+
+        return runtime
 
 
 class ConformInputSpec(BaseInterfaceInputSpec):
