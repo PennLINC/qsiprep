@@ -31,6 +31,7 @@ from ...interfaces.mrtrix import (
     PolarToComplex,
 )
 from ...interfaces.nilearn import MaskEPI, Merge
+from ...interfaces.phase import PhaseCorrect
 from ...interfaces.tortoise import Gibbs
 from ...utils.bids import IMPORTANT_DWI_FIELDS, update_metadata_from_nifti_header
 from ...utils.misc import describe_dwidenoise2, parse_denoise_method
@@ -285,6 +286,11 @@ def init_merge_and_denoise_wf(
     merge_confounds = pe.Node(niu.Merge(2), name='merge_confounds')
     hstack_confounds = pe.Node(StackConfounds(axis=1), name='hstack_confounds')
     n_volumes = dwi_df['NumVolumes'].sum()
+    if config.workflow.dwi_phase_correction in ('tv', 'tvc', 'dc'):
+        config.loggers.workflow.warning(
+            'Phase correction is not applied to concatenated DWI series '
+            '(denoising after combining); the magnitude will be used.'
+        )
     denoising_wf = init_dwi_denoising_wf(
         partial_fourier=get_merged_parameter(dwi_df, 'PartialFourier', 'all'),
         phase_encoding_direction=get_merged_parameter(dwi_df, 'PhaseEncodingAxis', 'all'),
@@ -454,6 +460,16 @@ def init_dwi_denoising_wf(
         # Any other method ignores the phase data and denoises the magnitude data alone.
         denoise_complex = denoise_method.startswith('dwidenoise') and use_phase
 
+        # Complex-valued output can optionally be phase-corrected instead of being
+        # split straight back to magnitude. Only "dwidenoise" (not "dwidenoise2") is
+        # validated for this; see --dwi-phase-correction.
+        phase_correction = config.workflow.dwi_phase_correction
+        do_phase_correct = (
+            denoise_complex
+            and denoise_method == 'dwidenoise'
+            and phase_correction in ('tv', 'tvc', 'dc')
+        )
+
         # Build the denoiser. The node is the same whether it is handed magnitude-only or
         # complex-valued data; only the data feeding it differs, which is wired up below.
         if denoise_method == 'dwidenoise2':
@@ -513,13 +529,26 @@ def init_dwi_denoising_wf(
                 # citation, so the description is compiled from the parameters in effect
                 mppca_desc = describe_dwidenoise2(dwidenoise2_params, complex_data=denoise_complex)
             else:
+                complex_cite = '; @cordero2019complex' if denoise_complex else ''
                 mppca_desc = (
                     'denoised using the Marchenko-Pastur PCA method implemented in dwidenoise '
-                    '[@mrtrix3; @dwidenoise1; @dwidenoise2] '
+                    f'[@mrtrix3; @dwidenoise1; @dwidenoise2{complex_cite}] '
                     f'with a{auto_str} window size of {dwi_denoise_window} voxels. '
                 )
 
-            if denoise_complex:
+            if denoise_complex and do_phase_correct:
+                method_name = {
+                    'tv': 'total-variation rephasing [@eichner2015real]',
+                    'tvc': 'complex-valued total-variation rephasing [@eichner2015real]',
+                    'dc': 'decorrelated phase filtering [@sprenger2017real]',
+                }[phase_correction]
+                desc += (
+                    'Magnitude and phase DWI data were combined into a complex-valued file, then '
+                    f'{mppca_desc}'
+                    f'After denoising, the complex-valued data were phase-corrected using '
+                    f'{method_name}, and the real channel was retained for subsequent processing. '
+                )
+            elif denoise_complex:
                 desc += (
                     'Magnitude and phase DWI data were combined into a complex-valued file, then '
                     f'{mppca_desc}'
@@ -557,19 +586,48 @@ def init_dwi_denoising_wf(
                 name='combine_complex',
                 n_procs=omp_nthreads,
             )
-            split_complex = pe.Node(
-                ComplexToMagnitude(),
-                name='split_complex',
-                n_procs=omp_nthreads,
-            )
             workflow.connect([
                 (inputnode, phase_to_radians, [('dwi_phase_file', 'phase_file')]),
                 (buffernodes[-2], combine_complex, [('dwi_file', 'mag_file')]),
                 (phase_to_radians, combine_complex, [('phase_file', 'phase_file')]),
                 (combine_complex, denoiser, [('out_file', 'in_file')]),
-                (denoiser, split_complex, [('out_file', 'complex_file')]),
-                (split_complex, buffernodes[-1], [('out_file', 'dwi_file')]),
             ])  # fmt:skip
+
+            if do_phase_correct:
+                phase_correct = pe.Node(
+                    PhaseCorrect(
+                        method=phase_correction,
+                        tv_weight=config.workflow.dwi_phase_tv_weight,
+                        dc_kernel=config.workflow.dwi_phase_dc_kernel,
+                    ),
+                    name='phase_correct',
+                    n_procs=omp_nthreads,
+                )
+                ds_report_phasecorr = pe.Node(
+                    DerivativesDataSink(
+                        datatype='figures',
+                        desc='phasecorrection',
+                        source_file=source_file,
+                    ),
+                    name=f'ds_report_{name}_phasecorrection',
+                    run_without_submitting=True,
+                    mem_gb=DEFAULT_MEMORY_MIN_GB,
+                )
+                workflow.connect([
+                    (denoiser, phase_correct, [('out_file', 'complex_file')]),
+                    (phase_correct, buffernodes[-1], [('out_file', 'dwi_file')]),
+                    (phase_correct, ds_report_phasecorr, [('out_report', 'in_file')]),
+                ])  # fmt:skip
+            else:
+                split_complex = pe.Node(
+                    ComplexToMagnitude(),
+                    name='split_complex',
+                    n_procs=omp_nthreads,
+                )
+                workflow.connect([
+                    (denoiser, split_complex, [('out_file', 'complex_file')]),
+                    (split_complex, buffernodes[-1], [('out_file', 'dwi_file')]),
+                ])  # fmt:skip
         else:
             workflow.connect([
                 (buffernodes[-2], denoiser, [('dwi_file', 'in_file')]),

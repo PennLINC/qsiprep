@@ -26,6 +26,22 @@ from datetime import datetime
 
 import qsiprep
 
+# Seed the global qsiprep config with sensible defaults so that the example
+# workflows rendered by the ``.. workflow::`` directives can be built. Most
+# workflow functions read parameters (b0_threshold, output_resolution, etc.)
+# from ``qsiprep.config`` rather than from their arguments, so without this the
+# example workflows fail to instantiate. ``init=False`` only populates the
+# settings; it does not validate or create the (CI-specific) paths in the file.
+from qsiprep import config as _qsiprep_config  # noqa: E402
+
+try:
+    _qsiprep_config.load(
+        os.path.join(os.path.dirname(qsiprep.__file__), 'data', 'tests', 'config.toml'),
+        init=False,
+    )
+except Exception as _exc:  # pragma: no cover - docs build best-effort
+    print(f'Could not seed qsiprep config for workflow examples: {_exc}')
+
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
