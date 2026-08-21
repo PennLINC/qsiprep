@@ -1,0 +1,35 @@
+# MultipartID splits the targets of one (inferred) estimation across two
+# outputs. Expected: legal grouping (borrowing), but an
+# estimation-spans-outputs warning since the field is estimated per output.
+'01':
+  - anat:
+      - suffix: T1w
+    dwi:
+      - dir: AP
+        run: '1'
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+          MultipartID: part1
+      - dir: PA
+        run: '1'
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05
+          MultipartID: part1
+      - dir: AP
+        run: '2'
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+          MultipartID: part2
+      - dir: PA
+        run: '2'
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05
+          MultipartID: part2

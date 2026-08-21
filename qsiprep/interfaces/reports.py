@@ -169,29 +169,25 @@ class SubjectSummary(SummaryInterface):
         if self.inputs.t2w:
             t2w_seg = f'(+ {len(self.inputs.t2w):d} T2-weighted)'
 
-        # Add text for how the dwis are grouped
-        n_dwis = 0
+        # Add text for how the dwis are grouped. A file may be a member of
+        # several outputs (virtual acquisition mode), so inputs are counted
+        # uniquely.
+        input_files = set()
         n_outputs = 0
         groupings = ''
         if isdefined(self.inputs.dwi_groupings):
             for output_fname, group_info in self.inputs.dwi_groupings.items():
                 n_outputs += 1
-                files_desc = []
-                files_desc.append(
+                files_desc = [
                     f'\t\t\t<li>Scan group: {output_fname} '
-                    f'(PE Dir {group_info["dwi_series_pedir"]})</li><ul>'
-                )
-                files_desc.append('\t\t\t\t<li>DWI Files: </li>')
-                for dwi_file in group_info['dwi_series']:
+                    f'(PE Dir {group_info["pe_dir"]})</li><ul>',
+                    '\t\t\t\t<li>DWI Files: </li>',
+                ]
+                for dwi_file in group_info['dwi_files']:
                     files_desc.append(f'\t\t\t\t\t<li> {dwi_file} </li>')
-                    n_dwis += 1
-                fieldmap_type = group_info['fieldmap_info']['suffix']
-                if fieldmap_type is not None:
-                    files_desc.append(f'\t\t\t\t<li>Fieldmap type: {fieldmap_type} </li>')
-
-                    for key, value in group_info['fieldmap_info'].items():
-                        files_desc.append(f'\t\t\t\t\t<li> {key}: {str(value)} </li>')
-                        n_dwis += 1
+                    input_files.add(dwi_file)
+                if group_info['fieldmap'] is not None:
+                    files_desc.append(f'\t\t\t\t<li>Fieldmap type: {group_info["fieldmap"]} </li>')
                 files_desc.append('</ul>')
                 groupings += GROUPING_TEMPLATE.format(
                     output_name=output_fname, input_files='\n'.join(files_desc)
@@ -201,7 +197,7 @@ class SubjectSummary(SummaryInterface):
             subject_id=self.inputs.subject_id,
             n_t1s=len(self.inputs.t1w),
             t2w=t2w_seg,
-            n_dwis=n_dwis,
+            n_dwis=len(input_files),
             n_outputs=n_outputs,
             groupings=groupings,
             output_spaces=['ACPC', self.inputs.template],
@@ -662,7 +658,10 @@ def calculate_motion_summary(confounds_tsv):
             'max_rel_rotation': [np.nan],
             'max_rel_translation': [np.nan],
         }
-    df = pd.read_csv(confounds_tsv, delimiter='\t')
+    # Single-unit confounds are tab-separated (.tsv); the distortion-group merge
+    # feeds MergeDWIs' comma-separated merged confounds (.csv).
+    sep = ',' if str(confounds_tsv).endswith('.csv') else '\t'
+    df = pd.read_csv(confounds_tsv, delimiter=sep)
 
     # the default case where each output image comes from one input image
     if 'trans_x' in df.columns:

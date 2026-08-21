@@ -577,7 +577,7 @@ class workflow(_Config):
     """Image-based denoising method. Either "dwidenoise" (MRtrix), "patch2self" (DIPY)
     or "none". DWIDenoise parameters may be appended as semicolon-delimited name:value
     pairs."""
-    distortion_group_merge = None
+    distortion_group_merge = 'concat'
     """How to combine images across distortion groups (concatenate, average or none)."""
     dwi_denoise_window = None
     """Window size in voxels for image-based denoising, integer or "auto"."""

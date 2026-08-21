@@ -69,13 +69,11 @@ doc = [
     "dipy",
     "doctest-ignore-unicode",
     "lxml_html_clean",
-    "nbsphinx",
+    "myst-nb",
     "pydot >= 1.2.3",
     "pydotplus",
-    "recommonmark",
     "sphinx >= 4.2.0",
     "sphinx-argparse",
-    "sphinx_markdown_tables",
     "sphinx_rtd_theme",
     "sphinxcontrib-apidoc",
     "sphinxcontrib-bibtex",
@@ -105,6 +103,7 @@ all = ["qsiprep[dev,doc,maint,tests]"]
 
 [project.scripts]
 qsiprep = "qsiprep.cli.run:main"
+qsiprep-group = "qsiprep.cli.group:main"
 
 #
 # Hatch configurations

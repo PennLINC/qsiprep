@@ -1,0 +1,17 @@
+# AP/PA pair with very different maximum b-values (1000 vs 3000; bval
+# content written by the test loader). Expected: the maxb-mismatch warning -
+# scanners often change acquisition parameters when max b changes.
+'01':
+  - anat:
+      - suffix: T1w
+    dwi:
+      - dir: AP
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+      - dir: PA
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05

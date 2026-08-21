@@ -1,0 +1,54 @@
+# Same acquisitions as skeleton_grouping_cluster_multipart.yml but with no
+# MultipartID curation. Expected: all seven series share one inferred axis-j
+# estimation, so inferred concatenation merges everything into a single
+# output (rule a: shared applied estimation).
+'01':
+  - anat:
+      - suffix: T1w
+    dwi:
+      - acq: A
+        dir: AP
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+      - acq: A
+        dir: PA
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05
+      - acq: B
+        dir: AP
+        run: '1'
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.08
+      - acq: B
+        dir: AP
+        run: '2'
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.08
+      - acq: B
+        dir: PA
+        run: '1'
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.08
+      - acq: B
+        dir: PA
+        run: '2'
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.08
+      - acq: C
+        dir: AP
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05

@@ -5,6 +5,30 @@ from pathlib import Path
 import pytest
 
 
+def test_subject_summary_counts_inputs_uniquely():
+    """A file in several outputs (virtual acquisition mode) is one input, not N."""
+    from qsiprep.interfaces.reports import SubjectSummary
+
+    summary = SubjectSummary(
+        subject_id='01',
+        template='MNI152NLin2009cAsym',
+        dwi_groupings={
+            'sub-01_acq-solo_dir-AP': {
+                'pe_dir': 'j-',
+                'dwi_files': ['sub-01_dir-AP_dwi.nii.gz'],
+                'fieldmap': None,
+            },
+            'sub-01_acq-pair': {
+                'pe_dir': 'j-',
+                'dwi_files': ['sub-01_dir-AP_dwi.nii.gz', 'sub-01_dir-PA_dwi.nii.gz'],
+                'fieldmap': 'pepolar',
+            },
+        },
+    )
+    segment = summary._generate_segment()
+    assert 'inputs 2, outputs 2' in segment
+
+
 @pytest.fixture
 def collect_reports(monkeypatch):
     """Replace run_reports with a recorder of the report directories and filenames."""

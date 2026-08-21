@@ -50,6 +50,11 @@ class MergeDWIsInputSpec(BaseInterfaceInputSpec):
         File(exists=True), mandatory=False, desc='list of carpetplot_data files'
     )
     scan_metadata = traits.Dict(desc='Dict of metadata for the to-be-combined scans')
+    original_bvec_files = InputMultiObject(
+        File(exists=True),
+        mandatory=False,
+        desc='list of original (pre-HMC) bvec files, used for the merged raw-QC gradients',
+    )
 
 
 class MergeDWIsOutputSpec(TraitedSpec):
@@ -102,9 +107,14 @@ class MergeDWIs(SimpleInterface):
             self.inputs.bids_dwi_files, to_concat, b0_means, corrections
         )
 
-        # Collect the confounds
+        # Collect the confounds. These may be comma-separated denoising confounds
+        # (merge.py) or the tab-separated per-unit motion confounds fed by the
+        # distortion-group merge, so pick the separator from the extension.
         if isdefined(self.inputs.denoising_confounds):
-            confounds = [pd.read_csv(fname) for fname in self.inputs.denoising_confounds]
+            confounds = [
+                pd.read_csv(fname, sep='\t' if str(fname).endswith('.tsv') else ',')
+                for fname in self.inputs.denoising_confounds
+            ]
             _confounds_df = pd.concat(confounds, axis=0, ignore_index=True)
             confounds_df = pd.concat([provenance_df, _confounds_df], axis=1, ignore_index=False)
         else:
@@ -165,6 +175,32 @@ class MergeDWIs(SimpleInterface):
         # Remove any negative values introduced during interpolation (if it occurs)
         pos_merged_nii = math_img('np.clip(img, 0, None)', img=merged_nii)
         pos_merged_nii.to_filename(merged_fname)
+
+        # init_distortion_group_merge_wf (and only it) merges already-corrected units and
+        # feeds these to a b=0 masking step and the pre-correction QC. The intra-unit merges
+        # in merge.py / pre_hmc.py leave raw_concatenated_files unset, so they are untouched.
+        if isdefined(self.inputs.raw_concatenated_files) and self.inputs.raw_concatenated_files:
+            # b=0 reference of the merged series (mirrors ExtractB0s in init_dwi_finalize_wf)
+            b0_indices = np.flatnonzero(all_bvals < self.inputs.b0_threshold)
+            if b0_indices.size == 0:
+                b0_indices = np.array([0])
+            b0_imgs = index_img(pos_merged_nii, b0_indices)
+            merged_b0_ref = math_img('img.mean(3)', img=b0_imgs) if b0_imgs.ndim == 4 else b0_imgs
+            merged_b0_fname = op.join(runtime.cwd, 'merged_b0ref.nii.gz')
+            merged_b0_ref.to_filename(merged_b0_fname)
+            self._results['merged_b0_ref'] = merged_b0_fname
+
+            # Merged raw series and its original gradient directions, for the pre-correction QC
+            merged_raw_fname = op.join(runtime.cwd, 'merged_raw.nii.gz')
+            concat_imgs(self.inputs.raw_concatenated_files, auto_resample=True).to_filename(
+                merged_raw_fname
+            )
+            self._results['merged_raw_dwi'] = merged_raw_fname
+            if isdefined(self.inputs.original_bvec_files):
+                self._results['merged_raw_bvec'] = combine_bvecs(
+                    self.inputs.original_bvec_files,
+                    output_file=op.join(runtime.cwd, 'merged_raw.bvec'),
+                )
 
         return runtime
 
@@ -691,7 +727,15 @@ def harmonize_b0s(dwi_files, bvals, b0_threshold, do_harmonization):
     b0_means = []
     for dwi_file, bval_file in zip(dwi_files, bvals, strict=False):
         dwi_nii = load_img(dwi_file)
-        _bvals = np.loadtxt(bval_file)
+        if dwi_nii.ndim == 3:
+            # A single-volume correction unit: promote to 4D so volume
+            # indexing and concatenation see a consistent shape.
+            dwi_nii = nb.Nifti1Image(
+                np.asanyarray(dwi_nii.dataobj)[..., np.newaxis],
+                dwi_nii.affine,
+                dwi_nii.header,
+            )
+        _bvals = np.atleast_1d(np.loadtxt(bval_file))
         b0_indices = np.flatnonzero(_bvals < b0_threshold)
         if b0_indices.size == 0:
             LOGGER.warning(f'No b<{b0_threshold} images found in {dwi_file}')

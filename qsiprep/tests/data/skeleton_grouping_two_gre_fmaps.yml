@@ -1,0 +1,42 @@
+# Two GRE phasediff fieldmaps, each IntendedFor a different DWI run; the runs
+# have different readout times, so their signatures differ. Expected: two
+# TRANSLATED PHASEDIFF estimations; both runs are corrected and
+# shim-compatible, so inferred concatenation merges them into one output
+# (rule b: independently corrected), flagged loudly.
+'01':
+  - anat:
+      - suffix: T1w
+    fmap:
+      - acq: run1
+        suffix: phasediff
+        metadata:
+          EchoTime1: 0.00492
+          EchoTime2: 0.00738
+          IntendedFor: ['dwi/sub-01_dir-AP_run-1_dwi.nii.gz']
+      - acq: run1
+        suffix: magnitude1
+        metadata:
+          EchoTime: 0.00492
+      - acq: run2
+        suffix: phasediff
+        metadata:
+          EchoTime1: 0.00492
+          EchoTime2: 0.00738
+          IntendedFor: ['dwi/sub-01_dir-AP_run-2_dwi.nii.gz']
+      - acq: run2
+        suffix: magnitude1
+        metadata:
+          EchoTime: 0.00492
+    dwi:
+      - dir: AP
+        run: '1'
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+      - dir: AP
+        run: '2'
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.08

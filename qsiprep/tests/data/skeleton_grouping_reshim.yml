@@ -1,0 +1,29 @@
+# Re-shimmed mid-session: acq-A AP+PA share one ShimSetting; acq-B AP was
+# acquired after a re-shim and has no reverse partner. Expected (default):
+# acq-B cannot borrow across the shim boundary -> no fieldmap, warnings.
+# With ignore_shims=True: acq-B joins the axis-j estimation.
+'01':
+  - anat:
+      - suffix: T1w
+    dwi:
+      - acq: A
+        dir: AP
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+          ShimSetting: [1.0, 2.0, 3.0]
+      - acq: A
+        dir: PA
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05
+          ShimSetting: [1.0, 2.0, 3.0]
+      - acq: B
+        dir: AP
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+          ShimSetting: [9.0, 8.0, 7.0]

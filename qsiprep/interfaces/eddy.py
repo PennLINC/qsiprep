@@ -100,6 +100,9 @@ class GatherEddyInputsInputSpec(BaseInterfaceInputSpec):
     raw_image_sdc = traits.Bool(True, usedefault=True)
     eddy_config = File(exists=True, mandatory=True)
     json_file = File(exists=True)
+    sidecars = traits.Dict(
+        desc='per-file PE/readout metadata from the grouping model, to spare sidecar reads'
+    )
 
 
 class GatherEddyInputsOutputSpec(TraitedSpec):
@@ -137,6 +140,8 @@ class GatherEddyInputs(SimpleInterface):
     output_spec = GatherEddyInputsOutputSpec
 
     def _run_interface(self, runtime):
+        sidecars = self.inputs.sidecars if isdefined(self.inputs.sidecars) else None
+
         # Gather inputs for TOPUP
         topup_prefix = op.join(runtime.cwd, 'topup_')
         topup_datain_file, topup_imain_file, topup_text, b0_tsv, topup0, eddy0 = (
@@ -150,6 +155,7 @@ class GatherEddyInputs(SimpleInterface):
                 max_per_spec=self.inputs.topup_max_b0s_per_spec,
                 topup_requested=self.inputs.topup_requested,
                 raw_image_sdc=self.inputs.raw_image_sdc,
+                sidecars=sidecars,
             )
         )
         self._results['topup_datain'] = topup_datain_file
@@ -174,7 +180,9 @@ class GatherEddyInputs(SimpleInterface):
 
         # Gather inputs for eddy
         eddy_prefix = op.join(runtime.cwd, 'eddy_')
-        acqp_file, index_file = eddy_inputs_from_dwi_files(self.inputs.original_files, eddy_prefix)
+        acqp_file, index_file = eddy_inputs_from_dwi_files(
+            self.inputs.original_files, eddy_prefix, sidecars=sidecars
+        )
         self._results['eddy_acqp'] = acqp_file
         self._results['eddy_indices'] = index_file
 

@@ -1,0 +1,13 @@
+# A single DWI series, no fieldmap, and only a T1w (no T2w). Expected by
+# default: no correction at all (T2Wreg needs a T2w). With use_synb0=True: a
+# FORCED SyNb0 estimation synthesized from the T1w corrects it, and it works
+# on the FSL path.
+'01':
+  - anat:
+      - suffix: T1w
+    dwi:
+      - dir: AP
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05

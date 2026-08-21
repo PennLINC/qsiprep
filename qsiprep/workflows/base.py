@@ -31,6 +31,7 @@ qsiprep base processing workflows
 
 """
 
+import os
 import sys
 from collections import defaultdict
 from copy import deepcopy
@@ -42,6 +43,18 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from packaging.version import Version
 
 from .. import config
+from ..grouping import (
+    GroupingError,
+    backend_for_config,
+    build_dwi_grouping,
+    check_backend,
+    describe_processing,
+    report_text,
+    to_preproc_units,
+)
+from ..grouping import (
+    concatenation_scheme as derive_concatenation_scheme,
+)
 from ..interfaces import (
     AboutSummary,
     BIDSDataGrabber,
@@ -50,7 +63,6 @@ from ..interfaces import (
     SubjectSummary,
 )
 from ..utils.bids import collect_data
-from ..utils.grouping import group_dwi_scans
 from ..utils.misc import fix_multi_source_name
 from .anatomical.volume import anat_biascorrect_enabled, init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
@@ -358,15 +370,41 @@ to workflows in *QSIPrep*'s documentation]\
     if config.workflow.anat_only:
         return workflow
 
-    # Handle the grouping of multiple dwi files within a session
-    # concatenation_scheme maps the outputs to their final concatenation group
-    dwi_fmap_groups, concatenation_scheme = group_dwi_scans(
+    # Group the subject's DWI scans from BIDS metadata alone,
+    # then validate against the backend selected by the CLI.
+    backend = backend_for_config(config.workflow.hmc_model, config.workflow.pepolar_method)
+    grouping = build_dwi_grouping(
         layout=config.execution.layout,
         subject_data=subject_data,
-        combine_scans=not config.workflow.separate_all_dwis,
+        separate_all_dwis=config.workflow.separate_all_dwis,
         ignore_fieldmaps='fieldmaps' in config.workflow.ignore,
+        ignore_shims='shims' in config.workflow.ignore,
+        ignore_fov='fov' in config.workflow.ignore,
+        ignore_sdc='sdc' in config.workflow.ignore,
+        use_nipreps_syn_sdc=bool(config.workflow.use_syn_sdc),
+        distortion_group_merge=config.workflow.distortion_group_merge,
+        strict=False,
     )
-    config.loggers.workflow.info(dwi_fmap_groups)
+    grouping_errors = grouping.errors + [
+        issue for issue in check_backend(grouping, backend) if issue.severity == 'error'
+    ]
+    for issue in grouping.warnings:
+        config.loggers.workflow.warning(issue.render())
+    config.loggers.workflow.info(report_text(grouping))
+    config.loggers.workflow.info(describe_processing(grouping, backend))
+    if grouping_errors:
+        rendered = '\n'.join(issue.render() for issue in grouping_errors)
+        raise GroupingError(
+            f'The DWI grouping for sub-{subject_id} has {len(grouping_errors)} '
+            f'unresolvable problem(s):\n{rendered}'
+        )
+
+    # Each PreprocUnit is one HMC+SDC run. concatenation_scheme maps each
+    # unit's preprocessed result to the final output it is combined into. The
+    # backend can split a unit (TORTOISE, multi-axis PEPOLAR), so both must see
+    # it and agree on the resulting unit names.
+    preproc_units = to_preproc_units(grouping, backend)
+    concatenation_scheme = derive_concatenation_scheme(grouping, backend)
 
     # If a merge is happening at the end, make sure
     if merging_distortion_groups:
@@ -378,6 +416,11 @@ to workflows in *QSIPrep*'s documentation]\
 
         merging_group_workflows = {}
         for merged_group in merged_group_names:
+            # Outputs with a single correction unit keep the direct path:
+            # there is nothing to merge, and the legacy merge workflow is
+            # only exercised when corrected units actually combine.
+            if len(merged_to_subgroups[merged_group]) < 2:
+                continue
             merging_group_workflows[merged_group] = init_distortion_group_merge_wf(
                 merging_strategy=config.workflow.distortion_group_merge,
                 source_file=merged_group + '_dwi.nii.gz',
@@ -394,13 +437,15 @@ to workflows in *QSIPrep*'s documentation]\
                 ]),
             ])  # fmt:skip
 
-    outputs_to_files = {
-        dwi_group['concatenated_bids_name']: dwi_group for dwi_group in dwi_fmap_groups
+    outputs_to_files = {unit.output_name: unit for unit in preproc_units}
+    summary.inputs.dwi_groupings = {
+        unit.output_name: {
+            'pe_dir': unit.pe_dir,
+            'dwi_files': [os.path.basename(path) for path in unit.dwi_files],
+            'fieldmap': unit.method.value if unit.method else None,
+        }
+        for unit in preproc_units
     }
-    if config.workflow.force_syn:
-        for group_name in outputs_to_files:
-            outputs_to_files[group_name]['fieldmap_info'] = {'suffix': 'syn'}
-    summary.inputs.dwi_groupings = outputs_to_files
 
     make_intramodal_template = False
     if config.workflow.intramodal_template_iters > 0:
@@ -535,22 +580,37 @@ to workflows in *QSIPrep*'s documentation]\
             ])  # fmt:skip
 
     # create a processing pipeline for the dwis in each session
-    for output_fname, dwi_info in outputs_to_files.items():
-        source_file = get_source_file(dwi_info['dwi_series'], output_fname, suffix='_dwi')
+    for output_fname, unit in outputs_to_files.items():
+        # naming_name is this output's display name: a single-unit output uses
+        # its final name (carrying a curated 'acq-<label>' MultipartID), while a
+        # unit that merges into a multi-unit output keeps its per-unit key -- it
+        # is a sub-part, not an output, and its siblings would collide. It drives
+        # the derivatives (source_file), the preproc work-dir (output_prefix ->
+        # _get_wf_name; finalize follows via `name`), and the series-QC row
+        # (finalize output_prefix -> SeriesQC), so /work and every derivative
+        # carry the same label. Every lookup below stays keyed on output_fname
+        # (the unit key); only this display name changes.
+        final_output_name = concatenation_scheme[output_fname]
+        merged_here = merging_distortion_groups and final_output_name in merging_group_workflows
+        naming_name = output_fname if merged_here else final_output_name
+        source_file = get_source_file(list(unit.dwi_files), naming_name, suffix='_dwi')
         output_wfname = output_fname.replace('-', '_')
         dwi_preproc_wf = init_dwi_preproc_wf(
-            scan_groups=dwi_info,
-            output_prefix=output_fname,
+            unit=unit,
+            output_prefix=naming_name,
             source_file=source_file,
             t2w_sdc=_t2w_available_for_sdc(subject_data),
             anatomical_template=anatomical_template,
         )
         dwi_finalize_wf = init_dwi_finalize_wf(
-            scan_groups=dwi_info,
+            unit=unit,
             name=dwi_preproc_wf.name.replace('dwi_preproc', 'dwi_finalize'),
-            output_prefix=output_fname,
+            output_prefix=naming_name,
             source_file=source_file,
-            write_derivatives=not merging_distortion_groups,
+            write_derivatives=not (
+                merging_distortion_groups
+                and concatenation_scheme[output_fname] in merging_group_workflows
+            ),
             make_intramodal_template=make_intramodal_template,
         )
 
@@ -646,7 +706,12 @@ to workflows in *QSIPrep*'s documentation]\
                     (intramodal_template_wf, ds_orig_to_intramodal, [(output_name, 'in_file')]),
                 ])  # fmt:skip
 
-        if merging_distortion_groups:
+        final_merge_wf = (
+            merging_group_workflows.get(concatenation_scheme[output_fname])
+            if merging_distortion_groups
+            else None
+        )
+        if final_merge_wf is not None:
             image_name = f'inputnode.{output_wfname}_image'
             bval_name = f'inputnode.{output_wfname}_bval'
             bvec_name = f'inputnode.{output_wfname}_bvec'
@@ -657,7 +722,6 @@ to workflows in *QSIPrep*'s documentation]\
             b0_ref_name = f'inputnode.{output_wfname}_b0_ref'
             cnr_name = f'inputnode.{output_wfname}_cnr'
             carpetplot_name = f'inputnode.{output_wfname}_carpetplot_data'
-            final_merge_wf = merging_group_workflows[concatenation_scheme[output_fname]]
             workflow.connect([
                 (dwi_finalize_wf, final_merge_wf, [
                     ('outputnode.bvals_t1', bval_name),

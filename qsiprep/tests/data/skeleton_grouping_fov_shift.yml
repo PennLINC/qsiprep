@@ -1,0 +1,18 @@
+# AP/PA pair whose fields of view are offset by a rigid translation
+# (real NIfTIs written by the test loader; see SCENARIO_NIFTIS). Expected:
+# the fov-shifted warning, noting that no ShimSetting is recorded so a
+# re-shim cannot be ruled out.
+'01':
+  - anat:
+      - suffix: T1w
+    dwi:
+      - dir: AP
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+      - dir: PA
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05

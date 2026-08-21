@@ -33,23 +33,24 @@ from .util import _create_mem_gb, _get_wf_name
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def _doing_t2wreg(fieldmap_type, t2w_sdc):
+def _doing_t2wreg(unit, t2w_sdc):
     """True when SDC is TORTOISE's T2Wreg (DIFFPREP, fieldmap-less, T2w present).
 
     Mirrors ``use_t2wreg`` in :mod:`qsiprep.workflows.dwi.diffprep`. T2Wreg does
-    real susceptibility distortion correction but carries no fieldmap, so
-    without this predicate the ``fieldmap_type is None`` case would fall through
-    the reportlet gate and produce no SDC figure.
+    real susceptibility distortion correction but carries no measured fieldmap,
+    so without this predicate the fieldmap-less case would fall through the
+    reportlet gate and produce no SDC figure.
     """
     return (
         config.workflow.hmc_model == 'tortoise'
-        and fieldmap_type in (None, 'syn')
+        and not unit.has_scanner_measured_fieldmap
+        and not unit.is_nipreps_syn
         and bool(t2w_sdc)
     )
 
 
 def init_dwi_preproc_wf(
-    scan_groups,
+    unit,
     t2w_sdc,
     output_prefix,
     source_file,
@@ -63,16 +64,18 @@ def init_dwi_preproc_wf(
         :simple_form: yes
 
         from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
-        wf = init_dwi_preproc_wf(scan_groups={'dwi_series': ['fake.nii'],
-                                  'fieldmap_info': {'suffix': None},
-                                  'dwi_series_pedir': 'j'},
-                                 output_prefix='',
-                                 source_file='/data/bids/sub-1/dwi/sub-1_dwi.nii.gz')
+        from qsiprep.tests.preproc_factory import make_preproc_unit
+        wf = init_dwi_preproc_wf(
+            make_preproc_unit(['/data/bids/sub-1/dwi/sub-1_dwi.nii.gz']),
+            t2w_sdc=False,
+            output_prefix='',
+            source_file='/data/bids/sub-1/dwi/sub-1_dwi.nii.gz',
+            anatomical_template='MNI152NLin2009cAsym')
 
     Parameters
     ----------
-    scan_groups : list of dicts
-        List of dicts grouping files by PE-dir
+    unit : :class:`~qsiprep.grouping.adapters.PreprocUnit`
+        The DWI series to correct together and the fieldmap that corrects them
     t2w_sdc : bool
         Include T2w scans in distortion correction
     output_prefix : str
@@ -151,26 +154,7 @@ def init_dwi_preproc_wf(
     dwi_only = config.workflow.anat_modality == 'none'
     output_dir = config.execution.output_dir
 
-    # Check the inputs
-    if config.execution.layout is not None:
-        all_dwis = scan_groups['dwi_series']
-        fieldmap_info = scan_groups['fieldmap_info']
-        dwi_metadata = config.execution.layout.get_metadata(all_dwis[0])
-    else:
-        all_dwis = ['/fake/testing/path.nii.gz']
-        fieldmap_info = {'suffix': None}
-        dwi_metadata = {}
-
-    fieldmap_type = fieldmap_info['suffix']
-    doing_bidirectional_pepolar = fieldmap_type == 'rpe_series'
-    if fieldmap_type is not None:
-        fmap_key = 'phase1' if fieldmap_type == 'phase' else fieldmap_type
-
-        if fieldmap_type != 'syn':
-            fieldmap_file = fieldmap_info[fmap_key]
-            # There can be a bunch of rpe series, so don't get the info yet
-            if fmap_key not in ('rpe_series', 'epi', 'dwi'):
-                fieldmap_info['metadata'] = config.execution.layout.get_metadata(fieldmap_file)
+    all_dwis = list(unit.dwi_files)
 
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
@@ -252,8 +236,7 @@ def init_dwi_preproc_wf(
 """
 
     pre_hmc_wf = init_dwi_pre_hmc_wf(
-        scan_groups=scan_groups,
-        preprocess_rpe_series=doing_bidirectional_pepolar,
+        unit=unit,
         orientation='LAS' if config.workflow.hmc_model == 'eddy' else 'LPS',
         source_file=source_file,
     )
@@ -264,18 +247,16 @@ def init_dwi_preproc_wf(
                 f'--shoreline-iters must be > 0 when --hmc-model is {config.workflow.hmc_model}'
             )
         hmc_wf = init_qsiprep_hmcsdc_wf(
-            scan_groups=scan_groups,
+            unit=unit,
             source_file=source_file,
-            dwi_metadata=dwi_metadata,
             t2w_sdc=t2w_sdc,
             anatomical_template=anatomical_template,
         )
 
     elif config.workflow.hmc_model == 'eddy':
         hmc_wf = init_fsl_hmc_wf(
-            scan_groups=scan_groups,
+            unit=unit,
             source_file=source_file,
-            dwi_metadata=dwi_metadata,
             t2w_sdc=t2w_sdc,
             name='hmc_sdc_wf',
         )
@@ -287,9 +268,8 @@ def init_dwi_preproc_wf(
         # owns its SDC. So no fieldmap guard here; the branching lives inside
         # init_diffprep_hmc_wf.
         hmc_wf = init_diffprep_hmc_wf(
-            scan_groups=scan_groups,
+            unit=unit,
             source_file=source_file,
-            dwi_metadata=dwi_metadata,
             t2w_sdc=t2w_sdc,
             name='hmc_sdc_wf',
         )
@@ -342,12 +322,9 @@ def init_dwi_preproc_wf(
 
     # Fieldmap reports should vary depending on which type of correction is performed
     # PEPOLAR (epi, rpe series) will produce potentially much more detailed reports
-    doing_topup = (
-        fieldmap_type in ('epi', 'rpe_series')
-        and 'topup' in config.workflow.pepolar_method.lower()
-    )
-    doing_t2wreg = _doing_t2wreg(fieldmap_type, t2w_sdc)
-    if fieldmap_type not in ('epi', 'rpe_series', None) or doing_topup or doing_t2wreg:
+    doing_topup = unit.is_pepolar and 'topup' in config.workflow.pepolar_method.lower()
+    doing_t2wreg = _doing_t2wreg(unit, t2w_sdc)
+    if unit.is_gre or unit.is_nipreps_syn or doing_topup or doing_t2wreg:
         fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
         ds_report_sdc = pe.Node(
             DerivativesDataSink(
@@ -380,14 +357,10 @@ def init_dwi_preproc_wf(
         workflow.connect([(hmc_wf, outputnode, [('outputnode.fieldmap_hz', 'fieldmap_hz')])])
 
     # DRBUDDI has some extra reports that we want to save. Make sure we get them!
-    if (
-        fieldmap_type in ('epi', 'rpe_series')
-        and 'drbuddi' in config.workflow.pepolar_method.lower()
-    ):
-        if os.path.exists(t2w_sdc):
-            extended_pepolar_report_wf = init_extended_pepolar_report_wf(segment_t2w=t2w_sdc)
-        else:
-            extended_pepolar_report_wf = init_extended_pepolar_report_wf()
+    if unit.is_pepolar and 'drbuddi' in config.workflow.pepolar_method.lower():
+        # segment_t2w is a boolean flag (the T2w image itself arrives via the
+        # inputnode); pass the availability bool straight through.
+        extended_pepolar_report_wf = init_extended_pepolar_report_wf(segment_t2w=t2w_sdc)
 
         ds_report_fa_sdc = pe.Node(
             DerivativesMaybeDataSink(
@@ -441,7 +414,8 @@ def init_dwi_preproc_wf(
 
     summary = pe.Node(
         DiffusionSummary(
-            pe_direction=scan_groups['dwi_series_pedir'],
+            # '' (no PE info) -> None, which the summary renders as "MISSING".
+            pe_direction=unit.pe_dir or None,
             hmc_model=config.workflow.hmc_model,
             b0_to_anat_transform=config.workflow.b0_to_anat_transform,
             hmc_transform=config.workflow.hmc_transform,

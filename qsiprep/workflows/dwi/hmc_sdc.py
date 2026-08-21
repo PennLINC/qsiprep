@@ -24,11 +24,10 @@ from .hmc import init_dwi_hmc_wf
 
 
 def init_qsiprep_hmcsdc_wf(
-    scan_groups,
+    unit,
     source_file,
     t2w_sdc,
     anatomical_template,
-    dwi_metadata=None,
 ):
     """
     This workflow controls the head motion correction and susceptibility distortion
@@ -39,14 +38,12 @@ def init_qsiprep_hmcsdc_wf(
         :graph2use: orig
         :simple_form: yes
 
-        from qsiprep.workflows.dwi.shoreline import init_qsiprep_hmcsdc_coreg_wf
+        from qsiprep.workflows.dwi.hmc_sdc import init_qsiprep_hmcsdc_wf
+        from qsiprep.tests.preproc_factory import make_preproc_unit
         wf = init_qsiprep_hmcsdc_wf(
-            {'dwi_series':[dwi1.nii, dwi2.nii],
-             'fieldmap_info': {'suffix': None},
-             'dwi_series_pedir': j},
+            make_preproc_unit(['/data/sub-1/dwi/sub-1_dwi.nii.gz']),
             source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
             t2w_sdc=False,
-            dwi_metadata={},
             anatomical_template='MNI152NLin2009cAsym',
         )
     """
@@ -175,16 +172,9 @@ def init_qsiprep_hmcsdc_wf(
         ]),
     ])  # fmt:skip
 
-    fieldmap_info = scan_groups['fieldmap_info']
-    # Run SyN if forced or in the absence of fieldmap correction
-    fieldmap_type = fieldmap_info['suffix']
-
-    if fieldmap_type in ('epi', 'rpe_series'):
-        if 'topup' in config.workflow.pepolar_method.lower():
-            raise Exception('TOPUP is not supported with SHORELine ')
-
+    if unit.is_pepolar:
         drbuddi_wf = init_drbuddi_wf(
-            scan_groups=scan_groups,
+            unit=unit,
             t2w_sdc=t2w_sdc,
             use_cuda=gpu_enabled('drbuddi'),
         )
@@ -243,30 +233,20 @@ def init_qsiprep_hmcsdc_wf(
         ])  # fmt:skip
         return workflow
 
-    if fieldmap_type is None:
+    if unit.method is None:
         config.loggers.workflow.warning(
             'SDC: no fieldmaps found or they were ignored (%s).', source_file
-        )
-    elif fieldmap_type == 'syn':
-        config.loggers.workflow.warning(
-            'SDC: no fieldmaps found or they were ignored. '
-            'Using EXPERIMENTAL "fieldmap-less SyN" correction '
-            'for dataset %s.',
-            source_file,
         )
     else:
         config.loggers.workflow.log(
             25,
             'SDC: fieldmap estimation of type "%s" intended for %s found.',
-            fieldmap_type,
+            unit.method,
             source_file,
         )
 
     # Perform SDC if possible. This will pass-through if no sdc is to be done
-    b0_sdc_wf = init_sdc_wf(
-        scan_groups['fieldmap_info'],
-        dwi_metadata,
-    )
+    b0_sdc_wf = init_sdc_wf(unit, unit.dwi_metadata)
     b0_sdc_wf.inputs.inputnode.template = anatomical_template
 
     workflow.connect([

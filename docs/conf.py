@@ -43,21 +43,26 @@ needs_sphinx = '4.2.0'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'nbsphinx',
+    'myst_nb',  # notebooks and markdown (replaces nbsphinx + recommonmark)
     'nipype.sphinxext.apidoc',
     'nipype.sphinxext.plot_workflow',
-    'recommonmark',
     'sphinx.ext.autodoc',
     'sphinx.ext.coverage',
     'sphinx.ext.doctest',
     'sphinx.ext.intersphinx',
     'sphinx.ext.linkcode',
     'sphinx.ext.mathjax',
-    'sphinx_markdown_tables',
     'sphinxarg.ext',  # argparse extension
     'sphinxcontrib.apidoc',
     'sphinxcontrib.bibtex',
 ]
+
+# Notebooks are MyST markdown (clean git diffs, no committed outputs) and
+# are executed during the docs build, which doubles as a regression test
+# for their demos. 'cache' skips re-execution when a notebook is unchanged.
+nb_execution_mode = 'cache'
+nb_execution_raise_on_error = True
+nb_execution_timeout = 300
 
 # Mock modules in autodoc:
 autodoc_mock_imports = [
@@ -115,7 +120,9 @@ language = 'en'
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This patterns also effect to html_static_path and html_extra_path
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
+# notebooks/*.ipynb are local jupytext conversions of the committed MyST .md
+# notebooks (gitignored); exclude them so sphinx never prefers a stale copy.
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'notebooks/*.ipynb']
 
 # The reST default role (used for this markup: `text`) to use for all
 # documents.

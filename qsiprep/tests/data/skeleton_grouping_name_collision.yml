@@ -1,0 +1,36 @@
+# Curated MultipartIDs (without the 'acq-' naming prefix) that produce two
+# outputs with the same derived BIDS name (both reduce to 'sub-01_dir-AP').
+# Expected: output-name-collision error advising 'acq-'-prefixed
+# MultipartIDs, which name the outputs explicitly (see acq_multipart).
+'01':
+  - anat:
+      - suffix: T1w
+    dwi:
+      - dir: AP
+        run: '1'
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+          MultipartID: partA
+      - dir: AP
+        run: '2'
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+          MultipartID: partA
+      - dir: AP
+        run: '3'
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+          MultipartID: partB
+      - dir: AP
+        run: '4'
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+          MultipartID: partB

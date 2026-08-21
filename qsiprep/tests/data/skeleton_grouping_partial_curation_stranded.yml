@@ -1,0 +1,32 @@
+# Asymmetric partial curation: the curated pair (run-1 AP+PA) carries
+# B0FieldIdentifier/Source, and the only uncurated series (run-2 AP) has no
+# uncurated reverse phase-encoded partner. Expected: run-2 gets NO inferred
+# PEPOLAR estimation (curated series are never pooled with uncurated ones),
+# a reverse-pe-not-pooled warning, and the T2Wreg fallback via the T2w.
+'01':
+  - anat:
+      - suffix: T1w
+      - suffix: T2w
+    dwi:
+      - dir: AP
+        run: '1'
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: pepolar01
+          B0FieldSource: pepolar01
+      - dir: PA
+        run: '1'
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: pepolar01
+          B0FieldSource: pepolar01
+      - dir: AP
+        run: '2'
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05

@@ -47,7 +47,7 @@ def _synth_shell_kwargs(bval, ndirs):
 
 
 def init_drbuddi_wf(
-    scan_groups,
+    unit,
     t2w_sdc,
     use_cuda=False,
     synth_shell_bval=None,
@@ -63,28 +63,23 @@ def init_drbuddi_wf(
         :simple_form: yes
 
         from qsiprep.workflows.fieldmap import init_drbuddi_wf
-        scan_groups = {
-            'dwi_series': [
-                'data/tinytensor/sub-tinytensors/dwi/sub-tinytensors_dir-AP_dwi.nii.gz'],
-        'dwi_series_pedir': 'j',
-        'fieldmap_info': {
-            'suffix': 'rpe_series',
-            'rpe_series': [
-                'data/tinytensor/sub-tinytensors/dwi/sub-tinytensors_dir-PA_dwi.nii.gz'],
-            'epi': [
-                'data/tinytensor/sub-tinytensors/fmap/sub-tinytensors_dir-AP_epi.nii.gz',
-                'data/tinytensor/sub-tinytensors/fmap/sub-tinytensors_dir-PA_epi.nii.gz']},
-        'concatenated_bids_name': 'sub-tinytensors'}
-
-
+        from qsiprep.tests.preproc_factory import make_preproc_unit
+        from qsiprep.grouping.models import CorrectionMethod
+        ap = 'data/tinytensor/sub-tinytensors/dwi/sub-tinytensors_dir-AP_dwi.nii.gz'
+        pa = 'data/tinytensor/sub-tinytensors/dwi/sub-tinytensors_dir-PA_dwi.nii.gz'
         wf = init_drbuddi_wf(
-            scan_groups=scan_groups
+            make_preproc_unit(
+                [ap, pa],
+                method=CorrectionMethod.PEPOLAR,
+                pe_dirs={ap: 'j', pa: 'j-'},
+            ),
+            t2w_sdc=False,
         )
 
     Parameters
     ----------
-    scan_groups : dict of distortion groupings
-        Inputs configuration for distortion correction
+    unit : :class:`~qsiprep.grouping.adapters.PreprocUnit`
+        The reverse-PE DWI series (and any epi fieldmaps) to correct
     use_cuda : :obj:`bool`
         Run ``DRBUDDI_cuda`` instead of ``DRBUDDI``. The GPU must be exposed to
         the container. Results differ from the CPU build, so this is not purely
@@ -163,34 +158,38 @@ def init_drbuddi_wf(
         name='outputnode',
     )
 
-    fieldmap_info = scan_groups['fieldmap_info']
-    if fieldmap_info['suffix'] not in ('epi', 'rpe_series', 'dwi'):
-        raise Exception('DRBUDDI workflow requires epi, rpe_series or dwi fieldmaps')
+    if not unit.is_pepolar:
+        raise Exception('DRBUDDI workflow requires a PEPOLAR fieldmap')
+
+    # The interfaces still discriminate on this legacy string (retired in the
+    # native-plan pass): reverse-PE *series* vs a dedicated epi b=0.
+    fieldmap_type = 'rpe_series' if unit.has_bidirectional_dwi else 'epi'
+    epi_fmaps = list(unit.minus_files) if unit.has_bidirectional_dwi else list(unit.extra_b0)
 
     workflow.__desc__ = generate_drbuddi_boilerplate(
-        fieldmap_type=fieldmap_info['suffix'],
+        fieldmap_type=fieldmap_type,
         t2w_sdc=t2w_sdc,
         with_topup='topup' in config.workflow.pepolar_method.lower(),
     )
 
-    outputnode.inputs.method = (
-        f'PEB/PEPOLAR (phase-encoding based / PE-POLARity): {fieldmap_info["suffix"]}'
-    )
+    outputnode.inputs.method = f'PEB/PEPOLAR (phase-encoding based / PE-POLARity): {fieldmap_type}'
 
     gather_drbuddi_inputs = pe.Node(
         GatherDRBUDDIInputs(
-            dwi_series_pedir=scan_groups['dwi_series_pedir'],
-            epi_fmaps=fieldmap_info[fieldmap_info['suffix']],
+            dwi_series_pedir=unit.pe_dir,
+            epi_fmaps=epi_fmaps,
             b0_threshold=config.workflow.b0_threshold,
             raw_image_sdc=True,
-            fieldmap_type=fieldmap_info['suffix'],
+            fieldmap_type=fieldmap_type,
+            # Model-derived metadata so the up/down blip split skips sidecar reads.
+            sidecars=unit.sidecar_overrides(),
         ),
         name='gather_drbuddi_inputs',
     )
 
     drbuddi = pe.Node(
         DRBUDDI(
-            fieldmap_type=fieldmap_info['suffix'],
+            fieldmap_type=fieldmap_type,
             num_threads=config.nipype.omp_nthreads,
             sloppy=config.execution.sloppy,
             **sloppy_epi_working_res(),
@@ -208,7 +207,7 @@ def init_drbuddi_wf(
     )
 
     aggregate_drbuddi = pe.Node(
-        DRBUDDIAggregateOutputs(fieldmap_type=fieldmap_info['suffix']), name='aggregate_drbuddi'
+        DRBUDDIAggregateOutputs(fieldmap_type=fieldmap_type), name='aggregate_drbuddi'
     )
 
     workflow.connect([

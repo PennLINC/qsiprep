@@ -1,0 +1,43 @@
+# Two sessions, each a curated PEPOLAR pair with its own B0FieldIdentifier,
+# both sharing the curated MultipartID 'acq-combined'. Expected: the reused
+# MultipartID scopes per session - two outputs (sub-01_ses-1_acq-combined,
+# sub-01_ses-2_acq-combined), never one session-less merge.
+'01':
+  - session: '1'
+    anat:
+      - suffix: T1w
+    dwi:
+      - dir: AP
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: dwi_b0_field_ses1
+          B0FieldSource: dwi_b0_field_ses1
+          MultipartID: acq-combined
+      - dir: PA
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: dwi_b0_field_ses1
+          B0FieldSource: dwi_b0_field_ses1
+          MultipartID: acq-combined
+  - session: '2'
+    dwi:
+      - dir: AP
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j-'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: dwi_b0_field_ses2
+          B0FieldSource: dwi_b0_field_ses2
+          MultipartID: acq-combined
+      - dir: PA
+        suffix: dwi
+        metadata:
+          PhaseEncodingDirection: 'j'
+          TotalReadoutTime: 0.05
+          B0FieldIdentifier: dwi_b0_field_ses2
+          B0FieldSource: dwi_b0_field_ses2
+          MultipartID: acq-combined

@@ -100,6 +100,10 @@ scratch/
 notebooks/*
 !notebooks/*.ipynb
 
+# The grouping tutorial is committed as a MyST .md notebook; ipynb copies
+# converted with jupytext for interactive use stay local.
+docs/notebooks/*.ipynb
+
 # pixi environments
 .pixi/*
 !.pixi/config.toml

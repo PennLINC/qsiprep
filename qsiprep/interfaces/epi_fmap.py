@@ -41,17 +41,22 @@ def _merge_metadata(metadatas):
     return merged_metadata
 
 
-def read_nifti_sidecar(bids_file):
+def read_nifti_sidecar(bids_file, sidecars=None):
     """Read the distortion-relevant metadata that applies to a BIDS file.
 
-    Metadata is resolved with the BIDS inheritance principle, so sidecars in the
-    dataset root, subject, and session directories are merged in along with any
-    sidecar sitting beside ``bids_file`` itself.
+    When ``sidecars`` supplies an entry for ``bids_file`` (the grouping model
+    already read every sidecar once), it is used directly and the disk is not
+    touched. Otherwise metadata is resolved with the BIDS inheritance principle,
+    so sidecars in the dataset root, subject, and session directories are merged
+    in along with any sidecar sitting beside ``bids_file`` itself.
 
     Parameters
     ----------
     bids_file : :obj:`str`
         Path to a file in a BIDS dataset.
+    sidecars : :obj:`dict`, optional
+        Mapping of file path to pre-read metadata (``PhaseEncodingDirection`` /
+        ``TotalReadoutTime`` / ``SliceTiming``), used in preference to disk.
 
     Returns
     -------
@@ -65,6 +70,14 @@ def read_nifti_sidecar(bids_file):
         If no sidecar applies to ``bids_file``, or if the metadata does not
         include a phase encoding direction.
     """
+    if sidecars and bids_file in sidecars and sidecars[bids_file].get('PhaseEncodingDirection'):
+        spec = sidecars[bids_file]
+        return {
+            'PhaseEncodingDirection': spec['PhaseEncodingDirection'],
+            'SliceTiming': spec.get('SliceTiming'),
+            'TotalReadoutTime': spec.get('TotalReadoutTime'),
+        }
+
     metadata = load_sidecar(bids_file)
     if not metadata:
         raise ValueError(f'No metadata found for {bids_file}')
@@ -155,13 +168,13 @@ def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
     return concatenated_images, b0_indices, original_files
 
 
-def get_distortion_grouping(origin_file_list):
+def get_distortion_grouping(origin_file_list, sidecars=None):
     """Discover which distortion groups are present, then assign each volume to a group."""
     unique_files = sorted(set(origin_file_list))
     unique_acqps = []
     line_lookup = {}
     for unique_dwi in unique_files:
-        spec = read_nifti_sidecar(unique_dwi)
+        spec = read_nifti_sidecar(unique_dwi, sidecars)
         spec_line = acqp_lines[spec['PhaseEncodingDirection']]
         acqp_line = spec_line % spec['TotalReadoutTime']
         if acqp_line not in unique_acqps:
@@ -172,8 +185,8 @@ def get_distortion_grouping(origin_file_list):
     return unique_acqps, group_numbers
 
 
-def eddy_inputs_from_dwi_files(origin_file_list, eddy_prefix):
-    unique_acqps, group_numbers = get_distortion_grouping(origin_file_list)
+def eddy_inputs_from_dwi_files(origin_file_list, eddy_prefix, sidecars=None):
+    unique_acqps, group_numbers = get_distortion_grouping(origin_file_list, sidecars)
 
     # Create the acqp file
     acqp_file = eddy_prefix + 'acqp.txt'
@@ -198,6 +211,7 @@ def get_best_b0_topup_inputs_from(
     max_per_spec=3,
     topup_requested=False,
     raw_image_sdc=True,
+    sidecars=None,
 ):
     """Create a datain spec and a slspec from a concatenated dwi series.
 
@@ -258,7 +272,7 @@ def get_best_b0_topup_inputs_from(
     spec_lookup = {}
     slicetime_lookup = {}
     for unique_bids_file in unique_bids_files:
-        spec = read_nifti_sidecar(unique_bids_file)
+        spec = read_nifti_sidecar(unique_bids_file, sidecars)
         spec_line = acqp_lines[spec['PhaseEncodingDirection']]
         spec_lookup[unique_bids_file] = spec_line % spec['TotalReadoutTime']
         slicetime_lookup[unique_bids_file] = spec['SliceTiming']

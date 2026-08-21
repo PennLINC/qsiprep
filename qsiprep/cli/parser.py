@@ -434,12 +434,14 @@ def _build_parser(**kwargs):
         action='store',
         nargs='+',
         default=[],
-        choices=['fieldmaps', 't2w', 'phase'],
+        choices=['fieldmaps', 't2w', 'phase', 'sdc'],
         help=(
             'Ignore selected aspects of the input dataset to disable corresponding '
             'parts of the workflow (a space delimited list). '
-            '"fieldmaps" will completely disable susceptibility distortion correction, '
-            'whether using field maps or reverse phase-encoded dMRI runs.'
+            '"fieldmaps" skips the fmap/ directory, but reverse phase-encoded dMRI '
+            'runs still drive susceptibility distortion correction. "sdc" disables '
+            'susceptibility distortion correction entirely (field maps, reverse-PE '
+            'runs, and fieldmap-less methods all off).'
         ),
     )
     g_conf.add_argument(
@@ -612,14 +614,14 @@ def _build_parser(**kwargs):
         '--distortion-group-merge',
         action='store',
         choices=['concat', 'average', 'none'],
-        default='none',
+        default='concat',
         help="""\
-How to combine images across distorted groups.
- - concat: append images in the 4th dimension
+How to combine the corrected results of an output's correction units.
+ - concat: Default. Append images in the 4th dimension
  - average: if a whole sequence was duplicated in both PE
             directions, average the corrected images of the same
             q-space coordinate
- - none: Default. Keep distorted groups separate
+ - none: keep each correction unit as its own output
 """,
     )
     g_conf.add_argument(
