@@ -64,9 +64,7 @@ def init_intramodal_template_wf(
     omp_nthreads = config.nipype.omp_nthreads
     workflow = Workflow(name=name)
     workflow.__desc__ = (
-        'An unbiased DWI reference image was constructed by coregistering all b=0 volumes across '
-        'runs and sessions to each other, allowing each run to be registered to the same AC-PC '
-        'reference image. '
+        'An unbiased template was constructed from the b=0 reference of each DWI run. '
     )
 
     input_names = [name.replace('-', '_') + '_b0_template' for name in inputs_list]
@@ -136,8 +134,8 @@ def init_intramodal_template_wf(
     linear_only = transform in ('Rigid', 'Affine')
     if linear_only:
         workflow.__desc__ += (
-            f'The unbiased b=0 template was constructed over {num_iterations} iterations '
-            f'of {transform} registrations.'
+            f'These were iteratively aligned to the evolving template over {num_iterations} '
+            f'iterations of {transform} registrations. '
         )
 
         # initialize_com because sessions can differ by centimetres of table
@@ -180,8 +178,8 @@ def init_intramodal_template_wf(
         template_node, template_field = linear_template_wf, 'outputnode.final_template'
     else:
         workflow.__desc__ += (
-            'The unbiased b=0 template was constructed using '
-            f'antsMultivariateTemplateConstruction2.sh, using {transform} transforms.'
+            'These were aligned to the template using antsMultivariateTemplateConstruction2.sh '
+            f'with {transform} transforms. '
         )
         runtime_opts = {'num_cores': 1, 'parallel_control': 0}
         if omp_nthreads > 1:
@@ -204,6 +202,11 @@ def init_intramodal_template_wf(
         ])  # fmt:skip
 
         template_node, template_field = ants_mvtc2, 'templates'
+
+    workflow.__desc__ += (
+        'This template was coregistered to the anatomical reference a single time, and every DWI '
+        'run inherited that shared template-to-anatomical transform. '
+    )
 
     # calculate dwi registration to T1w
     b0_coreg_wf = init_b0_to_anat_registration_wf(
