@@ -12,7 +12,7 @@ import os
 import nibabel as nb
 import numpy as np
 import pandas as pd
-from nilearn.image import iter_img, load_img, threshold_img
+from nilearn.image import crop_img, iter_img, load_img, threshold_img
 from nipype import logging
 from nipype.interfaces.base import isdefined, traits
 from nipype.interfaces.mixins import reporting
@@ -121,7 +121,10 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
             contour_nii = load_img(self.inputs.mask)
         else:
             mask_nii = threshold_img(denoised_lowb_nii, 50)
-        cuts = cuts_from_bbox(contour_nii or mask_nii, cuts=self._n_cuts)
+
+        ref_nii = contour_nii or mask_nii
+        cuts = cuts_from_bbox(ref_nii, cuts=self._n_cuts)
+        _, crop_offset = crop_img(ref_nii, return_offset=True)
 
         # What image should be contoured?
         if field_nii is None:
@@ -144,6 +147,7 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
                 'moving-image',
                 estimate_brightness=True,
                 cuts=cuts,
+                crop_offset=crop_offset,
                 label='Raw Image',
                 lowb_contour=lowb_field_nii,
                 highb_contour=highb_field_nii,
@@ -155,6 +159,7 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
                 'fixed-image',
                 estimate_brightness=True,
                 cuts=cuts,
+                crop_offset=crop_offset,
                 label='Denoised',
                 lowb_contour=lowb_field_nii,
                 highb_contour=highb_field_nii,

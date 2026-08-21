@@ -601,7 +601,10 @@ class Gibbs(SeriesPreprocReport, TORTOISECommandLine):
             contour_nii = nim.load_img(self.inputs.mask)
         else:
             mask_nii = nim.threshold_img(denoised_lowb_nii, 50)
-        cuts = cuts_from_bbox(contour_nii or mask_nii, cuts=self._n_cuts)
+
+        ref_nii = contour_nii or mask_nii
+        cuts = cuts_from_bbox(ref_nii, cuts=self._n_cuts)
+        _, crop_offset = nim.crop_img(ref_nii, return_offset=True)
 
         diff_lowb_nii = nb.Nifti1Image(
             orig_lowb_nii.get_fdata() - denoised_lowb_nii.get_fdata(),
@@ -620,6 +623,7 @@ class Gibbs(SeriesPreprocReport, TORTOISECommandLine):
                 'moving-image',
                 estimate_brightness=True,
                 cuts=cuts,
+                crop_offset=crop_offset,
                 label='De-Gibbs',
                 lowb_contour=None,
                 highb_contour=None,
@@ -631,6 +635,7 @@ class Gibbs(SeriesPreprocReport, TORTOISECommandLine):
                 'fixed-image',
                 estimate_brightness=True,
                 cuts=cuts,
+                crop_offset=crop_offset,
                 label='Estimated Ringing',
                 lowb_contour=None,
                 highb_contour=None,
