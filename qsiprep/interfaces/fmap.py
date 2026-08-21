@@ -994,6 +994,8 @@ class PEPOLARReport(SimpleInterface):
         b0_up_corrected_img = nb.load(self.inputs.b0_up_corrected_image)
         b0_down_corrected_img = nb.load(self.inputs.b0_down_corrected_image)
         cuts = cuts_from_bbox(seg_img, self._n_cuts)
+        _, crop_offset = image.crop_img(seg_img, return_offset=True)
+
         b0_sdc_svg = op.join(runtime.cwd, 'b0_blipupdown_sdc.svg')
         compose_view(
             plot_pepolar(
@@ -1003,6 +1005,7 @@ class PEPOLARReport(SimpleInterface):
                 'moving-image',
                 estimate_brightness=True,
                 cuts=cuts,
+                crop_offset=crop_offset,
                 label='Original',
                 upper_label_suffix=': Blip Up',
                 lower_label_suffix=': Blip Down',
@@ -1015,6 +1018,7 @@ class PEPOLARReport(SimpleInterface):
                 'fixed-image',
                 estimate_brightness=True,
                 cuts=cuts,
+                crop_offset=crop_offset,
                 label='Corrected',
                 upper_label_suffix=': Blip Up',
                 lower_label_suffix=': Blip Down',
@@ -1081,6 +1085,7 @@ def plot_pepolar(
     blip_down_plot_params=None,
     order=('z', 'x', 'y'),
     cuts=None,
+    crop_offset=crop_offset,
     estimate_brightness=False,
     label=None,
     blip_down_contour=None,
@@ -1111,7 +1116,9 @@ def plot_pepolar(
             blip_up_img.get_fdata(dtype='float32').reshape(-1), plot_params
         )
 
-    seg_contour_img = image.crop_img(seg_contour_img)
+    seg_contour_img = (
+        seg_contour_img if crop_offset is None else seg_contour_img.slicer[crop_offset]
+    )
     zeros_bg_img = image.new_img_like(
         seg_contour_img, np.zeros(seg_contour_img.shape), copy_header=True
     )
