@@ -334,7 +334,7 @@ def init_b0_hmc_wf(
     prioritize_omp=False,
     use_masks=False,
     initialize_com=False,
-    num_iters=None,
+    num_iters=2,
     settings='shoreline',
 ) -> Workflow:
     """Align a set of images, optionally building an unbiased template from them.
@@ -347,9 +347,10 @@ def init_b0_hmc_wf(
     actually fires (1e-06 rather than 1e-08). Measured on 0.94 mm T1w against the
     merge template: 16x faster, reaching an identical metric value to five
     decimal places. See test_template_registration_settings.py.
+
+    TODO: Rename to init_unbiased_alignment_wf.
+    Used in three places: intramodal template, anatomical merge, dwi hmc.
     """
-    if num_iters is None:
-        num_iters = 2
     if align_to is None:
         align_to = config.workflow.b0_motion_corr_to
     if transform is None:
@@ -361,9 +362,10 @@ def init_b0_hmc_wf(
     if align_to == 'iterative' and num_iters < 2:
         raise ValueError('Must specify a positive number of iterations')
 
-    alignment_wf = Workflow(name=name)
+    workflow = Workflow(name=name)
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=['b0_images', 'template_mask']), name='inputnode'
+        niu.IdentityInterface(fields=['b0_images', 'template_mask']),
+        name='inputnode',
     )
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -373,7 +375,7 @@ def init_b0_hmc_wf(
                 'iteration_templates',
                 'motion_params',
                 'aligned_images',
-            ]
+            ],
         ),
         name='outputnode',
     )
@@ -387,13 +389,14 @@ def init_b0_hmc_wf(
             f'of {config.workflow.hmc_model} registrations. '
         )
         initial_template = pe.Node(
-            ants.AverageImages(normalize=True, dimension=3), name='initial_template'
+            ants.AverageImages(normalize=True, dimension=3),
+            name='initial_template',
         )
-        alignment_wf.connect(inputnode, 'b0_images', initial_template, 'images')  # fmt:skip
+        workflow.connect([(inputnode, initial_template, [('b0_images', 'images')])])
+
         # Store the registration targets
         iter_templates = pe.Node(niu.Merge(num_iters), name='iteration_templates')
-        alignment_wf.connect(initial_template, 'output_average_image',
-                             iter_templates, 'in1')  # fmt:skip
+        workflow.connect([(initial_template, iter_templates, [('output_average_image', 'in1')])])
 
         initial_reg = linear_alignment_workflow(
             iternum=0,
@@ -402,13 +405,17 @@ def init_b0_hmc_wf(
             initialize_com=initialize_com,
             settings=settings,
         )
-        if use_masks:
-            alignment_wf.connect(inputnode, 'template_mask',
-                                 initial_reg, 'inputnode.template_mask')  # fmt:skip
-        alignment_wf.connect(initial_template, 'output_average_image',
-                             initial_reg, 'inputnode.template_image')  # fmt:skip
-        alignment_wf.connect(inputnode, 'b0_images', initial_reg,
-                             'inputnode.image_paths')  # fmt:skip
+        workflow.connect([
+            (inputnode, initial_reg, [
+                ('b0_images', 'inputnode.image_paths'),
+                # only used if use_masks
+                ('template_mask', 'inputnode.template_mask'),
+            ]),
+            (initial_template, initial_reg, [
+                ('output_average_image', 'inputnode.template_image'),
+            ]),
+        ])  # fmt:skip
+
         reg_iters = [initial_reg]
         for iternum in range(1, num_iters):
             reg_iters.append(
@@ -420,26 +427,31 @@ def init_b0_hmc_wf(
                     settings=settings,
                 )
             )
-            if use_masks:
-                alignment_wf.connect(inputnode, 'template_mask',
-                                     reg_iters[-1], 'inputnode.template_mask')  # fmt:skip
-            alignment_wf.connect(reg_iters[-2], 'outputnode.updated_template',
-                                 reg_iters[-1], 'inputnode.template_image')  # fmt:skip
-            alignment_wf.connect(inputnode, 'b0_images', reg_iters[-1],
-                                 'inputnode.image_paths')  # fmt:skip
-            alignment_wf.connect(reg_iters[-1], 'outputnode.updated_template',
-                                 iter_templates, 'in%d' % (iternum + 1))  # fmt:skip
+            workflow.connect([
+                (inputnode, reg_iters[-1], [
+                    ('b0_images', 'inputnode.image_paths'),
+                    # only used if use_masks
+                    ('template_mask', 'inputnode.template_mask'),
+                ]),
+                (reg_iters[-2], reg_iters[-1], [
+                    ('outputnode.updated_template', 'inputnode.template_image'),
+                ]),
+                (reg_iters[-1], iter_templates, [
+                    ('outputnode.updated_template', f'in{iternum + 1}'),
+                ]),
+            ])  # fmt:skip
 
         # Attach to outputs
         # The last iteration aligned to the output from the second-to-last
-        alignment_wf.connect(reg_iters[-2], 'outputnode.updated_template',
-                             outputnode, 'final_template')  # fmt:skip
-        alignment_wf.connect(reg_iters[-1], 'outputnode.affine_transforms',
-                             outputnode, 'forward_transforms')  # fmt:skip
-        alignment_wf.connect(reg_iters[-1], 'outputnode.registered_image_paths',
-                             outputnode, 'aligned_images')  # fmt:skip
-        alignment_wf.connect(iter_templates, 'out', outputnode,
-                             'iteration_templates')  # fmt:skip
+        workflow.connect([
+            (reg_iters[-2], outputnode, [('outputnode.updated_template', 'final_template')]),
+            (reg_iters[-1], outputnode, [
+                ('outputnode.affine_transforms', 'forward_transforms'),
+                ('outputnode.registered_image_paths', 'aligned_images'),
+            ]),
+            (iter_templates, outputnode, [('out', 'iteration_templates')]),
+        ])  # fmt:skip
+
     elif align_to == 'first':
         desc += (
             'Each b=0 image was registered to the first b=0 image using '
@@ -452,22 +464,24 @@ def init_b0_hmc_wf(
             initialize_com=initialize_com,
             settings=settings,
         )
-        if use_masks:
-            alignment_wf.connect(inputnode, 'template_mask',
-                                 reg_to_first, 'inputnode.template_mask')  # fmt:skip
-
-        alignment_wf.connect([
+        workflow.connect([
             (inputnode, reg_to_first, [
                 (('b0_images', first_image), 'inputnode.template_image'),
-                ('b0_images', 'inputnode.image_paths')]),
+                ('b0_images', 'inputnode.image_paths'),
+                # only used if use_masks
+                ('template_mask', 'inputnode.template_mask'),
+            ]),
             (reg_to_first, outputnode, [
                 ('averaged_images.output_average_image', 'final_template'),
                 ('outputnode.affine_transforms', 'forward_transforms'),
-                ('outputnode.registered_image_paths', 'aligned_images')])
+                ('outputnode.registered_image_paths', 'aligned_images'),
+            ]),
         ])  # fmt:skip
+
     if boilerplate:
-        alignment_wf.__desc__ = desc
-    return alignment_wf
+        workflow.__desc__ = desc
+
+    return workflow
 
 
 def first_image(image_list):

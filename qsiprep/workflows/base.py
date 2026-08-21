@@ -418,25 +418,34 @@ to workflows in *QSIPrep*'s documentation]\
         else:
             make_intramodal_template = True
 
-    anat_source_file = fix_multi_source_name(
-        subject_data[info_modality],
-        include_session=config.workflow.subject_anatomical_reference == 'sessionwise',
-        anatomical_contrast=config.workflow.anat_modality,
-    )
-    intramodal_template_wf = init_intramodal_template_wf(
-        t1w_source_file=anat_source_file,
-        inputs_list=sorted(outputs_to_files.keys()),
-        transform=config.workflow.intramodal_template_transform,
-        num_iterations=config.workflow.intramodal_template_iters or 2,
-        name='intramodal_template_wf',
-    )
-    # TemplateQC and the per-group orig->intramodal transform export exist only
-    # for linear templates: mvtc2 exposes no per-input aligned images, and its
-    # per-group transform is an [affine, warp] pair that does not fit a
-    # single-file .mat sink.
-    intramodal_linear = config.workflow.intramodal_template_transform in ('Rigid', 'Affine')
-
     if make_intramodal_template:
+        anat_source_file = fix_multi_source_name(
+            subject_data[info_modality],
+            include_session=config.workflow.subject_anatomical_reference == 'sessionwise',
+            anatomical_contrast=config.workflow.anat_modality,
+        )
+
+        intramodal_template_wf = init_intramodal_template_wf(
+            inputs_list=sorted(outputs_to_files.keys()),
+            t1w_source_file=anat_source_file,
+            transform=config.workflow.intramodal_template_transform,
+            num_iterations=config.workflow.intramodal_template_iters or 2,
+            name='intramodal_template_wf',
+        )
+        workflow.connect([
+            (anat_preproc_wf, intramodal_template_wf, [
+                ('outputnode.t1_preproc', 'inputnode.t1_preproc'),
+                ('outputnode.t1_brain', 'inputnode.t1_brain'),
+                ('outputnode.t1_mask', 'inputnode.t1_mask'),
+                ('outputnode.t1_seg', 'inputnode.t1_seg'),
+                ('outputnode.t1_aseg', 'inputnode.t1_aseg'),
+                ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
+                ('outputnode.t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
+                ('outputnode.t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
+                ('outputnode.dwi_sampling_grid', 'inputnode.dwi_sampling_grid'),
+            ]),
+        ])  # fmt:skip
+
         ds_intramodal_template = pe.Node(
             DerivativesDataSink(
                 source_file=anat_source_file,
@@ -451,6 +460,15 @@ to workflows in *QSIPrep*'s documentation]\
             name='ds_intramodal_template',
             run_without_submitting=True,
         )
+        workflow.connect([
+            (intramodal_template_wf, ds_intramodal_template, [
+                # The ACPC-resampled template, NOT outputnode.intramodal_template:
+                # that one is in the template's own midpoint space, and tagging
+                # it space-ACPC would mislabel it.
+                ('outputnode.intramodal_template_acpc', 'in_file'),
+            ]),
+        ])  # fmt:skip
+
         # Without this the intramodal space is a dead end: nothing can be mapped
         # into or out of it after the fact.
         ds_intramodal_to_acpc = pe.Node(
@@ -466,6 +484,17 @@ to workflows in *QSIPrep*'s documentation]\
             name='ds_intramodal_to_acpc',
             run_without_submitting=True,
         )
+        workflow.connect([
+            (intramodal_template_wf, ds_intramodal_to_acpc, [
+                ('outputnode.intramodal_template_to_t1_affine', 'in_file'),
+            ]),
+        ])  # fmt:skip
+
+        # TemplateQC and the per-group orig->intramodal transform export exist only
+        # for linear templates: mvtc2 exposes no per-input aligned images, and its
+        # per-group transform is an [affine, warp] pair that does not fit a
+        # single-file .mat sink.
+        intramodal_linear = config.workflow.intramodal_template_transform in ('Rigid', 'Affine')
         if intramodal_linear:
             ds_template_qc = pe.Node(
                 DerivativesDataSink(
@@ -479,6 +508,12 @@ to workflows in *QSIPrep*'s documentation]\
                 name='ds_template_qc',
                 run_without_submitting=True,
             )
+            workflow.connect([
+                (intramodal_template_wf, ds_template_qc, [
+                    ('outputnode.template_qc_file', 'in_file'),
+                ]),
+            ])  # fmt:skip
+
             ds_template_agreement = pe.Node(
                 DerivativesDataSink(
                     source_file=anat_source_file,
@@ -494,43 +529,10 @@ to workflows in *QSIPrep*'s documentation]\
                 run_without_submitting=True,
             )
             workflow.connect([
-                (intramodal_template_wf, ds_template_qc, [
-                    ('outputnode.template_qc_file', 'in_file'),
-                ]),
                 (intramodal_template_wf, ds_template_agreement, [
                     ('outputnode.template_agreement_map', 'in_file'),
                 ]),
             ])  # fmt:skip
-
-        workflow.connect([
-            (intramodal_template_wf, ds_intramodal_to_acpc, [
-                ('outputnode.intramodal_template_to_t1_affine', 'in_file'),
-            ]),
-        ])  # fmt:skip
-
-        workflow.connect([
-            (intramodal_template_wf, ds_intramodal_template, [
-                # The ACPC-resampled template, NOT outputnode.intramodal_template:
-                # that one is in the template's own midpoint space, and tagging
-                # it space-ACPC would mislabel it.
-                ('outputnode.intramodal_template_acpc', 'in_file'),
-            ]),
-        ])  # fmt:skip
-
-    if make_intramodal_template:
-        workflow.connect([
-            (anat_preproc_wf, intramodal_template_wf, [
-                ('outputnode.t1_preproc', 'inputnode.t1_preproc'),
-                ('outputnode.t1_brain', 'inputnode.t1_brain'),
-                ('outputnode.t1_mask', 'inputnode.t1_mask'),
-                ('outputnode.t1_seg', 'inputnode.t1_seg'),
-                ('outputnode.t1_aseg', 'inputnode.t1_aseg'),
-                ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
-                ('outputnode.t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
-                ('outputnode.t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-                ('outputnode.dwi_sampling_grid', 'inputnode.dwi_sampling_grid'),
-            ]),
-        ])  # fmt:skip
 
     # create a processing pipeline for the dwis in each session
     for output_fname, dwi_info in outputs_to_files.items():
@@ -600,28 +602,6 @@ to workflows in *QSIPrep*'s documentation]\
         if make_intramodal_template:
             input_name = f'inputnode.{output_wfname}_b0_template'
             output_name = f'outputnode.{output_wfname}_transform'
-            if intramodal_linear:
-                # Per-group hop into the template space. Paired with
-                # from-intramodal_to-ACPC above, this closes the round trip:
-                # BIDS b=0 -> intramodal -> ACPC -> MNI, and back.
-                ds_orig_to_intramodal = pe.Node(
-                    DerivativesDataSink(
-                        source_file=source_file,
-                        base_directory=config.execution.output_dir,
-                        datatype='anat',
-                        mode='image',
-                        extension='.mat',
-                        **{'from': 'orig', 'to': 'intramodal'},
-                        suffix='xfm',
-                    ),
-                    name=f'ds_orig_to_intramodal_{output_wfname}',
-                    run_without_submitting=True,
-                )
-                workflow.connect([
-                    (intramodal_template_wf, ds_orig_to_intramodal, [
-                        (output_name, 'in_file'),
-                    ]),
-                ])  # fmt:skip
 
             workflow.connect([
                 (dwi_preproc_wf, intramodal_template_wf, [
@@ -644,6 +624,27 @@ to workflows in *QSIPrep*'s documentation]\
                     ),
                 ]),
             ])  # fmt:skip
+
+            if intramodal_linear:
+                # Per-group hop into the template space. Paired with
+                # from-intramodal_to-ACPC above, this closes the round trip:
+                # BIDS b=0 -> intramodal -> ACPC -> MNI, and back.
+                ds_orig_to_intramodal = pe.Node(
+                    DerivativesDataSink(
+                        source_file=source_file,
+                        base_directory=config.execution.output_dir,
+                        datatype='anat',
+                        mode='image',
+                        extension='.mat',
+                        **{'from': 'orig', 'to': 'intramodal'},
+                        suffix='xfm',
+                    ),
+                    name=f'ds_orig_to_intramodal_{output_wfname}',
+                    run_without_submitting=True,
+                )
+                workflow.connect([
+                    (intramodal_template_wf, ds_orig_to_intramodal, [(output_name, 'in_file')]),
+                ])  # fmt:skip
 
         if merging_distortion_groups:
             image_name = f'inputnode.{output_wfname}_image'
