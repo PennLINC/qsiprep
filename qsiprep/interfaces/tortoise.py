@@ -564,7 +564,11 @@ class _GibbsInputSpec(TORTOISEInputSpec, SeriesPreprocReportInputSpec):
     nsh = traits.Int(argstr='%d', position=4)
     min_w = traits.Int()
     mask = File()
-    num_threads = traits.Int(1, usedefault=True, nohash=True)
+    num_threads = traits.Int(
+        argstr='--ncores %d',
+        nohash=True,
+        desc='number of OMP threads',
+    )
 
 
 class _GibbsOutputSpec(SeriesPreprocReportOutputSpec):
@@ -835,12 +839,12 @@ def generate_diffprep_boilerplate(correction_mode):
     }
     corrects, transform = mode_desc[correction_mode]
     return (
-        '\n\nHead motion correction was performed with DIFFPREP '
-        '[@diffprep], part of the TORTOISE [@tortoisev4] software package, '
-        f'in {correction_mode} mode (correcting {corrects}). DIFFPREP fits a '
+        '\n\nHead motion correction was performed with the TORTOISE [@tortoisev4] software '
+        "package's DIFFPREP module, "
+        f'in "{correction_mode}" mode (correcting {corrects}). DIFFPREP fits a '
         'SHORE/MAPMRI signal model to the data and iteratively registers each '
         f"volume to a model-predicted target using TORTOISE's {transform}. "
-        'The corrected volumes and motion-rotated bmatrix were then passed to '
+        'The corrected volumes and motion-rotated b-matrix were then passed to '
         'the rest of the pipeline.\n\n'
     )
 

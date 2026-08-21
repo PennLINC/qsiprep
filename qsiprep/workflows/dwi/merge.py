@@ -603,6 +603,7 @@ def init_dwi_denoising_wf(
                 Gibbs(
                     kspace_coverage=partial_fourier,
                     phase_encoding_dir=pe_code,
+                    num_threads=omp_nthreads,
                 ),
                 name='degibbser',
                 n_procs=omp_nthreads,
