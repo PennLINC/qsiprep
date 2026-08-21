@@ -1,8 +1,7 @@
 """Visualization utilities."""
 
-import numpy as np
 from lxml import etree
-from nilearn import image, plotting
+from nilearn import plotting
 from niworkflows.viz.utils import SVGNS, extract_svg, robust_set_limits, uuid4
 from svgutils.transform import SVGFigure
 

@@ -1085,7 +1085,7 @@ def plot_pepolar(
     blip_down_plot_params=None,
     order=('z', 'x', 'y'),
     cuts=None,
-    crop_offset=crop_offset,
+    crop_offset=None,
     estimate_brightness=False,
     label=None,
     blip_down_contour=None,
