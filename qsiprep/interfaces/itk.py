@@ -81,7 +81,7 @@ class ACPCReport(SimpleInterface):
         translation_img = nb.load(self.inputs.translation_image)
         rigid_img = nb.load(self.inputs.rigid_image)
         # combine images so crop offset captures both
-        sum_img = nim.math_image('a + b', a=translation_img, b=rigid_img)
+        sum_img = nim.math_img('a + b', a=translation_img, b=rigid_img)
         _, crop_offset = nim.crop_img(sum_img, return_offset=True)
 
         # Call composer
