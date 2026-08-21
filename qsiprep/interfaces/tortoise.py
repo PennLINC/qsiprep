@@ -556,7 +556,11 @@ class _GibbsInputSpec(TORTOISEInputSpec, SeriesPreprocReportInputSpec):
     nsh = traits.Int(argstr='%d', position=4)
     min_w = traits.Int()
     mask = File()
-    num_threads = traits.Int(1, usedefault=True, nohash=True)
+    num_threads = traits.Int(
+        argstr='--ncores %d',
+        nohash=True,
+        desc='number of OMP threads',
+    )
 
 
 class _GibbsOutputSpec(SeriesPreprocReportOutputSpec):
