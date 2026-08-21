@@ -53,6 +53,7 @@ from ...interfaces.freesurfer import (
     PrepareSynthStripGrid,
     SynthSeg,
 )
+from ...interfaces.images import AnatomicalReportlet
 from ...interfaces.itk import AffineToRigid, DisassembleTransform
 from ...interfaces.niworkflows import RobustMNINormalizationRPT
 from ...utils.gpu import gpu_enabled
@@ -78,8 +79,7 @@ def init_anat_preproc_wf(
     t2w_do_biascorr=True,
     name='anat_preproc_wf',
 ):
-    r"""
-    This workflow controls the anatomical preprocessing stages of qsiprep.
+    r"""This workflow controls the anatomical preprocessing stages of qsiprep.
 
     This includes:
 
@@ -93,22 +93,28 @@ def init_anat_preproc_wf(
         :simple_form: yes
 
         from qsiprep.workflows.anatomical import init_anat_preproc_wf
-        wf = init_anat_preproc_wf(num_anat_images=1,
-                                  num_additional_t2ws=0,
-                                  has_rois=False)
+
+        wf = init_anat_preproc_wf(
+            num_anat_images=1,
+            num_additional_t2ws=0,
+            has_rois=False,
+        )
 
     Parameters
     ----------
     num_anat_images : :obj:`int`
         Number of anatomical images available in the chosen modality
-
     num_additional_t2ws : :obj:`int`
         If anat modality is T1w and there are available T2ws that can be
         used by DRBUDDI, how many are there?
-
     has_rois: :obj:`bool`
         Are there lesion ROI files?
-
+    anatomical_template : :obj:`str`
+        Template specification of the form <template>[+<cohort>].
+    do_biascorr : :obj:`bool`, optional
+        Whether to apply N4 bias correction to the T1w(?) or not. Default is True.
+    t2w_do_biascorr : :obj:`bool`, optional
+        Whether to apply N4 bias correction to the T2w or not. Default is True.
 
     Inputs
     ------
@@ -120,7 +126,6 @@ def init_anat_preproc_wf(
         A mask to exclude regions during standardization (as list)
     subjects_dir
         FreeSurfer SUBJECTS_DIR
-
 
     Outputs
     -------
@@ -145,8 +150,9 @@ def init_anat_preproc_wf(
         ANTs-compatible affine-and-warp transform file (inverse)
     t1_resampling_grid
         Image of the preprocessed t1 to be used as the reference output for dwis
-
     """
+    anat_modality = config.workflow.anat_modality
+    dwi_only = anat_modality == 'none'
 
     workflow = Workflow(name=name)
     inputnode = pe.Node(
@@ -179,13 +185,11 @@ def init_anat_preproc_wf(
         name='outputnode',
     )
 
-    dwi_only = config.workflow.anat_modality == 'none'
-
     # XXX: This is a temporary solution until QSIPrep supports flexible output spaces.
     get_template = pe.Node(
         GetTemplate(
             template_spec=anatomical_template,
-            anatomical_contrast=config.workflow.anat_modality,
+            anatomical_contrast=anat_modality,
         ),
         name='get_template_image',
     )
@@ -193,13 +197,13 @@ def init_anat_preproc_wf(
         afni.Calc(expr='a*b', outputtype='NIFTI_GZ'),
         name='mask_template',
     )
-    reorient_brain_to_lps = pe.Node(
+    reorient_tpl_brain_to_lps = pe.Node(
         afni.Resample(orientation='RAI', outputtype='NIFTI_GZ'),
-        name='reorient_brain_to_lps',
+        name='reorient_tpl_brain_to_lps',
     )
-    reorient_mask_to_lps = pe.Node(
+    reorient_tpl_mask_to_lps = pe.Node(
         afni.Resample(orientation='RAI', outputtype='NIFTI_GZ'),
-        name='reorient_mask_to_lps',
+        name='reorient_tpl_mask_to_lps',
     )
 
     # Create the output reference grid_image
@@ -209,9 +213,9 @@ def init_anat_preproc_wf(
             ('template_file', 'in_file_a'),
             ('mask_file', 'in_file_b'),
         ]),
-        (get_template, reorient_mask_to_lps, [('mask_file', 'in_file')]),
-        (mask_template, reorient_brain_to_lps, [('out_file', 'in_file')]),
-        (reorient_brain_to_lps, reference_grid_wf, [('out_file', 'inputnode.template_image')]),
+        (get_template, reorient_tpl_mask_to_lps, [('mask_file', 'in_file')]),
+        (mask_template, reorient_tpl_brain_to_lps, [('out_file', 'in_file')]),
+        (reorient_tpl_brain_to_lps, reference_grid_wf, [('out_file', 'inputnode.template_image')]),
         (reference_grid_wf, outputnode, [('outputnode.grid_image', 'dwi_sampling_grid')]),
     ])  # fmt:skip
 
@@ -220,26 +224,26 @@ def init_anat_preproc_wf(
             'No anatomical scans will be processed! Visual reports will show template masks.'
         )
         workflow.connect([
-            (reorient_brain_to_lps, outputnode, [('out_file', 't1_brain')]),
-            (reorient_mask_to_lps, outputnode, [
+            (reorient_tpl_brain_to_lps, outputnode, [('out_file', 't1_brain')]),
+            (reorient_tpl_mask_to_lps, outputnode, [
                 ('out_file', 't1_mask'),
                 ('out_file', 't1_seg'),
             ]),
         ])  # fmt:skip
 
-        reorient_template_to_lps = pe.Node(
+        reorient_tpl_to_lps = pe.Node(
             afni.Resample(orientation='RAI', outputtype='NIFTI_GZ'),
-            name='reorient_template_to_lps',
+            name='reorient_tpl_to_lps',
         )
         workflow.connect([
-            (get_template, reorient_template_to_lps, [('template_file', 'in_file')]),
-            (reorient_template_to_lps, outputnode, [('out_file', 't1_preproc')]),
+            (get_template, reorient_tpl_to_lps, [('template_file', 'in_file')]),
+            (reorient_tpl_to_lps, outputnode, [('out_file', 't1_preproc')]),
         ])  # fmt:skip
 
         workflow.add_nodes([inputnode])
         return workflow
 
-    contrast = config.workflow.anat_modality[:-1]
+    contrast = anat_modality[:-1]
     desc = """
 
 #### Anatomical data preprocessing
@@ -249,16 +253,18 @@ def init_anat_preproc_wf(
         f"""\
 A total of {num_anat_images} {contrast}-weighted ({contrast}w) images were found within the input
 BIDS dataset.
-All of them were corrected for intensity non-uniformity (INU)
-using `N4BiasFieldCorrection` [@n4, ANTs {ANTS_VERSION}].
 """
         if num_anat_images > 1
         else f"""\
-The {contrast}-weighted ({contrast}w) image was corrected for intensity non-uniformity (INU)
-using `N4BiasFieldCorrection` [@n4, ANTs {ANTS_VERSION}],
-and used as an anatomical reference throughout the workflow.
+The {contrast}-weighted ({contrast}w) image was used as an anatomical reference throughout the
+workflow.
 """
     )
+    if do_biascorr:
+        desc += (
+            'Each image was corrected for intensity non-uniformity (INU) using '
+            f'`N4BiasFieldCorrection` [@n4, ANTs {ANTS_VERSION}].'
+        )
 
     # Ensure there is 1 and only 1 anatomical reference
     anat_reference_wf = init_anat_template_wf(num_images=num_anat_images, do_biascorr=do_biascorr)
@@ -268,7 +274,7 @@ and used as an anatomical reference throughout the workflow.
 
     # Skull strip the anatomical reference
     synthstrip_anat_wf = init_synthstrip_wf(
-        unfatsat=config.workflow.anat_modality == 'T2w',
+        unfatsat=anat_modality == 'T2w',
         name='synthstrip_anat_wf',
     )
 
@@ -278,7 +284,7 @@ and used as an anatomical reference throughout the workflow.
     # Synthstrip is used a lot elsewhere, so make boilerplate for the anatomy-specific
     # version here. TODO: get version number automatically
     workflow.__postdesc__ = f"""\
-Brain extraction was performed on the {config.workflow.anat_modality} image using
+Brain extraction was performed on the {anat_modality} image using
 SynthStrip [@synthstrip] and automated segmentation was
 performed using SynthSeg [@synthseg1; @synthseg2] from
 FreeSurfer version {FS_VERSION}. """
@@ -322,8 +328,8 @@ FreeSurfer version {FS_VERSION}. """
         name='acpc_aseg_to_dseg',
     )
 
-    # What to do about T2w's?
-    if config.workflow.anat_modality == 'T2w':
+    # What to do about T2ws?
+    if anat_modality == 'T2w':
         workflow.connect([
             (synthstrip_anat_wf, rigid_acpc_resample_unfatsat, [
                 ('outputnode.unfatsat', 'input_image'),
@@ -331,7 +337,7 @@ FreeSurfer version {FS_VERSION}. """
             (anat_normalization_wf, rigid_acpc_resample_unfatsat, [
                 ('outputnode.to_template_rigid_transform', 'transforms'),
             ]),
-            (reorient_brain_to_lps, rigid_acpc_resample_unfatsat, [
+            (reorient_tpl_brain_to_lps, rigid_acpc_resample_unfatsat, [
                 ('out_file', 'reference_image'),
             ]),
             (rigid_acpc_resample_unfatsat, outputnode, [('output_image', 't2w_unfatsat')]),
@@ -360,7 +366,7 @@ FreeSurfer version {FS_VERSION}. """
 
     workflow.connect([
         (inputnode, anat_reference_wf, [
-            (config.workflow.anat_modality.lower(), 'inputnode.images'),
+            (anat_modality.lower(), 'inputnode.images'),
         ]),
 
         # Make a single anatomical reference. Pad it.
@@ -396,10 +402,12 @@ FreeSurfer version {FS_VERSION}. """
         (anat_reference_wf, anat_normalization_wf, [
             ('outputnode.bias_corrected', 'inputnode.anatomical_reference'),
         ]),
-        (reorient_brain_to_lps, anat_normalization_wf, [
+        (reorient_tpl_brain_to_lps, anat_normalization_wf, [
             ('out_file', 'inputnode.template_image'),
         ]),
-        (reorient_mask_to_lps, anat_normalization_wf, [('out_file', 'inputnode.template_mask')]),
+        (reorient_tpl_mask_to_lps, anat_normalization_wf, [
+            ('out_file', 'inputnode.template_mask'),
+        ]),
         (anat_normalization_wf, outputnode, [
             ('outputnode.to_template_rigid_transform', 'acpc_transform'),
             ('outputnode.from_template_rigid_transform', 'acpc_inv_transform'),
@@ -416,10 +424,10 @@ FreeSurfer version {FS_VERSION}. """
             ('outputnode.bias_corrected', 'input_image'),
         ]),
         (synthseg_anat_wf, rigid_acpc_resample_aseg, [('outputnode.aparc_image', 'input_image')]),
-        (reorient_brain_to_lps, rigid_acpc_resample_brain, [('out_file', 'reference_image')]),
-        (reorient_brain_to_lps, rigid_acpc_resample_mask, [('out_file', 'reference_image')]),
-        (reorient_brain_to_lps, rigid_acpc_resample_head, [('out_file', 'reference_image')]),
-        (reorient_brain_to_lps, rigid_acpc_resample_aseg, [('out_file', 'reference_image')]),
+        (reorient_tpl_brain_to_lps, rigid_acpc_resample_brain, [('out_file', 'reference_image')]),
+        (reorient_tpl_brain_to_lps, rigid_acpc_resample_mask, [('out_file', 'reference_image')]),
+        (reorient_tpl_brain_to_lps, rigid_acpc_resample_head, [('out_file', 'reference_image')]),
+        (reorient_tpl_brain_to_lps, rigid_acpc_resample_aseg, [('out_file', 'reference_image')]),
         (anat_normalization_wf, rigid_acpc_resample_brain, [
             ('outputnode.to_template_rigid_transform', 'transforms'),
         ]),
@@ -447,12 +455,17 @@ FreeSurfer version {FS_VERSION}. """
             ('t1_preproc', 'in_file'),
         ]),
         (inputnode, anat_reports_wf, [
-            ((config.workflow.anat_modality.lower(), fix_multi_source_name,
+            ((anat_modality.lower(), fix_multi_source_name,
               config.workflow.subject_anatomical_reference == 'sessionwise',
-              config.workflow.anat_modality),
-             'inputnode.source_file')]),
+              anat_modality),
+             'inputnode.source_file'),
+            (anat_modality.lower(), 'inputnode.anat_list'),
+        ]),
         (anat_reference_wf, anat_reports_wf, [
-            ('outputnode.out_report', 'inputnode.t1_conform_report'),
+            ('outputnode.valid_list', 'inputnode.valid_list'),
+        ]),
+        (reorient_tpl_brain_to_lps, anat_reports_wf, [
+            ('out_file', 'inputnode.reference_image'),
         ]),
         (seg_rpt, anat_reports_wf, [('out_report', 'inputnode.seg_report')]),
         (anat_normalization_wf, anat_reports_wf, [
@@ -461,7 +474,8 @@ FreeSurfer version {FS_VERSION}. """
     ])  # fmt:skip
 
     anat_derivatives_wf = init_anat_derivatives_wf(
-        anatomical_template=anatomical_template, has_t2w=num_additional_t2ws > 0
+        anatomical_template=anatomical_template,
+        has_t2w=num_additional_t2ws > 0,
     )
 
     workflow.connect([
@@ -500,7 +514,7 @@ FreeSurfer version {FS_VERSION}. """
 
 def init_t2w_preproc_wf(num_t2ws, do_biascorr=True, name='t2w_preproc_wf'):
     """If T1w is the anatomical contrast, you may also want to process the T2ws for
-    worlflows that can use them (ie DRBUDDI). This"""
+    worlflows that can use them (ie DRBUDDI)."""
     workflow = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(fields=['t2w_images', 't1_brain']),
@@ -671,6 +685,8 @@ def init_anat_template_wf(num_images, do_biascorr=True) -> Workflow:
     ----------
     num_images : int
         Number of anatomical images
+    do_biascorr : bool, optional
+        Whether or not to apply N4 bias correction. Default is True.
 
     Inputs
     ------
@@ -719,10 +735,15 @@ A {contrast}-reference map was computed after registration of
 
     omp_nthreads = config.nipype.omp_nthreads
 
-    # 0. Reorient anatomical image(s) to LPS and resample to common voxel space
+    # 0. Prepare anatomical image(s)
+    # Determine which anatomical images are close enough in resolution to be merged
     template_dimensions = pe.Node(TemplateDimensions(), name='template_dimensions')
+
+    # Conform to LPS and resample to common voxel space
     anat_conform = pe.MapNode(
-        Conform(deoblique_header=True), iterfield='in_file', name='anat_conform'
+        Conform(deoblique_header=True),
+        iterfield='in_file',
+        name='anat_conform',
     )
 
     workflow.connect([
@@ -732,10 +753,7 @@ A {contrast}-reference map was computed after registration of
             ('target_zooms', 'target_zooms'),
             ('target_shape', 'target_shape'),
         ]),
-        (template_dimensions, outputnode, [
-            ('out_report', 'out_report'),
-            ('t1w_valid_list', 'valid_list'),
-        ]),
+        (template_dimensions, outputnode, [('t1w_valid_list', 'valid_list')]),
     ])  # fmt:skip
 
     # N4 fits its field by least squares in the log domain, where near-zero
@@ -1270,6 +1288,8 @@ def init_anat_reports_wf(anatomical_template) -> Workflow:
     """
     Set up a battery of datasinks to store reports in the right location
     """
+    anat_modality = config.workflow.anat_modality
+
     workflow = Workflow(name='anat_reports_wf')
 
     inputnode = pe.Node(
@@ -1280,21 +1300,40 @@ def init_anat_reports_wf(anatomical_template) -> Workflow:
                 'seg_report',
                 't1_2_mni_report',
                 'recon_report',
-            ]
+                'anat_list',
+                'valid_list',
+                'reference_image',
+            ],
         ),
         name='inputnode',
     )
 
-    ds_report_t1_conform = pe.Node(
+    anat_reportlet = pe.Node(
+        AnatomicalReportlet(anat_type=anat_modality),
+        name='anat_reportlet',
+    )
+    workflow.connect([
+        (inputnode, anat_reportlet, [
+            ('anat_list', 'anat_list'),
+            ('valid_list', 'valid_list'),
+            ('reference_image', 'reference_image'),
+        ]),
+    ])  # fmt:skip
+
+    ds_report_anat_conform = pe.Node(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
             datatype='figures',
             desc='conform',
             suffix=config.workflow.anat_modality,
         ),
-        name='ds_report_t1_conform',
+        name='ds_report_anat_conform',
         run_without_submitting=True,
     )
+    workflow.connect([
+        (inputnode, ds_report_anat_conform, [('source_file', 'source_file')]),
+        (anat_reportlet, ds_report_anat_conform, [('out_report', 'in_file')]),
+    ])  # fmt:skip
 
     template_entities = _template_to_report_entities(anatomical_template)
     ds_report_t1_2_mni = pe.Node(
@@ -1319,10 +1358,6 @@ def init_anat_reports_wf(anatomical_template) -> Workflow:
     )
 
     workflow.connect([
-        (inputnode, ds_report_t1_conform, [
-            ('source_file', 'source_file'),
-            ('t1_conform_report', 'in_file'),
-        ]),
         (inputnode, ds_report_t1_seg_mask, [
             ('source_file', 'source_file'),
             ('seg_report', 'in_file'),

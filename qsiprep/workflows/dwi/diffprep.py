@@ -257,6 +257,7 @@ def init_diffprep_hmc_wf(
                 'sdc_method',
                 'slice_quality',
                 'motion_params',
+                'ec_file',
                 'cnr_map',
                 'bvec_files_to_transform',
                 'dwi_files_to_transform',
@@ -467,7 +468,10 @@ def init_diffprep_hmc_wf(
             ('b0_indices', 'b0_indices'),
             ('forward_transforms', 'to_dwi_ref_affines'),
         ]),
-        (motion_params, outputnode, [('spm_motion_file', 'motion_params')]),
+        (motion_params, outputnode, [
+            ('spm_motion_file', 'motion_params'),
+            ('diffprep_ec_file', 'ec_file'),
+        ]),
 
         # Pre-SDC enhancement (report)
         (corrected_node, extract_b0s, [('corrected_dwi_file', 'dwi_series')]),

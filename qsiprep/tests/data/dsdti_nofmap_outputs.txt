@@ -18,6 +18,7 @@ sub-PNC/anat/sub-PNC_space-ACPC_desc-preproc_T1w.json
 sub-PNC/anat/sub-PNC_space-ACPC_desc-preproc_T1w.nii.gz
 sub-PNC/anat/sub-PNC_space-ACPC_dseg.nii.gz
 sub-PNC/dwi
+sub-PNC/dwi/sub-PNC_acq-realistic_desc-confounds_timeseries.json
 sub-PNC/dwi/sub-PNC_acq-realistic_desc-confounds_timeseries.tsv
 sub-PNC/dwi/sub-PNC_acq-realistic_desc-pepolar_qc.tsv
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-brain_mask.nii.gz

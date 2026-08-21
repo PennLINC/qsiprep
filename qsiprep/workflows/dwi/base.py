@@ -482,7 +482,10 @@ def init_dwi_preproc_wf(
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
-    workflow.connect([(confounds_wf, ds_confounds, [('outputnode.confounds_file', 'in_file')])])
+    workflow.connect([(confounds_wf, ds_confounds, [
+        ('outputnode.confounds_file', 'in_file'),
+        ('outputnode.confounds_metadata', 'meta_dict'),
+    ])])  # fmt:skip
 
     # Carpetplot and confounds plot
     conf_plot = pe.Node(DMRISummary(), name='conf_plot', mem_gb=mem_gb['resampled'])
@@ -501,6 +504,7 @@ def init_dwi_preproc_wf(
         (hmc_wf, confounds_wf, [
             ('outputnode.slice_quality', 'inputnode.sliceqc_file'),
             ('outputnode.motion_params', 'inputnode.motion_params'),
+            ('outputnode.ec_file', 'inputnode.ec_file'),
         ]),
         (pre_hmc_wf, confounds_wf, [
             ('outputnode.denoising_confounds', 'inputnode.denoising_confounds'),
