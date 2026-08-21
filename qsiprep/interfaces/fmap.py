@@ -1044,6 +1044,9 @@ class PEPOLARReport(SimpleInterface):
         fa_down_corrected_img = nb.load(self.inputs.down_fa_corrected_image)
         uncorrected_fa = image.math_img('(a+b)/2', a=fa_up_img, b=fa_down_img)
         corrected_fa = image.math_img('(a+b)/2', a=fa_up_corrected_img, b=fa_down_corrected_img)
+
+        _, crop_offset = image.crop_img(uncorrected_fa, return_offset=True)
+
         compose_view(
             plot_fa_reg(
                 corrected_fa,
@@ -1052,6 +1055,7 @@ class PEPOLARReport(SimpleInterface):
                 estimate_brightness=False,
                 label='FA: After',
                 cuts=cuts,
+                crop_offset=crop_offset,
             ),
             plot_fa_reg(
                 uncorrected_fa,
@@ -1060,6 +1064,7 @@ class PEPOLARReport(SimpleInterface):
                 estimate_brightness=False,
                 label='FA: Before',
                 cuts=cuts,
+                crop_offset=crop_offset,
             ),
             out_file=fa_sdc_svg,
         )
@@ -1179,6 +1184,7 @@ def plot_fa_reg(
     blip_down_plot_params=None,
     order=('z', 'x', 'y'),
     cuts=None,
+    crop_offset=None,
     estimate_brightness=False,
     label=None,
     compress='auto',
@@ -1197,7 +1203,9 @@ def plot_fa_reg(
         raise NotImplementedError
 
     out_files = []
-    seg_contour_img = image.crop_img(seg_contour_img)
+    seg_contour_img = (
+        seg_contour_img if crop_offset is None else seg_contour_img.slicer[crop_offset]
+    )
     zeros_bg_img = image.new_img_like(
         seg_contour_img, np.zeros(seg_contour_img.shape), copy_header=True
     )
