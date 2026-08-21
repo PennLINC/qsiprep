@@ -79,7 +79,7 @@ class ACPCReport(SimpleInterface):
     def _run_interface(self, runtime):
         out_report = runtime.cwd + '/ACPCReport.svg'
         translation_img = nb.load(self.inputs.translation_image)
-        rigid_img = nb.load(self.inputs.rigid_img)
+        rigid_img = nb.load(self.inputs.rigid_image)
         # combine images so crop offset captures both
         sum_img = nim.math_image('a + b', a=translation_img, b=rigid_img)
         _, crop_offset = nim.crop_img(sum_img, return_offset=True)
