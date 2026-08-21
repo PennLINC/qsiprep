@@ -113,7 +113,6 @@ def plot_acpc(
     div_id,
     plot_params=None,
     order=('z', 'x', 'y'),
-    cuts=None,
     crop_offset=None,
     estimate_brightness=False,
     label=None,
