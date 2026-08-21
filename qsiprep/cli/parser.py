@@ -671,10 +671,15 @@ How to combine the corrected results of an output's correction units.
         action='store',
         default=0,
         type=int,
-        help='Number of iterations for finding the midpoint image '
-        'from the b0 templates from all groups. Has no effect if there '
-        'is only one group. If 0, all b0 templates are directly registered '
-        'to the t1w image.',
+        help=(
+            'Number of iterations for finding the midpoint image '
+            'from the b0 templates from all DWI runs and sessions. '
+            'Has no effect if there is only one group. '
+            'If 0, all b0 templates are directly registered to the t1w image. '
+            'Enabling the intramodal template method when there are multiple runs/sessions '
+            'results in a single DWI reference image, which makes it possible to '
+            'directly compare AC-PC-space preprocessed DWI data across groups.'
+        ),
     )
     g_coreg.add_argument(
         '--intramodal-template-transform',

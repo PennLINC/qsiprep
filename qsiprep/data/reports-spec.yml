@@ -30,9 +30,9 @@ sections:
     subtitle: Spatial normalization of the anatomical reference
 
   - bids: {datatype: figures, desc: intramodalcoreg, suffix: [T1w, T2w]}
-    caption: Coregistration between the intramodal DWI template to the anatomical reference image.
+    caption: Coregistration of the intramodal DWI template to the anatomical reference image.
     static: false
-    subtitle: Coregistration of the Intramodal to anatomical templates
+    subtitle: Coregistration of the intramodal to anatomical templates
 
 - name: <em>B<sub>0</sub></em> field mapping
   ordering: session,acquisition,run,fmapid
@@ -239,7 +239,7 @@ sections:
     caption: |
       b=0 reference image warped to the across-scan/session intramodal template.
     static: false
-    subtitle: Alignment of dMRI to Intramodal Template
+    subtitle: Alignment of dMRI to intramodal template
 
   - bids: {datatype: figures, desc: acpc, suffix: dwi}
     caption: |

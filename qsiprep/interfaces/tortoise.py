@@ -609,7 +609,10 @@ class Gibbs(SeriesPreprocReport, TORTOISECommandLine):
             contour_nii = nim.load_img(self.inputs.mask)
         else:
             mask_nii = nim.threshold_img(denoised_lowb_nii, 50)
-        cuts = cuts_from_bbox(contour_nii or mask_nii, cuts=self._n_cuts)
+
+        ref_nii = contour_nii or mask_nii
+        cuts = cuts_from_bbox(ref_nii, cuts=self._n_cuts)
+        _, crop_offset = nim.crop_img(ref_nii, return_offset=True)
 
         diff_lowb_nii = nb.Nifti1Image(
             orig_lowb_nii.get_fdata() - denoised_lowb_nii.get_fdata(),
@@ -628,6 +631,7 @@ class Gibbs(SeriesPreprocReport, TORTOISECommandLine):
                 'moving-image',
                 estimate_brightness=True,
                 cuts=cuts,
+                crop_offset=crop_offset,
                 label='De-Gibbs',
                 lowb_contour=None,
                 highb_contour=None,
@@ -639,6 +643,7 @@ class Gibbs(SeriesPreprocReport, TORTOISECommandLine):
                 'fixed-image',
                 estimate_brightness=True,
                 cuts=cuts,
+                crop_offset=crop_offset,
                 label='Estimated Ringing',
                 lowb_contour=None,
                 highb_contour=None,
@@ -1140,6 +1145,7 @@ class _DIFFPREPMotionParamsInputSpec(BaseInterfaceInputSpec):
 
 class _DIFFPREPMotionParamsOutputSpec(TraitedSpec):
     spm_motion_file = File(exists=True)
+    diffprep_ec_file = File(exists=True)
 
 
 class DIFFPREPMotionParams(SimpleInterface):
@@ -1148,11 +1154,12 @@ class DIFFPREPMotionParams(SimpleInterface):
 
     The output columns are the leading 6 parameters of TORTOISE's
     ``OkanQuadraticTransform`` in SPM realignment-parameter order
-    (translation_x/y/z in mm of LPS physical coordinate, rotation_x/y/z as
-    Euler angles in radians). The remaining 18 Okan parameters encode the
-    eddy-current polynomial + rotation/eddy centre and are intentionally
-    dropped -- they are not rigid head motion. Units match the eddy and
-    SHORELine SPM motion files (translation mm, rotation radians).
+    (translation_x/y/z in mm, rotation_x/y/z as Euler angles in radians),
+    converted from TORTOISE's native LPS to **RAS+** so they match the
+    eddy/SHORELine motion files (which qsiprep now also exports in RAS via
+    :func:`~qsiprep.interfaces.gradients.get_ras_motion_params`). The remaining
+    18 Okan parameters encode the eddy-current polynomial + rotation/eddy
+    centre and are intentionally dropped -- they are not rigid head motion.
     """
 
     input_spec = _DIFFPREPMotionParamsInputSpec
@@ -1161,7 +1168,10 @@ class DIFFPREPMotionParams(SimpleInterface):
     def _run_interface(self, runtime):
         rows = _read_okan_transformations(self.inputs.transformations_file)
         params = np.asarray(rows, dtype=float)
-        spm_motion = params[:, :6]
+        # Okan params are LPS physical; LPS->RAS is a 180deg rotation about z,
+        # so negate the x and y components of both translation and rotation.
+        spm_motion = params[:, :6].copy()
+        spm_motion[:, [0, 1, 3, 4]] *= -1.0
         spm_motion_file = fname_presuffix(
             self.inputs.transformations_file,
             suffix='_spm_rp.txt',
@@ -1170,6 +1180,16 @@ class DIFFPREPMotionParams(SimpleInterface):
         )
         np.savetxt(spm_motion_file, spm_motion)
         self._results['spm_motion_file'] = spm_motion_file
+
+        # Okan eddy-current + rotation/eddy-centre parameters (cols 6-23) -> headed TSV
+        # confounds columns (diffprep_ec_NN): ~3 linear x/y/z + quadratic + centres.
+        ec = params[:, 6:24]
+        ec_file = fname_presuffix(
+            self.inputs.transformations_file, suffix='_ec.tsv', use_ext=False, newpath=runtime.cwd
+        )
+        header = '\t'.join(f'diffprep_ec_{i:02d}' for i in range(ec.shape[1]))
+        np.savetxt(ec_file, ec, delimiter='\t', header=header, comments='')
+        self._results['diffprep_ec_file'] = ec_file
         return runtime
 
 

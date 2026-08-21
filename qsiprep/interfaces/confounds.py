@@ -35,6 +35,7 @@ LOGGER = logging.getLogger('nipype.interface')
 class GatherConfoundsInputSpec(BaseInterfaceInputSpec):
     fd = File(exists=True, desc='input framewise displacement')
     motion = File(exists=True, desc='input motion parameters')
+    ec = File(exists=True, desc='eddy-current field parameters (headed TSV)')
     sliceqc_file = File(exists=True, desc='output from sliceqc')
     original_files = traits.List(desc='original grouping of each volume')
     original_bvecs = InputMultiObject(File(exists=True), desc='original bvec files')
@@ -45,6 +46,7 @@ class GatherConfoundsInputSpec(BaseInterfaceInputSpec):
 class GatherConfoundsOutputSpec(TraitedSpec):
     confounds_file = File(exists=True, desc='output confounds file')
     confounds_list = traits.List(traits.Str, desc='list of headers')
+    confounds_metadata = traits.Dict(desc='per-column descriptions for the confounds JSON sidecar')
 
 
 class GatherConfounds(SimpleInterface):
@@ -61,6 +63,7 @@ class GatherConfounds(SimpleInterface):
             fdisp=self.inputs.fd,
             sliceqc_file=self.inputs.sliceqc_file,
             motion=self.inputs.motion,
+            ec=self.inputs.ec,
             original_files=self.inputs.original_files,
             original_bvals=concatenate_bvals(self.inputs.original_bvals, None),
             original_bvecs=concatenate_bvecs(self.inputs.original_bvecs),
@@ -69,12 +72,55 @@ class GatherConfounds(SimpleInterface):
         )
         self._results['confounds_file'] = combined_out
         self._results['confounds_list'] = confounds_list
+        columns = pd.read_csv(combined_out, sep='\t', nrows=0).columns.tolist()
+        self._results['confounds_metadata'] = _confounds_column_metadata(columns)
         return runtime
+
+
+def _confounds_column_metadata(columns):
+    """Per-column descriptions for the confounds JSON sidecar.
+
+    Motion columns are RAS+ (translation mm, rotation rad). The eddy-current
+    columns are the raw per-volume field coefficients each backend fits; they are
+    described at the block level (linear / quadratic / centre) with a model
+    reference rather than a per-column basis, since the exact ordering is defined
+    by FSL eddy (``--flm``) and TORTOISE (``OkanQuadraticTransform``).
+    """
+    motion = {
+        'trans_x': 'Translation along RAS+ x (mm)',
+        'trans_y': 'Translation along RAS+ y (mm)',
+        'trans_z': 'Translation along RAS+ z (mm)',
+        'rot_x': 'Rotation about RAS+ x (radians)',
+        'rot_y': 'Rotation about RAS+ y (radians)',
+        'rot_z': 'Rotation about RAS+ z (radians)',
+    }
+    eddy_block = (
+        'FSL eddy first-level-model eddy-current field coefficient (from '
+        '.eddy_parameters). For --flm=quadratic there are 10 per volume: ~3 linear '
+        '(x, y, z), ~6 quadratic/cross, and 1 spare/constant. The exact per-column '
+        'basis is defined by FSL eddy; see its documentation.'
+    )
+    okan_block = (
+        'TORTOISE DIFFPREP OkanQuadraticTransform eddy parameter (cols 6-23 of the '
+        '24-parameter transform): the quadratic eddy-current field (~3 linear x/y/z '
+        'plus quadratic) and the rotation/eddy centres. The exact per-column basis '
+        'is defined by TORTOISE.'
+    )
+    meta = {}
+    for col in columns:
+        if col in motion:
+            meta[col] = {'Description': motion[col]}
+        elif col.startswith('eddy_ec_'):
+            meta[col] = {'Description': eddy_block, 'Source': 'FSL eddy'}
+        elif col.startswith('diffprep_ec_'):
+            meta[col] = {'Description': okan_block, 'Source': 'TORTOISE DIFFPREP'}
+    return meta
 
 
 def _gather_confounds(
     fdisp=None,
     motion=None,
+    ec=None,
     sliceqc_file=None,
     newpath=None,
     original_files=None,
@@ -126,7 +172,11 @@ def _gather_confounds(
 
     all_files = []
     confounds_list = []
-    for confound, name in ((fdisp, 'Framewise displacement'), (motion, 'Motion parameters')):
+    for confound, name in (
+        (fdisp, 'Framewise displacement'),
+        (motion, 'Motion parameters'),
+        (ec, 'Eddy-current parameters'),
+    ):
         if confound is not None and isdefined(confound):
             confounds_list.append(name)
             if os.path.exists(confound) and os.stat(confound).st_size > 0:

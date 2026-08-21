@@ -79,6 +79,7 @@ def init_qsiprep_hmcsdc_wf(
                 'sdc_method',
                 'slice_quality',
                 'motion_params',
+                'ec_file',
                 'cnr_map',
                 'bvec_files_to_transform',
                 'dwi_files_to_transform',
