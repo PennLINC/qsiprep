@@ -428,6 +428,8 @@ class execution(_Config):
     # the command line) as spatial references for outputs."""
     reports_only = False
     """Only build the reports, based on the reportlets found in a cached working directory."""
+    report_output_level = None
+    """Directory level at which the HTML reports should be written."""
     run_uuid = f'{strftime("%Y%m%d-%H%M%S")}_{uuid4()}'
     """Unique identifier of this particular run."""
     participant_label = None
@@ -453,6 +455,7 @@ class execution(_Config):
         'bids_dir',
         'bids_database_dir',
         'dataset_links',
+        'diffprep_config',
         'eddy_config',
         'layout',
         'log_dir',
@@ -558,9 +561,13 @@ class workflow(_Config):
     """Any value in the .bval file less than this will be considered a b=0 image."""
     b0_motion_corr_to = None
     """Perform SHORELine's initial b=0-based registration to first volume?
-    Or make a template? Either 'iterative' or 'first'"""
-    b0_to_t1w_transform = None
-    """Transformation model for intramodal registration."""
+    Or make a template? Either 'iterative' or 'first'. DEPRECATED: later versions will
+    always use 'iterative'."""
+    b0_to_anat_transform = None
+    """Transformation model for b=0-to-anatomical coregistration. Either 'Rigid' or
+    'Affine'."""
+    anat_biascorrect = None
+    """Whether to N4-correct anatomicals: ``n4``, ``auto`` or ``none``."""
     b1_biascorrect_stage = None
     """The stage of processing at which to apply B1 bias correction. Either "final" (after
     resampling), "none" (skipped entirely) or "legacy" (before concatenation)."""
@@ -568,15 +575,14 @@ class workflow(_Config):
     """Run ``dwidenoise`` after combining dwis, but before motion correction."""
     denoise_method = None
     """Image-based denoising method. Either "dwidenoise" (MRtrix), "patch2self" (DIPY)
-    or "none"."""
+    or "none". DWIDenoise parameters may be appended as semicolon-delimited name:value
+    pairs."""
     distortion_group_merge = None
     """How to combine images across distortion groups (concatenate, average or none)."""
     dwi_denoise_window = None
     """Window size in voxels for image-based denoising, integer or "auto"."""
-    dwi_no_biascorr = None
-    """DEPRECATED: see --b1-biascorrect-stage."""
-    dwi_only = False
-    """DEPRECATED: True if anat_modality is 'none'."""
+    diffprep_config = None
+    """Configuration JSON for running TORTOISE DIFFPREP."""
     eddy_config = None
     """Configuration for running Eddy."""
     fmap_bspline = None
@@ -585,6 +591,8 @@ class workflow(_Config):
     """Remove the mean from fieldmaps."""
     force_syn = None
     """Run *fieldmap-less* susceptibility-derived distortions estimation."""
+    gpu = None
+    """Tasks to run on the GPU (see ``qsiprep.utils.gpu``)."""
     hmc_model = None
     """Model used to generate target images for hmc."""
     hmc_transform = None
@@ -599,8 +607,6 @@ class workflow(_Config):
     """Transformation used for building the intramodal template."""
     subject_anatomical_reference = None
     """How should the anatomical space be defined: sessionwise, unbiased or first-lex"""
-    longitudinal = False
-    """Run FreeSurfer ``recon-all`` with the ``-longitudinal`` flag. [Deprecated]"""
     no_b0_harmonization = False
     """Skip re-scaling dwi scans to have matching b=0 intensities."""
     output_resolution = None
@@ -611,6 +617,8 @@ class workflow(_Config):
     """Process all dwis separately - do not attempt concatenation."""
     shoreline_iters = None
     """How many iterations to run SHORELine."""
+    tortoise_gpu_cpu_ratio = None
+    """Volumes the GPU takes per DIFFPREP pass; None leaves TORTOISE's default."""
     unringing_method = None
     """Method for Gibbs-ringing removal. Either "none", "mrdegibbs" or "rpg"."""
     use_syn_sdc = None

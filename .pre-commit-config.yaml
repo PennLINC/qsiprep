@@ -11,8 +11,9 @@ repos:
       - id: check-json
       - id: check-toml
       - id: check-added-large-files
+  # Keep this rev in sync with the ruff pin in .github/workflows/lint.yml.
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.2
+    rev: v0.15.21
     hooks:
       - id: ruff
         args: [ --fix ]

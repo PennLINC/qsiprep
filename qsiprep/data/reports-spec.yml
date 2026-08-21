@@ -30,9 +30,9 @@ sections:
     subtitle: Spatial normalization of the anatomical reference
 
   - bids: {datatype: figures, desc: intramodalcoreg, suffix: [T1w, T2w]}
-    caption: Coregistration between the intramodal DWI template to the anatomical reference image.
+    caption: Coregistration of the intramodal DWI template to the anatomical reference image.
     static: false
-    subtitle: Coregistration of the Intramodal to anatomical templates
+    subtitle: Coregistration of the intramodal to anatomical templates
 
 - name: <em>B<sub>0</sub></em> field mapping
   ordering: session,acquisition,run,fmapid
@@ -149,6 +149,18 @@ sections:
     static: false
     subtitle: Susceptibility distortion correction
 
+  - bids: {datatype: figures, desc: sdcT2w, suffix: dwi}
+    caption: |
+      Results of performing susceptibility distortion correction (SDC) using
+      TORTOISE's T2Wreg, which registers the <em>b</em>=0 image to the T2-weighted
+      structural along the phase-encoding direction. The "distorted" image is the
+      motion- and eddy-corrected <em>b</em>=0 before SDC; the "corrected" image is
+      the one actually used for alignment to the anatomical reference. Check that
+      the corrected image agrees with the anatomical contours, particularly in
+      frontal and temporal regions where susceptibility distortion is largest.
+    static: false
+    subtitle: Susceptibility distortion correction (T2Wreg)
+
   - bids: {datatype: figures, desc: sdcdrbuddi, suffix: dwi}
     caption: |
       Results of performing susceptibility distortion correction (SDC) using DRBUDDI.
@@ -227,7 +239,7 @@ sections:
     caption: |
       b=0 reference image warped to the across-scan/session intramodal template.
     static: false
-    subtitle: Alignment of dMRI to Intramodal Template
+    subtitle: Alignment of dMRI to intramodal template
 
   - bids: {datatype: figures, desc: acpc, suffix: dwi}
     caption: |

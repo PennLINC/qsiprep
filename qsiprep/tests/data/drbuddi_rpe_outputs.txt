@@ -7,6 +7,7 @@ logs/CITATION.tex
 sub-tinytensors
 sub-tinytensors.html
 sub-tinytensors/dwi
+sub-tinytensors/dwi/sub-tinytensors_desc-confounds_timeseries.json
 sub-tinytensors/dwi/sub-tinytensors_desc-confounds_timeseries.tsv
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-brain_mask.nii.gz
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-image_qc.tsv
@@ -20,3 +21,5 @@ sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-slice_qc.json
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_dwiref.nii.gz
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_model-eddy_stat-cnr_dwimap.json
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_model-eddy_stat-cnr_dwimap.nii.gz
+sub-tinytensors/dwi/sub-tinytensors_space-ACPC_stat-tsnr_dwimap.json
+sub-tinytensors/dwi/sub-tinytensors_space-ACPC_stat-tsnr_dwimap.nii.gz

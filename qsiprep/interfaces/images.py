@@ -33,6 +33,8 @@ from nipype.interfaces.base import (
 from nipype.utils.filemanip import fname_presuffix
 from niworkflows.interfaces.header import _ValidateImageInputSpec
 
+from ..utils.bids import find_bval, find_bvec
+
 # from qsiprep.interfaces.images import (
 #    nii_ones_like,
 #    FilledImageLike, DemeanImage, TemplateDimensions)
@@ -257,7 +259,7 @@ class IntraModalMerge(SimpleInterface):
 
 CONFORMATION_TEMPLATE = """\t\t<h3 class="elem-title">Anatomical Conformation</h3>
 \t\t<ul class="elem-desc">
-\t\t\t<li>Input T1w images: {n_t1w}</li>
+\t\t\t<li>Input {anat} images: {n_anat}</li>
 \t\t\t<li>Output orientation: LPS</li>
 \t\t\t<li>Output dimensions: {dims}</li>
 \t\t\t<li>Output voxel size: {zooms}</li>
@@ -267,6 +269,57 @@ CONFORMATION_TEMPLATE = """\t\t<h3 class="elem-title">Anatomical Conformation</h
 """
 
 DISCARD_TEMPLATE = """\t\t\t\t<li><abbr title="{path}">{basename}</abbr></li>"""
+
+
+class _AnatomicalReportletInputSpec(BaseInterfaceInputSpec):
+    anat_type = traits.Enum('T1w', 'T2w', usedefault=True, desc='Anatomical image type')
+    anat_list = InputMultiObject(
+        File(exists=True),
+        desc='input anatomical images',
+    )
+    valid_list = InputMultiObject(
+        File(exists=True),
+        desc='Valid input anatomical images',
+    )
+    reference_image = File(mandatory=True, desc='Reference image (LPS-oriented template)')
+
+
+class _AnatomicalReportletOutputSpec(TraitedSpec):
+    out_report = File(exists=True, desc='Anatomical image report')
+
+
+class AnatomicalReportlet(SimpleInterface):
+    """Summarize anatomical outputs."""
+
+    input_spec = _AnatomicalReportletInputSpec
+    output_spec = _AnatomicalReportletOutputSpec
+
+    def _run_interface(self, runtime):
+        ref_img = nb.load(self.inputs.reference_image)
+        zooms = ref_img.header.get_zooms()
+        dims = ref_img.shape
+        discards = sorted(set(self.inputs.anat_list) - set(self.inputs.valid_list))
+        items = [
+            DISCARD_TEMPLATE.format(path=path, basename=os.path.basename(path))
+            for path in discards
+        ]
+        discard_list = '\n'.join(['\t\t\t<ul>'] + items + ['\t\t\t</ul>']) if items else ''
+        zoom_fmt = '{:.02g}mm x {:.02g}mm x {:.02g}mm'.format(*zooms)
+        segment = CONFORMATION_TEMPLATE.format(
+            anat=self.inputs.anat_type,
+            n_anat=len(self.inputs.anat_list),
+            dims='x'.join(map(str, dims)),
+            zooms=zoom_fmt,
+            n_discards=len(discards),
+            discard_list=discard_list,
+        )
+        out_report = os.path.join(runtime.cwd, 'report.html')
+        with open(out_report, 'w') as fobj:
+            fobj.write(segment)
+
+        self._results['out_report'] = out_report
+
+        return runtime
 
 
 class ConformInputSpec(BaseInterfaceInputSpec):
@@ -415,18 +468,23 @@ class ConformDwi(SimpleInterface):
         suffix = '_' + orientation
         out_fname = fname_presuffix(fname, suffix=suffix, newpath=runtime.cwd)
 
-        # If not defined, find it
-        if isdefined(self.inputs.bval_file):
-            bval_fname = self.inputs.bval_file
-        else:
-            bval_fname = fname_presuffix(fname, suffix='.bval', use_ext=False)
+        # If not defined, find it. The BIDS inheritance principle applies, so a
+        # part-mag and a part-phase image can share a single sub-<label>_dwi.bval.
+        bval_fname = (
+            self.inputs.bval_file if isdefined(self.inputs.bval_file) else find_bval(fname)
+        )
+        bvec_fname = (
+            self.inputs.bvec_file if isdefined(self.inputs.bvec_file) else find_bvec(fname)
+        )
 
-        if isdefined(self.inputs.bvec_file):
-            bvec_fname = self.inputs.bvec_file
+        if bval_fname is not None:
+            self._results['bval_file'] = bval_fname
         else:
-            bvec_fname = fname_presuffix(fname, suffix='.bvec', use_ext=False)
+            LOGGER.info('No bval file found for %s', fname)
 
-        out_bvec_fname = fname_presuffix(bvec_fname, suffix=suffix, newpath=runtime.cwd)
+        if bvec_fname is None:
+            LOGGER.info('No bvec file found for %s', fname)
+
         validator = ValidateImage(in_file=fname)
         validated = validator.run()
         self._results['out_report'] = validated.outputs.out_report
@@ -449,8 +507,9 @@ class ConformDwi(SimpleInterface):
             self._results['dwi_file'] = out_fname
 
             # Flip the bvecs
-            if os.path.exists(bvec_fname):
+            if bvec_fname is not None:
                 LOGGER.info('Reorienting %s to %s', bvec_fname, orientation)
+                out_bvec_fname = fname_presuffix(bvec_fname, suffix=suffix, newpath=runtime.cwd)
                 bvec_array = np.loadtxt(bvec_fname)
                 if not bvec_array.shape[0] == transform_orientation.shape[0]:
                     raise ValueError('Unrecognized bvec format')
@@ -459,14 +518,12 @@ class ConformDwi(SimpleInterface):
                     output_array[this_axnum] = bvec_array[int(axnum)] * flip
                 np.savetxt(out_bvec_fname, output_array, fmt='%.8f ')
                 self._results['bvec_file'] = out_bvec_fname
-                self._results['bval_file'] = bval_fname
 
         else:
             LOGGER.info('Not applying reorientation to %s: already in %s', fname, orientation)
             self._results['dwi_file'] = fname
-            if os.path.exists(bvec_fname):
+            if bvec_fname is not None:
                 self._results['bvec_file'] = bvec_fname
-                self._results['bval_file'] = bval_fname
 
         return runtime
 

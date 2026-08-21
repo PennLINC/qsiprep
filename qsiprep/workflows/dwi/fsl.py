@@ -28,6 +28,7 @@ from ...interfaces.gradients import ExtractB0s
 from ...interfaces.images import ConformDwi, IntraModalMerge, SplitDWIsFSL
 from ...interfaces.nilearn import EnhanceB0
 from ...interfaces.reports import TopupSummary
+from ...utils.gpu import gpu_enabled
 from ..fieldmap.base import init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf
 
@@ -132,6 +133,7 @@ def init_fsl_hmc_wf(
                 'sdc_method',
                 'slice_quality',
                 'motion_params',
+                'ec_file',
                 'cnr_map',
                 'bvec_files_to_transform',
                 'dwi_files_to_transform',
@@ -180,6 +182,12 @@ def init_fsl_hmc_wf(
         name='gather_inputs',
     )
     enhance_pre_sdc = pe.Node(EnhanceB0(), name='enhance_pre_sdc')
+
+    # --gpu wins over "use_cuda" in --eddy-config (gpu_enabled warns on conflict).
+    # Only treat the value as user intent when the user actually supplied the
+    # config file -- otherwise the shipped default would "conflict" with --gpu.
+    _legacy_use_cuda = eddy_args.get('use_cuda') if config.workflow.eddy_config else None
+    eddy_args['use_cuda'] = gpu_enabled('eddy', config_file_value=_legacy_use_cuda)
 
     # Run in parallel if possible
     if eddy_args['use_cuda']:
@@ -266,7 +274,11 @@ def init_fsl_hmc_wf(
             (slice_quality, 'hmc_optimization_data'),
         ]),
         (eddy, spm_motion, [('out_parameter', 'eddy_motion')]),
-        (spm_motion, outputnode, [('spm_motion_file', 'motion_params')]),
+        (inputnode, spm_motion, [('dwi_file', 'ref_file')]),
+        (spm_motion, outputnode, [
+            ('spm_motion_file', 'motion_params'),
+            ('eddy_ec_file', 'ec_file'),
+        ]),
         # Create a b=0 reference from Eddy's output
         (back_to_lps, extract_b0_series, [
             ('dwi_file', 'dwi_series'),
@@ -405,6 +417,7 @@ def init_fsl_hmc_wf(
         drbuddi_wf = init_drbuddi_wf(
             scan_groups=scan_groups,
             t2w_sdc=t2w_sdc,
+            use_cuda=gpu_enabled('drbuddi'),
         )
 
         workflow.connect([

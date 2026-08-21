@@ -18,6 +18,7 @@ sub-tester/anat/sub-tester_space-ACPC_desc-preproc_T1w.json
 sub-tester/anat/sub-tester_space-ACPC_desc-preproc_T1w.nii.gz
 sub-tester/anat/sub-tester_space-ACPC_dseg.nii.gz
 sub-tester/dwi
+sub-tester/dwi/sub-tester_acq-HASC55AP_desc-confounds_timeseries.json
 sub-tester/dwi/sub-tester_acq-HASC55AP_desc-confounds_timeseries.tsv
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-brain_mask.nii.gz
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-image_qc.tsv
@@ -31,3 +32,5 @@ sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-slice_qc.json
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_dwiref.nii.gz
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_model-3dSHORE_stat-cnr_dwimap.json
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_model-3dSHORE_stat-cnr_dwimap.nii.gz
+sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_stat-tsnr_dwimap.json
+sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_stat-tsnr_dwimap.nii.gz
