@@ -14,6 +14,7 @@ import subprocess
 from mimetypes import guess_type
 
 import nibabel as nb
+import nilearn.image as nim
 import numpy as np
 import SimpleITK as sitk
 from dipy.core import geometry as geom
@@ -77,20 +78,28 @@ class ACPCReport(SimpleInterface):
 
     def _run_interface(self, runtime):
         out_report = runtime.cwd + '/ACPCReport.svg'
+        translation_img = nb.load(self.inputs.translation_image)
+        rigid_img = nb.load(self.inputs.rigid_img)
+        # combine images so crop offset captures both
+        sum_img = nim.math_image('a + b', a=translation_img, b=rigid_img)
+        _, crop_offset = nim.crop_img(sum_img, return_offset=True)
+
         # Call composer
         compose_view(
             plot_acpc(
-                nb.load(self.inputs.translation_image),
+                translation_img,
                 'moving-image',
                 estimate_brightness=True,
                 label='Original',
+                crop_offset=crop_offset,
                 compress=False,
             ),
             plot_acpc(
-                nb.load(self.inputs.rigid_image),
+                rigid_img,
                 'fixed-image',
                 estimate_brightness=True,
                 label='AC-PC',
+                crop_offset=crop_offset,
                 compress=False,
             ),
             out_file=out_report,

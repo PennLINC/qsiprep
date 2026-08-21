@@ -11,7 +11,7 @@ import os
 
 import nibabel as nb
 import numpy as np
-from nilearn.image import load_img, threshold_img
+from nilearn.image import crop_img, load_img, threshold_img
 from nipype import logging
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
@@ -562,7 +562,10 @@ class MRDeGibbs(SeriesPreprocReport, MRTrix3Base):
             contour_nii = load_img(self.inputs.mask)
         else:
             mask_nii = threshold_img(denoised_lowb_nii, 50)
-        cuts = cuts_from_bbox(contour_nii or mask_nii, cuts=self._n_cuts)
+
+        ref_nii = contour_nii or mask_nii
+        cuts = cuts_from_bbox(ref_nii, cuts=self._n_cuts)
+        _, crop_offset = crop_img(ref_nii, return_offset=True)
 
         diff_lowb_nii = nb.Nifti1Image(
             orig_lowb_nii.get_fdata() - denoised_lowb_nii.get_fdata(),
@@ -581,6 +584,7 @@ class MRDeGibbs(SeriesPreprocReport, MRTrix3Base):
                 'moving-image',
                 estimate_brightness=True,
                 cuts=cuts,
+                crop_offset=crop_offset,
                 label='De-Gibbs',
                 lowb_contour=None,
                 highb_contour=None,
@@ -592,6 +596,7 @@ class MRDeGibbs(SeriesPreprocReport, MRTrix3Base):
                 'fixed-image',
                 estimate_brightness=True,
                 cuts=cuts,
+                crop_offset=crop_offset,
                 label='Estimated Ringing',
                 lowb_contour=None,
                 highb_contour=None,
