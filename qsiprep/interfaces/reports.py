@@ -13,13 +13,9 @@ import re
 import time
 from collections import defaultdict
 
-import matplotlib as mpl
-import matplotlib.pyplot as plt
 import nibabel as nb
 import numpy as np
 import pandas as pd
-import seaborn as sns
-from matplotlib import animation
 from nilearn.maskers import NiftiLabelsMasker
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
@@ -297,6 +293,10 @@ class GradientPlotInputSpec(BaseInterfaceInputSpec):
         File(exists=True), mandatory=True, desc='bvals from DWISplit'
     )
     source_files = traits.List(desc='source file for each gradient')
+    source_pe_dirs = traits.Dict(
+        desc='map from source file path to PhaseEncodingDirection, so the viewer '
+        'can color by phase encoding as well as by source file'
+    )
     final_bvec_file = File(exists=True, desc='bval file')
 
 
@@ -309,103 +309,51 @@ class GradientPlot(SummaryInterface):
     output_spec = GradientPlotOutputSpec
 
     def _run_interface(self, runtime):
-        outfile = os.path.join(runtime.cwd, 'bvec_plot.gif')
-        sns.set_style('whitegrid')
-        sns.set_context('paper', font_scale=0.8)
+        from ..grouping.metadata import get_b0_threshold
+        from ..viz.qspace import q_points, scheme_iframe, scheme_payload
 
+        outfile = os.path.join(runtime.cwd, 'sampling_scheme.html')
         orig_bvecs = concatenate_bvecs(self.inputs.orig_bvec_files)
         bvals = concatenate_bvals(self.inputs.orig_bval_files, None)
-        if isdefined(self.inputs.source_files):
-            file_array = np.array(self.inputs.source_files)
-            _, filenums = np.unique(file_array, return_inverse=True)
-        else:
-            filenums = np.ones_like(bvals)
 
-        # Account for the possibility that this is a PE Pair average
+        # One color category per source file, plus each file's phase-encoding
+        # direction, so the viewer can color by either.
+        if isdefined(self.inputs.source_files):
+            labels, filenums = np.unique(np.array(self.inputs.source_files), return_inverse=True)
+            files = [op.basename(label) for label in labels]
+        else:
+            labels = np.array(['dwi'])
+            filenums = np.zeros(len(bvals), dtype=int)
+            files = ['dwi']
+        # A PE-pair average carries two source files per volume; keep the first.
         if len(filenums) == len(bvals) * 2:
             filenums = filenums[: len(bvals)]
 
-        # Plot the final bvecs if provided
-        final_bvecs = None
-        if isdefined(self.inputs.final_bvec_file):
-            final_bvecs = np.loadtxt(self.inputs.final_bvec_file).T
+        pe_map = self.inputs.source_pe_dirs if isdefined(self.inputs.source_pe_dirs) else {}
+        file_pes = [pe_map.get(str(label)) or 'unknown' for label in labels]
+        pes = list(dict.fromkeys(file_pes))
 
-        plot_gradients(bvals, orig_bvecs, filenums, outfile, final_bvecs)
+        panels = [
+            {'title': 'Acquired (original b-vectors)', 'coords': q_points(bvals, orig_bvecs)}
+        ]
+        if isdefined(self.inputs.final_bvec_file):
+            final_bvecs = concatenate_bvecs([self.inputs.final_bvec_file])
+            panels.append(
+                {
+                    'title': 'After preprocessing (rotated b-vectors)',
+                    'coords': q_points(bvals, final_bvecs),
+                }
+            )
+
+        meta = [
+            {'b': int(round(float(bval))), 'file': int(filenum), 'pe': file_pes[filenum]}
+            for bval, filenum in zip(bvals, filenums, strict=True)
+        ]
+        data = scheme_payload(panels, meta, list(files), pes=pes, b0_threshold=get_b0_threshold())
+        with open(outfile, 'w') as fobj:
+            fobj.write(scheme_iframe(data))
         self._results['plot_file'] = outfile
         return runtime
-
-
-def plot_gradients(bvals, orig_bvecs, source_filenums, output_fname, final_bvecs=None, frames=60):
-    qrads = np.sqrt(bvals)
-    qvecs = qrads[:, np.newaxis] * orig_bvecs
-    qx, qy, qz = qvecs.T
-    maxvals = qvecs.max(0)
-    minvals = qvecs.min(0)
-    total_max = max(np.abs(maxvals).max(), np.abs(minvals).max())
-
-    def force_scaling(ax):
-        # trick to force equal aspect on all 3 axes
-        for direction in (-1, 1):
-            for point in np.diag(direction * total_max * np.array([1, 1, 1])):
-                ax.plot([point[0]], [point[1]], [point[2]], 'w')
-
-    def add_lines(ax):
-        labels = ['L', 'P', 'S']
-        for axnum in range(3):
-            minvec = np.zeros(3)
-            maxvec = np.zeros(3)
-            minvec[axnum] = minvals[axnum]
-            maxvec[axnum] = maxvals[axnum]
-            x, y, z = np.column_stack([minvec, maxvec])
-            ax.plot(x, y, z, color='k')
-            txt_pos = maxvec + 5
-            ax.text(txt_pos[0], txt_pos[1], txt_pos[2], labels[axnum], size=8, zorder=1, color='k')
-
-    if final_bvecs is not None:
-        if final_bvecs.shape[0] == 3:
-            final_bvecs = final_bvecs.T
-        fqx, fqy, fqz = (qrads[:, np.newaxis] * final_bvecs).T
-        fig, axes = plt.subplots(
-            nrows=1, ncols=2, figsize=(10, 5), subplot_kw={'projection': '3d'}
-        )
-        orig_ax = axes[0]
-        final_ax = axes[1]
-        axes_list = [orig_ax, final_ax]
-        final_ax.scatter(fqx, fqy, fqz, c=source_filenums, marker='+')
-        orig_ax.scatter(qx, qy, qz, c=source_filenums, marker='+')
-        final_ax.axis('off')
-        add_lines(final_ax)
-        final_ax.set_title('After Preprocessing')
-    else:
-        fig, orig_ax = plt.subplots(
-            nrows=1, ncols=1, figsize=(10, 5), subplot_kw={'aspect': 'equal', 'projection': '3d'}
-        )
-        axes_list = [orig_ax]
-        orig_ax.scatter(qx, qy, qz, c=source_filenums, marker='+')
-
-    fig.tight_layout()
-    orig_ax.axis('off')
-    orig_ax.set_title('Original Scheme')
-    add_lines(orig_ax)
-    force_scaling(orig_ax)
-    # Animate rotating the axes
-    rotate_amount = np.ones(frames) * 180 / frames
-    stay_put = np.zeros_like(rotate_amount)
-    rotate_azim = np.concatenate([rotate_amount, stay_put, -rotate_amount, stay_put])
-    rotate_elev = np.concatenate([stay_put, rotate_amount, stay_put, -rotate_amount])
-    plt.tight_layout()
-
-    def rotate(i):
-        for ax in axes_list:
-            ax.azim += rotate_azim[i]
-            ax.elev += rotate_elev[i]
-        return tuple(axes_list)
-
-    anim = animation.FuncAnimation(fig, rotate, frames=frames * 4, interval=20, blit=False)
-    anim.save(output_fname, writer='imagemagick', fps=32)
-
-    plt.close(fig)
-    fig = None
 
 
 def topup_selection_to_report(
@@ -702,15 +650,3 @@ def calculate_motion_summary(confounds_tsv):
         'max_rel_rotation': compare_series('max_rel_rotation', max),
         'max_rel_translation': compare_series('max_rel_translation', max),
     }
-
-
-def _filename_to_colors(labels_column, colormap='rainbow'):
-    cmap = mpl.cm.get_cmap(colormap)
-    labels, _ = pd.factorize(labels_column)
-    n_samples = labels.shape[0]
-    max_label = labels.max()
-    if max_label == 0:
-        return [(1.0, 0.0, 0.0)] * n_samples
-    labels = labels / max_label
-    colors = np.array([cmap(label) for label in labels])
-    return colors.tolist()

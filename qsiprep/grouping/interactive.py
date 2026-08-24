@@ -12,9 +12,9 @@ reads top to bottom as a story:
    hold the scan rows. Every scan appears exactly once; membership in a
    fieldmap estimation is a letter chip on the row, so identity is carried by
    letters (A, B, ...) while color stays dedicated to provenance. Borrowed
-   b=0 sources are called out in a sentence. Each output ends with the
-   plain-language processing steps for the chosen backend, with the other
-   backends collapsed underneath.
+   b=0 sources are called out in a sentence. Each output ends with tabs: an
+   interactive view of its concatenated sampling scheme (shown first) and a
+   plain-language processing preview per backend.
 3. **Notes** - the grouping's warnings and errors.
 
 The page works without JavaScript; a small inline script adds hover
@@ -26,9 +26,11 @@ from __future__ import annotations
 
 import html
 
+from ..viz.qspace import q_points, scheme_div, scheme_payload, viewer_assets
+from .metadata import get_b0_threshold, sibling_bval, sibling_bvec
 from .models import CorrectionMethod, DWIGrouping, Provenance
-from .report import processing_steps
-from .validation import BACKENDS
+from .report import processing_steps, shell_label
+from .validation import BACKEND_DESCRIPTIONS, BACKENDS
 
 #: Provenance value -> (fill, stroke).
 _PROVENANCE_COLORS = {
@@ -155,18 +157,26 @@ h2{font-size:15px;margin:26px 0 10px;color:#334155}
 .cu-head{font-size:11px;color:#475569;padding:7px 12px 0}
 .cu-note{color:#94a3b8;margin-left:6px}
 .final-concat{font-size:11.5px;font-weight:600;color:#334155;margin:6px 14px 8px}
-.preview{margin:8px 12px 6px;font-size:12px;background:#f1f5f9;border-radius:8px;
-  padding:7px 12px}
-.preview summary{cursor:pointer;color:#334155;font-size:12px}
-.preview ol{margin:8px 0 4px;padding-left:22px;line-height:1.55;color:#334155}
-.preview li.issue{color:#b91c1c;list-style:none;margin-left:-14px}
-.alt{margin:4px 0 4px 4px}
-.alt summary{font-size:11.5px;color:#64748b}
 .note{font-size:12px;border-radius:8px;padding:8px 12px;margin:0 0 8px;line-height:1.5}
 .note.warning{background:#fffbeb;border:1px solid #fcd34d}
 .note.error{background:#fef2f2;border:1px solid #fca5a5}
 .none{font-size:13px;color:#b91c1c}
 .hl{box-shadow:0 0 0 2.5px #0ea5e9}
+.tabs{display:flex;gap:2px;flex-wrap:wrap;margin:10px 12px 0;
+  border-bottom:1px solid #e2e8f0}
+.tab-btn{border:1px solid transparent;border-bottom:none;background:#f1f5f9;
+  color:#475569;padding:5px 12px;font-size:11.5px;cursor:pointer;
+  border-radius:7px 7px 0 0;font-weight:550}
+.tab-btn:hover{background:#e2e8f0}
+.tab-btn.on{background:#fff;color:#0f172a;border-color:#e2e8f0;margin-bottom:-1px}
+.tab-btn.scheme.on{color:#0369a1}
+.tab-btn.sel::after{content:'\\2022';margin-left:5px;color:#0ea5e9}
+.tab-panel{display:none;padding:10px 14px 6px}
+.tab-panel.on{display:block}
+.tab-desc{font-size:11.5px;color:#475569;margin:0 0 6px}
+.tab-panel ol{margin:6px 0 4px;padding-left:22px;line-height:1.55;color:#334155}
+.tab-panel li.issue{color:#b91c1c;list-style:none;margin-left:-14px}
+.scheme-missing{font-size:12px;color:#94a3b8;padding:6px 0}
 """
 
 #: Hover an estimation card or letter chip -> highlight everything that
@@ -181,6 +191,22 @@ document.querySelectorAll('[data-est]').forEach(el => {
   });
   el.addEventListener('mouseleave', () => {
     document.querySelectorAll('.hl').forEach(other => other.classList.remove('hl'));
+  });
+});
+
+// Tabs: click a tab button to reveal its panel; scoped to each output box so
+// buttons in one box never switch another. The resize nudge lets a viewer that
+// was in a hidden tab lay out its canvas the first time it is shown.
+document.querySelectorAll('.output').forEach(box => {
+  box.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.tab;
+      box.querySelectorAll('.tab-btn').forEach(
+        b => b.classList.toggle('on', b.dataset.tab === key));
+      box.querySelectorAll('.tab-panel').forEach(
+        p => p.classList.toggle('on', p.dataset.tab === key));
+      window.dispatchEvent(new Event('resize'));
+    });
   });
 });
 """
@@ -214,7 +240,7 @@ def _pe_phrase(pe_dir: str | None) -> str:
 
 def _shell_text(record) -> str:
     if record.shelled is True:
-        return 'b=' + '/'.join(str(int(centre)) for centre in record.shells)
+        return shell_label(record)
     if record.shelled is False:
         return 'non-shelled sampling'
     return ''
@@ -381,6 +407,67 @@ def _preview_list(steps: list[str]) -> list[str]:
     return parts
 
 
+_BACKEND_TAB_LABELS = {'fsl': 'FSL', 'tortoise': 'TORTOISE', 'mixed': 'Mixed'}
+
+
+def _load_gradients(path: str):
+    """``(bvals, bvecs)`` from a DWI's sidecars, or ``None`` if unreadable.
+
+    Uses :func:`dipy.io.read_bvals_bvecs` — the same reader the rest of the
+    pipeline uses — so the report's gradients are parsed identically. ``bvals``
+    is a list of floats and ``bvecs`` a list of ``(x, y, z)`` lists. Returning
+    ``None`` on a missing or malformed sidecar lets the report degrade to a
+    short notice instead of failing.
+    """
+    # Deferred: dipy has a slow import chain the report shouldn't pay for until
+    # a scheme actually needs drawing.
+    from dipy.io import read_bvals_bvecs
+
+    try:
+        bvals, bvecs = read_bvals_bvecs(sibling_bval(path), sibling_bvec(path))
+    except (OSError, ValueError):
+        return None
+    return bvals.tolist(), bvecs.tolist()
+
+
+def _scheme_data(grouping: DWIGrouping, concat) -> dict | None:
+    """Viewer payload for one output's concatenated sampling scheme.
+
+    Each volume becomes a q-space point ``sqrt(b) * bvec`` tagged with its
+    source file and phase-encoding direction, so the viewer can color by
+    either. Returns ``None`` when no member has readable gradients.
+    """
+    coords, meta, files, pes = [], [], [], []
+    for path in concat.dwi_files:
+        loaded = _load_gradients(path)
+        if loaded is None:
+            continue
+        bvals, bvecs = loaded
+        record = grouping.files.get(path)
+        pe = (record.signature.pe_dir if record else None) or 'unknown'
+        if pe not in pes:
+            pes.append(pe)
+        file_index = len(files)
+        files.append(_basename(path))
+        coords.extend(q_points(bvals, bvecs))
+        meta.extend({'b': int(round(bval)), 'file': file_index, 'pe': pe} for bval in bvals)
+    if not coords:
+        return None
+    panels = [{'title': concat.output_name, 'coords': coords}]
+    return scheme_payload(panels, meta, files, pes, b0_threshold=get_b0_threshold())
+
+
+def _scheme_tab(grouping: DWIGrouping, concat) -> str:
+    """The sampling-scheme tab body: the interactive viewer, or a notice."""
+    data = _scheme_data(grouping, concat)
+    if data is None:
+        return (
+            '<p class="scheme-missing">Sampling scheme unavailable '
+            '(no readable <code>.bval</code>/<code>.bvec</code>).</p>'
+        )
+    return scheme_div(data)
+
+
 def _output_boxes(grouping: DWIGrouping, letters: dict[str, str], backend: str) -> list[str]:
     previews = {b: processing_steps(grouping, b) for b in BACKENDS}
     parts = [
@@ -449,24 +536,35 @@ def _output_boxes(grouping: DWIGrouping, letters: dict[str, str], backend: str) 
                 '<b>not</b> part of this output file.</p>'
             )
 
-        steps = previews[backend].get(concat.output_name, [])
-        if steps:
+        # Tabbed footer: the concatenated sampling scheme (shown by default),
+        # then one processing preview per backend. The backend selected on the
+        # command line is flagged with a dot.
+        parts.append('<div class="tabs">')
+        parts.append(
+            '<button class="tab-btn scheme on" data-tab="scheme">'
+            '&#9673; Sampling scheme</button>'
+        )
+        for name in BACKENDS:
+            if not previews[name].get(concat.output_name):
+                continue
+            sel = ' sel' if name == backend else ''
             parts.append(
-                '<details class="preview" open><summary>What will happen to this data '
-                f'(<b>{_esc(backend)}</b> workflow)</summary>'
+                f'<button class="tab-btn{sel}" data-tab="{_esc(name)}">'
+                f'{_esc(_BACKEND_TAB_LABELS.get(name, name))}</button>'
             )
+        parts.append('</div>')
+        parts.append(
+            '<div class="tab-panel scheme on" data-tab="scheme">'
+            f'{_scheme_tab(grouping, concat)}</div>'
+        )
+        for name in BACKENDS:
+            steps = previews[name].get(concat.output_name, [])
+            if not steps:
+                continue
+            parts.append(f'<div class="tab-panel" data-tab="{_esc(name)}">')
+            parts.append(f'<p class="tab-desc">{_esc(BACKEND_DESCRIPTIONS[name])}</p>')
             parts.extend(_preview_list(steps))
-            for other in BACKENDS:
-                other_steps = previews[other].get(concat.output_name, [])
-                if other == backend or not other_steps:
-                    continue
-                parts.append(
-                    f'<details class="alt"><summary>if run with the {_esc(other)} '
-                    'workflow instead&hellip;</summary>'
-                )
-                parts.extend(_preview_list(other_steps))
-                parts.append('</details>')
-            parts.append('</details>')
+            parts.append('</div>')
         parts.append('</div>')
     parts.append('</section>')
     return parts
@@ -489,8 +587,9 @@ def _issue_notes(grouping: DWIGrouping) -> list[str]:
 def render_html(grouping: DWIGrouping, backend: str = 'fsl') -> str:
     """Return a standalone explanatory HTML document for ``grouping``.
 
-    ``backend`` selects which workflow's processing preview is expanded on
-    each output; the other backends are collapsed underneath it.
+    Every output shows its concatenated sampling scheme by default; the
+    processing previews sit behind per-backend tabs. ``backend`` flags which
+    workflow the user selected on the command line.
     """
     letters = {
         eid: chr(ord('A') + index) for index, eid in enumerate(sorted(grouping.estimations))
@@ -500,11 +599,14 @@ def render_html(grouping: DWIGrouping, backend: str = 'fsl') -> str:
     parts.extend(_output_boxes(grouping, letters, backend))
     parts.extend(_issue_notes(grouping))
     body = ''.join(parts)
+    viewer_css, viewer_js = viewer_assets()
     return (
         '<!doctype html>\n'
         '<html lang="en"><head><meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
         f'<title>DWI grouping for sub-{_esc(grouping.subject_id)}</title>\n'
-        f'<style>{_CSS}</style></head>\n'
-        f'<body>{body}<script>{_JS}</script></body></html>'
+        f'<style>{_CSS}\n{viewer_css}</style></head>\n'
+        f'<body>{body}\n'
+        f'<script>{viewer_js}</script>\n'
+        f'<script>{_JS}</script></body></html>'
     )

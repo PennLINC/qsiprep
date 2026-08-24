@@ -112,8 +112,8 @@ sections:
   - bids: {datatype: figures, desc: validation, suffix: dwi}
   - bids: {datatype: figures, desc: samplingscheme, suffix: dwi}
     caption: |
-      Animation of the DWI sampling scheme. Each separate scan is its own color
-    static: false
+      Interactive DWI sampling scheme in q-space, before and after preprocessing.
+      Drag to rotate, scroll to zoom; each input scan is a separate color.
     subtitle: DWI Sampling Scheme
 
   - bids: {datatype: figures, desc: fmapCoreg, suffix: dwi}

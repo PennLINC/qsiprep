@@ -365,6 +365,10 @@ def init_dwi_finalize_wf(
     btab_t1 = pe.Node(DSIStudioBTable(bvec_convention='DIPY'), name='btab_t1')
     t1_dice_calc = init_mask_overlap_wf(name='t1_dice_calc')
     gradient_plot = pe.Node(GradientPlot(), name='gradient_plot', run_without_submitting=True)
+    gradient_plot.inputs.source_pe_dirs = {
+        path: overrides['PhaseEncodingDirection']
+        for path, overrides in unit.sidecar_overrides().items()
+    }
     ds_report_gradients = pe.Node(
         DerivativesDataSink(
             datatype='figures',
