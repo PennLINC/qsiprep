@@ -270,11 +270,10 @@ def test_anat_spatial_normalization_reportlet_allows_template_cohort(tmp_path):
         )
 
 
-def test_gradient_plot_emits_interactive_iframe(tmp_path, monkeypatch):
-    """GradientPlot writes a self-contained ``<iframe srcdoc>`` sampling-scheme
-    reportlet with before/after panels, colored by source file, in a form that
-    is charset-independent (pure ASCII)."""
-    import html as html_lib
+def test_gradient_plot_emits_inline_scheme(tmp_path, monkeypatch):
+    """GradientPlot writes a self-contained inline sampling-scheme reportlet
+    (no iframe, so it flows in the report instead of scrolling in a fixed frame)
+    with before/after panels, colored by source file."""
     import json
     import re
 
@@ -302,11 +301,11 @@ def test_gradient_plot_emits_interactive_iframe(tmp_path, monkeypatch):
     out = Path(result.outputs.plot_file)
     assert out.suffix == '.html'
     markup = out.read_text()
-    assert markup.startswith('<iframe')
-    assert markup.isascii()  # decodes correctly under any host-page charset
+    # Inlines directly into the report: no iframe, so no fixed-height scroll frame.
+    assert '<iframe' not in markup
+    assert 'class="qspace-viewer"' in markup
 
-    document = html_lib.unescape(re.search(r'srcdoc="(.*?)"\s', markup, re.S).group(1))
-    payload = re.search(r'application/json">(\{.*?\})</script>', document, re.S).group(1)
+    payload = re.search(r'application/json">(\{.*?\})</script>', markup, re.S).group(1)
     data = json.loads(payload.replace('<\\/', '</'))
     assert [panel['title'] for panel in data['panels']] == [
         'Acquired (original b-vectors)',

@@ -493,6 +493,12 @@
     if (window.ResizeObserver) {
       new ResizeObserver(function () { render(); }).observe(stage);
     }
+    // A canvas laid out to zero width at first paint — e.g. when the host page's
+    // stylesheet is still loading — renders blank. Re-render once the page has
+    // fully loaded so the backing store picks up the settled width.
+    if (document.readyState !== "complete") {
+      window.addEventListener("load", render);
+    }
 
     syncSeg();
     buildLegend();

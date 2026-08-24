@@ -331,7 +331,7 @@ class GradientPlot(SummaryInterface):
 
     def _run_interface(self, runtime):
         from ..grouping.metadata import get_b0_threshold
-        from ..viz.qspace import q_points, scheme_iframe, scheme_payload
+        from ..viz.qspace import q_points, scheme_fragment, scheme_payload
 
         outfile = os.path.join(runtime.cwd, 'sampling_scheme.html')
         orig_bvecs = concatenate_bvecs(self.inputs.orig_bvec_files)
@@ -372,7 +372,7 @@ class GradientPlot(SummaryInterface):
         ]
         data = scheme_payload(panels, meta, list(files), pes=pes, b0_threshold=get_b0_threshold())
         with open(outfile, 'w') as fobj:
-            fobj.write(scheme_iframe(data))
+            fobj.write(scheme_fragment(data))
         self._results['plot_file'] = outfile
         return runtime
 

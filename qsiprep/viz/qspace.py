@@ -9,13 +9,13 @@ Two embedding styles are offered:
 
 - :func:`scheme_div` - a bare ``.qspace-viewer`` element for a host page that
   loads the assets once (via :func:`viewer_assets`) and may hold several viewers.
-- :func:`scheme_iframe` - a self-contained ``<iframe srcdoc>`` that inlines the
-  assets, for isolated contexts such as a nireports reportlet.
+- :func:`scheme_fragment` - a self-contained inline fragment (the viewer plus
+  its assets) that nireports drops straight into the report, so the widget flows
+  in the page instead of scrolling inside a fixed-height iframe.
 """
 
 from __future__ import annotations
 
-import html
 import json
 import math
 
@@ -27,13 +27,6 @@ DEFAULT_B0_THRESHOLD = 100.0
 
 _AXIS_LABELS = ['L', 'P', 'S']
 _AXIS_LABELS_NEG = ['R', 'A', 'I']
-
-#: Minimal reset for the isolated iframe document (the host page has its own).
-_FRAME_CSS = (
-    'html,body{margin:0;padding:0}'
-    "body{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,"
-    'sans-serif;color:#0f172a;background:#fff;padding:6px 8px}'
-)
 
 
 def q_points(bvals, bvecs):
@@ -87,36 +80,14 @@ def viewer_assets():
     )
 
 
-def document_iframe(document, title='embedded document', height=440):
-    """Wrap a complete HTML document in a self-contained ``<iframe srcdoc>``.
+def scheme_fragment(data):
+    """A self-contained inline fragment: the viewer, its assets, and one scheme.
 
-    The frame fully isolates ``document``'s CSS and scripts from the host page,
-    so a full standalone page (its own ``body``/``h1`` styles and all) can be
-    dropped into a report without leaking style. ``height`` is the frame's
-    starting height in pixels; a same-origin document may grow itself past it
-    (see the resize script in :mod:`qsiprep.grouping.interactive`).
-    """
-    # The browser decodes ``srcdoc`` using the *host* page's charset, so make
-    # the value pure ASCII (non-ASCII as numeric entities) to stay correct
-    # regardless of how the surrounding report is served.
-    srcdoc = html.escape(document, quote=True).encode('ascii', 'xmlcharrefreplace').decode('ascii')
-    return (
-        f'<iframe title="{html.escape(title, quote=True)}" srcdoc="{srcdoc}" '
-        f'style="width:100%;height:{height}px;border:0" loading="lazy"></iframe>'
-    )
-
-
-def scheme_iframe(data, height=440):
-    """A self-contained ``<iframe srcdoc>`` with the viewer and its assets inlined.
-
-    For isolated contexts (a nireports reportlet) where each widget carries its
-    own copy of the code and cannot rely on the host page's scripts.
+    For a nireports reportlet that inlines directly into the host report (no
+    iframe), so the widget flows in the page instead of scrolling inside a
+    fixed-height frame. The viewer's ``.qspace-viewer``/``.qs-*`` CSS is
+    host-agnostic (no bare-element rules that could leak), and its JS boots
+    idempotently, so several fragments can coexist in one report.
     """
     css, js = viewer_assets()
-    document = (
-        '<!doctype html><meta charset="utf-8">'
-        f'<style>{_FRAME_CSS}{css}</style>'
-        f'{scheme_div(data)}'
-        f'<script>{js}</script>'
-    )
-    return document_iframe(document, title='DWI sampling scheme', height=height)
+    return f'<style>{css}</style>{scheme_div(data)}<script>{js}</script>'
