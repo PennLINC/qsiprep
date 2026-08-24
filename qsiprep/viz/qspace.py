@@ -87,6 +87,25 @@ def viewer_assets():
     )
 
 
+def document_iframe(document, title='embedded document', height=440):
+    """Wrap a complete HTML document in a self-contained ``<iframe srcdoc>``.
+
+    The frame fully isolates ``document``'s CSS and scripts from the host page,
+    so a full standalone page (its own ``body``/``h1`` styles and all) can be
+    dropped into a report without leaking style. ``height`` is the frame's
+    starting height in pixels; a same-origin document may grow itself past it
+    (see the resize script in :mod:`qsiprep.grouping.interactive`).
+    """
+    # The browser decodes ``srcdoc`` using the *host* page's charset, so make
+    # the value pure ASCII (non-ASCII as numeric entities) to stay correct
+    # regardless of how the surrounding report is served.
+    srcdoc = html.escape(document, quote=True).encode('ascii', 'xmlcharrefreplace').decode('ascii')
+    return (
+        f'<iframe title="{html.escape(title, quote=True)}" srcdoc="{srcdoc}" '
+        f'style="width:100%;height:{height}px;border:0" loading="lazy"></iframe>'
+    )
+
+
 def scheme_iframe(data, height=440):
     """A self-contained ``<iframe srcdoc>`` with the viewer and its assets inlined.
 
@@ -100,11 +119,4 @@ def scheme_iframe(data, height=440):
         f'{scheme_div(data)}'
         f'<script>{js}</script>'
     )
-    # The browser decodes ``srcdoc`` using the *host* page's charset, so make
-    # the value pure ASCII (non-ASCII as numeric entities) to stay correct
-    # regardless of how the surrounding report is served.
-    srcdoc = html.escape(document, quote=True).encode('ascii', 'xmlcharrefreplace').decode('ascii')
-    return (
-        f'<iframe title="DWI sampling scheme" srcdoc="{srcdoc}" '
-        f'style="width:100%;height:{height}px;border:0" loading="lazy"></iframe>'
-    )
+    return document_iframe(document, title='DWI sampling scheme', height=height)

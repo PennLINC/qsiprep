@@ -149,7 +149,7 @@ def main(argv=None):
         if args.html:
             path = _per_subject_path(args.html, subject, multi)
             with open(path, 'w') as fobj:
-                fobj.write(render_html(grouping, backend=args.backend[0]))
+                fobj.write(render_html(grouping))
             print(f'sub-{subject}: wrote {path}')
         if grouping.errors:
             exit_code = 1

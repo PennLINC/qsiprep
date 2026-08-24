@@ -242,6 +242,7 @@ def test_anat_spatial_normalization_reportlet_allows_template_cohort(tmp_path):
         )
 
     html_reportlets = [
+        figures_dir / 'sub-01_desc-grouping_T1w.html',
         figures_dir / 'sub-01_desc-summary_T1w.html',
         figures_dir / 'sub-01_desc-conform_T1w.html',
         figures_dir / 'sub-01_desc-about_T1w.html',

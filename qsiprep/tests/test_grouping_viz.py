@@ -45,17 +45,35 @@ def test_render_html_shows_each_scan_once_per_output(tmp_path, scenario):
     assert page.count('class="scan"') == expected
 
 
-def test_render_html_previews_every_backend(tmp_path):
+def test_grouping_display_omits_workflow_processing_previews(tmp_path):
+    """The step-by-step processing narrative lives in a separate workflow
+    display, not the grouping page: no backend tabs and no per-backend step
+    text, but the concatenated sampling scheme stays."""
     grouping = load_scenario('hcp_style', tmp_path, strict=False)
-    page = render_html(grouping, backend='tortoise')
-    # The sampling scheme is the default tab; each backend has its own preview
-    # tab, and the one selected on the command line is flagged.
-    assert 'data-tab="scheme"' in page
-    for backend in ('fsl', 'tortoise', 'mixed'):
-        assert f'data-tab="{backend}"' in page
-    assert 'class="tab-btn sel" data-tab="tortoise"' in page
-    assert 'DRBUDDI' in page
-    assert 'TOPUP' in page
+    page = render_html(grouping)
+    assert 'tab-btn' not in page
+    assert 'data-tab=' not in page
+    assert 'TOPUP estimates' not in page
+    assert 'eddy corrects' not in page
+    # The sampling scheme is still shown, directly (no tab).
+    assert 'scheme-block' in page
+    assert 'qspace-viewer' in page
+
+
+def test_report_is_past_tense_and_plan_is_future_tense(tmp_path):
+    """The report describes a run that happened (past tense); the CLI plan page
+    previews one that has not yet (future tense). Same markup, different wording."""
+    from qsiprep.grouping import render_report_segment
+
+    grouping = load_scenario('hcp_style', tmp_path, strict=False)
+    plan = render_html(grouping)
+    report = render_report_segment(grouping)
+    assert 'How QSIPrep will process' in plan
+    assert 'how distortion will be measured' in plan
+    assert 'How QSIPrep processed' in report
+    assert 'how distortion was measured' in report
+    assert 'were combined, and how each was corrected' in report
+    assert 'will process' not in report
 
 
 def test_render_html_marks_borrowed_sources(tmp_path):
@@ -73,6 +91,49 @@ def test_render_html_is_self_contained(tmp_path):
     page = render_html(grouping)
     assert 'src="http' not in page
     assert 'href="http' not in page
+
+
+def test_render_report_segment_inlines_scoped_and_self_contained(tmp_path):
+    """The report fragment inlines natively (no iframe, no document wrapper),
+    carries its own assets, and scopes every style rule under the container so
+    it neither restyles the host report nor leaks in."""
+    import re
+
+    from qsiprep.grouping import render_report_segment
+    from qsiprep.grouping.interactive import ROOT_CLASS
+
+    grouping = load_scenario('hcp_style', tmp_path, strict=False)
+    segment = render_report_segment(grouping)
+
+    # Inlines directly: no iframe and no full-document wrapper.
+    assert '<iframe' not in segment
+    lowered = segment.lower()
+    assert '<!doctype' not in lowered
+    assert '<body' not in lowered
+    # One scoping container holds the whole widget.
+    assert f'<div class="{ROOT_CLASS}">' in segment
+    # Self-contained: no external assets.
+    assert 'src="http' not in segment
+    assert 'href="http' not in segment
+
+    # Every grouping rule is scoped: no bare body/h1/h2/.badge selector that
+    # would reach out into (or be reached by) the report's Bootstrap CSS.
+    style = re.search(r'<style>(.*?)</style>', segment, re.S).group(1)
+    grouping_css = style.split('.qspace-viewer', 1)[0]  # drop the shared viewer CSS
+    for bare in ('\nbody{', '\nh1{', '\nh2{', '\n.badge{', '\n.output{', '\n*{'):
+        assert bare not in grouping_css, bare
+    assert f'.{ROOT_CLASS} .badge{{' in grouping_css
+    assert f'.{ROOT_CLASS} .output{{' in grouping_css
+
+
+def test_render_html_wraps_the_report_segment(tmp_path):
+    """The standalone page is the inline fragment inside a minimal page shell."""
+    from qsiprep.grouping.interactive import ROOT_CLASS
+
+    grouping = load_scenario('hcp_style', tmp_path, strict=False)
+    page = render_html(grouping)
+    assert page.startswith('<!doctype html>')
+    assert f'<div class="{ROOT_CLASS}">' in page
 
 
 @pytest.mark.parametrize('scenario', SCENARIOS)
@@ -137,9 +198,9 @@ def test_scheme_tab_builds_viewer_from_gradients(tmp_path):
     distinct = {tuple(round(value, 6) for value in point) for point in coords}
     assert len(distinct) == 4
 
-    tab = interactive._scheme_tab(grouping, concat)
-    assert tab.startswith('<div class="qspace-viewer">')
-    payload = tab.split('application/json">', 1)[1].split('</script>', 1)[0]
+    view = interactive._scheme_view(grouping, concat)
+    assert view.startswith('<div class="qspace-viewer">')
+    payload = view.split('application/json">', 1)[1].split('</script>', 1)[0]
     assert json.loads(payload)['files'] == data['files']
 
 
@@ -155,4 +216,4 @@ def test_scheme_tab_degrades_without_gradients(tmp_path):
     grouping = types.SimpleNamespace(files={str(nii): record})
     concat = types.SimpleNamespace(dwi_files=[str(nii)], output_name='sub-01_desc-preproc_dwi')
     assert interactive._scheme_data(grouping, concat) is None
-    assert 'scheme-missing' in interactive._scheme_tab(grouping, concat)
+    assert 'scheme-missing' in interactive._scheme_view(grouping, concat)

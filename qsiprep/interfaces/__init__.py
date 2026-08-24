@@ -5,7 +5,7 @@ from .confounds import DMRISummary, GatherConfounds
 from .fmap import FieldToHz, FieldToRadS, Phasediff2Fieldmap, Phases2Fieldmap
 from .freesurfer import StructuralReference
 from .images import Conform, ConformDwi, IntraModalMerge, ValidateImage
-from .reports import AboutSummary, SubjectSummary
+from .reports import AboutSummary, InteractiveReport, SubjectSummary
 from .utils import AddTSVHeader, ConcatAffines
 
 __all__ = [
@@ -23,6 +23,7 @@ __all__ = [
     'StructuralReference',
     'ValidateImage',
     'AboutSummary',
+    'InteractiveReport',
     'SubjectSummary',
     'AddTSVHeader',
     'ConcatAffines',

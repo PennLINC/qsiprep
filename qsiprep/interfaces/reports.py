@@ -285,6 +285,27 @@ class TopupSummary(SummaryInterface):
         return TOPUP_TEMPLATE.format(summary=self.inputs.summary)
 
 
+class InteractiveReportInputSpec(BaseInterfaceInputSpec):
+    segment = Str(mandatory=True, desc='pre-rendered HTML segment to write as a reportlet')
+
+
+class InteractiveReport(SummaryInterface):
+    """Write a pre-rendered, self-contained HTML segment as a reportlet.
+
+    The segment is a scoped fragment (its own inline ``<style>``/``<script>``,
+    e.g. the DWI grouping widget) that nireports inlines directly into the
+    report. Unlike the other summaries, the HTML is assembled by the caller (the
+    grouping page is built from a rich Python object at workflow-construction
+    time) and passed straight through, so it can be sunk with the standard
+    :class:`~qsiprep.interfaces.bids.DerivativesDataSink` provenance.
+    """
+
+    input_spec = InteractiveReportInputSpec
+
+    def _generate_segment(self):
+        return self.inputs.segment
+
+
 class GradientPlotInputSpec(BaseInterfaceInputSpec):
     orig_bvec_files = InputMultiObject(
         File(exists=True), mandatory=True, desc='bvecs from DWISplit'

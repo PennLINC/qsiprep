@@ -2,6 +2,11 @@ package: qsiprep
 title: Visual report for participant '{subject}' - QSIPrep
 sections:
 
+- name: DWI Grouping
+  reportlets:
+  - bids: {datatype: figures, desc: grouping, suffix: [T1w, T2w, dwi]}
+    subtitle: How QSIPrep grouped and processed this subject's DWI scans
+
 - name: Summary
   reportlets:
   - bids: {datatype: figures, desc: summary, suffix: [T1w, T2w, dwi]}

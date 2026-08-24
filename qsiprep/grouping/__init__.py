@@ -45,7 +45,7 @@ from .adapters import (
     unit_to_sidecar,
 )
 from .inference import build_grouping
-from .interactive import render_html
+from .interactive import render_html, render_report_segment
 from .metadata import index_subject
 from .models import (
     ConcatenationGroup,
@@ -83,6 +83,7 @@ __all__ = [
     'full_report',
     'index_subject',
     'render_html',
+    'render_report_segment',
     'report_text',
     'to_legacy_scan_groups',
     'to_preproc_units',

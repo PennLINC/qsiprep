@@ -49,6 +49,7 @@ from ..grouping import (
     build_dwi_grouping,
     check_backend,
     describe_processing,
+    render_report_segment,
     report_text,
     to_preproc_units,
 )
@@ -60,6 +61,7 @@ from ..interfaces import (
     BIDSDataGrabber,
     BIDSInfo,
     DerivativesDataSink,
+    InteractiveReport,
     SubjectSummary,
 )
 from ..utils.bids import collect_data
@@ -398,6 +400,37 @@ to workflows in *QSIPrep*'s documentation]\
             f'The DWI grouping for sub-{subject_id} has {len(grouping_errors)} '
             f'unresolvable problem(s):\n{rendered}'
         )
+
+    # Embed the grouping decision page (fieldmap estimations, which scans combine
+    # into each output, and how each is corrected) at the top of the subject
+    # report. Rendered here because it is built from the DWIGrouping object,
+    # which only exists at workflow-construction time. The segment's styles are
+    # scoped so it inlines natively into the report (no iframe).
+    grouping_report = pe.Node(
+        InteractiveReport(segment=render_report_segment(grouping)),
+        name='grouping_report',
+        run_without_submitting=True,
+    )
+    ds_report_grouping = pe.Node(
+        DerivativesDataSink(
+            base_directory=config.execution.output_dir,
+            datatype='figures',
+            desc='grouping',
+            suffix=report_suffix,
+        ),
+        name='ds_report_grouping',
+        run_without_submitting=True,
+    )
+    workflow.connect([
+        (bidssrc, ds_report_grouping, [
+            ((info_modality,
+              fix_multi_source_name,
+              config.workflow.subject_anatomical_reference == 'sessionwise',
+              config.workflow.anat_modality),
+             'source_file'),
+        ]),
+        (grouping_report, ds_report_grouping, [('out_report', 'in_file')]),
+    ])  # fmt:skip
 
     # Each PreprocUnit is one HMC+SDC run. concatenation_scheme maps each
     # unit's preprocessed result to the final output it is combined into. The
