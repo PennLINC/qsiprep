@@ -199,9 +199,9 @@ def test_anatomical_n4_estimates_on_truncated_but_corrects_the_original(tmp_path
         # and it is apply_bias, not n4_correct, that feeds downstream
         consumers = [k[1] for k in edges if k[0] == 'apply_bias']
         assert consumers, 'apply_bias output goes nowhere'
-        assert not any(k[0] == 'n4_correct' and k[1] != 'apply_bias' for k in edges), (
-            'the N4 output image still reaches something downstream'
-        )
+        assert not any(
+            k[0] == 'n4_correct' and k[1] != 'apply_bias' for k in edges
+        ), 'the N4 output image still reaches something downstream'
 
         assert nodes['n4_correct'].interface.inputs.save_bias is True
         trunc = nodes['truncate_intensity'].interface.inputs

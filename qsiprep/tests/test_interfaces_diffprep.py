@@ -603,13 +603,13 @@ def test_diffprep_split_outputs_deobliques_gradients(tmp_path):
     deobliqued = np.array([np.loadtxt(f) for f in deob_files])
     raw = np.array([np.loadtxt(f) for f in raw_files])
 
-    assert np.allclose(emitted, deobliqued, atol=1e-5), (
-        f'gradients are not the mrtrix RAS+ ones:\n{emitted}\nvs\n{deobliqued}'
-    )
+    assert np.allclose(
+        emitted, deobliqued, atol=1e-5
+    ), f'gradients are not the mrtrix RAS+ ones:\n{emitted}\nvs\n{deobliqued}'
     # And on this grid that is a real difference, so the assertion has teeth.
-    assert not np.allclose(deobliqued, raw, atol=1e-3), (
-        'oblique fixture failed to distinguish the two conversions'
-    )
+    assert not np.allclose(
+        deobliqued, raw, atol=1e-3
+    ), 'oblique fixture failed to distinguish the two conversions'
 
 
 def _make_original_with_sidecar(tmp_path, name, pe_dir):
