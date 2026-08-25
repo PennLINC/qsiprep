@@ -121,3 +121,60 @@ class CreateNonlinearityDisplacementMap(CommandLine):
 
     def _list_outputs(self):
         return {'out_field': op.abspath(self.inputs.out_field)}
+
+
+class _CreateGradientNonlinearityBMatrixInputSpec(CommandLineInputSpec):
+    final_image = File(
+        exists=True,
+        mandatory=True,
+        copyfile=True,
+        argstr='-f %s',
+        desc='Final preprocessed b=0, in the output space. The tool writes its '
+        'outputs beside this file, so it is staged into the node directory.',
+    )
+    nonlinearity = File(
+        exists=True,
+        mandatory=True,
+        argstr='-g %s',
+        desc='Coefficient file or ITK gradwarp displacement field',
+    )
+    initial_image = File(
+        exists=True,
+        argstr='-i %s',
+        desc='Raw native-space b=0. Omitted means the final image is native.',
+    )
+    is_ge = traits.Bool(False, usedefault=True, argstr='--isGE %d', desc='Scanner is GE')
+
+
+class _CreateGradientNonlinearityBMatrixOutputSpec(TraitedSpec):
+    grad_dev = File(exists=True, desc='9-component gradient deviation (L) map')
+    gradwarp_field = File(exists=True, desc='Gradwarp displacement field')
+
+
+class CreateGradientNonlinearityBMatrix(CommandLine):
+    """Compute the voxelwise gradient deviation tensor.
+
+    Emits the HCP-style 9-component L matrix per voxel. Applied downstream as
+    ``L @ g``: because L carries scaling and shear, not just rotation, both the
+    b-vector and the b-value deviate per voxel.
+    """
+
+    input_spec = _CreateGradientNonlinearityBMatrixInputSpec
+    output_spec = _CreateGradientNonlinearityBMatrixOutputSpec
+    _cmd = 'CreateGradientNonlinearityBMatrix'
+
+    def _graddev_suffix(self):
+        """The tool names its output for how the nonlinearity was supplied."""
+        if '.nii' in op.basename(self.inputs.nonlinearity):
+            return '_graddev_f.nii'
+        return '_graddev_c.nii'
+
+    def _list_outputs(self):
+        # Outputs are named from the -f input's stem, in its directory. Because
+        # final_image is copyfile=True, that directory is this node's cwd.
+        staged = op.abspath(op.basename(self.inputs.final_image))
+        stem = staged[: staged.rfind('.nii')]
+        return {
+            'grad_dev': stem + self._graddev_suffix(),
+            'gradwarp_field': stem + '_gradwarp_field.nii',
+        }

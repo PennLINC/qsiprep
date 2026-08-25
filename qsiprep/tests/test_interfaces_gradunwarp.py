@@ -132,3 +132,65 @@ def test_displacement_map_runs_on_synthetic_coefficients(tmp_path):
     # A parsed coefficient file must produce a non-trivial field; an all-zero
     # result means the .grad fixture did not parse.
     assert np.abs(np.asanyarray(field.dataobj)).max() > 0
+
+
+def test_bmatrix_cmdline_flags(tmp_path):
+    from qsiprep.interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
+
+    coeff = write_siemens_grad(tmp_path / 'coeff.grad')
+    final = write_dwi_with_gradients(tmp_path / 'final_b0.nii.gz')
+    initial = write_dwi_with_gradients(tmp_path / 'initial_b0.nii.gz')
+    cmd = CreateGradientNonlinearityBMatrix(
+        final_image=final, initial_image=initial, nonlinearity=str(coeff)
+    ).cmdline
+
+    assert f'-f {final}' in cmd
+    assert f'-i {initial}' in cmd
+    assert f'-g {coeff}' in cmd
+
+
+def test_bmatrix_is_ge_uses_a_value_not_omission(tmp_path):
+    """Unlike CreateNonlinearityDisplacementMap, this tool's getIsGE() uses
+    atoi(), so --isGE 0 correctly means false."""
+    from qsiprep.interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
+
+    coeff = write_siemens_grad(tmp_path / 'coeff.grad')
+    final = write_dwi_with_gradients(tmp_path / 'final_b0.nii.gz')
+    iface = CreateGradientNonlinearityBMatrix(final_image=final, nonlinearity=str(coeff))
+
+    assert '--isGE 0' in iface.cmdline
+    iface.inputs.is_ge = True
+    assert '--isGE 1' in iface.cmdline
+
+
+def test_bmatrix_output_suffix_depends_on_nonlinearity_type(tmp_path):
+    """Coefficients produce _graddev_c.nii; a field produces _graddev_f.nii."""
+    from qsiprep.interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
+
+    final = write_dwi_with_gradients(tmp_path / 'final_b0.nii.gz')
+
+    from_coeffs = CreateGradientNonlinearityBMatrix(
+        final_image=final, nonlinearity=str(write_siemens_grad(tmp_path / 'coeff.grad'))
+    )
+    assert from_coeffs._graddev_suffix() == '_graddev_c.nii'
+
+    from_field = CreateGradientNonlinearityBMatrix(
+        final_image=final, nonlinearity=str(write_itk_field(tmp_path / 'field.nii'))
+    )
+    assert from_field._graddev_suffix() == '_graddev_f.nii'
+
+
+def test_bmatrix_runs_on_synthetic_coefficients(tmp_path):
+    """End-to-end against the real binary, in CI's container."""
+    from qsiprep.interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
+
+    _require('CreateGradientNonlinearityBMatrix')
+    coeff = write_siemens_grad(tmp_path / 'coeff.grad')
+    final = write_dwi_with_gradients(tmp_path / 'final_b0.nii.gz', nvols=1)
+    result = CreateGradientNonlinearityBMatrix(final_image=final, nonlinearity=str(coeff)).run(
+        cwd=str(tmp_path)
+    )
+
+    grad_dev = nb.load(result.outputs.grad_dev)
+    # Nine components: the row-major 3x3 L matrix per voxel.
+    assert grad_dev.shape[-1] == 9
