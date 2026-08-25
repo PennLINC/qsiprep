@@ -42,7 +42,7 @@ def _basename(path: str) -> str:
 
 def plan_payload(grouping, plan) -> dict:
     """The viewer's JSON payload for one compiled execution plan."""
-    from ..grouping.report import plan_step_records
+    from ..grouping.report import drbuddi_channels, plan_step_records
 
     letters = {
         eid: chr(ord('A') + index) for index, eid in enumerate(sorted(grouping.estimations))
@@ -68,6 +68,7 @@ def plan_payload(grouping, plan) -> dict:
                     'estimation': stage.estimation,
                     'letter': letters.get(stage.estimation),
                     'target': stage.structural_target,
+                    'channels': drbuddi_channels(stage) if stage.tool == 'drbuddi' else None,
                     'consumes': stage.consumes,
                     'sources': [_basename(path) for path in stage.fieldmap_sources],
                     'borrowed': [_basename(path) for path in stage.borrowed_b0],

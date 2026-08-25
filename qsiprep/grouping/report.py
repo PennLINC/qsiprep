@@ -312,6 +312,21 @@ def _stage_kind(role) -> str:
     }[role]
 
 
+def drbuddi_channels(stage) -> str:
+    """The registration channels a DRBUDDI stage will use, e.g. ``'b=0+FA+T2w'``.
+
+    DRBUDDI always registers the blip-up/blip-down b=0 images; a reverse-PE
+    DWI *series* on both sides adds the FA channel (the ``rpe_series`` path),
+    and a structural target adds the multimodal T2w channel.
+    """
+    channels = ['b=0']
+    if stage.plus_files and stage.minus_files:
+        channels.append('FA')
+    if stage.structural_target == 't2w':
+        channels.append('T2w')
+    return '+'.join(channels)
+
+
 def _stage_text(grouping: DWIGrouping, selection: MethodSelection, stage) -> str:
     """One concise sentence for a plan stage, keyed on (role, tool)."""
     from .plan import StageRole
@@ -336,14 +351,15 @@ def _stage_text(grouping: DWIGrouping, selection: MethodSelection, stage) -> str
     if stage.tool == 'tortoise':
         return 'TORTOISE DIFFPREP corrects head motion and eddy currents.'
     if stage.tool == 'drbuddi':
+        channels = drbuddi_channels(stage)
         if stage.role is StageRole.REFINE:
             return (
                 'DRBUDDI refines the correction from the corrected '
-                'blip-up/blip-down series.'
+                f'blip-up/blip-down series ({channels} registration).'
             )
         return (
-            'DRBUDDI estimates distortion from the blip-up/blip-down pair and '
-            'applies the correction.'
+            'DRBUDDI estimates distortion from the blip-up/blip-down pair '
+            f'({channels} registration) and applies the correction.'
         )
     if stage.tool == 'fieldmap':
         label = _METHOD_LABELS.get(stage.method, 'fieldmap')

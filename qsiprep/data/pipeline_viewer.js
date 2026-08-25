@@ -142,7 +142,12 @@
         var x = colX(1 + idx);
         var style = stage.role === 'estimate' ? 'estimate' : stage.role;
         var subtitle = ROLE_PHRASES[stage.role] || stage.role;
-        if (stage.target) subtitle += ' · ' + stage.target;
+        if (stage.channels) {
+          // DRBUDDI: name the registration channels (b=0 / +FA / +T2w).
+          subtitle = stage.channels + ' registration';
+        } else if (stage.target) {
+          subtitle += ' · ' + stage.target;
+        }
         var node = drawNode(svg, x, y, style, stage.label, subtitle);
         var edgeLabel = null;
         var next = run.stages[idx + 1];

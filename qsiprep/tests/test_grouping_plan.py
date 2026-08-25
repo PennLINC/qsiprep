@@ -263,3 +263,36 @@ def test_plan_step_records_scope_issues_to_their_output(tmp_path):
     assert issues
     assert issues[0].severity == 'error'
     assert 'eddy-requires-shelled' in issues[0].text
+
+
+def test_drbuddi_registration_channels(tmp_path):
+    """The plan names DRBUDDI's registration mode from the stage's facts:
+    reverse-PE DWI series on both sides add FA, a T2w adds the multimodal
+    channel, and an epi-fieldmap-only pair is b=0-only."""
+    from qsiprep.grouping.report import drbuddi_channels
+
+    # Reverse-PE DWI pair, subject has a T2w: b=0+FA+T2w.
+    plan = _plan_for(tmp_path, 'partial_pair', 'tortoise', 'drbuddi')
+    pair_stage = plan.run('sub-01_acq-fast').stage_with('drbuddi')
+    assert drbuddi_channels(pair_stage) == 'b=0+FA+T2w'
+
+    # Reverse-PE DWI pair, no T2w: b=0+FA.
+    plan = _plan_for(tmp_path, 'hcp_style', 'tortoise', 'drbuddi')
+    (run,) = plan.runs
+    assert drbuddi_channels(run.stage_with('drbuddi')) == 'b=0+FA'
+
+    # Dedicated epi fieldmap only (single-polarity DWI), no T2w: b=0 only.
+    from qsiprep.grouping.report import plan_step_records
+    from qsiprep.viz.pipeline import plan_payload
+
+    grouping = load_scenario('abcd_style', tmp_path, strict=False)
+    plan = compile_plan(grouping, selection_for_config('tortoise', 'drbuddi'))
+    (run,) = plan.runs
+    assert drbuddi_channels(run.stage_with('drbuddi')) == 'b=0'
+    # The step sentence and the diagram payload carry the mode.
+    (records,) = plan_step_records(grouping, plan).values()
+    (drbuddi_record,) = (r for r in records if r.tool == 'drbuddi')
+    assert '(b=0 registration)' in drbuddi_record.text
+    (payload_run,) = plan_payload(grouping, plan)['runs']
+    (drbuddi_stage,) = (s for s in payload_run['stages'] if s['tool'] == 'drbuddi')
+    assert drbuddi_stage['channels'] == 'b=0'
