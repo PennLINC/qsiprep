@@ -589,10 +589,14 @@ class workflow(_Config):
     """Regularize fieldmaps with a field of B-Spline basis."""
     fmap_demean = None
     """Remove the mean from fieldmaps."""
+    force = None
+    """Corrections to force on regardless of input metadata."""
     force_syn = None
     """Run *fieldmap-less* susceptibility-derived distortions estimation."""
     gpu = None
     """Tasks to run on the GPU (see ``qsiprep.utils.gpu``)."""
+    gradient_file = None
+    """Gradient nonlinearity coefficient file or displacement field."""
     hmc_model = None
     """Model used to generate target images for hmc."""
     hmc_transform = None
