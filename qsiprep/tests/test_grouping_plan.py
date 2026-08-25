@@ -134,13 +134,13 @@ def test_eddy_drbuddi_only_corrects_after_hmc(tmp_path):
     assert _role_tool(run) == [('hmc', 'eddy'), ('estimate+apply', 'drbuddi')]
 
 
-def test_diffprep_drbuddi_sequence(tmp_path):
-    plan = _plan_for(tmp_path, 'hcp_style', 'diffprep', 'drbuddi')
+def test_tortoise_drbuddi_sequence(tmp_path):
+    plan = _plan_for(tmp_path, 'hcp_style', 'tortoise', 'drbuddi')
     (run,) = plan.runs
-    assert _role_tool(run) == [('hmc', 'diffprep'), ('estimate+apply', 'drbuddi')]
+    assert _role_tool(run) == [('hmc', 'tortoise'), ('estimate+apply', 'drbuddi')]
 
 
-def test_shoreline_is_named_not_diffprep(tmp_path):
+def test_shoreline_is_named_not_tortoise(tmp_path):
     plan = _plan_for(tmp_path, 'hcp_style', 'shoreline', 'drbuddi')
     (run,) = plan.runs
     assert _role_tool(run) == [('hmc', 'shoreline'), ('estimate+apply', 'drbuddi')]
@@ -154,10 +154,10 @@ def test_gre_fieldmap_estimates_after_hmc(tmp_path):
     ), stages
 
 
-def test_diffprep_t2wreg_fallback_stage(tmp_path):
-    plan = _plan_for(tmp_path, 'fieldmapless_t2w', 'diffprep', 'drbuddi')
+def test_tortoise_t2wreg_fallback_stage(tmp_path):
+    plan = _plan_for(tmp_path, 'fieldmapless_t2w', 'tortoise', 'drbuddi')
     (run,) = plan.runs
-    assert _role_tool(run) == [('hmc', 'diffprep'), ('estimate+apply', 't2wreg')]
+    assert _role_tool(run) == [('hmc', 'tortoise'), ('estimate+apply', 't2wreg')]
     assert run.stages[1].structural_target == 't2w'
 
 
@@ -168,8 +168,8 @@ def test_eddy_cannot_run_t2wreg(tmp_path):
     assert any(issue.code == 'anat-sdc-unsupported' for issue in plan.issues)
 
 
-def test_synb0_prefers_synthetic_target_on_diffprep(tmp_path):
-    plan = _plan_for(tmp_path, 't2w_hcp', 'diffprep', 'drbuddi', use_synb0=True)
+def test_synb0_prefers_synthetic_target_on_tortoise(tmp_path):
+    plan = _plan_for(tmp_path, 't2w_hcp', 'tortoise', 'drbuddi', use_synb0=True)
     targets = {
         stage.structural_target
         for run in plan.runs
@@ -193,7 +193,7 @@ def test_decomposed_pairs_get_their_own_runs(tmp_path):
     """A multi-readout PEPOLAR unit splits per blip pair on decomposing methods."""
     grouping = load_scenario('multi_readout', tmp_path, strict=False)
     pooled = compile_plan(grouping, selection_for_config('eddy', 'topup'))
-    split = compile_plan(grouping, selection_for_config('diffprep', 'drbuddi'))
+    split = compile_plan(grouping, selection_for_config('tortoise', 'drbuddi'))
     assert len(split.runs) > len(pooled.runs)
     assert {run.logical_unit for run in split.runs} == {
         run.logical_unit for run in pooled.runs

@@ -174,7 +174,7 @@ def _describe_unit(lines, grouping, selection, multipart_id, unit, step) -> int:
     """One correction unit's HMC+SDC steps; returns the next step number."""
     corrected = _unit_corrected(grouping, unit)
     dgroups = [grouping.distortion_groups[key] for key in unit.distortion_groups]
-    if selection.hmc is HmcMethod.DIFFPREP:
+    if selection.hmc is HmcMethod.TORTOISE:
         return _describe_tortoise(lines, grouping, multipart_id, corrected, dgroups, step)
     if selection.hmc is HmcMethod.SHORELINE:
         return _describe_shoreline(
@@ -333,8 +333,8 @@ def _stage_text(grouping: DWIGrouping, selection: MethodSelection, stage) -> str
             )
         model = '3dSHORE' if selection.shoreline_model == '3dshore' else 'tensor'
         return f'SHORELine corrects head motion using a {model} signal model.'
-    if stage.tool == 'diffprep':
-        return 'DIFFPREP corrects head motion and eddy currents.'
+    if stage.tool == 'tortoise':
+        return 'TORTOISE DIFFPREP corrects head motion and eddy currents.'
     if stage.tool == 'drbuddi':
         if stage.role is StageRole.REFINE:
             return (
@@ -606,11 +606,11 @@ def _describe_tortoise(lines, grouping, multipart_id, corrected, dgroups, step):
     if len(dgroups) > 1:
         keys = ', '.join(dgroup.key for dgroup in dgroups)
         lines.append(
-            f'  {step}. DIFFPREP corrects head motion and eddy currents separately '
+            f'  {step}. TORTOISE DIFFPREP corrects head motion and eddy currents separately '
             f'for each distortion group ({keys}).'
         )
     else:
-        lines.append(f'  {step}. DIFFPREP corrects head motion and eddy currents.')
+        lines.append(f'  {step}. TORTOISE DIFFPREP corrects head motion and eddy currents.')
     step += 1
 
     if pepolar_ids:

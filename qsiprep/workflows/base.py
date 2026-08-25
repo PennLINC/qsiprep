@@ -80,7 +80,7 @@ def _t2w_sdc_enabled(selection):
     the PEPOLAR tools; DIFFPREP's ``--epi T2Wreg`` covers the fieldmap-less
     case and is not gated on the PEPOLAR tool choice.
     """
-    return SdcTool.DRBUDDI in selection.pepolar_tools or selection.hmc is HmcMethod.DIFFPREP
+    return SdcTool.DRBUDDI in selection.pepolar_tools or selection.hmc is HmcMethod.TORTOISE
 
 
 def _t2w_available_for_sdc(subject_data, selection):

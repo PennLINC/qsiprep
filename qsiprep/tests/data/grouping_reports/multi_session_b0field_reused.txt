@@ -55,33 +55,33 @@ Output "sub-01_ses-2_dir-PA" (1 single series):
   3. The corrected series is written as one output file.
   !! WARNING [no-sdc]: Output 'sub-01_ses-2_dir-PA' has no fieldmap and this subject has no T2w image (or the series lacks PhaseEncodingDirection): no susceptibility distortion correction will be performed.
 
-Processing preview: DIFFPREP + DRBUDDI (--hmc-method diffprep --sdc-method drbuddi)
+Processing preview: TORTOISE + DRBUDDI (--hmc-method tortoise --sdc-method drbuddi)
 -----------------------------------------------------------------------------------
 
 Output "sub-01_ses-1_dir-AP" (1 single series):
   1. The series is denoised.
-  2. DIFFPREP corrects head motion and eddy currents.
+  2. TORTOISE DIFFPREP corrects head motion and eddy currents.
   3. No fieldmap is available and this subject has no T2w image: susceptibility distortion is NOT corrected.
   4. The corrected series is written as one output file.
   !! WARNING [no-sdc]: Output 'sub-01_ses-1_dir-AP' has no fieldmap and this subject has no T2w image (or the series lacks PhaseEncodingDirection): no susceptibility distortion correction will be performed.
 
 Output "sub-01_ses-1_dir-PA" (1 single series):
   1. The series is denoised.
-  2. DIFFPREP corrects head motion and eddy currents.
+  2. TORTOISE DIFFPREP corrects head motion and eddy currents.
   3. No fieldmap is available and this subject has no T2w image: susceptibility distortion is NOT corrected.
   4. The corrected series is written as one output file.
   !! WARNING [no-sdc]: Output 'sub-01_ses-1_dir-PA' has no fieldmap and this subject has no T2w image (or the series lacks PhaseEncodingDirection): no susceptibility distortion correction will be performed.
 
 Output "sub-01_ses-2_dir-AP" (1 single series):
   1. The series is denoised.
-  2. DIFFPREP corrects head motion and eddy currents.
+  2. TORTOISE DIFFPREP corrects head motion and eddy currents.
   3. No fieldmap is available and this subject has no T2w image: susceptibility distortion is NOT corrected.
   4. The corrected series is written as one output file.
   !! WARNING [no-sdc]: Output 'sub-01_ses-2_dir-AP' has no fieldmap and this subject has no T2w image (or the series lacks PhaseEncodingDirection): no susceptibility distortion correction will be performed.
 
 Output "sub-01_ses-2_dir-PA" (1 single series):
   1. The series is denoised.
-  2. DIFFPREP corrects head motion and eddy currents.
+  2. TORTOISE DIFFPREP corrects head motion and eddy currents.
   3. No fieldmap is available and this subject has no T2w image: susceptibility distortion is NOT corrected.
   4. The corrected series is written as one output file.
   !! WARNING [no-sdc]: Output 'sub-01_ses-2_dir-PA' has no fieldmap and this subject has no T2w image (or the series lacks PhaseEncodingDirection): no susceptibility distortion correction will be performed.

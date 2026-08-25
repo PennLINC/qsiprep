@@ -596,7 +596,7 @@ class workflow(_Config):
     gpu = None
     """Tasks to run on the GPU (see ``qsiprep.utils.gpu``)."""
     hmc_method = None
-    """Which software corrects head motion: eddy, shoreline or diffprep."""
+    """Which software corrects head motion: eddy, shoreline or tortoise."""
     hmc_model = None
     """Model used to generate target images for hmc. DEPRECATED: the legacy
     vocabulary equivalent of ``hmc_method`` + ``shoreline_model``, kept while

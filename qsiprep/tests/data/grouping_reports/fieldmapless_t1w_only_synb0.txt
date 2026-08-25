@@ -20,12 +20,12 @@ Output "sub-01_dir-AP" (1 single series):
   4. eddy corrects head motion, eddy currents, and susceptibility distortion in one model, using the TOPUP field.
   5. The corrected series is written as one output file.
 
-Processing preview: DIFFPREP + DRBUDDI (--hmc-method diffprep --sdc-method drbuddi)
+Processing preview: TORTOISE + DRBUDDI (--hmc-method tortoise --sdc-method drbuddi)
 -----------------------------------------------------------------------------------
 
 Output "sub-01_dir-AP" (1 single series):
   1. The series is denoised.
-  2. DIFFPREP corrects head motion and eddy currents.
+  2. TORTOISE DIFFPREP corrects head motion and eddy currents.
   3. SyNb0 synthesizes an undistorted b=0 image from the T1w (sub-01_T1w.nii.gz); DIFFPREP registers the data to it (T2Wreg mode) to estimate and correct distortion.
   4. The corrected series is written as one output file.
 

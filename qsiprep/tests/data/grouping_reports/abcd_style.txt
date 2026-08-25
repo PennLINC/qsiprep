@@ -22,12 +22,12 @@ Output "sub-01_dir-AP" (1 single series):
   3. eddy corrects head motion, eddy currents, and susceptibility distortion in one model, using the TOPUP field. Every volume is assigned to its distortion group in the eddy index file.
   4. The corrected series is written as one output file.
 
-Processing preview: DIFFPREP + DRBUDDI (--hmc-method diffprep --sdc-method drbuddi)
+Processing preview: TORTOISE + DRBUDDI (--hmc-method tortoise --sdc-method drbuddi)
 -----------------------------------------------------------------------------------
 
 Output "sub-01_dir-AP" (1 single series):
   1. The series is denoised.
-  2. DIFFPREP corrects head motion and eddy currents.
+  2. TORTOISE DIFFPREP corrects head motion and eddy currents.
   3. DRBUDDI estimates distortion along the j axis from the blip-up (borrowed series) and blip-down (sub-01_dir-AP) data and applies the correction to every volume.
   4. The corrected series is written as one output file.
 

@@ -100,7 +100,7 @@ def _build_parser(**kwargs):
     # The deprecated --hmc-model vocabulary, mapped onto the method axes.
     hmc_model_to_method = {
         'eddy': 'eddy',
-        'tortoise': 'diffprep',
+        'tortoise': 'tortoise',
         '3dSHORE': 'shoreline',
         'tensor': 'shoreline',
         'none': 'shoreline',
@@ -206,18 +206,18 @@ def _build_parser(**kwargs):
             explicit_sdc = legacy_pepolar.lower() if legacy_pepolar else namespace.sdc_method
             if explicit_sdc in (None, 'auto'):
                 namespace.sdc_method = 'topup' if namespace.hmc_method == 'eddy' else 'drbuddi'
-                # DIFFPREP gets DRBUDDI (the legacy 'TOPUP' default never produced
+                # TORTOISE gets DRBUDDI (the legacy 'TOPUP' default never produced
                 # a working DIFFPREP run); eddy and SHORELine keep the legacy
                 # 'TOPUP' so report gating that still reads pepolar_method builds
                 # the same graph it does today.
                 namespace.pepolar_method = (
-                    'DRBUDDI' if namespace.hmc_method == 'diffprep' else 'TOPUP'
+                    'DRBUDDI' if namespace.hmc_method == 'tortoise' else 'TOPUP'
                 )
             else:
                 if namespace.hmc_method != 'eddy' and 'topup' in explicit_sdc:
                     self.error(
                         f'--sdc-method {explicit_sdc} requires --hmc-method eddy: '
-                        'SHORELine and DIFFPREP correct PEPOLAR units with DRBUDDI'
+                        'SHORELine and TORTOISE correct PEPOLAR units with DRBUDDI'
                     )
                 namespace.sdc_method = explicit_sdc
                 namespace.pepolar_method = explicit_sdc.upper()
@@ -795,12 +795,12 @@ How to combine the corrected results of an output's correction units.
         '--hmc-method',
         action='store',
         default=None,
-        choices=['eddy', 'shoreline', 'diffprep'],
+        choices=['eddy', 'shoreline', 'tortoise'],
         help='which software corrects head motion and eddy currents: '
         '"eddy" (FSL; requires a shelled sampling scheme; the default), '
         '"shoreline" (SHORELine; model-based, works on arbitrary q-space '
         'sampling; see --shoreline-model and --shoreline-iters), or '
-        '"diffprep" (TORTOISE DIFFPREP; rigid head motion and 24-parameter '
+        '"tortoise" (TORTOISE DIFFPREP; rigid head motion and 24-parameter '
         'quadratic eddy-current correction, arbitrary sampling; see '
         '--diffprep-config).',
     )
@@ -818,7 +818,7 @@ How to combine the corrected results of an output's correction units.
         ],
         help='DEPRECATED: use --hmc-method (and --shoreline-model) instead. '
         '"eddy" means `--hmc-method eddy`; "tortoise" means `--hmc-method '
-        'diffprep`; "3dSHORE", "tensor" and "none" mean `--hmc-method '
+        'tortoise`; "3dSHORE", "tensor" and "none" mean `--hmc-method '
         'shoreline` with the matching --shoreline-model.',
     )
     g_moco.add_argument(
@@ -843,7 +843,7 @@ How to combine the corrected results of an output's correction units.
         '--diffprep-config',
         action='store',
         help='path to a json file with settings for the call to TORTOISE '
-        'DIFFPREP (used only when --hmc-model is tortoise). This is also where '
+        'DIFFPREP (used only when --hmc-method is tortoise). This is also where '
         'the correction mode is chosen: "correction_mode" may be "motion" '
         '(rigid only), "quadratic" (the default) or "cubic". '
         'If no json is specified, a default one will be used. The '
@@ -914,7 +914,7 @@ How to combine the corrected results of an output's correction units.
         default=False,
         help='override all fieldmaps with T2w-registration SDC (TORTOISE '
         'T2Wreg). Requires a T2w image and an SDC stage that can consume it '
-        '(--hmc-method diffprep or --sdc-method drbuddi).',
+        '(--hmc-method tortoise or --sdc-method drbuddi).',
     )
     g_fmap.add_argument(
         '--fmap-bspline',

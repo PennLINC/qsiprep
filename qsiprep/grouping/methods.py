@@ -21,11 +21,17 @@ from .models import CorrectionMethod
 
 
 class HmcMethod(enum.StrEnum):
-    """Which software corrects head motion (and eddy currents)."""
+    """Which software corrects head motion (and eddy currents).
+
+    Values are the names users can cite: eddy, TOPUP and DRBUDDI have their
+    own papers, while TORTOISE's motion/eddy correction (the DIFFPREP
+    program) is only described in the TORTOISE papers - so it is selected as
+    ``tortoise``, with DIFFPREP named in the prose where precision helps.
+    """
 
     EDDY = 'eddy'
     SHORELINE = 'shoreline'
-    DIFFPREP = 'diffprep'
+    TORTOISE = 'tortoise'
 
 
 class SdcTool(enum.StrEnum):
@@ -105,8 +111,8 @@ HMC_CAPABILITIES: dict[HmcMethod, HmcCapabilities] = {
         consumes_t2w_target=False,
         pepolar_tools=frozenset({SdcTool.DRBUDDI}),
     ),
-    HmcMethod.DIFFPREP: HmcCapabilities(
-        label='DIFFPREP',
+    HmcMethod.TORTOISE: HmcCapabilities(
+        label='TORTOISE',
         requires_shelled=False,
         native_orientation='LPS',
         integrated_pepolar=None,
@@ -176,8 +182,7 @@ SDC_CAPABILITIES: dict[SdcTool, SdcCapabilities] = {
 _HMC_ALIASES = {
     'eddy': HmcMethod.EDDY,
     'shoreline': HmcMethod.SHORELINE,
-    'diffprep': HmcMethod.DIFFPREP,
-    'tortoise': HmcMethod.DIFFPREP,
+    'tortoise': HmcMethod.TORTOISE,
     '3dshore': HmcMethod.SHORELINE,
     'tensor': HmcMethod.SHORELINE,
     'none': HmcMethod.SHORELINE,
@@ -233,7 +238,7 @@ class MethodSelection:
         """The legacy ``--hmc-model`` value equivalent to this selection."""
         if self.hmc is HmcMethod.EDDY:
             return 'eddy'
-        if self.hmc is HmcMethod.DIFFPREP:
+        if self.hmc is HmcMethod.TORTOISE:
             return 'tortoise'
         return _LEGACY_HMC_MODEL[self.shoreline_model]
 
@@ -269,9 +274,9 @@ def selection_for_config(
     Accepts both the legacy values (``--hmc-model`` ``eddy``/``tortoise``/
     ``3dSHORE``/``tensor``/``none``; ``--pepolar-method`` ``TOPUP``/
     ``DRBUDDI``/``TOPUP+DRBUDDI``) and the axis values (``shoreline``/
-    ``diffprep``; lowercase tools; ``auto``). ``auto`` (or ``None``) resolves
+    lowercase tools; ``auto``). ``auto`` (or ``None``) resolves
     to the HMC method's preferred PEPOLAR tool. Mismatched combinations
-    (e.g. ``diffprep`` with an explicit ``topup``) are accepted here;
+    (e.g. ``tortoise`` with an explicit ``topup``) are accepted here;
     feasibility is the compiler's job.
     """
     hmc_key = (hmc_model or '').lower()

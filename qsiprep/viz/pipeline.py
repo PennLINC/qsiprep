@@ -28,7 +28,7 @@ _TOOL_LABELS = {
     'topup': 'TOPUP',
     'eddy': 'eddy',
     'shoreline': 'SHORELine',
-    'diffprep': 'DIFFPREP',
+    'tortoise': 'TORTOISE',
     'drbuddi': 'DRBUDDI',
     'fieldmap': 'GRE fieldmap',
     't2wreg': 'T2Wreg',

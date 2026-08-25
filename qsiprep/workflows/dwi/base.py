@@ -259,8 +259,8 @@ def init_dwi_preproc_wf(
             name='hmc_sdc_wf',
         )
 
-    elif hmc_tool == 'diffprep':
-        # DIFFPREP performs its own SDC internally (DRBUDDI for reverse-PE,
+    elif hmc_tool == 'tortoise':
+        # TORTOISE DIFFPREP performs its own SDC internally (DRBUDDI for reverse-PE,
         # TORTOISE T2Wreg for the fieldmap-less-with-T2w case, or qsiprep's
         # init_sdc_wf for GRE/phase/SyN) -- exactly as init_fsl_hmc_wf owns
         # its SDC. So no fieldmap guard here; the branching lives inside

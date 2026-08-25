@@ -18,12 +18,12 @@ Output "sub-01_dir-AP" (1 single series):
   2. eddy corrects head motion and eddy currents; a standalone fieldmap-less SyN warp (constrained ANTs registration of the T1w to a fieldmap atlas: sub-01_T1w.nii.gz) is applied to unwarp the results.
   3. The corrected series is written as one output file.
 
-Processing preview: DIFFPREP + DRBUDDI (--hmc-method diffprep --sdc-method drbuddi)
+Processing preview: TORTOISE + DRBUDDI (--hmc-method tortoise --sdc-method drbuddi)
 -----------------------------------------------------------------------------------
 
 Output "sub-01_dir-AP" (1 single series):
   1. The series is denoised.
-  2. DIFFPREP corrects head motion and eddy currents.
+  2. TORTOISE DIFFPREP corrects head motion and eddy currents.
   3. A standalone fieldmap-less SyN warp is estimated by a constrained ANTs registration of the T1w (sub-01_T1w.nii.gz) to a fieldmap atlas, and applied to unwarp the DIFFPREP output.
   4. The corrected series is written as one output file.
 

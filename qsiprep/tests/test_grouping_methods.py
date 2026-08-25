@@ -39,8 +39,7 @@ def test_legacy_backend_matches_the_original_truth_table(hmc_model, pepolar_meth
     ('hmc_model', 'hmc', 'shoreline_model'),
     [
         ('eddy', HmcMethod.EDDY, None),
-        ('tortoise', HmcMethod.DIFFPREP, None),
-        ('diffprep', HmcMethod.DIFFPREP, None),
+        ('tortoise', HmcMethod.TORTOISE, None),
         ('shoreline', HmcMethod.SHORELINE, '3dshore'),
         ('3dSHORE', HmcMethod.SHORELINE, '3dshore'),
         ('tensor', HmcMethod.SHORELINE, 'tensor'),
@@ -57,7 +56,7 @@ def test_hmc_vocabulary_old_and_new(hmc_model, hmc, shoreline_model):
 def test_auto_resolves_per_hmc_method(pepolar_method):
     assert selection_for_config('eddy', pepolar_method).pepolar_tools == (SdcTool.TOPUP,)
     assert selection_for_config('shoreline', pepolar_method).pepolar_tools == (SdcTool.DRBUDDI,)
-    assert selection_for_config('diffprep', pepolar_method).pepolar_tools == (SdcTool.DRBUDDI,)
+    assert selection_for_config('tortoise', pepolar_method).pepolar_tools == (SdcTool.DRBUDDI,)
 
 
 def test_pepolar_vocabulary_old_and_new():
@@ -109,7 +108,7 @@ def test_selection_validation():
     [
         ('fsl', 'eddy + TOPUP'),
         ('mixed', 'eddy + TOPUP→DRBUDDI'),
-        ('tortoise', 'DIFFPREP + DRBUDDI'),
+        ('tortoise', 'TORTOISE + DRBUDDI'),
     ],
 )
 def test_canonical_selection_previews_its_backend(backend, expected_label):

@@ -32,12 +32,12 @@ Output "sub-01" (4 series):
   3. eddy corrects head motion, eddy currents, and susceptibility distortion in one model, using the TOPUP field. Every volume is assigned to its distortion group in the eddy index file.
   4. The corrected series is written as one output file.
 
-Processing preview: DIFFPREP + DRBUDDI (--hmc-method diffprep --sdc-method drbuddi)
+Processing preview: TORTOISE + DRBUDDI (--hmc-method tortoise --sdc-method drbuddi)
 -----------------------------------------------------------------------------------
 
 Output "sub-01" (4 series):
   1. Each series is denoised on its own, then all 4 series are concatenated. (--denoise-after-combining reverses this order.)
-  2. DIFFPREP corrects head motion and eddy currents separately for each distortion group (sub-01_acq-fast_dir-AP, sub-01_acq-fast_dir-PA, sub-01_acq-slow_dir-AP, sub-01_acq-slow_dir-PA).
+  2. TORTOISE DIFFPREP corrects head motion and eddy currents separately for each distortion group (sub-01_acq-fast_dir-AP, sub-01_acq-fast_dir-PA, sub-01_acq-slow_dir-AP, sub-01_acq-slow_dir-PA).
      Estimation forms 2 blip pairs (axis j, TRT 0.05s; axis j, TRT 0.08s); each is corrected in its own DIFFPREP+DRBUDDI pipeline and the corrected results are combined.
   3. DRBUDDI estimates distortion along the j axis (TRT 0.05s) from the blip-up (sub-01_acq-fast_dir-PA) and blip-down (sub-01_acq-fast_dir-AP) data and applies the correction to every volume.
   4. DRBUDDI estimates distortion along the j axis (TRT 0.08s) from the blip-up (sub-01_acq-slow_dir-PA) and blip-down (sub-01_acq-slow_dir-AP) data and applies the correction to every volume.

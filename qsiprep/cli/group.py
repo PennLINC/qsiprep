@@ -4,7 +4,7 @@ Usage::
 
     qsiprep-group /path/to/bids [--participant-label 01 02] \\
         [--ignore-shims] [--separate-all-dwis] [--ignore-fieldmaps] \\
-        [--hmc-method eddy|shoreline|diffprep] [--sdc-method auto|topup|...]
+        [--hmc-method eddy|shoreline|tortoise] [--sdc-method auto|topup|...]
 
 Prints, per subject, the grouping decisions (with curated/inferred
 provenance) and a plain-language preview of what the selected processing
@@ -46,7 +46,7 @@ def _build_parser():
     )
     parser.add_argument(
         '--hmc-method',
-        choices=['eddy', 'shoreline', 'diffprep'],
+        choices=['eddy', 'shoreline', 'tortoise'],
         default=None,
         help='Preview one head-motion-correction method instead of all defaults.',
     )

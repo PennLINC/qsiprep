@@ -484,9 +484,9 @@ def test_hmc_method_shoreline_gets_model_and_drbuddi(minimal_args):
     assert opts.pepolar_method == 'TOPUP'
 
 
-def test_hmc_method_diffprep_auto_resolves_drbuddi(minimal_args):
+def test_hmc_method_tortoise_auto_resolves_drbuddi(minimal_args):
     """The legacy TOPUP default never produced a working DIFFPREP run."""
-    opts = _parse(minimal_args, '--hmc-method', 'diffprep')
+    opts = _parse(minimal_args, '--hmc-method', 'tortoise')
     assert opts.sdc_method == 'drbuddi'
     assert opts.hmc_model == 'tortoise'
     assert opts.pepolar_method == 'DRBUDDI'
@@ -496,7 +496,7 @@ def test_hmc_method_diffprep_auto_resolves_drbuddi(minimal_args):
     ('legacy', 'hmc_method', 'shoreline_model', 'hmc_model'),
     [
         ('eddy', 'eddy', None, 'eddy'),
-        ('tortoise', 'diffprep', None, 'tortoise'),
+        ('tortoise', 'tortoise', None, 'tortoise'),
         ('3dSHORE', 'shoreline', '3dshore', '3dSHORE'),
         ('tensor', 'shoreline', 'tensor', 'tensor'),
         ('none', 'shoreline', 'none', 'none'),
@@ -535,7 +535,7 @@ def test_pepolar_method_conflicts_with_sdc_method(minimal_args, capsys):
     assert 'not allowed with' in capsys.readouterr().err
 
 
-@pytest.mark.parametrize('hmc_method', ['shoreline', 'diffprep'])
+@pytest.mark.parametrize('hmc_method', ['shoreline', 'tortoise'])
 @pytest.mark.parametrize('sdc_method', ['topup', 'topup+drbuddi'])
 def test_explicit_topup_requires_eddy(minimal_args, capsys, hmc_method, sdc_method):
     with pytest.raises(SystemExit):

@@ -827,7 +827,7 @@ def test_t2w_available_for_sdc_requires_a_consuming_method(t2w_gate_config):
     ``additional_t2ws`` -- the only thing that makes init_anat_preproc_wf build its
     T2w branch -- was gated on the PEPOLAR tool alone. DIFFPREP's T2Wreg path
     consumes the T2w without any PEPOLAR data and is not gated on that choice, so
-    a plain ``--hmc-method diffprep --ignore fieldmaps`` run requested T2w SDC
+    a plain ``--hmc-method tortoise --ignore fieldmaps`` run requested T2w SDC
     while nothing produced the image, and DIFFPREP died with
     ``epi_mode="T2Wreg" requires a structural_image``.
     """
@@ -846,9 +846,9 @@ def test_t2w_available_for_sdc_requires_a_consuming_method(t2w_gate_config):
 
     # The regression: DIFFPREP consumes it via --epi T2Wreg regardless of
     # the PEPOLAR tool choice.
-    selection = selection_for_config('diffprep', 'auto')
-    assert _t2w_sdc_enabled(selection) is True, 'diffprep'
-    assert _t2w_available_for_sdc(T2W_SUBJECT, selection) is True, 'diffprep'
+    selection = selection_for_config('tortoise', 'auto')
+    assert _t2w_sdc_enabled(selection) is True, 'tortoise'
+    assert _t2w_available_for_sdc(T2W_SUBJECT, selection) is True, 'tortoise'
 
 
 def test_extended_pepolar_report_t2w_n4_gets_input():

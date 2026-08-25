@@ -132,9 +132,9 @@ Head motion correction method
 *****************************
 
 Head motion correction is selected with ``--hmc-method``, which takes
-``eddy``, ``shoreline`` or ``diffprep``. (The deprecated ``--hmc-model``
+``eddy``, ``shoreline`` or ``tortoise``. (The deprecated ``--hmc-model``
 values map onto these: ``eddy`` is ``--hmc-method eddy``, ``tortoise`` is
-``--hmc-method diffprep``, and ``3dSHORE``/``tensor``/``none`` are
+``--hmc-method tortoise``, and ``3dSHORE``/``tensor``/``none`` are
 ``--hmc-method shoreline`` with the matching ``--shoreline-model``.)
 
 Choosing ``eddy`` (the default) runs FSL's ``eddy`` for head motion correction
@@ -153,7 +153,7 @@ non-shelled data requires the DIFFPREP option described below.
 For non-shelled acquisitions such as compressed-sensing DSI (CS-DSI), FSL
 ``eddy`` cannot be used, and SHORELine corrects motion but does not correct
 eddy currents. In these cases, TORTOISE DIFFPREP is available via
-``--hmc-method diffprep``.
+``--hmc-method tortoise``.
 
 This option runs TORTOISE v4 DIFFPREP, which fits a signal model over
 arbitrary q-space and therefore does not require shells. By default it
