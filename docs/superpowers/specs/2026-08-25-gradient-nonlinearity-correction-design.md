@@ -9,14 +9,21 @@ Gradient coils deviate from their nominal linear field. The deviation causes two
 distinct errors, and QSIPrep currently corrects neither:
 
 1. **Spatial.** Voxels are displaced, increasingly so away from isocentre.
-2. **Gradient.** The effective diffusion gradient at a voxel differs from the
-   nominal one, so the b-vector and b-value are wrong per voxel.
+2. **Diffusion encoding.** The gradient actually applied at a voxel is `L @ g`
+   rather than the nominal `g`. Because `L` is a general 3x3 matrix — scaling
+   and shear, not a rotation — both the direction and the magnitude of the
+   encoding are wrong, so the b-vector *and* the b-value deviate per voxel.
 
 The two are separable, and scanners already correct some of the first. Siemens
 tags reconstructed images in the DICOM `ImageType` field: `DIS2D` means only
 in-plane gradwarp was applied at the scanner, leaving through-plane distortion;
-`DIS3D` means the full spatial correction was applied. Neither tag implies any
-correction to the gradients, which the scanner cannot do.
+`DIS3D` means the full spatial correction was applied.
+
+Neither tag implies any correction to the diffusion encoding. That correction
+cannot be expressed in the bval/bvec table at all: those files hold one value
+per volume and have nowhere to put spatially varying information. It is why
+grad_dev exists as a separate voxelwise output, and why a run tagged `DIS3D`
+still needs one.
 
 This spec adds both corrections to QSIPrep, driven by a gradient nonlinearity
 coefficient file, using TORTOISE V4.
