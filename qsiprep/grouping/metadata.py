@@ -43,23 +43,43 @@ FMAP_SUFFIXES = (
     'magnitude2',
 )
 
-#: Fallback b=0 threshold, used only when the runtime config is not loaded
-#: (e.g. the ``qsiprep-group`` preview CLI). Matches the ``--b0-threshold``
-#: default; prefer :func:`get_b0_threshold`.
+#: Default b=0 threshold (matches qsiprep's ``--b0-threshold`` default).
+#: Diffusion-weighting at or below this is treated as b=0. Callers with a
+#: configured threshold pass it explicitly.
 B0_THRESHOLD = 100.0
 
 
-def get_b0_threshold() -> float:
-    """The active b=0 threshold.
+def unique_bvals(bvals, tol: float = 20.0):
+    """Cluster b-values within ``tol`` of each other, greedily over sorted values.
 
-    Uses ``config.workflow.b0_threshold`` (the ``--b0-threshold`` value) when
-    the config is loaded, falling back to :data:`B0_THRESHOLD` otherwise.
-    Diffusion-weighting at or below this is treated as b=0.
+    Mirrors dipy's ``unique_bvals_tolerance`` (its only use here) so the
+    grouping does not need dipy: each sorted unique value starts a new
+    cluster when it exceeds the previous representative by more than ``tol``.
     """
-    from qsiprep import config
+    values = np.unique(np.asarray(bvals, dtype=float).reshape(-1))
+    representatives = [values[0]]
+    for value in values[1:]:
+        if value - representatives[-1] > tol:
+            representatives.append(value)
+    return np.asarray(representatives)
 
-    configured = config.workflow.b0_threshold
-    return B0_THRESHOLD if configured is None else float(configured)
+
+def read_bvals_bvecs(bval_file: str, bvec_file: str):
+    """``(bvals, bvecs)`` arrays from sidecar files, FSL row-form transposed.
+
+    Mirrors the dipy reader this replaced: bvals flatten to ``(N,)``, a 3xN
+    bvec table becomes ``(N, 3)``, and a volume-count mismatch raises
+    ``ValueError`` (callers treat unreadable gradients as absent).
+    """
+    bvals = np.loadtxt(bval_file).reshape(-1)
+    bvecs = np.atleast_2d(np.loadtxt(bvec_file))
+    if bvecs.shape[0] == 3 and bvecs.shape[1] != 3:
+        bvecs = bvecs.T
+    if bvecs.shape != (bvals.size, 3):
+        raise ValueError(
+            f'{bvec_file} has shape {bvecs.shape}, expected ({bvals.size}, 3)'
+        )
+    return bvals, bvecs
 
 
 def _sibling(nii_file: str, ext: str) -> str:
@@ -107,16 +127,12 @@ def evaluate_shells(
     volumes to classify.
     """
     if b0_threshold is None:
-        b0_threshold = get_b0_threshold()
+        b0_threshold = B0_THRESHOLD
     non_b0 = np.asarray(bvals, dtype=float).reshape(-1)
     non_b0 = non_b0[non_b0 >= b0_threshold]
     if non_b0.size == 0:
         return None, ()
-    # Deferred: dipy drags in a slow import chain the CLI shouldn't pay for
-    # until b-values actually need classifying.
-    from dipy.core.gradients import unique_bvals_tolerance
-
-    centres = unique_bvals_tolerance(non_b0, tol=tol)
+    centres = unique_bvals(non_b0, tol=tol)
     shell_centres = tuple(round(float(centre)) for centre in centres)
     if len(centres) > max_shells:
         return False, shell_centres
@@ -126,7 +142,9 @@ def evaluate_shells(
     return shelled, shell_centres
 
 
-def _read_gradients(nii_file: str) -> tuple[bool | None, tuple[float, ...], float | None]:
+def _read_gradients(
+    nii_file: str, b0_threshold: float | None = None
+) -> tuple[bool | None, tuple[float, ...], float | None]:
     """(shelled, shell centres, max b-value) from a DWI's sibling .bval file.
 
     Missing or unreadable b-values (docs builds, test skeletons) leave
@@ -138,7 +156,7 @@ def _read_gradients(nii_file: str) -> tuple[bool | None, tuple[float, ...], floa
         return None, (), None
     if bvals.size == 0:
         return None, (), None
-    shelled, shells = evaluate_shells(bvals)
+    shelled, shells = evaluate_shells(bvals, b0_threshold=b0_threshold)
     return shelled, shells, float(np.max(bvals))
 
 
@@ -246,6 +264,7 @@ def _record_from_file(
     subject_id: str,
     known_dwi_files: set[str],
     issues: list[GroupingIssue],
+    b0_threshold: float | None = None,
 ) -> FileRecord:
     path = op.abspath(path)
     metadata = layout.get_metadata(path)
@@ -265,7 +284,7 @@ def _record_from_file(
 
     shelled, shells, max_bval, grid = (None, (), None, None)
     if datatype == 'dwi':
-        shelled, shells, max_bval = _read_gradients(path)
+        shelled, shells, max_bval = _read_gradients(path, b0_threshold=b0_threshold)
         grid = _read_grid(path)
 
     return FileRecord(
@@ -305,6 +324,7 @@ def index_subject(
     layout,
     subject_data: dict,
     ignore_fieldmaps: bool = False,
+    b0_threshold: float | None = None,
 ) -> tuple[list[FileRecord], list[GroupingIssue]]:
     """Build a :class:`~.models.FileRecord` for every relevant image.
 
@@ -347,7 +367,15 @@ def index_subject(
     )
 
     records = [
-        _record_from_file(path, layout, bids_root, subject_id, known_dwi_files, issues)
+        _record_from_file(
+            path,
+            layout,
+            bids_root,
+            subject_id,
+            known_dwi_files,
+            issues,
+            b0_threshold=b0_threshold,
+        )
         for path in sorted(known_dwi_files) + sorted(fmap_files) + anat_files
     ]
     return records, issues

@@ -355,6 +355,7 @@ to workflows in *QSIPrep*'s documentation]\
         force_t2wreg='t2wreg' in (config.workflow.force or ()),
         use_nipreps_syn_sdc=bool(config.workflow.use_syn_sdc),
         distortion_group_merge=config.workflow.distortion_group_merge,
+        b0_threshold=config.workflow.b0_threshold,
         strict=False,
     )
     plan = compile_plan(grouping, selection)

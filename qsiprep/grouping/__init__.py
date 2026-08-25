@@ -53,7 +53,6 @@ from .methods import (
     MethodSelection,
     SdcTool,
     canonical_selection,
-    method_selection_from_config,
     selection_for_config,
 )
 from .models import (
@@ -119,6 +118,7 @@ def build_dwi_grouping(
     use_synb0=False,
     use_nipreps_syn_sdc=False,
     distortion_group_merge='concat',
+    b0_threshold=None,
     strict=True,
 ):
     """Group one subject's DWI scans.
@@ -169,6 +169,10 @@ def build_dwi_grouping(
         synthetic b=0) to a fieldmap atlas. Never overrides a real fieldmap and
         is never combined with SyNb0 (SyNb0 wins if both are set). Errors if no
         T1w exists or a target series lacks PhaseEncodingDirection.
+    b0_threshold : float
+        Diffusion-weighting at or below this is treated as b=0 when
+        classifying sampling schemes (default:
+        :data:`~.metadata.B0_THRESHOLD`).
     strict : bool
         Raise :class:`~.validation.GroupingError` if any error-severity issue
         is found. With ``strict=False`` the grouping is returned with its
@@ -180,7 +184,12 @@ def build_dwi_grouping(
     """
     from bids.layout import parse_file_entities
 
-    records, index_issues = index_subject(layout, subject_data, ignore_fieldmaps=ignore_fieldmaps)
+    records, index_issues = index_subject(
+        layout,
+        subject_data,
+        ignore_fieldmaps=ignore_fieldmaps,
+        b0_threshold=b0_threshold,
+    )
     subject_id = parse_file_entities(records[0].path)['subject']
     grouping = build_grouping(
         records,
@@ -199,3 +208,23 @@ def build_dwi_grouping(
     if strict:
         raise_for_errors(grouping)
     return grouping
+
+
+def method_selection_from_config() -> MethodSelection:
+    """The selection the current :mod:`qsiprep.config` asks for.
+
+    The single config-to-selection conversion point. Falls back to the legacy
+    keys so a config object loaded from an older file still resolves.
+    """
+    from qsiprep import config
+
+    hmc = config.workflow.hmc_method or config.workflow.hmc_model
+    if config.workflow.hmc_method == 'shoreline' and config.workflow.shoreline_model:
+        # 'shoreline' alone defaults to 3dshore; honor the configured model.
+        hmc = config.workflow.shoreline_model
+    return selection_for_config(
+        hmc,
+        config.workflow.sdc_method or config.workflow.pepolar_method,
+        use_syn=bool(config.workflow.use_syn_sdc),
+        force_t2wreg='t2wreg' in (config.workflow.force or ()),
+    )

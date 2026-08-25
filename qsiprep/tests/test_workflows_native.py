@@ -368,7 +368,7 @@ def test_unknown_hmc_model_is_rejected_at_selection_time(tmp_path):
     """The subject workflow resolves the method selection before building
     anything; garbage config dies there, not deep in a builder."""
     _cfg(hmc_model='bogus', layout=_StubLayout())
-    from qsiprep.grouping.methods import method_selection_from_config
+    from qsiprep.grouping import method_selection_from_config
 
     with pytest.raises(ValueError, match='hmc'):
         method_selection_from_config()

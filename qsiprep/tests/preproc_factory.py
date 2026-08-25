@@ -143,7 +143,8 @@ def _run_for(grouping, unit):
     attaches runs from the subject-level compiled plan, so the factory mirrors
     that with a single-unit plan under the configured method selection.
     """
-    from qsiprep.grouping.methods import method_selection_from_config, selection_for_config
+    from qsiprep.grouping import method_selection_from_config
+    from qsiprep.grouping.methods import selection_for_config
     from qsiprep.grouping.plan import ProcessingRun, _stages_for_unit
 
     try:

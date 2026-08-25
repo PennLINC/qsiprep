@@ -31,7 +31,7 @@ import html
 
 from ..viz.pipeline import _embedded_json, pipeline_assets, pipeline_div, plan_payload
 from ..viz.qspace import q_points, scheme_div, scheme_payload, viewer_assets
-from .metadata import get_b0_threshold, sibling_bval, sibling_bvec
+from .metadata import B0_THRESHOLD, read_bvals_bvecs, sibling_bval, sibling_bvec
 from .methods import reachable_selections
 from .models import CorrectionMethod, DWIGrouping, Provenance
 from .plan import compile_plan
@@ -468,16 +468,10 @@ def _scan_row(grouping: DWIGrouping, path: str, letters: dict[str, str]) -> str:
 def _load_gradients(path: str):
     """``(bvals, bvecs)`` from a DWI's sidecars, or ``None`` if unreadable.
 
-    Uses :func:`dipy.io.read_bvals_bvecs` — the same reader the rest of the
-    pipeline uses — so the report's gradients are parsed identically. ``bvals``
-    is a list of floats and ``bvecs`` a list of ``(x, y, z)`` lists. Returning
-    ``None`` on a missing or malformed sidecar lets the report degrade to a
-    short notice instead of failing.
+    ``bvals`` is a list of floats and ``bvecs`` a list of ``(x, y, z)``
+    lists. Returning ``None`` on a missing or malformed sidecar lets the
+    report degrade to a short notice instead of failing.
     """
-    # Deferred: dipy has a slow import chain the report shouldn't pay for until
-    # a scheme actually needs drawing.
-    from dipy.io import read_bvals_bvecs
-
     try:
         bvals, bvecs = read_bvals_bvecs(sibling_bval(path), sibling_bvec(path))
     except (OSError, ValueError):
@@ -509,7 +503,7 @@ def _scheme_data(grouping: DWIGrouping, concat) -> dict | None:
     if not coords:
         return None
     panels = [{'title': concat.output_name, 'coords': coords}]
-    return scheme_payload(panels, meta, files, pes, b0_threshold=get_b0_threshold())
+    return scheme_payload(panels, meta, files, pes, b0_threshold=B0_THRESHOLD)
 
 
 def _scheme_view(grouping: DWIGrouping, concat) -> str:
