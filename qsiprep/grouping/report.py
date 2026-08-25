@@ -45,11 +45,25 @@ def _basename(path: str) -> str:
     return op.basename(path)
 
 
+def round_bval(bval) -> int:
+    """A b-value rounded to the nearest 100 for display.
+
+    Small acquisition deviations (e.g. 1585, 4985) should not read as distinct
+    shells. The JS viewer (``qsiprep/data/qspace_viewer.js`` ``roundB``) applies
+    the same rule, so every b-value shown to a reader is rounded consistently.
+    """
+    return int((bval + 50) // 100) * 100
+
+
+def shell_label(record) -> str:
+    """``b=<v>/<v>...`` of a shelled record's centres, rounded for display."""
+    return 'b=' + '/'.join(dict.fromkeys(str(round_bval(c)) for c in record.shells))
+
+
 def _shell_tag(record) -> str:
     """Bracketed sampling-scheme annotation for a DWI file line."""
     if record.shelled is True:
-        shells = '/'.join(str(int(centre)) for centre in record.shells)
-        return f' [shelled: b={shells}]'
+        return f' [shelled: {shell_label(record)}]'
     if record.shelled is False:
         return ' [non-shelled q-space sampling]'
     return ''

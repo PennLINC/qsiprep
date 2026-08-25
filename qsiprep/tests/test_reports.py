@@ -242,6 +242,7 @@ def test_anat_spatial_normalization_reportlet_allows_template_cohort(tmp_path):
         )
 
     html_reportlets = [
+        figures_dir / 'sub-01_desc-grouping_T1w.html',
         figures_dir / 'sub-01_desc-summary_T1w.html',
         figures_dir / 'sub-01_desc-conform_T1w.html',
         figures_dir / 'sub-01_desc-about_T1w.html',
@@ -267,3 +268,50 @@ def test_anat_spatial_normalization_reportlet_allows_template_cohort(tmp_path):
         assert (
             reportlet.name in report_html or reportlet.read_text(encoding='utf-8') in report_html
         )
+
+
+def test_gradient_plot_emits_inline_scheme(tmp_path, monkeypatch):
+    """GradientPlot writes a self-contained inline sampling-scheme reportlet
+    (no iframe, so it flows in the report instead of scrolling in a fixed frame)
+    with before/after panels, colored by source file."""
+    import json
+    import re
+
+    import numpy as np
+
+    from qsiprep.interfaces.reports import GradientPlot
+
+    # Two DIPY-style (N, 3) split series that sample the same directions.
+    dirs = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=float)
+    bvals = [0, 1000, 1000, 2000]
+    for name in ('ap', 'pa'):
+        np.savetxt(tmp_path / f'{name}.bvec', dirs)
+        (tmp_path / f'{name}.bval').write_text(' '.join(str(b) for b in bvals))
+    np.savetxt(tmp_path / 'final.bvec', np.vstack([dirs, dirs]))
+
+    monkeypatch.chdir(tmp_path)
+    result = GradientPlot(
+        orig_bvec_files=[str(tmp_path / 'ap.bvec'), str(tmp_path / 'pa.bvec')],
+        orig_bval_files=[str(tmp_path / 'ap.bval'), str(tmp_path / 'pa.bval')],
+        source_files=['sub-01_dir-AP_dwi.nii.gz'] * 4 + ['sub-01_dir-PA_dwi.nii.gz'] * 4,
+        source_pe_dirs={'sub-01_dir-AP_dwi.nii.gz': 'j-', 'sub-01_dir-PA_dwi.nii.gz': 'j'},
+        final_bvec_file=str(tmp_path / 'final.bvec'),
+    ).run()
+
+    out = Path(result.outputs.plot_file)
+    assert out.suffix == '.html'
+    markup = out.read_text()
+    # Inlines directly into the report: no iframe, so no fixed-height scroll frame.
+    assert '<iframe' not in markup
+    assert 'class="qspace-viewer"' in markup
+
+    payload = re.search(r'application/json">(\{.*?\})</script>', markup, re.S).group(1)
+    data = json.loads(payload.replace('<\\/', '</'))
+    assert [panel['title'] for panel in data['panels']] == [
+        'Acquired (original b-vectors)',
+        'After preprocessing (rotated b-vectors)',
+    ]
+    assert data['files'] == ['sub-01_dir-AP_dwi.nii.gz', 'sub-01_dir-PA_dwi.nii.gz']
+    assert data['pes'] == ['j-', 'j']  # colorable by phase encoding
+    assert {point['pe'] for point in data['meta']} == {'j-', 'j'}
+    assert len(data['meta']) == 8

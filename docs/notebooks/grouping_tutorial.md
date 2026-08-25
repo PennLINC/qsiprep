@@ -85,9 +85,9 @@ def group(*records, **options):
     return build_grouping(list(records), subject_id='01', **options)
 
 
-def show(grouping, height=560, backend='fsl'):
+def show(grouping, height=560):
     """Display the explanatory HTML page for a grouping inline."""
-    page = _html.escape(render_html(grouping, backend=backend))
+    page = _html.escape(render_html(grouping))
     display(
         HTML(
             f'<iframe srcdoc="{page}" style="width:100%;height:{height}px;'
@@ -394,7 +394,7 @@ dwi = scan('sub-01_dir-AP_dwi.nii.gz', PhaseEncodingDirection='j-')
 t1w = scan('sub-01_T1w.nii.gz', folder='anat', suffix='T1w', PhaseEncodingDirection=None, TotalReadoutTime=None)
 t2w = scan('sub-01_T2w.nii.gz', folder='anat', suffix='T2w', PhaseEncodingDirection=None, TotalReadoutTime=None)
 g = group(dwi, t1w, t2w)
-show(g, height=680, backend='tortoise')
+show(g, height=680)
 ```
 
 Command-line flags climb the ladder explicitly (provenance **cli-override**,
@@ -427,9 +427,9 @@ for backend in ('fsl', 'tortoise', 'mixed'):
     print(describe_processing(g, backend))
 ```
 
-The HTML page shows the same information: the chosen backend's steps are
-expanded on each output box, with the alternatives collapsed underneath
-("if run with the … workflow instead").
+The text preview above is where the per-backend steps live. The HTML grouping
+page concentrates on the grouping itself — which scans combine, which fieldmap
+corrects which group, and the resulting sampling scheme.
 
 ## Appendix: `IntendedFor` (deprecated)
 

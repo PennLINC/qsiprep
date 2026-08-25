@@ -341,7 +341,7 @@ Contents:
  - data/singleshell_output/qsiprep/sub-PNC/figures/sub-PNC_acq-realistic_carpetplot.svg
  - data/singleshell_output/qsiprep/sub-PNC/figures/sub-PNC_acq-realistic_coreg.svg
  - data/singleshell_output/qsiprep/sub-PNC/figures/sub-PNC_acq-realistic_desc-sdc_b0.svg
- - data/singleshell_output/qsiprep/sub-PNC/figures/sub-PNC_acq-realistic_sampling_scheme.gif
+ - data/singleshell_output/qsiprep/sub-PNC/figures/sub-PNC_acq-realistic_desc-samplingscheme_dwi.html
  - data/singleshell_output/qsiprep/sub-PNC/figures/sub-PNC_seg_brainmask.svg
  - data/singleshell_output/qsiprep/sub-PNC/figures/sub-PNC_t1_2_mni.svg
  - data/singleshell_output/qsiprep/sub-PNC.html

@@ -43,21 +43,45 @@ FMAP_SUFFIXES = (
     'magnitude2',
 )
 
-#: b-values below this are b=0 (qsiprep's convention, cf. interfaces/eddy.py).
+#: Fallback b=0 threshold, used only when the runtime config is not loaded
+#: (e.g. the ``qsiprep-group`` preview CLI). Matches the ``--b0-threshold``
+#: default; prefer :func:`get_b0_threshold`.
 B0_THRESHOLD = 100.0
+
+
+def get_b0_threshold() -> float:
+    """The active b=0 threshold.
+
+    Uses ``config.workflow.b0_threshold`` (the ``--b0-threshold`` value) when
+    the config is loaded, falling back to :data:`B0_THRESHOLD` otherwise.
+    Diffusion-weighting at or below this is treated as b=0.
+    """
+    from qsiprep import config
+
+    configured = config.workflow.b0_threshold
+    return B0_THRESHOLD if configured is None else float(configured)
+
+
+def _sibling(nii_file: str, ext: str) -> str:
+    for nii_ext in ('.nii.gz', '.nii'):
+        if nii_file.endswith(nii_ext):
+            return nii_file[: -len(nii_ext)] + ext
+    return op.splitext(nii_file)[0] + ext
 
 
 def sibling_bval(nii_file: str) -> str:
     """The FSL ``.bval`` sibling path for a BIDS DWI nii."""
-    for ext in ('.nii.gz', '.nii'):
-        if nii_file.endswith(ext):
-            return nii_file[: -len(ext)] + '.bval'
-    return op.splitext(nii_file)[0] + '.bval'
+    return _sibling(nii_file, '.bval')
+
+
+def sibling_bvec(nii_file: str) -> str:
+    """The FSL ``.bvec`` sibling path for a BIDS DWI nii."""
+    return _sibling(nii_file, '.bvec')
 
 
 def evaluate_shells(
     bvals,
-    b0_threshold: float = B0_THRESHOLD,
+    b0_threshold: float | None = None,
     tol: float = 100.0,
     min_shell_dirs: int = 6,
     max_shells: int = 7,
@@ -82,6 +106,8 @@ def evaluate_shells(
     ``shelled`` is ``None`` (undetermined) when there are no diffusion-weighted
     volumes to classify.
     """
+    if b0_threshold is None:
+        b0_threshold = get_b0_threshold()
     non_b0 = np.asarray(bvals, dtype=float).reshape(-1)
     non_b0 = non_b0[non_b0 >= b0_threshold]
     if non_b0.size == 0:
