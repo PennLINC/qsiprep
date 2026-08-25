@@ -404,12 +404,15 @@ to workflows in *QSIPrep*'s documentation]\
         )
 
     # Embed the grouping decision page (fieldmap estimations, which scans combine
-    # into each output, and how each is corrected) at the top of the subject
-    # report. Rendered here because it is built from the DWIGrouping object,
-    # which only exists at workflow-construction time. The segment's styles are
-    # scoped so it inlines natively into the report (no iframe).
+    # into each output, how each is corrected, and the executed processing plan
+    # drawn from the selected methods) at the top of the subject report.
+    # Rendered here because it is built from the DWIGrouping object, which only
+    # exists at workflow-construction time. The segment's styles are scoped so
+    # it inlines natively into the report (no iframe).
     grouping_report = pe.Node(
-        InteractiveReport(segment=render_report_segment(grouping)),
+        InteractiveReport(
+            segment=render_report_segment(grouping, method_selection_from_config())
+        ),
         name='grouping_report',
         run_without_submitting=True,
     )
