@@ -23,10 +23,13 @@ from ...interfaces.bids import DerivativesSidecar
 from ...interfaces.dsi_studio import DSIStudioBTable
 from ...interfaces.dwi_merge import MergeFinalConfounds, SplitResampledDWIs
 from ...interfaces.gradients import ExtractB0s
+from ...interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SeriesQC
+from .base import _extract_first_volume
 from .derivatives import init_dwi_derivatives_wf
+from .gradwarp import resolve_gradwarp_plan
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
 from .resampling import init_dwi_trans_wf
 
@@ -146,6 +149,7 @@ def init_dwi_finalize_wf(
 
     """
     all_dwis = list(unit.dwi_files)
+    gradwarp_plan = resolve_gradwarp_plan(unit)
 
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
@@ -404,8 +408,14 @@ def init_dwi_finalize_wf(
     )
 
     # Write a metadata sidecar for the derivatives
+    merged_sidecar_data = unit_to_sidecar(unit)
+    if gradwarp_plan is not None:
+        # No spatial warp (DIS3D) still gets a value here: 'none' says the
+        # scanner had already corrected the geometry, not that this field is
+        # absent from the sidecar.
+        merged_sidecar_data['GradientWarpDimensions'] = gradwarp_plan.warp_dim or 'none'
     merged_sidecar = pe.Node(
-        DerivativesSidecar(sidecar_data=unit_to_sidecar(unit), source_file=source_file),
+        DerivativesSidecar(sidecar_data=merged_sidecar_data, source_file=source_file),
         name='merged_sidecar',
     )
     ds_merged_sidecar = pe.Node(
@@ -434,6 +444,61 @@ def init_dwi_finalize_wf(
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
+
+    # The voxelwise gradient deviation tensor (grad_dev): gradient nonlinearity
+    # corrupts the diffusion encoding itself, not just voxel positions, and no
+    # scanner can correct that -- the bval/bvec table holds one value per
+    # volume and has nowhere to put spatially varying information. So this is
+    # produced whenever a gradwarp plan resolves, even for a DIS3D unit that
+    # gets no spatial correction at all.
+    if gradwarp_plan is not None:
+        # CreateGradientNonlinearityBMatrix reads both -f and -i as 3D NIfTIs
+        # (TORTOISE's main() calls readImageD<ImageType3D> for both). t1_b0_ref
+        # is already a single reference volume (init_dwi_reference_wf's
+        # ref_image), but raw_concatenated is the raw series in one 4D file, so
+        # it needs the same extraction gradwarp_ref uses in base.py.
+        grad_dev_initial_ref = pe.Node(
+            niu.Function(function=_extract_first_volume, output_names=['out_file']),
+            name='grad_dev_initial_ref',
+        )
+        grad_dev = pe.Node(
+            CreateGradientNonlinearityBMatrix(
+                nonlinearity=gradwarp_plan.coeff_file,
+                is_ge=gradwarp_plan.is_ge,
+            ),
+            name='grad_dev',
+        )
+        ds_grad_dev = pe.Node(
+            DerivativesDataSink(
+                source_file=source_file,
+                base_directory=config.execution.output_dir,
+                space='ACPC',
+                suffix='graddev',
+                extension='.nii.gz',
+                compress=True,
+                meta_dict={
+                    'Description': (
+                        'Voxelwise gradient deviation tensor (row-major 3x3 L '
+                        'matrix per voxel). The effective diffusion gradient at '
+                        'a voxel is L @ g; because L carries scaling and shear, '
+                        'both the b-vector and the b-value deviate per voxel.'
+                    ),
+                    'GradientCoefficientFile': os.path.basename(gradwarp_plan.coeff_file),
+                    'GradientWarpDimensions': gradwarp_plan.warp_dim or 'none',
+                    'GradientCoefficientManufacturer': 'GE' if gradwarp_plan.is_ge else 'non-GE',
+                    'GradientCorrectionBasis': gradwarp_plan.basis,
+                },
+            ),
+            name='ds_grad_dev',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+        workflow.connect([
+            (inputnode, grad_dev_initial_ref, [('raw_concatenated', 'in_file')]),
+            (grad_dev_initial_ref, grad_dev, [('out_file', 'initial_image')]),
+            (outputnode, grad_dev, [('t1_b0_ref', 'final_image')]),
+            (grad_dev, ds_grad_dev, [('grad_dev', 'in_file')]),
+        ])  # fmt:skip
 
     workflow.connect([
         (inputnode, series_qc, [

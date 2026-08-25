@@ -146,7 +146,7 @@ def _finalize_cfg(tmp_path):
     config.nipype.omp_nthreads = 1
 
 
-def _finalize_wf(tmp_path):
+def _finalize_wf(tmp_path, write_derivatives=False):
     from qsiprep.workflows.dwi.finalize import init_dwi_finalize_wf
 
     _finalize_cfg(tmp_path)
@@ -157,7 +157,7 @@ def _finalize_wf(tmp_path):
         name='dwi_finalize_wf',
         source_file=dwi,
         output_prefix='sub-01',
-        write_derivatives=False,
+        write_derivatives=write_derivatives,
     )
 
 
@@ -657,3 +657,155 @@ def test_dwi_preproc_wf_dis3d_does_not_feed_gradwarp_field_to_the_hmc_workflow(t
 
     edge = wf._graph.get_edge_data(wf.get_node('gradwarp_wf'), wf.get_node('hmc_sdc_wf'))
     assert edge is None
+
+
+# --- Task 11: the grad_dev derivative ----------------------------------------
+
+
+def test_io_spec_has_a_graddev_pattern():
+    """grad_dev is neither a spatial transform nor a tissue map: it needs its
+    own suffix rather than xfm or dwimap."""
+    import json
+
+    from qsiprep.data import load as load_data
+
+    with open(load_data('io_spec.json')) as handle:
+        spec = json.load(handle)
+
+    assert any('graddev' in pattern for pattern in spec['default_path_patterns'])
+
+
+def test_graddev_filename_renders_with_space_entity(tmp_path):
+    import gzip
+
+    from qsiprep.interfaces import DerivativesDataSink
+
+    # niworkflows' DerivativesDataSink _copy_any opens a ".gz"-suffixed source
+    # with gzip.open regardless of the extension= kwarg below (it reads the
+    # actual extension off in_file), so the payload must be real gzip content,
+    # not just a byte with a .nii.gz name -- otherwise the run() raises
+    # BadGzipFile before ever reaching the filename this test checks.
+    payload = tmp_path / 'graddev.nii.gz'
+    with gzip.open(payload, 'wb') as handle:
+        handle.write(b'\x00')
+    sink = DerivativesDataSink(
+        base_directory=str(tmp_path / 'out'),
+        source_file='/data/sub-01/dwi/sub-01_dwi.nii.gz',
+        space='ACPC',
+        suffix='graddev',
+        extension='.nii.gz',
+        in_file=str(payload),
+    ).run()
+
+    out = sink.outputs.out_file
+    out = out[0] if isinstance(out, list) else out
+    assert out.endswith('sub-01_space-ACPC_graddev.nii.gz')
+
+
+def _finalize_wf_with_gradients(tmp_path, image_type=None, write_derivatives=True):
+    """A finalize_wf with a resolved gradwarp plan, for the grad_dev tests."""
+    from qsiprep.workflows.dwi.finalize import init_dwi_finalize_wf
+
+    _finalize_cfg(tmp_path)
+    config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
+    dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz')
+    metadata = {'Manufacturer': 'SIEMENS'}
+    if image_type is not None:
+        metadata['ImageType'] = image_type
+    unit = make_preproc_unit([dwi], metadata=metadata)
+    return init_dwi_finalize_wf(
+        unit=unit,
+        name='dwi_finalize_wf',
+        source_file=dwi,
+        output_prefix='sub-01',
+        write_derivatives=write_derivatives,
+    )
+
+
+def test_dwi_finalize_wf_has_no_grad_dev_without_a_coefficient_file(tmp_path):
+    wf = _finalize_wf(tmp_path, write_derivatives=True)
+    assert wf.get_node('grad_dev') is None
+    assert wf.get_node('ds_grad_dev') is None
+
+
+def test_dwi_finalize_wf_builds_grad_dev_when_a_plan_resolves(tmp_path):
+    wf = _finalize_wf_with_gradients(tmp_path)
+
+    assert wf.get_node('grad_dev') is not None
+    assert wf.get_node('ds_grad_dev') is not None
+
+
+def test_dwi_finalize_wf_builds_grad_dev_for_dis3d(tmp_path):
+    """No spatial correction happens for a DIS3D unit, but grad_dev is still
+    produced -- no scanner can correct the diffusion encoding itself."""
+    wf = _finalize_wf_with_gradients(tmp_path, image_type=['ORIGINAL', 'DIS3D'])
+
+    grad_dev = wf.get_node('grad_dev')
+    assert grad_dev is not None
+    assert wf.get_node('ds_grad_dev') is not None
+
+
+def test_dwi_finalize_wf_grad_dev_initial_image_is_extracted_not_the_raw_4d_series(tmp_path):
+    """CreateGradientNonlinearityBMatrix's ``-i`` is read as a 3D NIfTI
+    (TORTOISE's ``main`` calls ``readImageD<ImageType3D>`` for both ``-f`` and
+    ``-i``); ``raw_concatenated`` is the raw series in a single 4D file, so it
+    must never reach ``initial_image`` directly -- it needs an extraction node
+    in between, same as ``gradwarp_ref`` in base.py.
+    """
+    wf = _finalize_wf_with_gradients(tmp_path)
+
+    inputnode = wf.get_node('inputnode')
+    grad_dev = wf.get_node('grad_dev')
+
+    # No direct edge -- that would be the 4D raw series reaching a 3D-only tool.
+    edge = wf._graph.get_edge_data(inputnode, grad_dev)
+    assert edge is None or ('raw_concatenated', 'initial_image') not in edge['connect']
+
+    # An extraction node sits between them instead.
+    extractor = wf.get_node('grad_dev_initial_ref')
+    assert extractor is not None
+
+    in_edge = wf._graph.get_edge_data(inputnode, extractor)
+    assert in_edge is not None
+    assert ('raw_concatenated', 'in_file') in in_edge['connect']
+
+    out_edge = wf._graph.get_edge_data(extractor, grad_dev)
+    assert out_edge is not None
+    assert ('out_file', 'initial_image') in out_edge['connect']
+
+
+def test_dwi_finalize_wf_grad_dev_final_image_is_the_final_b0_reference(tmp_path):
+    """The final b0 ref (``init_dwi_reference_wf``'s ``ref_image``) is already a
+    single volume, so ``-f`` needs no extraction -- unlike ``-i``."""
+    wf = _finalize_wf_with_gradients(tmp_path)
+
+    outputnode = wf.get_node('outputnode')
+    grad_dev = wf.get_node('grad_dev')
+    edge = wf._graph.get_edge_data(outputnode, grad_dev)
+    assert edge is not None
+    assert ('t1_b0_ref', 'final_image') in edge['connect']
+
+
+def test_dwi_finalize_wf_grad_dev_sidecar_records_coefficient_basename_only(tmp_path):
+    """The sidecar must never leak the host path of the coefficient file."""
+    wf = _finalize_wf_with_gradients(tmp_path)
+
+    ds_grad_dev = wf.get_node('ds_grad_dev')
+    meta = ds_grad_dev.inputs.meta_dict
+    assert meta['GradientCoefficientFile'] == 'coeff.grad'
+    assert '/' not in meta['GradientCoefficientFile']
+    assert str(tmp_path) not in meta['GradientCoefficientFile']
+
+
+def test_dwi_finalize_wf_adds_gradient_warp_dimensions_to_the_main_sidecar(tmp_path):
+    wf = _finalize_wf_with_gradients(tmp_path, image_type=['ORIGINAL', 'DIS3D'])
+
+    merged_sidecar = wf.get_node('merged_sidecar')
+    assert merged_sidecar.inputs.sidecar_data['GradientWarpDimensions'] == 'none'
+
+
+def test_dwi_finalize_wf_main_sidecar_has_no_gradient_warp_dimensions_without_a_plan(tmp_path):
+    wf = _finalize_wf(tmp_path, write_derivatives=True)
+
+    merged_sidecar = wf.get_node('merged_sidecar')
+    assert 'GradientWarpDimensions' not in merged_sidecar.inputs.sidecar_data
