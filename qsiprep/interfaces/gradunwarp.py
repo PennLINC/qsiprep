@@ -5,12 +5,19 @@ verified against TORTOISEV4 at ``main``:
 
 1. ``CreateNonlinearityDisplacementMap`` takes the coefficient file as its
    *first* positional argument (``mk_displacement(argv[1], img, is_GE)`` in
-   ``src/tools/gradnonlin/mk_displacementMaps.cxx``). A stale, unbuilt copy of
-   that file elsewhere in the tree has the arguments reversed.
-2. That tool reads ``is_GE`` as ``(bool)(argv[4])`` -- a cast of the *pointer*,
-   not its contents -- so passing ``0`` yields **true**. The argument is
-   appended only when GE. ``CreateGradientNonlinearityBMatrix`` is different:
-   its ``getIsGE()`` uses ``atoi()``, so ``--isGE 0`` is correctly false.
+   ``src/tools/gradnonlin/mk_displacementMaps.cxx``, the file
+   ``CMakeLists.txt:251`` actually builds). A stale, unbuilt duplicate at
+   ``src/tools/CreateNonlinearityDisplacementMap/`` has the arguments
+   reversed.
+2. That built tool reads a supplied fourth argument via
+   ``(bool)atoi(argv[4])``, so passing ``"0"`` correctly means false; the
+   argument is appended only when GE. (The stale, unbuilt duplicate in point
+   1 instead reads ``is_GE=(bool)(argv[4])`` -- a cast of the *pointer*, not
+   its contents, under which passing ``"0"`` would incorrectly evaluate
+   true -- but that file governs nothing we invoke.)
+   ``CreateGradientNonlinearityBMatrix`` uses a required ``--isGE`` flag
+   instead: its ``getIsGE()`` also uses ``atoi()``, so ``--isGE 0`` is
+   correctly false.
 3. ``mk_displacement`` returns the field TORTOISE names ``gradwarp_field_inv``,
    and that is the file ``FINALDATA.cxx:548`` composes and ``DRBUDDI.cxx:141``
    resamples with. It must **not** be inverted here.
@@ -113,8 +120,10 @@ class CreateNonlinearityDisplacementMap(CommandLine):
 
     def _parse_inputs(self, skip=None):
         parsed = super()._parse_inputs(skip=skip)
-        # ``is_GE=(bool)(argv[4])`` casts the pointer: ANY fourth argument is
-        # true. Omitting it is the only way to say false.
+        # The built tool reads a supplied fourth argument via
+        # ``(bool)atoi(argv[4])`` (see module docstring): both a "0" and
+        # omitting the argument entirely mean false. We omit it, matching the
+        # existing "appended only when GE" convention.
         if self.inputs.is_ge:
             parsed.append('1')
         return parsed

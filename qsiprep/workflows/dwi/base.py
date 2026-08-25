@@ -305,8 +305,19 @@ def init_dwi_preproc_wf(
     # reference so it does not depend on the HMC backend selected above.
     gradwarp_wf = init_gradwarp_wf(unit)
     if gradwarp_wf is not None:
+        # mk_displacementMaps.cxx (what CreateNonlinearityDisplacementMap
+        # wraps) reads its reference image as a 3D NIfTI, not the 4D series
+        # pre_hmc_wf.outputnode.dwi_file is -- feeding it the merged 4D file
+        # throws at runtime. The field depends only on the sampling grid, not
+        # on image content, so any single volume on that grid is a valid
+        # reference; volume 0 is cheapest and needs no bvals/bvecs.
+        gradwarp_ref = pe.Node(
+            niu.Function(function=_extract_first_volume, output_names=['out_file']),
+            name='gradwarp_ref',
+        )
         workflow.connect([
-            (pre_hmc_wf, gradwarp_wf, [('outputnode.dwi_file', 'inputnode.ref_image')]),
+            (pre_hmc_wf, gradwarp_ref, [('outputnode.dwi_file', 'in_file')]),
+            (gradwarp_ref, gradwarp_wf, [('out_file', 'inputnode.ref_image')]),
         ])  # fmt:skip
         # A DIS3D unit still builds a field, because grad_dev needs one, but no
         # spatial correction is applied to the images -- applying it would
@@ -558,3 +569,26 @@ def init_dwi_preproc_wf(
 
 def _get_first(lll):
     return lll[0]
+
+
+def _extract_first_volume(in_file, newpath=None):
+    """Pull a single 3D volume off a (possibly 4D) DWI series.
+
+    ``CreateNonlinearityDisplacementMap`` reads its reference image as a 3D
+    NIfTI (``mk_displacementMaps.cxx``'s ``main`` loads it with
+    ``readImageD<ImageType3D>``, not a 4D-aware reader), so a merged 4D DWI
+    series cannot be handed to it directly. The gradwarp field only depends on
+    the sampling grid, not on image content, so any single volume works;
+    volume 0 is cheapest and needs no bvals/bvecs. Nipype ``Function`` nodes
+    run in a fresh namespace, so imports live inside the function body.
+    """
+    import nibabel as nb
+    from nilearn.image import index_img
+    from nipype.utils.filemanip import fname_presuffix
+
+    if nb.load(in_file).ndim == 3:
+        return in_file
+
+    out_file = fname_presuffix(in_file, suffix='_vol0', newpath=newpath)
+    index_img(in_file, 0).to_filename(out_file)
+    return out_file

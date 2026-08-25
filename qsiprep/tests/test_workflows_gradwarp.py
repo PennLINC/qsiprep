@@ -236,16 +236,34 @@ def _preproc_wf(tmp_path, image_type=None):
 
 
 def test_dwi_preproc_wf_builds_gradwarp_and_feeds_pre_hmc_reference(tmp_path):
-    """A resolved plan builds gradwarp_wf and feeds it the pre-HMC reference."""
+    """A resolved plan builds gradwarp_wf and feeds it a 3D reference.
+
+    CreateNonlinearityDisplacementMap's underlying tool reads its reference
+    image as a 3D NIfTI, not the 4D series pre_hmc_wf.outputnode.dwi_file is,
+    so pre_hmc_wf must NOT feed gradwarp_wf.inputnode.ref_image directly --
+    an extraction node has to sit between them.
+    """
     wf = _preproc_wf(tmp_path)
 
     gradwarp_wf = wf.get_node('gradwarp_wf')
     assert gradwarp_wf is not None
 
     pre_hmc_wf = wf.get_node('pre_hmc_wf')
-    edge = wf._graph.get_edge_data(pre_hmc_wf, gradwarp_wf)
+
+    # No direct edge from pre_hmc_wf to gradwarp_wf -- that would be the 4D
+    # merged series reaching a tool that requires a 3D reference.
+    assert wf._graph.get_edge_data(pre_hmc_wf, gradwarp_wf) is None
+
+    gradwarp_ref = wf.get_node('gradwarp_ref')
+    assert gradwarp_ref is not None
+
+    edge = wf._graph.get_edge_data(pre_hmc_wf, gradwarp_ref)
     assert edge is not None
-    assert ('outputnode.dwi_file', 'inputnode.ref_image') in edge['connect']
+    assert ('outputnode.dwi_file', 'in_file') in edge['connect']
+
+    edge = wf._graph.get_edge_data(gradwarp_ref, gradwarp_wf)
+    assert edge is not None
+    assert ('out_file', 'inputnode.ref_image') in edge['connect']
 
     # No ImageType tags -> plan defaults to '3D' -> connected into outputnode.
     outputnode = wf.get_node('outputnode')
@@ -285,6 +303,40 @@ def test_dwi_preproc_wf_without_gradient_file_has_no_gradwarp_wf(tmp_path):
 
     assert wf.get_node('gradwarp_wf') is None
     assert 'gradwarp_field' in wf.get_node('outputnode').inputs.trait_get()
+
+
+def test_extract_first_volume_returns_a_3d_image(tmp_path):
+    """The extraction node's function must actually produce a 3D file.
+
+    CreateNonlinearityDisplacementMap's underlying tool reads its reference
+    with a 3D-only reader (readImageD<ImageType3D>), so a 4D DWI series would
+    throw at runtime if fed to it directly.
+    """
+    import nibabel as nb
+
+    from qsiprep.workflows.dwi.base import _extract_first_volume
+
+    dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz', nvols=6)
+    out = _extract_first_volume(str(dwi), newpath=str(tmp_path))
+
+    out_img = nb.load(out)
+    assert out_img.ndim == 3
+    # Same grid as the input series (the field only depends on the grid).
+    in_img = nb.load(str(dwi))
+    assert out_img.shape == in_img.shape[:3]
+    assert (out_img.affine == in_img.affine).all()
+
+
+def test_extract_first_volume_passes_an_already_3d_image_through(tmp_path):
+    import nibabel as nb
+    import numpy as np
+
+    from qsiprep.workflows.dwi.base import _extract_first_volume
+
+    path = tmp_path / 'vol.nii.gz'
+    nb.Nifti1Image(np.zeros((4, 4, 4), dtype='float32'), np.eye(4)).to_filename(str(path))
+
+    assert _extract_first_volume(str(path)) == str(path)
 
 
 def test_single_subject_wf_wires_gradwarp_field_to_finalize():
