@@ -383,6 +383,7 @@ to workflows in *QSIPrep*'s documentation]\
         ignore_shims='shims' in config.workflow.ignore,
         ignore_fov='fov' in config.workflow.ignore,
         ignore_sdc='sdc' in config.workflow.ignore,
+        force_t2wreg=bool(config.workflow.force_t2wreg),
         use_nipreps_syn_sdc=bool(config.workflow.use_syn_sdc),
         distortion_group_merge=config.workflow.distortion_group_merge,
         strict=False,

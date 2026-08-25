@@ -47,6 +47,16 @@ from .adapters import (
 from .inference import build_grouping
 from .interactive import render_html, render_report_segment
 from .metadata import index_subject
+from .methods import (
+    HMC_CAPABILITIES,
+    SDC_CAPABILITIES,
+    HmcMethod,
+    MethodSelection,
+    SdcTool,
+    canonical_selection,
+    method_selection_from_config,
+    selection_for_config,
+)
 from .models import (
     ConcatenationGroup,
     CorrectionMethod,
@@ -63,6 +73,8 @@ from .validation import BACKENDS, GroupingError, GroupingIssue, check_backend, r
 
 __all__ = [
     'BACKENDS',
+    'HMC_CAPABILITIES',
+    'SDC_CAPABILITIES',
     'ConcatenationGroup',
     'DistortionGroup',
     'DistortionSignature',
@@ -73,18 +85,24 @@ __all__ = [
     'GroupingError',
     'GroupingIssue',
     'GroupingPolicy',
+    'HmcMethod',
+    'MethodSelection',
     'PreprocUnit',
     'Provenance',
+    'SdcTool',
     'backend_for_config',
     'build_dwi_grouping',
+    'canonical_selection',
     'check_backend',
     'concatenation_scheme',
     'describe_processing',
     'full_report',
     'index_subject',
+    'method_selection_from_config',
     'render_html',
     'render_report_segment',
     'report_text',
+    'selection_for_config',
     'to_legacy_scan_groups',
     'to_preproc_units',
     'unit_to_sidecar',

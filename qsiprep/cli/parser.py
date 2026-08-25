@@ -69,6 +69,15 @@ def _build_parser(**kwargs):
             'by the fieldmaps\' "B0FieldIdentifier"/"B0FieldSource" (or "IntendedFor") '
             'metadata.',
         ),
+        '--hmc-model': (
+            '27.0.0',
+            'Use `--hmc-method` instead (with `--shoreline-model` for the '
+            'SHORELine signal model).',
+        ),
+        '--pepolar-method': (
+            '27.0.0',
+            'Use `--sdc-method` instead.',
+        ),
         '--b0-motion-corr-to': (
             '27.0.0',
             'Later versions will always use the "iterative" approach.',
@@ -87,6 +96,17 @@ def _build_parser(**kwargs):
             'unbiased',
         ),
     }
+
+    # The deprecated --hmc-model vocabulary, mapped onto the method axes.
+    hmc_model_to_method = {
+        'eddy': 'eddy',
+        'tortoise': 'diffprep',
+        '3dSHORE': 'shoreline',
+        'tensor': 'shoreline',
+        'none': 'shoreline',
+    }
+    hmc_model_to_shoreline_model = {'3dSHORE': '3dshore', 'tensor': 'tensor', 'none': 'none'}
+    shoreline_model_to_hmc_model = {v: k for k, v in hmc_model_to_shoreline_model.items()}
 
     def _warn_deprecated(option_string):
         removed_in, detail = deprecations[option_string]
@@ -155,6 +175,57 @@ def _build_parser(**kwargs):
                 del namespace.b0_to_t1w_transform
             if not hasattr(namespace, 'b0_to_anat_transform'):
                 namespace.b0_to_anat_transform = B0_TO_ANAT_TRANSFORM_DEFAULT
+
+            # The method axes (--hmc-method/--sdc-method) and their deprecated
+            # aliases (--hmc-model/--pepolar-method), normalized after the whole
+            # command line has been read. hmc_model/pepolar_method are re-derived
+            # in the legacy vocabulary because config and the workflow builders
+            # still read them.
+            legacy_hmc = getattr(namespace, '_legacy_hmc_model', None)
+            if hasattr(namespace, '_legacy_hmc_model'):
+                del namespace._legacy_hmc_model
+            legacy_pepolar = getattr(namespace, '_legacy_pepolar_method', None)
+            if hasattr(namespace, '_legacy_pepolar_method'):
+                del namespace._legacy_pepolar_method
+
+            if legacy_hmc is not None:
+                if namespace.shoreline_model is not None:
+                    self.error(
+                        '--shoreline-model requires --hmc-method shoreline '
+                        '(not the deprecated --hmc-model)'
+                    )
+                namespace.hmc_method = hmc_model_to_method[legacy_hmc]
+                namespace.shoreline_model = hmc_model_to_shoreline_model.get(legacy_hmc)
+            if namespace.hmc_method is None:
+                namespace.hmc_method = 'eddy'
+            if namespace.shoreline_model is not None and namespace.hmc_method != 'shoreline':
+                self.error('--shoreline-model requires --hmc-method shoreline')
+            if namespace.hmc_method == 'shoreline' and namespace.shoreline_model is None:
+                namespace.shoreline_model = '3dshore'
+
+            explicit_sdc = legacy_pepolar.lower() if legacy_pepolar else namespace.sdc_method
+            if explicit_sdc in (None, 'auto'):
+                namespace.sdc_method = 'topup' if namespace.hmc_method == 'eddy' else 'drbuddi'
+                # DIFFPREP gets DRBUDDI (the legacy 'TOPUP' default never produced
+                # a working DIFFPREP run); eddy and SHORELine keep the legacy
+                # 'TOPUP' so report gating that still reads pepolar_method builds
+                # the same graph it does today.
+                namespace.pepolar_method = (
+                    'DRBUDDI' if namespace.hmc_method == 'diffprep' else 'TOPUP'
+                )
+            else:
+                if namespace.hmc_method != 'eddy' and 'topup' in explicit_sdc:
+                    self.error(
+                        f'--sdc-method {explicit_sdc} requires --hmc-method eddy: '
+                        'SHORELine and DIFFPREP correct PEPOLAR units with DRBUDDI'
+                    )
+                namespace.sdc_method = explicit_sdc
+                namespace.pepolar_method = explicit_sdc.upper()
+
+            if namespace.hmc_method == 'shoreline':
+                namespace.hmc_model = shoreline_model_to_hmc_model[namespace.shoreline_model]
+            else:
+                namespace.hmc_model = 'eddy' if namespace.hmc_method == 'eddy' else 'tortoise'
 
             return namespace, extras
 
@@ -719,10 +790,25 @@ How to combine the corrected results of an output's correction units.
         choices=['Affine', 'Rigid'],
         help='transformation to be optimized during head motion correction (default: affine)',
     )
-    g_moco.add_argument(
-        '--hmc-model',
+    g_hmc_method = g_moco.add_mutually_exclusive_group()
+    g_hmc_method.add_argument(
+        '--hmc-method',
         action='store',
-        default='eddy',
+        default=None,
+        choices=['eddy', 'shoreline', 'diffprep'],
+        help='which software corrects head motion and eddy currents: '
+        '"eddy" (FSL; requires a shelled sampling scheme; the default), '
+        '"shoreline" (SHORELine; model-based, works on arbitrary q-space '
+        'sampling; see --shoreline-model and --shoreline-iters), or '
+        '"diffprep" (TORTOISE DIFFPREP; rigid head motion and 24-parameter '
+        'quadratic eddy-current correction, arbitrary sampling; see '
+        '--diffprep-config).',
+    )
+    g_hmc_method.add_argument(
+        '--hmc-model',
+        action=DeprecatedStoreAction,
+        dest='_legacy_hmc_model',
+        default=SUPPRESS,
         choices=[
             'none',
             '3dSHORE',
@@ -730,15 +816,20 @@ How to combine the corrected results of an output's correction units.
             'tensor',
             'tortoise',
         ],
-        help='model used to generate target images for hmc. If "none" the '
-        'non-b0 images will be warped using the same transform as their '
-        'nearest b0 image. If "3dSHORE", SHORELine will be used. if "tensor", '
-        'SHORELine iterations with a tensor model will be used. '
-        '"tortoise" uses TORTOISE DIFFPREP; '
-        'by default this performs rigid head motion correction and '
-        '24-parameter quadratic eddy-current correction. '
-        '"tortoise" works on arbitrary q-space (no shells required). '
-        'For fine-grained control over "tortoise" settings, use --diffprep-config.',
+        help='DEPRECATED: use --hmc-method (and --shoreline-model) instead. '
+        '"eddy" means `--hmc-method eddy`; "tortoise" means `--hmc-method '
+        'diffprep`; "3dSHORE", "tensor" and "none" mean `--hmc-method '
+        'shoreline` with the matching --shoreline-model.',
+    )
+    g_moco.add_argument(
+        '--shoreline-model',
+        action='store',
+        default=None,
+        choices=['3dshore', 'tensor', 'none'],
+        help='signal model SHORELine uses to predict motion-correction target '
+        'images: "3dshore" (the default), "tensor", or "none" (each non-b=0 '
+        'image is warped using the same transform as its nearest b=0 image). '
+        'Only valid with --hmc-method shoreline.',
     )
     g_moco.add_argument(
         '--eddy-config',
@@ -795,12 +886,35 @@ How to combine the corrected results of an output's correction units.
         'series is determined by the fieldmaps\' "B0FieldIdentifier"/"B0FieldSource" '
         '(or "IntendedFor") metadata.',
     )
-    g_fmap.add_argument(
-        '--pepolar-method',
+    g_sdc_method = g_fmap.add_mutually_exclusive_group()
+    g_sdc_method.add_argument(
+        '--sdc-method',
         action='store',
-        default='TOPUP',
+        default=None,
+        choices=['auto', 'topup', 'drbuddi', 'topup+drbuddi'],
+        help='which tool corrects susceptibility distortion for PEPOLAR '
+        '(blip-up/blip-down) data: "topup" (FSL; --hmc-method eddy only), '
+        '"drbuddi" (TORTOISE), "topup+drbuddi" (TOPUP then DRBUDDI '
+        'refinement; --hmc-method eddy only), or "auto" (the default: TOPUP '
+        'for eddy, DRBUDDI otherwise). Non-PEPOLAR corrections (GRE '
+        'fieldmaps, SyN, T2w registration) are chosen by the input data and '
+        'their own flags, not by this one.',
+    )
+    g_sdc_method.add_argument(
+        '--pepolar-method',
+        action=DeprecatedStoreAction,
+        dest='_legacy_pepolar_method',
+        default=SUPPRESS,
         choices=['TOPUP', 'DRBUDDI', 'TOPUP+DRBUDDI'],
-        help='select which SDC method to use for PEPOLAR fieldmaps (default: TOPUP)',
+        help='DEPRECATED: use --sdc-method instead (same values, lowercased).',
+    )
+    g_fmap.add_argument(
+        '--force-t2wreg',
+        action='store_true',
+        default=False,
+        help='override all fieldmaps with T2w-registration SDC (TORTOISE '
+        'T2Wreg). Requires a T2w image and an SDC stage that can consume it '
+        '(--hmc-method diffprep or --sdc-method drbuddi).',
     )
     g_fmap.add_argument(
         '--fmap-bspline',
