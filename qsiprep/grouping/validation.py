@@ -14,10 +14,9 @@ Two layers of checks live here:
 from __future__ import annotations
 
 import dataclasses
-import os.path as op
 from collections import defaultdict
 
-from .models import CorrectionMethod, DWIGrouping, FieldmapEstimation, Provenance
+from .models import DWIGrouping, FieldmapEstimation
 
 #: Backends a grouping can be previewed/validated against.
 BACKENDS = ('fsl', 'tortoise', 'mixed')
@@ -311,224 +310,18 @@ def check_data_compatibility(
     return issues
 
 
-def _check_shelling(grouping, backend, multipart_id, concat) -> list[GroupingIssue]:
-    """Data-level shelled/non-shelled rules for one output.
-
-    eddy models the signal on shells, so the FSL path (and the mixed path,
-    whose first stage is eddy) requires every series in an output to be
-    shelled. TORTOISE handles either sampling, but a mixture within one
-    concatenated output deserves an informational note. Series whose b-values
-    could not be read (``shelled is None``) are skipped.
-    """
-    issues = []
-    shelled = [path for path in concat.dwi_files if grouping.files[path].shelled is True]
-    non_shelled = [path for path in concat.dwi_files if grouping.files[path].shelled is False]
-
-    if non_shelled and backend in ('fsl', 'mixed'):
-        names = ', '.join(op.basename(path) for path in non_shelled)
-        issues.append(
-            error(
-                'eddy-requires-shelled',
-                f'eddy requires shelled (DTI/multi-shell) q-space sampling, but '
-                f"{names} in output '{concat.output_name}' is not shelled. "
-                'Use --hmc-model tortoise, which handles non-shelled data.',
-                tuple(non_shelled),
-                scope=multipart_id,
-            )
-        )
-
-    if shelled and non_shelled and backend == 'tortoise':
-        issues.append(
-            warning(
-                'mixed-shelled-nonshelled',
-                f"Output '{concat.output_name}' concatenates shelled and "
-                f'non-shelled series ({len(shelled)} shelled, '
-                f'{len(non_shelled)} non-shelled). TORTOISE can process both, '
-                'but consider whether these acquisitions belong in one output '
-                '(MultipartID can separate them).',
-                tuple(shelled + non_shelled),
-                scope=multipart_id,
-            )
-        )
-
-    return issues
-
-
 def check_backend(grouping: DWIGrouping, backend: str) -> list[GroupingIssue]:
     """Validate a finished grouping against one processing backend.
 
     Returns issues only - never raises - so reports can show all three
-    backends side by side.
+    backends side by side. The rules live in the plan compiler
+    (:func:`~.plan.compile_plan`); this returns the compiled plan's issues
+    for the backend's canonical method selection.
     """
     if backend not in BACKENDS:
         raise ValueError(f"Unknown backend '{backend}'. Choose from {BACKENDS}.")
 
-    issues = []
-    for multipart_id, concat in sorted(grouping.concatenation_groups.items()):
-        issues.extend(_check_shelling(grouping, backend, multipart_id, concat))
-        estimations = {
-            dgroup.b0field_source
-            for dgroup in grouping.distortion_groups_in(multipart_id)
-            if dgroup.b0field_source is not None
-        }
-        uncorrected = [
-            dgroup.key
-            for dgroup in grouping.distortion_groups_in(multipart_id)
-            if dgroup.b0field_source is None
-        ]
+    from .methods import canonical_selection
+    from .plan import compile_plan
 
-        if uncorrected and not estimations:
-            # With the fieldmap-less fallback, an uncorrected group means the
-            # subject has no usable T2w either (or the series has no PE info).
-            issues.append(
-                warning(
-                    'no-sdc',
-                    f"Output '{concat.output_name}' has no fieldmap and this subject "
-                    'has no T2w image (or the series lacks PhaseEncodingDirection): '
-                    'no susceptibility distortion correction will be performed.',
-                    concat.dwi_files,
-                    scope=multipart_id,
-                )
-            )
-
-        for b0field_id in sorted(estimations):
-            estimation = grouping.estimations[b0field_id]
-
-            if estimation.method is CorrectionMethod.T2WREG:
-                # T2Wreg lives in TORTOISE's DIFFPREP; the FSL path (and the
-                # fsl-based first stage of the mixed path) cannot reach it.
-                if backend in ('fsl', 'mixed'):
-                    demanded = estimation.provenance in (Provenance.FORCED, Provenance.CURATED)
-                    make_issue = error if demanded else warning
-                    issues.append(
-                        make_issue(
-                            'anat-sdc-unsupported',
-                            f"Estimation '{b0field_id}' is a T2w registration "
-                            f'(T2Wreg), which only the TORTOISE path implements. '
-                            + (
-                                'Use --hmc-model tortoise to run it.'
-                                if demanded
-                                else f"On this path '{concat.output_name}' gets no "
-                                'susceptibility distortion correction.'
-                            ),
-                            estimation.sources,
-                            scope=multipart_id,
-                        )
-                    )
-                continue
-
-            if estimation.method is CorrectionMethod.SYNB0:
-                # The synthetic b=0 is a target image: TOPUP's missing blip on
-                # the fsl path, the registration target for T2Wreg-style
-                # stages on the tortoise and mixed paths. Every backend can
-                # consume it; DRBUDDI's dual-blip refinement simply never runs
-                # for these series (there is no reverse-PE dMRI data).
-                continue
-
-            if not estimation.is_pepolar:
-                # GRE-style fieldmaps route to the classic fieldmap workflow on
-                # every backend; the only note is that the mixed path's DRBUDDI
-                # stage has nothing to refine.
-                if backend == 'mixed':
-                    issues.append(
-                        warning(
-                            'mixed-non-pepolar',
-                            f"Estimation '{b0field_id}' is not PEPOLAR; the DRBUDDI "
-                            f'second stage only refines PEPOLAR corrections, so '
-                            f"'{concat.output_name}' will get single-stage "
-                            'correction.',
-                            estimation.sources,
-                            scope=multipart_id,
-                        )
-                    )
-                continue
-
-            if backend == 'fsl':
-                if _pepolar_signature_count(grouping, estimation) < 2:
-                    issues.append(
-                        error(
-                            'topup-single-signature',
-                            f"Estimation '{b0field_id}' has only one distortion "
-                            f'signature among its sources. TOPUP needs at least two '
-                            f'(e.g. opposite phase encoding directions) to estimate '
-                            f"a fieldmap for '{concat.output_name}'.",
-                            estimation.sources,
-                            scope=multipart_id,
-                        )
-                    )
-            elif backend == 'mixed' and not dwi_blip_pairs(grouping, estimation):
-                # DRBUDDI refinement needs reverse phase-encoded dMRI *series*;
-                # a lone reverse b=0 (epi fieldmap) was already consumed by
-                # TOPUP, so a second DRBUDDI pass would reuse the same
-                # information. Users cannot be stopped from requesting it, but
-                # they should know it is probably not useful. The preview
-                # instead assumes T2Wreg against a structural target, or
-                # single-stage when there is none.
-                fallback = (
-                    'The second stage is T2Wreg against a structural image instead.'
-                    if structural_target(grouping) is not None
-                    else 'No T2w or SyNb0 synthetic b=0 is available for a T2Wreg '
-                    f"second stage either, so '{concat.output_name}' gets "
-                    'single-stage (TOPUP+eddy) correction.'
-                )
-                issues.append(
-                    warning(
-                        'drbuddi-refinement-not-useful',
-                        f"Estimation '{b0field_id}' has no reverse phase-encoded "
-                        'dMRI series: a DRBUDDI second stage would reuse the same '
-                        'b=0 images TOPUP already consumed and is probably not '
-                        f'useful. {fallback}',
-                        estimation.sources,
-                        scope=multipart_id,
-                    )
-                )
-            else:  # tortoise, and mixed with reverse-PE dMRI: DRBUDDI runs
-                # DRBUDDI's single pass corrects one matched blip pair (same axis,
-                # readout time and shim, opposite polarity) at a time.
-                pairs = blip_pair_polarities(grouping, estimation)
-                unpaired = sorted(
-                    (key for key, pols in pairs.items() if len(pols) < 2), key=blip_sort_key
-                )
-                if backend == 'tortoise' and unpaired:
-                    # TORTOISE routes each blip group on its own: complete pairs to
-                    # DRBUDDI, an unpaired group to the fieldmap-less fallback. Not
-                    # fatal - it just cannot use DRBUDDI.
-                    groups = '; '.join(describe_blip_group(key) for key in unpaired)
-                    fallback = (
-                        'corrected by T2Wreg against the T2w instead'
-                        if grouping.anat_files('T2w')
-                        else 'left uncorrected (no T2w for a T2Wreg fallback)'
-                    )
-                    issues.append(
-                        warning(
-                            'drbuddi-no-opposing-pair',
-                            f"Estimation '{b0field_id}' has blip group(s) with no "
-                            f'opposing (blip-up/blip-down) pair: {groups}. DRBUDDI '
-                            f'needs a matched pair, so on the TORTOISE path those '
-                            f'series are {fallback}. Add the missing reverse blip(s) '
-                            f"to use DRBUDDI for '{concat.output_name}'.",
-                            estimation.sources,
-                            scope=multipart_id,
-                        )
-                    )
-                elif backend == 'mixed' and len(pairs) > 1:
-                    # The mixed path pools every group into one TOPUP+eddy, but the
-                    # single-pass DRBUDDI refinement handles only one matched pair,
-                    # so a multi-group unit gets single-stage TOPUP+eddy.
-                    labels = '; '.join(
-                        describe_blip_group(key) for key in sorted(pairs, key=blip_sort_key)
-                    )
-                    issues.append(
-                        warning(
-                            'drbuddi-refinement-multigroup',
-                            f"Estimation '{b0field_id}' spans {len(pairs)} blip groups "
-                            f'({labels}). TOPUP+eddy corrects them together, but the '
-                            f'DRBUDDI refinement handles one matched pair at a time, so '
-                            f"'{concat.output_name}' gets single-stage TOPUP+eddy "
-                            'correction (no DRBUDDI refinement).',
-                            estimation.sources,
-                            scope=multipart_id,
-                        )
-                    )
-
-    return issues
+    return list(compile_plan(grouping, canonical_selection(backend)).issues)

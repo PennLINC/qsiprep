@@ -66,6 +66,9 @@ class PreprocUnit:
     output_name: str
     dwi_files: tuple[str, ...]
     estimation: FieldmapEstimation | None
+    #: The execution-plan run this unit renders (set when the unit was derived
+    #: from a compiled plan), carrying the ordered stage sequence.
+    run: object | None = dataclasses.field(default=None, compare=False, repr=False)
 
     @property
     def method(self) -> CorrectionMethod | None:
@@ -360,29 +363,24 @@ def _units_and_finals(grouping: DWIGrouping, backend: str):
     Shared by :func:`to_preproc_units` and :func:`concatenation_scheme` so the
     unit list and the concatenation scheme always agree on the (possibly split)
     unit names - ``base.py`` indexes the scheme by each unit's ``output_name``.
+    Both are views over the compiled execution plan.
     """
-    final_of = {
-        unit_key: concat.output_name
-        for concat in grouping.concatenation_groups.values()
-        for unit_key in concat.correction_units
-    }
-    for unit_key in sorted(grouping.correction_units):
-        unit = grouping.correction_units[unit_key]
-        estimation = grouping.estimations[unit.b0field_source] if unit.b0field_source else None
-        final = final_of.get(unit.key, unit.key)
-        if _decomposes_on_tortoise(grouping, unit, estimation, backend):
-            for subunit in _decompose_unit(grouping, unit, estimation):
-                yield subunit, final
-        else:
-            yield (
-                PreprocUnit(
-                    grouping=grouping,
-                    output_name=unit.key,
-                    dwi_files=unit.dwi_files,
-                    estimation=estimation,
-                ),
-                final,
-            )
+    from .methods import canonical_selection
+    from .plan import compile_plan
+
+    plan = compile_plan(grouping, canonical_selection(backend))
+    final_of = {assembly.output_group: assembly.output_name for assembly in plan.outputs}
+    for run in plan.runs:
+        yield (
+            PreprocUnit(
+                grouping=grouping,
+                output_name=run.key,
+                dwi_files=run.dwi_files,
+                estimation=run.estimation,
+                run=run,
+            ),
+            final_of.get(run.output_group, run.output_group),
+        )
 
 
 def to_preproc_units(grouping: DWIGrouping, backend: str = 'fsl') -> list[PreprocUnit]:
