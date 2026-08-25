@@ -105,6 +105,9 @@ def init_dwi_trans_wf(
             List of affine transforms aligning each volume to ``ref_image`` in ITK format
         fieldwarps
             a :abbr:`DFM (displacements field map)` in ITK format
+        gradwarp_field
+            a gradient nonlinearity displacement field in native DWI space, or
+            undefined if no gradwarp correction is being applied
         output_grid
             File defining the output space
         t1_mask
@@ -157,6 +160,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 'dwi_mask',
                 'hmc_xforms',
                 'fieldwarps',
+                'gradwarp_field',
                 'output_grid',
                 'sdc_scaling_images',
                 # Only written out if TOPUP was used
@@ -213,6 +217,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             ('hmc_xforms', 'hmc_affines'),
             ('itk_b0_to_t1', 'hmcsdc_dwi_ref_to_t1w_affine'),
             ('fieldwarps', 'fieldwarps'),
+            (('gradwarp_field', _listify), 'gradwarp'),
             ('b0_to_intramodal_template_transforms', 'b0_to_intramodal_template_transforms'),
             (('intramodal_template_to_t1_affine', _get_first),
              'intramodal_template_to_t1_affine'),
@@ -340,3 +345,26 @@ def _aslist(in_value):
     if isinstance(in_value, list):
         return in_value
     return [in_value]
+
+
+def _listify(value):
+    """Wrap a single gradwarp field in a one-element list for ``ComposeTransforms``.
+
+    ``ComposeTransforms.gradwarp`` silently drops a list whose length matches
+    neither 1 nor the DWI count -- unlike ``fieldwarps``, it does not warn on a
+    mismatch. Asserting single-element-ness here means a future mis-wire that
+    feeds this something other than one field fails loudly instead of vanishing
+    into ``ComposeTransforms``.
+
+    ``Undefined`` (an unconnected ``gradwarp_field``, e.g. no gradwarp plan, or
+    a DIS3D plan that intentionally is not wired into resampling) passes
+    through unchanged rather than becoming a spurious single-item list.
+    """
+    from nipype.interfaces.base import isdefined
+
+    if not isdefined(value):
+        return value
+    assert not isinstance(value, list), (
+        f'_listify expects a single gradwarp field, got a list: {value!r}'
+    )
+    return [value]

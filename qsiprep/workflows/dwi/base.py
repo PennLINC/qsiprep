@@ -25,6 +25,7 @@ from ..fieldmap.unwarp import init_fmap_unwarp_report_wf
 from .confounds import init_dwi_confs_wf
 from .diffprep import init_diffprep_hmc_wf
 from .fsl import init_fsl_hmc_wf
+from .gradwarp import init_gradwarp_wf
 from .hmc_sdc import init_qsiprep_hmcsdc_wf
 from .pre_hmc import init_dwi_pre_hmc_wf
 from .registration import init_b0_to_anat_registration_wf, init_direct_b0_acpc_wf
@@ -217,6 +218,7 @@ def init_dwi_preproc_wf(
                 'dwi_mask',
                 'hmc_xforms',
                 'fieldwarps',
+                'gradwarp_field',
                 'original_files',
                 'original_bvecs',
                 'raw_qc_file',
@@ -298,6 +300,23 @@ def init_dwi_preproc_wf(
         ]),
         (pre_hmc_wf, test_pre_hmc_connect, [('outputnode.raw_concatenated', 'test1')]),
     ])  # fmt:skip
+
+    # Gradient nonlinearity correction. The field is built off the pre-HMC
+    # reference so it does not depend on the HMC backend selected above.
+    gradwarp_wf = init_gradwarp_wf(unit)
+    if gradwarp_wf is not None:
+        workflow.connect([
+            (pre_hmc_wf, gradwarp_wf, [('outputnode.dwi_file', 'inputnode.ref_image')]),
+        ])  # fmt:skip
+        # A DIS3D unit still builds a field, because grad_dev needs one, but no
+        # spatial correction is applied to the images -- applying it would
+        # double-correct data the scanner already corrected.
+        if gradwarp_wf.plan.warp_dim is not None:
+            workflow.connect([
+                (gradwarp_wf, outputnode, [
+                    ('outputnode.gradwarp_field', 'gradwarp_field'),
+                ]),
+            ])  # fmt:skip
 
     if not dwi_only:
         # calculate dwi registration to T1w
