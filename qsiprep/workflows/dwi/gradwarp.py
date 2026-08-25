@@ -141,6 +141,23 @@ _BOILERPLATE = {
 }
 
 
+#: Report phrasing for each resolved state.
+_REPORT_TEXT = {
+    '3D': '3D (from ImageType)',
+    '1D': 'through-plane only (ImageType: DIS2D)',
+    None: 'b-matrix only (ImageType: DIS3D)',
+}
+
+
+def describe_gradient_correction(plan):
+    """One-line description of the resolved plan, for the HTML report."""
+    if plan is None:
+        return 'none'
+    if plan.basis == 'forced':
+        return 'forced 3D'
+    return _REPORT_TEXT[plan.warp_dim]
+
+
 def init_gradwarp_wf(unit, name='gradwarp_wf'):
     """Build the gradwarp displacement field for one correction unit.
 

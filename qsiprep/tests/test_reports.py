@@ -315,3 +315,41 @@ def test_gradient_plot_emits_inline_scheme(tmp_path, monkeypatch):
     assert data['pes'] == ['j-', 'j']  # colorable by phase encoding
     assert {point['pe'] for point in data['meta']} == {'j-', 'j'}
     assert len(data['meta']) == 8
+
+
+@pytest.mark.parametrize(
+    ('warp_dim', 'basis', 'expected'),
+    [
+        ('3D', 'metadata', '3D (from ImageType)'),
+        ('1D', 'metadata', 'through-plane only (ImageType: DIS2D)'),
+        (None, 'metadata', 'b-matrix only (ImageType: DIS3D)'),
+        ('3D', 'forced', 'forced 3D'),
+    ],
+)
+def test_describe_gradient_correction(warp_dim, basis, expected):
+    from qsiprep.workflows.dwi.gradwarp import GradwarpPlan, describe_gradient_correction
+
+    plan = GradwarpPlan(coeff_file='/opt/c.grad', warp_dim=warp_dim, is_ge=False, basis=basis)
+    assert describe_gradient_correction(plan) == expected
+
+
+def test_describe_gradient_correction_without_a_plan():
+    from qsiprep.workflows.dwi.gradwarp import describe_gradient_correction
+
+    assert describe_gradient_correction(None) == 'none'
+
+
+def test_diffusion_summary_renders_gradient_correction():
+    from qsiprep.interfaces.reports import DiffusionSummary
+
+    summary = DiffusionSummary(
+        distortion_correction='TOPUP',
+        pe_direction='j',
+        hmc_transform='Affine',
+        hmc_model='eddy',
+        b0_to_anat_transform='Rigid',
+        denoise_method='dwidenoise',
+        dwi_denoise_window=5,
+        gradient_correction='through-plane only (ImageType: DIS2D)',
+    )
+    assert 'through-plane only' in summary._generate_segment()

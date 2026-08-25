@@ -25,7 +25,7 @@ from ..fieldmap.unwarp import init_fmap_unwarp_report_wf
 from .confounds import init_dwi_confs_wf
 from .diffprep import init_diffprep_hmc_wf
 from .fsl import init_fsl_hmc_wf
-from .gradwarp import init_gradwarp_wf
+from .gradwarp import describe_gradient_correction, init_gradwarp_wf
 from .hmc_sdc import init_qsiprep_hmcsdc_wf
 from .pre_hmc import init_dwi_pre_hmc_wf
 from .registration import init_b0_to_anat_registration_wf, init_direct_b0_acpc_wf
@@ -457,6 +457,9 @@ def init_dwi_preproc_wf(
             hmc_transform=config.workflow.hmc_transform,
             denoise_method=config.workflow.denoise_method,
             dwi_denoise_window=config.workflow.dwi_denoise_window,
+            gradient_correction=describe_gradient_correction(
+                gradwarp_wf.plan if gradwarp_wf is not None else None
+            ),
         ),
         name='summary',
         mem_gb=DEFAULT_MEMORY_MIN_GB,

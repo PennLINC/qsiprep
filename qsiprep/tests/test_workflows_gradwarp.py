@@ -77,6 +77,27 @@ def test_gradwarp_wf_passes_is_ge_through(tmp_path):
     assert init_gradwarp_wf(unit).get_node('make_field').inputs.is_ge is True
 
 
+@pytest.mark.parametrize(
+    ('image_type', 'warp_dim'),
+    [
+        (None, '3D'),
+        (['ORIGINAL', 'DIS2D'], '1D'),
+        (['ORIGINAL', 'DIS3D'], None),
+    ],
+)
+def test_gradwarp_wf_desc_matches_the_resolved_warp_dim(tmp_path, image_type, warp_dim):
+    """workflow.__desc__ must be the _BOILERPLATE entry for the resolved plan,
+    not just any entry -- report text that doesn't track the plan would be a
+    methods-section error."""
+    from qsiprep.workflows.dwi.gradwarp import _BOILERPLATE, init_gradwarp_wf
+
+    config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
+    wf = init_gradwarp_wf(_unit(tmp_path, image_type))
+
+    assert wf.plan.warp_dim == warp_dim
+    assert wf.__desc__ == _BOILERPLATE[warp_dim]
+
+
 # --- Task 9: threading the field through resampling and base -----------------
 
 

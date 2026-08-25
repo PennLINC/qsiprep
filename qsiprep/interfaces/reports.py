@@ -62,6 +62,7 @@ DIFFUSION_TEMPLATE = """\t\t<h3 class="elem-title">Summary</h3>
 \t\t\t<li>Denoising Window: {denoise_window}</li>
 \t\t\t<li>HMC Transform: {hmc_transform}</li>
 \t\t\t<li>HMC Model: {hmc_model}</li>
+\t\t\t<li>Gradient correction: {gradient_correction}</li>
 \t\t\t<li>DWI series resampled to spaces: ACPC</li>
 \t\t\t<li>Confounds collected: {confounds}</li>
 \t\t\t<li>Impute slice threshold: {impute_slice_threshold}</li>
@@ -216,6 +217,9 @@ class DiffusionSummaryInputSpec(BaseInterfaceInputSpec):
     dwi_denoise_window = traits.Either(
         traits.Int(), traits.Str(), desc='window size for dwidenoise'
     )
+    gradient_correction = traits.Str(
+        'none', usedefault=True, desc='Gradient nonlinearity correction applied'
+    )
     output_spaces = traits.List(desc='Target spaces')
     confounds_file = File(exists=True, desc='Confounds file')
     validation_reports = InputMultiObject(File(exists=True))
@@ -237,9 +241,10 @@ class DiffusionSummary(SummaryInterface):
             conflist = ''
 
         validation_summaries = []
-        for summary in self.inputs.validation_reports:
-            with open(summary) as summary_f:
-                validation_summaries.extend(summary_f.readlines())
+        if isdefined(self.inputs.validation_reports):
+            for summary in self.inputs.validation_reports:
+                with open(summary) as summary_f:
+                    validation_summaries.extend(summary_f.readlines())
         validation_summary = '\n'.join(validation_summaries)
 
         return DIFFUSION_TEMPLATE.format(
@@ -250,6 +255,7 @@ class DiffusionSummary(SummaryInterface):
             hmc_model=self.inputs.hmc_model,
             denoise_method=self.inputs.denoise_method,
             denoise_window=self.inputs.dwi_denoise_window,
+            gradient_correction=self.inputs.gradient_correction,
             output_spaces='ACPC',
             confounds=re.sub(r'[\t ]+', ', ', conflist),
             impute_slice_threshold=self.inputs.impute_slice_threshold,
