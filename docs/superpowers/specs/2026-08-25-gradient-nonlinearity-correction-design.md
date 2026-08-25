@@ -48,21 +48,36 @@ behaviours are load-bearing and none are documented upstream.
 | `FINALDATA.cxx:3404-3446` | grad_dev is computed using only a rigid b0-to-structural transform; the nonlinear SDC chain is not inverted |
 | `CMakeLists.txt:251,434` | `CreateNonlinearityDisplacementMap` and `CreateGradientNonlinearityBMatrix` are built as standalone binaries |
 
+**Two files, one name.** `CMakeLists.txt:251` builds
+`CreateNonlinearityDisplacementMap` from `src/tools/gradnonlin/mk_displacementMaps.cxx`.
+A second, **unbuilt** copy sits at `src/tools/CreateNonlinearityDisplacementMap/`
+and differs in ways that matter. Every statement below describes the *built*
+file; read that one, not the one whose directory matches the binary's name.
+
 Three findings are silent-wrong-answer hazards and are called out again where
 they bite:
 
-- **Argument order.** `CMakeLists.txt:251` builds
-  `CreateNonlinearityDisplacementMap` from `src/tools/gradnonlin/mk_displacementMaps.cxx`,
-  whose `main` calls `mk_displacement(argv[1], img, is_GE)` — coefficient file
-  first, base NIfTI second. A stale, unbuilt duplicate at
-  `src/tools/CreateNonlinearityDisplacementMap/` has them reversed. Ignore it.
-- **`is_GE` is a pointer cast.** `is_GE=(bool)(argv[4])` casts the pointer, not
-  its contents, so passing `0` yields **true**. The only way to get false is to
-  omit the argument.
+- **Argument order.** The built `main` calls `mk_displacement(argv[1], img, is_GE)`
+  — coefficient file first, base NIfTI second. The unbuilt duplicate has them
+  reversed.
+- **The reference is read as 3D.** The built `main` does
+  `readImageD<ImageType3D>(argv[2])`, not `read_3D_volume_from_4D`. Handing it a
+  4D DWI series throws in ITK, so a single 3D volume must be extracted first.
+  The gradwarp field depends only on the sampling grid, so any volume on that
+  grid serves.
 - **No inversion.** `mk_displacement` returns what TORTOISE names
   `gradwarp_field_inv`, and that is the file `FINALDATA.cxx:548` composes and
   `DRBUDDI.cxx:141` resamples with. The binary's direct output is what we want;
   the separate `InvertDisplacementField` step feeds a variable we do not use.
+
+**Corrected 2026-08-25.** An earlier revision of this spec claimed `is_GE` was
+read as `(bool)(argv[4])` — a pointer cast making `"0"` evaluate to true — and
+built a wrapper hazard around it. That is the *unbuilt* duplicate. The built
+tool uses `(bool)atoi(argv[4])`, so `"0"` correctly means false. The
+implementation is unaffected: it omits the argument when not GE, which leaves
+`is_GE` false under either reading. `CreateGradientNonlinearityBMatrix` uses
+`atoi` as well (`getIsGE()`), so `--isGE 0` is likewise safe there — the two
+tools are *not* asymmetric in this respect, as an earlier revision claimed.
 
 ## Decisions
 
