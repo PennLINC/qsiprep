@@ -4,17 +4,26 @@ Usage::
 
     qsiprep-group /path/to/bids [--participant-label 01 02] \\
         [--ignore-shims] [--separate-all-dwis] [--ignore-fieldmaps] \\
-        [--backend fsl tortoise mixed]
+        [--hmc-method eddy|shoreline|diffprep] [--sdc-method auto|topup|...]
 
 Prints, per subject, the grouping decisions (with curated/inferred
-provenance) and a plain-language preview of what each processing backend
-would do with the data. Nothing is processed and nothing is written.
+provenance) and a plain-language preview of what the selected processing
+methods would do with the data - or, with no method flags, every default
+method combination. Nothing is processed and nothing is written.
 """
 
 import argparse
 import sys
 
-from qsiprep.grouping import build_dwi_grouping, describe_processing, render_html, report_text
+from qsiprep.grouping import (
+    build_dwi_grouping,
+    describe_processing,
+    render_html,
+    report_text,
+    selection_for_config,
+)
+from qsiprep.grouping.methods import SHORELINE_MODELS, canonical_selection
+from qsiprep.grouping.report import default_preview_selections
 from qsiprep.grouping.validation import BACKENDS
 
 
@@ -36,11 +45,30 @@ def _build_parser():
         help='Restrict to one session label (without "ses-").',
     )
     parser.add_argument(
+        '--hmc-method',
+        choices=['eddy', 'shoreline', 'diffprep'],
+        default=None,
+        help='Preview one head-motion-correction method instead of all defaults.',
+    )
+    parser.add_argument(
+        '--shoreline-model',
+        choices=list(SHORELINE_MODELS),
+        default=None,
+        help='SHORELine signal model (with --hmc-method shoreline).',
+    )
+    parser.add_argument(
+        '--sdc-method',
+        choices=['auto', 'topup', 'drbuddi', 'topup+drbuddi'],
+        default='auto',
+        help='PEPOLAR tool preference for the previewed method (default: auto).',
+    )
+    parser.add_argument(
         '--backend',
         nargs='+',
         choices=BACKENDS,
-        default=list(BACKENDS),
-        help='Backend(s) to preview. Default: all three.',
+        default=None,
+        help='DEPRECATED: use --hmc-method/--sdc-method. Legacy backend '
+        'name(s) to preview.',
     )
     parser.add_argument(
         '--ignore-shims',
@@ -104,8 +132,25 @@ def _per_subject_path(path: str, subject: str, multi: bool) -> str:
     return f'{stem}_sub-{subject}{suffix}'
 
 
+def _selections(args):
+    """The method selections to preview, from the parsed arguments."""
+    if args.shoreline_model and args.hmc_method != 'shoreline':
+        raise SystemExit('--shoreline-model requires --hmc-method shoreline')
+    if args.hmc_method:
+        hmc = args.shoreline_model or args.hmc_method
+        return [selection_for_config(hmc, args.sdc_method)]
+    if args.backend:
+        print(
+            '--backend is deprecated; use --hmc-method/--sdc-method instead.',
+            file=sys.stderr,
+        )
+        return [canonical_selection(backend) for backend in args.backend]
+    return list(default_preview_selections())
+
+
 def main(argv=None):
     args = _build_parser().parse_args(argv)
+    selections = _selections(args)
 
     from bids import BIDSLayout
 
@@ -143,8 +188,8 @@ def main(argv=None):
             strict=False,
         )
         print(report_text(grouping))
-        for backend in args.backend:
-            print(describe_processing(grouping, backend))
+        for selection in selections:
+            print(describe_processing(grouping, selection))
         multi = len(subjects) > 1
         if args.html:
             path = _per_subject_path(args.html, subject, multi)

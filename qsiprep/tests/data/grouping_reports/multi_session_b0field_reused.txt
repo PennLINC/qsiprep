@@ -28,7 +28,7 @@ Notes:
   ERROR [unresolvable-b0fieldsource]: sub-01_ses-1_dir-AP_dwi.nii.gz names B0FieldSource 'dwi_b0_field', but no file in this subject carries that B0FieldIdentifier.
   ERROR [unresolvable-b0fieldsource]: sub-01_ses-2_dir-AP_dwi.nii.gz names B0FieldSource 'dwi_b0_field', but no file in this subject carries that B0FieldIdentifier.
 
-Processing preview: FSL path (TOPUP fieldmap estimation + eddy HMC/SDC)
+Processing preview: eddy + TOPUP (--hmc-method eddy --sdc-method topup)
 -----------------------------------------------------------------------
 
 Output "sub-01_ses-1_dir-AP" (1 single series):
@@ -55,8 +55,8 @@ Output "sub-01_ses-2_dir-PA" (1 single series):
   3. The corrected series is written as one output file.
   !! WARNING [no-sdc]: Output 'sub-01_ses-2_dir-PA' has no fieldmap and this subject has no T2w image (or the series lacks PhaseEncodingDirection): no susceptibility distortion correction will be performed.
 
-Processing preview: TORTOISE path (DIFFPREP HMC + DRBUDDI SDC)
---------------------------------------------------------------
+Processing preview: DIFFPREP + DRBUDDI (--hmc-method diffprep --sdc-method drbuddi)
+-----------------------------------------------------------------------------------
 
 Output "sub-01_ses-1_dir-AP" (1 single series):
   1. The series is denoised.
@@ -86,8 +86,8 @@ Output "sub-01_ses-2_dir-PA" (1 single series):
   4. The corrected series is written as one output file.
   !! WARNING [no-sdc]: Output 'sub-01_ses-2_dir-PA' has no fieldmap and this subject has no T2w image (or the series lacks PhaseEncodingDirection): no susceptibility distortion correction will be performed.
 
-Processing preview: Two-stage path (TOPUP + eddy, then DRBUDDI or T2Wreg refinement)
-------------------------------------------------------------------------------------
+Processing preview: eddy + TOPUP→DRBUDDI (--hmc-method eddy --sdc-method topup+drbuddi)
+---------------------------------------------------------------------------------------
 
 Output "sub-01_ses-1_dir-AP" (1 single series):
   1. The series is denoised.
@@ -111,4 +111,35 @@ Output "sub-01_ses-2_dir-PA" (1 single series):
   1. The series is denoised.
   2. No fieldmap is available and this subject has no T2w image: susceptibility distortion is NOT corrected.
   3. The corrected series is written as one output file.
+  !! WARNING [no-sdc]: Output 'sub-01_ses-2_dir-PA' has no fieldmap and this subject has no T2w image (or the series lacks PhaseEncodingDirection): no susceptibility distortion correction will be performed.
+
+Processing preview: SHORELine + DRBUDDI (--hmc-method shoreline --sdc-method drbuddi)
+-------------------------------------------------------------------------------------
+
+Output "sub-01_ses-1_dir-AP" (1 single series):
+  1. The series is denoised.
+  2. SHORELine iteratively corrects head motion by registering each volume to a 3dSHORE signal-model prediction (eddy currents are not corrected).
+  3. No fieldmap is available: susceptibility distortion is NOT corrected (SHORELine has no fieldmap-less fallback).
+  4. The corrected series is written as one output file.
+  !! WARNING [no-sdc]: Output 'sub-01_ses-1_dir-AP' has no fieldmap and this subject has no T2w image (or the series lacks PhaseEncodingDirection): no susceptibility distortion correction will be performed.
+
+Output "sub-01_ses-1_dir-PA" (1 single series):
+  1. The series is denoised.
+  2. SHORELine iteratively corrects head motion by registering each volume to a 3dSHORE signal-model prediction (eddy currents are not corrected).
+  3. No fieldmap is available: susceptibility distortion is NOT corrected (SHORELine has no fieldmap-less fallback).
+  4. The corrected series is written as one output file.
+  !! WARNING [no-sdc]: Output 'sub-01_ses-1_dir-PA' has no fieldmap and this subject has no T2w image (or the series lacks PhaseEncodingDirection): no susceptibility distortion correction will be performed.
+
+Output "sub-01_ses-2_dir-AP" (1 single series):
+  1. The series is denoised.
+  2. SHORELine iteratively corrects head motion by registering each volume to a 3dSHORE signal-model prediction (eddy currents are not corrected).
+  3. No fieldmap is available: susceptibility distortion is NOT corrected (SHORELine has no fieldmap-less fallback).
+  4. The corrected series is written as one output file.
+  !! WARNING [no-sdc]: Output 'sub-01_ses-2_dir-AP' has no fieldmap and this subject has no T2w image (or the series lacks PhaseEncodingDirection): no susceptibility distortion correction will be performed.
+
+Output "sub-01_ses-2_dir-PA" (1 single series):
+  1. The series is denoised.
+  2. SHORELine iteratively corrects head motion by registering each volume to a 3dSHORE signal-model prediction (eddy currents are not corrected).
+  3. No fieldmap is available: susceptibility distortion is NOT corrected (SHORELine has no fieldmap-less fallback).
+  4. The corrected series is written as one output file.
   !! WARNING [no-sdc]: Output 'sub-01_ses-2_dir-PA' has no fieldmap and this subject has no T2w image (or the series lacks PhaseEncodingDirection): no susceptibility distortion correction will be performed.

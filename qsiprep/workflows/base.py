@@ -49,6 +49,7 @@ from ..grouping import (
     build_dwi_grouping,
     check_backend,
     describe_processing,
+    method_selection_from_config,
     render_report_segment,
     report_text,
     to_preproc_units,
@@ -394,7 +395,7 @@ to workflows in *QSIPrep*'s documentation]\
     for issue in grouping.warnings:
         config.loggers.workflow.warning(issue.render())
     config.loggers.workflow.info(report_text(grouping))
-    config.loggers.workflow.info(describe_processing(grouping, backend))
+    config.loggers.workflow.info(describe_processing(grouping, method_selection_from_config()))
     if grouping_errors:
         rendered = '\n'.join(issue.render() for issue in grouping_errors)
         raise GroupingError(

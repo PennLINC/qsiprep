@@ -247,6 +247,14 @@ class MethodSelection:
         tools = '→'.join(SDC_CAPABILITIES[tool].label for tool in self.pepolar_tools)
         return f'{HMC_CAPABILITIES[self.hmc].label} + {tools}'
 
+    def cli_phrase(self) -> str:
+        """The qsiprep flags that select this, e.g. ``'--hmc-method eddy --sdc-method topup'``."""
+        parts = [f'--hmc-method {self.hmc.value}']
+        if self.hmc is HmcMethod.SHORELINE and self.shoreline_model != '3dshore':
+            parts.append(f'--shoreline-model {self.shoreline_model}')
+        parts.append(f'--sdc-method {"+".join(tool.value for tool in self.pepolar_tools)}')
+        return ' '.join(parts)
+
 
 def selection_for_config(
     hmc_model: str,

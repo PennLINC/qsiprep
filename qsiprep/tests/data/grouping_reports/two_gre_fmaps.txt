@@ -17,7 +17,7 @@ Fieldmap estimations:
     - sub-01_acq-run2_magnitude1.nii.gz
     - sub-01_acq-run2_phasediff.nii.gz
 
-Processing preview: FSL path (TOPUP fieldmap estimation + eddy HMC/SDC)
+Processing preview: eddy + TOPUP (--hmc-method eddy --sdc-method topup)
 -----------------------------------------------------------------------
 
 Output "sub-01_dir-AP" (2 series):
@@ -30,8 +30,8 @@ Output "sub-01_dir-AP" (2 series):
   7. eddy corrects head motion and eddy currents; the fieldmap is applied to unwarp the results.
   8. The corrected results of the 2 units are resampled onto one grid and concatenated into one output file.
 
-Processing preview: TORTOISE path (DIFFPREP HMC + DRBUDDI SDC)
---------------------------------------------------------------
+Processing preview: DIFFPREP + DRBUDDI (--hmc-method diffprep --sdc-method drbuddi)
+-----------------------------------------------------------------------------------
 
 Output "sub-01_dir-AP" (2 series):
   1. Each series is denoised on its own. The 2 series span 2 correction units; each unit is concatenated and corrected in its own pipeline.
@@ -43,8 +43,8 @@ Output "sub-01_dir-AP" (2 series):
   7. A fieldmap is computed from the GRE phase difference acquisition and applied to unwarp the DIFFPREP output.
   8. The corrected results of the 2 units are resampled onto one grid and concatenated into one output file.
 
-Processing preview: Two-stage path (TOPUP + eddy, then DRBUDDI or T2Wreg refinement)
-------------------------------------------------------------------------------------
+Processing preview: eddy + TOPUP→DRBUDDI (--hmc-method eddy --sdc-method topup+drbuddi)
+---------------------------------------------------------------------------------------
 
 Output "sub-01_dir-AP" (2 series):
   1. Each series is denoised on its own. The 2 series span 2 correction units; each unit is concatenated and corrected in its own pipeline.
@@ -55,3 +55,16 @@ Output "sub-01_dir-AP" (2 series):
   6. The corrected results of the 2 units are resampled onto one grid and concatenated into one output file.
   !! WARNING [mixed-non-pepolar]: Estimation 'auto+fmap+sub-01_acq-run1' is not PEPOLAR; the DRBUDDI second stage only refines PEPOLAR corrections, so 'sub-01_dir-AP' will get single-stage correction.
   !! WARNING [mixed-non-pepolar]: Estimation 'auto+fmap+sub-01_acq-run2' is not PEPOLAR; the DRBUDDI second stage only refines PEPOLAR corrections, so 'sub-01_dir-AP' will get single-stage correction.
+
+Processing preview: SHORELine + DRBUDDI (--hmc-method shoreline --sdc-method drbuddi)
+-------------------------------------------------------------------------------------
+
+Output "sub-01_dir-AP" (2 series):
+  1. Each series is denoised on its own. The 2 series span 2 correction units; each unit is concatenated and corrected in its own pipeline.
+  2. Correction unit 'sub-01_dir-AP_run-1' (sub-01_dir-AP_run-1_dwi.nii.gz):
+  3. SHORELine iteratively corrects head motion by registering each volume to a 3dSHORE signal-model prediction (eddy currents are not corrected).
+  4. A fieldmap is computed from the GRE phase difference acquisition and applied to unwarp the corrected series.
+  5. Correction unit 'sub-01_dir-AP_run-2' (sub-01_dir-AP_run-2_dwi.nii.gz):
+  6. SHORELine iteratively corrects head motion by registering each volume to a 3dSHORE signal-model prediction (eddy currents are not corrected).
+  7. A fieldmap is computed from the GRE phase difference acquisition and applied to unwarp the corrected series.
+  8. The corrected results of the 2 units are resampled onto one grid and concatenated into one output file.

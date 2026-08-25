@@ -10,7 +10,7 @@ Fieldmap estimations:
   auto+synb0 [cli-override]: SyNb0 synthetic b=0
     - sub-01_T1w.nii.gz
 
-Processing preview: FSL path (TOPUP fieldmap estimation + eddy HMC/SDC)
+Processing preview: eddy + TOPUP (--hmc-method eddy --sdc-method topup)
 -----------------------------------------------------------------------
 
 Output "sub-01_dir-AP" (1 single series):
@@ -20,8 +20,8 @@ Output "sub-01_dir-AP" (1 single series):
   4. eddy corrects head motion, eddy currents, and susceptibility distortion in one model, using the TOPUP field.
   5. The corrected series is written as one output file.
 
-Processing preview: TORTOISE path (DIFFPREP HMC + DRBUDDI SDC)
---------------------------------------------------------------
+Processing preview: DIFFPREP + DRBUDDI (--hmc-method diffprep --sdc-method drbuddi)
+-----------------------------------------------------------------------------------
 
 Output "sub-01_dir-AP" (1 single series):
   1. The series is denoised.
@@ -29,11 +29,20 @@ Output "sub-01_dir-AP" (1 single series):
   3. SyNb0 synthesizes an undistorted b=0 image from the T1w (sub-01_T1w.nii.gz); DIFFPREP registers the data to it (T2Wreg mode) to estimate and correct distortion.
   4. The corrected series is written as one output file.
 
-Processing preview: Two-stage path (TOPUP + eddy, then DRBUDDI or T2Wreg refinement)
-------------------------------------------------------------------------------------
+Processing preview: eddy + TOPUP→DRBUDDI (--hmc-method eddy --sdc-method topup+drbuddi)
+---------------------------------------------------------------------------------------
 
 Output "sub-01_dir-AP" (1 single series):
   1. The series is denoised.
   2. SyNb0 synthesizes an undistorted b=0 image from the T1w (sub-01_T1w.nii.gz); TOPUP treats it as a zero-readout-time volume and eddy applies the resulting field.
   3. T2Wreg registers the eddy-corrected b=0 to the synthetic b=0, refining the TOPUP correction.
+  4. The corrected series is written as one output file.
+
+Processing preview: SHORELine + DRBUDDI (--hmc-method shoreline --sdc-method drbuddi)
+-------------------------------------------------------------------------------------
+
+Output "sub-01_dir-AP" (1 single series):
+  1. The series is denoised.
+  2. SHORELine iteratively corrects head motion by registering each volume to a 3dSHORE signal-model prediction (eddy currents are not corrected).
+  3. The selected correction is a SyNb0 synthetic-b=0 estimation, which the SHORELine path does not implement: distortion is NOT corrected on this path.
   4. The corrected series is written as one output file.

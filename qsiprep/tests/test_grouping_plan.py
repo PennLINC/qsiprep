@@ -237,3 +237,29 @@ def test_every_backend_selection_pair_is_reachable():
     assert {canonical_selection(b).legacy_backend for b in BACKENDS} == set(BACKENDS)
     assert len(CASES) == len(SCENARIOS) + 4
     assert len(list(itertools.product(CASES, BACKENDS))) == 3 * len(CASES)
+
+
+def test_plan_step_records_follow_stage_order(tmp_path):
+    from qsiprep.grouping.report import plan_step_records
+
+    grouping = load_scenario('hcp_style', tmp_path, strict=False)
+    plan = compile_plan(grouping, selection_for_config('eddy', 'topup+drbuddi'))
+    (records,) = plan_step_records(grouping, plan).values()
+    kinds = [record.kind for record in records]
+    assert kinds == ['denoise', 'sdc-estimate', 'hmc', 'refine', 'assemble']
+    tools = [record.tool for record in records if record.tool]
+    assert tools == ['topup', 'eddy', 'drbuddi']
+    assert 'TOPUP estimates' in records[1].text
+    assert 'using the TOPUP field' in records[2].text
+
+
+def test_plan_step_records_scope_issues_to_their_output(tmp_path):
+    from qsiprep.grouping.report import plan_step_records
+
+    grouping = load_scenario('nonshelled_pair', tmp_path, strict=False)
+    plan = compile_plan(grouping, selection_for_config('eddy', 'topup'))
+    (records,) = plan_step_records(grouping, plan).values()
+    issues = [record for record in records if record.kind == 'issue']
+    assert issues
+    assert issues[0].severity == 'error'
+    assert 'eddy-requires-shelled' in issues[0].text

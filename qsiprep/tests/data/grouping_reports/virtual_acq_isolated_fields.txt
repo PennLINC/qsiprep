@@ -46,7 +46,7 @@ Notes:
   WARNING [estimation-spans-outputs]: Fieldmap estimation 'fieldHi' corrects DWI series in 2 different correction units; it will be estimated once per unit.
   WARNING [estimation-spans-outputs]: Fieldmap estimation 'fieldLo' corrects DWI series in 2 different correction units; it will be estimated once per unit.
 
-Processing preview: FSL path (TOPUP fieldmap estimation + eddy HMC/SDC)
+Processing preview: eddy + TOPUP (--hmc-method eddy --sdc-method topup)
 -----------------------------------------------------------------------
 
 Output "sub-01" (4 series):
@@ -71,8 +71,8 @@ Output "sub-01_acq-lo" (2 series):
   3. eddy corrects head motion, eddy currents, and susceptibility distortion in one model, using the TOPUP field. Every volume is assigned to its distortion group in the eddy index file.
   4. The corrected series is written as one output file.
 
-Processing preview: TORTOISE path (DIFFPREP HMC + DRBUDDI SDC)
---------------------------------------------------------------
+Processing preview: DIFFPREP + DRBUDDI (--hmc-method diffprep --sdc-method drbuddi)
+-----------------------------------------------------------------------------------
 
 Output "sub-01" (4 series):
   1. Each series is denoised on its own. The 4 series span 2 correction units; each unit is concatenated and corrected in its own pipeline.
@@ -96,8 +96,8 @@ Output "sub-01_acq-lo" (2 series):
   3. DRBUDDI estimates distortion along the j axis from the blip-up (sub-01_acq-lo_dir-PA) and blip-down (sub-01_acq-lo_dir-AP) data and applies the correction to every volume.
   4. The corrected series is written as one output file.
 
-Processing preview: Two-stage path (TOPUP + eddy, then DRBUDDI or T2Wreg refinement)
-------------------------------------------------------------------------------------
+Processing preview: eddy + TOPUP→DRBUDDI (--hmc-method eddy --sdc-method topup+drbuddi)
+---------------------------------------------------------------------------------------
 
 Output "sub-01" (4 series):
   1. Each series is denoised on its own. The 4 series span 2 correction units; each unit is concatenated and corrected in its own pipeline.
@@ -124,3 +124,28 @@ Output "sub-01_acq-lo" (2 series):
   3. eddy corrects head motion and eddy currents using the TOPUP field.
   4. DRBUDDI re-estimates distortion along the j axis from the eddy-corrected blip-up/blip-down dMRI series, refining the TOPUP correction.
   5. The corrected series is written as one output file.
+
+Processing preview: SHORELine + DRBUDDI (--hmc-method shoreline --sdc-method drbuddi)
+-------------------------------------------------------------------------------------
+
+Output "sub-01" (4 series):
+  1. Each series is denoised on its own. The 4 series span 2 correction units; each unit is concatenated and corrected in its own pipeline.
+  2. Correction unit 'sub-01_acq-hi_both' (sub-01_acq-hi_dir-AP_dwi.nii.gz, sub-01_acq-hi_dir-PA_dwi.nii.gz):
+  3. SHORELine iteratively corrects head motion by registering each volume to a 3dSHORE signal-model prediction (eddy currents are not corrected).
+  4. DRBUDDI estimates distortion along the j axis from the blip-up (sub-01_acq-hi_dir-PA_both) and blip-down (sub-01_acq-hi_dir-AP_both) data and applies the correction to every volume.
+  5. Correction unit 'sub-01_acq-lo_both' (sub-01_acq-lo_dir-AP_dwi.nii.gz, sub-01_acq-lo_dir-PA_dwi.nii.gz):
+  6. SHORELine iteratively corrects head motion by registering each volume to a 3dSHORE signal-model prediction (eddy currents are not corrected).
+  7. DRBUDDI estimates distortion along the j axis from the blip-up (sub-01_acq-lo_dir-PA_both) and blip-down (sub-01_acq-lo_dir-AP_both) data and applies the correction to every volume.
+  8. The corrected results of the 2 units are resampled onto one grid and concatenated into one output file.
+
+Output "sub-01_acq-hi" (2 series):
+  1. Each series is denoised on its own, then all 2 series are concatenated. (--denoise-after-combining reverses this order.)
+  2. SHORELine iteratively corrects head motion by registering each volume to a 3dSHORE signal-model prediction (eddy currents are not corrected).
+  3. DRBUDDI estimates distortion along the j axis from the blip-up (sub-01_acq-hi_dir-PA) and blip-down (sub-01_acq-hi_dir-AP) data and applies the correction to every volume.
+  4. The corrected series is written as one output file.
+
+Output "sub-01_acq-lo" (2 series):
+  1. Each series is denoised on its own, then all 2 series are concatenated. (--denoise-after-combining reverses this order.)
+  2. SHORELine iteratively corrects head motion by registering each volume to a 3dSHORE signal-model prediction (eddy currents are not corrected).
+  3. DRBUDDI estimates distortion along the j axis from the blip-up (sub-01_acq-lo_dir-PA) and blip-down (sub-01_acq-lo_dir-AP) data and applies the correction to every volume.
+  4. The corrected series is written as one output file.

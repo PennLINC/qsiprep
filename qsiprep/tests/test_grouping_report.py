@@ -52,6 +52,7 @@ from collections import Counter
 import pytest
 
 from qsiprep.grouping import full_report
+from qsiprep.grouping.report import default_preview_selections
 from qsiprep.tests.grouping_scenarios import SCENARIOS, load_scenario
 from qsiprep.tests.utils import get_test_data_path
 
@@ -129,13 +130,14 @@ def test_report_invariants(tmp_path, scenario, kwargs):
     grouping = load_scenario(scenario, tmp_path, strict=False, **kwargs)
     report = full_report(grouping)
 
-    # The grouping section plus all three backend previews are present.
-    assert report.count('Processing preview:') == 3
+    # The grouping section plus every default method-selection preview.
+    n_previews = len(default_preview_selections())
+    assert report.count('Processing preview:') == n_previews
 
-    # Every output appears once in the grouping section and once per backend.
+    # Every output appears once in the grouping section and once per preview.
     name_counts = Counter(concat.output_name for concat in grouping.concatenation_groups.values())
     for output_name, count in name_counts.items():
-        assert report.count(f'Output "{output_name}"') == 4 * count
+        assert report.count(f'Output "{output_name}"') == (n_previews + 1) * count
 
     # Every series, estimation, and issue is mentioned somewhere.
     for path in grouping.dwi_files:

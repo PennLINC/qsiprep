@@ -358,9 +358,9 @@ def _plan_issues(grouping: DWIGrouping, selection: MethodSelection) -> list[Grou
                         make_issue(
                             'anat-sdc-unsupported',
                             f"Estimation '{b0field_id}' is a T2w registration "
-                            f'(T2Wreg), which only the TORTOISE path implements. '
+                            f'(T2Wreg), which only DIFFPREP implements. '
                             + (
-                                'Use --hmc-model tortoise to run it.'
+                                'Use --hmc-method diffprep to run it.'
                                 if demanded
                                 else f"On this path '{concat.output_name}' gets no "
                                 'susceptibility distortion correction.'
@@ -436,19 +436,25 @@ def _plan_issues(grouping: DWIGrouping, selection: MethodSelection) -> list[Grou
                 )
                 if not is_eddy and unpaired:
                     # Each blip group routes on its own: complete pairs to
-                    # DRBUDDI, an unpaired group to the fieldmap-less fallback.
+                    # DRBUDDI, an unpaired group to the fieldmap-less fallback
+                    # (DIFFPREP only; SHORELine has none).
                     groups = '; '.join(describe_blip_group(key) for key in unpaired)
-                    fallback = (
-                        'corrected by T2Wreg against the T2w instead'
-                        if grouping.anat_files('T2w')
-                        else 'left uncorrected (no T2w for a T2Wreg fallback)'
-                    )
+                    if selection.hmc is HmcMethod.DIFFPREP:
+                        path_name = 'DIFFPREP'
+                        fallback = (
+                            'corrected by T2Wreg against the T2w instead'
+                            if grouping.anat_files('T2w')
+                            else 'left uncorrected (no T2w for a T2Wreg fallback)'
+                        )
+                    else:
+                        path_name = 'SHORELine'
+                        fallback = 'left uncorrected (SHORELine has no T2Wreg fallback)'
                     issues.append(
                         warning(
                             'drbuddi-no-opposing-pair',
                             f"Estimation '{b0field_id}' has blip group(s) with no "
                             f'opposing (blip-up/blip-down) pair: {groups}. DRBUDDI '
-                            f'needs a matched pair, so on the TORTOISE path those '
+                            f'needs a matched pair, so on the {path_name} path those '
                             f'series are {fallback}. Add the missing reverse blip(s) '
                             f"to use DRBUDDI for '{concat.output_name}'.",
                             estimation.sources,
@@ -490,7 +496,7 @@ def _check_shelling(grouping, selection, multipart_id, concat) -> list[GroupingI
                 'eddy-requires-shelled',
                 f'eddy requires shelled (DTI/multi-shell) q-space sampling, but '
                 f"{names} in output '{concat.output_name}' is not shelled. "
-                'Use --hmc-model tortoise, which handles non-shelled data.',
+                'Use --hmc-method shoreline or diffprep, which handle non-shelled data.',
                 tuple(non_shelled),
                 scope=multipart_id,
             )

@@ -19,7 +19,7 @@ Fieldmap estimations:
     - sub-01_acq-slow_dir-AP_dwi.nii.gz
     phase encoding axes: j (bidirectional)
 
-Processing preview: FSL path (TOPUP fieldmap estimation + eddy HMC/SDC)
+Processing preview: eddy + TOPUP (--hmc-method eddy --sdc-method topup)
 -----------------------------------------------------------------------
 
 Output "sub-01" (3 series):
@@ -28,8 +28,8 @@ Output "sub-01" (3 series):
   3. eddy corrects head motion, eddy currents, and susceptibility distortion in one model, using the TOPUP field. Every volume is assigned to its distortion group in the eddy index file.
   4. The corrected series is written as one output file.
 
-Processing preview: TORTOISE path (DIFFPREP HMC + DRBUDDI SDC)
---------------------------------------------------------------
+Processing preview: DIFFPREP + DRBUDDI (--hmc-method diffprep --sdc-method drbuddi)
+-----------------------------------------------------------------------------------
 
 Output "sub-01" (3 series):
   1. Each series is denoised on its own, then all 3 series are concatenated. (--denoise-after-combining reverses this order.)
@@ -38,10 +38,10 @@ Output "sub-01" (3 series):
   4. DRBUDDI has no opposing blip for axis j, TRT 0.08s, so DIFFPREP registers them to the T2w instead (T2Wreg).
      DRBUDDI additionally uses the T2w image (sub-01_T2w.nii.gz) as a structural registration target (multimodal correction).
   5. The corrected series is written as one output file.
-  !! WARNING [drbuddi-no-opposing-pair]: Estimation 'jpool' has blip group(s) with no opposing (blip-up/blip-down) pair: axis j, TRT 0.08s. DRBUDDI needs a matched pair, so on the TORTOISE path those series are corrected by T2Wreg against the T2w instead. Add the missing reverse blip(s) to use DRBUDDI for 'sub-01'.
+  !! WARNING [drbuddi-no-opposing-pair]: Estimation 'jpool' has blip group(s) with no opposing (blip-up/blip-down) pair: axis j, TRT 0.08s. DRBUDDI needs a matched pair, so on the DIFFPREP path those series are corrected by T2Wreg against the T2w instead. Add the missing reverse blip(s) to use DRBUDDI for 'sub-01'.
 
-Processing preview: Two-stage path (TOPUP + eddy, then DRBUDDI or T2Wreg refinement)
-------------------------------------------------------------------------------------
+Processing preview: eddy + TOPUP→DRBUDDI (--hmc-method eddy --sdc-method topup+drbuddi)
+---------------------------------------------------------------------------------------
 
 Output "sub-01" (3 series):
   1. Each series is denoised on its own, then all 3 series are concatenated. (--denoise-after-combining reverses this order.)
@@ -50,3 +50,15 @@ Output "sub-01" (3 series):
   4. The estimation spans 2 blip groups (axis j, TRT 0.05s; axis j, TRT 0.08s); TOPUP+eddy corrects them together, but the single-pass DRBUDDI refinement covers one matched pair, so no DRBUDDI refinement is applied.
   5. The corrected series is written as one output file.
   !! WARNING [drbuddi-refinement-multigroup]: Estimation 'jpool' spans 2 blip groups (axis j, TRT 0.05s; axis j, TRT 0.08s). TOPUP+eddy corrects them together, but the DRBUDDI refinement handles one matched pair at a time, so 'sub-01' gets single-stage TOPUP+eddy correction (no DRBUDDI refinement).
+
+Processing preview: SHORELine + DRBUDDI (--hmc-method shoreline --sdc-method drbuddi)
+-------------------------------------------------------------------------------------
+
+Output "sub-01" (3 series):
+  1. Each series is denoised on its own, then all 3 series are concatenated. (--denoise-after-combining reverses this order.)
+  2. SHORELine iteratively corrects head motion by registering each volume to a 3dSHORE signal-model prediction (eddy currents are not corrected).
+  3. DRBUDDI estimates distortion along the j axis from the blip-up (sub-01_acq-fast_dir-PA) and blip-down (sub-01_acq-fast_dir-AP) data and applies the correction to every volume.
+  4. DRBUDDI has no opposing blip for axis j, TRT 0.08s, so those series are left uncorrected (SHORELine has no T2Wreg fallback).
+     DRBUDDI additionally uses the T2w image (sub-01_T2w.nii.gz) as a structural registration target (multimodal correction).
+  5. The corrected series is written as one output file.
+  !! WARNING [drbuddi-no-opposing-pair]: Estimation 'jpool' has blip group(s) with no opposing (blip-up/blip-down) pair: axis j, TRT 0.08s. DRBUDDI needs a matched pair, so on the SHORELine path those series are left uncorrected (SHORELine has no T2Wreg fallback). Add the missing reverse blip(s) to use DRBUDDI for 'sub-01'.
