@@ -434,14 +434,47 @@ def _build_parser(**kwargs):
         action='store',
         nargs='+',
         default=[],
-        choices=['fieldmaps', 't2w', 'phase', 'sdc'],
+        choices=['fieldmaps', 't2w', 'phase', 'sdc', 'gradients'],
         help=(
             'Ignore selected aspects of the input dataset to disable corresponding '
             'parts of the workflow (a space delimited list). '
             '"fieldmaps" skips the fmap/ directory, but reverse phase-encoded dMRI '
             'runs still drive susceptibility distortion correction. "sdc" disables '
             'susceptibility distortion correction entirely (field maps, reverse-PE '
-            'runs, and fieldmap-less methods all off).'
+            'runs, and fieldmap-less methods all off). '
+            '"gradients" disables gradient nonlinearity correction entirely, '
+            'including the voxelwise gradient deviation map.'
+        ),
+    )
+    g_conf.add_argument(
+        '--force',
+        required=False,
+        action='store',
+        nargs='+',
+        default=[],
+        choices=['gradients'],
+        help=(
+            'Force selected corrections on, overriding what the input metadata '
+            'implies (a space delimited list). "gradients" applies the full 3D '
+            'gradient nonlinearity correction to every DWI run regardless of the '
+            'ImageType field, for data whose DIS2D/DIS3D tags are absent or '
+            'untrustworthy. Requires --gradient-file.'
+        ),
+    )
+    g_conf.add_argument(
+        '--gradient-file',
+        required=False,
+        action='store',
+        type=IsFile,
+        help=(
+            'Path to a gradient nonlinearity information file, matching '
+            "TORTOISE's --grad_nonlin: a scanner coefficient file (.grad for "
+            'Siemens, .dat for GE, .gc for the TORTOISE binary format) or an ITK '
+            'displacement field (.nii/.nii.gz). Applies to every DWI run in the '
+            'dataset. Whether the spatial correction is applied to a given run, '
+            "and in which dimensions, is decided from that run's ImageType "
+            'field unless --force/--ignore gradients says otherwise. The '
+            'voxelwise gradient deviation map is written whenever this is given.'
         ),
     )
     g_conf.add_argument(
@@ -973,6 +1006,10 @@ def parse_args(args=None, namespace=None):
         from ..utils.misc import validate_diffprep_config
 
         validate_diffprep_config(opts.diffprep_config)
+
+    from ..utils.misc import validate_gradient_flags
+
+    validate_gradient_flags(opts.gradient_file, opts.force, opts.ignore)
 
     if opts.gpu:
         from ..utils.gpu import check_gpu_available

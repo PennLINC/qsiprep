@@ -462,5 +462,61 @@ def validate_diffprep_config(diffprep_config):
     return
 
 
+def validate_gradient_flags(gradient_file, force, ignore):
+    """Validate the ``--gradient-file``/``--force``/``--ignore`` combination.
+
+    Parameters
+    ----------
+    gradient_file : str, os.PathLike or None
+        Path passed to ``--gradient-file``, or ``None`` if the flag was not given.
+        Existence is assumed to already be checked (the CLI's ``IsFile`` argparse
+        type does that); only the extension is validated here.
+    force : list of str
+        Values passed to ``--force`` (currently only ``"gradients"`` is defined).
+    ignore : list of str
+        Values passed to ``--ignore``.
+
+    Raises
+    ------
+    ValueError
+        If ``--force gradients`` and ``--ignore gradients`` are both given, if
+        ``--force gradients`` is given without ``--gradient-file``, or if
+        ``--gradient-file`` does not end in a TORTOISE-recognized extension.
+
+    Notes
+    -----
+    An unrecognized ``--gradient-file`` extension is rejected outright rather than
+    merely warned about. TORTOISE itself only warns on an unrecognized extension
+    and then silently disables gradient nonlinearity correction; silently
+    producing uncorrected output is the wrong default for a batch pipeline, so
+    QSIPrep rejects it here instead.
+    """
+    from .. import config
+
+    forcing_gradients = 'gradients' in force
+    ignoring_gradients = 'gradients' in ignore
+
+    if forcing_gradients and ignoring_gradients:
+        raise ValueError('"--force gradients" and "--ignore gradients" are contradictory.')
+
+    if forcing_gradients and not gradient_file:
+        raise ValueError('"--force gradients" requires --gradient-file.')
+
+    if gradient_file:
+        gradient_extensions = ('.grad', '.dat', '.gc', '.nii', '.nii.gz')
+        if not str(gradient_file).endswith(gradient_extensions):
+            raise ValueError(
+                f'--gradient-file must end in one of {", ".join(gradient_extensions)}: '
+                f'<{gradient_file}>. TORTOISE silently disables gradient nonlinearity '
+                'correction for unrecognized extensions, so QSIPrep rejects it here instead.'
+            )
+        if ignoring_gradients:
+            config.loggers.cli.warning(
+                '--gradient-file is unused because "--ignore gradients" was given.'
+            )
+
+    return
+
+
 if __name__ == '__main__':
     pass
