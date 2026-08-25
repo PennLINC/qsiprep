@@ -43,6 +43,11 @@ from ...utils.gpu import gpu_enabled
 from ...utils.resources import as_path
 from ..fieldmap.base import init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf
+from .gradwarp import (
+    connect_gradwarp_sdc_reference,
+    connect_gradwarp_sdc_volumes,
+    resolve_gradwarp_plan,
+)
 from .util import init_dwi_reference_wf, tortoise_convert_mem_gb
 
 # BIDS PhaseEncodingDirection axes already match what TORTOISEProcess expects
@@ -239,6 +244,7 @@ def init_diffprep_hmc_wf(
                 't1_mask',
                 't1_2_mni_reverse_transform',
                 't2w_unfatsat',
+                'gradwarp_field',
             ]
         ),
         name='inputnode',
@@ -277,6 +283,13 @@ def init_diffprep_hmc_wf(
         ),
         name='outputnode',
     )
+
+    # Whether the SDC estimation inputs get gradwarp-corrected first -- see the
+    # note above connect_gradwarp_sdc_volumes in gradwarp.py. No TOPUP carve-out
+    # applies here: every SDC warp this backend produces is carried out in
+    # to_dwi_ref_warps and applied downstream of gradwarp.
+    gradwarp_plan = resolve_gradwarp_plan(unit)
+    gradwarp_before_sdc = gradwarp_plan is not None and gradwarp_plan.warp_dim is not None
 
     # Several nodes below hold the whole series as float32; size their memory
     # from the data rather than guessing.
@@ -542,9 +555,17 @@ def init_diffprep_hmc_wf(
             synth_shell_ndirs=diffprep_cfg.get('drbuddi_synth_shell_ndirs', 30),
         )
 
+        if gradwarp_before_sdc:
+            connect_gradwarp_sdc_volumes(
+                workflow, inputnode, split_outputs, 'dwi_files', drbuddi_wf
+            )
+        else:
+            workflow.connect([
+                (split_outputs, drbuddi_wf, [('dwi_files', 'inputnode.dwi_files')]),
+            ])  # fmt:skip
+
         workflow.connect([
             (split_outputs, drbuddi_wf, [
-                ('dwi_files', 'inputnode.dwi_files'),
                 ('bvec_files', 'inputnode.bvec_files'),
                 ('bval_files', 'inputnode.bval_files'),
             ]),
@@ -598,12 +619,24 @@ def init_diffprep_hmc_wf(
         b0_sdc_wf = init_sdc_wf(unit, unit.dwi_metadata)
         b0_sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
 
+        if gradwarp_before_sdc:
+            connect_gradwarp_sdc_reference(
+                workflow,
+                inputnode,
+                b0_ref_for_coreg,
+                ('outputnode.ref_image', 'outputnode.ref_image_brain', 'outputnode.dwi_mask'),
+                b0_sdc_wf,
+            )
+        else:
+            workflow.connect([
+                (b0_ref_for_coreg, b0_sdc_wf, [
+                    ('outputnode.ref_image', 'inputnode.b0_ref'),
+                    ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
+                    ('outputnode.dwi_mask', 'inputnode.b0_mask'),
+                ]),
+            ])  # fmt:skip
+
         workflow.connect([
-            (b0_ref_for_coreg, b0_sdc_wf, [
-                ('outputnode.ref_image', 'inputnode.b0_ref'),
-                ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
-                ('outputnode.dwi_mask', 'inputnode.b0_mask'),
-            ]),
             (inputnode, b0_sdc_wf, [
                 ('t1_brain', 'inputnode.t1_brain'),
                 ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),

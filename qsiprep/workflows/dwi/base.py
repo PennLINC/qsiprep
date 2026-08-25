@@ -327,6 +327,12 @@ def init_dwi_preproc_wf(
                 (gradwarp_wf, outputnode, [
                     ('outputnode.gradwarp_field', 'gradwarp_field'),
                 ]),
+                # The HMC/SDC backends gradwarp the images their susceptibility
+                # estimation runs on, wherever that field is applied downstream
+                # of gradwarp (see gradwarp.connect_gradwarp_sdc_volumes).
+                (gradwarp_wf, hmc_wf, [
+                    ('outputnode.gradwarp_field', 'inputnode.gradwarp_field'),
+                ]),
             ])  # fmt:skip
 
     if not dwi_only:

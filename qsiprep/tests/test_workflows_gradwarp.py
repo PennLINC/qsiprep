@@ -351,3 +351,284 @@ def test_single_subject_wf_wires_gradwarp_field_to_finalize():
 
     src = inspect.getsource(base.init_single_subject_wf)
     assert "('outputnode.gradwarp_field', 'inputnode.gradwarp_field')" in src
+
+
+# --- Task 10: gradwarp-correcting the SDC estimation inputs ------------------
+
+
+def _edge_pairs(wf, src_name, dst_name):
+    """``(source_field, dest_field)`` pairs on the edge between two named nodes."""
+    edge = wf._graph.get_edge_data(wf.get_node(src_name), wf.get_node(dst_name))
+    return [] if edge is None else list(edge['connect'])
+
+
+def _connects(wf, src_name, dst_name, source_field, dest_field):
+    """True when ``src.source_field`` feeds ``dst.dest_field``.
+
+    Sources wrapped in a helper function (``(('gradwarp_field', _listify), ...)``)
+    are matched on the field name alone.
+    """
+    for source, dest in _edge_pairs(wf, src_name, dst_name):
+        name = source[0] if isinstance(source, tuple) else source
+        if name == source_field and dest == dest_field:
+            return True
+    return False
+
+
+def _rpe_unit(tmp_path, image_type=None):
+    from qsiprep.grouping.models import CorrectionMethod
+
+    main = write_dwi_with_gradients(tmp_path / 'sub-01_dir-AP_dwi.nii.gz')
+    partner = write_dwi_with_gradients(tmp_path / 'sub-01_dir-PA_dwi.nii.gz')
+    metadata = {'Manufacturer': 'SIEMENS'}
+    if image_type is not None:
+        metadata['ImageType'] = image_type
+    return make_preproc_unit(
+        [main, partner],
+        method=CorrectionMethod.PEPOLAR,
+        pe_dirs={main: 'j', partner: 'j-'},
+        metadata=metadata,
+    )
+
+
+def _syn_unit(tmp_path):
+    from qsiprep.grouping.models import CorrectionMethod
+
+    dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz')
+    return make_preproc_unit(
+        [dwi],
+        method=CorrectionMethod.NIPREPS_SYN,
+        estimation_sources=[str(tmp_path / 'sub-01_T1w.nii.gz')],
+        metadata={'Manufacturer': 'SIEMENS'},
+    )
+
+
+def _cfg_for_fsl(tmp_path, pepolar_method):
+    config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
+    config.workflow.hmc_model = 'eddy'
+    config.workflow.pepolar_method = pepolar_method
+    config.workflow.b0_threshold = 100
+    config.workflow.eddy_config = None
+    config.workflow.denoise_method = 'dwidenoise'
+    config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
+    config.execution.sloppy = False
+    config.nipype.omp_nthreads = 1
+
+
+def _fsl_wf(tmp_path, unit):
+    from qsiprep.workflows.dwi.fsl import init_fsl_hmc_wf
+
+    return init_fsl_hmc_wf(unit, source_file='/data/x_dwi.nii.gz', t2w_sdc=False)
+
+
+def test_fsl_hmc_wf_exposes_a_gradwarp_field_input(tmp_path):
+    _cfg_for_fsl(tmp_path, 'DRBUDDI')
+    wf = _fsl_wf(tmp_path, _rpe_unit(tmp_path))
+    assert 'gradwarp_field' in wf.get_node('inputnode').inputs.trait_get()
+
+
+def test_topup_branch_does_not_gradwarp_sdc_inputs(tmp_path):
+    """eddy applies the TOPUP field to raw data, so the field must be estimated
+    on raw data too -- it is baked in upstream of ``ComposeTransforms``."""
+    _cfg_for_fsl(tmp_path, 'TOPUP')
+    wf = _fsl_wf(tmp_path, _rpe_unit(tmp_path))
+    assert wf.get_node('gradwarp_sdc_inputs') is None
+    # Positively: topup still estimates from the raw b=0 series, with nothing
+    # interposed under any name.
+    assert _connects(wf, 'gather_inputs', 'topup', 'topup_imain', 'in_file')
+
+
+def test_drbuddi_branch_gradwarps_sdc_inputs(tmp_path):
+    """DRBUDDI's warp is applied downstream of gradwarp, so its inputs must be
+    corrected first -- matching ``DRBUDDI::Step0_CreateImages``."""
+    _cfg_for_fsl(tmp_path, 'DRBUDDI')
+    wf = _fsl_wf(tmp_path, _rpe_unit(tmp_path))
+
+    assert wf.get_node('gradwarp_sdc_inputs') is not None
+    # The field actually reaches the resampling node...
+    assert _connects(wf, 'inputnode', 'gradwarp_sdc_inputs', 'gradwarp_field', 'transforms')
+    # ...the corrected volumes actually reach DRBUDDI...
+    assert _connects(
+        wf, 'gradwarp_sdc_inputs', 'drbuddi_sdc_wf', 'output_image', 'inputnode.dwi_files'
+    )
+    # ...and the raw volumes no longer do.
+    assert not _connects(
+        wf, 'split_eddy_lps', 'drbuddi_sdc_wf', 'dwi_files', 'inputnode.dwi_files'
+    )
+
+
+def test_drbuddi_plus_topup_still_gradwarps_the_drbuddi_inputs(tmp_path):
+    """The rule is per SDC node, not per workflow.
+
+    In the mixed method eddy bakes the TOPUP field into its output, but
+    DRBUDDI then runs on that output and its warp still lands in
+    ``to_dwi_ref_warps`` -- downstream of gradwarp.
+    """
+    _cfg_for_fsl(tmp_path, 'DRBUDDI+TOPUP')
+    wf = _fsl_wf(tmp_path, _rpe_unit(tmp_path))
+
+    assert wf.get_node('topup') is not None
+    assert _connects(
+        wf, 'gradwarp_sdc_inputs', 'drbuddi_sdc_wf', 'output_image', 'inputnode.dwi_files'
+    )
+
+
+def test_fsl_syn_branch_gradwarps_the_sdc_reference(tmp_path):
+    """SyN's warp stays in ``to_dwi_ref_warps``, so estimate it on corrected b0s."""
+    _cfg_for_fsl(tmp_path, 'DRBUDDI')
+    wf = _fsl_wf(tmp_path, _syn_unit(tmp_path))
+
+    assert _connects(wf, 'gradwarp_sdc_inputs', 'sdc_wf', 'output_image', 'inputnode.b0_ref')
+    assert _connects(
+        wf, 'gradwarp_sdc_inputs_brain', 'sdc_wf', 'output_image', 'inputnode.b0_ref_brain'
+    )
+    assert _connects(wf, 'gradwarp_sdc_inputs_mask', 'sdc_wf', 'output_image', 'inputnode.b0_mask')
+    assert not _connects(
+        wf, 'b0_ref_for_coreg', 'sdc_wf', 'outputnode.ref_image', 'inputnode.b0_ref'
+    )
+    # A binary mask must not be sinc-interpolated.
+    assert wf.get_node('gradwarp_sdc_inputs_mask').inputs.interpolation == 'NearestNeighbor'
+
+
+def test_no_gradwarp_node_without_a_coefficient_file(tmp_path):
+    _cfg_for_fsl(tmp_path, 'DRBUDDI')
+    config.workflow.gradient_file = None
+    wf = _fsl_wf(tmp_path, _rpe_unit(tmp_path))
+    assert wf.get_node('gradwarp_sdc_inputs') is None
+
+
+def test_dis3d_does_not_gradwarp_sdc_inputs(tmp_path):
+    """No spatial correction means nothing to apply before SDC estimation."""
+    _cfg_for_fsl(tmp_path, 'DRBUDDI')
+    wf = _fsl_wf(tmp_path, _rpe_unit(tmp_path, ['ORIGINAL', 'DIS3D']))
+    assert wf.get_node('gradwarp_sdc_inputs') is None
+
+
+def _cfg_for_diffprep(tmp_path):
+    config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
+    config.workflow.hmc_model = 'tortoise'
+    config.workflow.diffprep_config = None
+    config.workflow.b0_threshold = 100
+    config.workflow.pepolar_method = 'DRBUDDI'
+    config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
+    config.workflow.gpu = None
+    config.execution.sloppy = False
+    config.nipype.omp_nthreads = 1
+
+
+def _diffprep_wf(tmp_path, unit):
+    from qsiprep.workflows.dwi.diffprep import init_diffprep_hmc_wf
+
+    return init_diffprep_hmc_wf(unit, source_file='/data/x_dwi.nii.gz', t2w_sdc=False)
+
+
+def test_diffprep_hmc_wf_exposes_a_gradwarp_field_input(tmp_path):
+    _cfg_for_diffprep(tmp_path)
+    wf = _diffprep_wf(tmp_path, _rpe_unit(tmp_path))
+    assert 'gradwarp_field' in wf.get_node('inputnode').inputs.trait_get()
+
+
+def test_diffprep_drbuddi_branch_gradwarps_sdc_inputs(tmp_path):
+    _cfg_for_diffprep(tmp_path)
+    wf = _diffprep_wf(tmp_path, _rpe_unit(tmp_path))
+
+    assert _connects(wf, 'inputnode', 'gradwarp_sdc_inputs', 'gradwarp_field', 'transforms')
+    assert _connects(
+        wf, 'gradwarp_sdc_inputs', 'drbuddi_sdc_wf', 'output_image', 'inputnode.dwi_files'
+    )
+    assert not _connects(wf, 'split_outputs', 'drbuddi_sdc_wf', 'dwi_files', 'inputnode.dwi_files')
+
+
+def test_diffprep_dis3d_does_not_gradwarp_sdc_inputs(tmp_path):
+    _cfg_for_diffprep(tmp_path)
+    wf = _diffprep_wf(tmp_path, _rpe_unit(tmp_path, ['ORIGINAL', 'DIS3D']))
+    assert wf.get_node('gradwarp_sdc_inputs') is None
+
+
+def test_diffprep_syn_branch_gradwarps_the_sdc_reference(tmp_path):
+    _cfg_for_diffprep(tmp_path)
+    wf = _diffprep_wf(tmp_path, _syn_unit(tmp_path))
+
+    assert _connects(wf, 'gradwarp_sdc_inputs', 'sdc_wf', 'output_image', 'inputnode.b0_ref')
+    assert not _connects(
+        wf, 'b0_ref_for_coreg', 'sdc_wf', 'outputnode.ref_image', 'inputnode.b0_ref'
+    )
+
+
+def _cfg_for_shoreline(tmp_path):
+    config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
+    config.workflow.hmc_model = '3dSHORE'
+    config.workflow.hmc_transform = 'Affine'
+    config.workflow.shoreline_iters = 2
+    config.workflow.b0_threshold = 100
+    config.workflow.b0_motion_corr_to = 'iterative'
+    config.workflow.pepolar_method = 'DRBUDDI'
+    config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
+    config.execution.sloppy = False
+    config.nipype.omp_nthreads = 1
+
+
+def _shoreline_wf(tmp_path, unit):
+    from qsiprep.workflows.dwi.hmc_sdc import init_qsiprep_hmcsdc_wf
+
+    return init_qsiprep_hmcsdc_wf(
+        unit,
+        source_file='/data/x_dwi.nii.gz',
+        t2w_sdc=False,
+        anatomical_template='MNI152NLin2009cAsym',
+    )
+
+
+def test_hmcsdc_wf_exposes_a_gradwarp_field_input(tmp_path):
+    _cfg_for_shoreline(tmp_path)
+    wf = _shoreline_wf(tmp_path, _rpe_unit(tmp_path))
+    assert 'gradwarp_field' in wf.get_node('inputnode').inputs.trait_get()
+
+
+def test_shoreline_drbuddi_branch_gradwarps_sdc_inputs(tmp_path):
+    _cfg_for_shoreline(tmp_path)
+    wf = _shoreline_wf(tmp_path, _rpe_unit(tmp_path))
+
+    assert _connects(wf, 'inputnode', 'gradwarp_sdc_inputs', 'gradwarp_field', 'transforms')
+    assert _connects(
+        wf, 'gradwarp_sdc_inputs', 'drbuddi_sdc_wf', 'output_image', 'inputnode.dwi_files'
+    )
+    assert not _connects(
+        wf, 'uncorrect_model_images', 'drbuddi_sdc_wf', 'output_image', 'inputnode.dwi_files'
+    )
+
+
+def test_shoreline_dis3d_does_not_gradwarp_sdc_inputs(tmp_path):
+    _cfg_for_shoreline(tmp_path)
+    wf = _shoreline_wf(tmp_path, _rpe_unit(tmp_path, ['ORIGINAL', 'DIS3D']))
+    assert wf.get_node('gradwarp_sdc_inputs') is None
+
+
+def test_shoreline_syn_branch_gradwarps_the_sdc_reference(tmp_path):
+    _cfg_for_shoreline(tmp_path)
+    wf = _shoreline_wf(tmp_path, _syn_unit(tmp_path))
+
+    assert _connects(wf, 'gradwarp_sdc_inputs', 'sdc_wf', 'output_image', 'inputnode.b0_ref')
+    assert _connects(wf, 'gradwarp_sdc_inputs_mask', 'sdc_wf', 'output_image', 'inputnode.b0_mask')
+    assert not _connects(
+        wf, 'dwi_hmc_wf', 'sdc_wf', 'outputnode.final_template', 'inputnode.b0_ref'
+    )
+
+
+def test_dwi_preproc_wf_connects_gradwarp_field_to_the_hmc_workflow(tmp_path):
+    """Without this edge every ``gradwarp_sdc_inputs`` node above is dead code."""
+    wf = _preproc_wf(tmp_path)
+
+    gradwarp_wf = wf.get_node('gradwarp_wf')
+    hmc_wf = wf.get_node('hmc_sdc_wf')
+    edge = wf._graph.get_edge_data(gradwarp_wf, hmc_wf)
+    assert edge is not None
+    assert ('outputnode.gradwarp_field', 'inputnode.gradwarp_field') in edge['connect']
+
+
+def test_dwi_preproc_wf_dis3d_does_not_feed_gradwarp_field_to_the_hmc_workflow(tmp_path):
+    """A DIS3D unit applies no spatial correction anywhere, SDC estimation included."""
+    wf = _preproc_wf(tmp_path, image_type=['ORIGINAL', 'DIS3D'])
+
+    edge = wf._graph.get_edge_data(wf.get_node('gradwarp_wf'), wf.get_node('hmc_sdc_wf'))
+    assert edge is None
