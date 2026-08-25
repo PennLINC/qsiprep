@@ -356,5 +356,34 @@ def test_drbuddi_blip_assignments_from_sidecars_needs_no_disk():
 # here and in test_interfaces_diffprep.
 
 
+def test_dwi_preproc_wf_rejects_unknown_hmc_model(tmp_path):
+    _cfg(hmc_model='bogus', layout=_StubLayout())
+    from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
+
+    src = _write_dwi(tmp_path / 'sub-01_dwi.nii.gz')
+    with pytest.raises(ValueError, match='hmc_model'):
+        init_dwi_preproc_wf(
+            make_preproc_unit([src]),
+            t2w_sdc=False,
+            output_prefix='sub-01',
+            source_file=src,
+            anatomical_template='MNI152NLin2009cAsym',
+        )
+
+
+def test_distortion_group_merge_wf_rejects_unknown_strategy():
+    _cfg()
+    from qsiprep.workflows.dwi.distortion_group_merge import init_distortion_group_merge_wf
+
+    with pytest.raises(ValueError, match='merging_strategy'):
+        init_distortion_group_merge_wf(
+            merging_strategy='bogus',
+            inputs_list=['sub-01-run-1', 'sub-01-run-2'],
+            source_file='sub-01_dwi.nii.gz',
+            output_prefix='sub-01',
+            name='bogus_merge_wf',
+        )
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

@@ -439,7 +439,8 @@ to workflows in *QSIPrep*'s documentation]\
     preproc_units = to_preproc_units(grouping, backend)
     concatenation_scheme = derive_concatenation_scheme(grouping, backend)
 
-    # If a merge is happening at the end, make sure
+    # Read unconditionally below even when no merge is happening.
+    merging_group_workflows = {}
     if merging_distortion_groups:
         # create a mapping of which across-distortion-groups are contained in each merge
         merged_group_names = sorted(set(concatenation_scheme.values()))
@@ -447,7 +448,6 @@ to workflows in *QSIPrep*'s documentation]\
         for subgroup_name, destination_name in concatenation_scheme.items():
             merged_to_subgroups[destination_name].append(subgroup_name)
 
-        merging_group_workflows = {}
         for merged_group in merged_group_names:
             # Outputs with a single correction unit keep the direct path:
             # there is nothing to merge, and the legacy merge workflow is

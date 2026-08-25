@@ -163,6 +163,8 @@ def init_distortion_group_merge_wf(
         ])  # fmt:skip
     elif merging_strategy.startswith('concat'):
         distortion_merger = pe.Node(MergeDWIs(), name='distortion_merger')
+    else:
+        raise ValueError(f'Unknown merging_strategy: {merging_strategy!r}')
     b0_ref_wf = init_dwi_reference_wf(
         name='merged_b0_ref',
         gen_report=True,

@@ -274,6 +274,9 @@ def init_dwi_preproc_wf(
             name='hmc_sdc_wf',
         )
 
+    else:
+        raise ValueError(f'Unknown hmc_model: {config.workflow.hmc_model!r}')
+
     workflow.connect([
         (pre_hmc_wf, hmc_wf, [
             ('outputnode.dwi_file', 'inputnode.dwi_file'),

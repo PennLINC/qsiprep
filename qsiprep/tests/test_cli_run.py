@@ -444,3 +444,11 @@ def test_b0_transform_options_are_mutually_exclusive(minimal_args, capsys):
             [*minimal_args, '--b0-to-anat-transform', 'Rigid', '--b0-to-t1w-transform', 'Affine']
         )
     assert 'not allowed with' in capsys.readouterr().err
+
+
+def test_ignore_accepts_shims_and_fov(minimal_args):
+    """The grouping honors both; they must be reachable from the CLI."""
+    from qsiprep.cli.parser import _build_parser
+
+    opts = _build_parser().parse_args([*minimal_args, '--ignore', 'shims', 'fov'])
+    assert opts.ignore == ['shims', 'fov']
