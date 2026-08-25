@@ -12,7 +12,12 @@ one value per volume and cannot express a spatially varying encoding.
 
 import dataclasses
 
+from nipype.interfaces import utility as niu
+from nipype.pipeline import engine as pe
+from niworkflows.engine.workflows import LiterateWorkflow as Workflow
+
 from ... import config
+from ...interfaces.gradunwarp import CreateNonlinearityDisplacementMap, MaskWarpDimensions
 
 #: Ordering used to reconcile disagreeing runs in one unit. Lower is less
 #: correction, and less correction is the recoverable error.
@@ -104,3 +109,66 @@ def resolve_gradwarp_plan(unit):
         )
 
     return GradwarpPlan(str(coeff_file), warp_dim, is_ge, 'metadata')
+
+
+#: Boilerplate fragments, keyed by the resolved warp dimensionality. The text
+#: must track the plan: claiming 3D correction on DIS2D data would be a
+#: methods-section error.
+_BOILERPLATE = {
+    '3D': (
+        'Gradient nonlinearity was corrected using the scanner gradient '
+        'coefficients with TORTOISE V4. The full three-dimensional gradwarp '
+        'displacement field was combined with the head motion, eddy current, '
+        'and susceptibility distortion transforms, so the data were resampled '
+        'only once.'
+    ),
+    '1D': (
+        'Gradient nonlinearity was corrected using the scanner gradient '
+        'coefficients with TORTOISE V4. Because the scanner had already applied '
+        'in-plane gradwarp correction (DIS2D), only the residual through-plane '
+        'component was applied here, combined with the head motion, eddy '
+        'current, and susceptibility distortion transforms so the data were '
+        'resampled only once.'
+    ),
+    None: (
+        'The scanner had already applied full three-dimensional gradwarp '
+        'correction (DIS3D), so no further spatial correction was performed. '
+        'A voxelwise gradient deviation map was computed with TORTOISE V4 to '
+        'account for the spatially varying diffusion encoding.'
+    ),
+}
+
+
+def init_gradwarp_wf(unit, name='gradwarp_wf'):
+    """Build the gradwarp displacement field for one correction unit.
+
+    Returns ``None`` when no gradient correction was requested. The field node
+    runs even when ``warp_dim`` is ``None``: the grad_dev map needs a field, and
+    only the wiring into the composed transform chain is suppressed.
+    """
+    plan = resolve_gradwarp_plan(unit)
+    if plan is None:
+        return None
+
+    workflow = Workflow(name=name)
+    workflow.__desc__ = _BOILERPLATE[plan.warp_dim]
+    workflow.plan = plan
+
+    inputnode = pe.Node(niu.IdentityInterface(fields=['ref_image']), name='inputnode')
+    outputnode = pe.Node(niu.IdentityInterface(fields=['gradwarp_field']), name='outputnode')
+
+    make_field = pe.Node(
+        CreateNonlinearityDisplacementMap(coeff_file=plan.coeff_file, is_ge=plan.is_ge),
+        name='make_field',
+    )
+    # '3D' is a passthrough, but keeping the node unconditional means the graph
+    # shape does not depend on the plan.
+    mask_field = pe.Node(MaskWarpDimensions(warp_dim=plan.warp_dim or '3D'), name='mask_field')
+
+    workflow.connect([
+        (inputnode, make_field, [('ref_image', 'ref_image')]),
+        (make_field, mask_field, [('out_field', 'in_file')]),
+        (mask_field, outputnode, [('out_file', 'gradwarp_field')]),
+    ])  # fmt:skip
+
+    return workflow
