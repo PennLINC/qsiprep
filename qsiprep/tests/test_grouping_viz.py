@@ -45,19 +45,42 @@ def test_render_html_shows_each_scan_once_per_output(tmp_path, scenario):
     assert page.count('class="scan"') == expected
 
 
-def test_grouping_display_omits_workflow_processing_previews(tmp_path):
-    """The step-by-step processing narrative lives in a separate workflow
-    display, not the grouping page: no backend tabs and no per-backend step
-    text, but the concatenated sampling scheme stays."""
+def test_grouping_display_has_processing_plan_tabs(tmp_path):
+    """The page ends with the processing-plan display: one tab per default
+    method selection, each holding the flow diagram and the prose steps. The
+    concatenated sampling scheme stays shown directly (no tab)."""
+    from qsiprep.grouping.report import default_preview_selections
+
     grouping = load_scenario('hcp_style', tmp_path, strict=False)
     page = render_html(grouping)
-    assert 'tab-btn' not in page
-    assert 'data-tab=' not in page
-    assert 'TOPUP estimates' not in page
-    assert 'eddy corrects' not in page
+    n_selections = len(default_preview_selections())
+    assert page.count('class="tab-btn') == n_selections
+    assert page.count('class="pipeline-viewer"') == n_selections
+    for selection in default_preview_selections():
+        assert selection.label() in page
+        assert selection.cli_phrase() in page
+    # The eddy panel narrates estimation-before-HMC; SHORELine is itself.
+    assert 'TOPUP estimates' in page
+    assert 'SHORELine iteratively corrects head motion' in page
     # The sampling scheme is still shown, directly (no tab).
     assert 'scheme-block' in page
     assert 'qspace-viewer' in page
+
+
+def test_report_segment_shows_only_the_selected_plan(tmp_path):
+    """The subject report draws the single plan that actually ran: no tabs."""
+    from qsiprep.grouping import render_report_segment
+    from qsiprep.grouping.methods import selection_for_config
+
+    grouping = load_scenario('hcp_style', tmp_path, strict=False)
+    segment = render_report_segment(grouping, selection_for_config('eddy', 'topup'))
+    assert 'how the data was corrected' in segment
+    assert 'class="plan-tabs"' not in segment
+    assert segment.count('class="pipeline-viewer"') == 1
+    assert 'eddy + TOPUP' in segment
+    # Without a selection the plan section is simply absent (legacy callers).
+    bare = render_report_segment(grouping)
+    assert 'class="pipeline-viewer"' not in bare
 
 
 def test_report_is_past_tense_and_plan_is_future_tense(tmp_path):
@@ -217,3 +240,36 @@ def test_scheme_tab_degrades_without_gradients(tmp_path):
     concat = types.SimpleNamespace(dwi_files=[str(nii)], output_name='sub-01_desc-preproc_dwi')
     assert interactive._scheme_data(grouping, concat) is None
     assert 'scheme-missing' in interactive._scheme_view(grouping, concat)
+
+
+def test_pipeline_payload_structure(tmp_path):
+    """The diagram payload carries runs, ordered stages, outputs and issues."""
+    from qsiprep.grouping.methods import selection_for_config
+    from qsiprep.grouping.plan import compile_plan
+    from qsiprep.viz.pipeline import plan_payload
+
+    grouping = load_scenario('hcp_style', tmp_path, strict=False)
+    plan = compile_plan(grouping, selection_for_config('eddy', 'topup+drbuddi'))
+    payload = plan_payload(grouping, plan)
+
+    assert payload['schemaVersion'] == 1
+    assert payload['selection']['label'] == 'eddy + TOPUP→DRBUDDI'
+    (run,) = payload['runs']
+    assert [stage['role'] for stage in run['stages']] == [
+        'estimate',
+        'hmc-with-field',
+        'refine',
+    ]
+    assert run['stages'][1]['consumes'] == 0
+    assert run['stages'][0]['letter'] == 'A'
+    assert run['stages'][0]['text'].startswith('TOPUP estimates')
+    (output,) = payload['outputs']
+    assert output['runs'] == [run['key']]
+
+
+def test_pipeline_div_escapes_script_closer():
+    from qsiprep.viz.pipeline import pipeline_div
+
+    markup = pipeline_div({'evil': 'a</script><b>'})
+    assert '</script><b>' not in markup.replace('<\\/script>', '')
+    assert 'class="pipeline-viewer"' in markup

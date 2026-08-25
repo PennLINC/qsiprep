@@ -1,0 +1,16 @@
+/* Pipeline-plan viewer. Only .pipeline-viewer / .pp-* rules live here - the
+ * host page owns layout, tabs, and theme, so nothing can leak out. */
+.pipeline-viewer{position:relative;font-family:ui-sans-serif,system-ui,-apple-system,
+  'Segoe UI',Roboto,sans-serif}
+.pipeline-viewer .pp-output{margin:0 0 14px}
+.pipeline-viewer .pp-head{font-size:12px;font-weight:650;color:#334155;
+  font-family:ui-monospace,Menlo,monospace;margin:0 0 4px}
+.pipeline-viewer .pp-scroll{overflow-x:auto;padding:2px 0}
+.pipeline-viewer .pp-svg{display:block}
+.pipeline-viewer .pp-node{cursor:default}
+.pipeline-viewer .pp-node:hover rect{filter:brightness(0.96)}
+.pipeline-viewer .pp-tip{display:none;position:absolute;z-index:20;max-width:340px;
+  background:#0f172a;color:#f8fafc;border-radius:7px;padding:7px 10px;
+  font-size:11px;line-height:1.45;pointer-events:none;
+  box-shadow:0 4px 12px rgba(15,23,42,.35)}
+.pipeline-viewer .pp-tip b{color:#fbbf24}

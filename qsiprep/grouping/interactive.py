@@ -29,10 +29,12 @@ from __future__ import annotations
 
 import html
 
+from ..viz.pipeline import pipeline_assets, pipeline_div, plan_payload
 from ..viz.qspace import q_points, scheme_div, scheme_payload, viewer_assets
 from .metadata import get_b0_threshold, sibling_bval, sibling_bvec
 from .models import CorrectionMethod, DWIGrouping, Provenance
-from .report import shell_label
+from .plan import compile_plan
+from .report import default_preview_selections, processing_steps, shell_label
 
 #: Provenance value -> (fill, stroke).
 _PROVENANCE_COLORS = {
@@ -185,6 +187,22 @@ _CSS = """
   border-top:1px solid #e2e8f0}
 .qsi-grouping .scheme-label{font-size:11.5px;font-weight:600;color:#0369a1;margin:0 0 8px}
 .qsi-grouping .scheme-missing{font-size:12px;color:#94a3b8;padding:6px 0}
+.qsi-grouping .plan-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.qsi-grouping .tab-btn{border:1.5px solid #cbd5e1;background:#fff;border-radius:99px;
+  padding:3px 12px;font-size:12px;cursor:pointer;color:#334155;font-family:inherit}
+.qsi-grouping .tab-btn.sel{background:#0f172a;border-color:#0f172a;color:#fff}
+.qsi-grouping .plan-panel{display:none}
+.qsi-grouping .plan-panel.on{display:block}
+.qsi-grouping .plan-cli{font-size:11.5px;color:#64748b;
+  font-family:ui-monospace,Menlo,monospace;margin:0 0 10px}
+.qsi-grouping .plan-prose{margin:2px 0 14px}
+.qsi-grouping .plan-prose summary{font-size:11.5px;color:#0369a1;cursor:pointer}
+.qsi-grouping .plan-out{font-size:11.5px;font-weight:650;color:#334155;
+  font-family:ui-monospace,Menlo,monospace;margin:8px 0 2px}
+.qsi-grouping .plan-steps{font-size:12px;color:#334155;margin:2px 0 6px;
+  padding-left:22px;line-height:1.5}
+.qsi-grouping .plan-steps li.issue{list-style:none;margin-left:-16px;color:#92400e}
+.qsi-grouping .plan-steps li.issue-error{color:#b91c1c}
 """
 
 #: Everything is scoped to each `.qsi-grouping` root so the script is inert
@@ -203,6 +221,19 @@ document.querySelectorAll('.qsi-grouping').forEach(root => {
     });
     el.addEventListener('mouseleave', () => {
       root.querySelectorAll('.hl').forEach(other => other.classList.remove('hl'));
+    });
+  });
+  // Processing-plan tabs: one panel per method selection.
+  root.querySelectorAll('.plan-tabs').forEach(tabs => {
+    const section = tabs.parentElement;
+    tabs.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        tabs.querySelectorAll('.tab-btn').forEach(b =>
+          b.classList.toggle('sel', b === btn));
+        section.querySelectorAll('.plan-panel').forEach(p =>
+          p.classList.toggle('on', p.dataset.plan === btn.dataset.plan));
+        window.dispatchEvent(new Event('resize'));
+      });
     });
   });
 });
@@ -532,6 +563,59 @@ def _output_boxes(grouping: DWIGrouping, letters: dict[str, str], past: bool = F
     return parts
 
 
+def _plan_panel(grouping: DWIGrouping, selection, index: int, on: bool) -> str:
+    """One selection's processing plan: the flow diagram plus prose steps."""
+    plan = compile_plan(grouping, selection)
+    parts = [
+        f'<div class="plan-panel{" on" if on else ""}" data-plan="{index}">',
+        f'<p class="plan-cli">{_esc(selection.cli_phrase())}</p>',
+        pipeline_div(plan_payload(grouping, plan)),
+        '<details class="plan-prose"><summary>Step-by-step description</summary>',
+    ]
+    for output_name, steps in processing_steps(grouping, selection).items():
+        parts.append(f'<p class="plan-out">{_esc(output_name)}</p><ol class="plan-steps">')
+        for step in steps:
+            if step.startswith('!!'):
+                severity = 'issue-error' if 'ERROR' in step else ''
+                parts.append(
+                    f'<li class="issue {severity}">{_esc(step.lstrip("! "))}</li>'
+                )
+            else:
+                parts.append(f'<li>{_esc(step)}</li>')
+        parts.append('</ol>')
+    parts.append('</details></div>')
+    return ''.join(parts)
+
+
+def _plan_section(grouping: DWIGrouping, selections, past: bool = False) -> list[str]:
+    """The processing-plan section: tabs across method selections.
+
+    ``selections`` previews the hypothetical combinations in the standalone
+    page; the subject report passes the single selection that actually ran.
+    """
+    if not selections:
+        return []
+    heading = (
+        'Step 3 &mdash; Processing: how the data was corrected'
+        if past
+        else 'Step 3 &mdash; Processing: what will happen'
+    )
+    parts = [f'<section><h2>{heading}</h2>']
+    if len(selections) > 1:
+        parts.append('<div class="plan-tabs">')
+        for index, selection in enumerate(selections):
+            sel = ' sel' if index == 0 else ''
+            parts.append(
+                f'<button type="button" class="tab-btn{sel}" data-plan="{index}">'
+                f'{_esc(selection.label())}</button>'
+            )
+        parts.append('</div>')
+    for index, selection in enumerate(selections):
+        parts.append(_plan_panel(grouping, selection, index, on=index == 0))
+    parts.append('</section>')
+    return parts
+
+
 def _issue_notes(grouping: DWIGrouping) -> list[str]:
     if not grouping.issues:
         return []
@@ -546,57 +630,67 @@ def _issue_notes(grouping: DWIGrouping) -> list[str]:
     return parts
 
 
-def _body(grouping: DWIGrouping, letters: dict[str, str], past: bool) -> str:
+def _body(grouping: DWIGrouping, letters: dict[str, str], past: bool, selections) -> str:
     """The grouping page's inner markup (no container, styles, or scripts)."""
     parts = _header(grouping, past)
     parts.extend(_estimation_cards(grouping, letters, past))
     parts.extend(_output_boxes(grouping, letters, past))
+    parts.extend(_plan_section(grouping, selections, past))
     parts.extend(_issue_notes(grouping))
     return ''.join(parts)
 
 
-def _fragment(grouping: DWIGrouping, past: bool) -> str:
+def _fragment(grouping: DWIGrouping, past: bool, selections=()) -> str:
     """The scoped, self-contained grouping widget: styles + markup + scripts.
 
     Everything is scoped under :data:`ROOT_CLASS` and carried inline (the shared
-    q-space viewer's assets included), so the fragment drops straight into a host
-    page with no iframe: the host's styles do not reach in, and these do not leak
-    out. ``past`` picks report tense (a run that happened) vs plan tense (a run
-    that has not).
+    q-space and pipeline viewers' assets included), so the fragment drops
+    straight into a host page with no iframe: the host's styles do not reach in,
+    and these do not leak out. ``past`` picks report tense (a run that happened)
+    vs plan tense (a run that has not). ``selections`` are the method
+    selections whose processing plans the page shows.
     """
     letters = {
         eid: chr(ord('A') + index) for index, eid in enumerate(sorted(grouping.estimations))
     }
     viewer_css, viewer_js = viewer_assets()
+    plan_css, plan_js = pipeline_assets()
     return (
-        f'<style>{_CSS}\n{viewer_css}</style>'
-        f'<div class="{ROOT_CLASS}">{_body(grouping, letters, past)}</div>'
+        f'<style>{_CSS}\n{viewer_css}\n{plan_css}</style>'
+        f'<div class="{ROOT_CLASS}">{_body(grouping, letters, past, selections)}</div>'
         f'<script>{viewer_js}</script>'
+        f'<script>{plan_js}</script>'
         f'<script>{_JS}</script>'
     )
 
 
-def render_report_segment(grouping: DWIGrouping) -> str:
+def render_report_segment(grouping: DWIGrouping, selection=None) -> str:
     """The grouping widget for inlining into the subject report (no iframe).
 
     The report describes a run that already happened, so the wording is past
-    tense. See :func:`_fragment` for how the styles/scripts stay isolated.
+    tense; ``selection`` is the method selection that actually ran, whose plan
+    is drawn as the single processing panel. See :func:`_fragment` for how the
+    styles/scripts stay isolated.
     """
-    return _fragment(grouping, past=True)
+    selections = [selection] if selection is not None else []
+    return _fragment(grouping, past=True, selections=selections)
 
 
-def render_html(grouping: DWIGrouping) -> str:
+def render_html(grouping: DWIGrouping, selections=None) -> str:
     """Return a standalone explanatory HTML document for ``grouping``.
 
     Wraps the grouping fragment in a minimal page shell. Used by
     ``qsiprep-group --html``, which previews a run that has not happened yet, so
-    the wording is future tense.
+    the wording is future tense and every requested method selection gets a
+    processing-plan tab (default: all the default preview selections).
     """
+    if selections is None:
+        selections = list(default_preview_selections())
     return (
         '<!doctype html>\n'
         '<html lang="en"><head><meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
         f'<title>DWI grouping for sub-{_esc(grouping.subject_id)}</title>\n'
         '<style>body{margin:0}</style></head>\n'
-        f'<body>{_fragment(grouping, past=False)}</body></html>'
+        f'<body>{_fragment(grouping, past=False, selections=selections)}</body></html>'
     )
