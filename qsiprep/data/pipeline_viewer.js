@@ -58,17 +58,12 @@
 
   /* ------------------------------------------------------------------ */
 
-  function init(root) {
-    if (root.dataset.ppReady) return;
-    root.dataset.ppReady = '1';
-    var script = root.querySelector('script[type="application/json"]');
-    if (!script) return;
-    var data;
-    try {
-      data = JSON.parse(script.textContent);
-    } catch (err) {
-      return;
-    }
+  function render(root, data) {
+    // Re-entrant: an interactive host calls this again with a new payload
+    // whenever the user changes the method controls.
+    root.querySelectorAll('.pp-output, .pp-tip').forEach(function (el) {
+      el.remove();
+    });
 
     var runsByKey = {};
     data.runs.forEach(function (run) { runsByKey[run.key] = run; });
@@ -80,6 +75,20 @@
     data.outputs.forEach(function (output) {
       root.appendChild(renderOutput(data, output, runsByKey, tip, root));
     });
+  }
+
+  function init(root) {
+    if (root.dataset.ppReady) return;
+    root.dataset.ppReady = '1';
+    var script = root.querySelector('script[type="application/json"]');
+    if (!script) return;
+    var data;
+    try {
+      data = JSON.parse(script.textContent);
+    } catch (err) {
+      return;
+    }
+    render(root, data);
   }
 
   function issuesFor(data, output) {
@@ -326,6 +335,10 @@
   function boot() {
     document.querySelectorAll('.pipeline-viewer').forEach(init);
   }
+
+  // The host-page API: interactive hosts re-render a container from a new
+  // payload; the embedded-script boot path stays for static pages.
+  window.QSIPrepPipeline = { render: render };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);

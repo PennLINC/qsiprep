@@ -29,12 +29,13 @@ from __future__ import annotations
 
 import html
 
-from ..viz.pipeline import pipeline_assets, pipeline_div, plan_payload
+from ..viz.pipeline import _embedded_json, pipeline_assets, pipeline_div, plan_payload
 from ..viz.qspace import q_points, scheme_div, scheme_payload, viewer_assets
 from .metadata import get_b0_threshold, sibling_bval, sibling_bvec
+from .methods import reachable_selections
 from .models import CorrectionMethod, DWIGrouping, Provenance
 from .plan import compile_plan
-from .report import default_preview_selections, processing_steps, shell_label
+from .report import processing_steps, shell_label
 
 #: Provenance value -> (fill, stroke).
 _PROVENANCE_COLORS = {
@@ -187,10 +188,12 @@ _CSS = """
   border-top:1px solid #e2e8f0}
 .qsi-grouping .scheme-label{font-size:11.5px;font-weight:600;color:#0369a1;margin:0 0 8px}
 .qsi-grouping .scheme-missing{font-size:12px;color:#94a3b8;padding:6px 0}
-.qsi-grouping .plan-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
-.qsi-grouping .tab-btn{border:1.5px solid #cbd5e1;background:#fff;border-radius:99px;
-  padding:3px 12px;font-size:12px;cursor:pointer;color:#334155;font-family:inherit}
-.qsi-grouping .tab-btn.sel{background:#0f172a;border-color:#0f172a;color:#fff}
+.qsi-grouping .plan-controls{display:flex;gap:14px;flex-wrap:wrap;align-items:center;
+  margin:0 0 10px}
+.qsi-grouping .plan-controls label{font-size:11.5px;color:#334155;
+  font-family:ui-monospace,Menlo,monospace;display:flex;gap:6px;align-items:center}
+.qsi-grouping .plan-controls select{font:inherit;font-size:12px;color:#0f172a;
+  border:1.5px solid #cbd5e1;border-radius:7px;background:#fff;padding:2px 6px}
 .qsi-grouping .plan-panel{display:none}
 .qsi-grouping .plan-panel.on{display:block}
 .qsi-grouping .plan-cli{font-size:11.5px;color:#64748b;
@@ -223,18 +226,51 @@ document.querySelectorAll('.qsi-grouping').forEach(root => {
       root.querySelectorAll('.hl').forEach(other => other.classList.remove('hl'));
     });
   });
-  // Processing-plan tabs: one panel per method selection.
-  root.querySelectorAll('.plan-tabs').forEach(tabs => {
-    const section = tabs.parentElement;
-    tabs.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        tabs.querySelectorAll('.tab-btn').forEach(b =>
-          b.classList.toggle('sel', b === btn));
-        section.querySelectorAll('.plan-panel').forEach(p =>
-          p.classList.toggle('on', p.dataset.plan === btn.dataset.plan));
-        window.dispatchEvent(new Event('resize'));
+  // Interactive processing plan: the method controls pick a flag
+  // combination; the provider maps its canonical key to a plan payload and
+  // the diagram re-renders. Today the provider reads the embedded index;
+  // a live host swaps in one that fetches /plan?<key> instead.
+  root.querySelectorAll('.plan-interactive').forEach(section => {
+    const index = JSON.parse(
+      section.querySelector('script.plan-payloads').textContent);
+    const provider = key => Promise.resolve(index[key]);
+    const hmc = section.querySelector('.ctl-hmc');
+    const model = section.querySelector('.ctl-model');
+    const modelWrap = section.querySelector('.ctl-model-wrap');
+    const sdc = section.querySelector('.ctl-sdc');
+    const host = section.querySelector('.plan-host');
+    const cli = section.querySelector('.plan-cli');
+    const SDC_OPTIONS = {
+      eddy: ['topup', 'drbuddi', 'topup+drbuddi'],
+      shoreline: ['drbuddi'],
+      tortoise: ['drbuddi'],
+    };
+    const currentKey = () => {
+      const parts = ['hmc-method=' + hmc.value];
+      if (hmc.value === 'shoreline') parts.push('shoreline-model=' + model.value);
+      parts.push('sdc-method=' + sdc.value);
+      return parts.join('&');
+    };
+    const update = () => {
+      const options = SDC_OPTIONS[hmc.value];
+      if (!options.includes(sdc.value)) sdc.value = options[0];
+      [...sdc.options].forEach(option => {
+        option.hidden = !options.includes(option.value);
+        option.disabled = option.hidden;
       });
-    });
+      modelWrap.style.display = hmc.value === 'shoreline' ? '' : 'none';
+      const key = currentKey();
+      provider(key).then(payload => {
+        if (!payload) return;
+        window.QSIPrepPipeline.render(host, payload);
+        cli.textContent = payload.selection.label + '  (' + payload.selection.cli + ')';
+        section.querySelectorAll('.plan-prose').forEach(details => {
+          details.style.display = details.dataset.planKey === key ? '' : 'none';
+        });
+      });
+    };
+    [hmc, model, sdc].forEach(control => control.addEventListener('change', update));
+    update();
   });
 });
 """
@@ -563,35 +599,70 @@ def _output_boxes(grouping: DWIGrouping, letters: dict[str, str], past: bool = F
     return parts
 
 
-def _plan_panel(grouping: DWIGrouping, selection, index: int, on: bool) -> str:
-    """One selection's processing plan: the flow diagram plus prose steps."""
-    plan = compile_plan(grouping, selection)
-    parts = [
-        f'<div class="plan-panel{" on" if on else ""}" data-plan="{index}">',
-        f'<p class="plan-cli">{_esc(selection.cli_phrase())}</p>',
-        pipeline_div(plan_payload(grouping, plan)),
-        '<details class="plan-prose"><summary>Step-by-step description</summary>',
-    ]
+def _prose_steps(grouping: DWIGrouping, selection) -> str:
+    """The numbered step-by-step text for one selection, as list markup."""
+    parts = []
     for output_name, steps in processing_steps(grouping, selection).items():
         parts.append(f'<p class="plan-out">{_esc(output_name)}</p><ol class="plan-steps">')
         for step in steps:
             if step.startswith('!!'):
                 severity = 'issue-error' if 'ERROR' in step else ''
-                parts.append(
-                    f'<li class="issue {severity}">{_esc(step.lstrip("! "))}</li>'
-                )
+                parts.append(f'<li class="issue {severity}">{_esc(step.lstrip("! "))}</li>')
             else:
                 parts.append(f'<li>{_esc(step)}</li>')
         parts.append('</ol>')
-    parts.append('</details></div>')
     return ''.join(parts)
 
 
-def _plan_section(grouping: DWIGrouping, selections, past: bool = False) -> list[str]:
-    """The processing-plan section: tabs across method selections.
+def _plan_panel(grouping: DWIGrouping, selection) -> str:
+    """A single selection's processing plan: the flow diagram plus prose steps."""
+    plan = compile_plan(grouping, selection)
+    return ''.join(
+        [
+            '<div class="plan-panel on">',
+            f'<p class="plan-cli">{_esc(selection.cli_phrase())}</p>',
+            pipeline_div(plan_payload(grouping, plan)),
+            '<details class="plan-prose"><summary>Step-by-step description</summary>',
+            _prose_steps(grouping, selection),
+            '</details></div>',
+        ]
+    )
 
-    ``selections`` previews the hypothetical combinations in the standalone
-    page; the subject report passes the single selection that actually ran.
+
+def _plan_controls(selections) -> str:
+    """The --hmc-method/--shoreline-model/--sdc-method dropdown row."""
+    hmc_values = list(dict.fromkeys(sel.hmc.value for sel in selections))
+    model_values = list(
+        dict.fromkeys(sel.shoreline_model for sel in selections if sel.shoreline_model)
+    )
+    sdc_values = list(
+        dict.fromkeys(
+            '+'.join(tool.value for tool in sel.pepolar_tools) for sel in selections
+        )
+    )
+
+    def options(values):
+        return ''.join(f'<option value="{_esc(v)}">{_esc(v)}</option>' for v in values)
+
+    return (
+        '<div class="plan-controls">'
+        f'<label>--hmc-method <select class="ctl-hmc">{options(hmc_values)}</select></label>'
+        '<label class="ctl-model-wrap">--shoreline-model '
+        f'<select class="ctl-model">{options(model_values)}</select></label>'
+        f'<label>--sdc-method <select class="ctl-sdc">{options(sdc_values)}</select></label>'
+        '</div>'
+    )
+
+
+def _plan_section(grouping: DWIGrouping, selections, past: bool = False) -> list[str]:
+    """The processing-plan section.
+
+    With one selection (the subject report's executed run) it is a single
+    static panel. With several (the standalone page) it becomes interactive:
+    dropdowns mirroring the CLI flags pick a combination, whose canonical
+    key (:meth:`~.methods.MethodSelection.combination_key`) looks up a
+    precompiled payload in the embedded index and re-renders the diagram -
+    the same key a live ``/plan`` endpoint would take.
     """
     if not selections:
         return []
@@ -601,17 +672,30 @@ def _plan_section(grouping: DWIGrouping, selections, past: bool = False) -> list
         else 'Step 3 &mdash; Processing: what will happen'
     )
     parts = [f'<section><h2>{heading}</h2>']
-    if len(selections) > 1:
-        parts.append('<div class="plan-tabs">')
-        for index, selection in enumerate(selections):
-            sel = ' sel' if index == 0 else ''
-            parts.append(
-                f'<button type="button" class="tab-btn{sel}" data-plan="{index}">'
-                f'{_esc(selection.label())}</button>'
+    if len(selections) == 1:
+        parts.append(_plan_panel(grouping, selections[0]))
+    else:
+        payloads = {}
+        prose = []
+        for selection in selections:
+            key = selection.combination_key()
+            payloads[key] = plan_payload(grouping, compile_plan(grouping, selection))
+            prose.append(
+                f'<details class="plan-prose" data-plan-key="{_esc(key)}" '
+                'style="display:none">'
+                '<summary>Step-by-step description</summary>'
+                f'{_prose_steps(grouping, selection)}</details>'
             )
+        parts.append('<div class="plan-interactive">')
+        parts.append(_plan_controls(selections))
+        parts.append('<p class="plan-cli"></p>')
+        parts.append('<div class="pipeline-viewer plan-host"></div>')
+        parts.append(
+            '<script type="application/json" class="plan-payloads">'
+            f'{_embedded_json(payloads)}</script>'
+        )
+        parts.extend(prose)
         parts.append('</div>')
-    for index, selection in enumerate(selections):
-        parts.append(_plan_panel(grouping, selection, index, on=index == 0))
     parts.append('</section>')
     return parts
 
@@ -681,11 +765,12 @@ def render_html(grouping: DWIGrouping, selections=None) -> str:
 
     Wraps the grouping fragment in a minimal page shell. Used by
     ``qsiprep-group --html``, which previews a run that has not happened yet, so
-    the wording is future tense and every requested method selection gets a
-    processing-plan tab (default: all the default preview selections).
+    the wording is future tense and the processing-plan section is interactive:
+    dropdown controls over the requested method selections (default: every
+    reachable combination) re-render the flow diagram.
     """
     if selections is None:
-        selections = list(default_preview_selections())
+        selections = reachable_selections()
     return (
         '<!doctype html>\n'
         '<html lang="en"><head><meta charset="utf-8">\n'

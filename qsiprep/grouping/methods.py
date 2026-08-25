@@ -260,6 +260,19 @@ class MethodSelection:
         parts.append(f'--sdc-method {"+".join(tool.value for tool in self.pepolar_tools)}')
         return ' '.join(parts)
 
+    def combination_key(self) -> str:
+        """The canonical serialization of this flag combination.
+
+        The single spelling shared by every plan provider: it keys the
+        embedded payload index in the interactive page today and is the
+        query string a live ``/plan`` endpoint would take tomorrow.
+        """
+        parts = [f'hmc-method={self.hmc.value}']
+        if self.hmc is HmcMethod.SHORELINE:
+            parts.append(f'shoreline-model={self.shoreline_model}')
+        parts.append(f'sdc-method={"+".join(tool.value for tool in self.pepolar_tools)}')
+        return '&'.join(parts)
+
 
 def selection_for_config(
     hmc_model: str,
@@ -327,6 +340,30 @@ def method_selection_from_config() -> MethodSelection:
         use_syn=bool(config.workflow.use_syn_sdc),
         force_t2wreg='t2wreg' in (config.workflow.force or ()),
     )
+
+
+def reachable_selections() -> list[MethodSelection]:
+    """Every selectable flag combination, for interactive previews.
+
+    The dropdown controls only offer combinations the parser accepts, so
+    this is the full payload space a static page needs to embed: each HMC
+    method with its capable PEPOLAR tool chains (TOPUP with optional DRBUDDI
+    refinement for eddy; DRBUDDI for the others), and every SHORELine signal
+    model.
+    """
+    selections = []
+    for sdc in ('topup', 'drbuddi', 'topup+drbuddi'):
+        selections.append(selection_for_config('eddy', sdc))
+    for model in SHORELINE_MODELS:
+        selections.append(
+            MethodSelection(
+                hmc=HmcMethod.SHORELINE,
+                pepolar_tools=(SdcTool.DRBUDDI,),
+                shoreline_model=model,
+            )
+        )
+    selections.append(selection_for_config('tortoise', 'drbuddi'))
+    return selections
 
 
 #: The MethodSelection each legacy backend name previews as.

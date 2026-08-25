@@ -45,24 +45,36 @@ def test_render_html_shows_each_scan_once_per_output(tmp_path, scenario):
     assert page.count('class="scan"') == expected
 
 
-def test_grouping_display_has_processing_plan_tabs(tmp_path):
-    """The page ends with the processing-plan display: one tab per default
-    method selection, each holding the flow diagram and the prose steps. The
-    concatenated sampling scheme stays shown directly (no tab)."""
-    from qsiprep.grouping.report import default_preview_selections
+def test_grouping_display_has_interactive_plan_controls(tmp_path):
+    """The page ends with the interactive processing-plan display: CLI-flag
+    dropdowns over every reachable method combination, an embedded payload
+    index keyed by combination_key, and per-key prose. The concatenated
+    sampling scheme stays shown directly."""
+    import json
+    import re
+
+    from qsiprep.grouping.methods import reachable_selections
 
     grouping = load_scenario('hcp_style', tmp_path, strict=False)
     page = render_html(grouping)
-    n_selections = len(default_preview_selections())
-    assert page.count('class="tab-btn') == n_selections
-    assert page.count('class="pipeline-viewer"') == n_selections
-    for selection in default_preview_selections():
-        assert selection.label() in page
-        assert selection.cli_phrase() in page
-    # The eddy panel narrates estimation-before-HMC; SHORELine is itself.
+    assert 'class="plan-interactive"' in page
+    for control in ('ctl-hmc', 'ctl-model', 'ctl-sdc'):
+        assert f'class="{control}"' in page
+    # One re-render host; the payload index covers every reachable selection.
+    assert page.count('class="pipeline-viewer plan-host"') == 1
+    payload_json = re.search(
+        r'<script type="application/json" class="plan-payloads">(.*?)</script>',
+        page,
+        re.S,
+    ).group(1)
+    index = json.loads(payload_json.replace('<\\/', '</'))
+    keys = {selection.combination_key() for selection in reachable_selections()}
+    assert set(index) == keys
+    assert page.count('class="plan-prose"') == len(keys)
+    # The eddy prose narrates estimation-before-HMC; SHORELine is itself.
     assert 'TOPUP estimates' in page
     assert 'SHORELine iteratively corrects head motion' in page
-    # The sampling scheme is still shown, directly (no tab).
+    # The sampling scheme is still shown, directly.
     assert 'scheme-block' in page
     assert 'qspace-viewer' in page
 
