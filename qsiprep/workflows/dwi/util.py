@@ -204,16 +204,13 @@ def tortoise_convert_mem_gb(dwi_files):
     return max(float32_gb * 1.5, DEFAULT_MEMORY_MIN_GB)
 
 
-def _get_concatenated_bids_name(dwi_group):
-    """Derive the output name for a dwi grouping."""
-    try:
-        all_dwis = dwi_group['dwi_series']
-        if dwi_group['fieldmap_info']['suffix'] == 'rpe_series':
-            all_dwis += dwi_group['fieldmap_info']['rpe_series']
+def _get_concatenated_bids_name(all_dwis):
+    """A display name for a list of dwi files, for reportlet source files.
 
-    except Exception:
-        all_dwis = dwi_group
-
+    Output naming proper lives in :func:`qsiprep.grouping.models.derive_output_name`;
+    this common-prefix fallback only names reportlet source files when the
+    caller has no output prefix (:func:`get_source_file`).
+    """
     # If a single file, use its name, otherwise use the common prefix
     if len(all_dwis) > 1:
         no_runs = []

@@ -21,15 +21,13 @@ will be used:
 
 Table of behavior (fieldmap use-cases):
 
-=============== =========== ============= ===============
-Fieldmaps found ``use_syn`` ``force_syn``     Action
-=============== =========== ============= ===============
-True            *           True          Fieldmaps + SyN
-True            *           False         Fieldmaps
-False           *           True          SyN
-False           True        False         SyN
-False           False       False         HMC only
-=============== =========== ============= ===============
+=============== =========== ===============
+Fieldmaps found ``use_syn``     Action
+=============== =========== ===============
+True            *           Fieldmaps
+False           True        SyN
+False           False       HMC only
+=============== =========== ===============
 
 
 """
@@ -47,7 +45,7 @@ from .unwarp import init_sdc_unwarp_wf
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_sdc_wf(unit, dwi_meta):
+def init_sdc_wf(unit):
     """
     This workflow implements the heuristics to choose a
     :abbr:`SDC (susceptibility distortion correction)` strategy for a
@@ -72,15 +70,13 @@ def init_sdc_wf(unit, dwi_meta):
                     '/data/sub-03/fmap/sub-03_epi.nii.gz',
                 ],
             ),
-            dwi_meta={'PhaseEncodingDirection': 'j'},
         )
 
     Parameters
     ----------
     unit : :class:`~qsiprep.grouping.adapters.PreprocUnit`
         The DWI series to correct and the fieldmap that corrects them
-    dwi_meta : dict
-        BIDS metadata dictionary corresponding to the DWI run
+        (its lead series' sidecar metadata drives the PEPOLAR/SyN setup)
 
     Inputs
     ------
@@ -108,8 +104,7 @@ def init_sdc_wf(unit, dwi_meta):
     out_warp
         The deformation field to unwarp the susceptibility distortions
     syn_b0_ref
-        If ``--force-syn``, an unwarped b0 reference with this
-        method (for reporting purposes)
+        An unwarped b0 reference from the SyN method (for reporting purposes)
     method
         Name of the method used for SDC
     fieldmap_hz
@@ -169,7 +164,7 @@ co-registration with the anatomical reference.
 
         # We have already sorted by compatible
         sdc_unwarp_wf = init_pepolar_unwarp_wf(
-            dwi_meta=dwi_meta,
+            dwi_meta=unit.dwi_metadata,
             epi_fmaps=epi_fmaps,
             omp_nthreads=omp_nthreads,
             name='pepolar_unwarp_wf',
@@ -236,7 +231,7 @@ co-registration with the anatomical reference.
             ]
 
         sdc_unwarp_wf = init_sdc_unwarp_wf(name='sdc_unwarp_wf')
-        sdc_unwarp_wf.inputs.inputnode.metadata = dwi_meta
+        sdc_unwarp_wf.inputs.inputnode.metadata = unit.dwi_metadata
 
         workflow.connect([
             (inputnode, sdc_unwarp_wf, [
@@ -256,7 +251,7 @@ co-registration with the anatomical reference.
     if unit.is_nipreps_syn:
         from .syn import init_syn_sdc_wf
 
-        syn_sdc_wf = init_syn_sdc_wf(bold_pe=dwi_meta.get('PhaseEncodingDirection', None))
+        syn_sdc_wf = init_syn_sdc_wf(bold_pe=unit.dwi_metadata.get('PhaseEncodingDirection', None))
         outputnode.inputs.method = 'FLB ("fieldmap-less", SyN-based)'
         workflow.connect([
             (inputnode, syn_sdc_wf, [

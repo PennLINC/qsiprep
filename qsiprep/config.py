@@ -589,8 +589,6 @@ class workflow(_Config):
     """Regularize fieldmaps with a field of B-Spline basis."""
     fmap_demean = None
     """Remove the mean from fieldmaps."""
-    force_syn = None
-    """Run *fieldmap-less* susceptibility-derived distortions estimation."""
     force_t2wreg = None
     """Override all fieldmaps with T2w-registration SDC (TORTOISE T2Wreg)."""
     gpu = None

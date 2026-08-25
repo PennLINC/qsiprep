@@ -4,7 +4,6 @@ import itertools
 
 import pytest
 
-from qsiprep.grouping.adapters import backend_for_config
 from qsiprep.grouping.methods import (
     HMC_CAPABILITIES,
     SDC_CAPABILITIES,
@@ -31,7 +30,6 @@ def test_legacy_backend_matches_the_original_truth_table(hmc_model, pepolar_meth
         expected = 'mixed' if 'DRBUDDI' in pepolar_method else 'fsl'
     else:
         expected = 'tortoise'
-    assert backend_for_config(hmc_model, pepolar_method) == expected
     assert selection_for_config(hmc_model, pepolar_method).legacy_backend == expected
 
 

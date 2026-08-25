@@ -78,6 +78,11 @@ def _build_parser(**kwargs):
             '27.0.0',
             'Use `--sdc-method` instead.',
         ),
+        '--force-syn': (
+            '27.0.0',
+            'It has no effect. Fieldmap-less SyN is requested with '
+            '`--use-syn-sdc`, and a measured fieldmap always takes precedence.',
+        ),
         '--b0-motion-corr-to': (
             '27.0.0',
             'Later versions will always use the "iterative" approach.',
@@ -943,10 +948,11 @@ How to combine the corrected results of an output's correction units.
     )
     g_syn.add_argument(
         '--force-syn',
-        action='store_true',
-        default=False,
-        help='EXPERIMENTAL/TEMPORARY: Use SyN correction in addition to '
-        'fieldmap correction, if available',
+        action=DeprecatedAction,
+        default=SUPPRESS,
+        help='DEPRECATED: this flag has no effect. Fieldmap-less SyN correction '
+        'is requested with --use-syn-sdc; a measured fieldmap always takes '
+        'precedence.',
     )
 
     g_other = parser.add_argument_group('Other options')

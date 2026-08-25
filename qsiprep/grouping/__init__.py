@@ -18,7 +18,7 @@ per-backend processing previews for a dataset.
 
 Adding a new estimation method
 ------------------------------
-The (method x backend) behavior matrix is deliberately spelled out as prose
+The (method x selection) behavior matrix is deliberately spelled out as prose
 branches rather than a rules table, because the preview text is the product.
 The cost is that a new :class:`~.models.CorrectionMethod` touches five places
 (SYNB0 is the worked example in each):
@@ -26,21 +26,20 @@ The cost is that a new :class:`~.models.CorrectionMethod` touches five places
 1. :class:`~.models.CorrectionMethod` - add the member.
 2. ``inference.py`` - produce it: ``_classify_method`` for curated sources
    and/or a step in ``resolve_fieldmapless``; rank it in ``_METHOD_RANK``.
-3. ``validation.check_backend`` - which backends can execute it, and whether
-   failing is an error or a degradation.
+3. ``methods.py`` - which :class:`~.methods.SdcTool` consumes it (the
+   capability registries), and ``plan.py`` - its stage sequence per HMC
+   method, and whether an infeasible selection is an error or a degradation.
 4. ``report.py`` - ``_METHOD_LABELS``, ``MethodGroups``/``_ids_by_kind``,
-   and a narration branch in each ``_describe_*`` function.
-5. Tests - a scenario skeleton, inference assertions, and regenerated golden
-   reports (``QSIPREP_REGEN_GROUPING_REPORTS=1``).
-6. ``adapters.py`` - the legacy ``fieldmap_info`` shape the method maps to
-   (or a clear ``NotImplementedError`` when it has none yet).
+   a narration branch in each ``_describe_*`` function, and its
+   ``_stage_text`` sentence.
+5. Tests - a scenario skeleton, inference assertions, plan-stage assertions,
+   and regenerated golden reports (``QSIPREP_REGEN_GROUPING_REPORTS=1``).
 """
 
 from .adapters import (
     PreprocUnit,
-    backend_for_config,
+    assembly_to_sidecar,
     concatenation_scheme,
-    to_legacy_scan_groups,
     to_preproc_units,
     unit_to_sidecar,
 )
@@ -90,7 +89,7 @@ __all__ = [
     'PreprocUnit',
     'Provenance',
     'SdcTool',
-    'backend_for_config',
+    'assembly_to_sidecar',
     'build_dwi_grouping',
     'canonical_selection',
     'check_backend',
@@ -103,7 +102,6 @@ __all__ = [
     'render_report_segment',
     'report_text',
     'selection_for_config',
-    'to_legacy_scan_groups',
     'to_preproc_units',
     'unit_to_sidecar',
 ]

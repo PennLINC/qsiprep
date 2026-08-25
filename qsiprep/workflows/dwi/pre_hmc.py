@@ -110,6 +110,7 @@ def init_dwi_pre_hmc_wf(
         pe_axis = unit.pe_axis
         plus_source_file = get_source_file(plus_files, suffix='_PEplus')
         merge_plus = init_merge_and_denoise_wf(
+            unit=unit,
             raw_dwi_files=plus_files,
             orientation=orientation,
             source_file=plus_source_file,
@@ -122,6 +123,7 @@ def init_dwi_pre_hmc_wf(
         # Merge, denoise, split, hmc on the minus series
         minus_source_file = get_source_file(minus_files, suffix='_PEminus')
         merge_minus = init_merge_and_denoise_wf(
+            unit=unit,
             raw_dwi_files=minus_files,
             orientation=orientation,
             source_file=minus_source_file,
@@ -142,7 +144,10 @@ def init_dwi_pre_hmc_wf(
         pm_denoising_confounds = pe.Node(niu.Merge(2), name='pm_denoising_confounds')
         pm_raw_images = pe.Node(niu.Merge(2), name='pm_raw_images')
         rpe_concat = pe.Node(
-            MergeDWIs(harmonize_b0_intensities=not config.workflow.no_b0_harmonization),
+            MergeDWIs(
+                harmonize_b0_intensities=not config.workflow.no_b0_harmonization,
+                merged_prefix=unit.output_name,
+            ),
             name='rpe_concat',
         )
         raw_rpe_concat = pe.Node(Merge(is_dwi=True), name='raw_rpe_concat')
@@ -211,6 +216,7 @@ def init_dwi_pre_hmc_wf(
 
     workflow.__postdesc__ += '\n\n'
     merge_dwis = init_merge_and_denoise_wf(
+        unit=unit,
         raw_dwi_files=list(unit.dwi_files),
         orientation=orientation,
         calculate_qc=True,

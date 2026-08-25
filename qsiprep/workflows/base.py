@@ -448,6 +448,8 @@ to workflows in *QSIPrep*'s documentation]\
         merged_to_subgroups = defaultdict(list)
         for subgroup_name, destination_name in concatenation_scheme.items():
             merged_to_subgroups[destination_name].append(subgroup_name)
+        assembly_by_name = {assembly.output_name: assembly for assembly in plan.outputs}
+        units_by_name = {unit.output_name: unit for unit in preproc_units}
 
         for merged_group in merged_group_names:
             # Outputs with a single correction unit keep the direct path:
@@ -461,6 +463,8 @@ to workflows in *QSIPrep*'s documentation]\
                 inputs_list=merged_to_subgroups[merged_group],
                 output_prefix=merged_group,
                 name=merged_group.replace('-', '_') + '_final_merge_wf',
+                assembly=assembly_by_name[merged_group],
+                units=[units_by_name[key] for key in merged_to_subgroups[merged_group]],
             )
 
             workflow.connect([

@@ -293,7 +293,7 @@ def init_fsl_hmc_wf(
     # Fieldmap correction to be done in LAS+: TOPUP for rpe series or epi fieldmap
     # If a topupref is provided, use it for TOPUP
     if unit.is_pepolar:
-        fieldmap_type = 'rpe_series' if unit.has_bidirectional_dwi else 'epi'
+        fieldmap_type = unit.pepolar_fieldmap_type
     elif unit.is_gre:
         fieldmap_type = unit.gre_suffix
     elif unit.is_nipreps_syn:
@@ -466,7 +466,7 @@ def init_fsl_hmc_wf(
     if unit.is_gre or unit.is_nipreps_syn:
         config.loggers.workflow.info(f'Computing fieldmap directly from {fieldmap_type}')
         outputnode.inputs.sdc_method = fieldmap_type
-        b0_sdc_wf = init_sdc_wf(unit, unit.dwi_metadata)
+        b0_sdc_wf = init_sdc_wf(unit)
 
         workflow.connect([
             # Send to SDC workflow

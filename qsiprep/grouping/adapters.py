@@ -8,10 +8,10 @@ distortion group. Merging several distortion groups back into one concatenated
 output happens after HMC and is deliberately left to a later change; here every
 unit is its own output.
 
-:func:`to_preproc_units` is the native entry point the workflow builders use.
-:func:`to_legacy_scan_groups` renders the same units into the legacy
-``dwi_series``/``fieldmap_info`` dicts, so unconverted workflow code keeps
-working while the refactor proceeds.
+:func:`plan_preproc_units`/:func:`plan_concatenation_scheme` are the native
+entry points workflow construction uses over a compiled execution plan;
+:func:`to_preproc_units`/:func:`concatenation_scheme` are the backend-string
+conveniences the previews use.
 """
 
 from __future__ import annotations
@@ -21,7 +21,6 @@ import math
 import os.path as op
 from collections import Counter, defaultdict
 
-from .methods import selection_for_config
 from .models import (
     CorrectionMethod,
     DWIGrouping,
@@ -37,18 +36,6 @@ _GRE_SUFFIX = {
     CorrectionMethod.PHASES: 'phase1',
     CorrectionMethod.DIRECT: 'fieldmap',
 }
-
-
-def backend_for_config(hmc_model: str, pepolar_method: str) -> str:
-    """Map the CLI motion/PEPOLAR settings to a :data:`~.validation.BACKENDS` name.
-
-    ``eddy`` runs TOPUP for PEPOLAR fieldmaps (the ``fsl`` backend) unless
-    DRBUDDI refinement is requested, which makes it the two-stage ``mixed``
-    backend. Everything else - ``tortoise`` and the SHORELine models
-    (``3dSHORE``, ``tensor``, ``none``) - shares TORTOISE's DRBUDDI
-    feasibility semantics, so it maps to ``tortoise``.
-    """
-    return selection_for_config(hmc_model, pepolar_method).legacy_backend
 
 
 @dataclasses.dataclass(frozen=True)
@@ -163,6 +150,15 @@ class PreprocUnit:
         return len(pairs) == 1 and all(len(polarities) == 2 for polarities in pairs.values())
 
     @property
+    def pepolar_fieldmap_type(self) -> str:
+        """The legacy PEPOLAR discriminator the TORTOISE interfaces still take.
+
+        ``'rpe_series'`` when the reverse blip is an opposite-polarity DWI
+        series in the unit, ``'epi'`` when it is a dedicated fieldmap.
+        """
+        return 'rpe_series' if self.has_bidirectional_dwi else 'epi'
+
+    @property
     def pe_dir(self) -> str:
         """The phase-encoding direction reported for the corrected series.
 
@@ -208,56 +204,6 @@ class PreprocUnit:
                 'SliceTiming': record.metadata.get('SliceTiming'),
             }
         return overrides
-
-    def to_legacy_dict(self) -> dict:
-        """Render this unit as a legacy ``group_dwi_scans`` scan-group dict."""
-        return {
-            'dwi_series': list(self._legacy_dwi_series()),
-            'fieldmap_info': self._legacy_fieldmap_info(),
-            'dwi_series_pedir': self.pe_dir,
-            'concatenated_bids_name': self.output_name,
-        }
-
-    def _legacy_dwi_series(self) -> tuple[str, ...]:
-        if self.is_pepolar and self.has_bidirectional_dwi:
-            return self.plus_files
-        return self.dwi_files
-
-    def _legacy_fieldmap_info(self) -> dict:
-        if self.estimation is None:
-            return {'suffix': None}
-
-        if self.is_pepolar:
-            if self.has_bidirectional_dwi:
-                info = {'suffix': 'rpe_series', 'rpe_series': list(self.minus_files)}
-                if self.extra_b0:
-                    info['epi'] = list(self.extra_b0)
-                return info
-            # A single polarity in the output: the reverse blip lives in ``epi``.
-            return {'suffix': 'epi', 'epi': list(self.extra_b0)}
-
-        if self.method in _GRE_SUFFIX:
-            info = {'suffix': _GRE_SUFFIX[self.method]}
-            info.update(self.gre_files())
-            primary = info[info['suffix']]
-            info['metadata'] = dict(self.grouping.files[primary].metadata)
-            return info
-
-        if self.method is CorrectionMethod.T2WREG:
-            # T2Wreg is expressed downstream as fieldmap-less with t2w_sdc=True.
-            return {'suffix': None}
-
-        if self.method is CorrectionMethod.NIPREPS_SYN:
-            return {'suffix': 'syn'}
-
-        if self.method is CorrectionMethod.SYNB0:
-            raise NotImplementedError(
-                f"SyNb0 estimation '{self.estimation.b0field_id}' has no legacy workflow "
-                'shape; the synthesis workflow is added with the SyNb0 integration.'
-            )
-
-        raise ValueError(f'Unhandled estimation method {self.method!r}')  # pragma: no cover
-
 
 def _blip_pair_key(grouping: DWIGrouping, path: str) -> tuple:
     """The blip-pair identity ``(pe_axis, readout_time, shim)`` of a source file."""
@@ -421,20 +367,17 @@ def _metadata_values_agree(first, second) -> bool:
     return first == second
 
 
-def unit_to_sidecar(unit: PreprocUnit) -> dict:
-    """Build the derivatives sidecar describing how an output was produced.
+def _merged_metadata(records) -> tuple[dict, dict]:
+    """``(common, per_file)`` metadata for a set of file records.
 
-    Metadata comes from the grouping model's file records rather than being
-    re-read from disk. Keys shared (and equal) across every member series are
-    promoted to the top level; the per-series metadata is kept under
-    ``SourceMetadata``.
+    Keys shared (and equal) across every record are promoted to ``common``;
+    ``per_file`` keeps each record's full metadata, keyed by basename.
     """
-    scan_metadata: dict[str, dict] = {}
+    per_file: dict[str, dict] = {}
     common: dict | None = None
-    for record in unit.dwi_records:
-        name = op.basename(record.path)
+    for record in records:
         meta = dict(record.metadata)
-        scan_metadata[name] = meta
+        per_file[op.basename(record.path)] = meta
         if common is None:
             common = dict(meta)
         else:
@@ -443,9 +386,11 @@ def unit_to_sidecar(unit: PreprocUnit) -> dict:
                 for key, value in common.items()
                 if key in meta and _metadata_values_agree(value, meta[key])
             }
+    return dict(common or {}), per_file
 
-    sidecar = dict(common or {})
-    sidecar['ScanGrouping'] = {
+
+def _unit_scan_grouping(unit: PreprocUnit) -> dict:
+    return {
         'output_name': unit.output_name,
         'method': unit.method.value if unit.method else None,
         'dwi_series': [op.basename(path) for path in unit.dwi_files],
@@ -453,18 +398,40 @@ def unit_to_sidecar(unit: PreprocUnit) -> dict:
         if unit.estimation
         else [],
     }
+
+
+def unit_to_sidecar(unit: PreprocUnit) -> dict:
+    """Build the derivatives sidecar describing how an output was produced.
+
+    Metadata comes from the grouping model's file records rather than being
+    re-read from disk. Keys shared (and equal) across every member series are
+    promoted to the top level; the per-series metadata is kept under
+    ``SourceMetadata``.
+    """
+    common, scan_metadata = _merged_metadata(unit.dwi_records)
+    sidecar = common
+    sidecar['ScanGrouping'] = _unit_scan_grouping(unit)
     sidecar['SourceMetadata'] = scan_metadata
     sidecar['Sources'] = sorted(scan_metadata)
     return sidecar
 
 
-def to_legacy_scan_groups(grouping: DWIGrouping, backend: str = 'fsl') -> tuple[list[dict], dict]:
-    """Render a grouping as ``(scan_groups, concatenation_scheme)``.
+def assembly_to_sidecar(assembly, units: list[PreprocUnit]) -> dict:
+    """The derivatives sidecar for an output merged from several runs.
 
-    ``scan_groups`` matches the contract of the retired
-    :func:`qsiprep.utils.grouping.group_dwi_scans`; ``concatenation_scheme``
-    maps each scan group (one per correction unit, or per axis under a TORTOISE
-    split) to the final output its corrected result is combined into.
+    The direct (single-run) path writes :func:`unit_to_sidecar`; a merged
+    output covers every member run, so its ``ScanGrouping`` lists them with
+    the merge strategy, and the metadata sections span all their series.
     """
-    scan_groups = [unit.to_legacy_dict() for unit in to_preproc_units(grouping, backend)]
-    return scan_groups, concatenation_scheme(grouping, backend)
+    common, scan_metadata = _merged_metadata(
+        [record for unit in units for record in unit.dwi_records]
+    )
+    sidecar = common
+    sidecar['ScanGrouping'] = {
+        'output_name': assembly.output_name,
+        'merge_strategy': assembly.strategy,
+        'runs': [_unit_scan_grouping(unit) for unit in units],
+    }
+    sidecar['SourceMetadata'] = scan_metadata
+    sidecar['Sources'] = sorted(scan_metadata)
+    return sidecar

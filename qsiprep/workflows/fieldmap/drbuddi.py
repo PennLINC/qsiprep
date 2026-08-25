@@ -161,9 +161,9 @@ def init_drbuddi_wf(
     if not unit.is_pepolar:
         raise Exception('DRBUDDI workflow requires a PEPOLAR fieldmap')
 
-    # The interfaces still discriminate on this legacy string (retired in the
-    # native-plan pass): reverse-PE *series* vs a dedicated epi b=0.
-    fieldmap_type = 'rpe_series' if unit.has_bidirectional_dwi else 'epi'
+    # The interfaces still discriminate on this legacy string:
+    # reverse-PE *series* vs a dedicated epi b=0.
+    fieldmap_type = unit.pepolar_fieldmap_type
     epi_fmaps = list(unit.minus_files) if unit.has_bidirectional_dwi else list(unit.extra_b0)
 
     workflow.__desc__ = generate_drbuddi_boilerplate(
