@@ -271,7 +271,14 @@ def init_qsiprep_hmcsdc_wf(
     b0_sdc_wf = init_sdc_wf(unit, unit.dwi_metadata)
     b0_sdc_wf.inputs.inputnode.template = anatomical_template
 
-    if gradwarp_before_sdc:
+    # init_sdc_wf builds a pure pass-through ('sdc_bypass_wf') under exactly this
+    # condition, and forwards b0_ref straight to outputnode.b0_template -- the
+    # DWI/T1w coregistration reference. There is no field to estimate on a
+    # bypass, so correcting its inputs would only change that reference on a path
+    # the rule does not cover (and that fsl.py and diffprep.py leave raw).
+    does_sdc = unit.has_scanner_measured_fieldmap or unit.is_nipreps_syn
+
+    if gradwarp_before_sdc and does_sdc:
         connect_gradwarp_sdc_reference(
             workflow,
             inputnode,

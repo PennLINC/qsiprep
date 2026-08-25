@@ -615,6 +615,31 @@ def test_shoreline_syn_branch_gradwarps_the_sdc_reference(tmp_path):
     )
 
 
+def test_shoreline_without_a_fieldmap_does_not_gradwarp_the_bypass_reference(tmp_path):
+    """No fieldmap means ``init_sdc_wf`` is a pure pass-through, so there is no
+    susceptibility field being estimated and nothing to correct its inputs for.
+
+    The bypass forwards ``b0_ref`` straight to ``outputnode.b0_template``, the
+    DWI/T1w coregistration reference -- correcting it here would silently change
+    that reference on a path the rule does not cover, and would diverge from the
+    no-fieldmap branches of ``fsl.py`` and ``diffprep.py``, which leave it raw.
+    """
+    _cfg_for_shoreline(tmp_path)
+    dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz')
+    unit = make_preproc_unit([dwi], metadata={'Manufacturer': 'SIEMENS'})
+    wf = _shoreline_wf(tmp_path, unit)
+
+    assert unit.method is None
+    assert wf.get_node('sdc_bypass_wf') is not None
+    assert wf.get_node('gradwarp_sdc_inputs') is None
+    assert wf.get_node('gradwarp_sdc_inputs_brain') is None
+    assert wf.get_node('gradwarp_sdc_inputs_mask') is None
+    # Positively: the raw HMC template still reaches the bypass untouched.
+    assert _connects(
+        wf, 'dwi_hmc_wf', 'sdc_bypass_wf', 'outputnode.final_template', 'inputnode.b0_ref'
+    )
+
+
 def test_dwi_preproc_wf_connects_gradwarp_field_to_the_hmc_workflow(tmp_path):
     """Without this edge every ``gradwarp_sdc_inputs`` node above is dead code."""
     wf = _preproc_wf(tmp_path)

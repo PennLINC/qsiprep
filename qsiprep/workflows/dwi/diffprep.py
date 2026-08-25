@@ -287,7 +287,9 @@ def init_diffprep_hmc_wf(
     # Whether the SDC estimation inputs get gradwarp-corrected first -- see the
     # note above connect_gradwarp_sdc_volumes in gradwarp.py. No TOPUP carve-out
     # applies here: every SDC warp this backend produces is carried out in
-    # to_dwi_ref_warps and applied downstream of gradwarp.
+    # to_dwi_ref_warps and applied downstream of gradwarp. It gates the DRBUDDI
+    # and GRE/SyN nodes below; the T2Wreg branch qualifies under the rule but
+    # cannot be corrected yet (see branch 2).
     gradwarp_plan = resolve_gradwarp_plan(unit)
     gradwarp_before_sdc = gradwarp_plan is not None and gradwarp_plan.warp_dim is not None
 
@@ -599,6 +601,13 @@ def init_diffprep_hmc_wf(
     #    resampled once -- the same contract as the DRBUDDI branch above. This
     #    keeps DIFFPREP's output in the native grid and leaves coregistration and
     #    ACPC alignment to qsiprep instead of TORTOISE's StructuralAlignment.
+    #
+    #    Known gap: by the gradwarp rule this warp's estimation inputs *should* be
+    #    gradwarp-corrected, since the warp is applied downstream of gradwarp. But
+    #    the EPI stage runs inside the same TORTOISEProcess call as HMC and never
+    #    hands its registration target back, so there is nothing here to interpose
+    #    on. Correcting it would mean gradwarping the series before DIFFPREP,
+    #    which changes head motion correction too; deferred rather than forced.
     if use_t2wreg:
         outputnode.inputs.sdc_method = 'T2Wreg'
         workflow.connect([
