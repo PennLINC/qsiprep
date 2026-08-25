@@ -205,8 +205,15 @@ def _build_parser(**kwargs):
                 namespace.hmc_method = 'eddy'
             if namespace.shoreline_model is not None and namespace.hmc_method != 'shoreline':
                 self.error('--shoreline-model requires --hmc-method shoreline')
-            if namespace.hmc_method == 'shoreline' and namespace.shoreline_model is None:
-                namespace.shoreline_model = '3dshore'
+            if namespace.hmc_method == 'shoreline':
+                if namespace.shoreline_model is None:
+                    namespace.shoreline_model = '3dshore'
+                print(
+                    'SHORELine (--hmc-method shoreline) is scheduled for removal '
+                    'in a future major release; eddy and tortoise are the '
+                    'supported methods.',
+                    file=sys.stderr,
+                )
 
             explicit_sdc = legacy_pepolar.lower() if legacy_pepolar else namespace.sdc_method
             if explicit_sdc in (None, 'auto'):
@@ -804,7 +811,8 @@ How to combine the corrected results of an output's correction units.
         help='which software corrects head motion and eddy currents: '
         '"eddy" (FSL; requires a shelled sampling scheme; the default), '
         '"shoreline" (SHORELine; model-based, works on arbitrary q-space '
-        'sampling; see --shoreline-model and --shoreline-iters), or '
+        'sampling; see --shoreline-model and --shoreline-iters; scheduled '
+        'for removal in a future major release), or '
         '"tortoise" (TORTOISE DIFFPREP; rigid head motion and 24-parameter '
         'quadratic eddy-current correction, arbitrary sampling; see '
         '--diffprep-config).',
@@ -914,12 +922,14 @@ How to combine the corrected results of an output's correction units.
         help='DEPRECATED: use --sdc-method instead (same values, lowercased).',
     )
     g_fmap.add_argument(
-        '--force-t2wreg',
-        action='store_true',
-        default=False,
-        help='override all fieldmaps with T2w-registration SDC (TORTOISE '
-        'T2Wreg). Requires a T2w image and an SDC stage that can consume it '
-        '(--hmc-method tortoise or --sdc-method drbuddi).',
+        '--force',
+        nargs='+',
+        default=[],
+        choices=['t2wreg'],
+        help='force specific processing choices (a space-delimited list). '
+        '"t2wreg" overrides all fieldmaps with T2w-registration SDC (TORTOISE '
+        'T2Wreg); it requires a T2w image and an SDC stage that can consume '
+        'it (--hmc-method tortoise or --sdc-method drbuddi).',
     )
     g_fmap.add_argument(
         '--fmap-bspline',

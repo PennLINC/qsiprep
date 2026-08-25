@@ -45,8 +45,6 @@ from packaging.version import Version
 from .. import config
 from ..grouping import (
     GroupingError,
-    HmcMethod,
-    SdcTool,
     build_dwi_grouping,
     describe_processing,
     method_selection_from_config,
@@ -65,40 +63,13 @@ from ..interfaces import (
 )
 from ..utils.bids import collect_data
 from ..utils.misc import fix_multi_source_name
+from ..utils.sdc import t2w_available_for_sdc, t2w_sdc_enabled
 from .anatomical.volume import anat_biascorrect_enabled, init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
 from .dwi.distortion_group_merge import init_distortion_group_merge_wf
 from .dwi.finalize import init_dwi_finalize_wf
 from .dwi.intramodal_template import init_intramodal_template_wf
 from .dwi.util import get_source_file
-
-
-def _t2w_sdc_enabled(selection):
-    """Whether the selected methods have a stage that can consume a T2w for SDC.
-
-    DRBUDDI's multimodal ``--structural`` is reached whenever DRBUDDI is among
-    the PEPOLAR tools; DIFFPREP's ``--epi T2Wreg`` covers the fieldmap-less
-    case and is not gated on the PEPOLAR tool choice.
-    """
-    return SdcTool.DRBUDDI in selection.pepolar_tools or selection.hmc is HmcMethod.TORTOISE
-
-
-def _t2w_available_for_sdc(subject_data, selection):
-    """Whether a T2w should drive susceptibility distortion correction.
-
-    True only when the subject has a T2w, anatomical processing runs
-    (``--anat-modality`` != ``none``), and the selected methods actually have a
-    T2w-consuming stage. Every T2w consumer takes the anatomical workflow's
-    ``t2w_unfatsat``, which is only produced when ``init_anat_preproc_wf`` is
-    asked for additional T2ws (see ``additional_t2ws`` in
-    :func:`init_single_subject_wf`, which must stay in sync with this).
-    Requesting T2w-based SDC without it leaves those nodes with an empty input.
-    """
-    return (
-        bool(subject_data.get('t2w'))
-        and config.workflow.anat_modality != 'none'
-        and _t2w_sdc_enabled(selection)
-    )
 
 
 def init_qsiprep_wf():
@@ -226,10 +197,10 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
 
     # The anatomical workflow only builds its T2w branch -- and therefore only
     # produces ``t2w_unfatsat`` -- when asked for additional T2ws. Keep this in
-    # sync with _t2w_available_for_sdc, which decides whether the consumers of
+    # sync with utils.sdc.t2w_available_for_sdc, which decides whether the consumers of
     # that output get switched on.
     additional_t2ws = 0
-    if _t2w_sdc_enabled(selection) and subject_data['t2w']:
+    if t2w_sdc_enabled(selection) and subject_data['t2w']:
         additional_t2ws = len(subject_data['t2w'])
 
     # Inspect the dwi data and provide advice on pipeline choices
@@ -381,7 +352,7 @@ to workflows in *QSIPrep*'s documentation]\
         ignore_shims='shims' in config.workflow.ignore,
         ignore_fov='fov' in config.workflow.ignore,
         ignore_sdc='sdc' in config.workflow.ignore,
-        force_t2wreg=bool(config.workflow.force_t2wreg),
+        force_t2wreg='t2wreg' in (config.workflow.force or ()),
         use_nipreps_syn_sdc=bool(config.workflow.use_syn_sdc),
         distortion_group_merge=config.workflow.distortion_group_merge,
         strict=False,
@@ -637,7 +608,7 @@ to workflows in *QSIPrep*'s documentation]\
             unit=unit,
             output_prefix=naming_name,
             source_file=source_file,
-            t2w_sdc=_t2w_available_for_sdc(subject_data, selection),
+            t2w_sdc=t2w_available_for_sdc(subject_data, selection, config.workflow.anat_modality),
             anatomical_template=anatomical_template,
         )
         dwi_finalize_wf = init_dwi_finalize_wf(

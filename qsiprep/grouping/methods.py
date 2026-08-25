@@ -325,7 +325,7 @@ def method_selection_from_config() -> MethodSelection:
         hmc,
         config.workflow.sdc_method or config.workflow.pepolar_method,
         use_syn=bool(config.workflow.use_syn_sdc),
-        force_t2wreg=bool(config.workflow.force_t2wreg),
+        force_t2wreg='t2wreg' in (config.workflow.force or ()),
     )
 
 

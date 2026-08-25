@@ -565,5 +565,10 @@ def test_shoreline_model_requires_shoreline_method(minimal_args, capsys):
 
 
 def test_force_t2wreg_parses(minimal_args):
-    assert _parse(minimal_args).force_t2wreg is False
-    assert _parse(minimal_args, '--force-t2wreg').force_t2wreg is True
+    assert _parse(minimal_args).force == []
+    assert _parse(minimal_args, '--force', 't2wreg').force == ['t2wreg']
+
+
+def test_shoreline_selection_warns_of_removal(minimal_args, capsys):
+    _parse(minimal_args, '--hmc-method', 'shoreline')
+    assert 'scheduled for removal' in capsys.readouterr().err

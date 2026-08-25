@@ -811,14 +811,12 @@ def test_t2w_available_for_sdc_requires_anat_processing(t2w_gate_config):
     is never produced; requesting T2w SDC then leaves the DRBUDDI structural / the
     extended report's t2w_n4 with an empty input (the CI failure)."""
     from qsiprep.grouping.methods import selection_for_config
-    from qsiprep.workflows.base import _t2w_available_for_sdc
+    from qsiprep.utils.sdc import t2w_available_for_sdc
 
     selection = selection_for_config('eddy', 'drbuddi')
-    assert _t2w_available_for_sdc(T2W_SUBJECT, selection) is True
-    assert _t2w_available_for_sdc({}, selection) is False
-
-    t2w_gate_config.workflow.anat_modality = 'none'
-    assert _t2w_available_for_sdc(T2W_SUBJECT, selection) is False
+    assert t2w_available_for_sdc(T2W_SUBJECT, selection, 't1w') is True
+    assert t2w_available_for_sdc({}, selection, 't1w') is False
+    assert t2w_available_for_sdc(T2W_SUBJECT, selection, 'none') is False
 
 
 def test_t2w_available_for_sdc_requires_a_consuming_method(t2w_gate_config):
@@ -832,23 +830,23 @@ def test_t2w_available_for_sdc_requires_a_consuming_method(t2w_gate_config):
     ``epi_mode="T2Wreg" requires a structural_image``.
     """
     from qsiprep.grouping.methods import selection_for_config
-    from qsiprep.workflows.base import _t2w_available_for_sdc, _t2w_sdc_enabled
+    from qsiprep.utils.sdc import t2w_available_for_sdc, t2w_sdc_enabled
 
     # eddy + TOPUP: nothing consumes a T2w, so do not claim T2w SDC.
     selection = selection_for_config('eddy', 'topup')
-    assert _t2w_sdc_enabled(selection) is False
-    assert _t2w_available_for_sdc(T2W_SUBJECT, selection) is False
+    assert t2w_sdc_enabled(selection) is False
+    assert t2w_available_for_sdc(T2W_SUBJECT, selection, 't1w') is False
 
     # DRBUDDI consumes it as its multimodal --structural.
     selection = selection_for_config('eddy', 'topup+drbuddi')
-    assert _t2w_sdc_enabled(selection) is True
-    assert _t2w_available_for_sdc(T2W_SUBJECT, selection) is True
+    assert t2w_sdc_enabled(selection) is True
+    assert t2w_available_for_sdc(T2W_SUBJECT, selection, 't1w') is True
 
     # The regression: DIFFPREP consumes it via --epi T2Wreg regardless of
     # the PEPOLAR tool choice.
     selection = selection_for_config('tortoise', 'auto')
-    assert _t2w_sdc_enabled(selection) is True, 'tortoise'
-    assert _t2w_available_for_sdc(T2W_SUBJECT, selection) is True, 'tortoise'
+    assert t2w_sdc_enabled(selection) is True, 'tortoise'
+    assert t2w_available_for_sdc(T2W_SUBJECT, selection, 't1w') is True, 'tortoise'
 
 
 def test_extended_pepolar_report_t2w_n4_gets_input():

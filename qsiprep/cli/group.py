@@ -22,9 +22,8 @@ from qsiprep.grouping import (
     report_text,
     selection_for_config,
 )
-from qsiprep.grouping.methods import SHORELINE_MODELS, canonical_selection
+from qsiprep.grouping.methods import SHORELINE_MODELS
 from qsiprep.grouping.report import default_preview_selections
-from qsiprep.grouping.validation import BACKENDS
 
 
 def _build_parser():
@@ -63,14 +62,6 @@ def _build_parser():
         help='PEPOLAR tool preference for the previewed method (default: auto).',
     )
     parser.add_argument(
-        '--backend',
-        nargs='+',
-        choices=BACKENDS,
-        default=None,
-        help='DEPRECATED: use --hmc-method/--sdc-method. Legacy backend '
-        'name(s) to preview.',
-    )
-    parser.add_argument(
         '--ignore-shims',
         action='store_true',
         help='Treat all ShimSetting values as compatible.',
@@ -95,9 +86,12 @@ def _build_parser():
         help='Skip fmap/; only the reverse phase-encoding DWI heuristic applies.',
     )
     parser.add_argument(
-        '--force-t2wreg',
-        action='store_true',
-        help='Override all fieldmaps with T2w-registration SDC (TORTOISE T2Wreg).',
+        '--force',
+        nargs='+',
+        default=[],
+        choices=['t2wreg'],
+        help='Force processing choices (space-delimited list). "t2wreg" '
+        'overrides all fieldmaps with T2w-registration SDC (TORTOISE T2Wreg).',
     )
     parser.add_argument(
         '--distortion-group-merge',
@@ -139,12 +133,6 @@ def _selections(args):
     if args.hmc_method:
         hmc = args.shoreline_model or args.hmc_method
         return [selection_for_config(hmc, args.sdc_method)]
-    if args.backend:
-        print(
-            '--backend is deprecated; use --hmc-method/--sdc-method instead.',
-            file=sys.stderr,
-        )
-        return [canonical_selection(backend) for backend in args.backend]
     return list(default_preview_selections())
 
 
@@ -182,7 +170,7 @@ def main(argv=None):
             ignore_fieldmaps=args.ignore_fieldmaps,
             ignore_shims=args.ignore_shims,
             ignore_fov=args.ignore_fov,
-            force_t2wreg=args.force_t2wreg,
+            force_t2wreg='t2wreg' in args.force,
             use_synb0=args.use_synb0,
             distortion_group_merge=args.distortion_group_merge,
             strict=False,

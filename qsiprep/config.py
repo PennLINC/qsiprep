@@ -589,8 +589,8 @@ class workflow(_Config):
     """Regularize fieldmaps with a field of B-Spline basis."""
     fmap_demean = None
     """Remove the mean from fieldmaps."""
-    force_t2wreg = None
-    """Override all fieldmaps with T2w-registration SDC (TORTOISE T2Wreg)."""
+    force = None
+    """Forced processing choices (see ``--force``): currently ``t2wreg``."""
     gpu = None
     """Tasks to run on the GPU (see ``qsiprep.utils.gpu``)."""
     hmc_method = None
