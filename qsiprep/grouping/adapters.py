@@ -21,6 +21,7 @@ import math
 import os.path as op
 from collections import Counter, defaultdict
 
+from .methods import selection_for_config
 from .models import (
     CorrectionMethod,
     DWIGrouping,
@@ -43,13 +44,11 @@ def backend_for_config(hmc_model: str, pepolar_method: str) -> str:
 
     ``eddy`` runs TOPUP for PEPOLAR fieldmaps (the ``fsl`` backend) unless
     DRBUDDI refinement is requested, which makes it the two-stage ``mixed``
-    backend. Everything else - ``tortoise`` and the deprecated SHORELine
-    models (``3dSHORE``, ``tensor``, ``none``) - shares TORTOISE's DRBUDDI
+    backend. Everything else - ``tortoise`` and the SHORELine models
+    (``3dSHORE``, ``tensor``, ``none``) - shares TORTOISE's DRBUDDI
     feasibility semantics, so it maps to ``tortoise``.
     """
-    if hmc_model == 'eddy':
-        return 'mixed' if 'DRBUDDI' in pepolar_method else 'fsl'
-    return 'tortoise'
+    return selection_for_config(hmc_model, pepolar_method).legacy_backend
 
 
 @dataclasses.dataclass(frozen=True)
