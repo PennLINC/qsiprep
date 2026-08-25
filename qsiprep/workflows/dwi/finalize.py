@@ -150,6 +150,10 @@ def init_dwi_finalize_wf(
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
 
+    # Deliberately reads the back-filled legacy pepolar_method (not the plan):
+    # under the SHORELine default it still says 'TOPUP', keeping today's
+    # fieldmap-hz handling until the SHORELine report layout is settled (see
+    # the matching gates in dwi/base.py).
     doing_topup = unit.is_pepolar and 'topup' in config.workflow.pepolar_method.lower()
 
     # Determine resource usage

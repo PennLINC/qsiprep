@@ -300,16 +300,18 @@ def init_fsl_hmc_wf(
         fieldmap_type = 'syn'
     else:
         fieldmap_type = ''
+    # The plan already encodes DRBUDDI's single-blip-pair constraint: a
+    # multi-axis or multi-readout unit has no refinement stage, and the
+    # TOPUP+eddy stage pools every blip group.
+    run_topup = unit.run.stage_with('topup') is not None
+    run_drbuddi = unit.run.stage_with('drbuddi') is not None
     workflow.__desc__ = boilerplate_from_eddy_config(
-        eddy_args, fieldmap_type, config.workflow.pepolar_method
+        eddy_args,
+        fieldmap_type,
+        pepolar_method='+'.join(
+            ['topup'] * run_topup + ['drbuddi'] * run_drbuddi
+        ),
     )
-
-    # DRBUDDI's single pass corrects one matched blip pair, so a multi-axis or
-    # multi-readout unit skips the DRBUDDI stage; the mixed path (TOPUP+DRBUDDI)
-    # still corrects it as single-stage TOPUP+eddy, which pools every blip group.
-    _pepolar = config.workflow.pepolar_method.lower()
-    run_topup = unit.is_pepolar and 'topup' in _pepolar
-    run_drbuddi = unit.is_pepolar and 'drbuddi' in _pepolar and unit.is_single_blip_pair
 
     # Are we running TOPUP?
     if run_topup:
@@ -397,7 +399,7 @@ def init_fsl_hmc_wf(
             (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')]),
         ])  # fmt:skip
 
-        if 'drbuddi' not in config.workflow.pepolar_method.lower():
+        if not run_drbuddi:
             config.loggers.workflow.info('Using single-stage SDC, TOPUP-only')
             workflow.connect([
                 # There will be no SDC warps, they are applied by eddy

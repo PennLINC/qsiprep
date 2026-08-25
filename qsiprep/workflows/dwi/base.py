@@ -39,14 +39,10 @@ def _doing_t2wreg(unit, t2w_sdc):
     Mirrors ``use_t2wreg`` in :mod:`qsiprep.workflows.dwi.diffprep`. T2Wreg does
     real susceptibility distortion correction but carries no measured fieldmap,
     so without this predicate the fieldmap-less case would fall through the
-    reportlet gate and produce no SDC figure.
+    reportlet gate and produce no SDC figure. The plan encodes the stage; the
+    ``t2w_sdc`` bool additionally honors --anat-modality/--ignore t2w.
     """
-    return (
-        config.workflow.hmc_model == 'tortoise'
-        and not unit.has_scanner_measured_fieldmap
-        and not unit.is_nipreps_syn
-        and bool(t2w_sdc)
-    )
+    return unit.run.stage_with('t2wreg') is not None and bool(t2w_sdc)
 
 
 def init_dwi_preproc_wf(
@@ -237,14 +233,16 @@ def init_dwi_preproc_wf(
 
     pre_hmc_wf = init_dwi_pre_hmc_wf(
         unit=unit,
-        orientation='LAS' if config.workflow.hmc_model == 'eddy' else 'LPS',
+        orientation='LAS' if unit.run.hmc_stage.tool == 'eddy' else 'LPS',
         source_file=source_file,
     )
     test_pre_hmc_connect = pe.Node(TestInput(), name='test_pre_hmc_connect')
-    if config.workflow.hmc_model in ('none', '3dSHORE', 'tensor'):
-        if not config.workflow.hmc_model == 'none' and config.workflow.shoreline_iters < 1:
+    hmc_tool = unit.run.hmc_stage.tool
+    if hmc_tool == 'shoreline':
+        if config.workflow.shoreline_model != 'none' and config.workflow.shoreline_iters < 1:
             raise Exception(
-                f'--shoreline-iters must be > 0 when --hmc-model is {config.workflow.hmc_model}'
+                '--shoreline-iters must be > 0 when --shoreline-model is '
+                f'{config.workflow.shoreline_model}'
             )
         hmc_wf = init_qsiprep_hmcsdc_wf(
             unit=unit,
@@ -253,7 +251,7 @@ def init_dwi_preproc_wf(
             anatomical_template=anatomical_template,
         )
 
-    elif config.workflow.hmc_model == 'eddy':
+    elif hmc_tool == 'eddy':
         hmc_wf = init_fsl_hmc_wf(
             unit=unit,
             source_file=source_file,
@@ -261,11 +259,11 @@ def init_dwi_preproc_wf(
             name='hmc_sdc_wf',
         )
 
-    elif config.workflow.hmc_model == 'tortoise':
-        # The DIFFPREP backend performs its own SDC internally (DRBUDDI for
-        # reverse-PE, TORTOISE T2Wreg for the fieldmap-less-with-T2w case, or
-        # qsiprep's init_sdc_wf for GRE/phase/SyN) -- exactly as init_fsl_hmc_wf
-        # owns its SDC. So no fieldmap guard here; the branching lives inside
+    elif hmc_tool == 'diffprep':
+        # DIFFPREP performs its own SDC internally (DRBUDDI for reverse-PE,
+        # TORTOISE T2Wreg for the fieldmap-less-with-T2w case, or qsiprep's
+        # init_sdc_wf for GRE/phase/SyN) -- exactly as init_fsl_hmc_wf owns
+        # its SDC. So no fieldmap guard here; the branching lives inside
         # init_diffprep_hmc_wf.
         hmc_wf = init_diffprep_hmc_wf(
             unit=unit,
@@ -275,7 +273,7 @@ def init_dwi_preproc_wf(
         )
 
     else:
-        raise ValueError(f'Unknown hmc_model: {config.workflow.hmc_model!r}')
+        raise ValueError(f'Unknown HMC tool: {hmc_tool!r}')
 
     workflow.connect([
         (pre_hmc_wf, hmc_wf, [
@@ -324,7 +322,11 @@ def init_dwi_preproc_wf(
     )
 
     # Fieldmap reports should vary depending on which type of correction is performed
-    # PEPOLAR (epi, rpe series) will produce potentially much more detailed reports
+    # PEPOLAR (epi, rpe series) will produce potentially much more detailed reports.
+    # These gates deliberately read the back-filled legacy pepolar_method rather
+    # than the plan: under the SHORELine default it still says 'TOPUP', which
+    # keeps today's report shapes (a desc-sdc figure, no extended DRBUDDI
+    # reports) until the SHORELine report layout is decided on its own terms.
     doing_topup = unit.is_pepolar and 'topup' in config.workflow.pepolar_method.lower()
     doing_t2wreg = _doing_t2wreg(unit, t2w_sdc)
     if unit.is_gre or unit.is_nipreps_syn or doing_topup or doing_t2wreg:

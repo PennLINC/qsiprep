@@ -124,6 +124,14 @@ class ProcessingRun:
                 return stage
         return None
 
+    @property
+    def hmc_stage(self) -> PlanStage:
+        """The single motion-correction stage (HMC or HMC_WITH_FIELD)."""
+        for stage in self.stages:
+            if stage.role in (StageRole.HMC, StageRole.HMC_WITH_FIELD):
+                return stage
+        raise ValueError(f"run '{self.key}' has no HMC stage")
+
     def to_dict(self) -> dict:
         return {
             'key': self.key,

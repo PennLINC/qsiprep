@@ -810,43 +810,45 @@ def test_t2w_available_for_sdc_requires_anat_processing(t2w_gate_config):
     """With --anat-modality none there is no anatomical workflow, so t2w_unfatsat
     is never produced; requesting T2w SDC then leaves the DRBUDDI structural / the
     extended report's t2w_n4 with an empty input (the CI failure)."""
+    from qsiprep.grouping.methods import selection_for_config
     from qsiprep.workflows.base import _t2w_available_for_sdc
 
-    t2w_gate_config.workflow.pepolar_method = 'DRBUDDI'
-    assert _t2w_available_for_sdc(T2W_SUBJECT) is True
-    assert _t2w_available_for_sdc({}) is False
+    selection = selection_for_config('eddy', 'drbuddi')
+    assert _t2w_available_for_sdc(T2W_SUBJECT, selection) is True
+    assert _t2w_available_for_sdc({}, selection) is False
 
     t2w_gate_config.workflow.anat_modality = 'none'
-    assert _t2w_available_for_sdc(T2W_SUBJECT) is False
+    assert _t2w_available_for_sdc(T2W_SUBJECT, selection) is False
 
 
-def test_t2w_available_for_sdc_requires_a_consuming_backend(t2w_gate_config):
-    """t2w_unfatsat only exists when the backend has a stage that consumes it.
+def test_t2w_available_for_sdc_requires_a_consuming_method(t2w_gate_config):
+    """t2w_unfatsat only exists when a selected method has a consuming stage.
 
     ``additional_t2ws`` -- the only thing that makes init_anat_preproc_wf build its
-    T2w branch -- was gated on --pepolar-method alone. The tortoise T2Wreg path
-    consumes the T2w without any PEPOLAR data and is not gated on that flag, so a
-    plain ``--hmc-model tortoise --ignore fieldmaps`` run requested T2w SDC while
-    nothing produced the image, and DIFFPREP died with
+    T2w branch -- was gated on the PEPOLAR tool alone. DIFFPREP's T2Wreg path
+    consumes the T2w without any PEPOLAR data and is not gated on that choice, so
+    a plain ``--hmc-method diffprep --ignore fieldmaps`` run requested T2w SDC
+    while nothing produced the image, and DIFFPREP died with
     ``epi_mode="T2Wreg" requires a structural_image``.
     """
-    from qsiprep.workflows.base import _t2w_available_for_sdc, _t2w_sdc_backend_enabled
+    from qsiprep.grouping.methods import selection_for_config
+    from qsiprep.workflows.base import _t2w_available_for_sdc, _t2w_sdc_enabled
 
     # eddy + TOPUP: nothing consumes a T2w, so do not claim T2w SDC.
-    assert _t2w_sdc_backend_enabled() is False
-    assert _t2w_available_for_sdc(T2W_SUBJECT) is False
+    selection = selection_for_config('eddy', 'topup')
+    assert _t2w_sdc_enabled(selection) is False
+    assert _t2w_available_for_sdc(T2W_SUBJECT, selection) is False
 
     # DRBUDDI consumes it as its multimodal --structural.
-    t2w_gate_config.workflow.pepolar_method = 'TOPUP+DRBUDDI'
-    assert _t2w_sdc_backend_enabled() is True
-    assert _t2w_available_for_sdc(T2W_SUBJECT) is True
+    selection = selection_for_config('eddy', 'topup+drbuddi')
+    assert _t2w_sdc_enabled(selection) is True
+    assert _t2w_available_for_sdc(T2W_SUBJECT, selection) is True
 
-    # The regression: 'tortoise' consumes it via --epi T2Wreg regardless of
-    # --pepolar-method.
-    t2w_gate_config.workflow.pepolar_method = 'TOPUP'
-    t2w_gate_config.workflow.hmc_model = 'tortoise'
-    assert _t2w_sdc_backend_enabled() is True, 'tortoise'
-    assert _t2w_available_for_sdc(T2W_SUBJECT) is True, 'tortoise'
+    # The regression: DIFFPREP consumes it via --epi T2Wreg regardless of
+    # the PEPOLAR tool choice.
+    selection = selection_for_config('diffprep', 'auto')
+    assert _t2w_sdc_enabled(selection) is True, 'diffprep'
+    assert _t2w_available_for_sdc(T2W_SUBJECT, selection) is True, 'diffprep'
 
 
 def test_extended_pepolar_report_t2w_n4_gets_input():
@@ -874,6 +876,11 @@ def _base_config():
     config.workflow.diffprep_config = None
     config.workflow.b0_threshold = 100
     config.workflow.pepolar_method = 'drbuddi'
+    # The legacy keys drive these tests; clear the axis keys so a selection
+    # left behind by another test cannot shadow them.
+    config.workflow.hmc_method = None
+    config.workflow.sdc_method = None
+    config.workflow.shoreline_model = None
     config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
     config.workflow.gpu = None  # --gpu not given, so legacy use_cuda keys apply
     config.execution.sloppy = False
@@ -1322,12 +1329,15 @@ def test_t2wreg_is_recognised_as_sdc_for_reporting():
     ``init_dwi_preproc_wf`` and T2Wreg silently produced no SDC figure, while the
     identical correction tagged ``syn`` did produce one.
     """
+    from qsiprep.tests.preproc_factory import make_preproc_unit
     from qsiprep.workflows.dwi.base import _doing_t2wreg
 
     config = _base_config()
     try:
         config.workflow.hmc_model = 'tortoise'
-        assert _doing_t2wreg(_make_unit(None), '/path/to/T2w.nii.gz') is True
+        t2w = ['/data/sub-01_T2w.nii.gz']
+        fieldmapless = make_preproc_unit(['/data/sub-01_dwi.nii.gz'], anat_files=t2w)
+        assert _doing_t2wreg(fieldmapless, '/path/to/T2w.nii.gz') is True
 
         # No T2w -> no T2Wreg -> nothing to show.
         assert _doing_t2wreg(_make_unit(None), '') is False
@@ -1337,9 +1347,10 @@ def test_t2wreg_is_recognised_as_sdc_for_reporting():
         epi = _make_unit('epi', epi=['/data/sub-01_epi.nii.gz'])
         assert _doing_t2wreg(epi, '/path/to/T2w.nii.gz') is False
 
-        # Other backends do not run T2Wreg at all.
+        # Other methods do not run T2Wreg at all.
         config.workflow.hmc_model = 'eddy'
-        assert _doing_t2wreg(_make_unit(None), '/path/to/T2w.nii.gz') is False
+        fieldmapless = make_preproc_unit(['/data/sub-01_dwi.nii.gz'], anat_files=t2w)
+        assert _doing_t2wreg(fieldmapless, '/path/to/T2w.nii.gz') is False
     finally:
         config.workflow.hmc_model = 'eddy'
 

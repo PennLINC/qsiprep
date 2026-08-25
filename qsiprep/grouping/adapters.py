@@ -357,30 +357,40 @@ def _decompose_unit(
     return subunits
 
 
+def plan_preproc_units(grouping: DWIGrouping, plan) -> list[PreprocUnit]:
+    """One :class:`PreprocUnit` per :class:`~.plan.ProcessingRun`, carrying it."""
+    return [
+        PreprocUnit(
+            grouping=grouping,
+            output_name=run.key,
+            dwi_files=run.dwi_files,
+            estimation=run.estimation,
+            run=run,
+        )
+        for run in plan.runs
+    ]
+
+
+def plan_concatenation_scheme(plan) -> dict[str, str]:
+    """Run key -> final output name, from a compiled plan's assemblies."""
+    final_of = {assembly.output_group: assembly.output_name for assembly in plan.outputs}
+    return {run.key: final_of.get(run.output_group, run.output_group) for run in plan.runs}
+
+
 def _units_and_finals(grouping: DWIGrouping, backend: str):
     """Yield ``(PreprocUnit, final_output_name)`` for every unit, backend-aware.
 
     Shared by :func:`to_preproc_units` and :func:`concatenation_scheme` so the
     unit list and the concatenation scheme always agree on the (possibly split)
-    unit names - ``base.py`` indexes the scheme by each unit's ``output_name``.
-    Both are views over the compiled execution plan.
+    unit names. Both are views over the compiled execution plan.
     """
     from .methods import canonical_selection
     from .plan import compile_plan
 
     plan = compile_plan(grouping, canonical_selection(backend))
-    final_of = {assembly.output_group: assembly.output_name for assembly in plan.outputs}
-    for run in plan.runs:
-        yield (
-            PreprocUnit(
-                grouping=grouping,
-                output_name=run.key,
-                dwi_files=run.dwi_files,
-                estimation=run.estimation,
-                run=run,
-            ),
-            final_of.get(run.output_group, run.output_group),
-        )
+    scheme = plan_concatenation_scheme(plan)
+    for unit in plan_preproc_units(grouping, plan):
+        yield unit, scheme[unit.output_name]
 
 
 def to_preproc_units(grouping: DWIGrouping, backend: str = 'fsl') -> list[PreprocUnit]:

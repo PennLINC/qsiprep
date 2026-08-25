@@ -45,18 +45,16 @@ from packaging.version import Version
 from .. import config
 from ..grouping import (
     GroupingError,
-    backend_for_config,
+    HmcMethod,
+    SdcTool,
     build_dwi_grouping,
-    check_backend,
     describe_processing,
     method_selection_from_config,
     render_report_segment,
     report_text,
-    to_preproc_units,
 )
-from ..grouping import (
-    concatenation_scheme as derive_concatenation_scheme,
-)
+from ..grouping.adapters import plan_concatenation_scheme, plan_preproc_units
+from ..grouping.plan import compile_plan
 from ..interfaces import (
     AboutSummary,
     BIDSDataGrabber,
@@ -75,24 +73,21 @@ from .dwi.intramodal_template import init_intramodal_template_wf
 from .dwi.util import get_source_file
 
 
-def _t2w_sdc_backend_enabled():
-    """Whether the selected backend has a stage that can consume a T2w for SDC.
+def _t2w_sdc_enabled(selection):
+    """Whether the selected methods have a stage that can consume a T2w for SDC.
 
-    DRBUDDI's multimodal ``--structural`` is reached only when ``--pepolar-method``
-    asks for DRBUDDI; TORTOISE ``--epi T2Wreg`` is reached from the ``tortoise``
-    backend for the fieldmap-less case and is **not** gated on ``--pepolar-method``.
+    DRBUDDI's multimodal ``--structural`` is reached whenever DRBUDDI is among
+    the PEPOLAR tools; DIFFPREP's ``--epi T2Wreg`` covers the fieldmap-less
+    case and is not gated on the PEPOLAR tool choice.
     """
-    return (
-        'drbuddi' in (config.workflow.pepolar_method or '').lower()
-        or config.workflow.hmc_model == 'tortoise'
-    )
+    return SdcTool.DRBUDDI in selection.pepolar_tools or selection.hmc is HmcMethod.DIFFPREP
 
 
-def _t2w_available_for_sdc(subject_data):
+def _t2w_available_for_sdc(subject_data, selection):
     """Whether a T2w should drive susceptibility distortion correction.
 
     True only when the subject has a T2w, anatomical processing runs
-    (``--anat-modality`` != ``none``), and the selected backend actually has a
+    (``--anat-modality`` != ``none``), and the selected methods actually have a
     T2w-consuming stage. Every T2w consumer takes the anatomical workflow's
     ``t2w_unfatsat``, which is only produced when ``init_anat_preproc_wf`` is
     asked for additional T2ws (see ``additional_t2ws`` in
@@ -102,7 +97,7 @@ def _t2w_available_for_sdc(subject_data):
     return (
         bool(subject_data.get('t2w'))
         and config.workflow.anat_modality != 'none'
-        and _t2w_sdc_backend_enabled()
+        and _t2w_sdc_enabled(selection)
     )
 
 
@@ -226,12 +221,15 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
         cohort = cohort_by_months(anatomical_template, age)
         anatomical_template = f'{anatomical_template}+{cohort}'
 
+    # The methods this run selected: the axis every routing decision reads.
+    selection = method_selection_from_config()
+
     # The anatomical workflow only builds its T2w branch -- and therefore only
     # produces ``t2w_unfatsat`` -- when asked for additional T2ws. Keep this in
     # sync with _t2w_available_for_sdc, which decides whether the consumers of
     # that output get switched on.
     additional_t2ws = 0
-    if _t2w_sdc_backend_enabled() and subject_data['t2w']:
+    if _t2w_sdc_enabled(selection) and subject_data['t2w']:
         additional_t2ws = len(subject_data['t2w'])
 
     # Inspect the dwi data and provide advice on pipeline choices
@@ -374,8 +372,7 @@ to workflows in *QSIPrep*'s documentation]\
         return workflow
 
     # Group the subject's DWI scans from BIDS metadata alone,
-    # then validate against the backend selected by the CLI.
-    backend = backend_for_config(config.workflow.hmc_model, config.workflow.pepolar_method)
+    # then compile the execution plan for the selected methods.
     grouping = build_dwi_grouping(
         layout=config.execution.layout,
         subject_data=subject_data,
@@ -389,13 +386,14 @@ to workflows in *QSIPrep*'s documentation]\
         distortion_group_merge=config.workflow.distortion_group_merge,
         strict=False,
     )
+    plan = compile_plan(grouping, selection)
     grouping_errors = grouping.errors + [
-        issue for issue in check_backend(grouping, backend) if issue.severity == 'error'
+        issue for issue in plan.issues if issue.severity == 'error'
     ]
     for issue in grouping.warnings:
         config.loggers.workflow.warning(issue.render())
     config.loggers.workflow.info(report_text(grouping))
-    config.loggers.workflow.info(describe_processing(grouping, method_selection_from_config()))
+    config.loggers.workflow.info(describe_processing(grouping, selection))
     if grouping_errors:
         rendered = '\n'.join(issue.render() for issue in grouping_errors)
         raise GroupingError(
@@ -410,9 +408,7 @@ to workflows in *QSIPrep*'s documentation]\
     # exists at workflow-construction time. The segment's styles are scoped so
     # it inlines natively into the report (no iframe).
     grouping_report = pe.Node(
-        InteractiveReport(
-            segment=render_report_segment(grouping, method_selection_from_config())
-        ),
+        InteractiveReport(segment=render_report_segment(grouping, selection)),
         name='grouping_report',
         run_without_submitting=True,
     )
@@ -437,12 +433,12 @@ to workflows in *QSIPrep*'s documentation]\
         (grouping_report, ds_report_grouping, [('out_report', 'in_file')]),
     ])  # fmt:skip
 
-    # Each PreprocUnit is one HMC+SDC run. concatenation_scheme maps each
-    # unit's preprocessed result to the final output it is combined into. The
-    # backend can split a unit (TORTOISE, multi-axis PEPOLAR), so both must see
-    # it and agree on the resulting unit names.
-    preproc_units = to_preproc_units(grouping, backend)
-    concatenation_scheme = derive_concatenation_scheme(grouping, backend)
+    # Each PreprocUnit is one HMC+SDC run (one plan ProcessingRun, carried on
+    # the unit). concatenation_scheme maps each run's preprocessed result to
+    # the final output it is combined into; both are views over the same plan,
+    # so they always agree on the (possibly split) run names.
+    preproc_units = plan_preproc_units(grouping, plan)
+    concatenation_scheme = plan_concatenation_scheme(plan)
 
     # Read unconditionally below even when no merge is happening.
     merging_group_workflows = {}
@@ -637,7 +633,7 @@ to workflows in *QSIPrep*'s documentation]\
             unit=unit,
             output_prefix=naming_name,
             source_file=source_file,
-            t2w_sdc=_t2w_available_for_sdc(subject_data),
+            t2w_sdc=_t2w_available_for_sdc(subject_data, selection),
             anatomical_template=anatomical_template,
         )
         dwi_finalize_wf = init_dwi_finalize_wf(

@@ -59,6 +59,11 @@ def _cfg(hmc_model='eddy', pepolar_method='TOPUP', layout=None):
     config.execution.layout = layout
     config.workflow.hmc_model = hmc_model
     config.workflow.pepolar_method = pepolar_method
+    # The legacy keys drive these tests; clear the axis keys so a selection
+    # left behind by another test cannot shadow them.
+    config.workflow.hmc_method = None
+    config.workflow.sdc_method = None
+    config.workflow.shoreline_model = None
     config.workflow.b0_threshold = 100
     config.workflow.b1_biascorrect_stage = 'final'
     config.workflow.eddy_config = None
@@ -356,19 +361,14 @@ def test_drbuddi_blip_assignments_from_sidecars_needs_no_disk():
 # here and in test_interfaces_diffprep.
 
 
-def test_dwi_preproc_wf_rejects_unknown_hmc_model(tmp_path):
+def test_unknown_hmc_model_is_rejected_at_selection_time(tmp_path):
+    """The subject workflow resolves the method selection before building
+    anything; garbage config dies there, not deep in a builder."""
     _cfg(hmc_model='bogus', layout=_StubLayout())
-    from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
+    from qsiprep.grouping.methods import method_selection_from_config
 
-    src = _write_dwi(tmp_path / 'sub-01_dwi.nii.gz')
-    with pytest.raises(ValueError, match='hmc_model'):
-        init_dwi_preproc_wf(
-            make_preproc_unit([src]),
-            t2w_sdc=False,
-            output_prefix='sub-01',
-            source_file=src,
-            anatomical_template='MNI152NLin2009cAsym',
-        )
+    with pytest.raises(ValueError, match='hmc'):
+        method_selection_from_config()
 
 
 def test_distortion_group_merge_wf_rejects_unknown_strategy():
@@ -387,3 +387,29 @@ def test_distortion_group_merge_wf_rejects_unknown_strategy():
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
+
+def test_legacy_method_keys_read_only_at_allowlisted_sites():
+    """Routing reads the compiled plan; the back-filled legacy keys survive only
+    at these sites (report gating held for SHORELine shape-compatibility, and
+    display/vocabulary strings), so new reads cannot creep in unnoticed."""
+    import pathlib
+    import re
+
+    root = pathlib.Path(__file__).parent.parent
+    allowed = {
+        # SHORELine report-shape compatibility (see the comments at the sites).
+        'workflows/dwi/base.py': {'pepolar_method': 2, 'hmc_model': 1},
+        'workflows/dwi/finalize.py': {'pepolar_method': 1},
+        # Display strings and the SHORELine model vocabulary.
+        'workflows/dwi/derivatives.py': {'hmc_model': 3},
+        'workflows/dwi/hmc.py': {'hmc_model': 3},
+    }
+    found: dict = {}
+    for path in (root / 'workflows').rglob('*.py'):
+        text = path.read_text()
+        for key in ('pepolar_method', 'hmc_model'):
+            count = len(re.findall(rf'config\.workflow\.{key}\b', text))
+            if count:
+                found.setdefault(str(path.relative_to(root)), {})[key] = count
+    assert found == allowed

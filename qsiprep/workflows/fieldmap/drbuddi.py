@@ -169,7 +169,7 @@ def init_drbuddi_wf(
     workflow.__desc__ = generate_drbuddi_boilerplate(
         fieldmap_type=fieldmap_type,
         t2w_sdc=t2w_sdc,
-        with_topup='topup' in config.workflow.pepolar_method.lower(),
+        with_topup=unit.run.stage_with('topup') is not None,
     )
 
     outputnode.inputs.method = f'PEB/PEPOLAR (phase-encoding based / PE-POLARity): {fieldmap_type}'
