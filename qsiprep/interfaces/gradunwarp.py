@@ -22,6 +22,8 @@ import nibabel as nb
 import numpy as np
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
+    CommandLine,
+    CommandLineInputSpec,
     File,
     SimpleInterface,
     TraitedSpec,
@@ -66,3 +68,56 @@ class MaskWarpDimensions(SimpleInterface):
         nb.Nifti1Image(data, img.affine, img.header).to_filename(out_file)
         self._results['out_file'] = out_file
         return runtime
+
+
+class _CreateNonlinearityDisplacementMapInputSpec(CommandLineInputSpec):
+    coeff_file = File(
+        exists=True,
+        mandatory=True,
+        argstr='%s',
+        position=0,
+        desc='Scanner gradient coefficient file (.grad, .dat, .gc) or gcal file',
+    )
+    ref_image = File(
+        exists=True,
+        mandatory=True,
+        argstr='%s',
+        position=1,
+        desc='NIfTI defining the grid the field is generated on',
+    )
+    out_field = traits.Str(
+        'gradwarp_field.nii',
+        usedefault=True,
+        argstr='%s',
+        position=2,
+        desc='Output displacement field name. Must end in .nii for the ITK writer.',
+    )
+    # No argstr: appended in _parse_inputs only when True. See module docstring.
+    is_ge = traits.Bool(False, usedefault=True, desc='Scanner is GE')
+
+
+class _CreateNonlinearityDisplacementMapOutputSpec(TraitedSpec):
+    out_field = File(exists=True, desc='Gradwarp displacement field, native space')
+
+
+class CreateNonlinearityDisplacementMap(CommandLine):
+    """Expand gradient coefficients into a displacement field.
+
+    The output is TORTOISE's ``gradwarp_field_inv``, which is what gets
+    composed and what resamples b=0 images. Do not invert it.
+    """
+
+    input_spec = _CreateNonlinearityDisplacementMapInputSpec
+    output_spec = _CreateNonlinearityDisplacementMapOutputSpec
+    _cmd = 'CreateNonlinearityDisplacementMap'
+
+    def _parse_inputs(self, skip=None):
+        parsed = super()._parse_inputs(skip=skip)
+        # ``is_GE=(bool)(argv[4])`` casts the pointer: ANY fourth argument is
+        # true. Omitting it is the only way to say false.
+        if self.inputs.is_ge:
+            parsed.append('1')
+        return parsed
+
+    def _list_outputs(self):
+        return {'out_field': op.abspath(self.inputs.out_field)}

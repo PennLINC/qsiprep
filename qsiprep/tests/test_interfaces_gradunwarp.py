@@ -14,7 +14,9 @@ import numpy as np
 import pytest
 
 from qsiprep.tests.gradient_fixtures import (
+    write_dwi_with_gradients,
     write_itk_field,
+    write_siemens_grad,
 )
 
 
@@ -70,3 +72,63 @@ def test_mask_warp_dimensions_does_not_modify_input(tmp_path):
     before = _components(field).copy()
     MaskWarpDimensions(in_file=str(field), warp_dim='1D').run(cwd=str(tmp_path))
     assert np.allclose(_components(field), before)
+
+
+def test_displacement_map_puts_coefficients_first(tmp_path):
+    """mk_displacement(argv[1], img, is_GE): coefficient file, then NIfTI.
+
+    A stale unbuilt copy of that source has the arguments reversed; getting
+    this backwards produces a plausible-looking wrong field, not an error.
+    """
+    from qsiprep.interfaces.gradunwarp import CreateNonlinearityDisplacementMap
+
+    coeff = write_siemens_grad(tmp_path / 'coeff.grad')
+    ref = write_dwi_with_gradients(tmp_path / 'ref.nii.gz')
+    iface = CreateNonlinearityDisplacementMap(coeff_file=str(coeff), ref_image=ref)
+
+    args = iface.cmdline.split()
+    assert args[0] == 'CreateNonlinearityDisplacementMap'
+    assert args[1] == str(coeff)
+    assert args[2] == ref
+
+
+def test_displacement_map_omits_is_ge_when_false(tmp_path):
+    """is_GE=(bool)(argv[4]) casts the pointer, so "0" would read as true.
+
+    The only way to express false is to pass no fourth argument at all.
+    """
+    from qsiprep.interfaces.gradunwarp import CreateNonlinearityDisplacementMap
+
+    coeff = write_siemens_grad(tmp_path / 'coeff.grad')
+    ref = write_dwi_with_gradients(tmp_path / 'ref.nii.gz')
+    iface = CreateNonlinearityDisplacementMap(coeff_file=str(coeff), ref_image=ref, is_ge=False)
+    assert len(iface.cmdline.split()) == 4
+
+
+def test_displacement_map_appends_is_ge_when_true(tmp_path):
+    from qsiprep.interfaces.gradunwarp import CreateNonlinearityDisplacementMap
+
+    coeff = write_siemens_grad(tmp_path / 'coeff.grad')
+    ref = write_dwi_with_gradients(tmp_path / 'ref.nii.gz')
+    iface = CreateNonlinearityDisplacementMap(coeff_file=str(coeff), ref_image=ref, is_ge=True)
+    args = iface.cmdline.split()
+    assert len(args) == 5
+    assert args[4] == '1'
+
+
+def test_displacement_map_runs_on_synthetic_coefficients(tmp_path):
+    """End-to-end against the real binary, in CI's container."""
+    from qsiprep.interfaces.gradunwarp import CreateNonlinearityDisplacementMap
+
+    _require('CreateNonlinearityDisplacementMap')
+    coeff = write_siemens_grad(tmp_path / 'coeff.grad')
+    ref = write_dwi_with_gradients(tmp_path / 'ref.nii.gz')
+    result = CreateNonlinearityDisplacementMap(coeff_file=str(coeff), ref_image=ref).run(
+        cwd=str(tmp_path)
+    )
+
+    field = nb.load(result.outputs.out_field)
+    assert field.shape[:3] == (8, 8, 8)
+    # A parsed coefficient file must produce a non-trivial field; an all-zero
+    # result means the .grad fixture did not parse.
+    assert np.abs(np.asanyarray(field.dataobj)).max() > 0
