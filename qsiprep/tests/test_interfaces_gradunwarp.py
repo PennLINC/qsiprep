@@ -8,6 +8,7 @@ guarded with ``shutil.which`` and skip when those binaries are absent. They are
 """
 
 import shutil
+from pathlib import Path
 
 import nibabel as nb
 import numpy as np
@@ -147,6 +148,42 @@ def test_bmatrix_cmdline_flags(tmp_path):
     assert f'-f {final}' in cmd
     assert f'-i {initial}' in cmd
     assert f'-g {coeff}' in cmd
+
+
+def test_bmatrix_final_image_is_staged_with_copyfile():
+    """copyfile=True is what makes nipype's Node stage final_image into the
+    node's working directory before running. Without it, the tool writes its
+    outputs beside the *original* final_image, not beside the copy that
+    _list_outputs assumes -- a bare Interface.run() never exercises staging,
+    so this has to be pinned on the trait metadata directly."""
+    from qsiprep.interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
+
+    trait = CreateGradientNonlinearityBMatrix.input_spec().traits()['final_image']
+    assert trait.copyfile is True
+
+
+def test_bmatrix_list_outputs_resolves_against_cwd(tmp_path, monkeypatch):
+    """_list_outputs must derive output paths from the *staged* final_image
+    (i.e. from cwd), not from final_image's original directory -- under a
+    real Node, copyfile=True stages the file into cwd, and this is the other
+    half of that contract. Put final_image in one directory, chdir into a
+    different one, and confirm the computed outputs land in cwd."""
+    from qsiprep.interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
+
+    original_dir = tmp_path / 'original'
+    original_dir.mkdir()
+    staged_dir = tmp_path / 'staged'
+    staged_dir.mkdir()
+
+    coeff = write_siemens_grad(tmp_path / 'coeff.grad')
+    final = write_dwi_with_gradients(original_dir / 'final_b0.nii.gz')
+
+    monkeypatch.chdir(staged_dir)
+    iface = CreateGradientNonlinearityBMatrix(final_image=final, nonlinearity=str(coeff))
+    outputs = iface._list_outputs()
+
+    assert Path(outputs['grad_dev']).parent == staged_dir
+    assert Path(outputs['gradwarp_field']).parent == staged_dir
 
 
 def test_bmatrix_is_ge_uses_a_value_not_omission(tmp_path):
