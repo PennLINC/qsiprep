@@ -39,7 +39,8 @@ class GroupingIssue:
 
     ``scope`` names the concatenation group (MultipartID) an issue belongs
     to, when it belongs to exactly one; reports use it to show each issue
-    under the right output.
+    under the right output. ``run`` names the execution-plan processing run
+    an issue is about, when it is about exactly one.
     """
 
     severity: str  # 'error' | 'warning'
@@ -47,6 +48,7 @@ class GroupingIssue:
     message: str
     files: tuple[str, ...] = ()
     scope: str | None = None
+    run: str | None = None
 
     def render(self) -> str:
         return f'{self.severity.upper()} [{self.code}]: {self.message}'

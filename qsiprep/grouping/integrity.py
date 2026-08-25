@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from .models import DWIGrouping, Provenance
 
-__all__ = ['check_model_integrity']
+__all__ = ['check_model_integrity', 'check_plan']
 
 
 def check_model_integrity(grouping: DWIGrouping) -> list[str]:
@@ -180,5 +180,96 @@ def check_model_integrity(grouping: DWIGrouping) -> list[str]:
                 f'{path} appears in {count} outputs, expected {expected} '
                 f'(MultipartID {list(record.multipart_id)!r})'
             )
+
+    return violations
+
+
+def check_plan(grouping, plan) -> list[str]:
+    """Every violated plan invariant, as human-readable strings (empty = OK).
+
+    A violation means the compiler broke its own model - never that the
+    user's data is wrong. ``plan`` is an
+    :class:`~qsiprep.grouping.plan.ExecutionPlan` compiled from ``grouping``.
+    """
+    from .plan import StageRole
+
+    violations: list[str] = []
+
+    # --- referential integrity -------------------------------------------
+    run_keys = [run.key for run in plan.runs]
+    if len(set(run_keys)) != len(run_keys):
+        violations.append('duplicate run keys')
+    for run in plan.runs:
+        if run.logical_unit not in grouping.correction_units:
+            violations.append(f"run '{run.key}' refines unknown unit '{run.logical_unit}'")
+        if run.estimation is not None and run.estimation.b0field_id not in grouping.estimations:
+            violations.append(
+                f"run '{run.key}' names unknown estimation '{run.estimation.b0field_id}'"
+            )
+
+    # --- runs cover every logical membership exactly once ----------------
+    files_of_unit: dict[str, list[str]] = {}
+    for run in plan.runs:
+        files_of_unit.setdefault(run.logical_unit, []).extend(run.dwi_files)
+    for unit_key, run_files in files_of_unit.items():
+        unit = grouping.correction_units.get(unit_key)
+        if unit is None:
+            continue
+        if sorted(run_files) != sorted(unit.dwi_files):
+            violations.append(
+                f"runs of unit '{unit_key}' cover {sorted(run_files)}, "
+                f'unit holds {sorted(unit.dwi_files)}'
+            )
+
+    # --- assemblies consume every run exactly once -----------------------
+    consumed: list[str] = []
+    for assembly in plan.outputs:
+        consumed.extend(assembly.input_runs)
+        for run_key in assembly.input_runs:
+            run = next((r for r in plan.runs if r.key == run_key), None)
+            if run is None:
+                violations.append(
+                    f"assembly '{assembly.output_name}' consumes unknown run '{run_key}'"
+                )
+            elif run.output_group != assembly.output_group:
+                violations.append(
+                    f"run '{run_key}' belongs to '{run.output_group}' but assembly "
+                    f"'{assembly.output_name}' covers '{assembly.output_group}'"
+                )
+        if assembly.strategy != 'none' and len(assembly.input_runs) < 2:
+            violations.append(
+                f"single-run assembly '{assembly.output_name}' has strategy "
+                f"'{assembly.strategy}', not identity"
+            )
+    if sorted(consumed) != sorted(run_keys):
+        violations.append('assemblies do not consume every run exactly once')
+    # Name uniqueness is suspended when the grouping already reported the
+    # collision as a data problem (mirroring check_model_integrity).
+    collision_reported = any(issue.code == 'output-name-collision' for issue in grouping.issues)
+    output_names = [assembly.output_name for assembly in plan.outputs]
+    if not collision_reported and len(set(output_names)) != len(output_names):
+        violations.append('duplicate assembly output names')
+
+    # --- stage sequences -------------------------------------------------
+    for run in plan.runs:
+        estimate_indices = set()
+        consumed_indices = set()
+        for position, stage in enumerate(run.stages):
+            if stage.index != position:
+                violations.append(f"run '{run.key}' stage {position} has index {stage.index}")
+            if stage.role is StageRole.ESTIMATE:
+                estimate_indices.add(stage.index)
+            if stage.consumes is not None:
+                consumed_indices.add(stage.consumes)
+                if stage.consumes >= stage.index:
+                    violations.append(
+                        f"run '{run.key}' stage {stage.index} consumes a later stage"
+                    )
+                elif run.stages[stage.consumes].role is not StageRole.ESTIMATE:
+                    violations.append(
+                        f"run '{run.key}' stage {stage.index} consumes a non-ESTIMATE stage"
+                    )
+        for index in estimate_indices - consumed_indices:
+            violations.append(f"run '{run.key}' ESTIMATE stage {index} is never consumed")
 
     return violations
