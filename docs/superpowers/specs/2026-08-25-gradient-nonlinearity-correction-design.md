@@ -382,3 +382,28 @@ the container.
 - `vbmat` output (full per-volume voxelwise b-matrix). At 6 components per
   volume it is impractical as a derivative, and `grad_dev` is what downstream
   tools consume.
+
+### Known limitations, found during implementation
+
+Both are second-order placement errors of the same kind as the eddy+TOPUP
+carve-out this design already accepts. Each deserves its own follow-up spec.
+
+- **DIFFPREP's `T2Wreg` path is not gradwarp-corrected.** Its EPI field is
+  estimated *inside* the `TORTOISEProcess` binary, so there is no hand-off for
+  qsiprep to interpose gradwarp-corrected inputs on — yet the resulting
+  `sdc_warp` is applied downstream of gradwarp like every other SDC warp.
+  Correcting it means plumbing `--grad_nonlin` through the DIFFPREP interface,
+  which reverses this design's decision to use the standalone tools. Affects
+  only `--hmc-model tortoise` with fieldmap-less T2Wreg SDC. Recorded in code
+  at the branch itself.
+
+- **The b0→T1w coregistration reference is not gradwarp-consistent across
+  backends.** `ComposeTransforms` applies the coregistration affine *after*
+  gradwarp, but `b0_template` — the image `b0_coreg_wf` estimates that affine
+  from — is gradwarp-corrected only on the DRBUDDI and GRE/SyN branches, as a
+  side effect of correcting their SDC estimation inputs. It stays raw on the
+  TOPUP-only branch, the fsl/diffprep no-fieldmap branches, and the T2Wreg
+  branch. The five branches are therefore mutually inconsistent. Making them
+  consistent means touching the TOPUP branch this design deliberately carves
+  out and the T2Wreg branch that cannot be reached at all, so it is not a
+  local fix.
