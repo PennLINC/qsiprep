@@ -34,14 +34,19 @@ def _config():
 
 
 def _build(num_additional_t2ws, name):
+    from qsiprep import config
+    from qsiprep.utils.spaces import select_acpc_anchor
     from qsiprep.workflows.anatomical.volume import init_anat_preproc_wf
 
     _config()
+    output_spaces = config.workflow.parsed_output_spaces()
     return init_anat_preproc_wf(
         num_anat_images=2,
         num_additional_t2ws=num_additional_t2ws,
         has_rois=False,
-        anatomical_template='MNI152NLin2009cAsym',
+        output_spaces=output_spaces,
+        acpc_anchor=select_acpc_anchor(output_spaces),
+        acpc_specs=[s for s in output_spaces if not s.standard],
         name=name,
     )
 
