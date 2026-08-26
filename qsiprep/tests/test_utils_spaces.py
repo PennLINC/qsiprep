@@ -200,3 +200,99 @@ def test_parser_rejects_a_bad_token(tmp_path, capsys):
     with pytest.raises(SystemExit):
         parser.parse_args(_min_args(tmp_path, '--output-spaces', 'acpc:res-2'))
     assert 'acpc:res-2mm' in capsys.readouterr().err
+
+
+def test_parser_accumulates_repeated_flags(tmp_path):
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    opts = parser.parse_args(
+        _min_args(
+            tmp_path,
+            '--output-spaces', 'acpc:res-2mm',
+            '--output-spaces', 'MNI152NLin2009cAsym',
+        )
+    )
+    assert opts.output_spaces == ['acpc:res-2mm', 'MNI152NLin2009cAsym']
+
+
+def _parse(tmp_path, *extra):
+    from qsiprep.cli.parser import _build_parser
+
+    return _build_parser().parse_args(_min_args(tmp_path, *extra))
+
+
+def test_output_resolution_forwards(tmp_path):
+    from qsiprep.cli.parser import _apply_output_space_deprecations
+
+    opts = _parse(tmp_path, '--output-resolution', '2')
+    _apply_output_space_deprecations(opts)
+    assert opts.output_spaces == ['acpc:res-2mm', 'MNI152NLin2009cAsym']
+
+
+def test_output_resolution_decimal_forwards(tmp_path):
+    from qsiprep.cli.parser import _apply_output_space_deprecations
+
+    opts = _parse(tmp_path, '--output-resolution', '1.5')
+    _apply_output_space_deprecations(opts)
+    assert opts.output_spaces[0] == 'acpc:res-1p5mm'
+
+
+def test_output_resolution_forwards_infant_template(tmp_path):
+    from qsiprep.cli.parser import _apply_output_space_deprecations
+
+    opts = _parse(tmp_path, '--output-resolution', '2', '--infant')
+    _apply_output_space_deprecations(opts)
+    assert opts.output_spaces == ['acpc:res-2mm', 'MNIInfant:cohort-auto']
+
+
+def test_skip_normalization_drops_standard_spaces(tmp_path):
+    from qsiprep.cli.parser import _apply_output_space_deprecations
+
+    opts = _parse(
+        tmp_path, '--output-resolution', '2', '--skip-anat-based-spatial-normalization'
+    )
+    _apply_output_space_deprecations(opts)
+    assert opts.output_spaces == ['acpc:res-2mm']
+
+
+def test_old_and_new_together_is_an_error(tmp_path):
+    from qsiprep.cli.parser import _apply_output_space_deprecations
+
+    opts = _parse(
+        tmp_path, '--output-resolution', '2', '--output-spaces', 'acpc:res-2mm'
+    )
+    with pytest.raises(SystemExit):
+        _apply_output_space_deprecations(opts)
+
+
+def test_infant_adds_the_infant_template(tmp_path):
+    from qsiprep.cli.parser import _apply_output_space_deprecations
+
+    opts = _parse(tmp_path, '--output-spaces', 'acpc:res-2mm', '--infant')
+    _apply_output_space_deprecations(opts)
+    assert opts.output_spaces == ['acpc:res-2mm', 'MNIInfant:cohort-auto']
+
+
+def test_infant_does_not_duplicate_an_explicit_infant_template(tmp_path):
+    from qsiprep.cli.parser import _apply_output_space_deprecations
+
+    opts = _parse(tmp_path, '--output-spaces', 'acpc:res-2mm', 'MNIInfant:cohort-3', '--infant')
+    _apply_output_space_deprecations(opts)
+    assert opts.output_spaces == ['acpc:res-2mm', 'MNIInfant:cohort-3']
+
+
+def test_missing_acpc_is_an_error(tmp_path):
+    from qsiprep.cli.parser import _apply_output_space_deprecations
+
+    opts = _parse(tmp_path, '--output-spaces', 'MNI152NLin2009cAsym')
+    with pytest.raises(SystemExit):
+        _apply_output_space_deprecations(opts)
+
+
+def test_nothing_given_at_all_is_an_error(tmp_path):
+    from qsiprep.cli.parser import _apply_output_space_deprecations
+
+    opts = _parse(tmp_path)
+    with pytest.raises(SystemExit):
+        _apply_output_space_deprecations(opts)
