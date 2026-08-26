@@ -2246,8 +2246,16 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ## Task 12: DWI resampling fan-out and the `res-` entity rule
 
 **Files:**
-- Modify: `qsiprep/workflows/dwi/finalize.py:180-330`
+- Modify: `qsiprep/workflows/dwi/finalize.py:180-330`, `qsiprep/workflows/dwi/derivatives.py`
 - Test: `qsiprep/tests/test_output_spaces_naming.py`
+
+**Constraint added after the Task 5 review:** the ACPC DWI datasinks live in
+`qsiprep/workflows/dwi/derivatives.py`, not in `finalize.py`, so the `res-` entity rule
+is applied there. Task 5's guard calls `init_dwi_derivatives_wf(source_file=...)` with
+a single argument and asserts no `res` entity on a single-resolution run. Any
+resolution parameter added here MUST be optional with a default that preserves that
+call form and that behavior — the guard is not to be edited to accommodate a signature
+change.
 
 **Interfaces:**
 - Consumes: `dwi_sampling_grid` (list) from Task 11, `init_dwi_trans_wf(resolution=...)` from Task 8.
