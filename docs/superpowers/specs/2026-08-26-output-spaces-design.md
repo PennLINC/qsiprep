@@ -63,6 +63,7 @@ validates cohorts against `TF_LAYOUT.get_cohorts()`.
 | Old flags | Warn and forward for one release, then remove. |
 | Multiple `acpc` resolutions | Allowed. Each produces its own grid and its own resampled DWI. |
 | `res-` entity on ACPC DWI | Only when more than one ACPC resolution was requested. |
+| The bundled SyN-SDC fieldmap atlas | Stays bundled (no TemplateFlow equivalent); add a NOTICE entry and track contributing it upstream separately. |
 
 ## Approach
 
@@ -268,7 +269,49 @@ place a `res-nativemax` run reports what `nativemax` actually turned out to be.
 `_template_to_report_entities` generalizes to handle it. The summary reportlet names
 every requested space.
 
-## 6. Errors
+## 6. TemplateFlow sourcing and orientation
+
+QSIPrep's preferred orientation is **LPS+**. `interfaces/niworkflows.py:47` states that
+"qsiprep forces LPS", and the existing reorientation nodes use
+`afni.Resample(orientation='RAI')`, which is AFNI's spelling of LPS+.
+
+### Templates are already TemplateFlow-sourced
+
+`GetTemplate` (`interfaces/anatomical.py:214`) already calls `templateflow.api.get` for
+both the template image and its brain mask. No anatomical template is bundled. The only
+NIfTI in `qsiprep/data` is `mni_lps_fmap_atlas.nii.gz`, which is not a template:
+
+- 193x229x193, 1 mm, LPS+ (the MNI152NLin2009cAsym res-01 grid)
+- value range -2.8 to 10.65 -- negative values, so a fieldmap (the Treiber et al.
+  average field behind fMRIPrep's fieldmap-less approach), not an intensity image
+- used only by `syn_sdc_wf`, where `ThreshAndBin` thresholds it at 2 and binarizes it
+  into a registration mask
+
+It has **no TemplateFlow equivalent**. The nearest candidate,
+`tpl-MNI152NLin2009cAsym_res-02_desc-fMRIPrep_boldref`, correlates 0.66 with it after
+resampling and ranges 0-1352 with no negatives -- an average EPI reference, a different
+image. `git log --follow` shows the file landed in 2018 with no NOTICE entry.
+
+**Decision:** keep it bundled, add the missing provenance and attribution entry to
+`qsiprep/data/NOTICE`, and open a separate issue to contribute it to TemplateFlow.
+It is a fieldmap-less SDC registration mask and is unrelated to output spaces, so it
+does not block this work.
+
+### Two changes the multi-space design does need
+
+**`GetTemplate` is res- and cohort-blind.** It hardcodes `resolution='1'`. It takes the
+resolved `SpaceSpec` instead, so a `res-` spec on a standard space selects the
+corresponding TemplateFlow grid, and the cohort comes from the spec rather than from
+splitting a `template+cohort` string.
+
+**LPS reorientation is hardcoded to the anchor.** `reorient_tpl_brain_to_lps` and
+`reorient_tpl_mask_to_lps` (`workflows/anatomical/volume.py:200-206`) exist only for the
+ACPC anchor pair. They become a small reusable sub-workflow applied to every requested
+standard space, so every anatomical output QSIPrep writes is LPS+, matching the rest of
+its derivatives. Standard-space outputs are therefore written in LPS+ rather than
+TemplateFlow's native RAS+.
+
+## 7. Errors
 
 All of the following fail at CLI parse time via `parser.error`, so nothing dies an hour
 into a run:
@@ -286,7 +329,7 @@ Only two errors cannot be caught there, both raised in `init_single_subject_wf`:
 not found for a `cohort-auto` space, and the existing multi-session restriction. Both
 name the space that triggered them.
 
-## 7. Testing
+## 8. Testing
 
 - `qsiprep/tests/test_utils_spaces.py` — a parametrized accept/reject table over the
   grammar. Pure functions; no BIDS tree, no TemplateFlow downloads beyond the cohort
@@ -302,7 +345,7 @@ name the space that triggered them.
 - Workflow-build tests — N grids and N `dwi_trans_wf`s for N ACPC specs; N
   normalization workflows for N standard spaces.
 
-## 8. Migration surface
+## 9. Migration surface
 
 27 files reference `output_resolution` or `--output-resolution`:
 
@@ -319,9 +362,14 @@ name the space that triggered them.
   `workflows/anatomical/volume.py`, `workflows/dwi/finalize.py`,
   `workflows/dwi/resampling.py`.
 
+Additionally, outside the `output_resolution` grep: `interfaces/anatomical.py`
+(`GetTemplate`, `VoxelSizeChooser`) and `qsiprep/data/NOTICE`.
+
 ## Out of scope
 
 - Resampling DWI into standard spaces. QSIPrep writes preprocessed DWI in ACPC space
   only.
 - QSIRecon's consumption of the new transforms and multi-resolution ACPC outputs.
 - Surface spaces (`fsaverage`, `fsLR`). QSIPrep has no surface outputs.
+- Contributing `mni_lps_fmap_atlas.nii.gz` to TemplateFlow. Tracked separately; the
+  file stays bundled, with a NOTICE entry added here.
