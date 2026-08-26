@@ -26,9 +26,9 @@ def method_selection_from_config() -> MethodSelection:
     if config.workflow.hmc_method == 'shoreline' and config.workflow.shoreline_model:
         # 'shoreline' alone defaults to 3dshore; honor the configured model.
         hmc = config.workflow.shoreline_model
+    # SDC method only; the fieldmap-less choices (--use-syn-sdc, --force
+    # t2wreg) are grouping policy, applied in build_dwi_grouping, not here.
     return selection_for_config(
         hmc,
         config.workflow.sdc_method or config.workflow.pepolar_method,
-        use_syn=bool(config.workflow.use_syn_sdc),
-        force_t2wreg='t2wreg' in (config.workflow.force or ()),
     )

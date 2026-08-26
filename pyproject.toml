@@ -35,10 +35,7 @@ dependencies = [
     "psutil <= 5.9.8",
     "pybids >= 0.15.0, < 0.16.0",
     "pyyaml",
-    # the grouping/plan compiler; qsiprep/grouping is a shim over it. The
-    # 0.1.x bound is a behavior contract: golden tests pin plan routing and
-    # issue text byte-for-byte, so a minor bump must come with a review here.
-    "qsiplan >= 0.1.0, < 0.2",
+    "qsiplan >= 0.2.0, < 0.3",
     "scikit-image",
     "scikit-learn <= 1.4.0",
     "seaborn",

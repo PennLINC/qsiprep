@@ -31,6 +31,7 @@ qsiprep base processing workflows
 
 """
 
+import dataclasses
 import os
 import sys
 from collections import defaultdict
@@ -42,6 +43,7 @@ from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from packaging.version import Version
 from qsiplan.adapters import plan_concatenation_scheme, plan_preproc_units
+from qsiplan.cli_spec import policy_from_namespace
 from qsiplan.plan import compile_plan
 
 from .. import config
@@ -344,17 +346,11 @@ to workflows in *QSIPrep*'s documentation]\
 
     # Group the subject's DWI scans from BIDS metadata alone,
     # then compile the execution plan for the selected methods.
+    # The grouping policy comes from the single spec qsiplan and qsiprep share.
     grouping = build_dwi_grouping(
         layout=config.execution.layout,
         subject_data=subject_data,
-        separate_all_dwis=config.workflow.separate_all_dwis,
-        ignore_fieldmaps='fieldmaps' in config.workflow.ignore,
-        ignore_shims='shims' in config.workflow.ignore,
-        ignore_fov='fov' in config.workflow.ignore,
-        ignore_sdc='sdc' in config.workflow.ignore,
-        force_t2wreg='t2wreg' in (config.workflow.force or ()),
-        use_nipreps_syn_sdc=bool(config.workflow.use_syn_sdc),
-        distortion_group_merge=config.workflow.distortion_group_merge,
+        **dataclasses.asdict(policy),
         b0_threshold=config.workflow.b0_threshold,
         strict=False,
     )

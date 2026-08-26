@@ -379,6 +379,8 @@ def test_prefer_dedicated_fmaps_warns_and_is_ignored(minimal_args, capsys):
     assert '--prefer-dedicated-fmaps' in warning
     assert 'no effect' in warning
     assert 'B0FieldIdentifier' in warning
+    # It now points at the flag that actually does what it was meant to.
+    assert '--ignore pepolar-dwis' in warning
     assert not hasattr(opts, 'prefer_dedicated_fmaps')
 
 
