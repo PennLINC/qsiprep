@@ -407,3 +407,22 @@ def test_resolve_output_spaces_reads_the_age_once(monkeypatch):
     )
     spaces_mod.resolve_output_spaces(specs, 'bids', '01', None)
     assert len(calls) == 1
+
+
+def test_resolve_output_spaces_errors_when_age_exceeds_all_cohorts(monkeypatch):
+    from qsiprep.utils import spaces as spaces_mod
+
+    monkeypatch.setattr(spaces_mod, '_age_in_months', lambda *a, **k: 61)
+    specs = parse_output_spaces(['acpc:res-2mm', 'MNIInfant:cohort-auto'])
+    with pytest.raises(OutputSpacesError, match='61'):
+        spaces_mod.resolve_output_spaces(specs, 'bids', '01', None)
+
+
+def test_select_acpc_anchor_is_order_independent():
+    from qsiprep.utils.spaces import select_acpc_anchor
+
+    forward = parse_output_spaces(['acpc:res-2mm', 'MNIInfant:cohort-3', 'UNCInfant:cohort-2'])
+    reverse = parse_output_spaces(['acpc:res-2mm', 'UNCInfant:cohort-2', 'MNIInfant:cohort-3'])
+    forward_anchor = select_acpc_anchor(forward).fullname
+    reverse_anchor = select_acpc_anchor(reverse).fullname
+    assert forward_anchor == reverse_anchor == 'MNIInfant+3'
