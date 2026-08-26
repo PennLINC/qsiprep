@@ -380,5 +380,15 @@ def test_diffprep_sdc_uses_the_acpc_anchor(tmp_path, monkeypatch):
     assert not hasattr(config.workflow, 'anatomical_template')
 
 
+def test_template_lps_wf_reorients_to_lps():
+    from qsiprep.workflows.anatomical.volume import init_template_lps_wf
+
+    wf = init_template_lps_wf()
+    # AFNI spells LPS+ as RAI.
+    assert wf.get_node('reorient_brain').inputs.orientation == 'RAI'
+    assert wf.get_node('reorient_mask').inputs.orientation == 'RAI'
+    assert wf.get_node('outputnode') is not None
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
