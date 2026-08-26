@@ -723,8 +723,17 @@ voxel *position*).
 .. note::
    **Known limitations**
 
-   Both of the following are second-order registration effects of the same
-   kind as the ``eddy``/``TOPUP`` estimation-order exception described above.
+   - **No gradient deviation map is written under
+     ``--distortion-group-merge``.** When distortion groups are merged, the
+     final derivatives for that output are written by
+     :func:`~qsiprep.workflows.dwi.distortion_group_merge.init_distortion_group_merge_wf`,
+     which has no gradient-deviation step, so neither ``*_graddev.nii.gz`` nor
+     the ``GradientWarpDimensions`` sidecar key is produced for it. The
+     spatial gradwarp correction is still applied to the merged data. QSIPrep
+     logs a warning naming each affected output.
+
+   The remaining two are second-order registration effects of the same kind
+   as the ``eddy``/``TOPUP`` estimation-order exception described above.
    Neither affects the primary spatial or diffusion-encoding correction; both
    are limited to *where a downstream registration reference happens to be
    gradwarp-corrected or not*.

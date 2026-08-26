@@ -296,7 +296,8 @@ not a `dwimap`, which in QSIPrep denotes a derived map of the tissue
 (`model-eddy_stat-cnr_dwimap`); grad_dev describes the scanner.
 
 It is written whenever `--gradient-file` is given and `--ignore gradients` is
-absent, including the `DIS3D` case — which is the point of separating the two
+absent, including the `DIS3D` case (but see the `--distortion-group-merge` gap
+under Known limitations) — which is the point of separating the two
 outputs.
 
 Its JSON sidecar records:
@@ -405,8 +406,18 @@ the container.
 
 ### Known limitations, found during implementation
 
-Both are second-order placement errors of the same kind as the eddy+TOPUP
-carve-out this design already accepts. Each deserves its own follow-up spec.
+The first is a coverage gap; the other two are second-order placement errors of
+the same kind as the eddy+TOPUP carve-out this design already accepts. Each
+deserves its own follow-up spec.
+
+- **`graddev` is not written under `--distortion-group-merge`.** The grad_dev
+  node lives in `init_dwi_finalize_wf` behind its `write_derivatives` guard, and
+  merging distortion groups sets `write_derivatives=False` for the per-unit
+  finalize; the merge workflow that does write those derivatives has no grad_dev
+  node and no `GradientWarpDimensions` sidecar key. The spatial correction still
+  applies. Emitting grad_dev from the merge workflow opens a workflow this
+  design otherwise never touches, so it is deferred; qsiprep logs a warning
+  naming each affected output, and `docs/usage.rst` records it.
 
 - **DIFFPREP's `T2Wreg` path is not gradwarp-corrected.** Its EPI field is
   estimated *inside* the `TORTOISEProcess` binary, so there is no hand-off for

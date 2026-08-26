@@ -173,8 +173,8 @@ Diffusion-encoding (gradient deviation) correction
 
 Independently of the spatial correction, a voxelwise gradient deviation map
 is written as ``*_space-ACPC_graddev.nii.gz`` whenever ``--gradient-file`` is
-given and ``--ignore gradients`` is absent -- **including for runs tagged
-``DIS3D``**. No scanner can correct the diffusion encoding itself: the
+given and ``--ignore gradients`` is absent -- **including for runs tagged**
+``DIS3D``. No scanner can correct the diffusion encoding itself: the
 bval/bvec table holds a single value per volume and has nowhere to record
 information that varies across the image. At each voxel, the gradient
 actually applied is ``L @ g``, where ``g`` is the nominal gradient vector and
@@ -183,6 +183,14 @@ captures scaling and shear rather than a pure rotation, both the b-vector
 *and* the b-value deviate per voxel, not just the direction. The deviation
 map holds this 3x3 matrix, in row-major order, as 9 volumes; downstream tools
 that consume a gradient deviation file (e.g. DSI Studio) can use it directly.
+
+.. warning::
+   The deviation map is **not** written for outputs produced by
+   ``--distortion-group-merge``. Those outputs are assembled by a separate
+   merge workflow that has no gradient-deviation step, so neither
+   ``*_graddev.nii.gz`` nor the ``GradientWarpDimensions`` sidecar key is
+   written for them. The spatial gradwarp correction is still applied to the
+   data. QSIPrep logs a warning naming each affected output.
 
 For details on where gradient nonlinearity correction sits in the DWI
 pipeline, how it differs by head-motion/distortion-correction backend, and
