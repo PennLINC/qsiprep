@@ -239,13 +239,21 @@ disk.
 
 **`init_gradwarp_wf(unit)`** in `qsiprep/workflows/dwi/gradwarp.py` chains the
 first two and exposes `outputnode.gradwarp_field`, carrying the resolved `.plan`
-for the report and the methods boilerplate. When the plan resolves to
-grad_dev-only (`DIS3D`) it builds **no nodes at all**. Nothing resamples through
-a field for such a unit, and the grad_dev node in `finalize` is fed the
-*coefficient* file rather than a field (`CreateGradientNonlinearityBMatrix`
-accepts either), so generating one here would invoke an external binary per unit
-and discard both of its outputs. The workflow object still exists — and is still
-added to the parent graph — so the plan and the `DIS3D` boilerplate survive.
+for the report and the methods boilerplate. It builds only nodes whose outputs
+are consumed:
+
+- When the plan resolves to grad_dev-only (`DIS3D`), it builds **no nodes at
+  all**. Nothing resamples through a field for such a unit, and the grad_dev
+  node in `finalize` is fed the *coefficient* file rather than a field
+  (`CreateGradientNonlinearityBMatrix` accepts either), so generating one here
+  would invoke an external binary per unit and discard both of its outputs. The
+  workflow object still exists — and is still added to the parent graph — so the
+  plan and the `DIS3D` boilerplate survive.
+- When `--gradient-file` is a `.nii`/`.nii.gz` ITK displacement field rather
+  than a coefficient file, `CreateNonlinearityDisplacementMap` is skipped and
+  the file feeds `MaskWarpDimensions` directly. That binary *is* the coefficient
+  expander and does no extension dispatch of its own — TORTOISE branches on the
+  extension in `TORTOISE.cxx:1943-2023`, before ever calling it.
 
 `init_gradwarp_wf` sets `.needs_reference` to say whether
 `inputnode.ref_image` is consumed, so `base.py` knows whether to build the 3D

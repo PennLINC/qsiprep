@@ -78,6 +78,58 @@ def test_gradwarp_wf_builds_no_field_for_dis3d(tmp_path):
     assert wf.needs_reference is False
 
 
+def test_gradwarp_wf_skips_make_field_for_a_displacement_field_input(tmp_path):
+    """A ``.nii`` --gradient-file is already a field.
+
+    ``CreateNonlinearityDisplacementMap`` is the *coefficient expander* and
+    does no extension dispatch of its own (TORTOISE branches on the extension
+    before ever calling it), so handing it a binary NIfTI would feed a text
+    parser -- either throwing, or silently yielding an all-zero field.
+    """
+    import nibabel as nb
+    import numpy as np
+
+    from qsiprep.workflows.dwi.gradwarp import init_gradwarp_wf
+
+    field = tmp_path / 'gradwarp_field.nii.gz'
+    nb.Nifti1Image(np.zeros((4, 4, 4, 1, 3), dtype='float32'), np.eye(4)).to_filename(str(field))
+    config.workflow.gradient_file = str(field)
+    wf = init_gradwarp_wf(_unit(tmp_path))
+
+    assert wf.get_node('make_field') is None
+    assert wf.needs_reference is False
+    # The supplied field goes straight into the dimension mask.
+    assert wf.get_node('mask_field').inputs.in_file == str(field)
+
+
+def test_gradwarp_wf_builds_make_field_for_a_coefficient_input(tmp_path):
+    """The other half of the dispatch: coefficients still need expanding."""
+    from qsiprep.workflows.dwi.gradwarp import init_gradwarp_wf
+
+    config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
+    wf = init_gradwarp_wf(_unit(tmp_path))
+
+    assert wf.get_node('make_field') is not None
+    assert wf.needs_reference is True
+
+
+@pytest.mark.parametrize(
+    ('gradient_file', 'expected'),
+    [
+        ('/opt/coeff.grad', False),
+        ('/opt/coeff.dat', False),
+        ('/opt/coeff.gc', False),
+        ('/opt/field.nii', True),
+        ('/opt/field.nii.gz', True),
+    ],
+)
+def test_is_displacement_field_covers_every_accepted_extension(gradient_file, expected):
+    """Every extension --gradient-file accepts must land on one branch."""
+    from qsiprep.workflows.dwi.gradwarp import is_displacement_field
+
+    assert is_displacement_field(gradient_file) is expected
+
+
 def test_gradwarp_wf_passes_is_ge_through(tmp_path):
     from qsiprep.workflows.dwi.gradwarp import init_gradwarp_wf
 
@@ -346,6 +398,35 @@ def test_dwi_preproc_wf_dis3d_report_line_survives(tmp_path):
     wf = _preproc_wf(tmp_path, image_type=['ORIGINAL', 'DIS3D'])
 
     assert wf.get_node('summary').inputs.gradient_correction == 'b-matrix only (ImageType: DIS3D)'
+
+
+def test_dwi_preproc_wf_skips_the_reference_node_for_a_displacement_field(tmp_path):
+    """A supplied ITK field is already on its own grid; nothing to extract."""
+    import nibabel as nb
+    import numpy as np
+
+    from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
+
+    _dwi_preproc_cfg(tmp_path)
+    field = tmp_path / 'gradwarp_field.nii.gz'
+    nb.Nifti1Image(np.zeros((4, 4, 4, 1, 3), dtype='float32'), np.eye(4)).to_filename(str(field))
+    config.workflow.gradient_file = str(field)
+    dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz')
+    unit = make_preproc_unit([dwi], metadata={'Manufacturer': 'SIEMENS'})
+    wf = init_dwi_preproc_wf(
+        unit,
+        t2w_sdc=False,
+        output_prefix='sub-01',
+        source_file=dwi,
+        anatomical_template='MNI152NLin2009cAsym',
+    )
+
+    assert wf.get_node('gradwarp_ref') is None
+    # The field is still wired into resampling: only the field *builder* went.
+    gradwarp_wf = wf.get_node('gradwarp_wf')
+    edge = wf._graph.get_edge_data(gradwarp_wf, wf.get_node('outputnode'))
+    assert edge is not None
+    assert ('outputnode.gradwarp_field', 'gradwarp_field') in edge['connect']
 
 
 def test_dwi_preproc_wf_without_gradient_file_has_no_gradwarp_wf(tmp_path):

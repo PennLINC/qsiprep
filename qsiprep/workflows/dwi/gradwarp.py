@@ -158,18 +158,35 @@ def describe_gradient_correction(plan):
     return _REPORT_TEXT[plan.warp_dim]
 
 
+def is_displacement_field(gradient_file):
+    """True when ``--gradient-file`` is a ready-made ITK field, not coefficients.
+
+    TORTOISE dispatches on the extension itself (``TORTOISE.cxx:1943-2023``),
+    but the standalone ``CreateNonlinearityDisplacementMap`` does not: it *is*
+    the coefficient expander (``mk_displacement(argv[1], img, is_GE)``), so
+    handing it a binary NIfTI feeds a text parser, which either throws or
+    yields zero coefficients and an all-zero field.
+    """
+    return str(gradient_file).endswith(('.nii', '.nii.gz'))
+
+
 def init_gradwarp_wf(unit, name='gradwarp_wf'):
     """Build the gradwarp displacement field for one correction unit.
 
     Returns ``None`` when no gradient correction was requested. Otherwise the
     returned workflow always carries the resolved ``.plan`` and the methods
-    boilerplate that goes with it, but it builds **no nodes at all** when
-    ``plan.warp_dim is None`` (the scanner already applied full 3D gradwarp,
-    ``DIS3D``). Nothing resamples through a field for such a unit, and
-    ``finalize``'s ``grad_dev`` node is fed the *coefficient* file rather than
-    a field, so building one here would invoke an external binary per unit and
-    discard both of its outputs. The workflow still exists so callers keep the
-    plan, and so the ``DIS3D`` boilerplate still reaches the methods section.
+    boilerplate that goes with it, but it only builds the nodes whose outputs
+    are actually consumed:
+
+    * ``plan.warp_dim is None`` (the scanner already applied full 3D gradwarp,
+      ``DIS3D``): no nodes at all. Nothing resamples through a field for such a
+      unit, and ``finalize``'s ``grad_dev`` node is fed the *coefficient* file
+      rather than a field, so building one here would invoke an external
+      binary per unit and discard both of its outputs. The workflow still
+      exists so callers keep the plan, and so the ``DIS3D`` boilerplate still
+      reaches the methods section.
+    * a ``.nii``/``.nii.gz`` ``--gradient-file``: no ``make_field``. The user
+      supplied the displacement field, so only the dimension masking applies.
 
     ``.needs_reference`` says whether ``inputnode.ref_image`` is consumed, so a
     caller knows whether to build the 3D extraction node that feeds it.
@@ -186,19 +203,24 @@ def init_gradwarp_wf(unit, name='gradwarp_wf'):
     if plan.warp_dim is None:
         return workflow
 
-    workflow.needs_reference = True
-    inputnode = pe.Node(niu.IdentityInterface(fields=['ref_image']), name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(fields=['gradwarp_field']), name='outputnode')
-
-    make_field = pe.Node(
-        CreateNonlinearityDisplacementMap(coeff_file=plan.coeff_file, is_ge=plan.is_ge),
-        name='make_field',
-    )
     mask_field = pe.Node(MaskWarpDimensions(warp_dim=plan.warp_dim), name='mask_field')
 
+    if is_displacement_field(plan.coeff_file):
+        mask_field.inputs.in_file = plan.coeff_file
+    else:
+        workflow.needs_reference = True
+        inputnode = pe.Node(niu.IdentityInterface(fields=['ref_image']), name='inputnode')
+        make_field = pe.Node(
+            CreateNonlinearityDisplacementMap(coeff_file=plan.coeff_file, is_ge=plan.is_ge),
+            name='make_field',
+        )
+        workflow.connect([
+            (inputnode, make_field, [('ref_image', 'ref_image')]),
+            (make_field, mask_field, [('out_field', 'in_file')]),
+        ])  # fmt:skip
+
     workflow.connect([
-        (inputnode, make_field, [('ref_image', 'ref_image')]),
-        (make_field, mask_field, [('out_field', 'in_file')]),
         (mask_field, outputnode, [('out_file', 'gradwarp_field')]),
     ])  # fmt:skip
 
