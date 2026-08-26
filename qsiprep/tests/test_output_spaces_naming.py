@@ -19,6 +19,22 @@ EXPECTED_ANAT_ENTITIES = {
     'ds_t1_mni_inv_warp': {'from': 'MNI152NLin2009cAsym', 'to': 'ACPC', 'suffix': 'xfm'},
     'ds_t1_template_acpc_transforms': {'from': 'anat', 'to': 'ACPC', 'suffix': 'xfm'},
     'ds_t1_template_acpc_inv_transforms': {'from': 'ACPC', 'to': 'anat', 'suffix': 'xfm'},
+    'ds_t1_template_transforms': {'from': 'orig', 'to': 'anat', 'suffix': 'xfm'},
+}
+
+# node name -> the entities that end up in its filename, for a single-acpc run
+# with the default (non-3dSHORE) hmc_model. Built from what
+# init_dwi_derivatives_wf('/data/.../dwi.nii.gz') actually emits today.
+EXPECTED_DWI_ENTITIES = {
+    'ds_dwi_t1': {'space': 'ACPC', 'desc': 'preproc', 'suffix': 'dwi'},
+    'ds_bvals_t1': {'space': 'ACPC', 'desc': 'preproc', 'suffix': 'dwi'},
+    'ds_bvecs_t1': {'space': 'ACPC', 'desc': 'preproc', 'suffix': 'dwi'},
+    'ds_t1_b0_ref': {'space': 'ACPC', 'suffix': 'dwiref'},
+    'ds_dwi_mask_t1': {'space': 'ACPC', 'desc': 'brain', 'suffix': 'mask'},
+    'ds_cnr_map_t1': {'space': 'ACPC', 'suffix': 'dwimap'},
+    'ds_gradient_table_t1': {'space': 'ACPC', 'desc': 'preproc', 'suffix': 'dwi'},
+    'ds_btable_t1': {'space': 'ACPC', 'desc': 'preproc', 'suffix': 'dwi'},
+    'ds_tsnr': {'space': 'ACPC', 'suffix': 'dwimap'},
 }
 
 
@@ -75,5 +91,40 @@ def test_single_acpc_writes_no_res_entity(single_acpc_config):
 
     acpc_nodes = {n: e for n, e in found.items() if e.get('space') == 'ACPC'}
     assert acpc_nodes, 'expected some ACPC-space derivatives'
+    for node_name, entities in acpc_nodes.items():
+        assert 'res' not in entities, f'{node_name} gained a res- entity on a single-acpc run'
+
+
+@pytest.fixture
+def dwi_config():
+    config.execution.output_dir = '/tmp/qsiprep-naming-test'
+    config.workflow.hmc_model = 'tortoise'
+    config.workflow.write_local_bvecs = False
+    return config
+
+
+def test_single_acpc_dwi_derivative_names(dwi_config):
+    """QSIRecon's primary input is the preprocessed DWI -- this must never rename it.
+
+    Unlike the anatomical tests above, ``init_dwi_derivatives_wf`` still takes only
+    ``source_file`` today, and Task 12's added resolution parameter must default to
+    keeping this one-argument call form working. So this test is NOT xfail: it must
+    pass now and keep passing.
+    """
+    from qsiprep.workflows.dwi.derivatives import init_dwi_derivatives_wf
+
+    wf = init_dwi_derivatives_wf(source_file='/data/sub-01/ses-1/dwi/sub-01_ses-1_dwi.nii.gz')
+    found = collect_datasink_entities(wf)
+
+    assert found, 'expected some DerivativesDataSink nodes in the dwi derivatives workflow'
+    for node_name, expected in EXPECTED_DWI_ENTITIES.items():
+        assert node_name in found, f'{node_name} disappeared from the derivatives workflow'
+        for key, value in expected.items():
+            assert found[node_name].get(key) == value, (
+                f'{node_name}: {key} is {found[node_name].get(key)!r}, expected {value!r}'
+            )
+
+    acpc_nodes = {n: e for n, e in found.items() if e.get('space') == 'ACPC'}
+    assert acpc_nodes, 'expected some ACPC-space dwi derivatives'
     for node_name, entities in acpc_nodes.items():
         assert 'res' not in entities, f'{node_name} gained a res- entity on a single-acpc run'
