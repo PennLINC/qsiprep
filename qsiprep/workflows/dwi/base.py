@@ -305,22 +305,29 @@ def init_dwi_preproc_wf(
     # reference so it does not depend on the HMC backend selected above.
     gradwarp_wf = init_gradwarp_wf(unit)
     if gradwarp_wf is not None:
-        # mk_displacementMaps.cxx (what CreateNonlinearityDisplacementMap
-        # wraps) reads its reference image as a 3D NIfTI, not the 4D series
-        # pre_hmc_wf.outputnode.dwi_file is -- feeding it the merged 4D file
-        # throws at runtime. The field depends only on the sampling grid, not
-        # on image content, so any single volume on that grid is a valid
-        # reference; volume 0 is cheapest and needs no bvals/bvecs.
-        gradwarp_ref = pe.Node(
-            niu.Function(function=_extract_first_volume, output_names=['out_file']),
-            name='gradwarp_ref',
-        )
-        workflow.connect([
-            (pre_hmc_wf, gradwarp_ref, [('outputnode.dwi_file', 'in_file')]),
-            (gradwarp_ref, gradwarp_wf, [('out_file', 'inputnode.ref_image')]),
-        ])  # fmt:skip
-        # A DIS3D unit still builds a field, because grad_dev needs one, but no
-        # spatial correction is applied to the images -- applying it would
+        if gradwarp_wf.needs_reference:
+            # mk_displacementMaps.cxx (what CreateNonlinearityDisplacementMap
+            # wraps) reads its reference image as a 3D NIfTI, not the 4D series
+            # pre_hmc_wf.outputnode.dwi_file is -- feeding it the merged 4D file
+            # throws at runtime. The field depends only on the sampling grid, not
+            # on image content, so any single volume on that grid is a valid
+            # reference; volume 0 is cheapest and needs no bvals/bvecs.
+            gradwarp_ref = pe.Node(
+                niu.Function(function=_extract_first_volume, output_names=['out_file']),
+                name='gradwarp_ref',
+            )
+            workflow.connect([
+                (pre_hmc_wf, gradwarp_ref, [('outputnode.dwi_file', 'in_file')]),
+                (gradwarp_ref, gradwarp_wf, [('out_file', 'inputnode.ref_image')]),
+            ])  # fmt:skip
+        elif gradwarp_wf.plan.warp_dim is None:
+            # A DIS3D unit builds no field at all: the scanner already corrected
+            # the geometry, and finalize's grad_dev node is fed the coefficient
+            # file rather than a field, so nothing would consume one. The empty
+            # workflow is still added to the graph so its methods boilerplate
+            # reaches the report.
+            workflow.add_nodes([gradwarp_wf])
+        # A DIS3D unit gets no spatial correction -- applying one would
         # double-correct data the scanner already corrected.
         if gradwarp_wf.plan.warp_dim is not None:
             workflow.connect([

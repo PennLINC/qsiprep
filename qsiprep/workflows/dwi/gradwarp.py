@@ -161,9 +161,18 @@ def describe_gradient_correction(plan):
 def init_gradwarp_wf(unit, name='gradwarp_wf'):
     """Build the gradwarp displacement field for one correction unit.
 
-    Returns ``None`` when no gradient correction was requested. The field node
-    runs even when ``warp_dim`` is ``None``: the grad_dev map needs a field, and
-    only the wiring into the composed transform chain is suppressed.
+    Returns ``None`` when no gradient correction was requested. Otherwise the
+    returned workflow always carries the resolved ``.plan`` and the methods
+    boilerplate that goes with it, but it builds **no nodes at all** when
+    ``plan.warp_dim is None`` (the scanner already applied full 3D gradwarp,
+    ``DIS3D``). Nothing resamples through a field for such a unit, and
+    ``finalize``'s ``grad_dev`` node is fed the *coefficient* file rather than
+    a field, so building one here would invoke an external binary per unit and
+    discard both of its outputs. The workflow still exists so callers keep the
+    plan, and so the ``DIS3D`` boilerplate still reaches the methods section.
+
+    ``.needs_reference`` says whether ``inputnode.ref_image`` is consumed, so a
+    caller knows whether to build the 3D extraction node that feeds it.
     """
     plan = resolve_gradwarp_plan(unit)
     if plan is None:
@@ -172,7 +181,12 @@ def init_gradwarp_wf(unit, name='gradwarp_wf'):
     workflow = Workflow(name=name)
     workflow.__desc__ = _BOILERPLATE[plan.warp_dim]
     workflow.plan = plan
+    workflow.needs_reference = False
 
+    if plan.warp_dim is None:
+        return workflow
+
+    workflow.needs_reference = True
     inputnode = pe.Node(niu.IdentityInterface(fields=['ref_image']), name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(fields=['gradwarp_field']), name='outputnode')
 
@@ -180,9 +194,7 @@ def init_gradwarp_wf(unit, name='gradwarp_wf'):
         CreateNonlinearityDisplacementMap(coeff_file=plan.coeff_file, is_ge=plan.is_ge),
         name='make_field',
     )
-    # '3D' is a passthrough, but keeping the node unconditional means the graph
-    # shape does not depend on the plan.
-    mask_field = pe.Node(MaskWarpDimensions(warp_dim=plan.warp_dim or '3D'), name='mask_field')
+    mask_field = pe.Node(MaskWarpDimensions(warp_dim=plan.warp_dim), name='mask_field')
 
     workflow.connect([
         (inputnode, make_field, [('ref_image', 'ref_image')]),

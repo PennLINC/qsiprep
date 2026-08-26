@@ -56,15 +56,26 @@ def test_gradwarp_wf_masks_to_through_plane_for_dis2d(tmp_path):
     assert wf.plan.warp_dim == '1D'
 
 
-def test_gradwarp_wf_still_builds_a_field_for_dis3d(tmp_path):
-    """grad_dev needs a field even when no spatial correction is applied."""
+def test_gradwarp_wf_builds_no_field_for_dis3d(tmp_path):
+    """A DIS3D unit builds no field at all.
+
+    Nothing consumes one: the scanner already corrected the geometry, so no
+    resampling uses the field, and finalize's grad_dev node is fed the
+    *coefficient* file rather than a field. Building one would invoke an
+    external binary per unit and throw both of its outputs away.
+    """
     from qsiprep.workflows.dwi.gradwarp import init_gradwarp_wf
 
     config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
     wf = init_gradwarp_wf(_unit(tmp_path, ['ORIGINAL', 'DIS3D']))
 
-    assert wf.get_node('make_field') is not None
+    assert wf is not None
     assert wf.plan.warp_dim is None
+    assert wf.get_node('make_field') is None
+    assert wf.get_node('mask_field') is None
+    assert list(wf._graph.nodes()) == []
+    # The plan and the methods text still have to survive.
+    assert wf.needs_reference is False
 
 
 def test_gradwarp_wf_passes_is_ge_through(tmp_path):
@@ -293,17 +304,48 @@ def test_dwi_preproc_wf_builds_gradwarp_and_feeds_pre_hmc_reference(tmp_path):
     assert ('outputnode.gradwarp_field', 'gradwarp_field') in edge['connect']
 
 
-def test_dwi_preproc_wf_dis3d_builds_field_but_leaves_outputnode_unconnected(tmp_path):
-    """DIS3D still builds a field (grad_dev needs it) but skips resampling wiring."""
+def test_dwi_preproc_wf_dis3d_runs_nothing_and_wires_nothing(tmp_path):
+    """A DIS3D unit neither builds a field nor extracts a reference for one.
+
+    Nothing downstream consumes either: no resampling uses the field, and
+    finalize's grad_dev node takes the coefficient file. The previous wiring
+    ran an external binary plus a nibabel node per unit and discarded both.
+    """
     wf = _preproc_wf(tmp_path, image_type=['ORIGINAL', 'DIS3D'])
 
     gradwarp_wf = wf.get_node('gradwarp_wf')
     assert gradwarp_wf is not None
     assert gradwarp_wf.plan.warp_dim is None
 
+    # No extraction node, so nothing feeds the (nonexistent) field builder.
+    assert wf.get_node('gradwarp_ref') is None
+
     outputnode = wf.get_node('outputnode')
-    edge = wf._graph.get_edge_data(gradwarp_wf, outputnode)
-    assert edge is None
+    assert wf._graph.get_edge_data(gradwarp_wf, outputnode) is None
+    # ...and it contributes no runnable nodes to the flattened graph.
+    flat = [node.name for node in wf._create_flat_graph().nodes()]
+    assert not [name for name in flat if name.startswith('gradwarp')]
+
+
+def test_dwi_preproc_wf_dis3d_still_emits_the_dis3d_boilerplate(tmp_path):
+    """The DIS3D methods text is not optional -- it is why the state exists.
+
+    ``LiterateWorkflow.visit_desc`` walks the parent graph, so a gradwarp_wf
+    that contributes no nodes still has to be *in* that graph.
+    """
+    from qsiprep.workflows.dwi.gradwarp import _BOILERPLATE
+
+    wf = _preproc_wf(tmp_path, image_type=['ORIGINAL', 'DIS3D'])
+
+    assert _BOILERPLATE[None] in wf.visit_desc()
+
+
+def test_dwi_preproc_wf_dis3d_report_line_survives(tmp_path):
+    """The report line is derived from ``gradwarp_wf.plan``, which must survive
+    the workflow having no nodes."""
+    wf = _preproc_wf(tmp_path, image_type=['ORIGINAL', 'DIS3D'])
+
+    assert wf.get_node('summary').inputs.gradient_correction == 'b-matrix only (ImageType: DIS3D)'
 
 
 def test_dwi_preproc_wf_without_gradient_file_has_no_gradwarp_wf(tmp_path):
