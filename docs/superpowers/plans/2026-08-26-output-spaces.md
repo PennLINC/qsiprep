@@ -287,7 +287,7 @@ Nothing here touches nipype or a BIDS layout, so it is all directly testable.
 
 import re
 from dataclasses import dataclass, replace
-from typing import Sequence
+from collections.abc import Sequence
 
 from qsiprep.utils.bids import COHORT_KEY
 
