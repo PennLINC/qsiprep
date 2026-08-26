@@ -26,15 +26,50 @@ EXPECTED_ANAT_ENTITIES = {
 # with the default (non-3dSHORE) hmc_model. Built from what
 # init_dwi_derivatives_wf('/data/.../dwi.nii.gz') actually emits today.
 EXPECTED_DWI_ENTITIES = {
-    'ds_dwi_t1': {'space': 'ACPC', 'desc': 'preproc', 'suffix': 'dwi'},
-    'ds_bvals_t1': {'space': 'ACPC', 'desc': 'preproc', 'suffix': 'dwi'},
-    'ds_bvecs_t1': {'space': 'ACPC', 'desc': 'preproc', 'suffix': 'dwi'},
-    'ds_t1_b0_ref': {'space': 'ACPC', 'suffix': 'dwiref'},
-    'ds_dwi_mask_t1': {'space': 'ACPC', 'desc': 'brain', 'suffix': 'mask'},
-    'ds_cnr_map_t1': {'space': 'ACPC', 'suffix': 'dwimap'},
-    'ds_gradient_table_t1': {'space': 'ACPC', 'desc': 'preproc', 'suffix': 'dwi'},
-    'ds_btable_t1': {'space': 'ACPC', 'desc': 'preproc', 'suffix': 'dwi'},
-    'ds_tsnr': {'space': 'ACPC', 'suffix': 'dwimap'},
+    'ds_dwi_t1': {
+        'space': 'ACPC',
+        'desc': 'preproc',
+        'suffix': 'dwi',
+        'extension': '.nii.gz',
+    },
+    'ds_bvals_t1': {
+        'space': 'ACPC',
+        'desc': 'preproc',
+        'suffix': 'dwi',
+        'extension': '.bval',
+    },
+    'ds_bvecs_t1': {
+        'space': 'ACPC',
+        'desc': 'preproc',
+        'suffix': 'dwi',
+        'extension': '.bvec',
+    },
+    'ds_t1_b0_ref': {'space': 'ACPC', 'suffix': 'dwiref', 'extension': '.nii.gz'},
+    'ds_dwi_mask_t1': {
+        'space': 'ACPC',
+        'desc': 'brain',
+        'suffix': 'mask',
+        'extension': '.nii.gz',
+    },
+    'ds_cnr_map_t1': {
+        'space': 'ACPC',
+        'suffix': 'dwimap',
+        'model': 'MAPMRI',
+        'extension': '.nii.gz',
+    },
+    'ds_gradient_table_t1': {
+        'space': 'ACPC',
+        'desc': 'preproc',
+        'suffix': 'dwi',
+        'extension': '.b',
+    },
+    'ds_btable_t1': {
+        'space': 'ACPC',
+        'desc': 'preproc',
+        'suffix': 'dwi',
+        'extension': '.b_table.txt',
+    },
+    'ds_tsnr': {'space': 'ACPC', 'suffix': 'dwimap', 'extension': '.nii.gz'},
 }
 
 
@@ -46,7 +81,19 @@ def collect_datasink_entities(workflow):
         if node is None or not isinstance(node.interface, DerivativesDataSink):
             continue
         entities = {}
-        for key in ('space', 'desc', 'suffix', 'res', 'cohort', 'from', 'to', 'mode'):
+        for key in (
+            'space',
+            'desc',
+            'suffix',
+            'res',
+            'cohort',
+            'from',
+            'to',
+            'mode',
+            'model',
+            'extension',
+            'datatype',
+        ):
             value = node.inputs.trait_get().get(key)
             if value is not None and str(value) != '<undefined>':
                 entities[key] = value
