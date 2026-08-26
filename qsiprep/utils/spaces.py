@@ -14,7 +14,9 @@ The grammar is::
   axes, following https://github.com/nipreps/niworkflows/issues/997.
 * a bare label -- a TemplateFlow ``res`` entity, as in fMRIPrep. Standard spaces only.
 
-Nothing here touches nipype or a BIDS layout, so it is all directly testable.
+No BIDSLayout is ever constructed here and nothing needs a BIDS tree on disk, so
+every function below is directly unit-testable. (Importing this module does pull
+pybids in transitively, via ``qsiprep.utils.__init__``.)
 """
 
 import re
@@ -192,7 +194,7 @@ def _validate_cohort(space: str, cohort: str | None) -> None:
         )
 
 
-def parse_space_token(token: str) -> list:
+def parse_space_token(token: str) -> list[SpaceSpec]:
     """Parse one ``--output-spaces`` token into one or more :class:`SpaceSpec`.
 
     A token carrying several ``res-`` specs expands to one spec each, following
@@ -244,7 +246,7 @@ def parse_space_token(token: str) -> list:
     ]
 
 
-def parse_output_spaces(tokens: Sequence) -> list:
+def parse_output_spaces(tokens: Sequence) -> list[SpaceSpec]:
     """Parse every token, de-duplicate, and check the whole request makes sense."""
     specs = []
     seen = set()
