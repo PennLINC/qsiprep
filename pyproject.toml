@@ -17,9 +17,6 @@ classifiers = [
 license = {file = "LICENSE"}
 requires-python = ">=3.11"
 dependencies = [
-    # qsiplan (the grouping/plan compiler, now its own repository) is a hard
-    # runtime dependency; add "qsiplan" here and to pixi.lock once it is
-    # published.
     'importlib_resources; python_version < "3.12"',
     "acres",
     "dipy>=1.12.0,<1.13.0",
@@ -38,6 +35,10 @@ dependencies = [
     "psutil <= 5.9.8",
     "pybids >= 0.15.0, < 0.16.0",
     "pyyaml",
+    # the grouping/plan compiler; qsiprep/grouping is a shim over it. The
+    # 0.1.x bound is a behavior contract: golden tests pin plan routing and
+    # issue text byte-for-byte, so a minor bump must come with a review here.
+    "qsiplan >= 0.1.0, < 0.2",
     "scikit-image",
     "scikit-learn <= 1.4.0",
     "seaborn",

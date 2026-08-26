@@ -70,8 +70,6 @@ RUN --mount=type=cache,target=/root/.cache/rattler pixi install -e qsiprep --fro
 # Ensure qsiprep is installed non-editably in the qsiprep env so the copied env is
 # self-contained in the runtime image (lockfile may resolve to editable variant).
 # Pixi envs do not include pip; use uv to install into the env's Python.
-# TODO: install qsiplan (the grouping/plan compiler, now its own repository)
-# here once it is published - as a named dependency in pyproject + pixi.lock.
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     /root/.local/bin/uv pip install --python /app/.pixi/envs/qsiprep/bin/python --no-deps --force-reinstall .
 
