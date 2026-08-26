@@ -363,6 +363,20 @@ def init_dwi_finalize_wf(
 
     # The workflow is done if we will be concatenating images later
     if not write_derivatives:
+        if gradwarp_plan is not None:
+            # write_derivatives is False only under --distortion-group-merge:
+            # init_distortion_group_merge_wf writes the derivatives for this
+            # output instead, and it has no grad_dev node. Say so rather than
+            # silently not honouring the documented promise.
+            config.loggers.workflow.warning(
+                'Gradient nonlinearity: %s is written by the distortion-group '
+                'merge workflow (--distortion-group-merge), which does not '
+                'produce a gradient deviation map. The spatial gradwarp '
+                'correction is still applied, but no *_graddev.nii.gz and no '
+                'GradientWarpDimensions sidecar key will be written for this '
+                'output.',
+                unit.output_name,
+            )
         return workflow
 
     # CONNECT TO DERIVATIVES #####################

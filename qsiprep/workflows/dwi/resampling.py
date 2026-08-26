@@ -341,12 +341,6 @@ def _get_first(lll):
     return lll
 
 
-def _aslist(in_value):
-    if isinstance(in_value, list):
-        return in_value
-    return [in_value]
-
-
 def _listify(value):
     """Wrap a single gradwarp field in a one-element list for ``ComposeTransforms``.
 

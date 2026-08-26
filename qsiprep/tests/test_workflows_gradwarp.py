@@ -11,11 +11,18 @@ from qsiprep.tests.preproc_factory import make_preproc_unit
 
 @pytest.fixture(autouse=True)
 def _reset_config():
+    from qsiprep.workflows.dwi.gradwarp import _reset_plan_logging
+
+    # resolve_gradwarp_plan suppresses exact repeats of a rendered log line, so
+    # that memory has to be cleared between tests or one test can silence
+    # another's expected message.
+    _reset_plan_logging()
     config.workflow.gradient_file = None
     config.workflow.ignore = []
     config.workflow.force = []
     config.nipype.omp_nthreads = 1
     yield
+    _reset_plan_logging()
     config.workflow.gradient_file = None
     config.workflow.ignore = []
     config.workflow.force = []
@@ -634,6 +641,31 @@ def test_fsl_syn_branch_gradwarps_the_sdc_reference(tmp_path):
     assert wf.get_node('gradwarp_sdc_inputs_mask').inputs.interpolation == 'NearestNeighbor'
 
 
+def test_gradwarp_sdc_resampling_nodes_write_float(tmp_path):
+    """``gradwarp_sdc_inputs`` is a MapNode over every volume in the series.
+
+    Every adjacent resampling node in the codebase sets ``float=True``
+    (``resampling.py``, ``diffprep.py``); without it these would be the only
+    double-precision per-volume nodes in the pipeline.
+    """
+    _cfg_for_fsl(tmp_path, 'DRBUDDI')
+    wf = _fsl_wf(tmp_path, _syn_unit(tmp_path))
+
+    for name in ('gradwarp_sdc_inputs', 'gradwarp_sdc_inputs_brain', 'gradwarp_sdc_inputs_mask'):
+        assert wf.get_node(name).inputs.float is True, name
+
+
+def test_gradwarp_sdc_resampling_honours_sloppy(tmp_path):
+    """Matches the adjacent per-volume ApplyTransforms in hmc_sdc.py."""
+    _cfg_for_fsl(tmp_path, 'DRBUDDI')
+    config.execution.sloppy = True
+    try:
+        wf = _fsl_wf(tmp_path, _syn_unit(tmp_path))
+        assert wf.get_node('gradwarp_sdc_inputs').inputs.interpolation == 'NearestNeighbor'
+    finally:
+        config.execution.sloppy = False
+
+
 def test_no_gradwarp_node_without_a_coefficient_file(tmp_path):
     _cfg_for_fsl(tmp_path, 'DRBUDDI')
     config.workflow.gradient_file = None
@@ -1030,3 +1062,20 @@ def test_extract_first_b0_passes_an_already_3d_image_through(tmp_path):
     nb.Nifti1Image(np.zeros((4, 4, 4), dtype='float32'), np.eye(4)).to_filename(str(path))
 
     assert _extract_first_b0(str(path), [2]) == str(path)
+
+
+def test_dwi_finalize_wf_warns_when_graddev_will_not_be_written(tmp_path, caplog):
+    """--distortion-group-merge writes its outputs from a workflow with no
+    grad_dev node. Silence is the one unacceptable option."""
+    with caplog.at_level('WARNING', logger='nipype.workflow'):
+        _finalize_wf_with_gradients(tmp_path, write_derivatives=False)
+
+    assert 'graddev' in caplog.text
+    assert 'distortion-group-merge' in caplog.text
+
+
+def test_dwi_finalize_wf_does_not_warn_when_graddev_is_written(tmp_path, caplog):
+    with caplog.at_level('WARNING', logger='nipype.workflow'):
+        _finalize_wf_with_gradients(tmp_path, write_derivatives=True)
+
+    assert 'graddev' not in caplog.text

@@ -4,7 +4,7 @@ import pytest
 
 from qsiprep import config
 from qsiprep.tests.preproc_factory import make_preproc_unit
-from qsiprep.workflows.dwi.gradwarp import resolve_gradwarp_plan
+from qsiprep.workflows.dwi.gradwarp import _reset_plan_logging, resolve_gradwarp_plan
 
 DWI = '/data/sub-01_dwi.nii.gz'
 COEFF = '/opt/coeff.grad'
@@ -12,10 +12,15 @@ COEFF = '/opt/coeff.grad'
 
 @pytest.fixture(autouse=True)
 def _reset_config():
+    # resolve_gradwarp_plan suppresses exact repeats of a rendered log line, so
+    # that memory has to be cleared between tests or one test can silence
+    # another's expected message.
+    _reset_plan_logging()
     config.workflow.gradient_file = None
     config.workflow.ignore = []
     config.workflow.force = []
     yield
+    _reset_plan_logging()
     config.workflow.gradient_file = None
     config.workflow.ignore = []
     config.workflow.force = []
@@ -115,3 +120,43 @@ def test_is_ge_detection(manufacturer, expected):
 def test_plan_carries_the_coefficient_file():
     config.workflow.gradient_file = COEFF
     assert resolve_gradwarp_plan(_unit()).coeff_file == COEFF
+
+
+def test_resolving_the_same_unit_repeatedly_logs_once(caplog):
+    """One unit is resolved three times (base, the HMC backend, finalize).
+
+    Without suppression, one plan prints as three, and the mixed-``ImageType``
+    warning prints as three separate problems.
+    """
+    config.workflow.gradient_file = COEFF
+    unit = _unit()
+    with caplog.at_level('INFO', logger='nipype.workflow'):
+        for _ in range(3):
+            resolve_gradwarp_plan(unit)
+
+    assert caplog.text.count('spatial warp 3D') == 1
+
+
+def test_a_different_unit_still_logs(caplog):
+    """Suppression is per rendered message, and every message names the unit."""
+    config.workflow.gradient_file = COEFF
+    with caplog.at_level('INFO', logger='nipype.workflow'):
+        resolve_gradwarp_plan(_unit())
+        resolve_gradwarp_plan(_unit(files=('/data/sub-02_dwi.nii.gz',)))
+
+    assert caplog.text.count('spatial warp 3D') == 2
+
+
+def test_repeated_mixed_image_type_warnings_are_suppressed(caplog):
+    config.workflow.gradient_file = COEFF
+    other = '/data/sub-01_run-2_dwi.nii.gz'
+    unit = _unit(
+        ['ORIGINAL', 'PRIMARY'],
+        files=(DWI, other),
+        per_file={other: {'ImageType': ['ORIGINAL', 'DIS2D']}},
+    )
+    with caplog.at_level('WARNING', logger='nipype.workflow'):
+        for _ in range(3):
+            resolve_gradwarp_plan(unit)
+
+    assert caplog.text.count('disagree about scanner gradwarp correction') == 1

@@ -56,8 +56,13 @@ from .util import init_dwi_reference_wf, tortoise_convert_mem_gb
 _VALID_PE = {'i', 'i-', 'j', 'j-', 'k', 'k-'}
 
 
-def _listify(value):
-    """Wrap a single transform path in a list for MapNode/MultiObject inputs."""
+def _as_transform_list(value):
+    """Wrap a single transform path in a list for MapNode/MultiObject inputs.
+
+    Deliberately not named ``_listify``: ``resampling._listify`` has different
+    semantics (it asserts single-element-ness and passes ``Undefined``
+    through), and this module calls ``gradwarp`` helpers that use *that* one.
+    """
     return [value]
 
 
@@ -529,7 +534,7 @@ def init_diffprep_hmc_wf(
                 ('b0_average', 'input_image'),
                 ('b0_average', 'reference_image'),
             ]),
-            (corrected_node, apply_sdc_to_b0, [(('sdc_warp', _listify), 'transforms')]),
+            (corrected_node, apply_sdc_to_b0, [(('sdc_warp', _as_transform_list), 'transforms')]),
             (apply_sdc_to_b0, b0_ref_for_coreg, [('output_image', 'inputnode.b0_template')]),
         ])  # fmt:skip
     else:
@@ -613,7 +618,7 @@ def init_diffprep_hmc_wf(
         workflow.connect([
             (b0_ref_for_coreg, outputnode, [('outputnode.ref_image', 'b0_template')]),
             (corrected_node, outputnode, [
-                (('sdc_warp', _listify), 'to_dwi_ref_warps'),
+                (('sdc_warp', _as_transform_list), 'to_dwi_ref_warps'),
                 ('b0_up_image', 'b0_up_image'),
                 ('b0_up_corrected_image', 'b0_up_corrected_image'),
                 ('structural_image', 't2w_image'),

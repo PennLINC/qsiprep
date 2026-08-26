@@ -338,7 +338,10 @@ claiming 3D correction on `DIS2D` data would be a methods-section error.
 ### Logging
 
 One `config.loggers.workflow.info` per correction unit, stating the resolved plan
-and its basis, plus the mixed-`ImageType` warning.
+and its basis, plus the mixed-`ImageType` warning. `resolve_gradwarp_plan` is
+called three times for one unit (base, the selected HMC/SDC backend, finalize),
+so it suppresses exact repeats of a rendered line: every message names
+`unit.output_name`, and one plan printed three times reads like three units.
 
 ## Testing
 

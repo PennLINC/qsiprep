@@ -73,6 +73,33 @@ def _is_ge(metadata):
     return str(metadata.get('Manufacturer', '')).strip().upper().startswith('GE')
 
 
+#: Plan log lines already emitted, as rendered strings.
+_LOGGED_PLAN_MESSAGES = set()
+
+
+def _reset_plan_logging():
+    """Forget which plan log lines have been emitted (tests only)."""
+    _LOGGED_PLAN_MESSAGES.clear()
+
+
+def _log_plan_once(level, message, *args):
+    """Emit one plan log line, suppressing exact repeats.
+
+    ``resolve_gradwarp_plan`` is deliberately cheap and stateless, and it is
+    called three times for a single correction unit: once in ``base`` (through
+    :func:`init_gradwarp_wf`), once in the selected HMC/SDC backend, and once
+    in ``finalize``. Every message names ``unit.output_name``, so an exact
+    repeat is always the same unit being resolved again -- and one plan
+    printed three times reads like three units, while the mixed-``ImageType``
+    warning printed three times reads like three separate problems.
+    """
+    rendered = (level, message % args)
+    if rendered in _LOGGED_PLAN_MESSAGES:
+        return
+    _LOGGED_PLAN_MESSAGES.add(rendered)
+    getattr(config.loggers.workflow, level)(message, *args)
+
+
 def resolve_gradwarp_plan(unit):
     """Decide the gradient correction for one PreprocUnit, or None."""
     coeff_file = config.workflow.gradient_file
@@ -83,7 +110,8 @@ def resolve_gradwarp_plan(unit):
     is_ge = any(_is_ge(record.metadata) for record in records)
 
     if 'gradients' in (config.workflow.force or []):
-        config.loggers.workflow.info(
+        _log_plan_once(
+            'info',
             'Gradient correction: forced 3D spatial warp for %s (--force gradients).',
             unit.output_name,
         )
@@ -94,7 +122,8 @@ def resolve_gradwarp_plan(unit):
     warp_dim = _RANK_TO_WARP[min(ranks.values())]
 
     if len(set(ranks.values())) > 1:
-        config.loggers.workflow.warning(
+        _log_plan_once(
+            'warning',
             'Runs in %s disagree about scanner gradwarp correction (%s). These '
             'series are concatenated before head motion correction and share one '
             'field, so the least-correcting value (%s) is used to avoid '
@@ -104,7 +133,8 @@ def resolve_gradwarp_plan(unit):
             warp_dim or 'none',
         )
     else:
-        config.loggers.workflow.info(
+        _log_plan_once(
+            'info',
             'Gradient correction for %s: spatial warp %s (from ImageType).',
             unit.output_name,
             warp_dim or 'disabled',
@@ -246,6 +276,15 @@ def init_gradwarp_wf(unit, name='gradwarp_wf'):
 # DRBUDDI+TOPUP`` runs both, and only DRBUDDI's inputs are corrected.
 
 
+def _sdc_interpolation():
+    """Interpolator for the gradwarp resampling nodes.
+
+    Matches the adjacent per-volume ``ApplyTransforms`` in ``hmc_sdc.py``, so
+    ``--sloppy`` speeds these up the same way it speeds up everything else.
+    """
+    return 'NearestNeighbor' if config.execution.sloppy else 'LanczosWindowedSinc'
+
+
 def connect_gradwarp_sdc_volumes(workflow, inputnode, source, source_field, drbuddi_wf):
     """Gradwarp the per-volume DWI series that DRBUDDI estimates its field from.
 
@@ -253,9 +292,18 @@ def connect_gradwarp_sdc_volumes(workflow, inputnode, source, source_field, drbu
     feed ``drbuddi_wf.inputnode.dwi_files``. Every volume is corrected, not just
     the b=0s, because DRBUDDI builds its FA registration target from the whole
     series.
+
+    ``float=True`` matches every adjacent resampling node in the codebase
+    (``resampling.py``, ``diffprep.py``): this is a MapNode over the whole
+    series, so double-precision output would double the working memory of the
+    heaviest per-volume step in the pipeline.
     """
     resample = pe.MapNode(
-        ants.ApplyTransforms(dimension=3, interpolation='LanczosWindowedSinc'),
+        ants.ApplyTransforms(
+            dimension=3,
+            interpolation=_sdc_interpolation(),
+            float=True,
+        ),
         iterfield=['input_image', 'reference_image'],
         name='gradwarp_sdc_inputs',
     )
@@ -277,18 +325,14 @@ def connect_gradwarp_sdc_reference(workflow, inputnode, source, source_fields, b
     neighbours: sinc-interpolating a binary image would leave it non-binary.
     """
     ref_field, brain_field, mask_field = source_fields
+    smooth = _sdc_interpolation()
     for name, source_field, dest, interpolation in (
-        ('gradwarp_sdc_inputs', ref_field, 'inputnode.b0_ref', 'LanczosWindowedSinc'),
-        (
-            'gradwarp_sdc_inputs_brain',
-            brain_field,
-            'inputnode.b0_ref_brain',
-            'LanczosWindowedSinc',
-        ),
+        ('gradwarp_sdc_inputs', ref_field, 'inputnode.b0_ref', smooth),
+        ('gradwarp_sdc_inputs_brain', brain_field, 'inputnode.b0_ref_brain', smooth),
         ('gradwarp_sdc_inputs_mask', mask_field, 'inputnode.b0_mask', 'NearestNeighbor'),
     ):
         resample = pe.Node(
-            ants.ApplyTransforms(dimension=3, interpolation=interpolation),
+            ants.ApplyTransforms(dimension=3, interpolation=interpolation, float=True),
             name=name,
         )
         workflow.connect([
