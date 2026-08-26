@@ -26,6 +26,7 @@ from ...interfaces.gradients import ExtractB0s
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SeriesQC
+from ...utils.spaces import Resolution
 from .derivatives import init_dwi_derivatives_wf
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
 from .resampling import init_dwi_trans_wf
@@ -285,10 +286,12 @@ def init_dwi_finalize_wf(
         ])  # fmt:skip
 
     # Do the resampling
+    # TODO(Task 12): thread real acpc_specs through instead of this native-max stand-in.
     transform_dwis_t1 = init_dwi_trans_wf(
         source_file=source_file,
         name='transform_dwis_t1',
         template='ACPC',
+        resolution=Resolution(kind='native', label='nativemax', strategy='max'),
         mem_gb=mem_gb['resampled'],
         use_compression=False,
         concatenate=True,

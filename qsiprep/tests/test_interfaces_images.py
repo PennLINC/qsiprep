@@ -184,8 +184,10 @@ def _write_image(path, zooms):
 def test_voxel_size_chooser_max_across_runs(tmp_path):
     from qsiprep.interfaces.anatomical import VoxelSizeChooser
 
-    a = _write_image(tmp_path / 'a.nii.gz', (3.0, 4.0, 5.0))
-    b = _write_image(tmp_path / 'b.nii.gz', (2.0, 2.0, 2.0))
+    # The largest zoom lives in the second image, so a regression that silently used
+    # only input_images[0] would fail this test instead of passing by coincidence.
+    a = _write_image(tmp_path / 'a.nii.gz', (2.0, 2.0, 2.0))
+    b = _write_image(tmp_path / 'b.nii.gz', (3.0, 4.0, 5.0))
     result = VoxelSizeChooser(input_images=[a, b], anisotropic_strategy='max').run(
         cwd=str(tmp_path)
     )
@@ -209,3 +211,17 @@ def test_voxel_size_chooser_explicit_size_wins(tmp_path):
     a = _write_image(tmp_path / 'a.nii.gz', (3.0, 4.0, 5.0))
     result = VoxelSizeChooser(input_images=[a], voxel_size=1.7).run(cwd=str(tmp_path))
     assert result.outputs.voxel_size == 1.7
+
+
+def test_choose_interpolator_from_grid(tmp_path):
+    from qsiprep.interfaces.images import ChooseInterpolator
+
+    dwi = _write_image(tmp_path / 'dwi.nii.gz', (2.0, 2.0, 2.0))
+    coarse_grid = _write_image(tmp_path / 'coarse.nii.gz', (2.0, 2.0, 2.0))
+    fine_grid = _write_image(tmp_path / 'fine.nii.gz', (1.0, 1.0, 1.0))
+
+    same = ChooseInterpolator(dwi_files=[dwi], output_grid=coarse_grid).run(cwd=str(tmp_path))
+    assert same.outputs.interpolation_method == 'LanczosWindowedSinc'
+
+    upsampled = ChooseInterpolator(dwi_files=[dwi], output_grid=fine_grid).run(cwd=str(tmp_path))
+    assert upsampled.outputs.interpolation_method == 'Linear'

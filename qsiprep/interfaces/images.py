@@ -530,7 +530,7 @@ class ConformDwi(SimpleInterface):
 
 class _ChooseInterpolatorInputSpec(BaseInterfaceInputSpec):
     dwi_files = InputMultiObject(File(exists=True), mandatory=True)
-    output_resolution = traits.Float(mandatory=True)
+    output_grid = File(exists=True, mandatory=True)
     sloppy = traits.Bool(False, usedefault=True)
 
 
@@ -551,11 +551,10 @@ class ChooseInterpolator(SimpleInterface):
             self._results['interpolation_method'] = 'NearestNeighbor'
             LOGGER.warning('Using NN interpolation for sloppy mode')
             return runtime
-        output_resolution = np.array([self.inputs.output_resolution] * 3)
+        output_resolution = np.array(nb.load(self.inputs.output_grid).header.get_zooms()[:3])
         interpolator = 'LanczosWindowedSinc'
         for input_file in self.inputs.dwi_files:
             resolution_cutoff = 0.9 * np.array(nb.load(input_file).header.get_zooms()[:3])
-            print(output_resolution, resolution_cutoff)
             if np.any(output_resolution < resolution_cutoff):
                 interpolator = 'Linear'
                 LOGGER.warning('Using Linear interpolation for upsampling')

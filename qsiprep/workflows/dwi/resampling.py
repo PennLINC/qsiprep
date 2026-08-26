@@ -32,6 +32,7 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 def init_dwi_trans_wf(
     source_file,
     mem_gb,
+    resolution,
     template='ACPC',
     name='dwi_trans_wf',
     use_compression=True,
@@ -51,7 +52,8 @@ def init_dwi_trans_wf(
         from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
         wf = init_dwi_trans_wf(source_file='sub-1_dwi.nii.gz',
                                template='MNI152NLin2009cAsym',
-                               output_resolution=1.2,
+                               resolution=Resolution(kind='mm', label='1p2mm',
+                                                      zooms=(1.2, 1.2, 1.2)),
                                mem_gb=3,
                                omp_nthreads=1)
 
@@ -59,6 +61,8 @@ def init_dwi_trans_wf(
 
         template : str
             Name of template targeted by ``template`` output space
+        resolution : Resolution
+            The requested output resolution, used to describe the output voxel size
         mem_gb : float
             Size of DWI file in GB
         omp_nthreads : int
@@ -69,8 +73,6 @@ def init_dwi_trans_wf(
             Save registered DWI series as ``.nii.gz``
         use_fieldwarp : bool
             Include SDC warp in single-shot transform from DWI to MNI
-        output_resolution : float
-            Voxel size in mm for the output data
         to_mni : bool
             Include warps to MNI
         write_local_bvecs : bool
@@ -131,11 +133,15 @@ def init_dwi_trans_wf(
 
     """
     workflow = Workflow(name=name)
-    output_resolution = config.workflow.output_resolution
-    workflow.__desc__ = """\
-The DWI time-series were resampled to {tpl},
-generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels.
-""".format(tpl=template, vox=str(output_resolution).rstrip('0').rstrip('.'))
+    if resolution.kind == 'native':
+        vox_desc = f'{resolution.strategy}imum native voxel size'
+    else:
+        vox_desc = f'{resolution.label.replace("p", ".").replace("mm", "")}mm isotropic voxels'
+
+    workflow.__desc__ = f"""\
+The DWI time-series were resampled to {template},
+generating a *preprocessed DWI run in {template} space* with {vox_desc}.
+"""
 
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -189,7 +195,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
     # get composite warps and composed affines for warping and rotating
     compose_transforms = pe.Node(ComposeTransforms(), name='compose_transforms')
     get_interpolation = pe.Node(
-        ChooseInterpolator(sloppy=config.execution.sloppy, output_resolution=output_resolution),
+        ChooseInterpolator(sloppy=config.execution.sloppy),
         name='get_interpolation',
     )
     dwi_transform = pe.MapNode(
@@ -252,7 +258,10 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             ('dwi_files', 'input_image'),
             ('output_grid', 'reference_image'),
         ]),
-        (inputnode, get_interpolation, [('dwi_files', 'dwi_files')]),
+        (inputnode, get_interpolation, [
+            ('dwi_files', 'dwi_files'),
+            ('output_grid', 'output_grid'),
+        ]),
         (get_interpolation, dwi_transform, [('interpolation_method', 'interpolation')]),
         (dwi_transform, scale_dwis, [('output_image', 'dwi_files')]),
     ])  # fmt:skip
