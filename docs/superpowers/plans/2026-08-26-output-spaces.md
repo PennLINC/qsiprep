@@ -1954,8 +1954,12 @@ with a read of the resolved anchor:
 Note this resolves the anchor from config rather than taking it as a parameter,
 because `diffprep.py` is reached through a call chain that does not thread the anchor.
 A `cohort-auto` spec is still symbolic here, so `fullname` returns the bare template
-name in that case — acceptable, because the b=0 SDC target only needs the template
-family, and the infant cohorts share a common space for this purpose.
+name in that case. That is harmless, but not for the reason first assumed: the
+`template` inputnode field is **never read**. It is declared at
+`workflows/fieldmap/syn.py:152`, threaded in from `workflows/fieldmap/base.py:130,266`,
+and no node consumes it — it is write-only through the whole chain. Whatever string is
+set here has no effect on any output. (Removing the dead field is a separate cleanup,
+out of scope for this plan.)
 
 - [ ] **Step 5: Confirm no consumer of the deleted field remains**
 
