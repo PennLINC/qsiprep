@@ -158,3 +158,45 @@ def test_parse_output_spaces_deduplicates_preserving_order():
         ['acpc:res-2mm', 'MNI152NLin2009cAsym', 'acpc:res-2mm']
     )
     assert [str(s) for s in specs] == ['acpc:res-2mm', 'MNI152NLin2009cAsym']
+
+
+def _min_args(tmp_path, *extra):
+    bids = tmp_path / 'bids'
+    (bids / 'sub-01' / 'anat').mkdir(parents=True)
+    (bids / 'dataset_description.json').write_text(
+        '{"Name": "t", "BIDSVersion": "1.8.0", "DatasetType": "raw"}'
+    )
+    return [str(bids), str(tmp_path / 'out'), 'participant', *extra]
+
+
+def test_parser_accepts_output_spaces(tmp_path):
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    opts = parser.parse_args(
+        _min_args(tmp_path, '--output-spaces', 'acpc:res-2mm', 'MNI152NLin2009cAsym')
+    )
+    assert opts.output_spaces == ['acpc:res-2mm', 'MNI152NLin2009cAsym']
+
+
+def test_parser_expands_repeated_res(tmp_path):
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    opts = parser.parse_args(
+        _min_args(tmp_path, '--output-spaces', 'acpc:res-2mm', 'MNI152NLin2009cAsym:res-1:res-2')
+    )
+    assert opts.output_spaces == [
+        'acpc:res-2mm',
+        'MNI152NLin2009cAsym:res-1',
+        'MNI152NLin2009cAsym:res-2',
+    ]
+
+
+def test_parser_rejects_a_bad_token(tmp_path, capsys):
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(_min_args(tmp_path, '--output-spaces', 'acpc:res-2'))
+    assert 'acpc:res-2mm' in capsys.readouterr().err

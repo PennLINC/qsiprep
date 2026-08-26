@@ -175,6 +175,22 @@ def _build_parser(**kwargs):
                 d[name] = loc
             setattr(namespace, self.dest, d)
 
+    class OutputSpacesAction(Action):
+        """Parse and validate --output-spaces at parse time, storing canonical tokens."""
+
+        def __call__(self, parser, namespace, values, option_string=None):
+            from qsiprep.utils.spaces import OutputSpacesError, parse_space_token
+
+            specs = []
+            for token in values:
+                try:
+                    specs.extend(parse_space_token(token))
+                except OutputSpacesError as exc:
+                    parser.error(str(exc))
+
+            existing = getattr(namespace, self.dest, None) or []
+            setattr(namespace, self.dest, [*existing, *[str(s) for s in specs]])
+
     def _path_exists(path, parser):
         """Ensure a given path exists."""
         if path is None or not Path(path).exists():
@@ -625,21 +641,25 @@ How to combine the corrected results of an output's correction units.
 """,
     )
     g_conf.add_argument(
-        '--anatomical-template',
-        required=False,
-        action='store',
-        choices=['MNI152NLin2009cAsym'],
-        default='MNI152NLin2009cAsym',
-        help='volume template space (default: MNI152NLin2009cAsym)',
-    )
-    g_conf.add_argument(
-        '--output-resolution',
-        action='store',
-        required=True,
-        type=float,
-        help='the isotropic voxel size in mm the data will be resampled to '
-        'after preprocessing. If set to a lower value than the original voxel '
-        'size, your data will be upsampled using BSpline interpolation.',
+        '--output-spaces',
+        nargs='+',
+        action=OutputSpacesAction,
+        default=None,
+        metavar='SPACE',
+        help=(
+            'Standard and non-standard spaces to write outputs to, space delimited. '
+            'At least one "acpc" space is required, because QSIPrep writes preprocessed '
+            'DWI in ACPC space only -- for example "acpc:res-2mm". Resolutions are given '
+            'as a physical size with an "mm" suffix ("res-2mm", "res-1p5mm", "res-6x6x3mm") '
+            'or, for standard spaces, as a TemplateFlow resolution label ("res-1"). '
+            'On "acpc", "res-nativemin" and "res-nativemax" take the smallest or largest '
+            'voxel dimension of the input DWI runs (a 3x4x5 mm input gives 3x3x3 mm for '
+            'nativemin and 5x5x5 mm for nativemax). Listing "acpc" more than once writes '
+            'the preprocessed DWI at each resolution. Standard spaces produce transforms '
+            'and anatomical derivatives; DWI is never resampled into them. Templates with '
+            'cohorts accept "cohort-auto" to pick one from the participant\'s age, as in '
+            '"MNIInfant:cohort-auto".'
+        ),
     )
 
     g_coreg = parser.add_argument_group('Options for dwi-to-Anatomical coregistration')
