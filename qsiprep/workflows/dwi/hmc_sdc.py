@@ -27,7 +27,7 @@ def init_qsiprep_hmcsdc_wf(
     unit,
     source_file,
     t2w_sdc,
-    anatomical_template,
+    acpc_anchor,
 ):
     """
     This workflow controls the head motion correction and susceptibility distortion
@@ -40,11 +40,12 @@ def init_qsiprep_hmcsdc_wf(
 
         from qsiprep.workflows.dwi.hmc_sdc import init_qsiprep_hmcsdc_wf
         from qsiprep.tests.preproc_factory import make_preproc_unit
+        from qsiprep.utils.spaces import SpaceSpec
         wf = init_qsiprep_hmcsdc_wf(
             make_preproc_unit(['/data/sub-1/dwi/sub-1_dwi.nii.gz']),
             source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
             t2w_sdc=False,
-            anatomical_template='MNI152NLin2009cAsym',
+            acpc_anchor=SpaceSpec(space='MNI152NLin2009cAsym'),
         )
     """
     inputnode = pe.Node(
@@ -247,7 +248,7 @@ def init_qsiprep_hmcsdc_wf(
 
     # Perform SDC if possible. This will pass-through if no sdc is to be done
     b0_sdc_wf = init_sdc_wf(unit, unit.dwi_metadata)
-    b0_sdc_wf.inputs.inputnode.template = anatomical_template
+    b0_sdc_wf.inputs.inputnode.template = acpc_anchor.fullname
 
     workflow.connect([
         (dwi_hmc_wf, b0_sdc_wf, [

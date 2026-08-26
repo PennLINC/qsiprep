@@ -243,6 +243,7 @@ def test_dwi_preproc_wf_drbuddi_without_t2w_builds(tmp_path, monkeypatch):
     cfg.workflow.tortoise_gpu_cpu_ratio = None
     cfg.workflow.gpu = None
     cfg.workflow.impute_slice_threshold = 0
+    from qsiprep.utils.spaces import SpaceSpec
     from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
 
     wf = init_dwi_preproc_wf(
@@ -250,7 +251,7 @@ def test_dwi_preproc_wf_drbuddi_without_t2w_builds(tmp_path, monkeypatch):
         t2w_sdc=False,
         output_prefix='sub-01',
         source_file=SRC,
-        anatomical_template='MNI152NLin2009cAsym',
+        acpc_anchor=SpaceSpec(space='MNI152NLin2009cAsym'),
     )
     assert wf.get_node('extended_pepolar_report_wf') is not None
 
@@ -354,6 +355,29 @@ def test_drbuddi_blip_assignments_from_sidecars_needs_no_disk():
 # than a smoke warrants; the CI ``drbuddi_shoreline_epi`` / ``drbuddi_tensorline_epi``
 # jobs cover it. Its PreprocUnit consumption follows the same pattern validated
 # here and in test_interfaces_diffprep.
+
+
+def test_diffprep_sdc_uses_the_acpc_anchor(tmp_path, monkeypatch):
+    """diffprep read config.workflow.anatomical_template, which no longer exists."""
+    from qsiprep import config
+    from qsiprep.utils.spaces import parse_output_spaces, select_acpc_anchor
+
+    config.workflow.output_spaces = ['acpc:res-2mm', 'MNIInfant:cohort-3']
+    specs = parse_output_spaces(config.workflow.output_spaces)
+    anchor = select_acpc_anchor(specs)
+    assert anchor.fullname == 'MNIInfant+3'
+
+    # _cfg() (used by other tests in this module) dynamically assigns
+    # config.workflow.anatomical_template as test scaffolding, which -- because
+    # `workflow` is a class, not an instance -- persists as a class attribute
+    # across tests regardless of run order (Task 16 removes that scaffolding).
+    # Strip it here so this assertion checks the source-level contract rather
+    # than incidental cross-test pollution.
+    monkeypatch.delattr(config.workflow, 'anatomical_template', raising=False)
+
+    # The config field diffprep.py used to read must be gone, so any surviving
+    # reader is a build-time AttributeError rather than a silent None.
+    assert not hasattr(config.workflow, 'anatomical_template')
 
 
 if __name__ == '__main__':

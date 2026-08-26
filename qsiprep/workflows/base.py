@@ -204,26 +204,24 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
             '--anat-modality none'
         )
 
-    anatomical_template = config.workflow.anatomical_template
-    if config.workflow.infant:
-        from ..utils.bids import cohort_by_months, parse_bids_for_age_months
+    from ..utils.spaces import resolve_output_spaces, select_acpc_anchor
 
+    output_spaces = config.workflow.parsed_output_spaces()
+    if any(spec.needs_cohort_resolution for spec in output_spaces):
         if session_ids and len(session_ids) > 1:
-            raise RuntimeError('Infant template is only available for single session processing.')
-
-        # Calculate the age and age-specific spaces
-        session_id = None if not session_ids else session_ids[0]
-        age = parse_bids_for_age_months(
-            config.execution.bids_dir,
-            subject_id,
-            session_id,
-        )
-        if age is None:
-            ses_str = f'_ses-{session_id}' if session_id else ''
-            raise RuntimeError(f'Could not find age for sub-{subject_id}{ses_str}')
-
-        cohort = cohort_by_months(anatomical_template, age)
-        anatomical_template = f'{anatomical_template}+{cohort}'
+            raise RuntimeError(
+                'Automatic cohort selection is only available for single session processing.'
+            )
+    output_spaces = resolve_output_spaces(
+        output_spaces,
+        config.execution.bids_dir,
+        subject_id,
+        None if not session_ids else session_ids[0],
+    )
+    acpc_anchor = select_acpc_anchor(output_spaces)
+    # anatomical_template is still consumed by SubjectSummary and
+    # init_anat_preproc_wf below; keep it in sync with the resolved anchor.
+    anatomical_template = acpc_anchor.fullname
 
     # The anatomical workflow only builds its T2w branch -- and therefore only
     # produces ``t2w_unfatsat`` -- when asked for additional T2ws. Keep this in
@@ -633,7 +631,7 @@ to workflows in *QSIPrep*'s documentation]\
             output_prefix=naming_name,
             source_file=source_file,
             t2w_sdc=_t2w_available_for_sdc(subject_data),
-            anatomical_template=anatomical_template,
+            acpc_anchor=acpc_anchor,
         )
         dwi_finalize_wf = init_dwi_finalize_wf(
             unit=unit,
