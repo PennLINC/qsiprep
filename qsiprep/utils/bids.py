@@ -970,6 +970,13 @@ def age_to_months(age: int | float, units: ty.Literal['weeks', 'months', 'years'
     return int(round(age))
 
 
+# Upper age bound in months for each cohort, in cohort order starting at 1.
+COHORT_KEY = {
+    'MNIInfant': (2, 5, 8, 11, 14, 17, 21, 27, 33, 44, 60),
+    'UNCInfant': (8, 12, 24),
+}
+
+
 def cohort_by_months(template, months):
     """Produce a recommended cohort based on partipants age.
 
@@ -1000,28 +1007,7 @@ def cohort_by_months(template, months):
         https://www.nipreps.org/community/licensing/
 
     """
-    cohort_key = {
-        'MNIInfant': (
-            # upper bound of template | cohort
-            2,  # 1
-            5,  # 2
-            8,  # 3
-            11,  # 4
-            14,  # 5
-            17,  # 6
-            21,  # 7
-            27,  # 8
-            33,  # 9
-            44,  # 10
-            60,  # 11
-        ),
-        'UNCInfant': (
-            8,  # 1
-            12,  # 2
-            24,  # 3
-        ),
-    }
-    ages = cohort_key.get(template)
+    ages = COHORT_KEY.get(template)
     if ages is None:
         raise KeyError('Template cohort information does not exist.')
 
