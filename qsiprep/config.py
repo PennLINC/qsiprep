@@ -255,8 +255,6 @@ class _Config:
     @classmethod
     def get(cls):
         """Return defined settings."""
-        from niworkflows.utils.spaces import Reference, SpatialReferences
-
         out = {}
         for k, v in cls.__dict__.items():
             if k.startswith('_') or v is None:
@@ -270,10 +268,6 @@ class _Config:
                     v = {key: str(val) for key, val in v.items()}
                 else:
                     v = str(v)
-            if isinstance(v, SpatialReferences):
-                v = ' '.join(str(s) for s in v.references) or None
-            if isinstance(v, Reference):
-                v = str(v) or None
             out[k] = v
         return out
 
@@ -423,9 +417,6 @@ class execution(_Config):
     """Folder where derivatives will be stored."""
     output_layout = None
     """Layout of derivatives within output_dir."""
-    # output_spaces = None
-    # """List of (non)standard spaces designated (with the ``--output-spaces`` flag of
-    # the command line) as spatial references for outputs."""
     reports_only = False
     """Only build the reports, based on the reportlets found in a cached working directory."""
     report_output_level = None
@@ -555,8 +546,6 @@ class workflow(_Config):
     visual reports. If --infant, T2w is forced."""
     anat_only = False
     """Execute the anatomical preprocessing only."""
-    anatomical_template = None
-    """Anatomical template to use. This field doesn't include the cohort."""
     b0_threshold = None
     """Any value in the .bval file less than this will be considered a b=0 image."""
     b0_motion_corr_to = None
@@ -609,8 +598,8 @@ class workflow(_Config):
     """How should the anatomical space be defined: sessionwise, unbiased or first-lex"""
     no_b0_harmonization = False
     """Skip re-scaling dwi scans to have matching b=0 intensities."""
-    output_resolution = None
-    """Isotropic voxel size for outputs."""
+    output_spaces = None
+    """Canonical ``--output-spaces`` tokens, as a list of strings."""
     pepolar_method = None
     """SDC method to be used for PEPOLAR fieldmaps."""
     separate_all_dwis = False
@@ -624,6 +613,13 @@ class workflow(_Config):
     use_syn_sdc = None
     """Run *fieldmap-less* susceptibility-derived distortions estimation
     in the absence of any alternatives."""
+
+    @classmethod
+    def parsed_output_spaces(cls):
+        """Parse :attr:`output_spaces` into :class:`~qsiprep.utils.spaces.SpaceSpec`."""
+        from qsiprep.utils.spaces import parse_output_spaces
+
+        return parse_output_spaces(cls.output_spaces or [])
 
 
 class loggers:
@@ -760,7 +756,6 @@ def load(filename, skip=None, init=True):
             section = getattr(sys.modules[__name__], sectionname)
             ignore = skip.get(sectionname)
             section.load(configs, ignore=ignore, init=initialize(sectionname))
-    init_spaces()
 
 
 def get(flat=False):
@@ -798,25 +793,3 @@ def to_filename(filename):
     """Write settings to file."""
     filename = Path(filename)
     filename.write_text(dumps())
-
-
-def init_spaces(checkpoint=True):
-    """Initialize the :attr:`~workflow.spaces` setting."""
-    from niworkflows.utils.spaces import Reference, SpatialReferences
-
-    # spaces = execution.output_spaces or SpatialReferences()
-    spaces = SpatialReferences()
-    if not isinstance(spaces, SpatialReferences):
-        spaces = SpatialReferences(
-            [ref for s in spaces.split(' ') for ref in Reference.from_string(s)]
-        )
-
-    if checkpoint and not spaces.is_cached():
-        spaces.checkpoint()
-
-    # Add the default standard space if not already present (required by several sub-workflows)
-    if 'MNI152NLin2009cAsym' not in spaces.get_spaces(nonstandard=False, dim=(3,)):
-        spaces.add(Reference('MNI152NLin2009cAsym', {}))
-
-    # Make the SpatialReferences object available
-    workflow.spaces = spaces

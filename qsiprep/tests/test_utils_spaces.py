@@ -296,3 +296,27 @@ def test_nothing_given_at_all_is_an_error(tmp_path):
     opts = _parse(tmp_path)
     with pytest.raises(SystemExit):
         _apply_output_space_deprecations(opts)
+
+
+def test_config_round_trips_output_spaces(tmp_path):
+    from qsiprep import config
+
+    config.workflow.output_spaces = ['acpc:res-2mm', 'MNIInfant:cohort-auto']
+    out = tmp_path / 'config.toml'
+    config.to_filename(out)
+    assert 'acpc:res-2mm' in out.read_text()
+
+    config.workflow.output_spaces = None
+    config.load(out, init=False)
+    assert config.workflow.output_spaces == ['acpc:res-2mm', 'MNIInfant:cohort-auto']
+
+    specs = config.workflow.parsed_output_spaces()
+    assert [s.space for s in specs] == ['acpc', 'MNIInfant']
+    assert specs[1].needs_cohort_resolution is True
+
+
+def test_init_spaces_is_gone():
+    from qsiprep import config
+
+    assert not hasattr(config, 'init_spaces')
+    assert not hasattr(config.workflow, 'spaces')
