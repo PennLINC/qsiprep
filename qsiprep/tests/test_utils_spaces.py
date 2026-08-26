@@ -336,6 +336,14 @@ def test_templateflow_kwargs():
     assert templateflow_kwargs(mm_spec) == {'template_name': 'MNI152NLin2009cAsym'}
 
 
+def test_templateflow_kwargs_omits_symbolic_cohort():
+    """cohort-auto is symbolic and must never reach a TemplateFlow query."""
+    from qsiprep.utils.spaces import templateflow_kwargs
+
+    (spec,) = parse_space_token('MNIInfant:cohort-auto')
+    assert templateflow_kwargs(spec) == {'template_name': 'MNIInfant'}
+
+
 def test_spec_from_legacy_template():
     from qsiprep.utils.spaces import spec_from_legacy_template
 
