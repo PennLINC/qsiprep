@@ -291,3 +291,66 @@ def parse_output_spaces(tokens: Sequence) -> list[SpaceSpec]:
         )
 
     return specs
+
+
+DEFAULT_ANCHOR = 'MNI152NLin2009cAsym'
+#: Templates that make ACPC alignment infant-appropriate, most specific first.
+INFANT_ANCHORS = ('MNIInfant', 'UNCInfant')
+
+
+def _age_in_months(bids_dir, subject_id, session_id):
+    """Indirection so tests can substitute an age without a BIDS tree."""
+    from qsiprep.utils.bids import parse_bids_for_age_months
+
+    return parse_bids_for_age_months(bids_dir, subject_id, session_id)
+
+
+def select_acpc_anchor(specs) -> SpaceSpec:
+    """Pick the template that anchors ACPC alignment and the output grid.
+
+    Derived rather than user-selectable: an infant template among the requested
+    spaces anchors ACPC, otherwise MNI152NLin2009cAsym does. Independent of the
+    order spaces were listed in.
+    """
+    for name in INFANT_ANCHORS:
+        for spec in specs:
+            if spec.space == name:
+                return spec
+    return SpaceSpec(space=DEFAULT_ANCHOR)
+
+
+def resolve_output_spaces(specs, bids_dir, subject_id, session_id) -> list:
+    """Replace every ``cohort-auto`` with a cohort chosen from the participant's age.
+
+    The age is read at most once, however many templates asked for it.
+    """
+    from qsiprep.utils.bids import cohort_by_months
+
+    if not any(spec.needs_cohort_resolution for spec in specs):
+        return list(specs)
+
+    months = _age_in_months(bids_dir, subject_id, session_id)
+    if months is None:
+        wanted = ', '.join(
+            spec.space for spec in specs if spec.needs_cohort_resolution
+        )
+        ses_str = f'_ses-{session_id}' if session_id else ''
+        raise OutputSpacesError(
+            f'Could not find an age for sub-{subject_id}{ses_str}, which is needed to '
+            f'choose a cohort for: {wanted}. Specify the cohort explicitly, for example '
+            f'MNIInfant:cohort-3.'
+        )
+
+    resolved = []
+    for spec in specs:
+        if not spec.needs_cohort_resolution:
+            resolved.append(spec)
+            continue
+        try:
+            cohort = cohort_by_months(spec.space, months)
+        except KeyError as exc:
+            raise OutputSpacesError(
+                f'Could not choose a {spec.space} cohort for an age of {months} months: {exc}'
+            ) from None
+        resolved.append(spec.with_cohort(str(cohort)))
+    return resolved

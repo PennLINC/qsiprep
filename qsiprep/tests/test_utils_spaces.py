@@ -354,3 +354,56 @@ def test_spec_from_legacy_template():
     infant_spec = spec_from_legacy_template('MNIInfant+3')
     assert infant_spec.space == 'MNIInfant'
     assert infant_spec.cohort == '3'
+
+
+def test_select_acpc_anchor_defaults_to_2009c():
+    from qsiprep.utils.spaces import select_acpc_anchor
+
+    specs = parse_output_spaces(['acpc:res-2mm', 'MNI152NLin6Asym'])
+    anchor = select_acpc_anchor(specs)
+    assert anchor.space == 'MNI152NLin2009cAsym'
+
+
+def test_select_acpc_anchor_prefers_an_infant_template():
+    from qsiprep.utils.spaces import select_acpc_anchor
+
+    specs = parse_output_spaces(['acpc:res-2mm', 'MNI152NLin6Asym', 'MNIInfant:cohort-3'])
+    anchor = select_acpc_anchor(specs)
+    assert anchor.space == 'MNIInfant'
+    assert anchor.cohort == '3'
+
+
+def test_resolve_output_spaces_fills_in_the_cohort(monkeypatch):
+    from qsiprep.utils import spaces as spaces_mod
+
+    monkeypatch.setattr(spaces_mod, '_age_in_months', lambda *a, **k: 7)
+    specs = parse_output_spaces(['acpc:res-2mm', 'MNIInfant:cohort-auto'])
+    resolved = spaces_mod.resolve_output_spaces(specs, 'bids', '01', None)
+    assert resolved[1].cohort == '3'
+    assert resolved[1].fullname == 'MNIInfant+3'
+
+
+def test_resolve_output_spaces_errors_without_an_age(monkeypatch):
+    from qsiprep.utils import spaces as spaces_mod
+
+    monkeypatch.setattr(spaces_mod, '_age_in_months', lambda *a, **k: None)
+    specs = parse_output_spaces(['acpc:res-2mm', 'MNIInfant:cohort-auto'])
+    with pytest.raises(OutputSpacesError, match='MNIInfant'):
+        spaces_mod.resolve_output_spaces(specs, 'bids', '01', None)
+
+
+def test_resolve_output_spaces_reads_the_age_once(monkeypatch):
+    from qsiprep.utils import spaces as spaces_mod
+
+    calls = []
+
+    def _fake(*args, **kwargs):
+        calls.append(args)
+        return 7
+
+    monkeypatch.setattr(spaces_mod, '_age_in_months', _fake)
+    specs = parse_output_spaces(
+        ['acpc:res-2mm', 'MNIInfant:cohort-auto', 'UNCInfant:cohort-auto']
+    )
+    spaces_mod.resolve_output_spaces(specs, 'bids', '01', None)
+    assert len(calls) == 1
