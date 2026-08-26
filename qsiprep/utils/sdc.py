@@ -29,8 +29,4 @@ def t2w_available_for_sdc(subject_data, selection, anat_modality):
     sync with this). Requesting T2w-based SDC without it leaves those nodes
     with an empty input.
     """
-    return (
-        bool(subject_data.get('t2w'))
-        and anat_modality != 'none'
-        and t2w_sdc_enabled(selection)
-    )
+    return bool(subject_data.get('t2w')) and anat_modality != 'none' and t2w_sdc_enabled(selection)

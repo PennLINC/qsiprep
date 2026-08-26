@@ -15,7 +15,6 @@ from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-
 from qsiplan.models import strip_nii_ext
 
 from ... import config

@@ -17,7 +17,7 @@ def _series(tmp_path, name, shape, dtype):
     return str(f)
 
 
-@pytest.fixture()
+@pytest.fixture
 def fake_shapes(monkeypatch):
     """Report chosen shapes without writing gigabytes to disk.
 

@@ -7,8 +7,15 @@ def test_method_selection_from_config_reads_new_and_legacy_keys():
     from qsiprep import config
     from qsiprep.grouping import method_selection_from_config
 
-    keys = ('hmc_method', 'shoreline_model', 'sdc_method', 'hmc_model', 'pepolar_method',
-            'use_syn_sdc', 'force')
+    keys = (
+        'hmc_method',
+        'shoreline_model',
+        'sdc_method',
+        'hmc_model',
+        'pepolar_method',
+        'use_syn_sdc',
+        'force',
+    )
     saved = {key: getattr(config.workflow, key) for key in keys}
     try:
         config.workflow.hmc_method = 'shoreline'

@@ -12,7 +12,6 @@ import logging
 import nipype.pipeline.engine as pe
 from nipype.interfaces import utility as niu
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-
 from qsiplan.adapters import assembly_to_sidecar
 
 from ... import config

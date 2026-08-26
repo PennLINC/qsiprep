@@ -784,7 +784,7 @@ def test_concatenate_diffprep_groups_rejects_count_mismatch(tmp_path):
         ).run(cwd=str(run_dir))
 
 
-@pytest.fixture()
+@pytest.fixture
 def t2w_gate_config():
     """Pin every config knob _t2w_available_for_sdc reads, and restore after."""
     from qsiprep import config
@@ -811,6 +811,7 @@ def test_t2w_available_for_sdc_requires_anat_processing(t2w_gate_config):
     is never produced; requesting T2w SDC then leaves the DRBUDDI structural / the
     extended report's t2w_n4 with an empty input (the CI failure)."""
     from qsiplan.methods import selection_for_config
+
     from qsiprep.utils.sdc import t2w_available_for_sdc
 
     selection = selection_for_config('eddy', 'drbuddi')
@@ -830,6 +831,7 @@ def test_t2w_available_for_sdc_requires_a_consuming_method(t2w_gate_config):
     ``epi_mode="T2Wreg" requires a structural_image``.
     """
     from qsiplan.methods import selection_for_config
+
     from qsiprep.utils.sdc import t2w_available_for_sdc, t2w_sdc_enabled
 
     # eddy + TOPUP: nothing consumes a T2w, so do not claim T2w SDC.
@@ -893,6 +895,7 @@ def _make_unit(suffix=None, **extra):
     fieldmap, or a GRE suffix (``'phasediff'``/``'fieldmap'``).
     """
     from qsiplan.models import CorrectionMethod
+
     from qsiprep.tests.preproc_factory import make_preproc_unit
 
     dwi = '/data/sub-01_dwi.nii.gz'

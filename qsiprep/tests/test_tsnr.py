@@ -13,7 +13,7 @@ def _write(path, data, affine=None):
     return str(path)
 
 
-@pytest.fixture()
+@pytest.fixture
 def series(tmp_path):
     """8 b=0 volumes with known noise, plus diffusion-weighted volumes.
 

@@ -7,8 +7,8 @@ covered in depth by ``test_interfaces_diffprep``).
 
 import numpy as np
 import pytest
-
 from qsiplan.models import CorrectionMethod
+
 from qsiprep import config
 from qsiprep.tests.preproc_factory import make_preproc_unit
 
@@ -293,6 +293,7 @@ def test_unit_sidecar_round_trips_through_derivatives_sidecar(tmp_path):
     import json
 
     from qsiplan.adapters import unit_to_sidecar
+
     from qsiprep.interfaces.bids import DerivativesSidecar
 
     unit = make_preproc_unit(
@@ -426,6 +427,7 @@ def test_distortion_group_merge_wf_writes_the_assembly_sidecar(tmp_path):
     outputs lost their ScanGrouping provenance.
     """
     from qsiplan.plan import OutputAssembly
+
     from qsiprep.workflows.dwi.distortion_group_merge import init_distortion_group_merge_wf
 
     cfg = _cfg(layout=_StubLayout())

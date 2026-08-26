@@ -308,9 +308,7 @@ def init_fsl_hmc_wf(
     workflow.__desc__ = boilerplate_from_eddy_config(
         eddy_args,
         fieldmap_type,
-        pepolar_method='+'.join(
-            ['topup'] * run_topup + ['drbuddi'] * run_drbuddi
-        ),
+        pepolar_method='+'.join(['topup'] * run_topup + ['drbuddi'] * run_drbuddi),
     )
 
     # Are we running TOPUP?

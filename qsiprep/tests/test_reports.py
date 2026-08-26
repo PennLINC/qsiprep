@@ -29,7 +29,7 @@ def test_subject_summary_counts_inputs_uniquely():
     assert 'inputs 2, outputs 2' in segment
 
 
-@pytest.fixture()
+@pytest.fixture
 def collect_reports(monkeypatch):
     """Replace run_reports with a recorder of the report directories and filenames."""
     from qsiprep.reports import core

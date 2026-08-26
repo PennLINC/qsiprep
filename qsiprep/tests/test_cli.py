@@ -24,8 +24,8 @@ nipype_config.update_config({'execution': {'remove_unnecessary_outputs': False}}
 DEFAULT_NUM_CPUS = 4
 
 
-@pytest.mark.integration()
-@pytest.mark.dsdti_fmap()
+@pytest.mark.integration
+@pytest.mark.dsdti_fmap
 def test_dsdti_fmap(data_dir, output_dir, working_dir):
     """Run AllFieldmaps test on DSDTI data.
 
@@ -65,8 +65,8 @@ def test_dsdti_fmap(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
-@pytest.mark.integration()
-@pytest.mark.dscsdsi_fmap()
+@pytest.mark.integration
+@pytest.mark.dscsdsi_fmap
 def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
     """Run AllFieldmaps test on DSCSDSI data.
 
@@ -108,8 +108,8 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
-@pytest.mark.integration()
-@pytest.mark.cuda()
+@pytest.mark.integration
+@pytest.mark.cuda
 def test_cuda(data_dir, output_dir, working_dir):
     """
 
@@ -152,8 +152,8 @@ def test_cuda(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
-@pytest.mark.integration()
-@pytest.mark.drbuddi_rpe()
+@pytest.mark.integration
+@pytest.mark.drbuddi_rpe
 def test_drbuddi_rpe(data_dir, output_dir, working_dir):
     """
 
@@ -205,8 +205,8 @@ def test_drbuddi_rpe(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
-@pytest.mark.integration()
-@pytest.mark.drbuddi_shoreline_epi()
+@pytest.mark.integration
+@pytest.mark.drbuddi_shoreline_epi
 def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
     """Test EPI fieldmap correction with SHORELine + DRBUDDI.
 
@@ -242,8 +242,8 @@ def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
-@pytest.mark.integration()
-@pytest.mark.drbuddi_tensorline_epi()
+@pytest.mark.integration
+@pytest.mark.drbuddi_tensorline_epi
 def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
     """Test EPI fieldmap correction with TENSORLine + DRBUDDI.
 
@@ -279,8 +279,8 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
-@pytest.mark.integration()
-@pytest.mark.dscsdsi()
+@pytest.mark.integration
+@pytest.mark.dscsdsi
 def test_dscsdsi(data_dir, output_dir, working_dir):
     """DSCSDSI test
 
@@ -325,8 +325,8 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
-@pytest.mark.integration()
-@pytest.mark.diffprep()
+@pytest.mark.integration
+@pytest.mark.diffprep
 def test_diffprep(data_dir, output_dir, working_dir):
     """TORTOISE DIFFPREP head-motion/eddy correction on non-shelled data.
 
@@ -363,8 +363,8 @@ def test_diffprep(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
-@pytest.mark.integration()
-@pytest.mark.diffprep_drbuddi()
+@pytest.mark.integration
+@pytest.mark.diffprep_drbuddi
 def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
     """TORTOISE DIFFPREP head-motion correction followed by DRBUDDI SDC.
 
@@ -411,8 +411,8 @@ def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False, check_outputs=False)
 
 
-@pytest.mark.integration()
-@pytest.mark.diffprep_rpe_series()
+@pytest.mark.integration
+@pytest.mark.diffprep_rpe_series
 def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
     """TORTOISE DIFFPREP HMC on a reverse-PE *series* (rpe_series) + DRBUDDI SDC.
 
@@ -459,8 +459,8 @@ def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False, check_outputs=False)
 
 
-@pytest.mark.integration()
-@pytest.mark.diffprep_csdsi_rpe_series()
+@pytest.mark.integration
+@pytest.mark.diffprep_csdsi_rpe_series
 def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
     """TORTOISE DIFFPREP on a NON-shelled (CS-DSI) reverse-PE series + DRBUDDI.
 
@@ -518,8 +518,8 @@ def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False, check_outputs=False)
 
 
-@pytest.mark.integration()
-@pytest.mark.dsdti_nofmap()
+@pytest.mark.integration
+@pytest.mark.dsdti_nofmap
 def test_dsdti_nofmap(data_dir, output_dir, working_dir):
     """DSCDTI_nofmap test.
 
@@ -560,8 +560,8 @@ def test_dsdti_nofmap(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
-@pytest.mark.integration()
-@pytest.mark.dsdti_synfmap()
+@pytest.mark.integration
+@pytest.mark.dsdti_synfmap
 def test_dsdti_synfmap(data_dir, output_dir, working_dir):
     """DSCDTI_synfmap test
 
@@ -608,8 +608,8 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
-@pytest.mark.integration()
-@pytest.mark.intramodal_template()
+@pytest.mark.integration
+@pytest.mark.intramodal_template
 def test_intramodal_template(data_dir, output_dir, working_dir):
     """IntramodalTemplate test
 
@@ -649,8 +649,8 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
-@pytest.mark.integration()
-@pytest.mark.multi_t1w()
+@pytest.mark.integration
+@pytest.mark.multi_t1w
 def test_multi_t1w(data_dir, output_dir, working_dir):
     """MultiT1w test
 
@@ -732,8 +732,8 @@ def test_multi_t1w(data_dir, output_dir, working_dir):
     )
 
 
-@pytest.mark.integration()
-@pytest.mark.maternal_brain_project()
+@pytest.mark.integration
+@pytest.mark.maternal_brain_project
 def test_maternal_brain_project(data_dir, output_dir, working_dir):
     """Run QSIPrep on Maternal Brain Project data.
 
@@ -769,8 +769,8 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
-@pytest.mark.integration()
-@pytest.mark.forrest_gump()
+@pytest.mark.integration
+@pytest.mark.forrest_gump
 def test_forrest_gump(data_dir, output_dir, working_dir):
     """Run QSIPrep on Forrest Gump data without dwidenoise denoising.
 
@@ -805,8 +805,8 @@ def test_forrest_gump(data_dir, output_dir, working_dir):
     _run_and_generate(TEST_NAME, parameters, test_main=False)
 
 
-@pytest.mark.integration()
-@pytest.mark.forrest_gump_patch2self()
+@pytest.mark.integration
+@pytest.mark.forrest_gump_patch2self
 def test_forrest_gump_patch2self(data_dir, output_dir, working_dir):
     """Run QSIPrep on Forrest Gump data with patch2self denoising.
 
