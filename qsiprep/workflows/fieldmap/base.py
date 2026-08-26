@@ -59,7 +59,7 @@ def init_sdc_wf(unit):
 
         from qsiprep.workflows.fieldmap import init_sdc_wf
         from qsiprep.tests.preproc_factory import make_preproc_unit
-        from qsiprep.grouping.models import CorrectionMethod
+        from qsiplan.models import CorrectionMethod
         wf = init_sdc_wf(
             make_preproc_unit(
                 ['/data/sub-03/dwi/sub-03_dwi.nii.gz'],
@@ -74,7 +74,7 @@ def init_sdc_wf(unit):
 
     Parameters
     ----------
-    unit : :class:`~qsiprep.grouping.adapters.PreprocUnit`
+    unit : :class:`~qsiplan.adapters.PreprocUnit`
         The DWI series to correct and the fieldmap that corrects them
         (its lead series' sidecar metadata drives the PEPOLAR/SyN setup)
 

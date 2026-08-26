@@ -330,9 +330,10 @@ class GradientPlot(SummaryInterface):
     output_spec = GradientPlotOutputSpec
 
     def _run_interface(self, runtime):
+        from qsiplan.metadata import B0_THRESHOLD
+        from qsiplan.viz.qspace import q_points, scheme_fragment, scheme_payload
+
         from .. import config
-        from ..grouping.metadata import B0_THRESHOLD
-        from ..viz.qspace import q_points, scheme_fragment, scheme_payload
 
         outfile = os.path.join(runtime.cwd, 'sampling_scheme.html')
         orig_bvecs = concatenate_bvecs(self.inputs.orig_bvec_files)

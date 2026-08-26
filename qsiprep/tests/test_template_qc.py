@@ -34,7 +34,7 @@ def _structured(shape=(28, 28, 28), shift=0):
     return vol
 
 
-@pytest.fixture
+@pytest.fixture()
 def template_set(tmp_path):
     """Three inputs matching a template, plus one deliberate outlier."""
     rng = np.random.default_rng(0)

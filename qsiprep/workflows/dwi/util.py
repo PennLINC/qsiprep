@@ -207,7 +207,7 @@ def tortoise_convert_mem_gb(dwi_files):
 def _get_concatenated_bids_name(all_dwis):
     """A display name for a list of dwi files, for reportlet source files.
 
-    Output naming proper lives in :func:`qsiprep.grouping.models.derive_output_name`;
+    Output naming proper lives in :func:`qsiplan.models.derive_output_name`;
     this common-prefix fallback only names reportlet source files when the
     caller has no output prefix (:func:`get_source_file`).
     """

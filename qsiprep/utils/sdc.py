@@ -4,7 +4,7 @@ Pure functions over the method selection and collected subject data - no
 config reads - shared by workflow construction and its tests.
 """
 
-from ..grouping.methods import HmcMethod, SdcTool
+from qsiplan.methods import HmcMethod, SdcTool
 
 
 def t2w_sdc_enabled(selection):

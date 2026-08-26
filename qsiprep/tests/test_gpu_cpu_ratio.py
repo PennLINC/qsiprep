@@ -18,7 +18,7 @@ def _config(ratio=None, omp=8):
     return config
 
 
-@pytest.fixture
+@pytest.fixture()
 def diffprep_inputs(tmp_path):
     """DIFFPREP needs its mandatory inputs to render a command line."""
     dwi = tmp_path / 'dwi.nii'

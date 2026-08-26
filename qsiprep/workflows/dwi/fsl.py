@@ -62,7 +62,7 @@ def init_fsl_hmc_wf(
 
     **Parameters**
 
-        unit: :class:`~qsiprep.grouping.adapters.PreprocUnit`
+        unit: :class:`~qsiplan.adapters.PreprocUnit`
             the DWI series to correct together and the fieldmap that corrects them
         impute_slice_threshold: float
             threshold for a slice to be replaced with imputed values. Overrides the

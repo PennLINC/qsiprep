@@ -16,8 +16,9 @@ from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
+from qsiplan.models import strip_nii_ext
+
 from ... import config
-from ...grouping.models import strip_nii_ext
 from ...interfaces import ConformDwi, DerivativesDataSink
 from ...interfaces.dipy import Patch2Self
 from ...interfaces.dwi_merge import MergeDWIs, PhaseToRad, StackConfounds
@@ -67,7 +68,7 @@ def init_merge_and_denoise_wf(
 
     Parameters
     ----------
-    unit : :class:`~qsiprep.grouping.adapters.PreprocUnit`
+    unit : :class:`~qsiplan.adapters.PreprocUnit`
         the unit these series belong to; sidecar metadata comes from its
         records instead of layout re-reads (the layout is still probed for
         part-phase companion files, which the grouping does not model)

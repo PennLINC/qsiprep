@@ -70,7 +70,7 @@ def init_dwi_preproc_wf(
 
     Parameters
     ----------
-    unit : :class:`~qsiprep.grouping.adapters.PreprocUnit`
+    unit : :class:`~qsiplan.adapters.PreprocUnit`
         The DWI series to correct together and the fieldmap that corrects them
     t2w_sdc : bool
         Include T2w scans in distortion correction

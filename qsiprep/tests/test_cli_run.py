@@ -286,7 +286,7 @@ def test_collect_data(tmpdir, name, skeleton, sessions, n_anats):
     assert len(subj_data['t2w']) == 0, pprint.pformat(subj_data)
 
 
-@pytest.fixture
+@pytest.fixture()
 def minimal_args(tmp_path):
     """Return the arguments every qsiprep call needs, for parser-level tests."""
     bids_dir = tmp_path / 'bids'

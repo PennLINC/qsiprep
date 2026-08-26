@@ -1,7 +1,7 @@
-"""Build :class:`~qsiprep.grouping.adapters.PreprocUnit` objects in memory.
+"""Build :class:`~qsiplan.adapters.PreprocUnit` objects in memory.
 
 The workflow-construction tests need units without materializing a BIDS layout.
-:func:`make_preproc_unit` assembles the minimal :class:`~qsiprep.grouping.models`
+:func:`make_preproc_unit` assembles the minimal :class:`~qsiplan.models`
 objects a unit's accessors touch (file records, one estimation) so builders can
 be constructed and their graphs asserted.
 """
@@ -11,8 +11,8 @@ from __future__ import annotations
 import dataclasses
 import os.path as op
 
-from qsiprep.grouping.adapters import PreprocUnit
-from qsiprep.grouping.models import (
+from qsiplan.adapters import PreprocUnit
+from qsiplan.models import (
     AUTO_PREFIX,
     CorrectionMethod,
     DistortionSignature,
@@ -143,9 +143,9 @@ def _run_for(grouping, unit):
     attaches runs from the subject-level compiled plan, so the factory mirrors
     that with a single-unit plan under the configured method selection.
     """
+    from qsiplan.methods import selection_for_config
+    from qsiplan.plan import ProcessingRun, _stages_for_unit
     from qsiprep.grouping import method_selection_from_config
-    from qsiprep.grouping.methods import selection_for_config
-    from qsiprep.grouping.plan import ProcessingRun, _stages_for_unit
 
     try:
         selection = method_selection_from_config()

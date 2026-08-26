@@ -44,7 +44,7 @@ def _gpu_available():
     return shutil.which('nvidia-smi') is not None
 
 
-@pytest.mark.synthstrip
+@pytest.mark.synthstrip()
 def test_synthstrip_interface(datasets, tmp_path_factory):
     """Test qsiprep.interfaces.freesurfer.FixHeaderSynthStrip."""
     tmpdir = tmp_path_factory.mktemp('test_synthstrip')
@@ -71,7 +71,7 @@ def test_synthseg_tensorflow_environ():
     assert interface.inputs.environ['TF_ENABLE_ONEDNN_OPTS'] == '0'
 
 
-@pytest.mark.synthstrip
+@pytest.mark.synthstrip()
 def test_synthseg_interface(datasets, tmp_path_factory):
     """Test qsiprep.interfaces.freesurfer.SynthSeg."""
     tmpdir = tmp_path_factory.mktemp('test_synthseg')

@@ -17,6 +17,9 @@ classifiers = [
 license = {file = "LICENSE"}
 requires-python = ">=3.11"
 dependencies = [
+    # qsiplan (the grouping/plan compiler, now its own repository) is a hard
+    # runtime dependency; add "qsiplan" here and to pixi.lock once it is
+    # published.
     'importlib_resources; python_version < "3.12"',
     "acres",
     "dipy>=1.12.0,<1.13.0",
@@ -103,7 +106,6 @@ all = ["qsiprep[dev,doc,maint,tests]"]
 
 [project.scripts]
 qsiprep = "qsiprep.cli.run:main"
-qsiprep-group = "qsiprep.cli.group:main"
 
 #
 # Hatch configurations

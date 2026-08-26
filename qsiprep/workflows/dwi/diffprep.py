@@ -214,7 +214,7 @@ def init_diffprep_hmc_wf(
 
     Parameters
     ----------
-    unit : :class:`~qsiprep.grouping.adapters.PreprocUnit`
+    unit : :class:`~qsiplan.adapters.PreprocUnit`
         The DWI series to correct together and the fieldmap that corrects them.
     source_file : str
         Path to the source DWI file (used for report naming).

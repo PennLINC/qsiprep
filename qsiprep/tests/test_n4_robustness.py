@@ -30,7 +30,7 @@ def _write(path, data, affine=None):
     return str(path)
 
 
-@pytest.fixture
+@pytest.fixture()
 def dwi_with_dropout(tmp_path):
     """A series whose mask contains a patch of susceptibility dropout."""
     rng = np.random.default_rng(0)

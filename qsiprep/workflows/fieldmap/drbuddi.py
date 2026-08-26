@@ -64,7 +64,7 @@ def init_drbuddi_wf(
 
         from qsiprep.workflows.fieldmap import init_drbuddi_wf
         from qsiprep.tests.preproc_factory import make_preproc_unit
-        from qsiprep.grouping.models import CorrectionMethod
+        from qsiplan.models import CorrectionMethod
         ap = 'data/tinytensor/sub-tinytensors/dwi/sub-tinytensors_dir-AP_dwi.nii.gz'
         pa = 'data/tinytensor/sub-tinytensors/dwi/sub-tinytensors_dir-PA_dwi.nii.gz'
         wf = init_drbuddi_wf(
@@ -78,7 +78,7 @@ def init_drbuddi_wf(
 
     Parameters
     ----------
-    unit : :class:`~qsiprep.grouping.adapters.PreprocUnit`
+    unit : :class:`~qsiplan.adapters.PreprocUnit`
         The reverse-PE DWI series (and any epi fieldmaps) to correct
     use_cuda : :obj:`bool`
         Run ``DRBUDDI_cuda`` instead of ``DRBUDDI``. The GPU must be exposed to

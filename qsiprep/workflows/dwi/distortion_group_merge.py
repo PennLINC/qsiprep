@@ -13,8 +13,9 @@ import nipype.pipeline.engine as pe
 from nipype.interfaces import utility as niu
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
+from qsiplan.adapters import assembly_to_sidecar
+
 from ... import config
-from ...grouping.adapters import assembly_to_sidecar
 from ...interfaces import DerivativesDataSink
 from ...interfaces.bids import DerivativesSidecar
 from ...interfaces.dsi_studio import DSIStudioBTable
@@ -50,9 +51,9 @@ def init_distortion_group_merge_wf(
     merging_strategy: str
         'average': averages images that originally sampled the same q-space coordinate
         'concat': concatenates images in the 4th dimension
-    assembly: :class:`~qsiprep.grouping.plan.OutputAssembly`
+    assembly: :class:`~qsiplan.plan.OutputAssembly`
         The plan assembly this workflow realizes; with ``units`` (the member
-        :class:`~qsiprep.grouping.adapters.PreprocUnit`\\ s) it drives the
+        :class:`~qsiplan.adapters.PreprocUnit`\\ s) it drives the
         merged output's provenance sidecar and the gradient plot's
         phase-encoding colors.
 

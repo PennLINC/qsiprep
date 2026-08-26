@@ -42,6 +42,9 @@ from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from packaging.version import Version
 
+from qsiplan.adapters import plan_concatenation_scheme, plan_preproc_units
+from qsiplan.plan import compile_plan
+
 from .. import config
 from ..grouping import (
     GroupingError,
@@ -51,8 +54,6 @@ from ..grouping import (
     render_report_segment,
     report_text,
 )
-from ..grouping.adapters import plan_concatenation_scheme, plan_preproc_units
-from ..grouping.plan import compile_plan
 from ..interfaces import (
     AboutSummary,
     BIDSDataGrabber,
