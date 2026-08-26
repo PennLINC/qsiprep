@@ -207,7 +207,10 @@ def init_anat_preproc_wf(
     )
 
     # Create the output reference grid_image
-    reference_grid_wf = init_output_grid_wf()
+    # Transitional: Task 11 threads the full acpc_specs list in and fans this out.
+    # Until then, the first requested ACPC resolution is the only output grid.
+    _acpc_specs = [s for s in config.workflow.parsed_output_spaces() if not s.standard]
+    reference_grid_wf = init_output_grid_wf(_acpc_specs[0].resolution)
     workflow.connect([
         (get_template, mask_template, [
             ('template_file', 'in_file_a'),
@@ -1239,19 +1242,30 @@ def init_synthseg_wf() -> Workflow:
     return workflow
 
 
-def init_output_grid_wf() -> Workflow:
-    """Generate a non-oblique, uniform voxel-size grid around a brain."""
-    workflow = Workflow(name='output_grid_wf')
+def init_output_grid_wf(resolution, name='output_grid_wf') -> Workflow:
+    """Generate a non-oblique, uniform voxel-size grid around a brain.
+
+    Parameters
+    ----------
+    resolution : :class:`~qsiprep.utils.spaces.Resolution`
+        The resolution to build the grid at. A ``native`` resolution leaves the size
+        undefined so ``VoxelSizeChooser`` measures it from the DWI runs at run time.
+    """
+    workflow = Workflow(name=name)
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=['template_image', 'input_image']),
+        niu.IdentityInterface(fields=['template_image', 'input_images']),
         name='inputnode',
     )
     outputnode = pe.Node(niu.IdentityInterface(fields=['grid_image']), name='outputnode')
-    # Create the output reference grid_image
-    if config.workflow.output_resolution is None:
+
+    if resolution.kind == 'native':
         voxel_size = traits.Undefined
+        strategy = resolution.strategy
     else:
-        voxel_size = config.workflow.output_resolution
+        # acpc resolutions are validated isotropic, so any axis is the size.
+        voxel_size = resolution.zooms[0]
+        strategy = 'max'
+
     padding = 4 if config.workflow.infant else 8
 
     autobox_template = pe.Node(
@@ -1261,7 +1275,8 @@ def init_output_grid_wf() -> Workflow:
         afni.Warp(outputtype='NIFTI_GZ', deoblique=True), name='deoblique_autobox'
     )
     voxel_size_chooser = pe.Node(
-        VoxelSizeChooser(voxel_size=voxel_size), name='voxel_size_chooser'
+        VoxelSizeChooser(voxel_size=voxel_size, anisotropic_strategy=strategy),
+        name='voxel_size_chooser',
     )
     resample_to_voxel_size = pe.Node(
         afni.Resample(outputtype='NIFTI_GZ'), name='resample_to_voxel_size'
@@ -1272,7 +1287,7 @@ def init_output_grid_wf() -> Workflow:
         (autobox_template, deoblique_autobox, [('out_file', 'in_file')]),
         (deoblique_autobox, resample_to_voxel_size, [('out_file', 'in_file')]),
         (resample_to_voxel_size, outputnode, [('out_file', 'grid_image')]),
-        (inputnode, voxel_size_chooser, [('input_image', 'input_image')]),
+        (inputnode, voxel_size_chooser, [('input_images', 'input_images')]),
         (voxel_size_chooser, resample_to_voxel_size, [(('voxel_size', _tupleize), 'voxel_size')]),
     ])  # fmt:skip
 

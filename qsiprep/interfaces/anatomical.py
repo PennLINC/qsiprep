@@ -18,6 +18,7 @@ from nipype import logging
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
     File,
+    InputMultiObject,
     SimpleInterface,
     TraitedSpec,
     isdefined,
@@ -58,7 +59,7 @@ class DiceOverlap(SimpleInterface):
 
 class _VoxelSizeChooserInputSpec(BaseInterfaceInputSpec):
     voxel_size = traits.Float()
-    input_image = File(exists=True)
+    input_images = InputMultiObject(File(exists=True))
     anisotropic_strategy = traits.Enum('min', 'max', 'mean', usedefault=True)
 
 
@@ -71,24 +72,30 @@ class VoxelSizeChooser(SimpleInterface):
     output_spec = _VoxelSizeChooserOutputSpec
 
     def _run_interface(self, runtime):
-        if not isdefined(self.inputs.input_image) and not isdefined(self.inputs.voxel_size):
-            raise Exception('Either voxel_size or input_image need to be defined')
+        if not isdefined(self.inputs.input_images) and not isdefined(self.inputs.voxel_size):
+            raise Exception(
+                'VoxelSizeChooser: either voxel_size or input_images must be set '
+                '(a native resolution, e.g. res-nativemin/res-nativemax, requires '
+                'input_images).'
+            )
 
-        # A voxel size was specified without an image
+        # An explicit size always wins; the strategies only apply to measured images.
         if isdefined(self.inputs.voxel_size):
-            voxel_size = self.inputs.voxel_size
-        else:
-            # An image was provided
-            img = nb.load(self.inputs.input_image)
-            zooms = img.header.get_zooms()[:3]
-            if self.inputs.anisotropic_strategy == 'min':
-                voxel_size = min(zooms)
-            elif self.inputs.anisotropic_strategy == 'max':
-                voxel_size = max(zooms)
-            else:
-                voxel_size = np.round(np.mean(zooms), 2)
+            self._results['voxel_size'] = self.inputs.voxel_size
+            return runtime
 
-        self._results['voxel_size'] = voxel_size
+        zooms = []
+        for image in self.inputs.input_images:
+            zooms.extend(nb.load(image).header.get_zooms()[:3])
+
+        if self.inputs.anisotropic_strategy == 'min':
+            voxel_size = min(zooms)
+        elif self.inputs.anisotropic_strategy == 'max':
+            voxel_size = max(zooms)
+        else:
+            voxel_size = np.round(np.mean(zooms), 2)
+
+        self._results['voxel_size'] = float(voxel_size)
         return runtime
 
 

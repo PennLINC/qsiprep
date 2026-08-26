@@ -23,6 +23,7 @@ def _config():
     config.execution.sloppy = True
     config.execution.output_dir = Path('/tmp/qsiprep_test_out')
     config.nipype.omp_nthreads = 1
+    config.workflow.output_spaces = ['acpc:res-2mm', 'MNI152NLin2009cAsym']
     config.workflow.anat_modality = 'T1w'
     config.workflow.anat_biascorrect = 'n4'
     config.workflow.subject_anatomical_reference = 'unbiased'
