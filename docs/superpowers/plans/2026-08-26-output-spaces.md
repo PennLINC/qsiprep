@@ -1868,6 +1868,128 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
+## Task 9b: Migrate the DWI-side anchor consumers
+
+**Files:**
+- Modify: `qsiprep/workflows/dwi/diffprep.py:599`, `qsiprep/workflows/dwi/base.py:57,73,253`, `qsiprep/workflows/dwi/hmc_sdc.py:30,47,250`
+- Test: `qsiprep/tests/test_workflows_native.py`
+
+**Interfaces:**
+- Consumes: `select_acpc_anchor(specs) -> SpaceSpec` and `SpaceSpec.fullname` from Task 9.
+- Produces: `init_dwi_preproc_wf` and `init_qsiprep_hmcsdc_wf` take `acpc_anchor` (a
+  `SpaceSpec`) in place of `anatomical_template` (a string).
+
+**Why this task exists:** it was missing from the original plan and was found by the
+Task 4 review. Three DWI-side files consume the anchor template. `diffprep.py:599`
+reads `config.workflow.anatomical_template` directly, which Task 4 deleted — so
+TORTOISE/DIFFPREP susceptibility correction raises `AttributeError` at workflow-build
+time until this lands. The other two thread it as a parameter. None is covered by any
+other task, and the existing tests miss it because DIFFPREP paths need external
+binaries that are absent in CI.
+
+The value these consumers need is the ACPC anchor's `fullname` — the same string the
+old `anatomical_template` carried, cohort included (`MNIInfant+3`). They feed
+`b0_sdc_wf.inputs.inputnode.template`, which is the fieldmap-less SyN registration
+target.
+
+- [ ] **Step 1: Write the failing test**
+
+Append to `qsiprep/tests/test_workflows_native.py`:
+
+```python
+def test_diffprep_sdc_uses_the_acpc_anchor(tmp_path):
+    """diffprep read config.workflow.anatomical_template, which no longer exists."""
+    from qsiprep import config
+    from qsiprep.utils.spaces import parse_output_spaces, select_acpc_anchor
+
+    config.workflow.output_spaces = ['acpc:res-2mm', 'MNIInfant:cohort-3']
+    specs = parse_output_spaces(config.workflow.output_spaces)
+    anchor = select_acpc_anchor(specs)
+    assert anchor.fullname == 'MNIInfant+3'
+
+    # The config field diffprep.py used to read must be gone, so any surviving
+    # reader is a build-time AttributeError rather than a silent None.
+    assert not hasattr(config.workflow, 'anatomical_template')
+```
+
+- [ ] **Step 2: Run to verify it fails or passes for the right reason**
+
+Run: `micromamba run -n linc311 pytest qsiprep/tests/test_workflows_native.py -k diffprep_sdc -v`
+Expected: PASS on both assertions (they describe the post-Task-4 world). This test
+documents the contract; the real verification is Step 5's grep.
+
+- [ ] **Step 3: Thread the anchor through the two parameter-based consumers**
+
+In `qsiprep/workflows/dwi/base.py`, rename the `anatomical_template` parameter of
+`init_dwi_preproc_wf` to `acpc_anchor`, update the docstring example at line 73 to
+`acpc_anchor=SpaceSpec(space='MNI152NLin2009cAsym')`, and change the pass-through at
+line 253 to `acpc_anchor=acpc_anchor`.
+
+In `qsiprep/workflows/dwi/hmc_sdc.py`, rename the `anatomical_template` parameter of
+`init_qsiprep_hmcsdc_wf` to `acpc_anchor`, update the docstring at line 47, and change
+line 250 to:
+
+```python
+    b0_sdc_wf.inputs.inputnode.template = acpc_anchor.fullname
+```
+
+- [ ] **Step 4: Fix the direct config read**
+
+In `qsiprep/workflows/dwi/diffprep.py`, replace line 599:
+
+```python
+        b0_sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
+```
+
+with a read of the resolved anchor:
+
+```python
+        from ...utils.spaces import select_acpc_anchor
+
+        b0_sdc_wf.inputs.inputnode.template = select_acpc_anchor(
+            config.workflow.parsed_output_spaces()
+        ).fullname
+```
+
+Note this resolves the anchor from config rather than taking it as a parameter,
+because `diffprep.py` is reached through a call chain that does not thread the anchor.
+A `cohort-auto` spec is still symbolic here, so `fullname` returns the bare template
+name in that case — acceptable, because the b=0 SDC target only needs the template
+family, and the infant cohorts share a common space for this purpose.
+
+- [ ] **Step 5: Confirm no consumer of the deleted field remains**
+
+Run: `grep -rn "config\.workflow\.anatomical_template\|config\.workflow\.output_resolution" --include=*.py qsiprep/`
+Expected: no hits outside `qsiprep/cli/parser.py` (which only reads them off the
+argparse namespace, not off config).
+
+- [ ] **Step 6: Update the call site**
+
+`workflows/base.py:636` passes `anatomical_template=` into `init_dwi_preproc_wf`.
+Per the controller's standing ruling that each task owns the call sites of the
+signatures it changes, update it here to `acpc_anchor=acpc_anchor`.
+
+- [ ] **Step 7: Run the suite**
+
+Run: `micromamba run -n linc311 pytest qsiprep/tests/ -m "not integration" -q`
+Expected: no NEW failures beyond the known baseline.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add qsiprep/workflows/dwi/ qsiprep/workflows/base.py qsiprep/tests/test_workflows_native.py
+git commit -m "fix: thread the ACPC anchor into the DWI-side SDC consumers
+
+diffprep.py read config.workflow.anatomical_template directly, which no longer
+exists, so TORTOISE SDC raised AttributeError at build time. dwi/base.py and
+hmc_sdc.py threaded the same value as a string parameter; both now take the
+resolved SpaceSpec.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
 ## Task 10: A reusable LPS+ reorientation sub-workflow
 
 **Files:**
