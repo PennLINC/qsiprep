@@ -389,6 +389,50 @@ def test_template_lps_wf_reorients_to_lps():
     assert wf.get_node('reorient_mask').inputs.orientation == 'RAI'
     assert wf.get_node('outputnode') is not None
 
+    # Node attributes alone would pass even if the two reorients' sources were
+    # swapped (masked brain into reorient_mask, raw mask into reorient_brain).
+    # Task 13 reuses this sub-workflow for every standard space, so pin the
+    # actual wiring, not just node presence.
+    assert wf.get_node('mask_template').inputs.expr == 'a*b'
+    edges = {(u.name, v.name): d['connect'] for u, v, d in wf._graph.edges(data=True)}
+
+    # reorient_brain is fed from mask_template's masked output, not the raw template.
+    assert ('mask_template', 'reorient_brain') in edges
+    assert edges[('mask_template', 'reorient_brain')] == [('out_file', 'in_file')]
+    assert ('inputnode', 'reorient_brain') not in edges
+
+    # reorient_mask is fed straight from inputnode.mask_file, bypassing mask_template.
+    assert ('inputnode', 'reorient_mask') in edges
+    assert edges[('inputnode', 'reorient_mask')] == [('mask_file', 'in_file')]
+    assert ('mask_template', 'reorient_mask') not in edges
+
+
+def test_one_output_grid_per_acpc_resolution(tmp_path):
+    from qsiprep.utils.spaces import parse_output_spaces, select_acpc_anchor
+    from qsiprep.workflows.anatomical.volume import init_anat_preproc_wf
+
+    config.workflow.output_spaces = ['acpc:res-2mm', 'acpc:res-1p5mm']
+    config.workflow.anat_modality = 'T1w'
+    config.workflow.infant = False
+    config.nipype.omp_nthreads = 1
+    config.execution.output_dir = str(tmp_path)
+    specs = parse_output_spaces(config.workflow.output_spaces)
+    acpc_specs = [s for s in specs if not s.standard]
+
+    wf = init_anat_preproc_wf(
+        num_anat_images=1,
+        num_additional_t2ws=0,
+        has_rois=False,
+        output_spaces=specs,
+        acpc_anchor=select_acpc_anchor(specs),
+        acpc_specs=acpc_specs,
+        do_biascorr=False,
+        t2w_do_biascorr=False,
+    )
+    names = wf.list_node_names()
+    assert any('output_grid_res2mm_wf' in n for n in names)
+    assert any('output_grid_res1p5mm_wf' in n for n in names)
+
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

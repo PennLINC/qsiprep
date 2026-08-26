@@ -219,8 +219,9 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
         None if not session_ids else session_ids[0],
     )
     acpc_anchor = select_acpc_anchor(output_spaces)
-    # anatomical_template is still consumed by SubjectSummary and
-    # init_anat_preproc_wf below; keep it in sync with the resolved anchor.
+    acpc_specs = [s for s in output_spaces if not s.standard]
+    # anatomical_template is still consumed by SubjectSummary; init_anat_preproc_wf
+    # now derives its own copy from acpc_anchor internally.
     anatomical_template = acpc_anchor.fullname
 
     # The anatomical workflow only builds its T2w branch -- and therefore only
@@ -326,7 +327,10 @@ to workflows in *QSIPrep*'s documentation]\
         num_anat_images=num_anat_images,
         num_additional_t2ws=additional_t2ws,
         has_rois=bool(subject_data['roi']),
-        anatomical_template=anatomical_template,
+        output_spaces=output_spaces,
+        acpc_anchor=acpc_anchor,
+        acpc_specs=acpc_specs,
+        dwi_files=subject_data['dwi'],
         do_biascorr=anat_biascorrect_enabled(subject_data.get(info_modality)),
         t2w_do_biascorr=anat_biascorrect_enabled(subject_data.get('t2w')),
     )

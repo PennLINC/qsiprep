@@ -58,7 +58,7 @@ from ...interfaces.itk import AffineToRigid, DisassembleTransform
 from ...interfaces.niworkflows import RobustMNINormalizationRPT
 from ...utils.gpu import gpu_enabled
 from ...utils.misc import fix_multi_source_name
-from ...utils.spaces import spec_from_legacy_template, templateflow_kwargs
+from ...utils.spaces import templateflow_kwargs
 
 ANTS_VERSION = BrainExtraction().version or '<ver>'
 FS_VERSION = '7.3.1'
@@ -75,7 +75,10 @@ def init_anat_preproc_wf(
     num_anat_images,
     num_additional_t2ws,
     has_rois,
-    anatomical_template,
+    output_spaces,
+    acpc_anchor,
+    acpc_specs,
+    dwi_files=None,
     do_biascorr=True,
     t2w_do_biascorr=True,
     name='anat_preproc_wf',
@@ -110,8 +113,16 @@ def init_anat_preproc_wf(
         used by DRBUDDI, how many are there?
     has_rois: :obj:`bool`
         Are there lesion ROI files?
-    anatomical_template : :obj:`str`
-        Template specification of the form <template>[+<cohort>].
+    output_spaces : :obj:`list` of :class:`~qsiprep.utils.spaces.SpaceSpec`
+        Every requested output space, with cohorts already resolved.
+    acpc_anchor : :class:`~qsiprep.utils.spaces.SpaceSpec`
+        The template that anchors ACPC alignment and the output grid's bounding box.
+    acpc_specs : :obj:`list` of :class:`~qsiprep.utils.spaces.SpaceSpec`
+        The requested ACPC spaces, one per output resolution, in output order.
+    dwi_files : :obj:`list`, optional
+        Paths to the subject's DWI runs, used to measure ``native`` resolutions.
+        When empty or ``None`` (as under ``--anat-only``), native grids fall back
+        to the ACPC anchor template since they have no consumer anyway.
     do_biascorr : :obj:`bool`, optional
         Whether to apply N4 bias correction to the T1w(?) or not. Default is True.
     t2w_do_biascorr : :obj:`bool`, optional
@@ -154,6 +165,9 @@ def init_anat_preproc_wf(
     """
     anat_modality = config.workflow.anat_modality
     dwi_only = anat_modality == 'none'
+    # Tasks 13 and 14 still consume the template as a legacy string; this
+    # reproduces the value select_acpc_anchor used to hand back verbatim.
+    anatomical_template = acpc_anchor.fullname
 
     workflow = Workflow(name=name)
     inputnode = pe.Node(
@@ -181,6 +195,7 @@ def init_anat_preproc_wf(
                 'acpc_transform',
                 'acpc_inv_transform',
                 'dwi_sampling_grid',
+                'dwi_sampling_grids',
             ]
         ),
         name='outputnode',
@@ -189,12 +204,12 @@ def init_anat_preproc_wf(
     get_template = pe.Node(
         GetTemplate(
             anatomical_contrast=anat_modality,
-            **templateflow_kwargs(spec_from_legacy_template(anatomical_template)),
+            **templateflow_kwargs(acpc_anchor),
         ),
         name='get_template_image',
     )
     anchor_lps_wf = init_template_lps_wf(name='anchor_lps_wf')
-    reference_grid_wfs = []  # noqa: F841 -- populated in Task 11
+    reference_grid_wfs = []
 
     workflow.connect([
         (get_template, anchor_lps_wf, [
@@ -203,16 +218,39 @@ def init_anat_preproc_wf(
         ]),
     ])  # fmt:skip
 
-    # Create the output reference grid_image
-    # Transitional: Task 11 threads the full acpc_specs list in and fans this out.
-    # Until then, the first requested ACPC resolution is the only output grid.
-    _acpc_specs = [s for s in config.workflow.parsed_output_spaces() if not s.standard]
-    reference_grid_wf = init_output_grid_wf(_acpc_specs[0].resolution)
+    # One grid per requested ACPC resolution. The autobox is identical across them;
+    # only the final resample differs, so this is cheap.
+    for spec in acpc_specs:
+        grid_wf = init_output_grid_wf(
+            spec.resolution,
+            name=f'output_grid_res{spec.resolution.label}_wf',
+        )
+        reference_grid_wfs.append(grid_wf)
+        workflow.connect([
+            (anchor_lps_wf, grid_wf, [('outputnode.template_lps', 'inputnode.template_image')]),
+        ])  # fmt:skip
+
+        if spec.resolution.kind == 'native':
+            # Measured from the DWI runs at run time. Under --anat-only there are no
+            # DWI files and the grid has no consumer, so fall back to the anchor.
+            if dwi_files:
+                grid_wf.inputs.inputnode.input_images = dwi_files
+            else:
+                workflow.connect([
+                    (anchor_lps_wf, grid_wf, [
+                        ('outputnode.template_lps', 'inputnode.input_images'),
+                    ]),
+                ])  # fmt:skip
+
+    merge_grids = pe.Node(niu.Merge(len(acpc_specs)), name='merge_grids')
+    for index, grid_wf in enumerate(reference_grid_wfs, start=1):
+        workflow.connect([
+            (grid_wf, merge_grids, [('outputnode.grid_image', f'in{index}')]),
+        ])  # fmt:skip
+
     workflow.connect([
-        (anchor_lps_wf, reference_grid_wf, [
-            ('outputnode.template_lps', 'inputnode.template_image'),
-        ]),
-        (reference_grid_wf, outputnode, [('outputnode.grid_image', 'dwi_sampling_grid')]),
+        (merge_grids, outputnode, [('out', 'dwi_sampling_grids')]),
+        (reference_grid_wfs[0], outputnode, [('outputnode.grid_image', 'dwi_sampling_grid')]),
     ])  # fmt:skip
 
     if dwi_only:
