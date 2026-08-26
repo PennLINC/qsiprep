@@ -320,3 +320,29 @@ def test_init_spaces_is_gone():
 
     assert not hasattr(config, 'init_spaces')
     assert not hasattr(config.workflow, 'spaces')
+
+
+def test_templateflow_kwargs():
+    from qsiprep.utils.spaces import templateflow_kwargs
+
+    (spec,) = parse_space_token('MNIInfant:cohort-3:res-2')
+    assert templateflow_kwargs(spec) == {
+        'template_name': 'MNIInfant',
+        'cohort': '3',
+        'resolution': '2',
+    }
+
+    (mm_spec,) = parse_space_token('MNI152NLin2009cAsym:res-1p5mm')
+    assert templateflow_kwargs(mm_spec) == {'template_name': 'MNI152NLin2009cAsym'}
+
+
+def test_spec_from_legacy_template():
+    from qsiprep.utils.spaces import spec_from_legacy_template
+
+    spec = spec_from_legacy_template('MNI152NLin2009cAsym')
+    assert spec.space == 'MNI152NLin2009cAsym'
+    assert spec.cohort is None
+
+    infant_spec = spec_from_legacy_template('MNIInfant+3')
+    assert infant_spec.space == 'MNIInfant'
+    assert infant_spec.cohort == '3'

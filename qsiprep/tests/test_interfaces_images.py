@@ -1,5 +1,7 @@
 """Tests for the qsiprep.interfaces.images module."""
 
+from pathlib import Path
+
 import nibabel as nb
 import numpy as np
 from nipype.interfaces.base import isdefined
@@ -145,3 +147,26 @@ def test_conform_dwi_reports_bvals_when_only_bvals_exist(tmp_path):
 
     assert result.outputs.bval_file == str(dwi_dir / 'sub-01_dwi.bval')
     assert not isdefined(result.outputs.bvec_file)
+
+
+def test_get_template_uses_resolution_and_cohort(tmp_path):
+    from qsiprep.interfaces.anatomical import GetTemplate
+
+    iface = GetTemplate(
+        template_name='MNIInfant',
+        cohort='2',
+        resolution='2',
+        anatomical_contrast='T1w',
+    )
+    result = iface.run(cwd=str(tmp_path))
+    name = Path(result.outputs.template_file).name
+    assert 'cohort-2' in name
+    assert 'res-2' in name
+
+
+def test_get_template_defaults_to_res_1(tmp_path):
+    from qsiprep.interfaces.anatomical import GetTemplate
+
+    iface = GetTemplate(template_name='MNI152NLin2009cAsym', anatomical_contrast='T1w')
+    result = iface.run(cwd=str(tmp_path))
+    assert 'res-01' in Path(result.outputs.template_file).name

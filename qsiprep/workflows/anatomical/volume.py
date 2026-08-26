@@ -58,6 +58,7 @@ from ...interfaces.itk import AffineToRigid, DisassembleTransform
 from ...interfaces.niworkflows import RobustMNINormalizationRPT
 from ...utils.gpu import gpu_enabled
 from ...utils.misc import fix_multi_source_name
+from ...utils.spaces import spec_from_legacy_template, templateflow_kwargs
 
 ANTS_VERSION = BrainExtraction().version or '<ver>'
 FS_VERSION = '7.3.1'
@@ -185,11 +186,10 @@ def init_anat_preproc_wf(
         name='outputnode',
     )
 
-    # XXX: This is a temporary solution until QSIPrep supports flexible output spaces.
     get_template = pe.Node(
         GetTemplate(
-            template_spec=anatomical_template,
             anatomical_contrast=anat_modality,
+            **templateflow_kwargs(spec_from_legacy_template(anatomical_template)),
         ),
         name='get_template_image',
     )

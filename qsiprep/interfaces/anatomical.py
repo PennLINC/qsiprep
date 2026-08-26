@@ -194,10 +194,9 @@ def calculate_nonbrain_saturation(head_img, brain_mask_img):
 
 
 class _GetTemplateInputSpec(BaseInterfaceInputSpec):
-    template_spec = traits.Str(
-        desc='Template specification of the form <template>[+<cohort>]',
-        mandatory=True,
-    )
+    template_name = traits.Str(desc='TemplateFlow template name', mandatory=True)
+    cohort = traits.Str(desc='Cohort label, if the template has one')
+    resolution = traits.Str('1', usedefault=True, desc='TemplateFlow resolution entity')
     anatomical_contrast = traits.Enum('T1w', 'T2w', 'none')
 
 
@@ -218,23 +217,20 @@ class GetTemplate(SimpleInterface):
             LOGGER.info('Using T1w modality template for ACPC alignment')
             anatomical_contrast = 'T1w'
 
-        template_name = self.inputs.template_spec
-        cohort = None
-        if '+' in template_name:
-            template_name, cohort = template_name.split('+')
+        cohort = self.inputs.cohort if isdefined(self.inputs.cohort) else None
 
         template_path = get_template(
-            template_name,
+            self.inputs.template_name,
             cohort=cohort,
-            resolution='1',
+            resolution=self.inputs.resolution,
             desc=None,
             suffix=anatomical_contrast,
             extension='.nii.gz',
         )
         mask_path = get_template(
-            template_name,
+            self.inputs.template_name,
             cohort=cohort,
-            resolution='1',
+            resolution=self.inputs.resolution,
             desc='brain',
             suffix='mask',
             extension='.nii.gz',

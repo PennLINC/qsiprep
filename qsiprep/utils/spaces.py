@@ -246,6 +246,33 @@ def parse_space_token(token: str) -> list[SpaceSpec]:
     ]
 
 
+def templateflow_kwargs(spec: SpaceSpec) -> dict:
+    """Turn a standard-space :class:`SpaceSpec` into ``GetTemplate`` inputs.
+
+    A ``res-<n>mm`` spec has no TemplateFlow label, so the highest-resolution grid
+    (``res-1``) is fetched and resampled downstream.
+    """
+    if not spec.standard:
+        raise OutputSpacesError(f'{spec.space} is not a standard space.')
+
+    kwargs = {'template_name': spec.space}
+    if spec.cohort not in (None, 'auto'):
+        kwargs['cohort'] = spec.cohort
+    if spec.resolution is not None and spec.resolution.kind == 'label':
+        kwargs['resolution'] = spec.resolution.label
+    return kwargs
+
+
+def spec_from_legacy_template(template: str) -> SpaceSpec:
+    """Convert a legacy ``template[+cohort]`` string into a :class:`SpaceSpec`.
+
+    Transitional: the anatomical workflow still threads the template as a string
+    until the ACPC anchor is passed in as a spec. Remove once that lands.
+    """
+    space, _, cohort = template.partition('+')
+    return SpaceSpec(space=space, cohort=cohort or None)
+
+
 def parse_output_spaces(tokens: Sequence) -> list[SpaceSpec]:
     """Parse every token, de-duplicate, and check the whole request makes sense."""
     specs = []
