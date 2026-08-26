@@ -503,10 +503,10 @@ Everything above runs from a real BIDS directory too — without processing
 anything:
 
 ```bash
-qsiprep-group /path/to/bids --html grouping.html
+qsiplan /path/to/bids --html grouping.html
 ```
 
-prints the grouping report plus all three backend previews, and writes the
+prints the grouping report plus the method-selection previews, and writes the
 explanatory page you saw throughout this notebook (one per subject). If a
 grouping decision surprises you, the provenance chip tells you which sidecar
 field to set — `B0FieldIdentifier`, `B0FieldSource`, or `MultipartID` — to make

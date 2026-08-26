@@ -61,17 +61,20 @@ For a discussion see :ref:`merge_denoise`.
 Previewing how your data will be grouped
 ========================================
 
-Before running any processing, you can ask *QSIPrep* exactly how it will
+Before running any processing, you can ask exactly how *QSIPrep* will
 interpret your dataset - which scans estimate each fieldmap, which fieldmap
-corrects which scan, and which scans end up combined in each output file::
+corrects which scan, and which scans end up combined in each output file -
+using the lightweight `qsiplan <https://github.com/PennLINC/QSIPlan>`__
+package (installable on its own, e.g. ``pipx install qsiplan``; no qsiprep
+installation needed)::
 
-  qsiprep-group /path/to/bids --html grouping.html
+  qsiplan /path/to/bids --html grouping.html
 
 This prints a per-subject grouping report (every decision tagged with its
 provenance: curated by you, translated from ``IntendedFor``, requested by a
-flag, or inferred) plus a plain-language preview of what each processing
-backend would do with the data. The ``--html`` page is a self-contained
-visual explainer you can open in any browser. Nothing is processed and
+flag, or inferred) plus a plain-language preview of what each method
+selection would do with the data. The ``--html`` page is a self-contained
+interactive explainer you can open in any browser. Nothing is processed and
 nothing is written to your dataset.
 
 If a grouping decision surprises you, the report names the sidecar field to
