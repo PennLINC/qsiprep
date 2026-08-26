@@ -330,6 +330,15 @@ Volumetric outputs are written out in ``ACPC`` space ::
       <source_entities>_space-ACPC_stat-cnr_desc-<label>_dwimap.json
       <source_entities>_space-ACPC_stat-cnr_desc-<label>_dwimap.nii.gz
 
+      # Voxelwise gradient nonlinearity deviation map, present when
+      # --gradient-file is given (see "Gradient nonlinearity correction",
+      # below). 9 volumes holding the row-major 3x3 gradient deviation
+      # matrix per voxel; written even when the run needed no spatial
+      # correction, because it addresses the diffusion encoding rather
+      # than voxel position.
+      <source_entities>_space-ACPC_graddev.json
+      <source_entities>_space-ACPC_graddev.nii.gz
+
 
 Transforms
 ==========
@@ -672,6 +681,78 @@ DWI preprocessing
 Preprocessing of :abbr:`DWI (Diffusion Weighted Image)` files is
 split into multiple sub-workflows described below.
 
+
+.. _gradwarp:
+
+Gradient nonlinearity correction
+--------------------------------
+
+:func:`qsiprep.workflows.dwi.gradwarp.init_gradwarp_wf`
+
+When ``--gradient-file`` is supplied (see the :doc:`usage` page for the
+accepted file formats and the ``ImageType``-driven decision of how much
+spatial correction each run gets), the gradwarp field is generated once per
+correction unit, directly from the raw DWI grid, immediately after the plan
+is resolved. It is never used to resample the DWI series on its own. Instead
+it is folded into
+the single composed transform that is applied once at the end of the
+pipeline, in the order head-motion → gradwarp → susceptibility-distortion →
+(intramodal template →) coregistration → (template space). This keeps the
+long-standing single-resample guarantee: no matter how many corrections are
+stacked, the DWI data are interpolated only once.
+
+Head-motion/eddy-current estimation never sees the gradwarp field -- motion
+parameters are estimated on the native, uncorrected grid, matching how
+TORTOISE itself handles this.
+
+Susceptibility distortion correction (SDC) is estimated on gradwarp-corrected
+b=0/FA images whenever the resulting SDC warp is applied *after* gradwarp in
+the composed transform (the DRBUDDI, GRE fieldmap, SyN fieldmap-less, and
+TORTOISE/DIFFPREP workflows). The one exception is ``eddy`` combined with
+``TOPUP``: ``eddy`` resamples the raw data itself and applies the
+susceptibility field internally, so both the field estimate and gradwarp are
+applied together at the very end, and estimating the TOPUP field on raw
+(rather than gradwarp-corrected) b=0 images is what keeps that single step
+internally consistent.
+
+The voxelwise gradient deviation map (``graddev``, see the :doc:`usage` page)
+is produced independently of whether spatial correction was applied, since
+it addresses a completely separate problem (the diffusion *encoding*, not
+voxel *position*).
+
+.. note::
+   **Known limitations**
+
+   Both of the following are second-order registration effects of the same
+   kind as the ``eddy``/``TOPUP`` estimation-order exception described above.
+   Neither affects the primary spatial or diffusion-encoding correction; both
+   are limited to *where a downstream registration reference happens to be
+   gradwarp-corrected or not*.
+
+   - **TORTOISE's fieldmap-less T2Wreg path is not gradwarp-corrected.**
+     When ``--hmc-model tortoise`` is used with no fieldmap and a T2w
+     structural image is available, susceptibility distortion is estimated
+     by TORTOISE's own ``T2Wreg`` registration, running entirely inside the
+     ``TORTOISEProcess``/``DIFFPREP`` binary. There is no point at which
+     qsiprep can hand that binary a gradwarp-corrected image, so its SDC
+     estimate is made on the uncorrected image even though gradwarp-correction
+     of SDC estimation inputs is applied everywhere else this pattern occurs.
+     Every other correction (the spatial gradwarp itself, the gradient
+     deviation map, and every other backend's SDC estimate) is unaffected;
+     only this one fieldmap-less TORTOISE case is exempt.
+
+   - **The b0-to-T1w coregistration reference is not gradwarp-consistent
+     across backends.** The coregistration affine is applied to the DWI data
+     *after* gradwarp in the composed transform chain, which assumes the
+     image that affine was estimated from is itself gradwarp-corrected. That
+     is true on the DRBUDDI and GRE/SyN fieldmap branches, where the
+     coregistration reference is a side effect of an already
+     gradwarp-corrected SDC estimation image. It is **not** true on the
+     TOPUP-only branch, the fieldmap-less branches that do not reach
+     DRBUDDI/GRE/SyN, and the T2Wreg branch above, where the coregistration
+     reference stays on the raw grid. This is a small, backend-dependent
+     inconsistency in an already-approximate rigid registration step, not a
+     failure of the main spatial or gradient-deviation corrections.
 
 .. _fsl_wf:
 

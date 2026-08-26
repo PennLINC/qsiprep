@@ -55,8 +55,10 @@ def test_siemens_grad_records_requested_terms(tmp_path):
     )
     lines = _coefficient_lines(path.read_text())
     assert len(lines) == 2
-    assert lines[0].endswith('x') and '( 3, 1)' in lines[0]
-    assert lines[1].endswith('z') and '( 5, 0)' in lines[1]
+    assert lines[0].endswith('x')
+    assert '( 3, 1)' in lines[0]
+    assert lines[1].endswith('z')
+    assert '( 5, 0)' in lines[1]
 
 
 def test_itk_field_is_five_dimensional_vector_image(tmp_path):

@@ -94,9 +94,13 @@ def test_displacement_map_puts_coefficients_first(tmp_path):
 
 
 def test_displacement_map_omits_is_ge_when_false(tmp_path):
-    """is_GE=(bool)(argv[4]) casts the pointer, so "0" would read as true.
+    """The wrapper omits the argument rather than passing "0" for false.
 
-    The only way to express false is to pass no fourth argument at all.
+    The built tool reads a supplied fourth argument via ``(bool)atoi(argv[4])``,
+    so passing "0" would in fact correctly read as false -- unlike the stale,
+    unbuilt duplicate at ``src/tools/CreateNonlinearityDisplacementMap/``, which
+    casts the pointer itself and would read "0" as true. Either way, omitting
+    the argument is unambiguous, so that is what the wrapper does.
     """
     from qsiprep.interfaces.gradunwarp import CreateNonlinearityDisplacementMap
 
