@@ -13,10 +13,10 @@ from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
+from qsiplan.adapters import unit_to_sidecar
 
 from ... import config
 from ...data import load as load_data
-from ...grouping import unit_to_sidecar
 from ...interfaces import DerivativesDataSink
 from ...interfaces.bias import N4WeightMask
 from ...interfaces.bids import DerivativesSidecar
@@ -150,11 +150,10 @@ def init_dwi_finalize_wf(
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
 
-    # Deliberately reads the back-filled legacy pepolar_method (not the plan):
-    # under the SHORELine default it still says 'TOPUP', keeping today's
-    # fieldmap-hz handling until the SHORELine report layout is settled (see
-    # the matching gates in dwi/base.py).
-    doing_topup = unit.is_pepolar and 'topup' in config.workflow.pepolar_method.lower()
+    # TOPUP alone exposes a field in Hz for the final resampling path. Dispatch
+    # from the compiled run, not the deprecated config spelling: those can
+    # disagree after automatic method resolution.
+    doing_topup = unit.run.stage_with('topup') is not None
 
     # Determine resource usage
     for scan in all_dwis:

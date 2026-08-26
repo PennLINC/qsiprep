@@ -5,7 +5,7 @@ from qsiplan.methods import HmcMethod, SdcTool
 
 def test_method_selection_from_config_reads_new_and_legacy_keys():
     from qsiprep import config
-    from qsiprep.grouping import method_selection_from_config
+    from qsiprep.utils.plan import method_selection_from_config
 
     keys = (
         'hmc_method',

@@ -481,9 +481,8 @@ def test_hmc_method_shoreline_gets_model_and_drbuddi(minimal_args):
     assert opts.shoreline_model == '3dshore'
     assert opts.sdc_method == 'drbuddi'
     assert opts.hmc_model == '3dSHORE'
-    # Report gating still reads pepolar_method; SHORELine keeps the legacy
-    # default so today's graphs are unchanged.
-    assert opts.pepolar_method == 'TOPUP'
+    # The deprecated spelling remains a truthful view of the resolved method.
+    assert opts.pepolar_method == 'DRBUDDI'
 
 
 def test_hmc_method_tortoise_auto_resolves_drbuddi(minimal_args):

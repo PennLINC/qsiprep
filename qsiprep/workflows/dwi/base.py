@@ -321,13 +321,11 @@ def init_dwi_preproc_wf(
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
 
-    # Fieldmap reports should vary depending on which type of correction is performed
-    # PEPOLAR (epi, rpe series) will produce potentially much more detailed reports.
-    # These gates deliberately read the back-filled legacy pepolar_method rather
-    # than the plan: under the SHORELine default it still says 'TOPUP', which
-    # keeps today's report shapes (a desc-sdc figure, no extended DRBUDDI
-    # reports) until the SHORELine report layout is decided on its own terms.
-    doing_topup = unit.is_pepolar and 'topup' in config.workflow.pepolar_method.lower()
+    # Fieldmap reports should vary depending on which type of correction the
+    # compiled run actually performs. PEPOLAR (epi, rpe series) can produce
+    # considerably more detailed reports.
+    doing_topup = unit.run.stage_with('topup') is not None
+    doing_drbuddi = unit.run.stage_with('drbuddi') is not None
     doing_t2wreg = _doing_t2wreg(unit, t2w_sdc)
     if unit.is_gre or unit.is_nipreps_syn or doing_topup or doing_t2wreg:
         fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
@@ -362,7 +360,7 @@ def init_dwi_preproc_wf(
         workflow.connect([(hmc_wf, outputnode, [('outputnode.fieldmap_hz', 'fieldmap_hz')])])
 
     # DRBUDDI has some extra reports that we want to save. Make sure we get them!
-    if unit.is_pepolar and 'drbuddi' in config.workflow.pepolar_method.lower():
+    if doing_drbuddi:
         # segment_t2w is a boolean flag (the T2w image itself arrives via the
         # inputnode); pass the availability bool straight through.
         extended_pepolar_report_wf = init_extended_pepolar_report_wf(segment_t2w=t2w_sdc)

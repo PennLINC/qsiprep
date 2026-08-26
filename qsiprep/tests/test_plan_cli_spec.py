@@ -64,7 +64,7 @@ def test_config_selection_bridge_resolves_without_error():
     # force_t2wreg= kwargs that qsiplan's selection_for_config dropped, raising
     # TypeError. It now resolves cleanly to a MethodSelection.
     from qsiprep import config
-    from qsiprep.grouping import method_selection_from_config
+    from qsiprep.utils.plan import method_selection_from_config
 
     saved = (config.workflow.hmc_method, config.workflow.sdc_method)
     try:
@@ -73,3 +73,24 @@ def test_config_selection_bridge_resolves_without_error():
     finally:
         config.workflow.hmc_method, config.workflow.sdc_method = saved
     assert selection.hmc.value == 'eddy'
+
+
+def test_subject_plan_bridge_constructs_grouping_policy(monkeypatch):
+    """Regression: the subject workflow passed an undefined ``policy`` name."""
+    from qsiprep.workflows import base
+
+    grouping = object()
+    plan = object()
+    received = {}
+
+    def fake_grouping(**kwargs):
+        received.update(kwargs)
+        return grouping
+
+    monkeypatch.setattr(base, 'build_dwi_grouping', fake_grouping)
+    monkeypatch.setattr(base, 'compile_plan', lambda value, selection: plan)
+
+    assert base._build_dwi_plan({'dwi': ['scan.nii.gz']}, object()) == (grouping, plan)
+    assert received['subject_data'] == {'dwi': ['scan.nii.gz']}
+    assert received['strict'] is False
+    assert 'separate_all_dwis' in received

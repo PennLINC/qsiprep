@@ -42,19 +42,18 @@ from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from packaging.version import Version
+from qsiplan import (
+    GroupingError,
+    build_dwi_grouping,
+    describe_processing,
+    render_report_segment,
+    report_text,
+)
 from qsiplan.adapters import plan_concatenation_scheme, plan_preproc_units
 from qsiplan.cli_spec import policy_from_namespace
 from qsiplan.plan import compile_plan
 
 from .. import config
-from ..grouping import (
-    GroupingError,
-    build_dwi_grouping,
-    describe_processing,
-    method_selection_from_config,
-    render_report_segment,
-    report_text,
-)
 from ..interfaces import (
     AboutSummary,
     BIDSDataGrabber,
@@ -65,6 +64,7 @@ from ..interfaces import (
 )
 from ..utils.bids import collect_data
 from ..utils.misc import fix_multi_source_name
+from ..utils.plan import method_selection_from_config
 from ..utils.sdc import t2w_available_for_sdc, t2w_sdc_enabled
 from .anatomical.volume import anat_biascorrect_enabled, init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
@@ -72,6 +72,19 @@ from .dwi.distortion_group_merge import init_distortion_group_merge_wf
 from .dwi.finalize import init_dwi_finalize_wf
 from .dwi.intramodal_template import init_intramodal_template_wf
 from .dwi.util import get_source_file
+
+
+def _build_dwi_plan(subject_data, selection):
+    """Group one subject and compile the selected execution plan."""
+    policy = policy_from_namespace(config.workflow)
+    grouping = build_dwi_grouping(
+        layout=config.execution.layout,
+        subject_data=subject_data,
+        **dataclasses.asdict(policy),
+        b0_threshold=config.workflow.b0_threshold,
+        strict=False,
+    )
+    return grouping, compile_plan(grouping, selection)
 
 
 def init_qsiprep_wf():
@@ -347,14 +360,7 @@ to workflows in *QSIPrep*'s documentation]\
     # Group the subject's DWI scans from BIDS metadata alone,
     # then compile the execution plan for the selected methods.
     # The grouping policy comes from the single spec qsiplan and qsiprep share.
-    grouping = build_dwi_grouping(
-        layout=config.execution.layout,
-        subject_data=subject_data,
-        **dataclasses.asdict(policy),
-        b0_threshold=config.workflow.b0_threshold,
-        strict=False,
-    )
-    plan = compile_plan(grouping, selection)
+    grouping, plan = _build_dwi_plan(subject_data, selection)
     grouping_errors = grouping.errors + [
         issue for issue in plan.issues if issue.severity == 'error'
     ]

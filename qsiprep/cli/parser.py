@@ -220,13 +220,9 @@ def _build_parser(**kwargs):
             explicit_sdc = legacy_pepolar.lower() if legacy_pepolar else namespace.sdc_method
             if explicit_sdc in (None, 'auto'):
                 namespace.sdc_method = 'topup' if namespace.hmc_method == 'eddy' else 'drbuddi'
-                # TORTOISE gets DRBUDDI (the legacy 'TOPUP' default never produced
-                # a working DIFFPREP run); eddy and SHORELine keep the legacy
-                # 'TOPUP' so report gating that still reads pepolar_method builds
-                # the same graph it does today.
-                namespace.pepolar_method = (
-                    'DRBUDDI' if namespace.hmc_method == 'tortoise' else 'TOPUP'
-                )
+                # Keep the deprecated vocabulary truthful for any downstream
+                # consumer loading a newly written config file.
+                namespace.pepolar_method = namespace.sdc_method.upper()
             else:
                 if namespace.hmc_method != 'eddy' and 'topup' in explicit_sdc:
                     self.error(

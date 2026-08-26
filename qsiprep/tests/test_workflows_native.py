@@ -369,7 +369,7 @@ def test_unknown_hmc_model_is_rejected_at_selection_time(tmp_path):
     """The subject workflow resolves the method selection before building
     anything; garbage config dies there, not deep in a builder."""
     _cfg(hmc_model='bogus', layout=_StubLayout())
-    from qsiprep.grouping import method_selection_from_config
+    from qsiprep.utils.plan import method_selection_from_config
 
     with pytest.raises(ValueError, match='hmc'):
         method_selection_from_config()
@@ -394,18 +394,14 @@ if __name__ == '__main__':
 
 
 def test_legacy_method_keys_read_only_at_allowlisted_sites():
-    """Routing reads the compiled plan; the back-filled legacy keys survive only
-    at these sites (report gating held for SHORELine shape-compatibility, and
-    display/vocabulary strings), so new reads cannot creep in unnoticed."""
+    """Routing reads the compiled plan; legacy keys are display vocabulary only."""
     import pathlib
     import re
 
     root = pathlib.Path(__file__).parent.parent
     allowed = {
-        # SHORELine report-shape compatibility (see the comments at the sites).
-        'workflows/dwi/base.py': {'pepolar_method': 2, 'hmc_model': 1},
-        'workflows/dwi/finalize.py': {'pepolar_method': 1},
         # Display strings and the SHORELine model vocabulary.
+        'workflows/dwi/base.py': {'hmc_model': 1},
         'workflows/dwi/derivatives.py': {'hmc_model': 3},
         'workflows/dwi/hmc.py': {'hmc_model': 3},
     }

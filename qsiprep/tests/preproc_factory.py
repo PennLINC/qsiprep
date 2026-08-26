@@ -146,7 +146,7 @@ def _run_for(grouping, unit):
     from qsiplan.methods import selection_for_config
     from qsiplan.plan import ProcessingRun, _stages_for_unit
 
-    from qsiprep.grouping import method_selection_from_config
+    from qsiprep.utils.plan import method_selection_from_config
 
     try:
         selection = method_selection_from_config()
