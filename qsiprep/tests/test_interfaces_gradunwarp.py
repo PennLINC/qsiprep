@@ -127,7 +127,11 @@ def test_displacement_map_runs_on_synthetic_coefficients(tmp_path):
 
     _require('CreateNonlinearityDisplacementMap')
     coeff = write_siemens_grad(tmp_path / 'coeff.grad')
-    ref = write_dwi_with_gradients(tmp_path / 'ref.nii.gz')
+    # nvols=1: mk_displacementMaps.cxx reads the reference with
+    # readImageD<ImageType3D>, which is exactly why base.py's
+    # ``_extract_first_volume`` sits in front of this interface. Handing the
+    # binary a 4D series here would test the input the wrapper exists to avoid.
+    ref = write_dwi_with_gradients(tmp_path / 'ref.nii.gz', nvols=1)
     result = CreateNonlinearityDisplacementMap(coeff_file=str(coeff), ref_image=ref).run(
         cwd=str(tmp_path)
     )

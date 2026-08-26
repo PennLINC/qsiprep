@@ -303,7 +303,8 @@ Its JSON sidecar records:
 
 - `GradientCoefficientFile` — basename only, never the full host path
 - `GradientWarpDimensions` — `3D`, `1D`, or `none`
-- `GradientCoefficientManufacturer`
+- `GradientCoefficientIsGE` — boolean. Not a `Manufacturer` string: all that is
+  resolved is whether TORTOISE's GE code path was taken.
 - how the decision was reached: `metadata` or `--force gradients`
 
 so a reader can distinguish an auto-detected run from a forced one without the

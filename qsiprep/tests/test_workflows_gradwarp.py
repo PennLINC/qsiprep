@@ -953,3 +953,80 @@ def test_dwi_finalize_wf_main_sidecar_has_no_gradient_warp_dimensions_without_a_
 
     merged_sidecar = wf.get_node('merged_sidecar')
     assert 'GradientWarpDimensions' not in merged_sidecar.inputs.sidecar_data
+
+
+def test_dwi_finalize_wf_grad_dev_sidecar_records_is_ge_as_a_boolean(tmp_path):
+    """The flag resolved is whether TORTOISE's GE code path was taken.
+
+    A key named ``...Manufacturer`` implies a real DICOM Manufacturer value,
+    and ``'non-GE'`` is not one. This ships into derivative sidecars that
+    downstream readers parse, so the name has to be honest.
+    """
+    wf = _finalize_wf_with_gradients(tmp_path)
+
+    meta = wf.get_node('ds_grad_dev').inputs.meta_dict
+    assert meta['GradientCoefficientIsGE'] is False
+    assert 'GradientCoefficientManufacturer' not in meta
+
+
+def test_dwi_finalize_wf_grad_dev_initial_image_is_the_first_b0(tmp_path):
+    """``-i`` is the native-space counterpart of ``-f``, a b=0 in ACPC space.
+
+    Volume 0 of the raw series is not guaranteed to be a b=0; if it is
+    diffusion-weighted, whatever transform the tool derives between the two is
+    cross-contrast, and a bad one gives a silently wrong L map. Picking the
+    first b=0 costs nothing -- same grid, same affine.
+    """
+    wf = _finalize_wf_with_gradients(tmp_path)
+
+    extractor = wf.get_node('grad_dev_initial_ref')
+    edge = wf._graph.get_edge_data(wf.get_node('inputnode'), extractor)
+    assert ('b0_indices', 'b0_indices') in edge['connect']
+
+
+def test_extract_first_b0_picks_the_named_volume(tmp_path):
+    import nibabel as nb
+    import numpy as np
+
+    from qsiprep.workflows.dwi.finalize import _extract_first_b0
+
+    data = np.zeros((4, 4, 4, 5), dtype='float32')
+    for volume in range(5):
+        data[..., volume] = volume
+    path = tmp_path / 'raw.nii.gz'
+    nb.Nifti1Image(data, np.eye(4)).to_filename(str(path))
+
+    out = _extract_first_b0(str(path), [3, 4], newpath=str(tmp_path))
+    out_img = nb.load(out)
+    assert out_img.ndim == 3
+    assert np.allclose(np.asanyarray(out_img.dataobj), 3)
+
+
+def test_extract_first_b0_falls_back_to_volume_zero(tmp_path):
+    """An empty or unconnected ``b0_indices`` must not crash the node."""
+    import nibabel as nb
+    import numpy as np
+    from nipype.interfaces.base import Undefined
+
+    from qsiprep.workflows.dwi.finalize import _extract_first_b0
+
+    data = np.zeros((4, 4, 4, 3), dtype='float32')
+    data[..., 0] = 7
+    path = tmp_path / 'raw.nii.gz'
+    nb.Nifti1Image(data, np.eye(4)).to_filename(str(path))
+
+    for indices in ([], Undefined):
+        out = _extract_first_b0(str(path), indices, newpath=str(tmp_path))
+        assert np.allclose(np.asanyarray(nb.load(out).dataobj), 7)
+
+
+def test_extract_first_b0_passes_an_already_3d_image_through(tmp_path):
+    import nibabel as nb
+    import numpy as np
+
+    from qsiprep.workflows.dwi.finalize import _extract_first_b0
+
+    path = tmp_path / 'vol.nii.gz'
+    nb.Nifti1Image(np.zeros((4, 4, 4), dtype='float32'), np.eye(4)).to_filename(str(path))
+
+    assert _extract_first_b0(str(path), [2]) == str(path)

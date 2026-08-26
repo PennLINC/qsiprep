@@ -27,7 +27,6 @@ from ...interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SeriesQC
-from .base import _extract_first_volume
 from .derivatives import init_dwi_derivatives_wf
 from .gradwarp import resolve_gradwarp_plan
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
@@ -456,9 +455,9 @@ def init_dwi_finalize_wf(
         # (TORTOISE's main() calls readImageD<ImageType3D> for both). t1_b0_ref
         # is already a single reference volume (init_dwi_reference_wf's
         # ref_image), but raw_concatenated is the raw series in one 4D file, so
-        # it needs the same extraction gradwarp_ref uses in base.py.
+        # a single volume has to be extracted from it.
         grad_dev_initial_ref = pe.Node(
-            niu.Function(function=_extract_first_volume, output_names=['out_file']),
+            niu.Function(function=_extract_first_b0, output_names=['out_file']),
             name='grad_dev_initial_ref',
         )
         grad_dev = pe.Node(
@@ -485,7 +484,9 @@ def init_dwi_finalize_wf(
                     ),
                     'GradientCoefficientFile': os.path.basename(gradwarp_plan.coeff_file),
                     'GradientWarpDimensions': gradwarp_plan.warp_dim or 'none',
-                    'GradientCoefficientManufacturer': 'GE' if gradwarp_plan.is_ge else 'non-GE',
+                    # A boolean, not a Manufacturer string: all that was
+                    # resolved is whether TORTOISE's GE code path was taken.
+                    'GradientCoefficientIsGE': gradwarp_plan.is_ge,
                     'GradientCorrectionBasis': gradwarp_plan.basis,
                 },
             ),
@@ -494,7 +495,10 @@ def init_dwi_finalize_wf(
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
         workflow.connect([
-            (inputnode, grad_dev_initial_ref, [('raw_concatenated', 'in_file')]),
+            (inputnode, grad_dev_initial_ref, [
+                ('raw_concatenated', 'in_file'),
+                ('b0_indices', 'b0_indices'),
+            ]),
             (grad_dev_initial_ref, grad_dev, [('out_file', 'initial_image')]),
             (outputnode, grad_dev, [('t1_b0_ref', 'final_image')]),
             (grad_dev, ds_grad_dev, [('grad_dev', 'in_file')]),
@@ -566,6 +570,42 @@ def init_dwi_finalize_wf(
         ])  # fmt:skip
 
     return workflow
+
+
+def _extract_first_b0(in_file, b0_indices, newpath=None):
+    """Pull the first b=0 volume off a (possibly 4D) raw DWI series.
+
+    ``-i`` is the native-space image that ``-f`` (the final b=0, in ACPC space)
+    is related back to. In TORTOISE's in-process equivalent
+    (``FINALDATA::ComputeLImgFromField``) that pairing uses a rigid
+    b0-to-structural transform it already holds; the standalone binary is given
+    only the two images, so it has to derive that transform from them. Volume 0
+    of the raw series is not guaranteed to be a b=0, which would make the
+    derivation cross-contrast and a bad transform would give a silently wrong
+    ``L`` map. Picking the first b=0 costs nothing -- same grid, same affine --
+    and removes the hazard.
+
+    ``b0_indices`` indexes volumes of the merged series, the same ordering
+    ``raw_concatenated`` has. Nipype ``Function`` nodes run in a fresh
+    namespace, so imports live inside the function body.
+    """
+    import nibabel as nb
+    from nilearn.image import index_img
+    from nipype.utils.filemanip import fname_presuffix
+
+    try:
+        index = int(b0_indices[0])
+    except (TypeError, IndexError, ValueError):
+        # No b=0 was identified (or the input is unconnected): fall back to the
+        # first volume, which is what the series' own reference would be.
+        index = 0
+
+    if nb.load(in_file).ndim == 3:
+        return in_file
+
+    out_file = fname_presuffix(in_file, suffix=f'_vol{index}', newpath=newpath)
+    index_img(in_file, index).to_filename(out_file)
+    return out_file
 
 
 def init_finalize_denoising_wf(
