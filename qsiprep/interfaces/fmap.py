@@ -917,13 +917,16 @@ def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
         potential_bval_file = op.join(pth, fname) + ".bval"
         starting_index = len(original_files)
         fmap_img = load_img(fmap_file)
+        if fmap_img.ndim == 3:
+            # concat_imgs can't concatenate a mix of 3D and 4D images
+            fmap_img = concat_imgs([fmap_img])
         image_series.append(fmap_img)
-        num_images = 1 if fmap_img.ndim == 3 else fmap_img.shape[3]
+        num_images = fmap_img.shape[3]
         original_files += [fmap_file] * num_images
 
         # Which images are b=0 images?
         if op.exists(potential_bval_file):
-            bvals = np.loadtxt(potential_bval_file)
+            bvals = np.atleast_1d(np.loadtxt(potential_bval_file))
             too_large = np.flatnonzero(bvals > b0_threshold)
             too_large_values = bvals[too_large]
             if too_large.size:

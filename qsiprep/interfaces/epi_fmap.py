@@ -101,33 +101,33 @@ def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
         potential_bval_file = op.join(pth, fname) + ".bval"
         starting_index = len(original_files)
         fmap_img = load_img(fmap_file)
+        if fmap_img.ndim == 3:
+            # concat_imgs can't concatenate a mix of 3D and 4D images
+            fmap_img = concat_imgs([fmap_img])
         image_series.append(fmap_img)
-        num_images = 1 if fmap_img.ndim == 3 else fmap_img.shape[3]
+        num_images = fmap_img.shape[3]
         original_files += [fmap_file] * num_images
 
         # Which images are b=0 images?
         if op.exists(potential_bval_file):
             # If there is a secret bval file, check that it's allowed
-            bvals = np.loadtxt(potential_bval_file)
-            if fmap_img.ndim == 3 and len(bvals) == 1:
-                _b0_indices = np.arange(num_images) + starting_index
-            elif fmap_img.ndim == 4 and len(bvals) == fmap_img.shape[3]:
-                too_large = np.flatnonzero(bvals > b0_threshold)
-                too_large_values = bvals[too_large]
-                if too_large.size:
-                    LOGGER.warning(
-                        "Excluding volumes %s from the %s because b=%s is greater than %d",
-                        str(too_large),
-                        fmap_file,
-                        str(too_large_values),
-                        b0_threshold,
-                    )
-                _b0_indices = np.flatnonzero(bvals < b0_threshold) + starting_index
-            else:
+            bvals = np.atleast_1d(np.loadtxt(potential_bval_file))
+            if len(bvals) != num_images:
                 raise Exception(
                     "Secret fieldmap file %s mismatches its image file %s"
                     % (potential_bval_file, fmap_file)
                 )
+            too_large = np.flatnonzero(bvals > b0_threshold)
+            too_large_values = bvals[too_large]
+            if too_large.size:
+                LOGGER.warning(
+                    "Excluding volumes %s from the %s because b=%s is greater than %d",
+                    str(too_large),
+                    fmap_file,
+                    str(too_large_values),
+                    b0_threshold,
+                )
+            _b0_indices = np.flatnonzero(bvals < b0_threshold) + starting_index
         else:
             _b0_indices = np.arange(num_images) + starting_index
         b0_indices += _b0_indices.tolist()
