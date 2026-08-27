@@ -988,7 +988,11 @@ def _apply_output_space_deprecations(opts, parser=None):
     Runs after the whole command line has been read, so the result does not depend
     on the order options were given in.
     """
-    from qsiprep.utils.spaces import OutputSpacesError, parse_output_spaces
+    from qsiprep.utils.spaces import (
+        OutputSpacesError,
+        parse_output_spaces,
+        select_acpc_anchor,
+    )
 
     def fail(message):
         if parser is not None:
@@ -1035,6 +1039,13 @@ def _apply_output_space_deprecations(opts, parser=None):
         specs = parse_output_spaces(given)
     except OutputSpacesError as exc:
         fail(str(exc))
+
+    # Record the anchor now, from the full list. --skip-anat-based-spatial-
+    # normalization strips every standard space below, and deriving the anchor
+    # afterwards would hand an infant subject the adult template -- silently
+    # changing ACPC alignment, the output grid, and every anatomical and DWI
+    # output. The deprecated flags must not change results.
+    opts.acpc_anchor = str(select_acpc_anchor(specs))
 
     if skip_normalization:
         specs = [spec for spec in specs if not spec.standard]

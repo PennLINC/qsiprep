@@ -599,7 +599,8 @@ def init_diffprep_hmc_wf(
 
         b0_sdc_wf = init_sdc_wf(unit, unit.dwi_metadata)
         b0_sdc_wf.inputs.inputnode.template = select_acpc_anchor(
-            config.workflow.parsed_output_spaces()
+            config.workflow.parsed_output_spaces(),
+            config.workflow.parsed_acpc_anchor(),
         ).fullname
 
         workflow.connect([

@@ -406,6 +406,81 @@ def test_resolve_output_spaces_errors_when_age_exceeds_all_cohorts(monkeypatch):
         spaces_mod.resolve_output_spaces(specs, 'bids', '01', None)
 
 
+def test_select_acpc_anchor_honours_an_explicit_anchor():
+    from qsiprep.utils.spaces import SpaceSpec, select_acpc_anchor
+
+    specs = parse_output_spaces(['acpc:res-2mm'])
+    explicit = SpaceSpec(space='MNIInfant', cohort='auto')
+    assert select_acpc_anchor(specs, explicit) is explicit
+
+
+def test_infant_anchor_survives_skipping_normalization(tmp_path):
+    """--infant --skip-anat-based-spatial-normalization must stay infant-anchored.
+
+    Forwarding appends MNIInfant:cohort-auto, the skip then strips every standard
+    space, and deriving the anchor from what is left would silently move ACPC
+    alignment, the output grid and every output onto the adult template.
+    """
+    from qsiprep.cli.parser import _apply_output_space_deprecations
+    from qsiprep.utils.spaces import parse_space_token, select_acpc_anchor
+
+    opts = _parse(
+        tmp_path,
+        '--output-resolution', '2',
+        '--infant',
+        '--skip-anat-based-spatial-normalization',
+    )
+    _apply_output_space_deprecations(opts)
+
+    assert opts.output_spaces == ['acpc:res-2mm']
+    assert opts.acpc_anchor == 'MNIInfant:cohort-auto'
+    anchor = select_acpc_anchor(
+        parse_output_spaces(opts.output_spaces), parse_space_token(opts.acpc_anchor)[0]
+    )
+    assert anchor.space == 'MNIInfant'
+
+
+@pytest.mark.parametrize(
+    ('extra', 'expected'),
+    [
+        (('--output-resolution', '2'), 'MNI152NLin2009cAsym'),
+        (('--output-resolution', '2', '--infant'), 'MNIInfant:cohort-auto'),
+        (
+            ('--output-resolution', '2', '--skip-anat-based-spatial-normalization'),
+            'MNI152NLin2009cAsym',
+        ),
+        (('--output-spaces', 'acpc:res-2mm', 'MNI152NLin6Asym'), 'MNI152NLin2009cAsym'),
+        (
+            ('--output-spaces', 'acpc:res-2mm', 'UNCInfant:cohort-2'),
+            'UNCInfant:cohort-2',
+        ),
+    ],
+)
+def test_parser_records_the_anchor(tmp_path, extra, expected):
+    from qsiprep.cli.parser import _apply_output_space_deprecations
+
+    opts = _parse(tmp_path, *extra)
+    _apply_output_space_deprecations(opts)
+    assert opts.acpc_anchor == expected
+
+
+def test_config_round_trips_the_anchor(tmp_path):
+    from qsiprep import config
+
+    config.workflow.acpc_anchor = 'MNIInfant:cohort-auto'
+    out = tmp_path / 'config.toml'
+    config.to_filename(out)
+
+    config.workflow.acpc_anchor = None
+    assert config.workflow.parsed_acpc_anchor() is None
+
+    config.load(out, init=False)
+    anchor = config.workflow.parsed_acpc_anchor()
+    assert anchor.space == 'MNIInfant'
+    assert anchor.cohort == 'auto'
+    config.workflow.acpc_anchor = None
+
+
 def test_select_acpc_anchor_is_order_independent():
     from qsiprep.utils.spaces import select_acpc_anchor
 

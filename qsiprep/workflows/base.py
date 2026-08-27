@@ -207,18 +207,22 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
     from ..utils.spaces import resolve_output_spaces, select_acpc_anchor
 
     output_spaces = config.workflow.parsed_output_spaces()
-    if any(spec.needs_cohort_resolution for spec in output_spaces):
+    # The anchor can be a template that is not in output_spaces at all (the
+    # deprecated --infant --skip-anat-based-spatial-normalization combination), so
+    # resolve its cohort alongside the requested spaces rather than after them.
+    acpc_anchor = select_acpc_anchor(output_spaces, config.workflow.parsed_acpc_anchor())
+    to_resolve = [*output_spaces, acpc_anchor]
+    if any(spec.needs_cohort_resolution for spec in to_resolve):
         if session_ids and len(session_ids) > 1:
             raise RuntimeError(
                 'Automatic cohort selection is only available for single session processing.'
             )
-    output_spaces = resolve_output_spaces(
-        output_spaces,
+    *output_spaces, acpc_anchor = resolve_output_spaces(
+        to_resolve,
         config.execution.bids_dir,
         subject_id,
         None if not session_ids else session_ids[0],
     )
-    acpc_anchor = select_acpc_anchor(output_spaces)
     acpc_specs = [s for s in output_spaces if not s.standard]
     standard_specs = [s for s in output_spaces if s.standard]
 

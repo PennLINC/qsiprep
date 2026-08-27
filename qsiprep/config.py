@@ -598,6 +598,15 @@ class workflow(_Config):
     """Skip re-scaling dwi scans to have matching b=0 intensities."""
     output_spaces = None
     """Canonical ``--output-spaces`` tokens, as a list of strings."""
+    acpc_anchor = None
+    """The template AC-PC alignment and the output grid are anchored to.
+
+    Recorded at parse time as one ``--output-spaces``-style token, because it
+    cannot always be re-derived from :attr:`output_spaces`: deprecated flag
+    combinations (``--infant --skip-anat-based-spatial-normalization``) leave an
+    infant anchor with no infant template in the list. ``None`` falls back to
+    deriving it.
+    """
     pepolar_method = None
     """SDC method to be used for PEPOLAR fieldmaps."""
     separate_all_dwis = False
@@ -618,6 +627,19 @@ class workflow(_Config):
         from qsiprep.utils.spaces import parse_output_spaces
 
         return parse_output_spaces(cls.output_spaces or [])
+
+    @classmethod
+    def parsed_acpc_anchor(cls):
+        """The recorded AC-PC anchor as a :class:`~qsiprep.utils.spaces.SpaceSpec`.
+
+        ``None`` when nothing was recorded, leaving the anchor to be derived from
+        the requested spaces.
+        """
+        from qsiprep.utils.spaces import parse_space_token
+
+        if not cls.acpc_anchor:
+            return None
+        return parse_space_token(cls.acpc_anchor)[0]
 
 
 class loggers:
