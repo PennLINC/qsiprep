@@ -63,7 +63,11 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 
 def init_dwi_derivatives_wf(
-    source_file, resolution=None, write_hmc_optimization=True, name='dwi_derivatives_wf'
+    source_file,
+    resolution=None,
+    resolution_meta=False,
+    write_hmc_optimization=True,
+    name='dwi_derivatives_wf',
 ) -> Workflow:
     """Set up a battery of datasinks to store derivatives in the right location.
 
@@ -75,9 +79,13 @@ def init_dwi_derivatives_wf(
     ----------
     resolution : Resolution or None
         Set only when more than one ACPC resolution was requested. Adds a
-        ``res-<label>`` entity to every ACPC DWI sink below, and (since the
-        filename alone does not say what ``res-native*`` resolved to) expects
-        ``inputnode.resolution_meta`` to be wired with the resolved voxel size.
+        ``res-<label>`` entity to every ACPC DWI sink below.
+    resolution_meta : bool
+        Wire ``inputnode.resolution_meta`` -- the resolved voxel size -- into the
+        JSON sidecar of every ACPC DWI sink. Needed whenever the filename alone
+        does not say what the grid turned out to be: any ``res-native*`` request
+        (the sidecar is the only place it is reported) and any fan-out over
+        several resolutions.
     write_hmc_optimization : bool
         The hmcOptimization sidecar is produced before resampling and does not vary
         by output resolution. When ``init_dwi_derivatives_wf`` is instantiated once
@@ -300,7 +308,7 @@ def init_dwi_derivatives_wf(
         (inputnode, ds_btable_t1, [('btable_t1', 'in_file')]),
     ])  # fmt:skip
 
-    if resolution is not None:
+    if resolution_meta:
         # The filename alone doesn't say what res-native* resolved to -- only
         # the sidecar does. ds_cnr_map_t1 and ds_tsnr keep their own descriptive
         # meta_dict as-is; the rest get the resolved voxel size here.

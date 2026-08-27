@@ -303,9 +303,9 @@ def init_dwi_finalize_wf(
 
     # Fan out the resampling: one dwi_trans_wf (and, when write_derivatives, one
     # group of derivatives sinks) per requested ACPC resolution. The res- entity
-    # (and the sidecar note on what res-native* resolved to) only appears once
-    # more than one resolution was requested -- a single ACPC resolution must
-    # keep producing exactly the filenames QSIRecon already expects.
+    # only appears once more than one resolution was requested -- a single ACPC
+    # resolution must keep producing exactly the filenames QSIRecon already
+    # expects. The sidecar's Resolution key is decided separately, below.
     multi_acpc = len(acpc_specs) > 1
     # Built once, from the first spec that reaches the derivatives section below.
     gradient_plot = None
@@ -315,6 +315,10 @@ def init_dwi_finalize_wf(
         suffix = f'_res{label}' if multi_acpc else ''
         res_entities = {'res': label} if multi_acpc else {}
         resolution_for_derivatives = spec.resolution if multi_acpc else None
+        # res-native* is resolved from the DWI headers at run time, so the sidecar
+        # is the only place a run reports what it turned out to be -- write it even
+        # for a single ACPC spec, where there is no res- entity in the filename.
+        write_resolution_meta = multi_acpc or spec.resolution.kind == 'native'
 
         dwi_trans_wf = init_dwi_trans_wf(
             source_file=source_file,
@@ -447,6 +451,7 @@ def init_dwi_finalize_wf(
         dwi_derivatives_wf = init_dwi_derivatives_wf(
             source_file=source_file,
             resolution=resolution_for_derivatives,
+            resolution_meta=write_resolution_meta,
             # hmcOptimization is produced before resampling and is the same for
             # every ACPC resolution; writing it from every dwi_derivatives_wf
             # instance would be a same-path collision, so only the first spec
@@ -474,7 +479,7 @@ def init_dwi_finalize_wf(
             (btab_t1, dwi_derivatives_wf, [('btable_file', 'inputnode.btable_t1')]),
         ])  # fmt:skip
 
-        if resolution_for_derivatives is not None:
+        if write_resolution_meta:
             grid_metadata = pe.Node(
                 niu.Function(
                     input_names=['grid_file'],

@@ -241,6 +241,29 @@ def test_two_acpc_resolutions_write_a_res_entity(tmp_path):
     assert {e.get('res') for e in acpc_sinks} == {'2mm', '1p5mm'}
 
 
+def test_single_native_acpc_records_its_resolution(tmp_path):
+    """res-nativemax is resolved from the DWI headers at run time.
+
+    A single-spec run writes no res- entity, so the JSON sidecar is the only
+    place it says what nativemax turned out to be. It must be written anyway.
+    """
+    wf, _ = _build_finalize(tmp_path, ['acpc:res-nativemax'])
+    names = wf.list_node_names()
+    assert any(n.endswith('grid_metadata') for n in names), names
+    edges = {
+        (u.name, v.name): d['connect']
+        for u, v, d in wf._graph.edges(data=True)
+        if u.name == 'grid_metadata'
+    }
+    assert edges, 'grid_metadata is not wired into the derivatives sinks'
+
+
+def test_single_fixed_acpc_writes_no_resolution_metadata(tmp_path):
+    """A res-2mm run says what it is in its own name; no sidecar needed."""
+    wf, _ = _build_finalize(tmp_path, ['acpc:res-2mm'])
+    assert not any(n.endswith('grid_metadata') for n in wf.list_node_names())
+
+
 def test_one_normalization_per_standard_space():
     from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.anatomical.volume import init_anat_derivatives_wf
