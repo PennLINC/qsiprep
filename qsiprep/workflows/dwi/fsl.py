@@ -62,7 +62,7 @@ def init_fsl_hmc_wf(
 
     **Parameters**
 
-        unit: :class:`~qsiprep.grouping.adapters.PreprocUnit`
+        unit: :class:`~qsiplan.adapters.PreprocUnit`
             the DWI series to correct together and the fieldmap that corrects them
         impute_slice_threshold: float
             threshold for a slice to be replaced with imputed values. Overrides the
@@ -293,23 +293,23 @@ def init_fsl_hmc_wf(
     # Fieldmap correction to be done in LAS+: TOPUP for rpe series or epi fieldmap
     # If a topupref is provided, use it for TOPUP
     if unit.is_pepolar:
-        fieldmap_type = 'rpe_series' if unit.has_bidirectional_dwi else 'epi'
+        fieldmap_type = unit.pepolar_fieldmap_type
     elif unit.is_gre:
         fieldmap_type = unit.gre_suffix
     elif unit.is_nipreps_syn:
         fieldmap_type = 'syn'
     else:
         fieldmap_type = ''
+    # The plan already encodes DRBUDDI's single-blip-pair constraint: a
+    # multi-axis or multi-readout unit has no refinement stage, and the
+    # TOPUP+eddy stage pools every blip group.
+    run_topup = unit.run.stage_with('topup') is not None
+    run_drbuddi = unit.run.stage_with('drbuddi') is not None
     workflow.__desc__ = boilerplate_from_eddy_config(
-        eddy_args, fieldmap_type, config.workflow.pepolar_method
+        eddy_args,
+        fieldmap_type,
+        pepolar_method='+'.join(['topup'] * run_topup + ['drbuddi'] * run_drbuddi),
     )
-
-    # DRBUDDI's single pass corrects one matched blip pair, so a multi-axis or
-    # multi-readout unit skips the DRBUDDI stage; the mixed path (TOPUP+DRBUDDI)
-    # still corrects it as single-stage TOPUP+eddy, which pools every blip group.
-    _pepolar = config.workflow.pepolar_method.lower()
-    run_topup = unit.is_pepolar and 'topup' in _pepolar
-    run_drbuddi = unit.is_pepolar and 'drbuddi' in _pepolar and unit.is_single_blip_pair
 
     # Are we running TOPUP?
     if run_topup:
@@ -397,7 +397,7 @@ def init_fsl_hmc_wf(
             (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')]),
         ])  # fmt:skip
 
-        if 'drbuddi' not in config.workflow.pepolar_method.lower():
+        if not run_drbuddi:
             config.loggers.workflow.info('Using single-stage SDC, TOPUP-only')
             workflow.connect([
                 # There will be no SDC warps, they are applied by eddy
@@ -464,7 +464,7 @@ def init_fsl_hmc_wf(
     if unit.is_gre or unit.is_nipreps_syn:
         config.loggers.workflow.info(f'Computing fieldmap directly from {fieldmap_type}')
         outputnode.inputs.sdc_method = fieldmap_type
-        b0_sdc_wf = init_sdc_wf(unit, unit.dwi_metadata)
+        b0_sdc_wf = init_sdc_wf(unit)
 
         workflow.connect([
             # Send to SDC workflow

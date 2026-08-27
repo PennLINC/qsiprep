@@ -246,7 +246,7 @@ def init_qsiprep_hmcsdc_wf(
         )
 
     # Perform SDC if possible. This will pass-through if no sdc is to be done
-    b0_sdc_wf = init_sdc_wf(unit, unit.dwi_metadata)
+    b0_sdc_wf = init_sdc_wf(unit)
     b0_sdc_wf.inputs.inputnode.template = anatomical_template
 
     workflow.connect([

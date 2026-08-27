@@ -379,6 +379,8 @@ def test_prefer_dedicated_fmaps_warns_and_is_ignored(minimal_args, capsys):
     assert '--prefer-dedicated-fmaps' in warning
     assert 'no effect' in warning
     assert 'B0FieldIdentifier' in warning
+    # It now points at the flag that actually does what it was meant to.
+    assert '--ignore pepolar-dwis' in warning
     assert not hasattr(opts, 'prefer_dedicated_fmaps')
 
 
@@ -444,3 +446,130 @@ def test_b0_transform_options_are_mutually_exclusive(minimal_args, capsys):
             [*minimal_args, '--b0-to-anat-transform', 'Rigid', '--b0-to-t1w-transform', 'Affine']
         )
     assert 'not allowed with' in capsys.readouterr().err
+
+
+def test_ignore_accepts_shims_and_fov(minimal_args):
+    """The grouping honors both; they must be reachable from the CLI."""
+    from qsiprep.cli.parser import _build_parser
+
+    opts = _build_parser().parse_args([*minimal_args, '--ignore', 'shims', 'fov'])
+    assert opts.ignore == ['shims', 'fov']
+
+
+# --- The method axes (--hmc-method/--sdc-method) and their deprecated aliases ---
+
+
+def _parse(minimal_args, *extra):
+    from qsiprep.cli.parser import _build_parser
+
+    return _build_parser().parse_args([*minimal_args, *extra])
+
+
+def test_method_axis_defaults(minimal_args, capsys):
+    opts = _parse(minimal_args)
+    assert capsys.readouterr().err == ''
+    assert opts.hmc_method == 'eddy'
+    assert opts.shoreline_model is None
+    assert opts.sdc_method == 'topup'
+    # Legacy vocabulary is back-filled for unconverted readers.
+    assert opts.hmc_model == 'eddy'
+    assert opts.pepolar_method == 'TOPUP'
+
+
+def test_hmc_method_shoreline_gets_model_and_drbuddi(minimal_args):
+    opts = _parse(minimal_args, '--hmc-method', 'shoreline')
+    assert opts.shoreline_model == '3dshore'
+    assert opts.sdc_method == 'drbuddi'
+    assert opts.hmc_model == '3dSHORE'
+    # The deprecated spelling remains a truthful view of the resolved method.
+    assert opts.pepolar_method == 'DRBUDDI'
+
+
+def test_hmc_method_tortoise_auto_resolves_drbuddi(minimal_args):
+    """The legacy TOPUP default never produced a working DIFFPREP run."""
+    opts = _parse(minimal_args, '--hmc-method', 'tortoise')
+    assert opts.sdc_method == 'drbuddi'
+    assert opts.hmc_model == 'tortoise'
+    assert opts.pepolar_method == 'DRBUDDI'
+
+
+@pytest.mark.parametrize(
+    ('legacy', 'hmc_method', 'shoreline_model', 'hmc_model'),
+    [
+        ('eddy', 'eddy', None, 'eddy'),
+        ('tortoise', 'tortoise', None, 'tortoise'),
+        ('3dSHORE', 'shoreline', '3dshore', '3dSHORE'),
+        ('tensor', 'shoreline', 'tensor', 'tensor'),
+        ('none', 'shoreline', 'none', 'none'),
+    ],
+)
+def test_hmc_model_alias_maps_and_warns(
+    minimal_args, capsys, legacy, hmc_method, shoreline_model, hmc_model
+):
+    opts = _parse(minimal_args, '--hmc-model', legacy)
+    warning = capsys.readouterr().err
+    assert '--hmc-model' in warning
+    assert 'deprecated' in warning
+    assert opts.hmc_method == hmc_method
+    assert opts.shoreline_model == shoreline_model
+    assert opts.hmc_model == hmc_model
+
+
+def test_hmc_model_conflicts_with_hmc_method(minimal_args, capsys):
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--hmc-model', 'eddy', '--hmc-method', 'eddy')
+    assert 'not allowed with' in capsys.readouterr().err
+
+
+def test_pepolar_method_alias_maps_and_warns(minimal_args, capsys):
+    opts = _parse(minimal_args, '--pepolar-method', 'TOPUP+DRBUDDI')
+    warning = capsys.readouterr().err
+    assert '--pepolar-method' in warning
+    assert 'deprecated' in warning
+    assert opts.sdc_method == 'topup+drbuddi'
+    assert opts.pepolar_method == 'TOPUP+DRBUDDI'
+
+
+def test_pepolar_method_conflicts_with_sdc_method(minimal_args, capsys):
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--pepolar-method', 'TOPUP', '--sdc-method', 'topup')
+    assert 'not allowed with' in capsys.readouterr().err
+
+
+@pytest.mark.parametrize('hmc_method', ['shoreline', 'tortoise'])
+@pytest.mark.parametrize('sdc_method', ['topup', 'topup+drbuddi'])
+def test_explicit_topup_requires_eddy(minimal_args, capsys, hmc_method, sdc_method):
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--hmc-method', hmc_method, '--sdc-method', sdc_method)
+    assert 'requires --hmc-method eddy' in capsys.readouterr().err
+
+
+def test_legacy_topup_with_tortoise_is_an_error(minimal_args, capsys):
+    """This pairing used to parse and then hard-fail mid-run."""
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--hmc-model', 'tortoise', '--pepolar-method', 'TOPUP')
+    assert 'requires --hmc-method eddy' in capsys.readouterr().err
+
+
+def test_shoreline_model_requires_shoreline_method(minimal_args, capsys):
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--shoreline-model', 'tensor')
+    assert 'requires --hmc-method shoreline' in capsys.readouterr().err
+
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--hmc-model', '3dSHORE', '--shoreline-model', 'tensor')
+    assert 'requires --hmc-method shoreline' in capsys.readouterr().err
+
+    opts = _parse(minimal_args, '--hmc-method', 'shoreline', '--shoreline-model', 'tensor')
+    assert opts.shoreline_model == 'tensor'
+    assert opts.hmc_model == 'tensor'
+
+
+def test_force_t2wreg_parses(minimal_args):
+    assert _parse(minimal_args).force == []
+    assert _parse(minimal_args, '--force', 't2wreg').force == ['t2wreg']
+
+
+def test_shoreline_selection_warns_of_removal(minimal_args, capsys):
+    _parse(minimal_args, '--hmc-method', 'shoreline')
+    assert 'scheduled for removal' in capsys.readouterr().err

@@ -144,7 +144,7 @@ def test_cuda(data_dir, output_dir, working_dir):
         '--anat-modality=none',
         '--denoise-method=none',
         '--b1-biascorrect-stage=none',
-        '--pepolar-method=DRBUDDI',
+        '--sdc-method=drbuddi',
         f'--eddy-config={eddy_config}',
         '--output-resolution=5',
     ]
@@ -190,7 +190,7 @@ def test_drbuddi_rpe(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         '--b0-motion-corr-to=first',
         '--b1-biascorrect-stage=none',
-        '--pepolar-method=DRBUDDI',
+        '--sdc-method=drbuddi',
         # The dataset ships epi fieldmaps whose IntendedFor points at the DWIs,
         # so the modern grouping would correct each DWI with its own epi fmap
         # (two outputs). This test exercises the blip-up/blip-down DWI *series*
@@ -233,8 +233,9 @@ def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         '--b0-motion-corr-to=first',
         '--b1-biascorrect-stage=none',
-        '--pepolar-method=DRBUDDI',
-        '--hmc-model=none',
+        '--hmc-method=shoreline',
+        '--shoreline-model=none',
+        '--sdc-method=drbuddi',
         '--output-resolution=2',
         '--shoreline-iters=1',
     ]
@@ -270,8 +271,9 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         '--b0-motion-corr-to=first',
         '--b1-biascorrect-stage=none',
-        '--pepolar-method=DRBUDDI',
-        '--hmc-model=tensor',
+        '--hmc-method=shoreline',
+        '--shoreline-model=tensor',
+        '--sdc-method=drbuddi',
         '--output-resolution=5',
         '--shoreline-iters=1',
     ]
@@ -316,7 +318,7 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
         '--use-syn-sdc',
         '--force-syn',
         '--b1-biascorrect-stage=none',
-        '--hmc-model=3dSHORE',
+        '--hmc-method=shoreline',
         '--hmc-transform=Rigid',
         '--output-resolution=5',
         '--shoreline-iters=1',
@@ -331,7 +333,7 @@ def test_diffprep(data_dir, output_dir, working_dir):
     """TORTOISE DIFFPREP head-motion/eddy correction on non-shelled data.
 
     This tests the following features:
-    - The TORTOISE DIFFPREP HMC backend (--hmc-model tortoise) on a
+    - The TORTOISE DIFFPREP HMC backend (--hmc-method tortoise) on a
       compressed-sensing DSI (non-shelled) scheme, where FSL eddy cannot run
     - The fieldmap-less path: with no fieldmap and no T2w, DIFFPREP performs
       head-motion/eddy correction only and does not error out
@@ -356,7 +358,7 @@ def test_diffprep(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--sloppy',
         '--b1-biascorrect-stage=none',
-        '--hmc-model=tortoise',
+        '--hmc-method=tortoise',
         '--output-resolution=5',
     ]
 
@@ -401,8 +403,8 @@ def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
         '--anat-modality=none',
         '--denoise-method=none',
         '--b1-biascorrect-stage=none',
-        '--hmc-model=tortoise',
-        '--pepolar-method=DRBUDDI',
+        '--hmc-method=tortoise',
+        '--sdc-method=drbuddi',
         '--output-resolution=2',
     ]
 
@@ -449,8 +451,8 @@ def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         '--b0-motion-corr-to=first',
         '--b1-biascorrect-stage=none',
-        '--hmc-model=tortoise',
-        '--pepolar-method=DRBUDDI',
+        '--hmc-method=tortoise',
+        '--sdc-method=drbuddi',
         '--output-resolution=5',
     ]
 
@@ -508,8 +510,8 @@ def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         '--b0-motion-corr-to=first',
         '--b1-biascorrect-stage=none',
-        '--hmc-model=tortoise',
-        '--pepolar-method=DRBUDDI',
+        '--hmc-method=tortoise',
+        '--sdc-method=drbuddi',
         '--output-resolution=5',
     ]
 
@@ -639,7 +641,8 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--sloppy',
         '--b1-biascorrect-stage=none',
-        '--hmc-model=none',
+        '--hmc-method=shoreline',
+        '--shoreline-model=none',
         '--b0-motion-corr-to=first',
         '--output-resolution=5',
         '--intramodal-template-transform=BSplineSyN',
@@ -762,7 +765,7 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
         '--b1-biascorrect-stage=none',
         '--write-graph',
         '--output-resolution=5',
-        '--hmc-model=3dSHORE',
+        '--hmc-method=shoreline',
         f'--bids-filter-file={bids_filter}',
     ]
 
@@ -842,7 +845,12 @@ def test_forrest_gump_patch2self(data_dir, output_dir, working_dir):
 
 
 def test_parser_accepts_tortoise(tmp_path):
-    """``tortoise`` is the single --hmc-model value for the DIFFPREP backend."""
+    """``tortoise`` is the single --hmc-model value for the DIFFPREP backend.
+
+    Deliberately uses the deprecated ``--hmc-model`` spelling: this test (and
+    the one below) pins the alias mapping. The integration scenarios above use
+    the ``--hmc-method``/``--sdc-method`` axis flags.
+    """
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()

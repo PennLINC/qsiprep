@@ -18,10 +18,9 @@ from nipype.interfaces.base import (
     isdefined,
     traits,
 )
-from nipype.utils.filemanip import fname_presuffix
+from nipype.utils.filemanip import fname_presuffix, split_filename
 
 from ..utils.misc import safe_unit_vector
-from ..workflows.dwi.util import _get_concatenated_bids_name
 from .epi_fmap import get_distortion_grouping
 
 LOGGER = logging.getLogger('nipype.workflow')
@@ -54,6 +53,10 @@ class MergeDWIsInputSpec(BaseInterfaceInputSpec):
         File(exists=True),
         mandatory=False,
         desc='list of original (pre-HMC) bvec files, used for the merged raw-QC gradients',
+    )
+    merged_prefix = traits.Str(
+        desc='name stem for the merged working files (the caller knows the '
+        'output name; without it the first input file names them)'
     )
 
 
@@ -131,8 +134,10 @@ class MergeDWIs(SimpleInterface):
 
         # Concatenate the gradient information
         if num_dwis > 1:
-            merged_output = _get_concatenated_bids_name(
-                {'dwi_series': self.inputs.dwi_files, 'fieldmap_info': {'suffix': None}}
+            merged_output = (
+                self.inputs.merged_prefix
+                if isdefined(self.inputs.merged_prefix)
+                else split_filename(self.inputs.dwi_files[0])[1]
             )
             merged_fname = op.join(runtime.cwd, merged_output + '_merged.nii.gz')
             out_bval = fname_presuffix(

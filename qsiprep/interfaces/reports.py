@@ -330,8 +330,10 @@ class GradientPlot(SummaryInterface):
     output_spec = GradientPlotOutputSpec
 
     def _run_interface(self, runtime):
-        from ..grouping.metadata import get_b0_threshold
-        from ..viz.qspace import q_points, scheme_fragment, scheme_payload
+        from qsiplan.metadata import B0_THRESHOLD
+        from qsiplan.viz.qspace import q_points, scheme_fragment, scheme_payload
+
+        from .. import config
 
         outfile = os.path.join(runtime.cwd, 'sampling_scheme.html')
         orig_bvecs = concatenate_bvecs(self.inputs.orig_bvec_files)
@@ -370,7 +372,12 @@ class GradientPlot(SummaryInterface):
             {'b': int(round(float(bval))), 'file': int(filenum), 'pe': file_pes[filenum]}
             for bval, filenum in zip(bvals, filenums, strict=True)
         ]
-        data = scheme_payload(panels, meta, list(files), pes=pes, b0_threshold=get_b0_threshold())
+        b0_threshold = (
+            B0_THRESHOLD
+            if config.workflow.b0_threshold is None
+            else float(config.workflow.b0_threshold)
+        )
+        data = scheme_payload(panels, meta, list(files), pes=pes, b0_threshold=b0_threshold)
         with open(outfile, 'w') as fobj:
             fobj.write(scheme_fragment(data))
         self._results['plot_file'] = outfile

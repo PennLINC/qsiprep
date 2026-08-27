@@ -61,17 +61,20 @@ For a discussion see :ref:`merge_denoise`.
 Previewing how your data will be grouped
 ========================================
 
-Before running any processing, you can ask *QSIPrep* exactly how it will
+Before running any processing, you can ask exactly how *QSIPrep* will
 interpret your dataset - which scans estimate each fieldmap, which fieldmap
-corrects which scan, and which scans end up combined in each output file::
+corrects which scan, and which scans end up combined in each output file -
+using the lightweight `qsiplan <https://github.com/PennLINC/QSIPlan>`__
+package (installable on its own, e.g. ``pipx install qsiplan``; no qsiprep
+installation needed)::
 
-  qsiprep-group /path/to/bids --html grouping.html
+  qsiplan /path/to/bids --html grouping.html
 
 This prints a per-subject grouping report (every decision tagged with its
 provenance: curated by you, translated from ``IntendedFor``, requested by a
-flag, or inferred) plus a plain-language preview of what each processing
-backend would do with the data. The ``--html`` page is a self-contained
-visual explainer you can open in any browser. Nothing is processed and
+flag, or inferred) plus a plain-language preview of what each method
+selection would do with the data. The ``--html`` page is a self-contained
+interactive explainer you can open in any browser. Nothing is processed and
 nothing is written to your dataset.
 
 If a grouping decision surprises you, the report names the sidecar field to
@@ -127,29 +130,33 @@ done in a single step. If you are upsampling your data by more than 10%,
 interpolation.
 
 
-****************************
-Head motion correction model
-****************************
+*****************************
+Head motion correction method
+*****************************
 
-Although FSL's ``eddy`` is technically model-free, it is an option for
-``--hmc-model`` along with ``3dSHORE``, ``tensor``, ``tortoise`` and ``none``.
+Head motion correction is selected with ``--hmc-method``, which takes
+``eddy``, ``shoreline`` or ``tortoise``. (The deprecated ``--hmc-model``
+values map onto these: ``eddy`` is ``--hmc-method eddy``, ``tortoise`` is
+``--hmc-method tortoise``, and ``3dSHORE``/``tensor``/``none`` are
+``--hmc-method shoreline`` with the matching ``--shoreline-model``.)
+
 Choosing ``eddy`` (the default) runs FSL's ``eddy`` for head motion correction
 and eddy current correction. This will work for single-shell and multi-shell
-sampling schemes. The ``3dSHORE`` (aka "SHORELine") option works for
-multi-shell, Cartesian grid sampling (DSI) and random q-space sampling
-(CS-DSI), and ``tensor`` runs the same SHORELine iterations with a tensor
-model.
+sampling schemes. The ``shoreline`` option (SHORELine) works for multi-shell,
+Cartesian grid sampling (DSI) and random q-space sampling (CS-DSI); its
+signal model is chosen with ``--shoreline-model``, either ``3dshore`` (the
+default) or ``tensor``.
 
-The option ``none`` will register all the b=0 images to one another and the
-b>0 images will have the transform from the nearest b=0 image applied. This
-is not recommended. Between ``eddy`` and ``3dSHORE``, all sampling schemes
-can be motion corrected, though eddy-current correction for non-shelled data
-requires the DIFFPREP option described below.
+``--shoreline-model none`` will register all the b=0 images to one another
+and the b>0 images will have the transform from the nearest b=0 image
+applied. This is not recommended. Between ``eddy`` and ``shoreline``, all
+sampling schemes can be motion corrected, though eddy-current correction for
+non-shelled data requires the DIFFPREP option described below.
 
 For non-shelled acquisitions such as compressed-sensing DSI (CS-DSI), FSL
-``eddy`` cannot be used, and ``3dSHORE`` corrects motion but does not correct
+``eddy`` cannot be used, and SHORELine corrects motion but does not correct
 eddy currents. In these cases, TORTOISE DIFFPREP is available via
-``--hmc-model tortoise``.
+``--hmc-method tortoise``.
 
 This option runs TORTOISE v4 DIFFPREP, which fits a signal model over
 arbitrary q-space and therefore does not require shells. By default it
@@ -158,12 +165,12 @@ Advanced TORTOISE settings can be supplied with ``--diffprep-config``,
 including ``"correction_mode"``, which selects between ``"motion"`` (rigid
 head motion only), ``"quadratic"`` (the default) and ``"cubic"``.
 
-The ``tortoise`` backend also performs susceptibility distortion correction,
-preferring TORTOISE-native tools:
+DIFFPREP also performs susceptibility distortion correction, preferring
+TORTOISE-native tools:
 
 - **Reverse phase-encoded** data is corrected with DRBUDDI
-  (``--pepolar-method DRBUDDI``; ``TOPUP`` is not supported with the tortoise
-  backend). This covers both an ``epi`` fieldmap (a blip-up/blip-down b=0 or EPI
+  (``--sdc-method drbuddi``, the automatic choice; ``topup`` is not supported
+  with DIFFPREP or SHORELine). This covers both an ``epi`` fieldmap (a blip-up/blip-down b=0 or EPI
   in ``fmap/``) and a reverse phase-encoded *DWI series* (``rpe_series``). For a
   reverse-PE series, DIFFPREP is run **once per phase-encoding direction** (a
   single run models one phase axis for the whole file), then the corrected
