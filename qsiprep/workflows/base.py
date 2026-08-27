@@ -522,7 +522,6 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
                 ('outputnode.t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
                 ('outputnode.t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-                ('outputnode.dwi_sampling_grid', 'inputnode.dwi_sampling_grid'),
             ]),
         ])  # fmt:skip
 
@@ -642,6 +641,7 @@ to workflows in *QSIPrep*'s documentation]\
             name=dwi_preproc_wf.name.replace('dwi_preproc', 'dwi_finalize'),
             output_prefix=naming_name,
             source_file=source_file,
+            acpc_specs=acpc_specs,
             write_derivatives=not (
                 merging_distortion_groups
                 and concatenation_scheme[output_fname] in merging_group_workflows
@@ -659,7 +659,6 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
                 ('outputnode.t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
                 ('outputnode.t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-                ('outputnode.dwi_sampling_grid', 'inputnode.dwi_sampling_grid'),
                 ('outputnode.t2w_unfatsat', 'inputnode.t2w_unfatsat'),
             ]),
             (anat_preproc_wf, dwi_finalize_wf, [
@@ -671,7 +670,7 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
                 ('outputnode.t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
                 ('outputnode.t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-                ('outputnode.dwi_sampling_grid', 'inputnode.dwi_sampling_grid'),
+                ('outputnode.dwi_sampling_grids', 'inputnode.dwi_sampling_grids'),
             ]),
             (dwi_preproc_wf, dwi_finalize_wf, [
                 ('outputnode.dwi_files', 'inputnode.dwi_files'),

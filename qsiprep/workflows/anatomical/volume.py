@@ -194,7 +194,6 @@ def init_anat_preproc_wf(
                 'template_transforms',
                 'acpc_transform',
                 'acpc_inv_transform',
-                'dwi_sampling_grid',
                 'dwi_sampling_grids',
             ]
         ),
@@ -250,7 +249,6 @@ def init_anat_preproc_wf(
 
     workflow.connect([
         (merge_grids, outputnode, [('out', 'dwi_sampling_grids')]),
-        (reference_grid_wfs[0], outputnode, [('outputnode.grid_image', 'dwi_sampling_grid')]),
     ])  # fmt:skip
 
     if dwi_only:

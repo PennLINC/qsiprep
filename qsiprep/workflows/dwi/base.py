@@ -105,8 +105,6 @@ def init_dwi_preproc_wf(
         FreeSurfer SUBJECTS_DIR
     subject_id
         FreeSurfer subject ID
-    dwi_sampling_grid
-        A NIfTI1 file with the grid spacing and FoV to resample the DWIs
 
     Outputs
     -------
@@ -196,7 +194,6 @@ def init_dwi_preproc_wf(
                 't2w_unfatsat',
                 't1_2_mni_reverse_transform',
                 't2w_files',
-                'dwi_sampling_grid',
             ]
         ),
         name='inputnode',

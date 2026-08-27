@@ -62,10 +62,24 @@ def _tsnr_meta(n_b0, median_tsnr):
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def init_dwi_derivatives_wf(source_file) -> Workflow:
-    """Set up a battery of datasinks to store derivatives in the right location."""
+def init_dwi_derivatives_wf(source_file, resolution=None, name='dwi_derivatives_wf') -> Workflow:
+    """Set up a battery of datasinks to store derivatives in the right location.
+
+    QSIRecon's primary input is the preprocessed ACPC-space DWI this workflow
+    writes, so the single-argument call form (``resolution=None``) must keep
+    producing exactly the filenames it always has: no ``res-`` entity.
+
+    Parameters
+    ----------
+    resolution : Resolution or None
+        Set only when more than one ACPC resolution was requested. Adds a
+        ``res-<label>`` entity to every ACPC DWI sink below, and (since the
+        filename alone does not say what ``res-native*`` resolved to) expects
+        ``inputnode.resolution_meta`` to be wired with the resolved voxel size.
+    """
     output_dir = str(config.execution.output_dir)
-    workflow = Workflow(name='dwi_derivatives_wf')
+    workflow = Workflow(name=name)
+    res_entities = {'res': resolution.label} if resolution is not None else {}
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
@@ -81,6 +95,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
                 'btable_t1',
                 'hmc_optimization_data',
                 'series_qc',
+                'resolution_meta',
             ]
         ),
         name='inputnode',
@@ -121,6 +136,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             suffix='dwimap',
             extension='.nii.gz',
             compress=True,
+            **res_entities,
         ),
         name='ds_tsnr',
         run_without_submitting=True,
@@ -138,6 +154,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             suffix='dwi',
             extension='.nii.gz',
             compress=True,
+            **res_entities,
         ),
         name='ds_dwi_t1',
         run_without_submitting=True,
@@ -151,6 +168,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             suffix='dwi',
             extension='.bval',
             desc='preproc',
+            **res_entities,
         ),
         name='ds_bvals_t1',
         run_without_submitting=True,
@@ -164,6 +182,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             suffix='dwi',
             extension='.bvec',
             desc='preproc',
+            **res_entities,
         ),
         name='ds_bvecs_t1',
         run_without_submitting=True,
@@ -177,6 +196,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             suffix='dwiref',
             extension='.nii.gz',
             compress=True,
+            **res_entities,
         ),
         name='ds_t1_b0_ref',
         run_without_submitting=True,
@@ -191,6 +211,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             suffix='mask',
             extension='.nii.gz',
             compress=True,
+            **res_entities,
         ),
         name='ds_dwi_mask_t1',
         run_without_submitting=True,
@@ -209,6 +230,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             meta_dict={
                 'Description': _cnr_description(config.workflow.hmc_model),
             },
+            **res_entities,
         ),
         name='ds_cnr_map_t1',
         run_without_submitting=True,
@@ -222,6 +244,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             desc='preproc',
             suffix='dwi',
             extension='.b',
+            **res_entities,
         ),
         name='ds_gradient_table_t1',
         run_without_submitting=True,
@@ -235,6 +258,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             desc='preproc',
             suffix='dwi',
             extension='.b_table.txt',
+            **res_entities,
         ),
         name='ds_btable_t1',
         run_without_submitting=True,
@@ -262,6 +286,20 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
         (inputnode, ds_gradient_table_t1, [('gradient_table_t1', 'in_file')]),
         (inputnode, ds_btable_t1, [('btable_t1', 'in_file')]),
     ])  # fmt:skip
+
+    if resolution is not None:
+        # The filename alone doesn't say what res-native* resolved to -- only
+        # the sidecar does. ds_cnr_map_t1 and ds_tsnr keep their own descriptive
+        # meta_dict as-is; the rest get the resolved voxel size here.
+        workflow.connect([
+            (inputnode, ds_dwi_t1, [('resolution_meta', 'meta_dict')]),
+            (inputnode, ds_bvals_t1, [('resolution_meta', 'meta_dict')]),
+            (inputnode, ds_bvecs_t1, [('resolution_meta', 'meta_dict')]),
+            (inputnode, ds_t1_b0_ref, [('resolution_meta', 'meta_dict')]),
+            (inputnode, ds_dwi_mask_t1, [('resolution_meta', 'meta_dict')]),
+            (inputnode, ds_gradient_table_t1, [('resolution_meta', 'meta_dict')]),
+            (inputnode, ds_btable_t1, [('resolution_meta', 'meta_dict')]),
+        ])  # fmt:skip
     # If requested, write local bvecs
     # if config.workflow.write_local_bvecs:
     #     ds_local_bvecs_t1 = pe.Node(

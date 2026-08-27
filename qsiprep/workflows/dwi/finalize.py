@@ -26,7 +26,6 @@ from ...interfaces.gradients import ExtractB0s
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SeriesQC
-from ...utils.spaces import Resolution
 from .derivatives import init_dwi_derivatives_wf
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
 from .resampling import init_dwi_trans_wf
@@ -37,11 +36,25 @@ from .util import _create_mem_gb, init_dwi_reference_wf
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
+def _select_grid(grids, index):
+    """Pick one output grid out of the list the anatomical workflow produced."""
+    return grids[index]
+
+
+def _grid_metadata(grid_file):
+    """Report the grid's actual voxel size, which res-native* only fixes at run time."""
+    import nibabel as nb
+
+    zooms = [round(float(z), 4) for z in nb.load(grid_file).header.get_zooms()[:3]]
+    return {'Resolution': zooms}
+
+
 def init_dwi_finalize_wf(
     unit,
     name,
     source_file,
     output_prefix,
+    acpc_specs,
     write_derivatives=True,
     make_intramodal_template=False,
 ):
@@ -71,6 +84,10 @@ def init_dwi_finalize_wf(
 
         output_prefix : str
             beginning of the output file name (eg 'sub-1_buds-j')
+        acpc_specs : list of SpaceSpec
+            The requested ACPC output resolutions. One ``init_dwi_trans_wf`` and one
+            group of derivatives sinks is built per spec. The ``res-`` entity is only
+            written on the derivatives when more than one is requested.
         ignore : list
             Preprocessing steps to skip (eg "fieldmaps")
         template : str
@@ -114,8 +131,9 @@ def init_dwi_finalize_wf(
             FreeSurfer SUBJECTS_DIR
         subject_id
             FreeSurfer subject ID
-        dwi_sampling_grid
-            A NIfTI1 file with the grid spacing and FoV to resample the DWIs
+        dwi_sampling_grids
+            A list of NIfTI1 files with the grid spacing and FoV to resample the DWIs
+            to, one per requested ACPC resolution, in ``acpc_specs`` order.
         b0_ref_image
             A Nifti of the b0 reference that was used for hmc and sdc
         intramodal_template
@@ -197,7 +215,7 @@ def init_dwi_finalize_wf(
                 't1_aseg',
                 't1_aparc',
                 't1_2_mni_reverse_transform',
-                'dwi_sampling_grid',
+                'dwi_sampling_grids',
                 'raw_qc_file',
                 'coreg_score',
                 'raw_concatenated',
@@ -285,221 +303,290 @@ def init_dwi_finalize_wf(
             (b0_to_im_template, ds_report_intramodal, [('out_report', 'in_file')]),
         ])  # fmt:skip
 
-    # Do the resampling
-    # TODO(Task 12): thread real acpc_specs through instead of this native-max stand-in.
-    transform_dwis_t1 = init_dwi_trans_wf(
-        source_file=source_file,
-        name='transform_dwis_t1',
-        template='ACPC',
-        resolution=Resolution(kind='native', label='nativemax', strategy='max'),
-        mem_gb=mem_gb['resampled'],
-        use_compression=False,
-        concatenate=True,
-        doing_topup=doing_topup,
-    )
+    # Fan out the resampling: one dwi_trans_wf (and, when write_derivatives, one
+    # group of derivatives sinks) per requested ACPC resolution. The res- entity
+    # (and the sidecar note on what res-native* resolved to) only appears once
+    # more than one resolution was requested -- a single ACPC resolution must
+    # keep producing exactly the filenames QSIRecon already expects.
+    multi_acpc = len(acpc_specs) > 1
+    # Built once, from the first spec that reaches the derivatives section below.
+    gradient_plot = None
 
-    # Apply denoising to the interpolated data if requested
-    final_denoise_wf = init_finalize_denoising_wf(
-        source_file=source_file,
-        do_biascorr=config.workflow.b1_biascorrect_stage == 'final',
-        num_dwi_acquisitions=len(all_dwis),
-    )
+    for index, spec in enumerate(acpc_specs):
+        label = spec.resolution.label
+        suffix = f'_res{label}' if multi_acpc else ''
+        res_entities = {'res': label} if multi_acpc else {}
+        resolution_for_derivatives = spec.resolution if multi_acpc else None
 
-    workflow.connect([
-        (inputnode, transform_dwis_t1, [
-            ('b0_indices', 'inputnode.b0_indices'),
-            ('bval_files', 'inputnode.bval_files'),
-            ('bvec_files', 'inputnode.bvec_files'),
-            ('b0_ref_image', 'inputnode.b0_ref_image'),
-            ('cnr_map', 'inputnode.cnr_map'),
-            ('t1_mask', 'inputnode.t1_mask'),
-            ('dwi_mask', 'inputnode.dwi_mask'),
-            ('hmc_xforms', 'inputnode.hmc_xforms'),
-            ('fieldwarps', 'inputnode.fieldwarps'),
-            ('dwi_files', 'inputnode.dwi_files'),
-            ('dwi_sampling_grid', 'inputnode.output_grid'),
-            ('b0_to_intramodal_template_transforms',
-             'inputnode.b0_to_intramodal_template_transforms'),
-            ('intramodal_template_to_t1_affine',
-             'inputnode.intramodal_template_to_t1_affine'),
-            ('intramodal_template_to_t1_warp',
-             'inputnode.intramodal_template_to_t1_warp'),
-            ('itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
-            ('sdc_scaling_images', 'inputnode.sdc_scaling_images'),
-        ]),
-        (transform_dwis_t1, outputnode, [
-            ('outputnode.bvals', 'bvals_t1'),
-            ('outputnode.rotated_bvecs', 'bvecs_t1'),
-            ('outputnode.cnr_map_resampled', 'cnr_map_t1'),
-            ('outputnode.local_bvecs', 'local_bvecs_t1'),
-        ]),
-        (inputnode, final_denoise_wf, [('confounds', 'inputnode.confounds')]),
-        (transform_dwis_t1, final_denoise_wf, [
-            ('outputnode.dwi_resampled', 'inputnode.dwi_t1'),
-            ('outputnode.bvals', 'inputnode.dwi_t1_bval'),
-            ('outputnode.rotated_bvecs', 'inputnode.dwi_t1_bvec'),
-            ('outputnode.b0_series', 'inputnode.t1_b0_series'),
-            ('outputnode.dwi_ref_resampled', 'inputnode.t1_b0_ref'),
-            ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask_t1'),
-            ('outputnode.resampled_qc', 'inputnode.series_qc_t1'),
-        ]),
-        (final_denoise_wf, outputnode, [
-            ('outputnode.confounds', 'confounds'),
-            ('outputnode.dwi_t1', 'dwi_t1'),
-            ('outputnode.t1_b0_ref', 't1_b0_ref'),
-            ('outputnode.dwi_mask_t1', 'dwi_mask_t1'),
-        ]),
-    ])  # fmt:skip
+        dwi_trans_wf = init_dwi_trans_wf(
+            source_file=source_file,
+            name=f'dwi_trans_wf{suffix}',
+            template='ACPC',
+            resolution=spec.resolution,
+            mem_gb=mem_gb['resampled'],
+            use_compression=False,
+            concatenate=True,
+            doing_topup=doing_topup,
+        )
 
-    if doing_topup:
+        # Apply denoising to the interpolated data if requested
+        final_denoise_wf = init_finalize_denoising_wf(
+            source_file=source_file,
+            do_biascorr=config.workflow.b1_biascorrect_stage == 'final',
+            num_dwi_acquisitions=len(all_dwis),
+            name=f'final_denoise_wf{suffix}',
+        )
+
         workflow.connect([
-            (inputnode, transform_dwis_t1, [('fieldmap_hz', 'inputnode.fieldmap_hz')]),
-            (transform_dwis_t1, outputnode, [
-                ('outputnode.fieldmap_hz_resampled', 'fieldmap_hz_t1'),
+            (inputnode, dwi_trans_wf, [
+                ('b0_indices', 'inputnode.b0_indices'),
+                ('bval_files', 'inputnode.bval_files'),
+                ('bvec_files', 'inputnode.bvec_files'),
+                ('b0_ref_image', 'inputnode.b0_ref_image'),
+                ('cnr_map', 'inputnode.cnr_map'),
+                ('t1_mask', 'inputnode.t1_mask'),
+                ('dwi_mask', 'inputnode.dwi_mask'),
+                ('hmc_xforms', 'inputnode.hmc_xforms'),
+                ('fieldwarps', 'inputnode.fieldwarps'),
+                ('dwi_files', 'inputnode.dwi_files'),
+                (('dwi_sampling_grids', _select_grid, [index]), 'inputnode.output_grid'),
+                ('b0_to_intramodal_template_transforms',
+                 'inputnode.b0_to_intramodal_template_transforms'),
+                ('intramodal_template_to_t1_affine',
+                 'inputnode.intramodal_template_to_t1_affine'),
+                ('intramodal_template_to_t1_warp',
+                 'inputnode.intramodal_template_to_t1_warp'),
+                ('itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
+                ('sdc_scaling_images', 'inputnode.sdc_scaling_images'),
+            ]),
+            (inputnode, final_denoise_wf, [('confounds', 'inputnode.confounds')]),
+            (dwi_trans_wf, final_denoise_wf, [
+                ('outputnode.dwi_resampled', 'inputnode.dwi_t1'),
+                ('outputnode.bvals', 'inputnode.dwi_t1_bval'),
+                ('outputnode.rotated_bvecs', 'inputnode.dwi_t1_bvec'),
+                ('outputnode.b0_series', 'inputnode.t1_b0_series'),
+                ('outputnode.dwi_ref_resampled', 'inputnode.t1_b0_ref'),
+                ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask_t1'),
+                ('outputnode.resampled_qc', 'inputnode.series_qc_t1'),
             ]),
         ])  # fmt:skip
 
-    # The workflow is done if we will be concatenating images later
-    if not write_derivatives:
-        return workflow
+        if doing_topup:
+            workflow.connect([
+                (inputnode, dwi_trans_wf, [('fieldmap_hz', 'inputnode.fieldmap_hz')]),
+            ])  # fmt:skip
 
-    # CONNECT TO DERIVATIVES #####################
-    gtab_t1 = pe.Node(MRTrixGradientTable(), name='gtab_t1')
-    btab_t1 = pe.Node(DSIStudioBTable(bvec_convention='DIPY'), name='btab_t1')
-    t1_dice_calc = init_mask_overlap_wf(name='t1_dice_calc')
-    gradient_plot = pe.Node(GradientPlot(), name='gradient_plot', run_without_submitting=True)
-    gradient_plot.inputs.source_pe_dirs = {
-        path: overrides['PhaseEncodingDirection']
-        for path, overrides in unit.sidecar_overrides().items()
-    }
-    ds_report_gradients = pe.Node(
-        DerivativesDataSink(
-            datatype='figures',
-            desc='samplingscheme',
-            suffix='dwi',
+        if index == 0:
+            # The distortion-group merge path (final_merge_wf in base.py) has no
+            # notion of multiple output resolutions, so the first requested ACPC
+            # resolution is the one exposed through this workflow's single-valued
+            # outputnode.
+            workflow.connect([
+                (dwi_trans_wf, outputnode, [
+                    ('outputnode.bvals', 'bvals_t1'),
+                    ('outputnode.rotated_bvecs', 'bvecs_t1'),
+                    ('outputnode.cnr_map_resampled', 'cnr_map_t1'),
+                    ('outputnode.local_bvecs', 'local_bvecs_t1'),
+                ]),
+                (final_denoise_wf, outputnode, [
+                    ('outputnode.confounds', 'confounds'),
+                    ('outputnode.dwi_t1', 'dwi_t1'),
+                    ('outputnode.t1_b0_ref', 't1_b0_ref'),
+                    ('outputnode.dwi_mask_t1', 'dwi_mask_t1'),
+                ]),
+                (inputnode, outputnode, [('hmc_optimization_data', 'hmc_optimization_data')]),
+            ])  # fmt:skip
+            if doing_topup:
+                workflow.connect([
+                    (dwi_trans_wf, outputnode, [
+                        ('outputnode.fieldmap_hz_resampled', 'fieldmap_hz_t1'),
+                    ]),
+                ])  # fmt:skip
+
+        # The workflow is done with this resolution if we will be concatenating
+        # images later -- the derivatives sinks below are skipped entirely.
+        if not write_derivatives:
+            continue
+
+        # CONNECT TO DERIVATIVES #####################
+        gtab_t1 = pe.Node(MRTrixGradientTable(), name=f'gtab_t1{suffix}')
+        btab_t1 = pe.Node(DSIStudioBTable(bvec_convention='DIPY'), name=f'btab_t1{suffix}')
+        t1_dice_calc = init_mask_overlap_wf(name=f't1_dice_calc{suffix}')
+
+        if gradient_plot is None:
+            # bvecs don't change with the output grid, so the sampling-scheme
+            # report is built once, from the primary (first-requested) resolution.
+            gradient_plot = pe.Node(
+                GradientPlot(), name='gradient_plot', run_without_submitting=True
+            )
+            gradient_plot.inputs.source_pe_dirs = {
+                path: overrides['PhaseEncodingDirection']
+                for path, overrides in unit.sidecar_overrides().items()
+            }
+            ds_report_gradients = pe.Node(
+                DerivativesDataSink(
+                    datatype='figures',
+                    desc='samplingscheme',
+                    suffix='dwi',
+                    source_file=source_file,
+                ),
+                name='ds_report_gradients',
+                run_without_submitting=True,
+                mem_gb=DEFAULT_MEMORY_MIN_GB,
+            )
+            workflow.connect([
+                (dwi_trans_wf, gradient_plot, [
+                    ('outputnode.rotated_bvecs', 'final_bvec_file'),
+                ]),
+                (inputnode, gradient_plot, [
+                    ('bvec_files', 'orig_bvec_files'),
+                    ('bval_files', 'orig_bval_files'),
+                    ('original_files', 'source_files'),
+                ]),
+                (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')]),
+            ])  # fmt:skip
+
+        dwi_derivatives_wf = init_dwi_derivatives_wf(
             source_file=source_file,
-        ),
-        name='ds_report_gradients',
-        run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB,
-    )
-
-    dwi_derivatives_wf = init_dwi_derivatives_wf(
-        source_file=source_file,
-    )
-
-    # Combine all the QC measures for a series QC
-    series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name='series_qc')
-    ds_series_qc = pe.Node(
-        DerivativesDataSink(
-            space='ACPC',
-            desc='image',
-            suffix='qc',
-            extension='tsv',
-            source_file=source_file,
-            base_directory=config.execution.output_dir,
-        ),
-        name='ds_series_qc',
-        run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB,
-    )
-
-    # Write a metadata sidecar for the derivatives
-    merged_sidecar = pe.Node(
-        DerivativesSidecar(sidecar_data=unit_to_sidecar(unit), source_file=source_file),
-        name='merged_sidecar',
-    )
-    ds_merged_sidecar = pe.Node(
-        DerivativesDataSink(
-            space='ACPC',
-            desc='preproc',
-            extension='.json',
-            source_file=source_file,
-            base_directory=config.execution.output_dir,
-        ),
-        name='ds_merged_sidecar',
-        run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB,
-    )
-
-    # Write the carpetplot data (which is the text output from eddy)
-    ds_carpetplot_data = pe.Node(
-        DerivativesDataSink(
-            space='ACPC',
-            desc='slice',
-            suffix='qc',
-            source_file=source_file,
-            base_directory=config.execution.output_dir,
-        ),
-        name='ds_carpetplot',
-        run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB,
-    )
-
-    workflow.connect([
-        (inputnode, series_qc, [
-            ('raw_qc_file', 'pre_qc'),
-            ('confounds', 'confounds_file'),
-        ]),
-        (inputnode, ds_carpetplot_data, [('carpetplot_data', 'in_file')]),
-        (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
-        (final_denoise_wf, series_qc, [
-            ('outputnode.series_qc_postproc', 't1_qc_postproc'),
-        ]),
-        (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
-        (transform_dwis_t1, series_qc, [
-            ('outputnode.cnr_map_resampled', 't1_cnr_file'),
-        ]),
-
-        (final_denoise_wf, series_qc, [
-            ('outputnode.dwi_mask_t1', 't1_mask_file'),
-            ('outputnode.t1_b0_series', 't1_b0_series'),
-        ]),
-        (inputnode, dwi_derivatives_wf, [('dwi_files', 'inputnode.source_file')]),
-        (inputnode, outputnode, [('hmc_optimization_data', 'hmc_optimization_data')]),
-        (transform_dwis_t1, series_qc, [('outputnode.resampled_qc', 't1_qc')]),
-        (transform_dwis_t1, t1_dice_calc, [
-            ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask'),
-        ]),
-        (outputnode, gradient_plot, [('bvecs_t1', 'final_bvec_file')]),
-        (transform_dwis_t1, gtab_t1, [
-            ('outputnode.bvals', 'bval_file'),
-            ('outputnode.rotated_bvecs', 'bvec_file'),
-        ]),
-        (transform_dwis_t1, btab_t1, [
-            ('outputnode.bvals', 'bval_file'),
-            ('outputnode.rotated_bvecs', 'bvec_file'),
-        ]),
-        (inputnode, t1_dice_calc, [('t1_mask', 'inputnode.anatomical_mask')]),
-        (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')]),
-        (btab_t1, outputnode, [('btable_file', 'btable_t1')]),
-        (merged_sidecar, ds_merged_sidecar, [('derivatives_json', 'in_file')]),
-        (outputnode, dwi_derivatives_wf, [
-            ('dwi_t1', 'inputnode.dwi_t1'),
-            ('dwi_mask_t1', 'inputnode.dwi_mask_t1'),
-            ('cnr_map_t1', 'inputnode.cnr_map_t1'),
-            ('bvals_t1', 'inputnode.bvals_t1'),
-            ('bvecs_t1', 'inputnode.bvecs_t1'),
-            ('local_bvecs_t1', 'inputnode.local_bvecs_t1'),
-            ('t1_b0_ref', 'inputnode.t1_b0_ref'),
-            ('gradient_table_t1', 'inputnode.gradient_table_t1'),
-            ('btable_t1', 'inputnode.btable_t1'),
-            ('hmc_optimization_data', 'inputnode.hmc_optimization_data'),
-        ]),
-        (inputnode, gradient_plot, [
-            ('bvec_files', 'orig_bvec_files'),
-            ('bval_files', 'orig_bval_files'),
-            ('original_files', 'source_files'),
-        ]),
-        (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')]),
-    ])  # fmt:skip
-
-    if doing_topup:
+            resolution=resolution_for_derivatives,
+            name=f'dwi_derivatives_wf{suffix}',
+        )
         workflow.connect([
-            (transform_dwis_t1, series_qc, [
-                ('outputnode.fieldmap_hz_resampled', 't1_fieldmap_hz_file'),
+            (inputnode, dwi_derivatives_wf, [
+                ('dwi_files', 'inputnode.source_file'),
+                ('hmc_optimization_data', 'inputnode.hmc_optimization_data'),
             ]),
+            (dwi_trans_wf, dwi_derivatives_wf, [
+                ('outputnode.bvals', 'inputnode.bvals_t1'),
+                ('outputnode.rotated_bvecs', 'inputnode.bvecs_t1'),
+                ('outputnode.cnr_map_resampled', 'inputnode.cnr_map_t1'),
+                ('outputnode.local_bvecs', 'inputnode.local_bvecs_t1'),
+            ]),
+            (final_denoise_wf, dwi_derivatives_wf, [
+                ('outputnode.dwi_t1', 'inputnode.dwi_t1'),
+                ('outputnode.t1_b0_ref', 'inputnode.t1_b0_ref'),
+                ('outputnode.dwi_mask_t1', 'inputnode.dwi_mask_t1'),
+            ]),
+            (gtab_t1, dwi_derivatives_wf, [('gradient_file', 'inputnode.gradient_table_t1')]),
+            (btab_t1, dwi_derivatives_wf, [('btable_file', 'inputnode.btable_t1')]),
         ])  # fmt:skip
+
+        if resolution_for_derivatives is not None:
+            grid_metadata = pe.Node(
+                niu.Function(
+                    input_names=['grid_file'],
+                    output_names=['meta_dict'],
+                    function=_grid_metadata,
+                ),
+                name=f'grid_metadata{suffix}',
+                run_without_submitting=True,
+            )
+            workflow.connect([
+                (inputnode, grid_metadata, [
+                    (('dwi_sampling_grids', _select_grid, [index]), 'grid_file'),
+                ]),
+                (grid_metadata, dwi_derivatives_wf, [
+                    ('meta_dict', 'inputnode.resolution_meta'),
+                ]),
+            ])  # fmt:skip
+
+        # Combine all the QC measures for a series QC
+        series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name=f'series_qc{suffix}')
+        ds_series_qc = pe.Node(
+            DerivativesDataSink(
+                space='ACPC',
+                desc='image',
+                suffix='qc',
+                extension='tsv',
+                source_file=source_file,
+                base_directory=config.execution.output_dir,
+                **res_entities,
+            ),
+            name=f'ds_series_qc{suffix}',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+
+        # Write a metadata sidecar for the derivatives
+        merged_sidecar = pe.Node(
+            DerivativesSidecar(sidecar_data=unit_to_sidecar(unit), source_file=source_file),
+            name=f'merged_sidecar{suffix}',
+        )
+        ds_merged_sidecar = pe.Node(
+            DerivativesDataSink(
+                space='ACPC',
+                desc='preproc',
+                extension='.json',
+                source_file=source_file,
+                base_directory=config.execution.output_dir,
+                **res_entities,
+            ),
+            name=f'ds_merged_sidecar{suffix}',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+
+        # Write the carpetplot data (which is the text output from eddy)
+        ds_carpetplot_data = pe.Node(
+            DerivativesDataSink(
+                space='ACPC',
+                desc='slice',
+                suffix='qc',
+                source_file=source_file,
+                base_directory=config.execution.output_dir,
+                **res_entities,
+            ),
+            name=f'ds_carpetplot{suffix}',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+
+        workflow.connect([
+            (inputnode, series_qc, [
+                ('raw_qc_file', 'pre_qc'),
+                ('confounds', 'confounds_file'),
+            ]),
+            (inputnode, ds_carpetplot_data, [('carpetplot_data', 'in_file')]),
+            (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
+            (final_denoise_wf, series_qc, [
+                ('outputnode.series_qc_postproc', 't1_qc_postproc'),
+            ]),
+            (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
+            (dwi_trans_wf, series_qc, [
+                ('outputnode.cnr_map_resampled', 't1_cnr_file'),
+            ]),
+            (final_denoise_wf, series_qc, [
+                ('outputnode.dwi_mask_t1', 't1_mask_file'),
+                ('outputnode.t1_b0_series', 't1_b0_series'),
+            ]),
+            (dwi_trans_wf, series_qc, [('outputnode.resampled_qc', 't1_qc')]),
+            (dwi_trans_wf, t1_dice_calc, [
+                ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask'),
+            ]),
+            (dwi_trans_wf, gtab_t1, [
+                ('outputnode.bvals', 'bval_file'),
+                ('outputnode.rotated_bvecs', 'bvec_file'),
+            ]),
+            (dwi_trans_wf, btab_t1, [
+                ('outputnode.bvals', 'bval_file'),
+                ('outputnode.rotated_bvecs', 'bvec_file'),
+            ]),
+            (inputnode, t1_dice_calc, [('t1_mask', 'inputnode.anatomical_mask')]),
+            (merged_sidecar, ds_merged_sidecar, [('derivatives_json', 'in_file')]),
+        ])  # fmt:skip
+
+        if index == 0:
+            workflow.connect([
+                (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')]),
+                (btab_t1, outputnode, [('btable_file', 'btable_t1')]),
+            ])  # fmt:skip
+
+        if doing_topup:
+            workflow.connect([
+                (dwi_trans_wf, series_qc, [
+                    ('outputnode.fieldmap_hz_resampled', 't1_fieldmap_hz_file'),
+                ]),
+            ])  # fmt:skip
 
     return workflow
 

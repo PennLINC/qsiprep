@@ -4,6 +4,7 @@ QSIRecon consumes these filenames, so a single `acpc` space must keep producing
 exactly what QSIPrep produced before --output-spaces existed.
 """
 
+import numpy as np
 import pytest
 
 from qsiprep import config
@@ -175,3 +176,62 @@ def test_single_acpc_dwi_derivative_names(dwi_config):
     assert acpc_nodes, 'expected some ACPC-space dwi derivatives'
     for node_name, entities in acpc_nodes.items():
         assert 'res' not in entities, f'{node_name} gained a res- entity on a single-acpc run'
+
+
+def _write_dwi(path, nvols=6):
+    """Write a tiny valid 4D DWI (with .bval/.bvec) so merge nodes can build."""
+    import nibabel as nb
+
+    nb.Nifti1Image(np.zeros((4, 4, 4, nvols), dtype=np.int16), np.eye(4)).to_filename(str(path))
+    stem = str(path).split('.nii')[0]
+    bvals = np.array([0] + [1000] * (nvols - 1))
+    np.savetxt(stem + '.bval', bvals[None, :], fmt='%d')
+    np.savetxt(stem + '.bvec', np.zeros((3, nvols)), fmt='%.1f')
+    return str(path)
+
+
+def _build_finalize(tmp_path, output_spaces):
+    """Build a finalize workflow. Mirrors the fixture style in test_workflows_native."""
+    from qsiprep.tests.preproc_factory import make_preproc_unit
+    from qsiprep.utils.spaces import parse_output_spaces
+    from qsiprep.workflows.dwi.finalize import init_dwi_finalize_wf
+
+    config.workflow.output_spaces = output_spaces
+    config.nipype.omp_nthreads = 1
+    config.workflow.hmc_model = 'tortoise'
+    config.workflow.b1_biascorrect_stage = 'final'
+    config.workflow.b0_threshold = 100
+    config.workflow.intramodal_template_iters = 0
+    config.execution.output_dir = '/tmp/qsiprep-naming-test'
+    specs = parse_output_spaces(output_spaces)
+    acpc_specs = [s for s in specs if not s.standard]
+
+    src = _write_dwi(tmp_path / 'sub-01_dwi.nii.gz')
+    wf = init_dwi_finalize_wf(
+        unit=make_preproc_unit([src]),
+        name='dwi_finalize_wf',
+        source_file=src,
+        output_prefix='sub-01',
+        acpc_specs=acpc_specs,
+    )
+    return wf, acpc_specs
+
+
+def test_single_acpc_builds_one_trans_wf(tmp_path):
+    wf, _ = _build_finalize(tmp_path, ['acpc:res-2mm'])
+    prefixes = {n.split('.')[0] for n in wf.list_node_names() if 'dwi_trans_wf' in n}
+    assert prefixes == {'dwi_trans_wf'}
+
+
+def test_two_acpc_resolutions_build_two_trans_wfs(tmp_path):
+    wf, _ = _build_finalize(tmp_path, ['acpc:res-2mm', 'acpc:res-1p5mm'])
+    prefixes = {n.split('.')[0] for n in wf.list_node_names() if 'dwi_trans_wf' in n}
+    assert prefixes == {'dwi_trans_wf_res2mm', 'dwi_trans_wf_res1p5mm'}
+
+
+def test_two_acpc_resolutions_write_a_res_entity(tmp_path):
+    wf, _ = _build_finalize(tmp_path, ['acpc:res-2mm', 'acpc:res-1p5mm'])
+    found = collect_datasink_entities(wf)
+    acpc_sinks = [e for e in found.values() if e.get('space') == 'ACPC']
+    assert acpc_sinks
+    assert {e.get('res') for e in acpc_sinks} == {'2mm', '1p5mm'}
