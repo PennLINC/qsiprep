@@ -335,10 +335,28 @@ FreeSurfer version {FS_VERSION}. """
     # One additional nonlinear normalization per requested standard space. Each
     # registers straight from the raw anatomical reference to its own
     # TemplateFlow template, fetched and LPS+ reoriented at its own resolution.
-    # No standard space requested means no normalization runs.
+    # No standard space requested means no normalization runs. When a requested
+    # standard space is the same template/cohort/resolution as the ACPC anchor,
+    # the anchor's own (already unconditionally built) normalization IS that
+    # registration -- reuse it instead of paying for antsRegistration twice.
+    def _label_resolution(spec):
+        if spec.resolution is not None and spec.resolution.kind == 'label':
+            return spec.resolution.label
+        return None
+
+    anchor_label_resolution = _label_resolution(acpc_anchor)
+
     standard_specs = [spec for spec in output_spaces if spec.standard]
-    standard_norm_wfs = []
+    standard_transform_wfs = []
     for spec in standard_specs:
+        reuses_anchor = (
+            spec.fullname == acpc_anchor.fullname
+            and _label_resolution(spec) == anchor_label_resolution
+        )
+        if reuses_anchor:
+            standard_transform_wfs.append(anat_normalization_wf)
+            continue
+
         label = spec.fullname.replace('+', '')
         get_std_template = pe.Node(
             GetTemplate(anatomical_contrast=anat_modality, **templateflow_kwargs(spec)),
@@ -348,7 +366,7 @@ FreeSurfer version {FS_VERSION}. """
         norm_wf = init_anat_normalization_wf(
             spec, has_rois=has_rois, name=f'anat_normalization_{label}_wf'
         )
-        standard_norm_wfs.append(norm_wf)
+        standard_transform_wfs.append(norm_wf)
         workflow.connect([
             (get_std_template, std_lps_wf, [
                 ('template_file', 'inputnode.template_file'),
@@ -374,7 +392,7 @@ FreeSurfer version {FS_VERSION}. """
         merge_std_reverse_transforms = pe.Node(
             niu.Merge(len(standard_specs)), name='merge_std_reverse_transforms'
         )
-        for index, norm_wf in enumerate(standard_norm_wfs, start=1):
+        for index, norm_wf in enumerate(standard_transform_wfs, start=1):
             workflow.connect([
                 (norm_wf, merge_std_forward_transforms, [
                     ('outputnode.to_template_nonlinear_transform', f'in{index}'),
