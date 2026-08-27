@@ -195,6 +195,8 @@ def init_anat_preproc_wf(
                 'acpc_transform',
                 'acpc_inv_transform',
                 'dwi_sampling_grids',
+                'standard_forward_transforms',
+                'standard_reverse_transforms',
             ]
         ),
         name='outputnode',
@@ -321,11 +323,70 @@ SynthStrip [@synthstrip] and automated segmentation was
 performed using SynthSeg [@synthseg1; @synthseg2] from
 FreeSurfer version {FS_VERSION}. """
 
-    # Perform registrations
+    # Perform registrations. This one anchors ACPC alignment: its rigid component
+    # becomes acpc_transform/acpc_inv_transform, used throughout for every
+    # ACPC-space anatomical output, regardless of which (if any) standard spaces
+    # were requested.
     anat_normalization_wf = init_anat_normalization_wf(
-        anatomical_template=anatomical_template,
+        acpc_anchor,
         has_rois=has_rois,
     )
+
+    # One additional nonlinear normalization per requested standard space. Each
+    # registers straight from the raw anatomical reference to its own
+    # TemplateFlow template, fetched and LPS+ reoriented at its own resolution.
+    # No standard space requested means no normalization runs.
+    standard_specs = [spec for spec in output_spaces if spec.standard]
+    standard_norm_wfs = []
+    for spec in standard_specs:
+        label = spec.fullname.replace('+', '')
+        get_std_template = pe.Node(
+            GetTemplate(anatomical_contrast=anat_modality, **templateflow_kwargs(spec)),
+            name=f'get_template_{label}',
+        )
+        std_lps_wf = init_template_lps_wf(name=f'template_lps_{label}_wf')
+        norm_wf = init_anat_normalization_wf(
+            spec, has_rois=has_rois, name=f'anat_normalization_{label}_wf'
+        )
+        standard_norm_wfs.append(norm_wf)
+        workflow.connect([
+            (get_std_template, std_lps_wf, [
+                ('template_file', 'inputnode.template_file'),
+                ('mask_file', 'inputnode.mask_file'),
+            ]),
+            (std_lps_wf, norm_wf, [
+                ('outputnode.template_lps', 'inputnode.template_image'),
+                ('outputnode.mask_lps', 'inputnode.template_mask'),
+            ]),
+            (inputnode, norm_wf, [('roi', 'inputnode.roi')]),
+            (synthstrip_anat_wf, norm_wf, [
+                ('outputnode.brain_mask', 'inputnode.brain_mask'),
+            ]),
+            (anat_reference_wf, norm_wf, [
+                ('outputnode.bias_corrected', 'inputnode.anatomical_reference'),
+            ]),
+        ])  # fmt:skip
+
+    if standard_specs:
+        merge_std_forward_transforms = pe.Node(
+            niu.Merge(len(standard_specs)), name='merge_std_forward_transforms'
+        )
+        merge_std_reverse_transforms = pe.Node(
+            niu.Merge(len(standard_specs)), name='merge_std_reverse_transforms'
+        )
+        for index, norm_wf in enumerate(standard_norm_wfs, start=1):
+            workflow.connect([
+                (norm_wf, merge_std_forward_transforms, [
+                    ('outputnode.to_template_nonlinear_transform', f'in{index}'),
+                ]),
+                (norm_wf, merge_std_reverse_transforms, [
+                    ('outputnode.from_template_nonlinear_transform', f'in{index}'),
+                ]),
+            ])  # fmt:skip
+        workflow.connect([
+            (merge_std_forward_transforms, outputnode, [('out', 'standard_forward_transforms')]),
+            (merge_std_reverse_transforms, outputnode, [('out', 'standard_reverse_transforms')]),
+        ])  # fmt:skip
 
     # Resampling
     rigid_acpc_resample_brain = pe.Node(
@@ -512,7 +573,7 @@ FreeSurfer version {FS_VERSION}. """
     ])  # fmt:skip
 
     anat_derivatives_wf = init_anat_derivatives_wf(
-        anatomical_template=anatomical_template,
+        output_spaces=output_spaces,
         has_t2w=num_additional_t2ws > 0,
     )
 
@@ -528,9 +589,8 @@ FreeSurfer version {FS_VERSION}. """
             ('t1_mask', 'inputnode.t1_mask'),
             ('t1_seg', 'inputnode.t1_seg'),
             ('t1_aseg', 'inputnode.t1_aseg'),
-            ('t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
-            ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-            ('t1_2_mni', 'inputnode.t1_2_mni'),
+            ('standard_forward_transforms', 'inputnode.t1_std_forward_transforms'),
+            ('standard_reverse_transforms', 'inputnode.t1_std_reverse_transforms'),
         ]),
     ])  # fmt:skip
 
@@ -938,7 +998,7 @@ A {contrast}-reference map was computed after registration of
     return workflow
 
 
-def init_anat_normalization_wf(anatomical_template, has_rois=False) -> Workflow:
+def init_anat_normalization_wf(spec, has_rois=False, name='anat_normalization_wf') -> Workflow:
     r"""
     This workflow performs registration from the original anatomical reference to the
     template anatomical reference.
@@ -948,11 +1008,14 @@ def init_anat_normalization_wf(anatomical_template, has_rois=False) -> Workflow:
         :graph2use: orig
         :simple_form: yes
 
+        from qsiprep.utils.spaces import SpaceSpec
         from qsiprep.workflows.anatomical import init_anat_normalization_wf
-        wf = init_anat_registration_wf(has_rois=False)
+        wf = init_anat_normalization_wf(SpaceSpec(space='MNI152NLin2009cAsym'), has_rois=False)
 
     Parameters
     ----------
+    spec : :class:`~qsiprep.utils.spaces.SpaceSpec`
+        The standard space being registered to.
     has_rois : bool
         Whether Registration should account for regions to exclude
 
@@ -975,7 +1038,7 @@ def init_anat_normalization_wf(anatomical_template, has_rois=False) -> Workflow:
         Reportlet visualizing quality of skull-stripping
     """
 
-    workflow = Workflow(name='anat_normalization_wf')
+    workflow = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
@@ -1006,7 +1069,7 @@ def init_anat_normalization_wf(anatomical_template, has_rois=False) -> Workflow:
     desc = f"""\
 The anatomical reference image was reoriented into AC-PC alignment via
 a 6-DOF transform extracted from a full Affine registration to the
-{anatomical_template} template. """
+{spec.fullname} template. """
 
     acpc_json = (
         'intramodal_ACPC.json' if not config.execution.sloppy else 'intramodal_ACPC_sloppy.json'
@@ -1077,7 +1140,7 @@ estimated via symmetric nonlinear registration (SyN) using antsRegistration (@an
     anat_nlin_normalization = pe.Node(
         anat_norm_interface, name='anat_nlin_normalization', n_procs=omp_nthreads
     )
-    anat_nlin_normalization.inputs.template = anatomical_template
+    anat_nlin_normalization.inputs.template = spec.fullname
     anat_nlin_normalization.inputs.orientation = 'LPS'
 
     workflow.connect([
@@ -1472,11 +1535,21 @@ def _template_to_report_entities(template):
     return {'space': space, 'cohort': cohort}
 
 
-def init_anat_derivatives_wf(anatomical_template, has_t2w=False) -> Workflow:
+def init_anat_derivatives_wf(output_spaces, has_t2w=False) -> Workflow:
     """
     Set up a battery of datasinks to store derivatives in the right location
+
+    Parameters
+    ----------
+    output_spaces : :obj:`list` of :class:`~qsiprep.utils.spaces.SpaceSpec`
+        Every requested output space, with cohorts already resolved. Every
+        standard (non-ACPC) space among these gets its own from-ACPC/to-<space>
+        transform pair and resampled ``desc-preproc`` anatomical, brain mask
+        and dseg.
     """
     workflow = Workflow(name='anat_derivatives_wf')
+    anat_modality = config.workflow.anat_modality
+    standard_specs = [spec for spec in output_spaces if spec.standard]
 
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -1488,9 +1561,8 @@ def init_anat_derivatives_wf(anatomical_template, has_t2w=False) -> Workflow:
                 't1_preproc',
                 't1_mask',
                 't1_seg',
-                't1_2_mni_forward_transform',
-                't1_2_mni_reverse_transform',
-                't1_2_mni',
+                't1_std_forward_transforms',
+                't1_std_reverse_transforms',
                 't1_aseg',
                 # t2_preproc is the merged T2w template in ACPC; t2w_unfatsat
                 # is the fat-suppressed variant that drives TORTOISE T2Wreg and
@@ -1614,18 +1686,6 @@ def init_anat_derivatives_wf(anatomical_template, has_t2w=False) -> Workflow:
         run_without_submitting=True,
     )
 
-    ds_t1_mni_inv_warp = pe.Node(
-        DerivativesDataSink(
-            base_directory=config.execution.output_dir,
-            to='ACPC',
-            mode='image',
-            suffix='xfm',
-            **{'from': anatomical_template},
-        ),
-        name='ds_t1_mni_inv_warp',
-        run_without_submitting=True,
-    )
-
     ds_t1_template_acpc_transform = pe.Node(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
@@ -1647,18 +1707,6 @@ def init_anat_derivatives_wf(anatomical_template, has_t2w=False) -> Workflow:
             **{'from': 'ACPC'},
         ),
         name='ds_t1_template_acpc_inv_transforms',
-        run_without_submitting=True,
-    )
-
-    ds_t1_mni_warp = pe.Node(
-        DerivativesDataSink(
-            base_directory=config.execution.output_dir,
-            to=anatomical_template,
-            mode='image',
-            suffix='xfm',
-            **{'from': 'ACPC'},
-        ),
-        name='ds_t1_mni_warp',
         run_without_submitting=True,
     )
 
@@ -1691,13 +1739,144 @@ def init_anat_derivatives_wf(anatomical_template, has_t2w=False) -> Workflow:
             (t2_name, ds_t2w_unfatsat, [('out', 'source_file')]),
         ])  # fmt:skip
 
-    if not config.execution.skip_anat_based_spatial_normalization:
-        workflow.connect([
-            (inputnode, ds_t1_mni_warp, [('t1_2_mni_forward_transform', 'in_file')]),
-            (inputnode, ds_t1_mni_inv_warp, [('t1_2_mni_reverse_transform', 'in_file')]),
-            (t1_name, ds_t1_mni_warp, [('out', 'source_file')]),
-            (t1_name, ds_t1_mni_inv_warp, [('out', 'source_file')]),
-        ])  # fmt:skip
+    if standard_specs:
+        for index, spec in enumerate(standard_specs):
+            label = spec.fullname.replace('+', '')
+            res_entities = (
+                {'res': spec.resolution.label}
+                if spec.resolution is not None and spec.resolution.kind == 'label'
+                else {}
+            )
+            cohort_entities = (
+                {'cohort': spec.cohort} if spec.cohort not in (None, 'auto') else {}
+            )
+
+            # from-/to- labels carry the cohort inline because a transform label has
+            # nowhere else to put it; space- pairs with a separate cohort- entity.
+            warp_name = (
+                'ds_t1_mni_warp' if spec.space == 'MNI152NLin2009cAsym' else f'ds_t1_{label}_warp'
+            )
+            inv_warp_name = (
+                'ds_t1_mni_inv_warp'
+                if spec.space == 'MNI152NLin2009cAsym'
+                else f'ds_t1_{label}_inv_warp'
+            )
+
+            ds_to_template = pe.Node(
+                DerivativesDataSink(
+                    base_directory=config.execution.output_dir,
+                    to=spec.fullname,
+                    mode='image',
+                    suffix='xfm',
+                    **{'from': 'ACPC'},
+                ),
+                name=warp_name,
+                run_without_submitting=True,
+            )
+            ds_from_template = pe.Node(
+                DerivativesDataSink(
+                    base_directory=config.execution.output_dir,
+                    to='ACPC',
+                    mode='image',
+                    suffix='xfm',
+                    **{'from': spec.fullname},
+                ),
+                name=inv_warp_name,
+                run_without_submitting=True,
+            )
+            ds_std_preproc = pe.Node(
+                DerivativesDataSink(
+                    base_directory=config.execution.output_dir,
+                    compress=True,
+                    space=spec.space,
+                    desc='preproc',
+                    **cohort_entities,
+                    **res_entities,
+                ),
+                name=f'ds_t1_{label}_preproc',
+                run_without_submitting=True,
+            )
+            ds_std_mask = pe.Node(
+                DerivativesDataSink(
+                    base_directory=config.execution.output_dir,
+                    compress=True,
+                    space=spec.space,
+                    desc='brain',
+                    suffix='mask',
+                    **cohort_entities,
+                    **res_entities,
+                ),
+                name=f'ds_t1_{label}_mask',
+                run_without_submitting=True,
+            )
+            ds_std_dseg = pe.Node(
+                DerivativesDataSink(
+                    base_directory=config.execution.output_dir,
+                    compress=True,
+                    space=spec.space,
+                    suffix='dseg',
+                    **cohort_entities,
+                    **res_entities,
+                ),
+                name=f'ds_t1_{label}_dseg',
+                run_without_submitting=True,
+            )
+
+            select_forward = pe.Node(niu.Select(index=index), name=f'select_{label}_forward')
+            select_reverse = pe.Node(niu.Select(index=index), name=f'select_{label}_reverse')
+
+            get_std_template = pe.Node(
+                GetTemplate(anatomical_contrast=anat_modality, **templateflow_kwargs(spec)),
+                name=f'get_template_{label}_deriv',
+            )
+            std_lps_wf = init_template_lps_wf(name=f'template_lps_{label}_deriv_wf')
+
+            resample_std_preproc = pe.Node(
+                ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
+                name=f'resample_{label}_preproc',
+            )
+            resample_std_mask = pe.Node(
+                ants.ApplyTransforms(input_image_type=0, interpolation='MultiLabel'),
+                name=f'resample_{label}_mask',
+            )
+            resample_std_dseg = pe.Node(
+                ants.ApplyTransforms(input_image_type=0, interpolation='MultiLabel'),
+                name=f'resample_{label}_dseg',
+            )
+
+            workflow.connect([
+                (inputnode, select_forward, [('t1_std_forward_transforms', 'inlist')]),
+                (inputnode, select_reverse, [('t1_std_reverse_transforms', 'inlist')]),
+                (select_forward, ds_to_template, [('out', 'in_file')]),
+                (select_reverse, ds_from_template, [('out', 'in_file')]),
+                (t1_name, ds_to_template, [('out', 'source_file')]),
+                (t1_name, ds_from_template, [('out', 'source_file')]),
+
+                (get_std_template, std_lps_wf, [
+                    ('template_file', 'inputnode.template_file'),
+                    ('mask_file', 'inputnode.mask_file'),
+                ]),
+
+                (inputnode, resample_std_preproc, [('t1_preproc', 'input_image')]),
+                (std_lps_wf, resample_std_preproc, [
+                    ('outputnode.template_lps', 'reference_image'),
+                ]),
+                (select_forward, resample_std_preproc, [('out', 'transforms')]),
+                (resample_std_preproc, ds_std_preproc, [('output_image', 'in_file')]),
+                (t1_name, ds_std_preproc, [('out', 'source_file')]),
+
+                (inputnode, resample_std_mask, [('t1_mask', 'input_image')]),
+                (std_lps_wf, resample_std_mask, [('outputnode.template_lps', 'reference_image')]),
+                (select_forward, resample_std_mask, [('out', 'transforms')]),
+                (resample_std_mask, ds_std_mask, [('output_image', 'in_file')]),
+                (t1_name, ds_std_mask, [('out', 'source_file')]),
+
+                (inputnode, resample_std_dseg, [('t1_seg', 'input_image')]),
+                (std_lps_wf, resample_std_dseg, [('outputnode.template_lps', 'reference_image')]),
+                (select_forward, resample_std_dseg, [('out', 'transforms')]),
+                (resample_std_dseg, ds_std_dseg, [('output_image', 'in_file')]),
+                (t1_name, ds_std_dseg, [('out', 'source_file')]),
+            ])  # fmt:skip
 
     return workflow
 

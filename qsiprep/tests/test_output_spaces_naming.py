@@ -111,7 +111,6 @@ def single_acpc_config():
     return config
 
 
-@pytest.mark.xfail(reason='init_anat_derivatives_wf gains output_spaces in Task 13', strict=False)
 def test_single_acpc_anat_derivative_names(single_acpc_config):
     from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.anatomical.volume import init_anat_derivatives_wf
@@ -128,7 +127,6 @@ def test_single_acpc_anat_derivative_names(single_acpc_config):
             )
 
 
-@pytest.mark.xfail(reason='init_anat_derivatives_wf gains output_spaces in Task 13', strict=False)
 def test_single_acpc_writes_no_res_entity(single_acpc_config):
     from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.anatomical.volume import init_anat_derivatives_wf
@@ -235,3 +233,58 @@ def test_two_acpc_resolutions_write_a_res_entity(tmp_path):
     acpc_sinks = [e for e in found.values() if e.get('space') == 'ACPC']
     assert acpc_sinks
     assert {e.get('res') for e in acpc_sinks} == {'2mm', '1p5mm'}
+
+
+def test_one_normalization_per_standard_space():
+    from qsiprep.utils.spaces import parse_output_spaces
+    from qsiprep.workflows.anatomical.volume import init_anat_derivatives_wf
+
+    specs = parse_output_spaces(
+        ['acpc:res-2mm', 'MNI152NLin2009cAsym', 'MNI152NLin6Asym']
+    )
+    wf = init_anat_derivatives_wf(output_spaces=specs)
+    found = collect_datasink_entities(wf)
+    targets = {e.get('to') for e in found.values() if e.get('from') == 'ACPC'}
+    assert 'MNI152NLin2009cAsym' in targets
+    assert 'MNI152NLin6Asym' in targets
+
+
+def test_standard_space_anatomicals_are_written():
+    from qsiprep.utils.spaces import parse_output_spaces
+    from qsiprep.workflows.anatomical.volume import init_anat_derivatives_wf
+
+    specs = parse_output_spaces(['acpc:res-2mm', 'MNI152NLin6Asym:res-1'])
+    wf = init_anat_derivatives_wf(output_spaces=specs)
+    found = collect_datasink_entities(wf)
+    mni = [e for e in found.values() if e.get('space') == 'MNI152NLin6Asym']
+    assert any(e.get('desc') == 'preproc' for e in mni)
+    assert any(e.get('suffix') == 'mask' for e in mni)
+    assert all(e.get('res') == '1' for e in mni)
+
+
+def test_bare_standard_space_writes_no_res_entity():
+    from qsiprep.utils.spaces import parse_output_spaces
+    from qsiprep.workflows.anatomical.volume import init_anat_derivatives_wf
+
+    specs = parse_output_spaces(['acpc:res-2mm', 'MNI152NLin6Asym'])
+    wf = init_anat_derivatives_wf(output_spaces=specs)
+    found = collect_datasink_entities(wf)
+    mni = [e for e in found.values() if e.get('space') == 'MNI152NLin6Asym']
+    assert mni
+    assert all('res' not in e for e in mni)
+
+
+def test_cohort_is_a_separate_entity_on_space_but_inline_on_transforms():
+    from qsiprep.utils.spaces import parse_output_spaces
+    from qsiprep.workflows.anatomical.volume import init_anat_derivatives_wf
+
+    specs = parse_output_spaces(['acpc:res-2mm', 'MNIInfant:cohort-3'])
+    wf = init_anat_derivatives_wf(output_spaces=specs)
+    found = collect_datasink_entities(wf)
+
+    images = [e for e in found.values() if e.get('space') == 'MNIInfant']
+    assert images
+    assert all(e.get('cohort') == '3' for e in images)
+
+    transforms = [e for e in found.values() if e.get('from') == 'ACPC' and 'to' in e]
+    assert any(e['to'] == 'MNIInfant+3' for e in transforms)
