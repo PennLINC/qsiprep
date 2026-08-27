@@ -13,9 +13,7 @@ import pytest
 
 KIT = Path('/opt/trxscan/data')
 
-pytestmark = pytest.mark.skipif(
-    shutil.which('trxscan') is None, reason='TRXScan not installed'
-)
+pytestmark = pytest.mark.skipif(shutil.which('trxscan') is None, reason='TRXScan not installed')
 
 
 def test_trxscan_binaries_on_path():
