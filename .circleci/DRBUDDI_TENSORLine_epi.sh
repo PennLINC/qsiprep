@@ -35,6 +35,6 @@ ${QSIPREP_CMD} \
 	--b1-biascorrect-stage none \
 	--pepolar-method DRBUDDI \
 	--hmc-model tensor \
-	--output-resolution 2 \
+	--output-spaces acpc:res-2mm MNI152NLin2009cAsym \
 	--shoreline-iters 1 \
     -vv --stop-on-first-crash

@@ -45,7 +45,7 @@ ${QSIPREP_CMD} \
    --hmc-model 3dSHORE \
    --hmc-transform Rigid \
    --shoreline-iters 1 \
-   --output-resolution 5 \
+   --output-spaces acpc:res-5mm MNI152NLin2009cAsym \
    --stop-on-first-crash \
    -vv
 

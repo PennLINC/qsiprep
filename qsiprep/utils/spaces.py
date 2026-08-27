@@ -263,16 +263,6 @@ def templateflow_kwargs(spec: SpaceSpec) -> dict:
     return kwargs
 
 
-def spec_from_legacy_template(template: str) -> SpaceSpec:
-    """Convert a legacy ``template[+cohort]`` string into a :class:`SpaceSpec`.
-
-    Transitional: the anatomical workflow still threads the template as a string
-    until the ACPC anchor is passed in as a spec. Remove once that lands.
-    """
-    space, _, cohort = template.partition('+')
-    return SpaceSpec(space=space, cohort=cohort or None)
-
-
 def parse_output_spaces(tokens: Sequence) -> list[SpaceSpec]:
     """Parse every token, de-duplicate, and check the whole request makes sense."""
     specs = []

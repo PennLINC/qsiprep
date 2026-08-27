@@ -18,7 +18,7 @@ The common parts of the command are similar to the `BIDS-Apps
 
 Example: ::
 
-    qsiprep data/bids_root/ out/ participant -w work/ --output-resolution 2
+    qsiprep data/bids_root/ out/ participant -w work/ --output-spaces acpc:res-2mm MNI152NLin2009cAsym
 
 
 **********************
@@ -30,11 +30,105 @@ Command-Line Arguments
    :prog: qsiprep
 
 
+.. _output_spaces_ref:
+
+*************
+Output Spaces
+*************
+
+``--output-spaces`` tells *QSIPrep* where to write its outputs, and replaces the older
+``--output-resolution``, ``--anatomical-template`` and ``--skip-anat-based-spatial-normalization``
+flags (see :ref:`migrating_output_spaces` below). It takes one or more space-delimited
+tokens, each naming a space and, optionally, a resolution or cohort:
+
+.. code-block:: text
+
+    --output-spaces acpc:res-2mm MNI152NLin2009cAsym
+
+``acpc`` is required
+====================
+
+At least one ``acpc`` entry is required, because *QSIPrep* only ever writes preprocessed
+DWI in ACPC (subject-native) space -- there is no way to ask for DWI resampled straight
+into a standard space. ``acpc`` always needs an explicit resolution, for example
+``acpc:res-2mm``.
+
+The three ``res-`` families
+============================
+
+A ``res-`` suffix sets the resolution for a space, and comes in three flavors:
+
+- **Isotropic physical size**, given in millimeters, e.g. ``res-2mm`` or the decimal
+  form ``res-1p5mm`` (1.5 mm). ``acpc`` only accepts this isotropic form -- an
+  anisotropic size such as ``res-6x6x3mm`` is standard-space-only (see below) and is
+  rejected on ``acpc``.
+- **Native-resolution strategies**, ``res-nativemin`` and ``res-nativemax``, valid on
+  ``acpc`` only. These take the smallest or largest voxel dimension across the input
+  DWI runs and use it isotropically -- a 3x4x5 mm input yields 3x3x3 mm for
+  ``nativemin`` and 5x5x5 mm for ``nativemax``.
+- **TemplateFlow resolution labels**, e.g. ``res-1``, valid on standard spaces only.
+  Standard spaces may also take an anisotropic physical size, e.g. ``res-6x6x3mm``,
+  which is never accepted on ``acpc``.
+
+Multiple ``acpc`` entries
+=========================
+
+Listing ``acpc`` more than once (e.g. ``acpc:res-2mm acpc:res-1p5mm``) resamples and
+writes the preprocessed DWI once per requested resolution. Each additional ``acpc``
+entry costs roughly as much as another full resampling pass over the DWI data, so
+requesting *N* ``acpc`` resolutions costs roughly *N* times the resampling.
+
+Standard spaces
+================
+
+Any other space name (e.g. ``MNI152NLin2009cAsym``, ``MNIInfant``) is a standard,
+TemplateFlow-hosted space. Standard spaces produce the anatomical-to-template
+transforms and resampled anatomical derivatives (T1w/T2w, masks, segmentations), but
+**DWI is never resampled into a standard space** -- only ``acpc`` DWI is written.
+Each standard space requires its own nonlinear registration of the anatomical
+reference to that template, so requesting *N* standard spaces costs *N* nonlinear
+registrations.
+
+``cohort-auto``
+===============
+
+Templates with cohorts (e.g. ``MNIInfant``) require a ``cohort-`` key. Passing
+``cohort-auto`` (e.g. ``MNIInfant:cohort-auto``) defers cohort selection until
+run time, when *QSIPrep* picks the appropriate cohort from each participant's age
+(see `Infant mode`_ below). An explicit cohort, e.g. ``MNIInfant:cohort-3``, skips
+that age-based lookup.
+
+.. _migrating_output_spaces:
+
+Migrating from ``--output-resolution``
+========================================
+
+``--output-resolution``, ``--anatomical-template`` and
+``--skip-anat-based-spatial-normalization`` are deprecated in favor of
+``--output-spaces`` and will be removed in 27.0.0. The table below shows the
+equivalent ``--output-spaces`` invocation for each old flag combination:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Old
+     - New
+   * - ``--output-resolution 2``
+     - ``--output-spaces acpc:res-2mm MNI152NLin2009cAsym``
+   * - ``--output-resolution 1.5``
+     - ``--output-spaces acpc:res-1p5mm MNI152NLin2009cAsym``
+   * - ``--output-resolution 2 --infant``
+     - ``--output-spaces acpc:res-2mm MNIInfant:cohort-auto``
+   * - ``--output-resolution 2 --skip-anat-based-spatial-normalization``
+     - ``--output-spaces acpc:res-2mm``
+
+
 ***********
 Infant mode
 ***********
 
-If ``--infant`` is used, the pipeline will select an MNIInfant template with the
+If ``--infant`` is used, ``MNIInfant:cohort-auto`` is appended to ``--output-spaces``
+(unless an ``MNIInfant`` entry is already present), and the pipeline selects the
 appropriate cohort based on the participant's age.
 
 ``--infant`` is only compatible with ``--subject-anatomical-reference sessionwise``.

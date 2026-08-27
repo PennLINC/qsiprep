@@ -38,7 +38,7 @@ ${QSIPREP_CMD} \
 	--b1-biascorrect-stage none \
 	--pepolar-method DRBUDDI \
 	--eddy-config ${EDDY_CFG} \
-	--output-resolution 5 \
+	--output-spaces acpc:res-5mm MNIInfant:cohort-auto \
     -vv --stop-on-first-crash
 
 

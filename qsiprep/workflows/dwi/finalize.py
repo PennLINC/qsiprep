@@ -69,7 +69,7 @@ def init_dwi_finalize_wf(
         wf = init_dwi_finalize_wf(name='finalize_wf',
                                   omp_nthreads=1,
                                   output_dir='.',
-                                  output_resolution=2.0,
+                                  acpc_specs=parse_output_spaces(['acpc:res-2mm']),
                                   template='MNI152NLin2009cAsym',
                                   b0_threshold=100,
                                   low_mem=False,
@@ -94,8 +94,6 @@ def init_dwi_finalize_wf(
             Name of template targeted by ``template`` output space
         output_dir : str
             Directory in which to save derivatives
-        output_resolution : float
-            Output voxel resolution in mm
         pepolar_method : str
             Either 'DRBUDDI', 'TOPUP' or 'TOPUP+DRBUDDI'. The method for SDC when EPI
             fieldmaps are used.

@@ -18,13 +18,14 @@ One way to process these data would be to call *QSIPrep* like this::
 
   qsiprep \
     /path/to/inputs /path/to/outputs participant \
-    --output-resolution X \
+    --output-spaces acpc:res-Xmm MNI152NLin2009cAsym \
     --fs-license-file /path/to/license.txt
 
 .. warning::
-   The above example sets the ``--output-resolution`` to ``X``, where in
-   real usage this number should be set to a value in millimeters.
-   See :ref:`output_resolution` for specifics.
+   The above example asks for ACPC-space DWI resampled at ``X`` mm
+   isotropic (``acpc:res-Xmm``), where in real usage this number should be
+   a value in millimeters, plus the ``MNI152NLin2009cAsym`` standard space.
+   See :ref:`acpc_resolution` for specifics.
 
 
 **************
@@ -85,7 +86,8 @@ Specifying outputs
 ******************
 
 .. note::
-   This section covers ``--output-resolution X`` and ``--skip-t1-based-spatial-normalization``.
+   This section covers ``--output-spaces``. See :ref:`output_spaces_ref` in
+   :doc:`usage` for the full grammar reference.
 
 Unlike with fMRI, which can be coregistered to a T1w image and warped to a
 template using the T1w image's spatial normalization, the T1w images do not
@@ -93,38 +95,44 @@ contain enough contrast to accurately align white matter structures to a
 template. For this reason, spatial normalization is typically done *after*
 models are fit.
 
-All outputs will be registered to the T1w image (or the
-AC-PC aligned b=0 template if ``--anat-modality none`` was specified) but will have
-an isotropic voxel size. Furthermore, all outputs are aligned according to the
-AC-PC convention: the coordinates are changed from the native scanner
+All DWI outputs are written in ACPC (subject-native) space, at the
+resolution(s) given by every ``acpc:res-...`` entry in ``--output-spaces``
+(or the AC-PC aligned b=0 template if ``--anat-modality none`` was
+specified), and are isotropic. Furthermore, all outputs are aligned according
+to the AC-PC convention: the coordinates are changed from the native scanner
 coordinates to a new system where $0, 0, 0$ is where the midline intersects
 the anterior commissure (AC).
 
 Cortex can be accurately spatially-normalized using the T1w image, so the T1w
-image is still spatially normalized by default during preprocessing. The
-transform from the T1w image to the ``MNI152NLin2009cAsym`` template is
-included in the derivatives. This can be used during reconstruction to map
-cortical parcellations from the template into the DWI in order to estimate
-brain graphs. If you want to save ~20 minutes of computation time, this
-normalization can be disabled with the
-``--skip-t1-based-spatial-normalization`` option.
+image is spatially normalized by default during preprocessing whenever
+``--output-spaces`` includes a standard-space entry (e.g.
+``MNI152NLin2009cAsym``, the default). The transform from the T1w image to
+that template is included in the derivatives. This can be used during
+reconstruction to map cortical parcellations from the template into the DWI
+in order to estimate brain graphs. If you want to save ~20 minutes of
+computation time, this normalization can be disabled by requesting only
+``acpc`` entries in ``--output-spaces`` (i.e. no standard space at all).
 
 
-.. _output_resolution:
+.. _acpc_resolution:
 
 Output Resolution and Resampling
-================================
+=================================
 
-The ``--output-resolution`` argument determines the spatial resolution of the
-preprocessed DWI series. You can specify the resolution of the original data
-or choose to upsample the dwi to a higher spatial resolution. Some
-post-processing pipelines, such as fixel-based analysis, recommend resampling
-your output to at least 1.3mm resolution. By choosing this resolution here,
-it means your data will only be interpolated once: head motion correction,
-susceptibility distortion correction, coregistration and upsampling will be
-done in a single step. If you are upsampling your data by more than 10%,
-*QSIPrep* will use Linear interpolation instead of Lanczos windowed Sinc
-interpolation.
+Each ``acpc:res-...`` entry in ``--output-spaces`` determines a spatial
+resolution the preprocessed DWI series is resampled to. You can specify the
+resolution of the original data or choose to upsample the dwi to a higher
+spatial resolution. Some post-processing pipelines, such as fixel-based
+analysis, recommend resampling your output to at least 1.3mm resolution. By
+choosing this resolution here, it means your data will only be interpolated
+once: head motion correction, susceptibility distortion correction,
+coregistration and upsampling will be done in a single step. If you are
+upsampling your data by more than 10%, *QSIPrep* will use Linear
+interpolation instead of Lanczos windowed Sinc interpolation. Listing more
+than one ``acpc`` entry resamples and writes the DWI once per resolution, at
+roughly the cost of another full resampling pass each. See
+:ref:`output_spaces_ref` in :doc:`usage` for the complete ``--output-spaces``
+grammar, including standard spaces and ``cohort-auto``.
 
 
 ****************************

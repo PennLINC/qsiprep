@@ -40,7 +40,7 @@ ${QSIPREP_CMD} \
 	 -w ${TEMPDIR} \
 	 --boilerplate \
 	 --sloppy --write-graph --mem-mb 4096 \
-	 -vv --output-resolution 5
+	 -vv --output-spaces acpc:res-5mm MNI152NLin2009cAsym
 
 # Test blip-up blip-down non-shelled series (SHORELine/sdcflows)
 TESTNAME=DSI_SDC
@@ -56,7 +56,7 @@ ${QSIPREP_CMD} \
 	 --boilerplate \
      --hmc-model 3dSHORE \
 	 --sloppy --write-graph --mem-mb 4096 \
-	 -vv --output-resolution 5
+	 -vv --output-spaces acpc:res-5mm MNI152NLin2009cAsym
 
 
 

@@ -1,6 +1,27 @@
 # What's New
 
 
+## Unreleased
+
+### 🛠 Breaking Changes
+
+* Replace `--output-resolution`, `--anatomical-template` and
+  `--skip-anat-based-spatial-normalization` with a single `--output-spaces` argument,
+  modeled on fMRIPrep's flag of the same name. The old flags are deprecated (they still
+  work, forwarding to the equivalent `--output-spaces` request) and will be removed in
+  27.0.0. See the "Output Spaces" section of `docs/usage.rst` for the full grammar and
+  a migration table. See https://github.com/PennLINC/qsiprep/issues/681.
+* The DWI grid workflow nodes were renamed to `output_grid_res{label}_wf` (one per
+  requested `acpc` resolution) as part of the `--output-spaces` work. Resuming a run
+  with `-w`/`--work-dir` against a working directory cached from an older QSIPrep will
+  not find these nodes under their old names, so the output grid recomputes on resume
+  instead of reusing the cached result.
+
+### Other Changes
+
+* Migrate docs, CI and tests to `--output-spaces` by @tsalo.
+
+
 ## 26.0.0 (April 20, 2026)
 
 ### 🐛 Bug Fixes

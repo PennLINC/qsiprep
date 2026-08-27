@@ -43,7 +43,7 @@ ${QSIPREP_CMD} \
 	 --b1-biascorrect-stage none \
 	 --hmc-model none \
 	 --b0-motion-corr-to first \
-	 --output-resolution 5 \
+	 --output-spaces acpc:res-5mm MNI152NLin2009cAsym \
 	 --intramodal-template-transform BSplineSyN \
 	 --intramodal-template-iters 2 \
 	 -vv

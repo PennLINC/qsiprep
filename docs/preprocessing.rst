@@ -488,8 +488,7 @@ Processing the *Subject Anatomical Reference* T1w or T2w images
         dwi_only=False,
         infant_mode=False,
         template='MNI152NLin2009cAsym',
-        output_spaces=['T1w'],
-        output_resolution=1.25,
+        output_spaces=['acpc:res-1p25mm', 'MNI152NLin2009cAsym'],
         skull_strip_template='OASIS',
         force_spatial_normalization=True,
         freesurfer=True,
@@ -1001,7 +1000,7 @@ Pre-processed DWIs in a different space
     wf = init_dwi_trans_wf(
         source_file='sub-1_dwi.nii.gz',
         template="ACPC",
-        output_resolution=1.2,
+        resolution=1.2,
         use_compression=True,
         to_mni=False,
         write_local_bvecs=True,
@@ -1009,8 +1008,9 @@ Pre-processed DWIs in a different space
         omp_nthreads=1,
     )
 
-A DWI series is resampled to an output space. The ``output_resolution`` is
-specified on the commandline call. All transformations, including head motion
+A DWI series is resampled to an output space. Its resolution comes from the
+``acpc:res-...`` entries given to ``--output-spaces`` on the commandline call.
+All transformations, including head motion
 correction, susceptibility distortion correction, coregistration and (optionally)
 normalization to the template is performed in a single shot using a Lanczos kernel.
 

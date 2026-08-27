@@ -66,7 +66,7 @@ def _cfg(hmc_model='eddy', pepolar_method='TOPUP', layout=None):
     config.workflow.denoise_method = 'dwidenoise'
     config.workflow.dwi_denoise_window = 5
     config.workflow.shoreline_iters = 2
-    config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
+    config.workflow.output_spaces = ['acpc:res-2mm', 'MNI152NLin2009cAsym']
     return config
 
 
@@ -357,8 +357,8 @@ def test_drbuddi_blip_assignments_from_sidecars_needs_no_disk():
 # here and in test_interfaces_diffprep.
 
 
-def test_diffprep_sdc_uses_the_acpc_anchor(tmp_path, monkeypatch):
-    """diffprep read config.workflow.anatomical_template, which no longer exists."""
+def test_diffprep_sdc_uses_the_acpc_anchor(tmp_path):
+    """diffprep reads the ACPC anchor selected from output_spaces, not a template config field."""
     from qsiprep import config
     from qsiprep.utils.spaces import parse_output_spaces, select_acpc_anchor
 
@@ -366,14 +366,6 @@ def test_diffprep_sdc_uses_the_acpc_anchor(tmp_path, monkeypatch):
     specs = parse_output_spaces(config.workflow.output_spaces)
     anchor = select_acpc_anchor(specs)
     assert anchor.fullname == 'MNIInfant+3'
-
-    # _cfg() (used by other tests in this module) dynamically assigns
-    # config.workflow.anatomical_template as test scaffolding, which -- because
-    # `workflow` is a class, not an instance -- persists as a class attribute
-    # across tests regardless of run order (Task 16 removes that scaffolding).
-    # Strip it here so this assertion checks the source-level contract rather
-    # than incidental cross-test pollution.
-    monkeypatch.delattr(config.workflow, 'anatomical_template', raising=False)
 
     # The config field diffprep.py used to read must be gone, so any surviving
     # reader is a build-time AttributeError rather than a silent None.

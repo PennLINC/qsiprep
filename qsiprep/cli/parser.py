@@ -502,8 +502,8 @@ def _build_parser(**kwargs):
         '--infant',
         action='store_true',
         help='Configure pipelines to process infant brains. '
-        'If using this parameter, the anatomical-template will be changed to MNIInfant. '
-        "The appropriate MNIInfant cohort will be selected based on the participant's age.",
+        'This appends `MNIInfant:cohort-auto` to `--output-spaces` (unless an MNIInfant '
+        "entry is already present), and the cohort is selected from the participant's age.",
     )
     g_conf.add_argument(
         '--longitudinal',
@@ -667,8 +667,10 @@ How to combine the corrected results of an output's correction units.
             'Standard and non-standard spaces to write outputs to, space delimited. '
             'At least one "acpc" space is required, because QSIPrep writes preprocessed '
             'DWI in ACPC space only -- for example "acpc:res-2mm". Resolutions are given '
-            'as a physical size with an "mm" suffix ("res-2mm", "res-1p5mm", "res-6x6x3mm") '
-            'or, for standard spaces, as a TemplateFlow resolution label ("res-1"). '
+            'as a physical size with an "mm" suffix, either isotropic ("res-2mm", '
+            '"res-1p5mm") or, for standard spaces only, anisotropic ("res-6x6x3mm"); '
+            '"acpc" requires an isotropic size. Standard spaces also accept a '
+            'TemplateFlow resolution label ("res-1"). '
             'On "acpc", "res-nativemin" and "res-nativemax" take the smallest or largest '
             'voxel dimension of the input DWI runs (a 3x4x5 mm input gives 3x3x3 mm for '
             'nativemin and 5x5x5 mm for nativemax). Listing "acpc" more than once writes '

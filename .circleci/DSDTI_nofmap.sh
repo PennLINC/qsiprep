@@ -36,6 +36,8 @@ QSIPREP_CMD=$(run_qsiprep_cmd ${BIDS_INPUT_DIR} ${OUTPUT_DIR})
 # CRITICAL: delete the fieldmap data
 rm -rf data/DSDTI/sub-PNC/fmap
 
+# Deliberately left on the deprecated --output-resolution to keep the forwarding path
+# under test until it is removed in 27.0.0.
 # Do the anatomical run on its own
 ${QSIPREP_CMD} \
 	-w ${TEMPDIR} \

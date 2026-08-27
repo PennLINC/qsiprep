@@ -45,7 +45,7 @@ ${QSIPREP_CMD} \
 	--force-syn \
 	--b1-biascorrect-stage final \
      --denoise-method none \
-	--output-resolution 5 \
+	--output-spaces acpc:res-5mm MNI152NLin2009cAsym \
 	-vv
 
 

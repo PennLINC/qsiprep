@@ -33,7 +33,6 @@ write_graph = true
 [workflow]
 anat_modality = "T1w"
 anat_only = false
-anatomical_template = "MNI152NLin2009cAsym"
 b0_threshold = 100
 b0_motion_corr_to = "iterative"
 b0_to_anat_transform = "Rigid"
@@ -52,12 +51,11 @@ intramodal_template_iters = 0
 intramodal_template_transform = "BSplineSyN"
 subject_anatomical_reference = "first-lex"
 no_b0_harmonization = false
-output_resolution = 5.0
+output_spaces = [ "acpc:res-5mm", "MNI152NLin2009cAsym",]
 pepolar_method = "TOPUP"
 separate_all_dwis = false
 shoreline_iters = 2
 use_syn_sdc = false
-spaces = "MNI152NLin2009cAsym"
 
 [nipype]
 crashfile_format = "txt"

@@ -57,6 +57,8 @@ fi
 cp ${BIDS_INPUT_DIR}/sub-PNC/anat/sub-PNC_T1w.json \
    ${BIDS_INPUT_DIR}/sub-PNC/anat/sub-PNC_run-02_T1w.json
 
+# Deliberately left on the deprecated --output-resolution to keep the forwarding path
+# under test until it is removed in 27.0.0.
 # Do the anatomical run on its own
 ${QSIPREP_CMD} \
 	 -w ${TEMPDIR} \
@@ -74,6 +76,8 @@ setup_dir ${TESTDIR}/${TESTNAME}
 TEMPDIR=${TESTDIR}/${TESTNAME}/work
 OUTPUT_DIR=${TESTDIR}/${TESTNAME}/derivatives
 
+# Deliberately left on the deprecated --output-resolution to keep the forwarding path
+# under test until it is removed in 27.0.0.
 ${QSIPREP_CMD} \
 	 -w ${TEMPDIR} \
      --eddy-config ${EDDY_CFG} \
