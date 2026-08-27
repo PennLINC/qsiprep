@@ -692,14 +692,13 @@ Gradient nonlinearity correction
 When ``--gradient-file`` is supplied (see the :doc:`usage` page for the
 accepted file formats and the ``ImageType``-driven decision of how much
 spatial correction each run gets), the gradwarp field is generated once per
-correction unit, directly from the raw DWI grid, immediately after the plan
-is resolved. It is never used to resample the DWI series on its own. Instead
-it is folded into
-the single composed transform that is applied once at the end of the
-pipeline, in the order head-motion → gradwarp → susceptibility-distortion →
-(intramodal template →) coregistration → (template space). This keeps the
-long-standing single-resample guarantee: no matter how many corrections are
-stacked, the DWI data are interpolated only once.
+DWI run, directly from the raw DWI grid.
+It is never used to resample the DWI series on its own.
+Instead it is folded into the single composed transform that is applied once
+at the end of the pipeline,
+in the order head-motion → gradwarp → susceptibility-distortion →
+(intramodal template →) coregistration → (template space).
+This minimizes the number of interpolations applied to the data.
 
 Head-motion/eddy-current estimation never sees the gradwarp field -- motion
 parameters are estimated on the native, uncorrected grid, matching how
@@ -708,17 +707,17 @@ TORTOISE itself handles this.
 Susceptibility distortion correction (SDC) is estimated on gradwarp-corrected
 b=0/FA images whenever the resulting SDC warp is applied *after* gradwarp in
 the composed transform (the DRBUDDI, GRE fieldmap, SyN fieldmap-less, and
-TORTOISE/DIFFPREP workflows). The one exception is ``eddy`` combined with
-``TOPUP``: ``eddy`` resamples the raw data itself and applies the
-susceptibility field internally, so both the field estimate and gradwarp are
-applied together at the very end, and estimating the TOPUP field on raw
-(rather than gradwarp-corrected) b=0 images is what keeps that single step
-internally consistent.
+TORTOISE/DIFFPREP workflows).
+The one exception is ``eddy`` combined with ``TOPUP``: ``eddy`` resamples
+the raw data itself and applies the susceptibility field internally,
+so both the field estimate and gradwarp are applied together at the very end,
+and estimating the TOPUP field on raw (rather than gradwarp-corrected) b=0 images
+is what keeps that single step internally consistent.
 
 The voxelwise gradient deviation map (``graddev``, see the :doc:`usage` page)
-is produced independently of whether spatial correction was applied, since
-it addresses a completely separate problem (the diffusion *encoding*, not
-voxel *position*).
+is produced independently of whether spatial correction was applied,
+since it addresses a completely separate problem
+(the diffusion *encoding*, not voxel *position*).
 
 .. note::
    **Known limitations**
@@ -743,7 +742,7 @@ voxel *position*).
      structural image is available, susceptibility distortion is estimated
      by TORTOISE's own ``T2Wreg`` registration, running entirely inside the
      ``TORTOISEProcess``/``DIFFPREP`` binary. There is no point at which
-     qsiprep can hand that binary a gradwarp-corrected image, so its SDC
+     QSIPrep can hand that binary a gradwarp-corrected image, so its SDC
      estimate is made on the uncorrected image even though gradwarp-correction
      of SDC estimation inputs is applied everywhere else this pattern occurs.
      Every other correction (the spatial gradwarp itself, the gradient

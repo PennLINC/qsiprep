@@ -136,30 +136,30 @@ Therefore, we recommend that, if you use MultipartID, you check your outputs to 
 Gradient nonlinearity correction
 ********************************
 
-Gradient coils deviate from their nominal linear field. This displaces voxels,
-increasingly so away from isocentre, and it means the diffusion gradient
-actually applied at a voxel is not quite the one recorded in the bval/bvec
-table. Pass a scanner coefficient file with ``--gradient-file`` to correct
-both: ::
+Gradient coils deviate from their nominal linear field.
+This displaces voxels, increasingly so away from isocentre,
+and it means the diffusion gradient actually applied at a voxel is not quite
+the one recorded in the bval/bvec table.
+Pass a scanner coefficient file with ``--gradient-file`` to correct both: ::
 
     --gradient-file /path/to/coeff.grad
 
 Accepted formats are ``.grad`` (Siemens), ``.dat`` (GE), ``.gc`` (TORTOISE
-binary), and ``.nii``/``.nii.gz`` (an ITK displacement field). Only one file
-is accepted, and it applies to every DWI run in the dataset; process
-multi-site data one site at a time.
+binary), and ``.nii``/``.nii.gz`` (an ITK displacement field).
+Only one file is accepted, and it applies to every DWI run in the dataset;
+process multi-site data one site at a time.
 
 Whether the *spatial* correction is applied to a given run, and how much of
 it, is decided from that run's ``ImageType`` field:
 
-===================  ======================================================
+===================  =======================================================
 ``ImageType`` tag    Behavior
-===================  ======================================================
+===================  =======================================================
 (no ``DIS`` tag)     Full 3D gradwarp correction
 ``DIS2D``            Through-plane correction only; the scanner already
                      corrected in-plane distortion
 ``DIS3D``            No spatial correction; the scanner already corrected it
-===================  ======================================================
+===================  =======================================================
 
 Use ``--force gradients`` to apply the full 3D correction regardless of
 ``ImageType``, for data whose tags are absent or untrustworthy.
