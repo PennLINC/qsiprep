@@ -2363,13 +2363,15 @@ def _select_grid(grids, index):
         )
         workflow.connect([
             (inputnode, trans_wf, [
-                ((('dwi_sampling_grid'), partial(_select_grid, index=index)),
-                 'inputnode.output_grid'),
+                (('dwi_sampling_grids', _select_grid, [index]), 'inputnode.output_grid'),
             ]),
         ])  # fmt:skip
 ```
 
-Add `from functools import partial` to the module imports.
+Note the connect form: nipype's function-connection syntax is the 3-tuple
+`(field, func, [extra_args])`. A `functools.partial` does NOT work here — nipype
+introspects the function's source to serialize it, and a partial object is not
+introspectable.
 
 - [ ] **Step 4: Apply the `res-` entity rule to the sinks**
 
