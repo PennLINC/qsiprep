@@ -434,5 +434,45 @@ def test_one_output_grid_per_acpc_resolution(tmp_path):
     assert any('output_grid_res1p5mm_wf' in n for n in names)
 
 
+def _build_anat_preproc_wf(tmp_path, output_spaces):
+    from qsiprep.utils.spaces import parse_output_spaces, select_acpc_anchor
+    from qsiprep.workflows.anatomical.volume import init_anat_preproc_wf
+
+    config.workflow.output_spaces = output_spaces
+    config.workflow.anat_modality = 'T1w'
+    config.workflow.infant = False
+    config.nipype.omp_nthreads = 1
+    config.execution.output_dir = str(tmp_path)
+    specs = parse_output_spaces(config.workflow.output_spaces)
+    acpc_specs = [s for s in specs if not s.standard]
+
+    return init_anat_preproc_wf(
+        num_anat_images=1,
+        num_additional_t2ws=0,
+        has_rois=False,
+        output_spaces=specs,
+        acpc_anchor=select_acpc_anchor(specs),
+        acpc_specs=acpc_specs,
+        do_biascorr=False,
+        t2w_do_biascorr=False,
+    )
+
+
+def test_anchor_normalization_is_not_duplicated(tmp_path):
+    # The default request's standard space IS the ACPC anchor -- normalize once.
+    wf = _build_anat_preproc_wf(tmp_path, ['acpc:res-2mm', 'MNI152NLin2009cAsym'])
+    norm_wfs = {n.split('.')[0] for n in wf.list_node_names() if 'anat_normalization' in n}
+    assert len(norm_wfs) == 1, f'anchor normalization duplicated: {sorted(norm_wfs)}'
+
+
+def test_distinct_standard_spaces_each_normalize(tmp_path):
+    # A non-anchor space gets its own registration.
+    wf = _build_anat_preproc_wf(
+        tmp_path, ['acpc:res-2mm', 'MNI152NLin2009cAsym', 'MNI152NLin6Asym']
+    )
+    norm_wfs = {n.split('.')[0] for n in wf.list_node_names() if 'anat_normalization' in n}
+    assert len(norm_wfs) == 2, f'expected 2 normalizations, got {sorted(norm_wfs)}'
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
