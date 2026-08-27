@@ -220,9 +220,7 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
     )
     acpc_anchor = select_acpc_anchor(output_spaces)
     acpc_specs = [s for s in output_spaces if not s.standard]
-    # anatomical_template is still consumed by SubjectSummary; init_anat_preproc_wf
-    # now derives its own copy from acpc_anchor internally.
-    anatomical_template = acpc_anchor.fullname
+    standard_specs = [s for s in output_spaces if s.standard]
 
     # The anatomical workflow only builds its T2w branch -- and therefore only
     # produces ``t2w_unfatsat`` -- when asked for additional T2ws. Keep this in
@@ -274,7 +272,7 @@ to workflows in *QSIPrep*'s documentation]\
     bids_info = pe.Node(BIDSInfo(), name='bids_info', run_without_submitting=True)
 
     summary = pe.Node(
-        SubjectSummary(template=anatomical_template),
+        SubjectSummary(templates=[s.fullname for s in standard_specs]),
         name='summary',
         run_without_submitting=True,
     )

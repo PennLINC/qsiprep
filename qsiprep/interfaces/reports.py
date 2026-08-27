@@ -141,7 +141,7 @@ class SubjectSummaryInputSpec(BaseInterfaceInputSpec):
     session_id = Str(desc='Session ID')
     dwi_groupings = traits.Dict(desc='groupings of DWI files and their output names')
     output_spaces = traits.List(desc='Target spaces')
-    template = Str(desc='Template space')
+    templates = InputMultiObject(traits.Str, desc='Requested standard output spaces')
     freesurfer_status = traits.Enum('Not run', 'Partial', 'Full', desc='FreeSurfer status')
 
 
@@ -189,6 +189,12 @@ class SubjectSummary(SummaryInterface):
                     output_name=output_fname, input_files='\n'.join(files_desc)
                 )
 
+        templates = self.inputs.templates if isdefined(self.inputs.templates) else []
+        if templates:
+            templates_desc = ', '.join(templates)
+        else:
+            templates_desc = 'none (no standard space requested)'
+
         return SUBJECT_TEMPLATE.format(
             subject_id=self.inputs.subject_id,
             n_t1s=len(self.inputs.t1w),
@@ -196,7 +202,7 @@ class SubjectSummary(SummaryInterface):
             n_dwis=len(input_files),
             n_outputs=n_outputs,
             groupings=groupings,
-            output_spaces=['ACPC', self.inputs.template],
+            output_spaces=f'ACPC, {templates_desc}',
         )
 
 

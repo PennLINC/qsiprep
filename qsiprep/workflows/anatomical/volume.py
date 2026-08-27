@@ -165,9 +165,6 @@ def init_anat_preproc_wf(
     """
     anat_modality = config.workflow.anat_modality
     dwi_only = anat_modality == 'none'
-    # Tasks 13 and 14 still consume the template as a legacy string; this
-    # reproduces the value select_acpc_anchor used to hand back verbatim.
-    anatomical_template = acpc_anchor.fullname
 
     workflow = Workflow(name=name)
     inputnode = pe.Node(
@@ -392,6 +389,12 @@ FreeSurfer version {FS_VERSION}. """
         merge_std_reverse_transforms = pe.Node(
             niu.Merge(len(standard_specs)), name='merge_std_reverse_transforms'
         )
+        # One normalization reportlet per standard space, in the same order as
+        # standard_specs, so init_anat_reports_wf can hand each back to its own
+        # ds_report_t1_2_* sink.
+        merge_std_reports = pe.Node(
+            niu.Merge(len(standard_specs)), name='merge_std_reports'
+        )
         for index, norm_wf in enumerate(standard_transform_wfs, start=1):
             workflow.connect([
                 (norm_wf, merge_std_forward_transforms, [
@@ -399,6 +402,9 @@ FreeSurfer version {FS_VERSION}. """
                 ]),
                 (norm_wf, merge_std_reverse_transforms, [
                     ('outputnode.from_template_nonlinear_transform', f'in{index}'),
+                ]),
+                (norm_wf, merge_std_reports, [
+                    ('outputnode.out_report', f'in{index}'),
                 ]),
             ])  # fmt:skip
         workflow.connect([
@@ -473,7 +479,7 @@ FreeSurfer version {FS_VERSION}. """
 
     seg2msks = pe.Node(niu.Function(function=_seg2msks), name='seg2msks')
     seg_rpt = pe.Node(ROIsPlot(colors=['r', 'magenta', 'b', 'g']), name='seg_rpt')
-    anat_reports_wf = init_anat_reports_wf(anatomical_template=anatomical_template)
+    anat_reports_wf = init_anat_reports_wf(output_spaces=output_spaces)
 
     workflow.connect([
         (inputnode, anat_reference_wf, [
@@ -585,10 +591,12 @@ FreeSurfer version {FS_VERSION}. """
             ('outputnode.template_lps', 'inputnode.reference_image'),
         ]),
         (seg_rpt, anat_reports_wf, [('out_report', 'inputnode.seg_report')]),
-        (anat_normalization_wf, anat_reports_wf, [
-            ('outputnode.out_report', 'inputnode.t1_2_mni_report'),
-        ]),
     ])  # fmt:skip
+
+    if standard_specs:
+        workflow.connect([
+            (merge_std_reports, anat_reports_wf, [('out', 'inputnode.t1_2_mni_reports')]),
+        ])  # fmt:skip
 
     anat_derivatives_wf = init_anat_derivatives_wf(
         output_spaces=output_spaces,
@@ -1453,11 +1461,20 @@ def _tupleize(value):
     return (value, value, value)
 
 
-def init_anat_reports_wf(anatomical_template) -> Workflow:
+def init_anat_reports_wf(output_spaces) -> Workflow:
     """
     Set up a battery of datasinks to store reports in the right location
+
+    Parameters
+    ----------
+    output_spaces : :obj:`list` of :class:`~qsiprep.utils.spaces.SpaceSpec`
+        Every requested output space. Every standard (non-ACPC) space among
+        these gets its own normalization reportlet and ``ds_report_t1_2_*``
+        sink, in the same order ``standard_specs`` is filtered here -- callers
+        must feed ``inputnode.t1_2_mni_reports`` a list in that same order.
     """
     anat_modality = config.workflow.anat_modality
+    standard_specs = [spec for spec in output_spaces if spec.standard]
 
     workflow = Workflow(name='anat_reports_wf')
 
@@ -1467,7 +1484,7 @@ def init_anat_reports_wf(anatomical_template) -> Workflow:
                 'source_file',
                 't1_conform_report',
                 'seg_report',
-                't1_2_mni_report',
+                't1_2_mni_reports',
                 'recon_report',
                 'anat_list',
                 'valid_list',
@@ -1504,18 +1521,6 @@ def init_anat_reports_wf(anatomical_template) -> Workflow:
         (anat_reportlet, ds_report_anat_conform, [('out_report', 'in_file')]),
     ])  # fmt:skip
 
-    template_entities = _template_to_report_entities(anatomical_template)
-    ds_report_t1_2_mni = pe.Node(
-        DerivativesDataSink(
-            base_directory=config.execution.output_dir,
-            datatype='figures',
-            suffix=config.workflow.anat_modality,
-            **template_entities,
-        ),
-        name='ds_report_t1_2_mni',
-        run_without_submitting=True,
-    )
-
     ds_report_t1_seg_mask = pe.Node(
         DerivativesDataSink(
             base_directory=config.execution.output_dir,
@@ -1534,23 +1539,43 @@ def init_anat_reports_wf(anatomical_template) -> Workflow:
     ])  # fmt:skip
 
     if not config.execution.skip_anat_based_spatial_normalization:
-        workflow.connect([
-            (inputnode, ds_report_t1_2_mni, [
-                ('source_file', 'source_file'),
-                ('t1_2_mni_report', 'in_file'),
-            ]),
-        ])  # fmt:skip
+        for index, spec in enumerate(standard_specs):
+            entities = _spec_to_report_entities(spec)
+            # Same special-casing as the transform/derivative sinks: existing
+            # node names are asserted elsewhere and appear in cached working
+            # directories, so MNI152NLin2009cAsym keeps the original name.
+            label = spec.fullname.replace('+', '')
+            node_name = (
+                'ds_report_t1_2_mni'
+                if spec.space == 'MNI152NLin2009cAsym'
+                else f'ds_report_t1_2_{label}'
+            )
+            select_report = pe.Node(niu.Select(index=index), name=f'select_{label}_report')
+            ds_report_t1_2_std = pe.Node(
+                DerivativesDataSink(
+                    base_directory=config.execution.output_dir,
+                    datatype='figures',
+                    suffix=anat_modality,
+                    **entities,
+                ),
+                name=node_name,
+                run_without_submitting=True,
+            )
+            workflow.connect([
+                (inputnode, select_report, [('t1_2_mni_reports', 'inlist')]),
+                (inputnode, ds_report_t1_2_std, [('source_file', 'source_file')]),
+                (select_report, ds_report_t1_2_std, [('out', 'in_file')]),
+            ])  # fmt:skip
 
     return workflow
 
 
-def _template_to_report_entities(template):
-    """Convert a QSIPrep template string to reportlet filename entities."""
-    if '+' not in template:
-        return {'space': template}
-
-    space, cohort = template.split('+', 1)
-    return {'space': space, 'cohort': cohort}
+def _spec_to_report_entities(spec):
+    """Convert a SpaceSpec to reportlet filename entities."""
+    entities = {'space': spec.space}
+    if spec.cohort not in (None, 'auto'):
+        entities['cohort'] = spec.cohort
+    return entities
 
 
 def init_anat_derivatives_wf(output_spaces, has_t2w=False) -> Workflow:

@@ -127,7 +127,7 @@ def test_subject_summary_renders_native_groupings():
     summary = SubjectSummary(
         t1w=[],
         subject_id='01',
-        template='MNI152NLin2009cAsym',
+        templates=['MNI152NLin2009cAsym'],
         dwi_groupings={
             'sub-01': {
                 'pe_dir': 'j',

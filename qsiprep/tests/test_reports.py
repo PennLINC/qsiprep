@@ -11,7 +11,7 @@ def test_subject_summary_counts_inputs_uniquely():
 
     summary = SubjectSummary(
         subject_id='01',
-        template='MNI152NLin2009cAsym',
+        templates=['MNI152NLin2009cAsym'],
         dwi_groupings={
             'sub-01_acq-solo_dir-AP': {
                 'pe_dir': 'j-',
@@ -27,6 +27,30 @@ def test_subject_summary_counts_inputs_uniquely():
     )
     segment = summary._generate_segment()
     assert 'inputs 2, outputs 2' in segment
+
+
+def test_subject_summary_lists_every_template(tmp_path):
+    from qsiprep.interfaces.reports import SubjectSummary
+
+    iface = SubjectSummary(
+        templates=['MNI152NLin2009cAsym', 'MNIInfant+3'],
+        subject_id='01',
+    )
+    text = iface._generate_segment()
+    assert 'MNI152NLin2009cAsym' in text
+    assert 'MNIInfant+3' in text
+
+
+def test_subject_summary_no_standard_space():
+    """No standard space requested is a legitimate state, not an empty string."""
+    from qsiprep.interfaces.reports import SubjectSummary
+
+    iface = SubjectSummary(
+        templates=[],
+        subject_id='01',
+    )
+    text = iface._generate_segment()
+    assert 'none (no standard space requested)' in text
 
 
 @pytest.fixture
@@ -206,15 +230,19 @@ def test_generate_reports_session_level_finds_reportlets(tmp_path):
     )
 
 
-def test_template_to_report_entities():
-    from qsiprep.workflows.anatomical.volume import _template_to_report_entities
+def test_spec_to_report_entities():
+    from qsiprep.utils.spaces import SpaceSpec
+    from qsiprep.workflows.anatomical.volume import _spec_to_report_entities
 
-    assert _template_to_report_entities('MNI152NLin2009cAsym') == {
+    assert _spec_to_report_entities(SpaceSpec(space='MNI152NLin2009cAsym')) == {
         'space': 'MNI152NLin2009cAsym',
     }
-    assert _template_to_report_entities('MNIInfant+3') == {
+    assert _spec_to_report_entities(SpaceSpec(space='MNIInfant', cohort='3')) == {
         'space': 'MNIInfant',
         'cohort': '3',
+    }
+    assert _spec_to_report_entities(SpaceSpec(space='MNIInfant', cohort='auto')) == {
+        'space': 'MNIInfant',
     }
 
 
