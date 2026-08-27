@@ -429,8 +429,6 @@ class execution(_Config):
     """List of session identifiers that are to be preprocessed"""
     processing_list = []
     """List of (subject_id, [session_id, ...]) to be preprocessed together."""
-    skip_anat_based_spatial_normalization = False
-    """Should we skip normalizing the anatomical data to a template?"""
     templateflow_home = _templateflow_home
     """The root folder of the TemplateFlow client."""
     work_dir = Path('work').absolute()

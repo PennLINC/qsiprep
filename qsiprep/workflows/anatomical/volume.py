@@ -70,6 +70,25 @@ def _get_first(in_list):
     return in_list
 
 
+def _spec_node_label(spec) -> str:
+    """The node-name fragment identifying one requested output space.
+
+    ``fullname`` alone is not unique: ``MNI152NLin2009cAsym:res-1`` and
+    ``MNI152NLin2009cAsym:res-2`` share it, and nipype refuses duplicate node
+    names. Specs carrying a resolution get it appended; a bare template keeps the
+    historical label so cached working directories still match.
+    """
+    label = spec.fullname.replace('+', '')
+    if spec.resolution is not None:
+        return f'{label}res{spec.resolution.label}'
+    return label
+
+
+def _is_default_mni(spec) -> bool:
+    """True for a bare ``MNI152NLin2009cAsym``, which keeps its legacy node names."""
+    return spec.space == 'MNI152NLin2009cAsym' and spec.resolution is None
+
+
 #  pylint: disable=R0914
 def init_anat_preproc_wf(
     num_anat_images,
@@ -320,6 +339,20 @@ SynthStrip [@synthstrip] and automated segmentation was
 performed using SynthSeg [@synthseg1; @synthseg2] from
 FreeSurfer version {FS_VERSION}. """
 
+    standard_specs = [spec for spec in output_spaces if spec.standard]
+
+    # The anchor's *nonlinear* component is only ever consumed by a standard-space
+    # output or by the niworkflows SyN fieldmap, which warps its atlas prior into
+    # subject space through t1_2_mni_reverse_transform. With neither requested,
+    # antsRegistration would run for nothing, so skip it. (Before --output-spaces
+    # this was the job of --skip-anat-based-spatial-normalization.)
+    needs_nonlinear = bool(standard_specs) or bool(config.workflow.use_syn_sdc)
+    if not needs_nonlinear:
+        config.loggers.workflow.info(
+            'No standard output space was requested and SyN-SDC is off: skipping the '
+            'anatomical nonlinear normalization.'
+        )
+
     # Perform registrations. This one anchors ACPC alignment: its rigid component
     # becomes acpc_transform/acpc_inv_transform, used throughout for every
     # ACPC-space anatomical output, regardless of which (if any) standard spaces
@@ -327,6 +360,7 @@ FreeSurfer version {FS_VERSION}. """
     anat_normalization_wf = init_anat_normalization_wf(
         acpc_anchor,
         has_rois=has_rois,
+        nonlinear=needs_nonlinear,
     )
 
     # One additional nonlinear normalization per requested standard space. Each
@@ -343,7 +377,6 @@ FreeSurfer version {FS_VERSION}. """
 
     anchor_label_resolution = _label_resolution(acpc_anchor)
 
-    standard_specs = [spec for spec in output_spaces if spec.standard]
     standard_transform_wfs = []
     for spec in standard_specs:
         reuses_anchor = (
@@ -354,7 +387,7 @@ FreeSurfer version {FS_VERSION}. """
             standard_transform_wfs.append(anat_normalization_wf)
             continue
 
-        label = spec.fullname.replace('+', '')
+        label = _spec_node_label(spec)
         get_std_template = pe.Node(
             GetTemplate(anatomical_contrast=anat_modality, **templateflow_kwargs(spec)),
             name=f'get_template_{label}',
@@ -1024,7 +1057,9 @@ A {contrast}-reference map was computed after registration of
     return workflow
 
 
-def init_anat_normalization_wf(spec, has_rois=False, name='anat_normalization_wf') -> Workflow:
+def init_anat_normalization_wf(
+    spec, has_rois=False, nonlinear=True, name='anat_normalization_wf'
+) -> Workflow:
     r"""
     This workflow performs registration from the original anatomical reference to the
     template anatomical reference.
@@ -1044,6 +1079,10 @@ def init_anat_normalization_wf(spec, has_rois=False, name='anat_normalization_wf
         The standard space being registered to.
     has_rois : bool
         Whether Registration should account for regions to exclude
+    nonlinear : bool
+        Also estimate the full nonlinear (SyN) registration to the template. When
+        ``False`` only the rigid AC-PC transform is produced, and the
+        ``*_nonlinear_transform`` outputs stay undefined.
 
     Inputs
     ------
@@ -1133,8 +1172,9 @@ a 6-DOF transform extracted from a full Affine registration to the
         ]),
     ])  # fmt:skip
 
-    # If not doing a normalization to the template, we're done
-    if config.execution.skip_anat_based_spatial_normalization:
+    # The rigid ACPC transform is always needed. The nonlinear one is not, so when
+    # nothing consumes it the caller asks for the rigid part alone.
+    if not nonlinear:
         workflow.__desc__ = desc
         return workflow
 
@@ -1538,17 +1578,21 @@ def init_anat_reports_wf(output_spaces) -> Workflow:
         ]),
     ])  # fmt:skip
 
-    if not config.execution.skip_anat_based_spatial_normalization:
-        for index, spec in enumerate(standard_specs):
-            entities = _spec_to_report_entities(spec)
+    # A reportlet filename has no res- entity, so two resolutions of one template
+    # would name the same figure. One reportlet per template/cohort is enough:
+    # the registrations differ only in the grid the template was fetched on.
+    reports_written = set()
+    for index, spec in enumerate(standard_specs):
+        entities = _spec_to_report_entities(spec)
+        signature = tuple(sorted(entities.items()))
+        if signature not in reports_written:
+            reports_written.add(signature)
             # Same special-casing as the transform/derivative sinks: existing
             # node names are asserted elsewhere and appear in cached working
-            # directories, so MNI152NLin2009cAsym keeps the original name.
-            label = spec.fullname.replace('+', '')
+            # directories, so a bare MNI152NLin2009cAsym keeps the original name.
+            label = _spec_node_label(spec)
             node_name = (
-                'ds_report_t1_2_mni'
-                if spec.space == 'MNI152NLin2009cAsym'
-                else f'ds_report_t1_2_{label}'
+                'ds_report_t1_2_mni' if _is_default_mni(spec) else f'ds_report_t1_2_{label}'
             )
             select_report = pe.Node(niu.Select(index=index), name=f'select_{label}_report')
             ds_report_t1_2_std = pe.Node(
@@ -1783,8 +1827,13 @@ def init_anat_derivatives_wf(output_spaces, has_t2w=False) -> Workflow:
         ])  # fmt:skip
 
     if standard_specs:
+        # A transform filename has no res- entity, so two resolutions of one
+        # template would name the same file. Write it once.
+        transforms_written = set()
         for index, spec in enumerate(standard_specs):
-            label = spec.fullname.replace('+', '')
+            label = _spec_node_label(spec)
+            write_transforms = spec.fullname not in transforms_written
+            transforms_written.add(spec.fullname)
             res_entities = (
                 {'res': spec.resolution.label}
                 if spec.resolution is not None and spec.resolution.kind == 'label'
@@ -1796,37 +1845,34 @@ def init_anat_derivatives_wf(output_spaces, has_t2w=False) -> Workflow:
 
             # from-/to- labels carry the cohort inline because a transform label has
             # nowhere else to put it; space- pairs with a separate cohort- entity.
-            warp_name = (
-                'ds_t1_mni_warp' if spec.space == 'MNI152NLin2009cAsym' else f'ds_t1_{label}_warp'
-            )
+            warp_name = 'ds_t1_mni_warp' if _is_default_mni(spec) else f'ds_t1_{label}_warp'
             inv_warp_name = (
-                'ds_t1_mni_inv_warp'
-                if spec.space == 'MNI152NLin2009cAsym'
-                else f'ds_t1_{label}_inv_warp'
+                'ds_t1_mni_inv_warp' if _is_default_mni(spec) else f'ds_t1_{label}_inv_warp'
             )
 
-            ds_to_template = pe.Node(
-                DerivativesDataSink(
-                    base_directory=config.execution.output_dir,
-                    to=spec.fullname,
-                    mode='image',
-                    suffix='xfm',
-                    **{'from': 'ACPC'},
-                ),
-                name=warp_name,
-                run_without_submitting=True,
-            )
-            ds_from_template = pe.Node(
-                DerivativesDataSink(
-                    base_directory=config.execution.output_dir,
-                    to='ACPC',
-                    mode='image',
-                    suffix='xfm',
-                    **{'from': spec.fullname},
-                ),
-                name=inv_warp_name,
-                run_without_submitting=True,
-            )
+            if write_transforms:
+                ds_to_template = pe.Node(
+                    DerivativesDataSink(
+                        base_directory=config.execution.output_dir,
+                        to=spec.fullname,
+                        mode='image',
+                        suffix='xfm',
+                        **{'from': 'ACPC'},
+                    ),
+                    name=warp_name,
+                    run_without_submitting=True,
+                )
+                ds_from_template = pe.Node(
+                    DerivativesDataSink(
+                        base_directory=config.execution.output_dir,
+                        to='ACPC',
+                        mode='image',
+                        suffix='xfm',
+                        **{'from': spec.fullname},
+                    ),
+                    name=inv_warp_name,
+                    run_without_submitting=True,
+                )
             ds_std_preproc = pe.Node(
                 DerivativesDataSink(
                     base_directory=config.execution.output_dir,
@@ -1887,13 +1933,17 @@ def init_anat_derivatives_wf(output_spaces, has_t2w=False) -> Workflow:
                 name=f'resample_{label}_dseg',
             )
 
+            if write_transforms:
+                workflow.connect([
+                    (select_forward, ds_to_template, [('out', 'in_file')]),
+                    (select_reverse, ds_from_template, [('out', 'in_file')]),
+                    (t1_name, ds_to_template, [('out', 'source_file')]),
+                    (t1_name, ds_from_template, [('out', 'source_file')]),
+                ])  # fmt:skip
+
             workflow.connect([
                 (inputnode, select_forward, [('t1_std_forward_transforms', 'inlist')]),
                 (inputnode, select_reverse, [('t1_std_reverse_transforms', 'inlist')]),
-                (select_forward, ds_to_template, [('out', 'in_file')]),
-                (select_reverse, ds_from_template, [('out', 'in_file')]),
-                (t1_name, ds_to_template, [('out', 'source_file')]),
-                (t1_name, ds_from_template, [('out', 'source_file')]),
 
                 (get_std_template, std_lps_wf, [
                     ('template_file', 'inputnode.template_file'),

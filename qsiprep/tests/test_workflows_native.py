@@ -426,13 +426,14 @@ def test_one_output_grid_per_acpc_resolution(tmp_path):
     assert any('output_grid_res1p5mm_wf' in n for n in names)
 
 
-def _build_anat_preproc_wf(tmp_path, output_spaces):
+def _build_anat_preproc_wf(tmp_path, output_spaces, use_syn_sdc=False):
     from qsiprep.utils.spaces import parse_output_spaces, select_acpc_anchor
     from qsiprep.workflows.anatomical.volume import init_anat_preproc_wf
 
     config.workflow.output_spaces = output_spaces
     config.workflow.anat_modality = 'T1w'
     config.workflow.infant = False
+    config.workflow.use_syn_sdc = use_syn_sdc
     config.nipype.omp_nthreads = 1
     config.execution.output_dir = str(tmp_path)
     specs = parse_output_spaces(config.workflow.output_spaces)
@@ -464,6 +465,69 @@ def test_distinct_standard_spaces_each_normalize(tmp_path):
     )
     norm_wfs = {n.split('.')[0] for n in wf.list_node_names() if 'anat_normalization' in n}
     assert len(norm_wfs) == 2, f'expected 2 normalizations, got {sorted(norm_wfs)}'
+
+
+def test_two_resolutions_of_one_template_build(tmp_path):
+    """Rule 6 of the spec: one template may be asked for at several resolutions.
+
+    Node names used to key on spec.fullname alone, so this raised
+    ``OSError: Duplicate node name``.
+    """
+    wf = _build_anat_preproc_wf(tmp_path, ['acpc:res-2mm', 'MNI152NLin2009cAsym:res-1:res-2'])
+    norm_wfs = {n.split('.')[0] for n in wf.list_node_names() if 'anat_normalization' in n}
+    assert len(norm_wfs) == 3, sorted(norm_wfs)  # the anchor plus one per resolution
+
+
+def test_two_resolutions_of_one_template_report_once(tmp_path):
+    """Reportlet filenames have no res- entity, so one figure per template."""
+    from qsiprep.utils.spaces import parse_output_spaces
+    from qsiprep.workflows.anatomical.volume import init_anat_reports_wf
+
+    config.workflow.anat_modality = 'T1w'
+    config.execution.output_dir = str(tmp_path)
+    specs = parse_output_spaces(['acpc:res-2mm', 'MNI152NLin2009cAsym:res-1:res-2'])
+    wf = init_anat_reports_wf(output_spaces=specs)
+    reports = [n for n in wf.list_node_names() if 'ds_report_t1_2_' in n]
+    assert reports == ['ds_report_t1_2_MNI152NLin2009cAsymres1'], reports
+
+
+def test_two_resolutions_of_one_template_write_one_transform(tmp_path):
+    from qsiprep.utils.spaces import parse_output_spaces
+    from qsiprep.workflows.anatomical.volume import init_anat_derivatives_wf
+
+    config.workflow.anat_modality = 'T1w'
+    config.execution.output_dir = str(tmp_path)
+    specs = parse_output_spaces(['acpc:res-2mm', 'MNI152NLin2009cAsym:res-1:res-2'])
+    wf = init_anat_derivatives_wf(output_spaces=specs)
+    warps = sorted(n for n in wf.list_node_names() if n.endswith('_warp'))
+    assert warps == ['ds_t1_MNI152NLin2009cAsymres1_inv_warp',
+                     'ds_t1_MNI152NLin2009cAsymres1_warp'], warps
+
+
+def test_no_standard_space_skips_the_nonlinear_normalization(tmp_path):
+    """Nothing consumes the nonlinear transform, so antsRegistration must not run.
+
+    This is what --skip-anat-based-spatial-normalization used to do; the flag is
+    deprecated and no longer sets anything, so the space list has to decide.
+    """
+    wf = _build_anat_preproc_wf(tmp_path, ['acpc:res-2mm'])
+    names = wf.list_node_names()
+    assert not any('anat_nlin_normalization' in n for n in names), (
+        'a nonlinear normalization was built with no standard space requested'
+    )
+    # The rigid AC-PC registration still has to happen.
+    assert any(n.endswith('anat_normalization_wf.acpc_reg') for n in names)
+
+
+def test_syn_sdc_keeps_the_nonlinear_normalization(tmp_path):
+    """SyN-SDC pulls its atlas prior through t1_2_mni_reverse_transform."""
+    wf = _build_anat_preproc_wf(tmp_path, ['acpc:res-2mm'], use_syn_sdc=True)
+    assert any('anat_nlin_normalization' in n for n in wf.list_node_names())
+
+
+def test_standard_space_keeps_the_nonlinear_normalization(tmp_path):
+    wf = _build_anat_preproc_wf(tmp_path, ['acpc:res-2mm', 'MNI152NLin2009cAsym'])
+    assert any('anat_nlin_normalization' in n for n in wf.list_node_names())
 
 
 if __name__ == '__main__':
