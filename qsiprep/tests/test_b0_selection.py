@@ -179,16 +179,22 @@ def test_borrowed_b0s_never_evict_natives(topup_inputs, tmp_path, monkeypatch):
     shutil.which('SelectBestB0') is None, reason='TORTOISE SelectBestB0 not installed'
 )
 def test_select_best_b0_report_runs_binary(tmp_path):
+    from scipy.ndimage import gaussian_filter
+
+    # A smooth random field, not white noise: the multiresolution registration
+    # needs spatial structure, and a structureless phantom sits close enough to
+    # instability that the score ordering can flip with the thread count.
     rng = np.random.default_rng(2)
-    base = rng.uniform(100, 200, size=(24, 24, 16))
+    base = gaussian_filter(rng.uniform(0, 1, size=(36, 36, 24)), 3.0)
+    base = 100 + 400 * (base - base.min()) / (base.max() - base.min())
     candidates = []
-    for i, noise in enumerate([2.0, 2.0, 80.0]):
+    for i, noise in enumerate([3.0, 3.0, 120.0]):
         img = nb.Nifti1Image((base + rng.normal(0, noise, base.shape)).astype('f4'), np.eye(4))
         path = tmp_path / f'b0_{i}.nii.gz'
         img.to_filename(str(path))
         candidates.append(str(path))
 
-    report = select_best_b0_report(candidates, prefix=str(tmp_path / 'pick_'))
+    report = select_best_b0_report(candidates, prefix=str(tmp_path / 'pick_'), num_threads=1)
     assert len(report) == 3
     assert {'mean_cc', 'selected', 'translation_total_mm', 'rotation_total_deg'} <= set(
         report.columns
