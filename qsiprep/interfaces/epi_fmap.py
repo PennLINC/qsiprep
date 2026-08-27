@@ -225,6 +225,9 @@ def get_best_b0_topup_inputs_from(
     The strategy is to select ``max_per_spec`` b=0 images from each distortion group.
     Here, distortion group uses the FSL definition of a phase encoding direction and
     total readout time, as specified in the datain file used by TOPUP (i.e. "0 -1 0 0.087").
+    Within a group, b=0 images native to the series being corrected always outrank
+    fieldmap/borrowed candidates -- borrowing can augment the estimation or fill a
+    missing phase-encoding direction, but never evicts a native image.
 
     Parameters
     ----------
@@ -254,6 +257,7 @@ def get_best_b0_topup_inputs_from(
         b0_indices=None,
         use_original_files=raw_image_sdc,
     )
+    dwi_b0_df['is_native'] = True
 
     # If there are epi fieldmaps, add them to the table
     if epi_fmaps:
@@ -268,6 +272,7 @@ def get_best_b0_topup_inputs_from(
             bval_file=None,
             b0_indices=epi_b0_indices,
         )
+        epi_b0_df['is_native'] = False
         dwi_b0_df = pd.concat([dwi_b0_df, epi_b0_df], axis=0, ignore_index=True)
 
     unique_bids_files = dwi_b0_df.bids_origin_file.unique().tolist()
@@ -294,30 +299,61 @@ def get_best_b0_topup_inputs_from(
     # Score each candidate with TORTOISE's SelectBestB0. It rigidly registers
     # the candidates before the windowed-correlation comparison, so a
     # moved-but-clean b=0 is not mistaken for a bad one, and the recovered
-    # rigid parameters travel into the QC tsv.
+    # rigid parameters travel into the QC tsv. Natives and borrowed candidates
+    # are scored in separate calls: SelectBestB0 registers its first volume to
+    # the mean of the others, and a borrowed cohort at a different pose turns
+    # that mean into a double exposure that can wreck the first native's own
+    # score. The ranking never compares across the classes anyway, and
+    # anchoring the borrowed stack with the first native keeps the donors'
+    # rigid parameters measured in the native frame.
     dwi_b0_df['qc_score'] = np.nan
     dwi_b0_df['translation_total_mm'] = np.nan
     dwi_b0_df['rotation_total_deg'] = np.nan
     for spec_num, (_, spec_df) in enumerate(spec_groups):
-        report = select_best_b0_report(
-            spec_df['nii_3d_files'].tolist(),
-            prefix=op.join(cwd, f'spec-{spec_num:02d}_'),
-            num_threads=num_threads,
-        )
-        dwi_b0_df.loc[spec_df.index, 'qc_score'] = report['mean_cc'].to_numpy()
-        dwi_b0_df.loc[spec_df.index, 'translation_total_mm'] = report[
-            'translation_total_mm'
-        ].to_numpy()
-        dwi_b0_df.loc[spec_df.index, 'rotation_total_deg'] = report[
-            'rotation_total_deg'
-        ].to_numpy()
+        prefix = op.join(cwd, f'spec-{spec_num:02d}_')
+        native_rows = spec_df[spec_df['is_native']]
+        borrowed_rows = spec_df[~spec_df['is_native']]
+        if len(native_rows):
+            report = select_best_b0_report(
+                native_rows['nii_3d_files'].tolist(),
+                prefix=prefix + 'native_',
+                num_threads=num_threads,
+            )
+            dwi_b0_df.loc[native_rows.index, 'qc_score'] = report['mean_cc'].to_numpy()
+            dwi_b0_df.loc[native_rows.index, 'translation_total_mm'] = report[
+                'translation_total_mm'
+            ].to_numpy()
+            dwi_b0_df.loc[native_rows.index, 'rotation_total_deg'] = report[
+                'rotation_total_deg'
+            ].to_numpy()
+        if len(borrowed_rows):
+            anchor = native_rows['nii_3d_files'].iloc[0:1].tolist()
+            report = select_best_b0_report(
+                anchor + borrowed_rows['nii_3d_files'].tolist(),
+                prefix=prefix + 'borrowed_',
+                num_threads=num_threads,
+            ).iloc[len(anchor) :]
+            dwi_b0_df.loc[borrowed_rows.index, 'qc_score'] = report['mean_cc'].to_numpy()
+            dwi_b0_df.loc[borrowed_rows.index, 'translation_total_mm'] = report[
+                'translation_total_mm'
+            ].to_numpy()
+            dwi_b0_df.loc[borrowed_rows.index, 'rotation_total_deg'] = report[
+                'rotation_total_deg'
+            ].to_numpy()
     # Higher windowed correlation = more consistent = better. Ties (inevitable
     # with two candidates, whose mean-over-others scores are the same single
     # pairwise value) break toward the earlier volume, which is also eddy's
-    # reference.
+    # reference. A native b=0 (from the series being corrected) must never be
+    # evicted by borrowed/fieldmap candidates, however well they agree with
+    # each other: the field has to stay anchored to the pose of the data it
+    # corrects. qc_score is a mean windowed CC^2 in [0, 1], so a +2 offset
+    # ranks every native above every non-native while preserving score order
+    # within each class.
+    selection_key = dwi_b0_df['qc_score'] + 2.0 * dwi_b0_df['is_native']
     dwi_b0_df['qc_rank'] = (
         np.nan_to_num(
-            spec_groups['qc_score'].rank(ascending=False, method='first'), nan=1.0
+            selection_key.groupby(dwi_b0_df['fsl_spec']).rank(ascending=False, method='first'),
+            nan=1.0,
         ).astype(int)
         - 1
     )
@@ -326,10 +362,11 @@ def get_best_b0_topup_inputs_from(
     dwi_b0_df['selected_for_sdc'] = dwi_b0_df['qc_rank'] < max_per_spec
     sdc_selections = dwi_b0_df[dwi_b0_df['selected_for_sdc']].reset_index()
     # Make sure the first image in topup imain has the same distortion as the
-    # first b=0 volume in the eddy inputs
+    # first b=0 volume in the eddy inputs -- and is native, so the field is
+    # estimated in (and bridged from) the frame of the series being corrected.
     sdc_selections['same_as_first'] = sdc_selections['fsl_spec'] == dwi_b0_df.loc[0, 'fsl_spec']
     sdc_selections.sort_values(
-        by=['same_as_first', 'index'], ascending=[False, True], inplace=True
+        by=['same_as_first', 'is_native', 'index'], ascending=[False, False, True], inplace=True
     )
 
     imain_output = op.join(cwd, 'topup_imain.nii.gz')
