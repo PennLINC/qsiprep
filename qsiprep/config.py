@@ -591,14 +591,16 @@ class workflow(_Config):
     """Remove the mean from fieldmaps."""
     force = None
     """Corrections to force on regardless of input metadata."""
-    force_syn = None
-    """Run *fieldmap-less* susceptibility-derived distortions estimation."""
     gpu = None
     """Tasks to run on the GPU (see ``qsiprep.utils.gpu``)."""
     gradient_file = None
     """Gradient nonlinearity coefficient file or displacement field."""
+    hmc_method = None
+    """Which software corrects head motion: eddy, shoreline or tortoise."""
     hmc_model = None
-    """Model used to generate target images for hmc."""
+    """Model used to generate target images for hmc. DEPRECATED: the legacy
+    vocabulary equivalent of ``hmc_method`` + ``shoreline_model``, kept while
+    workflow builders still read it."""
     hmc_transform = None
     """Transformation to be used in SHORELine."""
     ignore = None
@@ -616,11 +618,19 @@ class workflow(_Config):
     output_resolution = None
     """Isotropic voxel size for outputs."""
     pepolar_method = None
-    """SDC method to be used for PEPOLAR fieldmaps."""
+    """SDC method to be used for PEPOLAR fieldmaps. DEPRECATED: the legacy
+    vocabulary equivalent of ``sdc_method``, kept while workflow builders
+    still read it."""
+    sdc_method = None
+    """Which tool corrects susceptibility distortion for PEPOLAR data:
+    topup, drbuddi or topup+drbuddi (the parser resolves ``auto``)."""
     separate_all_dwis = False
     """Process all dwis separately - do not attempt concatenation."""
     shoreline_iters = None
     """How many iterations to run SHORELine."""
+    shoreline_model = None
+    """Signal model SHORELine uses to predict motion-correction targets:
+    3dshore, tensor or none. Only set when ``hmc_method`` is shoreline."""
     tortoise_gpu_cpu_ratio = None
     """Volumes the GPU takes per DIFFPREP pass; None leaves TORTOISE's default."""
     unringing_method = None

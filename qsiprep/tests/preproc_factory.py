@@ -1,17 +1,18 @@
-"""Build :class:`~qsiprep.grouping.adapters.PreprocUnit` objects in memory.
+"""Build :class:`~qsiplan.adapters.PreprocUnit` objects in memory.
 
 The workflow-construction tests need units without materializing a BIDS layout.
-:func:`make_preproc_unit` assembles the minimal :class:`~qsiprep.grouping.models`
+:func:`make_preproc_unit` assembles the minimal :class:`~qsiplan.models`
 objects a unit's accessors touch (file records, one estimation) so builders can
 be constructed and their graphs asserted.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import os.path as op
 
-from qsiprep.grouping.adapters import PreprocUnit
-from qsiprep.grouping.models import (
+from qsiplan.adapters import PreprocUnit
+from qsiplan.models import (
     AUTO_PREFIX,
     CorrectionMethod,
     DistortionSignature,
@@ -64,6 +65,7 @@ def make_preproc_unit(
     provenance: Provenance = Provenance.INFERRED,
     b0field_id: str | None = None,
     output_name: str | None = None,
+    anat_files=(),
 ) -> PreprocUnit:
     """Assemble a :class:`PreprocUnit` from bare file paths.
 
@@ -73,6 +75,8 @@ def make_preproc_unit(
     from the filename (``*_epi`` -> ``epi``, ``*_phasediff`` -> ``phasediff`` ...).
     ``per_file_metadata`` overrides sidecar keys for individual files (keyed by
     path), layered on top of ``metadata``.
+    ``anat_files`` adds anatomical records (suffix from the filename, e.g.
+    ``*_T2w.nii.gz``) so fieldmap-less plans see their structural target.
     """
     dwi_files = list(dwi_files)
     metadata = dict(metadata or {})
@@ -96,6 +100,18 @@ def make_preproc_unit(
             shelled=shelled if suffix == 'dwi' else None,
         )
 
+    for path in anat_files:
+        stem = op.basename(path).split('.')[0]
+        suffix = stem.rsplit('_', 1)[-1]
+        files[path] = FileRecord(
+            path=path,
+            datatype='anat',
+            suffix=suffix,
+            session=None,
+            signature=DistortionSignature(pe_dir=None, readout_time=None),
+            metadata={},
+        )
+
     estimation = None
     if method is not None:
         estimation = FieldmapEstimation(
@@ -115,9 +131,37 @@ def make_preproc_unit(
         distortion_groups={},
         concatenation_groups={},
     )
-    return PreprocUnit(
+    unit = PreprocUnit(
         grouping=grouping,
         output_name=output_name or derive_output_name(dwi_files),
         dwi_files=tuple(dwi_files),
         estimation=estimation,
+    )
+    return dataclasses.replace(unit, run=_run_for(grouping, unit))
+
+
+def _run_for(grouping, unit):
+    """A ProcessingRun for a factory unit, from the config the test set up.
+
+    Workflow builders dispatch on ``unit.run``'s stages; the real pipeline
+    attaches runs from the subject-level compiled plan, so the factory mirrors
+    that with a single-unit plan under the configured method selection.
+    """
+    from qsiplan.methods import selection_for_config
+    from qsiplan.plan import ProcessingRun, _stages_for_unit
+
+    from qsiprep.utils.plan import method_selection_from_config
+
+    try:
+        selection = method_selection_from_config()
+    except ValueError:
+        # No methods configured (a bare test/doctest): the CLI default.
+        selection = selection_for_config('eddy', 'auto')
+    return ProcessingRun(
+        key=unit.output_name,
+        logical_unit=unit.output_name,
+        dwi_files=unit.dwi_files,
+        estimation=unit.estimation,
+        stages=_stages_for_unit(grouping, selection, unit),
+        output_group=unit.output_name,
     )

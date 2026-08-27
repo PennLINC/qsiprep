@@ -35,6 +35,7 @@ dependencies = [
     "psutil <= 5.9.8",
     "pybids >= 0.15.0, < 0.16.0",
     "pyyaml",
+    "qsiplan >= 0.2.0, < 0.3",
     "scikit-image",
     "scikit-learn <= 1.4.0",
     "seaborn",
@@ -103,7 +104,6 @@ all = ["qsiprep[dev,doc,maint,tests]"]
 
 [project.scripts]
 qsiprep = "qsiprep.cli.run:main"
-qsiprep-group = "qsiprep.cli.group:main"
 
 #
 # Hatch configurations

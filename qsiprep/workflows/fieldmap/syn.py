@@ -10,13 +10,8 @@ In the absence of direct measurements of fieldmap data, we provide an (experimen
 option to estimate the susceptibility distortion based on the ANTs symmetric
 normalization (SyN) technique.
 This feature may be enabled, using the ``--use-syn-sdc`` flag, and will only be
-applied if fieldmaps are unavailable.
-
-During the evaluation phase, the ``--force-syn`` flag will cause this estimation to
-be performed *in addition to* fieldmap-based estimation, to permit the direct
-comparison of the results of each technique.
-Note that, even if ``--force-syn`` is given, the functional outputs of qsiprep will
-be corrected using the fieldmap-based estimates.
+applied if fieldmaps are unavailable; a measured fieldmap always takes
+precedence.
 
 Feedback will be enthusiastically received.
 

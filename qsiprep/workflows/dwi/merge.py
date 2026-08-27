@@ -15,6 +15,7 @@ from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
+from qsiplan.models import strip_nii_ext
 
 from ... import config
 from ...interfaces import ConformDwi, DerivativesDataSink
@@ -41,6 +42,7 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 def init_merge_and_denoise_wf(
+    unit,
     raw_dwi_files,
     orientation,
     source_file,
@@ -56,13 +58,19 @@ def init_merge_and_denoise_wf(
         :simple_form: yes
 
         from qsiprep.workflows.dwi import init_merge_and_denoise_wf
-        wf = init_merge_and_dwnoise_wf(
+        from qsiprep.tests.preproc_factory import make_preproc_unit
+        wf = init_merge_and_denoise_wf(
+            make_preproc_unit(['/path/to/dwi/sub-1_dwi.nii.gz']),
             ['/path/to/dwi/sub-1_dwi.nii.gz'],
             source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
         )
 
     Parameters
     ----------
+    unit : :class:`~qsiplan.adapters.PreprocUnit`
+        the unit these series belong to; sidecar metadata comes from its
+        records instead of layout re-reads (the layout is still probed for
+        part-phase companion files, which the grouping does not model)
     raw_dwi_files : list
         list of raw (in their original BIDS directory) dwi nifti files
 
@@ -117,9 +125,8 @@ def init_merge_and_denoise_wf(
             bids_dwi_files=raw_dwi_files,
             b0_threshold=config.workflow.b0_threshold,
             harmonize_b0_intensities=not config.workflow.no_b0_harmonization,
-            scan_metadata={
-                scan: config.execution.layout.get_metadata(scan) for scan in raw_dwi_files
-            },
+            merged_prefix=strip_nii_ext(source_file),
+            scan_metadata={scan: unit.metadata_for(scan) for scan in raw_dwi_files},
         ),
         name='merge_dwis',
         n_procs=omp_nthreads,
@@ -151,7 +158,7 @@ def init_merge_and_denoise_wf(
     denoising_wfs = []
 
     # Get a data frame of the raw_dwi_files and their imaging parameters:
-    dwi_df = get_acq_parameters_df(raw_dwi_files, layout=layout)
+    dwi_df = get_acq_parameters_df(raw_dwi_files, metadata_lookup=unit.metadata_for)
     for i_dwi, row in dwi_df.iterrows():
         dwi_num = i_dwi + 1  # start at 1
         dwi_file = row.BIDSFile
@@ -731,11 +738,16 @@ def gen_denoising_boilerplate():
     return ' '.join(desc)
 
 
-def get_acq_parameters_df(dwi_file_list, layout):
-    """Figure out what the"""
+def get_acq_parameters_df(dwi_file_list, metadata_lookup):
+    """Tabulate each file's acquisition parameters.
+
+    ``metadata_lookup`` maps a path to its sidecar metadata (usually
+    ``PreprocUnit.metadata_for``, so nothing is re-read from disk); the NIfTI
+    header still supplies image-derived fields like the volume count.
+    """
     file_rows = []
     for dwi_file in dwi_file_list:
-        metadata = layout.get_metadata(dwi_file)
+        metadata = dict(metadata_lookup(dwi_file))
         update_metadata_from_nifti_header(metadata, dwi_file)
         metadata['BIDSFile'] = dwi_file
         file_rows.append(metadata)

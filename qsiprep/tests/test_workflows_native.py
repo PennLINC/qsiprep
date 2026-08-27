@@ -1,15 +1,15 @@
 """Construction smoke tests for the DWI workflow builders on ``PreprocUnit``.
 
 These assert the FSL/eddy, SHORELine, and pre-HMC builders wire up a graph from
-a :class:`~qsiprep.grouping.adapters.PreprocUnit` (the tortoise cluster is
+a :class:`~qsiplan.adapters.PreprocUnit` (the tortoise cluster is
 covered in depth by ``test_interfaces_diffprep``).
 """
 
 import numpy as np
 import pytest
+from qsiplan.models import CorrectionMethod
 
 from qsiprep import config
-from qsiprep.grouping.models import CorrectionMethod
 from qsiprep.tests.preproc_factory import make_preproc_unit
 
 SRC = '/data/sub-01_dwi.nii.gz'
@@ -35,13 +35,16 @@ class _StubFile:
 class _StubLayout:
     """Minimal stand-in so denoising/merge nodes can query the layout.
 
-    ``pre_hmc`` feeds ``init_merge_and_denoise_wf``, which still reads metadata
-    and probes for phase images through the layout; the real pipeline always has
-    one. The probes here find no phase files (the common case).
+    ``pre_hmc`` feeds ``init_merge_and_denoise_wf``, which still probes for
+    part-phase companion files through the layout (the grouping does not model
+    them); the probes here find none (the common case). Sidecar metadata must
+    come from the unit's records, never the layout - hence no ``get_metadata``.
     """
 
     def get_metadata(self, path):
-        return {'PhaseEncodingDirection': 'j', 'TotalReadoutTime': 0.05}
+        raise AssertionError(
+            'layout.get_metadata was called; sidecar metadata must come from the unit'
+        )
 
     def get_entities(self, metadata=False):
         return {}
@@ -59,6 +62,11 @@ def _cfg(hmc_model='eddy', pepolar_method='TOPUP', layout=None):
     config.execution.layout = layout
     config.workflow.hmc_model = hmc_model
     config.workflow.pepolar_method = pepolar_method
+    # The legacy keys drive these tests; clear the axis keys so a selection
+    # left behind by another test cannot shadow them.
+    config.workflow.hmc_method = None
+    config.workflow.sdc_method = None
+    config.workflow.shoreline_model = None
     config.workflow.b0_threshold = 100
     config.workflow.b1_biascorrect_stage = 'final'
     config.workflow.eddy_config = None
@@ -186,7 +194,7 @@ def test_init_sdc_wf_phasediff_builds_without_a_layout(monkeypatch):
         estimation_sources=['/data/sub-01_phasediff.nii.gz', '/data/sub-01_magnitude1.nii.gz'],
         metadata={'EchoTime1': 0.004, 'EchoTime2': 0.006},
     )
-    wf = init_sdc_wf(unit, dwi_meta={'PhaseEncodingDirection': 'j-'})
+    wf = init_sdc_wf(unit)
     assert 'FMB' in wf.get_node('outputnode').inputs.method
 
 
@@ -201,7 +209,7 @@ def test_init_sdc_wf_dispatches_classic_syn():
         pe_dir='j',
         estimation_sources=['/data/sub-01_T1w.nii.gz'],
     )
-    wf = init_sdc_wf(unit, dwi_meta={'PhaseEncodingDirection': 'j'})
+    wf = init_sdc_wf(unit)
     assert wf.name == 'sdc_wf'  # not the bypass workflow
     assert any('syn' in node.name.lower() for node in wf._get_all_nodes())
 
@@ -223,7 +231,7 @@ def test_init_sdc_wf_bipolar_two_phase_bypasses(monkeypatch):
         ],
         metadata={'DiffusionScheme': 'Bipolar'},
     )
-    wf = init_sdc_wf(unit, dwi_meta={'PhaseEncodingDirection': 'j-'})
+    wf = init_sdc_wf(unit)
     assert wf.get_node('outputnode').inputs.method == 'None'
 
 
@@ -284,7 +292,8 @@ def test_unit_sidecar_round_trips_through_derivatives_sidecar(tmp_path):
     """
     import json
 
-    from qsiprep.grouping.adapters import unit_to_sidecar
+    from qsiplan.adapters import unit_to_sidecar
+
     from qsiprep.interfaces.bids import DerivativesSidecar
 
     unit = make_preproc_unit(
@@ -356,5 +365,109 @@ def test_drbuddi_blip_assignments_from_sidecars_needs_no_disk():
 # here and in test_interfaces_diffprep.
 
 
+def test_unknown_hmc_model_is_rejected_at_selection_time(tmp_path):
+    """The subject workflow resolves the method selection before building
+    anything; garbage config dies there, not deep in a builder."""
+    _cfg(hmc_model='bogus', layout=_StubLayout())
+    from qsiprep.utils.plan import method_selection_from_config
+
+    with pytest.raises(ValueError, match='hmc'):
+        method_selection_from_config()
+
+
+def test_distortion_group_merge_wf_rejects_unknown_strategy():
+    _cfg()
+    from qsiprep.workflows.dwi.distortion_group_merge import init_distortion_group_merge_wf
+
+    with pytest.raises(ValueError, match='merging_strategy'):
+        init_distortion_group_merge_wf(
+            merging_strategy='bogus',
+            inputs_list=['sub-01-run-1', 'sub-01-run-2'],
+            source_file='sub-01_dwi.nii.gz',
+            output_prefix='sub-01',
+            name='bogus_merge_wf',
+        )
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
+
+def test_legacy_method_keys_read_only_at_allowlisted_sites():
+    """Routing reads the compiled plan; legacy keys are display vocabulary only."""
+    import pathlib
+    import re
+
+    root = pathlib.Path(__file__).parent.parent
+    allowed = {
+        # Display strings and the SHORELine model vocabulary.
+        'workflows/dwi/base.py': {'hmc_model': 1},
+        'workflows/dwi/derivatives.py': {'hmc_model': 3},
+        'workflows/dwi/hmc.py': {'hmc_model': 3},
+    }
+    found: dict = {}
+    for path in (root / 'workflows').rglob('*.py'):
+        text = path.read_text()
+        for key in ('pepolar_method', 'hmc_model'):
+            count = len(re.findall(rf'config\.workflow\.{key}\b', text))
+            if count:
+                found.setdefault(str(path.relative_to(root)), {})[key] = count
+    assert found == allowed
+
+
+def test_distortion_group_merge_wf_writes_the_assembly_sidecar(tmp_path):
+    """A merged output carries the same provenance sidecar the direct path
+    writes: ScanGrouping over every member run plus the merge strategy.
+
+    Regression: the merge path skipped the sidecar entirely, so merged
+    outputs lost their ScanGrouping provenance.
+    """
+    from qsiplan.plan import OutputAssembly
+
+    from qsiprep.workflows.dwi.distortion_group_merge import init_distortion_group_merge_wf
+
+    cfg = _cfg(layout=_StubLayout())
+    cfg.execution.output_dir = str(tmp_path / 'out')
+    a_file = _write_dwi(tmp_path / 'sub-01_acq-hi_dwi.nii.gz')
+    b_file = _write_dwi(tmp_path / 'sub-01_acq-lo_dwi.nii.gz')
+    unit_a = make_preproc_unit([a_file])
+    unit_b = make_preproc_unit([b_file])
+    assembly = OutputAssembly(
+        output_group='sub-01',
+        input_runs=(unit_a.output_name, unit_b.output_name),
+        strategy='concat',
+        output_name='sub-01',
+    )
+    wf = init_distortion_group_merge_wf(
+        merging_strategy='concat',
+        inputs_list=[unit_a.output_name, unit_b.output_name],
+        source_file='sub-01_dwi.nii.gz',
+        output_prefix='sub-01',
+        name='merge_wf',
+        assembly=assembly,
+        units=[unit_a, unit_b],
+    )
+    sidecar_node = wf.get_node('merged_sidecar')
+    assert sidecar_node is not None
+    assert wf.get_node('ds_merged_sidecar') is not None
+    grouping_data = sidecar_node.inputs.sidecar_data['ScanGrouping']
+    assert grouping_data['output_name'] == 'sub-01'
+    assert grouping_data['merge_strategy'] == 'concat'
+    assert [run['output_name'] for run in grouping_data['runs']] == [
+        unit_a.output_name,
+        unit_b.output_name,
+    ]
+    # The merged gradient plot knows every series' phase-encoding direction.
+    assert wf.get_node('gradient_plot').inputs.source_pe_dirs
+    # The merger names its working files after the output, not a commonprefix.
+    assert wf.get_node('distortion_merger').inputs.merged_prefix == 'sub-01'
+
+    # Without an assembly (legacy call), the sidecar is simply absent.
+    bare = init_distortion_group_merge_wf(
+        merging_strategy='concat',
+        inputs_list=[unit_a.output_name, unit_b.output_name],
+        source_file='sub-01_dwi.nii.gz',
+        output_prefix='sub-01',
+        name='bare_merge_wf',
+    )
+    assert bare.get_node('merged_sidecar') is None

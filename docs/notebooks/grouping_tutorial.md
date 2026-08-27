@@ -35,9 +35,14 @@ import html as _html
 
 from IPython.display import HTML, display
 
-from qsiprep.grouping import describe_processing, render_html, report_text
-from qsiprep.grouping.inference import build_grouping
-from qsiprep.grouping.models import DistortionSignature, FileRecord
+from qsiplan import (
+    DistortionSignature,
+    FileRecord,
+    build_grouping,
+    describe_processing,
+    render_html,
+    report_text,
+)
 
 SUBJECT = '/bids/sub-01'
 
@@ -503,10 +508,10 @@ Everything above runs from a real BIDS directory too — without processing
 anything:
 
 ```bash
-qsiprep-group /path/to/bids --html grouping.html
+qsiplan /path/to/bids --html grouping.html
 ```
 
-prints the grouping report plus all three backend previews, and writes the
+prints the grouping report plus the method-selection previews, and writes the
 explanatory page you saw throughout this notebook (one per subject). If a
 grouping decision surprises you, the provenance chip tells you which sidecar
 field to set — `B0FieldIdentifier`, `B0FieldSource`, or `MultipartID` — to make
@@ -519,5 +524,5 @@ the outputs above were executed during the documentation build. To run it
 interactively, convert it with [jupytext](https://jupytext.readthedocs.io/)
 (`jupytext --to notebook grouping_tutorial.md`) or open the `.md` directly
 in JupyterLab or VS Code with the jupytext extension. It needs only an
-environment where `qsiprep` is importable (`pip install -e .`).
+environment where `qsiplan` is importable (`pip install qsiplan`).
 ```
