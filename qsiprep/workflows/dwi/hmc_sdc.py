@@ -114,12 +114,16 @@ def init_qsiprep_hmcsdc_wf(
 
     workflow = Workflow(name='qsiprep_hmcsdc_wf')
 
-    # Whether the SDC estimation inputs get gradwarp-corrected first -- see the
-    # note above connect_gradwarp_sdc_volumes in gradwarp.py. No TOPUP carve-out
-    # applies here: every SDC warp this backend produces is carried out in
-    # to_dwi_ref_warps and applied downstream of gradwarp.
+    # Whether a spatial gradwarp field exists for this unit. It gates two
+    # things: gradwarp-correcting SDC estimation inputs (see the note above
+    # connect_gradwarp_sdc_volumes in gradwarp.py) and gradwarp-correcting the
+    # b=0 that coregistration is estimated from (see the note above
+    # connect_gradwarp_coreg_reference).
+    #
+    # No TOPUP carve-out applies here: every SDC warp this backend produces is
+    # carried out in to_dwi_ref_warps and applied downstream of gradwarp.
     gradwarp_plan = resolve_gradwarp_plan(unit)
-    gradwarp_before_sdc = gradwarp_plan is not None and gradwarp_plan.warp_dim is not None
+    has_gradwarp = gradwarp_plan is not None and gradwarp_plan.warp_dim is not None
 
     # Split the input data into single volumes, put bvecs in LPS+ world reference frame
     split_dwis = pe.Node(TSplit(digits=4, out_name='vol'), name='split_dwis')
@@ -244,7 +248,7 @@ def init_qsiprep_hmcsdc_wf(
             ]),
         ])  # fmt:skip
 
-        if gradwarp_before_sdc:
+        if has_gradwarp:
             connect_gradwarp_sdc_volumes(
                 workflow, inputnode, apply_hmc_transforms, 'output_image', drbuddi_wf
             )
@@ -271,14 +275,12 @@ def init_qsiprep_hmcsdc_wf(
     b0_sdc_wf = init_sdc_wf(unit, unit.dwi_metadata)
     b0_sdc_wf.inputs.inputnode.template = anatomical_template
 
-    # init_sdc_wf builds a pure pass-through ('sdc_bypass_wf') under exactly this
-    # condition, and forwards b0_ref straight to outputnode.b0_template -- the
+    # init_sdc_wf builds a pure pass-through ('sdc_bypass_wf') when there is no
+    # fieldmap, forwarding b0_ref straight to outputnode.b0_template -- the
     # DWI/T1w coregistration reference. There is no field to estimate on a
-    # bypass, so correcting its inputs would only change that reference on a path
-    # the rule does not cover (and that fsl.py and diffprep.py leave raw).
-    does_sdc = unit.has_scanner_measured_fieldmap or unit.is_nipreps_syn
-
-    if gradwarp_before_sdc and does_sdc:
+    # bypass, but that reference still has to be gradwarp-corrected, so the same
+    # connection serves both rules and the bypass is no longer excluded.
+    if has_gradwarp:
         connect_gradwarp_sdc_reference(
             workflow,
             inputnode,

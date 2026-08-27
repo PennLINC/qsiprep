@@ -406,9 +406,27 @@ the container.
 
 ### Known limitations, found during implementation
 
-The first is a coverage gap; the other two are second-order placement errors of
-the same kind as the eddy+TOPUP carve-out this design already accepts. Each
-deserves its own follow-up spec.
+Revised 2026-08-27 after reading the TORTOISE V4 source (`main` @ `d3301e5`) in
+response to an external review of the PR. Two entries below changed
+materially; one was resolved and one is new.
+
+- **Gradient coefficient files are refused for GE data.** For GE input,
+  TORTOISE applies a z-origin shift to the displacement field *after*
+  `mk_displacement` returns (`TORTOISE.cxx`, the `if(is_GE)` block following the
+  expansion). That shift lives in the `TORTOISEProcess` driver, not in the
+  standalone `CreateNonlinearityDisplacementMap` binary this design chose to
+  call, whose `main()` writes the field with the reference image's own origin;
+  `mk_displacement_nonsiemens` likewise sets the output origin unconditionally,
+  its `is_GE` argument affecting only the frame the harmonics are evaluated in.
+  qsiprep would therefore place the field at a different z than TORTOISE does.
+  Under the obvious reading of the recentring the shift's sign looks inverted,
+  so reproducing it blind is not safe either. `resolve_gradwarp_plan` raises
+  rather than applying a field it cannot place. A ready-made ITK field is
+  unaffected (nothing is expanded), as is `grad_dev`, whose tool does its own
+  self-contained GE recentring. Lifting this needs an empirical check against a
+  TORTOISE run on GE data; until then `CreateNonlinearityDisplacementMap`'s
+  `is_ge` input is unreachable from the workflow and is kept only because the
+  interface is a faithful wrapper of the binary.
 
 - **`graddev` is not written under `--distortion-group-merge`.** The grad_dev
   node lives in `init_dwi_finalize_wf` behind its `write_derivatives` guard, and
@@ -419,22 +437,45 @@ deserves its own follow-up spec.
   design otherwise never touches, so it is deferred; qsiprep logs a warning
   naming each affected output, and `docs/usage.rst` records it.
 
-- **DIFFPREP's `T2Wreg` path is not gradwarp-corrected.** Its EPI field is
-  estimated *inside* the `TORTOISEProcess` binary, so there is no hand-off for
-  qsiprep to interpose gradwarp-corrected inputs on — yet the resulting
-  `sdc_warp` is applied downstream of gradwarp like every other SDC warp.
-  Correcting it means plumbing `--grad_nonlin` through the DIFFPREP interface,
-  which reverses this design's decision to use the standalone tools. Affects
-  only `--hmc-model tortoise` with fieldmap-less T2Wreg SDC. Recorded in code
-  at the branch itself.
+- **The `grad_dev` map is oriented by an approximate transform.**
+  `CreateGradientNonlinearityBMatrix`'s `main()` does
+  `rigid_trans = RigidRegisterImages(final_b0, initial_b0)` — it re-derives its
+  own rigid registration between the two images qsiprep hands it, rather than
+  consuming `itk_b0_to_t1`, the affine that actually resampled the data. HCP
+  instead reuses its real `diff2str.mat`. Matching TORTOISE was the deliberate
+  choice, and TORTOISE likewise does not propagate the nonlinear SDC part into
+  the L matrix, but the two transforms are not guaranteed identical. Recorded
+  in the `GradientDeviationOrientation` sidecar key.
 
-- **The b0→T1w coregistration reference is not gradwarp-consistent across
-  backends.** `ComposeTransforms` applies the coregistration affine *after*
-  gradwarp, but `b0_template` — the image `b0_coreg_wf` estimates that affine
-  from — is gradwarp-corrected only on the DRBUDDI and GRE/SyN branches, as a
-  side effect of correcting their SDC estimation inputs. It stays raw on the
-  TOPUP-only branch, the fsl/diffprep no-fieldmap branches, and the T2Wreg
-  branch. The five branches are therefore mutually inconsistent. Making them
-  consistent means touching the TOPUP branch this design deliberately carves
-  out and the T2Wreg branch that cannot be reached at all, so it is not a
-  local fix.
+- **DIFFPREP's `T2Wreg` path is not gradwarp-corrected — and neither is stock
+  TORTOISE's.** Its EPI field is estimated inside the `TORTOISEProcess` binary,
+  so there is no hand-off for qsiprep to interpose gradwarp-corrected inputs on,
+  yet the resulting `sdc_warp` is applied downstream of gradwarp like every
+  other SDC warp. This was recorded as a divergence from TORTOISE. It is not.
+  `EPIREG::Step0_CreateImages` (`EPIREG.cxx:68-72`) builds the field's path from
+  the raw `--grad_nonlin` argument rather than from the file TORTOISE generates
+  in the temp-proc folder, so it constructs `<coeffs>_inv.nii`, which never
+  exists — and `.nii` inputs cannot reach it at all, because
+  `getGradNonlinInput` (`DRBUDDI_parserBase.cxx:464-480`) rejects every
+  extension but `.grad`, `.dat`, `.gc`. `readImageD` calls `reader->Update()`
+  with no `try`/`catch` anywhere in `main.cxx` or `TORTOISE.cxx`. `DRBUDDI.cxx:146`
+  does the same job correctly and preserves the broken form commented out one
+  line below, so this is an upstream oversight, not a design difference. qsiprep
+  therefore matches TORTOISE's real behaviour. An issue draft is at
+  `docs/superpowers/upstream/2026-08-27-tortoise-epireg-gradnonlin-bug.md`.
+  Only the susceptibility estimate is affected: the coregistration reference on
+  this branch *is* gradwarp-corrected (see below).
+
+**Resolved 2026-08-27** — *The b0→T1w coregistration reference is not
+gradwarp-consistent across backends.* This was deferred on the grounds that
+fixing it "means touching the TOPUP branch this design deliberately carves out".
+That reasoning was wrong: the carve-out concerns where TOPUP's *field* is
+estimated, because `eddy` applies that field to raw data, whereas the
+coregistration reference is derived from `eddy`'s *output*. Correcting it never
+touches TOPUP. `connect_gradwarp_coreg_reference` now corrects the reference on
+the TOPUP-only, fsl/diffprep no-fieldmap and SHORELine-bypass branches; the
+T2Wreg branch folds gradwarp into its existing `apply_sdc_to_b0` node, in chain
+order, so the mask `b0_ref_for_coreg` derives stays in the same geometry. The
+DRBUDDI and GRE/SyN branches already got this from their SDC correction. One
+inconsistency is retained deliberately: `b0_template_mask` stays on the raw grid
+on every branch, because it also feeds native-space slice QC.

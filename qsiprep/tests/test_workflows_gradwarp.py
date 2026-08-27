@@ -5,7 +5,11 @@ import inspect
 import pytest
 
 from qsiprep import config
-from qsiprep.tests.gradient_fixtures import write_dwi_with_gradients, write_siemens_grad
+from qsiprep.tests.gradient_fixtures import (
+    write_dwi_with_gradients,
+    write_itk_field,
+    write_siemens_grad,
+)
 from qsiprep.tests.preproc_factory import make_preproc_unit
 
 
@@ -20,6 +24,9 @@ def _reset_config():
     config.workflow.gradient_file = None
     config.workflow.ignore = []
     config.workflow.force = []
+    # The boilerplate branches on the HMC backend, so leaking this between
+    # tests would silently change the text another test asserts on.
+    config.workflow.hmc_model = '3dSHORE'
     config.nipype.omp_nthreads = 1
     yield
     _reset_plan_logging()
@@ -137,14 +144,133 @@ def test_is_displacement_field_covers_every_accepted_extension(gradient_file, ex
     assert is_displacement_field(gradient_file) is expected
 
 
-def test_gradwarp_wf_passes_is_ge_through(tmp_path):
+# --- Backend-specific resampling boilerplate ---------------------------------
+#
+# eddy and DIFFPREP write out motion/eddy-corrected volumes before qsiprep's
+# final resampling, so the composed chain carries no HMC transform at all.
+# Claiming a single raw-to-final interpolation there would be a methods-section
+# error.
+
+
+@pytest.mark.parametrize('warp_dim', ['3D', '1D'])
+@pytest.mark.parametrize(
+    ('hmc_model', 'backend'), [('eddy', 'FSL eddy'), ('tortoise', 'DIFFPREP')]
+)
+def test_boilerplate_does_not_claim_single_resampling_for_preresampling_backends(
+    hmc_model, backend, warp_dim
+):
+    from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
+
+    config.workflow.hmc_model = hmc_model
+    text = gradwarp_boilerplate(warp_dim)
+
+    assert 'resampled only once' not in text
+    assert backend in text
+    assert 'single resampling' in text
+
+
+@pytest.mark.parametrize('warp_dim', ['3D', '1D'])
+@pytest.mark.parametrize('hmc_model', ['3dSHORE', 'tensor', 'none'])
+def test_boilerplate_claims_single_resampling_for_transform_preserving_backends(
+    hmc_model, warp_dim
+):
+    from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
+
+    config.workflow.hmc_model = hmc_model
+    text = gradwarp_boilerplate(warp_dim)
+
+    assert 'resampled only once' in text
+    assert 'FSL eddy' not in text
+    assert 'DIFFPREP' not in text
+
+
+@pytest.mark.parametrize('hmc_model', ['eddy', 'tortoise', '3dSHORE'])
+def test_dis3d_boilerplate_makes_no_resampling_claim_on_any_backend(hmc_model):
+    """A DIS3D unit gets no field, so there is nothing to have been combined
+    with anything -- on any backend."""
+    from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
+
+    config.workflow.hmc_model = hmc_model
+    text = gradwarp_boilerplate(None)
+
+    assert 'resampl' not in text
+    assert 'displacement field' not in text
+
+
+# --- The GE coefficient-expansion guard --------------------------------------
+#
+# TORTOISE shifts the field's z origin after expanding GE coefficients, in
+# TORTOISEProcess rather than in the standalone binary qsiprep calls, so
+# qsiprep cannot reproduce the placement. resolve_gradwarp_plan refuses the
+# combination. Each test below removes exactly one leg of that three-part
+# condition, so dropping any leg from _guard_ge_field fails a test.
+
+
+def _ge_unit(tmp_path, image_type=None):
+    dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz')
+    metadata = {'Manufacturer': 'GE MEDICAL SYSTEMS'}
+    if image_type is not None:
+        metadata['ImageType'] = image_type
+    return make_preproc_unit([dwi], metadata=metadata)
+
+
+def test_ge_coefficients_are_refused(tmp_path):
+    from qsiprep.workflows.dwi.gradwarp import resolve_gradwarp_plan
+
+    config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
+
+    with pytest.raises(ValueError, match='not supported for GE data'):
+        resolve_gradwarp_plan(_ge_unit(tmp_path))
+
+
+def test_ge_coefficients_are_refused_when_forced(tmp_path):
+    """--force gradients must not become a way around the guard: it forces 3D,
+    which is exactly the field that cannot be placed."""
+    from qsiprep.workflows.dwi.gradwarp import resolve_gradwarp_plan
+
+    config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
+    config.workflow.force = ['gradients']
+
+    with pytest.raises(ValueError, match='not supported for GE data'):
+        resolve_gradwarp_plan(_ge_unit(tmp_path, ['ORIGINAL', 'DIS3D']))
+
+
+def test_ge_dis3d_still_resolves_for_grad_dev(tmp_path):
+    """No field is built for a DIS3D unit, and CreateGradientNonlinearityBMatrix
+    does its own GE recentring, so grad_dev is unaffected and must survive."""
+    from qsiprep.workflows.dwi.gradwarp import resolve_gradwarp_plan
+
+    config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
+
+    plan = resolve_gradwarp_plan(_ge_unit(tmp_path, ['ORIGINAL', 'DIS3D']))
+
+    assert plan is not None
+    assert plan.warp_dim is None
+    assert plan.is_ge is True
+
+
+def test_ge_displacement_field_is_allowed(tmp_path):
+    """A ready-made field is used as given -- nothing is expanded, so the
+    origin-shift defect cannot apply."""
+    from qsiprep.workflows.dwi.gradwarp import resolve_gradwarp_plan
+
+    config.workflow.gradient_file = str(write_itk_field(tmp_path / 'field.nii.gz'))
+
+    plan = resolve_gradwarp_plan(_ge_unit(tmp_path))
+
+    assert plan.warp_dim == '3D'
+    assert plan.is_ge is True
+
+
+def test_non_ge_coefficients_are_untouched_by_the_guard(tmp_path):
     from qsiprep.workflows.dwi.gradwarp import init_gradwarp_wf
 
     config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
-    dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz')
-    unit = make_preproc_unit([dwi], metadata={'Manufacturer': 'GE MEDICAL SYSTEMS'})
 
-    assert init_gradwarp_wf(unit).get_node('make_field').inputs.is_ge is True
+    wf = init_gradwarp_wf(_unit(tmp_path))
+
+    assert wf.plan.is_ge is False
+    assert wf.get_node('make_field').inputs.is_ge is False
 
 
 @pytest.mark.parametrize(
@@ -156,16 +282,16 @@ def test_gradwarp_wf_passes_is_ge_through(tmp_path):
     ],
 )
 def test_gradwarp_wf_desc_matches_the_resolved_warp_dim(tmp_path, image_type, warp_dim):
-    """workflow.__desc__ must be the _BOILERPLATE entry for the resolved plan,
+    """workflow.__desc__ must be the boilerplate for the resolved plan,
     not just any entry -- report text that doesn't track the plan would be a
     methods-section error."""
-    from qsiprep.workflows.dwi.gradwarp import _BOILERPLATE, init_gradwarp_wf
+    from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate, init_gradwarp_wf
 
     config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
     wf = init_gradwarp_wf(_unit(tmp_path, image_type))
 
     assert wf.plan.warp_dim == warp_dim
-    assert wf.__desc__ == _BOILERPLATE[warp_dim]
+    assert wf.__desc__ == gradwarp_boilerplate(warp_dim)
 
 
 # --- Task 9: threading the field through resampling and base -----------------
@@ -392,11 +518,11 @@ def test_dwi_preproc_wf_dis3d_still_emits_the_dis3d_boilerplate(tmp_path):
     ``LiterateWorkflow.visit_desc`` walks the parent graph, so a gradwarp_wf
     that contributes no nodes still has to be *in* that graph.
     """
-    from qsiprep.workflows.dwi.gradwarp import _BOILERPLATE
+    from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
 
     wf = _preproc_wf(tmp_path, image_type=['ORIGINAL', 'DIS3D'])
 
-    assert _BOILERPLATE[None] in wf.visit_desc()
+    assert gradwarp_boilerplate(None) in wf.visit_desc()
 
 
 def test_dwi_preproc_wf_dis3d_report_line_survives(tmp_path):
@@ -731,6 +857,98 @@ def test_diffprep_syn_branch_gradwarps_the_sdc_reference(tmp_path):
     )
 
 
+# --- The coregistration reference ---------------------------------------------
+#
+# ComposeTransforms applies the b0->T1w affine after gradwarp, so the b=0 that
+# affine is estimated from must be gradwarp-corrected too. The DRBUDDI and
+# GRE/SyN branches get that for free from their SDC correction; these are the
+# branches that need it wired explicitly.
+
+
+def _plain_unit(tmp_path, image_type=None):
+    dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz')
+    metadata = {'Manufacturer': 'SIEMENS'}
+    if image_type is not None:
+        metadata['ImageType'] = image_type
+    return make_preproc_unit([dwi], metadata=metadata)
+
+
+def test_topup_only_branch_gradwarps_the_coregistration_reference(tmp_path):
+    """eddy has already applied TOPUP's field to this image, so gradwarp is the
+    only transform still missing before coregistration. Correcting it does not
+    touch TOPUP, whose own inputs stay raw (asserted separately above)."""
+    _cfg_for_fsl(tmp_path, 'TOPUP')
+    wf = _fsl_wf(tmp_path, _rpe_unit(tmp_path))
+
+    assert _connects(wf, 'gradwarp_coreg_ref', 'outputnode', 'output_image', 'b0_template')
+    assert not _connects(
+        wf, 'b0_ref_for_coreg', 'outputnode', 'outputnode.ref_image', 'b0_template'
+    )
+    assert _connects(wf, 'inputnode', 'gradwarp_coreg_ref', 'gradwarp_field', 'transforms')
+
+
+def test_fsl_no_fieldmap_branch_gradwarps_the_coregistration_reference(tmp_path):
+    _cfg_for_fsl(tmp_path, 'TOPUP')
+    wf = _fsl_wf(tmp_path, _plain_unit(tmp_path))
+
+    assert _connects(wf, 'gradwarp_coreg_ref', 'outputnode', 'output_image', 'b0_template')
+    assert not _connects(
+        wf, 'b0_ref_for_coreg', 'outputnode', 'outputnode.ref_image', 'b0_template'
+    )
+
+
+@pytest.mark.parametrize('unit_factory', [_rpe_unit, _plain_unit])
+def test_fsl_dis3d_leaves_the_coregistration_reference_raw(tmp_path, unit_factory):
+    """No field means nothing to apply -- the node must not be built."""
+    _cfg_for_fsl(tmp_path, 'TOPUP')
+    wf = _fsl_wf(tmp_path, unit_factory(tmp_path, ['ORIGINAL', 'DIS3D']))
+
+    assert wf.get_node('gradwarp_coreg_ref') is None
+    assert _connects(wf, 'b0_ref_for_coreg', 'outputnode', 'outputnode.ref_image', 'b0_template')
+
+
+def test_diffprep_no_fieldmap_branch_gradwarps_the_coregistration_reference(tmp_path):
+    _cfg_for_diffprep(tmp_path)
+    wf = _diffprep_wf(tmp_path, _plain_unit(tmp_path))
+
+    assert _connects(wf, 'gradwarp_coreg_ref', 'outputnode', 'output_image', 'b0_template')
+    assert not _connects(
+        wf, 'b0_ref_for_coreg', 'outputnode', 'outputnode.ref_image', 'b0_template'
+    )
+
+
+def _diffprep_t2wreg_wf(tmp_path, unit):
+    from qsiprep.workflows.dwi.diffprep import init_diffprep_hmc_wf
+
+    return init_diffprep_hmc_wf(unit, source_file='/data/x_dwi.nii.gz', t2w_sdc=True)
+
+
+def test_diffprep_t2wreg_reference_gets_gradwarp_then_sdc(tmp_path):
+    """Both transforms go into the one resampling of the pre-SDC b=0 that this
+    branch already performs, in chain order. ANTs applies a transform list
+    last-first, so the SDC warp is in1 and the gradwarp field in2."""
+    _cfg_for_diffprep(tmp_path)
+    wf = _diffprep_t2wreg_wf(tmp_path, _plain_unit(tmp_path))
+
+    assert _connects(wf, 'diffprep', 'sdc_then_gradwarp', 'sdc_warp', 'in1')
+    assert _connects(wf, 'inputnode', 'sdc_then_gradwarp', 'gradwarp_field', 'in2')
+    assert _connects(wf, 'sdc_then_gradwarp', 'apply_sdc_to_b0', 'out', 'transforms')
+    # No second correction downstream: b0_ref_for_coreg derives the mask from
+    # this same image, so both stay in one geometry.
+    assert wf.get_node('gradwarp_coreg_ref') is None
+    assert _connects(wf, 'b0_ref_for_coreg', 'outputnode', 'outputnode.ref_image', 'b0_template')
+
+
+def test_diffprep_t2wreg_without_gradwarp_applies_sdc_alone(tmp_path):
+    _cfg_for_diffprep(tmp_path)
+    config.workflow.gradient_file = None
+    wf = _diffprep_t2wreg_wf(tmp_path, _plain_unit(tmp_path))
+
+    assert wf.get_node('sdc_then_gradwarp') is None
+    assert wf.get_node('gradwarp_coreg_ref') is None
+    assert _connects(wf, 'diffprep', 'apply_sdc_to_b0', 'sdc_warp', 'transforms')
+
+
 def _cfg_for_shoreline(tmp_path):
     config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
     config.workflow.hmc_model = '3dSHORE'
@@ -791,14 +1009,12 @@ def test_shoreline_syn_branch_gradwarps_the_sdc_reference(tmp_path):
     )
 
 
-def test_shoreline_without_a_fieldmap_does_not_gradwarp_the_bypass_reference(tmp_path):
+def test_shoreline_without_a_fieldmap_gradwarps_the_bypass_reference(tmp_path):
     """No fieldmap means ``init_sdc_wf`` is a pure pass-through, so there is no
-    susceptibility field being estimated and nothing to correct its inputs for.
-
-    The bypass forwards ``b0_ref`` straight to ``outputnode.b0_template``, the
-    DWI/T1w coregistration reference -- correcting it here would silently change
-    that reference on a path the rule does not cover, and would diverge from the
-    no-fieldmap branches of ``fsl.py`` and ``diffprep.py``, which leave it raw.
+    susceptibility field to estimate -- but the bypass forwards ``b0_ref``
+    straight to ``outputnode.b0_template``, the DWI/T1w coregistration
+    reference, and the coregistration affine is applied after gradwarp. So the
+    reference must be corrected even though no SDC is happening.
     """
     _cfg_for_shoreline(tmp_path)
     dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz')
@@ -807,10 +1023,25 @@ def test_shoreline_without_a_fieldmap_does_not_gradwarp_the_bypass_reference(tmp
 
     assert unit.method is None
     assert wf.get_node('sdc_bypass_wf') is not None
+    assert _connects(
+        wf, 'gradwarp_sdc_inputs', 'sdc_bypass_wf', 'output_image', 'inputnode.b0_ref'
+    )
+    assert not _connects(
+        wf, 'dwi_hmc_wf', 'sdc_bypass_wf', 'outputnode.final_template', 'inputnode.b0_ref'
+    )
+
+
+def test_shoreline_dis3d_without_a_fieldmap_leaves_the_bypass_reference_raw(tmp_path):
+    """A DIS3D unit has no field to apply, so the reference stays raw and the
+    correction nodes are not built at all."""
+    _cfg_for_shoreline(tmp_path)
+    dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz')
+    unit = make_preproc_unit(
+        [dwi], metadata={'Manufacturer': 'SIEMENS', 'ImageType': ['ORIGINAL', 'DIS3D']}
+    )
+    wf = _shoreline_wf(tmp_path, unit)
+
     assert wf.get_node('gradwarp_sdc_inputs') is None
-    assert wf.get_node('gradwarp_sdc_inputs_brain') is None
-    assert wf.get_node('gradwarp_sdc_inputs_mask') is None
-    # Positively: the raw HMC template still reaches the bypass untouched.
     assert _connects(
         wf, 'dwi_hmc_wf', 'sdc_bypass_wf', 'outputnode.final_template', 'inputnode.b0_ref'
     )
@@ -971,6 +1202,19 @@ def test_dwi_finalize_wf_grad_dev_sidecar_records_coefficient_basename_only(tmp_
     assert meta['GradientCoefficientFile'] == 'coeff.grad'
     assert '/' not in meta['GradientCoefficientFile']
     assert str(tmp_path) not in meta['GradientCoefficientFile']
+
+
+def test_dwi_finalize_wf_grad_dev_sidecar_records_the_orientation_approximation(tmp_path):
+    """The L matrix is oriented by a transform TORTOISE re-derives internally,
+    not by the coregistration affine qsiprep resampled the data with. A reader
+    cannot tell that from the file, so the sidecar has to say it."""
+    wf = _finalize_wf_with_gradients(tmp_path)
+
+    meta = wf.get_node('ds_grad_dev').inputs.meta_dict
+    note = meta['GradientDeviationOrientation']
+
+    assert 'CreateGradientNonlinearityBMatrix' in note
+    assert 'not by the coregistration transform' in note
 
 
 def test_dwi_finalize_wf_adds_gradient_warp_dimensions_to_the_main_sidecar(tmp_path):

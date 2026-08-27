@@ -474,6 +474,15 @@ def init_dwi_finalize_wf(
             niu.Function(function=_extract_first_b0, output_names=['out_file']),
             name='grad_dev_initial_ref',
         )
+        # Known approximation: the tool orients the L matrix with a rigid
+        # transform it estimates itself from these two images
+        # (``rigid_trans = RigidRegisterImages(final_b0, initial_b0)`` in
+        # CreateGradientNonlinearityBMatrix.cxx), rather than with
+        # ``itk_b0_to_t1`` -- the affine qsiprep actually resampled the data
+        # with. HCP instead reuses its real ``diff2str.mat``. Matching TORTOISE
+        # was the deliberate choice here, and TORTOISE likewise does not
+        # propagate the nonlinear SDC part into the L matrix, but the two
+        # transforms are not guaranteed identical. Recorded in the sidecar.
         grad_dev = pe.Node(
             CreateGradientNonlinearityBMatrix(
                 nonlinearity=gradwarp_plan.coeff_file,
@@ -502,6 +511,18 @@ def init_dwi_finalize_wf(
                     # resolved is whether TORTOISE's GE code path was taken.
                     'GradientCoefficientIsGE': gradwarp_plan.is_ge,
                     'GradientCorrectionBasis': gradwarp_plan.basis,
+                    # CreateGradientNonlinearityBMatrix re-derives its own rigid
+                    # initial->final transform rather than consuming qsiprep's
+                    # coregistration affine, so the L matrix is oriented by a
+                    # transform close to, but not identical to, the one that
+                    # actually resampled the data. See the note on the node
+                    # below.
+                    'GradientDeviationOrientation': (
+                        'Oriented by a rigid registration estimated internally by '
+                        "TORTOISE's CreateGradientNonlinearityBMatrix between the raw "
+                        'native b=0 and the final ACPC b=0, not by the coregistration '
+                        'transform QSIPrep applied to the data.'
+                    ),
                 },
             ),
             name='ds_grad_dev',

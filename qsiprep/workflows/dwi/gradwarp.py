@@ -100,6 +100,46 @@ def _log_plan_once(level, message, *args):
     getattr(config.loggers.workflow, level)(message, *args)
 
 
+#: Message for the GE coefficient-expansion guard. See :func:`_guard_ge_field`.
+_GE_GUARD = (
+    'Gradient nonlinearity correction from a coefficient file is not supported '
+    'for GE data (%s).\n\n'
+    "TORTOISE's own pipeline applies a z-origin shift to the displacement field "
+    'after expanding the coefficients, for GE data only (TORTOISE.cxx, the '
+    '``if(is_GE)`` block following ``mk_displacement``). That shift lives in '
+    'TORTOISEProcess, not in the standalone CreateNonlinearityDisplacementMap '
+    'binary qsiprep calls, whose main() writes the field with the reference '
+    "image's own origin. qsiprep would therefore place the field at a different "
+    'z than TORTOISE does, and the correct sign has not been verified against a '
+    'TORTOISE run on GE data.\n\n'
+    'Options:\n'
+    '  * pass --gradient-file a ready-made ITK displacement field (.nii/.nii.gz) '
+    'instead of coefficients; qsiprep uses it as given and expands nothing, so '
+    'this does not apply.\n'
+    '  * pass --ignore gradients to skip gradient correction entirely.\n\n'
+    'Siemens and Philips data are unaffected: the shift is applied only when '
+    'the Manufacturer field names GE.'
+)
+
+
+def _guard_ge_field(plan, unit):
+    """Refuse to expand GE coefficients into a field we cannot place correctly.
+
+    Scoped as narrowly as the defect is. It fires only when all three hold:
+
+    * the scanner is GE -- the shift is applied nowhere else;
+    * a spatial field is actually built -- a ``DIS3D`` unit builds none, and
+      ``CreateGradientNonlinearityBMatrix`` does its own, self-contained GE
+      recentring, so ``grad_dev`` is unaffected either way;
+    * the field is expanded from coefficients rather than supplied whole.
+    """
+    if not plan.is_ge or plan.warp_dim is None:
+        return plan
+    if is_displacement_field(plan.coeff_file):
+        return plan
+    raise ValueError(_GE_GUARD % unit.output_name)
+
+
 def resolve_gradwarp_plan(unit):
     """Decide the gradient correction for one PreprocUnit, or None."""
     coeff_file = config.workflow.gradient_file
@@ -110,16 +150,18 @@ def resolve_gradwarp_plan(unit):
     is_ge = any(_is_ge(record.metadata) for record in records)
 
     if 'gradients' in (config.workflow.force or []):
+        plan = _guard_ge_field(GradwarpPlan(str(coeff_file), '3D', is_ge, 'forced'), unit)
         _log_plan_once(
             'info',
             'Gradient correction: forced 3D spatial warp for %s (--force gradients).',
             unit.output_name,
         )
-        return GradwarpPlan(str(coeff_file), '3D', is_ge, 'forced')
+        return plan
 
     per_file = {record.path: _warp_dim_for(record.metadata) for record in records}
     ranks = {path: _WARP_RANK[warp] for path, warp in per_file.items()}
     warp_dim = _RANK_TO_WARP[min(ranks.values())]
+    plan = _guard_ge_field(GradwarpPlan(str(coeff_file), warp_dim, is_ge, 'metadata'), unit)
 
     if len(set(ranks.values())) > 1:
         _log_plan_once(
@@ -140,27 +182,34 @@ def resolve_gradwarp_plan(unit):
             warp_dim or 'disabled',
         )
 
-    return GradwarpPlan(str(coeff_file), warp_dim, is_ge, 'metadata')
+    return plan
 
 
-#: Boilerplate fragments, keyed by the resolved warp dimensionality. The text
-#: must track the plan: claiming 3D correction on DIS2D data would be a
+#: HMC backends that write out motion- and eddy-corrected volumes *before*
+#: qsiprep's final resampling. On these the composed chain carries no head
+#: motion or eddy current transform at all -- ``GatherEddyInputs`` emits an
+#: empty ``forward_transforms`` (``interfaces/eddy.py:190``) and
+#: ``DIFFPREPSplitOutputs`` emits per-volume identities
+#: (``interfaces/tortoise.py:1275``) -- so the series has already been resampled
+#: once by the time gradwarp is applied, and boilerplate claiming a single
+#: raw-to-final interpolation would be a methods-section error.
+_PRERESAMPLED_BY = {'eddy': 'FSL eddy', 'tortoise': "TORTOISE's DIFFPREP"}
+
+
+#: What was corrected, keyed by the resolved warp dimensionality. The text must
+#: track the plan: claiming 3D correction on DIS2D data would be a
 #: methods-section error.
-_BOILERPLATE = {
+_CORRECTION_TEXT = {
     '3D': (
         'Gradient nonlinearity was corrected using the scanner gradient '
-        'coefficients with TORTOISE V4. The full three-dimensional gradwarp '
-        'displacement field was combined with the head motion, eddy current, '
-        'and susceptibility distortion transforms, so the data were resampled '
-        'only once.'
+        'coefficients with TORTOISE V4, applying the full three-dimensional '
+        'gradwarp displacement field.'
     ),
     '1D': (
         'Gradient nonlinearity was corrected using the scanner gradient '
         'coefficients with TORTOISE V4. Because the scanner had already applied '
         'in-plane gradwarp correction (DIS2D), only the residual through-plane '
-        'component was applied here, combined with the head motion, eddy '
-        'current, and susceptibility distortion transforms so the data were '
-        'resampled only once.'
+        'component was applied here.'
     ),
     None: (
         'The scanner had already applied full three-dimensional gradwarp '
@@ -169,6 +218,34 @@ _BOILERPLATE = {
         'account for the spatially varying diffusion encoding.'
     ),
 }
+
+
+def _resampling_sentence():
+    """How many times the data were interpolated, which depends on the backend."""
+    backend = _PRERESAMPLED_BY.get(config.workflow.hmc_model)
+    if backend is None:
+        return (
+            ' The displacement field was combined with the head motion, eddy '
+            'current, and susceptibility distortion transforms, so the data '
+            'were resampled only once.'
+        )
+    return (
+        ' The displacement field was combined with the remaining susceptibility '
+        'distortion and coregistration transforms and applied in a single '
+        f'resampling, following the motion and eddy current correction {backend} '
+        'had already applied.'
+    )
+
+
+def gradwarp_boilerplate(warp_dim):
+    """Methods text for the resolved plan and the selected HMC backend.
+
+    A ``DIS3D`` unit gets no displacement field, so it gets no resampling
+    sentence either -- there is nothing to have been combined with anything.
+    """
+    if warp_dim is None:
+        return _CORRECTION_TEXT[None]
+    return _CORRECTION_TEXT[warp_dim] + _resampling_sentence()
 
 
 #: Report phrasing for each resolved state.
@@ -226,7 +303,7 @@ def init_gradwarp_wf(unit, name='gradwarp_wf'):
         return None
 
     workflow = Workflow(name=name)
-    workflow.__desc__ = _BOILERPLATE[plan.warp_dim]
+    workflow.__desc__ = gradwarp_boilerplate(plan.warp_dim)
     workflow.plan = plan
     workflow.needs_reference = False
 
@@ -343,3 +420,49 @@ def connect_gradwarp_sdc_reference(workflow, inputnode, source, source_fields, b
             ]),
             (resample, b0_sdc_wf, [('output_image', dest)]),
         ])  # fmt:skip
+
+
+# --- Gradwarp-correcting the DWI/T1w coregistration reference ----------------
+#
+# ``ComposeTransforms`` applies the b0->T1w affine *after* gradwarp, so the
+# image that affine was estimated from should itself be gradwarp-corrected.
+# ``b0_template`` -- the image ``init_b0_to_anat_registration_wf`` registers --
+# gets that for free on the branches whose SDC estimation inputs were corrected
+# above (DRBUDDI, GRE/SyN), because those branches forward the SDC workflow's
+# own reference. The branches that forward an uncorrected reference instead
+# need this, so the geometry is the same whichever backend ran.
+#
+# Unlike the SDC rule, this one has no TOPUP carve-out. That carve-out is about
+# where TOPUP's *field* is estimated, and eddy applies that field to raw data.
+# The coregistration reference is derived from eddy's *output*, so correcting
+# it does not touch TOPUP at all.
+
+
+def connect_gradwarp_coreg_reference(
+    workflow,
+    inputnode,
+    source,
+    source_field,
+    outputnode,
+    name='gradwarp_coreg_ref',
+):
+    """Gradwarp the b=0 that DWI/T1w coregistration is estimated from.
+
+    For branches whose reference carries no SDC warp either. DIFFPREP's T2Wreg
+    branch needs both and folds them into its existing ``apply_sdc_to_b0``
+    node instead, so that the mask ``b0_ref_for_coreg`` derives stays in the
+    same geometry as the reference.
+    """
+    resample = pe.Node(
+        ants.ApplyTransforms(dimension=3, interpolation=_sdc_interpolation(), float=True),
+        name=name,
+    )
+    workflow.connect([
+        (inputnode, resample, [(('gradwarp_field', _listify), 'transforms')]),
+        (source, resample, [
+            (source_field, 'input_image'),
+            (source_field, 'reference_image'),
+        ]),
+        (resample, outputnode, [('output_image', 'b0_template')]),
+    ])  # fmt:skip
+    return resample

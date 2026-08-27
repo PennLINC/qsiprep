@@ -112,9 +112,17 @@ def test_consistent_image_types_do_not_warn(caplog):
     ],
 )
 def test_is_ge_detection(manufacturer, expected):
-    """Manufacturer is free text from DICOM, so variants must be handled."""
+    """Manufacturer is free text from DICOM, so variants must be handled.
+
+    Resolved on a ``DIS3D`` unit so the detection can be observed on its own:
+    a GE unit that would get a spatial field is refused outright (see
+    ``test_ge_coefficients_are_refused``), but ``is_ge`` still has to be right,
+    because ``grad_dev`` is produced either way and passes it to
+    ``CreateGradientNonlinearityBMatrix --isGE``.
+    """
     config.workflow.gradient_file = COEFF
-    assert resolve_gradwarp_plan(_unit(manufacturer=manufacturer)).is_ge is expected
+    plan = resolve_gradwarp_plan(_unit(['ORIGINAL', 'DIS3D'], manufacturer=manufacturer))
+    assert plan.is_ge is expected
 
 
 def test_plan_carries_the_coefficient_file():
