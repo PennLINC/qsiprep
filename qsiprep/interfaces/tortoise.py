@@ -265,8 +265,9 @@ class GatherDRBUDDIInputs(SimpleInterface):
             b0_indices=b0_indices,
         )
         is_down = candidates.bids_origin_file.map(
-            lambda origin: read_nifti_sidecar(origin, sidecars)['PhaseEncodingDirection']
-            == down_pedir
+            lambda origin: (
+                read_nifti_sidecar(origin, sidecars)['PhaseEncodingDirection'] == down_pedir
+            )
         )
         candidates = candidates[is_down].reset_index(drop=True)
         if not len(candidates):
