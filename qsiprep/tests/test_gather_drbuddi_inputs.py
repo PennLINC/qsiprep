@@ -7,6 +7,7 @@ opposite-PE fieldmap candidates -- borrowed same-PE b=0s belong to TOPUP.
 
 import nibabel as nb
 import numpy as np
+import pandas as pd
 import pytest
 
 from qsiprep.interfaces.tortoise import GatherDRBUDDIInputs
@@ -84,17 +85,33 @@ def _gather(epi_inputs, tmp_path, epi_fmaps):
     return iface.run(cwd=str(tmp_path / 'work'))
 
 
-def test_blip_up_is_mean_of_corrected_b0s(epi_inputs, tmp_path):
+def test_blip_up_is_mean_of_corrected_b0s(epi_inputs, tmp_path, monkeypatch):
+    # Stand in for the TORTOISE binary: pick the second down candidate.
+    def fake_report(b0_files, prefix, num_threads=1):
+        n = len(b0_files)
+        return pd.DataFrame(
+            {
+                'volume_index': range(n),
+                'mean_cc': np.linspace(0.4, 0.5, n),
+                'translation_total_mm': 0.1,
+                'rotation_total_deg': 0.2,
+                'selected': [int(i == 1) for i in range(n)],
+            }
+        )
+
+    monkeypatch.setattr('qsiprep.interfaces.tortoise.select_best_b0_report', fake_report)
+
     (tmp_path / 'work').mkdir()
     result = _gather(epi_inputs, tmp_path, [epi_inputs['pa_fmap'], epi_inputs['ap_donor']])
 
     up = nb.load(result.outputs.blip_up_image)
     assert np.allclose(up.get_fdata(), epi_inputs['expected_up'], atol=1e-3)
 
-    # The down image comes from the PA fieldmap, never the same-PE donor.
+    # The down image is the PA candidate the picker selected (index 1),
+    # never the same-PE donor.
     down = nb.load(result.outputs.blip_down_image).get_fdata()
     pa_vols = np.asanyarray(nb.load(epi_inputs['pa_fmap']).dataobj)
-    assert any(np.allclose(down, pa_vols[..., i], atol=1e-3) for i in range(pa_vols.shape[-1]))
+    assert np.allclose(down, pa_vols[..., 1], atol=1e-3)
 
     assert len(result.outputs.blip_assignments) == 4
 

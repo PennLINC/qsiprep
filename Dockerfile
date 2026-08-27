@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=pennlinc/qsiprep-base:20260821
+ARG BASE_IMAGE=pennlinc/qsiprep-base:20260827
 ARG DWIDENOISE2_COMMIT=cd08ec1a0f5eb1dbc9962f80c20c2bb3428c4f93
 # MRtrix3 "dev" as at 2026-06-22, the commit dwidenoise2 is developed against
 ARG MRTRIX3_DWIDENOISE2_COMMIT=b98b54e9ae8168eeb9af23322a07011d4754456d

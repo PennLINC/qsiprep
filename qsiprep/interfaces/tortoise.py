@@ -35,10 +35,10 @@ from .denoise import (
     SeriesPreprocReportOutputSpec,
 )
 from .epi_fmap import (
-    calculate_best_b0s,
     get_distortion_grouping,
     load_epi_dwi_fieldmaps,
     read_nifti_sidecar,
+    select_best_b0_report,
     split_into_b0s_and_origins,
 )
 from .gradients import write_concatenated_fsl_gradients
@@ -274,8 +274,11 @@ class GatherDRBUDDIInputs(SimpleInterface):
             raise Exception(f'No {down_pedir} b=0 images among the epi fieldmaps for DRBUDDI')
         best = 0
         if len(candidates) > 1:
-            # ITK metric values: more negative = more similar to the others.
-            best = int(np.argmin(calculate_best_b0s(candidates.nii_3d_files.tolist())))
+            report = select_best_b0_report(
+                candidates.nii_3d_files.tolist(),
+                prefix=op.join(runtime.cwd, 'blip_down_'),
+            )
+            best = int(np.flatnonzero(report['selected'].to_numpy())[0])
         return nb.load(candidates.loc[best, 'nii_3d_files'])
 
 
@@ -901,7 +904,8 @@ def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False):
     if fieldmap_type == 'epi':
         desc.append(
             'DRBUDDI registered the mean motion-corrected b=0 image to a '
-            'reverse phase-encoding b=0 reference to estimate'
+            'reverse phase-encoding b=0 reference (chosen with SelectBestB0 '
+            'when several were available) to estimate'
         )
     else:
         desc.append(

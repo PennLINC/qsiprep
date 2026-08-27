@@ -1,6 +1,7 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 import os.path as op
+import subprocess
 from collections import defaultdict
 from pathlib import Path
 
@@ -212,6 +213,7 @@ def get_best_b0_topup_inputs_from(
     topup_requested=False,
     raw_image_sdc=True,
     sidecars=None,
+    num_threads=1,
 ):
     """Create a datain spec and a slspec from a concatenated dwi series.
 
@@ -289,10 +291,35 @@ def get_best_b0_topup_inputs_from(
     spec_groups = dwi_b0_df.groupby('fsl_spec')
     max_per_spec = min(max_per_spec, min(spec_groups.apply(len)))
 
-    # Calculate the "quality" of each image:
-    dwi_b0_df['qc_score'] = spec_groups['nii_3d_files'].transform(calculate_best_b0s)
+    # Score each candidate with TORTOISE's SelectBestB0. It rigidly registers
+    # the candidates before the windowed-correlation comparison, so a
+    # moved-but-clean b=0 is not mistaken for a bad one, and the recovered
+    # rigid parameters travel into the QC tsv.
+    dwi_b0_df['qc_score'] = np.nan
+    dwi_b0_df['translation_total_mm'] = np.nan
+    dwi_b0_df['rotation_total_deg'] = np.nan
+    for spec_num, (_, spec_df) in enumerate(spec_groups):
+        report = select_best_b0_report(
+            spec_df['nii_3d_files'].tolist(),
+            prefix=op.join(cwd, f'spec-{spec_num:02d}_'),
+            num_threads=num_threads,
+        )
+        dwi_b0_df.loc[spec_df.index, 'qc_score'] = report['mean_cc'].to_numpy()
+        dwi_b0_df.loc[spec_df.index, 'translation_total_mm'] = report[
+            'translation_total_mm'
+        ].to_numpy()
+        dwi_b0_df.loc[spec_df.index, 'rotation_total_deg'] = report[
+            'rotation_total_deg'
+        ].to_numpy()
+    # Higher windowed correlation = more consistent = better. Ties (inevitable
+    # with two candidates, whose mean-over-others scores are the same single
+    # pairwise value) break toward the earlier volume, which is also eddy's
+    # reference.
     dwi_b0_df['qc_rank'] = (
-        np.nan_to_num(spec_groups['qc_score'].rank(ascending=True), nan=1.0).astype(int) - 1
+        np.nan_to_num(
+            spec_groups['qc_score'].rank(ascending=False, method='first'), nan=1.0
+        ).astype(int)
+        - 1
     )
 
     # Select only the top
@@ -317,7 +344,7 @@ def get_best_b0_topup_inputs_from(
         f.write('\n'.join(sdc_selections['fsl_spec']))
 
     b0_tsv = op.join(cwd, 'b0_selection_info.tsv')
-    dwi_b0_df.drop('nii_3d_files', 1).to_csv(b0_tsv, sep='\t', index=False)
+    dwi_b0_df.drop(columns='nii_3d_files').to_csv(b0_tsv, sep='\t', index=False)
 
     # get out reference images from the topup and eddy data
     topup_reg_file = op.join(cwd, 'topup_reg_image.nii.gz')
@@ -379,20 +406,49 @@ def relative_b0_index(b0_indices, original_files):
     return original_indices
 
 
-def calculate_best_b0s(b0_list, radius=4):
-    import SimpleITK as sitk
+def select_best_b0_report(b0_files, prefix, num_threads=1):
+    """Score candidate b=0 images with TORTOISE's ``SelectBestB0``.
 
-    imgs = [sitk.ReadImage(fname, sitk.sitkFloat64) for fname in b0_list]
-    no_reg = sitk.ImageRegistrationMethod()
-    no_reg.SetMetricSamplingStrategy(no_reg.NONE)
-    no_reg.SetMetricAsCorrelation()
-    pairwise = np.zeros((len(b0_list), len(b0_list)), dtype=np.float64)
-    for id0, id1 in zip(*np.triu_indices(len(b0_list), 1), strict=False):
-        pairwise[id0, id1] = no_reg.MetricEvaluate(imgs[id0], imgs[id1])
-    pairwise = pairwise + pairwise.T
-    # Don't include self correlation
-    np.fill_diagonal(pairwise, np.nan)
-    return np.nanmean(pairwise, axis=0)
+    The candidates are stacked into a 4D file (resampled onto the first
+    image's grid when they differ) and handed to the binary, which rigidly
+    registers them before the windowed-correlation comparison -- so a
+    moved-but-clean b=0 is not mistaken for a bad one.
+
+    Returns the per-volume report as a DataFrame in input order:
+    ``mean_cc`` (higher = more consistent with the other candidates),
+    ``selected`` (TORTOISE's pick, a member of the most-consistent pair), and
+    the recovered rigid parameters relative to the first candidate
+    (``translation_total_mm``/``rotation_total_deg`` and their components).
+    """
+    stack_file = prefix + 'candidates.nii.gz'
+    concat_imgs(b0_files, auto_resample=True).to_filename(stack_file)
+    # The candidates are all b=0 by construction
+    bvals_file = prefix + 'candidates.bval'
+    np.savetxt(bvals_file, np.zeros((1, len(b0_files))), fmt='%d')
+    report_file = prefix + 'selection.tsv'
+
+    cmd = [
+        'SelectBestB0',
+        stack_file,
+        bvals_file,
+        prefix + 'best_b0.nii.gz',
+        '--ncores',
+        str(num_threads),
+        '--report',
+        report_file,
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0 or not op.exists(report_file):
+        raise RuntimeError(
+            f'SelectBestB0 failed (exit {proc.returncode}):\n{proc.stdout}\n{proc.stderr}'
+        )
+
+    report = pd.read_csv(report_file, sep='\t', comment='#')
+    if len(report) != len(b0_files):
+        raise RuntimeError(
+            f'SelectBestB0 reported {len(report)} volumes for {len(b0_files)} candidates'
+        )
+    return report
 
 
 def _get_bvals(bval_input):
@@ -454,8 +510,6 @@ def split_into_b0s_and_origins(
         )
         image_source = original_file if use_original_files else full_img
         source_index = original_index if use_original_files else b0_index
-        print('image_source', image_source)
-        print('new_b0_path', new_b0_path)
         safe_get_3d_image(image_source, source_index).to_filename(new_b0_path)
         b0_nii_files.append(new_b0_path)
 

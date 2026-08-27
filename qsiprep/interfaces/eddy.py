@@ -98,6 +98,9 @@ class GatherEddyInputsInputSpec(BaseInterfaceInputSpec):
     topup_max_b0s_per_spec = traits.CInt(1, usedefault=True)
     topup_requested = traits.Bool(False, usedefault=True)
     raw_image_sdc = traits.Bool(True, usedefault=True)
+    num_threads = traits.CInt(
+        1, usedefault=True, desc='CPU cores for the TORTOISE SelectBestB0 b=0 scoring'
+    )
     eddy_config = File(exists=True, mandatory=True)
     json_file = File(exists=True)
     sidecars = traits.Dict(
@@ -156,6 +159,7 @@ class GatherEddyInputs(SimpleInterface):
                 topup_requested=self.inputs.topup_requested,
                 raw_image_sdc=self.inputs.raw_image_sdc,
                 sidecars=sidecars,
+                num_threads=self.inputs.num_threads,
             )
         )
         self._results['topup_datain'] = topup_datain_file
@@ -554,6 +558,12 @@ def topup_boilerplate(fieldmap_type, pepolar_method):
             'b=0 images extracted from multiple DWI series  '
             'with reversed phase encoding directions.'
         )
+    desc.append(
+        "The most mutually-consistent b=0 images were chosen with TORTOISE's "
+        'SelectBestB0 [@tortoisev4], which rigidly aligns the candidates from '
+        'each distortion group before comparing them with a windowed '
+        'correlation.'
+    )
     desc.append(
         'The TOPUP-estimated fieldmap was incorporated into the '
         'Eddy current and head motion correction interpolation.'
