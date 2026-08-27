@@ -62,7 +62,9 @@ def _tsnr_meta(n_b0, median_tsnr):
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def init_dwi_derivatives_wf(source_file, resolution=None, name='dwi_derivatives_wf') -> Workflow:
+def init_dwi_derivatives_wf(
+    source_file, resolution=None, write_hmc_optimization=True, name='dwi_derivatives_wf'
+) -> Workflow:
     """Set up a battery of datasinks to store derivatives in the right location.
 
     QSIRecon's primary input is the preprocessed ACPC-space DWI this workflow
@@ -76,6 +78,13 @@ def init_dwi_derivatives_wf(source_file, resolution=None, name='dwi_derivatives_
         ``res-<label>`` entity to every ACPC DWI sink below, and (since the
         filename alone does not say what ``res-native*`` resolved to) expects
         ``inputnode.resolution_meta`` to be wired with the resolved voxel size.
+    write_hmc_optimization : bool
+        The hmcOptimization sidecar is produced before resampling and does not vary
+        by output resolution. When ``init_dwi_derivatives_wf`` is instantiated once
+        per ACPC resolution, every instance would otherwise write the exact same
+        path -- a same-path collision under nipype's MultiProc plugin. Callers doing
+        that fan-out should pass this as ``True`` for exactly one instance (its first
+        spec) and ``False`` for the rest.
     """
     output_dir = str(config.execution.output_dir)
     workflow = Workflow(name=name)
@@ -101,7 +110,11 @@ def init_dwi_derivatives_wf(source_file, resolution=None, name='dwi_derivatives_
         name='inputnode',
     )
 
-    if config.workflow.hmc_model == '3dSHORE' and config.workflow.shoreline_iters > 1:
+    if (
+        write_hmc_optimization
+        and config.workflow.hmc_model == '3dSHORE'
+        and config.workflow.shoreline_iters > 1
+    ):
         ds_optimization = pe.Node(
             DerivativesDataSink(
                 source_file=source_file,

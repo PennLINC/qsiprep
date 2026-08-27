@@ -449,6 +449,11 @@ def init_dwi_finalize_wf(
         dwi_derivatives_wf = init_dwi_derivatives_wf(
             source_file=source_file,
             resolution=resolution_for_derivatives,
+            # hmcOptimization is produced before resampling and is the same for
+            # every ACPC resolution; writing it from every dwi_derivatives_wf
+            # instance would be a same-path collision, so only the first spec
+            # writes it.
+            write_hmc_optimization=(index == 0),
             name=f'dwi_derivatives_wf{suffix}',
         )
         workflow.connect([
