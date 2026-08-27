@@ -666,17 +666,22 @@ How to combine the corrected results of an output's correction units.
         help=(
             'Standard and non-standard spaces to write outputs to, space delimited. '
             'At least one "acpc" space is required, because QSIPrep writes preprocessed '
-            'DWI in ACPC space only -- for example "acpc:res-2mm". Resolutions are given '
-            'as a physical size with an "mm" suffix, either isotropic ("res-2mm", '
-            '"res-1p5mm") or, for standard spaces only, anisotropic ("res-6x6x3mm"); '
-            '"acpc" requires an isotropic size. Standard spaces also accept a '
-            'TemplateFlow resolution label ("res-1"). '
-            'On "acpc", "res-nativemin" and "res-nativemax" take the smallest or largest '
-            'voxel dimension of the input DWI runs (a 3x4x5 mm input gives 3x3x3 mm for '
-            'nativemin and 5x5x5 mm for nativemax). Listing "acpc" more than once writes '
-            'the preprocessed DWI at each resolution. Standard spaces produce transforms '
-            'and anatomical derivatives; DWI is never resampled into them. Templates with '
-            'cohorts accept "cohort-auto" to pick one from the participant\'s age, as in '
+            'DWI in ACPC space only -- for example "acpc:res-2mm". '
+            'On "acpc", the resolution is an isotropic physical size with an "mm" '
+            'suffix ("res-2mm", "res-1p5mm"), or "res-nativemin"/"res-nativemax", which '
+            'take the smallest or largest voxel dimension of the input DWI runs (a '
+            '3x4x5 mm input gives 3x3x3 mm for nativemin and 5x5x5 mm for nativemax). '
+            'Anisotropic sizes are rejected on "acpc". '
+            'On a standard space, the resolution is a TemplateFlow resolution label '
+            '("res-1", "res-2"), which selects the grid the template is fetched on; a '
+            'template may be listed at several labels ("MNI152NLin2009cAsym:res-1:res-2"). '
+            'Physical "mm" sizes are NOT implemented for standard spaces -- QSIPrep does '
+            'not resample standard-space output to an arbitrary voxel size, so such a '
+            'token has no effect. '
+            'Listing "acpc" more than once writes the preprocessed DWI at each '
+            'resolution. Standard spaces produce transforms and anatomical derivatives; '
+            'DWI is never resampled into them. Templates with cohorts accept '
+            '"cohort-auto" to pick one from the participant\'s age, as in '
             '"MNIInfant:cohort-auto".'
         ),
     )
@@ -1039,6 +1044,22 @@ def _apply_output_space_deprecations(opts, parser=None):
         specs = parse_output_spaces(given)
     except OutputSpacesError as exc:
         fail(str(exc))
+
+    # A physical size on a standard space parses but does nothing: nothing resamples
+    # to it and no res- entity is written. Say so rather than no-op silently.
+    unimplemented = [
+        str(spec)
+        for spec in specs
+        if spec.standard and spec.resolution is not None and spec.resolution.kind == 'mm'
+    ]
+    if unimplemented:
+        print(
+            f'WARNING: {", ".join(unimplemented)} requests a physical voxel size on a '
+            'standard space, which QSIPrep does not implement. The template will be '
+            'fetched at its highest-resolution grid and nothing will be resampled to '
+            'the requested size. Use a TemplateFlow res- label instead.',
+            file=sys.stderr,
+        )
 
     # Record the anchor now, from the full list. --skip-anat-based-spatial-
     # normalization strips every standard space below, and deriving the anchor

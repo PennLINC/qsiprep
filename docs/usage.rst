@@ -53,22 +53,41 @@ DWI in ACPC (subject-native) space -- there is no way to ask for DWI resampled s
 into a standard space. ``acpc`` always needs an explicit resolution, for example
 ``acpc:res-2mm``.
 
-The three ``res-`` families
-============================
+The ``res-`` families
+=====================
 
-A ``res-`` suffix sets the resolution for a space, and comes in three flavors:
+A ``res-`` suffix sets the resolution for a space. Which forms are accepted depends
+on whether the space is ``acpc`` or a standard space:
+
+On ``acpc``:
 
 - **Isotropic physical size**, given in millimeters, e.g. ``res-2mm`` or the decimal
-  form ``res-1p5mm`` (1.5 mm). ``acpc`` only accepts this isotropic form -- an
-  anisotropic size such as ``res-6x6x3mm`` is standard-space-only (see below) and is
-  rejected on ``acpc``.
-- **Native-resolution strategies**, ``res-nativemin`` and ``res-nativemax``, valid on
-  ``acpc`` only. These take the smallest or largest voxel dimension across the input
-  DWI runs and use it isotropically -- a 3x4x5 mm input yields 3x3x3 mm for
-  ``nativemin`` and 5x5x5 mm for ``nativemax``.
-- **TemplateFlow resolution labels**, e.g. ``res-1``, valid on standard spaces only.
-  Standard spaces may also take an anisotropic physical size, e.g. ``res-6x6x3mm``,
-  which is never accepted on ``acpc``.
+  form ``res-1p5mm`` (1.5 mm). ``acpc`` accepts only the isotropic form; an
+  anisotropic size such as ``res-6x6x3mm`` is rejected, because reconstruction
+  requires isotropic DWI.
+- **Native-resolution strategies**, ``res-nativemin`` and ``res-nativemax``. These take
+  the smallest or largest voxel dimension across the input DWI runs and use it
+  isotropically -- a 3x4x5 mm input yields 3x3x3 mm for ``nativemin`` and 5x5x5 mm for
+  ``nativemax``. Because the value is only known once the DWI headers are read, the
+  resolved voxel size is recorded in the ``Resolution`` key of each output's JSON
+  sidecar.
+
+On standard spaces:
+
+- **TemplateFlow resolution labels only**, e.g. ``res-1`` or ``res-2``. The label
+  selects which TemplateFlow grid the template is fetched on, and appears verbatim as
+  the ``res-`` entity in the output filename. Which labels exist varies by template;
+  an unavailable label is rejected with the list of valid ones.
+
+.. warning::
+
+   Physical (``mm``) sizes are **not** implemented for standard spaces. QSIPrep does
+   not resample standard-space output to an arbitrary voxel size, so a token such as
+   ``MNI152NLin2009cAsym:res-1p5mm`` or ``MNI152NLin2009cAsym:res-6x6x3mm`` currently
+   parses but has no effect: the template is fetched at its highest-resolution grid,
+   nothing is resampled to the requested size, and no ``res-`` entity is written.
+   Use a TemplateFlow label instead. ``mm`` and ``native*`` sizes work only on
+   ``acpc``.
 
 Multiple ``acpc`` entries
 =========================
@@ -87,7 +106,21 @@ transforms and resampled anatomical derivatives (T1w/T2w, masks, segmentations),
 **DWI is never resampled into a standard space** -- only ``acpc`` DWI is written.
 Each standard space requires its own nonlinear registration of the anatomical
 reference to that template, so requesting *N* standard spaces costs *N* nonlinear
-registrations.
+registrations. Requesting **no** standard space at all (e.g.
+``--output-spaces acpc:res-2mm``) skips the anatomical nonlinear registration
+entirely, unless fieldmap-less SyN distortion correction is in use -- that needs the
+same transform.
+
+A single template may be listed at more than one TemplateFlow resolution, either as
+repeated tokens or with repeated ``res-`` keys:
+
+.. code-block:: text
+
+    --output-spaces acpc:res-2mm MNI152NLin2009cAsym:res-1:res-2
+
+Each resolution gets its own resampled anatomical derivatives, tagged with its own
+``res-`` entity. The ACPC-to-template transform does not depend on output resolution,
+so it is written once.
 
 ``cohort-auto``
 ===============
@@ -118,9 +151,25 @@ equivalent ``--output-spaces`` invocation for each old flag combination:
    * - ``--output-resolution 1.5``
      - ``--output-spaces acpc:res-1p5mm MNI152NLin2009cAsym``
    * - ``--output-resolution 2 --infant``
-     - ``--output-spaces acpc:res-2mm MNIInfant:cohort-auto``
+     - ``--infant --output-spaces acpc:res-2mm MNIInfant:cohort-auto``
    * - ``--output-resolution 2 --skip-anat-based-spatial-normalization``
      - ``--output-spaces acpc:res-2mm``
+
+.. important::
+
+   ``--infant`` is **not** deprecated and must be kept in the new invocation. Beyond
+   appending ``MNIInfant:cohort-auto`` to ``--output-spaces``, it narrows the autobox
+   padding (4 mm instead of 8 mm), forces a T2w anatomical reference, and requires
+   ``--subject-anatomical-reference sessionwise``. Dropping it in favor of the
+   ``MNIInfant:cohort-auto`` token alone changes results.
+
+.. note::
+
+   ``--infant --skip-anat-based-spatial-normalization`` has no exact
+   ``--output-spaces`` equivalent yet. ``--infant`` always appends
+   ``MNIInfant:cohort-auto``, so the only way to keep the infant AC-PC anchor while
+   writing no standard space is to keep using the deprecated flag, which continues to
+   work (and keeps the infant anchor) until 27.0.0.
 
 
 ***********
