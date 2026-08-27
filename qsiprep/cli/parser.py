@@ -540,13 +540,16 @@ def _build_parser(**kwargs):
         action='store',
         nargs='+',
         default=[],
-        choices=['gradients'],
+        choices=['gradients', 't2wreg'],
         help=(
             'Force selected corrections on, overriding what the input metadata '
             'implies (a space delimited list). "gradients" applies the full 3D '
             'gradient nonlinearity correction to every DWI run regardless of the '
             'ImageType field, for data whose DIS2D/DIS3D tags are absent or '
-            'untrustworthy. Requires --gradient-file.'
+            'untrustworthy. Requires --gradient-file. '
+            '"t2wreg" overrides all fieldmaps with T2w-registration SDC (TORTOISE '
+            'T2Wreg); it requires a T2w image and an SDC stage that can consume '
+            'it (--hmc-method tortoise or --sdc-method drbuddi).',
         ),
     )
     g_conf.add_argument(
@@ -957,16 +960,6 @@ How to combine the corrected results of an output's correction units.
         default=SUPPRESS,
         choices=['TOPUP', 'DRBUDDI', 'TOPUP+DRBUDDI'],
         help='DEPRECATED: use --sdc-method instead (same values, lowercased).',
-    )
-    g_fmap.add_argument(
-        '--force',
-        nargs='+',
-        default=[],
-        choices=['t2wreg'],
-        help='force specific processing choices (a space-delimited list). '
-        '"t2wreg" overrides all fieldmaps with T2w-registration SDC (TORTOISE '
-        'T2Wreg); it requires a T2w image and an SDC stage that can consume '
-        'it (--hmc-method tortoise or --sdc-method drbuddi).',
     )
     g_fmap.add_argument(
         '--fmap-bspline',
