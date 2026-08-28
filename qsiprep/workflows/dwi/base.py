@@ -33,16 +33,23 @@ from .util import _create_mem_gb, _get_wf_name
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def _doing_t2wreg(unit, t2w_sdc):
-    """True when SDC is TORTOISE's T2Wreg (DIFFPREP, fieldmap-less, T2w present).
+def _t2wreg_target(unit, t2w_sdc):
+    """The structural target DIFFPREP's T2Wreg stage registers to, or ``None``.
 
-    Mirrors ``use_t2wreg`` in :mod:`qsiprep.workflows.dwi.diffprep`. T2Wreg does
-    real susceptibility distortion correction but carries no measured fieldmap,
-    so without this predicate the fieldmap-less case would fall through the
-    reportlet gate and produce no SDC figure. The plan encodes the stage; the
-    ``t2w_sdc`` bool additionally honors --anat-modality/--ignore t2w.
+    Mirrors ``use_t2wreg``/``synb0_target`` in
+    :mod:`qsiprep.workflows.dwi.diffprep`. T2Wreg does real susceptibility
+    distortion correction but carries no measured fieldmap, so without this
+    predicate the fieldmap-less case would fall through the reportlet gate and
+    produce no SDC figure. The plan encodes the stage and its target
+    (``'synb0'`` needs no T2w); the ``t2w_sdc`` bool additionally honors
+    --anat-modality/--ignore t2w for the ``'t2w'`` target.
     """
-    return unit.run.stage_with('t2wreg') is not None and bool(t2w_sdc)
+    stage = unit.run.stage_with('t2wreg')
+    if stage is None:
+        return None
+    if stage.structural_target == 'synb0':
+        return 'synb0'
+    return 't2w' if t2w_sdc else None
 
 
 def init_dwi_preproc_wf(
@@ -337,13 +344,13 @@ def init_dwi_preproc_wf(
     # considerably more detailed reports.
     doing_topup = unit.run.stage_with('topup') is not None
     doing_drbuddi = unit.run.stage_with('drbuddi') is not None
-    doing_t2wreg = _doing_t2wreg(unit, t2w_sdc)
-    if unit.is_gre or unit.is_nipreps_syn or doing_topup or doing_t2wreg:
+    t2wreg_target = _t2wreg_target(unit, t2w_sdc)
+    if unit.is_gre or unit.is_nipreps_syn or doing_topup or t2wreg_target:
         fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
         ds_report_sdc = pe.Node(
             DerivativesDataSink(
                 datatype='figures',
-                desc='sdcT2w' if doing_t2wreg else 'sdc',
+                desc='sdcT2w' if t2wreg_target == 't2w' else 'sdc',
                 suffix='dwi',
                 source_file=source_file,
             ),

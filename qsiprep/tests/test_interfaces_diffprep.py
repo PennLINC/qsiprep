@@ -978,6 +978,45 @@ def _connect_fields(wf, src, dst):
     return [] if edge is None else list(edge['connect'])
 
 
+def test_init_diffprep_hmc_wf_synb0_targets_the_synthetic_b0():
+    """--use-synb0 without a T2w -> T2Wreg registered to the synthetic b=0."""
+    from qsiplan.models import CorrectionMethod
+
+    from qsiprep.tests.preproc_factory import make_preproc_unit
+
+    config = _base_config()
+    try:
+        config.workflow.hmc_model = 'tortoise'
+        t1w = '/data/sub-01_T1w.nii.gz'
+        unit = make_preproc_unit(
+            ['/data/sub-01_dwi.nii.gz'],
+            method=CorrectionMethod.SYNB0,
+            estimation_sources=[t1w],
+            anat_files=[t1w],
+        )
+        wf = _build(unit, t2w_sdc=False, name='dp_synb0')
+
+        assert wf.get_node('diffprep').inputs.epi_mode == 'T2Wreg'
+        assert wf.get_node('outputnode').inputs.sdc_method == 'T2Wreg (SynB0)'
+        # The synthetic b=0 (not the T2w) is DIFFPREP's structural target.
+        assert wf.get_node('synb0_wf') is not None
+        assert wf.get_node('synb0_b0_ref_wf') is not None
+        assert ('outputnode.synthetic_b0', 'structural_image') in _connect_fields(
+            wf, 'synb0_wf', 'diffprep'
+        )
+        assert ('t2w_unfatsat', 'structural_image') not in _connect_fields(
+            wf, 'inputnode', 'diffprep'
+        )
+        # The raw distorted b=0 seeds the generation...
+        assert ('b0_average', 'inputnode.b0_template') in _connect_fields(
+            wf, 'raw_b0s', 'synb0_b0_ref_wf'
+        )
+        # ...and coregistration still sees the EPI-corrected b=0.
+        assert wf.get_node('apply_sdc_to_b0') is not None
+    finally:
+        config.workflow.hmc_model = 'eddy'
+
+
 def test_t2wreg_sdc_travels_as_a_warp_not_baked_in():
     """The EPI field must reach to_dwi_ref_warps so qsiprep resamples once.
 
@@ -1330,28 +1369,39 @@ def test_t2wreg_is_recognised_as_sdc_for_reporting():
     ``init_dwi_preproc_wf`` and T2Wreg silently produced no SDC figure, while the
     identical correction tagged ``syn`` did produce one.
     """
+    from qsiplan.models import CorrectionMethod
+
     from qsiprep.tests.preproc_factory import make_preproc_unit
-    from qsiprep.workflows.dwi.base import _doing_t2wreg
+    from qsiprep.workflows.dwi.base import _t2wreg_target
 
     config = _base_config()
     try:
         config.workflow.hmc_model = 'tortoise'
         t2w = ['/data/sub-01_T2w.nii.gz']
         fieldmapless = make_preproc_unit(['/data/sub-01_dwi.nii.gz'], anat_files=t2w)
-        assert _doing_t2wreg(fieldmapless, '/path/to/T2w.nii.gz') is True
+        assert _t2wreg_target(fieldmapless, '/path/to/T2w.nii.gz') == 't2w'
 
         # No T2w -> no T2Wreg -> nothing to show.
-        assert _doing_t2wreg(_make_unit(None), '') is False
+        assert _t2wreg_target(_make_unit(None), '') is None
         # A measured fieldmap goes through its own SDC reports instead.
         rpe = _make_unit('rpe_series', rpe_series=['/data/sub-01_dir-PA_dwi.nii.gz'])
-        assert _doing_t2wreg(rpe, '/path/to/T2w.nii.gz') is False
+        assert _t2wreg_target(rpe, '/path/to/T2w.nii.gz') is None
         epi = _make_unit('epi', epi=['/data/sub-01_epi.nii.gz'])
-        assert _doing_t2wreg(epi, '/path/to/T2w.nii.gz') is False
+        assert _t2wreg_target(epi, '/path/to/T2w.nii.gz') is None
+
+        # A SynB0 unit registers to the synthetic b=0 -- no T2w required.
+        synb0 = make_preproc_unit(
+            ['/data/sub-01_dwi.nii.gz'],
+            method=CorrectionMethod.SYNB0,
+            estimation_sources=['/data/sub-01_T1w.nii.gz'],
+            anat_files=['/data/sub-01_T1w.nii.gz'],
+        )
+        assert _t2wreg_target(synb0, '') == 'synb0'
 
         # Other methods do not run T2Wreg at all.
         config.workflow.hmc_model = 'eddy'
         fieldmapless = make_preproc_unit(['/data/sub-01_dwi.nii.gz'], anat_files=t2w)
-        assert _doing_t2wreg(fieldmapless, '/path/to/T2w.nii.gz') is False
+        assert _t2wreg_target(fieldmapless, '/path/to/T2w.nii.gz') is None
     finally:
         config.workflow.hmc_model = 'eddy'
 

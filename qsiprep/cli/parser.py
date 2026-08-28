@@ -237,6 +237,12 @@ def _build_parser(**kwargs):
             else:
                 namespace.hmc_model = 'eddy' if namespace.hmc_method == 'eddy' else 'tortoise'
 
+            if getattr(namespace, 'use_synb0', False) and namespace.anat_modality != 'T1w':
+                self.error(
+                    '--use-synb0 requires --anat-modality T1w: the synthetic b=0 '
+                    'is generated from the preprocessed T1w image'
+                )
+
             return namespace, extras
 
     class ToDict(Action):

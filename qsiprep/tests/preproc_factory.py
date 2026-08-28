@@ -126,6 +126,9 @@ def make_preproc_unit(
         application_candidates={},
         distortion_groups={},
         concatenation_groups={},
+        # A SYNB0 estimation only ever exists under --use-synb0; mirror that so
+        # the plan compiler prefers the synthetic structural target.
+        synb0_requested=method is CorrectionMethod.SYNB0,
     )
     unit = PreprocUnit(
         grouping=grouping,
