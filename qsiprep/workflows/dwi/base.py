@@ -96,6 +96,11 @@ def init_dwi_preproc_wf(
         ANTs-compatible affine-and-warp transform file
     t1_2_mni_reverse_transform
         ANTs-compatible affine-and-warp transform file (inverse)
+    to_template_affine_transform
+        Full affine to the anatomical template that AC-PC alignment was
+        extracted from (consumed by the SynB0 generation workflow)
+    acpc_inv_transform
+        Inverse of the AC-PC rigid transform
     subjects_dir
         FreeSurfer SUBJECTS_DIR
     subject_id
@@ -192,6 +197,8 @@ def init_dwi_preproc_wf(
                 't1_2_mni_reverse_transform',
                 't2w_files',
                 'dwi_sampling_grid',
+                'to_template_affine_transform',
+                'acpc_inv_transform',
             ]
         ),
         name='inputnode',
@@ -284,10 +291,14 @@ def init_dwi_preproc_wf(
             ('outputnode.original_files', 'inputnode.original_files'),
         ]),
         (inputnode, hmc_wf, [
+            ('t1_preproc', 'inputnode.t1_preproc'),
             ('t1_brain', 'inputnode.t1_brain'),
             ('t1_mask', 'inputnode.t1_mask'),
+            ('t1_seg', 'inputnode.t1_seg'),
             ('t2w_unfatsat', 'inputnode.t2w_unfatsat'),
             ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
+            ('to_template_affine_transform', 'inputnode.to_template_affine_transform'),
+            ('acpc_inv_transform', 'inputnode.acpc_inv_transform'),
         ]),
         (pre_hmc_wf, outputnode, [
             ('outputnode.qc_file', 'raw_qc_file'),

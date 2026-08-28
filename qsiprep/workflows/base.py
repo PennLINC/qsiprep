@@ -638,6 +638,9 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
                 ('outputnode.dwi_sampling_grid', 'inputnode.dwi_sampling_grid'),
                 ('outputnode.t2w_unfatsat', 'inputnode.t2w_unfatsat'),
+                ('outputnode.to_template_affine_transform',
+                 'inputnode.to_template_affine_transform'),
+                ('outputnode.acpc_inv_transform', 'inputnode.acpc_inv_transform'),
             ]),
             (anat_preproc_wf, dwi_finalize_wf, [
                 ('outputnode.t1_preproc', 'inputnode.t1_preproc'),
