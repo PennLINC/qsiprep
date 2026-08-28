@@ -8,7 +8,7 @@ ARG TAG_AFNI=AFNI_25.2.09
 ARG TAG_TORTOISE=26.8.2
 ARG TAG_TORTOISECUDA=26.8.2
 ARG TAG_SYNB0=26.1.2
-ARG TAG_TRXSCAN=26.8.2
+ARG TAG_TRXSCAN=26.8.3
 
 FROM pennlinc/qsiprep-freesurfer:${TAG_FREESURFER} AS build_freesurfer
 FROM pennlinc/qsiprep-ants:${TAG_ANTS} AS build_ants

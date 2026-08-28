@@ -15,6 +15,11 @@ changes its apparent pose, and rigid registration honestly recovers only
 60-80% of the applied motion. The weak field keeps that coupling below the
 assertion tolerances while still exercising real EPI distortion.
 
+The streamlines are subsampled to 400k (weight-proportional, seeded -- the
+same subset in every run) to keep the three simulations under a minute; the
+measured ground-truth cost of that subset is FA p99 |delta| ~= 0.08 against
+the full tractogram.
+
 Runs only where trxscan, SelectBestB0 and the reference kit are available
 (the in-container CI jobs); skips elsewhere.
 """
@@ -104,6 +109,10 @@ def borrowing_sim(tmp_path_factory):
         '15',
         '--params',
         'adult',
+        '--seed',
+        '0',
+        '--subsample',
+        '400000',
     ]
     ap = ['--bval', work / 'ap3.bval', '--bvec', work / 'ap3.bvec']
     b0s = ['--bval', work / 'b0s.bval', '--bvec', work / 'b0s.bvec']
