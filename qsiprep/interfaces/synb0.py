@@ -146,12 +146,12 @@ class Synb0Inference(CommandLine):
 
     input_spec = _Synb0InferenceInputSpec
     output_spec = _Synb0InferenceOutputSpec
-    _cmd = 'synb0_runner'  # display only; see cmd
+    _cmd = 'python'  # replaced in __init__; must stay which-able for check_deps
 
-    @property
-    def cmd(self):
+    def __init__(self, **inputs):
+        super().__init__(**inputs)
         torch_python = os.environ.get('QSIPREP_TORCH_PYTHON', sys.executable)
-        return f'{torch_python} {load_data("synb0_runner.py")}'
+        self._cmd = f'{torch_python} {load_data("synb0_runner.py")}'
 
     def _list_outputs(self):
         outputs = self._outputs().get()

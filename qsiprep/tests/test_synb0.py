@@ -95,14 +95,12 @@ def test_synb0_locations_from_environment(tmp_path, monkeypatch):
 
 def test_inference_cmdline_uses_torch_python(tmp_path, monkeypatch):
     synb0_dir, atlas = _synb0_distribution(tmp_path)
-    interface = Synb0Inference(
-        t1_file=str(atlas),
-        b0_file=str(atlas),
-        synb0_dir=str(synb0_dir),
-    )
+    inputs = {'t1_file': str(atlas), 'b0_file': str(atlas), 'synb0_dir': str(synb0_dir)}
 
+    # The command is fixed at construction so check_deps' which() probe on
+    # _cmd.split()[0] sees the real interpreter
     monkeypatch.setenv('QSIPREP_TORCH_PYTHON', '/torchenv/bin/python')
-    cmdline = interface.cmdline
+    cmdline = Synb0Inference(**inputs).cmdline
     assert cmdline.startswith('/torchenv/bin/python ')
     assert 'synb0_runner.py' in cmdline
     assert f'--synb0-dir {synb0_dir}' in cmdline
@@ -110,7 +108,7 @@ def test_inference_cmdline_uses_torch_python(tmp_path, monkeypatch):
 
     # Without the variable the current interpreter runs the script
     monkeypatch.delenv('QSIPREP_TORCH_PYTHON')
-    assert interface.cmdline.startswith(f'{sys.executable} ')
+    assert Synb0Inference(**inputs).cmdline.startswith(f'{sys.executable} ')
 
 
 def test_synthstrip_cmd_uses_torch_python(tmp_path, monkeypatch):
