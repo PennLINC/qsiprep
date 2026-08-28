@@ -21,7 +21,9 @@ from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
+from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 
+from ...interfaces.images import ExtractWM
 from ...interfaces.synb0 import (
     NormalizeForSynb0,
     Synb0Inference,
@@ -83,6 +85,11 @@ def init_synb0_wf(name='synb0_wf'):
         The distorted b=0 on the U-Net grid (for QC)
     synthetic_b0_atlas_space
         The U-Net output before resampling back (for QC)
+    acquired_synthetic_report
+        Reportlet flickering acquired vs synthetic b=0 (native grid, WM
+        contours from the anatomical segmentation)
+    unet_input_report
+        Reportlet flickering the two U-Net input channels on the atlas grid
 
     """
     workflow = Workflow(name=name)
@@ -120,6 +127,8 @@ back onto the b=0 reference grid.
                 't1_atlas_space',
                 'b0_atlas_space',
                 'synthetic_b0_atlas_space',
+                'acquired_synthetic_report',
+                'unet_input_report',
             ]
         ),
         name='outputnode',
@@ -167,6 +176,28 @@ back onto the b=0 reference grid.
             invert_transform_flags=[True, True, True],
         ),
         name='resample_to_native',
+    )
+
+    # Reportlets. The acquired/synthetic flicker is deliberately NOT labeled
+    # before/after: nothing was corrected - the reader judges whether the
+    # synthesized target is trustworthy. WM contours give the undistorted
+    # anatomical truth in both states.
+    map_dseg_to_b0 = pe.Node(
+        ants.ApplyTransforms(dimension=3, interpolation='MultiLabel'),
+        name='map_dseg_to_b0',
+    )
+    extract_wm = pe.Node(ExtractWM(), name='extract_wm')
+    acquired_synthetic_rpt = pe.Node(
+        SimpleBeforeAfterRPT(before_label='Acquired b=0', after_label='Synthetic b=0'),
+        name='acquired_synthetic_rpt',
+        mem_gb=0.1,
+    )
+    # The two U-Net input channels must be mutually aligned; flickering them
+    # against each other shows misregistration one stage before the output.
+    unet_input_rpt = pe.Node(
+        SimpleBeforeAfterRPT(before_label='T1w (normalized)', after_label='Distorted b=0'),
+        name='unet_input_rpt',
+        mem_gb=0.1,
     )
 
     workflow.connect([
@@ -222,6 +253,21 @@ back onto the b=0 reference grid.
         (inputnode, resample_to_native, [('b0_ref', 'reference_image')]),
         (merge_native_xfms, resample_to_native, [('out', 'transforms')]),
         (resample_to_native, outputnode, [('output_image', 'synthetic_b0')]),
+
+        # Reportlets
+        (inputnode, map_dseg_to_b0, [
+            ('t1_seg', 'input_image'),
+            ('b0_ref', 'reference_image'),
+        ]),
+        (b0_coreg_wf, map_dseg_to_b0, [('outputnode.itk_t1_to_b0', 'transforms')]),
+        (map_dseg_to_b0, extract_wm, [('output_image', 'in_seg')]),
+        (inputnode, acquired_synthetic_rpt, [('b0_ref', 'before')]),
+        (resample_to_native, acquired_synthetic_rpt, [('output_image', 'after')]),
+        (extract_wm, acquired_synthetic_rpt, [('out', 'wm_seg')]),
+        (acquired_synthetic_rpt, outputnode, [('out_report', 'acquired_synthetic_report')]),
+        (resample_t1_to_atlas, unet_input_rpt, [('output_image', 'before')]),
+        (resample_b0_to_atlas, unet_input_rpt, [('output_image', 'after')]),
+        (unet_input_rpt, outputnode, [('out_report', 'unet_input_report')]),
     ])  # fmt:skip
 
     return workflow

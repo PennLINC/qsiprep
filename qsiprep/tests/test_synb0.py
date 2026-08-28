@@ -145,6 +145,10 @@ def test_synb0_wf_builds_without_container(monkeypatch):
         'resample_b0_to_atlas',
         'unet',
         'resample_to_native',
+        'map_dseg_to_b0',
+        'extract_wm',
+        'acquired_synthetic_rpt',
+        'unet_input_rpt',
     ]:
         assert wf.get_node(node_name) is not None
     assert wf.get_node('distorted_b0_coreg_wf.b0_to_anat') is not None
