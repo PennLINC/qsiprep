@@ -320,13 +320,6 @@ def init_fsl_hmc_wf(
         pepolar_method='+'.join(['topup'] * run_topup + ['drbuddi'] * run_drbuddi),
     )
 
-    # DRBUDDI's single pass corrects one matched blip pair, so a multi-axis or
-    # multi-readout unit skips the DRBUDDI stage; the mixed path (TOPUP+DRBUDDI)
-    # still corrects it as single-stage TOPUP+eddy, which pools every blip group.
-    _pepolar = config.workflow.pepolar_method.lower()
-    run_topup = unit.is_pepolar and 'topup' in _pepolar
-    run_drbuddi = unit.is_pepolar and 'drbuddi' in _pepolar and unit.is_single_blip_pair
-
     # Whether a spatial gradwarp field exists for this unit. It gates two
     # things: gradwarp-correcting SDC estimation inputs (see the note above
     # connect_gradwarp_sdc_volumes in gradwarp.py) and gradwarp-correcting the

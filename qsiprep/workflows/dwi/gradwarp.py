@@ -221,7 +221,22 @@ _CORRECTION_TEXT = {
 
 
 def _resampling_sentence():
-    """How many times the data were interpolated, which depends on the backend."""
+    """How many times the data were interpolated, which depends on the backend.
+
+    Notes
+    -----
+    This reads the legacy ``hmc_model`` key off ``config.workflow`` rather than
+    the compiled plan, and is allowlisted as such in
+    ``test_workflows_native.test_legacy_method_keys_read_only_at_allowlisted_sites``.
+    It is display vocabulary, not routing -- the same category as the other
+    allowlisted sites -- but it works only because ``eddy`` and ``tortoise`` are
+    spelled identically in the legacy key and in :class:`~qsiplan.methods.HmcMethod`.
+    The plan-native question is ``unit.run.hmc_stage.tool``; asking it would mean
+    threading the run through :func:`gradwarp_boilerplate` and its callers, which
+    is worth doing if this ever needs to distinguish a backend the two
+    vocabularies spell differently (SHORELine is ``3dSHORE``/``tensor`` here and
+    ``shoreline`` there).
+    """
     backend = _PRERESAMPLED_BY.get(config.workflow.hmc_model)
     if backend is None:
         return (
