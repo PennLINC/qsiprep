@@ -1013,6 +1013,9 @@ def test_init_diffprep_hmc_wf_synb0_targets_the_synthetic_b0():
         )
         # ...and coregistration still sees the EPI-corrected b=0.
         assert wf.get_node('apply_sdc_to_b0') is not None
+        # The generation QC reportlets are datasunk.
+        assert wf.get_node('ds_report_synb0_acquired') is not None
+        assert wf.get_node('ds_report_synb0_unet') is not None
     finally:
         config.workflow.hmc_model = 'eddy'
 

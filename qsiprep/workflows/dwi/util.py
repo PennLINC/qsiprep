@@ -25,6 +25,43 @@ from ..anatomical import init_synthstrip_wf
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
+def add_synb0_reportlets(workflow, synb0_wf, source_file):
+    """Wire ``init_synb0_wf``'s QC reportlets into figure datasinks.
+
+    Shared by the eddy+TOPUP and DIFFPREP consumers so both emit the same
+    acquired-vs-synthetic and U-Net-input figures (registered in
+    ``reports-spec.yml`` as ``synb0acquired``/``synb0unet``).
+    """
+    ds_report_synb0_acquired = pe.Node(
+        DerivativesDataSink(
+            datatype='figures',
+            desc='synb0acquired',
+            suffix='dwi',
+            source_file=source_file,
+        ),
+        name='ds_report_synb0_acquired',
+        run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB,
+    )
+    ds_report_synb0_unet = pe.Node(
+        DerivativesDataSink(
+            datatype='figures',
+            desc='synb0unet',
+            suffix='dwi',
+            source_file=source_file,
+        ),
+        name='ds_report_synb0_unet',
+        run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB,
+    )
+    workflow.connect([
+        (synb0_wf, ds_report_synb0_acquired, [
+            ('outputnode.acquired_synthetic_report', 'in_file'),
+        ]),
+        (synb0_wf, ds_report_synb0_unet, [('outputnode.unet_input_report', 'in_file')]),
+    ])  # fmt:skip
+
+
 def init_dwi_reference_wf(
     dwi_file=None,
     name='dwi_reference_wf',

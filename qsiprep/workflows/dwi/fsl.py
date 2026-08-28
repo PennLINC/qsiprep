@@ -37,7 +37,7 @@ from ..fieldmap.drbuddi import init_drbuddi_wf
 from ..fieldmap.synb0 import init_synb0_wf
 
 # dwi workflows
-from .util import init_dwi_reference_wf
+from .util import add_synb0_reportlets, init_dwi_reference_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
@@ -398,6 +398,7 @@ def init_fsl_hmc_wf(
                 source_file=source_file,
             )
             synb0_wf = init_synb0_wf()
+            add_synb0_reportlets(workflow, synb0_wf, source_file)
             synb0_topup_inputs = pe.Node(Synb0TopupInputs(), name='synb0_topup_inputs')
             topup.inputs.config = synb0_topup_config()
 

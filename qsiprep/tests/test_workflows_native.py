@@ -161,6 +161,27 @@ def test_fsl_hmc_synb0_feeds_topup(tmp_path):
     assert ('topup_datain', 'encoding_file') in merge_edge['connect']
     assert ('topup_imain', 'in_file') in merge_edge['connect']
 
+    # The generation QC reportlets are datasunk.
+    assert wf.get_node('ds_report_synb0_acquired') is not None
+    assert wf.get_node('ds_report_synb0_unet') is not None
+
+
+def test_synb0_reportlet_descs_are_registered_in_the_report_spec():
+    """A desc absent from reports-spec.yml is written to disk but never shown."""
+    import yaml
+
+    from qsiprep.data import load as load_data
+
+    spec = yaml.safe_load(load_data('reports-spec.yml').read_text())
+    descs = set()
+    for section in spec['sections']:
+        for reportlet in section.get('reportlets', []):
+            bids = reportlet.get('bids')
+            if isinstance(bids, dict):
+                desc = bids.get('desc')
+                descs.update(desc if isinstance(desc, list) else [desc])
+    assert {'synb0acquired', 'synb0unet'} <= descs
+
 
 def test_fsl_hmc_synb0_without_topup_is_uncorrected(tmp_path):
     """With no TOPUP stage in the plan (DRBUDDI-only eddy), nothing consumes
