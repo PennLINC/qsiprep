@@ -936,6 +936,17 @@ How to combine the corrected results of an output's correction units.
         'it (--hmc-method tortoise or --sdc-method drbuddi).',
     )
     g_fmap.add_argument(
+        '--use-synb0',
+        action='store_true',
+        default=False,
+        help='generate a synthetic distortion-free b=0 from the T1w image with the '
+        'SynB0-DISCO U-Net and use it to correct DWI series that have no fieldmap. '
+        'With --hmc-method eddy the synthetic image enters TOPUP as a '
+        'zero-readout-time volume; with --hmc-method tortoise it is the DIFFPREP '
+        'registration target. A real fieldmap is never overridden; requires a T1w '
+        'image and a PhaseEncodingDirection on the DWI series.',
+    )
+    g_fmap.add_argument(
         '--fmap-bspline',
         action='store_true',
         default=False,

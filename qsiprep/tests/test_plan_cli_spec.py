@@ -35,7 +35,18 @@ def test_planned_options_are_the_only_gaps():
     actions = _actions()
     absent = sorted(o.flag for o in cli_spec.PLAN_OPTIONS if o.flag not in actions)
     planned = sorted(o.flag for o in cli_spec.PLAN_OPTIONS if o.planned)
-    assert absent == planned  # today: ['--use-synb0']
+    assert absent == planned  # today: [] (--use-synb0 is wired)
+
+
+def test_use_synb0_flag_reaches_the_grouping_policy(tmp_path):
+    bids_dir = tmp_path / 'bids'
+    bids_dir.mkdir()
+    parser = _build_parser()
+    base = [str(bids_dir), str(tmp_path / 'out'), 'participant', '--output-resolution', '2']
+    assert not parser.parse_args(base).use_synb0
+    namespace = parser.parse_args([*base, '--use-synb0'])
+    assert namespace.use_synb0
+    assert cli_spec.policy_from_namespace(namespace).use_synb0
 
 
 def test_shared_helpers_read_a_qsiprep_namespace():

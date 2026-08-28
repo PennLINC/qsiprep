@@ -636,6 +636,9 @@ class workflow(_Config):
     use_syn_sdc = None
     """Run *fieldmap-less* susceptibility-derived distortions estimation
     in the absence of any alternatives."""
+    use_synb0 = False
+    """Correct DWI series that have no fieldmap with a synthetic distortion-free
+    b=0 generated from the T1w (SynB0-DISCO)."""
 
 
 class loggers:
