@@ -1,5 +1,7 @@
 """Tests for the qsiprep.interfaces.epi_fmap module."""
 
+import nibabel as nb
+import numpy as np
 import pytest
 
 from qsiprep.interfaces.epi_fmap import (
@@ -217,3 +219,63 @@ def test_load_epi_dwi_fieldmaps_without_a_bval_keeps_every_volume(tmp_path):
     _, b0_indices, _ = load_epi_dwi_fieldmaps([str(fmap)], b0_threshold=100)
 
     assert b0_indices == [0, 1]
+
+
+def test_load_epi_dwi_fieldmaps_mixes_3d_and_4d_images(tmp_path):
+    """3D and 4D fieldmap files can be concatenated together, in either order."""
+    root = build_test_dataset(
+        tmp_path / 'ds',
+        {'01': [{'fmap': [{'dir': 'AP', 'suffix': 'epi'}, {'dir': 'PA', 'suffix': 'epi'}]}]},
+        n_volumes=2,
+    )
+    fmap_dir = root / 'sub-01' / 'fmap'
+    pa_file = str(fmap_dir / 'sub-01_dir-PA_epi.nii.gz')
+    ap_file = str(fmap_dir / 'sub-01_dir-AP_epi.nii.gz')
+    # Make the AP file a single-volume 3D image
+    nb.Nifti1Image(np.zeros((2, 2, 2), dtype=np.float32), np.eye(4)).to_filename(ap_file)
+
+    for fmap_list, expected_files in (
+        ([pa_file, ap_file], [pa_file, pa_file, ap_file]),
+        ([ap_file, pa_file], [ap_file, pa_file, pa_file]),
+    ):
+        concatenated, b0_indices, original_files = load_epi_dwi_fieldmaps(
+            fmap_list, b0_threshold=100
+        )
+
+        assert concatenated.ndim == 4
+        assert concatenated.shape[3] == 3
+        assert b0_indices == [0, 1, 2]
+        assert original_files == expected_files
+
+
+def test_load_epi_dwi_fieldmaps_thresholds_a_3d_image_bval(tmp_path):
+    """A 3D fieldmap with a one-entry bval file is kept or excluded by b0_threshold."""
+    root = build_test_dataset(
+        tmp_path / 'ds',
+        {
+            '01': [
+                {
+                    'fmap': [
+                        {'dir': 'AP', 'run': '1', 'suffix': 'epi'},
+                        {'dir': 'AP', 'run': '2', 'suffix': 'epi'},
+                    ],
+                },
+            ],
+        },
+        extra_files={
+            'sub-01/fmap/sub-01_dir-AP_run-1_epi.bval': '0\n',
+            'sub-01/fmap/sub-01_dir-AP_run-2_epi.bval': '1000\n',
+        },
+    )
+    fmap_dir = root / 'sub-01' / 'fmap'
+    b0_file = str(fmap_dir / 'sub-01_dir-AP_run-1_epi.nii.gz')
+    highb_file = str(fmap_dir / 'sub-01_dir-AP_run-2_epi.nii.gz')
+
+    concatenated, b0_indices, original_files = load_epi_dwi_fieldmaps(
+        [b0_file, highb_file], b0_threshold=100
+    )
+
+    assert concatenated.shape[3] == 2
+    # The b=1000 image is not usable as a b=0
+    assert b0_indices == [0]
+    assert original_files == [b0_file, highb_file]
