@@ -653,7 +653,7 @@ def _connects(wf, src_name, dst_name, source_field, dest_field):
 
 
 def _rpe_unit(tmp_path, image_type=None):
-    from qsiprep.grouping.models import CorrectionMethod
+    from qsiplan.models import CorrectionMethod
 
     main = write_dwi_with_gradients(tmp_path / 'sub-01_dir-AP_dwi.nii.gz')
     partner = write_dwi_with_gradients(tmp_path / 'sub-01_dir-PA_dwi.nii.gz')
@@ -669,7 +669,7 @@ def _rpe_unit(tmp_path, image_type=None):
 
 
 def _syn_unit(tmp_path):
-    from qsiprep.grouping.models import CorrectionMethod
+    from qsiplan.models import CorrectionMethod
 
     dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz')
     return make_preproc_unit(
