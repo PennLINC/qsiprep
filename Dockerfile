@@ -56,7 +56,9 @@ COPY pixi.lock pyproject.toml /app
 WORKDIR /app
 # First install runs before COPY . so .git is missing.
 # Use --skip qsiprep (lockfile name) so pixi skips building the local package.
-RUN --mount=type=cache,target=/root/.cache/rattler pixi install -e qsiprep -e test --frozen --skip qsiprep
+# The torch env has no local package, so this is its only install.
+RUN --mount=type=cache,target=/root/.cache/rattler pixi install -e qsiprep -e test -e torch --frozen --skip qsiprep
+RUN /app/.pixi/envs/torch/bin/python -c "import torch, surfa, nibabel, scipy"
 RUN --mount=type=cache,target=/root/.npm pixi run --as-is -e qsiprep npm install -g svgo@^3.2.0 bids-validator@1.14.10
 RUN pixi shell-hook -e qsiprep --as-is | grep -v PATH > /shell-hook.sh
 RUN pixi shell-hook -e test --as-is | grep -v PATH > /test-shell-hook.sh
@@ -103,22 +105,30 @@ WORKDIR /tmp
 
 FROM base AS test
 COPY --link --from=build /app/.pixi/envs/test /app/.pixi/envs/test
+COPY --link --from=build /app/.pixi/envs/torch /app/.pixi/envs/torch
 COPY --link --from=build /test-shell-hook.sh /shell-hook.sh
 RUN cat /shell-hook.sh >> $HOME/.bashrc
 ENV PATH="/app/.pixi/envs/test/bin:$PATH"
 ENV FSLDIR="/app/.pixi/envs/test"
+ENV QSIPREP_TORCH_PYTHON="/app/.pixi/envs/torch/bin/python"
 ARG VCS_REF
 LABEL org.opencontainers.image.revision=$VCS_REF
 
 FROM base AS qsiprep
 COPY --link --from=build /app/.pixi/envs/qsiprep /app/.pixi/envs/qsiprep
+COPY --link --from=build /app/.pixi/envs/torch /app/.pixi/envs/torch
 COPY --link --from=build /shell-hook.sh /shell-hook.sh
 RUN cat /shell-hook.sh >> $HOME/.bashrc
 ENV PATH="/app/.pixi/envs/qsiprep/bin:$PATH"
 ENV FSLDIR="/app/.pixi/envs/qsiprep"
 ENV IS_DOCKER_8395080871=1
+ENV QSIPREP_TORCH_PYTHON="/app/.pixi/envs/torch/bin/python"
 # Verify the runtime image can import qsiprep without source tree mounts.
 RUN /app/.pixi/envs/qsiprep/bin/python -c "import qsiprep"
+# Verify the torch env can actually run the FreeSurfer synth scripts
+# (a plain --help exits before `import torch`, so import explicitly).
+RUN /app/.pixi/envs/torch/bin/python -c "import torch, surfa" && \
+    /app/.pixi/envs/torch/bin/python /opt/freesurfer/bin/mri_synthstrip --help
 
 ENTRYPOINT ["/app/.pixi/envs/qsiprep/bin/qsiprep"]
 ARG BUILD_DATE

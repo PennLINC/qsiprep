@@ -18,7 +18,9 @@ Disable warnings:
 
 """
 
+import os
 import os.path as op
+import shutil
 
 import nibabel as nb
 from nipype.interfaces import freesurfer as fs
@@ -39,6 +41,27 @@ from scipy import ndimage
 
 class FSTraitedSpecOpenMP(FSTraitedSpec):
     num_threads = traits.Int(desc='allows for specifying more threads', nohash=True)
+
+
+def torch_script_command(script_name):
+    """Command line for a FreeSurfer python script that imports torch.
+
+    The qsiprep containers keep torch in its own environment because torch and
+    tensorflow cannot share one pip environment (their vendored nvidia-* wheels
+    overwrite each other), and point ``QSIPREP_TORCH_PYTHON`` at its
+    interpreter. When the variable is set, run the script with that python
+    explicitly - its ``#!/usr/bin/env python`` shebang would otherwise pick up
+    the torch-less qsiprep environment. Without the variable the script runs
+    as-is (a real FreeSurfer install launches it through fspython, which
+    bundles torch).
+    """
+    torch_python = os.environ.get('QSIPREP_TORCH_PYTHON')
+    if not torch_python:
+        return script_name
+    script = shutil.which(script_name)
+    if script is None:
+        return script_name
+    return f'{torch_python} {script}'
 
 
 class StructuralReference(fs.RobustTemplate):
@@ -182,6 +205,10 @@ class SynthStrip(FSCommandOpenMP):
     input_spec = _SynthStripInputSpec
     output_spec = _SynthStripOutputSpec
     _cmd = 'mri_synthstrip'
+
+    @property
+    def cmd(self):
+        return torch_script_command(self._cmd)
 
     def _num_threads_update(self):
         if self.inputs.num_threads:
