@@ -5,9 +5,10 @@ ARG TAG_MRTRIX3=26.1.0
 ARG TAG_3TISSUE=26.1.0
 ARG TAG_DSISTUDIO=26.1.2
 ARG TAG_AFNI=AFNI_25.2.09
-ARG TAG_TORTOISE=26.8.1
-ARG TAG_TORTOISECUDA=26.8.1
+ARG TAG_TORTOISE=26.8.2
+ARG TAG_TORTOISECUDA=26.8.2
 ARG TAG_SYNB0=26.1.2
+ARG TAG_TRXSCAN=26.8.3
 
 FROM pennlinc/qsiprep-freesurfer:${TAG_FREESURFER} AS build_freesurfer
 FROM pennlinc/qsiprep-ants:${TAG_ANTS} AS build_ants
@@ -18,6 +19,7 @@ FROM afni/afni_make_build:${TAG_AFNI} AS build_afni
 FROM pennlinc/qsiprep-drbuddi:${TAG_TORTOISE} AS build_tortoise
 FROM pennlinc/qsiprep-drbuddicuda:${TAG_TORTOISECUDA} AS build_tortoisecuda
 FROM pennlinc/qsiprep-synb0:${TAG_SYNB0} AS build_synb0
+FROM pennlinc/qsiprep-trxscan:${TAG_TRXSCAN} AS build_trxscan
 FROM nvidia/cuda:12.2.2-runtime-ubuntu22.04 AS base
 
 ## ANTs
@@ -103,6 +105,10 @@ COPY --from=build_tortoise /src/TORTOISEV4/settings /src/TORTOISEV4/settings
 COPY --from=build_tortoisecuda /src/TORTOISEV4/bin/*cuda /src/TORTOISEV4/bin/
 ENV PATH="$PATH:/src/TORTOISEV4/bin" \
     TORTOISE_DEPS="libfftw3-3"
+
+## TRXScan (simulator binaries + the sub-0001a truth-data kit)
+COPY --from=build_trxscan /opt/trxscan /opt/trxscan
+ENV PATH="$PATH:/opt/trxscan/bin"
 
 # Create a shared $HOME directory
 RUN useradd -m -s /bin/bash -G users qsiprep
