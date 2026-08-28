@@ -175,6 +175,50 @@ def test_borrowed_b0s_never_evict_natives(topup_inputs, tmp_path, monkeypatch):
     assert list(ap2.loc[ap2.selected_for_sdc, 'is_native']) == [True, True, False]
 
 
+def test_synb0_relaxes_the_distortion_group_gate(topup_inputs, tmp_path, monkeypatch):
+    """One measured group fails plain TOPUP but passes when SynB0 joins later."""
+
+    def fake_report(b0_files, prefix, num_threads=1):
+        n = len(b0_files)
+        return pd.DataFrame(
+            {
+                'volume_index': range(n),
+                'mean_cc': np.linspace(0.5, 0.6, n),
+                'translation_total_mm': 0.1,
+                'rotation_total_deg': 0.2,
+                'selected': [int(i == n - 1) for i in range(n)],
+            }
+        )
+
+    monkeypatch.setattr(epi_fmap, 'select_best_b0_report', fake_report)
+    kwargs = {
+        'dwi_file': topup_inputs['dwi_file'],
+        'bval_file': topup_inputs['bval_file'],
+        'b0_threshold': 100,
+        'bids_origin_files': [topup_inputs['dwi_file']] * 4,
+        'epi_fmaps': None,  # no reverse-PE data at all
+        'max_per_spec': 1,
+        'topup_requested': True,
+        'sidecars': topup_inputs['sidecars'],
+    }
+
+    cwd = tmp_path / 'work'
+    cwd.mkdir()
+    with pytest.raises(Exception, match='not enough distortion groups'):
+        get_best_b0_topup_inputs_from(cwd=str(cwd), **kwargs)
+
+    cwd2 = tmp_path / 'work2'
+    cwd2.mkdir()
+    datain_file, imain_file, report, _, _, _ = get_best_b0_topup_inputs_from(
+        cwd=str(cwd2), synb0_requested=True, **kwargs
+    )
+    # Only the measured group is written; the synthetic volume joins downstream.
+    with open(datain_file) as f:
+        assert len(f.read().splitlines()) == 1
+    assert nb.load(imain_file).shape[3] == 1
+    assert 'SynB0-DISCO' in report
+
+
 @pytest.mark.skipif(
     shutil.which('SelectBestB0') is None, reason='TORTOISE SelectBestB0 not installed'
 )

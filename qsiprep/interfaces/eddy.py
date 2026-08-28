@@ -28,7 +28,11 @@ from nipype.interfaces.base import (
 from nipype.utils.filemanip import fname_presuffix, split_filename
 
 from ..data import load as load_data
-from .epi_fmap import eddy_inputs_from_dwi_files, get_best_b0_topup_inputs_from
+from .epi_fmap import (
+    add_synthetic_b0_to_topup_inputs,
+    eddy_inputs_from_dwi_files,
+    get_best_b0_topup_inputs_from,
+)
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -97,6 +101,13 @@ class GatherEddyInputsInputSpec(BaseInterfaceInputSpec):
     )
     topup_max_b0s_per_spec = traits.CInt(1, usedefault=True)
     topup_requested = traits.Bool(False, usedefault=True)
+    synb0_requested = traits.Bool(
+        False,
+        usedefault=True,
+        desc='a synthetic distortion-free b=0 will join the TOPUP inputs '
+        'downstream as its own zero-readout distortion group, so a single '
+        'measured distortion group is enough to run TOPUP',
+    )
     raw_image_sdc = traits.Bool(True, usedefault=True)
     num_threads = traits.CInt(
         1, usedefault=True, desc='CPU cores for the TORTOISE SelectBestB0 b=0 scoring'
@@ -160,6 +171,7 @@ class GatherEddyInputs(SimpleInterface):
                 raw_image_sdc=self.inputs.raw_image_sdc,
                 sidecars=sidecars,
                 num_threads=self.inputs.num_threads,
+                synb0_requested=self.inputs.synb0_requested,
             )
         )
         self._results['topup_datain'] = topup_datain_file
@@ -201,6 +213,56 @@ class GatherEddyInputs(SimpleInterface):
             if 'mporder' in eddy_config:
                 self._results['json_file'] = self.inputs.json_file
 
+        return runtime
+
+
+class Synb0TopupInputsInputSpec(BaseInterfaceInputSpec):
+    topup_datain = File(
+        exists=True, mandatory=True, desc='datain rows describing the real b=0 volumes'
+    )
+    topup_imain = File(
+        exists=True, mandatory=True, desc='4D stack of the selected real b=0 volumes'
+    )
+    synthetic_b0 = File(
+        exists=True,
+        mandatory=True,
+        desc='synthetic distortion-free b=0 on the b=0 reference grid',
+    )
+    smoothing_sigma_mm = traits.Float(
+        1.15,
+        usedefault=True,
+        desc='Gaussian sigma (mm) applied to the real b=0 volumes so their '
+        'smoothness matches the U-Net output',
+    )
+
+
+class Synb0TopupInputsOutputSpec(TraitedSpec):
+    topup_datain = File(exists=True)
+    topup_imain = File(exists=True)
+
+
+class Synb0TopupInputs(SimpleInterface):
+    """Join a synthetic distortion-free b=0 to the TOPUP inputs.
+
+    The synthetic volume becomes the last imain volume with a zero-readout
+    datain row, and the real b=0 volumes are slightly smoothed to match its
+    smoothness (see
+    :func:`~qsiprep.interfaces.epi_fmap.add_synthetic_b0_to_topup_inputs`).
+    """
+
+    input_spec = Synb0TopupInputsInputSpec
+    output_spec = Synb0TopupInputsOutputSpec
+
+    def _run_interface(self, runtime):
+        datain, imain = add_synthetic_b0_to_topup_inputs(
+            topup_datain=self.inputs.topup_datain,
+            topup_imain=self.inputs.topup_imain,
+            synthetic_b0=self.inputs.synthetic_b0,
+            cwd=runtime.cwd,
+            smoothing_sigma_mm=self.inputs.smoothing_sigma_mm,
+        )
+        self._results['topup_datain'] = datain
+        self._results['topup_imain'] = imain
         return runtime
 
 
@@ -534,8 +596,21 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
 
 def topup_boilerplate(fieldmap_type, pepolar_method):
     """Write boilerplate text based on fieldmaps"""
-    if fieldmap_type not in ('rpe_series', 'epi'):
+    if fieldmap_type not in ('rpe_series', 'epi', 'synb0'):
         return ''
+
+    if fieldmap_type == 'synb0':
+        return (
+            '\n\nNo fieldmap was available for these series, so susceptibility '
+            'distortion correction used a synthetic distortion-free b=0 '
+            '[@synb0disco]: the selected real b=0 images were slightly '
+            'smoothed (sigma=1.15mm) to match the smoothness of the synthetic '
+            "image, which entered FSL's TOPUP [@topup] as an additional "
+            'volume with zero total readout time. The TOPUP-estimated '
+            'fieldmap was incorporated into the Eddy current and head motion '
+            'correction interpolation.'
+        )
+
     desc = []
     desc.append(
         '\n\nData was collected with reversed phase-encode blips, resulting '
