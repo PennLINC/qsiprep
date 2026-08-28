@@ -148,6 +148,11 @@ def init_anat_preproc_wf(
         ANTs-compatible affine-and-warp transform file
     t1_2_mni_reverse_transform
         ANTs-compatible affine-and-warp transform file (inverse)
+    to_template_affine_transform
+        The full affine to the anatomical template that ``acpc_transform``
+        (its rigid component) was extracted from. Maps the pre-AC-PC
+        anatomical reference; compose with ``acpc_inv_transform`` to map
+        AC-PC space linearly into the template space (used by SyNb0).
     t1_resampling_grid
         Image of the preprocessed t1 to be used as the reference output for dwis
     """
@@ -179,6 +184,7 @@ def init_anat_preproc_wf(
                 'template_transforms',
                 'acpc_transform',
                 'acpc_inv_transform',
+                'to_template_affine_transform',
                 'dwi_sampling_grid',
             ]
         ),
@@ -411,6 +417,7 @@ FreeSurfer version {FS_VERSION}. """
         (anat_normalization_wf, outputnode, [
             ('outputnode.to_template_rigid_transform', 'acpc_transform'),
             ('outputnode.from_template_rigid_transform', 'acpc_inv_transform'),
+            ('outputnode.to_template_affine_transform', 'to_template_affine_transform'),
             ('outputnode.to_template_nonlinear_transform', 't1_2_mni_forward_transform'),
             ('outputnode.from_template_nonlinear_transform', 't1_2_mni_reverse_transform'),
         ]),
@@ -928,13 +935,20 @@ def init_anat_normalization_wf(anatomical_template, has_rois=False) -> Workflow:
     Outputs
     -------
     to_template_nonlinear_transform
-        Bias-corrected ``in_file``, before skull-stripping
+        Composite transform (SyN warp and affine) to the template
     to_template_rigid_transform
-        Skull-stripped ``in_file``
-    out_mask
-        Binary mask of the skull-stripped ``in_file``
+        Rigid (AC-PC) component of the full affine to the template
+    to_template_affine_transform
+        The full affine to the template that the AC-PC transform was
+        extracted from (maps the pre-AC-PC anatomical reference; compose
+        with ``from_template_rigid_transform`` to map AC-PC space linearly
+        into the template space)
+    from_template_nonlinear_transform
+        Inverse of ``to_template_nonlinear_transform``
+    from_template_rigid_transform
+        Inverse of ``to_template_rigid_transform``
     out_report
-        Reportlet visualizing quality of skull-stripping
+        Reportlet visualizing the spatial normalization
     """
 
     workflow = Workflow(name='anat_normalization_wf')
@@ -955,6 +969,7 @@ def init_anat_normalization_wf(anatomical_template, has_rois=False) -> Workflow:
             fields=[
                 'to_template_nonlinear_transform',
                 'to_template_rigid_transform',
+                'to_template_affine_transform',
                 'from_template_nonlinear_transform',
                 'from_template_rigid_transform',
                 'out_report',
@@ -1000,6 +1015,8 @@ a 6-DOF transform extracted from a full Affine registration to the
         (acpc_reg, disassemble_transform, [('composite_transform', 'in_file')]),
         (disassemble_transform, extract_rigid_transform, [
             (('out_transforms', _get_affine_component), 'affine_transform')]),
+        (disassemble_transform, outputnode, [
+            (('out_transforms', _get_affine_component), 'to_template_affine_transform')]),
         (extract_rigid_transform, outputnode, [
             ('rigid_transform', 'to_template_rigid_transform'),
             ('rigid_transform_inverse', 'from_template_rigid_transform'),
