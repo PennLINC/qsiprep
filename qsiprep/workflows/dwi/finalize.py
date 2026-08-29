@@ -24,7 +24,7 @@ from ...interfaces.dsi_studio import DSIStudioBTable
 from ...interfaces.dwi_merge import MergeFinalConfounds, SplitResampledDWIs
 from ...interfaces.gradients import ExtractB0s
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
-from ...interfaces.nilearn import Merge
+from ...interfaces.nilearn import MaskWithinDWIFieldOfView, Merge
 from ...interfaces.reports import GradientPlot, SeriesQC
 from .derivatives import init_dwi_derivatives_wf
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
@@ -697,6 +697,10 @@ def init_finalize_denoising_wf(
         name='final_b0_ref',
         source_file=source_file,
     )
+    refine_final_mask = pe.Node(
+        MaskWithinDWIFieldOfView(),
+        name='refine_final_mask',
+    )
 
     # Calculate QC metrics on the resampled data
     calculate_qc = init_modelfree_qc_wf(
@@ -711,11 +715,14 @@ def init_finalize_denoising_wf(
         (inputnode, extract_b0_series, [('dwi_t1_bval', 'bval_file')]),
         (extract_b0_series, final_b0_ref, [('b0_average', 'inputnode.b0_template')]),
         (inputnode, final_b0_ref, [('dwi_mask_t1', 'inputnode.t1_mask')]),
+        (p2s_buffernode, refine_final_mask, [('dwi_t1', 'dwi_series')]),
+        (extract_b0_series, refine_final_mask, [('b0_average', 'b0_image')]),
+        (final_b0_ref, refine_final_mask, [('outputnode.dwi_mask', 'in_mask')]),
         (extract_b0_series, outputnode, [('b0_series', 't1_b0_series')]),
         (final_b0_ref, outputnode, [
             ('outputnode.ref_image', 't1_b0_ref'),
-            ('outputnode.dwi_mask', 'dwi_mask_t1'),
         ]),
+        (refine_final_mask, outputnode, [('out_mask', 'dwi_mask_t1')]),
 
         # New QC on the whole series
         (inputnode, calculate_qc, [

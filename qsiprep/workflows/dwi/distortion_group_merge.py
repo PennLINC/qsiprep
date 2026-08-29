@@ -19,8 +19,9 @@ from ...interfaces import DerivativesDataSink
 from ...interfaces.bids import DerivativesSidecar
 from ...interfaces.dsi_studio import DSIStudioBTable
 from ...interfaces.dwi_merge import AveragePEPairs, MergeDWIs
+from ...interfaces.gradients import ExtractB0s
 from ...interfaces.mrtrix import MRTrixGradientTable
-from ...interfaces.nilearn import Merge
+from ...interfaces.nilearn import MaskWithinDWIFieldOfView, Merge
 from ...interfaces.reports import GradientPlot, SeriesQC
 from .derivatives import init_dwi_derivatives_wf
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
@@ -181,6 +182,11 @@ def init_distortion_group_merge_wf(
         gen_report=True,
         source_file=source_file,
     )
+    extract_merged_b0 = pe.Node(ExtractB0s(), name='extract_merged_b0')
+    refine_merged_mask = pe.Node(
+        MaskWithinDWIFieldOfView(),
+        name='refine_merged_mask',
+    )
     concat_cnr_images = pe.Node(Merge(), name='concat_cnr_images')
 
     workflow.connect([
@@ -278,8 +284,15 @@ def init_distortion_group_merge_wf(
         ]),
         (b0_ref_wf, outputnode, [
             ('outputnode.ref_image', 't1_b0_ref'),
-            ('outputnode.dwi_mask', 'dwi_mask_t1'),
         ]),
+        (distortion_merger, extract_merged_b0, [
+            ('out_dwi', 'dwi_series'),
+            ('out_bval', 'bval_file'),
+        ]),
+        (distortion_merger, refine_merged_mask, [('out_dwi', 'dwi_series')]),
+        (extract_merged_b0, refine_merged_mask, [('b0_average', 'b0_image')]),
+        (b0_ref_wf, refine_merged_mask, [('outputnode.dwi_mask', 'in_mask')]),
+        (refine_merged_mask, outputnode, [('out_mask', 'dwi_mask_t1')]),
 
         # QC connections
         (distortion_merger, raw_qc_wf, [
@@ -295,7 +308,7 @@ def init_distortion_group_merge_wf(
         (distortion_merger, series_qc, [('merged_denoising_confounds', 'confounds_file')]),
         (raw_qc_wf, series_qc, [('outputnode.qc_summary', 'pre_qc')]),
         (processed_qc_wf, series_qc, [('outputnode.qc_summary', 't1_qc')]),
-        (b0_ref_wf, t1_dice_calc, [('outputnode.dwi_mask', 'inputnode.dwi_mask')]),
+        (refine_merged_mask, t1_dice_calc, [('out_mask', 'inputnode.dwi_mask')]),
         (inputnode, t1_dice_calc, [('t1_mask', 'inputnode.anatomical_mask')]),
         (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
         (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
