@@ -132,6 +132,22 @@ def test_torch_script_command_missing_script(monkeypatch, tmp_path):
     assert torch_script_command('mri_synthstrip') == 'mri_synthstrip'
 
 
+def test_synb0_boilerplate_reflects_ignored_fieldmaps(monkeypatch):
+    from qsiprep import config
+    from qsiprep.interfaces.eddy import topup_boilerplate
+
+    monkeypatch.setattr(config.workflow, 'ignore', [])
+    assert 'No fieldmap was available' in topup_boilerplate('synb0', 'TOPUP')
+
+    # Reaching SyNb0 with fieldmaps or RPE series present means the user
+    # ignored them; the text must say so instead of claiming absence
+    monkeypatch.setattr(config.workflow, 'ignore', ['fieldmaps', 'pepolar-dwis', 't2w'])
+    text = topup_boilerplate('synb0', 'TOPUP')
+    assert 'No fieldmap was available' not in text
+    assert "excluded at the user's request" in text
+    assert '--ignore fieldmaps pepolar-dwis' in text
+
+
 def test_synb0_wf_builds_without_container(monkeypatch):
     monkeypatch.delenv('SYNB0_ATLASES', raising=False)
 

@@ -27,6 +27,7 @@ from nipype.interfaces.base import (
 )
 from nipype.utils.filemanip import fname_presuffix, split_filename
 
+from .. import config
 from ..data import load as load_data
 from .epi_fmap import (
     add_synthetic_b0_to_topup_inputs,
@@ -600,8 +601,19 @@ def topup_boilerplate(fieldmap_type, pepolar_method):
         return ''
 
     if fieldmap_type == 'synb0':
+        # SyNb0 never overrides a usable fieldmap, so reaching it with
+        # fieldmaps or RPE series in the dataset means the user ignored them -
+        # the boilerplate must not claim none were available in that case.
+        ignored = sorted({'fieldmaps', 'pepolar-dwis'} & set(config.workflow.ignore or []))
+        if ignored:
+            reason = (
+                'Any scanner-acquired fieldmap data were excluded at the '
+                f"user's request (--ignore {' '.join(ignored)}), so "
+            )
+        else:
+            reason = 'No fieldmap was available for these series, so '
         return (
-            '\n\nNo fieldmap was available for these series, so susceptibility '
+            '\n\n' + reason + 'susceptibility '
             'distortion correction used a synthetic distortion-free b=0 '
             '[@synb0disco]: the selected real b=0 images were slightly '
             'smoothed (sigma=1.15mm) to match the smoothness of the synthetic '
