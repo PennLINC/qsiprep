@@ -70,11 +70,17 @@ def init_synb0_wf(name='synb0_wf'):
     atlas_image
         The 2.5mm SynB0 atlas defining the U-Net grid (prefilled in the
         containers from ``SYNB0_ATLASES``)
+    output_grid
+        The DWI output-space grid (``dwi_sampling_grid``); when connected,
+        the synthetic b=0 is also produced in that space for the derivatives
 
     Outputs
     -------
     synthetic_b0
         Distortion-free synthetic b=0 on the ``b0_ref`` grid
+    synthetic_b0_acpc
+        The same image on ``output_grid`` (AC-PC space, aligned with the
+        preprocessed DWIs through the anatomical transforms alone)
     b0_to_anat_transform
         Rigid transform from ``b0_ref`` to the AC-PC T1w (ITK format)
     anat_to_b0_transform
@@ -114,6 +120,7 @@ back onto the b=0 reference grid.
                 'to_template_affine_transform',
                 'acpc_inv_transform',
                 'atlas_image',
+                'output_grid',
             ]
         ),
         name='inputnode',
@@ -122,6 +129,7 @@ back onto the b=0 reference grid.
         niu.IdentityInterface(
             fields=[
                 'synthetic_b0',
+                'synthetic_b0_acpc',
                 'b0_to_anat_transform',
                 'anat_to_b0_transform',
                 't1_atlas_space',
@@ -176,6 +184,19 @@ back onto the b=0 reference grid.
             invert_transform_flags=[True, True, True],
         ),
         name='resample_to_native',
+    )
+
+    # A second copy on the DWI output grid, for the derivatives: drop the
+    # coreg from the chain and the image lands in AC-PC space anchored by the
+    # anatomical transforms alone.
+    merge_acpc_xfms = pe.Node(niu.Merge(2), name='merge_acpc_xfms')
+    resample_to_acpc = pe.Node(
+        ants.ApplyTransforms(
+            dimension=3,
+            interpolation='LanczosWindowedSinc',
+            invert_transform_flags=[True, True],
+        ),
+        name='resample_to_acpc',
     )
 
     # Reportlets. The acquired/synthetic flicker is deliberately NOT labeled
@@ -253,6 +274,16 @@ back onto the b=0 reference grid.
         (inputnode, resample_to_native, [('b0_ref', 'reference_image')]),
         (merge_native_xfms, resample_to_native, [('out', 'transforms')]),
         (resample_to_native, outputnode, [('output_image', 'synthetic_b0')]),
+
+        # Onto the DWI output grid
+        (inputnode, merge_acpc_xfms, [
+            ('acpc_inv_transform', 'in1'),
+            ('to_template_affine_transform', 'in2'),
+        ]),
+        (unet, resample_to_acpc, [('out_file', 'input_image')]),
+        (inputnode, resample_to_acpc, [('output_grid', 'reference_image')]),
+        (merge_acpc_xfms, resample_to_acpc, [('out', 'transforms')]),
+        (resample_to_acpc, outputnode, [('output_image', 'synthetic_b0_acpc')]),
 
         # Reportlets
         (inputnode, map_dseg_to_b0, [

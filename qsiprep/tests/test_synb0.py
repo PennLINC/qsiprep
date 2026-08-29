@@ -159,6 +159,7 @@ def test_synb0_wf_builds_without_container(monkeypatch):
         'resample_b0_to_atlas',
         'unet',
         'resample_to_native',
+        'resample_to_acpc',
         'map_dseg_to_b0',
         'extract_wm',
         'acquired_synthetic_rpt',

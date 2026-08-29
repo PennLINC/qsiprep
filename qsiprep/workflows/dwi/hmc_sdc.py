@@ -64,6 +64,7 @@ def init_qsiprep_hmcsdc_wf(
                 't1_2_mni_reverse_transform',
                 't1_mask',
                 't1_seg',
+                'dwi_sampling_grid',
                 't2_brain',
                 'to_template_affine_transform',
                 'acpc_inv_transform',

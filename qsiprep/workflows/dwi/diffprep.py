@@ -44,7 +44,7 @@ from ...utils.resources import as_path
 from ..fieldmap.base import init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf
 from ..fieldmap.synb0 import init_synb0_wf
-from .util import add_synb0_reportlets, init_dwi_reference_wf, tortoise_convert_mem_gb
+from .util import add_synb0_outputs, init_dwi_reference_wf, tortoise_convert_mem_gb
 
 # BIDS PhaseEncodingDirection axes already match what TORTOISEProcess expects
 # in its own JSON input -- TORTOISE consumes "i", "j", "k" (with optional "-")
@@ -244,6 +244,7 @@ def init_diffprep_hmc_wf(
                 't2w_unfatsat',
                 'to_template_affine_transform',
                 'acpc_inv_transform',
+                'dwi_sampling_grid',
             ]
         ),
         name='inputnode',
@@ -423,7 +424,7 @@ def init_diffprep_hmc_wf(
                 source_file=source_file,
             )
             synb0_wf = init_synb0_wf()
-            add_synb0_reportlets(workflow, synb0_wf, source_file)
+            add_synb0_outputs(workflow, synb0_wf, source_file)
             workflow.connect([
                 (inputnode, raw_b0s, [
                     ('dwi_file', 'dwi_series'),
@@ -437,6 +438,7 @@ def init_diffprep_hmc_wf(
                     ('to_template_affine_transform',
                      'inputnode.to_template_affine_transform'),
                     ('acpc_inv_transform', 'inputnode.acpc_inv_transform'),
+                    ('dwi_sampling_grid', 'inputnode.output_grid'),
                 ]),
                 (synb0_b0_ref_wf, synb0_wf, [
                     ('outputnode.ref_image', 'inputnode.b0_ref'),

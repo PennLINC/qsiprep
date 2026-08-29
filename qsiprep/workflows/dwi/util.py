@@ -25,12 +25,14 @@ from ..anatomical import init_synthstrip_wf
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def add_synb0_reportlets(workflow, synb0_wf, source_file):
-    """Wire ``init_synb0_wf``'s QC reportlets into figure datasinks.
+def add_synb0_outputs(workflow, synb0_wf, source_file):
+    """Wire ``init_synb0_wf``'s deliverables into datasinks.
 
     Shared by the eddy+TOPUP and DIFFPREP consumers so both emit the same
     acquired-vs-synthetic and U-Net-input figures (registered in
-    ``reports-spec.yml`` as ``synb0acquired``/``synb0unet``).
+    ``reports-spec.yml`` as ``synb0acquired``/``synb0unet``) and the same
+    ``space-ACPC_desc-synb0_dwiref`` image derivative - the synthetic b=0 on
+    the DWI output grid, kept regardless of which correction consumed it.
     """
     ds_report_synb0_acquired = pe.Node(
         DerivativesDataSink(
@@ -54,11 +56,25 @@ def add_synb0_reportlets(workflow, synb0_wf, source_file):
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
+    ds_synb0_dwiref = pe.Node(
+        DerivativesDataSink(
+            source_file=source_file,
+            space='ACPC',
+            desc='synb0',
+            suffix='dwiref',
+            extension='.nii.gz',
+            compress=True,
+        ),
+        name='ds_synb0_dwiref',
+        run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB,
+    )
     workflow.connect([
         (synb0_wf, ds_report_synb0_acquired, [
             ('outputnode.acquired_synthetic_report', 'in_file'),
         ]),
         (synb0_wf, ds_report_synb0_unet, [('outputnode.unet_input_report', 'in_file')]),
+        (synb0_wf, ds_synb0_dwiref, [('outputnode.synthetic_b0_acpc', 'in_file')]),
     ])  # fmt:skip
 
 

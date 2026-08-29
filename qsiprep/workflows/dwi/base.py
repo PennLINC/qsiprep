@@ -306,6 +306,7 @@ def init_dwi_preproc_wf(
             ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
             ('to_template_affine_transform', 'inputnode.to_template_affine_transform'),
             ('acpc_inv_transform', 'inputnode.acpc_inv_transform'),
+            ('dwi_sampling_grid', 'inputnode.dwi_sampling_grid'),
         ]),
         (pre_hmc_wf, outputnode, [
             ('outputnode.qc_file', 'raw_qc_file'),
