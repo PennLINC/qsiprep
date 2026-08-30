@@ -27,6 +27,11 @@ def main():
         help='SynB0 distribution containing dual_channel_unet/, model.py and util.py',
     )
     parser.add_argument('--out', required=True, help='output synthetic b=0 image')
+    parser.add_argument(
+        '--dispersion-out',
+        help='also write the across-fold standard deviation image (the '
+        "ensemble's disagreement, a model-uncertainty map for QC)",
+    )
     args = parser.parse_args()
 
     import nibabel as nb
@@ -62,7 +67,7 @@ def main():
     img_data = np.concatenate((img_b0, img_t1), axis=1)
     img_data = torch.from_numpy(img_data).float().to(device)
 
-    mean_out = None
+    folds = []
     for weights in weight_files:
         model = UNet3D(2, 1).to(device)
         model.load_state_dict(torch.load(weights, map_location=device))
@@ -71,13 +76,16 @@ def main():
             fold_out = model(img_data)
         fold_out = util.unnormalize_img(fold_out, max_b0, 0, 1, -1)
         fold_out = fold_out[:, :, 2:-1, 2:-1, 3:-2]  # undo the padding
-        fold_arr = util.torch2nii(fold_out.detach().cpu())
-        mean_out = fold_arr if mean_out is None else mean_out + fold_arr
+        folds.append(np.squeeze(util.torch2nii(fold_out.detach().cpu())))
         print(f'finished fold {os.path.basename(weights)}')
-    mean_out = np.squeeze(mean_out) / len(weight_files)
+    folds = np.stack(folds, axis=-1)
 
     template = nb.load(args.b0)
-    nb.Nifti1Image(mean_out, template.affine, template.header).to_filename(args.out)
+    nb.Nifti1Image(folds.mean(-1), template.affine, template.header).to_filename(args.out)
+    if args.dispersion_out:
+        nb.Nifti1Image(folds.std(-1), template.affine, template.header).to_filename(
+            args.dispersion_out
+        )
 
 
 if __name__ == '__main__':

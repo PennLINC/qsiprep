@@ -27,7 +27,9 @@ from ...interfaces.images import ExtractWM
 from ...interfaces.synb0 import (
     NormalizeForSynb0,
     Synb0Inference,
+    Synb0QC,
     get_synb0_atlas,
+    get_synb0_atlas_mask,
     get_synb0_dir,
 )
 from ..dwi.registration import init_b0_to_anat_registration_wf
@@ -120,6 +122,7 @@ back onto the b=0 reference grid.
                 'to_template_affine_transform',
                 'acpc_inv_transform',
                 'atlas_image',
+                'atlas_mask',
                 'output_grid',
             ]
         ),
@@ -130,6 +133,7 @@ back onto the b=0 reference grid.
             fields=[
                 'synthetic_b0',
                 'synthetic_b0_acpc',
+                'qc_file',
                 'b0_to_anat_transform',
                 'anat_to_b0_transform',
                 't1_atlas_space',
@@ -146,6 +150,9 @@ back onto the b=0 reference grid.
     atlas_image = get_synb0_atlas()
     if atlas_image is not None:
         inputnode.inputs.atlas_image = atlas_image
+    atlas_mask = get_synb0_atlas_mask()
+    if atlas_mask is not None:
+        inputnode.inputs.atlas_mask = atlas_mask
 
     normalize_t1 = pe.Node(NormalizeForSynb0(), name='normalize_t1')
 
@@ -220,6 +227,8 @@ back onto the b=0 reference grid.
         name='unet_input_rpt',
         mem_gb=0.1,
     )
+
+    synb0_qc = pe.Node(Synb0QC(), name='synb0_qc')
 
     workflow.connect([
         (inputnode, normalize_t1, [
@@ -299,6 +308,24 @@ back onto the b=0 reference grid.
         (resample_t1_to_atlas, unet_input_rpt, [('output_image', 'before')]),
         (resample_b0_to_atlas, unet_input_rpt, [('output_image', 'after')]),
         (unet_input_rpt, outputnode, [('out_report', 'unet_input_report')]),
+
+        # Scalar QC, all on the U-Net grid
+        (resample_t1_to_atlas, synb0_qc, [('output_image', 't1_atlas')]),
+        (resample_b0_to_atlas, synb0_qc, [('output_image', 'b0_atlas')]),
+        (unet, synb0_qc, [
+            ('out_file', 'synthetic_atlas'),
+            ('dispersion_file', 'dispersion_atlas'),
+        ]),
+        (inputnode, synb0_qc, [
+            ('atlas_image', 'atlas_image'),
+            ('atlas_mask', 'atlas_mask'),
+        ]),
+        (normalize_t1, synb0_qc, [
+            ('scale_factor', 'normalization_scale'),
+            ('clipped_fraction', 'clipped_fraction'),
+        ]),
+        (b0_coreg_wf, synb0_qc, [('outputnode.coreg_metric', 'coreg_metric')]),
+        (synb0_qc, outputnode, [('qc_file', 'qc_file')]),
     ])  # fmt:skip
 
     return workflow

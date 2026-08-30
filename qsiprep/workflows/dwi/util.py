@@ -69,12 +69,24 @@ def add_synb0_outputs(workflow, synb0_wf, source_file):
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
+    ds_synb0_qc = pe.Node(
+        DerivativesDataSink(
+            source_file=source_file,
+            desc='synb0',
+            suffix='qc',
+            extension='.tsv',
+        ),
+        name='ds_synb0_qc',
+        run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB,
+    )
     workflow.connect([
         (synb0_wf, ds_report_synb0_acquired, [
             ('outputnode.acquired_synthetic_report', 'in_file'),
         ]),
         (synb0_wf, ds_report_synb0_unet, [('outputnode.unet_input_report', 'in_file')]),
         (synb0_wf, ds_synb0_dwiref, [('outputnode.synthetic_b0_acpc', 'in_file')]),
+        (synb0_wf, ds_synb0_qc, [('outputnode.qc_file', 'in_file')]),
     ])  # fmt:skip
 
 

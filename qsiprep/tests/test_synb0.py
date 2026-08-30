@@ -79,6 +79,8 @@ def _synb0_distribution(tmp_path):
     (synb0_dir / 'dual_channel_unet').mkdir()
     atlas = synb0_dir / 'atlases' / 'mni_icbm152_t1_tal_nlin_asym_09c_2_5.nii.gz'
     nb.Nifti1Image(np.zeros((4, 4, 4), dtype=np.float32), np.eye(4)).to_filename(str(atlas))
+    mask = synb0_dir / 'atlases' / 'mni_icbm152_t1_tal_nlin_asym_09c_mask_2_5.nii.gz'
+    nb.Nifti1Image(np.ones((4, 4, 4), dtype=np.uint8), np.eye(4)).to_filename(str(mask))
     return synb0_dir, atlas
 
 
@@ -164,6 +166,7 @@ def test_synb0_wf_builds_without_container(monkeypatch):
         'extract_wm',
         'acquired_synthetic_rpt',
         'unet_input_rpt',
+        'synb0_qc',
     ]:
         assert wf.get_node(node_name) is not None
     assert wf.get_node('distorted_b0_coreg_wf.b0_to_anat') is not None
@@ -181,3 +184,119 @@ def test_synb0_wf_prefills_container_locations(tmp_path, monkeypatch):
 
     assert wf.get_node('inputnode').inputs.atlas_image == str(atlas)
     assert wf.get_node('unet').inputs.synb0_dir == str(synb0_dir)
+
+
+GENERATION_QC_COLUMNS = [
+    'normalized_t1w_vs_atlas_correlation',
+    'unet_inputs_mutual_information',
+    'synthetic_vs_acquired_qq_correlation',
+    'unet_fold_dispersion_cv',
+    'wm_normalization_scale_factor',
+    't1w_clipped_voxel_fraction',
+    'b0_to_anat_coreg_mattes',
+]
+
+FIELD_QC_COLUMNS = [
+    'fieldmap_p95_abs_hz_in_brain',
+    'fieldmap_p95_displacement_mm_in_brain',
+    'fieldmap_halo_ratio_outside_over_inside',
+]
+
+
+def test_normalize_reports_scale_and_clipping(tmp_path):
+    t1_file, dseg_file = _write_t1_and_dseg(tmp_path, wm_mean=100.0)
+
+    result = NormalizeForSynb0(t1w_file=t1_file, dseg_file=dseg_file).run(cwd=str(tmp_path))
+
+    assert result.outputs.scale_factor == pytest.approx(110.0 / 100.0, rel=0.1)
+    # GM/CSF sit far above the low WM mean, so scaling pushes them past 255
+    assert result.outputs.clipped_fraction > 0
+
+
+def test_generation_qc_columns_and_sanity(tmp_path):
+    from qsiprep.interfaces.synb0 import Synb0QC
+
+    rng = np.random.default_rng(seed=1)
+    shape = (12, 12, 12)
+    affine = np.eye(4)
+    mask = np.zeros(shape, dtype=np.uint8)
+    mask[2:10, 2:10, 2:10] = 1
+    anatomy = rng.uniform(10, 150, size=shape).astype(np.float32)
+    b0 = (anatomy * 5 + rng.normal(0, 5, shape)).astype(np.float32)
+    synthetic = (b0 + rng.normal(0, 2, shape)).astype(np.float32)
+    dispersion = np.abs(rng.normal(0, 1, shape)).astype(np.float32)
+
+    paths = {}
+    for name, arr in [
+        ('t1', anatomy),
+        ('b0', b0),
+        ('synth', synthetic),
+        ('disp', dispersion),
+        ('mask', mask),
+        ('atlas', anatomy),
+    ]:
+        paths[name] = str(tmp_path / f'{name}.nii.gz')
+        nb.Nifti1Image(arr, affine).to_filename(paths[name])
+
+    result = Synb0QC(
+        t1_atlas=paths['t1'],
+        b0_atlas=paths['b0'],
+        synthetic_atlas=paths['synth'],
+        dispersion_atlas=paths['disp'],
+        atlas_mask=paths['mask'],
+        atlas_image=paths['atlas'],
+        coreg_metric=-0.55,
+        normalization_scale=1.2,
+        clipped_fraction=0.01,
+    ).run(cwd=str(tmp_path))
+
+    import pandas as pd
+
+    qc = pd.read_csv(result.outputs.qc_file, sep='\t')
+    assert list(qc.columns) == GENERATION_QC_COLUMNS
+    row = qc.iloc[0]
+    # t1 IS the atlas here; synthetic is a noisy copy of the acquired b0
+    assert row['normalized_t1w_vs_atlas_correlation'] == pytest.approx(1.0)
+    assert row['synthetic_vs_acquired_qq_correlation'] > 0.99
+    assert row['unet_inputs_mutual_information'] > 0.5
+    assert row['b0_to_anat_coreg_mattes'] == pytest.approx(-0.55)
+    assert row['wm_normalization_scale_factor'] == pytest.approx(1.2)
+
+
+def test_field_qc_detects_halo(tmp_path):
+    from qsiprep.interfaces.synb0 import Synb0FieldQC
+
+    shape = (24, 24, 24)
+    affine = np.diag([2.0, 2.0, 2.0, 1.0])
+    mask = np.zeros(shape, dtype=np.uint8)
+    mask[8:16, 8:16, 8:16] = 1
+    datain = tmp_path / 'datain.txt'
+    datain.write_text('0 -1 0 0.05\n0 -1 0 0.0\n')
+
+    def run_field(field, name):
+        field_file = str(tmp_path / f'{name}.nii.gz')
+        mask_file = str(tmp_path / f'{name}_mask.nii.gz')
+        nb.Nifti1Image(field, affine).to_filename(field_file)
+        nb.Nifti1Image(mask, affine).to_filename(mask_file)
+        result = Synb0FieldQC(fieldmap=field_file, mask=mask_file, datain=str(datain)).run(
+            cwd=str(tmp_path)
+        )
+        import pandas as pd
+
+        return pd.read_csv(result.outputs.qc_file, sep='\t').iloc[0]
+
+    rng = np.random.default_rng(seed=2)
+    quiet = rng.normal(0, 10, shape).astype(np.float32)
+    halo = quiet.copy()
+    halo[mask == 0] += 80  # big smooth field hugging the head boundary
+
+    quiet_row = run_field(quiet, 'quiet')
+    halo_row = run_field(halo, 'halo')
+    assert list(quiet_row.index) == FIELD_QC_COLUMNS
+    assert halo_row['fieldmap_halo_ratio_outside_over_inside'] > (
+        2 * quiet_row['fieldmap_halo_ratio_outside_over_inside']
+    )
+    # displacement = Hz x readout x 2mm voxels
+    assert quiet_row['fieldmap_p95_displacement_mm_in_brain'] == pytest.approx(
+        quiet_row['fieldmap_p95_abs_hz_in_brain'] * 0.05 * 2.0
+    )

@@ -31,6 +31,7 @@ from ...interfaces.gradients import ExtractB0s
 from ...interfaces.images import ConformDwi, IntraModalMerge, SplitDWIsFSL
 from ...interfaces.nilearn import EnhanceB0
 from ...interfaces.reports import TopupSummary
+from ...interfaces.synb0 import Synb0FieldQC
 from ...utils.gpu import gpu_enabled
 from ..fieldmap.base import init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf
@@ -402,6 +403,26 @@ def init_fsl_hmc_wf(
             add_synb0_outputs(workflow, synb0_wf, source_file)
             synb0_topup_inputs = pe.Node(Synb0TopupInputs(), name='synb0_topup_inputs')
             topup.inputs.config = synb0_topup_config()
+
+            # Scalar QC of the SynB0-driven field (halo/displacement checks)
+            synb0_field_qc = pe.Node(Synb0FieldQC(), name='synb0_field_qc')
+            ds_synb0_field_qc = pe.Node(
+                DerivativesDataSink(
+                    source_file=source_file,
+                    desc='synb0field',
+                    suffix='qc',
+                    extension='.tsv',
+                ),
+                name='ds_synb0_field_qc',
+                run_without_submitting=True,
+                mem_gb=DEFAULT_MEMORY_MIN_GB,
+            )
+            workflow.connect([
+                (topup, synb0_field_qc, [('out_field', 'fieldmap')]),
+                (synb0_b0_ref_wf, synb0_field_qc, [('outputnode.dwi_mask', 'mask')]),
+                (synb0_topup_inputs, synb0_field_qc, [('topup_datain', 'datain')]),
+                (synb0_field_qc, ds_synb0_field_qc, [('qc_file', 'in_file')]),
+            ])  # fmt:skip
 
             workflow.connect([
                 (gather_inputs, synb0_b0_ref_wf, [
