@@ -902,9 +902,10 @@ The are three kinds of SDC available in *QSIPrep*:
      image and two phase images or a phasediff image.
 
   3. :ref:`sdc_fieldmapless`: The SyN-based susceptibility distortion correction
-     implemented in FMRIPREP. To use this method, include argument ``--use-syn-sdc`` when
-     calling *QSIPrep*. Briefly, this method estimates a SDC warp using ANTS SyN based
-     on an average fieldmap in MNI space. For details on this method.
+     implemented in FMRIPREP, using the inverted-contrast T1w as the anatomical
+     reference. To use this method, include argument ``--sdc-anat-reference invt1w``
+     when calling *QSIPrep*. Briefly, this method estimates a SDC warp using ANTS SyN
+     based on an average fieldmap in MNI space. For details on this method.
 
 *QSIPrep* determines if a fieldmap should be used based on the ``"IntendedFor"``
 fields in the JSON sidecars in the ``fmap/`` directory.
