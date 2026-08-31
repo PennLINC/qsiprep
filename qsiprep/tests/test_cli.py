@@ -315,8 +315,7 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--sloppy',
         '--write-graph',
-        '--use-syn-sdc',
-        '--force-syn',
+        '--sdc-anat-reference=invt1w',
         '--b1-biascorrect-stage=none',
         '--hmc-method=shoreline',
         '--hmc-transform=Rigid',
@@ -598,11 +597,12 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         # The dataset ships a PA epi fieldmap (IntendedFor the DWI), so the
         # modern grouping would correct via TOPUP. This test exercises
-        # fieldmap-less SyN-SDC instead: ignore fmap/ and request SyN. (Replaces
-        # the removed data-dropping --force-syn, which forced SyN over the fmap.)
+        # fieldmap-less SyN-SDC instead: ignore fmap/ and select the
+        # inverted-contrast T1w as the anatomical SDC reference. (Replaces the
+        # removed data-dropping --force-syn, which forced SyN over the fmap.)
         '--ignore',
         'fieldmaps',
-        '--use-syn-sdc',
+        '--sdc-anat-reference=invt1w',
         '--b1-biascorrect-stage=final',
         '--output-resolution=5',
     ]

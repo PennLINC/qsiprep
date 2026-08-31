@@ -139,6 +139,7 @@ def test_synb0_boilerplate_reflects_ignored_fieldmaps(monkeypatch):
     from qsiprep.interfaces.eddy import topup_boilerplate
 
     monkeypatch.setattr(config.workflow, 'ignore', [])
+    monkeypatch.setattr(config.workflow, 'force_sdc_anat_reference', False)
     assert 'No fieldmap was available' in topup_boilerplate('synb0', 'TOPUP')
 
     # Reaching SyNb0 with fieldmaps or RPE series present means the user
@@ -148,6 +149,21 @@ def test_synb0_boilerplate_reflects_ignored_fieldmaps(monkeypatch):
     assert 'No fieldmap was available' not in text
     assert "excluded at the user's request" in text
     assert '--ignore fieldmaps pepolar-dwis' in text
+
+
+def test_synb0_boilerplate_reflects_forced_anat_reference(monkeypatch):
+    from qsiprep import config
+    from qsiprep.interfaces.eddy import topup_boilerplate
+
+    # Forcing the anatomical reference overrides fieldmaps outright, which
+    # takes precedence over the ignored-fieldmaps wording.
+    monkeypatch.setattr(config.workflow, 'ignore', ['fieldmaps'])
+    monkeypatch.setattr(config.workflow, 'force_sdc_anat_reference', True)
+    text = topup_boilerplate('synb0', 'TOPUP')
+    assert 'No fieldmap was available' not in text
+    assert "excluded at the user's request" not in text
+    assert '--force sdc-anat-reference' in text
+    assert 'overriding any scanner-acquired fieldmap data' in text
 
 
 def test_synb0_wf_builds_without_container(monkeypatch):

@@ -979,7 +979,7 @@ def _connect_fields(wf, src, dst):
 
 
 def test_init_diffprep_hmc_wf_synb0_targets_the_synthetic_b0():
-    """--use-synb0 without a T2w -> T2Wreg registered to the synthetic b=0."""
+    """--sdc-anat-reference synb0, no T2w -> T2Wreg registered to the synthetic b=0."""
     from qsiplan.models import CorrectionMethod
 
     from qsiprep.tests.preproc_factory import make_preproc_unit

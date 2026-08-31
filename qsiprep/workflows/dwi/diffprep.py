@@ -292,8 +292,9 @@ def init_diffprep_hmc_wf(
     # structural target is available: DIFFPREP runs the ``--epi T2Wreg`` stage
     # in the same TORTOISEProcess call and bakes the correction into its
     # output. The plan names the target: 'synb0' (a synthetic distortion-free
-    # b=0 generated from the T1w, preferred when --use-synb0 was given) or
-    # 't2w' (the subject's T2w, additionally gated by ``t2w_sdc``).
+    # b=0 generated from the T1w, preferred when --sdc-anat-reference synb0
+    # produced an estimation) or 't2w' (the subject's T2w, additionally gated
+    # by ``t2w_sdc``).
     is_fieldmapless = not unit.has_scanner_measured_fieldmap
     t2wreg_stage = unit.run.stage_with('t2wreg')
     synb0_target = t2wreg_stage is not None and t2wreg_stage.structural_target == 'synb0'
