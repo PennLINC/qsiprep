@@ -428,3 +428,89 @@ def test_denoising_wf_complex(
 
     _assert_denoiser_is_not_masked(nodes)
     _assert_denoising_outputs(nodes, sink_dir, nibs_dwi['dwi_file'])
+
+
+def _connections(workflow):
+    """Map (source node name, destination node name) to the connected field pairs."""
+    return {
+        (src.name, dest.name): set(data['connect'])
+        for src, dest, data in workflow._graph.edges(data=True)
+    }
+
+
+def _build_denoising_wf(monkeypatch, denoise_method, unringing_method, use_phase):
+    """Build (without running) a denoising workflow with the given configuration."""
+    monkeypatch.setattr(config.workflow, 'denoise_method', denoise_method)
+    monkeypatch.setattr(config.workflow, 'dwi_denoise_window', 5)
+    monkeypatch.setattr(config.workflow, 'unringing_method', unringing_method)
+    monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
+    monkeypatch.setattr(config.workflow, 'b0_threshold', 100)
+    monkeypatch.setattr(config.nipype, 'omp_nthreads', 1)
+
+    return init_dwi_denoising_wf(
+        source_file='sub-01_dwi.nii.gz',
+        partial_fourier=1.0,
+        phase_encoding_direction='j',
+        n_volumes=30,
+        use_phase=use_phase,
+        do_biascorr=False,
+    )
+
+
+@pytest.mark.parametrize('denoise_method', ['dwidenoise', 'dwidenoise2'])
+def test_complex_data_stay_complex_through_mrdegibbs(monkeypatch, denoise_method):
+    """Hand mrdegibbs the complex-valued denoised data, and split to magnitude after it.
+
+    mrdegibbs is built on the Fourier shift theorem, so it works better on complex
+    data; MRtrix3's development branch reads and writes it.
+    """
+    workflow = _build_denoising_wf(monkeypatch, denoise_method, 'mrdegibbs', use_phase=True)
+    connections = _connections(workflow)
+
+    assert connections[('combine_complex', 'denoiser')] == {('out_file', 'in_file')}
+    assert connections[('denoiser', 'degibbser')] == {('out_file', 'in_file')}
+    assert connections[('degibbser', 'split_complex')] == {('out_file', 'complex_file')}
+    assert connections[('split_complex', 'outputnode')] == {('out_file', 'dwi_file')}
+    # The split happens once, after unringing, not before it
+    assert ('denoiser', 'split_complex') not in connections
+
+
+@pytest.mark.parametrize('denoise_method', ['dwidenoise', 'dwidenoise2'])
+def test_rpg_unringing_gets_magnitude(monkeypatch, denoise_method):
+    """Split to magnitude before rpg unringing, which is TORTOISE and magnitude-only."""
+    workflow = _build_denoising_wf(monkeypatch, denoise_method, 'rpg', use_phase=True)
+    connections = _connections(workflow)
+
+    assert connections[('denoiser', 'split_complex')] == {('out_file', 'complex_file')}
+    assert connections[('split_complex', 'degibbser')] == {('out_file', 'in_file')}
+    assert ('degibbser', 'split_complex') not in connections
+
+
+@pytest.mark.parametrize('unringing_method', ['mrdegibbs', 'rpg', 'none'])
+def test_patch2self_never_goes_complex(monkeypatch, unringing_method):
+    """Keep patch2self runs entirely in the magnitude domain, whatever the unringing."""
+    workflow = _build_denoising_wf(monkeypatch, 'patch2self', unringing_method, use_phase=True)
+    node_names = {node.name for node in workflow._get_all_nodes()}
+
+    assert 'combine_complex' not in node_names
+    assert 'split_complex' not in node_names
+
+
+@pytest.mark.parametrize('unringing_method', ['mrdegibbs', 'rpg', 'none'])
+def test_magnitude_only_input_never_goes_complex(monkeypatch, unringing_method):
+    """Keep magnitude-only runs in the magnitude domain even with a complex-capable denoiser."""
+    workflow = _build_denoising_wf(monkeypatch, 'dwidenoise', unringing_method, use_phase=False)
+    node_names = {node.name for node in workflow._get_all_nodes()}
+
+    assert 'combine_complex' not in node_names
+    assert 'split_complex' not in node_names
+
+
+@pytest.mark.parametrize('denoise_method', ['dwidenoise', 'dwidenoise2'])
+def test_split_follows_the_denoiser_without_unringing(monkeypatch, denoise_method):
+    """Split to magnitude right after denoising when no unringing runs."""
+    workflow = _build_denoising_wf(monkeypatch, denoise_method, 'none', use_phase=True)
+    connections = _connections(workflow)
+
+    assert connections[('denoiser', 'split_complex')] == {('out_file', 'complex_file')}
+    assert connections[('split_complex', 'outputnode')] == {('out_file', 'dwi_file')}

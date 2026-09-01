@@ -471,6 +471,14 @@ def init_dwi_denoising_wf(
     do_unringing = config.workflow.unringing_method in ('mrdegibbs', 'rpg')
     harmonize_b0s = not config.workflow.no_b0_harmonization
 
+    # Only the dwidenoise variants can denoise complex-valued data. Any other method
+    # ignores the phase data and denoises the magnitude data alone.
+    denoise_complex = do_denoise and denoise_method.startswith('dwidenoise') and use_phase
+    # mrdegibbs is built on the Fourier shift theorem and reads and writes complex data
+    # on MRtrix3's development branch, so complex data stay complex through unringing.
+    # TORTOISE's rpg is magnitude-only.
+    unring_complex = denoise_complex and unringing_method == 'mrdegibbs'
+
     # How many steps in the denoising pipeline
     num_steps = sum(map(int, [do_denoise, do_unringing, do_biascorr, harmonize_b0s]))
     merge_confounds = pe.Node(niu.Merge(num_steps), name='merge_confounds')
@@ -489,10 +497,6 @@ def init_dwi_denoising_wf(
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
-
-        # Only the dwidenoise variants can denoise complex-valued data.
-        # Any other method ignores the phase data and denoises the magnitude data alone.
-        denoise_complex = denoise_method.startswith('dwidenoise') and use_phase
 
         # Build the denoiser. The node is the same whether it is handed magnitude-only or
         # complex-valued data; only the data feeding it differs, which is wired up below.
@@ -607,8 +611,9 @@ def init_dwi_denoising_wf(
 
         chain.feed(denoiser, 'in_file')
         chain.advance(denoiser, 'out_file', is_complex=denoise_complex)
-        # Split back to magnitude immediately; Task 6 moves this later for mrdegibbs
-        chain.to_magnitude()
+        # Hold the complex data if unringing can use them; otherwise split here
+        if not unring_complex:
+            chain.to_magnitude()
 
         step_num += 1
 
@@ -661,7 +666,7 @@ def init_dwi_denoising_wf(
             (degibbser, merge_confounds, [('nmse_text', f'in{step_num}')]),
         ])  # fmt:skip
         chain.feed(degibbser, 'in_file')
-        chain.advance(degibbser, 'out_file')
+        chain.advance(degibbser, 'out_file', is_complex=unring_complex)
         step_num += 1
 
     if do_biascorr:
