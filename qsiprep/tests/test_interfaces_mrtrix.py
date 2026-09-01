@@ -109,3 +109,21 @@ def test_dwidenoise2_formats_fslgrad(tmp_path):
     )
 
     assert f'-fslgrad {bvec_file} {bval_file}' in interface.cmdline
+
+
+def test_dwibiascorrect_uses_underscore_ants_options(tmp_path):
+    """Pass N4 options as -ants_b/-ants_c/-ants_s.
+
+    MRtrix3's development branch renamed these from the dot-separated -ants.b form
+    used by 3.0.x. Getting this wrong fails every bias-correction node at runtime,
+    so the exact spelling is pinned here.
+    """
+    in_file = tmp_path / 'dwi.nii.gz'
+    in_file.touch()
+
+    interface = mrtrix.DWIBiasCorrect(method='ants', in_file=in_file, ants_s='4')
+    cmdline = interface.cmdline
+    assert '-ants_b [150,3]' in cmdline
+    assert '-ants_c [200x200,1e-6]' in cmdline
+    assert '-ants_s 4' in cmdline
+    assert '-ants.' not in cmdline

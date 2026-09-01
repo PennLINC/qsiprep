@@ -444,9 +444,11 @@ class DWIBiasCorrectInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec
         position=-1,
         desc='the output bias corrected DWI image',
     )
-    ants_b = traits.Str(default_value='[150,3]', argstr='-ants.b %s', usedefault=True)
-    ants_c = traits.Str(default_value='[200x200,1e-6]', argstr='-ants.c %s', usedefault=True)
-    ants_s = traits.Str(default_value='4', argstr='-ants.s %s')
+    # MRtrix3's development branch spells these -ants_b/-ants_c/-ants_s; the
+    # dot-separated form used by 3.0.x is rejected outright.
+    ants_b = traits.Str(default_value='[150,3]', argstr='-ants_b %s', usedefault=True)
+    ants_c = traits.Str(default_value='[200x200,1e-6]', argstr='-ants_c %s', usedefault=True)
+    ants_s = traits.Str(default_value='4', argstr='-ants_s %s')
     out_report = File('n4_report.svg', usedefault=True, desc='filename for the visual report')
     bzero_max = traits.Int(
         argstr='-config BZeroThreshold %d',
