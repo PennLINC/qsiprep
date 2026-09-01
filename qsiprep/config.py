@@ -639,6 +639,12 @@ class workflow(_Config):
     """Run *fieldmap-less* susceptibility-derived distortions estimation
     in the absence of any alternatives."""
 
+    # Settings holding a Path must be listed here. ``get()`` only stringifies
+    # what ``_paths`` names, and toml writes anything else as its repr, so an
+    # unlisted Path reaches the workflow-building subprocess as the literal
+    # string "PosixPath('/path')".
+    _paths = ('gradient_file',)
+
 
 class loggers:
     """Keep loggers easily accessible (see :py:func:`init`)."""
