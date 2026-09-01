@@ -438,7 +438,7 @@ def _connections(workflow):
     }
 
 
-def _build_denoising_wf(monkeypatch, denoise_method, unringing_method, use_phase):
+def _build_denoising_wf(monkeypatch, denoise_method, unringing_method, use_phase, do_biascorr=False):
     """Build (without running) a denoising workflow with the given configuration."""
     monkeypatch.setattr(config.workflow, 'denoise_method', denoise_method)
     monkeypatch.setattr(config.workflow, 'dwi_denoise_window', 5)
@@ -453,7 +453,7 @@ def _build_denoising_wf(monkeypatch, denoise_method, unringing_method, use_phase
         phase_encoding_direction='j',
         n_volumes=30,
         use_phase=use_phase,
-        do_biascorr=False,
+        do_biascorr=do_biascorr,
     )
 
 
@@ -514,3 +514,35 @@ def test_split_follows_the_denoiser_without_unringing(monkeypatch, denoise_metho
 
     assert connections[('denoiser', 'split_complex')] == {('out_file', 'complex_file')}
     assert connections[('split_complex', 'outputnode')] == {('out_file', 'dwi_file')}
+
+
+@pytest.mark.parametrize('unringing_method', ['mrdegibbs', 'none'])
+@pytest.mark.parametrize('denoise_method', ['dwidenoise', 'dwidenoise2'])
+def test_biascorr_and_get_b0s_get_magnitude_from_split_complex(
+    monkeypatch, denoise_method, unringing_method
+):
+    """dwibiascorrect and the b0 extraction that builds its mask are magnitude-only.
+
+    Complex data must be split to magnitude before feeding either of them, whether the
+    split happens right after denoising (no unringing) or after mrdegibbs (which can
+    consume complex data). ``biascorr`` and ``get_b0s`` must be fed from the same
+    magnitude source, since the mask built from ``get_b0s`` is for the series that
+    ``biascorr`` corrects.
+    """
+    workflow = _build_denoising_wf(
+        monkeypatch,
+        denoise_method,
+        unringing_method,
+        use_phase=True,
+        do_biascorr=True,
+    )
+    connections = _connections(workflow)
+
+    assert connections[('split_complex', 'biascorr')] == {('out_file', 'in_file')}
+    assert connections[('split_complex', 'get_b0s')] == {('out_file', 'dwi_series')}
+    # Neither the denoiser nor the degibbser (still possibly complex-valued) may feed
+    # bias correction or b0 extraction directly; the split must happen first.
+    assert ('denoiser', 'biascorr') not in connections
+    assert ('denoiser', 'get_b0s') not in connections
+    assert ('degibbser', 'biascorr') not in connections
+    assert ('degibbser', 'get_b0s') not in connections
