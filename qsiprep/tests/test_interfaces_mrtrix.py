@@ -139,11 +139,17 @@ def test_mrdegibbs_dimensionality_is_optional(tmp_path):
 
 
 def test_mrdegibbs_report_handles_complex_input(monkeypatch, tmp_path):
-    """Generate the unringing report from complex-valued data.
+    """Generate the unringing report from complex-valued data, using the magnitude.
 
     mrdegibbs on MRtrix3's development branch emits complex data when it is given
-    complex data. nibabel's get_fdata() raises on complex images, so the report has
-    to reduce both images to magnitude first.
+    complex data. nibabel's get_fdata() does not raise on a complex image: it emits a
+    ComplexWarning and silently returns the real component, discarding the imaginary
+    part. Without an explicit magnitude conversion the report would be drawn from that
+    real part instead of the true magnitude (sqrt(real**2 + imag**2)) -- a wrong
+    picture rather than a crash. This test picks a phase that makes the two
+    unmistakably different values, then inspects what actually reaches the plotting
+    layer (rather than only checking that a report file got written, which happens
+    either way) to confirm it is the magnitude.
     """
     import nibabel as nb
     import numpy as np
@@ -152,23 +158,30 @@ def test_mrdegibbs_report_handles_complex_input(monkeypatch, tmp_path):
     shape = (8, 8, 4, 3)
     affine = np.eye(4)
 
-    def _write(name, data):
+    # A fixed, non-zero phase whose cosine (~0.54) is unmistakably different from 1:
+    # using the real part in place of the magnitude scales every voxel down by that
+    # factor, easily distinguished at float32 precision. It stays positive enough
+    # that threshold_img(…, 50) still finds a non-empty mask even if the fix is
+    # reverted and the real part leaks through.
+    phase = 1.0
+    magnitude = rng.uniform(150, 400, shape)
+    complex_factor = np.exp(1j * phase)
+
+    def _write(name, mag):
         path = tmp_path / name
-        img = nb.Nifti1Image(data, affine)
-        img.header.set_data_dtype(data.dtype)
+        img = nb.Nifti1Image((mag * complex_factor).astype(np.complex64), affine)
+        img.header.set_data_dtype(np.complex64)
         img.to_filename(path)
         return str(path)
 
-    # A bright, structured magnitude so threshold_img(…, 50) finds a non-empty mask
-    magnitude = rng.uniform(100, 400, shape)
-    phase = rng.uniform(-np.pi, np.pi, shape)
-    in_file = _write('in.nii.gz', (magnitude * np.exp(1j * phase)).astype(np.complex64))
-    out_file = _write('out.nii.gz', (magnitude * 0.99 * np.exp(1j * phase)).astype(np.complex64))
+    in_file = _write('in.nii.gz', magnitude)
+    denoised_magnitude = magnitude * 0.99
+    out_file = _write('out.nii.gz', denoised_magnitude)
 
     interface = mrtrix.MRDeGibbs(in_file=in_file)
     interface._out_report = str(tmp_path / 'report.svg')
     # Bypass nipype's name_source filename derivation and the NMSE CSV write: this test
-    # is about surviving complex inputs, not about how output filenames are built.
+    # is about what reaches the plotting layer, not about how output filenames are built.
     monkeypatch.setattr(
         mrtrix.MRDeGibbs,
         '_get_plotting_images',
@@ -180,6 +193,36 @@ def test_mrdegibbs_report_handles_complex_input(monkeypatch, tmp_path):
         lambda self, original_nii, corrected_nii: None,
     )
 
+    # Record the images that actually reach plot_denoise, instead of only trusting
+    # that a report file being written proves anything about its content.
+    recorded_calls = []
+
+    def _record_plot_denoise(lowb_nii, highb_nii, *args, **kwargs):
+        recorded_calls.append((lowb_nii.get_fdata().copy(), highb_nii.get_fdata().copy()))
+        return object()
+
+    def _fake_compose_view(*args, **kwargs):
+        with open(kwargs['out_file'], 'w') as fobj:
+            fobj.write('<svg/>')
+
+    monkeypatch.setattr(mrtrix, 'plot_denoise', _record_plot_denoise)
+    monkeypatch.setattr(mrtrix, 'compose_view', _fake_compose_view)
+
     interface._generate_report()
 
     assert (tmp_path / 'report.svg').is_file()
+    assert recorded_calls, 'plot_denoise was never called'
+
+    # The first plot_denoise call is the moving-image (denoised low-b/high-b) pair --
+    # values taken straight from denoised_nii with no subtraction involved -- so they
+    # must equal the true magnitude of the denoised data, not the phase-scaled real
+    # part that leaks through if the report skips _to_magnitude().
+    mean_per_volume = magnitude.mean(axis=tuple(range(magnitude.ndim - 1)))
+    lowb_index = int(np.argmax(mean_per_volume))
+    highb_index = int(np.argmin(mean_per_volume))
+    expected_lowb = denoised_magnitude[..., lowb_index].astype(np.float32)
+    expected_highb = denoised_magnitude[..., highb_index].astype(np.float32)
+
+    recorded_lowb, recorded_highb = recorded_calls[0]
+    np.testing.assert_allclose(recorded_lowb, expected_lowb, rtol=1e-3, atol=1e-2)
+    np.testing.assert_allclose(recorded_highb, expected_highb, rtol=1e-3, atol=1e-2)
