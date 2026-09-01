@@ -1,6 +1,11 @@
 # What's New
 
 
+## Unreleased
+
+* Pass complex-valued data to `mrdegibbs` when phase data are available (#1108)
+
+
 ## 26.0.0 (April 20, 2026)
 
 ### 🐛 Bug Fixes

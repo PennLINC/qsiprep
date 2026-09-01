@@ -567,9 +567,12 @@ def init_dwi_denoising_wf(
                 desc += (
                     'Magnitude and phase DWI data were combined into a complex-valued file, then '
                     f'{mppca_desc}'
-                    'After denoising, the complex-valued data were split back into magnitude and '
-                    'phase, and the denoised magnitude data were retained. '
                 )
+                if not unring_complex:
+                    desc += (
+                        'After denoising, the complex-valued data were split back into '
+                        'magnitude and phase, and the denoised magnitude data were retained. '
+                    )
             else:
                 desc += f'DWI data were {mppca_desc}'
 
@@ -619,7 +622,16 @@ def init_dwi_denoising_wf(
 
     if do_unringing:
         if unringing_method == 'mrdegibbs':
-            desc += f'{last_step}Gibbs ringing was removed using MRtrix3 [@mrtrix3; @mrdegibbs]. '
+            if unring_complex:
+                desc += (
+                    f'{last_step}Gibbs ringing was removed from the complex-valued data using '
+                    'MRtrix3 [@mrtrix3; @mrdegibbs]. The complex-valued data were then split '
+                    'back into magnitude and phase, and the magnitude data were retained. '
+                )
+            else:
+                desc += (
+                    f'{last_step}Gibbs ringing was removed using MRtrix3 [@mrtrix3; @mrdegibbs]. '
+                )
             degibbser = pe.Node(
                 MRDeGibbs(nthreads=omp_nthreads),
                 name='degibbser',

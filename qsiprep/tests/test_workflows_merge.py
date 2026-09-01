@@ -546,3 +546,20 @@ def test_biascorr_and_get_b0s_get_magnitude_from_split_complex(
     assert ('denoiser', 'get_b0s') not in connections
     assert ('degibbser', 'biascorr') not in connections
     assert ('degibbser', 'get_b0s') not in connections
+
+
+def test_boilerplate_describes_where_the_split_happens(monkeypatch):
+    """Say that unringing ran on complex data, and place the split after it."""
+    complex_degibbs = _build_denoising_wf(monkeypatch, 'dwidenoise', 'mrdegibbs', use_phase=True)
+    assert 'complex-valued' in complex_degibbs.__desc__
+    assert 'After denoising, the complex-valued data were split' not in complex_degibbs.__desc__
+    # The split is described after unringing is described
+    assert complex_degibbs.__desc__.index('Gibbs ringing') < complex_degibbs.__desc__.index(
+        'split back into magnitude'
+    )
+
+    # rpg is magnitude-only, so the split is still described right after denoising
+    complex_rpg = _build_denoising_wf(monkeypatch, 'dwidenoise', 'rpg', use_phase=True)
+    assert complex_rpg.__desc__.index('split back into magnitude') < complex_rpg.__desc__.index(
+        'Gibbs ringing'
+    )

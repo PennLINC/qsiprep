@@ -491,9 +491,9 @@ git commit -m "Use the development-branch spelling of dwibiascorrect ANTs option
 - Test: `qsiprep/tests/test_interfaces_mrtrix.py`
 
 **Interfaces:**
-- Produces: `MRDeGibbs` accepts complex-valued `in_file` without crashing during report generation, and exposes an optional `dimensionality` trait. Task 6 relies on the report not crashing when the workflow hands it complex data.
+- Produces: `MRDeGibbs` accepts complex-valued `in_file` and generates its report from the magnitude data rather than silently from the real part, and exposes an optional `dimensionality` trait. Task 6 relies on the report being drawn from the magnitude when the workflow hands it complex data.
 
-`MRDeGibbs` overrides `SeriesPreprocReport._generate_report` and, unlike the base implementation, never converts complex data to magnitude. `get_fdata()` on a complex NIfTI raises, so the report would fail on exactly the data this feature introduces. `_to_magnitude` already exists at `qsiprep/interfaces/denoise.py:26` and is what `SeriesPreprocReport._generate_report` uses.
+`MRDeGibbs` overrides `SeriesPreprocReport._generate_report` and, unlike the base implementation, never converts complex data to magnitude. `get_fdata()` on a complex NIfTI does not raise; it discards the imaginary part and returns the real component, so the report would silently be drawn from the real part rather than the magnitude on exactly the data this feature introduces. `_to_magnitude` already exists at `qsiprep/interfaces/denoise.py:26` and is what `SeriesPreprocReport._generate_report` uses.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -510,7 +510,8 @@ def test_mrdegibbs_report_handles_complex_input(monkeypatch, tmp_path):
     """Generate the unringing report from complex-valued data.
 
     mrdegibbs on MRtrix3's development branch emits complex data when it is given
-    complex data. nibabel's get_fdata() raises on complex images, so the report has
+    complex data. nibabel's get_fdata() does not raise on complex images; it silently
+    discards the imaginary part and returns the real component, so the report has
     to reduce both images to magnitude first.
     """
     import nibabel as nb

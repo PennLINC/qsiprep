@@ -172,8 +172,10 @@ The existing `out_file` name template (`%s_mrdegibbs.nii.gz`) needs no change: N
 represents `CFloat32` fine, and `mrdegibbs` selects the output datatype from the input.
 
 **`MRDeGibbs._generate_report`** — this override does not call `_to_magnitude`, unlike the
-`SeriesPreprocReport._generate_report` it replaces, so it would crash on complex input at
-`get_fdata()`. Convert both `input_dwi` and `denoised_nii` through
+`SeriesPreprocReport._generate_report` it replaces. `get_fdata()` does not raise on complex
+input; it discards the imaginary part and returns the real component (with a UserWarning), so
+without the conversion the report would be drawn from the real part instead of the magnitude.
+Convert both `input_dwi` and `denoised_nii` through
 `_to_magnitude` (already defined at `qsiprep/interfaces/denoise.py:26`) immediately after
 `_get_plotting_images()`, before the intensity scan, the plotting and the
 `_calculate_nmse` call.
