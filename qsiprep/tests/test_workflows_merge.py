@@ -163,7 +163,7 @@ def test_denoising_wf_masks_only_biascorr(monkeypatch, denoise_method):
     get_b0s = workflow.get_node('get_b0s')
     assert {src.name for src, dest, _ in workflow._graph.edges(data=True) if dest is get_b0s} == {
         'inputnode',
-        'buffer01',
+        'denoiser',
     }
 
 
