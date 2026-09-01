@@ -1,7 +1,7 @@
 ARG BASE_IMAGE=ubuntu:jammy-20250730
 ARG TAG_FREESURFER=26.1.0
 ARG TAG_ANTS=26.1.2
-ARG TAG_MRTRIX3=26.1.0
+ARG TAG_MRTRIX3DEV=26.9.0
 ARG TAG_3TISSUE=26.1.0
 ARG TAG_DSISTUDIO=26.1.2
 ARG TAG_AFNI=AFNI_25.2.09
@@ -12,7 +12,7 @@ ARG TAG_TRXSCAN=26.8.3
 
 FROM pennlinc/qsiprep-freesurfer:${TAG_FREESURFER} AS build_freesurfer
 FROM pennlinc/qsiprep-ants:${TAG_ANTS} AS build_ants
-FROM pennlinc/qsiprep-mrtrix3:${TAG_MRTRIX3} AS build_mrtrix3
+FROM pennlinc/qsiprep-mrtrix3dev:${TAG_MRTRIX3DEV} AS build_mrtrix3
 FROM pennlinc/qsiprep-3tissue:${TAG_3TISSUE} AS build_3tissue
 FROM pennlinc/qsiprep-dsistudio:${TAG_DSISTUDIO} AS build_dsistudio
 FROM afni/afni_make_build:${TAG_AFNI} AS build_afni
@@ -36,10 +36,13 @@ ENV DSI_STUDIO_DEPS="libqt5charts5 libqt5opengl5 libqt5svg5 libqt5gui5 libqt5wid
     PATH="/opt/dsi-studio:/opt/dsi-studio/dsi_studio_64:$PATH"
 
 ## MRtrix3
-COPY --from=build_mrtrix3 /opt/mrtrix3-latest /opt/mrtrix3-latest
+COPY --from=build_mrtrix3 /opt/mrtrix3 /opt/mrtrix3
 ## MRtrix3-3Tissue
 COPY --from=build_3tissue /opt/3Tissue /opt/3Tissue
-ENV PATH="$PATH:/opt/mrtrix3-latest/bin:/opt/3Tissue/bin" \
+# /opt/3Tissue ships its own 3.0.x copies of mrdegibbs and dwidenoise, so it must stay
+# after /opt/mrtrix3 on PATH or it will shadow the development-branch commands.
+ENV PATH="$PATH:/opt/mrtrix3/bin:/opt/3Tissue/bin" \
+    LD_LIBRARY_PATH="/opt/mrtrix3/lib:$LD_LIBRARY_PATH" \
     MRTRIX3_DEPS="bzip2 ca-certificates curl libpng16-16 libblas3 liblapack3"
 
 ## Freesurfer

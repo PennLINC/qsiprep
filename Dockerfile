@@ -1,44 +1,4 @@
-ARG BASE_IMAGE=pennlinc/qsiprep-base:20260828
-ARG DWIDENOISE2_COMMIT=cd08ec1a0f5eb1dbc9962f80c20c2bb3428c4f93
-# MRtrix3 "dev" as at 2026-06-22, the commit dwidenoise2 is developed against
-ARG MRTRIX3_DWIDENOISE2_COMMIT=b98b54e9ae8168eeb9af23322a07011d4754456d
-
-FROM buildpack-deps:bookworm AS dwidenoise2-build
-ARG DWIDENOISE2_COMMIT
-ARG MRTRIX3_DWIDENOISE2_COMMIT
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-                    cmake \
-                    libfftw3-dev \
-                    ninja-build \
-                    pkg-config \
-                    zlib1g-dev && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-WORKDIR /src/dwidenoise2
-RUN git init . && \
-    git remote add origin https://github.com/tsalo/dwidenoise2.git && \
-    git fetch --depth 1 origin ${DWIDENOISE2_COMMIT} && \
-    git checkout --detach FETCH_HEAD
-
-WORKDIR /src/mrtrix3
-RUN git clone --filter=blob:none --no-checkout https://github.com/MRtrix3/mrtrix3.git . && \
-    git checkout --detach ${MRTRIX3_DWIDENOISE2_COMMIT}
-# dwidenoise2 has no external-module build, so its sources are dropped into the MRtrix3
-# tree before configuring. The per-command noise estimation schedules must land in
-# share/mrtrix3/<command>/, where the built commands look for them relative to the
-# executable; "copy-share-data" imports them into the build tree and has to be named
-# explicitly, because building named executable targets does not run MRtrix3's ALL targets.
-RUN cp /src/dwidenoise2/cpp/cmd/dwidenoise2.cpp cpp/cmd/dwidenoise2.cpp && \
-    cp /src/dwidenoise2/cpp/cmd/dwi2noise.cpp cpp/cmd/dwi2noise.cpp && \
-    cp -r /src/dwidenoise2/cpp/core/denoise cpp/core/denoise && \
-    cp -r /src/dwidenoise2/share/dwidenoise2/. share/mrtrix3/ && \
-    cmake -B build -GNinja \
-          -DMRTRIX_BUILD_GUI=OFF \
-          -DMRTRIX_ENABLE_GPU=OFF \
-          -DCMAKE_COMPILE_WARNING_AS_ERROR=ON \
-          --preset=release && \
-    cmake --build build --target dwidenoise2 dwi2noise copy-share-data
+ARG BASE_IMAGE=pennlinc/qsiprep-base:20260901
 
 FROM ghcr.io/prefix-dev/pixi:0.58.0 AS build
 RUN apt-get update && \
@@ -77,26 +37,12 @@ FROM ${BASE_IMAGE} AS base
 WORKDIR /home/qsiprep
 ENV HOME="/home/qsiprep"
 
-COPY --from=dwidenoise2-build \
-     /src/mrtrix3/build/bin/dwidenoise2 \
-     /opt/dwidenoise2/bin/dwidenoise2
-COPY --from=dwidenoise2-build \
-     /src/mrtrix3/build/bin/dwi2noise \
-     /opt/dwidenoise2/bin/dwi2noise
-COPY --from=dwidenoise2-build \
-     /src/mrtrix3/build/cpp/core/libmrtrix-core.so \
-     /opt/dwidenoise2/lib/libmrtrix-core.so
-# The bundled schedules are found relative to the executable, at ../share/mrtrix3/<command>/
-COPY --from=dwidenoise2-build \
-     /src/mrtrix3/build/share/mrtrix3 \
-     /opt/dwidenoise2/share/mrtrix3
-COPY --from=dwidenoise2-build \
-     /src/dwidenoise2/LICENSE \
-     /opt/dwidenoise2/LICENSE
-ENV PATH="/opt/dwidenoise2/bin:$PATH" \
-    LD_LIBRARY_PATH="/opt/dwidenoise2/lib:$LD_LIBRARY_PATH"
+# Every MRtrix3 command must resolve to the development-branch build, not to the
+# 3.0.x copies inside /opt/3Tissue.
 RUN dwidenoise2 -version && \
-    test -d /opt/dwidenoise2/share/mrtrix3/dwidenoise2
+    test "$(command -v mrdegibbs)" = "/opt/mrtrix3/bin/mrdegibbs" && \
+    test "$(command -v dwidenoise)" = "/opt/mrtrix3/bin/dwidenoise" && \
+    test -d /opt/mrtrix3/share/mrtrix3/dwidenoise2
 
 RUN chmod -R go=u $HOME
 WORKDIR /tmp
