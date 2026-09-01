@@ -127,3 +127,59 @@ def test_dwibiascorrect_uses_underscore_ants_options(tmp_path):
     assert '-ants_c [200x200,1e-6]' in cmdline
     assert '-ants_s 4' in cmdline
     assert '-ants.' not in cmdline
+
+
+def test_mrdegibbs_dimensionality_is_optional(tmp_path):
+    """Leave -dimensionality off unless it is set, so the default stays 2D slice-wise."""
+    in_file = tmp_path / 'dwi.nii.gz'
+    in_file.touch()
+
+    assert '-dimensionality' not in mrtrix.MRDeGibbs(in_file=in_file).cmdline
+    assert '-dimensionality 3' in mrtrix.MRDeGibbs(in_file=in_file, dimensionality=3).cmdline
+
+
+def test_mrdegibbs_report_handles_complex_input(monkeypatch, tmp_path):
+    """Generate the unringing report from complex-valued data.
+
+    mrdegibbs on MRtrix3's development branch emits complex data when it is given
+    complex data. nibabel's get_fdata() raises on complex images, so the report has
+    to reduce both images to magnitude first.
+    """
+    import nibabel as nb
+    import numpy as np
+
+    rng = np.random.default_rng(0)
+    shape = (8, 8, 4, 3)
+    affine = np.eye(4)
+
+    def _write(name, data):
+        path = tmp_path / name
+        img = nb.Nifti1Image(data, affine)
+        img.header.set_data_dtype(data.dtype)
+        img.to_filename(path)
+        return str(path)
+
+    # A bright, structured magnitude so threshold_img(…, 50) finds a non-empty mask
+    magnitude = rng.uniform(100, 400, shape)
+    phase = rng.uniform(-np.pi, np.pi, shape)
+    in_file = _write('in.nii.gz', (magnitude * np.exp(1j * phase)).astype(np.complex64))
+    out_file = _write('out.nii.gz', (magnitude * 0.99 * np.exp(1j * phase)).astype(np.complex64))
+
+    interface = mrtrix.MRDeGibbs(in_file=in_file)
+    interface._out_report = str(tmp_path / 'report.svg')
+    # Bypass nipype's name_source filename derivation and the NMSE CSV write: this test
+    # is about surviving complex inputs, not about how output filenames are built.
+    monkeypatch.setattr(
+        mrtrix.MRDeGibbs,
+        '_get_plotting_images',
+        lambda self: (nb.load(in_file), nb.load(out_file), None),
+    )
+    monkeypatch.setattr(
+        mrtrix.MRDeGibbs,
+        '_calculate_nmse',
+        lambda self, original_nii, corrected_nii: None,
+    )
+
+    interface._generate_report()
+
+    assert (tmp_path / 'report.svg').is_file()

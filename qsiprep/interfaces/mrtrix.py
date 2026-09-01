@@ -33,6 +33,7 @@ from .denoise import (
     SeriesPreprocReport,
     SeriesPreprocReportInputSpec,
     SeriesPreprocReportOutputSpec,
+    _to_magnitude,
 )
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -520,6 +521,16 @@ class MRDeGibbsInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
     maxw = traits.Int(
         default=3, argstr='-maxW %d', desc='right border of window used for TV computation'
     )
+    dimensionality = traits.Enum(
+        2,
+        3,
+        argstr='-dimensionality %d',
+        desc=(
+            'dimensionality of the operation: 2 for the slice-wise method of Kellner et al., '
+            '3 for the volume-wise extension of Bautista et al. Left unset, mrdegibbs '
+            'defaults to 2.'
+        ),
+    )
 
 
 class MRDeGibbsOutputSpec(SeriesPreprocReportOutputSpec):
@@ -543,6 +554,12 @@ class MRDeGibbs(SeriesPreprocReport, MRTrix3Base):
         LOGGER.info('Generating denoising visual report')
 
         input_dwi, denoised_nii, _ = self._get_plotting_images()
+
+        # mrdegibbs emits complex data when it is given complex data, and the report
+        # always shows magnitude. This mirrors SeriesPreprocReport._generate_report,
+        # which this method overrides.
+        input_dwi = _to_magnitude(input_dwi)
+        denoised_nii = _to_magnitude(denoised_nii)
 
         # find an image to use as the background
         image_data = input_dwi.get_fdata()
