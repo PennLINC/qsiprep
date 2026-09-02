@@ -248,7 +248,7 @@ pennlinc/qsiprep-mrtrix3 is left on 3.0.x because QSIRecon depends on it."
 
 **Files:**
 - Modify: `Dockerfile.base:4` (the `TAG_MRTRIX3` ARG), `Dockerfile.base:15` (the `build_mrtrix3` FROM), `Dockerfile.base:39-43` (the MRtrix3 COPY and PATH)
-- Modify: `Dockerfile:1-3` (ARGs), `Dockerfile:5-42` (the `dwidenoise2-build` stage), `Dockerfile:80-100` (the `/opt/dwidenoise2` COPYs, ENV and verification RUN)
+- Modify: `Dockerfile:1-3` (ARGs), `Dockerfile:5-42` (the `dwidenoise2-build` stage), `Dockerfile:80-100` (the `/opt/dwidenoise2` COPIES, ENV and verification RUN)
 
 **Interfaces:**
 - Consumes: `pennlinc/qsiprep-mrtrix3dev:26.9.0` from Task 1.
