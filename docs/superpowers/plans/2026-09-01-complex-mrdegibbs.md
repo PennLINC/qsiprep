@@ -564,7 +564,10 @@ micromamba run -n linc311 python -m pytest \
   qsiprep/tests/test_interfaces_mrtrix.py::test_mrdegibbs_report_handles_complex_input -v
 ```
 
-Expected: the first FAILs with a trait error on `dimensionality`; the second FAILs inside `get_fdata()` with a complex-dtype error.
+Expected: the first FAILs with a trait error on `dimensionality`. The second does NOT
+fail on its own — `get_fdata()` does not raise on complex data, it warns and silently
+returns the real part — which is why that test must assert on the plotted magnitude
+values rather than merely on the report file existing.
 
 - [ ] **Step 3: Add the `dimensionality` trait**
 
