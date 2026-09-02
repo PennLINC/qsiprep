@@ -127,7 +127,9 @@ QSIRecon keeps its existing pin.
 
 `Dockerfile.base`:
 
-- Replace `ARG TAG_MRTRIX3=26.1.0` with `ARG TAG_MRTRIX3DEV=26.9.0` (the repo tags components `YY.M.patch`; `26.9.0` is the next free one).
+- Replace `ARG TAG_MRTRIX3=26.1.0` with `ARG TAG_MRTRIX3DEV=26.9.0` (QSIPrep and its build repo use NiPreps CalVer, `YY.MINOR.PATCH`. Adding a new
+  component image is a feature-level change, so it takes the next MINOR after the current
+  `26.8.x` series).
 - `FROM pennlinc/qsiprep-mrtrix3dev:${TAG_MRTRIX3DEV} AS build_mrtrix3`.
 - `COPY --from=build_mrtrix3 /opt/mrtrix3 /opt/mrtrix3`.
 - Change the PATH entry `/opt/mrtrix3-latest/bin` to `/opt/mrtrix3/bin`. `/opt/3Tissue/bin`

@@ -16,7 +16,7 @@
 - Two repositories are involved. `qsiprep` is at `/mnt/c/Users/tsalo/Documents/linc/qsiprep` (branch `complex-degibbs`); `qsiprep_build` is at `/mnt/c/Users/tsalo/Documents/linc/qsiprep_build`. Commit to each separately. Never run `git stash` in either.
 - MRtrix3 pin: `MRTRIX3_SHA=b98b54e9ae8168eeb9af23322a07011d4754456d`. Do not bump it — it is the commit `dwidenoise2` is developed against, and it already contains the complex `mrdegibbs`.
 - dwidenoise2 pin: `DWIDENOISE2_COMMIT=cd08ec1a0f5eb1dbc9962f80c20c2bb3428c4f93` from `https://github.com/tsalo/dwidenoise2.git`.
-- New component image tag: `TAG_MRTRIX3DEV=26.9.0` (the repo tags components `YY.M.patch`).
+- New component image tag: `TAG_MRTRIX3DEV=26.9.0` (NiPreps CalVer, `YY.MINOR.PATCH`; the next MINOR after the current `26.8.x` series).
 - `pennlinc/qsiprep-mrtrix3` and `qsiprep_build/Dockerfile_MRtrix3` must not change — QSIRecon consumes them.
 - `cmake` must be invoked with `-DCMAKE_INSTALL_LIBDIR=lib`. MRtrix3's generated Python command wrappers hardcode `sys.path.insert(0, <exe_dir>/../lib)`; an architecture-triplet libdir breaks every Python command including `dwibiascorrect`.
 - Existing node names (`denoiser`, `degibbser`, `biascorr`, `combine_complex`, `split_complex`, `quick_mask`, `get_b0s`, `gradient_table`, `phase_to_radians`) are asserted by tests and must be preserved.
