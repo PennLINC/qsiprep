@@ -42,6 +42,7 @@ ENV HOME="/home/qsiprep"
 RUN dwidenoise2 -version && \
     test "$(command -v mrdegibbs)" = "/opt/mrtrix3/bin/mrdegibbs" && \
     test "$(command -v dwidenoise)" = "/opt/mrtrix3/bin/dwidenoise" && \
+    test "$(command -v dwibiascorrect)" = "/opt/mrtrix3/bin/dwibiascorrect" && \
     test -d /opt/mrtrix3/share/mrtrix3/dwidenoise2
 
 RUN chmod -R go=u $HOME
