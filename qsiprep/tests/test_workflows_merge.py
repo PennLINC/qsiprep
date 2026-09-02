@@ -439,7 +439,9 @@ def _connections(workflow):
     }
 
 
-def _build_denoising_wf(monkeypatch, denoise_method, unringing_method, use_phase, do_biascorr=False):
+def _build_denoising_wf(
+    monkeypatch, denoise_method, unringing_method, use_phase, do_biascorr=False
+):
     """Build (without running) a denoising workflow with the given configuration."""
     monkeypatch.setattr(config.workflow, 'denoise_method', denoise_method)
     monkeypatch.setattr(config.workflow, 'dwi_denoise_window', 5)
