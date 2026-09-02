@@ -16,10 +16,14 @@ from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
+from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 
 from ... import config
+from ...interfaces import DerivativesDataSink
 from ...interfaces.gradunwarp import CreateNonlinearityDisplacementMap, MaskWarpDimensions
 from .resampling import _listify
+
+DEFAULT_MEMORY_MIN_GB = 0.01
 
 #: Ordering used to reconcile disagreeing runs in one unit. Lower is less
 #: correction, and less correction is the recoverable error.
@@ -311,7 +315,10 @@ def init_gradwarp_wf(unit, name='gradwarp_wf'):
       supplied the displacement field, so only the dimension masking applies.
 
     ``.needs_reference`` says whether ``inputnode.ref_image`` is consumed, so a
-    caller knows whether to build the 3D extraction node that feeds it.
+    caller knows whether to build the 3D extraction node that feeds it. It is
+    true whenever a field is built, for either of two reasons: the coefficient
+    expander needs a grid to expand onto, and the reportlet needs the
+    uncorrected image to show the correction against.
     """
     plan = resolve_gradwarp_plan(unit)
     if plan is None:
@@ -325,14 +332,14 @@ def init_gradwarp_wf(unit, name='gradwarp_wf'):
     if plan.warp_dim is None:
         return workflow
 
+    workflow.needs_reference = True
+    inputnode = pe.Node(niu.IdentityInterface(fields=['ref_image']), name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(fields=['gradwarp_field']), name='outputnode')
     mask_field = pe.Node(MaskWarpDimensions(warp_dim=plan.warp_dim), name='mask_field')
 
     if is_displacement_field(plan.coeff_file):
         mask_field.inputs.in_file = plan.coeff_file
     else:
-        workflow.needs_reference = True
-        inputnode = pe.Node(niu.IdentityInterface(fields=['ref_image']), name='inputnode')
         make_field = pe.Node(
             CreateNonlinearityDisplacementMap(coeff_file=plan.coeff_file, is_ge=plan.is_ge),
             name='make_field',
@@ -342,8 +349,55 @@ def init_gradwarp_wf(unit, name='gradwarp_wf'):
             (make_field, mask_field, [('out_field', 'in_file')]),
         ])  # fmt:skip
 
+    # The reportlet is the only place a user can see what the correction did:
+    # the field itself is never written out, and the gradwarp warp is composed
+    # into the single transform chain that produces the final series, so the
+    # preprocessed output has no uncorrected counterpart to compare against.
+    #
+    # Resampling the reference onto its own grid costs one 3D ApplyTransforms
+    # per unit and needs no image the workflow does not already have, so the
+    # figure is built for every unit that builds a field -- including the
+    # --gradient-file-is-a-displacement-field case, where the reference is
+    # otherwise unused.
+    #
+    # The displacements are small (millimetres, and largest at the edges of the
+    # FOV), which is what the before/after reportlet is good at: it alternates
+    # the two images in place, so a shift too small to spot in a side-by-side
+    # is visible as movement.
+    corrected_ref = pe.Node(
+        ants.ApplyTransforms(
+            dimension=3,
+            interpolation=_sdc_interpolation(),
+            float=True,
+        ),
+        name='corrected_ref',
+    )
+    reportlet = pe.Node(
+        SimpleBeforeAfterRPT(before_label='Distorted', after_label='Corrected'),
+        name='gradwarp_reportlet',
+        mem_gb=0.1,
+    )
+    # ``ds_report``-prefixed nodes have their source_file and base_directory
+    # filled in by init_dwi_preproc_wf, which walks the whole graph.
+    ds_report_gradwarp = pe.Node(
+        DerivativesDataSink(datatype='figures', desc='gradunwarp', suffix='dwi'),
+        name='ds_report_gradwarp',
+        mem_gb=DEFAULT_MEMORY_MIN_GB,
+        run_without_submitting=True,
+    )
+
     workflow.connect([
         (mask_field, outputnode, [('out_file', 'gradwarp_field')]),
+        # Resampled onto its own grid, so the two images differ only by the
+        # gradwarp displacement.
+        (inputnode, corrected_ref, [
+            ('ref_image', 'input_image'),
+            ('ref_image', 'reference_image'),
+        ]),
+        (mask_field, corrected_ref, [(('out_file', _listify), 'transforms')]),
+        (inputnode, reportlet, [('ref_image', 'before')]),
+        (corrected_ref, reportlet, [('output_image', 'after')]),
+        (reportlet, ds_report_gradwarp, [('out_report', 'in_file')]),
     ])  # fmt:skip
 
     return workflow

@@ -313,6 +313,11 @@ def init_dwi_preproc_wf(
             # throws at runtime. The field depends only on the sampling grid, not
             # on image content, so any single volume on that grid is a valid
             # reference; volume 0 is cheapest and needs no bvals/bvecs.
+            #
+            # The same volume is the 'before' image of gradwarp_wf's reportlet,
+            # so a unit that builds a field always wants one -- including when
+            # --gradient-file is a ready-made displacement field and there is no
+            # field builder to feed.
             gradwarp_ref = pe.Node(
                 niu.Function(function=_extract_first_volume, output_names=['out_file']),
                 name='gradwarp_ref',

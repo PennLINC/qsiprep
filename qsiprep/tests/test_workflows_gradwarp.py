@@ -111,7 +111,8 @@ def test_gradwarp_wf_skips_make_field_for_a_displacement_field_input(tmp_path):
     wf = init_gradwarp_wf(_unit(tmp_path))
 
     assert wf.get_node('make_field') is None
-    assert wf.needs_reference is False
+    # The reference is still consumed: it is the reportlet's 'before' image.
+    assert wf.needs_reference is True
     # The supplied field goes straight into the dimension mask.
     assert wf.get_node('mask_field').inputs.in_file == str(field)
 
@@ -125,6 +126,102 @@ def test_gradwarp_wf_builds_make_field_for_a_coefficient_input(tmp_path):
 
     assert wf.get_node('make_field') is not None
     assert wf.needs_reference is True
+
+
+def test_gradwarp_wf_builds_the_before_after_reportlet(tmp_path):
+    """The figure is the only place the spatial correction is visible.
+
+    The field is not written out, and the gradwarp warp is composed into the
+    one transform chain that produces the final series, so the preprocessed
+    output has no uncorrected counterpart to compare against.
+    """
+    from qsiprep.workflows.dwi.gradwarp import init_gradwarp_wf
+
+    config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
+    wf = init_gradwarp_wf(_unit(tmp_path))
+
+    reportlet = wf.get_node('gradwarp_reportlet')
+    assert reportlet is not None
+    assert reportlet.inputs.before_label == 'Distorted'
+    assert reportlet.inputs.after_label == 'Corrected'
+
+    datasink = wf.get_node('ds_report_gradwarp')
+    assert datasink is not None
+    assert datasink.inputs.datatype == 'figures'
+    assert datasink.inputs.desc == 'gradunwarp'
+    assert datasink.inputs.suffix == 'dwi'
+    assert _connects(wf, 'gradwarp_reportlet', 'ds_report_gradwarp', 'out_report', 'in_file')
+
+
+def test_gradwarp_reportlet_compares_the_reference_against_itself(tmp_path):
+    """Before and after differ by the field and by nothing else.
+
+    The corrected image is resampled onto the reference's *own* grid, so any
+    displacement seen in the figure is the gradwarp correction rather than a
+    change of resolution, field of view or obliquity.
+    """
+    from qsiprep.workflows.dwi.gradwarp import init_gradwarp_wf
+
+    config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
+    wf = init_gradwarp_wf(_unit(tmp_path))
+
+    assert _connects(wf, 'inputnode', 'gradwarp_reportlet', 'ref_image', 'before')
+    assert _connects(wf, 'corrected_ref', 'gradwarp_reportlet', 'output_image', 'after')
+    assert _connects(wf, 'inputnode', 'corrected_ref', 'ref_image', 'input_image')
+    assert _connects(wf, 'inputnode', 'corrected_ref', 'ref_image', 'reference_image')
+
+
+def test_gradwarp_reportlet_shows_the_field_that_is_actually_applied(tmp_path):
+    """The transform comes from ``mask_field``, not from the raw field.
+
+    A DIS2D unit is corrected through-plane only. Picturing the unmasked 3D
+    field would advertise an in-plane correction the pipeline never applies.
+    """
+    from qsiprep.workflows.dwi.gradwarp import init_gradwarp_wf
+
+    config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
+    wf = init_gradwarp_wf(_unit(tmp_path, ['ORIGINAL', 'DIS2D']))
+
+    assert wf.get_node('mask_field').inputs.warp_dim == '1D'
+    assert _connects(wf, 'mask_field', 'corrected_ref', 'out_file', 'transforms')
+    assert not _connects(wf, 'make_field', 'corrected_ref', 'out_field', 'transforms')
+
+
+def test_gradwarp_reportlet_is_built_for_a_supplied_displacement_field(tmp_path):
+    """A ready-made field still gets the figure; only the expander is skipped."""
+    from qsiprep.workflows.dwi.gradwarp import init_gradwarp_wf
+
+    config.workflow.gradient_file = str(write_itk_field(tmp_path / 'field.nii.gz'))
+    wf = init_gradwarp_wf(_unit(tmp_path))
+
+    assert wf.get_node('make_field') is None
+    assert wf.get_node('gradwarp_reportlet') is not None
+    assert _connects(wf, 'mask_field', 'corrected_ref', 'out_file', 'transforms')
+
+
+def test_gradwarp_reportlet_resampling_honours_sloppy(tmp_path):
+    """--sloppy speeds this up the way it speeds up every other resampling."""
+    from qsiprep.workflows.dwi.gradwarp import init_gradwarp_wf
+
+    config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
+    config.execution.sloppy = True
+    try:
+        wf = init_gradwarp_wf(_unit(tmp_path))
+    finally:
+        config.execution.sloppy = False
+
+    assert wf.get_node('corrected_ref').inputs.interpolation == 'NearestNeighbor'
+
+
+def test_dis3d_builds_no_reportlet(tmp_path):
+    """A DIS3D unit applies no spatial correction, so there is nothing to show."""
+    from qsiprep.workflows.dwi.gradwarp import init_gradwarp_wf
+
+    config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
+    wf = init_gradwarp_wf(_unit(tmp_path, ['ORIGINAL', 'DIS3D']))
+
+    assert wf.get_node('gradwarp_reportlet') is None
+    assert list(wf._graph.nodes()) == []
 
 
 @pytest.mark.parametrize(
@@ -533,8 +630,13 @@ def test_dwi_preproc_wf_dis3d_report_line_survives(tmp_path):
     assert wf.get_node('summary').inputs.gradient_correction == 'b-matrix only (ImageType: DIS3D)'
 
 
-def test_dwi_preproc_wf_skips_the_reference_node_for_a_displacement_field(tmp_path):
-    """A supplied ITK field is already on its own grid; nothing to extract."""
+def test_dwi_preproc_wf_extracts_a_reference_for_a_displacement_field(tmp_path):
+    """A supplied ITK field builds no expander, but still needs a reference.
+
+    Nothing expands coefficients onto a grid here, so the extracted volume has
+    exactly one consumer: the before/after reportlet, which cannot show what
+    the field did without the image it was applied to.
+    """
     import nibabel as nb
     import numpy as np
 
@@ -554,12 +656,51 @@ def test_dwi_preproc_wf_skips_the_reference_node_for_a_displacement_field(tmp_pa
         anatomical_template='MNI152NLin2009cAsym',
     )
 
-    assert wf.get_node('gradwarp_ref') is None
-    # The field is still wired into resampling: only the field *builder* went.
+    gradwarp_ref = wf.get_node('gradwarp_ref')
+    assert gradwarp_ref is not None
     gradwarp_wf = wf.get_node('gradwarp_wf')
+    edge = wf._graph.get_edge_data(gradwarp_ref, gradwarp_wf)
+    assert edge is not None
+    assert ('out_file', 'inputnode.ref_image') in edge['connect']
+
+    # The field is still wired into resampling: only the field *builder* went.
     edge = wf._graph.get_edge_data(gradwarp_wf, wf.get_node('outputnode'))
     assert edge is not None
     assert ('outputnode.gradwarp_field', 'gradwarp_field') in edge['connect']
+
+
+def test_dwi_preproc_wf_fills_in_the_gradwarp_reportlet_datasink(tmp_path):
+    """The datasink is named ``ds_report*`` so the parent fills it in.
+
+    ``init_dwi_preproc_wf`` walks the whole graph setting ``source_file`` and
+    ``base_directory`` on every ``ds_report*`` node, which is why the reportlet
+    can live inside gradwarp_wf without threading the source file through
+    ``init_gradwarp_wf``. Rename the node and the figure lands nowhere.
+    """
+    wf = _preproc_wf(tmp_path)
+
+    datasink = wf.get_node('gradwarp_wf.ds_report_gradwarp')
+    assert datasink is not None
+    assert [str(f) for f in datasink.inputs.source_file] == [str(tmp_path / 'sub-01_dwi.nii.gz')]
+    assert datasink.inputs.base_directory == str(tmp_path)
+
+
+def test_gradunwarp_reportlet_desc_is_registered_in_the_report_spec():
+    """A desc absent from reports-spec.yml is written to disk but never shown."""
+    import yaml
+
+    from qsiprep.data import load as load_data
+
+    spec = yaml.safe_load(load_data('reports-spec.yml').read_text())
+    descs = set()
+    for section in spec['sections']:
+        for reportlet in section.get('reportlets', []):
+            bids = reportlet.get('bids')
+            if not isinstance(bids, dict):
+                continue
+            desc = bids.get('desc')
+            descs.update(desc if isinstance(desc, list) else [desc])
+    assert 'gradunwarp' in descs
 
 
 def test_dwi_preproc_wf_without_gradient_file_has_no_gradwarp_wf(tmp_path):

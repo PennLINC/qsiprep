@@ -198,6 +198,19 @@ sections:
     static: false
     subtitle: Experimental fieldmap-less susceptibility distortion correction
 
+  - bids: {datatype: figures, desc: gradunwarp, suffix: dwi}
+    caption: |
+      Effect of gradient nonlinearity correction on the <em>b</em>=0 image the
+      displacement field was built from. The "distorted" image is that reference as
+      acquired; the "corrected" image is the same reference resampled through the
+      field. Gradient nonlinearity grows with distance from the isocenter, so the
+      edges of the field of view move most while the center of the brain may barely
+      move at all. Note that this figure shows only the spatial correction: the
+      voxelwise <em>b</em>-matrix deviation is written out as a
+      <code>graddev</code> image and is not pictured here.
+    static: false
+    subtitle: Gradient Nonlinearity Correction
+
   - bids: {datatype: figures, desc: denoising, suffix: dwi}
     caption: |
       "Effect of denoising on a low and high-<em>b</em> image."
