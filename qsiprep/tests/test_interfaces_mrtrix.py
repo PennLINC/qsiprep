@@ -226,3 +226,16 @@ def test_mrdegibbs_report_handles_complex_input(monkeypatch, tmp_path):
     recorded_lowb, recorded_highb = recorded_calls[0]
     np.testing.assert_allclose(recorded_lowb, expected_lowb, rtol=1e-3, atol=1e-2)
     np.testing.assert_allclose(recorded_highb, expected_highb, rtol=1e-3, atol=1e-2)
+
+    # The second plot_denoise call is the fixed-image ("Estimated Ringing") pair:
+    # input_dwi minus denoised_nii. It is the only thing that guards the input_dwi
+    # conversion -- the first call touches denoised_nii alone, so dropping
+    # `input_dwi = _to_magnitude(input_dwi)` leaves it passing while the ringing panel
+    # (and the NMSE that _calculate_nmse writes to a user-facing confounds CSV) is
+    # computed from the phase-scaled real part.
+    expected_diff_lowb = (magnitude - denoised_magnitude)[..., lowb_index].astype(np.float32)
+    expected_diff_highb = (magnitude - denoised_magnitude)[..., highb_index].astype(np.float32)
+
+    recorded_diff_lowb, recorded_diff_highb = recorded_calls[1]
+    np.testing.assert_allclose(recorded_diff_lowb, expected_diff_lowb, rtol=1e-3, atol=1e-2)
+    np.testing.assert_allclose(recorded_diff_highb, expected_diff_highb, rtol=1e-3, atol=1e-2)
