@@ -204,11 +204,12 @@ def _run_denoising_wf(
     denoise_method,
     use_phase,
     dwi_denoise_window='auto',
+    unringing_method='none',
 ):
     """Build and execute a denoising workflow on the nibs DWI series.
 
-    Unringing, bias correction and b=0 harmonization are all disabled so that only the
-    denoising step is exercised.
+    Bias correction and b=0 harmonization are disabled; unringing is off unless
+    ``unringing_method`` says otherwise.
 
     Returns
     -------
@@ -219,7 +220,7 @@ def _run_denoising_wf(
     """
     monkeypatch.setattr(config.workflow, 'denoise_method', denoise_method)
     monkeypatch.setattr(config.workflow, 'dwi_denoise_window', dwi_denoise_window)
-    monkeypatch.setattr(config.workflow, 'unringing_method', 'none')
+    monkeypatch.setattr(config.workflow, 'unringing_method', unringing_method)
     monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
     monkeypatch.setattr(config.workflow, 'b0_threshold', 100)
     monkeypatch.setattr(config.nipype, 'omp_nthreads', 1)
@@ -563,3 +564,30 @@ def test_boilerplate_describes_where_the_split_happens(monkeypatch):
     assert complex_rpg.__desc__.index('split back into magnitude') < complex_rpg.__desc__.index(
         'Gibbs ringing'
     )
+
+
+@pytest.mark.parametrize('denoise_method', ['dwidenoise', 'dwidenoise2'])
+def test_denoising_wf_complex_mrdegibbs(monkeypatch, tmp_path, nibs_dwi, denoise_method):
+    """Run mrdegibbs on complex-valued data and return magnitude.
+
+    This is the only test that proves the MRtrix3 in the image really accepts and
+    emits complex data; the graph-shape tests only check the wiring.
+    """
+    nodes, sink_dir = _run_denoising_wf(
+        monkeypatch,
+        tmp_path,
+        nibs_dwi,
+        denoise_method=denoise_method,
+        use_phase=True,
+        unringing_method='mrdegibbs',
+    )
+
+    degibbser = nodes['degibbser']
+    degibbs_in = nb.load(degibbser.inputs.in_file)
+    assert np.issubdtype(degibbs_in.header.get_data_dtype(), np.complexfloating)
+
+    degibbs_out = nb.load(degibbser.result.outputs.out_file)
+    assert np.issubdtype(degibbs_out.header.get_data_dtype(), np.complexfloating)
+    assert degibbs_out.shape == degibbs_in.shape
+
+    _assert_denoising_outputs(nodes, sink_dir, nibs_dwi['dwi_file'])
