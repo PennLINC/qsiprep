@@ -111,22 +111,45 @@ def test_dwidenoise2_formats_fslgrad(tmp_path):
     assert f'-fslgrad {bvec_file} {bval_file}' in interface.cmdline
 
 
-def test_dwibiascorrect_uses_underscore_ants_options(tmp_path):
-    """Pass N4 options as -ants_b/-ants_c/-ants_s.
+@pytest.mark.parametrize(
+    ('mrtrix_version', 'separator', 'rejected'),
+    [('stable', '.', '-ants_'), ('dev', '_', '-ants.')],
+)
+def test_dwibiascorrect_ants_option_spelling(tmp_path, mrtrix_version, separator, rejected):
+    """Spell the N4 options the way the selected MRtrix3 expects.
 
-    MRtrix3's development branch renamed these from the dot-separated -ants.b form
-    used by 3.0.x. Getting this wrong fails every bias-correction node at runtime,
-    so the exact spelling is pinned here.
+    3.0.x uses -ants.b and rejects the underscore form; the development branch
+    renamed them to -ants_b and rejects the dot form. These options are emitted on
+    every run, so getting this wrong fails every bias-correction node at runtime.
     """
     in_file = tmp_path / 'dwi.nii.gz'
     in_file.touch()
 
-    interface = mrtrix.DWIBiasCorrect(method='ants', in_file=in_file, ants_s='4')
+    interface = mrtrix.DWIBiasCorrect(
+        method='ants',
+        in_file=in_file,
+        ants_s='4',
+        mrtrix_version=mrtrix_version,
+    )
     cmdline = interface.cmdline
-    assert '-ants_b [150,3]' in cmdline
-    assert '-ants_c [200x200,1e-6]' in cmdline
-    assert '-ants_s 4' in cmdline
-    assert '-ants.' not in cmdline
+
+    assert f'-ants{separator}b [150,3]' in cmdline
+    assert f'-ants{separator}c [200x200,1e-6]' in cmdline
+    assert f'-ants{separator}s 4' in cmdline
+    assert rejected not in cmdline
+    # mrtrix_version selects a spelling; it is not itself an mrtrix option
+    assert 'mrtrix_version' not in cmdline
+    assert '--mrtrix' not in cmdline
+
+
+def test_dwibiascorrect_defaults_to_stable_spelling(tmp_path):
+    """A bare DWIBiasCorrect() matches the released MRtrix3, like the CLI default."""
+    in_file = tmp_path / 'dwi.nii.gz'
+    in_file.touch()
+
+    cmdline = mrtrix.DWIBiasCorrect(method='ants', in_file=in_file).cmdline
+    assert '-ants.b [150,3]' in cmdline
+    assert '-ants_' not in cmdline
 
 
 def test_mrdegibbs_dimensionality_is_optional(tmp_path):

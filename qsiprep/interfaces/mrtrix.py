@@ -445,11 +445,19 @@ class DWIBiasCorrectInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec
         position=-1,
         desc='the output bias corrected DWI image',
     )
-    # MRtrix3's development branch spells these -ants_b/-ants_c/-ants_s; the
-    # dot-separated form used by 3.0.x is rejected outright.
-    ants_b = traits.Str(default_value='[150,3]', argstr='-ants_b %s', usedefault=True)
-    ants_c = traits.Str(default_value='[200x200,1e-6]', argstr='-ants_c %s', usedefault=True)
-    ants_s = traits.Str(default_value='4', argstr='-ants_s %s')
+    # The argstr is a bare placeholder: DWIBiasCorrect._format_arg builds the real
+    # flag, because 3.0.x spells these -ants.b and the development branch -ants_b.
+    # The placeholder is load-bearing — nipype formats only traits that declare an
+    # argstr, so removing it would silently emit nothing at all.
+    ants_b = traits.Str(default_value='[150,3]', argstr='%s', usedefault=True)
+    ants_c = traits.Str(default_value='[200x200,1e-6]', argstr='%s', usedefault=True)
+    ants_s = traits.Str(default_value='4', argstr='%s')
+    mrtrix_version = traits.Enum(
+        'stable',
+        'dev',
+        usedefault=True,
+        desc='which MRtrix3 installation this node will run against',
+    )
     out_report = File('n4_report.svg', usedefault=True, desc='filename for the visual report')
     bzero_max = traits.Int(
         argstr='-config BZeroThreshold %d',
@@ -481,6 +489,12 @@ class DWIBiasCorrect(SeriesPreprocReport, MRTrix3Base):
     _cmd = 'dwibiascorrect'
     input_spec = DWIBiasCorrectInputSpec
     output_spec = DWIBiasCorrectOutputSpec
+
+    def _format_arg(self, name, spec, value):
+        if name in ('ants_b', 'ants_c', 'ants_s'):
+            separator = '_' if self.inputs.mrtrix_version == 'dev' else '.'
+            return f'-ants{separator}{name[-1]} {value}'
+        return super()._format_arg(name, spec, value)
 
     def _get_plotting_images(self):
         input_dwi = load_img(self.inputs.in_file)
@@ -528,7 +542,8 @@ class MRDeGibbsInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
         desc=(
             'dimensionality of the operation: 2 for the slice-wise method of Kellner et al., '
             '3 for the volume-wise extension of Bautista et al. Left unset, mrdegibbs '
-            'defaults to 2.'
+            'defaults to 2. Requires --mrtrix-version dev; the released mrdegibbs does '
+            'not accept this option.'
         ),
     )
 
