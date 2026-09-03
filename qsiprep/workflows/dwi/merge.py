@@ -483,7 +483,7 @@ def init_dwi_denoising_wf(
         and config.workflow.mrtrix_version == 'dev'
     )
     if denoise_complex and unringing_method == 'mrdegibbs' and not unring_complex:
-        config.loggers.workflow.info(
+        config.loggers.workflow.warning(
             'Complex-valued Gibbs unringing is available with --mrtrix-version dev. '
             'The magnitude data will be unrung instead.'
         )

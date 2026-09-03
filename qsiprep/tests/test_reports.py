@@ -77,7 +77,12 @@ def test_about_summary_records_the_mrtrix_installation():
 
 
 def test_about_summary_omits_an_unknown_mrtrix_path():
-    """Report the version alone when the platform declares no installation paths."""
+    """Mark the version as unresolved, not a bare claim, when no path was declared.
+
+    Nothing has actually been selected in this case: whatever MRtrix3 is on PATH ran,
+    which may not be the requested version. The report must not assert a version it
+    cannot back.
+    """
     from qsiprep.interfaces.reports import AboutSummary
 
     segment = AboutSummary(
@@ -89,6 +94,7 @@ def test_about_summary_omits_an_unknown_mrtrix_path():
     assert 'MRtrix3' in segment
     assert 'stable' in segment
     assert 'None' not in segment
+    assert 'resolved from PATH' in segment
 
 
 @pytest.fixture

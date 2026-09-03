@@ -288,6 +288,8 @@ class AboutSummary(SummaryInterface):
         mrtrix3 = self.inputs.mrtrix_version
         if isdefined(self.inputs.mrtrix3_home) and self.inputs.mrtrix3_home:
             mrtrix3 = f'{mrtrix3} ({self.inputs.mrtrix3_home})'
+        else:
+            mrtrix3 = f'{mrtrix3} (requested; no declared installation, resolved from PATH)'
 
         return ABOUT_TEMPLATE.format(
             version=self.inputs.version,

@@ -294,15 +294,15 @@ class environment(_Config):
 
     cpu_count = os.cpu_count()
     """Number of available CPUs."""
-    mrtrix3_home = None
-    """Absolute path of the MRtrix3 installation selected by ``--mrtrix-version``,
-    or ``None`` when the platform declares no MRtrix3 installations."""
     exec_docker_version = _docker_ver
     """Version of Docker Engine."""
     exec_env = _exec_env
     """A string representing the execution platform."""
     free_mem = _free_mem_at_start
     """Free memory at start."""
+    mrtrix3_home = None
+    """Absolute path of the MRtrix3 installation selected by ``--mrtrix-version``,
+    or ``None`` when the platform declares no MRtrix3 installations."""
     overcommit_policy = _oc_policy
     """Linux's kernel virtual memory overcommit policy."""
     overcommit_limit = _oc_limit

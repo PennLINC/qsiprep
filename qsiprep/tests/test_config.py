@@ -86,3 +86,26 @@ def test_workflow_init_does_not_accumulate_duplicates(monkeypatch, mrtrix_trees)
     config.workflow.init()
 
     assert os.environ['PATH'] == after_first
+
+
+def test_from_dict_reaches_workflow_init(monkeypatch, mrtrix_trees):
+    """Prove the public entry point actually reorders PATH, not just workflow.init().
+
+    Everything here rests on ``_Config.load`` calling ``cls.init()``, which
+    ``parse_args`` reaches through ``config.from_dict``. Calling ``workflow.init()``
+    directly (as the other tests in this module do) would keep passing even if that
+    wiring silently broke. ``init`` is restricted to the ``workflow`` section: the
+    ``execution`` section's ``init()`` builds a real BIDS layout and errors out
+    without a ``bids_dir``, which is unrelated to what this test is checking.
+    """
+    stable, dev = mrtrix_trees
+    # Register the pre-call value with monkeypatch for teardown restoration:
+    # ``from_dict`` sets the class attribute directly, bypassing monkeypatch's own
+    # setattr, so this only works because monkeypatch snapshots the value now.
+    monkeypatch.setattr(config.workflow, 'mrtrix_version', config.workflow.mrtrix_version)
+
+    config.from_dict({'mrtrix_version': 'dev'}, init={'workflow'})
+
+    entries = os.environ['PATH'].split(os.pathsep)
+    assert entries[0] == str(Path(dev, 'bin'))
+    assert config.environment.mrtrix3_home == dev

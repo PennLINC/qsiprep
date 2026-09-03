@@ -519,23 +519,39 @@ def test_stable_mrdegibbs_says_what_dev_would_buy(monkeypatch, caplog):
     """Tell the user that complex unringing exists, but only where it is actionable.
 
     The message belongs at workflow-build time rather than parse time: use_phase is a
-    per-scan property the parser cannot know.
+    per-scan property the parser cannot know. Assert visibility at the real default
+    log level (25, see ``execution.log_level``) rather than lowering the threshold to
+    INFO, so this proves a real run would actually show the message.
     """
-    with caplog.at_level('INFO', logger='nipype.workflow'):
-        _build_denoising_wf(
-            monkeypatch, 'dwidenoise', 'mrdegibbs', use_phase=True, mrtrix_version='stable'
-        )
+    caplog.set_level(25, logger='nipype.workflow')
+    _build_denoising_wf(
+        monkeypatch, 'dwidenoise', 'mrdegibbs', use_phase=True, mrtrix_version='stable'
+    )
 
     assert '--mrtrix-version dev' in caplog.text
 
 
-@pytest.mark.parametrize('unringing_method', ['rpg', 'none'])
-def test_no_advice_when_mrdegibbs_is_not_running(monkeypatch, caplog, unringing_method):
-    """Stay quiet where the advice would not apply; rpg is magnitude-only anyway."""
-    with caplog.at_level('INFO', logger='nipype.workflow'):
-        _build_denoising_wf(
-            monkeypatch, 'dwidenoise', unringing_method, use_phase=True, mrtrix_version='stable'
-        )
+@pytest.mark.parametrize(
+    ('unringing_method', 'mrtrix_version'),
+    [('rpg', 'stable'), ('none', 'stable'), ('mrdegibbs', 'dev')],
+)
+def test_no_advice_when_mrdegibbs_is_not_running(
+    monkeypatch, caplog, unringing_method, mrtrix_version
+):
+    """Stay quiet where the advice would not apply.
+
+    rpg is magnitude-only regardless of version; with none, unringing does not run at
+    all; and with dev + mrdegibbs, complex data are already carried through unringing,
+    so there is nothing dev would additionally buy.
+    """
+    caplog.set_level(25, logger='nipype.workflow')
+    _build_denoising_wf(
+        monkeypatch,
+        'dwidenoise',
+        unringing_method,
+        use_phase=True,
+        mrtrix_version=mrtrix_version,
+    )
 
     assert '--mrtrix-version dev' not in caplog.text
 
