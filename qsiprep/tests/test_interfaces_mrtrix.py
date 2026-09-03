@@ -1,12 +1,14 @@
 """Tests for the qsiprep.interfaces.mrtrix module."""
 
 import os
+import subprocess
 
 import nibabel as nb
 import numpy as np
 import pytest
 from traits.trait_errors import TraitError
 
+from qsiprep import config
 from qsiprep.interfaces import mrtrix
 from qsiprep.tests.utils import field_of_view
 
@@ -262,3 +264,91 @@ def test_mrdegibbs_report_handles_complex_input(monkeypatch, tmp_path):
     recorded_diff_lowb, recorded_diff_highb = recorded_calls[1]
     np.testing.assert_allclose(recorded_diff_lowb, expected_diff_lowb, rtol=1e-3, atol=1e-2)
     np.testing.assert_allclose(recorded_diff_highb, expected_diff_highb, rtol=1e-3, atol=1e-2)
+
+
+def _dwibiascorrect_option_is_accepted(tmp_path, flag):
+    """Ask the ``dwibiascorrect`` on ``PATH`` whether it recognizes ``flag``.
+
+    ``-help`` short-circuits MRtrix3's argument parsing -- even a nonsense option
+    like ``-ants.TOTALLYBOGUS`` "succeeds" under ``-help`` -- so it cannot be used to
+    probe whether an option is real. Instead this points the command at an input file
+    that does not exist and lets real argument parsing run. A rejected option makes
+    MRtrix3's App-level parser fail immediately with "unrecognized arguments" and a
+    usage message; an accepted option makes dwibiascorrect proceed past parsing and
+    fail later, when it actually tries (and fails) to open the missing input.
+
+    ``-scratch`` keeps that attempt's scratch directory inside ``tmp_path`` --
+    dwibiascorrect retains it on error for debugging, and without an explicit
+    ``-scratch`` it defaults to the current working directory, leaking a
+    ``dwibiascorrect-tmp-*`` directory into the repo when tests run with cwd there.
+    The development branch additionally requires the ``-scratch`` directory to
+    already exist (the released version creates it), so it is made ahead of time;
+    a shared, pre-existing directory is safe to reuse across calls in the same test
+    because dwibiascorrect nests each attempt in its own randomly-named subdirectory.
+    The subprocess's own cwd is also pinned to ``tmp_path``, as a second guard against
+    any other file dwibiascorrect might drop next to itself rather than under
+    ``-scratch``.
+    """
+    scratch_dir = tmp_path / 'scratch'
+    scratch_dir.mkdir(exist_ok=True)
+    result = subprocess.run(
+        [
+            'dwibiascorrect',
+            'ants',
+            flag,
+            '[150,3]',
+            str(tmp_path / 'nonexistent_input.mif'),
+            str(tmp_path / 'out.mif'),
+            '-scratch',
+            str(scratch_dir),
+        ],
+        cwd=str(tmp_path),
+        capture_output=True,
+        text=True,
+    )
+    combined_output = result.stdout + result.stderr
+    rejected = 'unrecognized arguments' in combined_output
+    return not rejected, combined_output
+
+
+@pytest.mark.parametrize('mrtrix_version', ['stable', 'dev'])
+def test_dwibiascorrect_options_are_accepted_by_the_real_binary(
+    monkeypatch, tmp_path, mrtrix_version
+):
+    """Ask the selected dwibiascorrect whether it knows the options QSIPrep passes.
+
+    This is the only test that can catch the -ants.b/-ants_b break, because it needs
+    a real MRtrix3 to parse the option. A bogus-option control proves the probe can
+    tell rejection from acceptance in the first place, and the opposite spelling is
+    checked too, so a regression in either direction shows up here.
+    """
+    if not (os.getenv('MRTRIX3_STABLE_HOME') and os.getenv('MRTRIX3_DEV_HOME')):
+        pytest.skip('both MRtrix3 trees are only available inside the container')
+
+    monkeypatch.setattr(config.workflow, 'mrtrix_version', mrtrix_version)
+    # config.workflow.init() mutates os.environ['PATH'] directly, which monkeypatch
+    # would not undo. Setting PATH through monkeypatch first registers it for
+    # restoration at teardown.
+    monkeypatch.setenv('PATH', os.environ.get('PATH', ''))
+    config.workflow.init()
+
+    own_separator = '_' if mrtrix_version == 'dev' else '.'
+    other_separator = '.' if mrtrix_version == 'dev' else '_'
+
+    accepted, output = _dwibiascorrect_option_is_accepted(tmp_path, f'-ants{own_separator}b')
+    assert accepted, output
+
+    # The other tree's spelling must be genuinely rejected by this tree's binary --
+    # this is the -ants.b/-ants_b break itself, caught in whichever direction the
+    # PATH reordering got wrong.
+    other_accepted, other_output = _dwibiascorrect_option_is_accepted(
+        tmp_path, f'-ants{other_separator}b'
+    )
+    assert not other_accepted, other_output
+
+    # Control: a genuinely bogus option must also be rejected, or this probe would
+    # report "accepted" no matter what dwibiascorrect actually did.
+    bogus_accepted, bogus_output = _dwibiascorrect_option_is_accepted(
+        tmp_path, '-ants.TOTALLYBOGUS'
+    )
+    assert not bogus_accepted, bogus_output

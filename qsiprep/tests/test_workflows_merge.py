@@ -732,3 +732,30 @@ def test_denoising_wf_complex_mrdegibbs(monkeypatch, tmp_path, nibs_dwi, denoise
     assert degibbs_out.shape == degibbs_in.shape
 
     _assert_denoising_outputs(nodes, sink_dir, nibs_dwi['dwi_file'])
+
+
+def test_denoising_wf_stable_mrdegibbs(monkeypatch, tmp_path, nibs_dwi):
+    """Unring magnitude data with the released mrdegibbs and keep the result real.
+
+    The graph-shape tests check that the split precedes unringing; this one checks
+    that the binary the reordered PATH selects actually accepts what it is given.
+    """
+    nodes, sink_dir = _run_denoising_wf(
+        monkeypatch,
+        tmp_path,
+        nibs_dwi,
+        denoise_method='dwidenoise',
+        use_phase=True,
+        unringing_method='mrdegibbs',
+        mrtrix_version='stable',
+    )
+
+    degibbser = nodes['degibbser']
+    degibbs_in = nb.load(degibbser.inputs.in_file)
+    assert not np.issubdtype(degibbs_in.header.get_data_dtype(), np.complexfloating)
+
+    degibbs_out = nb.load(degibbser.result.outputs.out_file)
+    assert not np.issubdtype(degibbs_out.header.get_data_dtype(), np.complexfloating)
+    assert degibbs_out.shape == degibbs_in.shape
+
+    _assert_denoising_outputs(nodes, sink_dir, nibs_dwi['dwi_file'])
