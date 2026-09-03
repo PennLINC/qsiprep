@@ -1081,7 +1081,9 @@ git commit -m "Warn in the report when the MRtrix3 development branch was used"
 
 **Background:** `Dockerfile_MRtrix3` is deliberately untouched. QSIRecon builds from `pennlinc/qsiprep-mrtrix3`, so reusing `26.1.0` as-is keeps the cross-repo blast radius at zero. Its classic `./configure && ./build` install is already self-contained — `main` puts `/opt/mrtrix3-latest/bin` on `PATH` with no `LD_LIBRARY_PATH` entry at all. The development image is the one that currently needs a global `LD_LIBRARY_PATH`, which becomes a shadowing hazard once two trees are present.
 
-`26.9.0` was never pushed, so it can be rebuilt under the same tag.
+`26.9.0` is already published on Docker Hub, built from the pre-RPATH source (its image
+config still carries a global `LD_LIBRARY_PATH`, which the RPATH change deliberately
+drops) — re-tagging it is not an option. The RPATH build ships as `26.9.1` instead.
 
 **Note:** Docker was not available in this WSL distro when the plan was written (`docker` was not found on `PATH`). If it is still unavailable, stop and report rather than guessing — every step here needs a real build.
 
@@ -1131,7 +1133,7 @@ RUN env -u LD_LIBRARY_PATH sh -c '\
 Run:
 ```bash
 cd /mnt/c/Users/tsalo/Documents/linc/qsiprep_build
-docker build -f Dockerfile_MRtrix3dev -t pennlinc/qsiprep-mrtrix3dev:26.9.0 .
+docker build -f Dockerfile_MRtrix3dev -t pennlinc/qsiprep-mrtrix3dev:26.9.1 .
 ```
 Expected: the build succeeds, including the verification `RUN`.
 
@@ -1153,7 +1155,7 @@ In `Dockerfile.base`, restore the released image's build ARG and stage. Change l
 
 ```dockerfile
 ARG TAG_MRTRIX3=26.1.0
-ARG TAG_MRTRIX3DEV=26.9.0
+ARG TAG_MRTRIX3DEV=26.9.1
 ```
 
 Change the single MRtrix stage (line 15) to two:
@@ -1365,7 +1367,7 @@ After all six tasks:
 
 Nothing in either repository has been pushed. The order matters because `Dockerfile.base` pulls its stages from the registry:
 
-1. Merge and tag `qsiprep_build` as exactly `26.9.0`; CI pushes `pennlinc/qsiprep-mrtrix3dev:26.9.0`.
+1. Merge and tag `qsiprep_build` as exactly `26.9.1`; CI pushes `pennlinc/qsiprep-mrtrix3dev:26.9.1`.
 2. Build and push `pennlinc/qsiprep-base:20260903`.
 3. Open the QSIPrep PR.
 

@@ -237,14 +237,16 @@ two trees present, a global library path is a shadowing hazard. Its verification
 must execute a development-tree binary with `LD_LIBRARY_PATH` cleared, which is what
 proves the RPATH took effect.
 
-`26.9.0` was never pushed, so it can be rebuilt under the same tag. Files are staged by
-name; `git add -A` is not safe in that repository.
+`26.9.0` is already published on Docker Hub, built from the pre-RPATH source (its image
+config still carries a global `LD_LIBRARY_PATH`, which the RPATH change deliberately
+drops) — re-tagging it is not an option. The RPATH build ships as `26.9.1` instead. Files
+are staged by name; `git add -A` is not safe in that repository.
 
 ### `Dockerfile.base`
 
 ```dockerfile
 ARG TAG_MRTRIX3=26.1.0
-ARG TAG_MRTRIX3DEV=26.9.0
+ARG TAG_MRTRIX3DEV=26.9.1
 ...
 COPY --from=build_mrtrix3    /opt/mrtrix3-latest /opt/mrtrix3-stable
 COPY --from=build_mrtrix3dev /opt/mrtrix3        /opt/mrtrix3-dev
