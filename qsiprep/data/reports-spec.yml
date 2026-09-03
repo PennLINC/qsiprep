@@ -114,13 +114,42 @@ sections:
   ordering: session,task,acquisition,ceagent,reconstruction,direction,run,echo
   reportlets:
   - bids: {datatype: figures, desc: summary, suffix: dwi}
+  # XXX: Appears to have no producer. Check.
   - bids: {datatype: figures, desc: validation, suffix: dwi}
-  - bids: {datatype: figures, desc: samplingscheme, suffix: dwi}
+  - bids: {datatype: figures, desc: denoising, suffix: dwi}
     caption: |
-      Interactive DWI sampling scheme in q-space, before and after preprocessing.
-      Drag to rotate, scroll to zoom; each input scan is a separate color.
-    subtitle: DWI Sampling Scheme
+      "Effect of denoising on a low and high-<em>b</em> image."
+    static: false
+    subtitle: DWI Denoising
 
+  - bids: {datatype: figures, desc: unringing, suffix: dwi}
+    caption: |
+      "Effect of removing Gibbs ringing on a low and high-<em>b</em> image."
+    static: false
+    subtitle: Gibbs Ringing Removal
+
+  - bids: {datatype: figures, desc: biascorr, suffix: dwi}
+    caption: |
+      "Effect of correcting <em>B<sub>1</sub></em> bias on a low and high-<em>b</em> image."
+    static: false
+    subtitle: <em>B<sub>1</sub></em> Bias Correction
+
+  - bids: {datatype: figures, desc: gradunwarp, suffix: dwi}
+    caption: |
+      Effect of gradient nonlinearity correction on the <em>b</em>=0 image the
+      displacement field was built from. The "distorted" image is that reference as
+      acquired; the "corrected" image is the same reference resampled through the
+      field. Gradient nonlinearity grows with distance from the isocenter, so the
+      edges of the field of view move most while the center of the brain may barely
+      move at all. Note that this figure shows only the spatial correction: the
+      voxelwise <em>b</em>-matrix deviation is written out as a
+      <code>graddev</code> image and is not pictured here.
+    static: false
+    subtitle: Gradient Nonlinearity Correction
+
+  # XXX: Appears to have no producer. The only fmapCoreg datasink
+  # (workflows/fieldmap/unwarp.py) writes suffix: fieldmap, which the
+  # B0 field mapping section above already matches. Check.
   - bids: {datatype: figures, desc: fmapCoreg, suffix: dwi}
     caption: |
       The estimated fieldmap was aligned to the corresponding EPI reference
@@ -131,6 +160,7 @@ sections:
     static: false
     subtitle: Alignment between the anatomical reference of the fieldmap and the target EPI
 
+  # XXX: Appears to have no producer. Check.
   - bids: {datatype: figures, desc: fieldmap, suffix: dwi}
     caption: |
       Estimated fieldmap, as reconstructed on the target DWI run space to allow
@@ -144,6 +174,17 @@ sections:
       as it is positioned in the reportlet above.
     static: false
     subtitle: "Reconstructed <em>B<sub>0</sub></em> map in the corresponding run's space (debug mode)"
+
+  - bids: {datatype: figures, desc: shoreline, suffix: dwi}
+    caption: |
+      Animation showing SHORELine model-predicted images, original images, and registered images.
+    subtitle: SHORELine Motion Correction
+
+  - bids: {datatype: figures, desc: shorelineiters, suffix: dwi}
+    caption: |
+      Difference in motion estimates over SHORELine iterations. Values close to zero
+      indicate good convergence.
+    subtitle: SHORELine Convergence
 
   - bids: {datatype: figures, desc: sdc, suffix: dwi}
     caption: |
@@ -190,6 +231,7 @@ sections:
     static: false
     subtitle: Susceptibility distortion correction - FA
 
+  # XXX: Appears to have no producer. Check.
   - bids: {datatype: figures, desc: forcedsyn, suffix: dwi}
     caption: |
       The dataset contained some fieldmap information, but the argument <code>--force-syn</code>
@@ -198,36 +240,29 @@ sections:
     static: false
     subtitle: Experimental fieldmap-less susceptibility distortion correction
 
-  - bids: {datatype: figures, desc: gradunwarp, suffix: dwi}
+  - bids: {datatype: figures, desc: coreg, suffix: dwi}
     caption: |
-      Effect of gradient nonlinearity correction on the <em>b</em>=0 image the
-      displacement field was built from. The "distorted" image is that reference as
-      acquired; the "corrected" image is the same reference resampled through the
-      field. Gradient nonlinearity grows with distance from the isocenter, so the
-      edges of the field of view move most while the center of the brain may barely
-      move at all. Note that this figure shows only the spatial correction: the
-      voxelwise <em>b</em>-matrix deviation is written out as a
-      <code>graddev</code> image and is not pictured here.
+      This panel shows the alignment of the reference EPI (dMRI b=0) image to the
+      anatomical reference image.
+      The reference EPI has been contrast enhanced and susceptibility-distortion
+      corrected (if applicable) for improved anatomical fidelity.
+      The anatomical image has been resampled into EPI space, as well as the
+      anatomical white matter mask, which appears as a red contour.
     static: false
-    subtitle: Gradient Nonlinearity Correction
+    subtitle: Alignment of dMRI and anatomical MRI data (coregistration)
 
-  - bids: {datatype: figures, desc: denoising, suffix: dwi}
+  - bids: {datatype: figures, desc: acpc, suffix: dwi}
     caption: |
-      "Effect of denoising on a low and high-<em>b</em> image."
+      This panel shows the alignment of the reference EPI (DWI) image to
+      AC-PC alignment.
     static: false
-    subtitle: DWI Denoising
+    subtitle: Reorientation of DWI reference image to AC-PC
 
-  - bids: {datatype: figures, desc: unringing, suffix: dwi}
+  - bids: {datatype: figures, desc: intramodalcoreg, suffix: dwi}
     caption: |
-      "Effect of removing Gibbs ringing on a low and high-<em>b</em> image."
+      b=0 reference image warped to the across-scan/session intramodal template.
     static: false
-    subtitle: Gibbs Ringing Removal
-
-  - bids: {datatype: figures, desc: biascorr, suffix: dwi}
-    caption: |
-      "Effect of correcting <em>B<sub>1</sub></em> bias on a low and high-<em>b</em> image."
-    static: false
-    subtitle: <em>B<sub>1</sub></em> Bias Correction
+    subtitle: Alignment of dMRI to intramodal template
 
   - bids: {datatype: figures, desc: biascorrpost.*, suffix: dwi, regex_search: True}
     caption: |
@@ -242,40 +277,11 @@ sections:
     static: false
     subtitle: "<em>b</em>=0 Reference Image"
 
-  - bids: {datatype: figures, desc: coreg, suffix: dwi}
+  - bids: {datatype: figures, desc: samplingscheme, suffix: dwi}
     caption: |
-      This panel shows the alignment of the reference EPI (dMRI b=0) image to the
-      anatomical reference image.
-      The reference EPI has been contrast enhanced and susceptibility-distortion
-      corrected (if applicable) for improved anatomical fidelity.
-      The anatomical image has been resampled into EPI space, as well as the
-      anatomical white matter mask, which appears as a red contour.
-    static: false
-    subtitle: Alignment of dMRI and anatomical MRI data (coregistration)
-
-  - bids: {datatype: figures, desc: intramodalcoreg, suffix: dwi}
-    caption: |
-      b=0 reference image warped to the across-scan/session intramodal template.
-    static: false
-    subtitle: Alignment of dMRI to intramodal template
-
-  - bids: {datatype: figures, desc: acpc, suffix: dwi}
-    caption: |
-      This panel shows the alignment of the reference EPI (DWI) image to
-      AC-PC alignment.
-    static: false
-    subtitle: Reorientation of DWI reference image to AC-PC
-
-  - bids: {datatype: figures, desc: shoreline, suffix: dwi}
-    caption: |
-      Animation showing SHORELine model-predicted images, original images, and registered images.
-    subtitle: SHORELine Motion Correction
-
-  - bids: {datatype: figures, desc: shorelineiters, suffix: dwi}
-    caption: |
-      Difference in motion estimates over SHORELine iterations. Values close to zero
-      indicate good convergence.
-    subtitle: SHORELine Convergence
+      Interactive DWI sampling scheme in q-space, before and after preprocessing.
+      Drag to rotate, scroll to zoom; each input scan is a separate color.
+    subtitle: DWI Sampling Scheme
 
   - bids: {datatype: figures, desc: carpetplot, suffix: dwi}
     caption: |
