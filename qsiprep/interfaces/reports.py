@@ -33,7 +33,7 @@ from nipype.interfaces.base import (
 from .bids import get_bids_params
 from .gradients import concatenate_bvals, concatenate_bvecs
 
-SUBJECT_TEMPLATE = """\t<ul class="elem-desc">
+SUBJECT_TEMPLATE = """{mrtrix_warning}\t<ul class="elem-desc">
 \t\t<li>Subject ID: {subject_id}</li>
 \t\t<li>Structural images: {n_t1s:d} T1-weighted {t2w}</li>
 \t\t<li>Diffusion-weighted series: inputs {n_dwis:d}, outputs {n_outputs:d}</li>
@@ -72,6 +72,7 @@ DIFFUSION_TEMPLATE = """\t\t<h3 class="elem-title">Summary</h3>
 ABOUT_TEMPLATE = """\t<ul>
 \t\t<li>qsiprep version: {version}</li>
 \t\t<li>qsiprep command: <code>{command}</code></li>
+\t\t<li>MRtrix3: {mrtrix3}</li>
 \t\t<li>Date preprocessed: {date}</li>
 \t</ul>
 </div>
@@ -86,6 +87,15 @@ GROUPING_TEMPLATE = """\t<ul>
 \t\t<li>Output Name: {output_name}</li>
 {input_files}
 </ul>
+"""
+
+MRTRIX_DEV_WARNING = """\t<div class="alert alert-warning" role="alert">
+\t\t<strong>Development-branch MRtrix3.</strong>
+\t\tThis run used the MRtrix3 development branch rather than a released version, at
+\t\tyour request via <code>--mrtrix-version dev</code>. Development-branch code has not
+\t\tbeen through a release cycle and may contain bugs. Inspect these outputs before
+\t\trelying on them.
+\t</div>
 """
 
 INTERACTIVE_TEMPLATE = """
@@ -143,6 +153,9 @@ class SubjectSummaryInputSpec(BaseInterfaceInputSpec):
     output_spaces = traits.List(desc='Target spaces')
     template = Str(desc='Template space')
     freesurfer_status = traits.Enum('Not run', 'Partial', 'Full', desc='FreeSurfer status')
+    mrtrix_version = traits.Enum(
+        'stable', 'dev', usedefault=True, desc='which MRtrix3 installation was used'
+    )
 
 
 class SubjectSummaryOutputSpec(SummaryOutputSpec):
@@ -197,6 +210,7 @@ class SubjectSummary(SummaryInterface):
             n_outputs=n_outputs,
             groupings=groupings,
             output_spaces=['ACPC', self.inputs.template],
+            mrtrix_warning=(MRTRIX_DEV_WARNING if self.inputs.mrtrix_version == 'dev' else ''),
         )
 
 
@@ -261,15 +275,24 @@ class AboutSummaryInputSpec(BaseInterfaceInputSpec):
     version = Str(desc='qsiprep version')
     command = Str(desc='qsiprep command')
     # Date not included - update timestamp only if version or command changes
+    mrtrix_version = traits.Enum(
+        'stable', 'dev', usedefault=True, desc='which MRtrix3 installation was used'
+    )
+    mrtrix3_home = Str(desc='path of the MRtrix3 installation that was used')
 
 
 class AboutSummary(SummaryInterface):
     input_spec = AboutSummaryInputSpec
 
     def _generate_segment(self):
+        mrtrix3 = self.inputs.mrtrix_version
+        if isdefined(self.inputs.mrtrix3_home) and self.inputs.mrtrix3_home:
+            mrtrix3 = f'{mrtrix3} ({self.inputs.mrtrix3_home})'
+
         return ABOUT_TEMPLATE.format(
             version=self.inputs.version,
             command=self.inputs.command,
+            mrtrix3=mrtrix3,
             date=time.strftime('%Y-%m-%d %H:%M:%S %z'),
         )
 

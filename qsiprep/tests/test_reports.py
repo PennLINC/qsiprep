@@ -29,6 +29,68 @@ def test_subject_summary_counts_inputs_uniquely():
     assert 'inputs 2, outputs 2' in segment
 
 
+def test_subject_summary_warns_about_the_development_branch():
+    """Put an unmissable warning in the report when unreleased MRtrix3 was used."""
+    from qsiprep.interfaces.reports import SubjectSummary
+
+    summary = SubjectSummary(
+        subject_id='01',
+        template='MNI152NLin2009cAsym',
+        mrtrix_version='dev',
+    )
+    segment = summary._generate_segment()
+
+    assert 'alert alert-warning' in segment
+    assert 'role="alert"' in segment
+    assert 'development branch' in segment.lower()
+    assert '--mrtrix-version dev' in segment
+
+
+def test_subject_summary_is_quiet_under_stable_mrtrix():
+    """Show no warning banner for a released MRtrix3, which is the default."""
+    from qsiprep.interfaces.reports import SubjectSummary
+
+    summary = SubjectSummary(
+        subject_id='01',
+        template='MNI152NLin2009cAsym',
+        mrtrix_version='stable',
+    )
+    segment = summary._generate_segment()
+
+    assert 'alert' not in segment
+    assert 'development branch' not in segment.lower()
+
+
+def test_about_summary_records_the_mrtrix_installation():
+    """State which MRtrix3 ran, warning or not."""
+    from qsiprep.interfaces.reports import AboutSummary
+
+    segment = AboutSummary(
+        version='1.2.3',
+        command='qsiprep ...',
+        mrtrix_version='dev',
+        mrtrix3_home='/opt/mrtrix3-dev',
+    )._generate_segment()
+
+    assert 'dev' in segment
+    assert '/opt/mrtrix3-dev' in segment
+
+
+def test_about_summary_omits_an_unknown_mrtrix_path():
+    """Report the version alone when the platform declares no installation paths."""
+    from qsiprep.interfaces.reports import AboutSummary
+
+    segment = AboutSummary(
+        version='1.2.3',
+        command='qsiprep ...',
+        mrtrix_version='stable',
+    )._generate_segment()
+
+    assert 'MRtrix3' in segment
+    assert 'stable' in segment
+    assert 'None' not in segment
+
+
 @pytest.fixture
 def collect_reports(monkeypatch):
     """Replace run_reports with a recorder of the report directories and filenames."""

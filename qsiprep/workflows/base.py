@@ -260,13 +260,21 @@ to workflows in *QSIPrep*'s documentation]\
     bids_info = pe.Node(BIDSInfo(), name='bids_info', run_without_submitting=True)
 
     summary = pe.Node(
-        SubjectSummary(template=anatomical_template),
+        SubjectSummary(
+            template=anatomical_template,
+            mrtrix_version=config.workflow.mrtrix_version,
+        ),
         name='summary',
         run_without_submitting=True,
     )
 
     about = pe.Node(
-        AboutSummary(version=config.environment.version, command=' '.join(sys.argv)),
+        AboutSummary(
+            version=config.environment.version,
+            command=' '.join(sys.argv),
+            mrtrix_version=config.workflow.mrtrix_version,
+            mrtrix3_home=config.environment.mrtrix3_home or '',
+        ),
         name='about',
         run_without_submitting=True,
     )
