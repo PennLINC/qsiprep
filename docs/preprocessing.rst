@@ -330,6 +330,15 @@ Volumetric outputs are written out in ``ACPC`` space ::
       <source_entities>_space-ACPC_stat-cnr_desc-<label>_dwimap.json
       <source_entities>_space-ACPC_stat-cnr_desc-<label>_dwimap.nii.gz
 
+      # Voxelwise gradient nonlinearity deviation map, present when
+      # --gradient-file is given (see "Gradient nonlinearity correction",
+      # below). 9 volumes holding the row-major 3x3 gradient deviation
+      # matrix per voxel; written even when the run needed no spatial
+      # correction, because it addresses the diffusion encoding rather
+      # than voxel position.
+      <source_entities>_space-ACPC_graddev.json
+      <source_entities>_space-ACPC_graddev.nii.gz
+
 
 Transforms
 ==========
@@ -672,6 +681,113 @@ DWI preprocessing
 Preprocessing of :abbr:`DWI (Diffusion Weighted Image)` files is
 split into multiple sub-workflows described below.
 
+
+.. _gradwarp:
+
+Gradient nonlinearity correction
+--------------------------------
+
+:func:`qsiprep.workflows.dwi.gradwarp.init_gradwarp_wf`
+
+When ``--gradient-file`` is supplied (see the :doc:`usage` page for the
+accepted file formats and the ``ImageType``-driven decision of how much
+spatial correction each run gets), the gradwarp field is generated once per
+DWI run, directly from the raw DWI grid.
+It is never applied to the output DWI series as a resampling step of its own.
+Instead it is folded into the composed transform applied at the end of the
+pipeline, in the order head-motion → gradwarp → susceptibility-distortion →
+(intramodal template →) coregistration → (template space).
+The field is also used to correct the *reference* images that downstream
+registrations are estimated from, so that those registrations are estimated in
+the same geometry they are later applied in (see below).
+
+How many times the output data are interpolated in total depends on the
+head-motion backend.
+With QSIPrep's own model-based HMC the motion transforms are carried, not
+applied, so head motion, gradwarp, susceptibility distortion and coregistration
+are all combined into a single interpolation of the raw data.
+``--hmc-model eddy`` and ``--hmc-model tortoise`` instead write out
+motion- and eddy-corrected volumes before QSIPrep's resampling runs, so the
+data are interpolated twice: once by that backend, and once by the composed
+gradwarp/SDC/coregistration transform.
+The generated methods boilerplate says which of the two happened.
+
+Head-motion/eddy-current estimation never sees the gradwarp field -- motion
+parameters are estimated on the native, uncorrected grid, matching how
+TORTOISE itself handles this.
+
+Susceptibility distortion correction (SDC) is estimated on gradwarp-corrected
+b=0/FA images whenever the resulting SDC warp is applied *after* gradwarp in
+the composed transform: the DRBUDDI, GRE fieldmap and SyN fieldmap-less
+branches, on every HMC backend.
+The one exception is ``eddy`` combined with ``TOPUP``: ``eddy`` resamples
+the raw data itself and applies the susceptibility field internally,
+so both the field estimate and gradwarp are applied together at the very end,
+and estimating the TOPUP field on raw (rather than gradwarp-corrected) b=0 images
+is what keeps that single step internally consistent.
+
+The b=0 image that DWI-to-anatomical coregistration is estimated from is
+gradwarp-corrected too, on every backend and every fieldmap branch.
+The coregistration affine is applied *after* gradwarp in the composed
+transform, so the image it was estimated from has to have been through
+gradwarp as well.
+On the DRBUDDI and GRE/SyN branches this falls out of the SDC correction
+above; elsewhere it is an explicit resampling of the coregistration reference.
+There is no TOPUP exception here, because this reference is derived from
+``eddy``'s *output* — downstream of everything ``eddy`` applied — rather than
+from the raw data TOPUP's field is measured on.
+
+The voxelwise gradient deviation map (``graddev``, see the :doc:`usage` page)
+is produced independently of whether spatial correction was applied,
+since it addresses a completely separate problem
+(the diffusion *encoding*, not voxel *position*).
+
+.. note::
+   **Known limitations**
+
+   - **Gradient coefficient files are not supported for GE data.** For GE
+     scanners TORTOISE applies a z-origin shift to the displacement field
+     after expanding the coefficients, and that shift lives in the
+     ``TORTOISEProcess`` driver rather than in the standalone
+     ``CreateNonlinearityDisplacementMap`` binary QSIPrep calls, so QSIPrep
+     would place the field at a different z than TORTOISE does. QSIPrep raises
+     an error rather than applying a field it cannot place. A ready-made ITK
+     displacement field passed to ``--gradient-file`` is unaffected (nothing is
+     expanded), as is the gradient deviation map, which is computed by a
+     different tool with its own self-contained GE handling.
+
+   - **No gradient deviation map is written under
+     ``--distortion-group-merge``.** When distortion groups are merged, the
+     final derivatives for that output are written by
+     :func:`~qsiprep.workflows.dwi.distortion_group_merge.init_distortion_group_merge_wf`,
+     which has no gradient-deviation step, so neither ``*_graddev.nii.gz`` nor
+     the ``GradientWarpDimensions`` sidecar key is produced for it. The
+     spatial gradwarp correction is still applied to the merged data. QSIPrep
+     logs a warning naming each affected output.
+
+   - **The gradient deviation map is oriented by an approximate transform.**
+     TORTOISE's ``CreateGradientNonlinearityBMatrix`` estimates its own rigid
+     registration between the raw native b=0 and the final ACPC b=0, and uses
+     that to orient the 3x3 L matrix, rather than consuming the coregistration
+     transform QSIPrep actually resampled the data with. The two are close but
+     not identical. This matches TORTOISE's own behaviour — TORTOISE likewise
+     does not propagate the nonlinear susceptibility transform into the L
+     matrix — and is recorded in the ``GradientDeviationOrientation`` key of
+     the ``*_graddev.json`` sidecar.
+
+   - **TORTOISE's fieldmap-less T2Wreg path is not gradwarp-corrected.**
+     When ``--hmc-model tortoise`` is used with no fieldmap and a T2w
+     structural image is available, susceptibility distortion is estimated
+     by TORTOISE's own ``T2Wreg`` registration, running entirely inside the
+     ``TORTOISEProcess``/``DIFFPREP`` binary, so QSIPrep has no opportunity to
+     hand that binary a gradwarp-corrected image. Stock TORTOISE does not
+     gradwarp-correct it either: the code in ``EPIREG.cxx`` that is meant to do
+     so builds its filename from the ``--grad_nonlin`` argument rather than
+     from the field TORTOISE generates, and so cannot find the file (the
+     equivalent code in ``DRBUDDI.cxx`` has this fixed, with the old form left
+     commented out beside it). QSIPrep therefore matches TORTOISE's real
+     behaviour here. The coregistration reference on this branch *is*
+     gradwarp-corrected; only the susceptibility estimate is not.
 
 .. _fsl_wf:
 

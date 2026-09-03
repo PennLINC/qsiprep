@@ -60,6 +60,7 @@ def make_preproc_unit(
     estimation_sources=None,
     readout_time: float = 0.05,
     metadata: dict | None = None,
+    per_file_metadata: dict[str, dict] | None = None,
     shelled: bool = True,
     provenance: Provenance = Provenance.INFERRED,
     b0field_id: str | None = None,
@@ -72,6 +73,8 @@ def make_preproc_unit(
     ``estimation_sources`` overrides the estimation's source list (defaults to
     the member DWIs). Non-DWI sources get a file record whose suffix is inferred
     from the filename (``*_epi`` -> ``epi``, ``*_phasediff`` -> ``phasediff`` ...).
+    ``per_file_metadata`` overrides sidecar keys for individual files (keyed by
+    path), layered on top of ``metadata``.
     ``anat_files`` adds anatomical records (suffix from the filename, e.g.
     ``*_T2w.nii.gz``) so fieldmap-less plans see their structural target.
     """
@@ -86,6 +89,7 @@ def make_preproc_unit(
         this_pe = pe_dirs.get(path, pe_dir)
         record_meta = {'PhaseEncodingDirection': this_pe, 'TotalReadoutTime': readout_time}
         record_meta.update(metadata)
+        record_meta.update((per_file_metadata or {}).get(path, {}))
         files[path] = FileRecord(
             path=path,
             datatype=_datatype_of(suffix),

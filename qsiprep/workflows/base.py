@@ -659,6 +659,7 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.b0_indices', 'inputnode.b0_indices'),
                 ('outputnode.hmc_xforms', 'inputnode.hmc_xforms'),
                 ('outputnode.fieldwarps', 'inputnode.fieldwarps'),
+                ('outputnode.gradwarp_field', 'inputnode.gradwarp_field'),
                 ('outputnode.itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
                 ('outputnode.hmc_optimization_data', 'inputnode.hmc_optimization_data'),
                 ('outputnode.raw_qc_file', 'inputnode.raw_qc_file'),

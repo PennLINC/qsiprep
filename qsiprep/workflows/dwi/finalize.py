@@ -23,10 +23,12 @@ from ...interfaces.bids import DerivativesSidecar
 from ...interfaces.dsi_studio import DSIStudioBTable
 from ...interfaces.dwi_merge import MergeFinalConfounds, SplitResampledDWIs
 from ...interfaces.gradients import ExtractB0s
+from ...interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SeriesQC
 from .derivatives import init_dwi_derivatives_wf
+from .gradwarp import resolve_gradwarp_plan
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
 from .resampling import init_dwi_trans_wf
 
@@ -146,6 +148,7 @@ def init_dwi_finalize_wf(
 
     """
     all_dwis = list(unit.dwi_files)
+    gradwarp_plan = resolve_gradwarp_plan(unit)
 
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
@@ -189,6 +192,7 @@ def init_dwi_finalize_wf(
                 'original_files',
                 'hmc_xforms',
                 'fieldwarps',
+                'gradwarp_field',
                 'output_grid',
                 'subjects_dir',
                 'subject_id',
@@ -316,6 +320,7 @@ def init_dwi_finalize_wf(
             ('dwi_mask', 'inputnode.dwi_mask'),
             ('hmc_xforms', 'inputnode.hmc_xforms'),
             ('fieldwarps', 'inputnode.fieldwarps'),
+            ('gradwarp_field', 'inputnode.gradwarp_field'),
             ('dwi_files', 'inputnode.dwi_files'),
             ('dwi_sampling_grid', 'inputnode.output_grid'),
             ('b0_to_intramodal_template_transforms',
@@ -361,6 +366,20 @@ def init_dwi_finalize_wf(
 
     # The workflow is done if we will be concatenating images later
     if not write_derivatives:
+        if gradwarp_plan is not None:
+            # write_derivatives is False only under --distortion-group-merge:
+            # init_distortion_group_merge_wf writes the derivatives for this
+            # output instead, and it has no grad_dev node. Say so rather than
+            # silently not honouring the documented promise.
+            config.loggers.workflow.warning(
+                'Gradient nonlinearity: %s is written by the distortion-group '
+                'merge workflow (--distortion-group-merge), which does not '
+                'produce a gradient deviation map. The spatial gradwarp '
+                'correction is still applied, but no *_graddev.nii.gz and no '
+                'GradientWarpDimensions sidecar key will be written for this '
+                'output.',
+                unit.output_name,
+            )
         return workflow
 
     # CONNECT TO DERIVATIVES #####################
@@ -405,8 +424,14 @@ def init_dwi_finalize_wf(
     )
 
     # Write a metadata sidecar for the derivatives
+    merged_sidecar_data = unit_to_sidecar(unit)
+    if gradwarp_plan is not None:
+        # No spatial warp (DIS3D) still gets a value here: 'none' says the
+        # scanner had already corrected the geometry, not that this field is
+        # absent from the sidecar.
+        merged_sidecar_data['GradientWarpDimensions'] = gradwarp_plan.warp_dim or 'none'
     merged_sidecar = pe.Node(
-        DerivativesSidecar(sidecar_data=unit_to_sidecar(unit), source_file=source_file),
+        DerivativesSidecar(sidecar_data=merged_sidecar_data, source_file=source_file),
         name='merged_sidecar',
     )
     ds_merged_sidecar = pe.Node(
@@ -435,6 +460,87 @@ def init_dwi_finalize_wf(
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
+
+    # The voxelwise gradient deviation tensor (grad_dev): gradient nonlinearity
+    # corrupts the diffusion encoding itself, not just voxel positions, and no
+    # scanner can correct that -- the bval/bvec table holds one value per
+    # volume and has nowhere to put spatially varying information. So this is
+    # produced whenever a gradwarp plan resolves, even for a DIS3D unit that
+    # gets no spatial correction at all.
+    if gradwarp_plan is not None:
+        # CreateGradientNonlinearityBMatrix reads both -f and -i as 3D NIfTIs
+        # (TORTOISE's main() calls readImageD<ImageType3D> for both). t1_b0_ref
+        # is already a single reference volume (init_dwi_reference_wf's
+        # ref_image), but raw_concatenated is the raw series in one 4D file, so
+        # a single volume has to be extracted from it.
+        grad_dev_initial_ref = pe.Node(
+            niu.Function(function=_extract_first_b0, output_names=['out_file']),
+            name='grad_dev_initial_ref',
+        )
+        # Known approximation: the tool orients the L matrix with a rigid
+        # transform it estimates itself from these two images
+        # (``rigid_trans = RigidRegisterImages(final_b0, initial_b0)`` in
+        # CreateGradientNonlinearityBMatrix.cxx), rather than with
+        # ``itk_b0_to_t1`` -- the affine qsiprep actually resampled the data
+        # with. HCP instead reuses its real ``diff2str.mat``. Matching TORTOISE
+        # was the deliberate choice here, and TORTOISE likewise does not
+        # propagate the nonlinear SDC part into the L matrix, but the two
+        # transforms are not guaranteed identical. Recorded in the sidecar.
+        grad_dev = pe.Node(
+            CreateGradientNonlinearityBMatrix(
+                nonlinearity=gradwarp_plan.coeff_file,
+                is_ge=gradwarp_plan.is_ge,
+            ),
+            name='grad_dev',
+        )
+        ds_grad_dev = pe.Node(
+            DerivativesDataSink(
+                source_file=source_file,
+                base_directory=config.execution.output_dir,
+                space='ACPC',
+                suffix='graddev',
+                extension='.nii.gz',
+                compress=True,
+                meta_dict={
+                    'Description': (
+                        'Voxelwise gradient deviation tensor (row-major 3x3 L '
+                        'matrix per voxel). The effective diffusion gradient at '
+                        'a voxel is L @ g; because L carries scaling and shear, '
+                        'both the b-vector and the b-value deviate per voxel.'
+                    ),
+                    'GradientCoefficientFile': os.path.basename(gradwarp_plan.coeff_file),
+                    'GradientWarpDimensions': gradwarp_plan.warp_dim or 'none',
+                    # A boolean, not a Manufacturer string: all that was
+                    # resolved is whether TORTOISE's GE code path was taken.
+                    'GradientCoefficientIsGE': gradwarp_plan.is_ge,
+                    'GradientCorrectionBasis': gradwarp_plan.basis,
+                    # CreateGradientNonlinearityBMatrix re-derives its own rigid
+                    # initial->final transform rather than consuming qsiprep's
+                    # coregistration affine, so the L matrix is oriented by a
+                    # transform close to, but not identical to, the one that
+                    # actually resampled the data. See the note on the node
+                    # below.
+                    'GradientDeviationOrientation': (
+                        'Oriented by a rigid registration estimated internally by '
+                        "TORTOISE's CreateGradientNonlinearityBMatrix between the raw "
+                        'native b=0 and the final ACPC b=0, not by the coregistration '
+                        'transform QSIPrep applied to the data.'
+                    ),
+                },
+            ),
+            name='ds_grad_dev',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+        workflow.connect([
+            (inputnode, grad_dev_initial_ref, [
+                ('raw_concatenated', 'in_file'),
+                ('b0_indices', 'b0_indices'),
+            ]),
+            (grad_dev_initial_ref, grad_dev, [('out_file', 'initial_image')]),
+            (outputnode, grad_dev, [('t1_b0_ref', 'final_image')]),
+            (grad_dev, ds_grad_dev, [('grad_dev', 'in_file')]),
+        ])  # fmt:skip
 
     workflow.connect([
         (inputnode, series_qc, [
@@ -502,6 +608,42 @@ def init_dwi_finalize_wf(
         ])  # fmt:skip
 
     return workflow
+
+
+def _extract_first_b0(in_file, b0_indices, newpath=None):
+    """Pull the first b=0 volume off a (possibly 4D) raw DWI series.
+
+    ``-i`` is the native-space image that ``-f`` (the final b=0, in ACPC space)
+    is related back to. In TORTOISE's in-process equivalent
+    (``FINALDATA::ComputeLImgFromField``) that pairing uses a rigid
+    b0-to-structural transform it already holds; the standalone binary is given
+    only the two images, so it has to derive that transform from them. Volume 0
+    of the raw series is not guaranteed to be a b=0, which would make the
+    derivation cross-contrast and a bad transform would give a silently wrong
+    ``L`` map. Picking the first b=0 costs nothing -- same grid, same affine --
+    and removes the hazard.
+
+    ``b0_indices`` indexes volumes of the merged series, the same ordering
+    ``raw_concatenated`` has. Nipype ``Function`` nodes run in a fresh
+    namespace, so imports live inside the function body.
+    """
+    import nibabel as nb
+    from nilearn.image import index_img
+    from nipype.utils.filemanip import fname_presuffix
+
+    try:
+        index = int(b0_indices[0])
+    except (TypeError, IndexError, ValueError):
+        # No b=0 was identified (or the input is unconnected): fall back to the
+        # first volume, which is what the series' own reference would be.
+        index = 0
+
+    if nb.load(in_file).ndim == 3:
+        return in_file
+
+    out_file = fname_presuffix(in_file, suffix=f'_vol{index}', newpath=newpath)
+    index_img(in_file, index).to_filename(out_file)
+    return out_file
 
 
 def init_finalize_denoising_wf(

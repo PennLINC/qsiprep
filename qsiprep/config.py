@@ -590,9 +590,11 @@ class workflow(_Config):
     fmap_demean = None
     """Remove the mean from fieldmaps."""
     force = None
-    """Forced processing choices (see ``--force``): currently ``t2wreg``."""
+    """Corrections to force on regardless of input metadata."""
     gpu = None
     """Tasks to run on the GPU (see ``qsiprep.utils.gpu``)."""
+    gradient_file = None
+    """Gradient nonlinearity coefficient file or displacement field."""
     hmc_method = None
     """Which software corrects head motion: eddy, shoreline or tortoise."""
     hmc_model = None
@@ -636,6 +638,12 @@ class workflow(_Config):
     use_syn_sdc = None
     """Run *fieldmap-less* susceptibility-derived distortions estimation
     in the absence of any alternatives."""
+
+    # Settings holding a Path must be listed here. ``get()`` only stringifies
+    # what ``_paths`` names, and toml writes anything else as its repr, so an
+    # unlisted Path reaches the workflow-building subprocess as the literal
+    # string "PosixPath('/path')".
+    _paths = ('gradient_file',)
 
 
 class loggers:

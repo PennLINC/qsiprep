@@ -31,6 +31,12 @@ from ...interfaces.reports import TopupSummary
 from ...utils.gpu import gpu_enabled
 from ..fieldmap.base import init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf
+from .gradwarp import (
+    connect_gradwarp_coreg_reference,
+    connect_gradwarp_sdc_reference,
+    connect_gradwarp_sdc_volumes,
+    resolve_gradwarp_plan,
+)
 
 # dwi workflows
 from .util import init_dwi_reference_wf
@@ -118,6 +124,7 @@ def init_fsl_hmc_wf(
                 't1_seg',
                 't1_2_mni_reverse_transform',
                 't2w_unfatsat',
+                'gradwarp_field',
             ]
         ),
         name='inputnode',
@@ -313,6 +320,20 @@ def init_fsl_hmc_wf(
         pepolar_method='+'.join(['topup'] * run_topup + ['drbuddi'] * run_drbuddi),
     )
 
+    # Whether a spatial gradwarp field exists for this unit. It gates two
+    # things: gradwarp-correcting SDC estimation inputs (see the note above
+    # connect_gradwarp_sdc_volumes in gradwarp.py) and gradwarp-correcting the
+    # b=0 that coregistration is estimated from (see the note above
+    # connect_gradwarp_coreg_reference).
+    #
+    # The SDC half covers the DRBUDDI and GRE/SyN nodes below, never TOPUP's:
+    # eddy bakes TOPUP's field into the raw data upstream of ComposeTransforms,
+    # so that field has to be estimated in the same raw space it is applied in.
+    # The coregistration half has no such carve-out -- it acts on eddy's output,
+    # downstream of everything eddy applied.
+    gradwarp_plan = resolve_gradwarp_plan(unit)
+    has_gradwarp = gradwarp_plan is not None and gradwarp_plan.warp_dim is not None
+
     # Are we running TOPUP?
     if run_topup:
         # If there are EPI fieldmaps in fmaps/, make sure they get to TOPUP. It will always use
@@ -322,6 +343,8 @@ def init_fsl_hmc_wf(
             gather_inputs.inputs.epi_fmaps = list(unit.extra_b0)
 
         outputnode.inputs.sdc_method = 'TOPUP'
+        # NB: topup's b=0 images are deliberately *not* gradwarp-corrected;
+        # eddy applies the resulting field to raw data (see above).
         topup = pe.Node(
             ParallelTOPUP(out_field='fieldmap_HZ.nii.gz', scale=1, nthreads=omp_nthreads),
             name='topup',
@@ -404,8 +427,17 @@ def init_fsl_hmc_wf(
             workflow.connect([
                 # There will be no SDC warps, they are applied by eddy
                 (gather_inputs, outputnode, [('forward_warps', 'to_dwi_ref_warps')]),
-                (b0_ref_for_coreg, outputnode, [('outputnode.ref_image', 'b0_template')]),
             ])  # fmt:skip
+            # eddy has already baked TOPUP's field into this image, so the only
+            # transform still missing before coregistration is gradwarp.
+            if has_gradwarp:
+                connect_gradwarp_coreg_reference(
+                    workflow, inputnode, b0_ref_for_coreg, 'outputnode.ref_image', outputnode
+                )
+            else:
+                workflow.connect([
+                    (b0_ref_for_coreg, outputnode, [('outputnode.ref_image', 'b0_template')]),
+                ])  # fmt:skip
     else:
         # If we're not using TOPUP we need to make a mask for eddy based on the
         # distorted brain shapes
@@ -432,9 +464,17 @@ def init_fsl_hmc_wf(
             use_cuda=gpu_enabled('drbuddi'),
         )
 
+        if has_gradwarp:
+            connect_gradwarp_sdc_volumes(
+                workflow, inputnode, split_eddy_lps, 'dwi_files', drbuddi_wf
+            )
+        else:
+            workflow.connect([
+                (split_eddy_lps, drbuddi_wf, [('dwi_files', 'inputnode.dwi_files')]),
+            ])  # fmt:skip
+
         workflow.connect([
             (split_eddy_lps, drbuddi_wf, [
-                ('dwi_files', 'inputnode.dwi_files'),
                 ('bval_files', 'inputnode.bval_files'),
                 ('bvec_files', 'inputnode.bvec_files'),
             ]),
@@ -468,13 +508,25 @@ def init_fsl_hmc_wf(
         outputnode.inputs.sdc_method = fieldmap_type
         b0_sdc_wf = init_sdc_wf(unit)
 
+        # Send to SDC workflow
+        if has_gradwarp:
+            connect_gradwarp_sdc_reference(
+                workflow,
+                inputnode,
+                b0_ref_for_coreg,
+                ('outputnode.ref_image', 'outputnode.ref_image_brain', 'outputnode.dwi_mask'),
+                b0_sdc_wf,
+            )
+        else:
+            workflow.connect([
+                (b0_ref_for_coreg, b0_sdc_wf, [
+                    ('outputnode.ref_image', 'inputnode.b0_ref'),
+                    ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
+                    ('outputnode.dwi_mask', 'inputnode.b0_mask'),
+                ]),
+            ])  # fmt:skip
+
         workflow.connect([
-            # Send to SDC workflow
-            (b0_ref_for_coreg, b0_sdc_wf, [
-                ('outputnode.ref_image', 'inputnode.b0_ref'),
-                ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
-                ('outputnode.dwi_mask', 'inputnode.b0_mask'),
-            ]),
             (inputnode, b0_sdc_wf, [
                 ('t1_brain', 'inputnode.t1_brain'),
                 ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
@@ -489,7 +541,12 @@ def init_fsl_hmc_wf(
 
     if not fieldmap_type:
         outputnode.inputs.sdc_method = 'None'
-        workflow.connect([
-            (b0_ref_for_coreg, outputnode, [('outputnode.ref_image', 'b0_template')]),
-        ])  # fmt:skip
+        if has_gradwarp:
+            connect_gradwarp_coreg_reference(
+                workflow, inputnode, b0_ref_for_coreg, 'outputnode.ref_image', outputnode
+            )
+        else:
+            workflow.connect([
+                (b0_ref_for_coreg, outputnode, [('outputnode.ref_image', 'b0_template')]),
+            ])  # fmt:skip
     return workflow

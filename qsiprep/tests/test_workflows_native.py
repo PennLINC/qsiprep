@@ -404,6 +404,11 @@ def test_legacy_method_keys_read_only_at_allowlisted_sites():
         'workflows/dwi/base.py': {'hmc_model': 1},
         'workflows/dwi/derivatives.py': {'hmc_model': 3},
         'workflows/dwi/hmc.py': {'hmc_model': 3},
+        # The backend-dependent gradwarp resampling sentence: also display
+        # vocabulary, and safe only because 'eddy' and 'tortoise' are spelled
+        # the same in the legacy key and in HmcMethod. See the Notes section of
+        # gradwarp._resampling_sentence for what asking the plan would cost.
+        'workflows/dwi/gradwarp.py': {'hmc_model': 1},
     }
     found: dict = {}
     for path in (root / 'workflows').rglob('*.py'):

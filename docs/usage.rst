@@ -132,6 +132,96 @@ However, please note that MultipartID may interact in unexpected ways with the I
 Therefore, we recommend that, if you use MultipartID, you check your outputs to make sure the runs are being grouped in the manner you expect.
 
 
+********************************
+Gradient nonlinearity correction
+********************************
+
+Gradient coils deviate from their nominal linear field.
+This displaces voxels, increasingly so away from isocentre,
+and it means the diffusion gradient actually applied at a voxel is not quite
+the one recorded in the bval/bvec table.
+Pass a scanner coefficient file with ``--gradient-file`` to correct both: ::
+
+    --gradient-file /path/to/coeff.grad
+
+Accepted formats are ``.grad`` (Siemens), ``.dat`` (GE), ``.gc`` (TORTOISE
+binary), and ``.nii``/``.nii.gz`` (an ITK displacement field).
+Only one file is accepted, and it applies to every DWI run in the dataset;
+process multi-site data one site at a time.
+
+Whether the *spatial* correction is applied to a given run, and how much of
+it, is decided from that run's ``ImageType`` field:
+
+===================  =======================================================
+``ImageType`` tag    Behavior
+===================  =======================================================
+(no ``DIS`` tag)     Full 3D gradwarp correction
+``DIS2D``            Through-plane correction only; the scanner already
+                     corrected in-plane distortion
+``DIS3D``            No spatial correction; the scanner already corrected it
+===================  =======================================================
+
+Use ``--force gradients`` to apply the full 3D correction regardless of
+``ImageType``, for data whose tags are absent or untrustworthy.
+``--force gradients`` requires ``--gradient-file``.
+
+Use ``--ignore gradients`` to disable gradient nonlinearity correction
+entirely, including the deviation map described below.
+
+.. warning::
+   **GE data: coefficient files are not accepted for spatial correction.**
+   When expanding coefficients for a GE scanner, TORTOISE applies a z-origin
+   shift to the resulting displacement field. That shift is applied by the
+   ``TORTOISEProcess`` driver, not by the standalone
+   ``CreateNonlinearityDisplacementMap`` binary QSIPrep calls, so QSIPrep
+   cannot reproduce TORTOISE's placement of the field and raises an error
+   rather than applying one it cannot place. Two ways forward:
+
+   * pass a ready-made ITK displacement field (``.nii``/``.nii.gz``) to
+     ``--gradient-file``. QSIPrep uses it as given and expands nothing, so the
+     shift does not arise;
+   * pass ``--ignore gradients`` to skip gradient correction.
+
+   Runs tagged ``DIS3D`` are unaffected, since no spatial field is built for
+   them, and the gradient deviation map below is unaffected on any GE run: it
+   is produced by a different TORTOISE tool that handles GE internally.
+
+Diffusion-encoding (gradient deviation) correction
+==================================================
+
+Independently of the spatial correction, a voxelwise gradient deviation map
+is written as ``*_space-ACPC_graddev.nii.gz`` whenever ``--gradient-file`` is
+given and ``--ignore gradients`` is absent -- **including for runs tagged**
+``DIS3D``. No scanner can correct the diffusion encoding itself: the
+bval/bvec table holds a single value per volume and has nowhere to record
+information that varies across the image. At each voxel, the gradient
+actually applied is ``L @ g``, where ``g`` is the nominal gradient vector and
+``L`` is the voxel's local 3x3 gradient nonlinearity matrix. Because ``L``
+captures scaling and shear rather than a pure rotation, both the b-vector
+*and* the b-value deviate per voxel, not just the direction. The deviation
+map holds this 3x3 matrix, in row-major order, as 9 volumes; downstream tools
+that consume a gradient deviation file (e.g. DSI Studio) can use it directly.
+
+The map is oriented into the output space by a rigid registration that
+TORTOISE's ``CreateGradientNonlinearityBMatrix`` estimates internally between
+the raw native b=0 and the final b=0, rather than by the coregistration
+transform QSIPrep used on the data itself. The two are close but not
+identical; the ``GradientDeviationOrientation`` key in the sidecar records
+this.
+
+.. warning::
+   The deviation map is **not** written for outputs produced by
+   ``--distortion-group-merge``. Those outputs are assembled by a separate
+   merge workflow that has no gradient-deviation step, so neither
+   ``*_graddev.nii.gz`` nor the ``GradientWarpDimensions`` sidecar key is
+   written for them. The spatial gradwarp correction is still applied to the
+   data. QSIPrep logs a warning naming each affected output.
+
+For details on where gradient nonlinearity correction sits in the DWI
+pipeline, how it differs by head-motion/distortion-correction backend, and
+its known limitations, see :ref:`gradwarp`.
+
+
 ******************
 Note on using CUDA
 ******************

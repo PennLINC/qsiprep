@@ -515,7 +515,7 @@ def _build_parser(**kwargs):
         action='store',
         nargs='+',
         default=[],
-        choices=['fieldmaps', 'pepolar-dwis', 't2w', 'phase', 'sdc', 'shims', 'fov'],
+        choices=['fieldmaps', 'pepolar-dwis', 't2w', 'phase', 'sdc', 'shims', 'fov', 'gradients'],
         help=(
             'Ignore selected aspects of the input dataset to disable corresponding '
             'parts of the workflow (a space delimited list). '
@@ -529,7 +529,43 @@ def _build_parser(**kwargs):
             'off). '
             '"shims" treats all ShimSetting values as compatible when grouping scans. '
             '"fov" concatenates series with differently-oriented fields of view anyway '
-            '(distortion corrections will be misapplied).'
+            '(distortion corrections will be misapplied). '
+            '"gradients" disables gradient nonlinearity correction entirely, '
+            'including the voxelwise gradient deviation map.'
+        ),
+    )
+    g_conf.add_argument(
+        '--force',
+        required=False,
+        action='store',
+        nargs='+',
+        default=[],
+        choices=['gradients', 't2wreg'],
+        help=(
+            'Force selected corrections on, overriding what the input metadata '
+            'implies (a space delimited list). "gradients" applies the full 3D '
+            'gradient nonlinearity correction to every DWI run regardless of the '
+            'ImageType field, for data whose DIS2D/DIS3D tags are absent or '
+            'untrustworthy. Requires --gradient-file. '
+            '"t2wreg" overrides all fieldmaps with T2w-registration SDC (TORTOISE '
+            'T2Wreg); it requires a T2w image and an SDC stage that can consume '
+            'it (--hmc-method tortoise or --sdc-method drbuddi).',
+        ),
+    )
+    g_conf.add_argument(
+        '--gradient-file',
+        required=False,
+        action='store',
+        type=IsFile,
+        help=(
+            'Path to a gradient nonlinearity information file, matching '
+            "TORTOISE's --grad_nonlin: a scanner coefficient file (.grad for "
+            'Siemens, .dat for GE, .gc for the TORTOISE binary format) or an ITK '
+            'displacement field (.nii/.nii.gz). Applies to every DWI run in the '
+            'dataset. Whether the spatial correction is applied to a given run, '
+            "and in which dimensions, is decided from that run's ImageType "
+            'field unless --force/--ignore gradients says otherwise. The '
+            'voxelwise gradient deviation map is written whenever this is given.'
         ),
     )
     g_conf.add_argument(
@@ -926,16 +962,6 @@ How to combine the corrected results of an output's correction units.
         help='DEPRECATED: use --sdc-method instead (same values, lowercased).',
     )
     g_fmap.add_argument(
-        '--force',
-        nargs='+',
-        default=[],
-        choices=['t2wreg'],
-        help='force specific processing choices (a space-delimited list). '
-        '"t2wreg" overrides all fieldmaps with T2w-registration SDC (TORTOISE '
-        'T2Wreg); it requires a T2w image and an SDC stage that can consume '
-        'it (--hmc-method tortoise or --sdc-method drbuddi).',
-    )
-    g_fmap.add_argument(
         '--fmap-bspline',
         action='store_true',
         default=False,
@@ -1110,6 +1136,10 @@ def parse_args(args=None, namespace=None):
         from ..utils.misc import validate_diffprep_config
 
         validate_diffprep_config(opts.diffprep_config)
+
+    from ..utils.misc import validate_gradient_flags
+
+    validate_gradient_flags(opts.gradient_file, opts.force, opts.ignore)
 
     if opts.gpu:
         from ..utils.gpu import check_gpu_available

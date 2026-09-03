@@ -25,6 +25,7 @@ from ..fieldmap.unwarp import init_fmap_unwarp_report_wf
 from .confounds import init_dwi_confs_wf
 from .diffprep import init_diffprep_hmc_wf
 from .fsl import init_fsl_hmc_wf
+from .gradwarp import describe_gradient_correction, init_gradwarp_wf
 from .hmc_sdc import init_qsiprep_hmcsdc_wf
 from .pre_hmc import init_dwi_pre_hmc_wf
 from .registration import init_b0_to_anat_registration_wf, init_direct_b0_acpc_wf
@@ -213,6 +214,7 @@ def init_dwi_preproc_wf(
                 'dwi_mask',
                 'hmc_xforms',
                 'fieldwarps',
+                'gradwarp_field',
                 'original_files',
                 'original_bvecs',
                 'raw_qc_file',
@@ -299,6 +301,52 @@ def init_dwi_preproc_wf(
         ]),
         (pre_hmc_wf, test_pre_hmc_connect, [('outputnode.raw_concatenated', 'test1')]),
     ])  # fmt:skip
+
+    # Gradient nonlinearity correction. The field is built off the pre-HMC
+    # reference so it does not depend on the HMC backend selected above.
+    gradwarp_wf = init_gradwarp_wf(unit)
+    if gradwarp_wf is not None:
+        if gradwarp_wf.needs_reference:
+            # mk_displacementMaps.cxx (what CreateNonlinearityDisplacementMap
+            # wraps) reads its reference image as a 3D NIfTI, not the 4D series
+            # pre_hmc_wf.outputnode.dwi_file is -- feeding it the merged 4D file
+            # throws at runtime. The field depends only on the sampling grid, not
+            # on image content, so any single volume on that grid is a valid
+            # reference; volume 0 is cheapest and needs no bvals/bvecs.
+            #
+            # The same volume is the 'before' image of gradwarp_wf's reportlet,
+            # so a unit that builds a field always wants one -- including when
+            # --gradient-file is a ready-made displacement field and there is no
+            # field builder to feed.
+            gradwarp_ref = pe.Node(
+                niu.Function(function=_extract_first_volume, output_names=['out_file']),
+                name='gradwarp_ref',
+            )
+            workflow.connect([
+                (pre_hmc_wf, gradwarp_ref, [('outputnode.dwi_file', 'in_file')]),
+                (gradwarp_ref, gradwarp_wf, [('out_file', 'inputnode.ref_image')]),
+            ])  # fmt:skip
+        elif gradwarp_wf.plan.warp_dim is None:
+            # A DIS3D unit builds no field at all: the scanner already corrected
+            # the geometry, and finalize's grad_dev node is fed the coefficient
+            # file rather than a field, so nothing would consume one. The empty
+            # workflow is still added to the graph so its methods boilerplate
+            # reaches the report.
+            workflow.add_nodes([gradwarp_wf])
+        # A DIS3D unit gets no spatial correction -- applying one would
+        # double-correct data the scanner already corrected.
+        if gradwarp_wf.plan.warp_dim is not None:
+            workflow.connect([
+                (gradwarp_wf, outputnode, [
+                    ('outputnode.gradwarp_field', 'gradwarp_field'),
+                ]),
+                # The HMC/SDC backends gradwarp the images their susceptibility
+                # estimation runs on, wherever that field is applied downstream
+                # of gradwarp (see gradwarp.connect_gradwarp_sdc_volumes).
+                (gradwarp_wf, hmc_wf, [
+                    ('outputnode.gradwarp_field', 'inputnode.gradwarp_field'),
+                ]),
+            ])  # fmt:skip
 
     if not dwi_only:
         # calculate dwi registration to T1w
@@ -424,6 +472,9 @@ def init_dwi_preproc_wf(
             hmc_transform=config.workflow.hmc_transform,
             denoise_method=config.workflow.denoise_method,
             dwi_denoise_window=config.workflow.dwi_denoise_window,
+            gradient_correction=describe_gradient_correction(
+                gradwarp_wf.plan if gradwarp_wf is not None else None
+            ),
         ),
         name='summary',
         mem_gb=DEFAULT_MEMORY_MIN_GB,
@@ -542,3 +593,26 @@ def init_dwi_preproc_wf(
 
 def _get_first(lll):
     return lll[0]
+
+
+def _extract_first_volume(in_file, newpath=None):
+    """Pull a single 3D volume off a (possibly 4D) DWI series.
+
+    ``CreateNonlinearityDisplacementMap`` reads its reference image as a 3D
+    NIfTI (``mk_displacementMaps.cxx``'s ``main`` loads it with
+    ``readImageD<ImageType3D>``, not a 4D-aware reader), so a merged 4D DWI
+    series cannot be handed to it directly. The gradwarp field only depends on
+    the sampling grid, not on image content, so any single volume works;
+    volume 0 is cheapest and needs no bvals/bvecs. Nipype ``Function`` nodes
+    run in a fresh namespace, so imports live inside the function body.
+    """
+    import nibabel as nb
+    from nilearn.image import index_img
+    from nipype.utils.filemanip import fname_presuffix
+
+    if nb.load(in_file).ndim == 3:
+        return in_file
+
+    out_file = fname_presuffix(in_file, suffix='_vol0', newpath=newpath)
+    index_img(in_file, 0).to_filename(out_file)
+    return out_file

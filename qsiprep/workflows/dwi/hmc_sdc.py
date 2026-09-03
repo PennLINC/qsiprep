@@ -18,6 +18,11 @@ from ...interfaces.images import SplitDWIsBvals, TSplit
 from ...utils.gpu import gpu_enabled
 from ..fieldmap.base import init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf
+from .gradwarp import (
+    connect_gradwarp_sdc_reference,
+    connect_gradwarp_sdc_volumes,
+    resolve_gradwarp_plan,
+)
 
 # dwi workflows
 from .hmc import init_dwi_hmc_wf
@@ -64,6 +69,7 @@ def init_qsiprep_hmcsdc_wf(
                 't1_mask',
                 't1_seg',
                 't2_brain',
+                'gradwarp_field',
             ]
         ),
         name='inputnode',
@@ -107,6 +113,17 @@ def init_qsiprep_hmcsdc_wf(
     )
 
     workflow = Workflow(name='qsiprep_hmcsdc_wf')
+
+    # Whether a spatial gradwarp field exists for this unit. It gates two
+    # things: gradwarp-correcting SDC estimation inputs (see the note above
+    # connect_gradwarp_sdc_volumes in gradwarp.py) and gradwarp-correcting the
+    # b=0 that coregistration is estimated from (see the note above
+    # connect_gradwarp_coreg_reference).
+    #
+    # No TOPUP carve-out applies here: every SDC warp this backend produces is
+    # carried out in to_dwi_ref_warps and applied downstream of gradwarp.
+    gradwarp_plan = resolve_gradwarp_plan(unit)
+    has_gradwarp = gradwarp_plan is not None and gradwarp_plan.warp_dim is not None
 
     # Split the input data into single volumes, put bvecs in LPS+ world reference frame
     split_dwis = pe.Node(TSplit(digits=4, out_name='vol'), name='split_dwis')
@@ -204,7 +221,6 @@ def init_qsiprep_hmcsdc_wf(
                 ('bvec_files', 'bvec_files'),
                 ('bval_files', 'bval_files'),
             ]),
-            (apply_hmc_transforms, drbuddi_wf, [('output_image', 'inputnode.dwi_files')]),
             (rotate_gradients, drbuddi_wf, [
                 ('bvals', 'inputnode.bval_files'),
                 ('bvecs', 'inputnode.bvec_files'),
@@ -231,6 +247,16 @@ def init_qsiprep_hmcsdc_wf(
                 ('outputnode.b0_ref', 'b0_template'),
             ]),
         ])  # fmt:skip
+
+        if has_gradwarp:
+            connect_gradwarp_sdc_volumes(
+                workflow, inputnode, apply_hmc_transforms, 'output_image', drbuddi_wf
+            )
+        else:
+            workflow.connect([
+                (apply_hmc_transforms, drbuddi_wf, [('output_image', 'inputnode.dwi_files')]),
+            ])  # fmt:skip
+
         return workflow
 
     if unit.method is None:
@@ -249,12 +275,33 @@ def init_qsiprep_hmcsdc_wf(
     b0_sdc_wf = init_sdc_wf(unit)
     b0_sdc_wf.inputs.inputnode.template = anatomical_template
 
+    # init_sdc_wf builds a pure pass-through ('sdc_bypass_wf') when there is no
+    # fieldmap, forwarding b0_ref straight to outputnode.b0_template -- the
+    # DWI/T1w coregistration reference. There is no field to estimate on a
+    # bypass, but that reference still has to be gradwarp-corrected, so the same
+    # connection serves both rules and the bypass is no longer excluded.
+    if has_gradwarp:
+        connect_gradwarp_sdc_reference(
+            workflow,
+            inputnode,
+            dwi_hmc_wf,
+            (
+                'outputnode.final_template',
+                'outputnode.final_template_brain',
+                'outputnode.final_template_mask',
+            ),
+            b0_sdc_wf,
+        )
+    else:
+        workflow.connect([
+            (dwi_hmc_wf, b0_sdc_wf, [
+                ('outputnode.final_template', 'inputnode.b0_ref'),
+                ('outputnode.final_template_brain', 'inputnode.b0_ref_brain'),
+                ('outputnode.final_template_mask', 'inputnode.b0_mask'),
+            ]),
+        ])  # fmt:skip
+
     workflow.connect([
-        (dwi_hmc_wf, b0_sdc_wf, [
-            ('outputnode.final_template', 'inputnode.b0_ref'),
-            ('outputnode.final_template_brain', 'inputnode.b0_ref_brain'),
-            ('outputnode.final_template_mask', 'inputnode.b0_mask'),
-        ]),
         (inputnode, b0_sdc_wf, [
             ('t1_brain', 'inputnode.t1_brain'),
             ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
