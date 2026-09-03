@@ -46,7 +46,9 @@ RUN test "$(command -v mrdegibbs)"      = "/opt/mrtrix3-stable/bin/mrdegibbs" &&
     test "$(command -v dwidenoise2)"    = "/opt/mrtrix3-dev/bin/dwidenoise2" && \
     /opt/mrtrix3-dev/bin/mrdegibbs -help | grep -q dimensionality && \
     /opt/mrtrix3-stable/bin/dwibiascorrect ants -help > /dev/null && \
-    test -d /opt/mrtrix3-dev/share/mrtrix3/dwidenoise2
+    test -d /opt/mrtrix3-dev/share/mrtrix3/dwidenoise2 && \
+    test "$(/opt/mrtrix3-stable/bin/mrinfo -version | head -1 | awk '{print $3}')" = "$MRTRIX3_STABLE_VERSION" && \
+    test "$(/opt/mrtrix3-dev/bin/mrinfo -version | head -1 | awk '{print $3}')" = "$MRTRIX3_DEV_VERSION"
 
 RUN chmod -R go=u $HOME
 WORKDIR /tmp

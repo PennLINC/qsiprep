@@ -62,7 +62,7 @@ def test_subject_summary_is_quiet_under_stable_mrtrix():
 
 
 def test_about_summary_records_the_mrtrix_installation():
-    """State which MRtrix3 ran, warning or not."""
+    """State which MRtrix3 ran, warning or not: version and path both known."""
     from qsiprep.interfaces.reports import AboutSummary
 
     segment = AboutSummary(
@@ -77,10 +77,12 @@ def test_about_summary_records_the_mrtrix_installation():
     assert '/opt/mrtrix3-dev' in segment
     assert '3.0.8-2071-gb98b54e9' in segment
     assert 'None' not in segment
+    assert '()' not in segment
+    assert 'MRtrix3: dev 3.0.8-2071-gb98b54e9 (/opt/mrtrix3-dev)' in segment
 
 
 def test_about_summary_omits_an_unknown_mrtrix_path():
-    """Mark the version as unresolved, not a bare claim, when no path was declared.
+    """Mark the version as unresolved, not a bare claim, when neither is declared.
 
     Nothing has actually been selected in this case: whatever MRtrix3 is on PATH ran,
     which may not be the requested version. The report must not assert a version it
@@ -97,7 +99,46 @@ def test_about_summary_omits_an_unknown_mrtrix_path():
     assert 'MRtrix3' in segment
     assert 'stable' in segment
     assert 'None' not in segment
+    assert '()' not in segment
     assert 'resolved from PATH' in segment
+    assert 'MRtrix3: stable (requested; no declared installation, resolved from PATH)' in segment
+
+
+def test_about_summary_records_a_version_with_no_declared_path():
+    """Mark the version as unresolved when it is known but no install path is declared."""
+    from qsiprep.interfaces.reports import AboutSummary
+
+    segment = AboutSummary(
+        version='1.2.3',
+        command='qsiprep ...',
+        mrtrix_version='dev',
+        mrtrix3_version='3.0.8-2071-gb98b54e9',
+    )._generate_segment()
+
+    assert 'None' not in segment
+    assert '()' not in segment
+    assert 'resolved from PATH' in segment
+    assert (
+        'MRtrix3: dev 3.0.8-2071-gb98b54e9 '
+        '(requested; no declared installation, resolved from PATH)'
+    ) in segment
+
+
+def test_about_summary_records_a_path_with_no_known_version():
+    """Report the install path without a version claim when the version is unknown."""
+    from qsiprep.interfaces.reports import AboutSummary
+
+    segment = AboutSummary(
+        version='1.2.3',
+        command='qsiprep ...',
+        mrtrix_version='stable',
+        mrtrix3_home='/opt/mrtrix3-stable',
+    )._generate_segment()
+
+    assert 'None' not in segment
+    assert '()' not in segment
+    assert 'resolved from PATH' not in segment
+    assert 'MRtrix3: stable (/opt/mrtrix3-stable)' in segment
 
 
 @pytest.fixture
