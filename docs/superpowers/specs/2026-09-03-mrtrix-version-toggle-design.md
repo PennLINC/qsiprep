@@ -314,9 +314,13 @@ Ordered by what each group would actually catch.
 
 ## Open items for implementation
 
-- Confirm that `-DCMAKE_INSTALL_RPATH='$ORIGIN/../lib'` removes the need for a global
-  `LD_LIBRARY_PATH`. Docker was unavailable when this was written. If the RPATH approach
-  does not hold, the fallback is a thin wrapper script per tree that sets
-  `LD_LIBRARY_PATH` before exec'ing the real binary.
-- Determine which released MRtrix3 version SHA `670e7b06` corresponds to, for the
-  provenance line in `AboutSummary`. If it cannot be established, report the SHA.
+Both resolved:
+
+- `-DCMAKE_INSTALL_RPATH='$ORIGIN/../lib'` removes the need for a global
+  `LD_LIBRARY_PATH`: `readelf` reports `RUNPATH [$ORIGIN:$ORIGIN/../lib]` and the binaries
+  run with `LD_LIBRARY_PATH` cleared. No wrapper-script fallback is needed.
+- Released MRtrix3 version SHA `670e7b06` is MRtrix3 3.0.4, confirmed by `mrinfo -version`
+  and `lib/mrtrix3/_version.py` inside `pennlinc/qsiprep-mrtrix3:26.1.0` (not 3.0.8; the
+  development branch reports `3.0.8-2071-gb98b54e9`). Both values are baked into
+  `Dockerfile.base` as `MRTRIX3_STABLE_VERSION`/`MRTRIX3_DEV_VERSION` and asserted at build
+  time against `mrinfo -version`.

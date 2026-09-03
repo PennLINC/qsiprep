@@ -1365,15 +1365,37 @@ After all six tasks:
 
 ## Release order
 
-Nothing in either repository has been pushed. The order matters because `Dockerfile.base` pulls its stages from the registry:
+`26.9.0` is already pushed to `qsiprep_build` and `pennlinc/qsiprep-mrtrix3dev:26.9.0` is
+published on Docker Hub, built from the pre-RPATH source. The order matters because
+`Dockerfile.base` pulls its stages from the registry, and QSIPrep's own CI publishes the
+base image automatically rather than as a separate manual step:
 
-1. Merge and tag `qsiprep_build` as exactly `26.9.1`; CI pushes `pennlinc/qsiprep-mrtrix3dev:26.9.1`.
-2. Build and push `pennlinc/qsiprep-base:20260903`.
-3. Open the QSIPrep PR.
+1. Merge `mrtrix3-dev` into `main` in `qsiprep_build`.
+2. Tag `26.9.1` on GitHub. CircleCI's `dpkg --compare-versions` gate compares the pinned
+   `required_tag` against the git tag; only the `mrtrix3dev` job's pin is behind `26.9.1`,
+   so only it runs, pushing `pennlinc/qsiprep-mrtrix3dev:26.9.1`. Every other image job
+   halts (pins are `26.1.x`-`26.8.x`); there is no AFNI build job, since that image is
+   third-party.
+3. Open the QSIPrep PR. `.circleci/continue_config.yml` derives `BASE_IMAGE` from
+   `Dockerfile`'s `ARG BASE_IMAGE=` line, finds `pennlinc/qsiprep-base:20260903` missing
+   via `docker manifest inspect`, and builds it from `Dockerfile.base` with `--pull`
+   (pulling `qsiprep-mrtrix3dev:26.9.1` and `qsiprep-mrtrix3:26.1.0`), pushes it, then
+   builds the application image and runs the suite.
 
-`pennlinc/qsiprep-mrtrix3:26.1.0` already exists and is unchanged.
+`pennlinc/qsiprep-mrtrix3:26.1.0` already exists and is unchanged. Step 3 is the first
+genuine end-to-end build of `Dockerfile.base` — it could not be built locally because a
+corporate firewall intercepts container TLS to `public.boxcloud.com`, breaking an
+unrelated download in an untouched `RUN` block.
 
 ## Open items carried from the spec
 
-- Whether `-DCMAKE_INSTALL_RPATH='$ORIGIN/../lib'` removes the need for a global `LD_LIBRARY_PATH` — Task 5 Step 2 is the test. The fallback is a wrapper script per tree.
-- Which released MRtrix3 version SHA `670e7b06` corresponds to, for the report's provenance line. If it cannot be established, `AboutSummary` reports `stable` plus the install path, which is what Task 4 implements. No task is blocked on this.
+Both resolved:
+
+- RPATH: `-DCMAKE_INSTALL_RPATH='$ORIGIN/../lib'` works. `readelf` reports `RUNPATH
+  [$ORIGIN:$ORIGIN/../lib]` and the binaries run with `LD_LIBRARY_PATH` cleared. No
+  wrapper-script fallback is needed.
+- Released MRtrix3 version: SHA `670e7b06` is MRtrix3 3.0.4, confirmed by `mrinfo
+  -version` and `lib/mrtrix3/_version.py` inside `pennlinc/qsiprep-mrtrix3:26.1.0` (not
+  3.0.8; the development branch reports `3.0.8-2071-gb98b54e9`). Both values are baked
+  into `Dockerfile.base` as `MRTRIX3_STABLE_VERSION`/`MRTRIX3_DEV_VERSION` and asserted at
+  build time against `mrinfo -version`.
