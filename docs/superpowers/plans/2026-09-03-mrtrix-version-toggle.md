@@ -481,8 +481,9 @@ git commit -m "Spell the dwibiascorrect ANTs options per MRtrix3 version"
 
 **Files:**
 - Modify: `qsiprep/workflows/dwi/merge.py:476-480` (the `unring_complex` flag), `:624-634` (the `mrdegibbs` boilerplate), `:688` (`DWIBiasCorrect` construction)
+- Modify: `qsiprep/workflows/dwi/finalize.py:585`, `:638` (the other two `DWIBiasCorrect` nodes)
 - Modify: `docs/preprocessing.rst:144-148`
-- Test: `qsiprep/tests/test_workflows_merge.py:442-459` (`_build_denoising_wf`), `:200-207` (`_run_denoising_wf`), `:463-477`
+- Test: `qsiprep/tests/test_workflows_merge.py:442-459` (`_build_denoising_wf`), `:200-207` (`_run_denoising_wf`), `:463-477`; `qsiprep/tests/test_n4_robustness.py`
 
 **Interfaces:**
 - Consumes: `config.workflow.mrtrix_version` (Task 1); `DWIBiasCorrect(mrtrix_version=...)` (Task 2).
@@ -557,7 +558,7 @@ def test_stable_mrdegibbs_says_what_dev_would_buy(monkeypatch, caplog):
     The message belongs at workflow-build time rather than parse time: use_phase is a
     per-scan property the parser cannot know.
     """
-    with caplog.at_level('INFO', logger='workflow'):
+    with caplog.at_level('INFO', logger='nipype.workflow'):
         _build_denoising_wf(
             monkeypatch, 'dwidenoise', 'mrdegibbs', use_phase=True, mrtrix_version='stable'
         )
@@ -568,7 +569,7 @@ def test_stable_mrdegibbs_says_what_dev_would_buy(monkeypatch, caplog):
 @pytest.mark.parametrize('unringing_method', ['rpg', 'none'])
 def test_no_advice_when_mrdegibbs_is_not_running(monkeypatch, caplog, unringing_method):
     """Stay quiet where the advice would not apply; rpg is magnitude-only anyway."""
-    with caplog.at_level('INFO', logger='workflow'):
+    with caplog.at_level('INFO', logger='nipype.workflow'):
         _build_denoising_wf(
             monkeypatch, 'dwidenoise', unringing_method, use_phase=True, mrtrix_version='stable'
         )
@@ -641,7 +642,7 @@ In `qsiprep/workflows/dwi/merge.py`, replace the `unring_complex` assignment (li
         )
 ```
 
-Replace the `biascorr` node construction (line 688):
+Replace the `biascorr` node construction (line 691):
 
 ```python
         biascorr = pe.Node(
@@ -651,12 +652,87 @@ Replace the `biascorr` node construction (line 688):
         )
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+`merge.py` is not the only place that builds this node. `qsiprep/workflows/dwi/finalize.py`
+constructs `DWIBiasCorrect` twice more, and `b1_biascorrect_stage` defaults to `final`, which
+is the finalize path — so these are the *common* case, not an edge case. Missing them would
+fail every `--mrtrix-version dev` run that does bias correction. Apply the same change at
+`finalize.py:585`:
 
-Run: `micromamba run -n linc311 pytest qsiprep/tests/test_workflows_merge.py -v`
+```python
+            biascorr = pe.Node(
+                DWIBiasCorrect(
+                    method='ants',
+                    bzero_max=config.workflow.b0_threshold,
+                    mrtrix_version=config.workflow.mrtrix_version,
+                ),
+                name='biascorr',
+                n_procs=omp_nthreads,
+            )
+```
+
+and at `finalize.py:638`:
+
+```python
+                biascorrs.append(
+                    pe.Node(
+                        DWIBiasCorrect(
+                            method='ants',
+                            bzero_max=config.workflow.b0_threshold,
+                            mrtrix_version=config.workflow.mrtrix_version,
+                        ),
+                        name='biascorr%d' % scan_num,
+                        n_procs=omp_nthreads,
+                    )
+                )
+```
+
+- [ ] **Step 4: Cover the finalize-stage bias-correction nodes**
+
+Add to `qsiprep/tests/test_n4_robustness.py`, which already builds this workflow (see
+`test_biascorr_receives_the_conditioned_weights_not_the_raw_mask` at line 138 for the
+`_config()` fixture pattern used in that module):
+
+```python
+@pytest.mark.parametrize('split_biascorr', [False, True])
+@pytest.mark.parametrize('mrtrix_version', ['stable', 'dev'])
+def test_finalize_biascorr_gets_the_selected_mrtrix_version(
+    tmp_path, monkeypatch, split_biascorr, mrtrix_version
+):
+    """Give every dwibiascorrect node the option spelling its MRtrix3 accepts.
+
+    b1_biascorrect_stage defaults to "final", so these nodes are on the common path.
+    A node left on the default spelling fails at runtime under --mrtrix-version dev.
+    """
+    from qsiprep import config
+    from qsiprep.workflows.dwi.finalize import init_finalize_denoising_wf
+
+    _config().execution.output_dir = str(tmp_path)
+    monkeypatch.setattr(config.workflow, 'mrtrix_version', mrtrix_version)
+
+    wf = init_finalize_denoising_wf(
+        source_file='/data/sub-01/ses-1/dwi/sub-01_ses-1_dwi.nii.gz',
+        do_biascorr=True,
+        num_dwi_acquisitions=1,
+        split_biascorr=split_biascorr,
+    )
+
+    biascorrs = [
+        node for node in wf._get_all_nodes() if node.name.startswith('biascorr')
+    ]
+    assert biascorrs, 'no bias-correction node was built'
+    for node in biascorrs:
+        assert node.interface.inputs.mrtrix_version == mrtrix_version, node.name
+```
+
+Check whether `pytest` and `_config` are already imported in that module before adding
+the test; both are used by the surrounding tests.
+
+- [ ] **Step 5: Run the tests to verify they pass**
+
+Run: `micromamba run -n linc311 pytest qsiprep/tests/test_workflows_merge.py qsiprep/tests/test_n4_robustness.py -v`
 Expected: all PASSED — the new tests and the pre-existing complex-path tests, which now pin `mrtrix_version='dev'` through the helper's default.
 
-- [ ] **Step 5: Add the version to the run-level test helper**
+- [ ] **Step 6: Add the version to the run-level test helper**
 
 In `qsiprep/tests/test_workflows_merge.py`, change `_run_denoising_wf` (line 200) to accept `mrtrix_version='dev'` and both set it and apply it:
 
@@ -686,12 +762,12 @@ and, among the other `monkeypatch.setattr` calls in that function, add:
 
 `os` is already imported at the top of that module.
 
-- [ ] **Step 6: Run the non-container tests to verify nothing regressed**
+- [ ] **Step 7: Run the non-container tests to verify nothing regressed**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_workflows_merge.py -v`
 Expected: same result as Step 4. The container-gated tests will skip or error on missing data, as they did before this task; note which ones so the outcome can be compared after Task 6.
 
-- [ ] **Step 7: Update the boilerplate**
+- [ ] **Step 8: Update the boilerplate**
 
 In `qsiprep/workflows/dwi/merge.py`, the `unring_complex` branch of the `mrdegibbs` boilerplate (line 624) already reads correctly for `dev`. Change the `else` branch so the released case names the version explicitly:
 
@@ -703,7 +779,7 @@ In `qsiprep/workflows/dwi/merge.py`, the `unring_complex` branch of the `mrdegib
                 )
 ```
 
-- [ ] **Step 8: Write the failing boilerplate test**
+- [ ] **Step 9: Write the failing boilerplate test**
 
 Add to `qsiprep/tests/test_workflows_merge.py`, immediately after `test_boilerplate_describes_where_the_split_happens`:
 
@@ -721,12 +797,12 @@ def test_boilerplate_says_magnitude_under_stable_mrtrix(monkeypatch):
     )
 ```
 
-- [ ] **Step 9: Run the boilerplate test to verify it passes**
+- [ ] **Step 10: Run the boilerplate test to verify it passes**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_workflows_merge.py -k boilerplate -v`
 Expected: PASSED. If `'complex-valued data'` still appears, the `unring_complex` gate in Step 3 was not applied.
 
-- [ ] **Step 10: Qualify the documentation**
+- [ ] **Step 11: Qualify the documentation**
 
 In `docs/preprocessing.rst`, replace lines 144-148 with:
 
@@ -744,19 +820,20 @@ exists only on the development branch, so it always runs from that installation,
 every other MRtrix3 command follows ``--mrtrix-version``.
 ```
 
-- [ ] **Step 11: Check lint and formatting**
+- [ ] **Step 12: Check lint and formatting**
 
 Run:
 ```bash
-micromamba run -n linc311 ruff check qsiprep/workflows/dwi/merge.py qsiprep/tests/test_workflows_merge.py
-micromamba run -n linc311 ruff format --check qsiprep/workflows/dwi/merge.py qsiprep/tests/test_workflows_merge.py
+micromamba run -n linc311 ruff check qsiprep/workflows/dwi/merge.py qsiprep/workflows/dwi/finalize.py qsiprep/tests/test_workflows_merge.py qsiprep/tests/test_n4_robustness.py
+micromamba run -n linc311 ruff format --check qsiprep/workflows/dwi/merge.py qsiprep/workflows/dwi/finalize.py qsiprep/tests/test_workflows_merge.py qsiprep/tests/test_n4_robustness.py
 ```
 Expected: no findings. Watch for E501 at 99 characters; the parameterized test bodies are close to the limit.
 
-- [ ] **Step 12: Commit**
+- [ ] **Step 13: Commit**
 
 ```bash
-git add qsiprep/workflows/dwi/merge.py qsiprep/tests/test_workflows_merge.py docs/preprocessing.rst
+git add qsiprep/workflows/dwi/merge.py qsiprep/workflows/dwi/finalize.py \
+  qsiprep/tests/test_workflows_merge.py qsiprep/tests/test_n4_robustness.py docs/preprocessing.rst
 git commit -m "Route complex data through mrdegibbs only on the development branch"
 ```
 
