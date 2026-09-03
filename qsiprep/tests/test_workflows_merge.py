@@ -205,6 +205,7 @@ def _run_denoising_wf(
     use_phase,
     dwi_denoise_window='auto',
     unringing_method='none',
+    mrtrix_version='dev',
 ):
     """Build and execute a denoising workflow on the nibs DWI series.
 
@@ -223,6 +224,12 @@ def _run_denoising_wf(
     monkeypatch.setattr(config.workflow, 'unringing_method', unringing_method)
     monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
     monkeypatch.setattr(config.workflow, 'b0_threshold', 100)
+    monkeypatch.setattr(config.workflow, 'mrtrix_version', mrtrix_version)
+    # config.workflow.init() mutates os.environ['PATH'] directly, which monkeypatch
+    # would not undo. Setting PATH through monkeypatch first registers it for
+    # restoration at teardown.
+    monkeypatch.setenv('PATH', os.environ.get('PATH', ''))
+    config.workflow.init()
     monkeypatch.setattr(config.nipype, 'omp_nthreads', 1)
 
     metadata = json.loads(Path(nibs_dwi['json_file']).read_text())
@@ -440,14 +447,25 @@ def _connections(workflow):
 
 
 def _build_denoising_wf(
-    monkeypatch, denoise_method, unringing_method, use_phase, do_biascorr=False
+    monkeypatch,
+    denoise_method,
+    unringing_method,
+    use_phase,
+    do_biascorr=False,
+    mrtrix_version='dev',
 ):
-    """Build (without running) a denoising workflow with the given configuration."""
+    """Build (without running) a denoising workflow with the given configuration.
+
+    ``mrtrix_version`` defaults to ``'dev'`` because the complex-path tests in this
+    module were written against the development branch, where mrdegibbs reads and
+    writes complex data.
+    """
     monkeypatch.setattr(config.workflow, 'denoise_method', denoise_method)
     monkeypatch.setattr(config.workflow, 'dwi_denoise_window', 5)
     monkeypatch.setattr(config.workflow, 'unringing_method', unringing_method)
     monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
     monkeypatch.setattr(config.workflow, 'b0_threshold', 100)
+    monkeypatch.setattr(config.workflow, 'mrtrix_version', mrtrix_version)
     monkeypatch.setattr(config.nipype, 'omp_nthreads', 1)
 
     return init_dwi_denoising_wf(
@@ -476,6 +494,92 @@ def test_complex_data_stay_complex_through_mrdegibbs(monkeypatch, denoise_method
     assert connections[('split_complex', 'outputnode')] == {('out_file', 'dwi_file')}
     # The split happens once, after unringing, not before it
     assert ('denoiser', 'split_complex') not in connections
+
+
+@pytest.mark.parametrize('denoise_method', ['dwidenoise', 'dwidenoise2'])
+def test_stable_mrtrix_splits_before_mrdegibbs(monkeypatch, denoise_method):
+    """Reduce to magnitude before mrdegibbs when a released MRtrix3 is selected.
+
+    3.0.x mrdegibbs cannot read complex data, so handing it complex input would fail
+    at runtime. This is the behavior QSIPrep had before complex unringing existed.
+    """
+    workflow = _build_denoising_wf(
+        monkeypatch, denoise_method, 'mrdegibbs', use_phase=True, mrtrix_version='stable'
+    )
+    connections = _connections(workflow)
+
+    assert connections[('denoiser', 'split_complex')] == {('out_file', 'complex_file')}
+    assert connections[('split_complex', 'degibbser')] == {('out_file', 'in_file')}
+    assert connections[('degibbser', 'outputnode')] == {('out_file', 'dwi_file')}
+    # The split happens once, before unringing, not after it
+    assert ('degibbser', 'split_complex') not in connections
+
+
+def test_stable_mrdegibbs_says_what_dev_would_buy(monkeypatch, caplog):
+    """Tell the user that complex unringing exists, but only where it is actionable.
+
+    The message belongs at workflow-build time rather than parse time: use_phase is a
+    per-scan property the parser cannot know.
+    """
+    with caplog.at_level('INFO', logger='nipype.workflow'):
+        _build_denoising_wf(
+            monkeypatch, 'dwidenoise', 'mrdegibbs', use_phase=True, mrtrix_version='stable'
+        )
+
+    assert '--mrtrix-version dev' in caplog.text
+
+
+@pytest.mark.parametrize('unringing_method', ['rpg', 'none'])
+def test_no_advice_when_mrdegibbs_is_not_running(monkeypatch, caplog, unringing_method):
+    """Stay quiet where the advice would not apply; rpg is magnitude-only anyway."""
+    with caplog.at_level('INFO', logger='nipype.workflow'):
+        _build_denoising_wf(
+            monkeypatch, 'dwidenoise', unringing_method, use_phase=True, mrtrix_version='stable'
+        )
+
+    assert '--mrtrix-version dev' not in caplog.text
+
+
+@pytest.mark.parametrize('mrtrix_version', ['stable', 'dev'])
+def test_biascorr_gets_the_selected_mrtrix_version(monkeypatch, mrtrix_version):
+    """Give dwibiascorrect the option spelling its own MRtrix3 accepts."""
+    workflow = _build_denoising_wf(
+        monkeypatch,
+        'dwidenoise',
+        'mrdegibbs',
+        use_phase=True,
+        do_biascorr=True,
+        mrtrix_version=mrtrix_version,
+    )
+    biascorr = next(node for node in workflow._get_all_nodes() if node.name == 'biascorr')
+
+    assert biascorr.interface.inputs.mrtrix_version == mrtrix_version
+
+
+@pytest.mark.parametrize('mrtrix_version', ['stable', 'dev'])
+def test_biascorr_never_receives_complex_data(monkeypatch, mrtrix_version):
+    """Keep dwibiascorrect on magnitude data under either MRtrix3 version.
+
+    dwibiascorrect is magnitude-only in both, so the split must precede it however
+    the complex data reached that point. Only one ``split_complex`` node is ever
+    built: under ``dev`` it sits right before biascorr, but under ``stable`` it
+    already ran ahead of mrdegibbs, so degibbser's (already-magnitude) output is
+    what feeds biascorr directly.
+    """
+    workflow = _build_denoising_wf(
+        monkeypatch,
+        'dwidenoise',
+        'mrdegibbs',
+        use_phase=True,
+        do_biascorr=True,
+        mrtrix_version=mrtrix_version,
+    )
+    connections = _connections(workflow)
+    feeder = 'split_complex' if mrtrix_version == 'dev' else 'degibbser'
+
+    assert connections[(feeder, 'biascorr')] == {('out_file', 'in_file')}
+    assert connections[(feeder, 'get_b0s')] == {('out_file', 'dwi_series')}
+    assert connections[('biascorr', 'outputnode')] >= {('out_file', 'dwi_file')}
 
 
 @pytest.mark.parametrize('denoise_method', ['dwidenoise', 'dwidenoise2'])
@@ -564,6 +668,25 @@ def test_boilerplate_describes_where_the_split_happens(monkeypatch):
     # rpg is magnitude-only, so the split is still described right after denoising
     complex_rpg = _build_denoising_wf(monkeypatch, 'dwidenoise', 'rpg', use_phase=True)
     assert complex_rpg.__desc__.index('split back into magnitude') < complex_rpg.__desc__.index(
+        'Gibbs ringing'
+    )
+
+
+def test_boilerplate_says_magnitude_under_stable_mrtrix(monkeypatch):
+    """Describe what actually ran: released mrdegibbs sees magnitude data only.
+
+    The denoising step still describes combining magnitude and phase into a
+    complex-valued file -- that is unaffected by --mrtrix-version, only mrdegibbs is
+    gated -- so the assertion targets the unringing-specific phrasing rather than
+    the substring "complex-valued data" wholesale.
+    """
+    workflow = _build_denoising_wf(
+        monkeypatch, 'dwidenoise', 'mrdegibbs', use_phase=True, mrtrix_version='stable'
+    )
+
+    assert 'Gibbs ringing was removed from the magnitude data' in workflow.__desc__
+    assert 'Gibbs ringing was removed from the complex-valued data' not in workflow.__desc__
+    assert workflow.__desc__.index('split back into magnitude') < workflow.__desc__.index(
         'Gibbs ringing'
     )
 

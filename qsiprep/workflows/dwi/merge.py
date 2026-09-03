@@ -476,8 +476,17 @@ def init_dwi_denoising_wf(
     denoise_complex = do_denoise and denoise_method.startswith('dwidenoise') and use_phase
     # mrdegibbs is built on the Fourier shift theorem and reads and writes complex data
     # on MRtrix3's development branch, so complex data stay complex through unringing.
-    # TORTOISE's rpg is magnitude-only.
-    unring_complex = denoise_complex and unringing_method == 'mrdegibbs'
+    # The released mrdegibbs cannot, and TORTOISE's rpg is magnitude-only.
+    unring_complex = (
+        denoise_complex
+        and unringing_method == 'mrdegibbs'
+        and config.workflow.mrtrix_version == 'dev'
+    )
+    if denoise_complex and unringing_method == 'mrdegibbs' and not unring_complex:
+        config.loggers.workflow.info(
+            'Complex-valued Gibbs unringing is available with --mrtrix-version dev. '
+            'The magnitude data will be unrung instead.'
+        )
 
     # How many steps in the denoising pipeline
     num_steps = sum(map(int, [do_denoise, do_unringing, do_biascorr, harmonize_b0s]))
@@ -630,7 +639,8 @@ def init_dwi_denoising_wf(
                 )
             else:
                 desc += (
-                    f'{last_step}Gibbs ringing was removed using MRtrix3 [@mrtrix3; @mrdegibbs]. '
+                    f'{last_step}Gibbs ringing was removed from the magnitude data using '
+                    'MRtrix3 [@mrtrix3; @mrdegibbs]. '
                 )
             degibbser = pe.Node(
                 MRDeGibbs(nthreads=omp_nthreads),
@@ -688,7 +698,11 @@ def init_dwi_denoising_wf(
         )
         last_step = True
 
-        biascorr = pe.Node(DWIBiasCorrect(method='ants'), name='biascorr', n_procs=omp_nthreads)
+        biascorr = pe.Node(
+            DWIBiasCorrect(method='ants', mrtrix_version=config.workflow.mrtrix_version),
+            name='biascorr',
+            n_procs=omp_nthreads,
+        )
         ds_report_biascorr = pe.Node(
             DerivativesDataSink(
                 datatype='figures',

@@ -160,6 +160,35 @@ def test_biascorr_receives_the_conditioned_weights_not_the_raw_mask(tmp_path):
     assert ('dwi_mask_t1', 'mask') not in edges.get(('inputnode', 'biascorr'), [])
 
 
+@pytest.mark.parametrize('split_biascorr', [False, True])
+@pytest.mark.parametrize('mrtrix_version', ['stable', 'dev'])
+def test_finalize_biascorr_gets_the_selected_mrtrix_version(
+    tmp_path, monkeypatch, split_biascorr, mrtrix_version
+):
+    """Give every dwibiascorrect node the option spelling its MRtrix3 accepts.
+
+    b1_biascorrect_stage defaults to "final", so these nodes are on the common path.
+    A node left on the default spelling fails at runtime under --mrtrix-version dev.
+    """
+    from qsiprep import config
+    from qsiprep.workflows.dwi.finalize import init_finalize_denoising_wf
+
+    _config().execution.output_dir = str(tmp_path)
+    monkeypatch.setattr(config.workflow, 'mrtrix_version', mrtrix_version)
+
+    wf = init_finalize_denoising_wf(
+        source_file='/data/sub-01/ses-1/dwi/sub-01_ses-1_dwi.nii.gz',
+        do_biascorr=True,
+        num_dwi_acquisitions=1,
+        split_biascorr=split_biascorr,
+    )
+
+    biascorrs = [node for node in wf._get_all_nodes() if node.name.startswith('biascorr')]
+    assert biascorrs, 'no bias-correction node was built'
+    for node in biascorrs:
+        assert node.interface.inputs.mrtrix_version == mrtrix_version, node.name
+
+
 def test_anatomical_n4_estimates_on_truncated_but_corrects_the_original(tmp_path):
     """Truncation must not reach the data, only the field estimate.
 
