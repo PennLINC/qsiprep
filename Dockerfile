@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=pennlinc/qsiprep-base:20260901
+ARG BASE_IMAGE=pennlinc/qsiprep-base:20260903
 
 FROM ghcr.io/prefix-dev/pixi:0.58.0 AS build
 RUN apt-get update && \
@@ -37,13 +37,16 @@ FROM ${BASE_IMAGE} AS base
 WORKDIR /home/qsiprep
 ENV HOME="/home/qsiprep"
 
-# Every MRtrix3 command must resolve to the development-branch build, not to the
-# 3.0.x copies inside /opt/3Tissue.
-RUN dwidenoise2 -version && \
-    test "$(command -v mrdegibbs)" = "/opt/mrtrix3/bin/mrdegibbs" && \
-    test "$(command -v dwidenoise)" = "/opt/mrtrix3/bin/dwidenoise" && \
-    test "$(command -v dwibiascorrect)" = "/opt/mrtrix3/bin/dwibiascorrect" && \
-    test -d /opt/mrtrix3/share/mrtrix3/dwidenoise2
+# Pin which tree each command resolves to. The default PATH order matches
+# --mrtrix-version stable; config.workflow.init() reorders it for --mrtrix-version dev.
+# dwidenoise2 exists only in the development tree, so it must fall through to it.
+RUN test "$(command -v mrdegibbs)"      = "/opt/mrtrix3-stable/bin/mrdegibbs" && \
+    test "$(command -v dwidenoise)"     = "/opt/mrtrix3-stable/bin/dwidenoise" && \
+    test "$(command -v dwibiascorrect)" = "/opt/mrtrix3-stable/bin/dwibiascorrect" && \
+    test "$(command -v dwidenoise2)"    = "/opt/mrtrix3-dev/bin/dwidenoise2" && \
+    /opt/mrtrix3-dev/bin/mrdegibbs -help | grep -q dimensionality && \
+    /opt/mrtrix3-stable/bin/dwibiascorrect ants -help > /dev/null && \
+    test -d /opt/mrtrix3-dev/share/mrtrix3/dwidenoise2
 
 RUN chmod -R go=u $HOME
 WORKDIR /tmp

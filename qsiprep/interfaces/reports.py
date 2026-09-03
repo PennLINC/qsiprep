@@ -279,6 +279,7 @@ class AboutSummaryInputSpec(BaseInterfaceInputSpec):
         'stable', 'dev', usedefault=True, desc='which MRtrix3 installation was used'
     )
     mrtrix3_home = Str(desc='path of the MRtrix3 installation that was used')
+    mrtrix3_version = Str(desc='version of the MRtrix3 installation that was used')
 
 
 class AboutSummary(SummaryInterface):
@@ -286,6 +287,8 @@ class AboutSummary(SummaryInterface):
 
     def _generate_segment(self):
         mrtrix3 = self.inputs.mrtrix_version
+        if isdefined(self.inputs.mrtrix3_version) and self.inputs.mrtrix3_version:
+            mrtrix3 = f'{mrtrix3} {self.inputs.mrtrix3_version}'
         if isdefined(self.inputs.mrtrix3_home) and self.inputs.mrtrix3_home:
             mrtrix3 = f'{mrtrix3} ({self.inputs.mrtrix3_home})'
         else:

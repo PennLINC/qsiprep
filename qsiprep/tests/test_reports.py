@@ -70,10 +70,13 @@ def test_about_summary_records_the_mrtrix_installation():
         command='qsiprep ...',
         mrtrix_version='dev',
         mrtrix3_home='/opt/mrtrix3-dev',
+        mrtrix3_version='3.0.8-2071-gb98b54e9',
     )._generate_segment()
 
     assert 'dev' in segment
     assert '/opt/mrtrix3-dev' in segment
+    assert '3.0.8-2071-gb98b54e9' in segment
+    assert 'None' not in segment
 
 
 def test_about_summary_omits_an_unknown_mrtrix_path():

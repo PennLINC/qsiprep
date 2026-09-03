@@ -303,6 +303,9 @@ class environment(_Config):
     mrtrix3_home = None
     """Absolute path of the MRtrix3 installation selected by ``--mrtrix-version``,
     or ``None`` when the platform declares no MRtrix3 installations."""
+    mrtrix3_version = None
+    """Version of the MRtrix3 installation selected by ``--mrtrix-version``,
+    or ``None`` when the platform declares no MRtrix3 installations."""
     overcommit_policy = _oc_policy
     """Linux's kernel virtual memory overcommit policy."""
     overcommit_limit = _oc_limit
@@ -656,10 +659,15 @@ class workflow(_Config):
             'stable': os.getenv('MRTRIX3_STABLE_HOME'),
             'dev': os.getenv('MRTRIX3_DEV_HOME'),
         }
+        versions = {
+            'stable': os.getenv('MRTRIX3_STABLE_VERSION'),
+            'dev': os.getenv('MRTRIX3_DEV_VERSION'),
+        }
         if not any(roots.values()):
             # A bare-metal installation has a single MRtrix3 on PATH already. The
             # setting still drives argument spellings and the workflow's shape.
             environment.mrtrix3_home = None
+            environment.mrtrix3_version = None
             return
 
         selected = roots[cls.mrtrix_version]
@@ -685,6 +693,7 @@ class workflow(_Config):
         ]
         os.environ['PATH'] = os.pathsep.join(bins + rest)
         environment.mrtrix3_home = selected
+        environment.mrtrix3_version = versions[cls.mrtrix_version]
 
 
 class loggers:

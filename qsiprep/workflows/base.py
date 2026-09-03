@@ -274,6 +274,7 @@ to workflows in *QSIPrep*'s documentation]\
             command=' '.join(sys.argv),
             mrtrix_version=config.workflow.mrtrix_version,
             mrtrix3_home=config.environment.mrtrix3_home or '',
+            mrtrix3_version=config.environment.mrtrix3_version or '',
         ),
         name='about',
         run_without_submitting=True,

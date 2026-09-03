@@ -7,6 +7,9 @@ import pytest
 
 from qsiprep import config
 
+MRTRIX3_STABLE_VERSION = '3.0.4'
+MRTRIX3_DEV_VERSION = '3.0.8-2071-gb98b54e9'
+
 
 @pytest.fixture
 def mrtrix_trees(tmp_path, monkeypatch):
@@ -22,6 +25,8 @@ def mrtrix_trees(tmp_path, monkeypatch):
     (dev / 'bin').mkdir(parents=True)
     monkeypatch.setenv('MRTRIX3_STABLE_HOME', str(stable))
     monkeypatch.setenv('MRTRIX3_DEV_HOME', str(dev))
+    monkeypatch.setenv('MRTRIX3_STABLE_VERSION', MRTRIX3_STABLE_VERSION)
+    monkeypatch.setenv('MRTRIX3_DEV_VERSION', MRTRIX3_DEV_VERSION)
     monkeypatch.setenv('PATH', os.environ.get('PATH', ''))
     return str(stable), str(dev)
 
@@ -41,15 +46,19 @@ def test_workflow_init_puts_the_selected_tree_first(monkeypatch, mrtrix_trees, s
     entries = os.environ['PATH'].split(os.pathsep)
     expected_first = dev if selected == 'dev' else stable
     expected_second = stable if selected == 'dev' else dev
+    expected_version = MRTRIX3_DEV_VERSION if selected == 'dev' else MRTRIX3_STABLE_VERSION
     assert entries[0] == str(Path(expected_first, 'bin'))
     assert entries[1] == str(Path(expected_second, 'bin'))
     assert config.environment.mrtrix3_home == expected_first
+    assert config.environment.mrtrix3_version == expected_version
 
 
 def test_workflow_init_is_a_noop_without_declared_trees(monkeypatch):
     """Leave PATH alone on a bare-metal install, which has one MRtrix3 already on it."""
     monkeypatch.delenv('MRTRIX3_STABLE_HOME', raising=False)
     monkeypatch.delenv('MRTRIX3_DEV_HOME', raising=False)
+    monkeypatch.delenv('MRTRIX3_STABLE_VERSION', raising=False)
+    monkeypatch.delenv('MRTRIX3_DEV_VERSION', raising=False)
     monkeypatch.setenv('PATH', '/usr/bin:/bin')
     monkeypatch.setattr(config.workflow, 'mrtrix_version', 'dev')
 
@@ -57,6 +66,7 @@ def test_workflow_init_is_a_noop_without_declared_trees(monkeypatch):
 
     assert os.environ['PATH'] == '/usr/bin:/bin'
     assert config.environment.mrtrix3_home is None
+    assert config.environment.mrtrix3_version is None
 
 
 def test_workflow_init_raises_when_the_selected_tree_is_missing(monkeypatch, tmp_path):
