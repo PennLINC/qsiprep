@@ -1022,3 +1022,59 @@ def _run_and_generate(test_name, parameters, test_main=False, check_outputs=True
             optional_outputs_list = None
 
         check_generated_files(config.execution.output_dir, output_list_file, optional_outputs_list)
+
+
+def test_parser_defaults_to_stable_mrtrix(tmp_path):
+    """Default to a released MRtrix3, so existing runs are unchanged."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    opts = parser.parse_args([str(bids), str(out), 'participant', '--output-resolution', '2'])
+    assert opts.mrtrix_version == 'stable'
+
+
+def test_parser_accepts_dev_mrtrix(tmp_path):
+    """``dev`` selects the development branch, which is what complex mrdegibbs needs."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    opts = parser.parse_args(
+        [
+            str(bids),
+            str(out),
+            'participant',
+            '--mrtrix-version',
+            'dev',
+            '--output-resolution',
+            '2',
+        ]
+    )
+    assert opts.mrtrix_version == 'dev'
+
+
+def test_parser_rejects_unknown_mrtrix_version(tmp_path):
+    """Reject version strings; the flag names installations, not releases."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                str(bids),
+                str(out),
+                'participant',
+                '--mrtrix-version',
+                '3.0.8',
+                '--output-resolution',
+                '2',
+            ]
+        )

@@ -638,6 +638,20 @@ def _build_parser(**kwargs):
         ),
     )
     g_conf.add_argument(
+        '--mrtrix-version',
+        action='store',
+        choices=['stable', 'dev'],
+        default='stable',
+        help=(
+            'Which MRtrix3 installation to use.\n'
+            ' - stable: a released MRtrix3 (default)\n'
+            ' - dev: the MRtrix3 development branch, which is required for '
+            'complex-valued unringing with --unringing-method mrdegibbs. '
+            'The development branch has not been through a release cycle and may '
+            'contain bugs.'
+        ),
+    )
+    g_conf.add_argument(
         '--unringing-method',
         action='store',
         choices=['none', 'mrdegibbs', 'rpg'],

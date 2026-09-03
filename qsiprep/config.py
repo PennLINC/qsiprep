@@ -294,6 +294,9 @@ class environment(_Config):
 
     cpu_count = os.cpu_count()
     """Number of available CPUs."""
+    mrtrix3_home = None
+    """Absolute path of the MRtrix3 installation selected by ``--mrtrix-version``,
+    or ``None`` when the platform declares no MRtrix3 installations."""
     exec_docker_version = _docker_ver
     """Version of Docker Engine."""
     exec_env = _exec_env
@@ -609,6 +612,9 @@ class workflow(_Config):
     """Number of iterations for intramodal template construction."""
     intramodal_template_transform = None
     """Transformation used for building the intramodal template."""
+    mrtrix_version = 'stable'
+    """Which MRtrix3 installation to use: "stable" (a released version) or "dev"
+    (the development branch, which is required for complex-valued ``mrdegibbs``)."""
     subject_anatomical_reference = None
     """How should the anatomical space be defined: sessionwise, unbiased or first-lex"""
     no_b0_harmonization = False
@@ -636,6 +642,49 @@ class workflow(_Config):
     use_syn_sdc = None
     """Run *fieldmap-less* susceptibility-derived distortions estimation
     in the absence of any alternatives."""
+
+    @classmethod
+    def init(cls):
+        """Put the MRtrix3 installation selected by ``--mrtrix-version`` first on ``PATH``.
+
+        ``dwibiascorrect`` is a Python script that resolves ``mrcalc``, ``dwiextract``,
+        ``mrmath``, ``mrconvert`` and ``N4BiasFieldCorrection`` through its own ``PATH``
+        lookup, so ordering ``PATH`` is the only way to keep a single node on a single
+        MRtrix3 version.
+        """
+        roots = {
+            'stable': os.getenv('MRTRIX3_STABLE_HOME'),
+            'dev': os.getenv('MRTRIX3_DEV_HOME'),
+        }
+        if not any(roots.values()):
+            # A bare-metal installation has a single MRtrix3 on PATH already. The
+            # setting still drives argument spellings and the workflow's shape.
+            environment.mrtrix3_home = None
+            return
+
+        selected = roots[cls.mrtrix_version]
+        if not selected or not Path(selected, 'bin').is_dir():
+            raise RuntimeError(
+                f'--mrtrix-version {cls.mrtrix_version} was requested, but no MRtrix3 '
+                'installation was found for it.'
+            )
+
+        other = roots['dev' if cls.mrtrix_version == 'stable' else 'stable']
+        # The other tree stays reachable: dwidenoise2 exists only in the development
+        # branch, so it must resolve there whichever version is selected.
+        bins = [str(Path(selected, 'bin'))]
+        if other:
+            bins.append(str(Path(other, 'bin')))
+
+        # Drop existing entries for either tree first. The image bakes both into PATH,
+        # so prepending without this would accumulate duplicates on every config reload.
+        rest = [
+            entry
+            for entry in os.environ.get('PATH', '').split(os.pathsep)
+            if entry and entry not in bins
+        ]
+        os.environ['PATH'] = os.pathsep.join(bins + rest)
+        environment.mrtrix3_home = selected
 
 
 class loggers:
