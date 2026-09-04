@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=pennlinc/qsiprep-base:20260828
+ARG BASE_IMAGE=pennlinc/qsiprep-base:20260903
 ARG DWIDENOISE2_COMMIT=cd08ec1a0f5eb1dbc9962f80c20c2bb3428c4f93
 # MRtrix3 "dev" as at 2026-06-22, the commit dwidenoise2 is developed against
 ARG MRTRIX3_DWIDENOISE2_COMMIT=b98b54e9ae8168eeb9af23322a07011d4754456d
@@ -56,9 +56,7 @@ COPY pixi.lock pyproject.toml /app
 WORKDIR /app
 # First install runs before COPY . so .git is missing.
 # Use --skip qsiprep (lockfile name) so pixi skips building the local package.
-# The torch env has no local package, so this is its only install.
-RUN --mount=type=cache,target=/root/.cache/rattler pixi install -e qsiprep -e test -e torch --frozen --skip qsiprep
-RUN /app/.pixi/envs/torch/bin/python -c "import torch, surfa, nibabel, scipy"
+RUN --mount=type=cache,target=/root/.cache/rattler pixi install -e qsiprep -e test --frozen --skip qsiprep
 RUN --mount=type=cache,target=/root/.npm pixi run --as-is -e qsiprep npm install -g svgo@^3.2.0 bids-validator@1.14.10
 RUN pixi shell-hook -e qsiprep --as-is | grep -v PATH > /shell-hook.sh
 RUN pixi shell-hook -e test --as-is | grep -v PATH > /test-shell-hook.sh
@@ -105,30 +103,39 @@ WORKDIR /tmp
 
 FROM base AS test
 COPY --link --from=build /app/.pixi/envs/test /app/.pixi/envs/test
-COPY --link --from=build /app/.pixi/envs/torch /app/.pixi/envs/torch
 COPY --link --from=build /test-shell-hook.sh /shell-hook.sh
 RUN cat /shell-hook.sh >> $HOME/.bashrc
 ENV PATH="/app/.pixi/envs/test/bin:$PATH"
 ENV FSLDIR="/app/.pixi/envs/test"
-ENV QSIPREP_TORCH_PYTHON="/app/.pixi/envs/torch/bin/python"
+ENV LD_LIBRARY_PATH="/app/.pixi/envs/test/lib:$LD_LIBRARY_PATH"
+ENV QSIPREP_FREESURFER_PYTHON="/opt/freesurfer/bin/fspython"
+ENV QSIPREP_TORCH_PYTHON="/opt/freesurfer-torch/bin/python"
+RUN /app/.pixi/envs/test/bin/python -c "import contourpy" && \
+    /opt/freesurfer/bin/fspython -c "import nibabel, scipy, surfa, tensorflow" && \
+    /opt/freesurfer-torch/bin/python -c "import nibabel, scipy, surfa, torch; assert torch.version.cuda"
 ARG VCS_REF
 LABEL org.opencontainers.image.revision=$VCS_REF
 
 FROM base AS qsiprep
 COPY --link --from=build /app/.pixi/envs/qsiprep /app/.pixi/envs/qsiprep
-COPY --link --from=build /app/.pixi/envs/torch /app/.pixi/envs/torch
 COPY --link --from=build /shell-hook.sh /shell-hook.sh
 RUN cat /shell-hook.sh >> $HOME/.bashrc
 ENV PATH="/app/.pixi/envs/qsiprep/bin:$PATH"
 ENV FSLDIR="/app/.pixi/envs/qsiprep"
+ENV LD_LIBRARY_PATH="/app/.pixi/envs/qsiprep/lib:$LD_LIBRARY_PATH"
 ENV IS_DOCKER_8395080871=1
-ENV QSIPREP_TORCH_PYTHON="/app/.pixi/envs/torch/bin/python"
-# Verify the runtime image can import qsiprep without source tree mounts.
-RUN /app/.pixi/envs/qsiprep/bin/python -c "import qsiprep"
-# Verify the torch env can actually run the FreeSurfer synth scripts
-# (a plain --help exits before `import torch`, so import explicitly).
-RUN /app/.pixi/envs/torch/bin/python -c "import torch, surfa" && \
-    /app/.pixi/envs/torch/bin/python /opt/freesurfer/bin/mri_synthstrip --help
+ENV QSIPREP_FREESURFER_PYTHON="/opt/freesurfer/bin/fspython"
+ENV QSIPREP_TORCH_PYTHON="/opt/freesurfer-torch/bin/python"
+# Verify the runtime image can import qsiprep without source tree mounts, and
+# that each ML tool's interpreter has the tool's dependencies and can compile
+# its script. (FreeSurfer's mri_synthstrip exits 1 on --help/--version and
+# defers "import torch" until after that check, so byte-compile it rather than
+# running --help.)
+RUN /app/.pixi/envs/qsiprep/bin/python -c "import contourpy, qsiprep" && \
+    /opt/freesurfer/bin/fspython -c "import nibabel, scipy, surfa, tensorflow" && \
+    /opt/freesurfer/bin/fspython -m py_compile /opt/freesurfer/bin/mri_synthseg && \
+    /opt/freesurfer-torch/bin/python -c "import nibabel, scipy, surfa, torch; assert torch.version.cuda" && \
+    /opt/freesurfer-torch/bin/python -m py_compile /opt/freesurfer/bin/mri_synthstrip
 
 ENTRYPOINT ["/app/.pixi/envs/qsiprep/bin/qsiprep"]
 ARG BUILD_DATE

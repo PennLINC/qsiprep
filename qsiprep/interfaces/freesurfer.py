@@ -43,25 +43,23 @@ class FSTraitedSpecOpenMP(FSTraitedSpec):
     num_threads = traits.Int(desc='allows for specifying more threads', nohash=True)
 
 
-def torch_script_command(script_name):
-    """Command line for a FreeSurfer python script that imports torch.
+def freesurfer_python_command(script_name, envvar='QSIPREP_FREESURFER_PYTHON'):
+    """Command line for a FreeSurfer Python script.
 
-    The qsiprep containers keep torch in its own environment because torch and
-    tensorflow cannot share one pip environment (their vendored nvidia-* wheels
-    overwrite each other), and point ``QSIPREP_TORCH_PYTHON`` at its
-    interpreter. When the variable is set, run the script with that python
-    explicitly - its ``#!/usr/bin/env python`` shebang would otherwise pick up
-    the torch-less qsiprep environment. Without the variable the script runs
-    as-is (a real FreeSurfer install launches it through fspython, which
-    bundles torch).
+    The QSIPrep containers copy FreeSurfer's bundled ``fspython`` runtime and
+    point ``QSIPREP_FREESURFER_PYTHON`` at its launcher. When the variable is
+    set, run the script with that interpreter explicitly; its
+    ``#!/usr/bin/env python`` shebang would otherwise pick up QSIPrep's Pixi
+    environment. Without the variable, the script runs as-is for compatibility
+    with conventional FreeSurfer installations.
     """
-    torch_python = os.environ.get('QSIPREP_TORCH_PYTHON')
-    if not torch_python:
+    fs_python = os.environ.get(envvar)
+    if not fs_python:
         return script_name
     script = shutil.which(script_name)
     if script is None:
         return script_name
-    return f'{torch_python} {script}'
+    return f'{fs_python} {script}'
 
 
 class StructuralReference(fs.RobustTemplate):
@@ -208,7 +206,7 @@ class SynthStrip(FSCommandOpenMP):
 
     @property
     def cmd(self):
-        return torch_script_command(self._cmd)
+        return freesurfer_python_command(self._cmd, envvar='QSIPREP_TORCH_PYTHON')
 
     def _num_threads_update(self):
         if self.inputs.num_threads:
@@ -298,12 +296,19 @@ class SynthSeg(FSCommandOpenMP):
     output_spec = _SynthSegOutputSpec
     _cmd = 'mri_synthseg'
 
+    @property
+    def cmd(self):
+        return freesurfer_python_command(self._cmd)
+
     def __init__(self, **inputs):
         super().__init__(**inputs)
         self.inputs.environ.update(
             {
                 # mri_synthseg builds its network with Keras 2-only APIs (e.g., Model.output
-                # returning a tensor rather than a list), so point tf.keras at tf-keras.
+                # returning a tensor rather than a list). This keeps tf.keras on Keras 2
+                # (via tf-keras) when the interpreter's TensorFlow is >=2.16; it is a
+                # harmless no-op on the container's pinned TensorFlow 2.13, whose bundled
+                # tf.keras is already Keras 2.
                 'TF_USE_LEGACY_KERAS': '1',
                 # TensorFlow enables oneDNN by default as of 2.9. For a full-size brain at
                 # 1mm that raises mri_synthseg's peak memory from ~13GB to ~16GB, which

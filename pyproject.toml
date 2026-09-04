@@ -51,14 +51,9 @@ dependencies = [
     "pytest-env",
     "pytest-xdist",
     "templateflow",
-    "tensorflow[and-cuda]",
-    # FreeSurfer's mri_synthseg requires Keras 2 (see SynthSeg interface)
-    "tf-keras",
-    # torch and surfa (mri_synthstrip, SynB0) live in the pixi "torch"
-    # environment, not here: torch and tensorflow[and-cuda] both vendor
-    # nvidia-* wheels into site-packages/nvidia/ and their CUDA generations
-    # overwrite each other's libraries (libnccl.so.2), leaving torch
-    # unimportable. See [tool.pixi.feature.torch] and QSIPREP_TORCH_PYTHON.
+    # Container ML dependencies are isolated from QSIPrep: FreeSurfer's
+    # fspython supplies TensorFlow for SynthSeg, while a separate Conda runtime
+    # supplies Torch for SynthStrip and SynB0.
 ]
 dynamic = ["version"]
 
@@ -149,24 +144,9 @@ FSLOUTPUTTYPE = "NIFTI_GZ"
 default = { features = ["editable"], solve-group = "default" }
 test = { features = ["editable", "tests"], solve-group = "default" }
 qsiprep = { features = ["production", "container"], solve-group = "production" }
-torch = { features = ["torch"], no-default-feature = true }
 
 [tool.pixi.feature.editable.pypi-dependencies]
 qsiprep = { path = ".", editable = true }
-
-# The isolated torch environment: interpreter for FreeSurfer python scripts
-# that import torch (mri_synthstrip) and for the SynB0-DISCO U-Net runner.
-# Solved apart from the qsiprep environment so torch's nvidia-* wheels never
-# collide with tensorflow's (see the note in [project] dependencies). The
-# containers point QSIPREP_TORCH_PYTHON at this environment's python.
-[tool.pixi.feature.torch.dependencies]
-python = "3.11.*"
-
-[tool.pixi.feature.torch.pypi-dependencies]
-torch = "*"
-surfa = "==0.6.1"
-nibabel = "*"
-scipy = "*"
 
 [tool.pixi.feature.production.pypi-dependencies]
 qsiprep = { path = ".", editable = false }

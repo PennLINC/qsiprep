@@ -1,7 +1,7 @@
 """Run every fold of the SynB0-DISCO dual-channel U-Net and average the result.
 
 This is a standalone script, not a qsiprep module: it is executed with the
-isolated torch environment's interpreter (see ``QSIPREP_TORCH_PYTHON`` and the
+isolated Torch interpreter (see ``QSIPREP_TORCH_PYTHON`` and the
 ``Synb0Inference`` interface), where qsiprep itself is not installed. It may
 import only the standard library, numpy, nibabel, torch, and the ``model.py``/
 ``util.py`` modules shipped next to the SynB0 weights.

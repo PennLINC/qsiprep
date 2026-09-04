@@ -11,7 +11,7 @@ import nibabel as nb
 import numpy as np
 import pytest
 
-from qsiprep.interfaces.freesurfer import SynthStrip, torch_script_command
+from qsiprep.interfaces.freesurfer import SynthStrip, freesurfer_python_command
 from qsiprep.interfaces.synb0 import (
     NormalizeForSynb0,
     Synb0Inference,
@@ -101,9 +101,9 @@ def test_inference_cmdline_uses_torch_python(tmp_path, monkeypatch):
 
     # The command is fixed at construction so check_deps' which() probe on
     # _cmd.split()[0] sees the real interpreter
-    monkeypatch.setenv('QSIPREP_TORCH_PYTHON', '/torchenv/bin/python')
+    monkeypatch.setenv('QSIPREP_TORCH_PYTHON', '/freesurfer-torch/bin/python')
     cmdline = Synb0Inference(**inputs).cmdline
-    assert cmdline.startswith('/torchenv/bin/python ')
+    assert cmdline.startswith('/freesurfer-torch/bin/python ')
     assert 'synb0_runner.py' in cmdline
     assert f'--synb0-dir {synb0_dir}' in cmdline
     assert '--out b0_u_atlas.nii.gz' in cmdline
@@ -119,19 +119,22 @@ def test_synthstrip_cmd_uses_torch_python(tmp_path, monkeypatch):
     script.chmod(0o755)
     monkeypatch.setenv('PATH', str(tmp_path), prepend=':')
 
-    monkeypatch.setenv('QSIPREP_TORCH_PYTHON', '/torchenv/bin/python')
-    assert SynthStrip().cmd == f'/torchenv/bin/python {script}'
+    monkeypatch.setenv('QSIPREP_TORCH_PYTHON', '/freesurfer-torch/bin/python')
+    assert SynthStrip().cmd == f'/freesurfer-torch/bin/python {script}'
 
     monkeypatch.delenv('QSIPREP_TORCH_PYTHON')
     assert SynthStrip().cmd == 'mri_synthstrip'
 
 
-def test_torch_script_command_missing_script(monkeypatch, tmp_path):
+def test_freesurfer_python_command_missing_script(monkeypatch, tmp_path):
     # An unresolvable script falls back to the bare name rather than a
     # half-built command line
     monkeypatch.setenv('PATH', str(tmp_path))
-    monkeypatch.setenv('QSIPREP_TORCH_PYTHON', '/torchenv/bin/python')
-    assert torch_script_command('mri_synthstrip') == 'mri_synthstrip'
+    monkeypatch.setenv('QSIPREP_TORCH_PYTHON', '/freesurfer-torch/bin/python')
+    assert (
+        freesurfer_python_command('mri_synthstrip', envvar='QSIPREP_TORCH_PYTHON')
+        == 'mri_synthstrip'
+    )
 
 
 def test_synb0_boilerplate_reflects_ignored_fieldmaps(monkeypatch):

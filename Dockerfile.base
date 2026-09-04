@@ -1,5 +1,5 @@
 ARG BASE_IMAGE=ubuntu:jammy-20250730
-ARG TAG_FREESURFER=26.1.0
+ARG TAG_FREESURFER=26.9.2
 ARG TAG_ANTS=26.1.2
 ARG TAG_MRTRIX3=26.1.0
 ARG TAG_3TISSUE=26.1.0
@@ -44,6 +44,10 @@ ENV PATH="$PATH:/opt/mrtrix3-latest/bin:/opt/3Tissue/bin" \
 
 ## Freesurfer
 COPY --from=build_freesurfer /opt/freesurfer /opt/freesurfer
+# fspython is a symlink into /opt/freesurfer-synthseg (TensorFlow for SynthSeg);
+# /opt/freesurfer-torch holds Torch for SynthStrip and SynB0.
+COPY --from=build_freesurfer /opt/freesurfer-synthseg /opt/freesurfer-synthseg
+COPY --from=build_freesurfer /opt/freesurfer-torch /opt/freesurfer-torch
 # Simulate SetUpFreeSurfer.sh
 ENV FSL_DIR="/opt/conda/envs/fslqsiprep" \
     OS="Linux" \
