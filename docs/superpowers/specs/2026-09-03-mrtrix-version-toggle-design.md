@@ -270,13 +270,24 @@ test "$(command -v mrdegibbs)"      = "/opt/mrtrix3-stable/bin/mrdegibbs" && \
 test "$(command -v dwidenoise)"     = "/opt/mrtrix3-stable/bin/dwidenoise" && \
 test "$(command -v dwibiascorrect)" = "/opt/mrtrix3-stable/bin/dwibiascorrect" && \
 test "$(command -v dwidenoise2)"    = "/opt/mrtrix3-dev/bin/dwidenoise2" && \
-/opt/mrtrix3-dev/bin/mrdegibbs -help | grep -q dimensionality && \
-/opt/mrtrix3-stable/bin/dwibiascorrect ants -help > /dev/null
+/opt/mrtrix3-dev/bin/mrdegibbs -help | grep -q dimensionality
 ```
 
-The `dwidenoise2` line pins the fall-through the design depends on. The last two prove
-the development tree runs without a global library path and that the released tree's
-Python wrapper still imports from its own `../lib`.
+The `dwidenoise2` line pins the fall-through the design depends on. The `mrdegibbs` line
+proves the development tree runs without a global library path.
+
+**Correction (2026-09-04).** This section originally ended with a
+`/opt/mrtrix3-stable/bin/dwibiascorrect ants -help > /dev/null` line, to prove the
+released tree's Python wrapper still imports from its own `../lib`. It cannot live in
+this stage and was removed after it failed CI with exit 127: MRtrix3's `dwibiascorrect`
+begins `#!/usr/bin/env python`, and the base image has no Python — the interpreter
+arrives only with the pixi environment layered on in the `test`/`qsiprep` stages. The
+check was written and validated against `pennlinc/qsiprep:test`, which already has that
+environment, so the gap never showed. Nothing verifiable was lost: the base stage now
+executes only compiled binaries (`mrdegibbs`, `mrinfo`), and both trees' `dwibiascorrect`
+are executed for real, against their own `-ants.b`/`-ants_b` spelling and a bogus-option
+control, by `test_dwibiascorrect_options_are_accepted_by_the_real_binary` in the test
+image.
 
 ## Testing
 
