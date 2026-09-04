@@ -565,9 +565,45 @@ def test_shoreline_model_requires_shoreline_method(minimal_args, capsys):
     assert opts.hmc_model == 'tensor'
 
 
-def test_force_t2wreg_parses(minimal_args):
+def test_sdc_anat_reference_parses(minimal_args):
+    assert _parse(minimal_args).sdc_anat_reference == 'none'
+    opts = _parse(minimal_args, '--sdc-anat-reference', 't2w')
+    assert opts.sdc_anat_reference == 't2w'
+    assert opts.force_sdc_anat_reference is False
+
+
+def test_force_sdc_anat_reference_parses(minimal_args):
     assert _parse(minimal_args).force == []
-    assert _parse(minimal_args, '--force', 't2wreg').force == ['t2wreg']
+    opts = _parse(minimal_args, '--sdc-anat-reference', 't2w', '--force', 'sdc-anat-reference')
+    assert opts.force == ['sdc-anat-reference']
+    assert opts.force_sdc_anat_reference is True
+
+
+def test_force_sdc_anat_reference_requires_a_reference(minimal_args, capsys):
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--force', 'sdc-anat-reference')
+    assert 'requires an anatomical SDC reference' in capsys.readouterr().err
+
+
+@pytest.mark.parametrize('reference', ['synb0', 'invt1w'])
+def test_t1w_derived_references_require_t1w_modality(minimal_args, capsys, reference):
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--sdc-anat-reference', reference, '--anat-modality', 'T2w')
+    assert 'requires --anat-modality T1w' in capsys.readouterr().err
+
+    # t2w and auto are exempt: auto resolves at grouping time.
+    assert (
+        _parse(
+            minimal_args, '--sdc-anat-reference', 't2w', '--anat-modality', 'T2w'
+        ).sdc_anat_reference
+        == 't2w'
+    )
+    assert (
+        _parse(
+            minimal_args, '--sdc-anat-reference', 'auto', '--anat-modality', 'T2w'
+        ).sdc_anat_reference
+        == 'auto'
+    )
 
 
 def test_shoreline_selection_warns_of_removal(minimal_args, capsys):

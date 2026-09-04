@@ -80,11 +80,6 @@ def _build_parser(**kwargs):
             '27.0.0',
             'Use `--sdc-method` instead.',
         ),
-        '--force-syn': (
-            '27.0.0',
-            'It has no effect. Fieldmap-less SyN is requested with '
-            '`--use-syn-sdc`, and a measured fieldmap always takes precedence.',
-        ),
         '--b0-motion-corr-to': (
             '27.0.0',
             'Later versions will always use the "iterative" approach.',
@@ -236,6 +231,25 @@ def _build_parser(**kwargs):
                 namespace.hmc_model = shoreline_model_to_hmc_model[namespace.shoreline_model]
             else:
                 namespace.hmc_model = 'eddy' if namespace.hmc_method == 'eddy' else 'tortoise'
+
+            # --force values land on their own boolean attributes so config
+            # (and qsiplan's policy bridge) can read them by name.
+            namespace.force_sdc_anat_reference = 'sdc-anat-reference' in (namespace.force or [])
+            if namespace.force_sdc_anat_reference and namespace.sdc_anat_reference == 'none':
+                self.error(
+                    '--force sdc-anat-reference requires an anatomical SDC '
+                    'reference to force: pass --sdc-anat-reference '
+                    '{synb0,t2w,invt1w,auto}'
+                )
+            if (
+                namespace.sdc_anat_reference in ('synb0', 'invt1w')
+                and namespace.anat_modality != 'T1w'
+            ):
+                self.error(
+                    f'--sdc-anat-reference {namespace.sdc_anat_reference} requires '
+                    '--anat-modality T1w: the reference image is derived from the '
+                    'preprocessed T1w'
+                )
 
             return namespace, extras
 
@@ -929,11 +943,32 @@ How to combine the corrected results of an output's correction units.
         '--force',
         nargs='+',
         default=[],
-        choices=['t2wreg'],
+        choices=['sdc-anat-reference'],
         help='force specific processing choices (a space-delimited list). '
-        '"t2wreg" overrides all fieldmaps with T2w-registration SDC (TORTOISE '
-        'T2Wreg); it requires a T2w image and an SDC stage that can consume '
-        'it (--hmc-method tortoise or --sdc-method drbuddi).',
+        '"sdc-anat-reference" escalates --sdc-anat-reference from a fallback '
+        'to an override: the selected anatomical reference replaces the '
+        'fieldmap application for EVERY DWI series. Requires an '
+        '--sdc-anat-reference other than "none".',
+    )
+    g_fmap.add_argument(
+        '--sdc-anat-reference',
+        action='store',
+        default='none',
+        choices=['none', 'auto', 'synb0', 't2w', 'invt1w'],
+        help='which anatomical-derived image serves as the reference for '
+        'fieldmap-less susceptibility distortion correction, applied as a '
+        'FALLBACK to DWI series that no fieldmap reaches: "synb0" generates '
+        'a synthetic distortion-free b=0 from the T1w with the SynB0-DISCO '
+        'U-Net, "t2w" uses the real T2w (TORTOISE T2Wreg), "invt1w" uses the '
+        'inverted-contrast T1w (nipreps-style SyN prior), "auto" picks synb0 '
+        'when the subject has a T1w, else t2w when it has a T2w, else '
+        'nothing ("invt1w" is never picked automatically), and "none" (the '
+        'default) disables anatomical SDC entirely. The engine consuming the '
+        'reference is governed by --sdc-method/--hmc-method and validated by '
+        'the plan compiler (e.g. with --hmc-method eddy a synthetic b=0 '
+        'enters TOPUP as a zero-readout-time volume; with --hmc-method '
+        'tortoise it is the DIFFPREP registration target). synb0/invt1w '
+        'require a T1w image and a PhaseEncodingDirection on the DWI series.',
     )
     g_fmap.add_argument(
         '--fmap-bspline',
@@ -946,27 +981,6 @@ How to combine the corrected results of an output's correction units.
         action='store_false',
         default=True,
         help='Do not remove median (within mask) from fieldmap',
-    )
-
-    # SyN-unwarp options
-    g_syn = parser.add_argument_group('Specific options for SyN distortion correction')
-    g_syn.add_argument(
-        '--use-syn-sdc',
-        nargs='?',
-        choices=['warn', 'error'],
-        action='store',
-        const='error',
-        default=False,
-        help='Use fieldmap-less distortion correction based on anatomical image; '
-        'if unable, error (default) or warn based on optional argument.',
-    )
-    g_syn.add_argument(
-        '--force-syn',
-        action=DeprecatedAction,
-        default=SUPPRESS,
-        help='DEPRECATED: this flag has no effect. Fieldmap-less SyN correction '
-        'is requested with --use-syn-sdc; a measured fieldmap always takes '
-        'precedence.',
     )
 
     g_other = parser.add_argument_group('Other options')

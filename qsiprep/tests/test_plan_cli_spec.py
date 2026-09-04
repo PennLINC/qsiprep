@@ -35,7 +35,32 @@ def test_planned_options_are_the_only_gaps():
     actions = _actions()
     absent = sorted(o.flag for o in cli_spec.PLAN_OPTIONS if o.flag not in actions)
     planned = sorted(o.flag for o in cli_spec.PLAN_OPTIONS if o.planned)
-    assert absent == planned  # today: ['--use-synb0']
+    assert absent == planned  # today: []
+
+
+def _parse_minimal(tmp_path, *extra):
+    bids_dir = tmp_path / 'bids'
+    bids_dir.mkdir(exist_ok=True)
+    base = [str(bids_dir), str(tmp_path / 'out'), 'participant', '--output-resolution', '2']
+    return _build_parser().parse_args([*base, *extra])
+
+
+def test_sdc_anat_reference_flag_reaches_the_grouping_policy(tmp_path):
+    assert _parse_minimal(tmp_path).sdc_anat_reference == 'none'
+    namespace = _parse_minimal(tmp_path, '--sdc-anat-reference', 'synb0')
+    assert namespace.sdc_anat_reference == 'synb0'
+    policy = cli_spec.policy_from_namespace(namespace)
+    assert policy.sdc_anat_reference == 'synb0'
+    assert policy.force_sdc_anat_reference is False
+
+
+def test_force_sdc_anat_reference_reaches_the_grouping_policy(tmp_path):
+    namespace = _parse_minimal(
+        tmp_path, '--sdc-anat-reference', 't2w', '--force', 'sdc-anat-reference'
+    )
+    policy = cli_spec.policy_from_namespace(namespace)
+    assert policy.sdc_anat_reference == 't2w'
+    assert policy.force_sdc_anat_reference is True
 
 
 def test_shared_helpers_read_a_qsiprep_namespace():
@@ -49,8 +74,7 @@ def test_shared_helpers_read_a_qsiprep_namespace():
         separate_all_dwis=False,
         ignore=['fieldmaps', 'shims'],
         force=[],
-        use_syn_sdc=False,
-        use_synb0=False,
+        sdc_anat_reference='none',
         distortion_group_merge='concat',
     )
     assert cli_spec.selection_from_namespace(namespace).label() == 'TORTOISE + DRBUDDI'

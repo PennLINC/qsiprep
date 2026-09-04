@@ -5,9 +5,11 @@ import numpy as np
 import pytest
 
 from qsiprep.interfaces.epi_fmap import (
+    add_synthetic_b0_to_topup_inputs,
     get_distortion_grouping,
     load_epi_dwi_fieldmaps,
     read_nifti_sidecar,
+    synb0_topup_config,
 )
 from qsiprep.tests.utils import (
     COMPLEX_DWI_SKELETON,
@@ -279,3 +281,77 @@ def test_load_epi_dwi_fieldmaps_thresholds_a_3d_image_bval(tmp_path):
     # The b=1000 image is not usable as a b=0
     assert b0_indices == [0]
     assert original_files == [b0_file, highb_file]
+
+
+def _write_synb0_topup_inputs(tmp_path, n_vols=2, readout='0.050000'):
+    rng = np.random.default_rng(7)
+    affine = np.diag([2.0, 2.0, 2.0, 1.0])
+    data = rng.uniform(100, 200, size=(8, 8, 6, n_vols)).astype('f4')
+    imain = str(tmp_path / 'topup_imain.nii.gz')
+    nb.Nifti1Image(data, affine).to_filename(imain)
+    datain = str(tmp_path / 'topup_datain.txt')
+    with open(datain, 'w') as f:
+        f.write('\n'.join([f'0 1 0 {readout}'] * n_vols))
+    synthetic = rng.uniform(100, 200, size=(8, 8, 6)).astype('f4')
+    synth_file = str(tmp_path / 'synthetic_b0.nii.gz')
+    nb.Nifti1Image(synthetic, affine).to_filename(synth_file)
+    return imain, datain, synth_file, data, synthetic
+
+
+def test_add_synthetic_b0_smooths_and_appends(tmp_path):
+    imain, datain, synth_file, data, synthetic = _write_synb0_topup_inputs(tmp_path)
+    cwd = tmp_path / 'work'
+    cwd.mkdir()
+
+    new_datain, new_imain = add_synthetic_b0_to_topup_inputs(
+        topup_datain=datain,
+        topup_imain=imain,
+        synthetic_b0=synth_file,
+        cwd=str(cwd),
+    )
+
+    out = nb.load(new_imain)
+    assert out.shape[3] == 3
+    # The synthetic volume is appended unchanged...
+    assert np.allclose(out.dataobj[..., 2], synthetic, atol=1e-3)
+    # ...while the real volumes are smoothed (their voxelwise noise shrinks).
+    for volnum in range(2):
+        smoothed = np.asarray(out.dataobj[..., volnum])
+        assert not np.allclose(smoothed, data[..., volnum], atol=1e-3)
+        assert smoothed.std() < data[..., volnum].std()
+        assert np.isclose(smoothed.mean(), data[..., volnum].mean(), rtol=0.01)
+
+    with open(new_datain) as f:
+        lines = f.read().splitlines()
+    assert lines == ['0 1 0 0.050000', '0 1 0 0.050000', '0 1 0 0.000000']
+
+
+def test_add_synthetic_b0_resamples_off_grid(tmp_path):
+    imain, datain, _, _, _ = _write_synb0_topup_inputs(tmp_path)
+    # A synthetic image on a coarser grid must be resampled onto imain's grid
+    rng = np.random.default_rng(8)
+    coarse = nb.Nifti1Image(
+        rng.uniform(100, 200, size=(4, 4, 3)).astype('f4'), np.diag([4.0, 4.0, 4.0, 1.0])
+    )
+    synth_file = str(tmp_path / 'synthetic_coarse.nii.gz')
+    coarse.to_filename(synth_file)
+    cwd = tmp_path / 'work'
+    cwd.mkdir()
+
+    _, new_imain = add_synthetic_b0_to_topup_inputs(
+        topup_datain=datain,
+        topup_imain=imain,
+        synthetic_b0=synth_file,
+        cwd=str(cwd),
+    )
+
+    out = nb.load(new_imain)
+    assert out.shape == (8, 8, 6, 3)
+    assert np.asarray(out.dataobj[..., 2]).max() > 0
+
+
+def test_synb0_topup_config_resolves_the_distribution(monkeypatch, tmp_path):
+    monkeypatch.delenv('SYNB0_ATLASES', raising=False)
+    assert synb0_topup_config() == '/opt/synb0/synb0.cnf'
+    monkeypatch.setenv('SYNB0_ATLASES', str(tmp_path / 'dist' / 'atlases'))
+    assert synb0_topup_config() == str(tmp_path / 'dist' / 'synb0.cnf')

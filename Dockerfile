@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=pennlinc/qsiprep-base:20260828
+ARG BASE_IMAGE=pennlinc/qsiprep-base:20260904
 ARG DWIDENOISE2_COMMIT=cd08ec1a0f5eb1dbc9962f80c20c2bb3428c4f93
 # MRtrix3 "dev" as at 2026-06-22, the commit dwidenoise2 is developed against
 ARG MRTRIX3_DWIDENOISE2_COMMIT=b98b54e9ae8168eeb9af23322a07011d4754456d
@@ -107,6 +107,12 @@ COPY --link --from=build /test-shell-hook.sh /shell-hook.sh
 RUN cat /shell-hook.sh >> $HOME/.bashrc
 ENV PATH="/app/.pixi/envs/test/bin:$PATH"
 ENV FSLDIR="/app/.pixi/envs/test"
+ENV LD_LIBRARY_PATH="/app/.pixi/envs/test/lib:$LD_LIBRARY_PATH"
+ENV QSIPREP_FREESURFER_PYTHON="/opt/freesurfer/bin/fspython"
+ENV QSIPREP_TORCH_PYTHON="/opt/freesurfer-torch/bin/python"
+RUN /app/.pixi/envs/test/bin/python -c "import contourpy" && \
+    /opt/freesurfer/bin/fspython -c "import nibabel, scipy, surfa, tensorflow" && \
+    /opt/freesurfer-torch/bin/python -c "import nibabel, scipy, surfa, torch; assert torch.version.cuda"
 ARG VCS_REF
 LABEL org.opencontainers.image.revision=$VCS_REF
 
@@ -116,9 +122,20 @@ COPY --link --from=build /shell-hook.sh /shell-hook.sh
 RUN cat /shell-hook.sh >> $HOME/.bashrc
 ENV PATH="/app/.pixi/envs/qsiprep/bin:$PATH"
 ENV FSLDIR="/app/.pixi/envs/qsiprep"
+ENV LD_LIBRARY_PATH="/app/.pixi/envs/qsiprep/lib:$LD_LIBRARY_PATH"
 ENV IS_DOCKER_8395080871=1
-# Verify the runtime image can import qsiprep without source tree mounts.
-RUN /app/.pixi/envs/qsiprep/bin/python -c "import qsiprep"
+ENV QSIPREP_FREESURFER_PYTHON="/opt/freesurfer/bin/fspython"
+ENV QSIPREP_TORCH_PYTHON="/opt/freesurfer-torch/bin/python"
+# Verify the runtime image can import qsiprep without source tree mounts, and
+# that each ML tool's interpreter has the tool's dependencies and can compile
+# its script. (FreeSurfer's mri_synthstrip exits 1 on --help/--version and
+# defers "import torch" until after that check, so byte-compile it rather than
+# running --help.)
+RUN /app/.pixi/envs/qsiprep/bin/python -c "import contourpy, qsiprep" && \
+    /opt/freesurfer/bin/fspython -c "import nibabel, scipy, surfa, tensorflow" && \
+    /opt/freesurfer/bin/fspython -m py_compile /opt/freesurfer/bin/mri_synthseg && \
+    /opt/freesurfer-torch/bin/python -c "import nibabel, scipy, surfa, torch; assert torch.version.cuda" && \
+    /opt/freesurfer-torch/bin/python -m py_compile /opt/freesurfer/bin/mri_synthstrip
 
 ENTRYPOINT ["/app/.pixi/envs/qsiprep/bin/qsiprep"]
 ARG BUILD_DATE

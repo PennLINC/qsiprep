@@ -18,7 +18,9 @@ Disable warnings:
 
 """
 
+import os
 import os.path as op
+import shutil
 
 import nibabel as nb
 from nipype.interfaces import freesurfer as fs
@@ -39,6 +41,25 @@ from scipy import ndimage
 
 class FSTraitedSpecOpenMP(FSTraitedSpec):
     num_threads = traits.Int(desc='allows for specifying more threads', nohash=True)
+
+
+def freesurfer_python_command(script_name, envvar='QSIPREP_FREESURFER_PYTHON'):
+    """Command line for a FreeSurfer Python script.
+
+    The QSIPrep containers copy FreeSurfer's bundled ``fspython`` runtime and
+    point ``QSIPREP_FREESURFER_PYTHON`` at its launcher. When the variable is
+    set, run the script with that interpreter explicitly; its
+    ``#!/usr/bin/env python`` shebang would otherwise pick up QSIPrep's Pixi
+    environment. Without the variable, the script runs as-is for compatibility
+    with conventional FreeSurfer installations.
+    """
+    fs_python = os.environ.get(envvar)
+    if not fs_python:
+        return script_name
+    script = shutil.which(script_name)
+    if script is None:
+        return script_name
+    return f'{fs_python} {script}'
 
 
 class StructuralReference(fs.RobustTemplate):
@@ -183,6 +204,10 @@ class SynthStrip(FSCommandOpenMP):
     output_spec = _SynthStripOutputSpec
     _cmd = 'mri_synthstrip'
 
+    @property
+    def cmd(self):
+        return freesurfer_python_command(self._cmd, envvar='QSIPREP_TORCH_PYTHON')
+
     def _num_threads_update(self):
         if self.inputs.num_threads:
             self.inputs.environ.update({'OMP_NUM_THREADS': '1'})
@@ -271,12 +296,19 @@ class SynthSeg(FSCommandOpenMP):
     output_spec = _SynthSegOutputSpec
     _cmd = 'mri_synthseg'
 
+    @property
+    def cmd(self):
+        return freesurfer_python_command(self._cmd)
+
     def __init__(self, **inputs):
         super().__init__(**inputs)
         self.inputs.environ.update(
             {
                 # mri_synthseg builds its network with Keras 2-only APIs (e.g., Model.output
-                # returning a tensor rather than a list), so point tf.keras at tf-keras.
+                # returning a tensor rather than a list). This keeps tf.keras on Keras 2
+                # (via tf-keras) when the interpreter's TensorFlow is >=2.16; it is a
+                # harmless no-op on the container's pinned TensorFlow 2.13, whose bundled
+                # tf.keras is already Keras 2.
                 'TF_USE_LEGACY_KERAS': '1',
                 # TensorFlow enables oneDNN by default as of 2.9. For a full-size brain at
                 # 1mm that raises mri_synthseg's peak memory from ~13GB to ~16GB, which

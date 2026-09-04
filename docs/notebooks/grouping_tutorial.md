@@ -322,17 +322,17 @@ susceptibility correction. Corrected and uncorrected volumes never share a
 final file, so the corrected run-1 pair becomes one output while the
 uncorrected run-2 scans stand alone.
 
-The safety net for unlinked scans is the **fieldmap-less ladder**, which
-stays available because — unlike sidecar metadata — it is under your control
-at run time (`--use-syn-sdc`, `--use-synb0`, or the automatic T2w fallback).
-Add a T2w to the same subject and run-2 is rescued, visibly tagged
-*inferred*, in its own correction unit — and because every unit is now
-corrected, their corrected results are concatenated into a single final
-output:
+The safety net for unlinked scans is the **anatomical SDC reference**,
+which stays available because — unlike sidecar metadata — it is under your
+control at run time (`--sdc-anat-reference`; under the default `none`
+nothing anatomical happens). Add a T2w to the same subject and ask for
+`auto`, and run-2 is rescued, visibly tagged *inferred*, in its own
+correction unit — and because every unit is now corrected, their corrected
+results are concatenated into a single final output:
 
 ```{code-cell} ipython3
 t2w = scan('sub-01_T2w.nii.gz', folder='anat', suffix='T2w', PhaseEncodingDirection=None, TotalReadoutTime=None)
-g = group(*runs, t2w)
+g = group(*runs, t2w, sdc_anat_reference='auto')
 print(report_text(g))
 ```
 
@@ -388,28 +388,32 @@ g = group(*runs, ignore_shims=True)
 print(report_text(g))
 ```
 
-## 7. No fieldmap at all: the fieldmap-less ladder
+## 7. No fieldmap at all: the anatomical SDC reference
 
-With no fieldmap and no reverse-PE partner, QSIPrep walks a ladder of
-fallbacks. If the subject has a T2w image, it infers a **T2w registration**
-(T2Wreg) correction — the distorted b=0 is registered to the undistorted T2w:
+With no fieldmap and no reverse-PE partner, a series is left uncorrected by
+default — anatomical (fieldmap-less) correction is opt-in. The
+`--sdc-anat-reference` flag names which anatomical-derived image serves as
+the correction reference, and `auto` resolves it per subject: a T1w selects
+the SyNb0 synthetic b=0, otherwise a T2w selects a **T2w registration**
+(T2Wreg) — the distorted b=0 is registered to the undistorted T2w:
 
 ```{code-cell} ipython3
 dwi = scan('sub-01_dir-AP_dwi.nii.gz', PhaseEncodingDirection='j-')
 t1w = scan('sub-01_T1w.nii.gz', folder='anat', suffix='T1w', PhaseEncodingDirection=None, TotalReadoutTime=None)
 t2w = scan('sub-01_T2w.nii.gz', folder='anat', suffix='T2w', PhaseEncodingDirection=None, TotalReadoutTime=None)
-g = group(dwi, t1w, t2w)
+g = group(dwi, t2w, sdc_anat_reference='auto')
 show(g, height=680)
 ```
 
-Command-line flags climb the ladder explicitly (provenance **cli-override**,
-purple): `--use-synb0` synthesizes an undistorted b=0 from the T1w, and the
-niworkflows SyN-SDC registers an inverted T1w to a fieldmap atlas. A real
-fieldmap always outranks every fieldmap-less method — the flags only apply to
-series that would otherwise go uncorrected:
+Naming a reference explicitly gets provenance **cli-override** (purple):
+`synb0` synthesizes an undistorted b=0 from the T1w, and `invt1w` registers
+an inverted-contrast T1w to a fieldmap atlas (the niworkflows SyN-SDC). A
+real fieldmap always outranks the fallback — the reference only applies to
+series that would otherwise go uncorrected, unless you escalate it with
+`--force sdc-anat-reference`:
 
 ```{code-cell} ipython3
-g = group(dwi, t1w, t2w, use_synb0=True)
+g = group(dwi, t1w, t2w, sdc_anat_reference='synb0')
 print(report_text(g))
 ```
 

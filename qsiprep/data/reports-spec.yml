@@ -166,6 +166,26 @@ sections:
     static: false
     subtitle: Susceptibility distortion correction (T2Wreg)
 
+  - bids: {datatype: figures, desc: synb0acquired, suffix: dwi}
+    caption: |
+      The acquired (distorted) <em>b</em>=0 reference against the synthetic
+      distortion-free <em>b</em>=0 generated from the T1w image with
+      SynB0-DISCO, with white matter contours mapped through the
+      <em>b</em>=0-to-anatomical coregistration. Nothing has been corrected in
+      this figure: it shows whether the synthesized target that drives the
+      distortion correction is trustworthy. The synthetic image should look
+      like an undistorted version of the acquired one and follow the contours.
+    static: false
+    subtitle: SynB0 synthetic <em>b</em>=0
+  - bids: {datatype: figures, desc: synb0unet, suffix: dwi}
+    caption: |
+      The two input channels of the SynB0-DISCO U-Net -- the normalized T1w
+      image and the distorted <em>b</em>=0 -- on the model's 2.5mm atlas grid.
+      Misregistration between the channels corrupts the synthetic output, so
+      the two images should flick between well-aligned anatomies.
+    static: false
+    subtitle: SynB0 U-Net inputs
+
   - bids: {datatype: figures, desc: sdcdrbuddi, suffix: dwi}
     caption: |
       Results of performing susceptibility distortion correction (SDC) using DRBUDDI.
