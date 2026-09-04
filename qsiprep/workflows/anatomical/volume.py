@@ -60,7 +60,7 @@ from ...utils.gpu import gpu_enabled
 from ...utils.misc import fix_multi_source_name
 
 ANTS_VERSION = BrainExtraction().version or '<ver>'
-FS_VERSION = '7.3.1'
+FS_VERSION = '8.2.0'
 
 
 def _get_first(in_list):
