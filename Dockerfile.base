@@ -46,11 +46,8 @@ COPY --from=build_3tissue /opt/3Tissue /opt/3Tissue
 # Neither tree contributes to LD_LIBRARY_PATH: each finds its own libraries, so one
 # cannot shadow the other. /opt/3Tissue ships its own 3.0.x mrdegibbs and dwidenoise
 # and must stay last. This order is the --mrtrix-version stable default.
-# MRTRIX3_STABLE_VERSION/MRTRIX3_DEV_VERSION are the versions actually contained in
-# the pinned TAG_MRTRIX3/TAG_MRTRIX3DEV images above (checked with `<cmd> -version`
-# inside each image) — update them together with those tags. The qsiprep-base
-# consumer's Dockerfile asserts these against `mrinfo -version` at build time, so a
-# stale value here fails that build rather than shipping quietly.
+# Update MRTRIX3_STABLE_VERSION/MRTRIX3_DEV_VERSION together with the TAG_MRTRIX3*
+# pins above; the qsiprep Dockerfile asserts them against `mrinfo -version`.
 ENV MRTRIX3_STABLE_HOME="/opt/mrtrix3-stable" \
     MRTRIX3_DEV_HOME="/opt/mrtrix3-dev" \
     MRTRIX3_STABLE_VERSION="3.0.4" \

@@ -471,12 +471,9 @@ def init_dwi_denoising_wf(
     do_unringing = config.workflow.unringing_method in ('mrdegibbs', 'rpg')
     harmonize_b0s = not config.workflow.no_b0_harmonization
 
-    # Only the dwidenoise variants can denoise complex-valued data. Any other method
-    # ignores the phase data and denoises the magnitude data alone.
+    # Only the dwidenoise variants denoise complex data; the rest use magnitude alone.
     denoise_complex = do_denoise and denoise_method.startswith('dwidenoise') and use_phase
-    # mrdegibbs is built on the Fourier shift theorem and reads and writes complex data
-    # on MRtrix3's development branch, so complex data stay complex through unringing.
-    # The released mrdegibbs cannot, and TORTOISE's rpg is magnitude-only.
+    # Only the development-branch mrdegibbs reads and writes complex data.
     unring_complex = (
         denoise_complex
         and unringing_method == 'mrdegibbs'

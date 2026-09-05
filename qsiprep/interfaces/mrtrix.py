@@ -445,10 +445,7 @@ class DWIBiasCorrectInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec
         position=-1,
         desc='the output bias corrected DWI image',
     )
-    # The argstr is a bare placeholder: DWIBiasCorrect._format_arg builds the real
-    # flag, because 3.0.x spells these -ants.b and the development branch -ants_b.
-    # The placeholder is load-bearing — nipype formats only traits that declare an
-    # argstr, so removing it would silently emit nothing at all.
+    # _format_arg builds the flag: 3.0.x spells it -ants.b, the dev branch -ants_b.
     ants_b = traits.Str(default_value='[150,3]', argstr='%s', usedefault=True)
     ants_c = traits.Str(default_value='[200x200,1e-6]', argstr='%s', usedefault=True)
     ants_s = traits.Str(default_value='4', argstr='%s')
@@ -570,9 +567,7 @@ class MRDeGibbs(SeriesPreprocReport, MRTrix3Base):
 
         input_dwi, denoised_nii, _ = self._get_plotting_images()
 
-        # mrdegibbs emits complex data when it is given complex data, and the report
-        # always shows magnitude. This mirrors SeriesPreprocReport._generate_report,
-        # which this method overrides.
+        # mrdegibbs passes complex data through; the report always shows magnitude.
         input_dwi = _to_magnitude(input_dwi)
         denoised_nii = _to_magnitude(denoised_nii)
 

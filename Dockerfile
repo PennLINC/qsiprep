@@ -40,11 +40,8 @@ ENV HOME="/home/qsiprep"
 # Pin which tree each command resolves to. The default PATH order matches
 # --mrtrix-version stable; config.workflow.init() reorders it for --mrtrix-version dev.
 # dwidenoise2 exists only in the development tree, so it must fall through to it.
-# Only compiled binaries may be executed here. MRtrix3's dwibiascorrect and the rest of
-# its scripts start with `#!/usr/bin/env python`, and no interpreter exists in this stage
-# -- Python only arrives with the pixi environment layered on in the stages below. Both
-# trees' dwibiascorrect are run for real, against their own -ants.b/-ants_b spelling, by
-# test_dwibiascorrect_options_are_accepted_by_the_real_binary in the test image.
+# Run compiled binaries only: MRtrix3's Python scripts (dwibiascorrect among them) have
+# no interpreter here, since Python arrives with the pixi env in the stages below.
 RUN test "$(command -v mrdegibbs)"      = "/opt/mrtrix3-stable/bin/mrdegibbs" && \
     test "$(command -v dwidenoise)"     = "/opt/mrtrix3-stable/bin/dwidenoise" && \
     test "$(command -v dwibiascorrect)" = "/opt/mrtrix3-stable/bin/dwibiascorrect" && \

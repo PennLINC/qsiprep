@@ -122,16 +122,7 @@ language = 'en'
 # This patterns also effect to html_static_path and html_extra_path
 # notebooks/*.ipynb are local jupytext conversions of the committed MyST .md
 # notebooks (gitignored); exclude them so sphinx never prefers a stale copy.
-# superpowers/** holds internal planning and spec documents that are kept in the
-# repo for human review but must never be published: they carry absolute local
-# filesystem paths, environment names, and agent-orchestration directives.
-exclude_patterns = [
-    '_build',
-    'Thumbs.db',
-    '.DS_Store',
-    'notebooks/*.ipynb',
-    'superpowers/**',
-]
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'notebooks/*.ipynb']
 
 # The reST default role (used for this markup: `text`) to use for all
 # documents.
