@@ -711,8 +711,17 @@ def bvec_to_rasb(bval_file, bvec_file, img_file, workdir):
     proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
     out, err = proc.communicate()
     LOGGER.info(' '.join(cmd))
-    if err:
-        raise Exception(str(err))
+    stderr_text = err.decode('utf-8', errors='replace').strip()
+    # MRtrix3 uses stderr for advisories, not just errors. Recent versions print
+    # "axes realigned to approximate RAS" for any non-RAS image, which includes
+    # every LPS+ image QSIPrep produces. Only a non-zero return code is a failure.
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f'Command failed with return code {proc.returncode}: {" ".join(cmd)}\n{stderr_text}'
+        )
+
+    if stderr_text:
+        LOGGER.debug('%s wrote to stderr: %s', ' '.join(cmd), stderr_text)
 
     return np.fromstring(out, dtype=float, sep=' ')[:3]
 

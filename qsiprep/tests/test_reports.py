@@ -29,6 +29,118 @@ def test_subject_summary_counts_inputs_uniquely():
     assert 'inputs 2, outputs 2' in segment
 
 
+def test_subject_summary_warns_about_the_development_branch():
+    """Put an unmissable warning in the report when unreleased MRtrix3 was used."""
+    from qsiprep.interfaces.reports import SubjectSummary
+
+    summary = SubjectSummary(
+        subject_id='01',
+        template='MNI152NLin2009cAsym',
+        mrtrix_version='dev',
+    )
+    segment = summary._generate_segment()
+
+    assert 'alert alert-warning' in segment
+    assert 'role="alert"' in segment
+    assert 'development branch' in segment.lower()
+    assert '--mrtrix-version dev' in segment
+
+
+def test_subject_summary_is_quiet_under_stable_mrtrix():
+    """Show no warning banner for a released MRtrix3, which is the default."""
+    from qsiprep.interfaces.reports import SubjectSummary
+
+    summary = SubjectSummary(
+        subject_id='01',
+        template='MNI152NLin2009cAsym',
+        mrtrix_version='stable',
+    )
+    segment = summary._generate_segment()
+
+    assert 'alert' not in segment
+    assert 'development branch' not in segment.lower()
+
+
+def test_about_summary_records_the_mrtrix_installation():
+    """State which MRtrix3 ran, warning or not: version and path both known."""
+    from qsiprep.interfaces.reports import AboutSummary
+
+    segment = AboutSummary(
+        version='1.2.3',
+        command='qsiprep ...',
+        mrtrix_version='dev',
+        mrtrix3_home='/opt/mrtrix3-dev',
+        mrtrix3_version='3.0.8-2071-gb98b54e9',
+    )._generate_segment()
+
+    assert 'dev' in segment
+    assert '/opt/mrtrix3-dev' in segment
+    assert '3.0.8-2071-gb98b54e9' in segment
+    assert 'None' not in segment
+    assert '()' not in segment
+    assert 'MRtrix3: dev 3.0.8-2071-gb98b54e9 (/opt/mrtrix3-dev)' in segment
+
+
+def test_about_summary_omits_an_unknown_mrtrix_path():
+    """Mark the version as unresolved, not a bare claim, when neither is declared.
+
+    Nothing has actually been selected in this case: whatever MRtrix3 is on PATH ran,
+    which may not be the requested version. The report must not assert a version it
+    cannot back.
+    """
+    from qsiprep.interfaces.reports import AboutSummary
+
+    segment = AboutSummary(
+        version='1.2.3',
+        command='qsiprep ...',
+        mrtrix_version='stable',
+    )._generate_segment()
+
+    assert 'MRtrix3' in segment
+    assert 'stable' in segment
+    assert 'None' not in segment
+    assert '()' not in segment
+    assert 'resolved from PATH' in segment
+    assert 'MRtrix3: stable (requested; no declared installation, resolved from PATH)' in segment
+
+
+def test_about_summary_records_a_version_with_no_declared_path():
+    """Mark the version as unresolved when it is known but no install path is declared."""
+    from qsiprep.interfaces.reports import AboutSummary
+
+    segment = AboutSummary(
+        version='1.2.3',
+        command='qsiprep ...',
+        mrtrix_version='dev',
+        mrtrix3_version='3.0.8-2071-gb98b54e9',
+    )._generate_segment()
+
+    assert 'None' not in segment
+    assert '()' not in segment
+    assert 'resolved from PATH' in segment
+    assert (
+        'MRtrix3: dev 3.0.8-2071-gb98b54e9 '
+        '(requested; no declared installation, resolved from PATH)'
+    ) in segment
+
+
+def test_about_summary_records_a_path_with_no_known_version():
+    """Report the install path without a version claim when the version is unknown."""
+    from qsiprep.interfaces.reports import AboutSummary
+
+    segment = AboutSummary(
+        version='1.2.3',
+        command='qsiprep ...',
+        mrtrix_version='stable',
+        mrtrix3_home='/opt/mrtrix3-stable',
+    )._generate_segment()
+
+    assert 'None' not in segment
+    assert '()' not in segment
+    assert 'resolved from PATH' not in segment
+    assert 'MRtrix3: stable (/opt/mrtrix3-stable)' in segment
+
+
 @pytest.fixture
 def collect_reports(monkeypatch):
     """Replace run_reports with a recorder of the report directories and filenames."""

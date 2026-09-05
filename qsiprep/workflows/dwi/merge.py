@@ -322,6 +322,53 @@ def init_merge_and_denoise_wf(
     return workflow
 
 
+class _ImageChain:
+    """Track the image flowing through the denoising steps, and its data domain.
+
+    The denoising steps form a linear chain, each reading the previous step's output.
+    Whether that image is complex-valued is not a property of the chain position but of
+    which steps have run: ``dwidenoise`` handed complex data emits complex data, and so
+    does ``mrdegibbs`` on MRtrix3's development branch, while ``dwibiascorrect`` and
+    TORTOISE's ``rpg`` are magnitude-only. Tracking the domain alongside the current
+    image lets :func:`to_magnitude` insert the split at the last step that can still
+    consume complex data, instead of always splitting right after denoising.
+    """
+
+    def __init__(self, workflow, node, field, omp_nthreads):
+        self.workflow = workflow
+        self.source = (node, field)
+        self.is_complex = False
+        self._omp_nthreads = omp_nthreads
+
+    def feed(self, node, field='in_file'):
+        """Connect the current image to ``field`` on ``node``."""
+        source_node, source_field = self.source
+        self.workflow.connect([(source_node, node, [(source_field, field)])])
+
+    def advance(self, node, field='out_file', is_complex=False):
+        """Make ``field`` on ``node`` the current image."""
+        self.source = (node, field)
+        self.is_complex = is_complex
+
+    def to_magnitude(self):
+        """Reduce the current image to magnitude, if it is not already.
+
+        A no-op on real-valued data, so callers can invoke it before any
+        magnitude-only step without checking first. Only one ``split_complex``
+        node is ever created, because the first call clears ``is_complex``.
+        """
+        if not self.is_complex:
+            return
+
+        split_complex = pe.Node(
+            ComplexToMagnitude(),
+            name='split_complex',
+            n_procs=self._omp_nthreads,
+        )
+        self.feed(split_complex, 'complex_file')
+        self.advance(split_complex, 'out_file', is_complex=False)
+
+
 def init_dwi_denoising_wf(
     source_file,
     partial_fourier,
@@ -402,21 +449,10 @@ def init_dwi_denoising_wf(
     omp_nthreads = config.nipype.omp_nthreads
     desc = '\n\n'
 
-    # Get IdentityInterfaces ready to hold intermediate results
-    buffernodes = []
-
-    def get_buffernode():
-        num_buffers = len(buffernodes)
-        return pe.Node(
-            niu.IdentityInterface(fields=['dwi_file']),
-            name=f'buffer{num_buffers:02}',
-        )
-
-    buffernodes.append(get_buffernode())
+    # The chain starts at the raw input file, in the magnitude domain
+    chain = _ImageChain(workflow, inputnode, 'dwi_file', omp_nthreads)
 
     workflow.connect([
-        # The first buffernode is the raw file
-        (inputnode, buffernodes[0], [('dwi_file', 'dwi_file')]),
         # XXX: Why pass the bval and bvec files through unmodified?
         (inputnode, outputnode, [
             ('bval_file', 'bval_file'),
@@ -435,6 +471,20 @@ def init_dwi_denoising_wf(
     do_unringing = config.workflow.unringing_method in ('mrdegibbs', 'rpg')
     harmonize_b0s = not config.workflow.no_b0_harmonization
 
+    # Only the dwidenoise variants denoise complex data; the rest use magnitude alone.
+    denoise_complex = do_denoise and denoise_method.startswith('dwidenoise') and use_phase
+    # Only the development-branch mrdegibbs reads and writes complex data.
+    unring_complex = (
+        denoise_complex
+        and unringing_method == 'mrdegibbs'
+        and config.workflow.mrtrix_version == 'dev'
+    )
+    if denoise_complex and unringing_method == 'mrdegibbs' and not unring_complex:
+        config.loggers.workflow.warning(
+            'Complex-valued Gibbs unringing is available with --mrtrix-version dev. '
+            'The magnitude data will be unrung instead.'
+        )
+
     # How many steps in the denoising pipeline
     num_steps = sum(map(int, [do_denoise, do_unringing, do_biascorr, harmonize_b0s]))
     merge_confounds = pe.Node(niu.Merge(num_steps), name='merge_confounds')
@@ -443,9 +493,6 @@ def init_dwi_denoising_wf(
     step_num = 1  # Merge inputs start at 1
     last_step = ''
     if do_denoise:
-        # Add buffernode for denoised DWI
-        buffernodes.append(get_buffernode())
-
         ds_report_denoising = pe.Node(
             DerivativesDataSink(
                 datatype='figures',
@@ -456,10 +503,6 @@ def init_dwi_denoising_wf(
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
-
-        # Only the dwidenoise variants can denoise complex-valued data.
-        # Any other method ignores the phase data and denoises the magnitude data alone.
-        denoise_complex = denoise_method.startswith('dwidenoise') and use_phase
 
         # Build the denoiser. The node is the same whether it is handed magnitude-only or
         # complex-valued data; only the data feeding it differs, which is wired up below.
@@ -530,9 +573,12 @@ def init_dwi_denoising_wf(
                 desc += (
                     'Magnitude and phase DWI data were combined into a complex-valued file, then '
                     f'{mppca_desc}'
-                    'After denoising, the complex-valued data were split back into magnitude and '
-                    'phase, and the denoised magnitude data were retained. '
                 )
+                if not unring_complex:
+                    desc += (
+                        'After denoising, the complex-valued data were split back into '
+                        'magnitude and phase, and the denoised magnitude data were retained. '
+                    )
             else:
                 desc += f'DWI data were {mppca_desc}'
 
@@ -552,7 +598,8 @@ def init_dwi_denoising_wf(
             (denoiser, outputnode, [('noise_image', 'noise_image')]),
         ])  # fmt:skip
 
-        # The denoiser's input and output are all that the complex-valued path changes
+        # The complex-valued path only changes what feeds the denoiser; the denoiser
+        # wiring itself is the same either way.
         if denoise_complex:
             phase_to_radians = pe.Node(
                 PhaseToRad(),
@@ -564,30 +611,34 @@ def init_dwi_denoising_wf(
                 name='combine_complex',
                 n_procs=omp_nthreads,
             )
-            split_complex = pe.Node(
-                ComplexToMagnitude(),
-                name='split_complex',
-                n_procs=omp_nthreads,
-            )
             workflow.connect([
                 (inputnode, phase_to_radians, [('dwi_phase_file', 'phase_file')]),
-                (buffernodes[-2], combine_complex, [('dwi_file', 'mag_file')]),
                 (phase_to_radians, combine_complex, [('phase_file', 'phase_file')]),
-                (combine_complex, denoiser, [('out_file', 'in_file')]),
-                (denoiser, split_complex, [('out_file', 'complex_file')]),
-                (split_complex, buffernodes[-1], [('out_file', 'dwi_file')]),
             ])  # fmt:skip
-        else:
-            workflow.connect([
-                (buffernodes[-2], denoiser, [('dwi_file', 'in_file')]),
-                (denoiser, buffernodes[-1], [('out_file', 'dwi_file')]),
-            ])  # fmt:skip
+            chain.feed(combine_complex, 'mag_file')
+            chain.advance(combine_complex, 'out_file', is_complex=True)
+
+        chain.feed(denoiser, 'in_file')
+        chain.advance(denoiser, 'out_file', is_complex=denoise_complex)
+        # Hold the complex data if unringing can use them; otherwise split here
+        if not unring_complex:
+            chain.to_magnitude()
 
         step_num += 1
 
     if do_unringing:
         if unringing_method == 'mrdegibbs':
-            desc += f'{last_step}Gibbs ringing was removed using MRtrix3 [@mrtrix3; @mrdegibbs]. '
+            if unring_complex:
+                desc += (
+                    f'{last_step}Gibbs ringing was removed from the complex-valued data using '
+                    'MRtrix3 [@mrtrix3; @mrdegibbs]. The complex-valued data were then split '
+                    'back into magnitude and phase, and the magnitude data were retained. '
+                )
+            else:
+                desc += (
+                    f'{last_step}Gibbs ringing was removed from the magnitude data using '
+                    'MRtrix3 [@mrtrix3; @mrdegibbs]. '
+                )
             degibbser = pe.Node(
                 MRDeGibbs(nthreads=omp_nthreads),
                 name='degibbser',
@@ -629,15 +680,12 @@ def init_dwi_denoising_wf(
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
-        # Add buffernode for unringed DWI
-        buffernodes.append(get_buffernode())
-
         workflow.connect([
-            (buffernodes[-2], degibbser, [('dwi_file', 'in_file')]),
             (degibbser, ds_report_unringing, [('out_report', 'in_file')]),
-            (degibbser, buffernodes[-1], [('out_file', 'dwi_file')]),
             (degibbser, merge_confounds, [('nmse_text', f'in{step_num}')]),
         ])  # fmt:skip
+        chain.feed(degibbser, 'in_file')
+        chain.advance(degibbser, 'out_file', is_complex=unring_complex)
         step_num += 1
 
     if do_biascorr:
@@ -647,7 +695,11 @@ def init_dwi_denoising_wf(
         )
         last_step = True
 
-        biascorr = pe.Node(DWIBiasCorrect(method='ants'), name='biascorr', n_procs=omp_nthreads)
+        biascorr = pe.Node(
+            DWIBiasCorrect(method='ants', mrtrix_version=config.workflow.mrtrix_version),
+            name='biascorr',
+            n_procs=omp_nthreads,
+        )
         ds_report_biascorr = pe.Node(
             DerivativesDataSink(
                 datatype='figures',
@@ -661,16 +713,14 @@ def init_dwi_denoising_wf(
         get_b0s = pe.Node(ExtractB0s(b0_threshold=config.workflow.b0_threshold), name='get_b0s')
         quick_mask = pe.Node(MaskEPI(lower_cutoff=0.02), name='quick_mask')
 
-        # Add buffernode for bias-corrected DWI
-        buffernodes.append(get_buffernode())
-
+        # dwibiascorrect is magnitude-only, and so is the mask built from its input
+        chain.to_magnitude()
+        chain.feed(biascorr, 'in_file')
+        chain.feed(get_b0s, 'dwi_series')
         workflow.connect([
-            (buffernodes[-2], biascorr, [('dwi_file', 'in_file')]),
-            (buffernodes[-2], get_b0s, [('dwi_file', 'dwi_series')]),
             (inputnode, get_b0s, [('bval_file', 'bval_file')]),
             (get_b0s, quick_mask, [('b0_series', 'in_files')]),
             (quick_mask, biascorr, [('out_mask', 'mask')]),
-            (biascorr, buffernodes[-1], [('out_file', 'dwi_file')]),
             (biascorr, outputnode, [('bias_image', 'bias_image')]),
             (biascorr, ds_report_biascorr, [('out_report', 'in_file')]),
             (biascorr, merge_confounds, [('nmse_text', f'in{step_num}')]),
@@ -679,10 +729,12 @@ def init_dwi_denoising_wf(
                 ('bvec_file', 'in_bvec'),
             ]),
         ])  # fmt:skip
+        chain.advance(biascorr, 'out_file')
         step_num += 1
 
-    # Connect the final buffernode (the most recent output) to the outputnode
-    workflow.connect([(buffernodes[-1], outputnode, [('dwi_file', 'dwi_file')])])
+    # The workflow always hands downstream steps magnitude data
+    chain.to_magnitude()
+    chain.feed(outputnode, 'dwi_file')
 
     if not last_step:
         desc = 'No denoising steps were applied to the DWI data.'

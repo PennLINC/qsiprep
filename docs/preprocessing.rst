@@ -141,6 +141,20 @@ default (using ``dwibiascorrect``) and can be disabled with
 across scans (i.e. scaled to an average value) by default, but this can be
 turned off using ``--dwi-no-b0-harmonization``.
 
+When phase data are available and the denoising method is ``dwidenoise`` or
+``dwidenoise2``, denoising itself is complex-valued under either ``--mrtrix-version``:
+3.0.x ``dwidenoise`` already accepts complex input, so ``stable`` does not discard the
+phase data at this step. What ``--mrtrix-version`` gates is what happens next: only when
+``dev`` is in effect are the complex-valued data carried through unringing rather than
+being reduced to magnitude immediately after denoising. ``mrdegibbs`` is based on the
+Fourier shift theorem and operates on complex-valued data directly, but only on
+MRtrix3's development branch; the released ``mrdegibbs`` reads magnitude data only. The
+``rpg`` unringing method works on magnitude data under either version.
+
+``--denoise-method dwidenoise2`` is unaffected by ``--mrtrix-version``. ``dwidenoise2``
+exists only on the development branch, so it always runs from that installation, while
+every other MRtrix3 command follows ``--mrtrix-version``.
+
 .. tip::
 
   If prescan normalization is enabled,
