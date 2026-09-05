@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=pennlinc/qsiprep-base:20260903
+ARG BASE_IMAGE=pennlinc/qsiprep-base:20260905
 
 FROM ghcr.io/prefix-dev/pixi:0.58.0 AS build
 RUN apt-get update && \
@@ -63,6 +63,12 @@ COPY --link --from=build /test-shell-hook.sh /shell-hook.sh
 RUN cat /shell-hook.sh >> $HOME/.bashrc
 ENV PATH="/app/.pixi/envs/test/bin:$PATH"
 ENV FSLDIR="/app/.pixi/envs/test"
+ENV LD_LIBRARY_PATH="/app/.pixi/envs/test/lib:$LD_LIBRARY_PATH"
+ENV QSIPREP_FREESURFER_PYTHON="/opt/freesurfer/bin/fspython"
+ENV QSIPREP_TORCH_PYTHON="/opt/freesurfer-torch/bin/python"
+RUN /app/.pixi/envs/test/bin/python -c "import contourpy" && \
+    /opt/freesurfer/bin/fspython -c "import nibabel, scipy, surfa, tensorflow" && \
+    /opt/freesurfer-torch/bin/python -c "import nibabel, scipy, surfa, torch; assert torch.version.cuda"
 ARG VCS_REF
 LABEL org.opencontainers.image.revision=$VCS_REF
 
@@ -72,9 +78,20 @@ COPY --link --from=build /shell-hook.sh /shell-hook.sh
 RUN cat /shell-hook.sh >> $HOME/.bashrc
 ENV PATH="/app/.pixi/envs/qsiprep/bin:$PATH"
 ENV FSLDIR="/app/.pixi/envs/qsiprep"
+ENV LD_LIBRARY_PATH="/app/.pixi/envs/qsiprep/lib:$LD_LIBRARY_PATH"
 ENV IS_DOCKER_8395080871=1
-# Verify the runtime image can import qsiprep without source tree mounts.
-RUN /app/.pixi/envs/qsiprep/bin/python -c "import qsiprep"
+ENV QSIPREP_FREESURFER_PYTHON="/opt/freesurfer/bin/fspython"
+ENV QSIPREP_TORCH_PYTHON="/opt/freesurfer-torch/bin/python"
+# Verify the runtime image can import qsiprep without source tree mounts, and
+# that each ML tool's interpreter has the tool's dependencies and can compile
+# its script. (FreeSurfer's mri_synthstrip exits 1 on --help/--version and
+# defers "import torch" until after that check, so byte-compile it rather than
+# running --help.)
+RUN /app/.pixi/envs/qsiprep/bin/python -c "import contourpy, qsiprep" && \
+    /opt/freesurfer/bin/fspython -c "import nibabel, scipy, surfa, tensorflow" && \
+    /opt/freesurfer/bin/fspython -m py_compile /opt/freesurfer/bin/mri_synthseg && \
+    /opt/freesurfer-torch/bin/python -c "import nibabel, scipy, surfa, torch; assert torch.version.cuda" && \
+    /opt/freesurfer-torch/bin/python -m py_compile /opt/freesurfer/bin/mri_synthstrip
 
 ENTRYPOINT ["/app/.pixi/envs/qsiprep/bin/qsiprep"]
 ARG BUILD_DATE

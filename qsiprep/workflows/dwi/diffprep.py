@@ -43,7 +43,8 @@ from ...utils.gpu import gpu_enabled
 from ...utils.resources import as_path
 from ..fieldmap.base import init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf
-from .util import init_dwi_reference_wf, tortoise_convert_mem_gb
+from ..fieldmap.synb0 import init_synb0_wf
+from .util import add_synb0_outputs, init_dwi_reference_wf, tortoise_convert_mem_gb
 
 # BIDS PhaseEncodingDirection axes already match what TORTOISEProcess expects
 # in its own JSON input -- TORTOISE consumes "i", "j", "k" (with optional "-")
@@ -235,10 +236,15 @@ def init_diffprep_hmc_wf(
                 'bval_file',
                 'json_file',
                 'original_files',
+                't1_preproc',
                 't1_brain',
                 't1_mask',
+                't1_seg',
                 't1_2_mni_reverse_transform',
                 't2w_unfatsat',
+                'to_template_affine_transform',
+                'acpc_inv_transform',
+                'dwi_sampling_grid',
             ]
         ),
         name='inputnode',
@@ -282,12 +288,18 @@ def init_diffprep_hmc_wf(
     # from the data rather than guessing.
     series_mem_gb = tortoise_convert_mem_gb(list(unit.dwi_files))
 
-    # TORTOISE-native T2Wreg replaces SyN for the fieldmap-less case when a T2w
-    # structural is available: DIFFPREP runs the ``--epi T2Wreg`` stage in the
-    # same TORTOISEProcess call and bakes the correction into its output.
+    # TORTOISE-native T2Wreg replaces SyN for the fieldmap-less case when a
+    # structural target is available: DIFFPREP runs the ``--epi T2Wreg`` stage
+    # in the same TORTOISEProcess call and bakes the correction into its
+    # output. The plan names the target: 'synb0' (a synthetic distortion-free
+    # b=0 generated from the T1w, preferred when --sdc-anat-reference synb0
+    # produced an estimation) or 't2w' (the subject's T2w, additionally gated
+    # by ``t2w_sdc``).
     is_fieldmapless = not unit.has_scanner_measured_fieldmap
+    t2wreg_stage = unit.run.stage_with('t2wreg')
+    synb0_target = t2wreg_stage is not None and t2wreg_stage.structural_target == 'synb0'
     # Classic SyN is fieldmap-less too, but has its own path (init_sdc_wf below).
-    use_t2wreg = is_fieldmapless and bool(t2w_sdc) and not unit.is_nipreps_syn
+    use_t2wreg = is_fieldmapless and not unit.is_nipreps_syn and (synb0_target or bool(t2w_sdc))
     epi_mode = 'T2Wreg' if use_t2wreg else 'off'
 
     # Load any user-supplied DIFFPREP config (or our defaults)
@@ -398,8 +410,44 @@ def init_diffprep_hmc_wf(
             (write_pe_json, diffprep, [('json_file', 'json_file')]),
         ])  # fmt:skip
 
-        # T2Wreg bakes SDC into the DIFFPREP call: feed the T2w structural.
-        if use_t2wreg:
+        # T2Wreg bakes SDC into the DIFFPREP call: feed the structural target.
+        if use_t2wreg and synb0_target:
+            # Generate the synthetic distortion-free b=0 from the T1w and the
+            # raw (distorted) b=0 reference, and register DIFFPREP's EPI stage
+            # to it instead of a T2w -- its contrast matches the b=0 exactly.
+            raw_b0s = pe.Node(
+                ExtractB0s(b0_threshold=config.workflow.b0_threshold), name='raw_b0s'
+            )
+            synb0_b0_ref_wf = init_dwi_reference_wf(
+                gen_report=False,
+                desc='b0_for_synb0',
+                name='synb0_b0_ref_wf',
+                source_file=source_file,
+            )
+            synb0_wf = init_synb0_wf()
+            add_synb0_outputs(workflow, synb0_wf, source_file)
+            workflow.connect([
+                (inputnode, raw_b0s, [
+                    ('dwi_file', 'dwi_series'),
+                    ('bval_file', 'bval_file'),
+                ]),
+                (raw_b0s, synb0_b0_ref_wf, [('b0_average', 'inputnode.b0_template')]),
+                (inputnode, synb0_wf, [
+                    ('t1_preproc', 'inputnode.t1_preproc'),
+                    ('t1_brain', 'inputnode.t1_brain'),
+                    ('t1_seg', 'inputnode.t1_seg'),
+                    ('to_template_affine_transform',
+                     'inputnode.to_template_affine_transform'),
+                    ('acpc_inv_transform', 'inputnode.acpc_inv_transform'),
+                    ('dwi_sampling_grid', 'inputnode.output_grid'),
+                ]),
+                (synb0_b0_ref_wf, synb0_wf, [
+                    ('outputnode.ref_image', 'inputnode.b0_ref'),
+                    ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
+                ]),
+                (synb0_wf, diffprep, [('outputnode.synthetic_b0', 'structural_image')]),
+            ])  # fmt:skip
+        elif use_t2wreg:
             workflow.connect([
                 (inputnode, diffprep, [('t2w_unfatsat', 'structural_image')]),
             ])  # fmt:skip
@@ -579,7 +627,7 @@ def init_diffprep_hmc_wf(
     #    keeps DIFFPREP's output in the native grid and leaves coregistration and
     #    ACPC alignment to qsiprep instead of TORTOISE's StructuralAlignment.
     if use_t2wreg:
-        outputnode.inputs.sdc_method = 'T2Wreg'
+        outputnode.inputs.sdc_method = 'T2Wreg (SynB0)' if synb0_target else 'T2Wreg'
         workflow.connect([
             (b0_ref_for_coreg, outputnode, [('outputnode.ref_image', 'b0_template')]),
             (corrected_node, outputnode, [

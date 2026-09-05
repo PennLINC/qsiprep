@@ -596,7 +596,11 @@ class workflow(_Config):
     fmap_demean = None
     """Remove the mean from fieldmaps."""
     force = None
-    """Forced processing choices (see ``--force``): currently ``t2wreg``."""
+    """Forced processing choices (see ``--force``): currently ``sdc-anat-reference``."""
+    force_sdc_anat_reference = False
+    """``--force sdc-anat-reference`` was given: the anatomical SDC reference
+    overrides the fieldmap application for every DWI series (derived from
+    ``force`` by the parser)."""
     gpu = None
     """Tasks to run on the GPU (see ``qsiprep.utils.gpu``)."""
     hmc_method = None
@@ -628,6 +632,11 @@ class workflow(_Config):
     """SDC method to be used for PEPOLAR fieldmaps. DEPRECATED: the legacy
     vocabulary equivalent of ``sdc_method``, kept while workflow builders
     still read it."""
+    sdc_anat_reference = 'none'
+    """Which anatomical-derived image serves as the reference for fieldmap-less
+    susceptibility distortion correction, as a fallback for DWI series no
+    fieldmap reaches: ``none`` (default), ``auto``, ``synb0``, ``t2w`` or
+    ``invt1w``."""
     sdc_method = None
     """Which tool corrects susceptibility distortion for PEPOLAR data:
     topup, drbuddi or topup+drbuddi (the parser resolves ``auto``)."""
@@ -642,9 +651,6 @@ class workflow(_Config):
     """Volumes the GPU takes per DIFFPREP pass; None leaves TORTOISE's default."""
     unringing_method = None
     """Method for Gibbs-ringing removal. Either "none", "mrdegibbs" or "rpg"."""
-    use_syn_sdc = None
-    """Run *fieldmap-less* susceptibility-derived distortions estimation
-    in the absence of any alternatives."""
 
     @classmethod
     def init(cls):
