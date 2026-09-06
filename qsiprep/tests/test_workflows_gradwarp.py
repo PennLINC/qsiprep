@@ -12,6 +12,8 @@ from qsiprep.tests.gradient_fixtures import (
 )
 from qsiprep.tests.preproc_factory import make_preproc_unit
 
+_AXIS_KEYS = ('hmc_method', 'sdc_method', 'shoreline_model')
+
 
 @pytest.fixture(autouse=True)
 def _reset_config():
@@ -27,12 +29,29 @@ def _reset_config():
     # The boilerplate branches on the HMC backend, so leaking this between
     # tests would silently change the text another test asserts on.
     config.workflow.hmc_model = '3dSHORE'
+    # init_dwi_derivatives_wf reads shoreline_iters whenever hmc_model is
+    # 3dSHORE, and the config default is None (unset), not the CLI's 2 -- so
+    # without this the finalize tests only pass when some earlier test happens
+    # to have left a number behind.
+    config.workflow.shoreline_iters = 2
+    # The legacy keys drive these tests: the helpers below configure
+    # hmc_model/pepolar_method, but method_selection_from_config resolves
+    # ``hmc_method or hmc_model`` and ``sdc_method or pepolar_method``. Anything
+    # that runs the real parser (test_cli_run) leaves the axis keys set, and a
+    # stray sdc_method='topup' would silently compile a plan with no DRBUDDI
+    # stage. Clear them here, and restore below so this module does not pollute
+    # in turn.
+    axis_keys = {key: getattr(config.workflow, key) for key in _AXIS_KEYS}
+    for key in _AXIS_KEYS:
+        setattr(config.workflow, key, None)
     config.nipype.omp_nthreads = 1
     yield
     _reset_plan_logging()
     config.workflow.gradient_file = None
     config.workflow.ignore = []
     config.workflow.force = []
+    for key, value in axis_keys.items():
+        setattr(config.workflow, key, value)
 
 
 def _unit(tmp_path, image_type=None):
