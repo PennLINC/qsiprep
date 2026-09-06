@@ -13,7 +13,7 @@ def test_method_selection_from_config_reads_new_and_legacy_keys():
         'sdc_method',
         'hmc_model',
         'pepolar_method',
-        'use_syn_sdc',
+        'sdc_anat_reference',
         'force',
     )
     saved = {key: getattr(config.workflow, key) for key in keys}
@@ -23,7 +23,7 @@ def test_method_selection_from_config_reads_new_and_legacy_keys():
         config.workflow.sdc_method = 'drbuddi'
         config.workflow.hmc_model = 'tensor'
         config.workflow.pepolar_method = 'TOPUP'
-        config.workflow.use_syn_sdc = None
+        config.workflow.sdc_anat_reference = 'none'
         config.workflow.force = None
         selection = method_selection_from_config()
         assert selection.hmc is HmcMethod.SHORELINE

@@ -1,10 +1,14 @@
 """Tests for the qsiprep.interfaces.images module."""
 
+import shutil
+
 import nibabel as nb
 import numpy as np
+import pytest
 from nipype.interfaces.base import isdefined
 
-from qsiprep.interfaces.images import ConformDwi
+from qsiprep.interfaces import images
+from qsiprep.interfaces.images import ConformDwi, bvec_to_rasb
 from qsiprep.tests.utils import build_test_dataset
 
 # An image already in LPS, and one in RAS that must be reoriented to reach LPS.
@@ -145,3 +149,88 @@ def test_conform_dwi_reports_bvals_when_only_bvals_exist(tmp_path):
 
     assert result.outputs.bval_file == str(dwi_dir / 'sub-01_dwi.bval')
     assert not isdefined(result.outputs.bvec_file)
+
+
+class _FakeProc:
+    """Stand-in for a finished subprocess.Popen."""
+
+    def __init__(self, stdout, stderr, returncode):
+        self._communicated = (stdout, stderr)
+        self.returncode = returncode
+
+    def communicate(self):
+        return self._communicated
+
+
+def _write_lps_dwi(tmp_path):
+    """Write a small LPS-oriented 4D DWI with matching bval/bvec files."""
+    rng = np.random.default_rng(0)
+    img_file = tmp_path / 'dwi.nii.gz'
+    data = rng.uniform(0, 100, size=(4, 4, 4, 2)).astype('f4')
+    nb.Nifti1Image(data, LPS_AFFINE).to_filename(str(img_file))
+
+    bval_file = tmp_path / 'dwi.bval'
+    bval_file.write_text('0 1000\n')
+    bvec_file = tmp_path / 'dwi.bvec'
+    bvec_file.write_text('0 1\n0 0\n0 0\n')
+
+    return str(img_file), str(bval_file), str(bvec_file)
+
+
+@pytest.mark.skipif(shutil.which('mrinfo') is None, reason='MRtrix3 mrinfo not installed')
+def test_bvec_to_rasb_tolerates_mrinfo_stderr(tmp_path):
+    """LPS images make recent mrinfo write an advisory to stderr; that is not a failure."""
+    img_file, bval_file, bvec_file = _write_lps_dwi(tmp_path)
+    workdir = tmp_path / 'work'
+    workdir.mkdir()
+
+    rasb = bvec_to_rasb(bval_file, bvec_file, img_file, str(workdir))
+
+    assert rasb.shape == (3,)
+    assert np.all(np.isfinite(rasb))
+
+
+@pytest.mark.skipif(shutil.which('mrinfo') is None, reason='MRtrix3 mrinfo not installed')
+def test_bvec_to_rasb_raises_when_mrinfo_fails(tmp_path):
+    """A genuinely failing mrinfo call still raises."""
+    _, bval_file, bvec_file = _write_lps_dwi(tmp_path)
+    workdir = tmp_path / 'work'
+    workdir.mkdir()
+
+    with pytest.raises(RuntimeError, match='return code'):
+        bvec_to_rasb(bval_file, bvec_file, str(tmp_path / 'does_not_exist.nii.gz'), str(workdir))
+
+
+def test_bvec_to_rasb_ignores_stderr_when_the_command_succeeds(tmp_path, monkeypatch):
+    """A zero return code is success even when mrinfo writes an advisory to stderr.
+
+    Development-branch mrinfo prints "axes realigned to approximate RAS" for any
+    non-RAS image, and QSIPrep conforms everything to LPS+. This runs without the
+    binary so the regression is caught wherever the suite runs.
+    """
+    _, bval_file, bvec_file = _write_lps_dwi(tmp_path)
+    workdir = tmp_path / 'work'
+    workdir.mkdir()
+
+    advisory = b'mrinfo: Image "lps.nii.gz" axes realigned to approximate RAS\n'
+    monkeypatch.setattr(
+        images, 'Popen', lambda *args, **kwargs: _FakeProc(b'0 1 0 1000\n', advisory, 0)
+    )
+
+    rasb = bvec_to_rasb(bval_file, bvec_file, 'unused.nii.gz', str(workdir))
+
+    assert np.allclose(rasb, [0, 1, 0])
+
+
+def test_bvec_to_rasb_raises_on_nonzero_return_code(tmp_path, monkeypatch):
+    """A non-zero return code raises, and the message keeps the command and stderr."""
+    _, bval_file, bvec_file = _write_lps_dwi(tmp_path)
+    workdir = tmp_path / 'work'
+    workdir.mkdir()
+
+    monkeypatch.setattr(
+        images, 'Popen', lambda *args, **kwargs: _FakeProc(b'', b'mrinfo: no such file\n', 1)
+    )
+
+    with pytest.raises(RuntimeError, match='no such file'):
+        bvec_to_rasb(bval_file, bvec_file, 'missing.nii.gz', str(workdir))
