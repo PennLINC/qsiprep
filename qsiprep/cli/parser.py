@@ -1284,6 +1284,21 @@ def parse_args(args=None, namespace=None):
     config.execution.log_dir.mkdir(exist_ok=True, parents=True)
     work_dir.mkdir(exist_ok=True, parents=True)
 
+    if config.workflow.gradient_file:
+        # TORTOISE's Siemens reader parses comment lines as coefficients and has
+        # no error handling, so a normalization header aborts the tool mid-run.
+        # Swap in a sanitized copy (same basename, so the sidecar's
+        # GradientCoefficientFile is unchanged) and reject a file whose *data*
+        # lines would still abort, while the run has cost nothing.
+        from ..utils.gradcal import sanitize_siemens_coefficients
+
+        try:
+            config.workflow.gradient_file = sanitize_siemens_coefficients(
+                config.workflow.gradient_file, work_dir, logger=build_log
+            )
+        except ValueError as error:
+            parser.error(str(error))
+
     # Force initialization of the BIDSLayout
     config.execution.init()
     all_subjects = config.execution.layout.get_subjects()
