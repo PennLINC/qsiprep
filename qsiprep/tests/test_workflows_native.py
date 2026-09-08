@@ -506,14 +506,14 @@ def test_one_output_grid_per_acpc_resolution(tmp_path):
     assert any('output_grid_res1p5mm_wf' in n for n in names)
 
 
-def _build_anat_preproc_wf(tmp_path, output_spaces, use_syn_sdc=False):
+def _build_anat_preproc_wf(tmp_path, output_spaces, sdc_anat_reference='none'):
     from qsiprep.utils.spaces import parse_output_spaces, select_acpc_anchor
     from qsiprep.workflows.anatomical.volume import init_anat_preproc_wf
 
     config.workflow.output_spaces = output_spaces
     config.workflow.anat_modality = 'T1w'
     config.workflow.infant = False
-    config.workflow.use_syn_sdc = use_syn_sdc
+    config.workflow.sdc_anat_reference = sdc_anat_reference
     config.nipype.omp_nthreads = 1
     config.execution.output_dir = str(tmp_path)
     specs = parse_output_spaces(config.workflow.output_spaces)
@@ -600,8 +600,8 @@ def test_no_standard_space_skips_the_nonlinear_normalization(tmp_path):
 
 
 def test_syn_sdc_keeps_the_nonlinear_normalization(tmp_path):
-    """SyN-SDC pulls its atlas prior through t1_2_mni_reverse_transform."""
-    wf = _build_anat_preproc_wf(tmp_path, ['acpc:res-2mm'], use_syn_sdc=True)
+    """Fieldmap-less SDC pulls its atlas prior through t1_2_mni_reverse_transform."""
+    wf = _build_anat_preproc_wf(tmp_path, ['acpc:res-2mm'], sdc_anat_reference='invt1w')
     assert any('anat_nlin_normalization' in n for n in wf.list_node_names())
 
 
