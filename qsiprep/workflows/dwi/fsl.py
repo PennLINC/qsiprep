@@ -13,6 +13,7 @@ from nipype.interfaces import fsl
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
+from qsiplan.models import CorrectionMethod
 
 from ... import config
 from ...data import load as load_data
@@ -21,19 +22,23 @@ from ...interfaces.eddy import (
     Eddy2SPMMotion,
     ExtendedEddy,
     GatherEddyInputs,
+    Synb0TopupInputs,
     boilerplate_from_eddy_config,
 )
+from ...interfaces.epi_fmap import synb0_topup_config
 from ...interfaces.fmap import ParallelTOPUP
 from ...interfaces.gradients import ExtractB0s
 from ...interfaces.images import ConformDwi, IntraModalMerge, SplitDWIsFSL
 from ...interfaces.nilearn import EnhanceB0
 from ...interfaces.reports import TopupSummary
+from ...interfaces.synb0 import Synb0FieldQC
 from ...utils.gpu import gpu_enabled
 from ..fieldmap.base import init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf
+from ..fieldmap.synb0 import init_synb0_wf
 
 # dwi workflows
-from .util import init_dwi_reference_wf
+from .util import add_synb0_outputs, init_dwi_reference_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
@@ -62,7 +67,7 @@ def init_fsl_hmc_wf(
 
     **Parameters**
 
-        unit: :class:`~qsiprep.grouping.adapters.PreprocUnit`
+        unit: :class:`~qsiplan.adapters.PreprocUnit`
             the DWI series to correct together and the fieldmap that corrects them
         impute_slice_threshold: float
             threshold for a slice to be replaced with imputed values. Overrides the
@@ -113,11 +118,15 @@ def init_fsl_hmc_wf(
                 'b0_indices',
                 'b0_images',
                 'original_files',
+                't1_preproc',
                 't1_brain',
                 't1_mask',
                 't1_seg',
                 't1_2_mni_reverse_transform',
                 't2w_unfatsat',
+                'to_template_affine_transform',
+                'acpc_inv_transform',
+                'dwi_sampling_grid',
             ]
         ),
         name='inputnode',
@@ -177,11 +186,13 @@ def init_fsl_hmc_wf(
             b0_threshold=config.workflow.b0_threshold,
             raw_image_sdc=False,
             eddy_config=eddy_cfg_file,
+            num_threads=omp_nthreads,
             # Model-derived PE/readout metadata so eddy's acqp/index and TOPUP's
             # datain are built without re-reading sidecars from disk.
             sidecars=unit.sidecar_overrides(),
         ),
         name='gather_inputs',
+        n_procs=omp_nthreads,
     )
     enhance_pre_sdc = pe.Node(EnhanceB0(), name='enhance_pre_sdc')
 
@@ -293,33 +304,46 @@ def init_fsl_hmc_wf(
     # Fieldmap correction to be done in LAS+: TOPUP for rpe series or epi fieldmap
     # If a topupref is provided, use it for TOPUP
     if unit.is_pepolar:
-        fieldmap_type = 'rpe_series' if unit.has_bidirectional_dwi else 'epi'
+        fieldmap_type = unit.pepolar_fieldmap_type
     elif unit.is_gre:
         fieldmap_type = unit.gre_suffix
     elif unit.is_nipreps_syn:
         fieldmap_type = 'syn'
+    elif unit.method is CorrectionMethod.SYNB0:
+        fieldmap_type = 'synb0'
     else:
         fieldmap_type = ''
+    # The plan already encodes DRBUDDI's single-blip-pair constraint: a
+    # multi-axis or multi-readout unit has no refinement stage, and the
+    # TOPUP+eddy stage pools every blip group.
+    run_topup = unit.run.stage_with('topup') is not None
+    run_drbuddi = unit.run.stage_with('drbuddi') is not None
+    if fieldmap_type == 'synb0' and not run_topup:
+        # The plan gave this unit no TOPUP stage (e.g. --sdc-method drbuddi):
+        # nothing on the eddy path consumes the synthetic b=0, so the series
+        # stays uncorrected.
+        fieldmap_type = ''
     workflow.__desc__ = boilerplate_from_eddy_config(
-        eddy_args, fieldmap_type, config.workflow.pepolar_method
+        eddy_args,
+        fieldmap_type,
+        pepolar_method='+'.join(['topup'] * run_topup + ['drbuddi'] * run_drbuddi),
     )
 
-    # DRBUDDI's single pass corrects one matched blip pair, so a multi-axis or
-    # multi-readout unit skips the DRBUDDI stage; the mixed path (TOPUP+DRBUDDI)
-    # still corrects it as single-stage TOPUP+eddy, which pools every blip group.
-    _pepolar = config.workflow.pepolar_method.lower()
-    run_topup = unit.is_pepolar and 'topup' in _pepolar
-    run_drbuddi = unit.is_pepolar and 'drbuddi' in _pepolar and unit.is_single_blip_pair
-
     # Are we running TOPUP?
+    doing_synb0 = fieldmap_type == 'synb0'
     if run_topup:
         # If there are EPI fieldmaps in fmaps/, make sure they get to TOPUP. It will always use
         # b=0 images from the DWI series regardless
         gather_inputs.inputs.topup_requested = True
-        if unit.extra_b0:
+        if doing_synb0:
+            # A SynB0 estimation's "sources" are anatomical images, not extra
+            # b=0 candidates; the synthetic volume joins TOPUP's inputs below,
+            # so a single measured distortion group is enough.
+            gather_inputs.inputs.synb0_requested = True
+        elif unit.extra_b0:
             gather_inputs.inputs.epi_fmaps = list(unit.extra_b0)
 
-        outputnode.inputs.sdc_method = 'TOPUP'
+        outputnode.inputs.sdc_method = 'TOPUP (SynB0)' if doing_synb0 else 'TOPUP'
         topup = pe.Node(
             ParallelTOPUP(out_field='fieldmap_HZ.nii.gz', scale=1, nthreads=omp_nthreads),
             name='topup',
@@ -364,12 +388,81 @@ def init_fsl_hmc_wf(
             name='transform_fmap_to_eddy',
         )
 
+        if doing_synb0:
+            # Generate the synthetic distortion-free b=0 from the T1w and the
+            # (pre-SDC) distorted b=0 reference, then join it to TOPUP's
+            # inputs as a zero-readout distortion group. The TOPUP config is
+            # the one tuned for the synthetic-b=0 pair.
+            synb0_b0_ref_wf = init_dwi_reference_wf(
+                gen_report=False,
+                desc='b0_for_synb0',
+                name='synb0_b0_ref_wf',
+                source_file=source_file,
+            )
+            synb0_wf = init_synb0_wf()
+            add_synb0_outputs(workflow, synb0_wf, source_file)
+            synb0_topup_inputs = pe.Node(Synb0TopupInputs(), name='synb0_topup_inputs')
+            topup.inputs.config = synb0_topup_config()
+
+            # Scalar QC of the SynB0-driven field (halo/displacement checks)
+            synb0_field_qc = pe.Node(Synb0FieldQC(), name='synb0_field_qc')
+            ds_synb0_field_qc = pe.Node(
+                DerivativesDataSink(
+                    source_file=source_file,
+                    desc='synb0field',
+                    suffix='qc',
+                    extension='.tsv',
+                ),
+                name='ds_synb0_field_qc',
+                run_without_submitting=True,
+                mem_gb=DEFAULT_MEMORY_MIN_GB,
+            )
+            workflow.connect([
+                (topup, synb0_field_qc, [('out_field', 'fieldmap')]),
+                (synb0_b0_ref_wf, synb0_field_qc, [('outputnode.dwi_mask', 'mask')]),
+                (synb0_topup_inputs, synb0_field_qc, [('topup_datain', 'datain')]),
+                (synb0_field_qc, ds_synb0_field_qc, [('qc_file', 'in_file')]),
+            ])  # fmt:skip
+
+            workflow.connect([
+                (gather_inputs, synb0_b0_ref_wf, [
+                    ('pre_topup_image', 'inputnode.b0_template'),
+                ]),
+                (inputnode, synb0_wf, [
+                    ('t1_preproc', 'inputnode.t1_preproc'),
+                    ('t1_brain', 'inputnode.t1_brain'),
+                    ('t1_seg', 'inputnode.t1_seg'),
+                    ('to_template_affine_transform',
+                     'inputnode.to_template_affine_transform'),
+                    ('acpc_inv_transform', 'inputnode.acpc_inv_transform'),
+                    ('dwi_sampling_grid', 'inputnode.output_grid'),
+                ]),
+                (synb0_b0_ref_wf, synb0_wf, [
+                    ('outputnode.ref_image', 'inputnode.b0_ref'),
+                    ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
+                ]),
+                (gather_inputs, synb0_topup_inputs, [
+                    ('topup_datain', 'topup_datain'),
+                    ('topup_imain', 'topup_imain'),
+                ]),
+                (synb0_wf, synb0_topup_inputs, [
+                    ('outputnode.synthetic_b0', 'synthetic_b0'),
+                ]),
+                (synb0_topup_inputs, topup, [
+                    ('topup_datain', 'encoding_file'),
+                    ('topup_imain', 'in_file'),
+                ]),
+            ])  # fmt:skip
+        else:
+            workflow.connect([
+                (gather_inputs, topup, [
+                    ('topup_datain', 'encoding_file'),
+                    ('topup_imain', 'in_file'),
+                    ('topup_config', 'config'),
+                ]),
+            ])  # fmt:skip
+
         workflow.connect([
-            (gather_inputs, topup, [
-                ('topup_datain', 'encoding_file'),
-                ('topup_imain', 'in_file'),
-                ('topup_config', 'config'),
-            ]),
             (gather_inputs, ds_pepolar_qc_tsv, [('b0_tsv', 'in_file')]),
             (topup, eddy, [('out_field', 'field')]),
             (gather_inputs, topup_to_eddy_reg, [
@@ -397,7 +490,7 @@ def init_fsl_hmc_wf(
             (topup_summary, ds_report_topupsummary, [('out_report', 'in_file')]),
         ])  # fmt:skip
 
-        if 'drbuddi' not in config.workflow.pepolar_method.lower():
+        if not run_drbuddi:
             config.loggers.workflow.info('Using single-stage SDC, TOPUP-only')
             workflow.connect([
                 # There will be no SDC warps, they are applied by eddy
@@ -464,7 +557,7 @@ def init_fsl_hmc_wf(
     if unit.is_gre or unit.is_nipreps_syn:
         config.loggers.workflow.info(f'Computing fieldmap directly from {fieldmap_type}')
         outputnode.inputs.sdc_method = fieldmap_type
-        b0_sdc_wf = init_sdc_wf(unit, unit.dwi_metadata)
+        b0_sdc_wf = init_sdc_wf(unit)
 
         workflow.connect([
             # Send to SDC workflow

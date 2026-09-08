@@ -318,23 +318,6 @@ def check_deps(workflow):
     )
 
 
-def fix_multi_T1w_source_name(in_files):
-    """Make up a generic source name when there are multiple T1s.
-
-    >>> fix_multi_T1w_source_name([
-    ...     '/path/to/sub-045_ses-test_T1w.nii.gz',
-    ...     '/path/to/sub-045_ses-retest_T1w.nii.gz'])
-    '/path/to/sub-045_T1w.nii.gz'
-    """
-    import os
-
-    from nipype.utils.filemanip import filename_to_list
-
-    base, in_file = os.path.split(filename_to_list(in_files)[0])
-    subject_label = in_file.split('_', 1)[0].split('-')[1]
-    return os.path.join(base, f'sub-{subject_label}_T1w.nii.gz')
-
-
 def fix_multi_source_name(in_files, include_session, anatomical_contrast='T1w'):
     """Make up a generic source name when there are multiple source files.
 
@@ -380,21 +363,6 @@ def fix_multi_source_name(in_files, include_session, anatomical_contrast='T1w'):
             _session = f'_{ses_entity[-1]}'
 
     return os.path.join(base, f'sub-{subject_label}{_session}_{anatomical_contrast}.nii.gz')
-
-
-def add_suffix(in_files, suffix):
-    """Wrap nipype's fname_presuffix to conveniently just add a suffixfix.
-
-    >>> add_suffix([
-    ...     '/path/to/sub-045_ses-test_T1w.nii.gz',
-    ...     '/path/to/sub-045_ses-retest_T1w.nii.gz'], '_test')
-    'sub-045_ses-test_T1w_test.nii.gz'
-    """
-    import os.path as op
-
-    from nipype.utils.filemanip import filename_to_list, fname_presuffix
-
-    return op.basename(fname_presuffix(filename_to_list(in_files)[0], suffix=suffix))
 
 
 def validate_eddy_config(eddy_config):

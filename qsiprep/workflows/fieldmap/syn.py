@@ -8,15 +8,10 @@ Fieldmap-less estimation (experimental)
 
 In the absence of direct measurements of fieldmap data, we provide an (experimental)
 option to estimate the susceptibility distortion based on the ANTs symmetric
-normalization (SyN) technique.
-This feature may be enabled, using the ``--use-syn-sdc`` flag, and will only be
-applied if fieldmaps are unavailable.
-
-During the evaluation phase, the ``--force-syn`` flag will cause this estimation to
-be performed *in addition to* fieldmap-based estimation, to permit the direct
-comparison of the results of each technique.
-Note that, even if ``--force-syn`` is given, the functional outputs of qsiprep will
-be corrected using the fieldmap-based estimates.
+normalization (SyN) technique, using the inverted-contrast T1w as the anatomical
+reference. This feature may be enabled with ``--sdc-anat-reference invt1w``, and
+by default is only applied to series no fieldmap reaches; a measured fieldmap
+takes precedence unless ``--force sdc-anat-reference`` is also given.
 
 Feedback will be enthusiastically received.
 

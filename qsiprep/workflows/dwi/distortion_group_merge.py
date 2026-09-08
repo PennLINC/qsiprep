@@ -12,9 +12,11 @@ import logging
 import nipype.pipeline.engine as pe
 from nipype.interfaces import utility as niu
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
+from qsiplan.adapters import assembly_to_sidecar
 
 from ... import config
 from ...interfaces import DerivativesDataSink
+from ...interfaces.bids import DerivativesSidecar
 from ...interfaces.dsi_studio import DSIStudioBTable
 from ...interfaces.dwi_merge import AveragePEPairs, MergeDWIs
 from ...interfaces.mrtrix import MRTrixGradientTable
@@ -34,6 +36,8 @@ def init_distortion_group_merge_wf(
     source_file,
     output_prefix,
     name,
+    assembly=None,
+    units=(),
 ) -> Workflow:
     """Create an unbiased intramodal template for a subject. This aligns the b=0 references
     from all the scans of a subject. Can be rigid, affine or nonlinear (BSplineSyN).
@@ -46,6 +50,11 @@ def init_distortion_group_merge_wf(
     merging_strategy: str
         'average': averages images that originally sampled the same q-space coordinate
         'concat': concatenates images in the 4th dimension
+    assembly: :class:`~qsiplan.plan.OutputAssembly`
+        The plan assembly this workflow realizes; with ``units`` (the member
+        :class:`~qsiplan.adapters.PreprocUnit`\\ s) it drives the
+        merged output's provenance sidecar and the gradient plot's
+        phase-encoding colors.
 
 
     Inputs
@@ -162,7 +171,11 @@ def init_distortion_group_merge_wf(
             (merge_carpetplot_data, distortion_merger, [('out', 'carpetplot_data')]),
         ])  # fmt:skip
     elif merging_strategy.startswith('concat'):
-        distortion_merger = pe.Node(MergeDWIs(), name='distortion_merger')
+        distortion_merger = pe.Node(
+            MergeDWIs(merged_prefix=output_prefix), name='distortion_merger'
+        )
+    else:
+        raise ValueError(f'Unknown merging_strategy: {merging_strategy!r}')
     b0_ref_wf = init_dwi_reference_wf(
         name='merged_b0_ref',
         gen_report=True,
@@ -209,6 +222,12 @@ def init_distortion_group_merge_wf(
     btab_t1 = pe.Node(DSIStudioBTable(bvec_convention='DIPY'), name='btab_t1')
     t1_dice_calc = init_mask_overlap_wf(name='t1_dice_calc')
     gradient_plot = pe.Node(GradientPlot(), name='gradient_plot', run_without_submitting=True)
+    if units:
+        gradient_plot.inputs.source_pe_dirs = {
+            path: overrides['PhaseEncodingDirection']
+            for unit in units
+            for path, overrides in unit.sidecar_overrides().items()
+        }
     ds_report_gradients = pe.Node(
         DerivativesDataSink(
             datatype='figures',
@@ -222,6 +241,32 @@ def init_distortion_group_merge_wf(
     )
 
     dwi_derivatives_wf = init_dwi_derivatives_wf(source_file=source_file)
+
+    # Write the provenance sidecar for the merged derivative, mirroring the
+    # direct (single-run) path's unit sidecar in finalize.py.
+    if assembly is not None:
+        merged_sidecar = pe.Node(
+            DerivativesSidecar(
+                sidecar_data=assembly_to_sidecar(assembly, list(units)),
+                source_file=source_file,
+            ),
+            name='merged_sidecar',
+        )
+        ds_merged_sidecar = pe.Node(
+            DerivativesDataSink(
+                space='ACPC',
+                desc='preproc',
+                extension='.json',
+                source_file=source_file,
+                base_directory=config.execution.output_dir,
+            ),
+            name='ds_merged_sidecar',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+        workflow.connect([
+            (merged_sidecar, ds_merged_sidecar, [('derivatives_json', 'in_file')]),
+        ])  # fmt:skip
 
     workflow.connect([
         # Mask the new b=0 reference

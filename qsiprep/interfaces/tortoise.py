@@ -12,7 +12,6 @@ import subprocess
 import nibabel as nb
 import nilearn.image as nim
 import numpy as np
-import pandas as pd
 from nipype.interfaces import ants
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
@@ -35,7 +34,13 @@ from .denoise import (
     SeriesPreprocReportInputSpec,
     SeriesPreprocReportOutputSpec,
 )
-from .epi_fmap import get_best_b0_topup_inputs_from, get_distortion_grouping, safe_get_3d_image
+from .epi_fmap import (
+    get_distortion_grouping,
+    load_epi_dwi_fieldmaps,
+    read_nifti_sidecar,
+    select_best_b0_report,
+    split_into_b0s_and_origins,
+)
 from .gradients import write_concatenated_fsl_gradients
 from .images import split_bvals_bvecs, to_lps
 
@@ -137,7 +142,6 @@ class _GatherDRBUDDIInputsInputSpec(TORTOISEInputSpec):
     epi_fmaps = InputMultiObject(
         File(exists=True), desc='files from fmaps/ for distortion correction'
     )
-    raw_image_sdc = traits.Bool(True, usedefault=True)
     fieldmap_type = traits.Enum('epi', 'rpe_series', mandatory=True)
     dwi_series_pedir = traits.Enum('i', 'i-', 'j', 'j-', 'k', 'k-', mandatory=True)
     sidecars = traits.Dict(
@@ -198,29 +202,23 @@ class GatherDRBUDDIInputs(SimpleInterface):
             )
 
         elif self.inputs.fieldmap_type == 'epi':
-            # Use the same function that was used to get images for TOPUP, but get the images
-            # directly from the CSV
-            _, _, _, b0_tsv, _, _ = get_best_b0_topup_inputs_from(
-                dwi_file=self.inputs.dwi_files,
-                bval_file=bval_files,
-                b0_threshold=self.inputs.b0_threshold,
-                cwd=runtime.cwd,
-                bids_origin_files=self.inputs.original_files,
-                epi_fmaps=self.inputs.epi_fmaps,
-                max_per_spec=True,
-                raw_image_sdc=self.inputs.raw_image_sdc,
-                sidecars=sidecars,
-            )
-
-            b0s_df = pd.read_table(b0_tsv)
-            selected_images = b0s_df[b0s_df.selected_for_sdc].reset_index(drop=True)
-            up_row = selected_images.loc[0]
-            down_row = selected_images.loc[1]
-            up_img = to_lps(safe_get_3d_image(up_row.bids_origin_file, up_row.original_volume))
+            # DRBUDDI's warps are applied to the motion-corrected series, so the
+            # blip-up b=0 must live in that frame: a volume re-extracted from
+            # the original scan sits at whatever pose the head had then, and
+            # the pose difference goes straight into the correction.
+            b0_files = [
+                dwi_file
+                for dwi_file, bval_file in zip(self.inputs.dwi_files, bval_files, strict=True)
+                if np.loadtxt(bval_file, ndmin=1).max() < self.inputs.b0_threshold
+            ]
+            if not b0_files:
+                raise Exception(
+                    'No b=0 volumes in the motion-corrected series to build the '
+                    'blip-up image for DRBUDDI'
+                )
+            up_img = to_lps(nim.mean_img(nim.concat_imgs(b0_files)))
             up_img.set_data_dtype('float32')
-            down_img = to_lps(
-                safe_get_3d_image(down_row.bids_origin_file, down_row.original_volume)
-            )
+            down_img = to_lps(self._select_blip_down_b0(runtime))
             down_img.set_data_dtype('float32')
 
             # Save the images
@@ -244,6 +242,44 @@ class GatherDRBUDDIInputs(SimpleInterface):
             self._results['blip_down_bmat'] = write_dummy_bmtxt(blip_down_nii)
 
         return runtime
+
+    def _select_blip_down_b0(self, runtime):
+        """The reverse-blip b=0: the best-scoring opposite-PE fieldmap volume.
+
+        Only candidates phase-encoded opposite to the corrected series are
+        eligible -- ``epi_fmaps`` can also carry borrowed same-PE b=0s, which
+        belong to TOPUP, not to DRBUDDI's blip-down side.
+        """
+        pedir = self.inputs.dwi_series_pedir
+        down_pedir = pedir[:-1] if pedir.endswith('-') else pedir + '-'
+        sidecars = self.inputs.sidecars if isdefined(self.inputs.sidecars) else None
+
+        epi_4d, b0_indices, original_files = load_epi_dwi_fieldmaps(
+            list(self.inputs.epi_fmaps), self.inputs.b0_threshold
+        )
+        candidates = split_into_b0s_and_origins(
+            self.inputs.b0_threshold,
+            original_files,
+            epi_4d,
+            runtime.cwd,
+            b0_indices=b0_indices,
+        )
+        is_down = candidates.bids_origin_file.map(
+            lambda origin: (
+                read_nifti_sidecar(origin, sidecars)['PhaseEncodingDirection'] == down_pedir
+            )
+        )
+        candidates = candidates[is_down].reset_index(drop=True)
+        if not len(candidates):
+            raise Exception(f'No {down_pedir} b=0 images among the epi fieldmaps for DRBUDDI')
+        best = 0
+        if len(candidates) > 1:
+            report = select_best_b0_report(
+                candidates.nii_3d_files.tolist(),
+                prefix=op.join(runtime.cwd, 'blip_down_'),
+            )
+            best = int(np.flatnonzero(report['selected'].to_numpy())[0])
+        return nb.load(candidates.loc[best, 'nii_3d_files'])
 
 
 def write_dummy_bmtxt(nii_file):
@@ -867,7 +903,9 @@ def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False):
     # Describe what's going on
     if fieldmap_type == 'epi':
         desc.append(
-            'DRBUDDI used b=0 reference images with reversed phase encoding directions to estimate'
+            'DRBUDDI registered the mean motion-corrected b=0 image to a '
+            'reverse phase-encoding b=0 reference (chosen with SelectBestB0 '
+            'when several were available) to estimate'
         )
     else:
         desc.append(

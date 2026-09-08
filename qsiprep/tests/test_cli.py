@@ -146,7 +146,7 @@ def test_cuda(data_dir, output_dir, working_dir):
         '--anat-modality=none',
         '--denoise-method=none',
         '--b1-biascorrect-stage=none',
-        '--pepolar-method=DRBUDDI',
+        '--sdc-method=drbuddi',
         f'--eddy-config={eddy_config}',
         '--output-spaces=acpc:res-5mm',
         '--output-spaces=MNI152NLin2009cAsym',
@@ -193,7 +193,7 @@ def test_drbuddi_rpe(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         '--b0-motion-corr-to=first',
         '--b1-biascorrect-stage=none',
-        '--pepolar-method=DRBUDDI',
+        '--sdc-method=drbuddi',
         # The dataset ships epi fieldmaps whose IntendedFor points at the DWIs,
         # so the modern grouping would correct each DWI with its own epi fmap
         # (two outputs). This test exercises the blip-up/blip-down DWI *series*
@@ -237,8 +237,9 @@ def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         '--b0-motion-corr-to=first',
         '--b1-biascorrect-stage=none',
-        '--pepolar-method=DRBUDDI',
-        '--hmc-model=none',
+        '--hmc-method=shoreline',
+        '--shoreline-model=none',
+        '--sdc-method=drbuddi',
         '--output-spaces=acpc:res-2mm',
         '--output-spaces=MNI152NLin2009cAsym',
         '--shoreline-iters=1',
@@ -275,8 +276,9 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         '--b0-motion-corr-to=first',
         '--b1-biascorrect-stage=none',
-        '--pepolar-method=DRBUDDI',
-        '--hmc-model=tensor',
+        '--hmc-method=shoreline',
+        '--shoreline-model=tensor',
+        '--sdc-method=drbuddi',
         '--output-spaces=acpc:res-5mm',
         '--output-spaces=MNI152NLin2009cAsym',
         '--shoreline-iters=1',
@@ -319,10 +321,9 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--sloppy',
         '--write-graph',
-        '--use-syn-sdc',
-        '--force-syn',
+        '--sdc-anat-reference=invt1w',
         '--b1-biascorrect-stage=none',
-        '--hmc-model=3dSHORE',
+        '--hmc-method=shoreline',
         '--hmc-transform=Rigid',
         '--output-spaces=acpc:res-5mm',
         '--output-spaces=MNI152NLin2009cAsym',
@@ -338,7 +339,7 @@ def test_diffprep(data_dir, output_dir, working_dir):
     """TORTOISE DIFFPREP head-motion/eddy correction on non-shelled data.
 
     This tests the following features:
-    - The TORTOISE DIFFPREP HMC backend (--hmc-model tortoise) on a
+    - The TORTOISE DIFFPREP HMC backend (--hmc-method tortoise) on a
       compressed-sensing DSI (non-shelled) scheme, where FSL eddy cannot run
     - The fieldmap-less path: with no fieldmap and no T2w, DIFFPREP performs
       head-motion/eddy correction only and does not error out
@@ -363,7 +364,7 @@ def test_diffprep(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--sloppy',
         '--b1-biascorrect-stage=none',
-        '--hmc-model=tortoise',
+        '--hmc-method=tortoise',
         '--output-spaces=acpc:res-5mm',
         '--output-spaces=MNI152NLin2009cAsym',
     ]
@@ -409,8 +410,8 @@ def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
         '--anat-modality=none',
         '--denoise-method=none',
         '--b1-biascorrect-stage=none',
-        '--hmc-model=tortoise',
-        '--pepolar-method=DRBUDDI',
+        '--hmc-method=tortoise',
+        '--sdc-method=drbuddi',
         '--output-spaces=acpc:res-2mm',
         '--output-spaces=MNI152NLin2009cAsym',
     ]
@@ -458,8 +459,8 @@ def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         '--b0-motion-corr-to=first',
         '--b1-biascorrect-stage=none',
-        '--hmc-model=tortoise',
-        '--pepolar-method=DRBUDDI',
+        '--hmc-method=tortoise',
+        '--sdc-method=drbuddi',
         '--output-spaces=acpc:res-5mm',
         '--output-spaces=MNI152NLin2009cAsym',
     ]
@@ -518,8 +519,8 @@ def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         '--b0-motion-corr-to=first',
         '--b1-biascorrect-stage=none',
-        '--hmc-model=tortoise',
-        '--pepolar-method=DRBUDDI',
+        '--hmc-method=tortoise',
+        '--sdc-method=drbuddi',
         '--output-spaces=acpc:res-5mm',
         '--output-spaces=MNI152NLin2009cAsym',
     ]
@@ -608,11 +609,12 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         # The dataset ships a PA epi fieldmap (IntendedFor the DWI), so the
         # modern grouping would correct via TOPUP. This test exercises
-        # fieldmap-less SyN-SDC instead: ignore fmap/ and request SyN. (Replaces
-        # the removed data-dropping --force-syn, which forced SyN over the fmap.)
+        # fieldmap-less SyN-SDC instead: ignore fmap/ and select the
+        # inverted-contrast T1w as the anatomical SDC reference. (Replaces the
+        # removed data-dropping --force-syn, which forced SyN over the fmap.)
         '--ignore',
         'fieldmaps',
-        '--use-syn-sdc',
+        '--sdc-anat-reference=invt1w',
         '--b1-biascorrect-stage=final',
         '--output-spaces=acpc:res-5mm',
         '--output-spaces=MNI152NLin2009cAsym',
@@ -652,7 +654,8 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--sloppy',
         '--b1-biascorrect-stage=none',
-        '--hmc-model=none',
+        '--hmc-method=shoreline',
+        '--shoreline-model=none',
         '--b0-motion-corr-to=first',
         '--output-spaces=acpc:res-5mm',
         '--output-spaces=MNI152NLin2009cAsym',
@@ -777,9 +780,9 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         '--b1-biascorrect-stage=none',
         '--write-graph',
+        '--hmc-method=shoreline',
         '--output-spaces=acpc:res-5mm',
         '--output-spaces=MNI152NLin2009cAsym',
-        '--hmc-model=3dSHORE',
         f'--bids-filter-file={bids_filter}',
     ]
 
@@ -861,7 +864,12 @@ def test_forrest_gump_patch2self(data_dir, output_dir, working_dir):
 
 
 def test_parser_accepts_tortoise(tmp_path):
-    """``tortoise`` is the single --hmc-model value for the DIFFPREP backend."""
+    """``tortoise`` is the single --hmc-model value for the DIFFPREP backend.
+
+    Deliberately uses the deprecated ``--hmc-model`` spelling: this test (and
+    the one below) pins the alias mapping. The integration scenarios above use
+    the ``--hmc-method``/``--sdc-method`` axis flags.
+    """
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -1043,3 +1051,59 @@ def _run_and_generate(test_name, parameters, test_main=False, check_outputs=True
             optional_outputs_list = None
 
         check_generated_files(config.execution.output_dir, output_list_file, optional_outputs_list)
+
+
+def test_parser_defaults_to_stable_mrtrix(tmp_path):
+    """Default to a released MRtrix3, so existing runs are unchanged."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    opts = parser.parse_args([str(bids), str(out), 'participant', '--output-resolution', '2'])
+    assert opts.mrtrix_version == 'stable'
+
+
+def test_parser_accepts_dev_mrtrix(tmp_path):
+    """``dev`` selects the development branch, which is what complex mrdegibbs needs."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    opts = parser.parse_args(
+        [
+            str(bids),
+            str(out),
+            'participant',
+            '--mrtrix-version',
+            'dev',
+            '--output-resolution',
+            '2',
+        ]
+    )
+    assert opts.mrtrix_version == 'dev'
+
+
+def test_parser_rejects_unknown_mrtrix_version(tmp_path):
+    """Reject version strings; the flag names installations, not releases."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                str(bids),
+                str(out),
+                'participant',
+                '--mrtrix-version',
+                '3.0.8',
+                '--output-resolution',
+                '2',
+            ]
+        )

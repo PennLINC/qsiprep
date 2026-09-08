@@ -33,20 +33,23 @@ from .util import _create_mem_gb, _get_wf_name
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def _doing_t2wreg(unit, t2w_sdc):
-    """True when SDC is TORTOISE's T2Wreg (DIFFPREP, fieldmap-less, T2w present).
+def _t2wreg_target(unit, t2w_sdc):
+    """The structural target DIFFPREP's T2Wreg stage registers to, or ``None``.
 
-    Mirrors ``use_t2wreg`` in :mod:`qsiprep.workflows.dwi.diffprep`. T2Wreg does
-    real susceptibility distortion correction but carries no measured fieldmap,
-    so without this predicate the fieldmap-less case would fall through the
-    reportlet gate and produce no SDC figure.
+    Mirrors ``use_t2wreg``/``synb0_target`` in
+    :mod:`qsiprep.workflows.dwi.diffprep`. T2Wreg does real susceptibility
+    distortion correction but carries no measured fieldmap, so without this
+    predicate the fieldmap-less case would fall through the reportlet gate and
+    produce no SDC figure. The plan encodes the stage and its target
+    (``'synb0'`` needs no T2w); the ``t2w_sdc`` bool additionally honors
+    --anat-modality/--ignore t2w for the ``'t2w'`` target.
     """
-    return (
-        config.workflow.hmc_model == 'tortoise'
-        and not unit.has_scanner_measured_fieldmap
-        and not unit.is_nipreps_syn
-        and bool(t2w_sdc)
-    )
+    stage = unit.run.stage_with('t2wreg')
+    if stage is None:
+        return None
+    if stage.structural_target == 'synb0':
+        return 'synb0'
+    return 't2w' if t2w_sdc else None
 
 
 def init_dwi_preproc_wf(
@@ -75,7 +78,7 @@ def init_dwi_preproc_wf(
 
     Parameters
     ----------
-    unit : :class:`~qsiprep.grouping.adapters.PreprocUnit`
+    unit : :class:`~qsiplan.adapters.PreprocUnit`
         The DWI series to correct together and the fieldmap that corrects them
     t2w_sdc : bool
         Include T2w scans in distortion correction
@@ -101,6 +104,11 @@ def init_dwi_preproc_wf(
         ANTs-compatible affine-and-warp transform file
     t1_2_mni_reverse_transform
         ANTs-compatible affine-and-warp transform file (inverse)
+    to_template_affine_transform
+        Full affine to the anatomical template that AC-PC alignment was
+        extracted from (consumed by the SynB0 generation workflow)
+    acpc_inv_transform
+        Inverse of the AC-PC rigid transform
     subjects_dir
         FreeSurfer SUBJECTS_DIR
     subject_id
@@ -194,6 +202,9 @@ def init_dwi_preproc_wf(
                 't2w_unfatsat',
                 't1_2_mni_reverse_transform',
                 't2w_files',
+                'dwi_sampling_grid',
+                'to_template_affine_transform',
+                'acpc_inv_transform',
             ]
         ),
         name='inputnode',
@@ -235,14 +246,16 @@ def init_dwi_preproc_wf(
 
     pre_hmc_wf = init_dwi_pre_hmc_wf(
         unit=unit,
-        orientation='LAS' if config.workflow.hmc_model == 'eddy' else 'LPS',
+        orientation='LAS' if unit.run.hmc_stage.tool == 'eddy' else 'LPS',
         source_file=source_file,
     )
     test_pre_hmc_connect = pe.Node(TestInput(), name='test_pre_hmc_connect')
-    if config.workflow.hmc_model in ('none', '3dSHORE', 'tensor'):
-        if not config.workflow.hmc_model == 'none' and config.workflow.shoreline_iters < 1:
+    hmc_tool = unit.run.hmc_stage.tool
+    if hmc_tool == 'shoreline':
+        if config.workflow.shoreline_model != 'none' and config.workflow.shoreline_iters < 1:
             raise Exception(
-                f'--shoreline-iters must be > 0 when --hmc-model is {config.workflow.hmc_model}'
+                '--shoreline-iters must be > 0 when --shoreline-model is '
+                f'{config.workflow.shoreline_model}'
             )
         hmc_wf = init_qsiprep_hmcsdc_wf(
             unit=unit,
@@ -251,7 +264,7 @@ def init_dwi_preproc_wf(
             acpc_anchor=acpc_anchor,
         )
 
-    elif config.workflow.hmc_model == 'eddy':
+    elif hmc_tool == 'eddy':
         hmc_wf = init_fsl_hmc_wf(
             unit=unit,
             source_file=source_file,
@@ -259,11 +272,11 @@ def init_dwi_preproc_wf(
             name='hmc_sdc_wf',
         )
 
-    elif config.workflow.hmc_model == 'tortoise':
-        # The DIFFPREP backend performs its own SDC internally (DRBUDDI for
-        # reverse-PE, TORTOISE T2Wreg for the fieldmap-less-with-T2w case, or
-        # qsiprep's init_sdc_wf for GRE/phase/SyN) -- exactly as init_fsl_hmc_wf
-        # owns its SDC. So no fieldmap guard here; the branching lives inside
+    elif hmc_tool == 'tortoise':
+        # TORTOISE DIFFPREP performs its own SDC internally (DRBUDDI for reverse-PE,
+        # TORTOISE T2Wreg for the fieldmap-less-with-T2w case, or qsiprep's
+        # init_sdc_wf for GRE/phase/SyN) -- exactly as init_fsl_hmc_wf owns
+        # its SDC. So no fieldmap guard here; the branching lives inside
         # init_diffprep_hmc_wf.
         hmc_wf = init_diffprep_hmc_wf(
             unit=unit,
@@ -271,6 +284,9 @@ def init_dwi_preproc_wf(
             t2w_sdc=t2w_sdc,
             name='hmc_sdc_wf',
         )
+
+    else:
+        raise ValueError(f'Unknown HMC tool: {hmc_tool!r}')
 
     workflow.connect([
         (pre_hmc_wf, hmc_wf, [
@@ -281,10 +297,15 @@ def init_dwi_preproc_wf(
             ('outputnode.original_files', 'inputnode.original_files'),
         ]),
         (inputnode, hmc_wf, [
+            ('t1_preproc', 'inputnode.t1_preproc'),
             ('t1_brain', 'inputnode.t1_brain'),
             ('t1_mask', 'inputnode.t1_mask'),
+            ('t1_seg', 'inputnode.t1_seg'),
             ('t2w_unfatsat', 'inputnode.t2w_unfatsat'),
             ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
+            ('to_template_affine_transform', 'inputnode.to_template_affine_transform'),
+            ('acpc_inv_transform', 'inputnode.acpc_inv_transform'),
+            ('dwi_sampling_grid', 'inputnode.dwi_sampling_grid'),
         ]),
         (pre_hmc_wf, outputnode, [
             ('outputnode.qc_file', 'raw_qc_file'),
@@ -318,16 +339,18 @@ def init_dwi_preproc_wf(
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
 
-    # Fieldmap reports should vary depending on which type of correction is performed
-    # PEPOLAR (epi, rpe series) will produce potentially much more detailed reports
-    doing_topup = unit.is_pepolar and 'topup' in config.workflow.pepolar_method.lower()
-    doing_t2wreg = _doing_t2wreg(unit, t2w_sdc)
-    if unit.is_gre or unit.is_nipreps_syn or doing_topup or doing_t2wreg:
+    # Fieldmap reports should vary depending on which type of correction the
+    # compiled run actually performs. PEPOLAR (epi, rpe series) can produce
+    # considerably more detailed reports.
+    doing_topup = unit.run.stage_with('topup') is not None
+    doing_drbuddi = unit.run.stage_with('drbuddi') is not None
+    t2wreg_target = _t2wreg_target(unit, t2w_sdc)
+    if unit.is_gre or unit.is_nipreps_syn or doing_topup or t2wreg_target:
         fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
         ds_report_sdc = pe.Node(
             DerivativesDataSink(
                 datatype='figures',
-                desc='sdcT2w' if doing_t2wreg else 'sdc',
+                desc='sdcT2w' if t2wreg_target == 't2w' else 'sdc',
                 suffix='dwi',
                 source_file=source_file,
             ),
@@ -355,7 +378,7 @@ def init_dwi_preproc_wf(
         workflow.connect([(hmc_wf, outputnode, [('outputnode.fieldmap_hz', 'fieldmap_hz')])])
 
     # DRBUDDI has some extra reports that we want to save. Make sure we get them!
-    if unit.is_pepolar and 'drbuddi' in config.workflow.pepolar_method.lower():
+    if doing_drbuddi:
         # segment_t2w is a boolean flag (the T2w image itself arrives via the
         # inputnode); pass the availability bool straight through.
         extended_pepolar_report_wf = init_extended_pepolar_report_wf(segment_t2w=t2w_sdc)

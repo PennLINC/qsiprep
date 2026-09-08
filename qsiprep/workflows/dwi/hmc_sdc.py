@@ -60,11 +60,15 @@ def init_qsiprep_hmcsdc_wf(
                 'original_files',
                 'rpe_b0_info',
                 'hmc_optimization_data',
+                't1_preproc',
                 't1_brain',
                 't1_2_mni_reverse_transform',
                 't1_mask',
                 't1_seg',
+                'dwi_sampling_grid',
                 't2_brain',
+                'to_template_affine_transform',
+                'acpc_inv_transform',
             ]
         ),
         name='inputnode',
@@ -247,7 +251,7 @@ def init_qsiprep_hmcsdc_wf(
         )
 
     # Perform SDC if possible. This will pass-through if no sdc is to be done
-    b0_sdc_wf = init_sdc_wf(unit, unit.dwi_metadata)
+    b0_sdc_wf = init_sdc_wf(unit)
     b0_sdc_wf.inputs.inputnode.template = acpc_anchor.fullname
 
     workflow.connect([

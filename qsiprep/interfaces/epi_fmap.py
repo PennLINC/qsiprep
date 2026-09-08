@@ -1,13 +1,14 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 import os.path as op
+import subprocess
 from collections import defaultdict
 from pathlib import Path
 
 import nibabel as nb
 import numpy as np
 import pandas as pd
-from nilearn.image import concat_imgs, index_img, load_img
+from nilearn.image import concat_imgs, index_img, load_img, resample_to_img
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
 
@@ -133,33 +134,33 @@ def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
         potential_bval_file = find_bval(fmap_file)
         starting_index = len(original_files)
         fmap_img = load_img(fmap_file)
+        if fmap_img.ndim == 3:
+            # concat_imgs can't concatenate a mix of 3D and 4D images
+            fmap_img = concat_imgs([fmap_img])
         image_series.append(fmap_img)
-        num_images = 1 if fmap_img.ndim == 3 else fmap_img.shape[3]
+        num_images = fmap_img.shape[3]
         original_files += [fmap_file] * num_images
 
         # Which images are b=0 images?
         if potential_bval_file is not None:
             # If there is a secret bval file, check that it's allowed
             bvals = np.loadtxt(potential_bval_file, ndmin=1)
-            if fmap_img.ndim == 3 and len(bvals) == 1:
-                _b0_indices = np.arange(num_images) + starting_index
-            elif fmap_img.ndim == 4 and len(bvals) == fmap_img.shape[3]:
-                too_large = np.flatnonzero(bvals > b0_threshold)
-                too_large_values = bvals[too_large]
-                if too_large.size:
-                    LOGGER.warning(
-                        'Excluding volumes %s from the %s because b=%s is greater than %d',
-                        str(too_large),
-                        fmap_file,
-                        str(too_large_values),
-                        b0_threshold,
-                    )
-                _b0_indices = np.flatnonzero(bvals < b0_threshold) + starting_index
-            else:
+            if len(bvals) != num_images:
                 raise Exception(
                     f'Secret fieldmap file {potential_bval_file} mismatches its image file '
                     f'{fmap_file}'
                 )
+            too_large = np.flatnonzero(bvals > b0_threshold)
+            too_large_values = bvals[too_large]
+            if too_large.size:
+                LOGGER.warning(
+                    'Excluding volumes %s from the %s because b=%s is greater than %d',
+                    str(too_large),
+                    fmap_file,
+                    str(too_large_values),
+                    b0_threshold,
+                )
+            _b0_indices = np.flatnonzero(bvals < b0_threshold) + starting_index
         else:
             _b0_indices = np.arange(num_images) + starting_index
         b0_indices += _b0_indices.tolist()
@@ -201,6 +202,92 @@ def eddy_inputs_from_dwi_files(origin_file_list, eddy_prefix, sidecars=None):
     return acqp_file, index_file
 
 
+def synb0_topup_config():
+    """The path of the TOPUP config tuned for a synthetic-b=0 input.
+
+    The SynB0-DISCO distribution ships ``synb0.cnf`` at its root (``/opt/synb0``
+    in the qsiprep containers). Resolved through ``SYNB0_ATLASES`` like the
+    U-Net assets, so a relocated distribution keeps working; falls back to the
+    container path so graph construction never fails outside the containers
+    (where TOPUP would not run anyway).
+    """
+    from .synb0 import get_synb0_dir
+
+    return op.join(get_synb0_dir() or '/opt/synb0', 'synb0.cnf')
+
+
+def add_synthetic_b0_to_topup_inputs(
+    topup_datain,
+    topup_imain,
+    synthetic_b0,
+    cwd,
+    smoothing_sigma_mm=1.15,
+):
+    """Append a synthetic distortion-free b=0 as its own distortion group.
+
+    The U-Net output is smooth, so the real b=0 volumes are smoothed with the
+    same small Gaussian the SynB0-DISCO reference pipeline uses (sigma
+    1.15mm) -- otherwise TOPUP would read the smoothness difference itself as
+    distortion. The synthetic volume joins ``topup_imain`` as the last
+    volume, with a datain row whose total readout time is 0: with no readout
+    there is no distortion, so the row's phase-encoding direction does not
+    matter and the first row's direction is reused.
+
+    Parameters
+    ----------
+    topup_datain : str
+        The datain text file describing the real b=0 volumes.
+    topup_imain : str
+        4D stack of the selected real b=0 volumes.
+    synthetic_b0 : str
+        The synthetic distortion-free b=0 (resampled onto the imain grid
+        here if its grid differs).
+    cwd : str
+        Directory the new files are written into.
+    smoothing_sigma_mm : float
+        Gaussian sigma (in mm) applied to the real b=0 volumes.
+
+    Returns
+    -------
+    new_datain : str
+        Path of the extended datain file.
+    new_imain : str
+        Path of the extended (smoothed + synthetic) imain file.
+    """
+    from scipy.ndimage import gaussian_filter
+
+    imain_img = load_img(topup_imain)
+    sigma_vox = [smoothing_sigma_mm / zoom for zoom in imain_img.header.get_zooms()[:3]]
+    data = imain_img.get_fdata(dtype=np.float32)
+    smoothed = np.empty_like(data)
+    for volnum in range(data.shape[3]):
+        smoothed[..., volnum] = gaussian_filter(data[..., volnum], sigma=sigma_vox)
+
+    synth_img = load_img(synthetic_b0)
+    if synth_img.ndim == 4:
+        synth_img = index_img(synth_img, 0)
+    if synth_img.shape[:3] != imain_img.shape[:3] or not np.allclose(
+        synth_img.affine, imain_img.affine, atol=1e-3
+    ):
+        synth_img = resample_to_img(synth_img, imain_img)
+    combined = np.concatenate(
+        [smoothed, synth_img.get_fdata(dtype=np.float32)[..., np.newaxis]], axis=3
+    )
+
+    new_imain = op.join(cwd, 'synb0_topup_imain.nii.gz')
+    out_img = nb.Nifti1Image(combined, imain_img.affine, imain_img.header)
+    out_img.header.set_data_dtype(np.float32)
+    out_img.to_filename(new_imain)
+
+    datain_lines = Path(topup_datain).read_text().splitlines()
+    direction = ' '.join(datain_lines[0].split()[:3])
+    datain_lines.append(f'{direction} 0.000000')
+    new_datain = op.join(cwd, 'synb0_topup_datain.txt')
+    Path(new_datain).write_text('\n'.join(datain_lines) + '\n')
+
+    return new_datain, new_imain
+
+
 def get_best_b0_topup_inputs_from(
     dwi_file,
     bval_file,
@@ -212,6 +299,8 @@ def get_best_b0_topup_inputs_from(
     topup_requested=False,
     raw_image_sdc=True,
     sidecars=None,
+    num_threads=1,
+    synb0_requested=False,
 ):
     """Create a datain spec and a slspec from a concatenated dwi series.
 
@@ -223,6 +312,9 @@ def get_best_b0_topup_inputs_from(
     The strategy is to select ``max_per_spec`` b=0 images from each distortion group.
     Here, distortion group uses the FSL definition of a phase encoding direction and
     total readout time, as specified in the datain file used by TOPUP (i.e. "0 -1 0 0.087").
+    Within a group, b=0 images native to the series being corrected always outrank
+    fieldmap/borrowed candidates -- borrowing can augment the estimation or fill a
+    missing phase-encoding direction, but never evicts a native image.
 
     Parameters
     ----------
@@ -252,6 +344,7 @@ def get_best_b0_topup_inputs_from(
         b0_indices=None,
         use_original_files=raw_image_sdc,
     )
+    dwi_b0_df['is_native'] = True
 
     # If there are epi fieldmaps, add them to the table
     if epi_fmaps:
@@ -266,6 +359,7 @@ def get_best_b0_topup_inputs_from(
             bval_file=None,
             b0_indices=epi_b0_indices,
         )
+        epi_b0_df['is_native'] = False
         dwi_b0_df = pd.concat([dwi_b0_df, epi_b0_df], axis=0, ignore_index=True)
 
     unique_bids_files = dwi_b0_df.bids_origin_file.unique().tolist()
@@ -279,8 +373,10 @@ def get_best_b0_topup_inputs_from(
 
     # Group the b=0 images by their spec
     dwi_b0_df['fsl_spec'] = dwi_b0_df['bids_origin_file'].map(spec_lookup)
-    # Write the datain text file and make sure it's usable if it's needed
-    if len(dwi_b0_df['fsl_spec'].unique()) < 2 and topup_requested:
+    # Write the datain text file and make sure it's usable if it's needed.
+    # A synthetic distortion-free b=0 (SynB0) joins downstream as its own
+    # zero-readout distortion group, so a single measured group suffices then.
+    if len(dwi_b0_df['fsl_spec'].unique()) < 2 and topup_requested and not synb0_requested:
         config.loggers.workflow.critical(dwi_b0_df['fsl_spec'])
         raise Exception(
             'Unable to run TOPUP: not enough distortion groups. '
@@ -289,20 +385,77 @@ def get_best_b0_topup_inputs_from(
     spec_groups = dwi_b0_df.groupby('fsl_spec')
     max_per_spec = min(max_per_spec, min(spec_groups.apply(len)))
 
-    # Calculate the "quality" of each image:
-    dwi_b0_df['qc_score'] = spec_groups['nii_3d_files'].transform(calculate_best_b0s)
+    # Score each candidate with TORTOISE's SelectBestB0. It rigidly registers
+    # the candidates before the windowed-correlation comparison, so a
+    # moved-but-clean b=0 is not mistaken for a bad one, and the recovered
+    # rigid parameters travel into the QC tsv. Natives and borrowed candidates
+    # are scored in separate calls: SelectBestB0 registers its first volume to
+    # the mean of the others, and a borrowed cohort at a different pose turns
+    # that mean into a double exposure that can wreck the first native's own
+    # score. The ranking never compares across the classes anyway, and
+    # anchoring the borrowed stack with the first native keeps the donors'
+    # rigid parameters measured in the native frame.
+    dwi_b0_df['qc_score'] = np.nan
+    dwi_b0_df['translation_total_mm'] = np.nan
+    dwi_b0_df['rotation_total_deg'] = np.nan
+    for spec_num, (_, spec_df) in enumerate(spec_groups):
+        prefix = op.join(cwd, f'spec-{spec_num:02d}_')
+        native_rows = spec_df[spec_df['is_native']]
+        borrowed_rows = spec_df[~spec_df['is_native']]
+        if len(native_rows):
+            report = select_best_b0_report(
+                native_rows['nii_3d_files'].tolist(),
+                prefix=prefix + 'native_',
+                num_threads=num_threads,
+            )
+            dwi_b0_df.loc[native_rows.index, 'qc_score'] = report['mean_cc'].to_numpy()
+            dwi_b0_df.loc[native_rows.index, 'translation_total_mm'] = report[
+                'translation_total_mm'
+            ].to_numpy()
+            dwi_b0_df.loc[native_rows.index, 'rotation_total_deg'] = report[
+                'rotation_total_deg'
+            ].to_numpy()
+        if len(borrowed_rows):
+            anchor = native_rows['nii_3d_files'].iloc[0:1].tolist()
+            report = select_best_b0_report(
+                anchor + borrowed_rows['nii_3d_files'].tolist(),
+                prefix=prefix + 'borrowed_',
+                num_threads=num_threads,
+            ).iloc[len(anchor) :]
+            dwi_b0_df.loc[borrowed_rows.index, 'qc_score'] = report['mean_cc'].to_numpy()
+            dwi_b0_df.loc[borrowed_rows.index, 'translation_total_mm'] = report[
+                'translation_total_mm'
+            ].to_numpy()
+            dwi_b0_df.loc[borrowed_rows.index, 'rotation_total_deg'] = report[
+                'rotation_total_deg'
+            ].to_numpy()
+    # Higher windowed correlation = more consistent = better. Ties (inevitable
+    # with two candidates, whose mean-over-others scores are the same single
+    # pairwise value) break toward the earlier volume, which is also eddy's
+    # reference. A native b=0 (from the series being corrected) must never be
+    # evicted by borrowed/fieldmap candidates, however well they agree with
+    # each other: the field has to stay anchored to the pose of the data it
+    # corrects. qc_score is a mean windowed CC^2 in [0, 1], so a +2 offset
+    # ranks every native above every non-native while preserving score order
+    # within each class.
+    selection_key = dwi_b0_df['qc_score'] + 2.0 * dwi_b0_df['is_native']
     dwi_b0_df['qc_rank'] = (
-        np.nan_to_num(spec_groups['qc_score'].rank(ascending=True), nan=1.0).astype(int) - 1
+        np.nan_to_num(
+            selection_key.groupby(dwi_b0_df['fsl_spec']).rank(ascending=False, method='first'),
+            nan=1.0,
+        ).astype(int)
+        - 1
     )
 
     # Select only the top
     dwi_b0_df['selected_for_sdc'] = dwi_b0_df['qc_rank'] < max_per_spec
     sdc_selections = dwi_b0_df[dwi_b0_df['selected_for_sdc']].reset_index()
     # Make sure the first image in topup imain has the same distortion as the
-    # first b=0 volume in the eddy inputs
+    # first b=0 volume in the eddy inputs -- and is native, so the field is
+    # estimated in (and bridged from) the frame of the series being corrected.
     sdc_selections['same_as_first'] = sdc_selections['fsl_spec'] == dwi_b0_df.loc[0, 'fsl_spec']
     sdc_selections.sort_values(
-        by=['same_as_first', 'index'], ascending=[False, True], inplace=True
+        by=['same_as_first', 'is_native', 'index'], ascending=[False, False, True], inplace=True
     )
 
     imain_output = op.join(cwd, 'topup_imain.nii.gz')
@@ -317,7 +470,7 @@ def get_best_b0_topup_inputs_from(
         f.write('\n'.join(sdc_selections['fsl_spec']))
 
     b0_tsv = op.join(cwd, 'b0_selection_info.tsv')
-    dwi_b0_df.drop('nii_3d_files', 1).to_csv(b0_tsv, sep='\t', index=False)
+    dwi_b0_df.drop(columns='nii_3d_files').to_csv(b0_tsv, sep='\t', index=False)
 
     # get out reference images from the topup and eddy data
     topup_reg_file = op.join(cwd, 'topup_reg_image.nii.gz')
@@ -329,6 +482,12 @@ def get_best_b0_topup_inputs_from(
         spec_lookup,
         image_source='data',
     )
+    if synb0_requested:
+        topup_report += (
+            ' A synthetic distortion-free b=0 generated from the T1w image '
+            '(SynB0-DISCO) was appended as an additional distortion group '
+            'with zero total readout time.'
+        )
     return (
         datain_file,
         imain_output,
@@ -379,20 +538,49 @@ def relative_b0_index(b0_indices, original_files):
     return original_indices
 
 
-def calculate_best_b0s(b0_list, radius=4):
-    import SimpleITK as sitk
+def select_best_b0_report(b0_files, prefix, num_threads=1):
+    """Score candidate b=0 images with TORTOISE's ``SelectBestB0``.
 
-    imgs = [sitk.ReadImage(fname, sitk.sitkFloat64) for fname in b0_list]
-    no_reg = sitk.ImageRegistrationMethod()
-    no_reg.SetMetricSamplingStrategy(no_reg.NONE)
-    no_reg.SetMetricAsCorrelation()
-    pairwise = np.zeros((len(b0_list), len(b0_list)), dtype=np.float64)
-    for id0, id1 in zip(*np.triu_indices(len(b0_list), 1), strict=False):
-        pairwise[id0, id1] = no_reg.MetricEvaluate(imgs[id0], imgs[id1])
-    pairwise = pairwise + pairwise.T
-    # Don't include self correlation
-    np.fill_diagonal(pairwise, np.nan)
-    return np.nanmean(pairwise, axis=0)
+    The candidates are stacked into a 4D file (resampled onto the first
+    image's grid when they differ) and handed to the binary, which rigidly
+    registers them before the windowed-correlation comparison -- so a
+    moved-but-clean b=0 is not mistaken for a bad one.
+
+    Returns the per-volume report as a DataFrame in input order:
+    ``mean_cc`` (higher = more consistent with the other candidates),
+    ``selected`` (TORTOISE's pick, a member of the most-consistent pair), and
+    the recovered rigid parameters relative to the first candidate
+    (``translation_total_mm``/``rotation_total_deg`` and their components).
+    """
+    stack_file = prefix + 'candidates.nii.gz'
+    concat_imgs(b0_files, auto_resample=True).to_filename(stack_file)
+    # The candidates are all b=0 by construction
+    bvals_file = prefix + 'candidates.bval'
+    np.savetxt(bvals_file, np.zeros((1, len(b0_files))), fmt='%d')
+    report_file = prefix + 'selection.tsv'
+
+    cmd = [
+        'SelectBestB0',
+        stack_file,
+        bvals_file,
+        prefix + 'best_b0.nii.gz',
+        '--ncores',
+        str(num_threads),
+        '--report',
+        report_file,
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0 or not op.exists(report_file):
+        raise RuntimeError(
+            f'SelectBestB0 failed (exit {proc.returncode}):\n{proc.stdout}\n{proc.stderr}'
+        )
+
+    report = pd.read_csv(report_file, sep='\t', comment='#')
+    if len(report) != len(b0_files):
+        raise RuntimeError(
+            f'SelectBestB0 reported {len(report)} volumes for {len(b0_files)} candidates'
+        )
+    return report
 
 
 def _get_bvals(bval_input):
@@ -454,8 +642,6 @@ def split_into_b0s_and_origins(
         )
         image_source = original_file if use_original_files else full_img
         source_index = original_index if use_original_files else b0_index
-        print('image_source', image_source)
-        print('new_b0_path', new_b0_path)
         safe_get_3d_image(image_source, source_index).to_filename(new_b0_path)
         b0_nii_files.append(new_b0_path)
 
