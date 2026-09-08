@@ -5,7 +5,7 @@ import numpy as np
 from nipype.interfaces.base import isdefined
 
 from qsiprep.interfaces.images import ConformDwi
-from qsiprep.tests.utils import build_test_dataset
+from qsiprep.tests.utils import annexify, build_test_dataset
 
 # An image already in LPS, and one in RAS that must be reoriented to reach LPS.
 LPS_AFFINE = np.diag([-1.0, -1.0, 1.0, 1.0])
@@ -116,6 +116,30 @@ def test_conform_dwi_flips_inherited_bvecs_on_reorientation(tmp_path):
         np.array([[-1.0, 0.0], [0.0, -1.0], [0.0, 0.0]]),
     )
     assert nb.aff2axcodes(nb.load(result.outputs.dwi_file).affine) == ('L', 'P', 'S')
+
+
+def test_conform_dwi_flips_bvecs_through_annex_symlinks(tmp_path):
+    """Regression: a git-annex-symlinked DWI is reoriented AND its bvec flipped.
+
+    Before the ``.resolve()`` -> ``os.path.abspath`` fix, ``find_bvec`` followed
+    the annex symlink out of the BIDS tree and returned ``None``, so ConformDwi
+    reoriented the image to LPS but left the bvecs unflipped -- silently
+    corrupting gradient directions on any datalad/git-annex dataset.
+    """
+    root = build_test_dataset(
+        tmp_path / 'ds', COMPLEX_DWI, extra_files=GRADIENTS, n_volumes=2, affine=RAS_AFFINE
+    )
+    annexify(root)
+    dwi = root / 'sub-01' / 'dwi' / 'sub-01_part-mag_dwi.nii.gz'
+    assert dwi.is_symlink()
+
+    result = _run(ConformDwi(dwi_file=str(dwi), orientation='LPS'), tmp_path / 'work')
+
+    assert nb.aff2axcodes(nb.load(result.outputs.dwi_file).affine) == ('L', 'P', 'S')
+    np.testing.assert_allclose(
+        np.loadtxt(result.outputs.bvec_file),
+        np.array([[-1.0, 0.0], [0.0, -1.0], [0.0, 0.0]]),
+    )
 
 
 def test_conform_dwi_without_gradients_still_conforms_the_image(tmp_path):
