@@ -11,7 +11,6 @@ from qsiprep.interfaces import images
 from qsiprep.interfaces.images import ConformDwi, bvec_to_rasb
 from qsiprep.tests.utils import annexify, build_test_dataset
 
-
 # An image already in LPS, and one in RAS that must be reoriented to reach LPS.
 LPS_AFFINE = np.diag([-1.0, -1.0, 1.0, 1.0])
 RAS_AFFINE = np.eye(4)
