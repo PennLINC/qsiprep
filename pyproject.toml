@@ -35,13 +35,12 @@ dependencies = [
     "psutil <= 5.9.8",
     "pybids >= 0.15.0, < 0.16.0",
     "pyyaml",
-    "qsiplan >= 0.2.0, < 0.3",
+    "qsiplan >= 0.3.1, < 0.4",
     "scikit-image",
     "scikit-learn <= 1.4.0",
     "seaborn",
     "sentry_sdk",
     "SimpleITK",
-    "surfa == 0.6.1",
     "svgutils <= 0.3.4",
     "transforms3d",
     "vtk",
@@ -52,10 +51,9 @@ dependencies = [
     "pytest-env",
     "pytest-xdist",
     "templateflow",
-    "tensorflow[and-cuda]",
-    # FreeSurfer's mri_synthseg requires Keras 2 (see SynthSeg interface)
-    "tf-keras",
-    "torch",
+    # Container ML dependencies are isolated from QSIPrep: FreeSurfer's
+    # fspython supplies TensorFlow for SynthSeg, while a separate Conda runtime
+    # supplies Torch for SynthStrip and SynB0.
 ]
 dynamic = ["version"]
 

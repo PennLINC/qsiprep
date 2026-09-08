@@ -124,6 +124,77 @@ def test_fsl_hmc_no_fieldmap_builds():
     assert wf.get_node('topup') is None
 
 
+def _synb0_unit(tmp_path):
+    main = _write_dwi(tmp_path / 'sub-01_dir-AP_dwi.nii.gz')
+    t1w = '/data/sub-01/anat/sub-01_T1w.nii.gz'
+    return make_preproc_unit(
+        [main],
+        method=CorrectionMethod.SYNB0,
+        estimation_sources=[t1w],
+        anat_files=[t1w],
+    )
+
+
+def test_fsl_hmc_synb0_feeds_topup(tmp_path):
+    """A SynB0 unit runs TOPUP fed by the synthetic-b=0 merge node."""
+    from nipype.interfaces.base import isdefined
+
+    _cfg(pepolar_method='TOPUP')
+    from qsiprep.workflows.dwi.fsl import init_fsl_hmc_wf
+
+    wf = init_fsl_hmc_wf(_synb0_unit(tmp_path), source_file=SRC, t2w_sdc=False)
+    assert wf.get_node('topup') is not None
+    assert wf.get_node('synb0_wf') is not None
+    assert wf.get_node('synb0_b0_ref_wf') is not None
+    assert wf.get_node('synb0_topup_inputs') is not None
+
+    # The single measured distortion group is allowed through the TOPUP gate,
+    # and the anatomical estimation "sources" are not passed as epi fieldmaps.
+    gather = wf.get_node('gather_inputs')
+    assert gather.inputs.synb0_requested
+    assert not isdefined(gather.inputs.epi_fmaps)
+
+    # TOPUP reads the merged datain/imain and the SynB0-tuned config.
+    topup = wf.get_node('topup')
+    assert topup.inputs.config.endswith('synb0.cnf')
+    merge_edge = wf._graph.get_edge_data(wf.get_node('synb0_topup_inputs'), topup)
+    assert ('topup_datain', 'encoding_file') in merge_edge['connect']
+    assert ('topup_imain', 'in_file') in merge_edge['connect']
+
+    # The generation QC reportlets are datasunk.
+    assert wf.get_node('ds_report_synb0_acquired') is not None
+    assert wf.get_node('ds_report_synb0_unet') is not None
+
+
+def test_synb0_reportlet_descs_are_registered_in_the_report_spec():
+    """A desc absent from reports-spec.yml is written to disk but never shown."""
+    import yaml
+
+    from qsiprep.data import load as load_data
+
+    spec = yaml.safe_load(load_data('reports-spec.yml').read_text())
+    descs = set()
+    for section in spec['sections']:
+        for reportlet in section.get('reportlets', []):
+            bids = reportlet.get('bids')
+            if isinstance(bids, dict):
+                desc = bids.get('desc')
+                descs.update(desc if isinstance(desc, list) else [desc])
+    assert {'synb0acquired', 'synb0unet'} <= descs
+
+
+def test_fsl_hmc_synb0_without_topup_is_uncorrected(tmp_path):
+    """With no TOPUP stage in the plan (DRBUDDI-only eddy), nothing consumes
+    the synthetic b=0 and the series is processed without SDC."""
+    _cfg(pepolar_method='DRBUDDI')
+    from qsiprep.workflows.dwi.fsl import init_fsl_hmc_wf
+
+    wf = init_fsl_hmc_wf(_synb0_unit(tmp_path), source_file=SRC, t2w_sdc=False)
+    assert wf.get_node('topup') is None
+    assert wf.get_node('synb0_wf') is None
+    assert wf.get_node('outputnode').inputs.sdc_method == 'None'
+
+
 def test_subject_summary_renders_native_groupings():
     """The subject report renders the per-output grouping dict base.py builds.
 

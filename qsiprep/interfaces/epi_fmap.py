@@ -8,7 +8,7 @@ from pathlib import Path
 import nibabel as nb
 import numpy as np
 import pandas as pd
-from nilearn.image import concat_imgs, index_img, load_img
+from nilearn.image import concat_imgs, index_img, load_img, resample_to_img
 from nipype import logging
 from nipype.utils.filemanip import fname_presuffix
 
@@ -202,6 +202,92 @@ def eddy_inputs_from_dwi_files(origin_file_list, eddy_prefix, sidecars=None):
     return acqp_file, index_file
 
 
+def synb0_topup_config():
+    """The path of the TOPUP config tuned for a synthetic-b=0 input.
+
+    The SynB0-DISCO distribution ships ``synb0.cnf`` at its root (``/opt/synb0``
+    in the qsiprep containers). Resolved through ``SYNB0_ATLASES`` like the
+    U-Net assets, so a relocated distribution keeps working; falls back to the
+    container path so graph construction never fails outside the containers
+    (where TOPUP would not run anyway).
+    """
+    from .synb0 import get_synb0_dir
+
+    return op.join(get_synb0_dir() or '/opt/synb0', 'synb0.cnf')
+
+
+def add_synthetic_b0_to_topup_inputs(
+    topup_datain,
+    topup_imain,
+    synthetic_b0,
+    cwd,
+    smoothing_sigma_mm=1.15,
+):
+    """Append a synthetic distortion-free b=0 as its own distortion group.
+
+    The U-Net output is smooth, so the real b=0 volumes are smoothed with the
+    same small Gaussian the SynB0-DISCO reference pipeline uses (sigma
+    1.15mm) -- otherwise TOPUP would read the smoothness difference itself as
+    distortion. The synthetic volume joins ``topup_imain`` as the last
+    volume, with a datain row whose total readout time is 0: with no readout
+    there is no distortion, so the row's phase-encoding direction does not
+    matter and the first row's direction is reused.
+
+    Parameters
+    ----------
+    topup_datain : str
+        The datain text file describing the real b=0 volumes.
+    topup_imain : str
+        4D stack of the selected real b=0 volumes.
+    synthetic_b0 : str
+        The synthetic distortion-free b=0 (resampled onto the imain grid
+        here if its grid differs).
+    cwd : str
+        Directory the new files are written into.
+    smoothing_sigma_mm : float
+        Gaussian sigma (in mm) applied to the real b=0 volumes.
+
+    Returns
+    -------
+    new_datain : str
+        Path of the extended datain file.
+    new_imain : str
+        Path of the extended (smoothed + synthetic) imain file.
+    """
+    from scipy.ndimage import gaussian_filter
+
+    imain_img = load_img(topup_imain)
+    sigma_vox = [smoothing_sigma_mm / zoom for zoom in imain_img.header.get_zooms()[:3]]
+    data = imain_img.get_fdata(dtype=np.float32)
+    smoothed = np.empty_like(data)
+    for volnum in range(data.shape[3]):
+        smoothed[..., volnum] = gaussian_filter(data[..., volnum], sigma=sigma_vox)
+
+    synth_img = load_img(synthetic_b0)
+    if synth_img.ndim == 4:
+        synth_img = index_img(synth_img, 0)
+    if synth_img.shape[:3] != imain_img.shape[:3] or not np.allclose(
+        synth_img.affine, imain_img.affine, atol=1e-3
+    ):
+        synth_img = resample_to_img(synth_img, imain_img)
+    combined = np.concatenate(
+        [smoothed, synth_img.get_fdata(dtype=np.float32)[..., np.newaxis]], axis=3
+    )
+
+    new_imain = op.join(cwd, 'synb0_topup_imain.nii.gz')
+    out_img = nb.Nifti1Image(combined, imain_img.affine, imain_img.header)
+    out_img.header.set_data_dtype(np.float32)
+    out_img.to_filename(new_imain)
+
+    datain_lines = Path(topup_datain).read_text().splitlines()
+    direction = ' '.join(datain_lines[0].split()[:3])
+    datain_lines.append(f'{direction} 0.000000')
+    new_datain = op.join(cwd, 'synb0_topup_datain.txt')
+    Path(new_datain).write_text('\n'.join(datain_lines) + '\n')
+
+    return new_datain, new_imain
+
+
 def get_best_b0_topup_inputs_from(
     dwi_file,
     bval_file,
@@ -214,6 +300,7 @@ def get_best_b0_topup_inputs_from(
     raw_image_sdc=True,
     sidecars=None,
     num_threads=1,
+    synb0_requested=False,
 ):
     """Create a datain spec and a slspec from a concatenated dwi series.
 
@@ -286,8 +373,10 @@ def get_best_b0_topup_inputs_from(
 
     # Group the b=0 images by their spec
     dwi_b0_df['fsl_spec'] = dwi_b0_df['bids_origin_file'].map(spec_lookup)
-    # Write the datain text file and make sure it's usable if it's needed
-    if len(dwi_b0_df['fsl_spec'].unique()) < 2 and topup_requested:
+    # Write the datain text file and make sure it's usable if it's needed.
+    # A synthetic distortion-free b=0 (SynB0) joins downstream as its own
+    # zero-readout distortion group, so a single measured group suffices then.
+    if len(dwi_b0_df['fsl_spec'].unique()) < 2 and topup_requested and not synb0_requested:
         config.loggers.workflow.critical(dwi_b0_df['fsl_spec'])
         raise Exception(
             'Unable to run TOPUP: not enough distortion groups. '
@@ -393,6 +482,12 @@ def get_best_b0_topup_inputs_from(
         spec_lookup,
         image_source='data',
     )
+    if synb0_requested:
+        topup_report += (
+            ' A synthetic distortion-free b=0 generated from the T1w image '
+            '(SynB0-DISCO) was appended as an additional distortion group '
+            'with zero total readout time.'
+        )
     return (
         datain_file,
         imain_output,

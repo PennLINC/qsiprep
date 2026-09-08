@@ -582,7 +582,11 @@ def init_finalize_denoising_wf(
 
         if not split_biascorr:
             biascorr = pe.Node(
-                DWIBiasCorrect(method='ants', bzero_max=config.workflow.b0_threshold),
+                DWIBiasCorrect(
+                    method='ants',
+                    bzero_max=config.workflow.b0_threshold,
+                    mrtrix_version=config.workflow.mrtrix_version,
+                ),
                 name='biascorr',
                 n_procs=omp_nthreads,
             )
@@ -635,7 +639,11 @@ def init_finalize_denoising_wf(
                 scan_num += 1
                 biascorrs.append(
                     pe.Node(
-                        DWIBiasCorrect(method='ants', bzero_max=config.workflow.b0_threshold),
+                        DWIBiasCorrect(
+                            method='ants',
+                            bzero_max=config.workflow.b0_threshold,
+                            mrtrix_version=config.workflow.mrtrix_version,
+                        ),
                         name='biascorr%d' % scan_num,
                         n_procs=omp_nthreads,
                     )

@@ -71,6 +71,19 @@ def test_synthseg_tensorflow_environ():
     assert interface.inputs.environ['TF_ENABLE_ONEDNN_OPTS'] == '0'
 
 
+def test_synthseg_cmd_uses_freesurfer_python(tmp_path, monkeypatch):
+    script = tmp_path / 'mri_synthseg'
+    script.write_text('#!/usr/bin/env python\n')
+    script.chmod(0o755)
+    monkeypatch.setenv('PATH', str(tmp_path), prepend=':')
+
+    monkeypatch.setenv('QSIPREP_FREESURFER_PYTHON', '/opt/freesurfer/bin/fspython')
+    assert freesurfer.SynthSeg().cmd == f'/opt/freesurfer/bin/fspython {script}'
+
+    monkeypatch.delenv('QSIPREP_FREESURFER_PYTHON')
+    assert freesurfer.SynthSeg().cmd == 'mri_synthseg'
+
+
 @pytest.mark.synthstrip
 def test_synthseg_interface(datasets, tmp_path_factory):
     """Test qsiprep.interfaces.freesurfer.SynthSeg."""
