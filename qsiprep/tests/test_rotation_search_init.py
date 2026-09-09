@@ -13,6 +13,14 @@ The intramodal b=0 template registrations and the SyN fieldmap registration are
 deliberately untouched: their inputs share an orientation by construction, and
 ``affine.json`` (shared with the fieldmap workflow) must keep its
 center-of-mass initialization.
+
+The structural image handed to TORTOISE gets the same protection one layer
+down: DRBUDDI and DIFFPREP's ``--epi T2Wreg`` (EPIREG) rigidly register their
+structural input to the b=0 internally, but only from a center-of-mass
+initialization (EPIREG has no multistart fallback at all), so the T2w is
+pre-aligned into the b=0 frame with the antsAI search before TORTOISE sees it.
+The synb0 structural target needs none of this: the synthetic b=0 is produced
+on the native b=0 grid already.
 """
 
 from nipype.interfaces.base import isdefined
@@ -137,3 +145,85 @@ def test_intermodal_acpc_settings_carry_no_initialization():
 
     cfg = json.loads(load_data('intermodal_ACPC.json').read_text())
     assert 'initial_moving_transform_com' not in cfg
+
+
+def _connect_fields(wf, src, dst):
+    edge = wf._graph.get_edge_data(wf.get_node(src), wf.get_node(dst))
+    return [] if edge is None else list(edge['connect'])
+
+
+def test_drbuddi_t2w_is_prealigned_to_the_b0(tmp_path):
+    """The raw ACPC T2w must not reach DRBUDDI; the aligned copy must."""
+    from qsiprep.tests.test_workflows_native import _cfg, _rpe_unit
+    from qsiprep.workflows.fieldmap import init_drbuddi_wf
+
+    _cfg(hmc_model='tortoise', pepolar_method='DRBUDDI')
+    wf = init_drbuddi_wf(_rpe_unit(tmp_path), t2w_sdc=True)
+
+    assert wf.get_node('t2w_to_b0_wf') is not None
+    assert ('outputnode.structural_aligned', 'structural_image') in _connect_fields(
+        wf, 't2w_to_b0_wf', 'drbuddi'
+    )
+    assert ('t2w_unfatsat', 'structural_image') not in _connect_fields(wf, 'inputnode', 'drbuddi')
+    # The alignment consumes the caller-provided b=0 reference
+    assert ('b0_ref', 'inputnode.b0_ref') in _connect_fields(wf, 'inputnode', 't2w_to_b0_wf')
+
+
+def test_drbuddi_without_t2w_builds_no_alignment(tmp_path):
+    from qsiprep.tests.test_workflows_native import _cfg, _rpe_unit
+    from qsiprep.workflows.fieldmap import init_drbuddi_wf
+
+    _cfg(hmc_model='tortoise', pepolar_method='DRBUDDI')
+    wf = init_drbuddi_wf(_rpe_unit(tmp_path), t2w_sdc=False)
+    assert wf.get_node('t2w_to_b0_wf') is None
+
+
+def test_t2wreg_structural_is_prealigned_to_the_b0():
+    """EPIREG runs a single COM-initialized rigid with no multistart fallback."""
+    from qsiprep.tests.test_interfaces_diffprep import _base_config, _build, _make_unit
+
+    _base_config()
+    wf = _build(_make_unit(None), t2w_sdc=True, name='dp_t2w_prealign')
+
+    assert wf.get_node('t2w_to_b0_wf') is not None
+    assert ('outputnode.structural_aligned', 'structural_image') in _connect_fields(
+        wf, 't2w_to_b0_wf', 'diffprep'
+    )
+    assert ('t2w_unfatsat', 'structural_image') not in _connect_fields(wf, 'inputnode', 'diffprep')
+    # The alignment target is the raw distorted b=0 average of this run
+    assert ('b0_average', 'inputnode.b0_ref') in _connect_fields(wf, 't2wreg_b0s', 't2w_to_b0_wf')
+
+
+def test_drbuddi_callers_supply_a_b0_reference_in_the_sdc_frame(tmp_path):
+    """Every DRBUDDI caller feeds inputnode.b0_ref from a pre-SDC b=0.
+
+    eddy: the pre-eddy b=0 reference; DIFFPREP: the corrected-series b=0
+    average; SHORELine: the motion-corrected b=0 template.
+    """
+    from qsiprep.tests.test_interfaces_diffprep import _base_config, _build
+    from qsiprep.tests.test_workflows_gradwarp import (
+        _cfg_for_fsl,
+        _cfg_for_shoreline,
+        _fsl_wf,
+        _rpe_unit,
+        _shoreline_wf,
+    )
+    from qsiprep.tests.test_workflows_native import _rpe_unit as _native_rpe_unit
+
+    _cfg_for_fsl(tmp_path, 'DRBUDDI')
+    wf = _fsl_wf(tmp_path, _rpe_unit(tmp_path))
+    assert ('outputnode.ref_image', 'inputnode.b0_ref') in _connect_fields(
+        wf, 'pre_eddy_b0_ref_wf', 'drbuddi_sdc_wf'
+    )
+
+    _base_config()
+    wf = _build(_native_rpe_unit(tmp_path), t2w_sdc=True, name='dp_drbuddi_b0ref')
+    assert ('b0_average', 'inputnode.b0_ref') in _connect_fields(
+        wf, 'extract_b0s', 'drbuddi_sdc_wf'
+    )
+
+    _cfg_for_shoreline(tmp_path)
+    wf = _shoreline_wf(tmp_path, _rpe_unit(tmp_path))
+    assert ('outputnode.final_template', 'inputnode.b0_ref') in _connect_fields(
+        wf, 'dwi_hmc_wf', 'drbuddi_sdc_wf'
+    )

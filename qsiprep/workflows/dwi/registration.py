@@ -83,6 +83,66 @@ def init_rotation_search_wf(transform='Rigid', name='rotation_search_wf'):
     return workflow
 
 
+def init_structural_to_b0_alignment_wf(name='structural_to_b0_alignment_wf'):
+    """Pre-align a structural image into the frame of a distorted b=0 reference.
+
+    TORTOISE rigidly registers its structural input to the b=0 internally
+    (DRBUDDI, and EPIREG for DIFFPREP's ``--epi T2Wreg`` mode), but only from
+    a center-of-mass initialization, which cannot recover a large rotation
+    between the anatomical and the dMRI acquisition. Resampling the
+    structural into the b=0 frame first, through an ``antsAI`` rotation
+    search, hands TORTOISE a target already within its capture range. The
+    search transform is deliberately coarse: TORTOISE's own rigid
+    registration provides the fine alignment.
+
+    Parameters
+    ----------
+    name : str
+        Name of workflow (default: ``structural_to_b0_alignment_wf``)
+
+    Inputs
+    ------
+    structural_image
+        Anatomical image (e.g. the unfatsat T2w), in any orientation
+    b0_ref
+        b=0 reference image in the frame the distortion correction runs in
+
+    Outputs
+    -------
+    structural_aligned
+        The structural image resampled onto the b=0 reference grid
+    """
+    workflow = Workflow(name=name)
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=['structural_image', 'b0_ref']), name='inputnode'
+    )
+    outputnode = pe.Node(niu.IdentityInterface(fields=['structural_aligned']), name='outputnode')
+
+    # fixed=b0: antsAI's transform then maps b0-space points to structural
+    # space, which is exactly what resampling onto the b0 grid needs
+    rotation_search_wf = init_rotation_search_wf(transform='Rigid')
+    resample_structural = pe.Node(
+        ants.ApplyTransforms(dimension=3, interpolation='LanczosWindowedSinc'),
+        name='resample_structural',
+    )
+
+    workflow.connect([
+        (inputnode, rotation_search_wf, [
+            ('b0_ref', 'inputnode.fixed_image'),
+            ('structural_image', 'inputnode.moving_image'),
+        ]),
+        (inputnode, resample_structural, [
+            ('structural_image', 'input_image'),
+            ('b0_ref', 'reference_image'),
+        ]),
+        (rotation_search_wf, resample_structural, [
+            ('outputnode.initial_transform', 'transforms'),
+        ]),
+        (resample_structural, outputnode, [('output_image', 'structural_aligned')]),
+    ])  # fmt:skip
+    return workflow
+
+
 def init_b0_to_anat_registration_wf(
     write_report=True, transform_type='Rigid', name='b0_anat_coreg'
 ):
