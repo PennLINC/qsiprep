@@ -560,7 +560,7 @@ def _build_parser(**kwargs):
         action='store',
         nargs='+',
         default=[],
-        choices=['fieldmaps', 'pepolar-dwis', 't2w', 'phase', 'sdc', 'shims', 'fov'],
+        choices=['fieldmaps', 'pepolar-dwis', 't2w', 'phase', 'sdc', 'shims', 'fov', 'gradients'],
         help=(
             'Ignore selected aspects of the input dataset to disable corresponding '
             'parts of the workflow (a space delimited list). '
@@ -574,7 +574,44 @@ def _build_parser(**kwargs):
             'off). '
             '"shims" treats all ShimSetting values as compatible when grouping scans. '
             '"fov" concatenates series with differently-oriented fields of view anyway '
-            '(distortion corrections will be misapplied).'
+            '(distortion corrections will be misapplied). '
+            '"gradients" disables gradient nonlinearity correction entirely, '
+            'including the voxelwise gradient deviation map.'
+        ),
+    )
+    g_conf.add_argument(
+        '--force',
+        required=False,
+        action='store',
+        nargs='+',
+        default=[],
+        choices=['gradients', 'sdc-anat-reference'],
+        help=(
+            'Force selected corrections on, overriding what the input metadata '
+            'implies (a space delimited list). "gradients" applies the full 3D '
+            'gradient nonlinearity correction to every DWI run regardless of the '
+            'ImageType field, for data whose DIS2D/DIS3D tags are absent or '
+            'untrustworthy. Requires --gradient-file. '
+            '"sdc-anat-reference" escalates --sdc-anat-reference from a fallback '
+            'to an override: the selected anatomical reference replaces the '
+            'fieldmap application for EVERY DWI series. Requires an '
+            '--sdc-anat-reference other than "none".',
+        ),
+    )
+    g_conf.add_argument(
+        '--gradient-file',
+        required=False,
+        action='store',
+        type=IsFile,
+        help=(
+            'Path to a gradient nonlinearity information file, matching '
+            "TORTOISE's --grad_nonlin: a scanner coefficient file (.grad for "
+            'Siemens, .dat for GE, .gc for the TORTOISE binary format) or an ITK '
+            'displacement field (.nii/.nii.gz). Applies to every DWI run in the '
+            'dataset. Whether the spatial correction is applied to a given run, '
+            "and in which dimensions, is decided from that run's ImageType "
+            'field unless --force/--ignore gradients says otherwise. The '
+            'voxelwise gradient deviation map is written whenever this is given.'
         ),
     )
     g_conf.add_argument(
@@ -1015,17 +1052,6 @@ How to combine the corrected results of an output's correction units.
         help='DEPRECATED: use --sdc-method instead (same values, lowercased).',
     )
     g_fmap.add_argument(
-        '--force',
-        nargs='+',
-        default=[],
-        choices=['sdc-anat-reference'],
-        help='force specific processing choices (a space-delimited list). '
-        '"sdc-anat-reference" escalates --sdc-anat-reference from a fallback '
-        'to an override: the selected anatomical reference replaces the '
-        'fieldmap application for EVERY DWI series. Requires an '
-        '--sdc-anat-reference other than "none".',
-    )
-    g_fmap.add_argument(
         '--sdc-anat-reference',
         action='store',
         default='none',
@@ -1296,6 +1322,10 @@ def parse_args(args=None, namespace=None):
 
         validate_diffprep_config(opts.diffprep_config)
 
+    from ..utils.misc import validate_gradient_flags
+
+    validate_gradient_flags(opts.gradient_file, opts.force, opts.ignore)
+
     if opts.gpu:
         from ..utils.gpu import check_gpu_available
 
@@ -1404,6 +1434,21 @@ def parse_args(args=None, namespace=None):
     # Check and create output and working directories
     config.execution.log_dir.mkdir(exist_ok=True, parents=True)
     work_dir.mkdir(exist_ok=True, parents=True)
+
+    if config.workflow.gradient_file:
+        # TORTOISE's Siemens reader parses comment lines as coefficients and has
+        # no error handling, so a normalization header aborts the tool mid-run.
+        # Swap in a sanitized copy (same basename, so the sidecar's
+        # GradientCoefficientFile is unchanged) and reject a file whose *data*
+        # lines would still abort, while the run has cost nothing.
+        from ..utils.gradcal import sanitize_siemens_coefficients
+
+        try:
+            config.workflow.gradient_file = sanitize_siemens_coefficients(
+                config.workflow.gradient_file, work_dir, logger=build_log
+            )
+        except ValueError as error:
+            parser.error(str(error))
 
     # Force initialization of the BIDSLayout
     config.execution.init()

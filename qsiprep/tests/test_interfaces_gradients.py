@@ -70,3 +70,38 @@ def test_get_fsl_motion_params_identity_transform(tmp_path):
     assert motion_params.shape == (12,)
     np.testing.assert_allclose(motion_params[:3], [1.0, 1.0, 1.0], atol=1e-8)  # scales
     np.testing.assert_allclose(motion_params[3:], np.zeros(9), atol=1e-8)  # shear/rot/trans
+
+
+def test_compose_transforms_places_gradwarp_between_hmc_and_sdc():
+    """TORTOISE composes motion/eddy, then gradwarp, then SDC.
+
+    transform_order is native-to-target and reversed for ANTs, so gradwarp must
+    sit immediately after hmc in the list.
+    """
+    from qsiprep.interfaces.gradients import ComposeTransforms
+
+    order = ComposeTransforms._transform_order_names()
+    assert order.index('gradwarp') == order.index('hmc') + 1
+    assert order.index('gradwarp') < order.index('fieldwarp')
+
+
+def test_compose_transforms_stage_names_match_the_runtime_lookup():
+    """Every stage name must have an entry in _run_interface's by_name dict.
+
+    A stage present in _TRANSFORM_STAGES but missing from that dict raises
+    KeyError at runtime, long after the graph is built.
+    """
+    import inspect
+
+    from qsiprep.interfaces.gradients import ComposeTransforms
+
+    source = inspect.getsource(ComposeTransforms._run_interface)
+    for stage in ComposeTransforms._TRANSFORM_STAGES:
+        assert f"'{stage}':" in source, stage
+
+
+def test_compose_transforms_gradwarp_is_not_forwarded_to_apply_transforms():
+    """Every custom input must be popped before ifargs reaches ApplyTransforms."""
+    from qsiprep.interfaces.gradients import ComposeTransforms
+
+    assert 'gradwarp' in ComposeTransforms._popped_keys()

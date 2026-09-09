@@ -590,6 +590,8 @@ class workflow(_Config):
     ``force`` by the parser)."""
     gpu = None
     """Tasks to run on the GPU (see ``qsiprep.utils.gpu``)."""
+    gradient_file = None
+    """Gradient nonlinearity coefficient file or displacement field."""
     hmc_method = None
     """Which software corrects head motion: eddy, shoreline or tortoise."""
     hmc_model = None
@@ -716,6 +718,12 @@ class workflow(_Config):
         if not cls.acpc_anchor:
             return None
         return parse_space_token(cls.acpc_anchor)[0]
+
+    # Settings holding a Path must be listed here. ``get()`` only stringifies
+    # what ``_paths`` names, and toml writes anything else as its repr, so an
+    # unlisted Path reaches the workflow-building subprocess as the literal
+    # string "PosixPath('/path')".
+    _paths = ('gradient_file',)
 
 
 class loggers:
