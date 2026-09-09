@@ -345,6 +345,11 @@ class ComposeTransformsInputSpec(ApplyTransformsInputSpec):
     reference_image = File(exists=True, mandatory=True, desc='output grid')
     # Transforms to apply
     hmc_affines = InputMultiObject(File(exists=True), desc='head motion correction affines')
+    gradwarp = InputMultiObject(
+        File(exists=True),
+        mandatory=False,
+        desc='gradient nonlinearity displacement field, in native DWI space',
+    )
     fieldwarps = InputMultiObject(
         File(exists=True), mandtory=False, desc='SDC unwarping transform'
     )
@@ -386,6 +391,49 @@ class ComposeTransforms(SimpleInterface):
     input_spec = ComposeTransformsInputSpec
     output_spec = ComposeTransformsOutputSpec
 
+    #: Transform stages, native-to-target. Reversed for ANTs before use.
+    #: gradwarp sits between hmc and fieldwarp, matching TORTOISE's
+    #: FINALDATA.cxx:930-976 composite order.
+    _TRANSFORM_STAGES = (
+        'hmc',
+        'gradwarp',
+        'fieldwarp',
+        'to b=0 affine',
+        'to b=0 warp',
+        'b=0 to T1w',
+    )
+
+    #: Inputs consumed here that must not be forwarded to ApplyTransforms.
+    _POPPED_KEYS = (
+        'environ',
+        'ignore_exception',
+        'print_out_composite_warp_file',
+        'terminal_output',
+        'output_image',
+        'input_image',
+        'transforms',
+        'dwi_files',
+        'original_b0_indices',
+        'hmc_affines',
+        'gradwarp',
+        'b0_to_intramodal_template_transforms',
+        'intramodal_template_to_t1_affine',
+        'intramodal_template_to_t1_warp',
+        'fieldwarps',
+        'hmcsdc_dwi_ref_to_t1w_affine',
+        'interpolation',
+        't1_2_mni_forward_transform',
+        'copy_dtype',
+    )
+
+    @classmethod
+    def _transform_order_names(cls):
+        return list(cls._TRANSFORM_STAGES)
+
+    @classmethod
+    def _popped_keys(cls):
+        return list(cls._POPPED_KEYS)
+
     def _run_interface(self, runtime):
         dwi_files = self.inputs.dwi_files
         num_dwis = len(dwi_files)
@@ -410,6 +458,11 @@ class ComposeTransforms(SimpleInterface):
                 LOGGER.info('using DRBUDDI warps!')
             else:
                 LOGGER.info('No Fieldwarps will be used')
+
+        gradwarp = self.inputs.gradwarp
+        if isdefined(gradwarp) and len(gradwarp) == 1:
+            LOGGER.info('using a single gradwarp field for all DWI files')
+            gradwarp = gradwarp * num_dwis
 
         # The affine transform to the t1 can come from hmcsdc or the intramodal template
         coreg_to_t1 = traits.Undefined
@@ -443,13 +496,15 @@ class ComposeTransforms(SimpleInterface):
         if isdefined(intramodal_template_to_t1_warp):
             intramodal_template_to_t1_affine = [intramodal_template_to_t1_warp] * num_dwis
 
-        transform_order = [
-            (hmc_affines, 'hmc'),
-            (fieldwarps, 'fieldwarp'),
-            (intramodal_affine, 'to b=0 affine'),
-            (intramodal_warp, 'to b=0 warp'),
-            (coreg_to_t1, 'b=0 to T1w'),
-        ]
+        by_name = {
+            'hmc': hmc_affines,
+            'gradwarp': gradwarp,
+            'fieldwarp': fieldwarps,
+            'to b=0 affine': intramodal_affine,
+            'to b=0 warp': intramodal_warp,
+            'b=0 to T1w': coreg_to_t1,
+        }
+        transform_order = [(by_name[name], name) for name in self._TRANSFORM_STAGES]
 
         for transform_list, transform_name in transform_order:
             LOGGER.info(transform_name)
@@ -494,26 +549,7 @@ class ComposeTransforms(SimpleInterface):
         save_cmd = ifargs.pop('save_cmd')
 
         # Remove certain keys
-        for key in [
-            'environ',
-            'ignore_exception',
-            'print_out_composite_warp_file',
-            'terminal_output',
-            'output_image',
-            'input_image',
-            'transforms',
-            'dwi_files',
-            'original_b0_indices',
-            'hmc_affines',
-            'b0_to_intramodal_template_transforms',
-            'intramodal_template_to_t1_affine',
-            'intramodal_template_to_t1_warp',
-            'fieldwarps',
-            'hmcsdc_dwi_ref_to_t1w_affine',
-            'interpolation',
-            't1_2_mni_forward_transform',
-            'copy_dtype',
-        ]:
+        for key in self._POPPED_KEYS:
             ifargs.pop(key, None)
 
         # In qsiprep the transforms have already been merged

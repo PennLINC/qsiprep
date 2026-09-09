@@ -886,6 +886,69 @@ def test_parser_rejects_removed_diffprep_hmc_models(tmp_path):
             )
 
 
+def test_parser_accepts_force_gradients_and_gradient_file(tmp_path):
+    """--force gradients and --gradient-file land on the namespace under those dests."""
+    from qsiprep.cli.parser import _build_parser
+    from qsiprep.tests.gradient_fixtures import write_siemens_grad
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    coeff = write_siemens_grad(tmp_path / 'coeff.grad')
+    opts = parser.parse_args(
+        [
+            str(bids),
+            str(out),
+            'participant',
+            '--force',
+            'gradients',
+            '--gradient-file',
+            str(coeff),
+            '--output-resolution',
+            '2',
+        ]
+    )
+    assert opts.force == ['gradients']
+    assert opts.gradient_file == coeff
+
+
+def test_parser_accepts_ignore_gradients(tmp_path):
+    """'gradients' extends the existing --ignore choices."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    opts = parser.parse_args(
+        [str(bids), str(out), 'participant', '--ignore', 'gradients', '--output-resolution', '2']
+    )
+    assert opts.ignore == ['gradients']
+
+
+def test_parser_rejects_unknown_force_value(tmp_path):
+    """--force only ever accepts "gradients" today."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                str(bids),
+                str(out),
+                'participant',
+                '--force',
+                'bogus',
+                '--output-resolution',
+                '2',
+            ]
+        )
+
+
 def test_validate_diffprep_config_missing(tmp_path):
     from qsiprep.utils.misc import validate_diffprep_config
 
@@ -921,6 +984,59 @@ def test_validate_diffprep_config_accepts_each_correction_mode(tmp_path):
         cfg = tmp_path / f'{mode}.json'
         cfg.write_text(json.dumps({'correction_mode': mode}))
         validate_diffprep_config(str(cfg))
+
+
+def test_validate_gradient_flags_force_and_ignore_conflict(tmp_path):
+    from qsiprep.tests.gradient_fixtures import write_siemens_grad
+    from qsiprep.utils.misc import validate_gradient_flags
+
+    coeff = write_siemens_grad(tmp_path / 'coeff.grad')
+    with pytest.raises(ValueError, match='contradictory'):
+        validate_gradient_flags(str(coeff), force=['gradients'], ignore=['gradients'])
+
+
+def test_validate_gradient_flags_force_requires_gradient_file():
+    from qsiprep.utils.misc import validate_gradient_flags
+
+    with pytest.raises(ValueError, match='requires --gradient-file'):
+        validate_gradient_flags(None, force=['gradients'], ignore=[])
+
+
+def test_validate_gradient_flags_rejects_unknown_extension(tmp_path):
+    """TORTOISE only warns and silently disables correction. Silently producing
+    uncorrected output is the wrong default for a batch pipeline."""
+    from qsiprep.utils.misc import validate_gradient_flags
+
+    bogus = tmp_path / 'coeff.txt'
+    bogus.write_text('not a coefficient file')
+    with pytest.raises(ValueError, match='gradient-file'):
+        validate_gradient_flags(str(bogus), force=[], ignore=[])
+
+
+@pytest.mark.parametrize('extension', ['.grad', '.dat', '.gc', '.nii', '.nii.gz'])
+def test_validate_gradient_flags_accepts_every_tortoise_extension(tmp_path, extension):
+    from qsiprep.utils.misc import validate_gradient_flags
+
+    path = tmp_path / f'coeff{extension}'
+    validate_gradient_flags(str(path), force=[], ignore=[])
+
+
+def test_validate_gradient_flags_default_is_a_noop():
+    """No flags at all: the feature is off and nothing is raised."""
+    from qsiprep.utils.misc import validate_gradient_flags
+
+    validate_gradient_flags(None, force=[], ignore=[])
+
+
+def test_validate_gradient_flags_warns_when_ignored_gradient_file_is_unused(tmp_path, caplog):
+    from qsiprep.tests.gradient_fixtures import write_siemens_grad
+    from qsiprep.utils.misc import validate_gradient_flags
+
+    coeff = write_siemens_grad(tmp_path / 'coeff.grad')
+    with caplog.at_level('WARNING', logger='cli'):
+        validate_gradient_flags(str(coeff), force=[], ignore=['gradients'])
+
+    assert 'unused' in caplog.text.lower()
 
 
 def _check_arg_specified(argname, arglist):
