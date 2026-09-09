@@ -254,9 +254,10 @@ sections:
       This panel shows the alignment of the reference EPI (dMRI b=0) image to the
       anatomical reference image.
       The reference EPI has been contrast enhanced and susceptibility-distortion
-      corrected (if applicable) for improved anatomical fidelity.
-      The anatomical image has been resampled into EPI space, as well as the
-      anatomical white matter mask, which appears as a red contour.
+      corrected (if applicable) for improved anatomical fidelity, and has been
+      resampled into the anatomical space.
+      The boundary of the anatomical white matter mask appears as a red contour
+      over both images.
     static: false
     subtitle: Alignment of dMRI and anatomical MRI data (coregistration)
 

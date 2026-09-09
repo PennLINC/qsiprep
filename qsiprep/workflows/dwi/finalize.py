@@ -11,8 +11,10 @@ import os
 from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
+from nireports.interfaces.reporting.base import (
+    SimpleBeforeAfterRPT as SimpleBeforeAfter,
+)
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 from qsiplan.adapters import unit_to_sidecar
 
 from ... import config
@@ -251,7 +253,7 @@ def init_dwi_finalize_wf(
         )
 
         b0_to_im_template = pe.Node(
-            SimpleBeforeAfterRPT(
+            SimpleBeforeAfter(
                 before_label='b=0 (header only)',
                 after_label='b=0 aligned to template',
             ),

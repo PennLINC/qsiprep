@@ -22,12 +22,12 @@ import os
 from nipype.interfaces import ants, fsl
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
+from nireports.interfaces.reporting.base import (
+    SimpleBeforeAfterRPT as SimpleBeforeAfter,
+)
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from niworkflows.interfaces.nibabel import DemeanImage, FilledImageLike
-from niworkflows.interfaces.reportlets.registration import (
-    ANTSApplyTransformsRPT,
-    ANTSRegistrationRPT,
-)
+from niworkflows.interfaces.reportlets.registration import ANTSApplyTransformsRPT
 
 from ... import config
 from ...data import load as load_data
@@ -123,14 +123,21 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
     if config.execution.sloppy:
         ants_settings = str(load_data('fmap-any_registration_testing.json'))
     fmap2ref_reg = pe.Node(
-        ANTSRegistrationRPT(
-            generate_report=True,
+        ants.Registration(
             from_file=ants_settings,
             output_inverse_warped_image=True,
             output_warped_image=True,
         ),
         name='fmap2ref_reg',
         n_procs=omp_nthreads,
+    )
+
+    # Flicker the EPI reference against the fieldmap reference that the
+    # registration resampled onto it.
+    fmap2ref_rpt = pe.Node(
+        SimpleBeforeAfter(before_label='Fieldmap reference', after_label='EPI reference'),
+        name='fmap2ref_rpt',
+        mem_gb=0.1,
     )
 
     ds_report_reg = pe.Node(
@@ -205,7 +212,9 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
         (fmap2ref_reg, fmap_mask2ref_apply, [('composite_transform', 'transforms')]),
         (fmap2ref_apply, ds_report_reg_vsm, [('out_report', 'in_file')]),
         (inputnode, fmap2ref_reg, [('in_reference_brain', 'fixed_image')]),
-        (fmap2ref_reg, ds_report_reg, [('out_report', 'in_file')]),
+        (fmap2ref_reg, fmap2ref_rpt, [('warped_image', 'before')]),
+        (inputnode, fmap2ref_rpt, [('in_reference_brain', 'after')]),
+        (fmap2ref_rpt, ds_report_reg, [('out_report', 'in_file')]),
         (inputnode, fmap2ref_apply, [('fmap', 'input_image')]),
         (inputnode, fmap_mask2ref_apply, [('fmap_mask', 'input_image')]),
         (fmap2ref_apply, torads, [('output_image', 'in_file')]),
@@ -286,7 +295,6 @@ def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf'):
 
     """
     from niworkflows.interfaces.fixes import FixHeaderApplyTransforms as ApplyTransforms
-    from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 
     from ...interfaces.images import ExtractWM
 
@@ -308,7 +316,7 @@ def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf'):
 
     sel_wm = pe.Node(ExtractWM(), name='sel_wm', mem_gb=DEFAULT_MEMORY_MIN_GB)
 
-    dwi_rpt = pe.Node(SimpleBeforeAfterRPT(), name='dwi_rpt', mem_gb=0.1)
+    dwi_rpt = pe.Node(SimpleBeforeAfter(), name='dwi_rpt', mem_gb=0.1)
 
     workflow.connect([
         (inputnode, dwi_rpt, [
