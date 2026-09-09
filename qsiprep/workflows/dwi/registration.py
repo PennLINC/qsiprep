@@ -227,9 +227,6 @@ def init_direct_b0_acpc_wf(write_report=True, name='b0_anat_coreg'):
 
     workflow = Workflow(name=name)
 
-    # Defines a coregistration operation. The reportlet for this workflow is
-    # ACPCReport's translation-vs-rigid comparison, not a registration flicker,
-    # so this node renders nothing.
     ants_settings = str(load_data('intermodal_ACPC.json'))
     acpc_reg = pe.Node(
         ants.Registration(from_file=ants_settings),
