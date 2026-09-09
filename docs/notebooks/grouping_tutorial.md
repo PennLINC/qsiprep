@@ -42,6 +42,7 @@ from qsiplan import (
     describe_processing,
     render_html,
     report_text,
+    selection_for_config,
 )
 
 SUBJECT = '/bids/sub-01'
@@ -154,15 +155,19 @@ volumes feed estimation A.
 encodings jointly determine the susceptibility field — opposite blips on one
 axis are just the best-conditioned case. Series encoded `i-` and `j` pool
 into one estimation too. Whether a given tool can consume that shape is a
-*backend* question, answered in the processing previews: TOPUP takes any
-mix of encodings, while DRBUDDI needs a same-axis opposing pair and says so:
+question about the *processing method*, answered in the previews. A preview
+takes an explicit method selection — the head-motion-correction method plus
+the distortion-correction tool, built here with
+`selection_for_config('tortoise', 'drbuddi')` (section 8 tours the full
+vocabulary): TOPUP takes any mix of encodings, while DRBUDDI needs a
+same-axis opposing pair and says so:
 
 ```{code-cell} ipython3
 lr = scan('sub-01_dir-LR_dwi.nii.gz', PhaseEncodingDirection='i-')
 pa = scan('sub-01_dir-PA_dwi.nii.gz', PhaseEncodingDirection='j')
 g = group(lr, pa)
 print(report_text(g))
-print(describe_processing(g, 'tortoise'))
+print(describe_processing(g, selection_for_config('tortoise', 'drbuddi')))
 ```
 
 ## 3. Curating fieldmaps: `B0FieldIdentifier` / `B0FieldSource`
@@ -419,12 +424,25 @@ print(report_text(g))
 
 ## 8. Same grouping, different pipelines
 
-The grouping describes your *data*. How a processing backend consumes it is a
-separate decision — and the previews spell out the difference. The FSL path
-pools all b=0 images into one TOPUP estimation and models everything jointly in
-eddy; the TORTOISE path motion-corrects each distortion group separately and
-feeds blip-up/blip-down to DRBUDDI; the two-stage path runs TOPUP+eddy first
-and then refines with DRBUDDI.
+The grouping describes your *data*. How processing consumes it is a separate
+decision with **two axes**, matching the CLI:
+
+- **`--hmc-method`** picks the head-motion/eddy-current correction: `eddy`
+  (FSL), `tortoise` (TORTOISE's DIFFPREP), or `shoreline` (with
+  `--shoreline-model` naming its signal model).
+- **`--sdc-method`** picks the PEPOLAR susceptibility-correction tool chain:
+  `topup`, `drbuddi`, or `topup+drbuddi` (TOPUP first, refined by DRBUDDI).
+  The `topup` chains require `--hmc-method eddy`, which consumes TOPUP's
+  field during eddy.
+
+Earlier releases offered one-word backend names (`fsl`, `tortoise`,
+`mixed`); they are gone because a single word silently chose both axes at
+once. `selection_for_config(hmc_method, sdc_method)` turns the CLI
+vocabulary into a selection, and the previews spell out the consequences:
+`eddy + topup` pools all b=0 images into one TOPUP estimation and models
+everything jointly in eddy; `tortoise + drbuddi` motion-corrects each
+distortion group separately and feeds blip-up/blip-down to DRBUDDI;
+`eddy + topup+drbuddi` runs TOPUP+eddy first and then refines with DRBUDDI.
 
 ```{code-cell} ipython3
 runs = [
@@ -432,13 +450,18 @@ runs = [
     scan('sub-01_dir-PA_dwi.nii.gz', PhaseEncodingDirection='j'),
 ]
 g = group(*runs)
-for backend in ('fsl', 'tortoise', 'mixed'):
-    print(describe_processing(g, backend))
+for hmc_method, sdc_method in (
+    ('eddy', 'topup'),
+    ('tortoise', 'drbuddi'),
+    ('eddy', 'topup+drbuddi'),
+):
+    print(describe_processing(g, selection_for_config(hmc_method, sdc_method)))
 ```
 
-The text preview above is where the per-backend steps live. The HTML grouping
-page concentrates on the grouping itself — which scans combine, which fieldmap
-corrects which group, and the resulting sampling scheme.
+The text preview above is where the per-method steps live (each is titled
+with the exact flags that select it). The HTML grouping page concentrates on
+the grouping itself — which scans combine, which fieldmap corrects which
+group, and the resulting sampling scheme.
 
 ## Appendix: `IntendedFor` (deprecated)
 
