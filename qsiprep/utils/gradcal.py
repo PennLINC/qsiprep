@@ -224,7 +224,7 @@ def sanitize_siemens_coefficients(gradient_file, dest_dir, logger=None):
 
 
 def describe(gradient_file):
-    """Report, per line, what the reader would do. Used by ``scripts/check_grad.py``."""
+    """Report, per line, what the reader would do, for inspecting a file by hand."""
     lines = _lines(gradient_file)
     report = []
     for number, line in enumerate(lines, start=1):
