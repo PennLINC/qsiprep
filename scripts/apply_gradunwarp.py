@@ -20,12 +20,15 @@ qsiprep container.
 """
 
 import argparse
+import logging
 import shutil
 import sys
 from pathlib import Path
 
 import nibabel as nb
 import numpy as np
+
+LOGGER = logging.getLogger('apply_gradunwarp')
 
 
 def _parse(argv):
@@ -95,6 +98,7 @@ def _field_summary(field_file, reference_file):
 
 def main(argv):
     options = _parse(argv)
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
     # Nipype interfaces write into the current directory.
     work_dir = options.work_dir.resolve()
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -114,6 +118,7 @@ def main(argv):
         CreateNonlinearityDisplacementMap,
         MaskWarpDimensions,
     )
+    from qsiprep.utils.gradcal import sanitize_siemens_coefficients
     from qsiprep.workflows.dwi.base import _extract_first_volume
     from qsiprep.workflows.dwi.gradwarp import is_displacement_field
 
@@ -121,6 +126,11 @@ def main(argv):
     # has to be reduced first. The field depends only on the sampling grid.
     reference = _extract_first_volume(str(input_file), newpath=str(work_dir))
     print(f'reference volume: {reference}')
+
+    # TORTOISE's Siemens reader parses comment lines as coefficients and aborts
+    # on them. A full run sanitizes the file in parse_args; this script bypasses
+    # the CLI, so it has to do the same or it dies with "what(): stof".
+    gradient_file = sanitize_siemens_coefficients(gradient_file, work_dir, logger=LOGGER)
 
     if is_displacement_field(gradient_file):
         field = str(gradient_file)
