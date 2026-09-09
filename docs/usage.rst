@@ -101,9 +101,13 @@ QSIPrep will assume that all of the volumes are b=0, which will almost certainly
 Complex-Valued Data
 ===================
 
-If you acquire complex-valued data, you should split the data into magnitude and phase files (NOT real and imaginary!).
+If you acquire complex-valued data, split it into BIDS ``part-mag`` (magnitude) and
+``part-phase`` (phase) files. QSIPrep pairs each ``part-phase`` image with its magnitude
+and combines them for complex denoising (with a ``dwidenoise`` or ``dwidenoise2`` denoising
+method, applied before series are concatenated); every downstream step runs on the magnitude.
 
-QSIPrep is not compatible with real and imaginary data.
+``part-real``/``part-imag`` (real/imaginary) parts are not supported: QSIPrep ignores them
+with a warning rather than erroring, so convert them to magnitude and phase first.
 
 
 BIDS-URIs

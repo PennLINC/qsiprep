@@ -35,7 +35,7 @@ dependencies = [
     "psutil <= 5.9.8",
     "pybids >= 0.15.0, < 0.16.0",
     "pyyaml",
-    "qsiplan >= 0.3.1, < 0.4",
+    "qsiplan >= 0.4.0, < 0.5",
     "scikit-image",
     "scikit-learn <= 1.4.0",
     "seaborn",
