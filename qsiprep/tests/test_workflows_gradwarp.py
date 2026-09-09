@@ -423,23 +423,27 @@ def _trans_wf_gradwarp_sources(wf):
     ]
 
 
-def test_dwi_trans_wf_exposes_a_gradwarp_field_input():
+def _trans_wf(name='trans_wf'):
+    from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
 
-    config.workflow.output_resolution = 1.2
-    wf = init_dwi_trans_wf(
-        source_file='sub-1_dwi.nii.gz', mem_gb=1, name='trans_wf', use_compression=False
+    (spec,) = parse_output_spaces(['acpc:res-1p2mm'])
+    return init_dwi_trans_wf(
+        source_file='sub-1_dwi.nii.gz',
+        mem_gb=1,
+        resolution=spec.resolution,
+        name=name,
+        use_compression=False,
     )
+
+
+def test_dwi_trans_wf_exposes_a_gradwarp_field_input():
+    wf = _trans_wf()
     assert 'gradwarp_field' in wf.get_node('inputnode').inputs.trait_get()
 
 
 def test_dwi_trans_wf_connects_gradwarp_to_compose_transforms():
-    from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
-
-    config.workflow.output_resolution = 1.2
-    wf = init_dwi_trans_wf(
-        source_file='sub-1_dwi.nii.gz', mem_gb=1, name='trans_wf', use_compression=False
-    )
+    wf = _trans_wf()
     assert _trans_wf_gradwarp_sources(wf) == ['inputnode']
 
 
@@ -470,26 +474,29 @@ def test_listify_rejects_a_list_input():
         _listify(['a.nii.gz', 'b.nii.gz'])
 
 
-def _finalize_cfg(tmp_path):
+def _finalize_cfg(tmp_path, output_spaces=('acpc:res-1p2mm',)):
     config.execution.output_dir = str(tmp_path)
     config.execution.sloppy = False
     config.workflow.pepolar_method = 'TOPUP'
-    config.workflow.output_resolution = 1.2
+    config.workflow.output_spaces = list(output_spaces)
     config.workflow.intramodal_template_iters = 0
     config.nipype.omp_nthreads = 1
 
 
-def _finalize_wf(tmp_path, write_derivatives=False):
+def _finalize_wf(tmp_path, write_derivatives=False, output_spaces=('acpc:res-1p2mm',)):
+    from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.dwi.finalize import init_dwi_finalize_wf
 
-    _finalize_cfg(tmp_path)
+    _finalize_cfg(tmp_path, output_spaces=output_spaces)
     dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz')
     unit = make_preproc_unit([dwi])
+    specs = parse_output_spaces(config.workflow.output_spaces)
     return init_dwi_finalize_wf(
         unit=unit,
         name='dwi_finalize_wf',
         source_file=dwi,
         output_prefix='sub-01',
+        acpc_specs=[s for s in specs if not s.standard],
         write_derivatives=write_derivatives,
     )
 
@@ -501,7 +508,9 @@ def test_dwi_finalize_wf_exposes_a_gradwarp_field_input(tmp_path):
 
 def test_dwi_finalize_wf_connects_gradwarp_field_to_trans_wf(tmp_path):
     wf = _finalize_wf(tmp_path)
-    trans_wf = wf.get_node('transform_dwis_t1')
+    # One dwi_trans_wf is built per requested ACPC resolution; a single
+    # resolution takes the unsuffixed name.
+    trans_wf = wf.get_node('dwi_trans_wf')
     edge = wf._graph.get_edge_data(wf.get_node('inputnode'), trans_wf)
     assert edge is not None
     assert ('gradwarp_field', 'inputnode.gradwarp_field') in edge['connect']
@@ -542,13 +551,13 @@ def _dwi_preproc_cfg(tmp_path):
     config.workflow.denoise_method = 'dwidenoise'
     config.workflow.dwi_denoise_window = 5
     config.workflow.shoreline_iters = 2
-    config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
     config.workflow.anat_modality = 't1w'
     config.workflow.b0_to_anat_transform = 'Rigid'
     config.workflow.hmc_transform = 'Affine'
 
 
 def _preproc_wf(tmp_path, image_type=None):
+    from qsiprep.utils.spaces import SpaceSpec
     from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
 
     _dwi_preproc_cfg(tmp_path)
@@ -564,7 +573,7 @@ def _preproc_wf(tmp_path, image_type=None):
         t2w_sdc=False,
         output_prefix='sub-01',
         source_file=dwi,
-        anatomical_template='MNI152NLin2009cAsym',
+        acpc_anchor=SpaceSpec(space='MNI152NLin2009cAsym'),
     )
 
 
@@ -659,6 +668,7 @@ def test_dwi_preproc_wf_extracts_a_reference_for_a_displacement_field(tmp_path):
     import nibabel as nb
     import numpy as np
 
+    from qsiprep.utils.spaces import SpaceSpec
     from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
 
     _dwi_preproc_cfg(tmp_path)
@@ -672,7 +682,7 @@ def test_dwi_preproc_wf_extracts_a_reference_for_a_displacement_field(tmp_path):
         t2w_sdc=False,
         output_prefix='sub-01',
         source_file=dwi,
-        anatomical_template='MNI152NLin2009cAsym',
+        acpc_anchor=SpaceSpec(space='MNI152NLin2009cAsym'),
     )
 
     gradwarp_ref = wf.get_node('gradwarp_ref')
@@ -724,6 +734,7 @@ def test_gradunwarp_reportlet_desc_is_registered_in_the_report_spec():
 
 def test_dwi_preproc_wf_without_gradient_file_has_no_gradwarp_wf(tmp_path):
     """The default path (no --gradient-coils) is untouched."""
+    from qsiprep.utils.spaces import SpaceSpec
     from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
 
     _dwi_preproc_cfg(tmp_path)
@@ -735,7 +746,7 @@ def test_dwi_preproc_wf_without_gradient_file_has_no_gradwarp_wf(tmp_path):
         t2w_sdc=False,
         output_prefix='sub-01',
         source_file=dwi,
-        anatomical_template='MNI152NLin2009cAsym',
+        acpc_anchor=SpaceSpec(space='MNI152NLin2009cAsym'),
     )
 
     assert wf.get_node('gradwarp_wf') is None
@@ -847,7 +858,6 @@ def _cfg_for_fsl(tmp_path, pepolar_method):
     config.workflow.b0_threshold = 100
     config.workflow.eddy_config = None
     config.workflow.denoise_method = 'dwidenoise'
-    config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
     config.execution.sloppy = False
     config.nipype.omp_nthreads = 1
 
@@ -972,7 +982,6 @@ def _cfg_for_diffprep(tmp_path):
     config.workflow.diffprep_config = None
     config.workflow.b0_threshold = 100
     config.workflow.pepolar_method = 'DRBUDDI'
-    config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
     config.workflow.gpu = None
     config.execution.sloppy = False
     config.nipype.omp_nthreads = 1
@@ -1117,19 +1126,19 @@ def _cfg_for_shoreline(tmp_path):
     config.workflow.b0_threshold = 100
     config.workflow.b0_motion_corr_to = 'iterative'
     config.workflow.pepolar_method = 'DRBUDDI'
-    config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
     config.execution.sloppy = False
     config.nipype.omp_nthreads = 1
 
 
 def _shoreline_wf(tmp_path, unit):
+    from qsiprep.utils.spaces import SpaceSpec
     from qsiprep.workflows.dwi.hmc_sdc import init_qsiprep_hmcsdc_wf
 
     return init_qsiprep_hmcsdc_wf(
         unit,
         source_file='/data/x_dwi.nii.gz',
         t2w_sdc=False,
-        anatomical_template='MNI152NLin2009cAsym',
+        acpc_anchor=SpaceSpec(space='MNI152NLin2009cAsym'),
     )
 
 
@@ -1269,22 +1278,30 @@ def test_graddev_filename_renders_with_space_entity(tmp_path):
     assert out.endswith('sub-01_space-ACPC_graddev.nii.gz')
 
 
-def _finalize_wf_with_gradients(tmp_path, image_type=None, write_derivatives=True):
+def _finalize_wf_with_gradients(
+    tmp_path,
+    image_type=None,
+    write_derivatives=True,
+    output_spaces=('acpc:res-1p2mm',),
+):
     """A finalize_wf with a resolved gradwarp plan, for the grad_dev tests."""
+    from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.dwi.finalize import init_dwi_finalize_wf
 
-    _finalize_cfg(tmp_path)
+    _finalize_cfg(tmp_path, output_spaces=output_spaces)
     config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
     dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz')
     metadata = {'Manufacturer': 'SIEMENS'}
     if image_type is not None:
         metadata['ImageType'] = image_type
     unit = make_preproc_unit([dwi], metadata=metadata)
+    specs = parse_output_spaces(config.workflow.output_spaces)
     return init_dwi_finalize_wf(
         unit=unit,
         name='dwi_finalize_wf',
         source_file=dwi,
         output_prefix='sub-01',
+        acpc_specs=[s for s in specs if not s.standard],
         write_derivatives=write_derivatives,
     )
 
@@ -1343,14 +1360,18 @@ def test_dwi_finalize_wf_grad_dev_initial_image_is_extracted_not_the_raw_4d_seri
 
 def test_dwi_finalize_wf_grad_dev_final_image_is_the_final_b0_reference(tmp_path):
     """The final b0 ref (``init_dwi_reference_wf``'s ``ref_image``) is already a
-    single volume, so ``-f`` needs no extraction -- unlike ``-i``."""
+    single volume, so ``-f`` needs no extraction -- unlike ``-i``.
+
+    It is taken from this resolution's ``final_denoise_wf`` rather than from
+    ``outputnode``, which only ever carries the first requested resolution.
+    """
     wf = _finalize_wf_with_gradients(tmp_path)
 
-    outputnode = wf.get_node('outputnode')
+    denoise_wf = wf.get_node('final_denoise_wf')
     grad_dev = wf.get_node('grad_dev')
-    edge = wf._graph.get_edge_data(outputnode, grad_dev)
+    edge = wf._graph.get_edge_data(denoise_wf, grad_dev)
     assert edge is not None
-    assert ('t1_b0_ref', 'final_image') in edge['connect']
+    assert ('outputnode.t1_b0_ref', 'final_image') in edge['connect']
 
 
 def test_dwi_finalize_wf_grad_dev_sidecar_records_coefficient_basename_only(tmp_path):
@@ -1375,6 +1396,89 @@ def test_dwi_finalize_wf_grad_dev_sidecar_records_the_orientation_approximation(
 
     assert 'CreateGradientNonlinearityBMatrix' in note
     assert 'not by the coregistration transform' in note
+
+
+# ---------------------------------------------------------------------------
+# grad_dev under more than one requested ACPC resolution. The L matrix is
+# voxelwise, so it belongs to an output grid, not to the unit.
+# ---------------------------------------------------------------------------
+
+MULTI_ACPC = ('acpc:res-2mm', 'acpc:res-1p5mm')
+
+
+def test_grad_dev_is_built_for_every_acpc_resolution(tmp_path):
+    """Each requested grid gets its own L map: a 2mm L map does not describe a
+    1.5mm volume."""
+    wf = _finalize_wf_with_gradients(tmp_path, output_spaces=MULTI_ACPC)
+
+    assert wf.get_node('grad_dev_res2mm') is not None
+    assert wf.get_node('grad_dev_res1p5mm') is not None
+    # The unsuffixed name is the single-resolution one and must not appear.
+    assert wf.get_node('grad_dev') is None
+
+
+def test_grad_dev_takes_the_b0_reference_of_its_own_resolution(tmp_path):
+    """A cross-wired final_image would orient the L matrix off the wrong grid."""
+    wf = _finalize_wf_with_gradients(tmp_path, output_spaces=MULTI_ACPC)
+
+    for suffix in ('_res2mm', '_res1p5mm'):
+        denoise_wf = wf.get_node(f'final_denoise_wf{suffix}')
+        edge = wf._graph.get_edge_data(denoise_wf, wf.get_node(f'grad_dev{suffix}'))
+        assert edge is not None
+        assert ('outputnode.t1_b0_ref', 'final_image') in edge['connect']
+
+
+def test_grad_dev_initial_reference_is_extracted_once(tmp_path):
+    """``-i`` is the raw native b=0, which does not depend on the output grid."""
+    wf = _finalize_wf_with_gradients(tmp_path, output_spaces=MULTI_ACPC)
+
+    initial_ref = wf.get_node('grad_dev_initial_ref')
+    assert initial_ref is not None
+    assert wf.get_node('grad_dev_initial_ref_res2mm') is None
+
+    fed = [
+        node.name
+        for _, node in wf._graph.out_edges(initial_ref)
+        if node.name.startswith('grad_dev')
+    ]
+    assert sorted(fed) == ['grad_dev_res1p5mm', 'grad_dev_res2mm']
+
+
+def test_graddev_paths_do_not_collide_across_acpc_resolutions(tmp_path):
+    """Distinct entities are not enough -- io_spec.json decides what survives
+    into the filename, so render the paths and check they differ."""
+    from qsiprep.tests.test_output_spaces_naming import (
+        assert_no_collisions,
+        render_datasink_paths,
+    )
+
+    wf = _finalize_wf_with_gradients(tmp_path, output_spaces=MULTI_ACPC)
+
+    found = {}
+    for name in ('ds_grad_dev_res2mm', 'ds_grad_dev_res1p5mm'):
+        node = wf.get_node(name)
+        assert node is not None
+        found[name] = {
+            'space': node.inputs.space,
+            'suffix': node.inputs.suffix,
+            'extension': node.inputs.extension,
+            'res': node.inputs.res,
+        }
+
+    paths = render_datasink_paths(found, {'subject': '01', 'datatype': 'dwi'})
+    assert_no_collisions(paths)
+    assert paths['ds_grad_dev_res2mm'].endswith('sub-01_space-ACPC_res-2mm_graddev.nii.gz')
+    assert paths['ds_grad_dev_res1p5mm'].endswith('sub-01_space-ACPC_res-1p5mm_graddev.nii.gz')
+
+
+def test_gradient_warp_dimensions_is_written_for_every_resolution(tmp_path):
+    """Every resolution writes its own preproc sidecar, so each needs the key."""
+    wf = _finalize_wf_with_gradients(tmp_path, output_spaces=MULTI_ACPC)
+
+    for suffix in ('_res2mm', '_res1p5mm'):
+        sidecar = wf.get_node(f'merged_sidecar{suffix}')
+        assert sidecar is not None
+        assert sidecar.inputs.sidecar_data['GradientWarpDimensions'] == '3D'
 
 
 def test_dwi_finalize_wf_adds_gradient_warp_dimensions_to_the_main_sidecar(tmp_path):
