@@ -1329,11 +1329,7 @@ def parse_args(args=None, namespace=None):
     # Examine the available sessions for each participant. Anatomical-only runs
     # do not require DWI data, so use the requested anatomical modality to
     # discover sessions in that case.
-    session_suffix = (
-        [config.workflow.anat_modality]
-        if config.workflow.anat_only
-        else ['dwi']
-    )
+    session_suffix = [config.workflow.anat_modality] if config.workflow.anat_only else ['dwi']
     for subject_id in participant_label:
         sessions = config.execution.layout.get_sessions(
             subject=subject_id,
