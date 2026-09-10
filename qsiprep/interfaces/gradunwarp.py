@@ -163,9 +163,13 @@ class _CreateGradientNonlinearityBMatrixOutputSpec(TraitedSpec):
 class CreateGradientNonlinearityBMatrix(CommandLine):
     """Compute the voxelwise gradient deviation tensor.
 
-    Emits the HCP-style 9-component L matrix per voxel. Applied downstream as
-    ``L @ g``: because L carries scaling and shear, not just rotation, both the
-    b-vector and the b-value deviate per voxel.
+    Emits 9 volumes per voxel in the HCP/FSL ``grad_dev`` layout. Read
+    row-major into a 3x3 matrix ``T`` (numpy ``reshape(3, 3)``, C order), the
+    gradient actually applied is ``T.T @ g`` in the image's voxel axes; FSL
+    gets the same result by filling its matrix column-major and applying it
+    directly. Unlike HCP/FSL ``grad_dev`` files the identity is already
+    included (diagonal ~1). Because ``T`` carries scaling and shear, not just
+    rotation, both the b-vector and the b-value deviate per voxel.
     """
 
     input_spec = _CreateGradientNonlinearityBMatrixInputSpec

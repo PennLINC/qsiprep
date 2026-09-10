@@ -346,10 +346,11 @@ Volumetric outputs are written out in ``ACPC`` space ::
 
       # Voxelwise gradient nonlinearity deviation map, present when
       # --gradient-file is given (see "Gradient nonlinearity correction",
-      # below). 9 volumes holding the row-major 3x3 gradient deviation
-      # matrix per voxel; written even when the run needed no spatial
-      # correction, because it addresses the diffusion encoding rather
-      # than voxel position.
+      # below). 9 volumes in the HCP/FSL grad_dev layout: read row-major
+      # into T, the applied gradient is T.T @ g; the identity is already
+      # included. Written even when the run needed no spatial correction,
+      # because it addresses the diffusion encoding rather than voxel
+      # position.
       <source_entities>_space-ACPC_graddev.json
       <source_entities>_space-ACPC_graddev.nii.gz
 

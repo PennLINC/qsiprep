@@ -503,10 +503,17 @@ def init_dwi_finalize_wf(
                 compress=True,
                 meta_dict={
                     'Description': (
-                        'Voxelwise gradient deviation tensor (row-major 3x3 L '
-                        'matrix per voxel). The effective diffusion gradient at '
-                        'a voxel is L @ g; because L carries scaling and shear, '
-                        'both the b-vector and the b-value deviate per voxel.'
+                        'Voxelwise gradient deviation tensor: 9 volumes in the '
+                        'HCP/FSL grad_dev layout. Reading a voxel row-major into '
+                        'a 3x3 matrix T (numpy reshape(3, 3), C order), the '
+                        'gradient actually applied is T.T @ g, where g is the '
+                        "nominal gradient vector in this image's voxel axes "
+                        "(equivalently reshape with order='F' and use T @ g, "
+                        'which is how FSL reads it). The identity is already '
+                        'included (diagonal ~1); unlike HCP/FSL grad_dev files, '
+                        'do not add it. Because T carries scaling and shear as '
+                        'well as rotation, both the b-vector and the b-value '
+                        'deviate per voxel.'
                     ),
                     'GradientCoefficientFile': os.path.basename(gradwarp_plan.coeff_file),
                     'GradientWarpDimensions': gradwarp_plan.warp_dim or 'none',

@@ -237,5 +237,5 @@ def test_bmatrix_runs_on_synthetic_coefficients(tmp_path):
     )
 
     grad_dev = nb.load(result.outputs.grad_dev)
-    # Nine components: the row-major 3x3 L matrix per voxel.
+    # Nine components per voxel (HCP/FSL grad_dev layout; identity included).
     assert grad_dev.shape[-1] == 9

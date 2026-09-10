@@ -194,13 +194,19 @@ is written as ``*_space-ACPC_graddev.nii.gz`` whenever ``--gradient-file`` is
 given and ``--ignore gradients`` is absent -- **including for runs tagged**
 ``DIS3D``. No scanner can correct the diffusion encoding itself: the
 bval/bvec table holds a single value per volume and has nowhere to record
-information that varies across the image. At each voxel, the gradient
-actually applied is ``L @ g``, where ``g`` is the nominal gradient vector and
-``L`` is the voxel's local 3x3 gradient nonlinearity matrix. Because ``L``
-captures scaling and shear rather than a pure rotation, both the b-vector
-*and* the b-value deviate per voxel, not just the direction. The deviation
-map holds this 3x3 matrix, in row-major order, as 9 volumes; downstream tools
-that consume a gradient deviation file (e.g. DSI Studio) can use it directly.
+information that varies across the image. The deviation map holds a 3x3
+matrix per voxel as 9 volumes, in the HCP/FSL ``grad_dev`` layout. Reading a
+voxel row-major into ``T`` (numpy ``reshape(3, 3)``, C order), the gradient
+actually applied is ``T.T @ g``, where ``g`` is the nominal gradient vector
+expressed in the image's voxel axes (LPS+ for QSIPrep outputs); FSL reaches
+the same result by filling its matrix column-major and applying it directly.
+Two things differ from HCP/FSL ``grad_dev`` files: the identity is already
+included (the diagonal is ~1, so do not add it), and the matrix is oriented
+into the output space. Because ``T`` captures scaling and shear rather than a
+pure rotation, both the b-vector *and* the b-value deviate per voxel, not just
+the direction. Downstream tools that consume a gradient deviation file can
+use it directly (DSI Studio auto-detects the missing-identity case; ``odx
+graddev`` rotates already-reconstructed ODFs and peaks with it).
 
 The map is oriented into the output space by a rigid registration that
 TORTOISE's ``CreateGradientNonlinearityBMatrix`` estimates internally between
