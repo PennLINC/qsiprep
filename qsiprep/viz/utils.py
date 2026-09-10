@@ -1,9 +1,34 @@
 """Visualization utilities."""
 
+from contextlib import contextmanager
+
 from lxml import etree
 from nilearn import plotting
 from niworkflows.viz.utils import SVGNS, extract_svg, robust_set_limits, uuid4
 from svgutils.transform import SVGFigure
+
+
+@contextmanager
+def fixed_field_of_view(display):
+    """Keep a nilearn display's field of view fixed while objects are added to it.
+
+    Nilearn grows a display's axes to fit the union of everything drawn on them, so an
+    overlay or contour taken from an image with a larger field of view than the
+    background silently undoes any cropping of the background. When the "before" and
+    "after" images of a reportlet sit on different grids, that leaves the two frames
+    zoomed relative to one another.
+
+    Restoring the limits that the background image established keeps both frames on the
+    same field of view.
+    """
+    limits = {name: (ax.ax.get_xlim(), ax.ax.get_ylim()) for name, ax in display.axes.items()}
+    try:
+        yield display
+    finally:
+        for name, ax in display.axes.items():
+            xlim, ylim = limits[name]
+            ax.ax.set_xlim(*xlim)
+            ax.ax.set_ylim(*ylim)
 
 
 def plot_denoise(
@@ -58,8 +83,9 @@ def plot_denoise(
 
         # Generate nilearn figure
         display = plotting.plot_anat(lowb_nii_cropped, **plot_params)
-        if lowb_contour is not None:
-            display.add_contours(lowb_contour, linewidths=1)
+        with fixed_field_of_view(display):
+            if lowb_contour is not None:
+                display.add_contours(lowb_contour, linewidths=1)
 
         svg = extract_svg(display, compress=compress)
         display.close()
@@ -90,8 +116,9 @@ def plot_denoise(
 
         # Generate nilearn figure
         display = plotting.plot_anat(highb_nii_cropped, **highb_plot_params)
-        if highb_contour is not None:
-            display.add_contours(highb_contour, linewidths=1)
+        with fixed_field_of_view(display):
+            if highb_contour is not None:
+                display.add_contours(highb_contour, linewidths=1)
 
         svg = extract_svg(display, compress=compress)
         display.close()
