@@ -10,7 +10,6 @@ Merge and denoise dwi images
 """
 
 import pandas as pd
-from bids.layout import Query
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
@@ -69,8 +68,8 @@ def init_merge_and_denoise_wf(
     ----------
     unit : :class:`~qsiplan.adapters.PreprocUnit`
         the unit these series belong to; sidecar metadata comes from its
-        records instead of layout re-reads (the layout is still probed for
-        part-phase companion files, which the grouping does not model)
+        records, and each magnitude's ``part-phase`` companion comes from
+        ``unit.dwi_phase_files`` (the plan), so the layout is never re-read
     raw_dwi_files : list
         list of raw (in their original BIDS directory) dwi nifti files
 
@@ -98,7 +97,6 @@ def init_merge_and_denoise_wf(
     workflow = Workflow(name=name)
     omp_nthreads = config.nipype.omp_nthreads
     denoise_before_combining = not config.workflow.denoise_after_combining
-    layout = config.execution.layout
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
@@ -174,18 +172,14 @@ def init_merge_and_denoise_wf(
             _, fname, _ = split_filename(dwi_file)
             wf_name = _get_wf_name(fname).replace('preproc', 'denoise')
 
-            # Set up a strict query for a phase file based on the magnitude file.
-            all_entities = layout.get_entities(metadata=False)
-            # No other non-matching entities allowed
-            query = dict.fromkeys(all_entities.keys(), Query.NONE)
-            query.update(layout.get_file(dwi_file).get_entities())
-            query['part'] = 'phase'
-            phase_files = layout.get(**query)
-            phase_available = False
-            if len(phase_files) == 1:
-                phase_available = True
+            # The part-phase companion of a complex-valued acquisition comes
+            # from the plan: qsiplan pairs each magnitude with its phase sibling
+            # (keyed by the magnitude path) and is the single source of truth, so
+            # there is no layout re-glob here.
+            phase_file = unit.dwi_phase_files.get(dwi_file)
+            phase_available = phase_file is not None
+            if phase_available:
                 config.loggers.workflow.info('Phase file found for %s', dwi_file)
-                phase_file = phase_files[0].path
 
             use_phase = phase_available and 'phase' not in config.workflow.ignore
             if use_phase:

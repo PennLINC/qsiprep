@@ -118,3 +118,66 @@ def test_subject_plan_bridge_constructs_grouping_policy(monkeypatch):
     assert received['subject_data'] == {'dwi': ['scan.nii.gz']}
     assert received['strict'] is False
     assert 'separate_all_dwis' in received
+
+
+def test_complex_dwi_reaches_the_plan_as_a_magnitude_companion(tmp_path):
+    """Contract across the qsiprep<->qsiplan seam for complex-valued DWI.
+
+    Exercises the real grouping/plan (no monkeypatching): qsiprep collects both
+    parts (the ``part`` pre-filter is retired), qsiplan indexes only the
+    magnitude and carries the phase as its companion, and the unit the workflow
+    consumes exposes it through ``dwi_phase_files`` -- keyed by the magnitude
+    path, the way ``init_merge_and_denoise_wf`` looks it up -- with no phase
+    leaking into any series list or sidecar override.
+    """
+    import os.path as op
+
+    from bids.layout import BIDSLayout
+    from qsiplan import build_dwi_grouping
+    from qsiplan.adapters import plan_preproc_units
+    from qsiplan.methods import selection_for_config
+    from qsiplan.plan import compile_plan
+
+    from qsiprep.tests.utils import (
+        COMPLEX_DWI_SKELETON,
+        SHARED_DWI_GRADIENTS,
+        build_test_dataset,
+    )
+    from qsiprep.utils.bids import collect_data
+
+    root = build_test_dataset(
+        tmp_path / 'ds',
+        COMPLEX_DWI_SKELETON,
+        extra_files={
+            **SHARED_DWI_GRADIENTS,
+            'sub-01/dwi/sub-01_dwi.json': {
+                'PhaseEncodingDirection': 'j-',
+                'TotalReadoutTime': 0.05,
+            },
+        },
+        n_volumes=2,
+    )
+    layout = BIDSLayout(root, validate=False)
+
+    # B1: the ``part`` pre-filter is gone, so both parts reach qsiplan.
+    subject_data = collect_data(layout, '01', bids_validate=False)[0]
+    assert sorted(op.basename(f) for f in subject_data['dwi']) == [
+        'sub-01_part-mag_dwi.nii.gz',
+        'sub-01_part-phase_dwi.nii.gz',
+    ]
+
+    # qsiplan is the authoritative split: only the magnitude is a series, and
+    # the phase rides on its record as a companion.
+    grouping = build_dwi_grouping(layout, subject_data, strict=False)
+    assert [op.basename(f) for f in grouping.dwi_files] == ['sub-01_part-mag_dwi.nii.gz']
+    (magnitude,) = grouping.dwi_files
+    assert op.basename(grouping.files[magnitude].phase_path) == 'sub-01_part-phase_dwi.nii.gz'
+
+    # B2: the shape the workflow consumes -- phase reached only through
+    # ``dwi_phase_files``, never as a member series or a sidecar override.
+    plan = compile_plan(grouping, selection_for_config('eddy', 'topup'))
+    (unit,) = plan_preproc_units(grouping, plan)
+    assert unit.dwi_phase_files == {magnitude: grouping.files[magnitude].phase_path}
+    series = (*unit.dwi_files, *unit.plus_files, *unit.minus_files)
+    assert not [path for path in series if 'part-phase' in path]
+    assert not [path for path in unit.sidecar_overrides() if 'part-phase' in path]
