@@ -6,8 +6,9 @@ rotations of a few tens of degrees at most, so a subject positioned very
 differently for the dMRI than for the anatomical (common in infant studies,
 where the head can be rotated toward sideways between scans) converges to a
 rotated local optimum. Each of these registrations now starts from the best
-candidate of an ``antsAI`` grid search over rotations (+-90 degrees per axis)
-run on 4 mm resamples of the inputs.
+candidate of an ``antsAI`` grid search over rotations (+-81 degrees per axis,
+so that a 20-degree grid point lands next to identity) run on 4 mm resamples
+of the inputs.
 
 The intramodal b=0 template registrations and the SyN fieldmap registration are
 deliberately untouched: their inputs share an orientation by construction, and
@@ -23,6 +24,7 @@ The synb0 structural target needs none of this: the synthetic b=0 is produced
 on the native b=0 grid already.
 """
 
+import pytest
 from nipype.interfaces.base import isdefined
 
 
@@ -58,7 +60,7 @@ def test_b0_to_anat_coreg_is_initialized_by_rotation_search():
 
     search = _node(wf, 'rotation_search')
     assert search.inputs.transform[0] == 'Rigid'
-    assert search.inputs.search_factor == (20.0, 0.5)
+    assert search.inputs.search_factor == (20.0, 0.45)
     assert 'initial_moving_transform' in _incoming_fields(wf, 'b0_to_anat')
 
     coreg = _node(wf, 'b0_to_anat')
@@ -95,7 +97,7 @@ def test_t2w_coreg_is_initialized_by_rotation_search():
 
 
 def test_sloppy_mode_narrows_the_search():
-    """CI runs get 8 candidate orientations instead of 1000."""
+    """CI runs get 8 candidate orientations instead of 729."""
     from qsiprep.workflows.dwi.registration import init_rotation_search_wf
 
     _config(sloppy=True)
@@ -106,11 +108,48 @@ def test_sloppy_mode_narrows_the_search():
     _config(sloppy=False)
     wf = init_rotation_search_wf(name='precise_search')
     search = _node(wf, 'rotation_search')
-    assert search.inputs.search_factor == (20.0, 0.5)
+    assert search.inputs.search_factor == (20.0, 0.45)
+
+
+def test_grid_has_a_start_next_to_identity():
+    """With arc 0.5 the 20-degree grid straddles zero (-10, +10); 0.45 lands at -1.
+
+    Most studies roughly align head position, so the common case deserves a
+    candidate next to the identity rather than 10 degrees off it.
+    """
+    import numpy as np
+
+    from qsiprep.workflows.dwi.registration import init_rotation_search_wf
+
+    _config()
+    search = _node(init_rotation_search_wf(name='grid_search'), 'rotation_search')
+    step, arc = search.inputs.search_factor
+    angles = np.arange(-180 * arc, 180 * arc + 1e-6, step)
+    assert np.abs(angles).min() < 2.0, angles
+
+
+@pytest.mark.parametrize(
+    ('ants_version', 'warns'),
+    [('2.5.4', True), ('2.6.0', False), ('2.6.2', False), (None, False)],
+)
+def test_pre_2_6_0_ants_gets_a_warning(monkeypatch, ants_version, warns):
+    """ANTs PR #1861 fixed multi-start state leaking between candidates."""
+    from unittest import mock
+
+    from nipype.interfaces.ants.base import Info
+
+    from qsiprep.workflows.dwi.registration import init_rotation_search_wf
+
+    config = _config()
+    monkeypatch.setattr(Info, '_version', ants_version)
+    logger = mock.Mock()
+    monkeypatch.setattr(config.loggers, 'workflow', logger)
+    init_rotation_search_wf(name=f'version_search_{warns}')
+    assert logger.warning.called is warns
 
 
 def test_search_runs_on_downsampled_images():
-    """A ~1000-start search at full resolution would take hours."""
+    """A several-hundred-start search at full resolution would take hours."""
     from qsiprep.workflows.dwi.registration import init_rotation_search_wf
 
     _config()

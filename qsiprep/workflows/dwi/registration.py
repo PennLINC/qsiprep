@@ -5,6 +5,7 @@ from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from niworkflows.interfaces.nibabel import RegridToZooms
+from packaging.version import Version
 
 from ... import config
 from ...data import load as load_data
@@ -18,15 +19,19 @@ def init_rotation_search_wf(transform='Rigid', name='rotation_search_wf'):
     """Estimate an initial transform for a coregistration by global rotation search.
 
     ``antsAI`` refines a grid of candidate orientations (all combinations of
-    three Euler angles at 20 degree spacing, +-90 degrees per axis) with a few
+    three Euler angles at 20 degree spacing, +-81 degrees per axis) with a few
     conjugate-gradient iterations each and keeps the candidate with the best
     Mattes MI. A center-of-mass start alone leaves antsRegistration to recover
     the full rotation, and a Mattes fit reliably captures only rotations of a
     few tens of degrees; anything larger (an infant positioned differently for
     the dMRI than for the anatomical) converges to a rotated local optimum.
-    The search runs on 4 mm resamples of the inputs: there are on the order of
-    a thousand candidates, and the result only needs to land within the
-    capture range of the full-resolution registration that follows.
+    The search runs on 4 mm resamples of the inputs: there are several hundred
+    candidates, and the result only needs to land within the capture range of
+    the full-resolution registration that follows.
+
+    The multi-start optimizer behind ``antsAI`` carried state between starts
+    before ANTs 2.6.0 (ANTs PR #1861), which made its answer depend on the
+    order of the candidates; older ANTs installations get a warning.
 
     Parameters
     ----------
@@ -58,8 +63,11 @@ def init_rotation_search_wf(transform='Rigid', name='rotation_search_wf'):
     res_fixed = pe.Node(RegridToZooms(zooms=(4.0, 4.0, 4.0), smooth=True), name='res_fixed')
     res_moving = pe.Node(RegridToZooms(zooms=(4.0, 4.0, 4.0), smooth=True), name='res_moving')
 
-    # In sloppy mode the arc shrinks to +-18 degrees (8 candidates vs 1000)
-    arc_fraction = 0.1 if config.execution.sloppy else 0.5
+    # An arc of 0.45 (+-81 degrees) rather than 0.5 puts a 20-degree grid
+    # point at -1 degree: most studies roughly align head position, so a start
+    # next to identity matters more than reaching exactly +-90. Sloppy mode
+    # shrinks the arc to +-18 degrees (8 candidates vs 729).
+    arc_fraction = 0.1 if config.execution.sloppy else 0.45
     rotation_search = pe.Node(
         ants.AI(
             metric=('Mattes', 32, 'Regular', 0.25),
@@ -72,6 +80,18 @@ def init_rotation_search_wf(transform='Rigid', name='rotation_search_wf'):
         name='rotation_search',
         n_procs=config.nipype.omp_nthreads,
     )
+
+    # nipype reports the last release tag (ANTs' "2.6.0.dev1" means one commit
+    # past v2.6.0, and parses as "2.6.0"), so this catches exactly the builds
+    # that predate the fix. None means ANTs is not on the path yet.
+    ants_version = rotation_search.interface.version
+    if ants_version and Version(ants_version) < Version('2.6.0'):
+        config.loggers.workflow.warning(
+            'antsAI from ANTs %s: versions before 2.6.0 carry optimizer state '
+            'between candidate orientations (ANTs PR #1861), so the rotation '
+            'search can return an arbitrary candidate. Upgrade ANTs.',
+            ants_version,
+        )
 
     workflow.connect([
         (inputnode, res_fixed, [('fixed_image', 'in_file')]),
