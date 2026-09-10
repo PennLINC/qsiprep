@@ -1335,6 +1335,9 @@ def parse_args(args=None, namespace=None):
             suffix=['dwi'],
         )
 
+        if session_filters and not sessions:
+            raise ValueError(f'No DWI files found with session filter {session_filters}')
+
         # If there are no sessions, there is only one option:
         if not sessions:
             if config.workflow.subject_anatomical_reference == 'sessionwise':
