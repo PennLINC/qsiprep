@@ -59,10 +59,6 @@ def _build_parser(**kwargs):
     deprecations = {
         '--dwi-only': ('27.0.0', 'Enabling `--anat-modality none` instead.'),
         '--dwi-no-biascorr': ('27.0.0', 'Enabling `--b1-biascorrect-stage none` instead.'),
-        '--longitudinal': (
-            '27.0.0',
-            'Enabling `--subject-anatomical-reference unbiased` instead.',
-        ),
         '--prefer-dedicated-fmaps': (
             '27.0.0',
             'It has no effect. To keep reverse phase-encoded DWI runs from being paired '
@@ -92,11 +88,6 @@ def _build_parser(**kwargs):
     forwarded_deprecations = {
         '--dwi-only': ('--anat-modality', 'anat_modality', 'none'),
         '--dwi-no-biascorr': ('--b1-biascorrect-stage', 'b1_biascorrect_stage', 'none'),
-        '--longitudinal': (
-            '--subject-anatomical-reference',
-            'subject_anatomical_reference',
-            'unbiased',
-        ),
     }
 
     # The deprecated --hmc-model vocabulary, mapped onto the method axes.
@@ -612,15 +603,6 @@ def _build_parser(**kwargs):
         help='Configure pipelines to process infant brains. '
         'If using this parameter, the anatomical-template will be changed to MNIInfant. '
         "The appropriate MNIInfant cohort will be selected based on the participant's age.",
-    )
-    g_conf.add_argument(
-        '--longitudinal',
-        action=DeprecatedForwardAction,
-        default=SUPPRESS,
-        help=(
-            'DEPRECATED: this flag now enables `--subject-anatomical-reference unbiased`. '
-            'Use that instead.'
-        ),
     )
     g_conf.add_argument(
         '--subject-anatomical-reference',
