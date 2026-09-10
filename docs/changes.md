@@ -1,46 +1,6 @@
 # What's New
 
 
-## Unreleased
-
-### 🛠 Breaking Changes
-
-* Replace `--output-resolution`, `--anatomical-template` and
-  `--skip-anat-based-spatial-normalization` with a single `--output-spaces` argument,
-  modeled on fMRIPrep's flag of the same name. The old flags are deprecated (they still
-  work, forwarding to the equivalent `--output-spaces` request) and will be removed in
-  27.0.0. See the "Output Spaces" section of `docs/usage.rst` for the full grammar and
-  a migration table. See https://github.com/PennLINC/qsiprep/issues/681.
-* The DWI grid workflow nodes were renamed to `output_grid_res{label}_wf` (one per
-  requested `acpc` resolution) as part of the `--output-spaces` work. Resuming a run
-  with `-w`/`--work-dir` against a working directory cached from an older QSIPrep will
-  not find these nodes under their old names, so the output grid recomputes on resume
-  instead of reusing the cached result.
-* `transform_dwis_t1` was renamed to `dwi_trans_wf`, a second working-directory cache
-  break alongside the grid-node rename above. Everything under the old name recomputes
-  on resume.
-* Every legacy `--output-resolution` run now writes **more files than it used to**. The
-  forwarded request adds a standard space (`MNI152NLin2009cAsym`, or
-  `MNIInfant:cohort-auto` under `--infant`), and each standard space now writes
-  `space-<template>[_cohort-<n>]_desc-preproc` T1w/T2w, brain mask and dseg into
-  `anat/`. That means an extra TemplateFlow template fetch and three extra resampling
-  passes per standard space, on top of the transforms that were already written.
-* Standard-space anatomical outputs are written on an **LPS+** grid, not TemplateFlow's
-  native RAS+. QSIPrep reorients every template to LPS+ before registering to it, and
-  the resampled derivatives inherit that grid. Downstream tools that assume the
-  TemplateFlow orientation for a `space-MNI152NLin2009cAsym` image must read the
-  affine rather than assume it.
-* The template that anchors AC-PC alignment (and therefore the output grid) is now
-  **derived**, not chosen by a flag: an infant template among the requested
-  `--output-spaces` anchors AC-PC, otherwise `MNI152NLin2009cAsym` does. The deprecated
-  flags record the anchor they imply, so `--infant` stays infant-anchored even when
-  `--skip-anat-based-spatial-normalization` drops every standard space.
-
-### Other Changes
-
-* Migrate docs, CI and tests to `--output-spaces` by @tsalo.
-
-
 ## 26.0.0 (April 20, 2026)
 
 ### 🐛 Bug Fixes

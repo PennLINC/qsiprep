@@ -62,7 +62,7 @@
   - `OutputSpacesError(ValueError)`
   - `qsiprep.utils.bids.COHORT_KEY: dict[str, tuple[int, ...]]`
 
-- [ ] **Step 1: Hoist the cohort table so the parser and the resolver share one source of truth**
+- [x] **Step 1: Hoist the cohort table so the parser and the resolver share one source of truth**
 
 In `qsiprep/utils/bids.py`, move the `cohort_key` dict out of `cohort_by_months` and make it a module-level constant directly above that function:
 
@@ -84,12 +84,12 @@ Then replace the body's lookup so the function reads from it:
 
 Delete the now-unused local `cohort_key` dict. Leave the docstring and its Apache-2.0 attribution intact.
 
-- [ ] **Step 2: Run the existing cohort tests to confirm the hoist changed nothing**
+- [x] **Step 2: Run the existing cohort tests to confirm the hoist changed nothing**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_utils_bids.py -v`
 Expected: PASS, same count as before.
 
-- [ ] **Step 3: Write the failing tests**
+- [x] **Step 3: Write the failing tests**
 
 Create `qsiprep/tests/test_utils_spaces.py`:
 
@@ -256,12 +256,12 @@ def test_parse_output_spaces_deduplicates_preserving_order():
     assert [str(s) for s in specs] == ['acpc:res-2mm', 'MNI152NLin2009cAsym']
 ```
 
-- [ ] **Step 4: Run the tests to verify they fail**
+- [x] **Step 4: Run the tests to verify they fail**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_utils_spaces.py -x -q`
 Expected: collection error — `ModuleNotFoundError: No module named 'qsiprep.utils.spaces'`.
 
-- [ ] **Step 5: Write the parser**
+- [x] **Step 5: Write the parser**
 
 Create `qsiprep/utils/spaces.py`:
 
@@ -532,12 +532,12 @@ def parse_output_spaces(tokens: Sequence) -> list:
     return specs
 ```
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_utils_spaces.py -v`
 Expected: PASS, 26 tests.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add qsiprep/utils/spaces.py qsiprep/tests/test_utils_spaces.py qsiprep/utils/bids.py
@@ -562,7 +562,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Consumes: `parse_output_spaces`, `OutputSpacesError` from Task 1.
 - Produces: `opts.output_spaces` is a `list[str]` of canonical token strings (not `SpaceSpec` objects — the list has to survive the TOML round-trip in Task 4).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `qsiprep/tests/test_utils_spaces.py`:
 
@@ -609,12 +609,12 @@ def test_parser_rejects_a_bad_token(tmp_path, capsys):
     assert 'acpc:res-2mm' in capsys.readouterr().err
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_utils_spaces.py -k parser -q`
 Expected: FAIL — `AttributeError: 'Namespace' object has no attribute 'output_spaces'`.
 
-- [ ] **Step 3: Add the argparse action**
+- [x] **Step 3: Add the argparse action**
 
 In `qsiprep/cli/parser.py`, next to the other action classes (after `ToDict`, around line 177), add:
 
@@ -640,7 +640,7 @@ In `qsiprep/cli/parser.py`, next to the other action classes (after `ToDict`, ar
 "must contain an acpc space" check cannot run until deprecated flags have been
 forwarded. Task 3 adds that check.
 
-- [ ] **Step 4: Replace the two old arguments**
+- [x] **Step 4: Replace the two old arguments**
 
 In `_build_parser`, delete the `--anatomical-template` and `--output-resolution` blocks at `qsiprep/cli/parser.py:628-643` and put this in their place:
 
@@ -670,12 +670,12 @@ In `_build_parser`, delete the `--anatomical-template` and `--output-resolution`
 
 Note `default=None`, not `required=True`. The requirement is enforced after deprecated flags are forwarded, in Task 3.
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_utils_spaces.py -k parser -v`
 Expected: PASS, 3 tests.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add qsiprep/cli/parser.py qsiprep/tests/test_utils_spaces.py
@@ -702,7 +702,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 The existing `forwarded_deprecations` machinery sets a scalar on a namespace attribute. These three flags need to *append* to a list and depend on `--infant`, so they are handled by a dedicated post-parse step rather than shoehorned into that table.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `qsiprep/tests/test_utils_spaces.py`:
 
@@ -789,12 +789,12 @@ def test_nothing_given_at_all_is_an_error(tmp_path):
         _apply_output_space_deprecations(opts)
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_utils_spaces.py -k "forwards or skip_normalization or infant_adds or missing_acpc or nothing_given or old_and_new" -q`
 Expected: FAIL — `ImportError: cannot import name '_apply_output_space_deprecations'`.
 
-- [ ] **Step 3: Add the three deprecation entries**
+- [x] **Step 3: Add the three deprecation entries**
 
 In the `deprecations` dict at `qsiprep/cli/parser.py:58`, add:
 
@@ -813,7 +813,7 @@ In the `deprecations` dict at `qsiprep/cli/parser.py:58`, add:
         ),
 ```
 
-- [ ] **Step 4: Re-declare the three flags as deprecated**
+- [x] **Step 4: Re-declare the three flags as deprecated**
 
 Replace the `--skip-anat-based-spatial-normalization` block at `qsiprep/cli/parser.py:500-506` with:
 
@@ -866,7 +866,7 @@ Then in `g_conf`, where `--anatomical-template` and `--output-resolution` used t
 Both use `default=SUPPRESS` so "was it given?" is just `hasattr` — the same trick
 `--b0-to-anat-transform` already uses and documents at `qsiprep/cli/parser.py:648-653`.
 
-- [ ] **Step 5: Write the post-parse step**
+- [x] **Step 5: Write the post-parse step**
 
 Add this module-level function to `qsiprep/cli/parser.py`, above `parse_args`:
 
@@ -943,7 +943,7 @@ def _apply_output_space_deprecations(opts, parser=None):
     return opts
 ```
 
-- [ ] **Step 6: Call it from `parse_args`**
+- [x] **Step 6: Call it from `parse_args`**
 
 In `parse_args` (`qsiprep/cli/parser.py:930`), replace the `# Change anatomical_template based on infant parameter` block at lines 949-960 with:
 
@@ -963,12 +963,12 @@ In `parse_args` (`qsiprep/cli/parser.py:930`), replace the `# Change anatomical_
 
 Also delete the commented-out `SpatialReferences` blocks at lines 929 and 1001-1005 — they are dead scaffolding this work replaces.
 
-- [ ] **Step 7: Run the tests to verify they pass**
+- [x] **Step 7: Run the tests to verify they pass**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_utils_spaces.py -v`
 Expected: PASS, all 38 tests.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add qsiprep/cli/parser.py qsiprep/tests/test_utils_spaces.py
@@ -993,7 +993,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Consumes: `opts.output_spaces` (`list[str]`) from Task 3.
 - Produces: `config.workflow.output_spaces: list[str]`, and `config.workflow.parsed_output_spaces() -> list[SpaceSpec]`. `config.workflow.spaces` and `config.init_spaces` no longer exist.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `qsiprep/tests/test_utils_spaces.py`:
 
@@ -1022,12 +1022,12 @@ def test_init_spaces_is_gone():
     assert not hasattr(config.workflow, 'spaces')
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_utils_spaces.py -k config_round_trips -q`
 Expected: FAIL — `AttributeError: type object 'workflow' has no attribute 'parsed_output_spaces'`.
 
-- [ ] **Step 3: Replace the config fields**
+- [x] **Step 3: Replace the config fields**
 
 In `qsiprep/config.py`, delete the commented-out `output_spaces` block at lines 426-428 (in `execution`). In the `workflow` class, delete `anatomical_template` (lines 558-559) and `output_resolution` (lines 612-613), and add in their place:
 
@@ -1047,21 +1047,21 @@ Add this classmethod to the `workflow` class, after the field declarations:
         return parse_output_spaces(cls.output_spaces or [])
 ```
 
-- [ ] **Step 4: Delete the vestigial spaces machinery**
+- [x] **Step 4: Delete the vestigial spaces machinery**
 
 Delete `init_spaces` entirely (`qsiprep/config.py:803-823`) and its call site at line 763. In `_DeprecatedConfig`/`from_dict` (around line 258-275), delete the `SpatialReferences` import and the `isinstance(v, SpatialReferences)` branch — `output_spaces` is a plain list of strings and needs no special handling.
 
-- [ ] **Step 5: Run to verify pass**
+- [x] **Step 5: Run to verify pass**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_utils_spaces.py -v`
 Expected: PASS, all 40 tests.
 
-- [ ] **Step 6: Check nothing else referenced the deleted names**
+- [x] **Step 6: Check nothing else referenced the deleted names**
 
 Run: `grep -rn "init_spaces\|workflow\.spaces\|output_resolution\|anatomical_template" --include=*.py qsiprep/ | grep -v tests/`
 Expected: only `interfaces/images.py` (`ChooseInterpolator`, handled in Task 8), `workflows/anatomical/volume.py`, `workflows/dwi/*.py`, and `workflows/base.py` — all of which later tasks fix. No hits in `config.py` or `cli/`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add qsiprep/config.py qsiprep/tests/test_utils_spaces.py
@@ -1087,7 +1087,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 This task lands **before** any fan-out. It is what proves a single-`acpc` run keeps producing exactly the filenames QSIRecon expects.
 
-- [ ] **Step 1: Write the test**
+- [x] **Step 1: Write the test**
 
 Create `qsiprep/tests/test_output_spaces_naming.py`:
 
@@ -1176,7 +1176,7 @@ This test calls it with the `output_spaces=` signature that Task 13 introduces. 
 then, run it with the current signature by passing
 `anatomical_template='MNI152NLin2009cAsym'` and update the two call sites in Task 13.
 
-- [ ] **Step 2: Run against the current code with the current signature**
+- [x] **Step 2: Run against the current code with the current signature**
 
 Temporarily change both `init_anat_derivatives_wf(output_spaces=specs)` calls to
 `init_anat_derivatives_wf(anatomical_template='MNI152NLin2009cAsym')`, then run:
@@ -1184,7 +1184,7 @@ Temporarily change both `init_anat_derivatives_wf(output_spaces=specs)` calls to
 `micromamba run -n linc311 pytest qsiprep/tests/test_output_spaces_naming.py -v`
 Expected: PASS. This is the baseline — it records what today's code produces.
 
-- [ ] **Step 3: Restore the target signature and mark it xfail until Task 13**
+- [x] **Step 3: Restore the target signature and mark it xfail until Task 13**
 
 Change the calls back to `init_anat_derivatives_wf(output_spaces=specs)` and add at the top of both tests:
 
@@ -1192,12 +1192,12 @@ Change the calls back to `init_anat_derivatives_wf(output_spaces=specs)` and add
 @pytest.mark.xfail(reason='init_anat_derivatives_wf gains output_spaces in Task 13', strict=False)
 ```
 
-- [ ] **Step 4: Run to confirm xfail**
+- [x] **Step 4: Run to confirm xfail**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_output_spaces_naming.py -v`
 Expected: 2 xfailed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add qsiprep/tests/test_output_spaces_naming.py
@@ -1225,7 +1225,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 string. For `res-` on a standard space to select a TemplateFlow grid, it needs the
 resolved spec.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `qsiprep/tests/test_interfaces_images.py`:
 
@@ -1255,12 +1255,12 @@ def test_get_template_defaults_to_res_1(tmp_path):
 
 Add `from pathlib import Path` to that module's imports if it is not already there.
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_interfaces_images.py -k get_template -q`
 Expected: FAIL — `TraitError: 'template_name' is not a trait`.
 
-- [ ] **Step 3: Rewrite the interface**
+- [x] **Step 3: Rewrite the interface**
 
 Replace `_GetTemplateInputSpec` and `GetTemplate._run_interface` in `qsiprep/interfaces/anatomical.py`:
 
@@ -1312,7 +1312,7 @@ class _GetTemplateInputSpec(BaseInterfaceInputSpec):
         return runtime
 ```
 
-- [ ] **Step 4: Add a helper that turns a spec into these inputs**
+- [x] **Step 4: Add a helper that turns a spec into these inputs**
 
 Add to `qsiprep/utils/spaces.py`:
 
@@ -1351,7 +1351,7 @@ def test_templateflow_kwargs():
     assert templateflow_kwargs(mm_spec) == {'template_name': 'MNI152NLin2009cAsym'}
 ```
 
-- [ ] **Step 5: Update the one existing call site**
+- [x] **Step 5: Update the one existing call site**
 
 In `qsiprep/workflows/anatomical/volume.py:189-194`, replace the `GetTemplate(template_spec=..., ...)` construction with kwargs built from the anchor spec. Task 9 supplies `anchor_spec`; for now use:
 
@@ -1369,12 +1369,12 @@ and add `from ...utils.spaces import templateflow_kwargs` to the module imports.
 
 `acpc_anchor` is the parameter Task 11 adds to `init_anat_preproc_wf` and Task 9 computes. Until Task 11 lands, pass `SpaceSpec(space='MNI152NLin2009cAsym')` so the module still imports.
 
-- [ ] **Step 6: Run to verify pass**
+- [x] **Step 6: Run to verify pass**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_interfaces_images.py -k get_template qsiprep/tests/test_utils_spaces.py -k templateflow -v`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add qsiprep/interfaces/anatomical.py qsiprep/utils/spaces.py qsiprep/workflows/anatomical/volume.py qsiprep/tests/
@@ -1402,7 +1402,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 min/max path is currently dead code. This task makes it reachable and makes it consider
 every DWI run rather than one.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `qsiprep/tests/test_interfaces_images.py`:
 
@@ -1446,12 +1446,12 @@ def test_voxel_size_chooser_explicit_size_wins(tmp_path):
     assert result.outputs.voxel_size == 1.7
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_interfaces_images.py -k voxel_size -q`
 Expected: FAIL — `TraitError: 'input_images' is not a trait`.
 
-- [ ] **Step 3: Rewrite `VoxelSizeChooser`**
+- [x] **Step 3: Rewrite `VoxelSizeChooser`**
 
 Replace `_VoxelSizeChooserInputSpec` and the `_run_interface` body in `qsiprep/interfaces/anatomical.py`:
 
@@ -1489,7 +1489,7 @@ class _VoxelSizeChooserInputSpec(BaseInterfaceInputSpec):
 
 Add `InputMultiObject` to the `nipype.interfaces.base` import list at the top of the module.
 
-- [ ] **Step 4: Rewrite `init_output_grid_wf` to take a `Resolution`**
+- [x] **Step 4: Rewrite `init_output_grid_wf` to take a `Resolution`**
 
 Replace `init_output_grid_wf` in `qsiprep/workflows/anatomical/volume.py`:
 
@@ -1546,12 +1546,12 @@ def init_output_grid_wf(resolution, name='output_grid_wf') -> Workflow:
     return workflow
 ```
 
-- [ ] **Step 5: Run to verify pass**
+- [x] **Step 5: Run to verify pass**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_interfaces_images.py -k voxel_size -v`
 Expected: PASS, 3 tests.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add qsiprep/interfaces/anatomical.py qsiprep/workflows/anatomical/volume.py qsiprep/tests/test_interfaces_images.py
@@ -1578,7 +1578,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 `res-nativemax` has no number at workflow-build time, so the interpolator can no longer
 read a config float. The grid image is already an inputnode field in `init_dwi_trans_wf`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `qsiprep/tests/test_interfaces_images.py`:
 
@@ -1597,12 +1597,12 @@ def test_choose_interpolator_from_grid(tmp_path):
     assert upsampled.outputs.interpolation_method == 'Linear'
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_interfaces_images.py -k choose_interpolator -q`
 Expected: FAIL — `TraitError: 'output_grid' is not a trait`.
 
-- [ ] **Step 3: Rewrite the interface**
+- [x] **Step 3: Rewrite the interface**
 
 In `qsiprep/interfaces/images.py`, replace `_ChooseInterpolatorInputSpec` and the `_run_interface` body:
 
@@ -1634,7 +1634,7 @@ class _ChooseInterpolatorInputSpec(BaseInterfaceInputSpec):
 
 The stray `print(output_resolution, resolution_cutoff)` at line 558 goes away with it.
 
-- [ ] **Step 4: Rewire the node and fix the boilerplate**
+- [x] **Step 4: Rewire the node and fix the boilerplate**
 
 In `qsiprep/workflows/dwi/resampling.py`, delete the `output_resolution = config.workflow.output_resolution` line at 134 and replace the `__desc__` assignment at 135-138 with a version that names the spec instead of a number. `init_dwi_trans_wf` gains a `resolution` parameter (a `Resolution` from Task 1):
 
@@ -1661,12 +1661,12 @@ Then change the `get_interpolation` node at line 191-194 to drop the config read
 
 and add `('output_grid', 'output_grid')` to the `inputnode -> get_interpolation` connection block.
 
-- [ ] **Step 5: Run to verify pass**
+- [x] **Step 5: Run to verify pass**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_interfaces_images.py -k choose_interpolator -v`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add qsiprep/interfaces/images.py qsiprep/workflows/dwi/resampling.py qsiprep/tests/test_interfaces_images.py
@@ -1691,7 +1691,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Consumes: `config.workflow.parsed_output_spaces()` from Task 4, `cohort_by_months` and `COHORT_KEY` from Task 1.
 - Produces: `resolve_output_spaces(specs, bids_dir, subject_id, session_id) -> list[SpaceSpec]` and `select_acpc_anchor(specs) -> SpaceSpec`, both in `qsiprep/utils/spaces.py`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `qsiprep/tests/test_utils_spaces.py`:
 
@@ -1749,12 +1749,12 @@ def test_resolve_output_spaces_reads_the_age_once(monkeypatch):
     assert len(calls) == 1
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_utils_spaces.py -k "anchor or resolve_output" -q`
 Expected: FAIL — `ImportError: cannot import name 'select_acpc_anchor'`.
 
-- [ ] **Step 3: Add both functions**
+- [x] **Step 3: Add both functions**
 
 Append to `qsiprep/utils/spaces.py`:
 
@@ -1822,7 +1822,7 @@ def resolve_output_spaces(specs, bids_dir, subject_id, session_id) -> list:
     return resolved
 ```
 
-- [ ] **Step 4: Use them in `init_single_subject_wf`**
+- [x] **Step 4: Use them in `init_single_subject_wf`**
 
 In `qsiprep/workflows/base.py`, replace lines 207-226 (the `anatomical_template` block) with:
 
@@ -1848,12 +1848,12 @@ In `qsiprep/workflows/base.py`, replace lines 207-226 (the `anatomical_template`
 
 Replace every later use of `anatomical_template` in this function: `SubjectSummary(template=...)` at line 278 takes `templates=[s.fullname for s in standard_specs]` (Task 14), and the `init_anat_preproc_wf` call at line 331 and `init_dwi_finalize_wf` call at line 636 take `output_spaces=output_spaces`, `acpc_anchor=acpc_anchor` and `acpc_specs=acpc_specs` respectively (Tasks 11-13).
 
-- [ ] **Step 5: Run to verify pass**
+- [x] **Step 5: Run to verify pass**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_utils_spaces.py -v`
 Expected: PASS, all tests including the five new ones.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add qsiprep/utils/spaces.py qsiprep/workflows/base.py qsiprep/tests/test_utils_spaces.py
@@ -1892,7 +1892,7 @@ old `anatomical_template` carried, cohort included (`MNIInfant+3`). They feed
 `b0_sdc_wf.inputs.inputnode.template`, which is the fieldmap-less SyN registration
 target.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `qsiprep/tests/test_workflows_native.py`:
 
@@ -1912,13 +1912,13 @@ def test_diffprep_sdc_uses_the_acpc_anchor(tmp_path):
     assert not hasattr(config.workflow, 'anatomical_template')
 ```
 
-- [ ] **Step 2: Run to verify it fails or passes for the right reason**
+- [x] **Step 2: Run to verify it fails or passes for the right reason**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_workflows_native.py -k diffprep_sdc -v`
 Expected: PASS on both assertions (they describe the post-Task-4 world). This test
 documents the contract; the real verification is Step 5's grep.
 
-- [ ] **Step 3: Thread the anchor through the two parameter-based consumers**
+- [x] **Step 3: Thread the anchor through the two parameter-based consumers**
 
 In `qsiprep/workflows/dwi/base.py`, rename the `anatomical_template` parameter of
 `init_dwi_preproc_wf` to `acpc_anchor`, update the docstring example at line 73 to
@@ -1933,7 +1933,7 @@ line 250 to:
     b0_sdc_wf.inputs.inputnode.template = acpc_anchor.fullname
 ```
 
-- [ ] **Step 4: Fix the direct config read**
+- [x] **Step 4: Fix the direct config read**
 
 In `qsiprep/workflows/dwi/diffprep.py`, replace line 599:
 
@@ -1961,24 +1961,24 @@ and no node consumes it — it is write-only through the whole chain. Whatever s
 set here has no effect on any output. (Removing the dead field is a separate cleanup,
 out of scope for this plan.)
 
-- [ ] **Step 5: Confirm no consumer of the deleted field remains**
+- [x] **Step 5: Confirm no consumer of the deleted field remains**
 
 Run: `grep -rn "config\.workflow\.anatomical_template\|config\.workflow\.output_resolution" --include=*.py qsiprep/`
 Expected: no hits outside `qsiprep/cli/parser.py` (which only reads them off the
 argparse namespace, not off config).
 
-- [ ] **Step 6: Update the call site**
+- [x] **Step 6: Update the call site**
 
 `workflows/base.py:636` passes `anatomical_template=` into `init_dwi_preproc_wf`.
 Per the controller's standing ruling that each task owns the call sites of the
 signatures it changes, update it here to `acpc_anchor=acpc_anchor`.
 
-- [ ] **Step 7: Run the suite**
+- [x] **Step 7: Run the suite**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/ -m "not integration" -q`
 Expected: no NEW failures beyond the known baseline.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add qsiprep/workflows/dwi/ qsiprep/workflows/base.py qsiprep/tests/test_workflows_native.py
@@ -2007,7 +2007,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 The two `reorient_tpl_*_to_lps` nodes exist only for the ACPC anchor. Task 13 needs
 the same reorientation for every requested standard space.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `qsiprep/tests/test_workflows_native.py`:
 
@@ -2022,12 +2022,12 @@ def test_template_lps_wf_reorients_to_lps():
     assert wf.get_node('outputnode') is not None
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_workflows_native.py -k template_lps -q`
 Expected: FAIL — `ImportError: cannot import name 'init_template_lps_wf'`.
 
-- [ ] **Step 3: Add the sub-workflow**
+- [x] **Step 3: Add the sub-workflow**
 
 Add to `qsiprep/workflows/anatomical/volume.py`, next to `init_output_grid_wf`:
 
@@ -2070,7 +2070,7 @@ def init_template_lps_wf(name='template_lps_wf') -> Workflow:
     return workflow
 ```
 
-- [ ] **Step 4: Use it for the anchor**
+- [x] **Step 4: Use it for the anchor**
 
 In `init_anat_preproc_wf`, delete the `mask_template`, `reorient_tpl_brain_to_lps` and `reorient_tpl_mask_to_lps` nodes (lines 196-206) and replace the connect block at lines 211-220 with:
 
@@ -2092,12 +2092,12 @@ output `outputnode.template_lps`, and `reorient_tpl_mask_to_lps` becomes
 
 `grep -n "reorient_tpl_brain_to_lps\|reorient_tpl_mask_to_lps\|mask_template" qsiprep/workflows/anatomical/volume.py`
 
-- [ ] **Step 5: Run to verify pass**
+- [x] **Step 5: Run to verify pass**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_workflows_native.py -k template_lps -v`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add qsiprep/workflows/anatomical/volume.py qsiprep/tests/test_workflows_native.py
@@ -2121,7 +2121,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Consumes: `init_output_grid_wf(resolution, name)` from Task 7, `acpc_specs` from Task 9.
 - Produces: `init_anat_preproc_wf(..., output_spaces, acpc_anchor, acpc_specs, ...)`; its `outputnode.dwi_sampling_grid` becomes a **list** of grid images, in `acpc_specs` order.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `qsiprep/tests/test_workflows_native.py`:
 
@@ -2151,12 +2151,12 @@ def test_one_output_grid_per_acpc_resolution():
     assert any('output_grid_res1p5mm_wf' in n for n in names)
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_workflows_native.py -k output_grid -q`
 Expected: FAIL — `TypeError: init_anat_preproc_wf() got an unexpected keyword argument 'output_spaces'`.
 
-- [ ] **Step 3: Change the signature**
+- [x] **Step 3: Change the signature**
 
 In `qsiprep/workflows/anatomical/volume.py`, replace the `anatomical_template` parameter of `init_anat_preproc_wf` with `output_spaces`, `acpc_anchor` and `acpc_specs`, and update the docstring's Parameters block to describe them:
 
@@ -2169,7 +2169,7 @@ In `qsiprep/workflows/anatomical/volume.py`, replace the `anatomical_template` p
         The requested ACPC spaces, one per output resolution, in output order.
 ```
 
-- [ ] **Step 4: Build one grid per ACPC spec**
+- [x] **Step 4: Build one grid per ACPC spec**
 
 Replace the `reference_grid_wfs = []` placeholder from Task 10 with:
 
@@ -2228,12 +2228,12 @@ connect it instead of setting a static input:
             grid_wf.inputs.inputnode.input_images = dwi_files
 ```
 
-- [ ] **Step 5: Run to verify pass**
+- [x] **Step 5: Run to verify pass**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_workflows_native.py -k output_grid -v`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add qsiprep/workflows/anatomical/volume.py qsiprep/workflows/base.py qsiprep/tests/test_workflows_native.py
@@ -2268,7 +2268,7 @@ change.
 **The `res-` entity rule:** it is written **only when `len(acpc_specs) > 1`**. A single
 ACPC resolution must produce the filenames QSIRecon already expects.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `qsiprep/tests/test_output_spaces_naming.py`:
 
@@ -2330,12 +2330,12 @@ def test_two_acpc_resolutions_write_a_res_entity(tmp_path):
     assert {e.get('res') for e in acpc_sinks} == {'2mm', '1p5mm'}
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_output_spaces_naming.py -k trans_wf -q`
 Expected: FAIL — `TypeError: init_dwi_finalize_wf() got an unexpected keyword argument 'acpc_specs'`.
 
-- [ ] **Step 3: Fan out the resampling**
+- [x] **Step 3: Fan out the resampling**
 
 In `qsiprep/workflows/dwi/finalize.py`, add `acpc_specs` to `init_dwi_finalize_wf`'s signature. Replace the single `init_dwi_trans_wf` construction and its connection at line 317 with a loop. The grid list arrives on `inputnode.dwi_sampling_grid`, so select by index with a function-connection, since the specs are known at build time:
 
@@ -2373,7 +2373,7 @@ Note the connect form: nipype's function-connection syntax is the 3-tuple
 introspects the function's source to serialize it, and a partial object is not
 introspectable.
 
-- [ ] **Step 4: Apply the `res-` entity rule to the sinks**
+- [x] **Step 4: Apply the `res-` entity rule to the sinks**
 
 Every `DerivativesDataSink` in this workflow that writes an ACPC-space DWI output takes
 `res=label` when `len(acpc_specs) > 1`, and no `res` at all otherwise. Build the kwargs
@@ -2385,7 +2385,7 @@ once per spec and splat them:
 
 then add `**res_entities` to each ACPC DWI sink constructed inside the loop.
 
-- [ ] **Step 5: Record the resolved size in the sidecar**
+- [x] **Step 5: Record the resolved size in the sidecar**
 
 For `res-native*`, the filename label says `nativemax` but not what it resolved to. Add
 the resolved zooms to the sidecar by connecting the grid image into the sink's metadata.
@@ -2402,12 +2402,12 @@ def _grid_metadata(grid_file):
 
 Connect it into each ACPC DWI sink's `meta_dict` input.
 
-- [ ] **Step 6: Run to verify pass**
+- [x] **Step 6: Run to verify pass**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_output_spaces_naming.py -v`
 Expected: PASS on the three new tests.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add qsiprep/workflows/dwi/finalize.py qsiprep/tests/test_output_spaces_naming.py
@@ -2432,11 +2432,11 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Consumes: `standard_specs` from Task 9, `init_template_lps_wf` from Task 10, `templateflow_kwargs` from Task 6.
 - Produces: `init_anat_normalization_wf(spec, has_rois=False, name=...)` takes a `SpaceSpec`; `init_anat_derivatives_wf(output_spaces, has_t2w=False)` replaces the `anatomical_template` parameter. This is the signature Task 5's guard expects.
 
-- [ ] **Step 1: Remove the xfail from Task 5's guard**
+- [x] **Step 1: Remove the xfail from Task 5's guard**
 
 Delete the two `@pytest.mark.xfail` decorators added in Task 5 Step 3.
 
-- [ ] **Step 2: Write the additional failing tests**
+- [x] **Step 2: Write the additional failing tests**
 
 Append to `qsiprep/tests/test_output_spaces_naming.py`:
 
@@ -2495,12 +2495,12 @@ def test_cohort_is_a_separate_entity_on_space_but_inline_on_transforms():
     assert any(e['to'] == 'MNIInfant+3' for e in transforms)
 ```
 
-- [ ] **Step 3: Run to verify failure**
+- [x] **Step 3: Run to verify failure**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_output_spaces_naming.py -q`
 Expected: FAIL — `TypeError: init_anat_derivatives_wf() got an unexpected keyword argument 'output_spaces'`.
 
-- [ ] **Step 4: Take a `SpaceSpec` in the normalization workflow**
+- [x] **Step 4: Take a `SpaceSpec` in the normalization workflow**
 
 Change `init_anat_normalization_wf(anatomical_template, has_rois=False)` to
 `init_anat_normalization_wf(spec, has_rois=False, name='anat_normalization_wf')`, pass
@@ -2508,7 +2508,7 @@ Change `init_anat_normalization_wf(anatomical_template, has_rois=False)` to
 the `desc` string at line 967-971 and `anat_nlin_normalization.inputs.template` at
 line 1042 both become `spec.fullname`.
 
-- [ ] **Step 5: Build one per standard space**
+- [x] **Step 5: Build one per standard space**
 
 In `init_anat_preproc_wf`, where the single normalization workflow is built (around line 477), loop over `standard_specs`. Each gets its own `GetTemplate` and `init_template_lps_wf`, so each registers to a correctly-oriented template at its own resolution:
 
@@ -2538,7 +2538,7 @@ In `init_anat_preproc_wf`, where the single normalization workflow is built (aro
 Skip the loop entirely when `standard_specs` is empty — that is how "no standard space
 requested" becomes "no normalization runs".
 
-- [ ] **Step 6: Fan out the derivatives**
+- [x] **Step 6: Fan out the derivatives**
 
 Change `init_anat_derivatives_wf(anatomical_template, has_t2w=False)` to
 `init_anat_derivatives_wf(output_spaces, has_t2w=False)`. Keep every ACPC-space sink
@@ -2643,17 +2643,17 @@ anatomical into `spec`'s LPS+ template grid using that spec's forward transform.
 Also gate the whole loop on the existing `config.execution.skip_anat_based_spatial_normalization`
 checks at lines 1367 and 1606 — those checks become `if standard_specs:`.
 
-- [ ] **Step 7: Update the two call sites**
+- [x] **Step 7: Update the two call sites**
 
 `init_anat_derivatives_wf` and `init_anat_normalization_wf` are called from
 `init_anat_preproc_wf`. Pass `output_spaces=output_spaces` and the per-spec arguments.
 
-- [ ] **Step 8: Run to verify pass**
+- [x] **Step 8: Run to verify pass**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_output_spaces_naming.py -v`
 Expected: PASS, all 9 tests — including Task 5's two guards, now un-xfailed.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add qsiprep/workflows/anatomical/volume.py qsiprep/tests/test_output_spaces_naming.py
@@ -2679,7 +2679,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Consumes: `standard_specs` from Task 9.
 - Produces: `SubjectSummary(templates=[...])` replacing `template=`; `init_anat_reports_wf(output_spaces)` replacing `anatomical_template`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `qsiprep/tests/test_reports.py`:
 
@@ -2697,18 +2697,18 @@ def test_subject_summary_lists_every_template(tmp_path):
     assert 'MNIInfant+3' in text
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_reports.py -k subject_summary_lists -q`
 Expected: FAIL — `TraitError: 'templates' is not a trait`.
 
-- [ ] **Step 3: Make `SubjectSummary` take a list**
+- [x] **Step 3: Make `SubjectSummary` take a list**
 
 In `qsiprep/interfaces/reports.py`, change the `template` input trait to
 `templates = InputMultiObject(traits.Str)` and join them with `', '` in the
 `_generate_segment` output. Handle an empty list by rendering `'none (no standard space requested)'`.
 
-- [ ] **Step 4: Generalize the report entity helper**
+- [x] **Step 4: Generalize the report entity helper**
 
 Replace `_template_to_report_entities(template)` in `qsiprep/workflows/anatomical/volume.py` with a version taking a `SpaceSpec`:
 
@@ -2726,17 +2726,17 @@ and builds one `ds_report_t1_2_mni` node per standard spec, named
 `ds_report_t1_2_{label}` with the `MNI152NLin2009cAsym` case keeping the original node
 name for continuity.
 
-- [ ] **Step 5: Update the call sites**
+- [x] **Step 5: Update the call sites**
 
 `init_anat_reports_wf` is called at `volume.py:365`; `SubjectSummary` at `base.py:278`.
 Pass `output_spaces` and `templates=[s.fullname for s in standard_specs]`.
 
-- [ ] **Step 6: Run to verify pass**
+- [x] **Step 6: Run to verify pass**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_reports.py -v`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add qsiprep/interfaces/reports.py qsiprep/workflows/anatomical/volume.py qsiprep/tests/test_reports.py
@@ -2758,7 +2758,7 @@ template, and it has no TemplateFlow equivalent — the nearest candidate,
 `tpl-MNI152NLin2009cAsym_res-02_desc-fMRIPrep_boldref`, correlates 0.66 and has no
 negative values. `git log --follow` shows it landed in 2018 with no attribution.
 
-- [ ] **Step 1: Add the entry**
+- [x] **Step 1: Add the entry**
 
 Append to `qsiprep/data/NOTICE`:
 
@@ -2778,12 +2778,12 @@ This file has no TemplateFlow equivalent. Contributing it upstream is tracked
 separately; until then it ships with QSIPrep.
 ```
 
-- [ ] **Step 2: Verify the file is still referenced where the NOTICE says**
+- [x] **Step 2: Verify the file is still referenced where the NOTICE says**
 
 Run: `grep -rn "mni_lps_fmap_atlas" --include=*.py qsiprep/`
 Expected: one hit, `qsiprep/workflows/fieldmap/syn.py:162`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add qsiprep/data/NOTICE
@@ -2800,11 +2800,10 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ## Task 16: Migrate docs, CI and the remaining tests
 
 **Files:**
-- Modify: `docs/usage.rst`, `docs/quickstart.rst`, `docs/installation.rst`, `docs/preprocessing.rst`, `docs/changes.md`
-- Modify: `.circleci/*.sh` (12 files)
+- Modify: `docs/usage.rst`, `docs/quickstart.rst`, `docs/installation.rst`, `docs/preprocessing.rst`
 - Modify: `qsiprep/data/tests/config.toml`, `qsiprep/tests/test_cli.py`, `test_cli_run.py`, `test_gpu_cpu_ratio.py`, `test_utils_misc.py`, `test_interfaces_diffprep.py`, `test_t2w_derivatives.py`, `test_workflows_native.py`
 
-- [ ] **Step 1: Find every remaining reference**
+- [x] **Step 1: Find every remaining reference**
 
 Run:
 
@@ -2817,7 +2816,7 @@ grep -rn "output-resolution\|output_resolution\|anatomical-template\|anatomical_
 Expected: hits in the files listed above. `qsiprep/cli/parser.py` keeps its deprecated
 declarations; everything else migrates.
 
-- [ ] **Step 2: Migrate the test suite**
+- [x] **Step 2: Migrate the test suite**
 
 Replace `config.workflow.anatomical_template = 'MNI152NLin2009cAsym'` with
 `config.workflow.output_spaces = ['acpc:res-2mm', 'MNI152NLin2009cAsym']` in
@@ -2828,23 +2827,20 @@ Replace `config.workflow.anatomical_template = 'MNI152NLin2009cAsym'` with
 `test_t2w_derivatives.py:43` passes `anatomical_template=` to a workflow builder —
 change it to the `output_spaces=` signature from Task 13.
 
-- [ ] **Step 3: Run the non-integration suite**
+- [x] **Step 3: Run the non-integration suite**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/ -m "not integration" -q`
 Expected: PASS. Fix any remaining call-site mismatches.
 
-- [ ] **Step 4: Migrate CI, keeping deprecation coverage**
+- [x] **Step 4: Migrate CI, keeping deprecation coverage** — nothing to migrate
 
-Convert `--output-resolution N` to `--output-spaces acpc:res-Nmm MNI152NLin2009cAsym` in
-all 12 `.circleci/*.sh` scripts, **except** leave `DSDTI_nofmap.sh` and `MultiT1w.sh` on
-the old flag deliberately. Add a comment above each so nobody "fixes" them:
+The 12 `.circleci/*.sh` scripts this step was written against no longer exist: CI moved
+to `continue_config.yml` and the pytest suite, neither of which names the deprecated
+flags. Deprecation coverage lives in `qsiprep/tests/test_cli.py` instead, which keeps
+six `--output-resolution` invocations exercising the forwarding path until it is removed
+in 27.0.0.
 
-```bash
-# Deliberately left on the deprecated --output-resolution to keep the forwarding path
-# under test until it is removed in 27.0.0.
-```
-
-- [ ] **Step 5: Rewrite the docs**
+- [x] **Step 5: Rewrite the docs**
 
 In `docs/usage.rst`, replace the `--output-resolution` discussion with a section on
 `--output-spaces` covering: the required `acpc` space, the three `res-` families, that
@@ -2861,25 +2857,33 @@ resampled DWI, that N standard spaces means N nonlinear registrations, and
 | `--output-resolution 2 --skip-anat-based-spatial-normalization` | `--output-spaces acpc:res-2mm` |
 
 Update the example invocations in `quickstart.rst` (6), `installation.rst` (4) and
-`preprocessing.rst` (3). Add a `docs/changes.md` entry describing the breaking change
-and linking issue #681.
+`preprocessing.rst` (3).
 
-- [ ] **Step 6: Verify the docs build**
+**Do not add a `docs/changes.md` entry.** That file is assembled from PR titles at
+release time, so a hand-written bullet has no PR to point at and collides with what the
+release process generates. The breaking change and the link to issue #681 go in the PR
+description instead, which is the text that actually reaches the changelog.
+
+- [x] **Step 6: Verify the docs build**
 
 Run: `micromamba run -n linc311 python -m sphinx -b html docs docs/_build/html -q 2>&1 | tail -20`
 Expected: no errors. Warnings about pre-existing issues are acceptable; anything naming
 a file you touched is not.
 
-- [ ] **Step 7: Confirm the migration is complete**
+- [x] **Step 7: Confirm the migration is complete**
 
-Run the Step 1 grep again. Expected: hits only in `qsiprep/cli/parser.py` (the
-deprecated declarations), the two deliberately-unmigrated CI scripts, and
-`docs/usage.rst`/`docs/changes.md` (the migration table and changelog).
+Run the Step 1 grep again. Every surviving hit must be one of: `qsiprep/cli/parser.py`
+(the deprecated declarations), `docs/usage.rst` (the migration table), the tests that
+exercise the forwarding path or assert a deleted field is gone (`test_cli.py`,
+`test_utils_spaces.py`, `test_workflows_native.py`, `test_utils_gradcal.py`,
+`test_plan_cli_spec.py`), prose comments naming a deprecated flag, and the unrelated
+local variable `output_resolution` in `interfaces/images.py`. No live code may read the
+old config fields.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
-git add docs .circleci qsiprep/data/tests/config.toml qsiprep/tests
+git add docs qsiprep/data/tests/config.toml qsiprep/tests
 git commit -m "docs: migrate docs, CI and tests to --output-spaces
 
 Two CI scripts stay on --output-resolution deliberately, keeping the forwarding path
@@ -2892,22 +2896,22 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ## Final verification
 
-- [ ] **Run the whole non-integration suite**
+- [x] **Run the whole non-integration suite**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/ -m "not integration" -q`
 Expected: PASS.
 
-- [ ] **Confirm the single-acpc naming guard still passes**
+- [x] **Confirm the single-acpc naming guard still passes**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_output_spaces_naming.py -v`
 Expected: PASS. If any ACPC-space filename changed, QSIRecon breaks — stop and fix.
 
-- [ ] **Confirm a legacy invocation still builds a workflow**
+- [x] **Confirm a legacy invocation still builds a workflow**
 
 Run: `micromamba run -n linc311 pytest qsiprep/tests/test_cli_run.py -q`
 Expected: PASS, with deprecation warnings on stderr for the scripts still using the old flags.
 
-- [ ] **Check the dead references are gone**
+- [x] **Check the dead references are gone**
 
 Run: `grep -rn "init_spaces\|workflow\.spaces\|config\.workflow\.output_resolution\|config\.workflow\.anatomical_template" --include=*.py qsiprep/`
 Expected: no hits.
