@@ -23,7 +23,7 @@ from nipype.interfaces import ants, fsl
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-from niworkflows.interfaces.nibabel import DemeanImage, FilledImageLike
+from niworkflows.interfaces.nibabel import ApplyMask, DemeanImage, FilledImageLike
 from niworkflows.interfaces.reportlets.registration import (
     ANTSApplyTransformsRPT,
     ANTSRegistrationRPT,
@@ -195,7 +195,7 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
         name='fmap_fov2ref_apply',
     )
 
-    apply_fov_mask = pe.Node(fsl.ApplyMask(), name='apply_fov_mask')
+    apply_fov_mask = pe.Node(ApplyMask(), name='apply_fov_mask')
 
     workflow.connect([
         (inputnode, fmap2ref_reg, [('fmap_ref', 'moving_image')]),
@@ -230,7 +230,7 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
         (fieldmap_fov_mask, fmap_fov2ref_apply, [('out_file', 'input_image')]),
         (inputnode, fmap_fov2ref_apply, [('in_reference', 'reference_image')]),
         (fmap2ref_reg, fmap_fov2ref_apply, [('composite_transform', 'transforms')]),
-        (fmap_fov2ref_apply, apply_fov_mask, [('output_image', 'mask_file')]),
+        (fmap_fov2ref_apply, apply_fov_mask, [('output_image', 'in_mask')]),
         (unwarp_reference, apply_fov_mask, [('output_image', 'in_file')]),
         (apply_fov_mask, outputnode, [
             ('out_file', 'out_reference'),

@@ -217,6 +217,97 @@ class FieldToHz(SimpleInterface):
         return runtime
 
 
+def _sphere_footprint(radius_mm, zooms):
+    """Boolean spherical footprint of the given mm radius on a voxel grid.
+
+    Mirrors ``fslmaths -kernel sphere <radius_mm>``: a voxel is included when the
+    physical distance from its center to the kernel center is within ``radius_mm``.
+    """
+    radii_vox = [int(np.floor(radius_mm / zoom)) for zoom in zooms]
+    axes = [np.arange(-n, n + 1) * zoom for n, zoom in zip(radii_vox, zooms, strict=True)]
+    grids = np.meshgrid(*axes, indexing='ij')
+    return sum(grid**2 for grid in grids) <= radius_mm**2
+
+
+class MedianFilterInputSpec(BaseInterfaceInputSpec):
+    in_file = File(exists=True, mandatory=True, desc='input image')
+    kernel_radius_mm = traits.Float(
+        5.0, usedefault=True, desc='radius (mm) of the spherical median kernel'
+    )
+
+
+class MedianFilterOutputSpec(TraitedSpec):
+    out_file = File(desc='median-filtered image')
+
+
+class MedianFilter(SimpleInterface):
+    """Median-filter an image with a spherical kernel.
+
+    Pure-nibabel replacement for ``fsl.SpatialFilter(operation='median',
+    kernel_shape='sphere')`` (``fslmaths -kernel sphere <r> -fmedian``), so the
+    fieldmap workflows no longer need ``fslmaths``.
+    """
+
+    input_spec = MedianFilterInputSpec
+    output_spec = MedianFilterOutputSpec
+
+    def _run_interface(self, runtime):
+        from scipy.ndimage import median_filter
+
+        img = nb.load(self.inputs.in_file)
+        data = img.get_fdata(dtype=np.float32)
+        footprint = _sphere_footprint(self.inputs.kernel_radius_mm, img.header.get_zooms()[:3])
+        filtered = median_filter(data, footprint=footprint)
+        out_file = fname_presuffix(self.inputs.in_file, suffix='_medfilt', newpath=runtime.cwd)
+        img.__class__(filtered.astype(np.float32), img.affine, img.header).to_filename(out_file)
+        self._results['out_file'] = out_file
+        return runtime
+
+
+class CleanupEdgeFilterInputSpec(BaseInterfaceInputSpec):
+    in_file = File(exists=True, mandatory=True, desc='original (pre-despike) fieldmap')
+    despiked_file = File(exists=True, mandatory=True, desc='FUGUE-despiked fieldmap')
+    in_mask = File(exists=True, mandatory=True, desc='fieldmap brain mask')
+
+
+class CleanupEdgeFilterOutputSpec(TraitedSpec):
+    out_file = File(desc='edge-cleaned fieldmap')
+
+
+class CleanupEdgeFilter(SimpleInterface):
+    """Blend despiked edge voxels into the original fieldmap interior.
+
+    Pure-nibabel replacement for the ``fslmaths`` portion of
+    ``fsl_prepare_fieldmap``'s edge cleanup (the erode/subtract/mask/add chain
+    that followed FUGUE). The mask is eroded with an in-plane 3x3 kernel
+    (``fslmaths -kernel 2D -ero``); the eroded interior keeps the original field
+    and the one-voxel rim is filled with the despiked values.
+    """
+
+    input_spec = CleanupEdgeFilterInputSpec
+    output_spec = CleanupEdgeFilterOutputSpec
+
+    def _run_interface(self, runtime):
+        from scipy.ndimage import grey_erosion
+
+        fmap_img = nb.load(self.inputs.in_file)
+        original = fmap_img.get_fdata(dtype=np.float32)
+        despiked = np.nan_to_num(nb.load(self.inputs.despiked_file).get_fdata(dtype=np.float32))
+        mask = np.nan_to_num(nb.load(self.inputs.in_mask).get_fdata(dtype=np.float32))
+
+        eroded = grey_erosion(mask, footprint=np.ones((3, 3, 1), dtype=bool))
+        interior = eroded > 0
+        edge = (mask - eroded) >= 0.5  # -sub <eroded> -thr 0.5 -bin
+        cleaned = original * interior + despiked * edge
+
+        out_file = fname_presuffix(self.inputs.in_file, suffix='_edgeclean', newpath=runtime.cwd)
+        fmap_img.__class__(
+            cleaned.astype(np.float32), fmap_img.affine, fmap_img.header
+        ).to_filename(out_file)
+        self._results['out_file'] = out_file
+        return runtime
+
+
 class Phasediff2FieldmapInputSpec(BaseInterfaceInputSpec):
     in_file = File(exists=True, mandatory=True, desc='input fieldmap')
     metadata = traits.Dict(mandatory=True, desc='BIDS metadata dictionary')
