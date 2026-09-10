@@ -375,7 +375,7 @@ def init_dwi_finalize_wf(
                 ('fieldwarps', 'inputnode.fieldwarps'),
                 ('gradwarp_field', 'inputnode.gradwarp_field'),
                 ('dwi_files', 'inputnode.dwi_files'),
-                (('dwi_sampling_grids', _select_grid, [index]), 'inputnode.output_grid'),
+                (('dwi_sampling_grids', _select_grid, index), 'inputnode.output_grid'),
                 ('b0_to_intramodal_template_transforms',
                  'inputnode.b0_to_intramodal_template_transforms'),
                 ('intramodal_template_to_t1_affine',
@@ -515,7 +515,7 @@ def init_dwi_finalize_wf(
             )
             workflow.connect([
                 (inputnode, grid_metadata, [
-                    (('dwi_sampling_grids', _select_grid, [index]), 'grid_file'),
+                    (('dwi_sampling_grids', _select_grid, index), 'grid_file'),
                 ]),
                 (grid_metadata, dwi_derivatives_wf, [
                     ('meta_dict', 'inputnode.resolution_meta'),

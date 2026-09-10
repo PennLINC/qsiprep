@@ -233,6 +233,53 @@ def test_two_acpc_resolutions_build_two_trans_wfs(tmp_path):
     assert prefixes == {'dwi_trans_wf_res2mm', 'dwi_trans_wf_res1p5mm'}
 
 
+def _grid_selections(wf, dest_field):
+    """Resolve every ``dwi_sampling_grids`` connection the way nipype resolves it.
+
+    ``Workflow.connect`` stores everything after the function as the argument
+    *tuple* (``source[2:]``), so ``(field, func, [index])`` passes the list, not
+    the index -- ``_select_grid`` then raises "list indices must be integers or
+    slices, not list" at hash time. Checking node names alone never sees that, so
+    run the stored connection through nipype's own evaluator.
+    """
+    from nipype.pipeline.engine.utils import evaluate_connect_function
+
+    grids = ['grid_res2mm.nii.gz', 'grid_res1p5mm.nii.gz']
+    inputnode = wf.get_node('inputnode')
+    selected = {}
+    for _, node, data in wf._graph.out_edges(inputnode, data=True):
+        for source, dest in data['connect']:
+            if not isinstance(source, tuple) or dest != dest_field:
+                continue
+            selected[node.name] = evaluate_connect_function(source[1], source[2], grids)
+    return selected
+
+
+def test_each_trans_wf_is_handed_its_own_output_grid(tmp_path):
+    wf, _ = _build_finalize(tmp_path, ['acpc:res-2mm', 'acpc:res-1p5mm'])
+    selected = _grid_selections(wf, 'inputnode.output_grid')
+    assert selected == {
+        'dwi_trans_wf_res2mm': 'grid_res2mm.nii.gz',
+        'dwi_trans_wf_res1p5mm': 'grid_res1p5mm.nii.gz',
+    }
+
+
+def test_grid_metadata_reads_its_own_output_grid(tmp_path):
+    """The sidecar's Resolution key comes from this node, so a mis-indexed grid
+    would report one resolution's voxel size on another's derivatives."""
+    wf, _ = _build_finalize(tmp_path, ['acpc:res-2mm', 'acpc:res-1p5mm'])
+    selected = _grid_selections(wf, 'grid_file')
+    assert selected == {
+        'grid_metadata_res2mm': 'grid_res2mm.nii.gz',
+        'grid_metadata_res1p5mm': 'grid_res1p5mm.nii.gz',
+    }
+
+
+def test_single_acpc_trans_wf_is_handed_the_only_grid(tmp_path):
+    wf, _ = _build_finalize(tmp_path, ['acpc:res-2mm'])
+    assert _grid_selections(wf, 'inputnode.output_grid') == {'dwi_trans_wf': 'grid_res2mm.nii.gz'}
+
+
 def test_two_acpc_resolutions_write_a_res_entity(tmp_path):
     wf, _ = _build_finalize(tmp_path, ['acpc:res-2mm', 'acpc:res-1p5mm'])
     found = collect_datasink_entities(wf)
@@ -268,9 +315,7 @@ def test_one_normalization_per_standard_space():
     from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.anatomical.volume import init_anat_derivatives_wf
 
-    specs = parse_output_spaces(
-        ['acpc:res-2mm', 'MNI152NLin2009cAsym', 'MNI152NLin6Asym']
-    )
+    specs = parse_output_spaces(['acpc:res-2mm', 'MNI152NLin2009cAsym', 'MNI152NLin6Asym'])
     wf = init_anat_derivatives_wf(output_spaces=specs)
     found = collect_datasink_entities(wf)
     targets = {e.get('to') for e in found.values() if e.get('from') == 'ACPC'}
