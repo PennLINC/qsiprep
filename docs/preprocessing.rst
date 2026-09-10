@@ -665,7 +665,6 @@ DWI preprocessing
         output_prefix='',
         ignore=[],
         b0_threshold=100,
-        motion_corr_to='iterative',
         b0_to_anat_transform='Rigid',
         hmc_model='3dSHORE',
         hmc_transform='Rigid',

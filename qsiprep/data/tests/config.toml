@@ -35,7 +35,6 @@ anat_modality = "T1w"
 anat_only = false
 anatomical_template = "MNI152NLin2009cAsym"
 b0_threshold = 100
-b0_motion_corr_to = "iterative"
 b0_to_anat_transform = "Rigid"
 b1_biascorrect_stage = "none"
 denoise_after_combining = false
