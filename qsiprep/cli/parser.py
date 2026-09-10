@@ -1336,7 +1336,7 @@ def parse_args(args=None, namespace=None):
         )
 
         if session_filters and not sessions:
-            raise ValueError(f'No DWI files found with session filter {session_filters}')
+            parser.error(f'No DWI files found with session filter {session_filters}')
 
         # If there are no sessions, there is only one option:
         if not sessions:
