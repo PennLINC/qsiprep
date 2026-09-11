@@ -22,6 +22,27 @@ implements) and `~/Downloads/2026-09-10-output-spaces-review.md` (the review bei
 not tracked in the repo — each finding is restated in full in the task that fixes it, so this
 plan stands alone).
 
+## Review history
+
+Drafted 2026-09-10 from the review of `output-spaces-new` at `0681498`, then put through a Codex
+adversarial review of the plan itself. That pass found three defects, all fixed here before any
+task was executed:
+
+- **Task 6 could not be built as written.** It connected from `rigid_acpc_resample_head` and
+  `_mask` inside the `standard_specs` loop at `volume.py:392`, but those names are not assigned
+  until `:464` and `:476`. `workflow.connect` evaluates immediately, so every non-anchor space
+  would have raised `UnboundLocalError`. Step 4 now moves the declarations first.
+- **Task 6 would have corrupted ROI-assisted registrations.** The ROI is resampled *inside*
+  `init_anat_normalization_wf` by a node `moving_is_acpc` deletes, so passing `inputnode.roi`
+  through would have paired an ACPC moving image with a pre-ACPC lesion mask — reintroducing the
+  frame mismatch the task exists to remove. The caller now resamples the ROI once.
+- **Task 9 did not close the hole it claimed to.** Rejecting only `acpc_count > 1` left a single
+  `acpc:res-native*` under `--distortion-group-merge` accepted and reporting its resolved voxel
+  size nowhere. Step 5 now carries the grid into the merge workflow's own sidecar.
+
+It also confirmed Task 2's assumption that nothing in the repository consumes the
+`init_dwi_trans_wf` reportlet's `validation_report`, and judged Tasks 1, 3, 4, 5 and 7 sound.
+
 ## Global Constraints
 
 - Run everything through micromamba: `micromamba run -n linc311 <command>`. Not pixi — the
@@ -56,6 +77,8 @@ plan stands alone).
 | `qsiprep/interfaces/bids.py` | `DerivativesSidecar` gains a runtime-merged `extra_data` input | 1 |
 | `qsiprep/workflows/dwi/derivatives.py` | Drop the `resolution_meta` sink plumbing | 1 |
 | `qsiprep/workflows/dwi/finalize.py` | Route the resolved grid size to the unit sidecar; per-resolution reportlet entities; stop building discarded subtrees | 1, 2, 9 |
+| `qsiprep/workflows/dwi/distortion_group_merge.py` | Report the resolved voxel size on merged outputs | 9 |
+| `qsiprep/workflows/base.py` | Hand the output grid to the merge workflow | 9 |
 | `qsiprep/workflows/dwi/resampling.py` | Thread `res` into the nested b0-ref reportlet | 2 |
 | `qsiprep/workflows/dwi/util.py` | `init_dwi_reference_wf` accepts extra sink entities | 2 |
 | `qsiprep/data/io_spec.json` | Add `[_res-{res}]` to the figures pattern | 2 |
@@ -776,12 +799,16 @@ wall-clock; say so in the commit message.
 
 **Interfaces:**
 - Produces: `init_anat_normalization_wf(spec, has_rois=False, nonlinear=True, moving_is_acpc=False, name=...)`.
-  When `moving_is_acpc=True` the workflow skips `acpc_reg`, `disassemble_transform`,
-  `extract_rigid_transform` and the `rigid_acpc_resample_*` nodes entirely, feeds
-  `inputnode.anatomical_reference` straight to `anat_nlin_normalization.moving_image` and
-  `inputnode.brain_mask` to `moving_mask`, and leaves `outputnode.to_template_rigid_transform`,
-  `from_template_rigid_transform` and `to_template_affine_transform` undefined — nothing
-  consumes them for a non-anchor space.
+  `moving_is_acpc=True` is a promise by the **caller** that `inputnode.anatomical_reference`,
+  `inputnode.brain_mask` and `inputnode.roi` are all already in the anchor's ACPC frame. The
+  workflow then skips `acpc_reg`, `disassemble_transform`, `extract_rigid_transform` and every
+  `rigid_acpc_resample_*` node — including `rigid_acpc_resample_roi` — and wires all three
+  inputs straight to `anat_nlin_normalization`. It leaves
+  `outputnode.to_template_rigid_transform`, `from_template_rigid_transform` and
+  `to_template_affine_transform` undefined; nothing consumes them for a non-anchor space.
+- Produces: `init_anat_preproc_wf` gains a `rigid_acpc_resample_roi` node (built only when
+  `has_rois`), so the ACPC ROI exists once at the caller's level rather than once inside each
+  normalization.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -819,12 +846,42 @@ def test_non_anchor_normalization_is_fed_the_acpc_anatomical(tmp_path):
         if field == 'inputnode.anatomical_reference'
     }
     assert sources == {'rigid_acpc_resample_head'}
+
+
+def test_non_anchor_normalization_gets_an_acpc_lesion_mask(tmp_path):
+    """The lesion mask must share the moving image's frame.
+
+    Each normalization used to resample the ROI itself with its own rigid
+    transform. Once the moving image arrives already in ACPC, a raw-frame ROI
+    would mask the wrong anatomy.
+    """
+    wf = _build_anat_preproc_wf(
+        tmp_path, ['acpc:res-2mm', 'MNI152NLin2009cAsym', 'MNI152NLin6Asym'], has_rois=True
+    )
+    norm_wf = wf.get_node('anat_normalization_MNI152NLin6Asym_wf')
+    assert norm_wf.get_node('rigid_acpc_resample_roi') is None, (
+        'the ROI is resampled once by the caller, not again per space'
+    )
+    sources = {
+        src.name
+        for src, dst, data in wf._graph.in_edges(norm_wf, data=True)
+        for _, field in data['connect']
+        if field == 'inputnode.roi'
+    }
+    assert sources == {'rigid_acpc_resample_roi'}
+    nlin = norm_wf.get_node('anat_nlin_normalization')
+    edge = norm_wf._graph.get_edge_data(norm_wf.get_node('inputnode'), nlin)
+    assert ('roi', 'lesion_mask') in edge['connect']
 ```
+
+Give `_build_anat_preproc_wf` a `has_rois=False` parameter and forward it to
+`init_anat_preproc_wf`.
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
 Run: `micromamba run -n linc311 python -m pytest qsiprep/tests/test_workflows_native.py -q -p no:cacheprovider -k "non_anchor_normalization"`
-Expected: FAIL — `acpc_reg` exists, and the source is `anat_reference_wf`.
+Expected: FAIL — `acpc_reg` exists, the source is `anat_reference_wf`, and there is no
+caller-level `rigid_acpc_resample_roi`.
 
 - [ ] **Step 3: Add the `moving_is_acpc` branch to the normalization workflow**
 
@@ -871,10 +928,44 @@ the template's frame, which is already true when the input is ACPC:
         ])  # fmt:skip
 ```
 
-Create `rigid_acpc_resample_anat` and `rigid_acpc_resample_mask` only in the `else` branch, and
-apply the same `if moving_is_acpc:` guard to the `if has_rois:` block's
-`rigid_acpc_resample_roi` (pass `inputnode.roi` straight through as `lesion_mask` when the
-moving image is already ACPC). Raise early on the unsupported combination:
+Create `rigid_acpc_resample_anat` and `rigid_acpc_resample_mask` only in the `else` branch.
+
+The `if has_rois:` block at `volume.py:1258-1273` needs the same treatment, and it is the easy
+one to get wrong: the ROI is currently resampled *inside* this workflow by
+`rigid_acpc_resample_roi`, driven by `extract_rigid_transform`. With `moving_is_acpc=True` that
+node is gone, so passing the raw `inputnode.roi` through would hand ANTs an ACPC moving image
+and a pre-ACPC lesion mask — masking the wrong anatomy and corrupting the very transform this
+task exists to fix. The caller supplies an already-resampled ROI instead (Step 5):
+
+```python
+    if has_rois:
+        desc += 'ROI masks of abnormal tissue were incorporated into the registration. '
+        if moving_is_acpc:
+            # moving_is_acpc means the caller resampled the ROI too; resampling it
+            # again here would apply a rigid transform this branch never estimated.
+            workflow.connect([
+                (inputnode, anat_nlin_normalization, [('roi', 'lesion_mask')]),
+            ])  # fmt:skip
+        else:
+            rigid_acpc_resample_roi = pe.Node(
+                ants.ApplyTransforms(input_image_type=0, interpolation='MultiLabel'),
+                name='rigid_acpc_resample_roi',
+            )
+            workflow.connect([
+                (rigid_acpc_resample_roi, anat_nlin_normalization, [
+                    ('output_image', 'lesion_mask'),
+                ]),
+                (extract_rigid_transform, rigid_acpc_resample_roi, [
+                    ('rigid_transform', 'transforms'),
+                ]),
+                (inputnode, rigid_acpc_resample_roi, [
+                    ('template_image', 'reference_image'),
+                    ('roi', 'input_image'),
+                ]),
+            ])  # fmt:skip
+```
+
+Raise early on the unsupported combination:
 
 ```python
     if moving_is_acpc and not nonlinear:
@@ -884,7 +975,44 @@ moving image is already ACPC). Raise early on the unsupported combination:
         )
 ```
 
-- [ ] **Step 4: Feed the ACPC anatomical at the fan-out call site**
+- [ ] **Step 4: Move the ACPC resample declarations above the standard-space loop**
+
+**This step is load-bearing and must come before Step 5.** The `for spec in standard_specs:`
+loop is at `volume.py:392`, but `rigid_acpc_resample_head` and `rigid_acpc_resample_mask` are
+not assigned until `:464` and `:476`. `workflow.connect` evaluates its arguments immediately, so
+referencing those names inside the loop raises `UnboundLocalError` at workflow-construction time
+for any non-anchor standard space.
+
+Move the five `rigid_acpc_resample_*` declarations (`rigid_acpc_resample_brain`, `_head`,
+`_unfatsat`, `_aseg`, `_mask`, currently `volume.py:459-479` under the `# Resampling` comment) to
+sit immediately **above** `standard_transform_wfs = []`. They are bare `pe.Node(...)`
+declarations — nothing between the two locations feeds them, and all of their connections are
+made later in the function, so the move is behaviour-preserving. Leave `acpc_aseg_to_dseg` and
+everything after it where it is.
+
+Add the ACPC ROI resample beside them, so the fan-out has an ACPC-frame lesion mask to hand out:
+
+```python
+    if has_rois:
+        # Resampled once here rather than inside each normalization: with
+        # moving_is_acpc the per-space workflows no longer estimate the rigid
+        # transform this needs.
+        rigid_acpc_resample_roi = pe.Node(
+            ants.ApplyTransforms(input_image_type=0, interpolation='MultiLabel'),
+            name='rigid_acpc_resample_roi',
+        )
+        workflow.connect([
+            (inputnode, rigid_acpc_resample_roi, [('roi', 'input_image')]),
+            (anchor_lps_wf, rigid_acpc_resample_roi, [
+                ('outputnode.template_lps', 'reference_image'),
+            ]),
+            (anat_normalization_wf, rigid_acpc_resample_roi, [
+                ('outputnode.to_template_rigid_transform', 'transforms'),
+            ]),
+        ])  # fmt:skip
+```
+
+- [ ] **Step 5: Feed the ACPC anatomical at the fan-out call site**
 
 In the `for spec in standard_specs:` loop, build the workflow with the new flag and change the
 moving-image connection from `anat_reference_wf` to `rigid_acpc_resample_head` (the ACPC-frame
@@ -907,20 +1035,26 @@ head, the same image `ds_t1_preproc` writes):
                 ('outputnode.template_lps', 'inputnode.template_image'),
                 ('outputnode.mask_lps', 'inputnode.template_mask'),
             ]),
-            (inputnode, norm_wf, [('roi', 'inputnode.roi')]),
             (rigid_acpc_resample_mask, norm_wf, [('output_image', 'inputnode.brain_mask')]),
             (rigid_acpc_resample_head, norm_wf, [('output_image', 'inputnode.anatomical_reference')]),
         ])  # fmt:skip
+        if has_rois:
+            workflow.connect([
+                (rigid_acpc_resample_roi, norm_wf, [('output_image', 'inputnode.roi')]),
+            ])  # fmt:skip
 ```
+
+Note the `(inputnode, norm_wf, [('roi', 'inputnode.roi')])` connection that was here is **gone** —
+the raw ROI must not reach a `moving_is_acpc` workflow.
 
 Confirm the node names: `grep -n "rigid_acpc_resample_head\|rigid_acpc_resample_mask = " qsiprep/workflows/anatomical/volume.py`
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [ ] **Step 6: Run the tests to verify they pass**
 
 Run: `micromamba run -n linc311 python -m pytest qsiprep/tests/test_workflows_native.py qsiprep/tests/test_output_spaces_naming.py qsiprep/tests/test_t2w_derivatives.py -q -p no:cacheprovider`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add qsiprep/workflows/anatomical/volume.py qsiprep/tests/test_workflows_native.py
@@ -1068,7 +1202,12 @@ prompted commit `976bc6e`. **Keep that lock** — it still guards concurrent *su
   `inputnode.t1_std_template_lps` and selects per index with `niu.Select`, exactly as it already
   does for `t1_std_forward_transforms`.
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Write the failing tests**
+
+Deleting the duplicate nodes is not the property that matters — the property is that slot *N*
+of `standard_template_lps` and slot *N* of `standard_forward_transforms` belong to the same
+spec. A test that only checks the `_deriv` nodes are gone would also pass if a `Merge` slot were
+left unconnected or filled in cache order. Test both.
 
 ```python
 def test_derivatives_reuse_the_preproc_template_chain(tmp_path):
@@ -1081,7 +1220,61 @@ def test_derivatives_reuse_the_preproc_template_chain(tmp_path):
     assert not duplicated, f'derivatives refetch templates: {duplicated}'
     duplicated_lps = [name for name in wf.list_node_names() if '_deriv_wf' in name]
     assert not duplicated_lps, f'derivatives rebuild the LPS chain: {duplicated_lps}'
+
+
+def test_transform_and_grid_lists_stay_index_aligned(tmp_path):
+    """Registrations dedup per template, LPS chains per spec -- two different keys
+    over one list. Every slot of both merges must be filled, from the producer
+    belonging to that spec, or a Select(index=N) pairs one space's transform with
+    another space's grid."""
+    spaces = [
+        'acpc:res-2mm',
+        'MNI152NLin2009cAsym:res-1',
+        'MNI152NLin2009cAsym:res-2',
+        'MNI152NLin6Asym',
+    ]
+    wf = _build_anat_preproc_wf(tmp_path, spaces)
+    from qsiprep.utils.spaces import parse_output_spaces
+
+    n_standard = len([s for s in parse_output_spaces(spaces) if s.standard])
+
+    for merge_name in ('merge_std_forward_transforms', 'merge_std_template_lps'):
+        merge = wf.get_node(merge_name)
+        assert merge is not None, f'{merge_name} is missing'
+        assert merge.inputs.numinputs == n_standard, (
+            f'{merge_name} has {merge.inputs.numinputs} slots for {n_standard} specs'
+        )
+        filled = {
+            field
+            for _, _, data in wf._graph.in_edges(merge, data=True)
+            for _, field in data['connect']
+        }
+        assert filled == {f'in{i}' for i in range(1, n_standard + 1)}, (
+            f'{merge_name} slots not all connected: {sorted(filled)}'
+        )
+
+    # Slot N of both merges must come from the same spec. The LPS producer is named
+    # per spec, the transform producer per template, so compare the spec each slot's
+    # source was built for.
+    def _slot_sources(merge_name):
+        merge = wf.get_node(merge_name)
+        sources = {}
+        for src, _, data in wf._graph.in_edges(merge, data=True):
+            for _, field in data['connect']:
+                sources[field] = src.name
+        return sources
+
+    lps_sources = _slot_sources('merge_std_template_lps')
+    xfm_sources = _slot_sources('merge_std_forward_transforms')
+    specs = [s for s in parse_output_spaces(spaces) if s.standard]
+    for position, spec in enumerate(specs, start=1):
+        label = _spec_node_label(spec)
+        assert label in lps_sources[f'in{position}'], (
+            f'slot in{position} grid comes from {lps_sources[f"in{position}"]}, not {label}'
+        )
 ```
+
+Import `_spec_node_label` from `qsiprep.workflows.anatomical.volume` at the top of the test.
 
 - [ ] **Step 2: Run the test to verify it fails**
 
@@ -1099,11 +1292,42 @@ Add `'standard_template_lps'` to the `outputnode` field list in `init_anat_prepr
         )
 ```
 
-In the per-spec loop, connect each spec's LPS output into slot `index + 1` — the anchor-reusing
-branch feeds `anchor_lps_wf`, the rest feed their own `std_lps_wf`. Because Task 7 made several
-specs share one registration while each still has its own `res-`-fetched template, the LPS
-node is per *spec*, not per registration: build `get_std_template`/`std_lps_wf` for every spec
-whose `templateflow_kwargs` differ from one already built, keyed on `str(spec)`.
+Do **not** assemble the two lists in separate passes. Task 7 dedups registrations on
+`spec.fullname` while the LPS chain is per *spec* (two `res-` labels of one template share a
+registration but each has its own fetched grid), so two independent loops over two caches are
+exactly how slot *N* of one list stops belonging to slot *N* of the other. Build one record per
+spec, in `standard_specs` order, holding both producers, and fill both merges from it:
+
+```python
+    # (spec, normalization workflow, LPS workflow) per requested standard space, in
+    # standard_specs order. Both merges are filled from this one list so their slots
+    # cannot drift apart: the registration is shared per template, the grid per spec.
+    per_spec = []
+    for spec in standard_specs:
+        norm_wf = registrations.get(spec.fullname)
+        ...  # build norm_wf when absent, exactly as in Task 7
+        lps_wf = lps_chains.get(str(spec))
+        if lps_wf is None:
+            lps_wf = init_template_lps_wf(name=f'template_lps_{_spec_node_label(spec)}_wf')
+            ...  # build and connect its get_std_template, as in Task 6
+            lps_chains[str(spec)] = lps_wf
+        per_spec.append((spec, norm_wf, lps_wf))
+
+    for index, (spec, norm_wf, lps_wf) in enumerate(per_spec):
+        workflow.connect([
+            (norm_wf, merge_std_forward_transforms, [
+                ('outputnode.to_template_nonlinear_transform', f'in{index + 1}'),
+            ]),
+            (lps_wf, merge_std_template_lps, [
+                ('outputnode.template_lps', f'in{index + 1}'),
+            ]),
+        ])  # fmt:skip
+```
+
+The anchor's own spec takes `anchor_lps_wf` as its `lps_wf`, seeded into `lps_chains` under
+`str(acpc_anchor)` alongside the `registrations` cache from Task 7. Keep the existing
+`merge_std_reverse_transforms` and `merge_std_reports` in the same loop so every merge is
+filled from the same record.
 
 Then: `(merge_std_template_lps, outputnode, [('out', 'standard_template_lps')])`.
 
@@ -1165,9 +1389,19 @@ extra resolutions' resampling and denoising run in full and are discarded. Downs
 `Resolution` sidecar is produced for `res-native*` merged outputs. No parse-time check rejects
 the combination and nothing warns.
 
-**Option A (planned below): reject the combination at parse time, and stop building the
-discarded subtrees.** Honest and small. It turns a currently-accepted invocation into an error —
-including one in active local use — but that invocation silently produces one resolution today.
+**Option A (planned below): reject *multiple* ACPC resolutions at parse time, stop building the
+discarded subtrees, and carry the surviving resolution's voxel size into the merge workflow's
+sidecar.** Honest and small. It turns a currently-accepted invocation into an error — including
+one in active local use — but that invocation silently produces one resolution today.
+
+The third part is not optional. Rejecting only `acpc_count > 1` still leaves a single
+`acpc:res-nativemin` plus `--distortion-group-merge` accepted, and that output reports no
+resolved voxel size anywhere: `init_distortion_group_merge_wf` builds its own `merged_sidecar`
+from `assembly_to_sidecar` (`distortion_group_merge.py:243-253`) and never sees a grid, while
+`finalize.py` hits `continue` before `grid_metadata` is built. Task 1's tests all run the
+`write_derivatives=True` path, so they pass while this stays broken. A native resolution is
+exactly the case where the filename cannot report the grid, so this is a real user-visible
+loss, not a tidiness point.
 
 **Option B (not planned here): support it.** Pass `acpc_specs` into
 `init_distortion_group_merge_wf` and fan out its derivatives the way `finalize.py` does. That is
@@ -1178,6 +1412,8 @@ Confirm the choice with the user before starting. The steps below implement Opti
 **Files:**
 - Modify: `qsiprep/cli/parser.py` (after `specs` is parsed)
 - Modify: `qsiprep/workflows/dwi/finalize.py:~330` (loop entry)
+- Modify: `qsiprep/workflows/dwi/distortion_group_merge.py:243-253` (merged sidecar)
+- Modify: `qsiprep/workflows/base.py:468-474` (grid connection)
 - Test: `qsiprep/tests/test_cli.py`, `qsiprep/tests/test_output_spaces_naming.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -1211,8 +1447,28 @@ def test_merged_groups_build_only_the_first_resolution(tmp_path):
     assert prefixes == {'dwi_trans_wf'}
 ```
 
+And, for the merged sidecar:
+
+```python
+def test_merged_native_resolution_reaches_the_sidecar(tmp_path):
+    """res-native* is reported nowhere but the sidecar, and the merge workflow
+    writes its own -- so the resolved grid has to reach that one too."""
+    from qsiprep.workflows.dwi.distortion_group_merge import init_distortion_group_merge_wf
+
+    wf = _build_distortion_group_merge(tmp_path)
+    grid_metadata = wf.get_node('grid_metadata')
+    merged_sidecar = wf.get_node('merged_sidecar')
+    assert grid_metadata is not None, 'the merged output reports no resolved voxel size'
+    edge = wf._graph.get_edge_data(grid_metadata, merged_sidecar)
+    assert edge is not None
+    assert ('meta_dict', 'extra_data') in edge['connect']
+```
+
 Give `_build_finalize` a `write_derivatives=True` parameter and forward it to
-`init_dwi_finalize_wf`.
+`init_dwi_finalize_wf`. Add a `_build_distortion_group_merge(tmp_path)` helper alongside it that
+calls `init_distortion_group_merge_wf` with `merging_strategy='concat'`, one source file, a
+single-element `inputs_list`, and the `assembly`/`units` the existing merge tests use — check
+`grep -rn "init_distortion_group_merge_wf" qsiprep/tests/` for a fixture to copy.
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
@@ -1255,17 +1511,62 @@ still be named and entitled as though it were one of several:
         acpc_specs = acpc_specs[:1]
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [ ] **Step 5: Carry the resolved voxel size into the merged sidecar**
+
+`init_distortion_group_merge_wf` already receives `t1_brain`, `t1_seg` and `t1_mask` from
+`anat_preproc_wf` (`workflows/base.py:468-474`), so the grid can follow the same route. Because
+Step 3 rejects more than one ACPC spec under merging, `dwi_sampling_grids` has exactly one
+element here and `_first_sampling_grid` is unambiguous.
+
+Add `'dwi_sampling_grid'` to the merge workflow's `inputnode` fields, and inside it:
+
+```python
+    if assembly is not None:
+        ...
+        grid_metadata = pe.Node(
+            niu.Function(
+                input_names=['grid_file'],
+                output_names=['meta_dict'],
+                function=_grid_metadata,
+            ),
+            name='grid_metadata',
+            run_without_submitting=True,
+        )
+        workflow.connect([
+            (inputnode, grid_metadata, [('dwi_sampling_grid', 'grid_file')]),
+            (grid_metadata, merged_sidecar, [('meta_dict', 'extra_data')]),
+        ])  # fmt:skip
+```
+
+Import `_grid_metadata` from `.finalize` — it is the same function, and the resolved size must
+be computed the same way on both paths.
+
+In `qsiprep/workflows/base.py`, extend the existing connection block:
+
+```python
+            workflow.connect([
+                (anat_preproc_wf, merging_group_workflows[merged_group], [
+                    ('outputnode.t1_brain', 'inputnode.t1_brain'),
+                    ('outputnode.t1_seg', 'inputnode.t1_seg'),
+                    ('outputnode.t1_mask', 'inputnode.t1_mask'),
+                    (('outputnode.dwi_sampling_grids', _first_sampling_grid),
+                     'inputnode.dwi_sampling_grid'),
+                ]),
+            ])  # fmt:skip
+```
+
+- [ ] **Step 6: Run the tests to verify they pass**
 
 Run: `micromamba run -n linc311 python -m pytest qsiprep/tests/test_cli.py qsiprep/tests/test_output_spaces_naming.py -q -p no:cacheprovider`
 Expected: PASS.
 
-- [ ] **Step 6: Document the restriction**
+- [ ] **Step 7: Document the restriction**
 
 Add a sentence to the `--output-spaces` section of `docs/usage.rst` saying that multiple `acpc`
-resolutions cannot be combined with `--distortion-group-merge`, and why.
+resolutions cannot be combined with `--distortion-group-merge`, and why. Note that a single
+`res-native*` resolution *is* supported there and reports its resolved size in the sidecar.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add qsiprep/cli/parser.py qsiprep/workflows/dwi/finalize.py \
@@ -1275,6 +1576,10 @@ git commit -m "fix: reject multiple ACPC resolutions with --distortion-group-mer
 The merge workflow writes one set of derivatives with no res- entity, so the extra
 resolutions were resampled and denoised in full and then silently dropped. Fail at
 parse time instead, and stop building the subtrees nothing consumes.
+
+A single res-native* resolution stays supported, and now reports its resolved voxel
+size: the merge workflow writes its own sidecar and never saw the output grid, so
+the one case where the filename cannot carry the resolution reported it nowhere.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01GyEjXrw7jjBW8AA1Lgpi7R"
