@@ -177,8 +177,14 @@ Infant mode
 ***********
 
 If ``--infant`` is used, ``MNIInfant:cohort-auto`` is appended to ``--output-spaces``
-(unless an ``MNIInfant`` entry is already present), and the pipeline selects the
-appropriate cohort based on the participant's age.
+unless an infant template is already requested -- ``MNIInfant`` or ``UNCInfant``,
+either of which anchors AC-PC. The pipeline selects the appropriate cohort based on
+the participant's age.
+
+On the deprecated path, ``--infant`` replaces the anatomical template rather than
+adding to it, so ``--output-resolution 2 --infant --anatomical-template
+MNI152NLin2009cAsym`` requests the infant template alone, as it did before
+``--output-spaces`` existed.
 
 ``--infant`` is only compatible with ``--subject-anatomical-reference sessionwise``.
 

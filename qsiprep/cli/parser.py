@@ -1185,6 +1185,7 @@ def _apply_output_space_deprecations(opts, parser=None):
     on the order options were given in.
     """
     from qsiprep.utils.spaces import (
+        INFANT_ANCHORS,
         OutputSpacesError,
         parse_output_spaces,
         select_acpc_anchor,
@@ -1226,9 +1227,14 @@ def _apply_output_space_deprecations(opts, parser=None):
                 'for example: --output-spaces acpc:res-2mm MNI152NLin2009cAsym'
             )
         given = [f'acpc:res-{_format_mm(legacy_resolution)}']
-        given.append(legacy_template or default_template)
+        # --infant replaced the template outright on the legacy path, so an explicit
+        # --anatomical-template does not survive it. Keeping both would add an adult
+        # SyN and adult-space anatomicals to a run that never had them.
+        given.append(default_template if opts.infant else (legacy_template or default_template))
 
-    if opts.infant and not any(s.split(':')[0] == 'MNIInfant' for s in given):
+    # Any infant template already anchors AC-PC (see INFANT_ANCHORS); only add the
+    # default one when the request names none.
+    if opts.infant and not any(s.split(':')[0] in INFANT_ANCHORS for s in given):
         given.append('MNIInfant:cohort-auto')
 
     try:

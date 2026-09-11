@@ -513,3 +513,32 @@ def test_anchor_is_independent_of_token_order():
         parse_output_spaces(['acpc:res-2mm', 'MNIInfant:cohort-auto:res-2:res-1'])
     )
     assert forward == reverse
+
+
+def test_infant_accepts_an_explicit_infant_template(tmp_path):
+    """UNCInfant is an infant anchor, so --infant must not append MNIInfant too."""
+    from qsiprep.cli.parser import _apply_output_space_deprecations
+
+    opts = _parse(
+        tmp_path, '--infant', '--output-spaces', 'acpc:res-2mm', 'UNCInfant:cohort-auto'
+    )
+    _apply_output_space_deprecations(opts)
+    assert not any(s.startswith('MNIInfant') for s in opts.output_spaces)
+    assert opts.acpc_anchor.startswith('UNCInfant')
+
+
+def test_legacy_infant_replaces_rather_than_augments_the_template(tmp_path):
+    """main discarded --anatomical-template under --infant; the shim must too."""
+    from qsiprep.cli.parser import _apply_output_space_deprecations
+
+    opts = _parse(
+        tmp_path,
+        '--infant',
+        '--output-resolution',
+        '2',
+        '--anatomical-template',
+        'MNI152NLin2009cAsym',
+    )
+    _apply_output_space_deprecations(opts)
+    assert not any(s.startswith('MNI152NLin2009cAsym') for s in opts.output_spaces)
+    assert opts.output_spaces == ['acpc:res-2mm', 'MNIInfant:cohort-auto']
