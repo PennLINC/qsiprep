@@ -9,6 +9,8 @@ from nipype.interfaces import fsl
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 
+from ...interfaces.fmap import CleanupEdgeFilter
+
 
 def siemens2rads(in_file, out_file=None):
     """
@@ -94,33 +96,19 @@ def cleanup_edge_pipeline(name='Cleanup'):
     fugue = pe.Node(
         fsl.FUGUE(save_fmap=True, despike_2dfilter=True, despike_threshold=2.1), name='Despike'
     )
-    erode = pe.Node(
-        fsl.maths.MathsCommand(nan2zeros=True, args='-kernel 2D -ero'), name='MskErode'
-    )
-    newmsk = pe.Node(fsl.MultiImageMaths(op_string='-sub %s -thr 0.5 -bin'), name='NewMask')
-    applymsk = pe.Node(fsl.ApplyMask(nan2zeros=True), name='ApplyMask')
-    join = pe.Node(niu.Merge(2), name='Merge')
-    addedge = pe.Node(fsl.MultiImageMaths(op_string='-mas %s -add %s'), name='AddEdge')
+    # The fslmaths erode/subtract/mask/add chain is reimplemented in nibabel;
+    # only FUGUE still needs FSL here (fsl-fugue, not the dropped fsl-avwutils).
+    edge_cleanup = pe.Node(CleanupEdgeFilter(), name='EdgeCleanup')
 
     wf = pe.Workflow(name=name)
     wf.connect([
         (inputnode, fugue, [
             ('in_file', 'fmap_in_file'),
             ('in_mask', 'mask_file')]),
-        (inputnode, erode, [
-            ('in_mask', 'in_file')]),
-        (inputnode, newmsk, [
-            ('in_mask', 'in_file')]),
-        (erode, newmsk, [
-            ('out_file', 'operand_files')]),
-        (fugue, applymsk, [
-            ('fmap_out_file', 'in_file')]),
-        (newmsk, applymsk, [
-            ('out_file', 'mask_file')]),
-        (erode, join, [('out_file', 'in1')]),
-        (applymsk, join, [('out_file', 'in2')]),
-        (inputnode, addedge, [('in_file', 'in_file')]),
-        (join, addedge, [('out', 'operand_files')]),
-        (addedge, outputnode, [('out_file', 'out_file')])
+        (inputnode, edge_cleanup, [
+            ('in_file', 'in_file'),
+            ('in_mask', 'in_mask')]),
+        (fugue, edge_cleanup, [('fmap_out_file', 'despiked_file')]),
+        (edge_cleanup, outputnode, [('out_file', 'out_file')])
     ])  # fmt:skip
     return wf

@@ -440,10 +440,10 @@ class execution(_Config):
     """Unique identifier of this particular run."""
     participant_label = None
     """List of participant identifiers that are to be preprocessed."""
-    session_id = None
+    session_label = None
     """List of session identifiers that are to be preprocessed"""
     processing_list = []
-    """List of (subject_id, [session_id, ...]) to be preprocessed together."""
+    """List of (subject_id, [session_label, ...]) to be preprocessed together."""
     skip_anat_based_spatial_normalization = False
     """Should we skip normalizing the anatomical data to a template?"""
     templateflow_home = _templateflow_home
@@ -565,10 +565,6 @@ class workflow(_Config):
     """Anatomical template to use. This field doesn't include the cohort."""
     b0_threshold = None
     """Any value in the .bval file less than this will be considered a b=0 image."""
-    b0_motion_corr_to = None
-    """Perform SHORELine's initial b=0-based registration to first volume?
-    Or make a template? Either 'iterative' or 'first'. DEPRECATED: later versions will
-    always use 'iterative'."""
     b0_to_anat_transform = None
     """Transformation model for b=0-to-anatomical coregistration. Either 'Rigid' or
     'Affine'."""

@@ -4,6 +4,8 @@ from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
+from niworkflows.interfaces.nibabel import RegridToZooms
+from packaging.version import Version
 
 from ... import config
 from ...data import load as load_data
@@ -13,12 +15,162 @@ from ...interfaces.niworkflows import ANTSRegistrationRPT
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
+def init_rotation_search_wf(transform='Rigid', name='rotation_search_wf'):
+    """Estimate an initial transform for a coregistration by global rotation search.
+
+    ``antsAI`` refines a grid of candidate orientations (all combinations of
+    three Euler angles at 20 degree spacing, +-81 degrees per axis) with a few
+    conjugate-gradient iterations each and keeps the candidate with the best
+    Mattes MI. A center-of-mass start alone leaves antsRegistration to recover
+    the full rotation, and a Mattes fit reliably captures only rotations of a
+    few tens of degrees; anything larger (an infant positioned differently for
+    the dMRI than for the anatomical) converges to a rotated local optimum.
+    The search runs on 4 mm resamples of the inputs: there are several hundred
+    candidates, and the result only needs to land within the capture range of
+    the full-resolution registration that follows.
+
+    The multi-start optimizer behind ``antsAI`` carried state between starts
+    before ANTs 2.6.0 (ANTs PR #1861), which made its answer depend on the
+    order of the candidates; older ANTs installations get a warning.
+
+    Parameters
+    ----------
+    transform : str
+        'Rigid', 'Similarity' or 'Affine': the transform ``antsAI`` optimizes
+        at each candidate orientation. Use 'Rigid' between images of the same
+        subject and 'Similarity' against a template, where scale is unknown.
+    name : str
+        Name of workflow (default: ``rotation_search_wf``)
+
+    Inputs
+    ------
+    fixed_image
+        Image being registered to
+    moving_image
+        Image that will be transformed to fixed_image
+
+    Outputs
+    -------
+    initial_transform
+        ITK transform file, suitable for ``initial_moving_transform``
+    """
+    workflow = Workflow(name=name)
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=['fixed_image', 'moving_image']), name='inputnode'
+    )
+    outputnode = pe.Node(niu.IdentityInterface(fields=['initial_transform']), name='outputnode')
+
+    res_fixed = pe.Node(RegridToZooms(zooms=(4.0, 4.0, 4.0), smooth=True), name='res_fixed')
+    res_moving = pe.Node(RegridToZooms(zooms=(4.0, 4.0, 4.0), smooth=True), name='res_moving')
+
+    # An arc of 0.45 (+-81 degrees) rather than 0.5 puts a 20-degree grid
+    # point at -1 degree: most studies roughly align head position, so a start
+    # next to identity matters more than reaching exactly +-90. Sloppy mode
+    # shrinks the arc to +-18 degrees (8 candidates vs 729).
+    arc_fraction = 0.1 if config.execution.sloppy else 0.45
+    rotation_search = pe.Node(
+        ants.AI(
+            metric=('Mattes', 32, 'Regular', 0.25),
+            transform=(transform, 0.1),
+            search_factor=(20.0, arc_fraction),
+            principal_axes=False,
+            convergence=(10, 1e-6, 10),
+            verbose=True,
+        ),
+        name='rotation_search',
+        n_procs=config.nipype.omp_nthreads,
+    )
+
+    # nipype reports the last release tag (ANTs' "2.6.0.dev1" means one commit
+    # past v2.6.0, and parses as "2.6.0"), so this catches exactly the builds
+    # that predate the fix. None means ANTs is not on the path yet.
+    ants_version = rotation_search.interface.version
+    if ants_version and Version(ants_version) < Version('2.6.0'):
+        config.loggers.workflow.warning(
+            'antsAI from ANTs %s: versions before 2.6.0 carry optimizer state '
+            'between candidate orientations (ANTs PR #1861), so the rotation '
+            'search can return an arbitrary candidate. Upgrade ANTs.',
+            ants_version,
+        )
+
+    workflow.connect([
+        (inputnode, res_fixed, [('fixed_image', 'in_file')]),
+        (inputnode, res_moving, [('moving_image', 'in_file')]),
+        (res_fixed, rotation_search, [('out_file', 'fixed_image')]),
+        (res_moving, rotation_search, [('out_file', 'moving_image')]),
+        (rotation_search, outputnode, [('output_transform', 'initial_transform')]),
+    ])  # fmt:skip
+    return workflow
+
+
+def init_structural_to_b0_alignment_wf(name='structural_to_b0_alignment_wf'):
+    """Pre-align a structural image into the frame of a distorted b=0 reference.
+
+    TORTOISE rigidly registers its structural input to the b=0 internally
+    (DRBUDDI, and EPIREG for DIFFPREP's ``--epi T2Wreg`` mode), but only from
+    a center-of-mass initialization, which cannot recover a large rotation
+    between the anatomical and the dMRI acquisition. Resampling the
+    structural into the b=0 frame first, through an ``antsAI`` rotation
+    search, hands TORTOISE a target already within its capture range. The
+    search transform is deliberately coarse: TORTOISE's own rigid
+    registration provides the fine alignment.
+
+    Parameters
+    ----------
+    name : str
+        Name of workflow (default: ``structural_to_b0_alignment_wf``)
+
+    Inputs
+    ------
+    structural_image
+        Anatomical image (e.g. the unfatsat T2w), in any orientation
+    b0_ref
+        b=0 reference image in the frame the distortion correction runs in
+
+    Outputs
+    -------
+    structural_aligned
+        The structural image resampled onto the b=0 reference grid
+    """
+    workflow = Workflow(name=name)
+    inputnode = pe.Node(
+        niu.IdentityInterface(fields=['structural_image', 'b0_ref']), name='inputnode'
+    )
+    outputnode = pe.Node(niu.IdentityInterface(fields=['structural_aligned']), name='outputnode')
+
+    # fixed=b0: antsAI's transform then maps b0-space points to structural
+    # space, which is exactly what resampling onto the b0 grid needs
+    rotation_search_wf = init_rotation_search_wf(transform='Rigid')
+    resample_structural = pe.Node(
+        ants.ApplyTransforms(dimension=3, interpolation='LanczosWindowedSinc'),
+        name='resample_structural',
+    )
+
+    workflow.connect([
+        (inputnode, rotation_search_wf, [
+            ('b0_ref', 'inputnode.fixed_image'),
+            ('structural_image', 'inputnode.moving_image'),
+        ]),
+        (inputnode, resample_structural, [
+            ('structural_image', 'input_image'),
+            ('b0_ref', 'reference_image'),
+        ]),
+        (rotation_search_wf, resample_structural, [
+            ('outputnode.initial_transform', 'transforms'),
+        ]),
+        (resample_structural, outputnode, [('output_image', 'structural_aligned')]),
+    ])  # fmt:skip
+    return workflow
+
+
 def init_b0_to_anat_registration_wf(
     write_report=True, transform_type='Rigid', name='b0_anat_coreg'
 ):
     """
     Calculates the registration between a reference b0 image and T1-space
-    using `antsRegistration`
+    using `antsRegistration`, initialized by an ``antsAI`` rotation search
+    so that large orientation differences between the dMRI and the
+    anatomical are recovered.
 
     .. workflow::
         :graph2use: orig
@@ -102,7 +254,6 @@ def init_b0_to_anat_registration_wf(
     coreg.inputs.sampling_strategy = ['Random']
     coreg.inputs.sampling_percentage = [0.25]
     coreg.inputs.radius_or_number_of_bins = [32]
-    coreg.inputs.initial_moving_transform_com = 0
     coreg.inputs.interpolation = 'HammingWindowedSinc'
     coreg.inputs.dimension = 3
     coreg.inputs.winsorize_lower_quantile = 0.025
@@ -115,7 +266,16 @@ def init_b0_to_anat_registration_wf(
     coreg.inputs.output_warped_image = True
     b0_to_anat = pe.Node(coreg, name='b0_to_anat', n_procs=config.nipype.omp_nthreads)
 
+    rotation_search_wf = init_rotation_search_wf(transform='Rigid')
+
     workflow.connect([
+        (inputnode, rotation_search_wf, [
+            ('t1_brain', 'inputnode.fixed_image'),
+            ('ref_b0_brain', 'inputnode.moving_image'),
+        ]),
+        (rotation_search_wf, b0_to_anat, [
+            ('outputnode.initial_transform', 'initial_moving_transform'),
+        ]),
         (inputnode, b0_to_anat, [
             ('t1_brain', 'fixed_image'),
             ('ref_b0_brain', 'moving_image'),
@@ -213,6 +373,9 @@ def init_direct_b0_acpc_wf(write_report=True, name='b0_anat_coreg'):
         n_procs=config.nipype.omp_nthreads,
     )
 
+    # The template is another subject at another age, so scale is unknown
+    rotation_search_wf = init_rotation_search_wf(transform='Similarity')
+
     # Extract the rigid components of the transform
     itk_to_rigid = pe.Node(AffineToRigid(), name='itk_to_rigid')
 
@@ -226,6 +389,13 @@ def init_direct_b0_acpc_wf(write_report=True, name='b0_anat_coreg'):
     acpc_report = pe.Node(ACPCReport(), name='acpc_report')
 
     workflow.connect([
+        (inputnode, rotation_search_wf, [
+            ('t1_brain', 'inputnode.fixed_image'),
+            ('ref_b0_brain', 'inputnode.moving_image'),
+        ]),
+        (rotation_search_wf, acpc_reg, [
+            ('outputnode.initial_transform', 'initial_moving_transform'),
+        ]),
         (inputnode, acpc_reg, [
             ('t1_brain', 'fixed_image'),
             (('t1_seg', _format_masks), 'fixed_image_masks'),

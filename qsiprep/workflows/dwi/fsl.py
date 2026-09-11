@@ -574,6 +574,9 @@ def init_fsl_hmc_wf(
                 ('t2w_unfatsat', 'inputnode.t2w_unfatsat'),
                 ('original_files', 'inputnode.original_files'),
             ]),
+            (pre_eddy_b0_ref_wf, drbuddi_wf, [
+                ('outputnode.ref_image', 'inputnode.b0_ref'),
+            ]),
             (drbuddi_wf, outputnode, [
                 ('outputnode.sdc_warps', 'to_dwi_ref_warps'),
                 ('outputnode.sdc_scaling_images', 'sdc_scaling_images'),

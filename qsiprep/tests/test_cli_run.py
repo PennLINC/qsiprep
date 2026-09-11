@@ -257,7 +257,7 @@ def test_collect_data(tmpdir, name, skeleton, sessions, n_anats):
     subj_data = collect_data(
         bids_dir=str(bids_dir),
         participant_label=participant_label,
-        session_id=sessions[0],
+        session_label=sessions[0],
         filters=None,
         bids_validate=False,
         ignore=[],
@@ -267,7 +267,7 @@ def test_collect_data(tmpdir, name, skeleton, sessions, n_anats):
     subj_data = collect_data(
         bids_dir=str(bids_dir),
         participant_label=participant_label,
-        session_id=sessions[1],
+        session_label=sessions[1],
         filters=None,
         bids_validate=False,
         ignore=[],
@@ -277,7 +277,7 @@ def test_collect_data(tmpdir, name, skeleton, sessions, n_anats):
     subj_data = collect_data(
         bids_dir=str(bids_dir),
         participant_label=participant_label,
-        session_id=sessions,
+        session_label=sessions,
         filters=None,
         bids_validate=False,
         ignore=['t2w'],
@@ -302,7 +302,6 @@ def _dest(option):
 # (deprecated flag, the option it enables, the value that option is set to)
 FORWARDED_FLAGS = [
     ('--dwi-only', '--anat-modality', 'none'),
-    ('--longitudinal', '--subject-anatomical-reference', 'unbiased'),
     ('--dwi-no-biascorr', '--b1-biascorrect-stage', 'none'),
 ]
 
@@ -369,41 +368,14 @@ def test_replacement_option_is_not_deprecated(minimal_args, capsys, flag, option
     assert getattr(opts, _dest(option)) == value
 
 
-def test_prefer_dedicated_fmaps_warns_and_is_ignored(minimal_args, capsys):
-    """The flag is gone from the workflow, so it only warns."""
+def test_prefer_dedicated_fmaps_is_removed(minimal_args, capsys):
+    """The deprecated flag is no longer accepted by the parser."""
     from qsiprep.cli.parser import _build_parser
 
-    opts = _build_parser().parse_args([*minimal_args, '--prefer-dedicated-fmaps'])
+    with pytest.raises(SystemExit):
+        _build_parser().parse_args([*minimal_args, '--prefer-dedicated-fmaps'])
 
-    warning = capsys.readouterr().err
-    assert '--prefer-dedicated-fmaps' in warning
-    assert 'no effect' in warning
-    assert 'B0FieldIdentifier' in warning
-    # It now points at the flag that actually does what it was meant to.
-    assert '--ignore pepolar-dwis' in warning
-    assert not hasattr(opts, 'prefer_dedicated_fmaps')
-
-
-@pytest.mark.parametrize('value', ['iterative', 'first'])
-def test_b0_motion_corr_to_warns_but_still_works(minimal_args, capsys, value):
-    """Deprecated, but it still selects the SHORELine b=0 alignment strategy."""
-    from qsiprep.cli.parser import _build_parser
-
-    opts = _build_parser().parse_args([*minimal_args, '--b0-motion-corr-to', value])
-
-    warning = capsys.readouterr().err
-    assert '--b0-motion-corr-to' in warning
-    assert 'iterative' in warning
-    assert opts.b0_motion_corr_to == value
-
-
-def test_b0_motion_corr_to_is_silent_by_default(minimal_args, capsys):
-    from qsiprep.cli.parser import _build_parser
-
-    opts = _build_parser().parse_args(minimal_args)
-
-    assert capsys.readouterr().err == ''
-    assert opts.b0_motion_corr_to == 'iterative'
+    assert 'unrecognized arguments: --prefer-dedicated-fmaps' in capsys.readouterr().err
 
 
 @pytest.mark.parametrize('value', ['Rigid', 'Affine'])

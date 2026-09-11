@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=pennlinc/qsiprep-base:20260905
+ARG BASE_IMAGE=pennlinc/qsiprep-base:20260910
 
 FROM ghcr.io/prefix-dev/pixi:0.58.0 AS build
 RUN apt-get update && \
@@ -43,6 +43,7 @@ ENV HOME="/home/qsiprep"
 # Run compiled binaries only: MRtrix3's Python scripts (dwibiascorrect among them) have
 # no interpreter here, since Python arrives with the pixi env in the stages below.
 RUN test "$(command -v mrdegibbs)"      = "/opt/mrtrix3-stable/bin/mrdegibbs" && \
+    test ! -e /opt/conda && \
     test "$(command -v dwidenoise)"     = "/opt/mrtrix3-stable/bin/dwidenoise" && \
     test "$(command -v dwibiascorrect)" = "/opt/mrtrix3-stable/bin/dwibiascorrect" && \
     test "$(command -v dwidenoise2)"    = "/opt/mrtrix3-dev/bin/dwidenoise2" && \
@@ -60,10 +61,15 @@ COPY --link --from=build /test-shell-hook.sh /shell-hook.sh
 RUN cat /shell-hook.sh >> $HOME/.bashrc
 ENV PATH="/app/.pixi/envs/test/bin:$PATH"
 ENV FSLDIR="/app/.pixi/envs/test"
+ENV FSL_DIR="/app/.pixi/envs/test"
 ENV LD_LIBRARY_PATH="/app/.pixi/envs/test/lib:$LD_LIBRARY_PATH"
 ENV QSIPREP_FREESURFER_PYTHON="/opt/freesurfer/bin/fspython"
 ENV QSIPREP_TORCH_PYTHON="/opt/freesurfer-torch/bin/python"
-RUN /app/.pixi/envs/test/bin/python -c "import contourpy" && \
+# ANTs must come from this stage's Pixi environment, never from the base image.
+RUN test "$(command -v python)" = "/app/.pixi/envs/test/bin/python" && \
+    test "$(command -v antsRegistration)" = "/app/.pixi/envs/test/bin/antsRegistration" && \
+    test ! -e /opt/ants && \
+    /app/.pixi/envs/test/bin/python -c "import contourpy" && \
     /opt/freesurfer/bin/fspython -c "import nibabel, scipy, surfa, tensorflow" && \
     /opt/freesurfer-torch/bin/python -c "import nibabel, scipy, surfa, torch; assert torch.version.cuda"
 ARG VCS_REF
@@ -75,6 +81,7 @@ COPY --link --from=build /shell-hook.sh /shell-hook.sh
 RUN cat /shell-hook.sh >> $HOME/.bashrc
 ENV PATH="/app/.pixi/envs/qsiprep/bin:$PATH"
 ENV FSLDIR="/app/.pixi/envs/qsiprep"
+ENV FSL_DIR="/app/.pixi/envs/qsiprep"
 ENV LD_LIBRARY_PATH="/app/.pixi/envs/qsiprep/lib:$LD_LIBRARY_PATH"
 ENV IS_DOCKER_8395080871=1
 ENV QSIPREP_FREESURFER_PYTHON="/opt/freesurfer/bin/fspython"
@@ -84,7 +91,11 @@ ENV QSIPREP_TORCH_PYTHON="/opt/freesurfer-torch/bin/python"
 # its script. (FreeSurfer's mri_synthstrip exits 1 on --help/--version and
 # defers "import torch" until after that check, so byte-compile it rather than
 # running --help.)
-RUN /app/.pixi/envs/qsiprep/bin/python -c "import contourpy, qsiprep" && \
+# Also assert that ANTs resolves from the production Pixi environment.
+RUN test "$(command -v python)" = "/app/.pixi/envs/qsiprep/bin/python" && \
+    test "$(command -v antsRegistration)" = "/app/.pixi/envs/qsiprep/bin/antsRegistration" && \
+    test ! -e /opt/ants && \
+    /app/.pixi/envs/qsiprep/bin/python -c "import contourpy, qsiprep" && \
     /opt/freesurfer/bin/fspython -c "import nibabel, scipy, surfa, tensorflow" && \
     /opt/freesurfer/bin/fspython -m py_compile /opt/freesurfer/bin/mri_synthseg && \
     /opt/freesurfer-torch/bin/python -c "import nibabel, scipy, surfa, torch; assert torch.version.cuda" && \
