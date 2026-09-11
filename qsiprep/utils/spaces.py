@@ -204,8 +204,7 @@ def parse_space_token(token: str) -> list[SpaceSpec]:
 
     if space != ACPC and space not in _templates():
         raise OutputSpacesError(
-            f'"{space}" is not a known output space. Use "acpc" or a TemplateFlow '
-            f'template name.'
+            f'"{space}" is not a known output space. Use "acpc" or a TemplateFlow template name.'
         )
 
     cohort = None
@@ -315,7 +314,11 @@ def select_acpc_anchor(specs, explicit=None) -> SpaceSpec:
     for name in INFANT_ANCHORS:
         for spec in specs:
             if spec.space == name:
-                return spec
+                # The anchor fixes the ACPC grid every anatomical and the DWI FoV are
+                # written on, so it takes the template's default resolution. Honouring
+                # a res- label here would silently move that grid, and would make the
+                # anchor depend on which of two labels the user typed first.
+                return replace(spec, resolution=None)
     return SpaceSpec(space=DEFAULT_ANCHOR)
 
 
@@ -331,9 +334,7 @@ def resolve_output_spaces(specs, bids_dir, subject_id, session_id) -> list:
 
     months = _age_in_months(bids_dir, subject_id, session_id)
     if months is None:
-        wanted = ', '.join(
-            spec.space for spec in specs if spec.needs_cohort_resolution
-        )
+        wanted = ', '.join(spec.space for spec in specs if spec.needs_cohort_resolution)
         ses_str = f'_ses-{session_id}' if session_id else ''
         raise OutputSpacesError(
             f'Could not find an age for sub-{subject_id}{ses_str}, which is needed to '

@@ -489,3 +489,27 @@ def test_select_acpc_anchor_is_order_independent():
     forward_anchor = select_acpc_anchor(forward).fullname
     reverse_anchor = select_acpc_anchor(reverse).fullname
     assert forward_anchor == reverse_anchor == 'MNIInfant+3'
+
+
+def test_anchor_drops_the_resolution_label():
+    """The anchor sets the ACPC grid; a res- label on it would silently move it."""
+    from qsiprep.utils.spaces import parse_output_spaces, select_acpc_anchor
+
+    specs = parse_output_spaces(['acpc:res-1mm', 'MNIInfant:cohort-auto:res-2'])
+    anchor = select_acpc_anchor(specs)
+    assert anchor.space == 'MNIInfant'
+    assert anchor.cohort == 'auto'
+    assert anchor.resolution is None
+
+
+def test_anchor_is_independent_of_token_order():
+    """Two resolutions of one infant template must not make the anchor order-dependent."""
+    from qsiprep.utils.spaces import parse_output_spaces, select_acpc_anchor
+
+    forward = select_acpc_anchor(
+        parse_output_spaces(['acpc:res-2mm', 'MNIInfant:cohort-auto:res-1:res-2'])
+    )
+    reverse = select_acpc_anchor(
+        parse_output_spaces(['acpc:res-2mm', 'MNIInfant:cohort-auto:res-2:res-1'])
+    )
+    assert forward == reverse
