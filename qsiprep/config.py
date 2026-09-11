@@ -440,10 +440,10 @@ class execution(_Config):
     """Unique identifier of this particular run."""
     participant_label = None
     """List of participant identifiers that are to be preprocessed."""
-    session_id = None
+    session_label = None
     """List of session identifiers that are to be preprocessed"""
     processing_list = []
-    """List of (subject_id, [session_id, ...]) to be preprocessed together."""
+    """List of (subject_id, [session_label, ...]) to be preprocessed together."""
     skip_anat_based_spatial_normalization = False
     """Should we skip normalizing the anatomical data to a template?"""
     templateflow_home = _templateflow_home
@@ -591,10 +591,6 @@ class workflow(_Config):
     """Configuration JSON for running TORTOISE DIFFPREP."""
     eddy_config = None
     """Configuration for running Eddy."""
-    fmap_bspline = None
-    """Regularize fieldmaps with a field of B-Spline basis."""
-    fmap_demean = None
-    """Remove the mean from fieldmaps."""
     force = None
     """Forced processing choices (see ``--force``): currently ``sdc-anat-reference``."""
     force_sdc_anat_reference = False
