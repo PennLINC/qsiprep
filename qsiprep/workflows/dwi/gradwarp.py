@@ -30,14 +30,18 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 _WARP_RANK = {None: 0, '1D': 1, '3D': 2}
 _RANK_TO_WARP = {rank: warp for warp, rank in _WARP_RANK.items()}
 
+#: ``--force`` values that pin the spatial warp dimensionality, overriding
+#: ImageType. Mutually exclusive; see :func:`_forced_warp_dim`.
+_FORCED_WARP_DIMS = {'gradwarp1D': '1D', 'gradwarp3D': '3D'}
+
 
 @dataclasses.dataclass(frozen=True)
 class GradwarpPlan:
     """What gradient correction to apply to one correction unit.
 
     ``warp_dim`` is ``'3D'`` (full spatial correction), ``'1D'`` (through-plane
-    residual only, for scanner-corrected DIS2D data), or ``None`` (no spatial
-    correction; the grad_dev map is still produced).
+    only, for scanner-corrected DIS2D data or ``--force gradwarp1D``), or
+    ``None`` (no spatial correction; the grad_dev map is still produced).
     """
 
     coeff_file: str
@@ -120,7 +124,7 @@ _GE_GUARD = (
     '  * pass --gradient-file a ready-made ITK displacement field (.nii/.nii.gz) '
     'instead of coefficients; qsiprep uses it as given and expands nothing, so '
     'this does not apply.\n'
-    '  * pass --ignore gradients to skip gradient correction entirely.\n\n'
+    '  * pass --ignore gradwarp to skip gradient correction entirely.\n\n'
     'Siemens and Philips data are unaffected: the shift is applied only when '
     'the Manufacturer field names GE.'
 )
@@ -144,21 +148,42 @@ def _guard_ge_field(plan, unit):
     raise ValueError(_GE_GUARD % unit.output_name)
 
 
+def _forced_warp_dim():
+    """``(warp_dim, flag)`` pinned by ``--force``, or ``(None, None)``.
+
+    ``validate_gradient_flags`` rejects the two ``--force gradwarp{1,3}D``
+    values together at parse time; the check is repeated here because
+    ``config.workflow.force`` can also be set from a loaded config file, which
+    never passes through the CLI validator.
+    """
+    requested = config.workflow.force or []
+    forced = sorted({value for value in requested if value in _FORCED_WARP_DIMS})
+    if len(forced) > 1:
+        raise ValueError(
+            f'"--force {forced[0]}" and "--force {forced[1]}" are mutually exclusive: '
+            'a run is corrected in one dimension or in three, not both.'
+        )
+    return (_FORCED_WARP_DIMS[forced[0]], forced[0]) if forced else (None, None)
+
+
 def resolve_gradwarp_plan(unit):
     """Decide the gradient correction for one PreprocUnit, or None."""
     coeff_file = config.workflow.gradient_file
-    if not coeff_file or 'gradients' in (config.workflow.ignore or []):
+    if not coeff_file or 'gradwarp' in (config.workflow.ignore or []):
         return None
 
     records = unit.dwi_records
     is_ge = any(_is_ge(record.metadata) for record in records)
 
-    if 'gradients' in (config.workflow.force or []):
-        plan = _guard_ge_field(GradwarpPlan(str(coeff_file), '3D', is_ge, 'forced'), unit)
+    forced_dim, forced_flag = _forced_warp_dim()
+    if forced_dim is not None:
+        plan = _guard_ge_field(GradwarpPlan(str(coeff_file), forced_dim, is_ge, 'forced'), unit)
         _log_plan_once(
             'info',
-            'Gradient correction: forced 3D spatial warp for %s (--force gradients).',
+            'Gradient correction: forced %s spatial warp for %s (--force %s).',
+            forced_dim,
             unit.output_name,
+            forced_flag,
         )
         return plan
 
@@ -224,6 +249,18 @@ _CORRECTION_TEXT = {
 }
 
 
+#: The same, for a warp dimensionality pinned with ``--force``. Only ``1D``
+#: differs: the metadata text explains the missing in-plane component with the
+#: DIS2D tag, which a forced plan has not consulted and may contradict.
+_FORCED_CORRECTION_TEXT = {
+    '1D': (
+        'Gradient nonlinearity was corrected using the scanner gradient '
+        'coefficients with TORTOISE V4. Only the through-plane component of '
+        'the gradwarp displacement field was applied, as requested.'
+    ),
+}
+
+
 def _resampling_sentence():
     """How many times the data were interpolated, which depends on the backend.
 
@@ -256,15 +293,21 @@ def _resampling_sentence():
     )
 
 
-def gradwarp_boilerplate(warp_dim):
+def gradwarp_boilerplate(warp_dim, basis='metadata'):
     """Methods text for the resolved plan and the selected HMC backend.
 
     A ``DIS3D`` unit gets no displacement field, so it gets no resampling
     sentence either -- there is nothing to have been combined with anything.
+    A forced plan cannot attribute the correction it applied to the scanner
+    tags, since it did not read them.
     """
     if warp_dim is None:
         return _CORRECTION_TEXT[None]
-    return _CORRECTION_TEXT[warp_dim] + _resampling_sentence()
+    if basis == 'forced':
+        text = _FORCED_CORRECTION_TEXT.get(warp_dim, _CORRECTION_TEXT[warp_dim])
+    else:
+        text = _CORRECTION_TEXT[warp_dim]
+    return text + _resampling_sentence()
 
 
 #: Report phrasing for each resolved state.
@@ -280,7 +323,7 @@ def describe_gradient_correction(plan):
     if plan is None:
         return 'none'
     if plan.basis == 'forced':
-        return 'forced 3D'
+        return f'forced {plan.warp_dim}'
     return _REPORT_TEXT[plan.warp_dim]
 
 
@@ -325,7 +368,7 @@ def init_gradwarp_wf(unit, name='gradwarp_wf'):
         return None
 
     workflow = Workflow(name=name)
-    workflow.__desc__ = gradwarp_boilerplate(plan.warp_dim)
+    workflow.__desc__ = gradwarp_boilerplate(plan.warp_dim, plan.basis)
     workflow.plan = plan
     workflow.needs_reference = False
 

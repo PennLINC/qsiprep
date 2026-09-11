@@ -48,6 +48,7 @@ from niworkflows.viz.utils import (
 from svgutils.transform import SVGFigure
 
 from ..utils.bids import load_sidecar
+from ..viz.utils import fixed_field_of_view
 from .epi_fmap import (
     _merge_metadata,
     acqp_lines,
@@ -1049,8 +1050,6 @@ class PEPOLARReport(SimpleInterface):
         uncorrected_fa = image.math_img('(a+b)/2', a=fa_up_img, b=fa_down_img)
         corrected_fa = image.math_img('(a+b)/2', a=fa_up_corrected_img, b=fa_down_corrected_img)
 
-        _, crop_offset = image.crop_img(uncorrected_fa, return_offset=True)
-
         compose_view(
             plot_fa_reg(
                 corrected_fa,
@@ -1135,8 +1134,9 @@ def plot_pepolar(
 
         # Generate nilearn figure
         display = plotting.plot_anat(zeros_bg_img, **plot_params)
-        display.add_overlay(blip_up_img, cmap='gray', **image_plot_params)
-        display.add_contours(seg_contour_img, colors='b', linewidths=0.5)
+        with fixed_field_of_view(display):
+            display.add_overlay(blip_up_img, cmap='gray', **image_plot_params)
+            display.add_contours(seg_contour_img, colors='b', linewidths=0.5)
 
         svg = extract_svg(display, compress=compress)
         display.close()
@@ -1166,8 +1166,10 @@ def plot_pepolar(
 
         # Generate nilearn figure
         display = plotting.plot_anat(zeros_bg_img, **blip_down_plot_params)
-        display.add_overlay(blip_down_img, cmap='gray', **image_blip_down_plot_params)
-        display.add_contours(seg_contour_img, colors='b', linewidths=0.5)
+        with fixed_field_of_view(display):
+            display.add_overlay(blip_down_img, cmap='gray', **image_blip_down_plot_params)
+            display.add_contours(seg_contour_img, colors='b', linewidths=0.5)
+
         svg = extract_svg(display, compress=compress)
         display.close()
 
@@ -1229,8 +1231,9 @@ def plot_fa_reg(
 
         # Generate nilearn figure
         display = plotting.plot_anat(zeros_bg_img, **plot_params)
-        display.add_overlay(fa_img, **image_plot_params)
-        # display.add_contours(seg_contour_img, colors='b', linewidths=0.5)
+        with fixed_field_of_view(display):
+            display.add_overlay(fa_img, **image_plot_params)
+            # display.add_contours(seg_contour_img, colors='b', linewidths=0.5)
 
         svg = extract_svg(display, compress=compress)
         display.close()
