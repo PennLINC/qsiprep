@@ -194,7 +194,7 @@ def _write_dwi(path, nvols=6):
     return str(path)
 
 
-def _build_finalize(tmp_path, output_spaces):
+def _build_finalize(tmp_path, output_spaces, write_derivatives=True):
     """Build a finalize workflow. Mirrors the fixture style in test_workflows_native."""
     from qsiprep.tests.preproc_factory import make_preproc_unit
     from qsiprep.utils.spaces import parse_output_spaces
@@ -217,6 +217,7 @@ def _build_finalize(tmp_path, output_spaces):
         source_file=src,
         output_prefix='sub-01',
         acpc_specs=acpc_specs,
+        write_derivatives=write_derivatives,
     )
     return wf, acpc_specs
 
@@ -594,3 +595,14 @@ def test_two_acpc_resolutions_write_distinct_figure_paths(tmp_path):
     assert found, 'expected figure sinks in the finalize workflow'
     paths = render_datasink_paths(found, FIGURE_BASE, include_figures=True)
     assert_no_collisions(paths)
+
+
+def test_merged_groups_build_only_the_first_resolution(tmp_path):
+    """Nipype prunes nothing, so a subtree nothing consumes still runs in full."""
+    wf, _ = _build_finalize(
+        tmp_path, ['acpc:res-2mm', 'acpc:res-1p5mm'], write_derivatives=False
+    )
+    prefixes = {n.split('.')[0] for n in wf.list_node_names() if 'dwi_trans_wf' in n}
+    # Truncating before multi_acpc is computed means the survivor is named as the
+    # single resolution it now is.
+    assert prefixes == {'dwi_trans_wf'}

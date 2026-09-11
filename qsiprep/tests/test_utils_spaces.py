@@ -556,3 +556,37 @@ def test_mm_resolution_on_a_standard_space_is_rejected(tmp_path):
     with pytest.raises(SystemExit) as excinfo:
         _apply_output_space_deprecations(opts)
     assert 'MNI152NLin2009cAsym:res-2mm' in str(excinfo.value)
+
+
+def test_multi_acpc_with_distortion_group_merge_is_rejected(tmp_path):
+    """The merge workflow writes one resolution, so asking for two is a silent loss."""
+    import pytest
+
+    from qsiprep.cli.parser import _apply_output_space_deprecations
+
+    opts = _parse(
+        tmp_path,
+        '--output-spaces',
+        'acpc:res-2mm',
+        'acpc:res-1p5mm',
+        '--distortion-group-merge',
+        'concat',
+    )
+    with pytest.raises(SystemExit) as excinfo:
+        _apply_output_space_deprecations(opts)
+    assert '--distortion-group-merge' in str(excinfo.value)
+
+
+def test_single_acpc_with_distortion_group_merge_is_allowed(tmp_path):
+    """One resolution merges fine; only the fan-out has nowhere to go."""
+    from qsiprep.cli.parser import _apply_output_space_deprecations
+
+    opts = _parse(
+        tmp_path,
+        '--output-spaces',
+        'acpc:res-nativemin',
+        '--distortion-group-merge',
+        'concat',
+    )
+    _apply_output_space_deprecations(opts)
+    assert opts.output_spaces == ['acpc:res-nativemin']

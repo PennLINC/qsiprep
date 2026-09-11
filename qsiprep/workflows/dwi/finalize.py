@@ -323,6 +323,16 @@ def init_dwi_finalize_wf(
             unit.output_name,
         )
 
+    if not write_derivatives:
+        # This unit is concatenated later by init_distortion_group_merge_wf, which
+        # writes one resolution through this workflow's single-valued outputnode.
+        # nipype prunes nothing, so building the rest would resample and denoise
+        # them in full and then discard the result. Truncating here, before
+        # multi_acpc is computed, also names the survivor as the single resolution
+        # it now is. The parser rejects this combination; the guard keeps it cheap
+        # if that check is ever relaxed.
+        acpc_specs = acpc_specs[:1]
+
     # Fan out the resampling: one dwi_trans_wf (and, when write_derivatives, one
     # group of derivatives sinks) per requested ACPC resolution. The res- entity
     # only appears once more than one resolution was requested -- a single ACPC

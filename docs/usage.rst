@@ -91,6 +91,15 @@ On standard spaces:
 Multiple ``acpc`` entries
 =========================
 
+.. note::
+
+   Multiple ``acpc`` resolutions cannot be combined with ``--distortion-group-merge``
+   (``concat`` or ``average``). The merge workflow writes one set of derivatives with
+   no ``res-`` entity, so the extra resolutions would be resampled and then silently
+   dropped; the combination is rejected instead. A *single* resolution merges
+   normally, including ``res-nativemin``/``res-nativemax``, whose resolved voxel size
+   is written to the merged output's JSON sidecar.
+
 Listing ``acpc`` more than once (e.g. ``acpc:res-2mm acpc:res-1p5mm``) resamples and
 writes the preprocessed DWI once per requested resolution. Each additional ``acpc``
 entry costs roughly as much as another full resampling pass over the DWI data, so

@@ -470,6 +470,10 @@ to workflows in *QSIPrep*'s documentation]\
                     ('outputnode.t1_brain', 'inputnode.t1_brain'),
                     ('outputnode.t1_seg', 'inputnode.t1_seg'),
                     ('outputnode.t1_mask', 'inputnode.t1_mask'),
+                    # Multiple ACPC resolutions are rejected alongside merging, so
+                    # this list has exactly one element here.
+                    (('outputnode.dwi_sampling_grids', _first_sampling_grid),
+                     'inputnode.dwi_sampling_grid'),
                 ]),
             ])  # fmt:skip
 

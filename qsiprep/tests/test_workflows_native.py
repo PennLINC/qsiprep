@@ -854,3 +854,46 @@ def test_transform_and_grid_lists_stay_index_aligned(tmp_path):
         assert label in source or source == 'anchor_lps_wf', (
             f'slot in{position} grid comes from {source}, not the chain for {label}'
         )
+
+
+def test_merged_native_resolution_reaches_the_sidecar(tmp_path):
+    """res-native* is reported nowhere but the sidecar, and the merge workflow
+    writes its own -- so the resolved grid has to reach that one too."""
+    from qsiplan.plan import OutputAssembly
+
+    from qsiprep.workflows.dwi.distortion_group_merge import init_distortion_group_merge_wf
+
+    cfg = _cfg(layout=_StubLayout())
+    cfg.execution.output_dir = str(tmp_path / 'out')
+    a_file = _write_dwi(tmp_path / 'sub-01_acq-hi_dwi.nii.gz')
+    b_file = _write_dwi(tmp_path / 'sub-01_acq-lo_dwi.nii.gz')
+    unit_a = make_preproc_unit([a_file])
+    unit_b = make_preproc_unit([b_file])
+    assembly = OutputAssembly(
+        output_group='sub-01',
+        input_runs=(unit_a.output_name, unit_b.output_name),
+        strategy='concat',
+        output_name='sub-01',
+    )
+    wf = init_distortion_group_merge_wf(
+        merging_strategy='concat',
+        inputs_list=[unit_a.output_name, unit_b.output_name],
+        source_file='sub-01_dwi.nii.gz',
+        output_prefix='sub-01',
+        name='merge_wf',
+        assembly=assembly,
+        units=[unit_a, unit_b],
+    )
+    grid_metadata = wf.get_node('grid_metadata')
+    merged_sidecar = wf.get_node('merged_sidecar')
+    assert grid_metadata is not None, 'the merged output reports no resolved voxel size'
+    edge = wf._graph.get_edge_data(grid_metadata, merged_sidecar)
+    assert edge is not None
+    assert ('meta_dict', 'extra_data') in edge['connect']
+    sources = {
+        src.name
+        for src, _, data in wf._graph.in_edges(grid_metadata, data=True)
+        for _, field in data['connect']
+        if field == 'grid_file'
+    }
+    assert sources == {'inputnode'}

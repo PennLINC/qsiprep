@@ -1258,6 +1258,18 @@ def _apply_output_space_deprecations(opts, parser=None):
             'MNI152NLin2009cAsym:res-2) or drop the resolution.'
         )
 
+    # init_distortion_group_merge_wf writes one set of derivatives with no res-
+    # entity, so extra ACPC resolutions would be resampled, denoised and then
+    # dropped without a trace in the output. A single resolution merges fine.
+    acpc_count = sum(1 for spec in specs if not spec.standard)
+    merging = getattr(opts, 'distortion_group_merge', 'none')
+    if acpc_count > 1 and merging not in (None, 'none'):
+        fail(
+            f'--distortion-group-merge {merging} writes a single ACPC resolution, but '
+            f'--output-spaces requested {acpc_count}. Request one "acpc" space, or use '
+            '--distortion-group-merge none.'
+        )
+
     # Record the anchor now, from the full list. --skip-anat-based-spatial-
     # normalization strips every standard space below, and deriving the anchor
     # afterwards would hand an infant subject the adult template -- silently
