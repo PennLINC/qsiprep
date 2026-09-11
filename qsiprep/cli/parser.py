@@ -1016,12 +1016,6 @@ How to combine the corrected results of an output's correction units.
         default=False,
         help='Fit a B-Spline field using least-squares (experimental)',
     )
-    g_fmap.add_argument(
-        '--fmap-no-demean',
-        action='store_false',
-        default=True,
-        help='Do not remove median (within mask) from fieldmap',
-    )
 
     g_other = parser.add_argument_group('Other options')
     g_other.add_argument('--version', action='version', version=verstr)

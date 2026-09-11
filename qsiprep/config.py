@@ -593,8 +593,6 @@ class workflow(_Config):
     """Configuration for running Eddy."""
     fmap_bspline = None
     """Regularize fieldmaps with a field of B-Spline basis."""
-    fmap_demean = None
-    """Remove the mean from fieldmaps."""
     force = None
     """Forced processing choices (see ``--force``): currently ``sdc-anat-reference``."""
     force_sdc_anat_reference = False
