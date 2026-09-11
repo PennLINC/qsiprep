@@ -163,7 +163,7 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
         subject_data = collect_data(
             config.execution.layout,
             subject_id,
-            session_id=session_ids,
+            session_label=session_ids,
             filters=config.execution.bids_filters,
             bids_validate=False,
             ignore=config.workflow.ignore,
@@ -194,14 +194,14 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
             raise RuntimeError('Infant template is only available for single session processing.')
 
         # Calculate the age and age-specific spaces
-        session_id = None if not session_ids else session_ids[0]
+        session_label = None if not session_ids else session_ids[0]
         age = parse_bids_for_age_months(
             config.execution.bids_dir,
             subject_id,
-            session_id,
+            session_label,
         )
         if age is None:
-            ses_str = f'_ses-{session_id}' if session_id else ''
+            ses_str = f'_ses-{session_label}' if session_label else ''
             raise RuntimeError(f'Could not find age for sub-{subject_id}{ses_str}')
 
         cohort = cohort_by_months(anatomical_template, age)
