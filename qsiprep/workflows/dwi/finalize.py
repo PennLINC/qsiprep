@@ -475,7 +475,6 @@ def init_dwi_finalize_wf(
         dwi_derivatives_wf = init_dwi_derivatives_wf(
             source_file=source_file,
             resolution=resolution_for_derivatives,
-            resolution_meta=write_resolution_meta,
             # hmcOptimization is produced before resampling and is the same for
             # every ACPC resolution; writing it from every dwi_derivatives_wf
             # instance would be a same-path collision, so only the first spec
@@ -502,25 +501,6 @@ def init_dwi_finalize_wf(
             (gtab_t1, dwi_derivatives_wf, [('gradient_file', 'inputnode.gradient_table_t1')]),
             (btab_t1, dwi_derivatives_wf, [('btable_file', 'inputnode.btable_t1')]),
         ])  # fmt:skip
-
-        if write_resolution_meta:
-            grid_metadata = pe.Node(
-                niu.Function(
-                    input_names=['grid_file'],
-                    output_names=['meta_dict'],
-                    function=_grid_metadata,
-                ),
-                name=f'grid_metadata{suffix}',
-                run_without_submitting=True,
-            )
-            workflow.connect([
-                (inputnode, grid_metadata, [
-                    (('dwi_sampling_grids', _select_grid, index), 'grid_file'),
-                ]),
-                (grid_metadata, dwi_derivatives_wf, [
-                    ('meta_dict', 'inputnode.resolution_meta'),
-                ]),
-            ])  # fmt:skip
 
         # Combine all the QC measures for a series QC
         series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name=f'series_qc{suffix}')
@@ -563,6 +543,28 @@ def init_dwi_finalize_wf(
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
+
+        if write_resolution_meta:
+            # res-native* is resolved from the DWI headers at run time, so the
+            # sidecar is the only place a run reports what the grid turned out to
+            # be. It goes here rather than on the data sinks: niworkflows derives a
+            # sidecar path from the sink's own filename, and the preproc dwi, bval,
+            # bvec, b and b_table sinks all share this node's stem.
+            grid_metadata = pe.Node(
+                niu.Function(
+                    input_names=['grid_file'],
+                    output_names=['meta_dict'],
+                    function=_grid_metadata,
+                ),
+                name=f'grid_metadata{suffix}',
+                run_without_submitting=True,
+            )
+            workflow.connect([
+                (inputnode, grid_metadata, [
+                    (('dwi_sampling_grids', _select_grid, index), 'grid_file'),
+                ]),
+                (grid_metadata, merged_sidecar, [('meta_dict', 'extra_data')]),
+            ])  # fmt:skip
 
         # Write the carpetplot data (which is the text output from eddy)
         ds_carpetplot_data = pe.Node(

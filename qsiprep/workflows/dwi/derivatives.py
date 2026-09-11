@@ -65,7 +65,6 @@ LOGGER = logging.getLogger('nipype.workflow')
 def init_dwi_derivatives_wf(
     source_file,
     resolution=None,
-    resolution_meta=False,
     write_hmc_optimization=True,
     name='dwi_derivatives_wf',
 ) -> Workflow:
@@ -80,12 +79,6 @@ def init_dwi_derivatives_wf(
     resolution : Resolution or None
         Set only when more than one ACPC resolution was requested. Adds a
         ``res-<label>`` entity to every ACPC DWI sink below.
-    resolution_meta : bool
-        Wire ``inputnode.resolution_meta`` -- the resolved voxel size -- into the
-        JSON sidecar of every ACPC DWI sink. Needed whenever the filename alone
-        does not say what the grid turned out to be: any ``res-native*`` request
-        (the sidecar is the only place it is reported) and any fan-out over
-        several resolutions.
     write_hmc_optimization : bool
         The hmcOptimization sidecar is produced before resampling and does not vary
         by output resolution. When ``init_dwi_derivatives_wf`` is instantiated once
@@ -112,7 +105,6 @@ def init_dwi_derivatives_wf(
                 'btable_t1',
                 'hmc_optimization_data',
                 'series_qc',
-                'resolution_meta',
             ]
         ),
         name='inputnode',
@@ -308,19 +300,6 @@ def init_dwi_derivatives_wf(
         (inputnode, ds_btable_t1, [('btable_t1', 'in_file')]),
     ])  # fmt:skip
 
-    if resolution_meta:
-        # The filename alone doesn't say what res-native* resolved to -- only
-        # the sidecar does. ds_cnr_map_t1 and ds_tsnr keep their own descriptive
-        # meta_dict as-is; the rest get the resolved voxel size here.
-        workflow.connect([
-            (inputnode, ds_dwi_t1, [('resolution_meta', 'meta_dict')]),
-            (inputnode, ds_bvals_t1, [('resolution_meta', 'meta_dict')]),
-            (inputnode, ds_bvecs_t1, [('resolution_meta', 'meta_dict')]),
-            (inputnode, ds_t1_b0_ref, [('resolution_meta', 'meta_dict')]),
-            (inputnode, ds_dwi_mask_t1, [('resolution_meta', 'meta_dict')]),
-            (inputnode, ds_gradient_table_t1, [('resolution_meta', 'meta_dict')]),
-            (inputnode, ds_btable_t1, [('resolution_meta', 'meta_dict')]),
-        ])  # fmt:skip
     # If requested, write local bvecs
     # if config.workflow.write_local_bvecs:
     #     ds_local_bvecs_t1 = pe.Node(

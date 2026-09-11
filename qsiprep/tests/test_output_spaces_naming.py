@@ -302,7 +302,7 @@ def test_single_native_acpc_records_its_resolution(tmp_path):
         for u, v, d in wf._graph.edges(data=True)
         if u.name == 'grid_metadata'
     }
-    assert edges, 'grid_metadata is not wired into the derivatives sinks'
+    assert edges, 'grid_metadata is not wired into the unit sidecar'
 
 
 def test_single_fixed_acpc_writes_no_resolution_metadata(tmp_path):
@@ -518,3 +518,46 @@ def test_two_standard_resolutions_write_distinct_anat_paths():
     assert len(std) == 6, std
     assert sum('_res-1' in p for p in std) == 3
     assert sum('_res-2' in p for p in std) == 3
+
+
+def test_resolution_does_not_collide_with_the_unit_sidecar(tmp_path):
+    """The resolved voxel size and the unit sidecar must not race for one path.
+
+    niworkflows writes ``<stem before first '.'>.json`` beside any sink carrying
+    metadata, and the preproc dwi/bval/bvec/b/b_table sinks all share one stem --
+    the stem ds_merged_sidecar writes the full unit sidecar to.
+    """
+    wf, _ = _build_finalize(tmp_path, ['acpc:res-nativemin'])
+    derivatives_wf = wf.get_node('dwi_derivatives_wf')
+    assert derivatives_wf is not None
+    # meta_dict is fed by a connection, not a static input, so check the edges:
+    # asserting on sink.inputs.meta_dict passes even when the wiring is there.
+    fed_meta_dict = {
+        node.name
+        for _, node, data in derivatives_wf._graph.edges(data=True)
+        for _, field in data['connect']
+        if field == 'meta_dict'
+    }
+    # These five share the stem ..._desc-preproc_dwi, which is the path
+    # ds_merged_sidecar writes the unit sidecar to.
+    colliding = fed_meta_dict & {
+        'ds_dwi_t1',
+        'ds_bvals_t1',
+        'ds_bvecs_t1',
+        'ds_gradient_table_t1',
+        'ds_btable_t1',
+    }
+    assert not colliding, (
+        f'{sorted(colliding)} write a sidecar that collides with ds_merged_sidecar'
+    )
+
+
+def test_resolved_voxel_size_reaches_the_unit_sidecar(tmp_path):
+    """res-native* is only reported in the sidecar, so it must still be written."""
+    wf, _ = _build_finalize(tmp_path, ['acpc:res-nativemin'])
+    grid_metadata = wf.get_node('grid_metadata')
+    merged_sidecar = wf.get_node('merged_sidecar')
+    assert grid_metadata is not None
+    edge = wf._graph.get_edge_data(grid_metadata, merged_sidecar)
+    assert edge is not None
+    assert ('meta_dict', 'extra_data') in edge['connect']
