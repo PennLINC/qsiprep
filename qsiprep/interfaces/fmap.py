@@ -221,8 +221,9 @@ class FieldToHz(SimpleInterface):
 def _sphere_footprint(radius_mm, zooms):
     """Boolean spherical footprint of the given mm radius on a voxel grid.
 
-    Mirrors ``fslmaths -kernel sphere <radius_mm>``: a voxel is included when the
-    physical distance from its center to the kernel center is within ``radius_mm``.
+    A voxel is included when the physical distance from its center to the kernel
+    center is within ``radius_mm`` (so anisotropic voxels give an ellipsoidal
+    footprint in voxel units).
     """
     radii_vox = [int(np.floor(radius_mm / zoom)) for zoom in zooms]
     axes = [np.arange(-n, n + 1) * zoom for n, zoom in zip(radii_vox, zooms, strict=True)]
@@ -242,11 +243,10 @@ class MedianFilterOutputSpec(TraitedSpec):
 
 
 class MedianFilter(SimpleInterface):
-    """Median-filter an image with a spherical kernel.
+    """Median-filter an image with a spherical kernel (radius in mm).
 
-    Pure-nibabel replacement for ``fsl.SpatialFilter(operation='median',
-    kernel_shape='sphere')`` (``fslmaths -kernel sphere <r> -fmedian``), so the
-    fieldmap workflows no longer need ``fslmaths``.
+    Denoises the fieldmap using scipy; the kernel is the spherical footprint from
+    :func:`_sphere_footprint`. Needs no external tools.
     """
 
     input_spec = MedianFilterInputSpec
@@ -260,7 +260,7 @@ class MedianFilter(SimpleInterface):
         footprint = _sphere_footprint(self.inputs.kernel_radius_mm, img.header.get_zooms()[:3])
         filtered = median_filter(data, footprint=footprint)
         out_file = fname_presuffix(self.inputs.in_file, suffix='_medfilt', newpath=runtime.cwd)
-        # Store as float32 like fslmaths, so an integer input is not requantised.
+        # Store as float32 so an integer input is not requantised via the source header.
         out_header = img.header.copy()
         out_header.set_data_dtype(np.float32)
         img.__class__(filtered.astype(np.float32), img.affine, out_header).to_filename(out_file)
@@ -270,7 +270,7 @@ class MedianFilter(SimpleInterface):
 
 class CleanupEdgeFilterInputSpec(BaseInterfaceInputSpec):
     in_file = File(exists=True, mandatory=True, desc='original (pre-despike) fieldmap')
-    despiked_file = File(exists=True, mandatory=True, desc='FUGUE-despiked fieldmap')
+    despiked_file = File(exists=True, mandatory=True, desc='despiked fieldmap')
     in_mask = File(exists=True, mandatory=True, desc='fieldmap brain mask')
 
 
@@ -281,11 +281,10 @@ class CleanupEdgeFilterOutputSpec(TraitedSpec):
 class CleanupEdgeFilter(SimpleInterface):
     """Blend despiked edge voxels into the original fieldmap interior.
 
-    Pure-nibabel replacement for the ``fslmaths`` portion of
-    ``fsl_prepare_fieldmap``'s edge cleanup (the erode/subtract/mask/add chain
-    that followed FUGUE). The mask is eroded with an in-plane 3x3 kernel
-    (``fslmaths -kernel 2D -ero``); the eroded interior keeps the original field
-    and the one-voxel rim is filled with the despiked values.
+    Tidies the fieldmap edge in nibabel/scipy: the brain mask is eroded with an
+    in-plane 3x3 kernel, the eroded interior keeps the original field, and the
+    one-voxel rim between the mask and its erosion is filled with the despiked
+    values. Needs no external tools.
     """
 
     input_spec = CleanupEdgeFilterInputSpec
@@ -301,16 +300,167 @@ class CleanupEdgeFilter(SimpleInterface):
 
         eroded = grey_erosion(mask, footprint=np.ones((3, 3, 1), dtype=bool))
         interior = eroded > 0
-        edge = (mask - eroded) >= 0.5  # -sub <eroded> -thr 0.5 -bin
+        edge = (mask - eroded) >= 0.5  # one-voxel rim = mask minus its erosion
         cleaned = original * interior + despiked * edge
 
         out_file = fname_presuffix(self.inputs.in_file, suffix='_edgeclean', newpath=runtime.cwd)
-        # Store as float32 like fslmaths, so an integer input is not requantised.
+        # Store as float32 so an integer input is not requantised via the source header.
         out_header = fmap_img.header.copy()
         out_header.set_data_dtype(np.float32)
         fmap_img.__class__(cleaned.astype(np.float32), fmap_img.affine, out_header).to_filename(
             out_file
         )
+        self._results['out_file'] = out_file
+        return runtime
+
+
+class FieldmapToVSMInputSpec(BaseInterfaceInputSpec):
+    in_file = File(exists=True, mandatory=True, desc='fieldmap in rad/s')
+    dwell_time = traits.Float(
+        mandatory=True, desc='effective echo spacing in seconds (BIDS EffectiveEchoSpacing)'
+    )
+    pe_dir = traits.Enum(
+        'i',
+        'j',
+        'k',
+        'i-',
+        'j-',
+        'k-',
+        'x',
+        'y',
+        'z',
+        'x-',
+        'y-',
+        'z-',
+        mandatory=True,
+        desc='phase-encoding axis; only the axis is used (the sign is applied downstream)',
+    )
+
+
+class FieldmapToVSMOutputSpec(TraitedSpec):
+    shift_out_file = File(desc='voxel-shift map, in voxels along the phase-encoding axis')
+
+
+class FieldmapToVSM(SimpleInterface):
+    """Convert a rad/s fieldmap into a voxel-shift map (VSM).
+
+    Uses the standard EPI relationship ``shift[vox] = fmap[rad/s] / (2*pi) * ees *
+    N_pe``, where ``ees`` is the effective echo spacing and ``N_pe`` the number of
+    voxels along the phase-encoding axis. The shift carries the field's own sign;
+    the phase-encoding polarity is applied downstream by
+    :class:`~qsiprep.interfaces.niworkflows.FUGUEvsm2ANTSwarp`. Implemented in
+    nibabel/numpy so the unwarp workflow needs no external tool to build the VSM.
+    """
+
+    input_spec = FieldmapToVSMInputSpec
+    output_spec = FieldmapToVSMOutputSpec
+
+    def _run_interface(self, runtime):
+        axis = {'i': 0, 'j': 1, 'k': 2, 'x': 0, 'y': 1, 'z': 2}[self.inputs.pe_dir[0]]
+        img = nb.load(self.inputs.in_file)
+        field_rads = img.get_fdata(dtype=np.float32)
+        n_pe = field_rads.shape[axis]
+        vsm = field_rads / (2.0 * np.pi) * self.inputs.dwell_time * n_pe
+
+        out_file = fname_presuffix(self.inputs.in_file, suffix='_vsm', newpath=runtime.cwd)
+        out_header = img.header.copy()
+        out_header.set_data_dtype(np.float32)
+        img.__class__(vsm.astype(np.float32), img.affine, out_header).to_filename(out_file)
+        self._results['shift_out_file'] = out_file
+        return runtime
+
+
+def _despike_2d(data, threshold, mask=None):
+    """Conditional 2D median despike of a fieldmap.
+
+    Cleans isolated spikes left by phase unwrapping before the fieldmap edge is
+    tidied up. Per slice along the 3rd voxel axis, each voxel is compared to its 8
+    in-plane neighbors (the center is excluded) and treated as a spike when::
+
+        |value - median(neighbors)| / (max(neighbors) - min(neighbors)) > threshold
+
+    A spike is replaced by the neighbors' lower median (``sorted(neighbors)[n//2 - 1]``
+    for an even count); every other voxel is left unchanged. When ``mask`` is given,
+    out-of-mask neighbors are excluded from the statistics and the output is zeroed
+    outside the mask.
+    """
+    data = np.asarray(data, dtype=np.float32)
+    in_mask = np.ones(data.shape, bool) if mask is None else (np.asarray(mask) > 0)
+    nx, ny = data.shape[:2]
+
+    # Field edges are replicated; the mask is padded as "outside" so out-of-FOV
+    # neighbors are excluded exactly like out-of-mask ones.
+    field_pad = np.pad(data, ((1, 1), (1, 1), (0, 0)), mode='edge')
+    mask_pad = np.pad(in_mask, ((1, 1), (1, 1), (0, 0)), mode='constant', constant_values=False)
+
+    values, valid = [], []
+    for di in (-1, 0, 1):
+        for dj in (-1, 0, 1):
+            if di == 0 and dj == 0:
+                continue
+            values.append(field_pad[1 + di : 1 + di + nx, 1 + dj : 1 + dj + ny])
+            valid.append(mask_pad[1 + di : 1 + di + nx, 1 + dj : 1 + dj + ny])
+    valid = np.stack(valid, axis=0)
+    neighbors = np.where(valid, np.stack(values, axis=0), np.nan).astype(np.float32)
+
+    ordered = np.sort(neighbors, axis=0)  # NaNs (invalid neighbors) sort to the end
+    count = valid.sum(axis=0)
+    lower_idx = np.clip((count - 1) // 2, 0, 7).astype(np.intp)
+    lower_median = np.take_along_axis(ordered, lower_idx[np.newaxis], axis=0)[0]
+    with np.errstate(invalid='ignore'):
+        spread = np.nanmax(ordered, axis=0) - np.nanmin(ordered, axis=0)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        ratio = np.abs(data - lower_median) / spread
+
+    spike = in_mask & (count >= 1) & (spread > 1e-6) & (ratio > threshold)
+    out = np.where(spike, lower_median, data)
+    if mask is not None:
+        out = out * in_mask
+    return out.astype(np.float32)
+
+
+class DespikeFilterInputSpec(BaseInterfaceInputSpec):
+    in_file = File(exists=True, mandatory=True, desc='fieldmap to despike')
+    in_mask = File(
+        exists=True,
+        desc='brain mask; despiking is restricted to it and out-of-mask '
+        'neighbors are excluded from the statistics',
+    )
+    threshold = traits.Float(
+        2.1,
+        usedefault=True,
+        desc='spike threshold: a voxel is despiked when |value - neighbor median| '
+        'exceeds this multiple of the neighbor range',
+    )
+
+
+class DespikeFilterOutputSpec(TraitedSpec):
+    out_file = File(desc='despiked fieldmap')
+
+
+class DespikeFilter(SimpleInterface):
+    """Conditional 2D median despike of a fieldmap (see :func:`_despike_2d`).
+
+    Removes isolated spikes from a phase-unwrapped fieldmap as part of the
+    edge-cleanup pipeline, using only nibabel/numpy. ``threshold`` defaults to the
+    conventional value for this cleanup step.
+    """
+
+    input_spec = DespikeFilterInputSpec
+    output_spec = DespikeFilterOutputSpec
+
+    def _run_interface(self, runtime):
+        img = nb.load(self.inputs.in_file)
+        data = img.get_fdata(dtype=np.float32)
+        mask = None
+        if isdefined(self.inputs.in_mask):
+            mask = np.asarray(nb.load(self.inputs.in_mask).get_fdata()) > 0
+        despiked = _despike_2d(data, self.inputs.threshold, mask)
+
+        out_file = fname_presuffix(self.inputs.in_file, suffix='_despike', newpath=runtime.cwd)
+        out_header = img.header.copy()
+        out_header.set_data_dtype(np.float32)
+        img.__class__(despiked, img.affine, out_header).to_filename(out_file)
         self._results['out_file'] = out_file
         return runtime
 
@@ -431,73 +581,6 @@ def phases2fmap(phase_files, metadatas, newpath=None):
     merged_metadata['EchoTime2'] = float(echo_times[long_echo_index])
 
     return phasediff_file, merged_metadata
-
-
-def _despike2d(data, thres, neigh=None):
-    """
-    despiking as done in FSL fugue
-    """
-
-    if neigh is None:
-        neigh = [-1, 0, 1]
-    nslices = data.shape[-1]
-
-    for k in range(nslices):
-        data2d = data[..., k]
-
-        for i in range(data2d.shape[0]):
-            for j in range(data2d.shape[1]):
-                vals = []
-                thisval = data2d[i, j]
-                for ii in neigh:
-                    for jj in neigh:
-                        try:
-                            vals.append(data2d[i + ii, j + jj])
-                        except IndexError:
-                            pass
-                vals = np.array(vals)
-                patch_range = vals.max() - vals.min()
-                patch_med = np.median(vals)
-
-                if patch_range > 1e-6 and (abs(thisval - patch_med) / patch_range) > thres:
-                    data[i, j, k] = patch_med
-    return data
-
-
-def _unwrap(fmap_data, mag_file, mask=None):
-    import os
-
-    fsl_check = os.environ.get('FSL_BUILD')
-    if fsl_check == 'no_fsl':
-        raise Exception(
-            """Container in use does not have FSL. To use this workflow,
-            please download the qsiprep container with FSL installed."""
-        )
-    from math import pi
-
-    from nipype.interfaces.fsl import PRELUDE
-
-    magnii = nb.load(mag_file)
-
-    if mask is None:
-        mask = np.ones_like(fmap_data, dtype=np.uint8)
-
-    fmapmax = max(abs(fmap_data[mask > 0].min()), fmap_data[mask > 0].max())
-    fmap_data *= pi / fmapmax
-
-    nb.Nifti1Image(fmap_data, magnii.affine).to_filename('fmap_rad.nii.gz')
-    nb.Nifti1Image(mask, magnii.affine).to_filename('fmap_mask.nii.gz')
-    nb.Nifti1Image(magnii.get_fdata(), magnii.affine).to_filename('fmap_mag.nii.gz')
-
-    # Run prelude
-    res = PRELUDE(
-        phase_file='fmap_rad.nii.gz',
-        magnitude_file='fmap_mag.nii.gz',
-        mask_file='fmap_mask.nii.gz',
-    ).run()
-
-    unwrapped = nb.load(res.outputs.unwrapped_phase_file).get_fdata() * (fmapmax / pi)
-    return unwrapped
 
 
 def get_ees(in_meta, in_file=None):

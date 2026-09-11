@@ -19,7 +19,7 @@ Fieldmap preprocessing workflow for fieldmap data structure
 
 import os
 
-from nipype.interfaces import ants, fsl
+from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
@@ -29,6 +29,7 @@ from niworkflows.interfaces.reportlets.masks import BETRPT
 from ... import config
 from ...interfaces import DerivativesDataSink, Phasediff2Fieldmap, Phases2Fieldmap
 from ...interfaces.fmap import MedianFilter
+from ...interfaces.niimath import RomeoUnwrap
 from .utils import cleanup_edge_pipeline, demean_image, siemens2rads
 
 
@@ -105,8 +106,8 @@ further improvements of HCP Pipelines [@hcppipelines].
     )
     # uses mask from bet; outputs a mask
 
-    # FSL PRELUDE will perform phase-unwrapping
-    prelude = pe.Node(fsl.PRELUDE(), name='prelude')
+    # niimath -romeo performs phase-unwrapping
+    prelude = pe.Node(RomeoUnwrap(), name='prelude')
 
     denoise = pe.Node(MedianFilter(kernel_radius_mm=5), name='denoise')
 
