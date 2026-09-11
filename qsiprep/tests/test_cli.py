@@ -220,6 +220,7 @@ def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
     dataset_dir = os.path.join(dataset_dir, 'tinytensor_epi')
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
+    shoreline_config = os.path.join(get_test_data_path(), 'shoreline_none_config.json')
 
     parameters = [
         dataset_dir,
@@ -231,10 +232,9 @@ def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         '--b1-biascorrect-stage=none',
         '--hmc-method=shoreline',
-        '--shoreline-model=none',
+        f'--shoreline-config={shoreline_config}',
         '--sdc-method=drbuddi',
         '--output-resolution=2',
-        '--shoreline-iters=1',
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)
@@ -257,6 +257,7 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
     dataset_dir = os.path.join(dataset_dir, 'DSDTI')
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
+    shoreline_config = os.path.join(get_test_data_path(), 'shoreline_tensor_config.json')
 
     parameters = [
         dataset_dir,
@@ -268,10 +269,9 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         '--b1-biascorrect-stage=none',
         '--hmc-method=shoreline',
-        '--shoreline-model=tensor',
+        f'--shoreline-config={shoreline_config}',
         '--sdc-method=drbuddi',
         '--output-resolution=5',
-        '--shoreline-iters=1',
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)
@@ -303,6 +303,7 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
     dataset_dir = os.path.join(dataset_dir, 'DSCSDSI_nofmap')
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
+    shoreline_config = os.path.join(get_test_data_path(), 'shoreline_rigid_config.json')
 
     parameters = [
         dataset_dir,
@@ -314,9 +315,8 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
         '--sdc-anat-reference=invt1w',
         '--b1-biascorrect-stage=none',
         '--hmc-method=shoreline',
-        '--hmc-transform=Rigid',
+        f'--shoreline-config={shoreline_config}',
         '--output-resolution=5',
-        '--shoreline-iters=1',
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)
@@ -627,6 +627,7 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
     dataset_dir = os.path.join(dataset_dir, 'twoses')
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
+    shoreline_config = os.path.join(get_test_data_path(), 'shoreline_none_config.json')
 
     parameters = [
         dataset_dir,
@@ -636,7 +637,7 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
         '--sloppy',
         '--b1-biascorrect-stage=none',
         '--hmc-method=shoreline',
-        '--shoreline-model=none',
+        f'--shoreline-config={shoreline_config}',
         '--output-resolution=5',
         '--intramodal-template-transform=BSplineSyN',
         '--intramodal-template-iters=2',
@@ -1036,6 +1037,116 @@ def test_validate_diffprep_config_accepts_each_correction_mode(tmp_path):
         cfg = tmp_path / f'{mode}.json'
         cfg.write_text(json.dumps({'correction_mode': mode}))
         validate_diffprep_config(str(cfg))
+
+
+_SHORELINE_DEFAULTS = {'model': '3dshore', 'iters': 2, 'transform': 'Affine'}
+
+
+def test_load_shoreline_config_defaults_match_the_shipped_file():
+    import json
+
+    from qsiprep.data import load as load_data
+    from qsiprep.utils.misc import load_shoreline_config
+
+    shipped = load_data('shoreline_params.json')
+    assert json.loads(shipped.read_text()) == _SHORELINE_DEFAULTS
+    assert load_shoreline_config(None) == _SHORELINE_DEFAULTS
+    assert load_shoreline_config(str(shipped)) == _SHORELINE_DEFAULTS
+
+
+def test_load_shoreline_config_merges_a_partial_file(tmp_path):
+    import json
+
+    from qsiprep.utils.misc import load_shoreline_config
+
+    cfg = tmp_path / 'tensor.json'
+    cfg.write_text(json.dumps({'model': 'tensor'}))
+    assert load_shoreline_config(str(cfg)) == {**_SHORELINE_DEFAULTS, 'model': 'tensor'}
+
+
+def test_load_shoreline_config_missing(tmp_path):
+    from qsiprep.utils.misc import load_shoreline_config
+
+    with pytest.raises(ValueError, match='does not exist'):
+        load_shoreline_config(str(tmp_path / 'nope.json'))
+
+
+@pytest.mark.parametrize(
+    ('contents', 'match'),
+    [
+        ('[1, 2]', 'must contain a JSON object'),
+        ('{"model": ', 'not valid JSON'),
+        # A typo must fail loudly rather than silently fall back to a default.
+        ('{"iter": 3}', 'unknown key'),
+        # Values are case-sensitive: the legacy --hmc-model spelling is not accepted.
+        ('{"model": "3dSHORE"}', 'model='),
+        ('{"transform": "affine"}', 'transform='),
+        ('{"iters": 0}', 'iters='),
+        ('{"iters": true}', 'iters='),
+        ('{"iters": "2"}', 'iters='),
+        ('{"iters": 1.5}', 'iters='),
+    ],
+)
+def test_load_shoreline_config_rejects_bad_files(tmp_path, contents, match):
+    from qsiprep.utils.misc import load_shoreline_config
+
+    cfg = tmp_path / 'bad.json'
+    cfg.write_text(contents)
+    with pytest.raises(ValueError, match=match):
+        load_shoreline_config(str(cfg))
+
+
+def test_load_shoreline_config_names_the_file_on_decode_errors(tmp_path):
+    """A file that is not UTF-8 must still produce an error naming the file."""
+    from qsiprep.utils.misc import load_shoreline_config
+
+    cfg = tmp_path / 'latin1.json'
+    cfg.write_bytes(b'{"model": "\xff"}')
+    with pytest.raises(ValueError, match=r'SHORELine configuration file .* is not valid JSON'):
+        load_shoreline_config(str(cfg))
+
+
+def test_load_shoreline_config_names_the_file_on_read_errors(tmp_path):
+    """An unreadable path (here a directory) must raise ValueError, not a bare OSError."""
+    from qsiprep.utils.misc import load_shoreline_config
+
+    with pytest.raises(ValueError, match=r'SHORELine configuration file .* could not be read'):
+        load_shoreline_config(str(tmp_path))
+
+
+def test_load_shoreline_config_model_none_ignores_iters(tmp_path):
+    import json
+
+    from qsiprep.utils.misc import load_shoreline_config
+
+    cfg = tmp_path / 'none.json'
+    cfg.write_text(json.dumps({'model': 'none', 'iters': 0}))
+    assert load_shoreline_config(str(cfg)) == {**_SHORELINE_DEFAULTS, 'model': 'none', 'iters': 0}
+
+
+def test_load_shoreline_config_legacy_model_override(tmp_path):
+    """The deprecated --hmc-model alias supplies the model; the file may still set the rest."""
+    import json
+
+    from qsiprep.utils.misc import load_shoreline_config
+
+    assert load_shoreline_config(None, model='tensor') == {
+        **_SHORELINE_DEFAULTS,
+        'model': 'tensor',
+    }
+
+    iters_only = tmp_path / 'iters.json'
+    iters_only.write_text(json.dumps({'iters': 3}))
+    assert load_shoreline_config(str(iters_only), model='none') == {
+        **_SHORELINE_DEFAULTS,
+        'model': 'none',
+        'iters': 3,
+    }
+
+    with_model = tmp_path / 'with_model.json'
+    with_model.write_text(json.dumps({'model': '3dshore'}))
+    with pytest.raises(ValueError, match='conflicts'):
+        load_shoreline_config(str(with_model), model='tensor')
 
 
 @pytest.mark.parametrize('forced', ['gradwarp1D', 'gradwarp3D'])

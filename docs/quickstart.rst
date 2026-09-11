@@ -138,16 +138,29 @@ Head motion correction is selected with ``--hmc-method``, which takes
 ``eddy``, ``shoreline`` or ``tortoise``. (The deprecated ``--hmc-model``
 values map onto these: ``eddy`` is ``--hmc-method eddy``, ``tortoise`` is
 ``--hmc-method tortoise``, and ``3dSHORE``/``tensor``/``none`` are
-``--hmc-method shoreline`` with the matching ``--shoreline-model``.)
+``--hmc-method shoreline`` with the matching SHORELine ``"model"``.)
 
 Choosing ``eddy`` (the default) runs FSL's ``eddy`` for head motion correction
 and eddy current correction. This will work for single-shell and multi-shell
 sampling schemes. The ``shoreline`` option (SHORELine) works for multi-shell,
-Cartesian grid sampling (DSI) and random q-space sampling (CS-DSI); its
-signal model is chosen with ``--shoreline-model``, either ``3dshore`` (the
-default) or ``tensor``.
+Cartesian grid sampling (DSI) and random q-space sampling (CS-DSI). Its
+settings are passed as a JSON file with ``--shoreline-config``, for example:
 
-``--shoreline-model none`` will register all the b=0 images to one another
+.. code-block:: json
+
+   {
+     "model": "tensor",
+     "iters": 2,
+     "transform": "Rigid"
+   }
+
+``"model"`` is the signal model, either ``"3dshore"`` (the default) or
+``"tensor"``; ``"iters"`` is the number of SHORELine iterations (default 2);
+and ``"transform"`` is the transformation optimized during head motion
+correction, ``"Affine"`` (the default) or ``"Rigid"``. Every key is optional.
+See :ref:`configure_shoreline` for details.
+
+Setting ``"model": "none"`` will register all the b=0 images to one another
 and the b>0 images will have the transform from the nearest b=0 image
 applied. This is not recommended. Between ``eddy`` and ``shoreline``, all
 sampling schemes can be motion corrected, though eddy-current correction for

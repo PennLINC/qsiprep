@@ -1517,3 +1517,57 @@ def test_dwi_finalize_wf_does_not_warn_when_graddev_is_written(tmp_path, caplog)
         _finalize_wf_with_gradients(tmp_path, write_derivatives=True)
 
     assert 'graddev' not in caplog.text
+
+
+def test_shoreline_iters_sets_the_model_iteration_count(tmp_path):
+    """Regression: --shoreline-iters never reached init_dwi_hmc_wf (always 2)."""
+    _cfg_for_shoreline(tmp_path)
+    config.workflow.shoreline_iters = 3
+    wf = _shoreline_wf(tmp_path, _rpe_unit(tmp_path))
+    model_wf = wf.get_node('dwi_hmc_wf.dwi_model_hmc_wf')
+    assert model_wf.get_node('shoreline_iteration002') is not None
+    assert model_wf.get_node('shoreline_iteration003') is None
+    assert model_wf.get_node('summarize_iterations') is not None
+    assert 'A total of 3 iterations were run' in model_wf.__desc__
+
+
+def test_single_shoreline_iteration_skips_the_iteration_summary(tmp_path):
+    _cfg_for_shoreline(tmp_path)
+    config.workflow.shoreline_iters = 1
+    wf = _shoreline_wf(tmp_path, _rpe_unit(tmp_path))
+    model_wf = wf.get_node('dwi_hmc_wf.dwi_model_hmc_wf')
+    assert model_wf.get_node('initial_model_iteration') is not None
+    assert model_wf.get_node('shoreline_iteration001') is None
+    assert model_wf.get_node('summarize_iterations') is None
+    assert 'A total of 1 iteration was run' in model_wf.__desc__
+
+
+@pytest.mark.parametrize(
+    ('hmc_model', 'expected', 'unexpected'),
+    [
+        ('tensor', 'using a tensor model', '3dSHORE'),
+        ('3dSHORE', 'using 3dSHORE [@merlet3dshore]', 'tensor model'),
+    ],
+)
+def test_shoreline_methods_text_names_the_model_and_transform(
+    tmp_path, hmc_model, expected, unexpected
+):
+    from qsiprep.workflows.dwi.hmc import init_dwi_model_hmc_wf
+
+    _cfg_for_shoreline(tmp_path)
+    config.workflow.hmc_model = hmc_model
+    config.workflow.hmc_transform = 'Rigid'
+    wf = init_dwi_model_hmc_wf(num_iters=2)
+    assert expected in wf.__desc__
+    assert unexpected not in wf.__desc__
+    assert 'using the Rigid transform' in wf.__desc__
+
+
+def test_eddy_summary_leaves_hmc_transform_undefined(tmp_path):
+    """A stale hmc_transform (e.g. from a reloaded config) must not reach an eddy summary."""
+    from nipype.interfaces.base import isdefined
+
+    wf = _preproc_wf(tmp_path)
+    # _dwi_preproc_cfg sets this, standing in for a stale value.
+    assert config.workflow.hmc_transform == 'Affine'
+    assert not isdefined(wf.get_node('summary').inputs.hmc_transform)

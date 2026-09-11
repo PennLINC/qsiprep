@@ -604,7 +604,9 @@ class workflow(_Config):
     vocabulary equivalent of ``hmc_method`` + ``shoreline_model``, kept while
     workflow builders still read it."""
     hmc_transform = None
-    """Transformation to be used in SHORELine."""
+    """Transformation SHORELine optimizes during head motion correction: Affine or
+    Rigid. Derived from ``--shoreline-config``; None unless ``hmc_method`` is
+    shoreline."""
     ignore = None
     """Ignore particular steps for *QSIPrep*."""
     infant = False
@@ -636,11 +638,15 @@ class workflow(_Config):
     topup, drbuddi or topup+drbuddi (the parser resolves ``auto``)."""
     separate_all_dwis = False
     """Process all dwis separately - do not attempt concatenation."""
+    shoreline_config = None
+    """Configuration JSON for SHORELine (``--shoreline-config``)."""
     shoreline_iters = None
-    """How many iterations to run SHORELine."""
+    """How many iterations to run SHORELine. Derived from ``--shoreline-config``;
+    None unless ``hmc_method`` is shoreline."""
     shoreline_model = None
     """Signal model SHORELine uses to predict motion-correction targets:
-    3dshore, tensor or none. Only set when ``hmc_method`` is shoreline."""
+    3dshore, tensor or none. Derived from ``--shoreline-config``; None unless
+    ``hmc_method`` is shoreline."""
     tortoise_gpu_cpu_ratio = None
     """Volumes the GPU takes per DIFFPREP pass; None leaves TORTOISE's default."""
     unringing_method = None
@@ -699,7 +705,7 @@ class workflow(_Config):
     # what ``_paths`` names, and toml writes anything else as its repr, so an
     # unlisted Path reaches the workflow-building subprocess as the literal
     # string "PosixPath('/path')".
-    _paths = ('gradient_file',)
+    _paths = ('gradient_file', 'shoreline_config')
 
 
 class loggers:
