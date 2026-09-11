@@ -257,7 +257,7 @@ def test_collect_data(tmpdir, name, skeleton, sessions, n_anats):
     subj_data = collect_data(
         bids_dir=str(bids_dir),
         participant_label=participant_label,
-        session_id=sessions[0],
+        session_label=sessions[0],
         filters=None,
         bids_validate=False,
         ignore=[],
@@ -267,7 +267,7 @@ def test_collect_data(tmpdir, name, skeleton, sessions, n_anats):
     subj_data = collect_data(
         bids_dir=str(bids_dir),
         participant_label=participant_label,
-        session_id=sessions[1],
+        session_label=sessions[1],
         filters=None,
         bids_validate=False,
         ignore=[],
@@ -277,7 +277,7 @@ def test_collect_data(tmpdir, name, skeleton, sessions, n_anats):
     subj_data = collect_data(
         bids_dir=str(bids_dir),
         participant_label=participant_label,
-        session_id=sessions,
+        session_label=sessions,
         filters=None,
         bids_validate=False,
         ignore=['t2w'],

@@ -411,7 +411,7 @@ def _build_parser(**kwargs):
         'identifier (the sub- prefix can be removed)',
     )
     g_bids.add_argument(
-        '--session-id',
+        '--session-label',
         action='store',
         nargs='+',
         type=_drop_ses,
@@ -1305,7 +1305,7 @@ def parse_args(args=None, namespace=None):
     processing_groups = []
 
     # Determine any session filters
-    session_filters = config.execution.session_id or []
+    session_filters = config.execution.session_label or []
     # if config.execution.bids_filters is not None:
     #     for _, filters in config.execution.bids_filters:
     #         ses_filter = filters.get("session")
