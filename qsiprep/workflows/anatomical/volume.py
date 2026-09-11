@@ -218,6 +218,7 @@ def init_anat_preproc_wf(
                 'dwi_sampling_grids',
                 'standard_forward_transforms',
                 'standard_reverse_transforms',
+                'standard_template_lps',
                 'to_template_affine_transform',
             ]
         ),
@@ -423,52 +424,64 @@ FreeSurfer version {FS_VERSION}. """
             ]),
         ])  # fmt:skip
 
+    # Registrations are shared per template+cohort; the fetched grid is per spec,
+    # because two res- labels of one template land in the same place but are
+    # resampled onto different grids. Both caches feed one record per spec, in
+    # standard_specs order, so the transform list and the grid list below cannot be
+    # assembled independently and drift out of alignment.
     registrations = {acpc_anchor.fullname: anat_normalization_wf}
+    lps_chains = {str(acpc_anchor): anchor_lps_wf}
 
-    standard_transform_wfs = []
+    per_spec = []
     for spec in standard_specs:
-        existing = registrations.get(spec.fullname)
-        if existing is not None:
-            standard_transform_wfs.append(existing)
-            continue
-
         label = _spec_node_label(spec)
-        get_std_template = pe.Node(
-            GetTemplate(anatomical_contrast=anat_modality, **templateflow_kwargs(spec)),
-            name=f'get_template_{label}',
-        )
-        std_lps_wf = init_template_lps_wf(name=f'template_lps_{label}_wf')
-        norm_wf = init_anat_normalization_wf(
-            spec,
-            has_rois=has_rois,
-            moving_is_acpc=True,
-            name=f'anat_normalization_{label}_wf',
-        )
-        standard_transform_wfs.append(norm_wf)
-        registrations[spec.fullname] = norm_wf
-        workflow.connect([
-            (get_std_template, std_lps_wf, [
-                ('template_file', 'inputnode.template_file'),
-                ('mask_file', 'inputnode.mask_file'),
-            ]),
-            (std_lps_wf, norm_wf, [
-                ('outputnode.template_lps', 'inputnode.template_image'),
-                ('outputnode.mask_lps', 'inputnode.template_mask'),
-            ]),
-            # ACPC-frame inputs, not the raw reference: this workflow no longer
-            # estimates its own rigid alignment, so what it is given defines the
-            # frame its composite maps from.
-            (rigid_acpc_resample_mask, norm_wf, [
-                ('output_image', 'inputnode.brain_mask'),
-            ]),
-            (rigid_acpc_resample_head, norm_wf, [
-                ('output_image', 'inputnode.anatomical_reference'),
-            ]),
-        ])  # fmt:skip
-        if has_rois:
+
+        # The grid first: the registration below reads its template from this.
+        std_lps_wf = lps_chains.get(str(spec))
+        if std_lps_wf is None:
+            get_std_template = pe.Node(
+                GetTemplate(anatomical_contrast=anat_modality, **templateflow_kwargs(spec)),
+                name=f'get_template_{label}',
+            )
+            std_lps_wf = init_template_lps_wf(name=f'template_lps_{label}_wf')
             workflow.connect([
-                (rigid_acpc_resample_roi, norm_wf, [('output_image', 'inputnode.roi')]),
+                (get_std_template, std_lps_wf, [
+                    ('template_file', 'inputnode.template_file'),
+                    ('mask_file', 'inputnode.mask_file'),
+                ]),
             ])  # fmt:skip
+            lps_chains[str(spec)] = std_lps_wf
+
+        norm_wf = registrations.get(spec.fullname)
+        if norm_wf is None:
+            norm_wf = init_anat_normalization_wf(
+                spec,
+                has_rois=has_rois,
+                moving_is_acpc=True,
+                name=f'anat_normalization_{label}_wf',
+            )
+            registrations[spec.fullname] = norm_wf
+            workflow.connect([
+                (std_lps_wf, norm_wf, [
+                    ('outputnode.template_lps', 'inputnode.template_image'),
+                    ('outputnode.mask_lps', 'inputnode.template_mask'),
+                ]),
+                # ACPC-frame inputs, not the raw reference: this workflow no longer
+                # estimates its own rigid alignment, so what it is given defines the
+                # frame its composite maps from.
+                (rigid_acpc_resample_mask, norm_wf, [
+                    ('output_image', 'inputnode.brain_mask'),
+                ]),
+                (rigid_acpc_resample_head, norm_wf, [
+                    ('output_image', 'inputnode.anatomical_reference'),
+                ]),
+            ])  # fmt:skip
+            if has_rois:
+                workflow.connect([
+                    (rigid_acpc_resample_roi, norm_wf, [('output_image', 'inputnode.roi')]),
+                ])  # fmt:skip
+
+        per_spec.append((spec, norm_wf, std_lps_wf))
 
     if standard_specs:
         merge_std_forward_transforms = pe.Node(
@@ -483,7 +496,13 @@ FreeSurfer version {FS_VERSION}. """
         merge_std_reports = pe.Node(
             niu.Merge(len(standard_specs)), name='merge_std_reports'
         )
-        for index, norm_wf in enumerate(standard_transform_wfs, start=1):
+        # The grid each space's derivatives are resampled onto, in the same order.
+        # init_anat_derivatives_wf selects by index, so slot N here must be the
+        # template slot N of merge_std_forward_transforms was registered against.
+        merge_std_template_lps = pe.Node(
+            niu.Merge(len(standard_specs)), name='merge_std_template_lps'
+        )
+        for index, (_, norm_wf, std_lps_wf) in enumerate(per_spec, start=1):
             workflow.connect([
                 (norm_wf, merge_std_forward_transforms, [
                     ('outputnode.to_template_nonlinear_transform', f'in{index}'),
@@ -494,10 +513,14 @@ FreeSurfer version {FS_VERSION}. """
                 (norm_wf, merge_std_reports, [
                     ('outputnode.out_report', f'in{index}'),
                 ]),
+                (std_lps_wf, merge_std_template_lps, [
+                    ('outputnode.template_lps', f'in{index}'),
+                ]),
             ])  # fmt:skip
         workflow.connect([
             (merge_std_forward_transforms, outputnode, [('out', 'standard_forward_transforms')]),
             (merge_std_reverse_transforms, outputnode, [('out', 'standard_reverse_transforms')]),
+            (merge_std_template_lps, outputnode, [('out', 'standard_template_lps')]),
         ])  # fmt:skip
 
     in_lut = str(load_data('FreeSurferColorLUT.txt'))
@@ -683,6 +706,7 @@ FreeSurfer version {FS_VERSION}. """
             ('t1_seg', 'inputnode.t1_seg'),
             ('t1_aseg', 'inputnode.t1_aseg'),
             ('standard_forward_transforms', 'inputnode.t1_std_forward_transforms'),
+            ('standard_template_lps', 'inputnode.t1_std_template_lps'),
             ('standard_reverse_transforms', 'inputnode.t1_std_reverse_transforms'),
         ]),
     ])  # fmt:skip
@@ -1726,7 +1750,6 @@ def init_anat_derivatives_wf(output_spaces, has_t2w=False) -> Workflow:
         and dseg.
     """
     workflow = Workflow(name='anat_derivatives_wf')
-    anat_modality = config.workflow.anat_modality
     standard_specs = [spec for spec in output_spaces if spec.standard]
 
     inputnode = pe.Node(
@@ -1740,6 +1763,7 @@ def init_anat_derivatives_wf(output_spaces, has_t2w=False) -> Workflow:
                 't1_mask',
                 't1_seg',
                 't1_std_forward_transforms',
+                't1_std_template_lps',
                 't1_std_reverse_transforms',
                 't1_aseg',
                 # t2_preproc is the merged T2w template in ACPC; t2w_unfatsat
@@ -2005,11 +2029,14 @@ def init_anat_derivatives_wf(output_spaces, has_t2w=False) -> Workflow:
             select_forward = pe.Node(niu.Select(index=index), name=f'select_{label}_forward')
             select_reverse = pe.Node(niu.Select(index=index), name=f'select_{label}_reverse')
 
-            get_std_template = pe.Node(
-                GetTemplate(anatomical_contrast=anat_modality, **templateflow_kwargs(spec)),
-                name=f'get_template_{label}_deriv',
+            # The grid comes from the chain init_anat_preproc_wf already built for
+            # this spec, not a second fetch: deriving it independently would let the
+            # image land on a different grid than the transform was estimated
+            # against, and cost a TemplateFlow lookup plus three AFNI launches for a
+            # byte-identical result.
+            select_template_lps = pe.Node(
+                niu.Select(index=index), name=f'select_{label}_template_lps'
             )
-            std_lps_wf = init_template_lps_wf(name=f'template_lps_{label}_deriv_wf')
 
             resample_std_preproc = pe.Node(
                 ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
@@ -2035,28 +2062,22 @@ def init_anat_derivatives_wf(output_spaces, has_t2w=False) -> Workflow:
             workflow.connect([
                 (inputnode, select_forward, [('t1_std_forward_transforms', 'inlist')]),
                 (inputnode, select_reverse, [('t1_std_reverse_transforms', 'inlist')]),
-
-                (get_std_template, std_lps_wf, [
-                    ('template_file', 'inputnode.template_file'),
-                    ('mask_file', 'inputnode.mask_file'),
-                ]),
+                (inputnode, select_template_lps, [('t1_std_template_lps', 'inlist')]),
 
                 (inputnode, resample_std_preproc, [('t1_preproc', 'input_image')]),
-                (std_lps_wf, resample_std_preproc, [
-                    ('outputnode.template_lps', 'reference_image'),
-                ]),
+                (select_template_lps, resample_std_preproc, [('out', 'reference_image')]),
                 (select_forward, resample_std_preproc, [('out', 'transforms')]),
                 (resample_std_preproc, ds_std_preproc, [('output_image', 'in_file')]),
                 (t1_name, ds_std_preproc, [('out', 'source_file')]),
 
                 (inputnode, resample_std_mask, [('t1_mask', 'input_image')]),
-                (std_lps_wf, resample_std_mask, [('outputnode.template_lps', 'reference_image')]),
+                (select_template_lps, resample_std_mask, [('out', 'reference_image')]),
                 (select_forward, resample_std_mask, [('out', 'transforms')]),
                 (resample_std_mask, ds_std_mask, [('output_image', 'in_file')]),
                 (t1_name, ds_std_mask, [('out', 'source_file')]),
 
                 (inputnode, resample_std_dseg, [('t1_seg', 'input_image')]),
-                (std_lps_wf, resample_std_dseg, [('outputnode.template_lps', 'reference_image')]),
+                (select_template_lps, resample_std_dseg, [('out', 'reference_image')]),
                 (select_forward, resample_std_dseg, [('out', 'transforms')]),
                 (resample_std_dseg, ds_std_dseg, [('output_image', 'in_file')]),
                 (t1_name, ds_std_dseg, [('out', 'source_file')]),

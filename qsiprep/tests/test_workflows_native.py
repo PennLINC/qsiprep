@@ -797,3 +797,60 @@ def test_res_labels_of_one_template_share_a_registration(tmp_path):
     assert registrations == {'anat_normalization_wf'}, (
         f'expected one registration to MNI152NLin2009cAsym, got {sorted(registrations)}'
     )
+
+
+def test_derivatives_reuse_the_preproc_template_chain(tmp_path):
+    """The grid images are resampled onto must be the grid they were registered to."""
+    wf = _build_anat_preproc_wf(tmp_path, MULTI_STANDARD)
+    duplicated = [
+        name
+        for name in wf.list_node_names()
+        if 'get_template' in name and name.endswith('_deriv')
+    ]
+    assert not duplicated, f'derivatives refetch templates: {duplicated}'
+    duplicated_lps = [name for name in wf.list_node_names() if '_deriv_wf' in name]
+    assert not duplicated_lps, f'derivatives rebuild the LPS chain: {duplicated_lps}'
+
+
+def test_transform_and_grid_lists_stay_index_aligned(tmp_path):
+    """Registrations dedup per template, LPS chains per spec -- two different keys
+    over one list. Every slot of both merges must be filled, from the producer
+    belonging to that spec, or a Select(index=N) pairs one space's transform with
+    another space's grid."""
+    from qsiprep.utils.spaces import parse_output_spaces
+    from qsiprep.workflows.anatomical.volume import _spec_node_label
+
+    spaces = [
+        'acpc:res-2mm',
+        'MNI152NLin2009cAsym:res-1',
+        'MNI152NLin2009cAsym:res-2',
+        'MNI152NLin6Asym',
+    ]
+    wf = _build_anat_preproc_wf(tmp_path, spaces)
+    specs = [s for s in parse_output_spaces(spaces) if s.standard]
+    n_standard = len(specs)
+
+    def _slot_sources(merge_name):
+        merge = wf.get_node(merge_name)
+        assert merge is not None, f'{merge_name} is missing'
+        arity = merge.interface._numinputs
+        assert arity == n_standard, f'{merge_name} has {arity} slots for {n_standard} specs'
+        sources = {}
+        for src, _, data in wf._graph.in_edges(merge, data=True):
+            for _, field in data['connect']:
+                sources[field] = src.name
+        assert set(sources) == {f'in{i}' for i in range(1, n_standard + 1)}, (
+            f'{merge_name} slots not all connected: {sorted(sources)}'
+        )
+        return sources
+
+    lps_sources = _slot_sources('merge_std_template_lps')
+    _slot_sources('merge_std_forward_transforms')
+
+    # Slot N of the grid list must be the chain built for spec N.
+    for position, spec in enumerate(specs, start=1):
+        label = _spec_node_label(spec)
+        source = lps_sources[f'in{position}']
+        assert label in source or source == 'anchor_lps_wf', (
+            f'slot in{position} grid comes from {source}, not the chain for {label}'
+        )
