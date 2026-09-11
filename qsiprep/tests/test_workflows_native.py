@@ -551,11 +551,15 @@ def test_two_resolutions_of_one_template_build(tmp_path):
     """Rule 6 of the spec: one template may be asked for at several resolutions.
 
     Node names used to key on spec.fullname alone, so this raised
-    ``OSError: Duplicate node name``.
+    ``OSError: Duplicate node name``; building at all is the regression guard.
+
+    Both resolutions now share one registration -- a res- label changes the grid
+    the template is fetched on, not where the registration lands -- so the count
+    here is one, not one per resolution.
     """
     wf = _build_anat_preproc_wf(tmp_path, ['acpc:res-2mm', 'MNI152NLin2009cAsym:res-1:res-2'])
     norm_wfs = {n.split('.')[0] for n in wf.list_node_names() if 'anat_normalization' in n}
-    assert len(norm_wfs) == 3, sorted(norm_wfs)  # the anchor plus one per resolution
+    assert norm_wfs == {'anat_normalization_wf'}, sorted(norm_wfs)
 
 
 def test_two_resolutions_of_one_template_report_once(tmp_path):
@@ -780,3 +784,16 @@ def test_non_anchor_normalization_gets_an_acpc_lesion_mask(tmp_path):
     nlin = norm_wf.get_node('anat_nlin_normalization')
     edge = norm_wf._graph.get_edge_data(norm_wf.get_node('inputnode'), nlin)
     assert ('roi', 'lesion_mask') in edge['connect']
+
+
+def test_res_labels_of_one_template_share_a_registration(tmp_path):
+    """res- labels differ only in the grid the template was fetched on."""
+    wf = _build_anat_preproc_wf(
+        tmp_path, ['acpc:res-2mm', 'MNI152NLin2009cAsym:res-1', 'MNI152NLin2009cAsym:res-2']
+    )
+    registrations = {
+        name.split('.')[0] for name in wf.list_node_names() if 'anat_normalization' in name
+    }
+    assert registrations == {'anat_normalization_wf'}, (
+        f'expected one registration to MNI152NLin2009cAsym, got {sorted(registrations)}'
+    )

@@ -374,20 +374,12 @@ FreeSurfer version {FS_VERSION}. """
         nonlinear=needs_nonlinear,
     )
 
-    # One additional nonlinear normalization per requested standard space. Each
-    # registers straight from the raw anatomical reference to its own
-    # TemplateFlow template, fetched and LPS+ reoriented at its own resolution.
-    # No standard space requested means no normalization runs. When a requested
-    # standard space is the same template/cohort/resolution as the ACPC anchor,
-    # the anchor's own (already unconditionally built) normalization IS that
-    # registration -- reuse it instead of paying for antsRegistration twice.
-    def _label_resolution(spec):
-        if spec.resolution is not None and spec.resolution.kind == 'label':
-            return spec.resolution.label
-        return None
-
-    anchor_label_resolution = _label_resolution(acpc_anchor)
-
+    # One nonlinear normalization per template and cohort, not per requested
+    # resolution: a res- label changes only the grid the template was fetched on,
+    # not where the registration lands, so two labels of one template share a
+    # registration and differ only in the grid derivatives are resampled onto. No
+    # standard space requested means no normalization runs. The anchor's own
+    # normalization is always built, so it seeds the cache.
     # Resampling into the anchor's ACPC frame. These are declared here, above the
     # standard-space fan-out, because that loop connects from them: workflow.connect
     # evaluates immediately, so a declaration further down would be an
@@ -431,14 +423,13 @@ FreeSurfer version {FS_VERSION}. """
             ]),
         ])  # fmt:skip
 
+    registrations = {acpc_anchor.fullname: anat_normalization_wf}
+
     standard_transform_wfs = []
     for spec in standard_specs:
-        reuses_anchor = (
-            spec.fullname == acpc_anchor.fullname
-            and _label_resolution(spec) == anchor_label_resolution
-        )
-        if reuses_anchor:
-            standard_transform_wfs.append(anat_normalization_wf)
+        existing = registrations.get(spec.fullname)
+        if existing is not None:
+            standard_transform_wfs.append(existing)
             continue
 
         label = _spec_node_label(spec)
@@ -454,6 +445,7 @@ FreeSurfer version {FS_VERSION}. """
             name=f'anat_normalization_{label}_wf',
         )
         standard_transform_wfs.append(norm_wf)
+        registrations[spec.fullname] = norm_wf
         workflow.connect([
             (get_std_template, std_lps_wf, [
                 ('template_file', 'inputnode.template_file'),
