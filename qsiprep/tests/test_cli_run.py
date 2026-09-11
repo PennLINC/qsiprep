@@ -4,6 +4,18 @@ import pytest
 from niworkflows.utils.testing import generate_bids_skeleton
 
 
+@pytest.fixture(autouse=True)
+def _reset_bids_layout():
+    """Drop the cached BIDSLayout so each test indexes its own dataset."""
+    from qsiprep import config
+
+    config.execution._layout = None
+    config.execution.bids_database_dir = None
+    yield
+    config.execution._layout = None
+    config.execution.bids_database_dir = None
+
+
 def gen_layout(bids_dir, database_dir=None):
     """Generate a BIDSLayout object."""
     import re
@@ -254,7 +266,8 @@ def test_anat_only_session_discovery_uses_anatomical_modality(tmp_path):
         },
     )
 
-    config.from_dict({'bids_dir': str(bids_dir)}, init=True)
+    work_dir = tmp_path / 'work'
+    config.from_dict({'bids_dir': str(bids_dir), 'work_dir': str(work_dir)}, init=True)
     parse_args(
         [
             str(bids_dir),
@@ -269,6 +282,8 @@ def test_anat_only_session_discovery_uses_anatomical_modality(tmp_path):
             'sessionwise',
             '--output-resolution',
             '2',
+            '--work-dir',
+            str(work_dir),
             '--skip-bids-validation',
         ],
     )
