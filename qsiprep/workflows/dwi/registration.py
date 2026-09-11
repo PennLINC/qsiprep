@@ -3,12 +3,15 @@
 from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
+from nireports.interfaces.reporting.base import (
+    SimpleBeforeAfterRPT as SimpleBeforeAfter,
+)
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
 from ... import config
 from ...data import load as load_data
+from ...interfaces.images import ExtractWM
 from ...interfaces.itk import ACPCReport, AffineToRigid
-from ...interfaces.niworkflows import ANTSRegistrationRPT
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
@@ -93,7 +96,7 @@ def init_b0_to_anat_registration_wf(
     workflow = Workflow(name=name)
 
     # Defines a coregistration operation
-    coreg = ANTSRegistrationRPT(generate_report=write_report)
+    coreg = ants.Registration()
     coreg.inputs.metric = ['Mattes']
     coreg.inputs.transforms = [transform_type]
     coreg.inputs.shrink_factors = [[8, 4, 2, 1]]
@@ -124,9 +127,28 @@ def init_b0_to_anat_registration_wf(
             ('forward_transforms', 'itk_b0_to_t1'),
             ('reverse_transforms', 'itk_t1_to_b0'),
             ('metric_value', 'coreg_metric'),
-            ('out_report', 'report'),
         ]),
     ])  # fmt:skip
+
+    if write_report:
+        # Flicker the anatomy against the b=0 that ANTs already resampled into
+        # anatomical space, contoured with the GM/WM boundary -- the same
+        # reportlet the distortion correction figures use. Both panels and the
+        # segmentation are in anatomical space, so nothing needs resampling.
+        sel_wm = pe.Node(ExtractWM(), name='sel_wm', mem_gb=DEFAULT_MEMORY_MIN_GB)
+        coreg_rpt = pe.Node(
+            SimpleBeforeAfter(before_label='Anatomical', after_label='b=0'),
+            name='coreg_rpt',
+            mem_gb=0.1,
+        )
+        workflow.connect([
+            (inputnode, sel_wm, [('t1_seg', 'in_seg')]),
+            (inputnode, coreg_rpt, [('t1_brain', 'before')]),
+            (b0_to_anat, coreg_rpt, [('warped_image', 'after')]),
+            (sel_wm, coreg_rpt, [('out', 'wm_seg')]),
+            (coreg_rpt, outputnode, [('out_report', 'report')]),
+        ])  # fmt:skip
+
     return workflow
 
 
@@ -205,10 +227,9 @@ def init_direct_b0_acpc_wf(write_report=True, name='b0_anat_coreg'):
 
     workflow = Workflow(name=name)
 
-    # Defines a coregistration operation
     ants_settings = str(load_data('intermodal_ACPC.json'))
     acpc_reg = pe.Node(
-        ANTSRegistrationRPT(generate_report=write_report, from_file=ants_settings),
+        ants.Registration(from_file=ants_settings),
         name='acpc_reg',
         n_procs=config.nipype.omp_nthreads,
     )
@@ -223,8 +244,6 @@ def init_direct_b0_acpc_wf(write_report=True, name='b0_anat_coreg'):
     rigid_warp = pe.Node(
         ants.ApplyTransforms(dimension=3, interpolation='BSpline'), name='rigid_warp'
     )
-    acpc_report = pe.Node(ACPCReport(), name='acpc_report')
-
     workflow.connect([
         (inputnode, acpc_reg, [
             ('t1_brain', 'fixed_image'),
@@ -242,14 +261,19 @@ def init_direct_b0_acpc_wf(write_report=True, name='b0_anat_coreg'):
             ('ref_b0_brain', 'input_image'),
             ('t1_brain', 'reference_image'),
         ]),
-        (translation_warp, acpc_report, [('output_image', 'translation_image')]),
-        (rigid_warp, acpc_report, [('output_image', 'rigid_image')]),
         (itk_to_rigid, outputnode, [
             ('rigid_transform', 'itk_b0_to_t1'),
             ('rigid_transform_inverse', 'itk_t1_to_b0'),
         ]),
-        (acpc_report, outputnode, [('out_report', 'report')]),
     ])  # fmt:skip
+
+    if write_report:
+        acpc_report = pe.Node(ACPCReport(), name='acpc_report')
+        workflow.connect([
+            (translation_warp, acpc_report, [('output_image', 'translation_image')]),
+            (rigid_warp, acpc_report, [('output_image', 'rigid_image')]),
+            (acpc_report, outputnode, [('out_report', 'report')]),
+        ])  # fmt:skip
 
     return workflow
 
