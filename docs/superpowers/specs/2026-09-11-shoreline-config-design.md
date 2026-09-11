@@ -166,10 +166,10 @@ also give the SHORELine settings different reload behavior from `hmc_method`.
 |---|---|
 | `workflows/dwi/hmc_sdc.py:140` | Pass `num_model_iterations=config.workflow.shoreline_iters` to `init_dwi_hmc_wf`. This is the bug fix; see "Effects of the iteration fix" below. |
 | `workflows/dwi/base.py:257-262` | Delete the runtime check that `iters` is at least 1; the loader enforces it. |
-| `workflows/dwi/base.py:~491` | Pass `hmc_transform` to `DiffusionSummary` only when `config.workflow.hmc_method == 'shoreline'`. Gating on the method rather than on the value means a stale value could never reach an eddy or TORTOISE summary. |
+| `workflows/dwi/base.py:~491` | Pass `hmc_transform` to `DiffusionSummary` only when the resolved HMC method is SHORELine: `hmc_tool == 'shoreline'`, where `hmc_tool = unit.run.hmc_stage.tool` is set at `base.py:256` in the same function. This is the resolved form of `hmc_method`, and it also covers configs that carry only the legacy `hmc_model`. Gating on the method rather than on the value means a stale value could never reach an eddy or TORTOISE summary. |
 | `interfaces/reports.py` | Make `DiffusionSummaryInputSpec.hmc_transform` optional (no longer `mandatory=True`). Render the "HMC Transform" `<li>` only when it is defined. The other lines are unchanged. |
 | `workflows/dwi/hmc.py:~389` (`init_b0_hmc_wf`, iterative branch) | The methods text says "iterations of `{config.workflow.hmc_model}` registrations"; change it to the local `transform` (Affine or Rigid), which is what actually selects the ANTs settings (`hmc.py:~271`). The `first` branch already does this. It also corrects the anatomical merge and intramodal template text, which pass their own `transform`. |
-| `workflows/dwi/hmc.py:~717-722` (`init_dwi_model_hmc_wf`) | The methods text always says "reconstructing the others using 3dSHORE [@merlet3dshore]". Name the model from `config.workflow.shoreline_model`: "3dSHORE [@merlet3dshore]" for `3dshore` and "a tensor model" for `tensor`. `none` never reaches this function, because `init_dwi_hmc_wf` returns early (`hmc.py:~162`). |
+| `workflows/dwi/hmc.py:~717-722` (`init_dwi_model_hmc_wf`) | The methods text always says "reconstructing the others using 3dSHORE [@merlet3dshore]". Name the model from `config.workflow.hmc_model`, the value `SignalPrediction` actually reads (`hmc.py:~585`): "3dSHORE [@merlet3dshore]" for `3dSHORE` and "a tensor model" for `tensor`. `none` never reaches this function, because `init_dwi_hmc_wf` returns early (`hmc.py:~162`). |
 | `workflows/dwi/hmc.py` (lines 357, 583), `workflows/dwi/derivatives.py:89`, `utils/plan.py` | No change. They read the resolved fields. |
 
 ### Effects of the iteration fix
@@ -284,7 +284,7 @@ This is the regression test for the bug fix. On the current code both builds con
 
 **Methods text:**
 
-- building `init_dwi_model_hmc_wf` with `shoreline_model = 'tensor'` and
+- building `init_dwi_model_hmc_wf` with `hmc_model = 'tensor'` and
   `hmc_transform = 'Rigid'` gives a `__desc__` that mentions a tensor model and a Rigid
   transform, and does not contain "3dSHORE";
 - with `3dshore`, it contains "3dSHORE [@merlet3dshore]";
@@ -366,7 +366,7 @@ A Codex adversarial review of the first draft (task `task-mtx37zjc-sadktc`) rais
 
 - **`--config-file` ordering (high):** fixed by making the command line authoritative for
   the SHORELine block (section 1, "Interaction with `--config-file`") and by gating the
-  summary on `hmc_method`. Tests added.
+  summary on the resolved HMC method. Tests added.
 - **QSIPlan's `cli_phrase()` appears in qsiprep's own workflow log and embedded grouping
   report (high):** handled in section 5.
 - **The iteration fix has observable effects beyond node count (medium):** documented in
