@@ -551,9 +551,6 @@ def _build_parser(**kwargs):
     g_conf.add_argument(
         '--force',
         required=False,
-        # Repeated occurrences accumulate rather than overwriting, so
-        # "--force gradwarp1D --force gradwarp3D" reaches validate_gradient_flags
-        # as the contradiction it is instead of silently keeping the last one.
         action='extend',
         nargs='+',
         default=[],

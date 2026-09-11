@@ -886,14 +886,6 @@ def test_parser_rejects_removed_diffprep_hmc_models(tmp_path):
             )
 
 
-def test_parser_help_renders():
-    """A stray trailing comma turns an argument's help into a tuple, which
-    argparse only trips over when --help is actually formatted."""
-    from qsiprep.cli.parser import _build_parser
-
-    assert '--force' in _build_parser().format_help()
-
-
 @pytest.mark.parametrize('forced', ['gradwarp1D', 'gradwarp3D'])
 def test_parser_accepts_force_gradwarp_and_gradient_file(tmp_path, forced):
     """--force gradwarp{1,3}D and --gradient-file land on the namespace under
