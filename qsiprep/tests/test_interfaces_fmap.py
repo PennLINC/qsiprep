@@ -172,3 +172,27 @@ def test_cleanup_edge_blends_despiked_rim_into_original_interior(tmp_path):
     assert np.all(out[interior] == 10.0)  # original field kept inside
     assert np.all(out[edge] == 99.0)  # rim replaced by despiked values
     assert np.all(out[~(interior | edge)] == 0.0)  # nothing outside mask ∪ rim
+
+
+def test_median_and_cleanup_write_float32_from_integer_input(tmp_path):
+    """Filtering an int16 image yields float32 (like fslmaths), not a requantised int.
+
+    Passing the source header through nibabel would otherwise keep the int16
+    dtype and scale the float result into it.
+    """
+    data = (np.random.default_rng(0).normal(0, 300, (8, 8, 6))).astype('int16')
+    src = tmp_path / 'int16.nii.gz'
+    img = nb.Nifti1Image(data, np.eye(4))
+    img.set_data_dtype(np.int16)
+    img.to_filename(str(src))
+
+    med = _run(MedianFilter(in_file=str(src), kernel_radius_mm=3), tmp_path / 'm')
+    assert nb.load(med.outputs.out_file).get_data_dtype() == np.float32
+
+    mask = tmp_path / 'mask.nii.gz'
+    nb.Nifti1Image(np.ones((8, 8, 6), 'int16'), np.eye(4)).to_filename(str(mask))
+    clean = _run(
+        CleanupEdgeFilter(in_file=str(src), despiked_file=str(src), in_mask=str(mask)),
+        tmp_path / 'c',
+    )
+    assert nb.load(clean.outputs.out_file).get_data_dtype() == np.float32

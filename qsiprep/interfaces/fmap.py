@@ -259,7 +259,10 @@ class MedianFilter(SimpleInterface):
         footprint = _sphere_footprint(self.inputs.kernel_radius_mm, img.header.get_zooms()[:3])
         filtered = median_filter(data, footprint=footprint)
         out_file = fname_presuffix(self.inputs.in_file, suffix='_medfilt', newpath=runtime.cwd)
-        img.__class__(filtered.astype(np.float32), img.affine, img.header).to_filename(out_file)
+        # Store as float32 like fslmaths, so an integer input is not requantised.
+        out_header = img.header.copy()
+        out_header.set_data_dtype(np.float32)
+        img.__class__(filtered.astype(np.float32), img.affine, out_header).to_filename(out_file)
         self._results['out_file'] = out_file
         return runtime
 
@@ -301,9 +304,12 @@ class CleanupEdgeFilter(SimpleInterface):
         cleaned = original * interior + despiked * edge
 
         out_file = fname_presuffix(self.inputs.in_file, suffix='_edgeclean', newpath=runtime.cwd)
-        fmap_img.__class__(
-            cleaned.astype(np.float32), fmap_img.affine, fmap_img.header
-        ).to_filename(out_file)
+        # Store as float32 like fslmaths, so an integer input is not requantised.
+        out_header = fmap_img.header.copy()
+        out_header.set_data_dtype(np.float32)
+        fmap_img.__class__(cleaned.astype(np.float32), fmap_img.affine, out_header).to_filename(
+            out_file
+        )
         self._results['out_file'] = out_file
         return runtime
 
