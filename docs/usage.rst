@@ -81,13 +81,12 @@ On standard spaces:
 
 .. warning::
 
-   Physical (``mm``) sizes are **not** implemented for standard spaces. QSIPrep does
-   not resample standard-space output to an arbitrary voxel size, so a token such as
-   ``MNI152NLin2009cAsym:res-1p5mm`` or ``MNI152NLin2009cAsym:res-6x6x3mm`` currently
-   parses but has no effect: the template is fetched at its highest-resolution grid,
-   nothing is resampled to the requested size, and no ``res-`` entity is written.
-   Use a TemplateFlow label instead. ``mm`` and ``native*`` sizes work only on
-   ``acpc``.
+   Physical (``mm``) sizes are **not** implemented for standard spaces, and are
+   rejected. QSIPrep does not resample standard-space output to an arbitrary voxel
+   size, so a token such as ``MNI152NLin2009cAsym:res-1p5mm`` or
+   ``MNI152NLin2009cAsym:res-6x6x3mm`` would write no ``res-`` entity and land on
+   exactly the filenames the bare template writes, silently overwriting them. Use a
+   TemplateFlow label instead. ``mm`` and ``native*`` sizes work only on ``acpc``.
 
 Multiple ``acpc`` entries
 =========================

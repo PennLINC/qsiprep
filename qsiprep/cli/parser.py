@@ -1243,19 +1243,19 @@ def _apply_output_space_deprecations(opts, parser=None):
         fail(str(exc))
 
     # A physical size on a standard space parses but does nothing: nothing resamples
-    # to it and no res- entity is written. Say so rather than no-op silently.
+    # to it and no res- entity is written, so it lands on exactly the filenames the
+    # bare template writes. Reject it rather than silently overwriting them.
     unimplemented = [
         str(spec)
         for spec in specs
         if spec.standard and spec.resolution is not None and spec.resolution.kind == 'mm'
     ]
     if unimplemented:
-        print(
-            f'WARNING: {", ".join(unimplemented)} requests a physical voxel size on a '
-            'standard space, which QSIPrep does not implement. The template will be '
-            'fetched at its highest-resolution grid and nothing will be resampled to '
-            'the requested size. Use a TemplateFlow res- label instead.',
-            file=sys.stderr,
+        fail(
+            f'Physical sizes on standard spaces are not implemented: '
+            f'{", ".join(unimplemented)}. QSIPrep writes standard-space anatomicals on '
+            "the template's own grid, so use a TemplateFlow res- label (for example "
+            'MNI152NLin2009cAsym:res-2) or drop the resolution.'
         )
 
     # Record the anchor now, from the full list. --skip-anat-based-spatial-

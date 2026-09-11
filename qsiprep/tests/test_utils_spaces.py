@@ -542,3 +542,17 @@ def test_legacy_infant_replaces_rather_than_augments_the_template(tmp_path):
     _apply_output_space_deprecations(opts)
     assert not any(s.startswith('MNI152NLin2009cAsym') for s in opts.output_spaces)
     assert opts.output_spaces == ['acpc:res-2mm', 'MNIInfant:cohort-auto']
+
+
+def test_mm_resolution_on_a_standard_space_is_rejected(tmp_path):
+    """It writes no res- entity, so it would collide with the bare template."""
+    import pytest
+
+    from qsiprep.cli.parser import _apply_output_space_deprecations
+
+    opts = _parse(
+        tmp_path, '--output-spaces', 'acpc:res-2mm', 'MNI152NLin2009cAsym:res-2mm'
+    )
+    with pytest.raises(SystemExit) as excinfo:
+        _apply_output_space_deprecations(opts)
+    assert 'MNI152NLin2009cAsym:res-2mm' in str(excinfo.value)
