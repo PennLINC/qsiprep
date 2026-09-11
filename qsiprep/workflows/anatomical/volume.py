@@ -58,6 +58,7 @@ from ...interfaces.itk import AffineToRigid, DisassembleTransform
 from ...interfaces.niworkflows import RobustMNINormalizationRPT
 from ...utils.gpu import gpu_enabled
 from ...utils.misc import fix_multi_source_name
+from ..dwi.registration import init_rotation_search_wf
 
 ANTS_VERSION = BrainExtraction().version or '<ver>'
 FS_VERSION = '8.2.0'
@@ -537,7 +538,8 @@ def init_t2w_preproc_wf(num_t2ws, do_biascorr=True, name='t2w_preproc_wf'):
     # ^ this also provides some boilerplate.
     workflow.__postdesc__ = """\
 The additional T2w reference image was registered to the T1w-ACPC reference
-image using an affine transformation in antsRegistration.
+image using an affine transformation in antsRegistration, initialized by a
+global search over rotations (antsAI).
 """
     # Skull strip the anatomical reference
     synthstrip_anat_wf = init_synthstrip_wf(
@@ -551,6 +553,11 @@ image using an affine transformation in antsRegistration.
         name='t2_brain_to_t1_brain',
         n_procs=config.nipype.omp_nthreads,
     )
+    # The search initialization replaces the center-of-mass one from
+    # affine.json, which the SyN fieldmap workflow still relies on
+    t2_brain_to_t1_brain.inputs.initial_moving_transform_com = traits.Undefined
+
+    rotation_search_wf = init_rotation_search_wf(transform='Rigid')
 
     # Resampling
     rigid_resample_t2w = pe.Node(
@@ -573,7 +580,14 @@ image using an affine transformation in antsRegistration.
         #    ('outputnode.template_transforms', 'anat_template_transforms'),
         # ]),
 
-        # Register the skull-stripped T2w to the skull-stripped T2w
+        # Register the skull-stripped T2w to the skull-stripped T1w
+        (synthstrip_anat_wf, rotation_search_wf, [
+            ('outputnode.brain_image', 'inputnode.moving_image'),
+        ]),
+        (inputnode, rotation_search_wf, [('t1_brain', 'inputnode.fixed_image')]),
+        (rotation_search_wf, t2_brain_to_t1_brain, [
+            ('outputnode.initial_transform', 'initial_moving_transform'),
+        ]),
         (synthstrip_anat_wf, t2_brain_to_t1_brain, [('outputnode.brain_image', 'moving_image')]),
         (inputnode, t2_brain_to_t1_brain, [('t1_brain', 'fixed_image')]),
 

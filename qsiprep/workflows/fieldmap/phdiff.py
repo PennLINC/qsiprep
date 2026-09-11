@@ -28,6 +28,7 @@ from niworkflows.interfaces.reportlets.masks import BETRPT
 
 from ... import config
 from ...interfaces import DerivativesDataSink, Phasediff2Fieldmap, Phases2Fieldmap
+from ...interfaces.fmap import MedianFilter
 from .utils import cleanup_edge_pipeline, demean_image, siemens2rads
 
 
@@ -104,15 +105,10 @@ further improvements of HCP Pipelines [@hcppipelines].
     )
     # uses mask from bet; outputs a mask
 
-    # dilate = pe.Node(fsl.maths.MathsCommand(
-    #     nan2zeros=True, args='-kernel sphere 5 -dilM'), name='MskDilate')
-
     # FSL PRELUDE will perform phase-unwrapping
     prelude = pe.Node(fsl.PRELUDE(), name='prelude')
 
-    denoise = pe.Node(
-        fsl.SpatialFilter(operation='median', kernel_shape='sphere', kernel_size=5), name='denoise'
-    )
+    denoise = pe.Node(MedianFilter(kernel_radius_mm=5), name='denoise')
 
     demean = pe.Node(niu.Function(function=demean_image), name='demean')
 

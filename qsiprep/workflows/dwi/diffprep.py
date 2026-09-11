@@ -50,6 +50,7 @@ from .gradwarp import (
     connect_gradwarp_sdc_volumes,
     resolve_gradwarp_plan,
 )
+from .registration import init_structural_to_b0_alignment_wf
 from .util import add_synb0_outputs, init_dwi_reference_wf, tortoise_convert_mem_gb
 
 # BIDS PhaseEncodingDirection axes already match what TORTOISEProcess expects
@@ -473,8 +474,23 @@ def init_diffprep_hmc_wf(
                 (synb0_wf, diffprep, [('outputnode.synthetic_b0', 'structural_image')]),
             ])  # fmt:skip
         elif use_t2wreg:
+            # EPIREG's internal rigid registration is center-of-mass
+            # initialized, so hand it a T2w already rotated into the b=0
+            # frame (antsAI rotation search against the raw b=0 average).
+            t2wreg_b0s = pe.Node(
+                ExtractB0s(b0_threshold=config.workflow.b0_threshold), name='t2wreg_b0s'
+            )
+            t2w_to_b0_wf = init_structural_to_b0_alignment_wf(name='t2w_to_b0_wf')
             workflow.connect([
-                (inputnode, diffprep, [('t2w_unfatsat', 'structural_image')]),
+                (inputnode, t2wreg_b0s, [
+                    ('dwi_file', 'dwi_series'),
+                    ('bval_file', 'bval_file'),
+                ]),
+                (t2wreg_b0s, t2w_to_b0_wf, [('b0_average', 'inputnode.b0_ref')]),
+                (inputnode, t2w_to_b0_wf, [('t2w_unfatsat', 'inputnode.structural_image')]),
+                (t2w_to_b0_wf, diffprep, [
+                    ('outputnode.structural_aligned', 'structural_image'),
+                ]),
             ])  # fmt:skip
 
         corrected_node = diffprep
@@ -656,6 +672,7 @@ def init_diffprep_hmc_wf(
                 ('t2w_unfatsat', 'inputnode.t2w_unfatsat'),
                 ('original_files', 'inputnode.original_files'),
             ]),
+            (extract_b0s, drbuddi_wf, [('b0_average', 'inputnode.b0_ref')]),
             (drbuddi_wf, outputnode, [
                 ('outputnode.sdc_warps', 'to_dwi_ref_warps'),
                 ('outputnode.sdc_scaling_images', 'sdc_scaling_images'),
