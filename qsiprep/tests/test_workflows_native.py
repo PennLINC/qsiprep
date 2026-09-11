@@ -394,6 +394,54 @@ def test_unit_sidecar_round_trips_through_derivatives_sidecar(tmp_path):
     assert written['Sources'] == ['sub-01_dir-AP_dwi.nii.gz', 'sub-01_dir-PA_dwi.nii.gz']
 
 
+def test_false_sidecar_booleans_survive_into_the_derivative_sidecar(tmp_path):
+    """A ``false`` boolean in a raw sidecar must not become ``true`` downstream.
+
+    The derivative sidecar is built from qsiplan's file records, which read the
+    JSON themselves. Metadata routed through pybids < 0.16.4 round-trips
+    booleans as strings and reads ``False`` back as ``True``.
+    """
+    from bids.layout import BIDSLayout
+    from qsiplan import build_dwi_grouping
+    from qsiplan.adapters import plan_preproc_units, unit_to_sidecar
+    from qsiplan.methods import selection_for_config
+    from qsiplan.plan import compile_plan
+
+    from qsiprep.tests.utils import SHARED_DWI_GRADIENTS, build_test_dataset
+    from qsiprep.utils.bids import collect_data
+
+    root = build_test_dataset(
+        tmp_path / 'ds',
+        {
+            '01': [
+                {
+                    'dwi': [
+                        {
+                            'suffix': 'dwi',
+                            'metadata': {
+                                'PhaseEncodingDirection': 'j',
+                                'TotalReadoutTime': 0.05,
+                                'NonlinearGradientCorrection': False,
+                            },
+                        }
+                    ]
+                }
+            ]
+        },
+        extra_files=SHARED_DWI_GRADIENTS,
+        n_volumes=2,
+    )
+    layout = BIDSLayout(root, validate=False)
+    subject_data = collect_data(layout, '01', bids_validate=False)[0]
+    grouping = build_dwi_grouping(layout, subject_data, strict=False)
+    plan = compile_plan(grouping, selection_for_config('eddy', 'topup'))
+    (unit,) = plan_preproc_units(grouping, plan)
+
+    sidecar = unit_to_sidecar(unit)
+    assert sidecar['NonlinearGradientCorrection'] is False
+    assert sidecar['SourceMetadata']['sub-01_dwi.nii.gz']['NonlinearGradientCorrection'] is False
+
+
 def test_eddy_grouping_from_sidecars_needs_no_disk():
     """eddy's acqp/index build from the model's sidecar map, not from disk."""
     from qsiprep.interfaces.epi_fmap import get_distortion_grouping
