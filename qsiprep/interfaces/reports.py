@@ -45,7 +45,7 @@ SUBJECT_TEMPLATE = """{mrtrix_warning}\t<ul class="elem-desc">
 
 SUBJECT_SESSION_ANAT_TEMPLATE = """\t<ul class="elem-desc">
 \t\t<li>Subject ID: {subject_id}</li>
-\t\t<li>Session ID: {session_id}</li>
+\t\t<li>Session ID: {session_label}</li>
 \t\t<li>Structural images: {n_t1s:d} T1-weighted {t2w}</li>
 \t\t<li>Diffusion-weighted series: inputs {n_dwis:d}, outputs {n_outputs:d}</li>
 {groupings}
@@ -149,7 +149,7 @@ class SubjectSummaryInputSpec(BaseInterfaceInputSpec):
     t2w = InputMultiPath(File(exists=True), desc='T2w structural images')
     subjects_dir = Directory(desc='FreeSurfer subjects directory')
     subject_id = Str(desc='Subject ID')
-    session_id = Str(desc='Session ID')
+    session_label = Str(desc='Session ID')
     dwi_groupings = traits.Dict(desc='groupings of DWI files and their output names')
     output_spaces = traits.List(desc='Target spaces')
     templates = InputMultiObject(traits.Str, desc='Requested standard output spaces')

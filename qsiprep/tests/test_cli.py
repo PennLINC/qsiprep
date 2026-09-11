@@ -100,7 +100,6 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
         '--boilerplate',
         '--sloppy',
         '--denoise-method=dwidenoise2',
-        '--b0-motion-corr-to=first',
         '--write-graph',
         '--mem-mb=4096',
         '--output-spaces=acpc:res-5mm',
@@ -191,7 +190,6 @@ def test_drbuddi_rpe(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b0-motion-corr-to=first',
         '--b1-biascorrect-stage=none',
         '--sdc-method=drbuddi',
         # The dataset ships epi fieldmaps whose IntendedFor points at the DWIs,
@@ -235,7 +233,6 @@ def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b0-motion-corr-to=first',
         '--b1-biascorrect-stage=none',
         '--hmc-method=shoreline',
         '--shoreline-model=none',
@@ -274,7 +271,6 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b0-motion-corr-to=first',
         '--b1-biascorrect-stage=none',
         '--hmc-method=shoreline',
         '--shoreline-model=tensor',
@@ -457,7 +453,6 @@ def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b0-motion-corr-to=first',
         '--b1-biascorrect-stage=none',
         '--hmc-method=tortoise',
         '--sdc-method=drbuddi',
@@ -517,7 +512,6 @@ def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b0-motion-corr-to=first',
         '--b1-biascorrect-stage=none',
         '--hmc-method=tortoise',
         '--sdc-method=drbuddi',
@@ -656,7 +650,6 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
         '--b1-biascorrect-stage=none',
         '--hmc-method=shoreline',
         '--shoreline-model=none',
-        '--b0-motion-corr-to=first',
         '--output-spaces=acpc:res-5mm',
         '--output-spaces=MNI152NLin2009cAsym',
         '--intramodal-template-transform=BSplineSyN',
@@ -915,8 +908,10 @@ def test_parser_rejects_removed_diffprep_hmc_models(tmp_path):
             )
 
 
-def test_parser_accepts_force_gradients_and_gradient_file(tmp_path):
-    """--force gradients and --gradient-file land on the namespace under those dests."""
+@pytest.mark.parametrize('forced', ['gradwarp1D', 'gradwarp3D'])
+def test_parser_accepts_force_gradwarp_and_gradient_file(tmp_path, forced):
+    """--force gradwarp{1,3}D and --gradient-file land on the namespace under
+    those dests."""
     from qsiprep.cli.parser import _build_parser
     from qsiprep.tests.gradient_fixtures import write_siemens_grad
 
@@ -931,19 +926,19 @@ def test_parser_accepts_force_gradients_and_gradient_file(tmp_path):
             str(out),
             'participant',
             '--force',
-            'gradients',
+            forced,
             '--gradient-file',
             str(coeff),
             '--output-resolution',
             '2',
         ]
     )
-    assert opts.force == ['gradients']
+    assert opts.force == [forced]
     assert opts.gradient_file == coeff
 
 
-def test_parser_accepts_ignore_gradients(tmp_path):
-    """'gradients' extends the existing --ignore choices."""
+def test_parser_accepts_ignore_gradwarp(tmp_path):
+    """'gradwarp' extends the existing --ignore choices."""
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -951,13 +946,70 @@ def test_parser_accepts_ignore_gradients(tmp_path):
     bids.mkdir()
     out = tmp_path / 'out'
     opts = parser.parse_args(
-        [str(bids), str(out), 'participant', '--ignore', 'gradients', '--output-resolution', '2']
+        [str(bids), str(out), 'participant', '--ignore', 'gradwarp', '--output-resolution', '2']
     )
-    assert opts.ignore == ['gradients']
+    assert opts.ignore == ['gradwarp']
+
+
+def test_repeated_force_accumulates(tmp_path):
+    """action='store' would keep only the last occurrence, so
+    "--force gradwarp1D --force gradwarp3D" would reach the validator as a
+    single value and silently apply 3D instead of being rejected."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    opts = parser.parse_args(
+        [
+            str(bids),
+            str(out),
+            'participant',
+            '--force',
+            'gradwarp1D',
+            '--force',
+            'gradwarp3D',
+            '--output-resolution',
+            '2',
+        ]
+    )
+    assert opts.force == ['gradwarp1D', 'gradwarp3D']
+
+
+def test_repeated_force_does_not_leak_between_parses(tmp_path):
+    """action='extend' appends to whatever is on the namespace, so a shared
+    mutable default would carry one parse's values into the next."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    base = [str(bids), str(out), 'participant', '--output-resolution', '2']
+
+    assert parser.parse_args([*base, '--force', 'gradwarp1D']).force == ['gradwarp1D']
+    assert parser.parse_args([*base, '--force', 'gradwarp3D']).force == ['gradwarp3D']
+    assert parser.parse_args(base).force == []
+
+
+@pytest.mark.parametrize('flag', ['--force', '--ignore'])
+def test_parser_rejects_the_old_gradients_value(tmp_path, flag):
+    """The pre-rename spelling must fail loudly rather than be silently ignored."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [str(bids), str(out), 'participant', flag, 'gradients', '--output-resolution', '2']
+        )
 
 
 def test_parser_rejects_unknown_force_value(tmp_path):
-    """--force only ever accepts "gradients" today."""
+    """--force accepts only its documented values."""
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -1015,20 +1067,50 @@ def test_validate_diffprep_config_accepts_each_correction_mode(tmp_path):
         validate_diffprep_config(str(cfg))
 
 
-def test_validate_gradient_flags_force_and_ignore_conflict(tmp_path):
+@pytest.mark.parametrize('forced', ['gradwarp1D', 'gradwarp3D'])
+def test_validate_gradient_flags_force_and_ignore_conflict(tmp_path, forced):
     from qsiprep.tests.gradient_fixtures import write_siemens_grad
     from qsiprep.utils.misc import validate_gradient_flags
 
     coeff = write_siemens_grad(tmp_path / 'coeff.grad')
     with pytest.raises(ValueError, match='contradictory'):
-        validate_gradient_flags(str(coeff), force=['gradients'], ignore=['gradients'])
+        validate_gradient_flags(str(coeff), force=[forced], ignore=['gradwarp'])
 
 
-def test_validate_gradient_flags_force_requires_gradient_file():
+def test_validate_gradient_flags_rejects_both_forced_dimensionalities(tmp_path):
+    """--force takes a list of values, so argparse cannot make the two
+    dimensionalities mutually exclusive; the validator does it instead."""
+    from qsiprep.tests.gradient_fixtures import write_siemens_grad
+    from qsiprep.utils.misc import validate_gradient_flags
+
+    coeff = write_siemens_grad(tmp_path / 'coeff.grad')
+    with pytest.raises(ValueError, match='mutually exclusive'):
+        validate_gradient_flags(str(coeff), force=['gradwarp3D', 'gradwarp1D'], ignore=[])
+
+
+@pytest.mark.parametrize('forced', ['gradwarp1D', 'gradwarp3D'])
+def test_validate_gradient_flags_accepts_a_repeated_identical_dimensionality(tmp_path, forced):
+    """ "--force gradwarp1D gradwarp1D" names one dimensionality, not two."""
+    from qsiprep.tests.gradient_fixtures import write_siemens_grad
+    from qsiprep.utils.misc import validate_gradient_flags
+
+    coeff = write_siemens_grad(tmp_path / 'coeff.grad')
+    validate_gradient_flags(str(coeff), force=[forced, forced], ignore=[])
+
+
+@pytest.mark.parametrize('forced', ['gradwarp1D', 'gradwarp3D'])
+def test_validate_gradient_flags_force_requires_gradient_file(forced):
     from qsiprep.utils.misc import validate_gradient_flags
 
     with pytest.raises(ValueError, match='requires --gradient-file'):
-        validate_gradient_flags(None, force=['gradients'], ignore=[])
+        validate_gradient_flags(None, force=[forced], ignore=[])
+
+
+def test_validate_gradient_flags_ignores_unrelated_force_values():
+    """--force sdc-anat-reference has nothing to do with --gradient-file."""
+    from qsiprep.utils.misc import validate_gradient_flags
+
+    validate_gradient_flags(None, force=['sdc-anat-reference'], ignore=[])
 
 
 def test_validate_gradient_flags_rejects_unknown_extension(tmp_path):
@@ -1063,7 +1145,7 @@ def test_validate_gradient_flags_warns_when_ignored_gradient_file_is_unused(tmp_
 
     coeff = write_siemens_grad(tmp_path / 'coeff.grad')
     with caplog.at_level('WARNING', logger='cli'):
-        validate_gradient_flags(str(coeff), force=[], ignore=['gradients'])
+        validate_gradient_flags(str(coeff), force=[], ignore=['gradwarp'])
 
     assert 'unused' in caplog.text.lower()
 

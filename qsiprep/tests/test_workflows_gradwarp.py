@@ -313,6 +313,27 @@ def test_dis3d_boilerplate_makes_no_resampling_claim_on_any_backend(hmc_model):
     assert 'displacement field' not in text
 
 
+def test_forced_1d_boilerplate_does_not_attribute_the_correction_to_dis2d():
+    """--force gradwarp1D never reads ImageType, so the methods text must not
+    explain the missing in-plane component with a DIS2D tag it did not see."""
+    from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
+
+    config.workflow.hmc_model = 'none'
+    text = gradwarp_boilerplate('1D', 'forced')
+
+    assert 'DIS2D' not in text
+    assert 'through-plane' in text
+
+
+def test_forced_3d_boilerplate_matches_the_metadata_text():
+    """The 3D text makes no claim about ImageType, so forcing changes nothing."""
+    from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
+
+    config.workflow.hmc_model = 'none'
+
+    assert gradwarp_boilerplate('3D', 'forced') == gradwarp_boilerplate('3D')
+
+
 # --- The GE coefficient-expansion guard --------------------------------------
 #
 # TORTOISE shifts the field's z origin after expanding GE coefficients, in
@@ -339,13 +360,14 @@ def test_ge_coefficients_are_refused(tmp_path):
         resolve_gradwarp_plan(_ge_unit(tmp_path))
 
 
-def test_ge_coefficients_are_refused_when_forced(tmp_path):
-    """--force gradients must not become a way around the guard: it forces 3D,
-    which is exactly the field that cannot be placed."""
+@pytest.mark.parametrize('forced', ['gradwarp3D', 'gradwarp1D'])
+def test_ge_coefficients_are_refused_when_forced(tmp_path, forced):
+    """--force gradwarp{1,3}D must not become a way around the guard: either
+    one expands the coefficients into a field that cannot be placed."""
     from qsiprep.workflows.dwi.gradwarp import resolve_gradwarp_plan
 
     config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
-    config.workflow.force = ['gradients']
+    config.workflow.force = [forced]
 
     with pytest.raises(ValueError, match='not supported for GE data'):
         resolve_gradwarp_plan(_ge_unit(tmp_path, ['ORIGINAL', 'DIS3D']))
@@ -408,6 +430,19 @@ def test_gradwarp_wf_desc_matches_the_resolved_warp_dim(tmp_path, image_type, wa
 
     assert wf.plan.warp_dim == warp_dim
     assert wf.__desc__ == gradwarp_boilerplate(warp_dim)
+
+
+def test_forced_gradwarp_wf_desc_matches_the_forced_plan(tmp_path):
+    """A forced unit gets the forced text, not the ImageType-based text."""
+    from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate, init_gradwarp_wf
+
+    config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
+    config.workflow.force = ['gradwarp1D']
+    wf = init_gradwarp_wf(_unit(tmp_path, ['ORIGINAL', 'DIS3D']))
+
+    assert wf.plan.warp_dim == '1D'
+    assert wf.plan.basis == 'forced'
+    assert wf.__desc__ == gradwarp_boilerplate('1D', 'forced')
 
 
 # --- Task 9: threading the field through resampling and base -----------------
@@ -1124,7 +1159,6 @@ def _cfg_for_shoreline(tmp_path):
     config.workflow.hmc_transform = 'Affine'
     config.workflow.shoreline_iters = 2
     config.workflow.b0_threshold = 100
-    config.workflow.b0_motion_corr_to = 'iterative'
     config.workflow.pepolar_method = 'DRBUDDI'
     config.execution.sloppy = False
     config.nipype.omp_nthreads = 1

@@ -174,7 +174,7 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
         subject_data = collect_data(
             config.execution.layout,
             subject_id,
-            session_id=session_ids,
+            session_label=session_ids,
             filters=config.execution.bids_filters,
             bids_validate=False,
             ignore=config.workflow.ignore,

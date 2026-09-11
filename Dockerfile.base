@@ -1,18 +1,16 @@
 ARG BASE_IMAGE=ubuntu:jammy-20250730
 ARG TAG_FREESURFER=26.9.2
-ARG TAG_ANTS=26.1.2
 ARG TAG_MRTRIX3=26.1.0
 ARG TAG_MRTRIX3DEV=26.9.1
 ARG TAG_3TISSUE=26.1.0
 ARG TAG_DSISTUDIO=26.1.2
 ARG TAG_AFNI=AFNI_25.2.09
-ARG TAG_TORTOISE=26.8.2
-ARG TAG_TORTOISECUDA=26.8.2
+ARG TAG_TORTOISE=26.9.3
+ARG TAG_TORTOISECUDA=26.9.3
 ARG TAG_SYNB0=26.1.2
 ARG TAG_TRXSCAN=26.8.3
 
 FROM pennlinc/qsiprep-freesurfer:${TAG_FREESURFER} AS build_freesurfer
-FROM pennlinc/qsiprep-ants:${TAG_ANTS} AS build_ants
 FROM pennlinc/qsiprep-mrtrix3:${TAG_MRTRIX3} AS build_mrtrix3
 FROM pennlinc/qsiprep-mrtrix3dev:${TAG_MRTRIX3DEV} AS build_mrtrix3dev
 FROM pennlinc/qsiprep-3tissue:${TAG_3TISSUE} AS build_3tissue
@@ -24,12 +22,8 @@ FROM pennlinc/qsiprep-synb0:${TAG_SYNB0} AS build_synb0
 FROM pennlinc/qsiprep-trxscan:${TAG_TRXSCAN} AS build_trxscan
 FROM nvidia/cuda:12.2.2-runtime-ubuntu22.04 AS base
 
-## ANTs
-COPY --from=build_ants /opt/ants /opt/ants
-ENV ANTSPATH="/opt/ants/bin" \
-    LD_LIBRARY_PATH="/opt/ants/lib:$LD_LIBRARY_PATH" \
-    PATH="$PATH:/opt/ants/bin" \
-    ANTS_DEPS="zlib1g"
+# ANTs is installed into the test and production environments by Pixi in the
+# main Dockerfile. TORTOISE carries its own RPATH-isolated ITK runtime.
 
 ## DSI Studio
 ENV DSI_STUDIO_DEPS="libqt5charts5 libqt5opengl5 libqt5svg5 libqt5gui5 libqt5widgets5 libqt5sql5 libqt5network5" \
@@ -62,8 +56,7 @@ COPY --from=build_freesurfer /opt/freesurfer /opt/freesurfer
 COPY --from=build_freesurfer /opt/freesurfer-synthseg /opt/freesurfer-synthseg
 COPY --from=build_freesurfer /opt/freesurfer-torch /opt/freesurfer-torch
 # Simulate SetUpFreeSurfer.sh
-ENV FSL_DIR="/opt/conda/envs/fslqsiprep" \
-    OS="Linux" \
+ENV OS="Linux" \
     FS_OVERRIDE=0 \
     FIX_VERTEX_AREA="" \
     FSF_OUTPUT_FORMAT="nii.gz" \
@@ -239,7 +232,7 @@ ENV \
     TF_ENABLE_ONEDNN_OPTS=0 \
     QT_PLUGIN_PATH="/usr/lib/x86_64-linux-gnu/qt5/plugins" \
     QML2_IMPORT_PATH="/usr/lib/x86_64-linux-gnu/qt5/qml" \
-    LD_LIBRARY_PATH="/opt/conda/envs/qsiprep/lib/python3.10/site-packages/nvidia/cudnn/lib:/opt/freesurfer/lib:${LD_LIBRARY_PATH}"
+    LD_LIBRARY_PATH="/opt/freesurfer/lib:${LD_LIBRARY_PATH}"
 
 WORKDIR /root/
 

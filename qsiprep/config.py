@@ -431,10 +431,10 @@ class execution(_Config):
     """Unique identifier of this particular run."""
     participant_label = None
     """List of participant identifiers that are to be preprocessed."""
-    session_id = None
+    session_label = None
     """List of session identifiers that are to be preprocessed"""
     processing_list = []
-    """List of (subject_id, [session_id, ...]) to be preprocessed together."""
+    """List of (subject_id, [session_label, ...]) to be preprocessed together."""
     templateflow_home = _templateflow_home
     """The root folder of the TemplateFlow client."""
     work_dir = Path('work').absolute()
@@ -552,10 +552,6 @@ class workflow(_Config):
     """Execute the anatomical preprocessing only."""
     b0_threshold = None
     """Any value in the .bval file less than this will be considered a b=0 image."""
-    b0_motion_corr_to = None
-    """Perform SHORELine's initial b=0-based registration to first volume?
-    Or make a template? Either 'iterative' or 'first'. DEPRECATED: later versions will
-    always use 'iterative'."""
     b0_to_anat_transform = None
     """Transformation model for b=0-to-anatomical coregistration. Either 'Rigid' or
     'Affine'."""
@@ -578,10 +574,6 @@ class workflow(_Config):
     """Configuration JSON for running TORTOISE DIFFPREP."""
     eddy_config = None
     """Configuration for running Eddy."""
-    fmap_bspline = None
-    """Regularize fieldmaps with a field of B-Spline basis."""
-    fmap_demean = None
-    """Remove the mean from fieldmaps."""
     force = None
     """Forced processing choices (see ``--force``): currently ``sdc-anat-reference``."""
     force_sdc_anat_reference = False

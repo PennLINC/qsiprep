@@ -386,7 +386,7 @@ def collect_participants(bids_dir, participant_label=None, strict=False, bids_va
 def collect_data(
     bids_dir,
     participant_label,
-    session_id=None,
+    session_label=None,
     filters=None,
     bids_validate=True,
     ignore=None,
@@ -407,18 +407,21 @@ def collect_data(
         't2w': {'datatype': 'anat', 'suffix': 'T2w'},
         't1w': {'datatype': 'anat', 'suffix': 'T1w'},
         'roi': {'datatype': 'anat', 'suffix': 'roi'},
-        'dwi': {'datatype': 'dwi', 'part': ['mag', None], 'suffix': 'dwi'},
+        # Collect every part; qsiplan's grouping performs the authoritative
+        # split (a part-phase file becomes its magnitude's companion, real/imag
+        # are dropped with a warning), so we must not pre-filter on part here.
+        'dwi': {'datatype': 'dwi', 'suffix': 'dwi'},
     }
     bids_filters = filters or {}
     for acq in queries.keys():
         entities = bids_filters.get(acq, {})
 
-        if ('session' in entities.keys()) and (session_id is not None):
+        if ('session' in entities.keys()) and (session_label is not None):
             config.loggers.workflow.warning(
                 'BIDS filter file value for session may conflict with values specified '
                 'on the command line'
             )
-        queries[acq]['session'] = session_id or Query.OPTIONAL
+        queries[acq]['session'] = session_label or Query.OPTIONAL
         queries[acq].update(entities)
 
     subj_data = {
@@ -677,14 +680,14 @@ def update_metadata_from_nifti_header(metadata, nifti_file):
 def parse_bids_for_age_months(
     bids_root: str | Path,
     subject_id: str,
-    session_id: str | None = None,
+    session_label: str | None = None,
 ) -> int | None:
     """
     Given a BIDS root, query the BIDS metadata files for participant age, and return in
     chronological months.
 
     The heuristic followed is:
-    1) Check `sub-<subject_id>[/ses-<session_id>]/<sub-<subject_id>[_ses-<session-id>]_scans.tsv
+    1) Check `sub-<subject_id>[/ses-<session_label>]/<sub-<subject_id>[_ses-<session-id>]_scans.tsv
     2) Check `sub-<subject_id>/sub-<subject_id>_sessions.tsv`
     3) Check `<root>/participants.tsv`
 
@@ -717,16 +720,16 @@ def parse_bids_for_age_months(
     """
     if subject_id.startswith('sub-'):
         subject_id = subject_id[4:]
-    if session_id and session_id.startswith('ses-'):
-        session_id = session_id[4:]
+    if session_label and session_label.startswith('ses-'):
+        session_label = session_label[4:]
 
     # Play nice with sessions
     subject = f'sub-{subject_id}'
-    session = f'ses-{session_id}' if session_id else ''
+    session = f'ses-{session_label}' if session_label else ''
     prefix = f'{subject}' + (f'_{session}' if session else '')
 
     subject_level = session_level = Path(bids_root) / subject
-    if session_id:
+    if session_label:
         session_level = subject_level / session
 
     age = None
@@ -743,8 +746,8 @@ def parse_bids_for_age_months(
         return age
 
     sessions_tsv = subject_level / f'{subject}_sessions.tsv'
-    if sessions_tsv.exists() and session_id is not None:
-        age = _get_age_from_tsv(sessions_tsv, index_column='session_id', index_value=session)
+    if sessions_tsv.exists() and session_label is not None:
+        age = _get_age_from_tsv(sessions_tsv, index_column='session_label', index_value=session)
 
     if age is not None:
         return age

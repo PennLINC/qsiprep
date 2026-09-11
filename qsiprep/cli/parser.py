@@ -59,18 +59,6 @@ def _build_parser(**kwargs):
     deprecations = {
         '--dwi-only': ('27.0.0', 'Enabling `--anat-modality none` instead.'),
         '--dwi-no-biascorr': ('27.0.0', 'Enabling `--b1-biascorrect-stage none` instead.'),
-        '--longitudinal': (
-            '27.0.0',
-            'Enabling `--subject-anatomical-reference unbiased` instead.',
-        ),
-        '--prefer-dedicated-fmaps': (
-            '27.0.0',
-            'It has no effect. To keep reverse phase-encoded DWI runs from being paired '
-            'into a PEPOLAR fieldmap (preferring a dedicated fieldmap instead), pass '
-            '"--ignore pepolar-dwis"; which fieldmap is applied to which DWI series is '
-            'otherwise determined by the fieldmaps\' "B0FieldIdentifier"/"B0FieldSource" '
-            '(or "IntendedFor") metadata.',
-        ),
         '--hmc-model': (
             '27.0.0',
             'Use `--hmc-method` instead (with `--shoreline-model` for the '
@@ -79,10 +67,6 @@ def _build_parser(**kwargs):
         '--pepolar-method': (
             '27.0.0',
             'Use `--sdc-method` instead.',
-        ),
-        '--b0-motion-corr-to': (
-            '27.0.0',
-            'Later versions will always use the "iterative" approach.',
         ),
         '--b0-to-t1w-transform': ('27.0.0', 'Please use `--b0-to-anat-transform` instead.'),
         '--output-resolution': (
@@ -104,11 +88,6 @@ def _build_parser(**kwargs):
     forwarded_deprecations = {
         '--dwi-only': ('--anat-modality', 'anat_modality', 'none'),
         '--dwi-no-biascorr': ('--b1-biascorrect-stage', 'b1_biascorrect_stage', 'none'),
-        '--longitudinal': (
-            '--subject-anatomical-reference',
-            'subject_anatomical_reference',
-            'unbiased',
-        ),
     }
 
     # The deprecated --hmc-model vocabulary, mapped onto the method axes.
@@ -442,7 +421,7 @@ def _build_parser(**kwargs):
         'identifier (the sub- prefix can be removed)',
     )
     g_bids.add_argument(
-        '--session-id',
+        '--session-label',
         action='store',
         nargs='+',
         type=_drop_ses,
@@ -560,7 +539,7 @@ def _build_parser(**kwargs):
         action='store',
         nargs='+',
         default=[],
-        choices=['fieldmaps', 'pepolar-dwis', 't2w', 'phase', 'sdc', 'shims', 'fov', 'gradients'],
+        choices=['fieldmaps', 'pepolar-dwis', 't2w', 'phase', 'sdc', 'shims', 'fov', 'gradwarp'],
         help=(
             'Ignore selected aspects of the input dataset to disable corresponding '
             'parts of the workflow (a space delimited list). '
@@ -575,27 +554,28 @@ def _build_parser(**kwargs):
             '"shims" treats all ShimSetting values as compatible when grouping scans. '
             '"fov" concatenates series with differently-oriented fields of view anyway '
             '(distortion corrections will be misapplied). '
-            '"gradients" disables gradient nonlinearity correction entirely, '
+            '"gradwarp" disables gradient nonlinearity correction entirely, '
             'including the voxelwise gradient deviation map.'
         ),
     )
     g_conf.add_argument(
         '--force',
         required=False,
-        action='store',
+        action='extend',
         nargs='+',
         default=[],
-        choices=['gradients', 'sdc-anat-reference'],
+        choices=['gradwarp1D', 'gradwarp3D', 'sdc-anat-reference'],
         help=(
             'Force selected corrections on, overriding what the input metadata '
-            'implies (a space delimited list). "gradients" applies the full 3D '
-            'gradient nonlinearity correction to every DWI run regardless of the '
-            'ImageType field, for data whose DIS2D/DIS3D tags are absent or '
-            'untrustworthy. Requires --gradient-file. '
+            'implies (a space delimited list). "gradwarp3D" applies the full 3D '
+            'gradient nonlinearity correction, and "gradwarp1D" the through-plane '
+            'component of it only, to every DWI run regardless of the ImageType '
+            'field, for data whose DIS2D/DIS3D tags are absent or untrustworthy. '
+            'The two are mutually exclusive, and either requires --gradient-file. '
             '"sdc-anat-reference" escalates --sdc-anat-reference from a fallback '
             'to an override: the selected anatomical reference replaces the '
             'fieldmap application for EVERY DWI series. Requires an '
-            '--sdc-anat-reference other than "none".',
+            '--sdc-anat-reference other than "none".'
         ),
     )
     g_conf.add_argument(
@@ -610,8 +590,9 @@ def _build_parser(**kwargs):
             'displacement field (.nii/.nii.gz). Applies to every DWI run in the '
             'dataset. Whether the spatial correction is applied to a given run, '
             "and in which dimensions, is decided from that run's ImageType "
-            'field unless --force/--ignore gradients says otherwise. The '
-            'voxelwise gradient deviation map is written whenever this is given.'
+            'field unless --force gradwarp1D/--force gradwarp3D/--ignore '
+            'gradwarp says otherwise. The voxelwise gradient deviation map is '
+            'written whenever this is given.'
         ),
     )
     g_conf.add_argument(
@@ -643,15 +624,6 @@ def _build_parser(**kwargs):
         help='Configure pipelines to process infant brains. '
         'This appends `MNIInfant:cohort-auto` to `--output-spaces` (unless an MNIInfant '
         "entry is already present), and the cohort is selected from the participant's age.",
-    )
-    g_conf.add_argument(
-        '--longitudinal',
-        action=DeprecatedForwardAction,
-        default=SUPPRESS,
-        help=(
-            'DEPRECATED: this flag now enables `--subject-anatomical-reference unbiased`. '
-            'Use that instead.'
-        ),
     )
     g_conf.add_argument(
         '--subject-anatomical-reference',
@@ -915,15 +887,6 @@ How to combine the corrected results of an output's correction units.
 
     g_moco = parser.add_argument_group('Specific options for motion correction and coregistration')
     g_moco.add_argument(
-        '--b0-motion-corr-to',
-        action=DeprecatedStoreAction,
-        default='iterative',
-        choices=['iterative', 'first'],
-        help='DEPRECATED: align to the "first" b0 volume or do an "iterative" registration '
-        'of all b0 images to their midpoint image. '
-        'Later versions will always use "iterative".',
-    )
-    g_moco.add_argument(
         '--hmc-transform',
         action='store',
         default='Affine',
@@ -1019,16 +982,6 @@ How to combine the corrected results of an output's correction units.
 
     # Fieldmap options
     g_fmap = parser.add_argument_group('Specific options for handling fieldmaps')
-    g_fmap.add_argument(
-        '--prefer-dedicated-fmaps',
-        action=DeprecatedAction,
-        default=SUPPRESS,
-        help='DEPRECATED: this flag has no effect. To keep reverse phase-encoded DWI runs '
-        'from being paired into a PEPOLAR fieldmap (preferring a dedicated fieldmap '
-        'instead), use "--ignore pepolar-dwis"; which fieldmap is applied to which DWI '
-        'series is otherwise determined by the fieldmaps\' "B0FieldIdentifier"/'
-        '"B0FieldSource" (or "IntendedFor") metadata.',
-    )
     g_sdc_method = g_fmap.add_mutually_exclusive_group()
     g_sdc_method.add_argument(
         '--sdc-method',
@@ -1070,18 +1023,6 @@ How to combine the corrected results of an output's correction units.
         'enters TOPUP as a zero-readout-time volume; with --hmc-method '
         'tortoise it is the DIFFPREP registration target). synb0/invt1w '
         'require a T1w image and a PhaseEncodingDirection on the DWI series.',
-    )
-    g_fmap.add_argument(
-        '--fmap-bspline',
-        action='store_true',
-        default=False,
-        help='Fit a B-Spline field using least-squares (experimental)',
-    )
-    g_fmap.add_argument(
-        '--fmap-no-demean',
-        action='store_false',
-        default=True,
-        help='Do not remove median (within mask) from fieldmap',
     )
 
     g_other = parser.add_argument_group('Other options')
@@ -1486,7 +1427,7 @@ def parse_args(args=None, namespace=None):
     processing_groups = []
 
     # Determine any session filters
-    session_filters = config.execution.session_id or []
+    session_filters = config.execution.session_label or []
     # if config.execution.bids_filters is not None:
     #     for _, filters in config.execution.bids_filters:
     #         ses_filter = filters.get("session")

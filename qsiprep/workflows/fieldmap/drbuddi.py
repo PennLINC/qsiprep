@@ -30,6 +30,7 @@ from ...interfaces.tortoise import (
     generate_drbuddi_boilerplate,
     sloppy_epi_working_res,
 )
+from ..dwi.registration import init_structural_to_b0_alignment_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
@@ -104,6 +105,10 @@ def init_drbuddi_wf(
         T1w image, brain-masked
     t2_brain
         T2w image, brain masked
+    b0_ref
+        Pre-SDC b=0 reference in the frame ``dwi_files`` are in. The T2w is
+        pre-aligned to it (antsAI rotation search) before reaching DRBUDDI,
+        whose internal rigid registration cannot recover large rotations.
 
     Outputs
     -------
@@ -128,6 +133,7 @@ def init_drbuddi_wf(
                 't1_brain',
                 't1_wm_seg',
                 't2w_unfatsat',
+                'b0_ref',
             ]
         ),
         name='inputnode',
@@ -223,7 +229,6 @@ def init_drbuddi_wf(
             ('blip_up_bmat', 'blip_up_bmat'),
             ('blip_down_image', 'blip_down_image'),
             ('blip_down_bmat', 'blip_down_bmat')]),
-        (inputnode, drbuddi, [('t2w_unfatsat', 'structural_image')]),
         (drbuddi, outputnode, [
             ('blip_down_b0', 'b0_down_image'),
             ('blip_up_b0', 'b0_up_image'),
@@ -259,5 +264,17 @@ def init_drbuddi_wf(
             ('b0_ref', 'b0_ref'),
         ]),
     ])  # fmt:skip
+
+    if t2w_sdc:
+        t2w_to_b0_wf = init_structural_to_b0_alignment_wf(name='t2w_to_b0_wf')
+        workflow.connect([
+            (inputnode, t2w_to_b0_wf, [
+                ('t2w_unfatsat', 'inputnode.structural_image'),
+                ('b0_ref', 'inputnode.b0_ref'),
+            ]),
+            (t2w_to_b0_wf, drbuddi, [
+                ('outputnode.structural_aligned', 'structural_image'),
+            ]),
+        ])  # fmt:skip
 
     return workflow
