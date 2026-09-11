@@ -378,28 +378,6 @@ def test_prefer_dedicated_fmaps_is_removed(minimal_args, capsys):
     assert 'unrecognized arguments: --prefer-dedicated-fmaps' in capsys.readouterr().err
 
 
-@pytest.mark.parametrize('value', ['iterative', 'first'])
-def test_b0_motion_corr_to_warns_but_still_works(minimal_args, capsys, value):
-    """Deprecated, but it still selects the SHORELine b=0 alignment strategy."""
-    from qsiprep.cli.parser import _build_parser
-
-    opts = _build_parser().parse_args([*minimal_args, '--b0-motion-corr-to', value])
-
-    warning = capsys.readouterr().err
-    assert '--b0-motion-corr-to' in warning
-    assert 'iterative' in warning
-    assert opts.b0_motion_corr_to == value
-
-
-def test_b0_motion_corr_to_is_silent_by_default(minimal_args, capsys):
-    from qsiprep.cli.parser import _build_parser
-
-    opts = _build_parser().parse_args(minimal_args)
-
-    assert capsys.readouterr().err == ''
-    assert opts.b0_motion_corr_to == 'iterative'
-
-
 @pytest.mark.parametrize('value', ['Rigid', 'Affine'])
 def test_b0_to_t1w_transform_forwards_its_value(minimal_args, capsys, value):
     """The renamed option keeps working, and sets the new one."""

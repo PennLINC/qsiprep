@@ -68,10 +68,6 @@ def _build_parser(**kwargs):
             '27.0.0',
             'Use `--sdc-method` instead.',
         ),
-        '--b0-motion-corr-to': (
-            '27.0.0',
-            'Later versions will always use the "iterative" approach.',
-        ),
         '--b0-to-t1w-transform': ('27.0.0', 'Please use `--b0-to-anat-transform` instead.'),
     }
 
@@ -829,15 +825,6 @@ How to combine the corrected results of an output's correction units.
     )
 
     g_moco = parser.add_argument_group('Specific options for motion correction and coregistration')
-    g_moco.add_argument(
-        '--b0-motion-corr-to',
-        action=DeprecatedStoreAction,
-        default='iterative',
-        choices=['iterative', 'first'],
-        help='DEPRECATED: align to the "first" b0 volume or do an "iterative" registration '
-        'of all b0 images to their midpoint image. '
-        'Later versions will always use "iterative".',
-    )
     g_moco.add_argument(
         '--hmc-transform',
         action='store',

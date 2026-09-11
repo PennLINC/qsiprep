@@ -1150,7 +1150,6 @@ def _cfg_for_shoreline(tmp_path):
     config.workflow.hmc_transform = 'Affine'
     config.workflow.shoreline_iters = 2
     config.workflow.b0_threshold = 100
-    config.workflow.b0_motion_corr_to = 'iterative'
     config.workflow.pepolar_method = 'DRBUDDI'
     config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
     config.execution.sloppy = False

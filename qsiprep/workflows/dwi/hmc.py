@@ -352,7 +352,7 @@ def init_b0_hmc_wf(
     Used in three places: intramodal template, anatomical merge, dwi hmc.
     """
     if align_to is None:
-        align_to = config.workflow.b0_motion_corr_to
+        align_to = 'iterative'
     if transform is None:
         transform = config.workflow.hmc_transform
     if config.execution.sloppy:
