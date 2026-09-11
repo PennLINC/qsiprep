@@ -9,10 +9,19 @@ as the config-to-selection bridge already did (see the regression test below).
 """
 
 import argparse
+import json
 
+import pytest
 from qsiplan import cli_spec
 
 from qsiprep.cli.parser import _build_parser
+
+# QSIPlan still lists --shoreline-model as a qsiprep flag, but qsiprep takes the
+# SHORELine model from --shoreline-config (a JSON "model" key) and fills the same
+# ``shoreline_model`` dest that selection_from_namespace reads. Remove this, and
+# bump the qsiplan pin, once QSIPlan stops listing the flag (QSIPlan issue:
+# "Replace --shoreline-model with qsiprep's --shoreline-config").
+_NOT_A_QSIPREP_FLAG = frozenset({'--shoreline-model'})
 
 
 def _actions():
@@ -23,7 +32,7 @@ def _actions():
 def test_parser_realizes_every_implemented_plan_option():
     actions = _actions()
     for option in cli_spec.PLAN_OPTIONS:
-        if option.planned:
+        if option.planned or option.flag in _NOT_A_QSIPREP_FLAG:
             continue
         action = actions.get(option.flag)
         assert action is not None, f'qsiprep parser is missing {option.flag}'
@@ -33,9 +42,15 @@ def test_parser_realizes_every_implemented_plan_option():
 
 def test_planned_options_are_the_only_gaps():
     actions = _actions()
-    absent = sorted(o.flag for o in cli_spec.PLAN_OPTIONS if o.flag not in actions)
+    absent = sorted(
+        o.flag
+        for o in cli_spec.PLAN_OPTIONS
+        if o.flag not in actions and o.flag not in _NOT_A_QSIPREP_FLAG
+    )
     planned = sorted(o.flag for o in cli_spec.PLAN_OPTIONS if o.planned)
     assert absent == planned  # today: []
+    # The exemption must not outlive the flag in QSIPlan's spec.
+    assert _NOT_A_QSIPREP_FLAG <= {o.flag for o in cli_spec.PLAN_OPTIONS}
 
 
 def _parse_minimal(tmp_path, *extra):
@@ -181,3 +196,21 @@ def test_complex_dwi_reaches_the_plan_as_a_magnitude_companion(tmp_path):
     series = (*unit.dwi_files, *unit.plus_files, *unit.minus_files)
     assert not [path for path in series if 'part-phase' in path]
     assert not [path for path in unit.sidecar_overrides() if 'part-phase' in path]
+
+
+@pytest.mark.parametrize('model', ['3dshore', 'tensor', 'none'])
+def test_shoreline_config_model_reaches_the_method_selection(tmp_path, model):
+    cfg = tmp_path / 'shoreline.json'
+    cfg.write_text(json.dumps({'model': model}))
+    namespace = _parse_minimal(
+        tmp_path, '--hmc-method', 'shoreline', '--shoreline-config', str(cfg)
+    )
+    selection = cli_spec.selection_from_namespace(namespace)
+    assert selection.hmc.value == 'shoreline'
+    assert selection.shoreline_model == model
+
+
+def test_eddy_namespace_has_no_shoreline_model(tmp_path):
+    namespace = _parse_minimal(tmp_path, '--hmc-method', 'eddy')
+    assert namespace.shoreline_model is None
+    assert cli_spec.selection_from_namespace(namespace).hmc.value == 'eddy'

@@ -28,7 +28,7 @@ import sys
 
 from .. import config
 from ..utils.gpu import GPU_ALIASES, GPU_TASKS
-from ..utils.misc import parse_denoise_method
+from ..utils.misc import load_shoreline_config, parse_denoise_method
 
 B0_TO_ANAT_TRANSFORM_DEFAULT = 'Rigid'
 """Default for ``--b0-to-anat-transform``.
@@ -73,7 +73,7 @@ def _build_parser(**kwargs):
         ),
         '--hmc-model': (
             '27.0.0',
-            'Use `--hmc-method` instead (with `--shoreline-model` for the '
+            'Use `--hmc-method` instead (with a `--shoreline-config` "model" for the '
             'SHORELine signal model).',
         ),
         '--pepolar-method': (
@@ -190,21 +190,30 @@ def _build_parser(**kwargs):
             if hasattr(namespace, '_legacy_pepolar_method'):
                 del namespace._legacy_pepolar_method
 
+            legacy_shoreline_model = None
             if legacy_hmc is not None:
-                if namespace.shoreline_model is not None:
-                    self.error(
-                        '--shoreline-model requires --hmc-method shoreline '
-                        '(not the deprecated --hmc-model)'
-                    )
                 namespace.hmc_method = hmc_model_to_method[legacy_hmc]
-                namespace.shoreline_model = hmc_model_to_shoreline_model.get(legacy_hmc)
+                legacy_shoreline_model = hmc_model_to_shoreline_model.get(legacy_hmc)
             if namespace.hmc_method is None:
                 namespace.hmc_method = 'eddy'
-            if namespace.shoreline_model is not None and namespace.hmc_method != 'shoreline':
-                self.error('--shoreline-model requires --hmc-method shoreline')
+            if namespace.shoreline_config is not None and namespace.hmc_method != 'shoreline':
+                self.error('--shoreline-config requires --hmc-method shoreline')
+            # SHORELine settings come from --shoreline-config (or the shipped
+            # defaults). Config and the workflow builders read only these resolved
+            # values, which stay None for the other methods.
+            namespace.shoreline_model = None
+            namespace.shoreline_iters = None
+            namespace.hmc_transform = None
             if namespace.hmc_method == 'shoreline':
-                if namespace.shoreline_model is None:
-                    namespace.shoreline_model = '3dshore'
+                try:
+                    shoreline = load_shoreline_config(
+                        namespace.shoreline_config, model=legacy_shoreline_model
+                    )
+                except ValueError as err:
+                    self.error(str(err))
+                namespace.shoreline_model = shoreline['model']
+                namespace.shoreline_iters = shoreline['iters']
+                namespace.hmc_transform = shoreline['transform']
                 print(
                     'SHORELine (--hmc-method shoreline) is scheduled for removal '
                     'in a future major release; eddy and tortoise are the '
@@ -862,13 +871,6 @@ How to combine the corrected results of an output's correction units.
         'of all b0 images to their midpoint image. '
         'Later versions will always use "iterative".',
     )
-    g_moco.add_argument(
-        '--hmc-transform',
-        action='store',
-        default='Affine',
-        choices=['Affine', 'Rigid'],
-        help='transformation to be optimized during head motion correction (default: affine)',
-    )
     g_hmc_method = g_moco.add_mutually_exclusive_group()
     g_hmc_method.add_argument(
         '--hmc-method',
@@ -878,7 +880,7 @@ How to combine the corrected results of an output's correction units.
         help='which software corrects head motion and eddy currents: '
         '"eddy" (FSL; requires a shelled sampling scheme; the default), '
         '"shoreline" (SHORELine; model-based, works on arbitrary q-space '
-        'sampling; see --shoreline-model and --shoreline-iters; scheduled '
+        'sampling; configured with --shoreline-config; scheduled '
         'for removal in a future major release), or '
         '"tortoise" (TORTOISE DIFFPREP; rigid head motion and 24-parameter '
         'quadratic eddy-current correction, arbitrary sampling; see '
@@ -896,20 +898,25 @@ How to combine the corrected results of an output's correction units.
             'tensor',
             'tortoise',
         ],
-        help='DEPRECATED: use --hmc-method (and --shoreline-model) instead. '
+        help='DEPRECATED: use --hmc-method (and --shoreline-config) instead. '
         '"eddy" means `--hmc-method eddy`; "tortoise" means `--hmc-method '
         'tortoise`; "3dSHORE", "tensor" and "none" mean `--hmc-method '
-        'shoreline` with the matching --shoreline-model.',
+        'shoreline` with the matching --shoreline-config "model".',
     )
     g_moco.add_argument(
-        '--shoreline-model',
+        '--shoreline-config',
         action='store',
+        type=IsFile,
         default=None,
-        choices=['3dshore', 'tensor', 'none'],
-        help='signal model SHORELine uses to predict motion-correction target '
-        'images: "3dshore" (the default), "tensor", or "none" (each non-b=0 '
-        'image is warped using the same transform as its nearest b=0 image). '
-        'Only valid with --hmc-method shoreline.',
+        help='path to a JSON file with settings for SHORELine (only valid with '
+        '--hmc-method shoreline). Every key is optional: "model" is the signal model '
+        'used to predict motion-correction targets ("3dshore", the default; "tensor"; '
+        'or "none", which warps each non-b=0 image with the transform of its nearest '
+        'b=0 image), "iters" is the number of SHORELine iterations (default: 2), and '
+        '"transform" is the transformation optimized during head motion correction '
+        '("Affine", the default, or "Rigid"). Unknown keys are an error. The current '
+        'default can be found here: '
+        'https://github.com/PennLINC/qsiprep/blob/main/qsiprep/data/shoreline_params.json',
     )
     g_moco.add_argument(
         '--eddy-config',
@@ -948,14 +955,6 @@ How to combine the corrected results of an output's correction units.
             'Requires the patched TORTOISE. Unset leaves TORTOISE at its default of 15.'
         ),
     )
-    g_moco.add_argument(
-        '--shoreline-iters',
-        action='store',
-        type=int,
-        default=2,
-        help='number of SHORELine iterations. (default: 2)',
-    )
-
     # Fieldmap options
     g_fmap = parser.add_argument_group('Specific options for handling fieldmaps')
     g_fmap.add_argument(
@@ -1173,6 +1172,11 @@ def parse_args(args=None, namespace=None):
 
     config.execution.log_level = int(max(25 - 5 * opts.verbose_count, logging.DEBUG))
     config.from_dict(vars(opts), init=['nipype'])
+    # The command line is authoritative for SHORELine settings, as it already is
+    # for hmc_method. from_dict skips None values, so without this a --config-file
+    # could leave a stale shoreline_config, hmc_transform or shoreline_iters behind.
+    for key in ('shoreline_config', 'shoreline_model', 'shoreline_iters', 'hmc_transform'):
+        setattr(config.workflow, key, getattr(opts, key))
 
     if not config.execution.notrack:
         import importlib.util
