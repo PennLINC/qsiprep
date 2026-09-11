@@ -591,8 +591,6 @@ class workflow(_Config):
     """Configuration JSON for running TORTOISE DIFFPREP."""
     eddy_config = None
     """Configuration for running Eddy."""
-    fmap_bspline = None
-    """Regularize fieldmaps with a field of B-Spline basis."""
     force = None
     """Forced processing choices (see ``--force``): currently ``sdc-anat-reference``."""
     force_sdc_anat_reference = False
