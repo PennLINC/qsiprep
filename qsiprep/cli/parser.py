@@ -1016,12 +1016,6 @@ How to combine the corrected results of an output's correction units.
         'require a T1w image and a PhaseEncodingDirection on the DWI series.',
     )
     g_fmap.add_argument(
-        '--fmap-bspline',
-        action='store_true',
-        default=False,
-        help='Fit a B-Spline field using least-squares (experimental)',
-    )
-    g_fmap.add_argument(
         '--fmap-no-demean',
         action='store_false',
         default=True,
