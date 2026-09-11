@@ -63,14 +63,6 @@ def _build_parser(**kwargs):
             '27.0.0',
             'Enabling `--subject-anatomical-reference unbiased` instead.',
         ),
-        '--prefer-dedicated-fmaps': (
-            '27.0.0',
-            'It has no effect. To keep reverse phase-encoded DWI runs from being paired '
-            'into a PEPOLAR fieldmap (preferring a dedicated fieldmap instead), pass '
-            '"--ignore pepolar-dwis"; which fieldmap is applied to which DWI series is '
-            'otherwise determined by the fieldmaps\' "B0FieldIdentifier"/"B0FieldSource" '
-            '(or "IntendedFor") metadata.',
-        ),
         '--b0-motion-corr-to': (
             '27.0.0',
             'Later versions will always use the "iterative" approach.',
@@ -83,11 +75,6 @@ def _build_parser(**kwargs):
     forwarded_deprecations = {
         '--dwi-only': ('--anat-modality', 'anat_modality', 'none'),
         '--dwi-no-biascorr': ('--b1-biascorrect-stage', 'b1_biascorrect_stage', 'none'),
-        '--longitudinal': (
-            '--subject-anatomical-reference',
-            'subject_anatomical_reference',
-            'unbiased',
-        ),
     }
 
     def _warn_deprecated(option_string):
@@ -361,7 +348,7 @@ def _build_parser(**kwargs):
         'identifier (the sub- prefix can be removed)',
     )
     g_bids.add_argument(
-        '--session-id',
+        '--session-label',
         action='store',
         nargs='+',
         type=_drop_ses,
@@ -564,15 +551,6 @@ def _build_parser(**kwargs):
         help='Configure pipelines to process infant brains. '
         'If using this parameter, the anatomical-template will be changed to MNIInfant. '
         "The appropriate MNIInfant cohort will be selected based on the participant's age.",
-    )
-    g_conf.add_argument(
-        '--longitudinal',
-        action=DeprecatedForwardAction,
-        default=SUPPRESS,
-        help=(
-            'DEPRECATED: this flag now enables `--subject-anatomical-reference unbiased`. '
-            'Use that instead.'
-        ),
     )
     g_conf.add_argument(
         '--subject-anatomical-reference',
@@ -892,17 +870,8 @@ How to combine the corrected results of an output's correction units.
 
     # Fieldmap options
     g_fmap = parser.add_argument_group('Specific options for handling fieldmaps')
-    g_fmap.add_argument(
-        '--prefer-dedicated-fmaps',
-        action=DeprecatedAction,
-        default=SUPPRESS,
-        help='DEPRECATED: this flag has no effect. To keep reverse phase-encoded DWI runs '
-        'from being paired into a PEPOLAR fieldmap (preferring a dedicated fieldmap '
-        'instead), use "--ignore pepolar-dwis"; which fieldmap is applied to which DWI '
-        'series is otherwise determined by the fieldmaps\' "B0FieldIdentifier"/'
-        '"B0FieldSource" (or "IntendedFor") metadata.',
-    )
-    g_fmap.add_argument(
+    g_sdc_method = g_fmap.add_mutually_exclusive_group()
+    g_sdc_method.add_argument(
         '--sdc-method',
         action='store',
         default=None,
@@ -1230,7 +1199,7 @@ def parse_args(args=None, namespace=None):
     processing_groups = []
 
     # Determine any session filters
-    session_filters = config.execution.session_id or []
+    session_filters = config.execution.session_label or []
     # if config.execution.bids_filters is not None:
     #     for _, filters in config.execution.bids_filters:
     #         ses_filter = filters.get("session")
