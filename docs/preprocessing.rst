@@ -963,9 +963,9 @@ signal image and its vector is rotated accordingly. A new model is fit on the
 transformed images and their rotated vectors. The leave-one-out procedure is
 then repeated on this updated DWI and gradient set.
 
-If ``"none"`` is specified as the hmc_model, then only the b0 images are used
-and the non-b0 images are transformed based on their nearest b0 image. This
-is probably not a great idea.
+If ``"model": "none"`` is set in ``--shoreline-config``, then only the b0
+images are used and the non-b0 images are transformed based on their nearest
+b0 image. This is probably not a great idea.
 
 Susceptibility distortion correction is run as part of this pipeline to be
 consistent with the ``TOPUP``/``eddy`` workflow.
@@ -1003,6 +1003,40 @@ are saved for each slice for display in a carpet plot-like thing.
         name='qsiprep_hmcsdc_wf',
         dwi_metadata={},
     )
+
+.. _configure_shoreline:
+
+Configuring SHORELine
+^^^^^^^^^^^^^^^^^^^^^
+
+SHORELine's settings are passed to *QSIPrep* as a JSON file with the
+``--shoreline-config`` option, which is only valid with
+``--hmc-method shoreline``. Every key is optional: missing keys take the
+defaults below, and unknown keys or invalid values are an error.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Key
+     - Allowed values
+     - Default
+     - Meaning
+   * - ``model``
+     - ``"3dshore"``, ``"tensor"``, ``"none"``
+     - ``"3dshore"``
+     - Signal model used to predict each left-out image. ``"none"`` skips the
+       model and gives each b>0 image the transform of its nearest b=0 image.
+   * - ``iters``
+     - An integer of at least 1 (ignored when ``model`` is ``"none"``)
+     - ``2``
+     - Number of SHORELine iterations.
+   * - ``transform``
+     - ``"Affine"``, ``"Rigid"``
+     - ``"Affine"``
+     - Transformation optimized during head motion correction.
+
+The default configuration can be viewed or downloaded `here
+<https://github.com/PennLINC/qsiprep/blob/main/qsiprep/data/shoreline_params.json>`__.
 
 
 .. _dwi_sdc:
