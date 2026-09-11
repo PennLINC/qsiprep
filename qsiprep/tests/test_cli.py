@@ -1044,6 +1044,24 @@ def test_load_shoreline_config_rejects_bad_files(tmp_path, contents, match):
         load_shoreline_config(str(cfg))
 
 
+def test_load_shoreline_config_names_the_file_on_decode_errors(tmp_path):
+    """A file that is not UTF-8 must still produce an error naming the file."""
+    from qsiprep.utils.misc import load_shoreline_config
+
+    cfg = tmp_path / 'latin1.json'
+    cfg.write_bytes(b'{"model": "\xff"}')
+    with pytest.raises(ValueError, match=r'SHORELine configuration file .* is not valid JSON'):
+        load_shoreline_config(str(cfg))
+
+
+def test_load_shoreline_config_names_the_file_on_read_errors(tmp_path):
+    """An unreadable path (here a directory) must raise ValueError, not a bare OSError."""
+    from qsiprep.utils.misc import load_shoreline_config
+
+    with pytest.raises(ValueError, match=r'SHORELine configuration file .* could not be read'):
+        load_shoreline_config(str(tmp_path))
+
+
 def test_load_shoreline_config_model_none_ignores_iters(tmp_path):
     import json
 

@@ -60,8 +60,8 @@ def init_dwi_hmc_wf(
         name: str
             Name of the workflow. Default: 'dwi_hmc_wf'.
 
-        The transform and signal model come from ``config.workflow.hmc_transform`` and
-        ``config.workflow.hmc_model``, set by ``--shoreline-config``.
+        The transform and signal model come from the ``hmc_transform`` and ``hmc_model``
+        workflow settings, set by ``--shoreline-config``.
 
     **Inputs**
 

@@ -472,11 +472,13 @@ def load_shoreline_config(path=None, model=None):
         source = f'SHORELine configuration file {path}'
         if not os.path.exists(path):
             raise ValueError(f'{source} does not exist.')
-        with open(path) as f:
-            try:
+        try:
+            with open(path, encoding='utf-8') as f:
                 user_cfg = json.load(f)
-            except json.JSONDecodeError as err:
-                raise ValueError(f'{source} is not valid JSON: {err}') from err
+        except OSError as err:
+            raise ValueError(f'{source} could not be read: {err}') from err
+        except (json.JSONDecodeError, UnicodeDecodeError) as err:
+            raise ValueError(f'{source} is not valid JSON: {err}') from err
         if not isinstance(user_cfg, dict):
             raise ValueError(f'{source} must contain a JSON object.')
         # Unknown keys are errors so a typo cannot silently fall back to a default.
