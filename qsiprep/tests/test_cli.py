@@ -986,6 +986,98 @@ def test_validate_diffprep_config_accepts_each_correction_mode(tmp_path):
         validate_diffprep_config(str(cfg))
 
 
+_SHORELINE_DEFAULTS = {'model': '3dshore', 'iters': 2, 'transform': 'Affine'}
+
+
+def test_load_shoreline_config_defaults_match_the_shipped_file():
+    import json
+
+    from qsiprep.data import load as load_data
+    from qsiprep.utils.misc import load_shoreline_config
+
+    shipped = load_data('shoreline_params.json')
+    assert json.loads(shipped.read_text()) == _SHORELINE_DEFAULTS
+    assert load_shoreline_config(None) == _SHORELINE_DEFAULTS
+    assert load_shoreline_config(str(shipped)) == _SHORELINE_DEFAULTS
+
+
+def test_load_shoreline_config_merges_a_partial_file(tmp_path):
+    import json
+
+    from qsiprep.utils.misc import load_shoreline_config
+
+    cfg = tmp_path / 'tensor.json'
+    cfg.write_text(json.dumps({'model': 'tensor'}))
+    assert load_shoreline_config(str(cfg)) == {**_SHORELINE_DEFAULTS, 'model': 'tensor'}
+
+
+def test_load_shoreline_config_missing(tmp_path):
+    from qsiprep.utils.misc import load_shoreline_config
+
+    with pytest.raises(ValueError, match='does not exist'):
+        load_shoreline_config(str(tmp_path / 'nope.json'))
+
+
+@pytest.mark.parametrize(
+    ('contents', 'match'),
+    [
+        ('[1, 2]', 'must contain a JSON object'),
+        ('{"model": ', 'not valid JSON'),
+        # A typo must fail loudly rather than silently fall back to a default.
+        ('{"iter": 3}', 'unknown key'),
+        # Values are case-sensitive: the legacy --hmc-model spelling is not accepted.
+        ('{"model": "3dSHORE"}', 'model='),
+        ('{"transform": "affine"}', 'transform='),
+        ('{"iters": 0}', 'iters='),
+        ('{"iters": true}', 'iters='),
+        ('{"iters": "2"}', 'iters='),
+        ('{"iters": 1.5}', 'iters='),
+    ],
+)
+def test_load_shoreline_config_rejects_bad_files(tmp_path, contents, match):
+    from qsiprep.utils.misc import load_shoreline_config
+
+    cfg = tmp_path / 'bad.json'
+    cfg.write_text(contents)
+    with pytest.raises(ValueError, match=match):
+        load_shoreline_config(str(cfg))
+
+
+def test_load_shoreline_config_model_none_ignores_iters(tmp_path):
+    import json
+
+    from qsiprep.utils.misc import load_shoreline_config
+
+    cfg = tmp_path / 'none.json'
+    cfg.write_text(json.dumps({'model': 'none', 'iters': 0}))
+    assert load_shoreline_config(str(cfg)) == {**_SHORELINE_DEFAULTS, 'model': 'none', 'iters': 0}
+
+
+def test_load_shoreline_config_legacy_model_override(tmp_path):
+    """The deprecated --hmc-model alias supplies the model; the file may still set the rest."""
+    import json
+
+    from qsiprep.utils.misc import load_shoreline_config
+
+    assert load_shoreline_config(None, model='tensor') == {
+        **_SHORELINE_DEFAULTS,
+        'model': 'tensor',
+    }
+
+    iters_only = tmp_path / 'iters.json'
+    iters_only.write_text(json.dumps({'iters': 3}))
+    assert load_shoreline_config(str(iters_only), model='none') == {
+        **_SHORELINE_DEFAULTS,
+        'model': 'none',
+        'iters': 3,
+    }
+
+    with_model = tmp_path / 'with_model.json'
+    with_model.write_text(json.dumps({'model': '3dshore'}))
+    with pytest.raises(ValueError, match='conflicts'):
+        load_shoreline_config(str(with_model), model='tensor')
+
+
 def test_validate_gradient_flags_force_and_ignore_conflict(tmp_path):
     from qsiprep.tests.gradient_fixtures import write_siemens_grad
     from qsiprep.utils.misc import validate_gradient_flags

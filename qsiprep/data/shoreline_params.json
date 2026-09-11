@@ -1,0 +1,5 @@
+{
+  "model": "3dshore",
+  "iters": 2,
+  "transform": "Affine"
+}
