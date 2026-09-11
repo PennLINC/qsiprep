@@ -50,23 +50,18 @@ def init_dwi_hmc_wf(
 
     **Parameters**
 
-        hmc_transform: 'Rigid' or 'Affine'
-            How many degrees of freedom to incorporate into motion correction
-        hmc_model: '3dSHORE', 'none' , 'tensor' or 'SH'
-            Which model to use for generating signal predictions for hmc. '3dSHORE' requires
-            multiple b-values, 'none' will only use b0 images for motion correction, 'tensor'
-            uses a tensor model for signal predictions for hmc, and 'SH' uses spherical harmonics
-            (not implemented yet).
-        hmc_align_to: 'first' or 'iterative'
-            Which volume should be used to determine the motion-corrected space?
         source_file: str
             Path to one of the original dwi files (used for reportlets)
-        rpe_b0: str
-            Path to a reverse phase encoding image to be used for 3dQWarp's TOPUP-style
-            correction
         num_model_iterations: int
-            If ``hmc_model`` is ``'3dSHORE'`` or ``'SH'`` determines the number of times the
-            model is updated and motion correction is estimated. Default: 2.
+            Number of SHORELine model-based iterations, used when the model is '3dSHORE' or
+            'tensor' (ignored for 'none'). Default: 2.
+        mem_gb: float
+            Estimated memory usage. Default: 3.
+        name: str
+            Name of the workflow. Default: 'dwi_hmc_wf'.
+
+        The transform and signal model come from ``config.workflow.hmc_transform`` and
+        ``config.workflow.hmc_model``, set by ``--shoreline-config``.
 
     **Inputs**
 

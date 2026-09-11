@@ -607,7 +607,7 @@ def test_hmc_model_alias_conflicts_with_shoreline_config_model(minimal_args, tmp
     cfg = _shoreline_json(tmp_path, model='3dshore')
     with pytest.raises(SystemExit):
         _parse(minimal_args, '--hmc-model', 'tensor', '--shoreline-config', cfg)
-    assert 'conflicts' in capsys.readouterr().err
+    assert '--hmc-model conflicts' in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
