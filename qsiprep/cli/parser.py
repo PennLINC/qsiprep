@@ -59,15 +59,6 @@ def _build_parser(**kwargs):
     deprecations = {
         '--dwi-only': ('27.0.0', 'Enabling `--anat-modality none` instead.'),
         '--dwi-no-biascorr': ('27.0.0', 'Enabling `--b1-biascorrect-stage none` instead.'),
-        '--hmc-model': (
-            '27.0.0',
-            'Use `--hmc-method` instead (with a `--shoreline-config` "model" for the '
-            'SHORELine signal model).',
-        ),
-        '--pepolar-method': (
-            '27.0.0',
-            'Use `--sdc-method` instead.',
-        ),
         '--b0-to-t1w-transform': ('27.0.0', 'Please use `--b0-to-anat-transform` instead.'),
     }
 
@@ -77,17 +68,6 @@ def _build_parser(**kwargs):
         '--dwi-only': ('--anat-modality', 'anat_modality', 'none'),
         '--dwi-no-biascorr': ('--b1-biascorrect-stage', 'b1_biascorrect_stage', 'none'),
     }
-
-    # The deprecated --hmc-model vocabulary, mapped onto the method axes.
-    hmc_model_to_method = {
-        'eddy': 'eddy',
-        'tortoise': 'tortoise',
-        '3dSHORE': 'shoreline',
-        'tensor': 'shoreline',
-        'none': 'shoreline',
-    }
-    hmc_model_to_shoreline_model = {'3dSHORE': '3dshore', 'tensor': 'tensor', 'none': 'none'}
-    shoreline_model_to_hmc_model = {v: k for k, v in hmc_model_to_shoreline_model.items()}
 
     def _warn_deprecated(option_string):
         removed_in, detail = deprecations[option_string]
@@ -157,22 +137,8 @@ def _build_parser(**kwargs):
             if not hasattr(namespace, 'b0_to_anat_transform'):
                 namespace.b0_to_anat_transform = B0_TO_ANAT_TRANSFORM_DEFAULT
 
-            # The method axes (--hmc-method/--sdc-method) and their deprecated
-            # aliases (--hmc-model/--pepolar-method), normalized after the whole
-            # command line has been read. hmc_model/pepolar_method are re-derived
-            # in the legacy vocabulary because config and the workflow builders
-            # still read them.
-            legacy_hmc = getattr(namespace, '_legacy_hmc_model', None)
-            if hasattr(namespace, '_legacy_hmc_model'):
-                del namespace._legacy_hmc_model
-            legacy_pepolar = getattr(namespace, '_legacy_pepolar_method', None)
-            if hasattr(namespace, '_legacy_pepolar_method'):
-                del namespace._legacy_pepolar_method
-
-            legacy_shoreline_model = None
-            if legacy_hmc is not None:
-                namespace.hmc_method = hmc_model_to_method[legacy_hmc]
-                legacy_shoreline_model = hmc_model_to_shoreline_model.get(legacy_hmc)
+            # The method axes (--hmc-method/--sdc-method), normalized after the
+            # whole command line has been read.
             if namespace.hmc_method is None:
                 namespace.hmc_method = 'eddy'
             if namespace.shoreline_config is not None and namespace.hmc_method != 'shoreline':
@@ -185,9 +151,7 @@ def _build_parser(**kwargs):
             namespace.hmc_transform = None
             if namespace.hmc_method == 'shoreline':
                 try:
-                    shoreline = load_shoreline_config(
-                        namespace.shoreline_config, model=legacy_shoreline_model
-                    )
+                    shoreline = load_shoreline_config(namespace.shoreline_config)
                 except ValueError as err:
                     self.error(str(err))
                 namespace.shoreline_model = shoreline['model']
@@ -200,25 +164,13 @@ def _build_parser(**kwargs):
                     file=sys.stderr,
                 )
 
-            explicit_sdc = legacy_pepolar.lower() if legacy_pepolar else namespace.sdc_method
-            if explicit_sdc in (None, 'auto'):
+            if namespace.sdc_method in (None, 'auto'):
                 namespace.sdc_method = 'topup' if namespace.hmc_method == 'eddy' else 'drbuddi'
-                # Keep the deprecated vocabulary truthful for any downstream
-                # consumer loading a newly written config file.
-                namespace.pepolar_method = namespace.sdc_method.upper()
-            else:
-                if namespace.hmc_method != 'eddy' and 'topup' in explicit_sdc:
-                    self.error(
-                        f'--sdc-method {explicit_sdc} requires --hmc-method eddy: '
-                        'SHORELine and TORTOISE correct PEPOLAR units with DRBUDDI'
-                    )
-                namespace.sdc_method = explicit_sdc
-                namespace.pepolar_method = explicit_sdc.upper()
-
-            if namespace.hmc_method == 'shoreline':
-                namespace.hmc_model = shoreline_model_to_hmc_model[namespace.shoreline_model]
-            else:
-                namespace.hmc_model = 'eddy' if namespace.hmc_method == 'eddy' else 'tortoise'
+            elif namespace.hmc_method != 'eddy' and 'topup' in namespace.sdc_method:
+                self.error(
+                    f'--sdc-method {namespace.sdc_method} requires --hmc-method eddy: '
+                    'SHORELine and TORTOISE correct PEPOLAR units with DRBUDDI'
+                )
 
             # --force values land on their own boolean attributes so config
             # (and qsiplan's policy bridge) can read them by name.
@@ -834,8 +786,7 @@ How to combine the corrected results of an output's correction units.
     )
 
     g_moco = parser.add_argument_group('Specific options for motion correction and coregistration')
-    g_hmc_method = g_moco.add_mutually_exclusive_group()
-    g_hmc_method.add_argument(
+    g_moco.add_argument(
         '--hmc-method',
         action='store',
         default=None,
@@ -848,23 +799,6 @@ How to combine the corrected results of an output's correction units.
         '"tortoise" (TORTOISE DIFFPREP; rigid head motion and 24-parameter '
         'quadratic eddy-current correction, arbitrary sampling; see '
         '--diffprep-config).',
-    )
-    g_hmc_method.add_argument(
-        '--hmc-model',
-        action=DeprecatedStoreAction,
-        dest='_legacy_hmc_model',
-        default=SUPPRESS,
-        choices=[
-            'none',
-            '3dSHORE',
-            'eddy',
-            'tensor',
-            'tortoise',
-        ],
-        help='DEPRECATED: use --hmc-method (and --shoreline-config) instead. '
-        '"eddy" means `--hmc-method eddy`; "tortoise" means `--hmc-method '
-        'tortoise`; "3dSHORE", "tensor" and "none" mean `--hmc-method '
-        'shoreline` with the matching --shoreline-config "model".',
     )
     g_moco.add_argument(
         '--shoreline-config',
@@ -933,14 +867,6 @@ How to combine the corrected results of an output's correction units.
         'for eddy, DRBUDDI otherwise). Non-PEPOLAR corrections (GRE '
         'fieldmaps, SyN, T2w registration) are chosen by the input data and '
         'their own flags, not by this one.',
-    )
-    g_sdc_method.add_argument(
-        '--pepolar-method',
-        action=DeprecatedStoreAction,
-        dest='_legacy_pepolar_method',
-        default=SUPPRESS,
-        choices=['TOPUP', 'DRBUDDI', 'TOPUP+DRBUDDI'],
-        help='DEPRECATED: use --sdc-method instead (same values, lowercased).',
     )
     g_fmap.add_argument(
         '--sdc-anat-reference',

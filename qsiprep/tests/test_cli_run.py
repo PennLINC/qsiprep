@@ -428,7 +428,7 @@ def test_ignore_accepts_shims_and_fov(minimal_args):
     assert opts.ignore == ['shims', 'fov']
 
 
-# --- The method axes (--hmc-method/--sdc-method) and their deprecated aliases ---
+# --- The method axes (--hmc-method/--sdc-method) ---
 
 
 def _parse(minimal_args, *extra):
@@ -446,9 +446,6 @@ def test_method_axis_defaults(minimal_args, capsys):
     assert opts.shoreline_iters is None
     assert opts.hmc_transform is None
     assert opts.sdc_method == 'topup'
-    # Legacy vocabulary is back-filled for unconverted readers.
-    assert opts.hmc_model == 'eddy'
-    assert opts.pepolar_method == 'TOPUP'
 
 
 def test_hmc_method_shoreline_gets_model_and_drbuddi(minimal_args):
@@ -457,60 +454,21 @@ def test_hmc_method_shoreline_gets_model_and_drbuddi(minimal_args):
     assert opts.shoreline_iters == 2
     assert opts.hmc_transform == 'Affine'
     assert opts.sdc_method == 'drbuddi'
-    assert opts.hmc_model == '3dSHORE'
-    # The deprecated spelling remains a truthful view of the resolved method.
-    assert opts.pepolar_method == 'DRBUDDI'
 
 
 def test_hmc_method_tortoise_auto_resolves_drbuddi(minimal_args):
     """The legacy TOPUP default never produced a working DIFFPREP run."""
     opts = _parse(minimal_args, '--hmc-method', 'tortoise')
     assert opts.sdc_method == 'drbuddi'
-    assert opts.hmc_model == 'tortoise'
-    assert opts.pepolar_method == 'DRBUDDI'
 
 
 @pytest.mark.parametrize(
-    ('legacy', 'hmc_method', 'shoreline_model', 'hmc_model'),
-    [
-        ('eddy', 'eddy', None, 'eddy'),
-        ('tortoise', 'tortoise', None, 'tortoise'),
-        ('3dSHORE', 'shoreline', '3dshore', '3dSHORE'),
-        ('tensor', 'shoreline', 'tensor', 'tensor'),
-        ('none', 'shoreline', 'none', 'none'),
-    ],
+    ('flag', 'value'), [('--hmc-model', 'eddy'), ('--pepolar-method', 'TOPUP')]
 )
-def test_hmc_model_alias_maps_and_warns(
-    minimal_args, capsys, legacy, hmc_method, shoreline_model, hmc_model
-):
-    opts = _parse(minimal_args, '--hmc-model', legacy)
-    warning = capsys.readouterr().err
-    assert '--hmc-model' in warning
-    assert 'deprecated' in warning
-    assert opts.hmc_method == hmc_method
-    assert opts.shoreline_model == shoreline_model
-    assert opts.hmc_model == hmc_model
-
-
-def test_hmc_model_conflicts_with_hmc_method(minimal_args, capsys):
+def test_removed_method_flags_are_rejected(minimal_args, capsys, flag, value):
     with pytest.raises(SystemExit):
-        _parse(minimal_args, '--hmc-model', 'eddy', '--hmc-method', 'eddy')
-    assert 'not allowed with' in capsys.readouterr().err
-
-
-def test_pepolar_method_alias_maps_and_warns(minimal_args, capsys):
-    opts = _parse(minimal_args, '--pepolar-method', 'TOPUP+DRBUDDI')
-    warning = capsys.readouterr().err
-    assert '--pepolar-method' in warning
-    assert 'deprecated' in warning
-    assert opts.sdc_method == 'topup+drbuddi'
-    assert opts.pepolar_method == 'TOPUP+DRBUDDI'
-
-
-def test_pepolar_method_conflicts_with_sdc_method(minimal_args, capsys):
-    with pytest.raises(SystemExit):
-        _parse(minimal_args, '--pepolar-method', 'TOPUP', '--sdc-method', 'topup')
-    assert 'not allowed with' in capsys.readouterr().err
+        _parse(minimal_args, flag, value)
+    assert 'unrecognized arguments' in capsys.readouterr().err
 
 
 @pytest.mark.parametrize('hmc_method', ['shoreline', 'tortoise'])
@@ -518,13 +476,6 @@ def test_pepolar_method_conflicts_with_sdc_method(minimal_args, capsys):
 def test_explicit_topup_requires_eddy(minimal_args, capsys, hmc_method, sdc_method):
     with pytest.raises(SystemExit):
         _parse(minimal_args, '--hmc-method', hmc_method, '--sdc-method', sdc_method)
-    assert 'requires --hmc-method eddy' in capsys.readouterr().err
-
-
-def test_legacy_topup_with_tortoise_is_an_error(minimal_args, capsys):
-    """This pairing used to parse and then hard-fail mid-run."""
-    with pytest.raises(SystemExit):
-        _parse(minimal_args, '--hmc-model', 'tortoise', '--pepolar-method', 'TOPUP')
     assert 'requires --hmc-method eddy' in capsys.readouterr().err
 
 
@@ -545,7 +496,6 @@ def test_shoreline_config_values_reach_the_namespace(minimal_args, tmp_path):
     assert opts.shoreline_model == 'tensor'
     assert opts.shoreline_iters == 3
     assert opts.hmc_transform == 'Rigid'
-    assert opts.hmc_model == 'tensor'
 
 
 @pytest.mark.parametrize(
@@ -563,23 +513,6 @@ def test_invalid_shoreline_config_is_a_parse_error(minimal_args, tmp_path, capsy
     with pytest.raises(SystemExit):
         _parse(minimal_args, '--hmc-method', 'shoreline', '--shoreline-config', cfg)
     assert 'unknown key' in capsys.readouterr().err
-
-
-def test_hmc_model_alias_merges_with_shoreline_config(minimal_args, tmp_path, capsys):
-    cfg = _shoreline_json(tmp_path, iters=3)
-    opts = _parse(minimal_args, '--hmc-model', 'tensor', '--shoreline-config', cfg)
-    assert 'deprecated' in capsys.readouterr().err
-    assert opts.hmc_method == 'shoreline'
-    assert opts.shoreline_model == 'tensor'
-    assert opts.shoreline_iters == 3
-    assert opts.hmc_model == 'tensor'
-
-
-def test_hmc_model_alias_conflicts_with_shoreline_config_model(minimal_args, tmp_path, capsys):
-    cfg = _shoreline_json(tmp_path, model='3dshore')
-    with pytest.raises(SystemExit):
-        _parse(minimal_args, '--hmc-model', 'tensor', '--shoreline-config', cfg)
-    assert '--hmc-model conflicts' in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(

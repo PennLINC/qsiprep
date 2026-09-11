@@ -839,12 +839,7 @@ def test_forrest_gump_patch2self(data_dir, output_dir, working_dir):
 
 
 def test_parser_accepts_tortoise(tmp_path):
-    """``tortoise`` is the single --hmc-model value for the DIFFPREP backend.
-
-    Deliberately uses the deprecated ``--hmc-model`` spelling: this test (and
-    the one below) pins the alias mapping. The integration scenarios above use
-    the ``--hmc-method``/``--sdc-method`` axis flags.
-    """
+    """``tortoise`` is the single --hmc-method value for the DIFFPREP backend."""
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -852,9 +847,17 @@ def test_parser_accepts_tortoise(tmp_path):
     bids.mkdir()
     out = tmp_path / 'out'
     opts = parser.parse_args(
-        [str(bids), str(out), 'participant', '--hmc-model', 'tortoise', '--output-resolution', '2']
+        [
+            str(bids),
+            str(out),
+            'participant',
+            '--hmc-method',
+            'tortoise',
+            '--output-resolution',
+            '2',
+        ]
     )
-    assert opts.hmc_model == 'tortoise'
+    assert opts.hmc_method == 'tortoise'
 
 
 def test_parser_rejects_removed_diffprep_hmc_models(tmp_path):
@@ -872,7 +875,7 @@ def test_parser_rejects_removed_diffprep_hmc_models(tmp_path):
                     str(bids),
                     str(out),
                     'participant',
-                    '--hmc-model',
+                    '--hmc-method',
                     removed,
                     '--output-resolution',
                     '2',

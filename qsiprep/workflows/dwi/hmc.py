@@ -29,10 +29,10 @@ from .util import init_dwi_reference_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
-# Methods-text names for the SHORELine signal models, keyed by the hmc_model value
-# SignalPrediction reads. "none" never builds the model-based workflow.
+# Methods-text names for the SHORELine signal models, keyed by the shoreline_model
+# value SignalPrediction reads. "none" never builds the model-based workflow.
 _SHORELINE_MODEL_DESCRIPTIONS = {
-    '3dSHORE': '3dSHORE [@merlet3dshore]',
+    '3dshore': '3dSHORE [@merlet3dshore]',
     'tensor': 'a tensor model',
 }
 
@@ -53,14 +53,14 @@ def init_dwi_hmc_wf(
         source_file: str
             Path to one of the original dwi files (used for reportlets)
         num_model_iterations: int
-            Number of SHORELine model-based iterations, used when the model is '3dSHORE' or
+            Number of SHORELine model-based iterations, used when the model is '3dshore' or
             'tensor' (ignored for 'none'). Default: 2.
         mem_gb: float
             Estimated memory usage. Default: 3.
         name: str
             Name of the workflow. Default: 'dwi_hmc_wf'.
 
-        The transform and signal model come from the ``hmc_transform`` and ``hmc_model``
+        The transform and signal model come from the ``hmc_transform`` and ``shoreline_model``
         workflow settings, set by ``--shoreline-config``.
 
     **Inputs**
@@ -87,7 +87,7 @@ def init_dwi_hmc_wf(
         noise_free_dwis: list
             Model-predicted images reverse-transformed into alignment with ``dwi_files``
         cnr_image: str
-            If hmc_model is 'none' this is the tsnr of the b=0 images. Otherwise it is the
+            If shoreline_model is 'none' this is the tsnr of the b=0 images. Otherwise it is the
             model fit divided by the model error in each voxel.
         optimization_data: str
             CSV file tracking the motion estimates across shoreline iterations
@@ -124,7 +124,7 @@ def init_dwi_hmc_wf(
         ),
         name='outputnode',
     )
-    hmc_model = config.workflow.hmc_model
+    shoreline_model = config.workflow.shoreline_model
     workflow = Workflow(name=name)
     # Unbiased align the b0s
     b0_hmc_wf = init_b0_hmc_wf()
@@ -161,7 +161,7 @@ def init_dwi_hmc_wf(
     ])  # fmt:skip
 
     # If we're just aligning based on the b=0 images, compute the b=0 tsnr as the cnr
-    if hmc_model.lower() == 'none':
+    if shoreline_model == 'none':
         workflow.__postdesc__ = (
             'Each b>0 image was transformed based on the registration of the nearest b=0 image. '
         )
@@ -585,7 +585,7 @@ def init_hmc_model_iteration_wf(name='hmc_model_iter0'):
     ants_settings = str(load_data(f'shoreline_{precision}_{config.workflow.hmc_transform}.json'))
 
     predict_dwis = pe.MapNode(
-        SignalPrediction(model=config.workflow.hmc_model),
+        SignalPrediction(model=config.workflow.shoreline_model),
         iterfield=['bval_to_predict', 'bvec_to_predict'],
         name='predict_dwis',
     )
@@ -688,7 +688,7 @@ def init_dwi_model_hmc_wf(
     model_predicted_images: list
         Model-predicted images reverse-transformed into alignment with ``dwi_files``
     cnr_image: str
-        If hmc_model is 'none' this is the tsnr of the b=0 images. Otherwise it is the
+        If shoreline_model is 'none' this is the tsnr of the b=0 images. Otherwise it is the
         model fit divided by the model error in each voxel.
     optimization_data: str
         CSV file tracking the motion estimates across shoreline iterations
@@ -717,7 +717,7 @@ def init_dwi_model_hmc_wf(
         name='outputnode',
     )
     model_description = _SHORELINE_MODEL_DESCRIPTIONS.get(
-        config.workflow.hmc_model, config.workflow.hmc_model
+        config.workflow.shoreline_model, config.workflow.shoreline_model
     )
     iterations_run = 'iteration was' if num_iters == 1 else 'iterations were'
     workflow.__desc__ = (
