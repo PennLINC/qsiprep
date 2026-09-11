@@ -813,7 +813,7 @@ In the `deprecations` dict at `qsiprep/cli/parser.py:58`, add:
         ),
 ```
 
-- [x] **Step 4: Re-declare the three flags as deprecated**
+- [x] **Step 4: Redeclare the three flags as deprecated**
 
 Replace the `--skip-anat-based-spatial-normalization` block at `qsiprep/cli/parser.py:500-506` with:
 

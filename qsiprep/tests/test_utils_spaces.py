@@ -154,9 +154,7 @@ def test_parse_output_spaces_allows_multiple_acpc():
 
 
 def test_parse_output_spaces_deduplicates_preserving_order():
-    specs = parse_output_spaces(
-        ['acpc:res-2mm', 'MNI152NLin2009cAsym', 'acpc:res-2mm']
-    )
+    specs = parse_output_spaces(['acpc:res-2mm', 'MNI152NLin2009cAsym', 'acpc:res-2mm'])
     assert [str(s) for s in specs] == ['acpc:res-2mm', 'MNI152NLin2009cAsym']
 
 
@@ -209,8 +207,10 @@ def test_parser_accumulates_repeated_flags(tmp_path):
     opts = parser.parse_args(
         _min_args(
             tmp_path,
-            '--output-spaces', 'acpc:res-2mm',
-            '--output-spaces', 'MNI152NLin2009cAsym',
+            '--output-spaces',
+            'acpc:res-2mm',
+            '--output-spaces',
+            'MNI152NLin2009cAsym',
         )
     )
     assert opts.output_spaces == ['acpc:res-2mm', 'MNI152NLin2009cAsym']
@@ -249,9 +249,7 @@ def test_output_resolution_forwards_infant_template(tmp_path):
 def test_skip_normalization_drops_standard_spaces(tmp_path):
     from qsiprep.cli.parser import _apply_output_space_deprecations
 
-    opts = _parse(
-        tmp_path, '--output-resolution', '2', '--skip-anat-based-spatial-normalization'
-    )
+    opts = _parse(tmp_path, '--output-resolution', '2', '--skip-anat-based-spatial-normalization')
     _apply_output_space_deprecations(opts)
     assert opts.output_spaces == ['acpc:res-2mm']
 
@@ -259,9 +257,7 @@ def test_skip_normalization_drops_standard_spaces(tmp_path):
 def test_old_and_new_together_is_an_error(tmp_path):
     from qsiprep.cli.parser import _apply_output_space_deprecations
 
-    opts = _parse(
-        tmp_path, '--output-resolution', '2', '--output-spaces', 'acpc:res-2mm'
-    )
+    opts = _parse(tmp_path, '--output-resolution', '2', '--output-spaces', 'acpc:res-2mm')
     with pytest.raises(SystemExit):
         _apply_output_space_deprecations(opts)
 
@@ -390,9 +386,7 @@ def test_resolve_output_spaces_reads_the_age_once(monkeypatch):
         return 7
 
     monkeypatch.setattr(spaces_mod, '_age_in_months', _fake)
-    specs = parse_output_spaces(
-        ['acpc:res-2mm', 'MNIInfant:cohort-auto', 'UNCInfant:cohort-auto']
-    )
+    specs = parse_output_spaces(['acpc:res-2mm', 'MNIInfant:cohort-auto', 'UNCInfant:cohort-auto'])
     spaces_mod.resolve_output_spaces(specs, 'bids', '01', None)
     assert len(calls) == 1
 
@@ -426,7 +420,8 @@ def test_infant_anchor_survives_skipping_normalization(tmp_path):
 
     opts = _parse(
         tmp_path,
-        '--output-resolution', '2',
+        '--output-resolution',
+        '2',
         '--infant',
         '--skip-anat-based-spatial-normalization',
     )
@@ -519,9 +514,7 @@ def test_infant_accepts_an_explicit_infant_template(tmp_path):
     """UNCInfant is an infant anchor, so --infant must not append MNIInfant too."""
     from qsiprep.cli.parser import _apply_output_space_deprecations
 
-    opts = _parse(
-        tmp_path, '--infant', '--output-spaces', 'acpc:res-2mm', 'UNCInfant:cohort-auto'
-    )
+    opts = _parse(tmp_path, '--infant', '--output-spaces', 'acpc:res-2mm', 'UNCInfant:cohort-auto')
     _apply_output_space_deprecations(opts)
     assert not any(s.startswith('MNIInfant') for s in opts.output_spaces)
     assert opts.acpc_anchor.startswith('UNCInfant')
@@ -550,9 +543,7 @@ def test_mm_resolution_on_a_standard_space_is_rejected(tmp_path):
 
     from qsiprep.cli.parser import _apply_output_space_deprecations
 
-    opts = _parse(
-        tmp_path, '--output-spaces', 'acpc:res-2mm', 'MNI152NLin2009cAsym:res-2mm'
-    )
+    opts = _parse(tmp_path, '--output-spaces', 'acpc:res-2mm', 'MNI152NLin2009cAsym:res-2mm')
     with pytest.raises(SystemExit) as excinfo:
         _apply_output_space_deprecations(opts)
     assert 'MNI152NLin2009cAsym:res-2mm' in str(excinfo.value)

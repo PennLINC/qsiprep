@@ -493,9 +493,7 @@ FreeSurfer version {FS_VERSION}. """
         # One normalization reportlet per standard space, in the same order as
         # standard_specs, so init_anat_reports_wf can hand each back to its own
         # ds_report_t1_2_* sink.
-        merge_std_reports = pe.Node(
-            niu.Merge(len(standard_specs)), name='merge_std_reports'
-        )
+        merge_std_reports = pe.Node(niu.Merge(len(standard_specs)), name='merge_std_reports')
         # The grid each space's derivatives are resampled onto, in the same order.
         # init_anat_derivatives_wf selects by index, so slot N here must be the
         # template slot N of merge_std_forward_transforms was registered against.
@@ -1535,9 +1533,7 @@ def init_template_lps_wf(name='template_lps_wf') -> Workflow:
         niu.IdentityInterface(fields=['template_lps', 'mask_lps']), name='outputnode'
     )
 
-    mask_template = pe.Node(
-        afni.Calc(expr='a*b', outputtype='NIFTI_GZ'), name='mask_template'
-    )
+    mask_template = pe.Node(afni.Calc(expr='a*b', outputtype='NIFTI_GZ'), name='mask_template')
     reorient_brain = pe.Node(
         afni.Resample(orientation='RAI', outputtype='NIFTI_GZ'), name='reorient_brain'
     )
@@ -1954,9 +1950,7 @@ def init_anat_derivatives_wf(output_spaces, has_t2w=False) -> Workflow:
                 if spec.resolution is not None and spec.resolution.kind == 'label'
                 else {}
             )
-            cohort_entities = (
-                {'cohort': spec.cohort} if spec.cohort not in (None, 'auto') else {}
-            )
+            cohort_entities = {'cohort': spec.cohort} if spec.cohort not in (None, 'auto') else {}
 
             # from-/to- labels carry the cohort inline because a transform label has
             # nowhere else to put it; space- pairs with a separate cohort- entity.

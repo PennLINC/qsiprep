@@ -52,6 +52,7 @@ def test_subject_summary_no_standard_space():
     text = iface._generate_segment()
     assert 'none (no standard space requested)' in text
 
+
 def test_subject_summary_warns_about_the_development_branch():
     """Put an unmissable warning in the report when unreleased MRtrix3 was used."""
     from qsiprep.interfaces.reports import SubjectSummary

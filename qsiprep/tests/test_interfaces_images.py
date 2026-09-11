@@ -230,6 +230,7 @@ def test_choose_interpolator_from_grid(tmp_path):
     upsampled = ChooseInterpolator(dwi_files=[dwi], output_grid=fine_grid).run(cwd=str(tmp_path))
     assert upsampled.outputs.interpolation_method == 'Linear'
 
+
 class _FakeProc:
     """Stand-in for a finished subprocess.Popen."""
 

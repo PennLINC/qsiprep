@@ -584,8 +584,10 @@ def test_two_resolutions_of_one_template_write_one_transform(tmp_path):
     specs = parse_output_spaces(['acpc:res-2mm', 'MNI152NLin2009cAsym:res-1:res-2'])
     wf = init_anat_derivatives_wf(output_spaces=specs)
     warps = sorted(n for n in wf.list_node_names() if n.endswith('_warp'))
-    assert warps == ['ds_t1_MNI152NLin2009cAsymres1_inv_warp',
-                     'ds_t1_MNI152NLin2009cAsymres1_warp'], warps
+    assert warps == [
+        'ds_t1_MNI152NLin2009cAsymres1_inv_warp',
+        'ds_t1_MNI152NLin2009cAsymres1_warp',
+    ], warps
 
 
 def test_no_standard_space_skips_the_nonlinear_normalization(tmp_path):
@@ -612,6 +614,7 @@ def test_syn_sdc_keeps_the_nonlinear_normalization(tmp_path):
 def test_standard_space_keeps_the_nonlinear_normalization(tmp_path):
     wf = _build_anat_preproc_wf(tmp_path, ['acpc:res-2mm', 'MNI152NLin2009cAsym'])
     assert any('anat_nlin_normalization' in n for n in wf.list_node_names())
+
 
 def test_unknown_hmc_model_is_rejected_at_selection_time(tmp_path):
     """The subject workflow resolves the method selection before building
@@ -803,9 +806,7 @@ def test_derivatives_reuse_the_preproc_template_chain(tmp_path):
     """The grid images are resampled onto must be the grid they were registered to."""
     wf = _build_anat_preproc_wf(tmp_path, MULTI_STANDARD)
     duplicated = [
-        name
-        for name in wf.list_node_names()
-        if 'get_template' in name and name.endswith('_deriv')
+        name for name in wf.list_node_names() if 'get_template' in name and name.endswith('_deriv')
     ]
     assert not duplicated, f'derivatives refetch templates: {duplicated}'
     duplicated_lps = [name for name in wf.list_node_names() if '_deriv_wf' in name]
