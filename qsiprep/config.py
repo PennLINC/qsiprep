@@ -603,10 +603,6 @@ class workflow(_Config):
     """Gradient nonlinearity coefficient file or displacement field."""
     hmc_method = None
     """Which software corrects head motion: eddy, shoreline or tortoise."""
-    hmc_model = None
-    """Model used to generate target images for hmc. DEPRECATED: the legacy
-    vocabulary equivalent of ``hmc_method`` + ``shoreline_model``, kept while
-    workflow builders still read it."""
     hmc_transform = None
     """Transformation to be used in SHORELine."""
     ignore = None
@@ -626,10 +622,6 @@ class workflow(_Config):
     """Skip re-scaling dwi scans to have matching b=0 intensities."""
     output_resolution = None
     """Isotropic voxel size for outputs."""
-    pepolar_method = None
-    """SDC method to be used for PEPOLAR fieldmaps. DEPRECATED: the legacy
-    vocabulary equivalent of ``sdc_method``, kept while workflow builders
-    still read it."""
     sdc_anat_reference = 'none'
     """Which anatomical-derived image serves as the reference for fieldmap-less
     susceptibility distortion correction, as a fallback for DWI series no

@@ -486,7 +486,11 @@ def init_dwi_preproc_wf(
         DiffusionSummary(
             # '' (no PE info) -> None, which the summary renders as "MISSING".
             pe_direction=unit.pe_dir or None,
-            hmc_model=config.workflow.hmc_model,
+            hmc_model=(
+                config.workflow.shoreline_model
+                if config.workflow.hmc_method == 'shoreline'
+                else config.workflow.hmc_method
+            ),
             b0_to_anat_transform=config.workflow.b0_to_anat_transform,
             hmc_transform=config.workflow.hmc_transform,
             denoise_method=config.workflow.denoise_method,

@@ -45,11 +45,10 @@ def init_dwi_hmc_wf(
 
         hmc_transform: 'Rigid' or 'Affine'
             How many degrees of freedom to incorporate into motion correction
-        hmc_model: '3dSHORE', 'none' , 'tensor' or 'SH'
-            Which model to use for generating signal predictions for hmc. '3dSHORE' requires
-            multiple b-values, 'none' will only use b0 images for motion correction, 'tensor'
-            uses a tensor model for signal predictions for hmc, and 'SH' uses spherical harmonics
-            (not implemented yet).
+        shoreline_model: '3dshore', 'none' or 'tensor'
+            Which model to use for generating signal predictions for hmc. '3dshore' requires
+            multiple b-values, 'none' will only use b0 images for motion correction, and 'tensor'
+            uses a tensor model for signal predictions for hmc.
         hmc_align_to: 'first' or 'iterative'
             Which volume should be used to determine the motion-corrected space?
         source_file: str
@@ -58,7 +57,7 @@ def init_dwi_hmc_wf(
             Path to a reverse phase encoding image to be used for 3dQWarp's TOPUP-style
             correction
         num_model_iterations: int
-            If ``hmc_model`` is ``'3dSHORE'`` or ``'SH'`` determines the number of times the
+            If ``shoreline_model`` is ``'3dshore'`` determines the number of times the
             model is updated and motion correction is estimated. Default: 2.
 
     **Inputs**
@@ -85,7 +84,7 @@ def init_dwi_hmc_wf(
         noise_free_dwis: list
             Model-predicted images reverse-transformed into alignment with ``dwi_files``
         cnr_image: str
-            If hmc_model is 'none' this is the tsnr of the b=0 images. Otherwise it is the
+            If shoreline_model is 'none' this is the tsnr of the b=0 images. Otherwise it is the
             model fit divided by the model error in each voxel.
         optimization_data: str
             CSV file tracking the motion estimates across shoreline iterations
@@ -122,7 +121,7 @@ def init_dwi_hmc_wf(
         ),
         name='outputnode',
     )
-    hmc_model = config.workflow.hmc_model
+    shoreline_model = config.workflow.shoreline_model
     workflow = Workflow(name=name)
     # Unbiased align the b0s
     b0_hmc_wf = init_b0_hmc_wf()
@@ -159,7 +158,7 @@ def init_dwi_hmc_wf(
     ])  # fmt:skip
 
     # If we're just aligning based on the b=0 images, compute the b=0 tsnr as the cnr
-    if hmc_model.lower() == 'none':
+    if shoreline_model == 'none':
         workflow.__postdesc__ = (
             'Each b>0 image was transformed based on the registration of the nearest b=0 image. '
         )
@@ -386,7 +385,7 @@ def init_b0_hmc_wf(
     if align_to == 'iterative':
         desc += (
             f'An unbiased b=0 template was constructed over {num_iters} iterations '
-            f'of {config.workflow.hmc_model} registrations. '
+            f'of {config.workflow.shoreline_model} registrations. '
         )
         initial_template = pe.Node(
             ants.AverageImages(normalize=True, dimension=3),
@@ -583,7 +582,7 @@ def init_hmc_model_iteration_wf(name='hmc_model_iter0'):
     ants_settings = str(load_data(f'shoreline_{precision}_{config.workflow.hmc_transform}.json'))
 
     predict_dwis = pe.MapNode(
-        SignalPrediction(model=config.workflow.hmc_model),
+        SignalPrediction(model=config.workflow.shoreline_model),
         iterfield=['bval_to_predict', 'bvec_to_predict'],
         name='predict_dwis',
     )
@@ -686,7 +685,7 @@ def init_dwi_model_hmc_wf(
     model_predicted_images: list
         Model-predicted images reverse-transformed into alignment with ``dwi_files``
     cnr_image: str
-        If hmc_model is 'none' this is the tsnr of the b=0 images. Otherwise it is the
+        If shoreline_model is 'none' this is the tsnr of the b=0 images. Otherwise it is the
         model fit divided by the model error in each voxel.
     optimization_data: str
         CSV file tracking the motion estimates across shoreline iterations

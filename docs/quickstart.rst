@@ -135,10 +135,7 @@ Head motion correction method
 *****************************
 
 Head motion correction is selected with ``--hmc-method``, which takes
-``eddy``, ``shoreline`` or ``tortoise``. (The deprecated ``--hmc-model``
-values map onto these: ``eddy`` is ``--hmc-method eddy``, ``tortoise`` is
-``--hmc-method tortoise``, and ``3dSHORE``/``tensor``/``none`` are
-``--hmc-method shoreline`` with the matching ``--shoreline-model``.)
+``eddy``, ``shoreline`` or ``tortoise``.
 
 Choosing ``eddy`` (the default) runs FSL's ``eddy`` for head motion correction
 and eddy current correction. This will work for single-shell and multi-shell

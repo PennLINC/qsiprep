@@ -18,22 +18,24 @@ from ...interfaces.tsnr import DWITSNR
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 # The BIDS ``model`` entity on the CNR derivative names the *signal model* the
-# CNR was computed from, not the HMC backend -- for the older backends the two
-# strings simply coincide (3dSHORE, tensor, eddy). The ``tortoise`` backend
-# breaks that: DIFFPREP itself emits no CNR, so qsiprep derives one from the
-# MAPMRI fit it already runs for slice QC, and the entity must name MAPMRI.
+# CNR was computed from, not the HMC backend: SHORELine's --shoreline-model
+# (3dshore, tensor, none), or eddy's own name. The ``tortoise`` backend breaks
+# that: DIFFPREP itself emits no CNR, so qsiprep derives one from the MAPMRI fit
+# it already runs for slice QC, and the entity must name MAPMRI.
 _CNR_MODEL_LABELS = {'tortoise': 'MAPMRI'}
 
 
-def _cnr_model_label(hmc_model):
+def _cnr_model_label(hmc_method, shoreline_model=None):
     """BIDS-safe ``model`` entity naming the signal model behind the CNR map."""
-    return _CNR_MODEL_LABELS.get(hmc_model, hmc_model)
+    if hmc_method == 'shoreline':
+        return shoreline_model
+    return _CNR_MODEL_LABELS.get(hmc_method, hmc_method)
 
 
-def _cnr_description(hmc_model):
+def _cnr_description(hmc_method):
     """Sidecar description for the CNR map, flagging DIFFPREP's in-sample fit."""
     desc = 'Contrast-to-noise ratio map for the HMC step.'
-    if hmc_model == 'tortoise':
+    if hmc_method == 'tortoise':
         desc += (
             ' DIFFPREP does not emit a CNR map, so this was computed from the '
             'MAPMRI model qsiprep fits to the corrected data for slice-wise QC. '
@@ -86,7 +88,11 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
         name='inputnode',
     )
 
-    if config.workflow.hmc_model == '3dSHORE' and config.workflow.shoreline_iters > 1:
+    if (
+        config.workflow.hmc_method == 'shoreline'
+        and config.workflow.shoreline_model == '3dshore'
+        and config.workflow.shoreline_iters > 1
+    ):
         ds_optimization = pe.Node(
             DerivativesDataSink(
                 source_file=source_file,
@@ -201,13 +207,13 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             source_file=source_file,
             base_directory=output_dir,
             space='ACPC',
-            model=_cnr_model_label(config.workflow.hmc_model),
+            model=_cnr_model_label(config.workflow.hmc_method, config.workflow.shoreline_model),
             statistic='cnr',
             suffix='dwimap',
             extension='.nii.gz',
             compress=True,
             meta_dict={
-                'Description': _cnr_description(config.workflow.hmc_model),
+                'Description': _cnr_description(config.workflow.hmc_method),
             },
         ),
         name='ds_cnr_map_t1',

@@ -26,24 +26,20 @@ def _reset_config():
     config.workflow.gradient_file = None
     config.workflow.ignore = []
     config.workflow.force = []
+    # Anything that runs the real parser leaves the method axes set, and a stray
+    # sdc_method='topup' would silently compile a plan with no DRBUDDI stage.
+    # Save them here, and restore below so this module does not pollute in turn.
+    axis_keys = {key: getattr(config.workflow, key) for key in _AXIS_KEYS}
+    config.workflow.sdc_method = None
     # The boilerplate branches on the HMC backend, so leaking this between
     # tests would silently change the text another test asserts on.
-    config.workflow.hmc_model = '3dSHORE'
-    # init_dwi_derivatives_wf reads shoreline_iters whenever hmc_model is
-    # 3dSHORE, and the config default is None (unset), not the CLI's 2 -- so
+    config.workflow.hmc_method = 'shoreline'
+    config.workflow.shoreline_model = '3dshore'
+    # init_dwi_derivatives_wf reads shoreline_iters whenever the SHORELine model
+    # is 3dshore, and the config default is None (unset), not the CLI's 2 -- so
     # without this the finalize tests only pass when some earlier test happens
     # to have left a number behind.
     config.workflow.shoreline_iters = 2
-    # The legacy keys drive these tests: the helpers below configure
-    # hmc_model/pepolar_method, but method_selection_from_config resolves
-    # ``hmc_method or hmc_model`` and ``sdc_method or pepolar_method``. Anything
-    # that runs the real parser (test_cli_run) leaves the axis keys set, and a
-    # stray sdc_method='topup' would silently compile a plan with no DRBUDDI
-    # stage. Clear them here, and restore below so this module does not pollute
-    # in turn.
-    axis_keys = {key: getattr(config.workflow, key) for key in _AXIS_KEYS}
-    for key in _AXIS_KEYS:
-        setattr(config.workflow, key, None)
     config.nipype.omp_nthreads = 1
     yield
     _reset_plan_logging()
@@ -270,14 +266,14 @@ def test_is_displacement_field_covers_every_accepted_extension(gradient_file, ex
 
 @pytest.mark.parametrize('warp_dim', ['3D', '1D'])
 @pytest.mark.parametrize(
-    ('hmc_model', 'backend'), [('eddy', 'FSL eddy'), ('tortoise', 'DIFFPREP')]
+    ('hmc_method', 'backend'), [('eddy', 'FSL eddy'), ('tortoise', 'DIFFPREP')]
 )
 def test_boilerplate_does_not_claim_single_resampling_for_preresampling_backends(
-    hmc_model, backend, warp_dim
+    hmc_method, backend, warp_dim
 ):
     from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
 
-    config.workflow.hmc_model = hmc_model
+    config.workflow.hmc_method = hmc_method
     text = gradwarp_boilerplate(warp_dim)
 
     assert 'resampled only once' not in text
@@ -286,13 +282,13 @@ def test_boilerplate_does_not_claim_single_resampling_for_preresampling_backends
 
 
 @pytest.mark.parametrize('warp_dim', ['3D', '1D'])
-@pytest.mark.parametrize('hmc_model', ['3dSHORE', 'tensor', 'none'])
+@pytest.mark.parametrize('shoreline_model', ['3dshore', 'tensor', 'none'])
 def test_boilerplate_claims_single_resampling_for_transform_preserving_backends(
-    hmc_model, warp_dim
+    shoreline_model, warp_dim
 ):
     from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
 
-    config.workflow.hmc_model = hmc_model
+    config.workflow.shoreline_model = shoreline_model
     text = gradwarp_boilerplate(warp_dim)
 
     assert 'resampled only once' in text
@@ -300,13 +296,13 @@ def test_boilerplate_claims_single_resampling_for_transform_preserving_backends(
     assert 'DIFFPREP' not in text
 
 
-@pytest.mark.parametrize('hmc_model', ['eddy', 'tortoise', '3dSHORE'])
-def test_dis3d_boilerplate_makes_no_resampling_claim_on_any_backend(hmc_model):
+@pytest.mark.parametrize('hmc_method', ['eddy', 'tortoise', 'shoreline'])
+def test_dis3d_boilerplate_makes_no_resampling_claim_on_any_backend(hmc_method):
     """A DIS3D unit gets no field, so there is nothing to have been combined
     with anything -- on any backend."""
     from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
 
-    config.workflow.hmc_model = hmc_model
+    config.workflow.hmc_method = hmc_method
     text = gradwarp_boilerplate(None)
 
     assert 'resampl' not in text
@@ -318,7 +314,7 @@ def test_forced_1d_boilerplate_does_not_attribute_the_correction_to_dis2d():
     explain the missing in-plane component with a DIS2D tag it did not see."""
     from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
 
-    config.workflow.hmc_model = 'none'
+    config.workflow.shoreline_model = 'none'
     text = gradwarp_boilerplate('1D', 'forced')
 
     assert 'DIS2D' not in text
@@ -329,7 +325,7 @@ def test_forced_3d_boilerplate_matches_the_metadata_text():
     """The 3D text makes no claim about ImageType, so forcing changes nothing."""
     from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
 
-    config.workflow.hmc_model = 'none'
+    config.workflow.shoreline_model = 'none'
 
     assert gradwarp_boilerplate('3D', 'forced') == gradwarp_boilerplate('3D')
 
@@ -508,7 +504,7 @@ def test_listify_rejects_a_list_input():
 def _finalize_cfg(tmp_path):
     config.execution.output_dir = str(tmp_path)
     config.execution.sloppy = False
-    config.workflow.pepolar_method = 'TOPUP'
+    config.workflow.sdc_method = 'topup'
     config.workflow.output_resolution = 1.2
     config.workflow.intramodal_template_iters = 0
     config.nipype.omp_nthreads = 1
@@ -568,8 +564,8 @@ def _dwi_preproc_cfg(tmp_path):
     config.execution.sloppy = False
     config.execution.layout = _StubLayout()
     config.execution.output_dir = str(tmp_path)
-    config.workflow.hmc_model = 'eddy'
-    config.workflow.pepolar_method = 'TOPUP'
+    config.workflow.hmc_method = 'eddy'
+    config.workflow.sdc_method = 'topup'
     config.workflow.b0_threshold = 100
     config.workflow.b1_biascorrect_stage = 'final'
     config.workflow.eddy_config = None
@@ -875,10 +871,10 @@ def _syn_unit(tmp_path):
     )
 
 
-def _cfg_for_fsl(tmp_path, pepolar_method):
+def _cfg_for_fsl(tmp_path, sdc_method):
     config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
-    config.workflow.hmc_model = 'eddy'
-    config.workflow.pepolar_method = pepolar_method
+    config.workflow.hmc_method = 'eddy'
+    config.workflow.sdc_method = sdc_method
     config.workflow.b0_threshold = 100
     config.workflow.eddy_config = None
     config.workflow.denoise_method = 'dwidenoise'
@@ -894,7 +890,7 @@ def _fsl_wf(tmp_path, unit):
 
 
 def test_fsl_hmc_wf_exposes_a_gradwarp_field_input(tmp_path):
-    _cfg_for_fsl(tmp_path, 'DRBUDDI')
+    _cfg_for_fsl(tmp_path, 'drbuddi')
     wf = _fsl_wf(tmp_path, _rpe_unit(tmp_path))
     assert 'gradwarp_field' in wf.get_node('inputnode').inputs.trait_get()
 
@@ -902,7 +898,7 @@ def test_fsl_hmc_wf_exposes_a_gradwarp_field_input(tmp_path):
 def test_topup_branch_does_not_gradwarp_sdc_inputs(tmp_path):
     """eddy applies the TOPUP field to raw data, so the field must be estimated
     on raw data too -- it is baked in upstream of ``ComposeTransforms``."""
-    _cfg_for_fsl(tmp_path, 'TOPUP')
+    _cfg_for_fsl(tmp_path, 'topup')
     wf = _fsl_wf(tmp_path, _rpe_unit(tmp_path))
     assert wf.get_node('gradwarp_sdc_inputs') is None
     # Positively: topup still estimates from the raw b=0 series, with nothing
@@ -913,7 +909,7 @@ def test_topup_branch_does_not_gradwarp_sdc_inputs(tmp_path):
 def test_drbuddi_branch_gradwarps_sdc_inputs(tmp_path):
     """DRBUDDI's warp is applied downstream of gradwarp, so its inputs must be
     corrected first -- matching ``DRBUDDI::Step0_CreateImages``."""
-    _cfg_for_fsl(tmp_path, 'DRBUDDI')
+    _cfg_for_fsl(tmp_path, 'drbuddi')
     wf = _fsl_wf(tmp_path, _rpe_unit(tmp_path))
 
     assert wf.get_node('gradwarp_sdc_inputs') is not None
@@ -936,7 +932,7 @@ def test_drbuddi_plus_topup_still_gradwarps_the_drbuddi_inputs(tmp_path):
     DRBUDDI then runs on that output and its warp still lands in
     ``to_dwi_ref_warps`` -- downstream of gradwarp.
     """
-    _cfg_for_fsl(tmp_path, 'DRBUDDI+TOPUP')
+    _cfg_for_fsl(tmp_path, 'drbuddi+topup')
     wf = _fsl_wf(tmp_path, _rpe_unit(tmp_path))
 
     assert wf.get_node('topup') is not None
@@ -947,7 +943,7 @@ def test_drbuddi_plus_topup_still_gradwarps_the_drbuddi_inputs(tmp_path):
 
 def test_fsl_syn_branch_gradwarps_the_sdc_reference(tmp_path):
     """SyN's warp stays in ``to_dwi_ref_warps``, so estimate it on corrected b0s."""
-    _cfg_for_fsl(tmp_path, 'DRBUDDI')
+    _cfg_for_fsl(tmp_path, 'drbuddi')
     wf = _fsl_wf(tmp_path, _syn_unit(tmp_path))
 
     assert _connects(wf, 'gradwarp_sdc_inputs', 'sdc_wf', 'output_image', 'inputnode.b0_ref')
@@ -969,7 +965,7 @@ def test_gradwarp_sdc_resampling_nodes_write_float(tmp_path):
     (``resampling.py``, ``diffprep.py``); without it these would be the only
     double-precision per-volume nodes in the pipeline.
     """
-    _cfg_for_fsl(tmp_path, 'DRBUDDI')
+    _cfg_for_fsl(tmp_path, 'drbuddi')
     wf = _fsl_wf(tmp_path, _syn_unit(tmp_path))
 
     for name in ('gradwarp_sdc_inputs', 'gradwarp_sdc_inputs_brain', 'gradwarp_sdc_inputs_mask'):
@@ -978,7 +974,7 @@ def test_gradwarp_sdc_resampling_nodes_write_float(tmp_path):
 
 def test_gradwarp_sdc_resampling_honours_sloppy(tmp_path):
     """Matches the adjacent per-volume ApplyTransforms in hmc_sdc.py."""
-    _cfg_for_fsl(tmp_path, 'DRBUDDI')
+    _cfg_for_fsl(tmp_path, 'drbuddi')
     config.execution.sloppy = True
     try:
         wf = _fsl_wf(tmp_path, _syn_unit(tmp_path))
@@ -988,7 +984,7 @@ def test_gradwarp_sdc_resampling_honours_sloppy(tmp_path):
 
 
 def test_no_gradwarp_node_without_a_coefficient_file(tmp_path):
-    _cfg_for_fsl(tmp_path, 'DRBUDDI')
+    _cfg_for_fsl(tmp_path, 'drbuddi')
     config.workflow.gradient_file = None
     wf = _fsl_wf(tmp_path, _rpe_unit(tmp_path))
     assert wf.get_node('gradwarp_sdc_inputs') is None
@@ -996,17 +992,17 @@ def test_no_gradwarp_node_without_a_coefficient_file(tmp_path):
 
 def test_dis3d_does_not_gradwarp_sdc_inputs(tmp_path):
     """No spatial correction means nothing to apply before SDC estimation."""
-    _cfg_for_fsl(tmp_path, 'DRBUDDI')
+    _cfg_for_fsl(tmp_path, 'drbuddi')
     wf = _fsl_wf(tmp_path, _rpe_unit(tmp_path, ['ORIGINAL', 'DIS3D']))
     assert wf.get_node('gradwarp_sdc_inputs') is None
 
 
 def _cfg_for_diffprep(tmp_path):
     config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
-    config.workflow.hmc_model = 'tortoise'
+    config.workflow.hmc_method = 'tortoise'
     config.workflow.diffprep_config = None
     config.workflow.b0_threshold = 100
-    config.workflow.pepolar_method = 'DRBUDDI'
+    config.workflow.sdc_method = 'drbuddi'
     config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
     config.workflow.gpu = None
     config.execution.sloppy = False
@@ -1072,7 +1068,7 @@ def test_topup_only_branch_gradwarps_the_coregistration_reference(tmp_path):
     """eddy has already applied TOPUP's field to this image, so gradwarp is the
     only transform still missing before coregistration. Correcting it does not
     touch TOPUP, whose own inputs stay raw (asserted separately above)."""
-    _cfg_for_fsl(tmp_path, 'TOPUP')
+    _cfg_for_fsl(tmp_path, 'topup')
     wf = _fsl_wf(tmp_path, _rpe_unit(tmp_path))
 
     assert _connects(wf, 'gradwarp_coreg_ref', 'outputnode', 'output_image', 'b0_template')
@@ -1083,7 +1079,7 @@ def test_topup_only_branch_gradwarps_the_coregistration_reference(tmp_path):
 
 
 def test_fsl_no_fieldmap_branch_gradwarps_the_coregistration_reference(tmp_path):
-    _cfg_for_fsl(tmp_path, 'TOPUP')
+    _cfg_for_fsl(tmp_path, 'topup')
     wf = _fsl_wf(tmp_path, _plain_unit(tmp_path))
 
     assert _connects(wf, 'gradwarp_coreg_ref', 'outputnode', 'output_image', 'b0_template')
@@ -1095,7 +1091,7 @@ def test_fsl_no_fieldmap_branch_gradwarps_the_coregistration_reference(tmp_path)
 @pytest.mark.parametrize('unit_factory', [_rpe_unit, _plain_unit])
 def test_fsl_dis3d_leaves_the_coregistration_reference_raw(tmp_path, unit_factory):
     """No field means nothing to apply -- the node must not be built."""
-    _cfg_for_fsl(tmp_path, 'TOPUP')
+    _cfg_for_fsl(tmp_path, 'topup')
     wf = _fsl_wf(tmp_path, unit_factory(tmp_path, ['ORIGINAL', 'DIS3D']))
 
     assert wf.get_node('gradwarp_coreg_ref') is None
@@ -1146,12 +1142,13 @@ def test_diffprep_t2wreg_without_gradwarp_applies_sdc_alone(tmp_path):
 
 def _cfg_for_shoreline(tmp_path):
     config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
-    config.workflow.hmc_model = '3dSHORE'
+    config.workflow.hmc_method = 'shoreline'
+    config.workflow.shoreline_model = '3dshore'
     config.workflow.hmc_transform = 'Affine'
     config.workflow.shoreline_iters = 2
     config.workflow.b0_threshold = 100
     config.workflow.b0_motion_corr_to = 'iterative'
-    config.workflow.pepolar_method = 'DRBUDDI'
+    config.workflow.sdc_method = 'drbuddi'
     config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
     config.execution.sloppy = False
     config.nipype.omp_nthreads = 1

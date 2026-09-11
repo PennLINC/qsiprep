@@ -78,7 +78,7 @@ def _load_diffprep_config(config_path):
     cfg.setdefault('is_human_brain', True)
     cfg.setdefault('rot_eddy_center', 'isocenter')
     cfg.setdefault('extra_args', [])
-    # --hmc-model exposes a single "tortoise" value, so this is the only way to
+    # --hmc-method exposes a single "tortoise" value, so this is the only way to
     # reach DIFFPREP's rigid-only ('motion') or 'cubic' eddy modes.
     cfg.setdefault('correction_mode', 'quadratic')
     # No default for "use_cuda": its absence must stay observable so a shipped

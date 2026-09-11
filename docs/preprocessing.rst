@@ -718,7 +718,7 @@ head-motion backend.
 With QSIPrep's own model-based HMC the motion transforms are carried, not
 applied, so head motion, gradwarp, susceptibility distortion and coregistration
 are all combined into a single interpolation of the raw data.
-``--hmc-model eddy`` and ``--hmc-model tortoise`` instead write out
+``--hmc-method eddy`` and ``--hmc-method tortoise`` instead write out
 motion- and eddy-corrected volumes before QSIPrep's resampling runs, so the
 data are interpolated twice: once by that backend, and once by the composed
 gradwarp/SDC/coregistration transform.
@@ -788,7 +788,7 @@ since it addresses a completely separate problem
      the ``*_graddev.json`` sidecar.
 
    - **TORTOISE's fieldmap-less T2Wreg path is not gradwarp-corrected.**
-     When ``--hmc-model tortoise`` is used with no fieldmap and a T2w
+     When ``--hmc-method tortoise`` is used with no fieldmap and a T2w
      structural image is available, susceptibility distortion is estimated
      by TORTOISE's own ``T2Wreg`` registration, running entirely inside the
      ``TORTOISEProcess``/``DIFFPREP`` binary, so QSIPrep has no opportunity to
