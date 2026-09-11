@@ -436,6 +436,7 @@ def test_gradient_plot_emits_inline_scheme(tmp_path, monkeypatch):
         ('1D', 'metadata', 'through-plane only (ImageType: DIS2D)'),
         (None, 'metadata', 'b-matrix only (ImageType: DIS3D)'),
         ('3D', 'forced', 'forced 3D'),
+        ('1D', 'forced', 'forced 1D'),
     ],
 )
 def test_describe_gradient_correction(warp_dim, basis, expected):

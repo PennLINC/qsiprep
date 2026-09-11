@@ -407,7 +407,10 @@ def collect_data(
         't2w': {'datatype': 'anat', 'suffix': 'T2w'},
         't1w': {'datatype': 'anat', 'suffix': 'T1w'},
         'roi': {'datatype': 'anat', 'suffix': 'roi'},
-        'dwi': {'datatype': 'dwi', 'part': ['mag', None], 'suffix': 'dwi'},
+        # Collect every part; qsiplan's grouping performs the authoritative
+        # split (a part-phase file becomes its magnitude's companion, real/imag
+        # are dropped with a warning), so we must not pre-filter on part here.
+        'dwi': {'datatype': 'dwi', 'suffix': 'dwi'},
     }
     bids_filters = filters or {}
     for acq in queries.keys():
