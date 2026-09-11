@@ -1627,6 +1627,22 @@ def test_gre_eddy_mbs_feeds_the_fieldmap_into_eddy(tmp_path, monkeypatch):
     assert not _connects(wf, 'sdc_wf', 'outputnode', 'outputnode.out_warp', 'to_dwi_ref_warps')
 
 
+def test_gre_field_sent_to_eddy_is_the_registered_hz_map(tmp_path, monkeypatch):
+    """eddy ``--field`` gets the registered fieldmap in Hz with no rescaling.
+
+    ``fmap2ref_apply`` already yields Hz on the reference grid, so any unit
+    conversion between it and ``out_hz`` changes the correction strength.
+    """
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    _cfg_gre(True)
+    wf = _fsl_wf(tmp_path, _phasediff_unit())
+    unwarp = wf.get_node('sdc_wf.sdc_unwarp_wf')
+
+    assert _connects(unwarp, 'fmap2ref_apply', 'outputnode', 'output_image', 'out_hz')
+    assert 'tohz' not in {node.name for node in unwarp._graph.nodes}
+    assert _connects(wf, 'sdc_wf', 'eddy', 'outputnode.fieldmap_hz', 'field')
+
+
 def test_gre_without_the_flag_applies_the_field_after_eddy(tmp_path, monkeypatch):
     """Default GRE behavior is unchanged: the warp is applied after eddy."""
     from nipype.interfaces.base import isdefined
