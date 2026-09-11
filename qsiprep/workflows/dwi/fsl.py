@@ -602,36 +602,81 @@ def init_fsl_hmc_wf(
         outputnode.inputs.sdc_method = fieldmap_type
         b0_sdc_wf = init_sdc_wf(unit)
 
-        # Send to SDC workflow
-        if has_gradwarp:
-            connect_gradwarp_sdc_reference(
-                workflow,
-                inputnode,
-                b0_ref_for_coreg,
-                ('outputnode.ref_image', 'outputnode.ref_image_brain', 'outputnode.dwi_mask'),
-                b0_sdc_wf,
+        # Optionally hand a GRE fieldmap to eddy via --field, so eddy corrects
+        # susceptibility distortion in-run and can estimate movement-by-
+        # susceptibility -- rather than applying the field after eddy. This needs
+        # the field estimated on a PRE-eddy reference (b0_ref_for_coreg is built
+        # from eddy's own output, so feeding it to eddy would be circular). Not
+        # yet wired for the gradient-unwarp case.
+        gre_to_eddy = unit.is_gre and config.workflow.gre_eddy_mbs and not has_gradwarp
+        if unit.is_gre and config.workflow.gre_eddy_mbs and has_gradwarp:
+            config.loggers.workflow.warning(
+                'gre_eddy_mbs is not yet supported together with gradient '
+                'unwarping; applying the GRE fieldmap after eddy instead.'
             )
-        else:
+
+        if gre_to_eddy:
+            # Register the field's reference to eddy's first volume for --field_mat.
+            gre_to_eddy_reg = pe.Node(
+                fsl.FLIRT(dof=6, output_type='NIFTI_GZ'), name='gre_to_eddy_reg'
+            )
+            eddy.inputs.estimate_move_by_susceptibility = True
             workflow.connect([
-                (b0_ref_for_coreg, b0_sdc_wf, [
+                # Estimate the fieldmap on the pre-eddy b=0 reference (the same
+                # distorted reference the non-TOPUP path already builds for eddy's
+                # mask), rather than the post-eddy b0_ref_for_coreg.
+                (pre_eddy_b0_ref_wf, b0_sdc_wf, [
                     ('outputnode.ref_image', 'inputnode.b0_ref'),
                     ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
                     ('outputnode.dwi_mask', 'inputnode.b0_mask'),
                 ]),
+                (inputnode, b0_sdc_wf, [
+                    ('t1_brain', 'inputnode.t1_brain'),
+                    ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
+                ]),
+                # Hand eddy the fieldmap in Hz (its --field convention matches
+                # FUGUE, so no sign flip) plus the field->eddy rigid transform.
+                (b0_sdc_wf, gre_to_eddy_reg, [('outputnode.b0_ref', 'in_file')]),
+                (gather_inputs, gre_to_eddy_reg, [('eddy_first', 'reference')]),
+                (b0_sdc_wf, eddy, [('outputnode.fieldmap_hz', 'field')]),
+                (gre_to_eddy_reg, eddy, [('out_matrix_file', 'field_mat')]),
+                # eddy now bakes in the SDC -- the corrected b=0 comes from
+                # b0_ref_for_coreg, and out_warp is deliberately NOT applied
+                # downstream (that would double-correct).
+                (b0_sdc_wf, outputnode, [('outputnode.method', 'sdc_method')]),
+                (b0_ref_for_coreg, outputnode, [('outputnode.ref_image', 'b0_template')]),
             ])  # fmt:skip
+        else:
+            # Send to SDC workflow (applied after eddy).
+            if has_gradwarp:
+                connect_gradwarp_sdc_reference(
+                    workflow,
+                    inputnode,
+                    b0_ref_for_coreg,
+                    ('outputnode.ref_image', 'outputnode.ref_image_brain', 'outputnode.dwi_mask'),
+                    b0_sdc_wf,
+                )
+            else:
+                workflow.connect([
+                    (b0_ref_for_coreg, b0_sdc_wf, [
+                        ('outputnode.ref_image', 'inputnode.b0_ref'),
+                        ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
+                        ('outputnode.dwi_mask', 'inputnode.b0_mask'),
+                    ]),
+                ])  # fmt:skip
 
-        workflow.connect([
-            (inputnode, b0_sdc_wf, [
-                ('t1_brain', 'inputnode.t1_brain'),
-                ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-            ]),
-            # These deformations will be applied later, use the unwarped image now
-            (b0_sdc_wf, outputnode, [
-                ('outputnode.out_warp', 'to_dwi_ref_warps'),
-                ('outputnode.method', 'sdc_method'),
-                ('outputnode.b0_ref', 'b0_template'),
-            ]),
-        ])  # fmt:skip
+            workflow.connect([
+                (inputnode, b0_sdc_wf, [
+                    ('t1_brain', 'inputnode.t1_brain'),
+                    ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
+                ]),
+                # These deformations will be applied later, use the unwarped image now
+                (b0_sdc_wf, outputnode, [
+                    ('outputnode.out_warp', 'to_dwi_ref_warps'),
+                    ('outputnode.method', 'sdc_method'),
+                    ('outputnode.b0_ref', 'b0_template'),
+                ]),
+            ])  # fmt:skip
 
     if not fieldmap_type:
         outputnode.inputs.sdc_method = 'None'

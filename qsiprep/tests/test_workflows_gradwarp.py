@@ -1571,3 +1571,72 @@ def test_eddy_summary_leaves_hmc_transform_undefined(tmp_path):
     # _dwi_preproc_cfg sets this, standing in for a stale value.
     assert config.workflow.hmc_transform == 'Affine'
     assert not isdefined(wf.get_node('summary').inputs.hmc_transform)
+
+
+# --- GRE fieldmap -> eddy --field (movement-by-susceptibility) ---------------
+
+
+def _phasediff_unit():
+    from qsiplan.models import CorrectionMethod
+
+    dwi = '/data/sub-01_dwi.nii.gz'
+    return make_preproc_unit(
+        [dwi],
+        method=CorrectionMethod.PHASEDIFF,
+        pe_dir='j',
+        estimation_sources=[
+            '/data/sub-01_phasediff.nii.gz',
+            '/data/sub-01_magnitude1.nii.gz',
+        ],
+    )
+
+
+def _cfg_gre(gre_eddy_mbs):
+    config.workflow.hmc_method = 'eddy'
+    config.workflow.sdc_method = 'topup'
+    config.workflow.b0_threshold = 100
+    config.workflow.eddy_config = None
+    config.workflow.denoise_method = 'dwidenoise'
+    config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
+    config.workflow.gradient_file = None  # no gradient unwarping
+    config.workflow.gre_eddy_mbs = gre_eddy_mbs
+    config.execution.sloppy = False
+    config.nipype.omp_nthreads = 1
+
+
+def _incoming(wf, dst_name):
+    return {
+        dest
+        for _s, d, meta in wf._graph.edges(data=True)
+        if d.name == dst_name
+        for _src, dest in meta['connect']
+    }
+
+
+def test_gre_eddy_mbs_feeds_the_fieldmap_into_eddy(tmp_path, monkeypatch):
+    """With gre_eddy_mbs, the GRE fieldmap goes to eddy --field for MBS."""
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    _cfg_gre(True)
+    wf = _fsl_wf(tmp_path, _phasediff_unit())
+    eddy = next(n for n in wf._get_all_nodes() if n.name == 'eddy')
+
+    assert {'field', 'field_mat'} <= _incoming(wf, 'eddy')
+    assert eddy.inputs.estimate_move_by_susceptibility is True
+    assert any(n.name == 'gre_to_eddy_reg' for n in wf._get_all_nodes())
+    # eddy now bakes in the SDC: the field must NOT also be applied after eddy.
+    assert not _connects(wf, 'sdc_wf', 'outputnode', 'outputnode.out_warp', 'to_dwi_ref_warps')
+
+
+def test_gre_without_the_flag_applies_the_field_after_eddy(tmp_path, monkeypatch):
+    """Default GRE behavior is unchanged: the warp is applied after eddy."""
+    from nipype.interfaces.base import isdefined
+
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    _cfg_gre(False)
+    wf = _fsl_wf(tmp_path, _phasediff_unit())
+    eddy = next(n for n in wf._get_all_nodes() if n.name == 'eddy')
+
+    assert _connects(wf, 'sdc_wf', 'outputnode', 'outputnode.out_warp', 'to_dwi_ref_warps')
+    assert 'field' not in _incoming(wf, 'eddy')
+    assert not isdefined(eddy.inputs.field)
+    assert not any(n.name == 'gre_to_eddy_reg' for n in wf._get_all_nodes())

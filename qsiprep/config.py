@@ -616,6 +616,14 @@ class workflow(_Config):
     sdc_method = None
     """Which tool corrects susceptibility distortion for PEPOLAR data:
     topup, drbuddi or topup+drbuddi (the parser resolves ``auto``)."""
+    gre_eddy_mbs = False
+    """Feed a GRE (phase-difference) fieldmap into FSL eddy via ``--field`` so
+    eddy corrects susceptibility distortion in-run and estimates movement-by-
+    susceptibility, instead of applying the GRE fieldmap after eddy. Only affects
+    the eddy HMC path on a series whose fieldmap is GRE. The fieldmap is in Hz and
+    fed as-is: eddy's ``--field`` sign convention matches FUGUE (validated against
+    a FUGUE-forward-distorted ground truth), and the PE polarity is carried by the
+    acqp, so one field serves either phase-encoding direction."""
     separate_all_dwis = False
     """Process all dwis separately - do not attempt concatenation."""
     shoreline_config = None
