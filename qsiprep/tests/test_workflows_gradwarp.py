@@ -1640,3 +1640,27 @@ def test_gre_without_the_flag_applies_the_field_after_eddy(tmp_path, monkeypatch
     assert 'field' not in _incoming(wf, 'eddy')
     assert not isdefined(eddy.inputs.field)
     assert not any(n.name == 'gre_to_eddy_reg' for n in wf._get_all_nodes())
+
+
+def test_gre_eddy_mbs_with_gradwarp_still_feeds_eddy(tmp_path, monkeypatch):
+    """Gradient unwarping no longer blocks the GRE field from entering eddy.
+
+    eddy applies the field in the raw, gradient-distorted frame (exactly like
+    TOPUP's field) and gradient unwarping is composed downstream; only the
+    coregistration reference is gradwarp-corrected, mirroring the TOPUP-only
+    branch.
+    """
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    _cfg_gre(True)
+    config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
+    wf = _fsl_wf(tmp_path, _phasediff_unit())
+    eddy = next(n for n in wf._get_all_nodes() if n.name == 'eddy')
+
+    # Guard lifted: the field still enters eddy even with gradient unwarping.
+    assert {'field', 'field_mat'} <= _incoming(wf, 'eddy')
+    assert eddy.inputs.estimate_move_by_susceptibility is True
+    assert any(n.name == 'gre_to_eddy_reg' for n in wf._get_all_nodes())
+    # No double SDC: the field is not also applied after eddy.
+    assert not _connects(wf, 'sdc_wf', 'outputnode', 'outputnode.out_warp', 'to_dwi_ref_warps')
+    # The coregistration reference is gradwarp-corrected (TOPUP-branch style).
+    assert any(n.name == 'gradwarp_coreg_ref' for n in wf._get_all_nodes())

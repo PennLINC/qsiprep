@@ -606,14 +606,10 @@ def init_fsl_hmc_wf(
         # susceptibility distortion in-run and can estimate movement-by-
         # susceptibility -- rather than applying the field after eddy. This needs
         # the field estimated on a PRE-eddy reference (b0_ref_for_coreg is built
-        # from eddy's own output, so feeding it to eddy would be circular). Not
-        # yet wired for the gradient-unwarp case.
-        gre_to_eddy = unit.is_gre and config.workflow.gre_eddy_mbs and not has_gradwarp
-        if unit.is_gre and config.workflow.gre_eddy_mbs and has_gradwarp:
-            config.loggers.workflow.warning(
-                'gre_eddy_mbs is not yet supported together with gradient '
-                'unwarping; applying the GRE fieldmap after eddy instead.'
-            )
+        # from eddy's own output, so feeding it to eddy would be circular). The
+        # field is fed in the raw, gradient-distorted frame exactly like TOPUP's
+        # field, so gradient unwarping (applied downstream) composes correctly.
+        gre_to_eddy = unit.is_gre and config.workflow.gre_eddy_mbs
 
         if gre_to_eddy:
             # Register the field's reference to eddy's first volume for --field_mat.
@@ -640,12 +636,21 @@ def init_fsl_hmc_wf(
                 (gather_inputs, gre_to_eddy_reg, [('eddy_first', 'reference')]),
                 (b0_sdc_wf, eddy, [('outputnode.fieldmap_hz', 'field')]),
                 (gre_to_eddy_reg, eddy, [('out_matrix_file', 'field_mat')]),
-                # eddy now bakes in the SDC -- the corrected b=0 comes from
-                # b0_ref_for_coreg, and out_warp is deliberately NOT applied
-                # downstream (that would double-correct).
+                # eddy now bakes in the SDC in the raw frame -- out_warp is
+                # deliberately NOT applied downstream (that would double-correct).
                 (b0_sdc_wf, outputnode, [('outputnode.method', 'sdc_method')]),
-                (b0_ref_for_coreg, outputnode, [('outputnode.ref_image', 'b0_template')]),
             ])  # fmt:skip
+            # The coregistration reference still needs gradient unwarping; the
+            # DWI receives it from the composed gradwarp field, exactly as the
+            # TOPUP-only branch handles its eddy-baked field.
+            if has_gradwarp:
+                connect_gradwarp_coreg_reference(
+                    workflow, inputnode, b0_ref_for_coreg, 'outputnode.ref_image', outputnode
+                )
+            else:
+                workflow.connect([
+                    (b0_ref_for_coreg, outputnode, [('outputnode.ref_image', 'b0_template')]),
+                ])  # fmt:skip
         else:
             # Send to SDC workflow (applied after eddy).
             if has_gradwarp:
