@@ -91,6 +91,15 @@ def test_forcing_both_dimensionalities_is_rejected():
         resolve_gradwarp_plan(_unit())
 
 
+def test_repeating_one_dimensionality_is_not_a_contradiction():
+    """One dimensionality named twice is still one dimensionality."""
+    config.workflow.gradient_file = COEFF
+    config.workflow.force = ['gradwarp1D', 'gradwarp1D']
+    plan = resolve_gradwarp_plan(_unit())
+    assert plan.warp_dim == '1D'
+    assert plan.basis == 'forced'
+
+
 def test_force_leaves_unrelated_force_values_alone():
     """--force takes a list; a non-gradwarp value must not pin anything."""
     config.workflow.gradient_file = COEFF

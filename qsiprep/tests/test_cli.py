@@ -937,6 +937,48 @@ def test_parser_accepts_ignore_gradwarp(tmp_path):
     assert opts.ignore == ['gradwarp']
 
 
+def test_repeated_force_accumulates(tmp_path):
+    """action='store' would keep only the last occurrence, so
+    "--force gradwarp1D --force gradwarp3D" would reach the validator as a
+    single value and silently apply 3D instead of being rejected."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    opts = parser.parse_args(
+        [
+            str(bids),
+            str(out),
+            'participant',
+            '--force',
+            'gradwarp1D',
+            '--force',
+            'gradwarp3D',
+            '--output-resolution',
+            '2',
+        ]
+    )
+    assert opts.force == ['gradwarp1D', 'gradwarp3D']
+
+
+def test_repeated_force_does_not_leak_between_parses(tmp_path):
+    """action='extend' appends to whatever is on the namespace, so a shared
+    mutable default would carry one parse's values into the next."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    base = [str(bids), str(out), 'participant', '--output-resolution', '2']
+
+    assert parser.parse_args([*base, '--force', 'gradwarp1D']).force == ['gradwarp1D']
+    assert parser.parse_args([*base, '--force', 'gradwarp3D']).force == ['gradwarp3D']
+    assert parser.parse_args(base).force == []
+
+
 @pytest.mark.parametrize('flag', ['--force', '--ignore'])
 def test_parser_rejects_the_old_gradients_value(tmp_path, flag):
     """The pre-rename spelling must fail loudly rather than be silently ignored."""
@@ -1030,6 +1072,16 @@ def test_validate_gradient_flags_rejects_both_forced_dimensionalities(tmp_path):
     coeff = write_siemens_grad(tmp_path / 'coeff.grad')
     with pytest.raises(ValueError, match='mutually exclusive'):
         validate_gradient_flags(str(coeff), force=['gradwarp3D', 'gradwarp1D'], ignore=[])
+
+
+@pytest.mark.parametrize('forced', ['gradwarp1D', 'gradwarp3D'])
+def test_validate_gradient_flags_accepts_a_repeated_identical_dimensionality(tmp_path, forced):
+    """ "--force gradwarp1D gradwarp1D" names one dimensionality, not two."""
+    from qsiprep.tests.gradient_fixtures import write_siemens_grad
+    from qsiprep.utils.misc import validate_gradient_flags
+
+    coeff = write_siemens_grad(tmp_path / 'coeff.grad')
+    validate_gradient_flags(str(coeff), force=[forced, forced], ignore=[])
 
 
 @pytest.mark.parametrize('forced', ['gradwarp1D', 'gradwarp3D'])

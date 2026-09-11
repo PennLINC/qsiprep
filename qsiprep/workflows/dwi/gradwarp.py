@@ -156,7 +156,8 @@ def _forced_warp_dim():
     ``config.workflow.force`` can also be set from a loaded config file, which
     never passes through the CLI validator.
     """
-    forced = sorted(value for value in (config.workflow.force or []) if value in _FORCED_WARP_DIMS)
+    requested = config.workflow.force or []
+    forced = sorted({value for value in requested if value in _FORCED_WARP_DIMS})
     if len(forced) > 1:
         raise ValueError(
             f'"--force {forced[0]}" and "--force {forced[1]}" are mutually exclusive: '

@@ -468,7 +468,8 @@ def validate_gradient_flags(gradient_file, force, ignore):
     from .. import config
 
     # argparse's choices constrain these to "gradwarp1D" and "gradwarp3D".
-    forced_gradwarp = sorted(value for value in force if value.startswith('gradwarp'))
+    # Deduplicated: "--force gradwarp1D gradwarp1D" names one dimensionality.
+    forced_gradwarp = sorted({value for value in force if value.startswith('gradwarp')})
     ignoring_gradwarp = 'gradwarp' in ignore
 
     if len(forced_gradwarp) > 1:
