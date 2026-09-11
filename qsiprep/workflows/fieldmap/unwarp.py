@@ -23,7 +23,7 @@ from nipype.interfaces import ants, fsl
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-from niworkflows.interfaces.nibabel import DemeanImage, FilledImageLike
+from niworkflows.interfaces.nibabel import FilledImageLike
 from niworkflows.interfaces.reportlets.registration import (
     ANTSApplyTransformsRPT,
     ANTSRegistrationRPT,
