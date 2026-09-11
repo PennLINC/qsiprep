@@ -368,19 +368,14 @@ def test_replacement_option_is_not_deprecated(minimal_args, capsys, flag, option
     assert getattr(opts, _dest(option)) == value
 
 
-def test_prefer_dedicated_fmaps_warns_and_is_ignored(minimal_args, capsys):
-    """The flag is gone from the workflow, so it only warns."""
+def test_prefer_dedicated_fmaps_is_removed(minimal_args, capsys):
+    """The deprecated flag is no longer accepted by the parser."""
     from qsiprep.cli.parser import _build_parser
 
-    opts = _build_parser().parse_args([*minimal_args, '--prefer-dedicated-fmaps'])
+    with pytest.raises(SystemExit):
+        _build_parser().parse_args([*minimal_args, '--prefer-dedicated-fmaps'])
 
-    warning = capsys.readouterr().err
-    assert '--prefer-dedicated-fmaps' in warning
-    assert 'no effect' in warning
-    assert 'B0FieldIdentifier' in warning
-    # It now points at the flag that actually does what it was meant to.
-    assert '--ignore pepolar-dwis' in warning
-    assert not hasattr(opts, 'prefer_dedicated_fmaps')
+    assert 'unrecognized arguments: --prefer-dedicated-fmaps' in capsys.readouterr().err
 
 
 @pytest.mark.parametrize('value', ['iterative', 'first'])

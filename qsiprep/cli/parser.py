@@ -59,14 +59,6 @@ def _build_parser(**kwargs):
     deprecations = {
         '--dwi-only': ('27.0.0', 'Enabling `--anat-modality none` instead.'),
         '--dwi-no-biascorr': ('27.0.0', 'Enabling `--b1-biascorrect-stage none` instead.'),
-        '--prefer-dedicated-fmaps': (
-            '27.0.0',
-            'It has no effect. To keep reverse phase-encoded DWI runs from being paired '
-            'into a PEPOLAR fieldmap (preferring a dedicated fieldmap instead), pass '
-            '"--ignore pepolar-dwis"; which fieldmap is applied to which DWI series is '
-            'otherwise determined by the fieldmaps\' "B0FieldIdentifier"/"B0FieldSource" '
-            '(or "IntendedFor") metadata.',
-        ),
         '--hmc-model': (
             '27.0.0',
             'Use `--hmc-method` instead (with `--shoreline-model` for the '
@@ -942,16 +934,6 @@ How to combine the corrected results of an output's correction units.
 
     # Fieldmap options
     g_fmap = parser.add_argument_group('Specific options for handling fieldmaps')
-    g_fmap.add_argument(
-        '--prefer-dedicated-fmaps',
-        action=DeprecatedAction,
-        default=SUPPRESS,
-        help='DEPRECATED: this flag has no effect. To keep reverse phase-encoded DWI runs '
-        'from being paired into a PEPOLAR fieldmap (preferring a dedicated fieldmap '
-        'instead), use "--ignore pepolar-dwis"; which fieldmap is applied to which DWI '
-        'series is otherwise determined by the fieldmaps\' "B0FieldIdentifier"/'
-        '"B0FieldSource" (or "IntendedFor") metadata.',
-    )
     g_sdc_method = g_fmap.add_mutually_exclusive_group()
     g_sdc_method.add_argument(
         '--sdc-method',
