@@ -302,7 +302,6 @@ def _dest(option):
 # (deprecated flag, the option it enables, the value that option is set to)
 FORWARDED_FLAGS = [
     ('--dwi-only', '--anat-modality', 'none'),
-    ('--longitudinal', '--subject-anatomical-reference', 'unbiased'),
     ('--dwi-no-biascorr', '--b1-biascorrect-stage', 'none'),
 ]
 
