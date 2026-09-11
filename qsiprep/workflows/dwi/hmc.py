@@ -719,12 +719,13 @@ def init_dwi_model_hmc_wf(
     model_description = _SHORELINE_MODEL_DESCRIPTIONS.get(
         config.workflow.hmc_model, config.workflow.hmc_model
     )
+    iterations_run = 'iteration was' if num_iters == 1 else 'iterations were'
     workflow.__desc__ = (
         'The SHORELine method was used to estimate head motion in b>0 '
         'images. This entails leaving out each b>0 image and reconstructing '
         f'the others using {model_description}. The signal for the left-'
         f'out image serves as the registration target. A total of {num_iters} '
-        f'iterations were run using a {config.workflow.hmc_transform} transform. '
+        f'{iterations_run} run using the {config.workflow.hmc_transform} transform. '
     )
 
     # Merge b0s into a single volume, put the non-b0 dwis into a list

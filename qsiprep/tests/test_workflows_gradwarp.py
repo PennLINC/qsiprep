@@ -1494,7 +1494,7 @@ def test_shoreline_iters_sets_the_model_iteration_count(tmp_path):
     assert model_wf.get_node('shoreline_iteration002') is not None
     assert model_wf.get_node('shoreline_iteration003') is None
     assert model_wf.get_node('summarize_iterations') is not None
-    assert 'A total of 3 iterations' in model_wf.__desc__
+    assert 'A total of 3 iterations were run' in model_wf.__desc__
 
 
 def test_single_shoreline_iteration_skips_the_iteration_summary(tmp_path):
@@ -1505,7 +1505,7 @@ def test_single_shoreline_iteration_skips_the_iteration_summary(tmp_path):
     assert model_wf.get_node('initial_model_iteration') is not None
     assert model_wf.get_node('shoreline_iteration001') is None
     assert model_wf.get_node('summarize_iterations') is None
-    assert 'A total of 1 iterations' in model_wf.__desc__
+    assert 'A total of 1 iteration was run' in model_wf.__desc__
 
 
 @pytest.mark.parametrize(
@@ -1526,7 +1526,7 @@ def test_shoreline_methods_text_names_the_model_and_transform(
     wf = init_dwi_model_hmc_wf(num_iters=2)
     assert expected in wf.__desc__
     assert unexpected not in wf.__desc__
-    assert 'using a Rigid transform' in wf.__desc__
+    assert 'using the Rigid transform' in wf.__desc__
 
 
 def test_eddy_summary_leaves_hmc_transform_undefined(tmp_path):
