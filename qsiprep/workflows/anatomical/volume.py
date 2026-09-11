@@ -388,6 +388,49 @@ FreeSurfer version {FS_VERSION}. """
 
     anchor_label_resolution = _label_resolution(acpc_anchor)
 
+    # Resampling into the anchor's ACPC frame. These are declared here, above the
+    # standard-space fan-out, because that loop connects from them: workflow.connect
+    # evaluates immediately, so a declaration further down would be an
+    # UnboundLocalError for every non-anchor space.
+    rigid_acpc_resample_brain = pe.Node(
+        ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
+        name='rigid_acpc_resample_brain',
+    )
+    rigid_acpc_resample_head = pe.Node(
+        ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
+        name='rigid_acpc_resample_head',
+    )
+    rigid_acpc_resample_unfatsat = pe.Node(
+        ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
+        name='rigid_acpc_resample_unfatsat',
+    )
+    rigid_acpc_resample_aseg = pe.Node(
+        ants.ApplyTransforms(input_image_type=0, interpolation='MultiLabel'),
+        name='rigid_acpc_resample_aseg',
+    )
+    rigid_acpc_resample_mask = pe.Node(
+        ants.ApplyTransforms(input_image_type=0, interpolation='MultiLabel'),
+        name='rigid_acpc_resample_mask',
+    )
+
+    if has_rois:
+        # Resampled once here rather than inside each normalization: with
+        # moving_is_acpc the per-space workflows no longer estimate the rigid
+        # transform that resampling needs.
+        rigid_acpc_resample_roi = pe.Node(
+            ants.ApplyTransforms(input_image_type=0, interpolation='MultiLabel'),
+            name='rigid_acpc_resample_roi',
+        )
+        workflow.connect([
+            (inputnode, rigid_acpc_resample_roi, [('roi', 'input_image')]),
+            (anchor_lps_wf, rigid_acpc_resample_roi, [
+                ('outputnode.template_lps', 'reference_image'),
+            ]),
+            (anat_normalization_wf, rigid_acpc_resample_roi, [
+                ('outputnode.to_template_rigid_transform', 'transforms'),
+            ]),
+        ])  # fmt:skip
+
     standard_transform_wfs = []
     for spec in standard_specs:
         reuses_anchor = (
@@ -405,7 +448,10 @@ FreeSurfer version {FS_VERSION}. """
         )
         std_lps_wf = init_template_lps_wf(name=f'template_lps_{label}_wf')
         norm_wf = init_anat_normalization_wf(
-            spec, has_rois=has_rois, name=f'anat_normalization_{label}_wf'
+            spec,
+            has_rois=has_rois,
+            moving_is_acpc=True,
+            name=f'anat_normalization_{label}_wf',
         )
         standard_transform_wfs.append(norm_wf)
         workflow.connect([
@@ -417,14 +463,20 @@ FreeSurfer version {FS_VERSION}. """
                 ('outputnode.template_lps', 'inputnode.template_image'),
                 ('outputnode.mask_lps', 'inputnode.template_mask'),
             ]),
-            (inputnode, norm_wf, [('roi', 'inputnode.roi')]),
-            (synthstrip_anat_wf, norm_wf, [
-                ('outputnode.brain_mask', 'inputnode.brain_mask'),
+            # ACPC-frame inputs, not the raw reference: this workflow no longer
+            # estimates its own rigid alignment, so what it is given defines the
+            # frame its composite maps from.
+            (rigid_acpc_resample_mask, norm_wf, [
+                ('output_image', 'inputnode.brain_mask'),
             ]),
-            (anat_reference_wf, norm_wf, [
-                ('outputnode.bias_corrected', 'inputnode.anatomical_reference'),
+            (rigid_acpc_resample_head, norm_wf, [
+                ('output_image', 'inputnode.anatomical_reference'),
             ]),
         ])  # fmt:skip
+        if has_rois:
+            workflow.connect([
+                (rigid_acpc_resample_roi, norm_wf, [('output_image', 'inputnode.roi')]),
+            ])  # fmt:skip
 
     if standard_specs:
         merge_std_forward_transforms = pe.Node(
@@ -455,28 +507,6 @@ FreeSurfer version {FS_VERSION}. """
             (merge_std_forward_transforms, outputnode, [('out', 'standard_forward_transforms')]),
             (merge_std_reverse_transforms, outputnode, [('out', 'standard_reverse_transforms')]),
         ])  # fmt:skip
-
-    # Resampling
-    rigid_acpc_resample_brain = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
-        name='rigid_acpc_resample_brain',
-    )
-    rigid_acpc_resample_head = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
-        name='rigid_acpc_resample_head',
-    )
-    rigid_acpc_resample_unfatsat = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
-        name='rigid_acpc_resample_unfatsat',
-    )
-    rigid_acpc_resample_aseg = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation='MultiLabel'),
-        name='rigid_acpc_resample_aseg',
-    )
-    rigid_acpc_resample_mask = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation='MultiLabel'),
-        name='rigid_acpc_resample_mask',
-    )
 
     in_lut = str(load_data('FreeSurferColorLUT.txt'))
     in_config = str(load_data('FreeSurfer2dseg.txt'))
@@ -1070,7 +1100,7 @@ A {contrast}-reference map was computed after registration of
 
 
 def init_anat_normalization_wf(
-    spec, has_rois=False, nonlinear=True, name='anat_normalization_wf'
+    spec, has_rois=False, nonlinear=True, moving_is_acpc=False, name='anat_normalization_wf'
 ) -> Workflow:
     r"""
     This workflow performs registration from the original anatomical reference to the
@@ -1150,49 +1180,66 @@ def init_anat_normalization_wf(
     )
     omp_nthreads = config.nipype.omp_nthreads
 
-    # get a good ACPC transform
-    desc = f"""\
+    if moving_is_acpc and not nonlinear:
+        raise ValueError(
+            'moving_is_acpc=True has nothing to do without the nonlinear stage: the '
+            "rigid ACPC transform it would return is the caller's own input."
+        )
+
+    if moving_is_acpc:
+        # The caller hands this workflow images already in the anchor's ACPC frame,
+        # so there is no ACPC transform to estimate here and the composite below
+        # genuinely maps from-ACPC. Estimating a second rigid alignment would put
+        # the transform in this template's own frame while the images it is applied
+        # to stay in the anchor's -- off by rigid_B**-1 . rigid_A.
+        desc = ''
+    else:
+        # get a good ACPC transform
+        desc = f"""\
 The anatomical reference image was reoriented into AC-PC alignment via
 a 6-DOF transform extracted from a full Affine registration to the
 {spec.fullname} template. """
 
-    acpc_json = (
-        'intramodal_ACPC.json' if not config.execution.sloppy else 'intramodal_ACPC_sloppy.json'
-    )
-    acpc_settings = str(load_data(acpc_json))
-    acpc_reg = pe.Node(
-        RobustMNINormalizationRPT(
-            float=True,
-            generate_report=False,
-            settings=[acpc_settings],
-        ),
-        name='acpc_reg',
-        n_procs=omp_nthreads,
-    )
-    disassemble_transform = pe.Node(
-        DisassembleTransform(),
-        name='disassemble_transform',
-    )
-    extract_rigid_transform = pe.Node(AffineToRigid(), name='extract_rigid_transform')
+    if not moving_is_acpc:
+        acpc_json = (
+            'intramodal_ACPC.json'
+            if not config.execution.sloppy
+            else 'intramodal_ACPC_sloppy.json'
+        )
+        acpc_settings = str(load_data(acpc_json))
+        acpc_reg = pe.Node(
+            RobustMNINormalizationRPT(
+                float=True,
+                generate_report=False,
+                settings=[acpc_settings],
+            ),
+            name='acpc_reg',
+            n_procs=omp_nthreads,
+        )
+        disassemble_transform = pe.Node(
+            DisassembleTransform(),
+            name='disassemble_transform',
+        )
+        extract_rigid_transform = pe.Node(AffineToRigid(), name='extract_rigid_transform')
 
-    workflow.connect([
-        (inputnode, acpc_reg, [
-            ('template_image', 'reference_image'),
-            ('template_mask', 'reference_mask'),
-            ('anatomical_reference', 'moving_image'),
-            ('roi', 'lesion_mask'),
-            ('brain_mask', 'moving_mask'),
-        ]),
-        (acpc_reg, disassemble_transform, [('composite_transform', 'in_file')]),
-        (disassemble_transform, extract_rigid_transform, [
-            (('out_transforms', _get_affine_component), 'affine_transform')]),
-        (disassemble_transform, outputnode, [
-            (('out_transforms', _get_affine_component), 'to_template_affine_transform')]),
-        (extract_rigid_transform, outputnode, [
-            ('rigid_transform', 'to_template_rigid_transform'),
-            ('rigid_transform_inverse', 'from_template_rigid_transform'),
-        ]),
-    ])  # fmt:skip
+        workflow.connect([
+            (inputnode, acpc_reg, [
+                ('template_image', 'reference_image'),
+                ('template_mask', 'reference_mask'),
+                ('anatomical_reference', 'moving_image'),
+                ('roi', 'lesion_mask'),
+                ('brain_mask', 'moving_mask'),
+            ]),
+            (acpc_reg, disassemble_transform, [('composite_transform', 'in_file')]),
+            (disassemble_transform, extract_rigid_transform, [
+                (('out_transforms', _get_affine_component), 'affine_transform')]),
+            (disassemble_transform, outputnode, [
+                (('out_transforms', _get_affine_component), 'to_template_affine_transform')]),
+            (extract_rigid_transform, outputnode, [
+                ('rigid_transform', 'to_template_rigid_transform'),
+                ('rigid_transform_inverse', 'from_template_rigid_transform'),
+            ]),
+        ])  # fmt:skip
 
     # The rigid ACPC transform is always needed. The nonlinear one is not, so when
     # nothing consumes it the caller asks for the rigid part alone.
@@ -1203,15 +1250,16 @@ a 6-DOF transform extracted from a full Affine registration to the
     desc += """\
 A full nonlinear registration to the template from AC-PC space was
 estimated via symmetric nonlinear registration (SyN) using antsRegistration (@ants). """
-    rigid_acpc_resample_anat = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
-        name='rigid_acpc_resample_anat',
-    )
     config.loggers.workflow.info('Running nonlinear normalization to template')
-    rigid_acpc_resample_mask = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation='MultiLabel'),
-        name='rigid_acpc_resample_mask',
-    )
+    if not moving_is_acpc:
+        rigid_acpc_resample_anat = pe.Node(
+            ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
+            name='rigid_acpc_resample_anat',
+        )
+        rigid_acpc_resample_mask = pe.Node(
+            ants.ApplyTransforms(input_image_type=0, interpolation='MultiLabel'),
+            name='rigid_acpc_resample_mask',
+        )
 
     if config.execution.sloppy:
         config.loggers.workflow.info('Using QuickSyN')
@@ -1236,18 +1284,6 @@ estimated via symmetric nonlinear registration (SyN) using antsRegistration (@an
             ('template_image', 'reference_image'),
             ('template_mask', 'reference_mask'),
         ]),
-        (inputnode, rigid_acpc_resample_mask, [
-            ('template_image', 'reference_image'),
-            ('brain_mask', 'input_image'),
-        ]),
-        (inputnode, rigid_acpc_resample_anat, [
-            ('template_image', 'reference_image'),
-            ('anatomical_reference', 'input_image'),
-        ]),
-        (extract_rigid_transform, rigid_acpc_resample_anat, [('rigid_transform', 'transforms')]),
-        (extract_rigid_transform, rigid_acpc_resample_mask, [('rigid_transform', 'transforms')]),
-        (rigid_acpc_resample_anat, anat_nlin_normalization, [('output_image', 'moving_image')]),
-        (rigid_acpc_resample_mask, anat_nlin_normalization, [('output_image', 'moving_mask')]),
         (anat_nlin_normalization, outputnode, [
             ('composite_transform', 'to_template_nonlinear_transform'),
             ('inverse_composite_transform', 'from_template_nonlinear_transform'),
@@ -1255,22 +1291,63 @@ estimated via symmetric nonlinear registration (SyN) using antsRegistration (@an
         ]),
     ])  # fmt:skip
 
-    if has_rois:
-        desc += 'ROI masks of abnormal tissue were incorporated into the registration. '
-        rigid_acpc_resample_roi = pe.Node(
-            ants.ApplyTransforms(input_image_type=0, interpolation='MultiLabel'),
-            name='rigid_acpc_resample_roi',
-        )
+    if moving_is_acpc:
         workflow.connect([
-            (rigid_acpc_resample_roi, anat_nlin_normalization, [('output_image', 'lesion_mask')]),
-            (extract_rigid_transform, rigid_acpc_resample_roi, [
-                ('rigid_transform', 'transforms'),
-            ]),
-            (inputnode, rigid_acpc_resample_roi, [
-                ('template_image', 'reference_image'),
-                ('roi', 'input_image'),
+            (inputnode, anat_nlin_normalization, [
+                ('anatomical_reference', 'moving_image'),
+                ('brain_mask', 'moving_mask'),
             ]),
         ])  # fmt:skip
+    else:
+        workflow.connect([
+            (inputnode, rigid_acpc_resample_mask, [
+                ('template_image', 'reference_image'),
+                ('brain_mask', 'input_image'),
+            ]),
+            (inputnode, rigid_acpc_resample_anat, [
+                ('template_image', 'reference_image'),
+                ('anatomical_reference', 'input_image'),
+            ]),
+            (extract_rigid_transform, rigid_acpc_resample_anat, [
+                ('rigid_transform', 'transforms'),
+            ]),
+            (extract_rigid_transform, rigid_acpc_resample_mask, [
+                ('rigid_transform', 'transforms'),
+            ]),
+            (rigid_acpc_resample_anat, anat_nlin_normalization, [
+                ('output_image', 'moving_image'),
+            ]),
+            (rigid_acpc_resample_mask, anat_nlin_normalization, [
+                ('output_image', 'moving_mask'),
+            ]),
+        ])  # fmt:skip
+
+    if has_rois:
+        desc += 'ROI masks of abnormal tissue were incorporated into the registration. '
+        if moving_is_acpc:
+            # moving_is_acpc means the caller resampled the ROI too. Resampling it
+            # again here would apply a rigid transform this branch never estimated;
+            # passing the raw ROI through would mask the wrong anatomy.
+            workflow.connect([
+                (inputnode, anat_nlin_normalization, [('roi', 'lesion_mask')]),
+            ])  # fmt:skip
+        else:
+            rigid_acpc_resample_roi = pe.Node(
+                ants.ApplyTransforms(input_image_type=0, interpolation='MultiLabel'),
+                name='rigid_acpc_resample_roi',
+            )
+            workflow.connect([
+                (rigid_acpc_resample_roi, anat_nlin_normalization, [
+                    ('output_image', 'lesion_mask'),
+                ]),
+                (extract_rigid_transform, rigid_acpc_resample_roi, [
+                    ('rigid_transform', 'transforms'),
+                ]),
+                (inputnode, rigid_acpc_resample_roi, [
+                    ('template_image', 'reference_image'),
+                    ('roi', 'input_image'),
+                ]),
+            ])  # fmt:skip
 
     workflow.__desc__ = desc
     return workflow

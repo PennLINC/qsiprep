@@ -506,7 +506,7 @@ def test_one_output_grid_per_acpc_resolution(tmp_path):
     assert any('output_grid_res1p5mm_wf' in n for n in names)
 
 
-def _build_anat_preproc_wf(tmp_path, output_spaces, sdc_anat_reference='none'):
+def _build_anat_preproc_wf(tmp_path, output_spaces, sdc_anat_reference='none', has_rois=False):
     from qsiprep.utils.spaces import parse_output_spaces, select_acpc_anchor
     from qsiprep.workflows.anatomical.volume import init_anat_preproc_wf
 
@@ -522,7 +522,7 @@ def _build_anat_preproc_wf(tmp_path, output_spaces, sdc_anat_reference='none'):
     return init_anat_preproc_wf(
         num_anat_images=1,
         num_additional_t2ws=0,
-        has_rois=False,
+        has_rois=has_rois,
         output_spaces=specs,
         acpc_anchor=select_acpc_anchor(specs),
         acpc_specs=acpc_specs,
@@ -720,3 +720,63 @@ def test_distortion_group_merge_wf_writes_the_assembly_sidecar(tmp_path):
         name='bare_merge_wf',
     )
     assert bare.get_node('merged_sidecar') is None
+
+
+MULTI_STANDARD = ['acpc:res-2mm', 'MNI152NLin2009cAsym', 'MNI152NLin6Asym']
+
+
+def test_non_anchor_normalization_starts_from_acpc(tmp_path):
+    """A from-ACPC transform must actually start at ACPC.
+
+    Each normalization used to estimate its own rigid alignment to its own
+    template, so a non-anchor space's composite mapped from that space's rigid
+    frame -- while the images it gets applied to are in the anchor's.
+    """
+    wf = _build_anat_preproc_wf(tmp_path, MULTI_STANDARD)
+    norm_wf = wf.get_node('anat_normalization_MNI152NLin6Asym_wf')
+    assert norm_wf is not None
+    assert norm_wf.get_node('acpc_reg') is None, (
+        'a non-anchor space must not estimate its own ACPC frame'
+    )
+    nlin = norm_wf.get_node('anat_nlin_normalization')
+    inputnode = norm_wf.get_node('inputnode')
+    edge = norm_wf._graph.get_edge_data(inputnode, nlin)
+    assert edge is not None
+    assert ('anatomical_reference', 'moving_image') in edge['connect']
+
+
+def test_non_anchor_normalization_is_fed_the_acpc_anatomical(tmp_path):
+    """The moving image must be the ACPC-resampled head, not the raw reference."""
+    wf = _build_anat_preproc_wf(tmp_path, MULTI_STANDARD)
+    norm_wf = wf.get_node('anat_normalization_MNI152NLin6Asym_wf')
+    sources = {
+        src.name
+        for src, _, data in wf._graph.in_edges(norm_wf, data=True)
+        for _, field in data['connect']
+        if field == 'inputnode.anatomical_reference'
+    }
+    assert sources == {'rigid_acpc_resample_head'}
+
+
+def test_non_anchor_normalization_gets_an_acpc_lesion_mask(tmp_path):
+    """The lesion mask must share the moving image's frame.
+
+    Each normalization used to resample the ROI itself with its own rigid
+    transform. Once the moving image arrives already in ACPC, a raw-frame ROI
+    would mask the wrong anatomy.
+    """
+    wf = _build_anat_preproc_wf(tmp_path, MULTI_STANDARD, has_rois=True)
+    norm_wf = wf.get_node('anat_normalization_MNI152NLin6Asym_wf')
+    assert norm_wf.get_node('rigid_acpc_resample_roi') is None, (
+        'the ROI is resampled once by the caller, not again per space'
+    )
+    sources = {
+        src.name
+        for src, _, data in wf._graph.in_edges(norm_wf, data=True)
+        for _, field in data['connect']
+        if field == 'inputnode.roi'
+    }
+    assert sources == {'rigid_acpc_resample_roi'}
+    nlin = norm_wf.get_node('anat_nlin_normalization')
+    edge = norm_wf._graph.get_edge_data(norm_wf.get_node('inputnode'), nlin)
+    assert ('roi', 'lesion_mask') in edge['connect']
