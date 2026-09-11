@@ -23,7 +23,7 @@ from nipype.interfaces import ants, fsl
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-from niworkflows.interfaces.nibabel import DemeanImage, FilledImageLike
+from niworkflows.interfaces.nibabel import FilledImageLike
 from niworkflows.interfaces.reportlets.registration import (
     ANTSApplyTransformsRPT,
     ANTSRegistrationRPT,
@@ -237,20 +237,8 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
             ('out_file', 'out_reference_brain'),
         ]),
         (jac_dfm, outputnode, [('jacobian_image', 'out_jacobian')]),
+        (gen_vsm, vsm2dfm, [('shift_out_file', 'in_file')]),
     ])  # fmt:skip
-
-    if config.workflow.fmap_demean:
-        # Demean within mask
-        demean = pe.Node(DemeanImage(), name='demean')
-
-        workflow.connect([
-            (gen_vsm, demean, [('shift_out_file', 'in_file')]),
-            (fmap_mask2ref_apply, demean, [('output_image', 'in_mask')]),
-            (demean, vsm2dfm, [('out_file', 'in_file')]),
-        ])  # fmt:skip
-
-    else:
-        workflow.connect([(gen_vsm, vsm2dfm, [('shift_out_file', 'in_file')])])
 
     return workflow
 

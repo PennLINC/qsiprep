@@ -1010,12 +1010,6 @@ How to combine the corrected results of an output's correction units.
         'tortoise it is the DIFFPREP registration target). synb0/invt1w '
         'require a T1w image and a PhaseEncodingDirection on the DWI series.',
     )
-    g_fmap.add_argument(
-        '--fmap-no-demean',
-        action='store_false',
-        default=True,
-        help='Do not remove median (within mask) from fieldmap',
-    )
 
     g_other = parser.add_argument_group('Other options')
     g_other.add_argument('--version', action='version', version=verstr)
