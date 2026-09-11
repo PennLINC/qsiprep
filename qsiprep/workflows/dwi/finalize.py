@@ -359,6 +359,7 @@ def init_dwi_finalize_wf(
             source_file=source_file,
             do_biascorr=config.workflow.b1_biascorrect_stage == 'final',
             num_dwi_acquisitions=len(all_dwis),
+            sink_entities=res_entities,
             name=f'final_denoise_wf{suffix}',
         )
 
@@ -762,6 +763,7 @@ def init_finalize_denoising_wf(
     num_dwi_acquisitions,
     split_biascorr=False,
     do_patch2self=False,
+    sink_entities=None,
     name='final_denoise_wf',
 ):
     """
@@ -847,6 +849,7 @@ def init_finalize_denoising_wf(
                     datatype='figures',
                     desc='biascorrpost',
                     source_file=source_file,
+                    **(sink_entities or {}),
                 ),
                 name='ds_report_' + name + '_biascorr',
                 run_without_submitting=True,
@@ -956,6 +959,7 @@ def init_finalize_denoising_wf(
         desc='resampled',
         name='final_b0_ref',
         source_file=source_file,
+        sink_entities=sink_entities,
     )
 
     # Calculate QC metrics on the resampled data

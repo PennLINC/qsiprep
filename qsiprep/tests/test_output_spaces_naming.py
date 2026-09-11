@@ -398,7 +398,7 @@ HISTORICAL_DWI_ACPC_PATHS = {
 }
 
 
-def render_datasink_paths(found, base):
+def render_datasink_paths(found, base, include_figures=False):
     """Render collected sink entities into the relative paths they will be written to.
 
     Uses ``DerivativesDataSink``'s own path patterns, so a pattern that silently
@@ -406,6 +406,9 @@ def render_datasink_paths(found, base):
 
     Transform sinks are skipped: they name themselves with ``from-``/``to-`` and
     carry the cohort inline in the ``to-`` label, so they have no ``space-``.
+
+    ``include_figures`` opts in to reportlet sinks, which have no ``space-`` either
+    and must name their own ``extension``.
     """
     from bids.layout.writing import build_path
 
@@ -414,7 +417,7 @@ def render_datasink_paths(found, base):
     patterns = qsiprep_spec['default_path_patterns']
     paths = {}
     for node_name, entities in found.items():
-        if 'space' not in entities:
+        if 'space' not in entities and not include_figures:
             continue
         merged = {**base, **entities}
         # A sink that does not name an extension inherits it from its in_file at
@@ -561,3 +564,33 @@ def test_resolved_voxel_size_reaches_the_unit_sidecar(tmp_path):
     edge = wf._graph.get_edge_data(grid_metadata, merged_sidecar)
     assert edge is not None
     assert ('meta_dict', 'extra_data') in edge['connect']
+
+
+FIGURE_BASE = {'subject': '01', 'datatype': 'figures', 'suffix': 'dwi'}
+
+
+def collect_figure_entities(wf):
+    """Every figures-datatype sink in the workflow, by fully qualified node name."""
+    from nipype.interfaces.base import Undefined, isdefined
+
+    found = {}
+    for node_name in wf.list_node_names():
+        node = wf.get_node(node_name)
+        interface = getattr(node, 'interface', None)
+        inputs = getattr(interface, 'inputs', None)
+        if inputs is None or getattr(inputs, 'datatype', Undefined) != 'figures':
+            continue
+        entities = {'datatype': 'figures', 'desc': inputs.desc, 'extension': '.svg'}
+        if isdefined(getattr(inputs, 'res', Undefined)):
+            entities['res'] = inputs.res
+        found[node_name] = entities
+    return found
+
+
+def test_two_acpc_resolutions_write_distinct_figure_paths(tmp_path):
+    """Two resolutions must not overwrite each other's reportlets."""
+    wf, _ = _build_finalize(tmp_path, ['acpc:res-2mm', 'acpc:res-1p5mm'])
+    found = collect_figure_entities(wf)
+    assert found, 'expected figure sinks in the finalize workflow'
+    paths = render_datasink_paths(found, FIGURE_BASE, include_figures=True)
+    assert_no_collisions(paths)

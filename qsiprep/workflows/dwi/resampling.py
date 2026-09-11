@@ -37,7 +37,6 @@ def init_dwi_trans_wf(
     name='dwi_trans_wf',
     use_compression=True,
     write_local_bvecs=False,
-    write_reports=True,
     concatenate=True,
     doing_topup=False,
 ):
@@ -294,7 +293,9 @@ generating a *preprocessed DWI run in {template} space* with {vox_desc}.
     merge = pe.Node(Merge(compress=use_compression), name='merge', mem_gb=mem_gb * 3)
     extract_b0_series = pe.Node(ExtractB0s(), name='extract_b0_series')
     final_b0_ref = init_dwi_reference_wf(
-        gen_report=write_reports,
+        # The denoising workflow writes this reportlet from the final image; a
+        # second copy here has always raced it for the same filename.
+        gen_report=False,
         desc='resampled',
         name='final_b0_ref',
         source_file=source_file,

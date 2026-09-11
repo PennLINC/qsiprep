@@ -96,6 +96,7 @@ def init_dwi_reference_wf(
     gen_report=False,
     source_file=None,
     desc='initial',
+    sink_entities=None,
 ):
     """Create dwiref reference image.
 
@@ -209,6 +210,7 @@ def init_dwi_reference_wf(
                 desc=report_desc,
                 suffix='dwi',
                 source_file=source_file,
+                **(sink_entities or {}),
             ),
             name='ds_report_b0_mask',
             mem_gb=DEFAULT_MEMORY_MIN_GB,
