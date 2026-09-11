@@ -529,7 +529,7 @@ def _build_parser(**kwargs):
         action='store',
         nargs='+',
         default=[],
-        choices=['fieldmaps', 'pepolar-dwis', 't2w', 'phase', 'sdc', 'shims', 'fov', 'gradients'],
+        choices=['fieldmaps', 'pepolar-dwis', 't2w', 'phase', 'sdc', 'shims', 'fov', 'gradwarp'],
         help=(
             'Ignore selected aspects of the input dataset to disable corresponding '
             'parts of the workflow (a space delimited list). '
@@ -544,27 +544,28 @@ def _build_parser(**kwargs):
             '"shims" treats all ShimSetting values as compatible when grouping scans. '
             '"fov" concatenates series with differently-oriented fields of view anyway '
             '(distortion corrections will be misapplied). '
-            '"gradients" disables gradient nonlinearity correction entirely, '
+            '"gradwarp" disables gradient nonlinearity correction entirely, '
             'including the voxelwise gradient deviation map.'
         ),
     )
     g_conf.add_argument(
         '--force',
         required=False,
-        action='store',
+        action='extend',
         nargs='+',
         default=[],
-        choices=['gradients', 'sdc-anat-reference'],
+        choices=['gradwarp1D', 'gradwarp3D', 'sdc-anat-reference'],
         help=(
             'Force selected corrections on, overriding what the input metadata '
-            'implies (a space delimited list). "gradients" applies the full 3D '
-            'gradient nonlinearity correction to every DWI run regardless of the '
-            'ImageType field, for data whose DIS2D/DIS3D tags are absent or '
-            'untrustworthy. Requires --gradient-file. '
+            'implies (a space delimited list). "gradwarp3D" applies the full 3D '
+            'gradient nonlinearity correction, and "gradwarp1D" the through-plane '
+            'component of it only, to every DWI run regardless of the ImageType '
+            'field, for data whose DIS2D/DIS3D tags are absent or untrustworthy. '
+            'The two are mutually exclusive, and either requires --gradient-file. '
             '"sdc-anat-reference" escalates --sdc-anat-reference from a fallback '
             'to an override: the selected anatomical reference replaces the '
             'fieldmap application for EVERY DWI series. Requires an '
-            '--sdc-anat-reference other than "none".',
+            '--sdc-anat-reference other than "none".'
         ),
     )
     g_conf.add_argument(
@@ -579,8 +580,9 @@ def _build_parser(**kwargs):
             'displacement field (.nii/.nii.gz). Applies to every DWI run in the '
             'dataset. Whether the spatial correction is applied to a given run, '
             "and in which dimensions, is decided from that run's ImageType "
-            'field unless --force/--ignore gradients says otherwise. The '
-            'voxelwise gradient deviation map is written whenever this is given.'
+            'field unless --force gradwarp1D/--force gradwarp3D/--ignore '
+            'gradwarp says otherwise. The voxelwise gradient deviation map is '
+            'written whenever this is given.'
         ),
     )
     g_conf.add_argument(
@@ -1009,18 +1011,6 @@ How to combine the corrected results of an output's correction units.
         'enters TOPUP as a zero-readout-time volume; with --hmc-method '
         'tortoise it is the DIFFPREP registration target). synb0/invt1w '
         'require a T1w image and a PhaseEncodingDirection on the DWI series.',
-    )
-    g_fmap.add_argument(
-        '--fmap-bspline',
-        action='store_true',
-        default=False,
-        help='Fit a B-Spline field using least-squares (experimental)',
-    )
-    g_fmap.add_argument(
-        '--fmap-no-demean',
-        action='store_false',
-        default=True,
-        help='Do not remove median (within mask) from fieldmap',
     )
 
     g_other = parser.add_argument_group('Other options')

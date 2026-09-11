@@ -45,7 +45,7 @@ def init_fmap_wf(name='fmap_wf'):
         :simple_form: yes
 
         from qsiprep.workflows.fieldmap.fmap import init_fmap_wf
-        wf = init_fmap_wf(omp_nthreads=6, fmap_bspline=False)
+        wf = init_fmap_wf()
 
     """
     # Check for FSL binary

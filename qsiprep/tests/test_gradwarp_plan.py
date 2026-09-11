@@ -38,9 +38,9 @@ def test_no_gradient_file_means_no_plan():
     assert resolve_gradwarp_plan(_unit(['ORIGINAL', 'PRIMARY'])) is None
 
 
-def test_ignore_gradients_disables_everything():
+def test_ignore_gradwarp_disables_everything():
     config.workflow.gradient_file = COEFF
-    config.workflow.ignore = ['gradients']
+    config.workflow.ignore = ['gradwarp']
     assert resolve_gradwarp_plan(_unit()) is None
 
 
@@ -69,12 +69,44 @@ def test_image_type_may_be_a_bare_string():
     assert plan.warp_dim == '1D'
 
 
-def test_force_overrides_metadata():
+@pytest.mark.parametrize(
+    ('forced', 'expected'),
+    [('gradwarp3D', '3D'), ('gradwarp1D', '1D')],
+)
+def test_force_overrides_metadata(forced, expected):
+    """--force pins the warp dimensionality; ImageType is not consulted."""
     config.workflow.gradient_file = COEFF
-    config.workflow.force = ['gradients']
+    config.workflow.force = [forced]
     plan = resolve_gradwarp_plan(_unit(['ORIGINAL', 'DIS3D']))
-    assert plan.warp_dim == '3D'
+    assert plan.warp_dim == expected
     assert plan.basis == 'forced'
+
+
+def test_forcing_both_dimensionalities_is_rejected():
+    """validate_gradient_flags catches this at parse time, but a loaded config
+    file never passes through the CLI validator."""
+    config.workflow.gradient_file = COEFF
+    config.workflow.force = ['gradwarp1D', 'gradwarp3D']
+    with pytest.raises(ValueError, match='mutually exclusive'):
+        resolve_gradwarp_plan(_unit())
+
+
+def test_repeating_one_dimensionality_is_not_a_contradiction():
+    """One dimensionality named twice is still one dimensionality."""
+    config.workflow.gradient_file = COEFF
+    config.workflow.force = ['gradwarp1D', 'gradwarp1D']
+    plan = resolve_gradwarp_plan(_unit())
+    assert plan.warp_dim == '1D'
+    assert plan.basis == 'forced'
+
+
+def test_force_leaves_unrelated_force_values_alone():
+    """--force takes a list; a non-gradwarp value must not pin anything."""
+    config.workflow.gradient_file = COEFF
+    config.workflow.force = ['sdc-anat-reference']
+    plan = resolve_gradwarp_plan(_unit(['ORIGINAL', 'DIS2D']))
+    assert plan.warp_dim == '1D'
+    assert plan.basis == 'metadata'
 
 
 def test_mixed_image_types_take_the_minimum_warp(caplog):

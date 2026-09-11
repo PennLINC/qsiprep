@@ -42,7 +42,6 @@ denoise_after_combining = false
 denoise_method = "none"
 distortion_group_merge = "none"
 dwi_denoise_window = "auto"
-fmap_bspline = false
 force_syn = false
 hmc_model = "eddy"
 hmc_transform = "Affine"
