@@ -29,6 +29,13 @@ from .util import init_dwi_reference_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
+# Methods-text names for the SHORELine signal models, keyed by the hmc_model value
+# SignalPrediction reads. "none" never builds the model-based workflow.
+_SHORELINE_MODEL_DESCRIPTIONS = {
+    '3dSHORE': '3dSHORE [@merlet3dshore]',
+    'tensor': 'a tensor model',
+}
+
 
 def init_dwi_hmc_wf(
     source_file,
@@ -386,7 +393,7 @@ def init_b0_hmc_wf(
     if align_to == 'iterative':
         desc += (
             f'An unbiased b=0 template was constructed over {num_iters} iterations '
-            f'of {config.workflow.hmc_model} registrations. '
+            f'of {transform} registrations. '
         )
         initial_template = pe.Node(
             ants.AverageImages(normalize=True, dimension=3),
@@ -714,10 +721,13 @@ def init_dwi_model_hmc_wf(
         ),
         name='outputnode',
     )
+    model_description = _SHORELINE_MODEL_DESCRIPTIONS.get(
+        config.workflow.hmc_model, config.workflow.hmc_model
+    )
     workflow.__desc__ = (
         'The SHORELine method was used to estimate head motion in b>0 '
         'images. This entails leaving out each b>0 image and reconstructing '
-        'the others using 3dSHORE [@merlet3dshore]. The signal for the left-'
+        f'the others using {model_description}. The signal for the left-'
         f'out image serves as the registration target. A total of {num_iters} '
         f'iterations were run using a {config.workflow.hmc_transform} transform. '
     )

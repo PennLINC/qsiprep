@@ -137,7 +137,10 @@ def init_qsiprep_hmcsdc_wf(
     )
 
     # Motion correct the data
-    dwi_hmc_wf = init_dwi_hmc_wf(source_file=source_file)
+    dwi_hmc_wf = init_dwi_hmc_wf(
+        source_file=source_file,
+        num_model_iterations=config.workflow.shoreline_iters,
+    )
 
     # Impute slice data if requested
     slice_qc = pe.Node(SliceQC(), name='slice_qc')

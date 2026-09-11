@@ -465,3 +465,30 @@ def test_diffusion_summary_renders_gradient_correction():
         gradient_correction='through-plane only (ImageType: DIS2D)',
     )
     assert 'through-plane only' in summary._generate_segment()
+
+
+def _diffusion_summary(**overrides):
+    from qsiprep.interfaces.reports import DiffusionSummary
+
+    inputs = {
+        'distortion_correction': 'TOPUP',
+        'pe_direction': 'j',
+        'hmc_model': 'eddy',
+        'b0_to_anat_transform': 'Rigid',
+        'denoise_method': 'dwidenoise',
+        'dwi_denoise_window': 5,
+    }
+    inputs.update(overrides)
+    return DiffusionSummary(**inputs)
+
+
+def test_diffusion_summary_omits_hmc_transform_when_undefined():
+    segment = _diffusion_summary()._generate_segment()
+    assert 'HMC Transform' not in segment
+    assert 'HMC Model: eddy' in segment
+
+
+def test_diffusion_summary_shows_hmc_transform_when_given():
+    segment = _diffusion_summary(hmc_model='3dSHORE', hmc_transform='Rigid')._generate_segment()
+    assert '<li>HMC Transform: Rigid</li>' in segment
+    assert 'HMC Model: 3dSHORE' in segment

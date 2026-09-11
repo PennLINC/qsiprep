@@ -206,3 +206,13 @@ def test_init_b0_hmc_wf_has_no_spatial_bias_correct():
     from qsiprep.workflows.dwi.hmc import init_b0_hmc_wf
 
     assert 'spatial_bias_correct' not in inspect.signature(init_b0_hmc_wf).parameters
+
+
+def test_iterative_b0_description_names_the_transform(tmp_path):
+    """The methods text named hmc_model ("tortoise registrations") instead of the transform."""
+    from qsiprep.workflows.dwi.hmc import init_b0_hmc_wf
+
+    _config().execution.output_dir = str(tmp_path)
+    wf = init_b0_hmc_wf(align_to='iterative', transform='Rigid')
+    assert 'iterations of Rigid registrations' in wf.__desc__
+    assert 'tortoise' not in wf.__desc__

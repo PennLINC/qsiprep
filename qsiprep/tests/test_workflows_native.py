@@ -474,7 +474,7 @@ def test_legacy_method_keys_read_only_at_allowlisted_sites():
         # Display strings and the SHORELine model vocabulary.
         'workflows/dwi/base.py': {'hmc_model': 1},
         'workflows/dwi/derivatives.py': {'hmc_model': 3},
-        'workflows/dwi/hmc.py': {'hmc_model': 3},
+        'workflows/dwi/hmc.py': {'hmc_model': 4},
         # The backend-dependent gradwarp resampling sentence: also display
         # vocabulary, and safe only because 'eddy' and 'tortoise' are spelled
         # the same in the legacy key and in HmcMethod. See the Notes section of
