@@ -440,19 +440,25 @@ def validate_gradient_flags(gradient_file, force, ignore):
         Existence is assumed to already be checked (the CLI's ``IsFile`` argparse
         type does that); only the extension is validated here.
     force : list of str
-        Values passed to ``--force`` (currently only ``"gradients"`` is defined).
+        Values passed to ``--force``. The gradwarp-related ones are
+        ``"gradwarp1D"`` and ``"gradwarp3D"``.
     ignore : list of str
         Values passed to ``--ignore``.
 
     Raises
     ------
     ValueError
-        If ``--force gradients`` and ``--ignore gradients`` are both given, if
-        ``--force gradients`` is given without ``--gradient-file``, or if
+        If both ``--force gradwarp1D`` and ``--force gradwarp3D`` are given, if a
+        ``--force gradwarp{1,3}D`` is combined with ``--ignore gradwarp``, if a
+        ``--force gradwarp{1,3}D`` is given without ``--gradient-file``, or if
         ``--gradient-file`` does not end in a TORTOISE-recognized extension.
 
     Notes
     -----
+    ``--force gradwarp1D`` and ``--force gradwarp3D`` are mutually exclusive, but
+    ``--force`` takes a list of unrelated values, so argparse cannot express that
+    with a mutually exclusive group. It is checked here instead.
+
     An unrecognized ``--gradient-file`` extension is rejected outright rather than
     merely warned about. TORTOISE itself only warns on an unrecognized extension
     and then silently disables gradient nonlinearity correction; silently
@@ -461,14 +467,24 @@ def validate_gradient_flags(gradient_file, force, ignore):
     """
     from .. import config
 
-    forcing_gradients = 'gradients' in force
-    ignoring_gradients = 'gradients' in ignore
+    # argparse's choices constrain these to "gradwarp1D" and "gradwarp3D".
+    forced_gradwarp = sorted(value for value in force if value.startswith('gradwarp'))
+    ignoring_gradwarp = 'gradwarp' in ignore
 
-    if forcing_gradients and ignoring_gradients:
-        raise ValueError('"--force gradients" and "--ignore gradients" are contradictory.')
+    if len(forced_gradwarp) > 1:
+        raise ValueError(
+            f'"--force {forced_gradwarp[0]}" and "--force {forced_gradwarp[1]}" are '
+            'mutually exclusive: a run is corrected in one dimension or in three, '
+            'not both.'
+        )
 
-    if forcing_gradients and not gradient_file:
-        raise ValueError('"--force gradients" requires --gradient-file.')
+    if forced_gradwarp and ignoring_gradwarp:
+        raise ValueError(
+            f'"--force {forced_gradwarp[0]}" and "--ignore gradwarp" are contradictory.'
+        )
+
+    if forced_gradwarp and not gradient_file:
+        raise ValueError(f'"--force {forced_gradwarp[0]}" requires --gradient-file.')
 
     if gradient_file:
         gradient_extensions = ('.grad', '.dat', '.gc', '.nii', '.nii.gz')
@@ -478,9 +494,9 @@ def validate_gradient_flags(gradient_file, force, ignore):
                 f'<{gradient_file}>. TORTOISE silently disables gradient nonlinearity '
                 'correction for unrecognized extensions, so QSIPrep rejects it here instead.'
             )
-        if ignoring_gradients:
+        if ignoring_gradwarp:
             config.loggers.cli.warning(
-                '--gradient-file is unused because "--ignore gradients" was given.'
+                '--gradient-file is unused because "--ignore gradwarp" was given.'
             )
 
     return
