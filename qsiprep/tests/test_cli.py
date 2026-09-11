@@ -222,6 +222,7 @@ def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
     dataset_dir = os.path.join(dataset_dir, 'tinytensor_epi')
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
+    shoreline_config = os.path.join(get_test_data_path(), 'shoreline_none_config.json')
 
     parameters = [
         dataset_dir,
@@ -234,10 +235,9 @@ def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
         '--b0-motion-corr-to=first',
         '--b1-biascorrect-stage=none',
         '--hmc-method=shoreline',
-        '--shoreline-model=none',
+        f'--shoreline-config={shoreline_config}',
         '--sdc-method=drbuddi',
         '--output-resolution=2',
-        '--shoreline-iters=1',
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)
@@ -260,6 +260,7 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
     dataset_dir = os.path.join(dataset_dir, 'DSDTI')
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
+    shoreline_config = os.path.join(get_test_data_path(), 'shoreline_tensor_config.json')
 
     parameters = [
         dataset_dir,
@@ -272,10 +273,9 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
         '--b0-motion-corr-to=first',
         '--b1-biascorrect-stage=none',
         '--hmc-method=shoreline',
-        '--shoreline-model=tensor',
+        f'--shoreline-config={shoreline_config}',
         '--sdc-method=drbuddi',
         '--output-resolution=5',
-        '--shoreline-iters=1',
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)
@@ -307,6 +307,7 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
     dataset_dir = os.path.join(dataset_dir, 'DSCSDSI_nofmap')
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
+    shoreline_config = os.path.join(get_test_data_path(), 'shoreline_rigid_config.json')
 
     parameters = [
         dataset_dir,
@@ -318,9 +319,8 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
         '--sdc-anat-reference=invt1w',
         '--b1-biascorrect-stage=none',
         '--hmc-method=shoreline',
-        '--hmc-transform=Rigid',
+        f'--shoreline-config={shoreline_config}',
         '--output-resolution=5',
-        '--shoreline-iters=1',
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)
@@ -633,6 +633,7 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
     dataset_dir = os.path.join(dataset_dir, 'twoses')
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
+    shoreline_config = os.path.join(get_test_data_path(), 'shoreline_none_config.json')
 
     parameters = [
         dataset_dir,
@@ -642,7 +643,7 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
         '--sloppy',
         '--b1-biascorrect-stage=none',
         '--hmc-method=shoreline',
-        '--shoreline-model=none',
+        f'--shoreline-config={shoreline_config}',
         '--b0-motion-corr-to=first',
         '--output-resolution=5',
         '--intramodal-template-transform=BSplineSyN',
