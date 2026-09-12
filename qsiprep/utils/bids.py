@@ -687,8 +687,8 @@ def parse_bids_for_age_months(
     chronological months.
 
     The heuristic followed is:
-    1) Check `sub-<subject_id>[/ses-<session_label>]/<sub-<subject_id>[_ses-<session-id>]_scans.tsv
-    2) Check `sub-<subject_id>/sub-<subject_id>_sessions.tsv`
+    1) Check `sub-<subject>[/ses-<session>]/<sub-<subject>[_ses-<session>]_scans.tsv
+    2) Check `sub-<subject>/sub-<subject>_sessions.tsv`
     3) Check `<root>/participants.tsv`
 
     Notes
