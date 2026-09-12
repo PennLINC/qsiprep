@@ -193,8 +193,9 @@ def test_report_output_level(tmpdir, reference, requested, expected):
             reference,
             '--report-output-level',
             requested,
-            '--output-resolution',
-            '2',
+            '--output-spaces',
+            'acpc:res-2mm',
+            'MNI152NLin2009cAsym',
             '--work-dir',
             str(work_dir),
             '--skip-bids-validation',
@@ -240,8 +241,9 @@ def _test_processing_list(tmpdir, name, skeleton, reference, expected):
             '01',
             '--subject-anatomical-reference',
             reference,
-            '--output-resolution',
-            '2',
+            '--output-spaces',
+            'acpc:res-2mm',
+            'MNI152NLin2009cAsym',
             '--skip-bids-validation',
         ],
     )
@@ -346,7 +348,14 @@ def minimal_args(tmp_path):
     """Return the arguments every qsiprep call needs, for parser-level tests."""
     bids_dir = tmp_path / 'bids'
     bids_dir.mkdir()
-    return [str(bids_dir), str(tmp_path / 'out'), 'participant', '--output-resolution', '2']
+    return [
+        str(bids_dir),
+        str(tmp_path / 'out'),
+        'participant',
+        '--output-spaces',
+        'acpc:res-2mm',
+        'MNI152NLin2009cAsym',
+    ]
 
 
 def _dest(option):

@@ -1,6 +1,8 @@
 """Tests for the qsiprep.interfaces.images module."""
 
 import shutil
+import time
+from pathlib import Path
 
 import nibabel as nb
 import numpy as np
@@ -151,6 +153,84 @@ def test_conform_dwi_reports_bvals_when_only_bvals_exist(tmp_path):
     assert not isdefined(result.outputs.bvec_file)
 
 
+def test_get_template_uses_resolution_and_cohort(tmp_path):
+    from qsiprep.interfaces.anatomical import GetTemplate
+
+    iface = GetTemplate(
+        template_name='MNIInfant',
+        cohort='2',
+        resolution='2',
+        anatomical_contrast='T1w',
+    )
+    result = iface.run(cwd=str(tmp_path))
+    name = Path(result.outputs.template_file).name
+    assert 'cohort-2' in name
+    assert 'res-2' in name
+
+
+def test_get_template_defaults_to_res_1(tmp_path):
+    from qsiprep.interfaces.anatomical import GetTemplate
+
+    iface = GetTemplate(template_name='MNI152NLin2009cAsym', anatomical_contrast='T1w')
+    result = iface.run(cwd=str(tmp_path))
+    assert 'res-01' in Path(result.outputs.template_file).name
+
+
+def _write_image(path, zooms):
+    import nibabel as nb
+    import numpy as np
+
+    affine = np.diag([*zooms, 1.0])
+    nb.Nifti1Image(np.zeros((4, 4, 4)), affine).to_filename(path)
+    return str(path)
+
+
+def test_voxel_size_chooser_max_across_runs(tmp_path):
+    from qsiprep.interfaces.anatomical import VoxelSizeChooser
+
+    # The largest zoom lives in the second image, so a regression that silently used
+    # only input_images[0] would fail this test instead of passing by coincidence.
+    a = _write_image(tmp_path / 'a.nii.gz', (2.0, 2.0, 2.0))
+    b = _write_image(tmp_path / 'b.nii.gz', (3.0, 4.0, 5.0))
+    result = VoxelSizeChooser(input_images=[a, b], anisotropic_strategy='max').run(
+        cwd=str(tmp_path)
+    )
+    assert result.outputs.voxel_size == 5.0
+
+
+def test_voxel_size_chooser_min_across_runs(tmp_path):
+    from qsiprep.interfaces.anatomical import VoxelSizeChooser
+
+    a = _write_image(tmp_path / 'a.nii.gz', (3.0, 4.0, 5.0))
+    b = _write_image(tmp_path / 'b.nii.gz', (2.5, 2.5, 2.5))
+    result = VoxelSizeChooser(input_images=[a, b], anisotropic_strategy='min').run(
+        cwd=str(tmp_path)
+    )
+    assert result.outputs.voxel_size == 2.5
+
+
+def test_voxel_size_chooser_explicit_size_wins(tmp_path):
+    from qsiprep.interfaces.anatomical import VoxelSizeChooser
+
+    a = _write_image(tmp_path / 'a.nii.gz', (3.0, 4.0, 5.0))
+    result = VoxelSizeChooser(input_images=[a], voxel_size=1.7).run(cwd=str(tmp_path))
+    assert result.outputs.voxel_size == 1.7
+
+
+def test_choose_interpolator_from_grid(tmp_path):
+    from qsiprep.interfaces.images import ChooseInterpolator
+
+    dwi = _write_image(tmp_path / 'dwi.nii.gz', (2.0, 2.0, 2.0))
+    coarse_grid = _write_image(tmp_path / 'coarse.nii.gz', (2.0, 2.0, 2.0))
+    fine_grid = _write_image(tmp_path / 'fine.nii.gz', (1.0, 1.0, 1.0))
+
+    same = ChooseInterpolator(dwi_files=[dwi], output_grid=coarse_grid).run(cwd=str(tmp_path))
+    assert same.outputs.interpolation_method == 'LanczosWindowedSinc'
+
+    upsampled = ChooseInterpolator(dwi_files=[dwi], output_grid=fine_grid).run(cwd=str(tmp_path))
+    assert upsampled.outputs.interpolation_method == 'Linear'
+
+
 class _FakeProc:
     """Stand-in for a finished subprocess.Popen."""
 
@@ -234,6 +314,79 @@ def test_bvec_to_rasb_raises_on_nonzero_return_code(tmp_path, monkeypatch):
 
     with pytest.raises(RuntimeError, match='no such file'):
         bvec_to_rasb(bval_file, bvec_file, 'missing.nii.gz', str(workdir))
+
+
+# ---------------------------------------------------------------------------
+# Concurrent TemplateFlow fetches.
+#
+# templateflow's client._s3_get streams a download straight into its final cache
+# path (``filepath.open('wb')``), with no temp file and no rename, so the file is
+# observable half-written for the whole download. --output-spaces builds one
+# GetTemplate node per standard space in anat_preproc_wf and another in
+# anat_derivatives_wf, with no dependency between them, so MultiProc runs them at
+# the same time and one node can copy what the other is still downloading.
+# ---------------------------------------------------------------------------
+
+
+def _partial_download_get(cache_dir, delay):
+    """Stand in for ``templateflow.api.get``: a non-atomic streaming download."""
+
+    def _get(template_name, **kwargs):
+        target = Path(cache_dir) / f'tpl-{template_name}_{kwargs.get("suffix")}.nii.gz'
+        if not target.exists():
+            with open(target, 'wb') as handle:
+                handle.write(b'A' * 512)
+                handle.flush()
+                time.sleep(delay)
+                handle.write(b'B' * 512)
+        return target
+
+    return _get
+
+
+def _fetch_in_child(cwd, cache_dir, delay, start_after):
+    """Run one GetTemplate against the fake cache, as a separate process would."""
+    from unittest import mock
+
+    time.sleep(start_after)
+    from qsiprep.interfaces.anatomical import GetTemplate
+
+    with mock.patch('templateflow.api.get', _partial_download_get(cache_dir, delay)):
+        GetTemplate(template_name='FAKE', anatomical_contrast='T1w').run(cwd=str(cwd))
+
+
+def test_get_template_never_copies_a_partial_download(tmp_path, monkeypatch):
+    """Two nodes fetching one template must not yield a truncated copy.
+
+    Reproduces the ``3dcalc`` failure on a multi-space run: "data bytes input =
+    -1 ... Can't load dataset ... is it complete?" on a template brain mask.
+    """
+    import multiprocessing
+
+    cache_dir = tmp_path / 'templateflow'
+    cache_dir.mkdir()
+    monkeypatch.setenv('TEMPLATEFLOW_HOME', str(cache_dir))
+
+    first, second = tmp_path / 'node_a', tmp_path / 'node_b'
+    first.mkdir()
+    second.mkdir()
+
+    ctx = multiprocessing.get_context('fork')
+    # The second node starts while the first is mid-download, which is exactly
+    # the interleaving the run log shows.
+    procs = [
+        ctx.Process(target=_fetch_in_child, args=(first, cache_dir, 1.0, 0.0)),
+        ctx.Process(target=_fetch_in_child, args=(second, cache_dir, 1.0, 0.3)),
+    ]
+    for proc in procs:
+        proc.start()
+    for proc in procs:
+        proc.join(timeout=60)
+
+    copied = sorted(p for node in (first, second) for p in node.glob('tpl-FAKE_*.nii.gz'))
+    assert len(copied) == 4, f'expected two copies per node, got {copied}'
+    truncated = [str(p) for p in copied if p.stat().st_size != 1024]
+    assert not truncated, f'copied a half-written download: {truncated}'
 
 
 # fslsplit/fslmerge come from fsl-avwutils, which qsiprep no longer installs;

@@ -59,7 +59,8 @@ def test_dsdti_fmap(data_dir, output_dir, working_dir):
         '--sloppy',
         '--write-graph',
         '--mem-mb=4096',
-        '--output-resolution=5',
+        '--output-spaces=acpc:res-5mm',
+        '--output-spaces=MNI152NLin2009cAsym',
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)
@@ -101,7 +102,8 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
         '--denoise-method=dwidenoise2',
         '--write-graph',
         '--mem-mb=4096',
-        '--output-resolution=5',
+        '--output-spaces=acpc:res-5mm',
+        '--output-spaces=MNI152NLin2009cAsym',
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)
@@ -145,7 +147,8 @@ def test_cuda(data_dir, output_dir, working_dir):
         '--b1-biascorrect-stage=none',
         '--sdc-method=drbuddi',
         f'--eddy-config={eddy_config}',
-        '--output-resolution=5',
+        '--output-spaces=acpc:res-5mm',
+        '--output-spaces=MNI152NLin2009cAsym',
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)
@@ -197,7 +200,8 @@ def test_drbuddi_rpe(data_dir, output_dir, working_dir):
         '--ignore',
         'fieldmaps',
         f'--eddy-config={eddy_config}',
-        '--output-resolution=5',
+        '--output-spaces=acpc:res-5mm',
+        '--output-spaces=MNI152NLin2009cAsym',
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)
@@ -233,7 +237,8 @@ def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
         '--hmc-method=shoreline',
         '--shoreline-model=none',
         '--sdc-method=drbuddi',
-        '--output-resolution=2',
+        '--output-spaces=acpc:res-2mm',
+        '--output-spaces=MNI152NLin2009cAsym',
         '--shoreline-iters=1',
     ]
 
@@ -270,7 +275,8 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
         '--hmc-method=shoreline',
         '--shoreline-model=tensor',
         '--sdc-method=drbuddi',
-        '--output-resolution=5',
+        '--output-spaces=acpc:res-5mm',
+        '--output-spaces=MNI152NLin2009cAsym',
         '--shoreline-iters=1',
     ]
 
@@ -315,7 +321,8 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
         '--b1-biascorrect-stage=none',
         '--hmc-method=shoreline',
         '--hmc-transform=Rigid',
-        '--output-resolution=5',
+        '--output-spaces=acpc:res-5mm',
+        '--output-spaces=MNI152NLin2009cAsym',
         '--shoreline-iters=1',
     ]
 
@@ -354,7 +361,8 @@ def test_diffprep(data_dir, output_dir, working_dir):
         '--sloppy',
         '--b1-biascorrect-stage=none',
         '--hmc-method=tortoise',
-        '--output-resolution=5',
+        '--output-spaces=acpc:res-5mm',
+        '--output-spaces=MNI152NLin2009cAsym',
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)
@@ -400,7 +408,8 @@ def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
         '--b1-biascorrect-stage=none',
         '--hmc-method=tortoise',
         '--sdc-method=drbuddi',
-        '--output-resolution=2',
+        '--output-spaces=acpc:res-2mm',
+        '--output-spaces=MNI152NLin2009cAsym',
     ]
 
     # See test_diffprep: no expected-output manifest yet, so the assertion is
@@ -447,7 +456,8 @@ def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
         '--b1-biascorrect-stage=none',
         '--hmc-method=tortoise',
         '--sdc-method=drbuddi',
-        '--output-resolution=5',
+        '--output-spaces=acpc:res-5mm',
+        '--output-spaces=MNI152NLin2009cAsym',
     ]
 
     # No expected-output manifest yet: assert the split/recombine + DRBUDDI SDC
@@ -505,7 +515,8 @@ def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
         '--b1-biascorrect-stage=none',
         '--hmc-method=tortoise',
         '--sdc-method=drbuddi',
-        '--output-resolution=5',
+        '--output-spaces=acpc:res-5mm',
+        '--output-spaces=MNI152NLin2009cAsym',
     ]
 
     # No expected-output manifest yet: assert the per-direction DIFFPREP +
@@ -549,7 +560,8 @@ def test_dsdti_nofmap(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         '--unringing-method=rpg',
         '--b1-biascorrect-stage=none',
-        '--output-resolution=5',
+        '--output-spaces=acpc:res-5mm',
+        '--output-spaces=MNI152NLin2009cAsym',
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)
@@ -598,7 +610,8 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
         'fieldmaps',
         '--sdc-anat-reference=invt1w',
         '--b1-biascorrect-stage=final',
-        '--output-resolution=5',
+        '--output-spaces=acpc:res-5mm',
+        '--output-spaces=MNI152NLin2009cAsym',
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)
@@ -637,7 +650,8 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
         '--b1-biascorrect-stage=none',
         '--hmc-method=shoreline',
         '--shoreline-model=none',
-        '--output-resolution=5',
+        '--output-spaces=acpc:res-5mm',
+        '--output-spaces=MNI152NLin2009cAsym',
         '--intramodal-template-transform=BSplineSyN',
         '--intramodal-template-iters=2',
     ]
@@ -706,7 +720,8 @@ def test_multi_t1w(data_dir, output_dir, working_dir):
         f'--eddy-config={eddy_config}',
         '--denoise-method=none',
         '--sloppy',
-        '--output-resolution=5',
+        '--output-spaces=acpc:res-5mm',
+        '--output-spaces=MNI152NLin2009cAsym',
         '--anat-only',
     ]
     _run_and_generate(TEST_NAME, parameters, test_main=False, check_outputs=False)
@@ -719,7 +734,8 @@ def test_multi_t1w(data_dir, output_dir, working_dir):
         f'--eddy-config={eddy_config}',
         '--denoise-method=none',
         '--sloppy',
-        '--output-resolution=5',
+        '--output-spaces=acpc:res-5mm',
+        '--output-spaces=MNI152NLin2009cAsym',
         '--anat-only',
         '--subject-anatomical-reference=unbiased',
     ]
@@ -757,8 +773,9 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         '--b1-biascorrect-stage=none',
         '--write-graph',
-        '--output-resolution=5',
         '--hmc-method=shoreline',
+        '--output-spaces=acpc:res-5mm',
+        '--output-spaces=MNI152NLin2009cAsym',
         f'--bids-filter-file={bids_filter}',
     ]
 
@@ -794,7 +811,8 @@ def test_forrest_gump(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         '--b1-biascorrect-stage=none',
         '--write-graph',
-        '--output-resolution=5',
+        '--output-spaces=acpc:res-5mm',
+        '--output-spaces=MNI152NLin2009cAsym',
         f'--bids-filter-file={bids_filter}',
     ]
 
@@ -830,7 +848,8 @@ def test_forrest_gump_patch2self(data_dir, output_dir, working_dir):
         '--denoise-method=patch2self',
         '--b1-biascorrect-stage=none',
         '--write-graph',
-        '--output-resolution=5',
+        '--output-spaces=acpc:res-5mm',
+        '--output-spaces=MNI152NLin2009cAsym',
         f'--bids-filter-file={bids_filter}',
     ]
 
@@ -851,7 +870,16 @@ def test_parser_accepts_tortoise(tmp_path):
     bids.mkdir()
     out = tmp_path / 'out'
     opts = parser.parse_args(
-        [str(bids), str(out), 'participant', '--hmc-model', 'tortoise', '--output-resolution', '2']
+        [
+            str(bids),
+            str(out),
+            'participant',
+            '--hmc-model',
+            'tortoise',
+            '--output-spaces',
+            'acpc:res-2mm',
+            'MNI152NLin2009cAsym',
+        ]
     )
     assert opts.hmc_model == 'tortoise'
 
@@ -873,8 +901,9 @@ def test_parser_rejects_removed_diffprep_hmc_models(tmp_path):
                     'participant',
                     '--hmc-model',
                     removed,
-                    '--output-resolution',
-                    '2',
+                    '--output-spaces',
+                    'acpc:res-2mm',
+                    'MNI152NLin2009cAsym',
                 ]
             )
 

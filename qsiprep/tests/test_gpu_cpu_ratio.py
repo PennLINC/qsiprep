@@ -91,8 +91,9 @@ def test_cli_parses_a_value(tmp_path):
             'participant',
             '--tortoise-gpu-cpu-ratio',
             '40',
-            '--output-resolution',
-            '2.0',
+            '--output-spaces',
+            'acpc:res-2mm',
+            'MNI152NLin2009cAsym',
             '--skip-bids-validation',
         ]
     )

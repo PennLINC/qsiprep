@@ -38,11 +38,25 @@ from .util import _create_mem_gb, init_dwi_reference_wf
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
+def _select_grid(grids, index):
+    """Pick one output grid out of the list the anatomical workflow produced."""
+    return grids[index]
+
+
+def _grid_metadata(grid_file):
+    """Report the grid's actual voxel size, which res-native* only fixes at run time."""
+    import nibabel as nb
+
+    zooms = [round(float(z), 4) for z in nb.load(grid_file).header.get_zooms()[:3]]
+    return {'Resolution': zooms}
+
+
 def init_dwi_finalize_wf(
     unit,
     name,
     source_file,
     output_prefix,
+    acpc_specs,
     write_derivatives=True,
     make_intramodal_template=False,
 ):
@@ -57,7 +71,7 @@ def init_dwi_finalize_wf(
         wf = init_dwi_finalize_wf(name='finalize_wf',
                                   omp_nthreads=1,
                                   output_dir='.',
-                                  output_resolution=2.0,
+                                  acpc_specs=parse_output_spaces(['acpc:res-2mm']),
                                   template='MNI152NLin2009cAsym',
                                   b0_threshold=100,
                                   low_mem=False,
@@ -72,14 +86,16 @@ def init_dwi_finalize_wf(
 
         output_prefix : str
             beginning of the output file name (eg 'sub-1_buds-j')
+        acpc_specs : list of SpaceSpec
+            The requested ACPC output resolutions. One ``init_dwi_trans_wf`` and one
+            group of derivatives sinks is built per spec. The ``res-`` entity is only
+            written on the derivatives when more than one is requested.
         ignore : list
             Preprocessing steps to skip (eg "fieldmaps")
         template : str
             Name of template targeted by ``template`` output space
         output_dir : str
             Directory in which to save derivatives
-        output_resolution : float
-            Output voxel resolution in mm
         pepolar_method : str
             Either 'DRBUDDI', 'TOPUP' or 'TOPUP+DRBUDDI'. The method for SDC when EPI
             fieldmaps are used.
@@ -115,8 +131,9 @@ def init_dwi_finalize_wf(
             FreeSurfer SUBJECTS_DIR
         subject_id
             FreeSurfer subject ID
-        dwi_sampling_grid
-            A NIfTI1 file with the grid spacing and FoV to resample the DWIs
+        dwi_sampling_grids
+            A list of NIfTI1 files with the grid spacing and FoV to resample the DWIs
+            to, one per requested ACPC resolution, in ``acpc_specs`` order.
         b0_ref_image
             A Nifti of the b0 reference that was used for hmc and sdc
         intramodal_template
@@ -203,7 +220,7 @@ def init_dwi_finalize_wf(
                 't1_aseg',
                 't1_aparc',
                 't1_2_mni_reverse_transform',
-                'dwi_sampling_grid',
+                'dwi_sampling_grids',
                 'raw_qc_file',
                 'coreg_score',
                 'raw_concatenated',
@@ -291,321 +308,425 @@ def init_dwi_finalize_wf(
             (b0_to_im_template, ds_report_intramodal, [('out_report', 'in_file')]),
         ])  # fmt:skip
 
-    # Do the resampling
-    transform_dwis_t1 = init_dwi_trans_wf(
-        source_file=source_file,
-        name='transform_dwis_t1',
-        template='ACPC',
-        mem_gb=mem_gb['resampled'],
-        use_compression=False,
-        concatenate=True,
-        doing_topup=doing_topup,
-    )
+    if not write_derivatives and gradwarp_plan is not None:
+        # write_derivatives is False only under --distortion-group-merge:
+        # init_distortion_group_merge_wf writes the derivatives for this
+        # output instead, and it has no grad_dev node. Say so rather than
+        # silently not honouring the documented promise.
+        config.loggers.workflow.warning(
+            'Gradient nonlinearity: %s is written by the distortion-group '
+            'merge workflow (--distortion-group-merge), which does not '
+            'produce a gradient deviation map. The spatial gradwarp '
+            'correction is still applied, but no *_graddev.nii.gz and no '
+            'GradientWarpDimensions sidecar key will be written for this '
+            'output.',
+            unit.output_name,
+        )
 
-    # Apply denoising to the interpolated data if requested
-    final_denoise_wf = init_finalize_denoising_wf(
-        source_file=source_file,
-        do_biascorr=config.workflow.b1_biascorrect_stage == 'final',
-        num_dwi_acquisitions=len(all_dwis),
-    )
+    if not write_derivatives:
+        # This unit is concatenated later by init_distortion_group_merge_wf, which
+        # writes one resolution through this workflow's single-valued outputnode.
+        # nipype prunes nothing, so building the rest would resample and denoise
+        # them in full and then discard the result. Truncating here, before
+        # multi_acpc is computed, also names the survivor as the single resolution
+        # it now is. The parser rejects this combination; the guard keeps it cheap
+        # if that check is ever relaxed.
+        acpc_specs = acpc_specs[:1]
 
-    workflow.connect([
-        (inputnode, transform_dwis_t1, [
-            ('b0_indices', 'inputnode.b0_indices'),
-            ('bval_files', 'inputnode.bval_files'),
-            ('bvec_files', 'inputnode.bvec_files'),
-            ('b0_ref_image', 'inputnode.b0_ref_image'),
-            ('cnr_map', 'inputnode.cnr_map'),
-            ('t1_mask', 'inputnode.t1_mask'),
-            ('dwi_mask', 'inputnode.dwi_mask'),
-            ('hmc_xforms', 'inputnode.hmc_xforms'),
-            ('fieldwarps', 'inputnode.fieldwarps'),
-            ('gradwarp_field', 'inputnode.gradwarp_field'),
-            ('dwi_files', 'inputnode.dwi_files'),
-            ('dwi_sampling_grid', 'inputnode.output_grid'),
-            ('b0_to_intramodal_template_transforms',
-             'inputnode.b0_to_intramodal_template_transforms'),
-            ('intramodal_template_to_t1_affine',
-             'inputnode.intramodal_template_to_t1_affine'),
-            ('intramodal_template_to_t1_warp',
-             'inputnode.intramodal_template_to_t1_warp'),
-            ('itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
-            ('sdc_scaling_images', 'inputnode.sdc_scaling_images'),
-        ]),
-        (transform_dwis_t1, outputnode, [
-            ('outputnode.bvals', 'bvals_t1'),
-            ('outputnode.rotated_bvecs', 'bvecs_t1'),
-            ('outputnode.cnr_map_resampled', 'cnr_map_t1'),
-            ('outputnode.local_bvecs', 'local_bvecs_t1'),
-        ]),
-        (inputnode, final_denoise_wf, [('confounds', 'inputnode.confounds')]),
-        (transform_dwis_t1, final_denoise_wf, [
-            ('outputnode.dwi_resampled', 'inputnode.dwi_t1'),
-            ('outputnode.bvals', 'inputnode.dwi_t1_bval'),
-            ('outputnode.rotated_bvecs', 'inputnode.dwi_t1_bvec'),
-            ('outputnode.b0_series', 'inputnode.t1_b0_series'),
-            ('outputnode.dwi_ref_resampled', 'inputnode.t1_b0_ref'),
-            ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask_t1'),
-            ('outputnode.resampled_qc', 'inputnode.series_qc_t1'),
-        ]),
-        (final_denoise_wf, outputnode, [
-            ('outputnode.confounds', 'confounds'),
-            ('outputnode.dwi_t1', 'dwi_t1'),
-            ('outputnode.t1_b0_ref', 't1_b0_ref'),
-            ('outputnode.dwi_mask_t1', 'dwi_mask_t1'),
-        ]),
-    ])  # fmt:skip
+    # Fan out the resampling: one dwi_trans_wf (and, when write_derivatives, one
+    # group of derivatives sinks) per requested ACPC resolution. The res- entity
+    # only appears once more than one resolution was requested -- a single ACPC
+    # resolution must keep producing exactly the filenames QSIRecon already
+    # expects. The sidecar's Resolution key is decided separately, below.
+    multi_acpc = len(acpc_specs) > 1
+    # Built once, from the first spec that reaches the derivatives section below.
+    gradient_plot = None
+    grad_dev_initial_ref = None
 
-    if doing_topup:
+    for index, spec in enumerate(acpc_specs):
+        label = spec.resolution.label
+        suffix = f'_res{label}' if multi_acpc else ''
+        res_entities = {'res': label} if multi_acpc else {}
+        resolution_for_derivatives = spec.resolution if multi_acpc else None
+        # res-native* is resolved from the DWI headers at run time, so the sidecar
+        # is the only place a run reports what it turned out to be -- write it even
+        # for a single ACPC spec, where there is no res- entity in the filename.
+        write_resolution_meta = multi_acpc or spec.resolution.kind == 'native'
+
+        dwi_trans_wf = init_dwi_trans_wf(
+            source_file=source_file,
+            name=f'dwi_trans_wf{suffix}',
+            template='ACPC',
+            resolution=spec.resolution,
+            mem_gb=mem_gb['resampled'],
+            use_compression=False,
+            concatenate=True,
+            doing_topup=doing_topup,
+        )
+
+        # Apply denoising to the interpolated data if requested
+        final_denoise_wf = init_finalize_denoising_wf(
+            source_file=source_file,
+            do_biascorr=config.workflow.b1_biascorrect_stage == 'final',
+            num_dwi_acquisitions=len(all_dwis),
+            sink_entities=res_entities,
+            name=f'final_denoise_wf{suffix}',
+        )
+
         workflow.connect([
-            (inputnode, transform_dwis_t1, [('fieldmap_hz', 'inputnode.fieldmap_hz')]),
-            (transform_dwis_t1, outputnode, [
-                ('outputnode.fieldmap_hz_resampled', 'fieldmap_hz_t1'),
+            (inputnode, dwi_trans_wf, [
+                ('b0_indices', 'inputnode.b0_indices'),
+                ('bval_files', 'inputnode.bval_files'),
+                ('bvec_files', 'inputnode.bvec_files'),
+                ('b0_ref_image', 'inputnode.b0_ref_image'),
+                ('cnr_map', 'inputnode.cnr_map'),
+                ('t1_mask', 'inputnode.t1_mask'),
+                ('dwi_mask', 'inputnode.dwi_mask'),
+                ('hmc_xforms', 'inputnode.hmc_xforms'),
+                ('fieldwarps', 'inputnode.fieldwarps'),
+                ('gradwarp_field', 'inputnode.gradwarp_field'),
+                ('dwi_files', 'inputnode.dwi_files'),
+                (('dwi_sampling_grids', _select_grid, index), 'inputnode.output_grid'),
+                ('b0_to_intramodal_template_transforms',
+                 'inputnode.b0_to_intramodal_template_transforms'),
+                ('intramodal_template_to_t1_affine',
+                 'inputnode.intramodal_template_to_t1_affine'),
+                ('intramodal_template_to_t1_warp',
+                 'inputnode.intramodal_template_to_t1_warp'),
+                ('itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
+                ('sdc_scaling_images', 'inputnode.sdc_scaling_images'),
+            ]),
+            (inputnode, final_denoise_wf, [('confounds', 'inputnode.confounds')]),
+            (dwi_trans_wf, final_denoise_wf, [
+                ('outputnode.dwi_resampled', 'inputnode.dwi_t1'),
+                ('outputnode.bvals', 'inputnode.dwi_t1_bval'),
+                ('outputnode.rotated_bvecs', 'inputnode.dwi_t1_bvec'),
+                ('outputnode.b0_series', 'inputnode.t1_b0_series'),
+                ('outputnode.dwi_ref_resampled', 'inputnode.t1_b0_ref'),
+                ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask_t1'),
+                ('outputnode.resampled_qc', 'inputnode.series_qc_t1'),
             ]),
         ])  # fmt:skip
 
-    # The workflow is done if we will be concatenating images later
-    if not write_derivatives:
-        if gradwarp_plan is not None:
-            # write_derivatives is False only under --distortion-group-merge:
-            # init_distortion_group_merge_wf writes the derivatives for this
-            # output instead, and it has no grad_dev node. Say so rather than
-            # silently not honouring the documented promise.
-            config.loggers.workflow.warning(
-                'Gradient nonlinearity: %s is written by the distortion-group '
-                'merge workflow (--distortion-group-merge), which does not '
-                'produce a gradient deviation map. The spatial gradwarp '
-                'correction is still applied, but no *_graddev.nii.gz and no '
-                'GradientWarpDimensions sidecar key will be written for this '
-                'output.',
-                unit.output_name,
+        if doing_topup:
+            workflow.connect([
+                (inputnode, dwi_trans_wf, [('fieldmap_hz', 'inputnode.fieldmap_hz')]),
+            ])  # fmt:skip
+
+        if index == 0:
+            # The distortion-group merge path (final_merge_wf in base.py) has no
+            # notion of multiple output resolutions, so the first requested ACPC
+            # resolution is the one exposed through this workflow's single-valued
+            # outputnode.
+            workflow.connect([
+                (dwi_trans_wf, outputnode, [
+                    ('outputnode.bvals', 'bvals_t1'),
+                    ('outputnode.rotated_bvecs', 'bvecs_t1'),
+                    ('outputnode.cnr_map_resampled', 'cnr_map_t1'),
+                    ('outputnode.local_bvecs', 'local_bvecs_t1'),
+                ]),
+                (final_denoise_wf, outputnode, [
+                    ('outputnode.confounds', 'confounds'),
+                    ('outputnode.dwi_t1', 'dwi_t1'),
+                    ('outputnode.t1_b0_ref', 't1_b0_ref'),
+                    ('outputnode.dwi_mask_t1', 'dwi_mask_t1'),
+                ]),
+                (inputnode, outputnode, [('hmc_optimization_data', 'hmc_optimization_data')]),
+            ])  # fmt:skip
+            if doing_topup:
+                workflow.connect([
+                    (dwi_trans_wf, outputnode, [
+                        ('outputnode.fieldmap_hz_resampled', 'fieldmap_hz_t1'),
+                    ]),
+                ])  # fmt:skip
+
+        # The workflow is done with this resolution if we will be concatenating
+        # images later -- the derivatives sinks below are skipped entirely.
+        if not write_derivatives:
+            continue
+
+        # CONNECT TO DERIVATIVES #####################
+        gtab_t1 = pe.Node(MRTrixGradientTable(), name=f'gtab_t1{suffix}')
+        btab_t1 = pe.Node(DSIStudioBTable(bvec_convention='DIPY'), name=f'btab_t1{suffix}')
+        t1_dice_calc = init_mask_overlap_wf(name=f't1_dice_calc{suffix}')
+
+        if gradient_plot is None:
+            # bvecs don't change with the output grid, so the sampling-scheme
+            # report is built once, from the primary (first-requested) resolution.
+            gradient_plot = pe.Node(
+                GradientPlot(), name='gradient_plot', run_without_submitting=True
             )
-        return workflow
+            gradient_plot.inputs.source_pe_dirs = {
+                path: overrides['PhaseEncodingDirection']
+                for path, overrides in unit.sidecar_overrides().items()
+            }
+            ds_report_gradients = pe.Node(
+                DerivativesDataSink(
+                    datatype='figures',
+                    desc='samplingscheme',
+                    suffix='dwi',
+                    source_file=source_file,
+                ),
+                name='ds_report_gradients',
+                run_without_submitting=True,
+                mem_gb=DEFAULT_MEMORY_MIN_GB,
+            )
+            workflow.connect([
+                (dwi_trans_wf, gradient_plot, [
+                    ('outputnode.rotated_bvecs', 'final_bvec_file'),
+                ]),
+                (inputnode, gradient_plot, [
+                    ('bvec_files', 'orig_bvec_files'),
+                    ('bval_files', 'orig_bval_files'),
+                    ('original_files', 'source_files'),
+                ]),
+                (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')]),
+            ])  # fmt:skip
 
-    # CONNECT TO DERIVATIVES #####################
-    gtab_t1 = pe.Node(MRTrixGradientTable(), name='gtab_t1')
-    btab_t1 = pe.Node(DSIStudioBTable(bvec_convention='DIPY'), name='btab_t1')
-    t1_dice_calc = init_mask_overlap_wf(name='t1_dice_calc')
-    gradient_plot = pe.Node(GradientPlot(), name='gradient_plot', run_without_submitting=True)
-    gradient_plot.inputs.source_pe_dirs = {
-        path: overrides['PhaseEncodingDirection']
-        for path, overrides in unit.sidecar_overrides().items()
-    }
-    ds_report_gradients = pe.Node(
-        DerivativesDataSink(
-            datatype='figures',
-            desc='samplingscheme',
-            suffix='dwi',
+        dwi_derivatives_wf = init_dwi_derivatives_wf(
             source_file=source_file,
-        ),
-        name='ds_report_gradients',
-        run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB,
-    )
-
-    dwi_derivatives_wf = init_dwi_derivatives_wf(
-        source_file=source_file,
-    )
-
-    # Combine all the QC measures for a series QC
-    series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name='series_qc')
-    ds_series_qc = pe.Node(
-        DerivativesDataSink(
-            space='ACPC',
-            desc='image',
-            suffix='qc',
-            extension='tsv',
-            source_file=source_file,
-            base_directory=config.execution.output_dir,
-        ),
-        name='ds_series_qc',
-        run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB,
-    )
-
-    # Write a metadata sidecar for the derivatives
-    merged_sidecar_data = unit_to_sidecar(unit)
-    if gradwarp_plan is not None:
-        # No spatial warp (DIS3D) still gets a value here: 'none' says the
-        # scanner had already corrected the geometry, not that this field is
-        # absent from the sidecar.
-        merged_sidecar_data['GradientWarpDimensions'] = gradwarp_plan.warp_dim or 'none'
-    merged_sidecar = pe.Node(
-        DerivativesSidecar(sidecar_data=merged_sidecar_data, source_file=source_file),
-        name='merged_sidecar',
-    )
-    ds_merged_sidecar = pe.Node(
-        DerivativesDataSink(
-            space='ACPC',
-            desc='preproc',
-            extension='.json',
-            source_file=source_file,
-            base_directory=config.execution.output_dir,
-        ),
-        name='ds_merged_sidecar',
-        run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB,
-    )
-
-    # Write the carpetplot data (which is the text output from eddy)
-    ds_carpetplot_data = pe.Node(
-        DerivativesDataSink(
-            space='ACPC',
-            desc='slice',
-            suffix='qc',
-            source_file=source_file,
-            base_directory=config.execution.output_dir,
-        ),
-        name='ds_carpetplot',
-        run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB,
-    )
-
-    # The voxelwise gradient deviation tensor (grad_dev): gradient nonlinearity
-    # corrupts the diffusion encoding itself, not just voxel positions, and no
-    # scanner can correct that -- the bval/bvec table holds one value per
-    # volume and has nowhere to put spatially varying information. So this is
-    # produced whenever a gradwarp plan resolves, even for a DIS3D unit that
-    # gets no spatial correction at all.
-    if gradwarp_plan is not None:
-        # CreateGradientNonlinearityBMatrix reads both -f and -i as 3D NIfTIs
-        # (TORTOISE's main() calls readImageD<ImageType3D> for both). t1_b0_ref
-        # is already a single reference volume (init_dwi_reference_wf's
-        # ref_image), but raw_concatenated is the raw series in one 4D file, so
-        # a single volume has to be extracted from it.
-        grad_dev_initial_ref = pe.Node(
-            niu.Function(function=_extract_first_b0, output_names=['out_file']),
-            name='grad_dev_initial_ref',
+            resolution=resolution_for_derivatives,
+            # hmcOptimization is produced before resampling and is the same for
+            # every ACPC resolution; writing it from every dwi_derivatives_wf
+            # instance would be a same-path collision, so only the first spec
+            # writes it.
+            write_hmc_optimization=(index == 0),
+            name=f'dwi_derivatives_wf{suffix}',
         )
-        # Known approximation: the tool orients the L matrix with a rigid
-        # transform it estimates itself from these two images
-        # (``rigid_trans = RigidRegisterImages(final_b0, initial_b0)`` in
-        # CreateGradientNonlinearityBMatrix.cxx), rather than with
-        # ``itk_b0_to_t1`` -- the affine qsiprep actually resampled the data
-        # with. HCP instead reuses its real ``diff2str.mat``. Matching TORTOISE
-        # was the deliberate choice here, and TORTOISE likewise does not
-        # propagate the nonlinear SDC part into the L matrix, but the two
-        # transforms are not guaranteed identical. Recorded in the sidecar.
-        grad_dev = pe.Node(
-            CreateGradientNonlinearityBMatrix(
-                nonlinearity=gradwarp_plan.coeff_file,
-                is_ge=gradwarp_plan.is_ge,
-            ),
-            name='grad_dev',
-        )
-        ds_grad_dev = pe.Node(
+        workflow.connect([
+            (inputnode, dwi_derivatives_wf, [
+                ('dwi_files', 'inputnode.source_file'),
+                ('hmc_optimization_data', 'inputnode.hmc_optimization_data'),
+            ]),
+            (dwi_trans_wf, dwi_derivatives_wf, [
+                ('outputnode.bvals', 'inputnode.bvals_t1'),
+                ('outputnode.rotated_bvecs', 'inputnode.bvecs_t1'),
+                ('outputnode.cnr_map_resampled', 'inputnode.cnr_map_t1'),
+                ('outputnode.local_bvecs', 'inputnode.local_bvecs_t1'),
+            ]),
+            (final_denoise_wf, dwi_derivatives_wf, [
+                ('outputnode.dwi_t1', 'inputnode.dwi_t1'),
+                ('outputnode.t1_b0_ref', 'inputnode.t1_b0_ref'),
+                ('outputnode.dwi_mask_t1', 'inputnode.dwi_mask_t1'),
+            ]),
+            (gtab_t1, dwi_derivatives_wf, [('gradient_file', 'inputnode.gradient_table_t1')]),
+            (btab_t1, dwi_derivatives_wf, [('btable_file', 'inputnode.btable_t1')]),
+        ])  # fmt:skip
+
+        # Combine all the QC measures for a series QC
+        series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name=f'series_qc{suffix}')
+        ds_series_qc = pe.Node(
             DerivativesDataSink(
+                space='ACPC',
+                desc='image',
+                suffix='qc',
+                extension='tsv',
                 source_file=source_file,
                 base_directory=config.execution.output_dir,
-                space='ACPC',
-                suffix='graddev',
-                extension='.nii.gz',
-                compress=True,
-                meta_dict={
-                    'Description': (
-                        'Voxelwise gradient deviation tensor (row-major 3x3 L '
-                        'matrix per voxel). The effective diffusion gradient at '
-                        'a voxel is L @ g; because L carries scaling and shear, '
-                        'both the b-vector and the b-value deviate per voxel.'
-                    ),
-                    'GradientCoefficientFile': os.path.basename(gradwarp_plan.coeff_file),
-                    'GradientWarpDimensions': gradwarp_plan.warp_dim or 'none',
-                    # A boolean, not a Manufacturer string: all that was
-                    # resolved is whether TORTOISE's GE code path was taken.
-                    'GradientCoefficientIsGE': gradwarp_plan.is_ge,
-                    'GradientCorrectionBasis': gradwarp_plan.basis,
-                    # CreateGradientNonlinearityBMatrix re-derives its own rigid
-                    # initial->final transform rather than consuming qsiprep's
-                    # coregistration affine, so the L matrix is oriented by a
-                    # transform close to, but not identical to, the one that
-                    # actually resampled the data. See the note on the node
-                    # below.
-                    'GradientDeviationOrientation': (
-                        'Oriented by a rigid registration estimated internally by '
-                        "TORTOISE's CreateGradientNonlinearityBMatrix between the raw "
-                        'native b=0 and the final ACPC b=0, not by the coregistration '
-                        'transform QSIPrep applied to the data.'
-                    ),
-                },
+                **res_entities,
             ),
-            name='ds_grad_dev',
+            name=f'ds_series_qc{suffix}',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
+
+        # Write a metadata sidecar for the derivatives
+        merged_sidecar_data = unit_to_sidecar(unit)
+        if gradwarp_plan is not None:
+            # No spatial warp (DIS3D) still gets a value here: 'none' says the
+            # scanner had already corrected the geometry, not that this field is
+            # absent from the sidecar.
+            merged_sidecar_data['GradientWarpDimensions'] = gradwarp_plan.warp_dim or 'none'
+        merged_sidecar = pe.Node(
+            DerivativesSidecar(sidecar_data=merged_sidecar_data, source_file=source_file),
+            name=f'merged_sidecar{suffix}',
+        )
+        ds_merged_sidecar = pe.Node(
+            DerivativesDataSink(
+                space='ACPC',
+                desc='preproc',
+                extension='.json',
+                source_file=source_file,
+                base_directory=config.execution.output_dir,
+                **res_entities,
+            ),
+            name=f'ds_merged_sidecar{suffix}',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+
+        if write_resolution_meta:
+            # res-native* is resolved from the DWI headers at run time, so the
+            # sidecar is the only place a run reports what the grid turned out to
+            # be. It goes here rather than on the data sinks: niworkflows derives a
+            # sidecar path from the sink's own filename, and the preproc dwi, bval,
+            # bvec, b and b_table sinks all share this node's stem.
+            grid_metadata = pe.Node(
+                niu.Function(
+                    input_names=['grid_file'],
+                    output_names=['meta_dict'],
+                    function=_grid_metadata,
+                ),
+                name=f'grid_metadata{suffix}',
+                run_without_submitting=True,
+            )
+            workflow.connect([
+                (inputnode, grid_metadata, [
+                    (('dwi_sampling_grids', _select_grid, index), 'grid_file'),
+                ]),
+                (grid_metadata, merged_sidecar, [('meta_dict', 'extra_data')]),
+            ])  # fmt:skip
+
+        # Write the carpetplot data (which is the text output from eddy)
+        ds_carpetplot_data = pe.Node(
+            DerivativesDataSink(
+                space='ACPC',
+                desc='slice',
+                suffix='qc',
+                source_file=source_file,
+                base_directory=config.execution.output_dir,
+                **res_entities,
+            ),
+            name=f'ds_carpetplot{suffix}',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+
+        # The voxelwise gradient deviation tensor (grad_dev): gradient nonlinearity
+        # corrupts the diffusion encoding itself, not just voxel positions, and no
+        # scanner can correct that -- the bval/bvec table holds one value per
+        # volume and has nowhere to put spatially varying information. So this is
+        # produced whenever a gradwarp plan resolves, even for a DIS3D unit that
+        # gets no spatial correction at all. The L matrix is voxelwise, so it is
+        # produced once per requested ACPC resolution, on that grid.
+        if gradwarp_plan is not None:
+            if grad_dev_initial_ref is None:
+                # CreateGradientNonlinearityBMatrix reads both -f and -i as 3D
+                # NIfTIs (TORTOISE's main() calls readImageD<ImageType3D> for
+                # both). t1_b0_ref is already a single reference volume
+                # (init_dwi_reference_wf's ref_image), but raw_concatenated is the
+                # raw series in one 4D file, so a single volume has to be
+                # extracted from it. The raw series does not depend on the output
+                # grid, so this is built once and shared across resolutions.
+                grad_dev_initial_ref = pe.Node(
+                    niu.Function(function=_extract_first_b0, output_names=['out_file']),
+                    name='grad_dev_initial_ref',
+                )
+                workflow.connect([
+                    (inputnode, grad_dev_initial_ref, [
+                        ('raw_concatenated', 'in_file'),
+                        ('b0_indices', 'b0_indices'),
+                    ]),
+                ])  # fmt:skip
+
+            # Known approximation: the tool orients the L matrix with a rigid
+            # transform it estimates itself from these two images
+            # (``rigid_trans = RigidRegisterImages(final_b0, initial_b0)`` in
+            # CreateGradientNonlinearityBMatrix.cxx), rather than with
+            # ``itk_b0_to_t1`` -- the affine qsiprep actually resampled the data
+            # with. HCP instead reuses its real ``diff2str.mat``. Matching TORTOISE
+            # was the deliberate choice here, and TORTOISE likewise does not
+            # propagate the nonlinear SDC part into the L matrix, but the two
+            # transforms are not guaranteed identical. Recorded in the sidecar.
+            grad_dev = pe.Node(
+                CreateGradientNonlinearityBMatrix(
+                    nonlinearity=gradwarp_plan.coeff_file,
+                    is_ge=gradwarp_plan.is_ge,
+                ),
+                name=f'grad_dev{suffix}',
+            )
+            ds_grad_dev = pe.Node(
+                DerivativesDataSink(
+                    source_file=source_file,
+                    base_directory=config.execution.output_dir,
+                    space='ACPC',
+                    suffix='graddev',
+                    extension='.nii.gz',
+                    compress=True,
+                    meta_dict={
+                        'Description': (
+                            'Voxelwise gradient deviation tensor (row-major 3x3 L '
+                            'matrix per voxel). The effective diffusion gradient at '
+                            'a voxel is L @ g; because L carries scaling and shear, '
+                            'both the b-vector and the b-value deviate per voxel.'
+                        ),
+                        'GradientCoefficientFile': os.path.basename(gradwarp_plan.coeff_file),
+                        'GradientWarpDimensions': gradwarp_plan.warp_dim or 'none',
+                        # A boolean, not a Manufacturer string: all that was
+                        # resolved is whether TORTOISE's GE code path was taken.
+                        'GradientCoefficientIsGE': gradwarp_plan.is_ge,
+                        'GradientCorrectionBasis': gradwarp_plan.basis,
+                        # CreateGradientNonlinearityBMatrix re-derives its own rigid
+                        # initial->final transform rather than consuming qsiprep's
+                        # coregistration affine, so the L matrix is oriented by a
+                        # transform close to, but not identical to, the one that
+                        # actually resampled the data. See the note on the node
+                        # below.
+                        'GradientDeviationOrientation': (
+                            'Oriented by a rigid registration estimated internally by '
+                            "TORTOISE's CreateGradientNonlinearityBMatrix between the raw "
+                            'native b=0 and the final ACPC b=0, not by the coregistration '
+                            'transform QSIPrep applied to the data.'
+                        ),
+                    },
+                    **res_entities,
+                ),
+                name=f'ds_grad_dev{suffix}',
+                run_without_submitting=True,
+                mem_gb=DEFAULT_MEMORY_MIN_GB,
+            )
+            workflow.connect([
+                (grad_dev_initial_ref, grad_dev, [('out_file', 'initial_image')]),
+                (final_denoise_wf, grad_dev, [('outputnode.t1_b0_ref', 'final_image')]),
+                (grad_dev, ds_grad_dev, [('grad_dev', 'in_file')]),
+            ])  # fmt:skip
+
         workflow.connect([
-            (inputnode, grad_dev_initial_ref, [
-                ('raw_concatenated', 'in_file'),
-                ('b0_indices', 'b0_indices'),
+            (inputnode, series_qc, [
+                ('raw_qc_file', 'pre_qc'),
+                ('confounds', 'confounds_file'),
             ]),
-            (grad_dev_initial_ref, grad_dev, [('out_file', 'initial_image')]),
-            (outputnode, grad_dev, [('t1_b0_ref', 'final_image')]),
-            (grad_dev, ds_grad_dev, [('grad_dev', 'in_file')]),
+            (inputnode, ds_carpetplot_data, [('carpetplot_data', 'in_file')]),
+            (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
+            (final_denoise_wf, series_qc, [
+                ('outputnode.series_qc_postproc', 't1_qc_postproc'),
+            ]),
+            (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
+            (dwi_trans_wf, series_qc, [
+                ('outputnode.cnr_map_resampled', 't1_cnr_file'),
+            ]),
+            (final_denoise_wf, series_qc, [
+                ('outputnode.dwi_mask_t1', 't1_mask_file'),
+                ('outputnode.t1_b0_series', 't1_b0_series'),
+            ]),
+            (dwi_trans_wf, series_qc, [('outputnode.resampled_qc', 't1_qc')]),
+            (dwi_trans_wf, t1_dice_calc, [
+                ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask'),
+            ]),
+            (dwi_trans_wf, gtab_t1, [
+                ('outputnode.bvals', 'bval_file'),
+                ('outputnode.rotated_bvecs', 'bvec_file'),
+            ]),
+            (dwi_trans_wf, btab_t1, [
+                ('outputnode.bvals', 'bval_file'),
+                ('outputnode.rotated_bvecs', 'bvec_file'),
+            ]),
+            (inputnode, t1_dice_calc, [('t1_mask', 'inputnode.anatomical_mask')]),
+            (merged_sidecar, ds_merged_sidecar, [('derivatives_json', 'in_file')]),
         ])  # fmt:skip
 
-    workflow.connect([
-        (inputnode, series_qc, [
-            ('raw_qc_file', 'pre_qc'),
-            ('confounds', 'confounds_file'),
-        ]),
-        (inputnode, ds_carpetplot_data, [('carpetplot_data', 'in_file')]),
-        (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
-        (final_denoise_wf, series_qc, [
-            ('outputnode.series_qc_postproc', 't1_qc_postproc'),
-        ]),
-        (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
-        (transform_dwis_t1, series_qc, [
-            ('outputnode.cnr_map_resampled', 't1_cnr_file'),
-        ]),
+        if index == 0:
+            workflow.connect([
+                (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')]),
+                (btab_t1, outputnode, [('btable_file', 'btable_t1')]),
+            ])  # fmt:skip
 
-        (final_denoise_wf, series_qc, [
-            ('outputnode.dwi_mask_t1', 't1_mask_file'),
-            ('outputnode.t1_b0_series', 't1_b0_series'),
-        ]),
-        (inputnode, dwi_derivatives_wf, [('dwi_files', 'inputnode.source_file')]),
-        (inputnode, outputnode, [('hmc_optimization_data', 'hmc_optimization_data')]),
-        (transform_dwis_t1, series_qc, [('outputnode.resampled_qc', 't1_qc')]),
-        (transform_dwis_t1, t1_dice_calc, [
-            ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask'),
-        ]),
-        (outputnode, gradient_plot, [('bvecs_t1', 'final_bvec_file')]),
-        (transform_dwis_t1, gtab_t1, [
-            ('outputnode.bvals', 'bval_file'),
-            ('outputnode.rotated_bvecs', 'bvec_file'),
-        ]),
-        (transform_dwis_t1, btab_t1, [
-            ('outputnode.bvals', 'bval_file'),
-            ('outputnode.rotated_bvecs', 'bvec_file'),
-        ]),
-        (inputnode, t1_dice_calc, [('t1_mask', 'inputnode.anatomical_mask')]),
-        (gtab_t1, outputnode, [('gradient_file', 'gradient_table_t1')]),
-        (btab_t1, outputnode, [('btable_file', 'btable_t1')]),
-        (merged_sidecar, ds_merged_sidecar, [('derivatives_json', 'in_file')]),
-        (outputnode, dwi_derivatives_wf, [
-            ('dwi_t1', 'inputnode.dwi_t1'),
-            ('dwi_mask_t1', 'inputnode.dwi_mask_t1'),
-            ('cnr_map_t1', 'inputnode.cnr_map_t1'),
-            ('bvals_t1', 'inputnode.bvals_t1'),
-            ('bvecs_t1', 'inputnode.bvecs_t1'),
-            ('local_bvecs_t1', 'inputnode.local_bvecs_t1'),
-            ('t1_b0_ref', 'inputnode.t1_b0_ref'),
-            ('gradient_table_t1', 'inputnode.gradient_table_t1'),
-            ('btable_t1', 'inputnode.btable_t1'),
-            ('hmc_optimization_data', 'inputnode.hmc_optimization_data'),
-        ]),
-        (inputnode, gradient_plot, [
-            ('bvec_files', 'orig_bvec_files'),
-            ('bval_files', 'orig_bval_files'),
-            ('original_files', 'source_files'),
-        ]),
-        (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')]),
-    ])  # fmt:skip
-
-    if doing_topup:
-        workflow.connect([
-            (transform_dwis_t1, series_qc, [
-                ('outputnode.fieldmap_hz_resampled', 't1_fieldmap_hz_file'),
-            ]),
-        ])  # fmt:skip
+        if doing_topup:
+            workflow.connect([
+                (dwi_trans_wf, series_qc, [
+                    ('outputnode.fieldmap_hz_resampled', 't1_fieldmap_hz_file'),
+                ]),
+            ])  # fmt:skip
 
     return workflow
 
@@ -652,6 +773,7 @@ def init_finalize_denoising_wf(
     num_dwi_acquisitions,
     split_biascorr=False,
     do_patch2self=False,
+    sink_entities=None,
     name='final_denoise_wf',
 ):
     """
@@ -737,6 +859,7 @@ def init_finalize_denoising_wf(
                     datatype='figures',
                     desc='biascorrpost',
                     source_file=source_file,
+                    **(sink_entities or {}),
                 ),
                 name='ds_report_' + name + '_biascorr',
                 run_without_submitting=True,
@@ -846,6 +969,7 @@ def init_finalize_denoising_wf(
         desc='resampled',
         name='final_b0_ref',
         source_file=source_file,
+        sink_entities=sink_entities,
     )
 
     # Calculate QC metrics on the resampled data

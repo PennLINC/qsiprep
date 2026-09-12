@@ -23,6 +23,7 @@ from ...interfaces.mrtrix import MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SeriesQC
 from .derivatives import init_dwi_derivatives_wf
+from .finalize import _grid_metadata
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
 from .util import init_dwi_reference_wf
 
@@ -97,7 +98,7 @@ def init_distortion_group_merge_wf(
     workflow = Workflow(name=name)
     source_file = 'dwi/' + source_file
     sanitized_inputs = [name.replace('-', '_') for name in inputs_list]
-    input_names = ['t1_brain', 't1_mask', 't1_seg']
+    input_names = ['t1_brain', 't1_mask', 't1_seg', 'dwi_sampling_grid']
     for suffix in [
         '_image',
         '_bval',
@@ -252,6 +253,23 @@ def init_distortion_group_merge_wf(
             ),
             name='merged_sidecar',
         )
+        # A res-native* grid is reported nowhere but here: this workflow writes no
+        # res- entity, and finalize.py returns before building its own grid_metadata
+        # for a unit that gets merged. Computed by the same function as the direct
+        # path, so both report the size the same way.
+        grid_metadata = pe.Node(
+            niu.Function(
+                input_names=['grid_file'],
+                output_names=['meta_dict'],
+                function=_grid_metadata,
+            ),
+            name='grid_metadata',
+            run_without_submitting=True,
+        )
+        workflow.connect([
+            (inputnode, grid_metadata, [('dwi_sampling_grid', 'grid_file')]),
+            (grid_metadata, merged_sidecar, [('meta_dict', 'extra_data')]),
+        ])  # fmt:skip
         ds_merged_sidecar = pe.Node(
             DerivativesDataSink(
                 space='ACPC',

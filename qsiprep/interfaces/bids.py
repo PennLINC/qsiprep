@@ -253,6 +253,11 @@ class DerivativesMaybeDataSink(DerivativesDataSink):
 
 class _DerivativesSidecarInputSpec(BaseInterfaceInputSpec):
     sidecar_data = traits.Dict()
+    # Anything only a running node can know -- the voxel size a res-native* grid
+    # turned out to be, say. Merged over sidecar_data rather than attached to a
+    # DerivativesDataSink, because niworkflows would then write it to the same
+    # <stem>.json this node writes and one would silently overwrite the other.
+    extra_data = traits.Dict()
     source_file = File()
 
 
@@ -268,8 +273,11 @@ class DerivativesSidecar(SimpleInterface):
         json_fname = fname_presuffix(
             self.inputs.source_file, use_ext=False, suffix='.json', newpath=runtime.cwd
         )
+        sidecar_data = dict(self.inputs.sidecar_data)
+        if isdefined(self.inputs.extra_data):
+            sidecar_data.update(self.inputs.extra_data)
         with open(json_fname, 'w') as jsonf:
-            dump(self.inputs.sidecar_data, jsonf, sort_keys=True, indent=4)
+            dump(sidecar_data, jsonf, sort_keys=True, indent=4)
         self._results['derivatives_json'] = json_fname
         return runtime
 
