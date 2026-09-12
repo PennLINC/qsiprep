@@ -4,6 +4,18 @@ import pytest
 from niworkflows.utils.testing import generate_bids_skeleton
 
 
+@pytest.fixture(autouse=True)
+def _reset_bids_layout():
+    """Drop the cached BIDSLayout so each test indexes its own dataset."""
+    from qsiprep import config
+
+    config.execution._layout = None
+    config.execution.bids_database_dir = None
+    yield
+    config.execution._layout = None
+    config.execution.bids_database_dir = None
+
+
 def gen_layout(bids_dir, database_dir=None):
     """Generate a BIDSLayout object."""
     import re
@@ -234,6 +246,49 @@ def _test_processing_list(tmpdir, name, skeleton, reference, expected):
         ],
     )
     assert config.execution.processing_list == expected, config
+
+
+def test_anat_only_session_discovery_uses_anatomical_modality(tmp_path):
+    """Anatomical-only runs can select sessions without DWI data."""
+    from qsiprep import config
+    from qsiprep.cli.parser import parse_args
+
+    bids_dir = tmp_path / 'bids'
+    generate_bids_skeleton(
+        str(bids_dir),
+        {
+            '01': [
+                {
+                    'session': 'anatonly',
+                    'anat': [{'suffix': 'T1w', 'metadata': {'EchoTime': 1}}],
+                }
+            ]
+        },
+    )
+
+    work_dir = tmp_path / 'work'
+    config.from_dict({'bids_dir': str(bids_dir), 'work_dir': str(work_dir)}, init=True)
+    parse_args(
+        [
+            str(bids_dir),
+            str(tmp_path / 'out'),
+            'participant',
+            '--participant-label',
+            '01',
+            '--session-id',
+            'anatonly',
+            '--anat-only',
+            '--subject-anatomical-reference',
+            'sessionwise',
+            '--output-resolution',
+            '2',
+            '--work-dir',
+            str(work_dir),
+            '--skip-bids-validation',
+        ],
+    )
+
+    assert config.execution.processing_list == [['01', ['anatonly']]]
 
 
 @pytest.mark.parametrize(
