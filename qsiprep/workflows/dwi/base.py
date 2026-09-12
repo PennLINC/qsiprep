@@ -255,11 +255,6 @@ def init_dwi_preproc_wf(
     test_pre_hmc_connect = pe.Node(TestInput(), name='test_pre_hmc_connect')
     hmc_tool = unit.run.hmc_stage.tool
     if hmc_tool == 'shoreline':
-        if config.workflow.shoreline_model != 'none' and config.workflow.shoreline_iters < 1:
-            raise Exception(
-                '--shoreline-iters must be > 0 when --shoreline-model is '
-                f'{config.workflow.shoreline_model}'
-            )
         hmc_wf = init_qsiprep_hmcsdc_wf(
             unit=unit,
             source_file=source_file,
@@ -486,9 +481,12 @@ def init_dwi_preproc_wf(
         DiffusionSummary(
             # '' (no PE info) -> None, which the summary renders as "MISSING".
             pe_direction=unit.pe_dir or None,
-            hmc_model=config.workflow.hmc_model,
+            hmc_model=(
+                config.workflow.shoreline_model
+                if config.workflow.hmc_method == 'shoreline'
+                else config.workflow.hmc_method
+            ),
             b0_to_anat_transform=config.workflow.b0_to_anat_transform,
-            hmc_transform=config.workflow.hmc_transform,
             denoise_method=config.workflow.denoise_method,
             dwi_denoise_window=config.workflow.dwi_denoise_window,
             gradient_correction=describe_gradient_correction(
@@ -499,6 +497,11 @@ def init_dwi_preproc_wf(
         mem_gb=DEFAULT_MEMORY_MIN_GB,
         run_without_submitting=True,
     )
+    if hmc_tool == 'shoreline':
+        # Only SHORELine optimizes a selectable transform. Gating on the resolved
+        # method, not the value, keeps a stale hmc_transform out of eddy and
+        # TORTOISE summaries.
+        summary.inputs.hmc_transform = config.workflow.hmc_transform
 
     workflow.connect([
         (inputnode, b0_coreg_wf, [

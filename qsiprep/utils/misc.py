@@ -430,6 +430,93 @@ def validate_diffprep_config(diffprep_config):
     return
 
 
+SHORELINE_MODELS = ('3dshore', 'tensor', 'none')
+"""Signal models SHORELine can use to predict motion-correction targets."""
+
+SHORELINE_TRANSFORMS = ('Affine', 'Rigid')
+"""Transformations SHORELine can optimize during head motion correction."""
+
+
+def load_shoreline_config(path=None, model=None):
+    """Load a ``--shoreline-config`` JSON file, merged over the shipped defaults.
+
+    Parameters
+    ----------
+    path : str, os.PathLike or None
+        The SHORELine configuration JSON file. ``None`` uses the defaults in
+        ``qsiprep/data/shoreline_params.json``.
+    model : str or None
+        A SHORELine model from the deprecated ``--hmc-model`` alias (``3dshore``,
+        ``tensor`` or ``none``). It replaces the default model, and conflicts with
+        a ``model`` key in the file.
+
+    Returns
+    -------
+    dict
+        Exactly the keys ``model``, ``iters`` and ``transform``.
+
+    Raises
+    ------
+    ValueError
+        If the file does not exist, is not a JSON object, has an unknown key or an
+        invalid value, or sets ``model`` while ``model`` is also given.
+    """
+    import json
+    import os
+
+    from ..data import load as load_data
+
+    cfg = json.loads(load_data('shoreline_params.json').read_text())
+    source = 'The default SHORELine configuration'
+    if path is not None:
+        source = f'SHORELine configuration file {path}'
+        if not os.path.exists(path):
+            raise ValueError(f'{source} does not exist.')
+        try:
+            with open(path, encoding='utf-8') as f:
+                user_cfg = json.load(f)
+        except OSError as err:
+            raise ValueError(f'{source} could not be read: {err}') from err
+        except (json.JSONDecodeError, UnicodeDecodeError) as err:
+            raise ValueError(f'{source} is not valid JSON: {err}') from err
+        if not isinstance(user_cfg, dict):
+            raise ValueError(f'{source} must contain a JSON object.')
+        # Unknown keys are errors so a typo cannot silently fall back to a default.
+        unknown = sorted(set(user_cfg) - set(cfg))
+        if unknown:
+            raise ValueError(
+                f'{source} has unknown key(s) {", ".join(unknown)}; '
+                f'valid keys are {", ".join(sorted(cfg))}.'
+            )
+        if model is not None and 'model' in user_cfg:
+            raise ValueError(f'--hmc-model conflicts with "model" in --shoreline-config {path}.')
+        cfg.update(user_cfg)
+    if model is not None:
+        cfg['model'] = model
+
+    if cfg['model'] not in SHORELINE_MODELS:
+        raise ValueError(
+            f'{source} sets model={cfg["model"]!r}; must be one of {", ".join(SHORELINE_MODELS)}.'
+        )
+    if cfg['transform'] not in SHORELINE_TRANSFORMS:
+        raise ValueError(
+            f'{source} sets transform={cfg["transform"]!r}; must be one of '
+            f'{", ".join(SHORELINE_TRANSFORMS)}.'
+        )
+    iters = cfg['iters']
+    # bool is a subclass of int, so "iters": true has to be rejected explicitly.
+    if (
+        isinstance(iters, bool)
+        or not isinstance(iters, int)
+        or (iters < 1 and cfg['model'] != 'none')
+    ):
+        raise ValueError(
+            f'{source} sets iters={iters!r}; must be an integer >= 1 '
+            '(any integer when model is "none").'
+        )
+    return cfg
+
+
 def validate_gradient_flags(gradient_file, force, ignore):
     """Validate the ``--gradient-file``/``--force``/``--ignore`` combination.
 

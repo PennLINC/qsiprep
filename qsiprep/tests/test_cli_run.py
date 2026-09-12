@@ -483,7 +483,7 @@ def test_ignore_accepts_shims_and_fov(minimal_args):
     assert opts.ignore == ['shims', 'fov']
 
 
-# --- The method axes (--hmc-method/--sdc-method) and their deprecated aliases ---
+# --- The method axes (--hmc-method/--sdc-method) ---
 
 
 def _parse(minimal_args, *extra):
@@ -497,70 +497,33 @@ def test_method_axis_defaults(minimal_args, capsys):
     assert capsys.readouterr().err == ''
     assert opts.hmc_method == 'eddy'
     assert opts.shoreline_model is None
+    assert opts.shoreline_config is None
+    assert opts.shoreline_iters is None
+    assert opts.hmc_transform is None
     assert opts.sdc_method == 'topup'
-    # Legacy vocabulary is back-filled for unconverted readers.
-    assert opts.hmc_model == 'eddy'
-    assert opts.pepolar_method == 'TOPUP'
 
 
 def test_hmc_method_shoreline_gets_model_and_drbuddi(minimal_args):
     opts = _parse(minimal_args, '--hmc-method', 'shoreline')
     assert opts.shoreline_model == '3dshore'
+    assert opts.shoreline_iters == 2
+    assert opts.hmc_transform == 'Affine'
     assert opts.sdc_method == 'drbuddi'
-    assert opts.hmc_model == '3dSHORE'
-    # The deprecated spelling remains a truthful view of the resolved method.
-    assert opts.pepolar_method == 'DRBUDDI'
 
 
 def test_hmc_method_tortoise_auto_resolves_drbuddi(minimal_args):
     """The legacy TOPUP default never produced a working DIFFPREP run."""
     opts = _parse(minimal_args, '--hmc-method', 'tortoise')
     assert opts.sdc_method == 'drbuddi'
-    assert opts.hmc_model == 'tortoise'
-    assert opts.pepolar_method == 'DRBUDDI'
 
 
 @pytest.mark.parametrize(
-    ('legacy', 'hmc_method', 'shoreline_model', 'hmc_model'),
-    [
-        ('eddy', 'eddy', None, 'eddy'),
-        ('tortoise', 'tortoise', None, 'tortoise'),
-        ('3dSHORE', 'shoreline', '3dshore', '3dSHORE'),
-        ('tensor', 'shoreline', 'tensor', 'tensor'),
-        ('none', 'shoreline', 'none', 'none'),
-    ],
+    ('flag', 'value'), [('--hmc-model', 'eddy'), ('--pepolar-method', 'TOPUP')]
 )
-def test_hmc_model_alias_maps_and_warns(
-    minimal_args, capsys, legacy, hmc_method, shoreline_model, hmc_model
-):
-    opts = _parse(minimal_args, '--hmc-model', legacy)
-    warning = capsys.readouterr().err
-    assert '--hmc-model' in warning
-    assert 'deprecated' in warning
-    assert opts.hmc_method == hmc_method
-    assert opts.shoreline_model == shoreline_model
-    assert opts.hmc_model == hmc_model
-
-
-def test_hmc_model_conflicts_with_hmc_method(minimal_args, capsys):
+def test_removed_method_flags_are_rejected(minimal_args, capsys, flag, value):
     with pytest.raises(SystemExit):
-        _parse(minimal_args, '--hmc-model', 'eddy', '--hmc-method', 'eddy')
-    assert 'not allowed with' in capsys.readouterr().err
-
-
-def test_pepolar_method_alias_maps_and_warns(minimal_args, capsys):
-    opts = _parse(minimal_args, '--pepolar-method', 'TOPUP+DRBUDDI')
-    warning = capsys.readouterr().err
-    assert '--pepolar-method' in warning
-    assert 'deprecated' in warning
-    assert opts.sdc_method == 'topup+drbuddi'
-    assert opts.pepolar_method == 'TOPUP+DRBUDDI'
-
-
-def test_pepolar_method_conflicts_with_sdc_method(minimal_args, capsys):
-    with pytest.raises(SystemExit):
-        _parse(minimal_args, '--pepolar-method', 'TOPUP', '--sdc-method', 'topup')
-    assert 'not allowed with' in capsys.readouterr().err
+        _parse(minimal_args, flag, value)
+    assert 'unrecognized arguments' in capsys.readouterr().err
 
 
 @pytest.mark.parametrize('hmc_method', ['shoreline', 'tortoise'])
@@ -571,25 +534,165 @@ def test_explicit_topup_requires_eddy(minimal_args, capsys, hmc_method, sdc_meth
     assert 'requires --hmc-method eddy' in capsys.readouterr().err
 
 
-def test_legacy_topup_with_tortoise_is_an_error(minimal_args, capsys):
-    """This pairing used to parse and then hard-fail mid-run."""
-    with pytest.raises(SystemExit):
-        _parse(minimal_args, '--hmc-model', 'tortoise', '--pepolar-method', 'TOPUP')
-    assert 'requires --hmc-method eddy' in capsys.readouterr().err
+def _shoreline_json(tmp_path, name='shoreline.json', **settings):
+    import json
+
+    path = tmp_path / name
+    path.write_text(json.dumps(settings))
+    return str(path)
 
 
-def test_shoreline_model_requires_shoreline_method(minimal_args, capsys):
-    with pytest.raises(SystemExit):
-        _parse(minimal_args, '--shoreline-model', 'tensor')
-    assert 'requires --hmc-method shoreline' in capsys.readouterr().err
+def test_shoreline_config_values_reach_the_namespace(minimal_args, tmp_path):
+    from pathlib import Path
 
-    with pytest.raises(SystemExit):
-        _parse(minimal_args, '--hmc-model', '3dSHORE', '--shoreline-model', 'tensor')
-    assert 'requires --hmc-method shoreline' in capsys.readouterr().err
-
-    opts = _parse(minimal_args, '--hmc-method', 'shoreline', '--shoreline-model', 'tensor')
+    cfg = _shoreline_json(tmp_path, model='tensor', iters=3, transform='Rigid')
+    opts = _parse(minimal_args, '--hmc-method', 'shoreline', '--shoreline-config', cfg)
+    assert opts.shoreline_config == Path(cfg).absolute()
     assert opts.shoreline_model == 'tensor'
-    assert opts.hmc_model == 'tensor'
+    assert opts.shoreline_iters == 3
+    assert opts.hmc_transform == 'Rigid'
+
+
+@pytest.mark.parametrize(
+    'method_args', [[], ['--hmc-method', 'eddy'], ['--hmc-method', 'tortoise']]
+)
+def test_shoreline_config_requires_shoreline_method(minimal_args, tmp_path, capsys, method_args):
+    cfg = _shoreline_json(tmp_path, model='tensor')
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, *method_args, '--shoreline-config', cfg)
+    assert '--shoreline-config requires --hmc-method shoreline' in capsys.readouterr().err
+
+
+def test_invalid_shoreline_config_is_a_parse_error(minimal_args, tmp_path, capsys):
+    cfg = _shoreline_json(tmp_path, iter=3)
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--hmc-method', 'shoreline', '--shoreline-config', cfg)
+    assert 'unknown key' in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ('flag', 'value'),
+    [('--shoreline-model', 'tensor'), ('--shoreline-iters', '3'), ('--hmc-transform', 'Rigid')],
+)
+def test_removed_shoreline_flags_are_rejected(minimal_args, capsys, flag, value):
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--hmc-method', 'shoreline', flag, value)
+    assert 'unrecognized arguments' in capsys.readouterr().err
+
+
+_SHORELINE_KEYS = ('shoreline_config', 'shoreline_model', 'shoreline_iters', 'hmc_transform')
+
+
+@pytest.fixture
+def restore_shoreline_config():
+    """Yield qsiprep.config, restoring the SHORELine block that parse_args writes."""
+    from qsiprep import config
+
+    saved = {key: getattr(config.workflow, key) for key in _SHORELINE_KEYS}
+    yield config
+    for key, value in saved.items():
+        setattr(config.workflow, key, value)
+
+
+def test_shoreline_config_survives_a_config_round_trip(
+    minimal_args, tmp_path, restore_shoreline_config
+):
+    """A Path must be written as a path string, not the literal "PosixPath('...')"."""
+    from pathlib import Path
+
+    import toml
+
+    config = restore_shoreline_config
+    cfg = _shoreline_json(tmp_path, model='tensor')
+    opts = _parse(minimal_args, '--hmc-method', 'shoreline', '--shoreline-config', cfg)
+    config.workflow.load({'shoreline_config': opts.shoreline_config}, init=False)
+    dumped = toml.dumps({'workflow': config.workflow.get()})
+    assert 'PosixPath(' not in dumped
+    config.workflow.shoreline_config = None
+    config.workflow.load(toml.loads(dumped)['workflow'], init=False)
+    assert config.workflow.shoreline_config == Path(cfg).absolute()
+
+
+def _parse_with_config_file(tmp_path, toml_text, *extra):
+    """Run the real parse_args, loading ``toml_text`` as a --config-file."""
+    from qsiprep import config
+    from qsiprep.cli.parser import parse_args
+
+    bids_dir = tmp_path / 'bids'
+    generate_bids_skeleton(str(bids_dir), long)
+    work_dir = tmp_path / 'work'
+    config_file = tmp_path / 'previous.toml'
+    config_file.write_text(toml_text)
+    config.from_dict({'bids_dir': str(bids_dir), 'work_dir': str(work_dir)}, init=True)
+    parse_args(
+        [
+            str(bids_dir),
+            str(tmp_path / 'out'),
+            'participant',
+            '--participant-label',
+            '01',
+            '--output-resolution',
+            '2',
+            '--work-dir',
+            str(work_dir),
+            '--skip-bids-validation',
+            '--config-file',
+            str(config_file),
+            *extra,
+        ]
+    )
+    return config
+
+
+def test_config_file_reload_drops_stale_shoreline_settings(tmp_path, restore_shoreline_config):
+    """An old eddy config.toml carried hmc_transform/shoreline_iters; they must not survive."""
+    config = _parse_with_config_file(
+        tmp_path,
+        '[workflow]\nhmc_model = "eddy"\nhmc_transform = "Affine"\nshoreline_iters = 2\n',
+    )
+    for key in _SHORELINE_KEYS:
+        assert getattr(config.workflow, key) is None, key
+
+
+def _previous_shoreline_toml(tmp_path):
+    old_json = _shoreline_json(tmp_path, name='old.json', model='tensor', iters=5)
+    return (
+        '[workflow]\n'
+        f'shoreline_config = "{old_json}"\n'
+        'shoreline_model = "tensor"\n'
+        'shoreline_iters = 5\n'
+        'hmc_transform = "Rigid"\n'
+    )
+
+
+def test_config_file_reload_uses_command_line_shoreline_defaults(
+    tmp_path, restore_shoreline_config
+):
+    config = _parse_with_config_file(
+        tmp_path, _previous_shoreline_toml(tmp_path), '--hmc-method', 'shoreline'
+    )
+    assert config.workflow.shoreline_config is None
+    assert config.workflow.shoreline_model == '3dshore'
+    assert config.workflow.shoreline_iters == 2
+    assert config.workflow.hmc_transform == 'Affine'
+
+
+def test_config_file_reload_uses_command_line_shoreline_config(tmp_path, restore_shoreline_config):
+    from pathlib import Path
+
+    new_json = _shoreline_json(tmp_path, name='new.json', iters=3, transform='Rigid')
+    config = _parse_with_config_file(
+        tmp_path,
+        _previous_shoreline_toml(tmp_path),
+        '--hmc-method',
+        'shoreline',
+        '--shoreline-config',
+        new_json,
+    )
+    assert config.workflow.shoreline_config == Path(new_json).absolute()
+    assert config.workflow.shoreline_model == '3dshore'
+    assert config.workflow.shoreline_iters == 3
+    assert config.workflow.hmc_transform == 'Rigid'
 
 
 def test_sdc_anat_reference_parses(minimal_args):

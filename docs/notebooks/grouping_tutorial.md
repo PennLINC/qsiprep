@@ -428,8 +428,8 @@ The grouping describes your *data*. How processing consumes it is a separate
 decision with **two axes**, matching the CLI:
 
 - **`--hmc-method`** picks the head-motion/eddy-current correction: `eddy`
-  (FSL), `tortoise` (TORTOISE's DIFFPREP), or `shoreline` (with
-  `--shoreline-model` naming its signal model).
+  (FSL), `tortoise` (TORTOISE's DIFFPREP), or `shoreline` (with a
+  `--shoreline-config` JSON whose `"model"` names its signal model).
 - **`--sdc-method`** picks the PEPOLAR susceptibility-correction tool chain:
   `topup`, `drbuddi`, or `topup+drbuddi` (TOPUP first, refined by DRBUDDI).
   The `topup` chains require `--hmc-method eddy`, which consumes TOPUP's

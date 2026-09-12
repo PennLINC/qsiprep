@@ -196,7 +196,7 @@ def test_drbuddi_t2w_is_prealigned_to_the_b0(tmp_path):
     from qsiprep.tests.test_workflows_native import _cfg, _rpe_unit
     from qsiprep.workflows.fieldmap import init_drbuddi_wf
 
-    _cfg(hmc_model='tortoise', pepolar_method='DRBUDDI')
+    _cfg(hmc_method='tortoise', sdc_method='drbuddi')
     wf = init_drbuddi_wf(_rpe_unit(tmp_path), t2w_sdc=True)
 
     assert wf.get_node('t2w_to_b0_wf') is not None
@@ -212,7 +212,7 @@ def test_drbuddi_without_t2w_builds_no_alignment(tmp_path):
     from qsiprep.tests.test_workflows_native import _cfg, _rpe_unit
     from qsiprep.workflows.fieldmap import init_drbuddi_wf
 
-    _cfg(hmc_model='tortoise', pepolar_method='DRBUDDI')
+    _cfg(hmc_method='tortoise', sdc_method='drbuddi')
     wf = init_drbuddi_wf(_rpe_unit(tmp_path), t2w_sdc=False)
     assert wf.get_node('t2w_to_b0_wf') is None
 
