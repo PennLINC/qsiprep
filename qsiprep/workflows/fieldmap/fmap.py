@@ -20,7 +20,7 @@ of the BIDS specification.
 
 import os
 
-from nipype.interfaces import ants, fsl
+from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
@@ -31,6 +31,7 @@ from niworkflows.interfaces.reportlets.masks import BETRPT
 from ... import config
 from ...interfaces import DerivativesDataSink, FieldToHz, FieldToRadS
 from ...interfaces.fmap import MedianFilter
+from ...interfaces.niimath import RomeoUnwrap
 from .utils import cleanup_edge_pipeline, demean_image
 
 
@@ -94,7 +95,7 @@ def init_fmap_wf(name='fmap_wf'):
     ])  # fmt:skip
 
     torads = pe.Node(FieldToRadS(), name='torads')
-    prelude = pe.Node(fsl.PRELUDE(), name='prelude')
+    prelude = pe.Node(RomeoUnwrap(), name='prelude')
     tohz = pe.Node(FieldToHz(), name='tohz')
 
     denoise = pe.Node(MedianFilter(kernel_radius_mm=3), name='denoise')
