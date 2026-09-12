@@ -275,7 +275,7 @@ def test_anat_only_session_discovery_uses_anatomical_modality(tmp_path):
             'participant',
             '--participant-label',
             '01',
-            '--session-id',
+            '--session-label',
             'anatonly',
             '--anat-only',
             '--subject-anatomical-reference',
