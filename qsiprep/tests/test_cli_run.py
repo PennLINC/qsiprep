@@ -5,15 +5,24 @@ from niworkflows.utils.testing import generate_bids_skeleton
 
 
 @pytest.fixture(autouse=True)
-def _reset_bids_layout():
-    """Drop the cached BIDSLayout so each test indexes its own dataset."""
+def _reset_execution_config():
+    """Drop the execution state that parse_args writes to the config singleton.
+
+    The cached BIDSLayout must go so each test indexes its own dataset. The session
+    filter must go too: ``config.from_dict`` skips None values, so a test that passes
+    ``--session-label`` leaves the filter behind for every later parse_args call in the
+    same worker, which then exits with "No DWI files found with session filter".
+    """
     from qsiprep import config
 
-    config.execution._layout = None
-    config.execution.bids_database_dir = None
+    def reset():
+        config.execution._layout = None
+        config.execution.bids_database_dir = None
+        config.execution.session_label = None
+
+    reset()
     yield
-    config.execution._layout = None
-    config.execution.bids_database_dir = None
+    reset()
 
 
 def gen_layout(bids_dir, database_dir=None):
