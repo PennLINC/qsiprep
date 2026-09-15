@@ -16,8 +16,10 @@ import numpy as np
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from nipype.utils.filemanip import split_filename
+from nireports.interfaces.reporting.base import (
+    SimpleBeforeAfterRPT as SimpleBeforeAfter,
+)
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 
 from ...interfaces import DerivativesDataSink
 from ..anatomical import init_synthstrip_wf
@@ -202,7 +204,7 @@ def init_dwi_reference_wf(
             raise Exception('Needs a source_file to write a report')
 
         report_desc = 'b0ref' if desc == 'initial' else f'{desc}b0ref'
-        b0ref_reportlet = pe.Node(SimpleBeforeAfterRPT(), name='b0ref_reportlet', mem_gb=0.1)
+        b0ref_reportlet = pe.Node(SimpleBeforeAfter(), name='b0ref_reportlet', mem_gb=0.1)
         ds_report_b0_mask = pe.Node(
             DerivativesDataSink(
                 datatype='figures',
