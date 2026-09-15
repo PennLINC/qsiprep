@@ -17,7 +17,6 @@ import seaborn as sns
 from matplotlib import gridspec as mgs
 from nipype import logging
 from nipype.interfaces import ants
-from nipype.interfaces.ants import Registration
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
     File,
@@ -29,10 +28,6 @@ from nipype.interfaces.mixins import reporting
 from nipype.utils.filemanip import fname_presuffix
 from niworkflows.interfaces.norm import SpatialNormalization, _SpatialNormalizationInputSpec
 from niworkflows.interfaces.reportlets.base import RegistrationRC, _SVGReportCapableInputSpec
-from niworkflows.interfaces.reportlets.registration import (
-    _ANTSRegistrationInputSpecRPT,
-    _ANTSRegistrationOutputSpecRPT,
-)
 from seaborn import color_palette
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -92,22 +87,6 @@ def _create_cfm(in_file, lesion_mask=None, global_mask=True, out_path=None):
 # Patch the buggy upstream create_cfm. SpatialNormalization._get_ants_args looks
 # the function up as a module global, so reassigning it here is sufficient.
 _niw_norm.create_cfm = _create_cfm
-
-
-class ANTSRegistrationRPT(RegistrationRC, Registration):
-    input_spec = _ANTSRegistrationInputSpecRPT
-    output_spec = _ANTSRegistrationOutputSpecRPT
-
-    def _post_run_hook(self, runtime):
-        self._fixed_image = self.inputs.fixed_image[0]
-        self._moving_image = self.aggregate_outputs(runtime=runtime).warped_image
-        LOGGER.info(
-            'Report - setting fixed (%s) and moving (%s) images',
-            self._fixed_image,
-            self._moving_image,
-        )
-
-        return super()._post_run_hook(runtime)
 
 
 class dMRIPlot:
