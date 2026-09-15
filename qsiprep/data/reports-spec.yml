@@ -9,7 +9,7 @@ sections:
 
 - name: Summary
   reportlets:
-  - bids: {datatype: figures, desc: summary, suffix: [T1w, T2w, dwi]}
+  - bids: {datatype: figures, desc: summary, suffix: [T1w, T2w]}
 
 - name: Anatomical
   reportlets:

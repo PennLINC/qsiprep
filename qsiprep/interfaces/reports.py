@@ -45,7 +45,7 @@ SUBJECT_TEMPLATE = """{mrtrix_warning}\t<ul class="elem-desc">
 
 SUBJECT_SESSION_ANAT_TEMPLATE = """\t<ul class="elem-desc">
 \t\t<li>Subject ID: {subject_id}</li>
-\t\t<li>Session ID: {session_id}</li>
+\t\t<li>Session ID: {session_label}</li>
 \t\t<li>Structural images: {n_t1s:d} T1-weighted {t2w}</li>
 \t\t<li>Diffusion-weighted series: inputs {n_dwis:d}, outputs {n_outputs:d}</li>
 {groupings}
@@ -60,8 +60,7 @@ DIFFUSION_TEMPLATE = """\t\t<h3 class="elem-title">Summary</h3>
 \t\t\t<li>Coregistration Transform: {coregistration}</li>
 \t\t\t<li>Denoising Method: {denoise_method}</li>
 \t\t\t<li>Denoising Window: {denoise_window}</li>
-\t\t\t<li>HMC Transform: {hmc_transform}</li>
-\t\t\t<li>HMC Model: {hmc_model}</li>
+{hmc_transform_line}\t\t\t<li>HMC Model: {hmc_model}</li>
 \t\t\t<li>Gradient correction: {gradient_correction}</li>
 \t\t\t<li>DWI series resampled to spaces: ACPC</li>
 \t\t\t<li>Confounds collected: {confounds}</li>
@@ -149,7 +148,7 @@ class SubjectSummaryInputSpec(BaseInterfaceInputSpec):
     t2w = InputMultiPath(File(exists=True), desc='T2w structural images')
     subjects_dir = Directory(desc='FreeSurfer subjects directory')
     subject_id = Str(desc='Subject ID')
-    session_id = Str(desc='Session ID')
+    session_label = Str(desc='Session ID')
     dwi_groupings = traits.Dict(desc='groupings of DWI files and their output names')
     output_spaces = traits.List(desc='Target spaces')
     template = Str(desc='Template space')
@@ -224,7 +223,7 @@ class DiffusionSummaryInputSpec(BaseInterfaceInputSpec):
     )
     distortion_correction = traits.Str(mandatory=True, desc='Method used for SDC')
     impute_slice_threshold = traits.CFloat(desc='threshold for imputing a slice')
-    hmc_transform = traits.Str(mandatory=True, desc='transform used during HMC')
+    hmc_transform = traits.Str(desc='transform optimized during HMC (SHORELine runs only)')
     hmc_model = traits.Str(desc='model used for hmc')
     b0_to_anat_transform = traits.Enum('Rigid', 'Affine', desc='Transform type for coregistration')
     denoise_method = traits.Str(desc='method used for image denoising')
@@ -261,11 +260,15 @@ class DiffusionSummary(SummaryInterface):
                     validation_summaries.extend(summary_f.readlines())
         validation_summary = '\n'.join(validation_summaries)
 
+        hmc_transform_line = ''
+        if isdefined(self.inputs.hmc_transform):
+            hmc_transform_line = f'\t\t\t<li>HMC Transform: {self.inputs.hmc_transform}</li>\n'
+
         return DIFFUSION_TEMPLATE.format(
             pedir=pedir,
             sdc=self.inputs.distortion_correction,
             coregistration=self.inputs.b0_to_anat_transform,
-            hmc_transform=self.inputs.hmc_transform,
+            hmc_transform_line=hmc_transform_line,
             hmc_model=self.inputs.hmc_model,
             denoise_method=self.inputs.denoise_method,
             denoise_window=self.inputs.dwi_denoise_window,

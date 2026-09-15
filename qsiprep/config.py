@@ -440,10 +440,10 @@ class execution(_Config):
     """Unique identifier of this particular run."""
     participant_label = None
     """List of participant identifiers that are to be preprocessed."""
-    session_id = None
+    session_label = None
     """List of session identifiers that are to be preprocessed"""
     processing_list = []
-    """List of (subject_id, [session_id, ...]) to be preprocessed together."""
+    """List of (subject_id, [session_label, ...]) to be preprocessed together."""
     skip_anat_based_spatial_normalization = False
     """Should we skip normalizing the anatomical data to a template?"""
     templateflow_home = _templateflow_home
@@ -565,10 +565,6 @@ class workflow(_Config):
     """Anatomical template to use. This field doesn't include the cohort."""
     b0_threshold = None
     """Any value in the .bval file less than this will be considered a b=0 image."""
-    b0_motion_corr_to = None
-    """Perform SHORELine's initial b=0-based registration to first volume?
-    Or make a template? Either 'iterative' or 'first'. DEPRECATED: later versions will
-    always use 'iterative'."""
     b0_to_anat_transform = None
     """Transformation model for b=0-to-anatomical coregistration. Either 'Rigid' or
     'Affine'."""
@@ -603,12 +599,10 @@ class workflow(_Config):
     """Gradient nonlinearity coefficient file or displacement field."""
     hmc_method = None
     """Which software corrects head motion: eddy, shoreline or tortoise."""
-    hmc_model = None
-    """Model used to generate target images for hmc. DEPRECATED: the legacy
-    vocabulary equivalent of ``hmc_method`` + ``shoreline_model``, kept while
-    workflow builders still read it."""
     hmc_transform = None
-    """Transformation to be used in SHORELine."""
+    """Transformation SHORELine optimizes during head motion correction: Affine or
+    Rigid. Derived from ``--shoreline-config``; None unless ``hmc_method`` is
+    shoreline."""
     ignore = None
     """Ignore particular steps for *QSIPrep*."""
     infant = False
@@ -626,10 +620,6 @@ class workflow(_Config):
     """Skip re-scaling dwi scans to have matching b=0 intensities."""
     output_resolution = None
     """Isotropic voxel size for outputs."""
-    pepolar_method = None
-    """SDC method to be used for PEPOLAR fieldmaps. DEPRECATED: the legacy
-    vocabulary equivalent of ``sdc_method``, kept while workflow builders
-    still read it."""
     sdc_anat_reference = 'none'
     """Which anatomical-derived image serves as the reference for fieldmap-less
     susceptibility distortion correction, as a fallback for DWI series no
@@ -640,11 +630,15 @@ class workflow(_Config):
     topup, drbuddi or topup+drbuddi (the parser resolves ``auto``)."""
     separate_all_dwis = False
     """Process all dwis separately - do not attempt concatenation."""
+    shoreline_config = None
+    """Configuration JSON for SHORELine (``--shoreline-config``)."""
     shoreline_iters = None
-    """How many iterations to run SHORELine."""
+    """How many iterations to run SHORELine. Derived from ``--shoreline-config``;
+    None unless ``hmc_method`` is shoreline."""
     shoreline_model = None
     """Signal model SHORELine uses to predict motion-correction targets:
-    3dshore, tensor or none. Only set when ``hmc_method`` is shoreline."""
+    3dshore, tensor or none. Derived from ``--shoreline-config``; None unless
+    ``hmc_method`` is shoreline."""
     tortoise_gpu_cpu_ratio = None
     """Volumes the GPU takes per DIFFPREP pass; None leaves TORTOISE's default."""
     unringing_method = None
@@ -703,7 +697,7 @@ class workflow(_Config):
     # what ``_paths`` names, and toml writes anything else as its repr, so an
     # unlisted Path reaches the workflow-building subprocess as the literal
     # string "PosixPath('/path')".
-    _paths = ('gradient_file',)
+    _paths = ('gradient_file', 'shoreline_config')
 
 
 class loggers:

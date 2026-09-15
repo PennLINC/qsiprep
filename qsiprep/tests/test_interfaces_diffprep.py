@@ -200,7 +200,7 @@ def test_diffprep_wf_honours_use_cuda(tmp_path):
 def test_diffprep_correction_mode_defaults_to_quadratic():
     """``correction_mode`` is a --diffprep-config key, defaulting to quadratic.
 
-    The CLI exposes one ``--hmc-model tortoise`` rather than a value per mode,
+    The CLI exposes one ``--hmc-method tortoise`` rather than a value per mode,
     so the config JSON is the only way to reach ``motion`` or ``cubic``.
     """
     from qsiprep.workflows.dwi.diffprep import _load_diffprep_config
@@ -790,12 +790,11 @@ def t2w_gate_config():
     from qsiprep import config
 
     saved = {
-        k: getattr(config.workflow, k, None)
-        for k in ('anat_modality', 'pepolar_method', 'hmc_model')
+        k: getattr(config.workflow, k, None) for k in ('anat_modality', 'sdc_method', 'hmc_method')
     }
     config.workflow.anat_modality = 't1w'
-    config.workflow.pepolar_method = 'TOPUP'
-    config.workflow.hmc_model = 'eddy'
+    config.workflow.sdc_method = 'topup'
+    config.workflow.hmc_method = 'eddy'
     try:
         yield config
     finally:
@@ -875,11 +874,7 @@ def _base_config():
     config.nipype.omp_nthreads = 1
     config.workflow.diffprep_config = None
     config.workflow.b0_threshold = 100
-    config.workflow.pepolar_method = 'drbuddi'
-    # The legacy keys drive these tests; clear the axis keys so a selection
-    # left behind by another test cannot shadow them.
-    config.workflow.hmc_method = None
-    config.workflow.sdc_method = None
+    config.workflow.sdc_method = 'drbuddi'
     config.workflow.shoreline_model = None
     config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
     config.workflow.gpu = None  # --gpu not given, so legacy use_cuda keys apply
@@ -986,7 +981,7 @@ def test_init_diffprep_hmc_wf_synb0_targets_the_synthetic_b0():
 
     config = _base_config()
     try:
-        config.workflow.hmc_model = 'tortoise'
+        config.workflow.hmc_method = 'tortoise'
         t1w = '/data/sub-01_T1w.nii.gz'
         unit = make_preproc_unit(
             ['/data/sub-01_dwi.nii.gz'],
@@ -1017,7 +1012,7 @@ def test_init_diffprep_hmc_wf_synb0_targets_the_synthetic_b0():
         assert wf.get_node('ds_report_synb0_acquired') is not None
         assert wf.get_node('ds_report_synb0_unet') is not None
     finally:
-        config.workflow.hmc_model = 'eddy'
+        config.workflow.hmc_method = 'eddy'
 
 
 def test_t2wreg_sdc_travels_as_a_warp_not_baked_in():
@@ -1084,27 +1079,30 @@ def test_cnr_model_label_is_bids_valid():
 
     DIFFPREP emits no CNR of its own, so the ``tortoise`` backend reports the
     MAPMRI model the CNR is actually derived from rather than its own name.
-    Every other backend must be left exactly as it was.
+    SHORELine reports its --shoreline-model, and eddy its own name.
     """
     import re
 
     from qsiprep.workflows.dwi.derivatives import _cnr_model_label
 
-    for unchanged in ('3dSHORE', 'eddy', 'tensor', 'none'):
-        assert _cnr_model_label(unchanged) == unchanged
-
+    shoreline_models = ('3dshore', 'tensor', 'none')
+    for shoreline_model in shoreline_models:
+        assert _cnr_model_label('shoreline', shoreline_model) == shoreline_model
+    assert _cnr_model_label('eddy') == 'eddy'
     assert _cnr_model_label('tortoise') == 'MAPMRI'
 
     entity = re.compile(r'^[a-zA-Z0-9]+$')
-    for model in ('3dSHORE', 'eddy', 'tensor', 'none', 'tortoise'):
-        assert entity.match(_cnr_model_label(model)), model
+    labels = [_cnr_model_label('shoreline', model) for model in shoreline_models]
+    labels += [_cnr_model_label('eddy'), _cnr_model_label('tortoise')]
+    for label in labels:
+        assert entity.match(label), label
 
 
 def test_cnr_description_flags_in_sample_bias():
     """The diffprep CNR is an in-sample fit; the sidecar must say so."""
     from qsiprep.workflows.dwi.derivatives import _cnr_description
 
-    baseline = _cnr_description('3dSHORE')
+    baseline = _cnr_description('shoreline')
     assert baseline == 'Contrast-to-noise ratio map for the HMC step.'
 
     diffprep_desc = _cnr_description('tortoise')
@@ -1287,7 +1285,7 @@ def test_drbuddi_never_sends_parser_disabled_flags(tmp_path):
 
 
 def test_init_diffprep_hmc_wf_pepolar_always_uses_drbuddi(tmp_path):
-    """TORTOISE corrects PEPOLAR with DRBUDDI regardless of --pepolar-method.
+    """TORTOISE corrects PEPOLAR with DRBUDDI regardless of --sdc-method.
 
     The builder no longer rejects TOPUP itself; backend feasibility is owned by
     the grouping validation / config layer, not the workflow builders.
@@ -1295,12 +1293,12 @@ def test_init_diffprep_hmc_wf_pepolar_always_uses_drbuddi(tmp_path):
     epi = tmp_path / 'sub-01_epi.nii.gz'
     _write_dummy_nii(epi)
     config = _base_config()
-    config.workflow.pepolar_method = 'TOPUP'
+    config.workflow.sdc_method = 'topup'
     try:
         wf = _build(_make_unit('epi', epi=[str(epi)]), False)
         assert wf.get_node('drbuddi_sdc_wf') is not None
     finally:
-        config.workflow.pepolar_method = 'drbuddi'
+        config.workflow.sdc_method = 'drbuddi'
 
 
 def test_sloppy_epi_working_res_only_under_sloppy():
@@ -1379,7 +1377,7 @@ def test_t2wreg_is_recognised_as_sdc_for_reporting():
 
     config = _base_config()
     try:
-        config.workflow.hmc_model = 'tortoise'
+        config.workflow.hmc_method = 'tortoise'
         t2w = ['/data/sub-01_T2w.nii.gz']
         fieldmapless = make_preproc_unit(['/data/sub-01_dwi.nii.gz'], anat_files=t2w)
         assert _t2wreg_target(fieldmapless, '/path/to/T2w.nii.gz') == 't2w'
@@ -1402,11 +1400,11 @@ def test_t2wreg_is_recognised_as_sdc_for_reporting():
         assert _t2wreg_target(synb0, '') == 'synb0'
 
         # Other methods do not run T2Wreg at all.
-        config.workflow.hmc_model = 'eddy'
+        config.workflow.hmc_method = 'eddy'
         fieldmapless = make_preproc_unit(['/data/sub-01_dwi.nii.gz'], anat_files=t2w)
         assert _t2wreg_target(fieldmapless, '/path/to/T2w.nii.gz') is None
     finally:
-        config.workflow.hmc_model = 'eddy'
+        config.workflow.hmc_method = 'eddy'
 
 
 def test_t2wreg_reportlet_desc_is_registered_in_the_report_spec():

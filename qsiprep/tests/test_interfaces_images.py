@@ -234,3 +234,81 @@ def test_bvec_to_rasb_raises_on_nonzero_return_code(tmp_path, monkeypatch):
 
     with pytest.raises(RuntimeError, match='no such file'):
         bvec_to_rasb(bval_file, bvec_file, 'missing.nii.gz', str(workdir))
+
+
+# fslsplit/fslmerge come from fsl-avwutils, which qsiprep no longer installs;
+# these ops are reimplemented in nibabel so the FSL-eddy path needs no avwutils.
+
+
+def test_split_merge_roundtrip_without_fsl(tmp_path):
+    """_split_4d_to_3d then _merge_3d_to_4d reproduces the 4D image and its header.
+
+    Matches fslsplit/fslmerge fidelity: distinct qform/sform (and codes), the
+    oblique orientation, the TR in pixdim[4], and xyzt units all survive the
+    round trip. (fslsplit keeps the TR even in the 3D volumes.)
+    """
+    from qsiprep.interfaces.images import _merge_3d_to_4d, _split_4d_to_3d
+
+    data = np.arange(6 * 7 * 5 * 4, dtype='float32').reshape(6, 7, 5, 4)
+    theta = np.deg2rad(12)
+    rot = np.array(
+        [[np.cos(theta), -np.sin(theta), 0], [np.sin(theta), np.cos(theta), 0], [0, 0, 1]]
+    )
+    sform = np.eye(4)
+    sform[:3, :3] = rot @ np.diag([1.7, 1.7, 2.0])
+    sform[:3, 3] = [10.5, -20.25, 3.125]
+    qform = sform.copy()
+    qform[:3, :3] = np.diag([1.7, 1.7, 2.0])  # qform axis-aligned, sform oblique
+    tr = 3.7
+
+    src = nb.Nifti1Image(data, sform)
+    src.header.set_sform(sform, code=2)
+    src.header.set_qform(qform, code=1)
+    src.header['pixdim'][4] = tr
+    src.header.set_xyzt_units('mm', 'sec')
+    src.to_filename(str(tmp_path / 'dwi.nii.gz'))
+
+    vols = _split_4d_to_3d(str(tmp_path / 'dwi.nii.gz'), str(tmp_path))
+    assert len(vols) == 4
+    for i, vol in enumerate(vols):
+        img = nb.load(vol)
+        assert img.shape == (6, 7, 5)  # a real 3D volume, not 4D-with-singleton
+        assert np.allclose(img.get_fdata(), data[..., i])
+        assert np.isclose(img.header['pixdim'][4], tr)  # fslsplit keeps the TR
+        assert img.header.get_xyzt_units() == ('mm', 'sec')
+
+    merged = nb.load(_merge_3d_to_4d(vols, str(tmp_path)))
+    assert merged.shape == (6, 7, 5, 4)
+    assert np.allclose(merged.get_fdata(), data)
+    # full spatial + temporal header fidelity
+    q, qc = merged.get_qform(coded=True)
+    s, sc = merged.get_sform(coded=True)
+    assert (qc, sc) == (1, 2)
+    assert np.allclose(q, qform)
+    assert np.allclose(s, sform)
+    assert np.isclose(merged.header['pixdim'][4], tr)
+    assert merged.header.get_xyzt_units() == ('mm', 'sec')
+
+
+def test_split_dwis_fsl_uses_no_fsl_binary(tmp_path):
+    """SplitDWIsFSL splits in nibabel (its node crashed CI when fslsplit vanished)."""
+    from qsiprep.interfaces.images import SplitDWIsFSL
+
+    n = 5
+    nb.Nifti1Image(np.random.rand(4, 4, 4, n).astype('float32'), np.eye(4)).to_filename(
+        str(tmp_path / 'dwi.nii.gz')
+    )
+    np.savetxt(str(tmp_path / 'dwi.bval'), [[0, 1000, 1000, 0, 1000]], fmt='%d')
+    np.savetxt(str(tmp_path / 'dwi.bvec'), np.zeros((3, n)), fmt='%.1f')
+
+    work = tmp_path / 'w'
+    work.mkdir()
+    result = SplitDWIsFSL(
+        dwi_file=str(tmp_path / 'dwi.nii.gz'),
+        bval_file=str(tmp_path / 'dwi.bval'),
+        bvec_file=str(tmp_path / 'dwi.bvec'),
+    ).run(cwd=str(work))
+
+    assert len(result.outputs.dwi_files) == n
+    assert result.outputs.b0_indices == [0, 3]
+    assert len(result.outputs.b0_images) == 2

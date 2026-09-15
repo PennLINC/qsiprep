@@ -138,13 +138,52 @@ class SplitDWIsFSLOutputSpec(TraitedSpec):
     b0_indices = traits.List(desc='list of original indices for each b0 image')
 
 
+def _split_4d_to_3d(in_file, cwd):
+    """Write each volume of a 4D image as its own 3D file (replaces ``fslsplit -t``).
+
+    fslsplit comes from fsl-avwutils, which qsiprep no longer installs. Like
+    fslsplit, the full header carries over: the qform/sform (and their codes)
+    are preserved by nibabel's slicer, and the temporal pixdim (TR) plus xyzt
+    units -- which the slicer would otherwise drop -- are copied back so a
+    later merge recovers the original repetition time.
+    """
+    img = nb.load(in_file)
+    tr = float(img.header['pixdim'][4])
+    units = img.header.get_xyzt_units()
+    out_files = []
+    for volnum in range(img.shape[3]):
+        vol = img.slicer[..., volnum]
+        vol.header['pixdim'][4] = tr
+        vol.header.set_xyzt_units(*units)
+        out_file = fname_presuffix(in_file, suffix=f'_vol{volnum:04d}', newpath=cwd)
+        vol.to_filename(out_file)
+        out_files.append(out_file)
+    return out_files
+
+
+def _merge_3d_to_4d(in_files, cwd):
+    """Concatenate 3D images along a new time axis (replaces ``fslmerge -t``).
+
+    The temporal pixdim (TR) and xyzt units are carried from the first input,
+    matching fslmerge, which nibabel would otherwise reset when it rebuilds the
+    header for the 4D image.
+    """
+    imgs = [nb.load(fname) for fname in in_files]
+    data = np.stack([np.asanyarray(img.dataobj) for img in imgs], axis=-1)
+    merged = nb.Nifti1Image(data, imgs[0].affine, imgs[0].header)
+    merged.header['pixdim'][4] = imgs[0].header['pixdim'][4]
+    merged.header.set_xyzt_units(*imgs[0].header.get_xyzt_units())
+    out_file = fname_presuffix(in_files[0], suffix='_merged', newpath=cwd)
+    merged.to_filename(out_file)
+    return out_file
+
+
 class SplitDWIsFSL(SimpleInterface):
     input_spec = SplitDWIsFSLInputSpec
     output_spec = SplitDWIsFSLOutputSpec
 
     def _run_interface(self, runtime):
-        split = fsl.Split(dimension='t', in_file=self.inputs.dwi_file)
-        split_dwi_files = split.run().outputs.out_files
+        split_dwi_files = _split_4d_to_3d(self.inputs.dwi_file, runtime.cwd)
 
         split_bval_files, split_bvec_files = split_bvals_bvecs(
             self.inputs.bval_file,
@@ -201,7 +240,6 @@ class IntraModalMerge(SimpleInterface):
                 """Container in use does not have FSL. To use this workflow,
                 please download the qsiprep container with FSL installed."""
             )
-        from nipype.interfaces import fsl
 
         in_files = self.inputs.in_files
         if not isinstance(in_files, list):
@@ -237,8 +275,7 @@ class IntraModalMerge(SimpleInterface):
                 return runtime
             in_files = in_files[0]
         else:
-            magmrg = fsl.Merge(dimension='t', in_files=self.inputs.in_files)
-            in_files = magmrg.run().outputs.merged_file
+            in_files = _merge_3d_to_4d(self.inputs.in_files, runtime.cwd)
         mcflirt = fsl.MCFLIRT(
             cost='normcorr', save_mats=True, save_plots=True, ref_vol=0, in_file=in_files
         )

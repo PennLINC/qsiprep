@@ -266,19 +266,15 @@ def _resampling_sentence():
 
     Notes
     -----
-    This reads the legacy ``hmc_model`` key off ``config.workflow`` rather than
-    the compiled plan, and is allowlisted as such in
-    ``test_workflows_native.test_legacy_method_keys_read_only_at_allowlisted_sites``.
+    This reads ``hmc_method`` off ``config.workflow`` rather than the compiled
+    plan, and is allowlisted as such in
+    ``test_workflows_native.test_method_axes_read_only_at_allowlisted_sites``.
     It is display vocabulary, not routing -- the same category as the other
-    allowlisted sites -- but it works only because ``eddy`` and ``tortoise`` are
-    spelled identically in the legacy key and in :class:`~qsiplan.methods.HmcMethod`.
-    The plan-native question is ``unit.run.hmc_stage.tool``; asking it would mean
-    threading the run through :func:`gradwarp_boilerplate` and its callers, which
-    is worth doing if this ever needs to distinguish a backend the two
-    vocabularies spell differently (SHORELine is ``3dSHORE``/``tensor`` here and
-    ``shoreline`` there).
+    allowlisted sites. The plan-native question is ``unit.run.hmc_stage.tool``;
+    asking it would mean threading the run through :func:`gradwarp_boilerplate`
+    and its callers.
     """
-    backend = _PRERESAMPLED_BY.get(config.workflow.hmc_model)
+    backend = _PRERESAMPLED_BY.get(config.workflow.hmc_method)
     if backend is None:
         return (
             ' The displacement field was combined with the head motion, eddy '
@@ -461,8 +457,8 @@ def init_gradwarp_wf(unit, name='gradwarp_wf'):
 #   Estimating it on gradwarp-corrected b=0 images would place it in a space it
 #   was never measured in, so TOPUP's inputs are deliberately left raw.
 #
-# The decision is per SDC node rather than per backend: ``--pepolar-method
-# DRBUDDI+TOPUP`` runs both, and only DRBUDDI's inputs are corrected.
+# The decision is per SDC node rather than per backend: ``--sdc-method
+# topup+drbuddi`` runs both, and only DRBUDDI's inputs are corrected.
 
 
 def _sdc_interpolation():

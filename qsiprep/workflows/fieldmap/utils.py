@@ -3,11 +3,10 @@ Functions copied from nipype
 
 """
 
-import os
-
-from nipype.interfaces import fsl
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
+
+from ...interfaces.fmap import CleanupEdgeFilter, DespikeFilter
 
 
 def siemens2rads(in_file, out_file=None):
@@ -82,45 +81,23 @@ def cleanup_edge_pipeline(name='Cleanup'):
     Perform some de-spiking filtering to clean up the edge of the fieldmap
     (copied from fsl_prepare_fieldmap)
     """
-    fsl_check = os.environ.get('FSLDIR', False)
-    if not fsl_check:
-        raise Exception(
-            """Container in use does not have FSL. To use this workflow,
-            please download the qsiprep container with FSL installed."""
-        )
     inputnode = pe.Node(niu.IdentityInterface(fields=['in_file', 'in_mask']), name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(fields=['out_file']), name='outputnode')
 
-    fugue = pe.Node(
-        fsl.FUGUE(save_fmap=True, despike_2dfilter=True, despike_threshold=2.1), name='Despike'
-    )
-    erode = pe.Node(
-        fsl.maths.MathsCommand(nan2zeros=True, args='-kernel 2D -ero'), name='MskErode'
-    )
-    newmsk = pe.Node(fsl.MultiImageMaths(op_string='-sub %s -thr 0.5 -bin'), name='NewMask')
-    applymsk = pe.Node(fsl.ApplyMask(nan2zeros=True), name='ApplyMask')
-    join = pe.Node(niu.Merge(2), name='Merge')
-    addedge = pe.Node(fsl.MultiImageMaths(op_string='-mas %s -add %s'), name='AddEdge')
+    # Despiking and the erode/subtract/mask/add edge chain are both implemented in
+    # nibabel/numpy, so this pipeline needs no external tools.
+    despike = pe.Node(DespikeFilter(threshold=2.1), name='Despike')
+    edge_cleanup = pe.Node(CleanupEdgeFilter(), name='EdgeCleanup')
 
     wf = pe.Workflow(name=name)
     wf.connect([
-        (inputnode, fugue, [
-            ('in_file', 'fmap_in_file'),
-            ('in_mask', 'mask_file')]),
-        (inputnode, erode, [
-            ('in_mask', 'in_file')]),
-        (inputnode, newmsk, [
-            ('in_mask', 'in_file')]),
-        (erode, newmsk, [
-            ('out_file', 'operand_files')]),
-        (fugue, applymsk, [
-            ('fmap_out_file', 'in_file')]),
-        (newmsk, applymsk, [
-            ('out_file', 'mask_file')]),
-        (erode, join, [('out_file', 'in1')]),
-        (applymsk, join, [('out_file', 'in2')]),
-        (inputnode, addedge, [('in_file', 'in_file')]),
-        (join, addedge, [('out', 'operand_files')]),
-        (addedge, outputnode, [('out_file', 'out_file')])
+        (inputnode, despike, [
+            ('in_file', 'in_file'),
+            ('in_mask', 'in_mask')]),
+        (inputnode, edge_cleanup, [
+            ('in_file', 'in_file'),
+            ('in_mask', 'in_mask')]),
+        (despike, edge_cleanup, [('out_file', 'despiked_file')]),
+        (edge_cleanup, outputnode, [('out_file', 'out_file')])
     ])  # fmt:skip
     return wf

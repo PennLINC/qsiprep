@@ -45,7 +45,7 @@ from qsiprep.data import load as load_data
 
 LOGGER = logging.getLogger('nipype.interface')
 BIDS_NAME = re.compile(
-    r'^(.*\/)?(?P<subject_id>sub-[a-zA-Z0-9]+)(_(?P<session_id>ses-[a-zA-Z0-9]+))?'
+    r'^(.*\/)?(?P<subject_id>sub-[a-zA-Z0-9]+)(_(?P<session_label>ses-[a-zA-Z0-9]+))?'
     '(_(?P<task_id>task-[a-zA-Z0-9]+))?(_(?P<acq_id>acq-[a-zA-Z0-9]+))?'
     '(_(?P<space_id>space-[a-zA-Z0-9]+))?'
     '(_(?P<rec_id>rec-[a-zA-Z0-9]+))?(_(?P<run_id>run-[a-zA-Z0-9]+))?'
@@ -67,7 +67,7 @@ config_entities = frozenset({e['name'] for e in merged_entities})
 def get_bids_params(fullpath):
     bids_patterns = [
         r'^(.*/)?(?P<subject_id>sub-[a-zA-Z0-9]+)',
-        '^.*_(?P<session_id>ses-[a-zA-Z0-9]+)',
+        '^.*_(?P<session_label>ses-[a-zA-Z0-9]+)',
         '^.*_(?P<task_id>task-[a-zA-Z0-9]+)',
         '^.*_(?P<acq_id>acq-[a-zA-Z0-9]+)',
         '^.*_(?P<space_id>space-[a-zA-Z0-9]+)',
@@ -77,7 +77,7 @@ def get_bids_params(fullpath):
     ]
     matches = {
         'subject_id': None,
-        'session_id': None,
+        'session_label': None,
         'task_id': None,
         'dir_id': None,
         'acq_id': None,
@@ -103,7 +103,7 @@ class BIDSInfoInputSpec(BaseInterfaceInputSpec):
 
 class BIDSInfoOutputSpec(TraitedSpec):
     subject_id = traits.Str()
-    session_id = traits.Str()
+    session_label = traits.Str()
     task_id = traits.Str()
     acq_id = traits.Str()
     rec_id = traits.Str()

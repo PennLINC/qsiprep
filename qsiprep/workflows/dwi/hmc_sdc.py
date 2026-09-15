@@ -137,7 +137,10 @@ def init_qsiprep_hmcsdc_wf(
     )
 
     # Motion correct the data
-    dwi_hmc_wf = init_dwi_hmc_wf(source_file=source_file)
+    dwi_hmc_wf = init_dwi_hmc_wf(
+        source_file=source_file,
+        num_model_iterations=config.workflow.shoreline_iters,
+    )
 
     # Impute slice data if requested
     slice_qc = pe.Node(SliceQC(), name='slice_qc')
@@ -234,6 +237,7 @@ def init_qsiprep_hmcsdc_wf(
                 ('t2w_unfatsat', 'inputnode.t2w_unfatsat'),
                 ('original_files', 'inputnode.original_files'),
             ]),
+            (dwi_hmc_wf, drbuddi_wf, [('outputnode.final_template', 'inputnode.b0_ref')]),
             (drbuddi_wf, outputnode, [
                 ('outputnode.sdc_warps', 'to_dwi_ref_warps'),
                 ('outputnode.sdc_scaling_images', 'sdc_scaling_images'),
