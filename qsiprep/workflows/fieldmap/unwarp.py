@@ -19,7 +19,7 @@ Unwarping
 
 import os
 
-from nipype.interfaces import ants, fsl
+from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
@@ -32,7 +32,7 @@ from niworkflows.interfaces.reportlets.registration import (
 from ... import config
 from ...data import load as load_data
 from ...interfaces import DerivativesDataSink
-from ...interfaces.fmap import FieldToHz, FieldToRadS
+from ...interfaces.fmap import FieldmapToVSM, FieldToHz, FieldToRadS
 from ...interfaces.fmap import get_ees as _get_ees
 from ...interfaces.niworkflows import FUGUEvsm2ANTSwarp
 
@@ -148,13 +148,6 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
         name='fmap2ref_apply',
     )
 
-    fmap_mask2ref_apply = pe.Node(
-        ANTSApplyTransformsRPT(
-            generate_report=False, dimension=3, interpolation='MultiLabel', float=True
-        ),
-        name='fmap_mask2ref_apply',
-    )
-
     ds_report_reg_vsm = pe.Node(
         DerivativesDataSink(datatype='figures', desc='vsm', suffix='fieldmap'),
         name='ds_report_vsm',
@@ -170,7 +163,7 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
 
     get_ees = pe.Node(niu.Function(function=_get_ees, output_names=['ees']), name='get_ees')
 
-    gen_vsm = pe.Node(fsl.FUGUE(save_unmasked_shift=True, save_fmap=True), name='gen_vsm')
+    gen_vsm = pe.Node(FieldmapToVSM(), name='gen_vsm')
     # Convert the VSM into a DFM (displacements field map)
     # or: FUGUE shift to ANTS warping.
     vsm2dfm = pe.Node(FUGUEvsm2ANTSwarp(), name='vsm2dfm')
@@ -201,13 +194,10 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
         (inputnode, fmap2ref_reg, [('fmap_ref', 'moving_image')]),
         (inputnode, fmap2ref_apply, [('in_reference', 'reference_image')]),
         (fmap2ref_reg, fmap2ref_apply, [('composite_transform', 'transforms')]),
-        (inputnode, fmap_mask2ref_apply, [('in_reference', 'reference_image')]),
-        (fmap2ref_reg, fmap_mask2ref_apply, [('composite_transform', 'transforms')]),
         (fmap2ref_apply, ds_report_reg_vsm, [('out_report', 'in_file')]),
         (inputnode, fmap2ref_reg, [('in_reference_brain', 'fixed_image')]),
         (fmap2ref_reg, ds_report_reg, [('out_report', 'in_file')]),
         (inputnode, fmap2ref_apply, [('fmap', 'input_image')]),
-        (inputnode, fmap_mask2ref_apply, [('fmap_mask', 'input_image')]),
         (fmap2ref_apply, torads, [('output_image', 'in_file')]),
         (fmap2ref_apply, tohz, [('output_image', 'in_file')]),
         (tohz, outputnode, [('out_file', 'out_hz')]),
@@ -215,12 +205,10 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
             ('in_reference', 'in_file'),
             ('metadata', 'in_meta'),
         ]),
-        (fmap_mask2ref_apply, gen_vsm, [('output_image', 'mask_file')]),
         (get_ees, gen_vsm, [('ees', 'dwell_time')]),
-        (inputnode, gen_vsm, [(('metadata', _get_pedir_fugue), 'unwarp_direction')]),
+        (inputnode, gen_vsm, [(('metadata', _get_pedir_bids), 'pe_dir')]),
         (inputnode, vsm2dfm, [(('metadata', _get_pedir_bids), 'pe_dir')]),
-        (torads, gen_vsm, [('out_file', 'fmap_in_file')]),
-        (gen_vsm, outputnode, [('fmap_out_file', 'fieldcoef')]),
+        (torads, gen_vsm, [('out_file', 'in_file')]),
         (vsm2dfm, unwarp_reference, [('out_file', 'transforms')]),
         (inputnode, unwarp_reference, [('in_reference', 'reference_image')]),
         (inputnode, unwarp_reference, [('in_reference', 'input_image')]),
@@ -322,7 +310,3 @@ def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf'):
 
 def _get_pedir_bids(in_dict):
     return in_dict['PhaseEncodingDirection']
-
-
-def _get_pedir_fugue(in_dict):
-    return in_dict['PhaseEncodingDirection'].replace('i', 'x').replace('j', 'y').replace('k', 'z')

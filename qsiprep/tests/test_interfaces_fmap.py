@@ -9,7 +9,10 @@ import numpy as np
 from qsiprep.interfaces.fmap import (
     B0RPEFieldmap,
     CleanupEdgeFilter,
+    DespikeFilter,
+    FieldmapToVSM,
     MedianFilter,
+    _despike_2d,
     _sphere_footprint,
 )
 from qsiprep.tests.utils import (
@@ -109,8 +112,7 @@ def test_b0rpe_fieldmap_merges_two_fieldmaps(tmp_path):
     assert json.loads(Path(result.outputs.fmap_info).read_text()) == PEPOLAR_METADATA
 
 
-# The fieldmap workflows dropped fslmaths (fsl-avwutils is no longer installed);
-# these interfaces reimplement the fslmaths ops in nibabel/scipy.
+# The fieldmap edge cleanup (denoise + edge blend) runs entirely in nibabel/scipy.
 
 
 def _write(path, data, zooms=(2.0, 2.0, 2.0)):
@@ -119,8 +121,8 @@ def _write(path, data, zooms=(2.0, 2.0, 2.0)):
     return str(path)
 
 
-def test_sphere_footprint_matches_fslmaths_geometry():
-    """`fslmaths -kernel sphere 3` on 2 mm voxels keeps center+faces+edges, not corners."""
+def test_sphere_footprint_geometry():
+    """A 3 mm spherical kernel on 2 mm voxels keeps center+faces+edges, not corners."""
     fp = _sphere_footprint(3.0, (2.0, 2.0, 2.0))
     assert fp.shape == (3, 3, 3)
     assert fp[1, 1, 1]  # center
@@ -174,8 +176,83 @@ def test_cleanup_edge_blends_despiked_rim_into_original_interior(tmp_path):
     assert np.all(out[~(interior | edge)] == 0.0)  # nothing outside mask ∪ rim
 
 
+def test_fieldmap_to_vsm_uses_standard_shift_formula(tmp_path):
+    """VSM = fmap[rad/s]/(2*pi) * ees * N_pe (the standard EPI voxel-shift formula).
+
+    The ``*N_pe`` factor is what makes the shift full-readout rather than per-line.
+    """
+    shape = (10, 12, 8)
+    y = np.linspace(-1, 1, shape[1])[None, :, None]
+    field_rads = np.broadcast_to((300.0 * y).astype('float32'), shape).astype('float32')
+    in_file = _write(tmp_path / 'field.nii.gz', field_rads)
+    ees = 0.0006
+
+    result = _run(FieldmapToVSM(in_file=in_file, dwell_time=ees, pe_dir='j'), tmp_path / 'wj')
+    vsm = nb.load(result.outputs.shift_out_file).get_fdata()
+
+    assert np.allclose(vsm, field_rads / (2 * np.pi) * ees * shape[1], atol=1e-5)
+
+    # The axis (not the sign) sets N_pe: 'k' uses the 3rd dimension...
+    res_k = _run(FieldmapToVSM(in_file=in_file, dwell_time=ees, pe_dir='k'), tmp_path / 'wk')
+    vsm_k = nb.load(res_k.outputs.shift_out_file).get_fdata()
+    assert np.allclose(vsm_k, field_rads / (2 * np.pi) * ees * shape[2], atol=1e-5)
+
+    # ...and the polarity sign does not change the VSM (applied downstream).
+    res_jm = _run(FieldmapToVSM(in_file=in_file, dwell_time=ees, pe_dir='j-'), tmp_path / 'wjm')
+    assert np.allclose(nb.load(res_jm.outputs.shift_out_file).get_fdata(), vsm, atol=1e-6)
+
+
+def test_despike_metric_is_relative_to_neighbor_range():
+    """A spike is flagged only when |dev|/range(neighbors) exceeds the threshold.
+
+    Same absolute deviation, different local spread: flagged in a flat neighborhood,
+    left alone in a variable one.
+    """
+    # flat neighborhood (range ~0.2): a +1 spike is >>2.1x the range -> despiked
+    flat = np.full((5, 5, 1), 10.0, dtype='float32')
+    flat += np.linspace(0, 0.2, 5)[:, None, None]
+    flat[2, 2, 0] += 1.0
+    out = _despike_2d(flat, threshold=2.1)
+    assert out[2, 2, 0] < 10.5  # replaced by the local (~10.1) lower median
+
+    # variable neighborhood (range ~8): the same +1 bump is well under threshold
+    var = np.zeros((5, 5, 1), dtype='float32')
+    var += np.linspace(0, 8, 5)[:, None, None]
+    before = var[2, 2, 0]
+    var[2, 2, 0] += 1.0
+    out = _despike_2d(var, threshold=2.1)
+    assert out[2, 2, 0] == before + 1.0  # untouched
+
+
+def test_despike_filter_replaces_spike_and_zeros_outside_mask(tmp_path):
+    """DespikeFilter replaces an isolated spike with the local value and masks output."""
+    data = np.zeros((7, 7, 3), dtype='float32')
+    data += np.linspace(0, 6, 7)[:, None, None]  # gentle ramp along axis 0
+    data[3, 3, 1] += 100.0  # isolated spike; true value there is 3.0
+    mask = np.zeros((7, 7, 3), dtype='float32')
+    mask[1:6, 1:6, :] = 1.0
+
+    result = _run(
+        DespikeFilter(
+            in_file=_write(tmp_path / 'f.nii.gz', data),
+            in_mask=_write(tmp_path / 'm.nii.gz', mask),
+            threshold=2.1,
+        ),
+        tmp_path / 'w',
+    )
+    out = nb.load(result.outputs.out_file)
+    o = out.get_fdata()
+
+    assert out.get_data_dtype() == np.float32
+    assert np.allclose(out.affine, np.diag([2.0, 2.0, 2.0, 1.0]))
+    assert np.isclose(o[3, 3, 1], 3.0, atol=1e-4)  # spike -> local lower median
+    assert np.all(o[mask == 0] == 0.0)  # zeroed outside the mask
+    # a non-spike in-mask voxel is untouched
+    assert np.isclose(o[2, 4, 1], data[2, 4, 1], atol=1e-4)
+
+
 def test_median_and_cleanup_write_float32_from_integer_input(tmp_path):
-    """Filtering an int16 image yields float32 (like fslmaths), not a requantised int.
+    """Filtering an int16 image yields float32, not a requantised int.
 
     Passing the source header through nibabel would otherwise keep the int16
     dtype and scale the float result into it.

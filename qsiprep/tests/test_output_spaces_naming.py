@@ -150,7 +150,7 @@ def test_single_acpc_writes_no_res_entity(single_acpc_config):
 @pytest.fixture
 def dwi_config():
     config.execution.output_dir = '/tmp/qsiprep-naming-test'
-    config.workflow.hmc_model = 'tortoise'
+    config.workflow.hmc_method = 'tortoise'
     config.workflow.write_local_bvecs = False
     return config
 
@@ -202,7 +202,7 @@ def _build_finalize(tmp_path, output_spaces, write_derivatives=True):
 
     config.workflow.output_spaces = output_spaces
     config.nipype.omp_nthreads = 1
-    config.workflow.hmc_model = 'tortoise'
+    config.workflow.hmc_method = 'tortoise'
     config.workflow.b1_biascorrect_stage = 'final'
     config.workflow.b0_threshold = 100
     config.workflow.intramodal_template_iters = 0
