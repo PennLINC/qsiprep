@@ -56,16 +56,12 @@ class _StubLayout:
         return []
 
 
-def _cfg(hmc_model='eddy', pepolar_method='TOPUP', layout=None):
+def _cfg(hmc_method='eddy', sdc_method='topup', layout=None):
     config.nipype.omp_nthreads = 1
     config.execution.sloppy = False
     config.execution.layout = layout
-    config.workflow.hmc_model = hmc_model
-    config.workflow.pepolar_method = pepolar_method
-    # The legacy keys drive these tests; clear the axis keys so a selection
-    # left behind by another test cannot shadow them.
-    config.workflow.hmc_method = None
-    config.workflow.sdc_method = None
+    config.workflow.hmc_method = hmc_method
+    config.workflow.sdc_method = sdc_method
     config.workflow.shoreline_model = None
     config.workflow.b0_threshold = 100
     config.workflow.b1_biascorrect_stage = 'final'
@@ -109,7 +105,7 @@ def test_pre_hmc_rpe_series_splits_into_polarity_groups(tmp_path):
 
 
 def test_fsl_hmc_topup_builds(tmp_path):
-    _cfg(pepolar_method='TOPUP')
+    _cfg(sdc_method='topup')
     from qsiprep.workflows.dwi.fsl import init_fsl_hmc_wf
 
     wf = init_fsl_hmc_wf(_rpe_unit(tmp_path), source_file=SRC, t2w_sdc=False)
@@ -117,7 +113,7 @@ def test_fsl_hmc_topup_builds(tmp_path):
 
 
 def test_fsl_hmc_no_fieldmap_builds():
-    _cfg(pepolar_method='TOPUP')
+    _cfg(sdc_method='topup')
     from qsiprep.workflows.dwi.fsl import init_fsl_hmc_wf
 
     wf = init_fsl_hmc_wf(make_preproc_unit([SRC]), source_file=SRC, t2w_sdc=False)
@@ -139,7 +135,7 @@ def test_fsl_hmc_synb0_feeds_topup(tmp_path):
     """A SynB0 unit runs TOPUP fed by the synthetic-b=0 merge node."""
     from nipype.interfaces.base import isdefined
 
-    _cfg(pepolar_method='TOPUP')
+    _cfg(sdc_method='topup')
     from qsiprep.workflows.dwi.fsl import init_fsl_hmc_wf
 
     wf = init_fsl_hmc_wf(_synb0_unit(tmp_path), source_file=SRC, t2w_sdc=False)
@@ -186,7 +182,7 @@ def test_synb0_reportlet_descs_are_registered_in_the_report_spec():
 def test_fsl_hmc_synb0_without_topup_is_uncorrected(tmp_path):
     """With no TOPUP stage in the plan (DRBUDDI-only eddy), nothing consumes
     the synthetic b=0 and the series is processed without SDC."""
-    _cfg(pepolar_method='DRBUDDI')
+    _cfg(sdc_method='drbuddi')
     from qsiprep.workflows.dwi.fsl import init_fsl_hmc_wf
 
     wf = init_fsl_hmc_wf(_synb0_unit(tmp_path), source_file=SRC, t2w_sdc=False)
@@ -314,7 +310,7 @@ def test_dwi_preproc_wf_drbuddi_without_t2w_builds(tmp_path, monkeypatch):
     crashing every DRBUDDI dataset that lacked a T2w.
     """
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
-    cfg = _cfg(hmc_model='tortoise', pepolar_method='DRBUDDI', layout=_StubLayout())
+    cfg = _cfg(hmc_method='tortoise', sdc_method='drbuddi', layout=_StubLayout())
     cfg.workflow.anat_modality = 't1w'
     cfg.workflow.b0_to_anat_transform = 'Rigid'
     cfg.workflow.hmc_transform = 'Affine'
@@ -340,7 +336,7 @@ def test_drbuddi_wf_feeds_sidecar_map_and_discriminator(tmp_path):
     Also checks the reverse-PE-series vs epi discriminator is derived from the
     unit rather than re-read at runtime.
     """
-    _cfg(hmc_model='tortoise', pepolar_method='DRBUDDI')
+    _cfg(hmc_method='tortoise', sdc_method='drbuddi')
     from qsiprep.workflows.fieldmap import init_drbuddi_wf
 
     wf = init_drbuddi_wf(_rpe_unit(tmp_path), t2w_sdc=False)
@@ -436,10 +432,10 @@ def test_drbuddi_blip_assignments_from_sidecars_needs_no_disk():
 # here and in test_interfaces_diffprep.
 
 
-def test_unknown_hmc_model_is_rejected_at_selection_time(tmp_path):
+def test_unknown_hmc_method_is_rejected_at_selection_time(tmp_path):
     """The subject workflow resolves the method selection before building
     anything; garbage config dies there, not deep in a builder."""
-    _cfg(hmc_model='bogus', layout=_StubLayout())
+    _cfg(hmc_method='bogus', layout=_StubLayout())
     from qsiprep.utils.plan import method_selection_from_config
 
     with pytest.raises(ValueError, match='hmc'):
@@ -464,28 +460,32 @@ if __name__ == '__main__':
     pytest.main([__file__, '-v'])
 
 
-def test_legacy_method_keys_read_only_at_allowlisted_sites():
-    """Routing reads the compiled plan; legacy keys are display vocabulary only."""
+def test_method_axes_read_only_at_allowlisted_sites():
+    """Routing reads the compiled plan; the config method axes are display vocabulary only."""
     import pathlib
     import re
 
     root = pathlib.Path(__file__).parent.parent
     allowed = {
-        # Display strings and the SHORELine model vocabulary.
-        'workflows/dwi/base.py': {'hmc_model': 1},
-        'workflows/dwi/derivatives.py': {'hmc_model': 3},
-        'workflows/dwi/hmc.py': {'hmc_model': 3},
+        # Display strings and the SHORELine signal model vocabulary.
+        'workflows/dwi/base.py': {'hmc_method': 2, 'shoreline_model': 1},
+        'workflows/dwi/derivatives.py': {'hmc_method': 3, 'shoreline_model': 2},
+        'workflows/dwi/hmc.py': {'shoreline_model': 4},
         # The backend-dependent gradwarp resampling sentence: also display
-        # vocabulary, and safe only because 'eddy' and 'tortoise' are spelled
-        # the same in the legacy key and in HmcMethod. See the Notes section of
-        # gradwarp._resampling_sentence for what asking the plan would cost.
-        'workflows/dwi/gradwarp.py': {'hmc_model': 1},
+        # vocabulary. See the Notes section of gradwarp._resampling_sentence for
+        # what asking the plan would cost.
+        'workflows/dwi/gradwarp.py': {'hmc_method': 1},
+    }
+    patterns = {
+        'hmc_method': r'config\.workflow\.hmc_method\b',
+        'sdc_method': r'config\.workflow\.sdc_method\b',
+        'shoreline_model': r'config\.workflow\.shoreline_model\b',
     }
     found: dict = {}
     for path in (root / 'workflows').rglob('*.py'):
         text = path.read_text()
-        for key in ('pepolar_method', 'hmc_model'):
-            count = len(re.findall(rf'config\.workflow\.{key}\b', text))
+        for key, pattern in patterns.items():
+            count = len(re.findall(pattern, text))
             if count:
                 found.setdefault(str(path.relative_to(root)), {})[key] = count
     assert found == allowed
