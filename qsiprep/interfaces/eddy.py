@@ -37,16 +37,18 @@ from .epi_fmap import (
 
 LOGGER = logging.getLogger('nipype.interface')
 
-_EDDY_CUDA_RE = re.compile(r'^eddy_cuda(\d+)\.(\d+)$')
+# Versioned (eddy_cuda11.0) or, from FSL 6.0.7 on, bare (eddy_cuda).
+_EDDY_CUDA_RE = re.compile(r'^eddy_cuda(?:(\d+)\.(\d+))?$')
 
 
 def _find_eddy_cuda(default='eddy_cuda10.2'):
     """Locate the installed FSL eddy CUDA binary (e.g. ``eddy_cuda11.0``).
 
-    FSL ships version-specific binaries whose name encodes the CUDA version
-    (``eddy_cuda11.0``). Older code hardcoded ``eddy_cuda10.2``, which current
-    FSL builds no longer provide. Scan the directories on ``PATH`` for any
-    ``eddy_cuda<major>.<minor>`` executable and return the newest one.
+    FSL used to ship version-specific binaries whose name encodes the CUDA
+    version (``eddy_cuda11.0``); from 6.0.7 the conda/pixi packages ship a
+    single bare ``eddy_cuda``. Older code hardcoded ``eddy_cuda10.2``. Scan the
+    directories on ``PATH`` for any of these and return the newest one, the
+    bare binary counting as newest.
 
     Parameters
     ----------
@@ -74,7 +76,10 @@ def _find_eddy_cuda(default='eddy_cuda10.2'):
             full_path = os.path.join(directory, entry)
             if not os.path.isfile(full_path) or not os.access(full_path, os.X_OK):
                 continue
-            version = (int(match.group(1)), int(match.group(2)))
+            if match.group(1) is None:
+                version = (float('inf'), float('inf'))
+            else:
+                version = (int(match.group(1)), int(match.group(2)))
             # Keep the first match on PATH for each basename.
             found.setdefault(entry, version)
 

@@ -32,6 +32,20 @@ def test_find_eddy_cuda_multiple_picks_newest(tmp_path, monkeypatch):
     assert warnings, 'expected a warning when multiple binaries are found'
 
 
+def test_find_eddy_cuda_accepts_the_bare_binary(tmp_path, monkeypatch):
+    """FSL >= 6.0.7 ships ``eddy_cuda`` with no CUDA version in the name."""
+    _make_exe(tmp_path / 'eddy_cuda')
+    monkeypatch.setenv('PATH', str(tmp_path))
+    assert _find_eddy_cuda() == 'eddy_cuda'
+
+
+def test_find_eddy_cuda_prefers_the_bare_binary_over_versioned_ones(tmp_path, monkeypatch):
+    _make_exe(tmp_path / 'eddy_cuda10.2')
+    _make_exe(tmp_path / 'eddy_cuda')
+    monkeypatch.setenv('PATH', str(tmp_path))
+    assert _find_eddy_cuda() == 'eddy_cuda'
+
+
 def test_find_eddy_cuda_none_returns_default(tmp_path, monkeypatch):
     """With no binaries on PATH, the default name is returned and a warning logged."""
     monkeypatch.setenv('PATH', str(tmp_path))
