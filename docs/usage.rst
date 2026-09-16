@@ -91,19 +91,34 @@ On standard spaces:
 Multiple ``acpc`` entries
 =========================
 
-.. note::
-
-   Multiple ``acpc`` resolutions cannot be combined with ``--distortion-group-merge``
-   (``concat`` or ``average``). The merge workflow writes one set of derivatives with
-   no ``res-`` entity, so the extra resolutions would be resampled and then silently
-   dropped; the combination is rejected instead. A *single* resolution merges
-   normally, including ``res-nativemin``/``res-nativemax``, whose resolved voxel size
-   is written to the merged output's JSON sidecar.
-
 Listing ``acpc`` more than once (e.g. ``acpc:res-2mm acpc:res-1p5mm``) resamples and
 writes the preprocessed DWI once per requested resolution. Each additional ``acpc``
 entry costs roughly as much as another full resampling pass over the DWI data, so
 requesting *N* ``acpc`` resolutions costs roughly *N* times the resampling.
+
+.. important::
+
+   Requesting more than one ``acpc`` resolution requires
+   ``--distortion-group-merge none``. That option **defaults to** ``concat``, so a
+   request for several resolutions is rejected unless you turn merging off
+   explicitly:
+
+   .. code-block:: bash
+
+      # rejected: --distortion-group-merge is concat by default
+      --output-spaces acpc:res-2mm acpc:res-1p5mm
+
+      # works
+      --output-spaces acpc:res-2mm acpc:res-1p5mm --distortion-group-merge none
+
+   The restriction is real rather than cosmetic: with merging on, the merge workflow
+   writes one set of derivatives with no ``res-`` entity, so every resolution after
+   the first would be resampled and then silently discarded. Rejecting the request is
+   better than producing fewer outputs than were asked for.
+
+   A *single* ``acpc`` resolution merges normally, including ``res-nativemin`` and
+   ``res-nativemax``, whose resolved voxel size is written to the merged output's JSON
+   sidecar.
 
 Standard spaces
 ================
