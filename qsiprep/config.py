@@ -624,6 +624,17 @@ class workflow(_Config):
     fed as-is: eddy's ``--field`` sign convention matches FUGUE (validated against
     a FUGUE-forward-distorted ground truth), and the PE polarity is carried by the
     acqp, so one field serves either phase-encoding direction."""
+    gre_gradwarp = 'reference'
+    """How a GRE fieldmap that is applied *after* head motion correction is
+    reconciled with gradient unwarping, which the composed transform chain
+    applies before the fieldmap warp. ``reference``: register the fieldmap to
+    the gradwarp-corrected b=0 and use it as-is (the field's content stays in
+    the raw frame). ``hz``: gradwarp the fieldmap and its magnitude before
+    registering them. ``transport``: register the fieldmap to the raw b=0,
+    build the warp in the raw frame and transport it into the gradwarp-corrected
+    frame by composing it with the gradwarp field and its inverse. Ignored when
+    no gradient unwarping happens, for PEPOLAR data, and when the fieldmap goes
+    into eddy (``gre_eddy_mbs``)."""
     separate_all_dwis = False
     """Process all dwis separately - do not attempt concatenation."""
     shoreline_config = None

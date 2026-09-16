@@ -600,7 +600,6 @@ def init_fsl_hmc_wf(
     if unit.is_gre or unit.is_nipreps_syn:
         config.loggers.workflow.info(f'Computing fieldmap directly from {fieldmap_type}')
         outputnode.inputs.sdc_method = fieldmap_type
-        b0_sdc_wf = init_sdc_wf(unit)
 
         # Optionally hand a GRE fieldmap to eddy via --field, so eddy corrects
         # susceptibility distortion in-run and can estimate movement-by-
@@ -608,8 +607,10 @@ def init_fsl_hmc_wf(
         # the field estimated on a PRE-eddy reference (b0_ref_for_coreg is built
         # from eddy's own output, so feeding it to eddy would be circular). The
         # field is fed in the raw, gradient-distorted frame exactly like TOPUP's
-        # field, so gradient unwarping (applied downstream) composes correctly.
+        # field, so gradient unwarping (applied downstream) composes correctly
+        # and the SDC workflow needs no gradwarp mode of its own.
         gre_to_eddy = unit.is_gre and config.workflow.gre_eddy_mbs
+        b0_sdc_wf = init_sdc_wf(unit, gradwarp=has_gradwarp and not gre_to_eddy)
 
         if gre_to_eddy:
             # Register the field's reference to eddy's first volume for --field_mat.

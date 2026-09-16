@@ -26,6 +26,8 @@ def _reset_config():
     config.workflow.gradient_file = None
     config.workflow.ignore = []
     config.workflow.force = []
+    config.workflow.gre_gradwarp = 'reference'
+    config.workflow.gre_eddy_mbs = False
     # Anything that runs the real parser leaves the method axes set, and a stray
     # sdc_method='topup' would silently compile a plan with no DRBUDDI stage.
     # Save them here, and restore below so this module does not pollute in turn.
@@ -44,6 +46,8 @@ def _reset_config():
     yield
     _reset_plan_logging()
     config.workflow.gradient_file = None
+    config.workflow.gre_gradwarp = 'reference'
+    config.workflow.gre_eddy_mbs = False
     config.workflow.ignore = []
     config.workflow.force = []
     for key, value in axis_keys.items():
@@ -1680,3 +1684,235 @@ def test_gre_eddy_mbs_with_gradwarp_still_feeds_eddy(tmp_path, monkeypatch):
     assert not _connects(wf, 'sdc_wf', 'outputnode', 'outputnode.out_warp', 'to_dwi_ref_warps')
     # The coregistration reference is gradwarp-corrected (TOPUP-branch style).
     assert any(n.name == 'gradwarp_coreg_ref' for n in wf._get_all_nodes())
+
+
+# --- GRE fieldmaps applied after HMC under gradient unwarping ----------------
+#
+# The composed chain applies the fieldmap warp before gradwarp, so a GRE warp
+# has to be expressed in the gradwarp-corrected frame. ``gre_gradwarp`` picks
+# how: ``reference`` (register to the corrected b=0, content stays raw), ``hz``
+# (gradwarp the fieldmap first) or ``transport`` (estimate on the raw b=0 and
+# compose with the gradwarp field and its inverse).
+
+
+def _gre_sdc_wf(tmp_path, mode, gradwarp=True):
+    from qsiprep.workflows.fieldmap.base import init_sdc_wf
+
+    config.workflow.gre_gradwarp = mode
+    config.execution.sloppy = False
+    return init_sdc_wf(_phasediff_unit(), gradwarp=gradwarp)
+
+
+def test_sdc_wf_exposes_a_gradwarp_field_input(tmp_path, monkeypatch):
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    wf = _gre_sdc_wf(tmp_path, 'reference')
+    assert 'gradwarp_field' in wf.get_node('inputnode').inputs.trait_get()
+    assert wf.gradwarp_mode == 'reference'
+
+
+def test_sdc_wf_reference_mode_leaves_the_fieldmap_raw(tmp_path, monkeypatch):
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    wf = _gre_sdc_wf(tmp_path, 'reference')
+    names = {n.name for n in wf._graph.nodes}
+    assert 'gradwarp_fmap' not in names
+    assert 'transport_warp' not in names
+    assert _connects(wf, 'phdiff_wf', 'sdc_unwarp_wf', 'outputnode.fmap', 'inputnode.fmap')
+    assert _connects(wf, 'sdc_unwarp_wf', 'outputnode', 'outputnode.out_warp', 'out_warp')
+
+
+def test_sdc_wf_without_gradwarp_ignores_the_mode(tmp_path, monkeypatch):
+    """No gradwarp field will ever be connected, so no node may depend on one."""
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    for mode in ('hz', 'transport'):
+        wf = _gre_sdc_wf(tmp_path, mode, gradwarp=False)
+        assert wf.gradwarp_mode == 'reference'
+        names = {n.name for n in wf._graph.nodes}
+        assert not names & {'gradwarp_fmap', 'transport_warp', 'invert_gradwarp'}
+
+
+def test_sdc_wf_hz_mode_gradwarps_the_fieldmap_before_registration(tmp_path, monkeypatch):
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    wf = _gre_sdc_wf(tmp_path, 'hz')
+
+    assert wf.gradwarp_mode == 'hz'
+    for node, field, dest in (
+        ('gradwarp_fmap', 'fmap', 'inputnode.fmap'),
+        ('gradwarp_fmap_ref', 'fmap_ref', 'inputnode.fmap_ref'),
+        ('gradwarp_fmap_mask', 'fmap_mask', 'inputnode.fmap_mask'),
+    ):
+        assert _connects(wf, 'inputnode', node, 'gradwarp_field', 'transforms')
+        assert _connects(wf, 'phdiff_wf', node, f'outputnode.{field}', 'input_image')
+        # Resampled onto its own grid: only the displacement changes.
+        assert _connects(wf, 'phdiff_wf', node, f'outputnode.{field}', 'reference_image')
+        assert _connects(wf, node, 'sdc_unwarp_wf', 'output_image', dest)
+        assert not _connects(wf, 'phdiff_wf', 'sdc_unwarp_wf', f'outputnode.{field}', dest)
+    assert wf.get_node('gradwarp_fmap_mask').inputs.interpolation == 'NearestNeighbor'
+    # The warp itself is used as estimated, on the corrected reference.
+    assert _connects(wf, 'sdc_unwarp_wf', 'outputnode', 'outputnode.out_warp', 'out_warp')
+    assert 'transport_warp' not in {n.name for n in wf._graph.nodes}
+
+
+def test_sdc_wf_transport_mode_composes_gradwarp_raw_warp_inverse(tmp_path, monkeypatch):
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    wf = _gre_sdc_wf(tmp_path, 'transport')
+
+    assert wf.gradwarp_mode == 'transport'
+    # The fieldmap goes in raw.
+    assert _connects(wf, 'phdiff_wf', 'sdc_unwarp_wf', 'outputnode.fmap', 'inputnode.fmap')
+    assert 'gradwarp_fmap' not in {n.name for n in wf._graph.nodes}
+    # Order matters: antsApplyTransforms applies the first listed first.
+    assert _connects(wf, 'inputnode', 'transport_stack', 'gradwarp_field', 'in1')
+    assert _connects(wf, 'sdc_unwarp_wf', 'transport_stack', 'outputnode.out_warp', 'in2')
+    assert _connects(wf, 'invert_gradwarp', 'transport_stack', 'out_file', 'in3')
+    assert _connects(wf, 'inputnode', 'invert_gradwarp', 'gradwarp_field', 'in_file')
+    assert _connects(wf, 'transport_stack', 'transport_warp', 'out', 'transforms')
+    transport = wf.get_node('transport_warp')
+    assert transport.inputs.print_out_composite_warp_file is True
+    assert transport.inputs.output_image == 'transported_sdc_warp.nii.gz'
+    # Only the transported warp reaches the chain.
+    assert _connects(wf, 'transport_warp', 'outputnode', 'output_image', 'out_warp')
+    assert not _connects(wf, 'sdc_unwarp_wf', 'outputnode', 'outputnode.out_warp', 'out_warp')
+    # The coregistration reference is gradwarp-corrected after unwarping.
+    assert _connects(
+        wf, 'sdc_unwarp_wf', 'gradwarp_unwarped_ref', 'outputnode.out_reference', 'input_image'
+    )
+    assert _connects(wf, 'gradwarp_unwarped_ref', 'outputnode', 'output_image', 'b0_ref')
+    assert not _connects(wf, 'sdc_unwarp_wf', 'outputnode', 'outputnode.out_reference', 'b0_ref')
+
+
+def test_transport_warp_cmdline_lists_the_transforms_in_stack_order(tmp_path):
+    """A Merge(3) hands ants a list; check it survives to the command line."""
+    from nipype.interfaces import ants
+
+    paths = {}
+    for name in ('b0.nii.gz', 'gradwarp.nii', 'raw_warp.nii.gz', 'gradwarp_inv.nii'):
+        paths[name] = str(tmp_path / name)
+        (tmp_path / name).write_bytes(b'')
+    node = ants.ApplyTransforms(
+        dimension=3,
+        interpolation='Linear',
+        float=True,
+        print_out_composite_warp_file=True,
+        output_image='transported_sdc_warp.nii.gz',
+        input_image=paths['b0.nii.gz'],
+        reference_image=paths['b0.nii.gz'],
+        transforms=[paths['gradwarp.nii'], paths['raw_warp.nii.gz'], paths['gradwarp_inv.nii']],
+    )
+    cmd = node.cmdline
+    assert '--output [ transported_sdc_warp.nii.gz, 1 ]' in cmd
+    assert (
+        cmd.index(paths['gradwarp.nii'])
+        < cmd.index(paths['raw_warp.nii.gz'])
+        < cmd.index(paths['gradwarp_inv.nii'])
+    )
+
+
+@pytest.mark.parametrize('builder', ['diffprep', 'shoreline', 'fsl'])
+def test_transport_mode_feeds_raw_references_to_the_sdc_wf(tmp_path, monkeypatch, builder):
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    config.workflow.gre_gradwarp = 'transport'
+    if builder == 'diffprep':
+        _cfg_for_diffprep(tmp_path)
+        wf = _diffprep_wf(tmp_path, _phasediff_unit())
+        source, fields = 'b0_ref_for_coreg', (
+            'outputnode.ref_image', 'outputnode.ref_image_brain', 'outputnode.dwi_mask'
+        )
+    elif builder == 'shoreline':
+        _cfg_for_shoreline(tmp_path)
+        wf = _shoreline_wf(tmp_path, _phasediff_unit())
+        source, fields = 'dwi_hmc_wf', (
+            'outputnode.final_template',
+            'outputnode.final_template_brain',
+            'outputnode.final_template_mask',
+        )
+    else:
+        _cfg_for_fsl(tmp_path, 'drbuddi')
+        config.workflow.gre_eddy_mbs = False
+        wf = _fsl_wf(tmp_path, _phasediff_unit())
+        source, fields = 'b0_ref_for_coreg', (
+            'outputnode.ref_image', 'outputnode.ref_image_brain', 'outputnode.dwi_mask'
+        )
+
+    sdc = wf.get_node('sdc_wf')
+    assert sdc.gradwarp_mode == 'transport'
+    for field, dest in zip(fields, ('inputnode.b0_ref', 'inputnode.b0_ref_brain', 'inputnode.b0_mask')):
+        assert _connects(wf, source, 'sdc_wf', field, dest)
+    assert 'gradwarp_sdc_inputs' not in {n.name for n in wf._graph.nodes}
+    assert _connects(wf, 'inputnode', 'sdc_wf', 'gradwarp_field', 'inputnode.gradwarp_field')
+    assert _connects(wf, 'sdc_wf', 'outputnode', 'outputnode.out_warp', 'to_dwi_ref_warps')
+
+
+def test_hz_mode_keeps_the_corrected_references_and_passes_the_field(tmp_path, monkeypatch):
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    config.workflow.gre_gradwarp = 'hz'
+    _cfg_for_diffprep(tmp_path)
+    wf = _diffprep_wf(tmp_path, _phasediff_unit())
+
+    assert wf.get_node('sdc_wf').gradwarp_mode == 'hz'
+    assert _connects(wf, 'gradwarp_sdc_inputs', 'sdc_wf', 'output_image', 'inputnode.b0_ref')
+    assert _connects(wf, 'inputnode', 'sdc_wf', 'gradwarp_field', 'inputnode.gradwarp_field')
+
+
+def test_reference_mode_does_not_pass_the_field_into_the_sdc_wf(tmp_path, monkeypatch):
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    config.workflow.gre_gradwarp = 'reference'
+    _cfg_for_diffprep(tmp_path)
+    wf = _diffprep_wf(tmp_path, _phasediff_unit())
+
+    assert _connects(wf, 'gradwarp_sdc_inputs', 'sdc_wf', 'output_image', 'inputnode.b0_ref')
+    assert not _connects(wf, 'inputnode', 'sdc_wf', 'gradwarp_field', 'inputnode.gradwarp_field')
+
+
+def test_gre_into_eddy_ignores_the_gradwarp_mode(tmp_path, monkeypatch):
+    """eddy takes the field raw; nothing may transport or gradwarp it."""
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    _cfg_gre(True)
+    config.workflow.gre_gradwarp = 'transport'
+    config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
+    wf = _fsl_wf(tmp_path, _phasediff_unit())
+
+    assert wf.get_node('sdc_wf').gradwarp_mode == 'reference'
+    assert not {'transport_warp', 'gradwarp_fmap'} & {n.name for n in wf._get_all_nodes()}
+    assert _connects(wf, 'sdc_wf', 'eddy', 'outputnode.fieldmap_hz', 'field')
+
+
+def test_invert_displacement_field_round_trips(tmp_path):
+    """phi^-1(phi(x)) == x to well under a tenth of a voxel for a gradwarp-sized field."""
+    import nibabel as nb
+    import numpy as np
+    from scipy.ndimage import map_coordinates
+
+    from qsiprep.interfaces.gradunwarp import InvertDisplacementField
+
+    shape = (24, 20, 22)
+    affine = np.diag([2.0, 2.0, 2.0, 1.0])
+    affine[:3, 3] = [-24.0, -20.0, -22.0]
+    grid = np.stack(np.meshgrid(*[np.arange(n) for n in shape], indexing='ij'), -1)
+    xyz = grid @ affine[:3, :3].T + affine[:3, 3]
+    # A smooth cubic-ish field of a couple of millimetres, like real gradwarp.
+    disp = np.zeros(shape + (1, 3), dtype='float32')
+    for c in range(3):
+        disp[..., 0, c] = 2.0e-4 * xyz[..., c] ** 2 * np.sign(xyz[..., c]) + 0.3 * np.sin(
+            xyz[..., (c + 1) % 3] / 15.0
+        )
+    field = tmp_path / 'field.nii'
+    nb.Nifti1Image(disp, affine).to_filename(str(field))
+
+    result = InvertDisplacementField(in_file=str(field)).run()
+    inv = nb.load(result.outputs.out_file)
+    assert inv.shape == disp.shape
+    assert np.allclose(inv.affine, affine)
+    inv_data = np.asarray(inv.dataobj)[..., 0, :]
+
+    # Check on interior points only: outside its own grid the field is zero.
+    inner = (slice(4, -4),) * 3
+    lps = np.array([-1.0, -1.0, 1.0])
+    forward = xyz + disp[..., 0, :] * lps  # phi(x) in RAS
+    probe = np.linalg.inv(affine)[:3, :3] @ forward.reshape(-1, 3).T + np.linalg.inv(affine)[
+        :3, 3:4
+    ]
+    back = np.stack(
+        [map_coordinates(inv_data[..., c], probe, order=1) for c in range(3)], -1
+    ).reshape(shape + (3,)) * lps
+    residual = np.linalg.norm(forward + back - xyz, axis=-1)[inner]
+    assert residual.max() < 0.05

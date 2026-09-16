@@ -32,11 +32,14 @@ False           False       HMC only
 
 """
 
+from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
 from ... import config
+from ...interfaces.gradunwarp import InvertDisplacementField
+from ..dwi.resampling import _listify
 
 # Fieldmap workflows
 from .pepolar import init_pepolar_unwarp_wf
@@ -45,7 +48,7 @@ from .unwarp import init_sdc_unwarp_wf
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_sdc_wf(unit):
+def init_sdc_wf(unit, gradwarp=False):
     """
     This workflow implements the heuristics to choose a
     :abbr:`SDC (susceptibility distortion correction)` strategy for a
@@ -110,6 +113,12 @@ def init_sdc_wf(unit):
     fieldmap_hz
         The fieldmap in Hz for eddy
 
+    ``gradwarp`` says whether the caller has a gradwarp field for this unit.
+    For a GRE fieldmap it selects ``config.workflow.gre_gradwarp``, recorded on
+    the workflow as ``gradwarp_mode`` so :func:`connect_gradwarp_sdc_reference`
+    can feed the references this workflow expects: gradwarp-corrected for
+    ``reference`` and ``hz``, raw for ``transport``. Any mode other than
+    ``reference`` also consumes ``inputnode.gradwarp_field``.
     """
     omp_nthreads = config.nipype.omp_nthreads
     does_sdc = unit.has_scanner_measured_fieldmap or unit.is_nipreps_syn
@@ -123,10 +132,12 @@ def init_sdc_wf(unit):
                 't1_brain',
                 't1_2_mni_reverse_transform',
                 'template',
+                'gradwarp_field',
             ]
         ),
         name='inputnode',
     )
+    workflow.gradwarp_mode = 'reference'
 
     outputnode = pe.Node(
         niu.IdentityInterface(
@@ -239,13 +250,24 @@ co-registration with the anatomical reference.
                 ('b0_ref_brain', 'inputnode.in_reference_brain'),
                 ('b0_mask', 'inputnode.in_mask'),
             ]),
-            (fmap_estimator_wf, sdc_unwarp_wf, [
-                ('outputnode.fmap', 'inputnode.fmap'),
-                ('outputnode.fmap_ref', 'inputnode.fmap_ref'),
-                ('outputnode.fmap_mask', 'inputnode.fmap_mask'),
-            ]),
             (sdc_unwarp_wf, outputnode, [('outputnode.out_hz', 'fieldmap_hz')]),
         ])  # fmt:skip
+
+        if gradwarp:
+            workflow.gradwarp_mode = config.workflow.gre_gradwarp
+        if workflow.gradwarp_mode == 'hz':
+            _connect_gradwarped_fieldmap(workflow, inputnode, fmap_estimator_wf, sdc_unwarp_wf)
+        else:
+            workflow.connect([
+                (fmap_estimator_wf, sdc_unwarp_wf, [
+                    ('outputnode.fmap', 'inputnode.fmap'),
+                    ('outputnode.fmap_ref', 'inputnode.fmap_ref'),
+                    ('outputnode.fmap_mask', 'inputnode.fmap_mask'),
+                ]),
+            ])  # fmt:skip
+        if workflow.gradwarp_mode == 'transport':
+            _connect_transported_warp(workflow, inputnode, sdc_unwarp_wf, outputnode)
+            return workflow
 
     # FIELDMAP-less classic SyN path
     if unit.is_nipreps_syn:
@@ -271,3 +293,88 @@ co-registration with the anatomical reference.
     ])  # fmt:skip
 
     return workflow
+
+
+# --- GRE fieldmaps and gradient unwarping -------------------------------------
+#
+# The composed transform chain applies the fieldmap warp to a point in the
+# gradwarp-corrected frame and only then the gradwarp field (see the note above
+# ``connect_gradwarp_sdc_volumes`` in ``dwi/gradwarp.py``). A GRE fieldmap is
+# measured with the same gradients as the DWI, so its content sits in the raw,
+# gradient-distorted frame no matter which b=0 it is registered to. Two ways
+# to move it into the frame the chain expects, selected by
+# ``config.workflow.gre_gradwarp``:
+#
+# * ``hz``: resample the fieldmap (Hz) and its magnitude through the gradwarp
+#   field before registration, so the field is looked up at corrected
+#   positions. The shift is then still the raw-frame shift; the Jacobian of
+#   the gradwarp is not applied to it.
+# * ``transport``: estimate the warp on the raw b=0, where it is exact, then
+#   compose ``gradwarp -> raw warp -> inverse gradwarp`` into a warp on the
+#   corrected frame. Exact up to interpolation, at the price of inverting the
+#   gradwarp field.
+
+
+def _gradwarp_resampler(name, interpolation):
+    return pe.Node(
+        ants.ApplyTransforms(dimension=3, interpolation=interpolation, float=True),
+        name=name,
+    )
+
+
+def _connect_gradwarped_fieldmap(workflow, inputnode, fmap_estimator_wf, sdc_unwarp_wf):
+    smooth = 'NearestNeighbor' if config.execution.sloppy else 'LanczosWindowedSinc'
+    for name, field, dest, interpolation in (
+        ('gradwarp_fmap', 'fmap', 'inputnode.fmap', 'BSpline'),
+        ('gradwarp_fmap_ref', 'fmap_ref', 'inputnode.fmap_ref', smooth),
+        ('gradwarp_fmap_mask', 'fmap_mask', 'inputnode.fmap_mask', 'NearestNeighbor'),
+    ):
+        resample = _gradwarp_resampler(name, interpolation)
+        workflow.connect([
+            (inputnode, resample, [(('gradwarp_field', _listify), 'transforms')]),
+            (fmap_estimator_wf, resample, [
+                (f'outputnode.{field}', 'input_image'),
+                (f'outputnode.{field}', 'reference_image'),
+            ]),
+            (resample, sdc_unwarp_wf, [('output_image', dest)]),
+        ])  # fmt:skip
+
+
+def _connect_transported_warp(workflow, inputnode, sdc_unwarp_wf, outputnode):
+    invert_gradwarp = pe.Node(InvertDisplacementField(), name='invert_gradwarp')
+    # antsApplyTransforms applies the first-listed transform first to a point of
+    # the output grid, so this composes gradwarp, then the raw-frame warp, then
+    # the inverse gradwarp -- ``phi^-1 o (id + D_raw) o phi``.
+    transport_stack = pe.Node(niu.Merge(3), name='transport_stack')
+    transport_warp = pe.Node(
+        ants.ApplyTransforms(
+            dimension=3,
+            interpolation='Linear',
+            float=True,
+            print_out_composite_warp_file=True,
+            output_image='transported_sdc_warp.nii.gz',
+        ),
+        name='transport_warp',
+    )
+    # The unwarped reference is still in the raw frame; the coregistration
+    # reference must be gradwarp-corrected like every other branch's.
+    smooth = 'NearestNeighbor' if config.execution.sloppy else 'LanczosWindowedSinc'
+    gradwarp_unwarped_ref = _gradwarp_resampler('gradwarp_unwarped_ref', smooth)
+    workflow.connect([
+        (inputnode, invert_gradwarp, [('gradwarp_field', 'in_file')]),
+        (inputnode, transport_stack, [('gradwarp_field', 'in1')]),
+        (sdc_unwarp_wf, transport_stack, [('outputnode.out_warp', 'in2')]),
+        (invert_gradwarp, transport_stack, [('out_file', 'in3')]),
+        (transport_stack, transport_warp, [('out', 'transforms')]),
+        (inputnode, transport_warp, [
+            ('b0_ref', 'input_image'),
+            ('b0_ref', 'reference_image'),
+        ]),
+        (transport_warp, outputnode, [('output_image', 'out_warp')]),
+        (inputnode, gradwarp_unwarped_ref, [(('gradwarp_field', _listify), 'transforms')]),
+        (sdc_unwarp_wf, gradwarp_unwarped_ref, [
+            ('outputnode.out_reference', 'input_image'),
+            ('outputnode.out_reference', 'reference_image'),
+        ]),
+        (gradwarp_unwarped_ref, outputnode, [('output_image', 'b0_ref')]),
+    ])  # fmt:skip

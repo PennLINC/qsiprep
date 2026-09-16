@@ -77,6 +77,69 @@ class MaskWarpDimensions(SimpleInterface):
         return runtime
 
 
+class _InvertDisplacementFieldInputSpec(BaseInterfaceInputSpec):
+    in_file = File(exists=True, mandatory=True, desc='ITK displacement field')
+    iterations = traits.Int(
+        10, usedefault=True, desc='Fixed-point iterations; 10 is far past convergence for gradwarp'
+    )
+
+
+class _InvertDisplacementFieldOutputSpec(TraitedSpec):
+    out_file = File(exists=True, desc='ITK displacement field mapping the other way')
+
+
+class InvertDisplacementField(SimpleInterface):
+    """Invert a small, smooth displacement field by fixed-point iteration.
+
+    An ITK field ``d`` sends a point ``x`` to ``x + d(x)``. Its inverse ``u``
+    satisfies ``u(y) = -d(y + u(y))``, a contraction whenever ``d`` varies
+    slowly compared to its own size -- true of gradwarp fields, which are a
+    few millimetres at most and vary over centimetres. The field is sampled
+    trilinearly and taken to be zero outside its own grid.
+    """
+
+    input_spec = _InvertDisplacementFieldInputSpec
+    output_spec = _InvertDisplacementFieldOutputSpec
+
+    def _run_interface(self, runtime):
+        img = nb.load(self.inputs.in_file)
+        data = np.asarray(img.dataobj, dtype='float64')
+        out_file = op.join(runtime.cwd, 'displacement_field_inverse.nii')
+        nb.Nifti1Image(
+            invert_displacement_field(data, img.affine, self.inputs.iterations).astype('float32'),
+            img.affine,
+            img.header,
+        ).to_filename(out_file)
+        self._results['out_file'] = out_file
+        return runtime
+
+
+def invert_displacement_field(data, affine, iterations=10):
+    """Fixed-point inverse of an ITK vector field on its own grid.
+
+    ``data`` is (X, Y, Z, [1,] 3) in ITK's LPS millimetres; the result has the
+    same shape and convention.
+    """
+    from scipy.ndimage import map_coordinates
+
+    shape = data.shape
+    lps_to_ras = np.array([-1.0, -1.0, 1.0])
+    field = data.reshape(shape[:3] + (3,)) * lps_to_ras
+    inv_affine = np.linalg.inv(affine)
+    ijk = np.indices(shape[:3]).reshape(3, -1).astype('float64')
+    xyz = affine[:3, :3] @ ijk + affine[:3, 3:4]
+    u = np.zeros_like(xyz)
+    for _ in range(iterations):
+        probe = inv_affine[:3, :3] @ (xyz + u) + inv_affine[:3, 3:4]
+        u = -np.stack(
+            [
+                map_coordinates(field[..., c], probe, order=1, mode='constant', cval=0.0)
+                for c in range(3)
+            ]
+        )
+    return (u.T * lps_to_ras).reshape(shape)
+
+
 class _CreateNonlinearityDisplacementMapInputSpec(CommandLineInputSpec):
     coeff_file = File(
         exists=True,

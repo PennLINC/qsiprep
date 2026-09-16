@@ -766,6 +766,33 @@ def _build_parser(**kwargs):
         ),
     )
 
+    g_sdc.add_argument(
+        '--gre-eddy-mbs',
+        action='store_true',
+        default=False,
+        help=(
+            'Hand a GRE (phase-difference or fieldmap) fieldmap to FSL eddy via '
+            '--field so eddy applies the susceptibility correction itself and '
+            'estimates movement-by-susceptibility, instead of applying the '
+            'fieldmap warp after eddy. Only affects --hmc-method eddy.'
+        ),
+    )
+    g_sdc.add_argument(
+        '--gre-gradwarp',
+        action='store',
+        choices=['reference', 'hz', 'transport'],
+        default='reference',
+        help=(
+            'How a GRE fieldmap applied after head motion correction is combined '
+            'with gradient unwarping (--gradient-file). "reference" registers the '
+            'fieldmap to the gradwarp-corrected b=0 and uses it as-is; "hz" '
+            'gradwarps the fieldmap and its magnitude image first; "transport" '
+            'estimates the warp on the raw b=0 and composes it with the gradwarp '
+            'field and its inverse. No effect without gradient unwarping, for '
+            'PEPOLAR data, or with --gre-eddy-mbs.'
+        ),
+    )
+
     g_gradwarp = parser.add_argument_group(
         'Gradient nonlinearity correction',
         description=(

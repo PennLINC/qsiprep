@@ -690,6 +690,16 @@ def test_t1w_derived_references_require_t1w_modality(minimal_args, capsys, refer
     )
 
 
+def test_gre_flags_default_off_and_parse(minimal_args):
+    opts = _parse(minimal_args)
+    assert opts.gre_eddy_mbs is False
+    assert opts.gre_gradwarp == 'reference'
+    opts = _parse(minimal_args, '--gre-eddy-mbs', '--gre-gradwarp', 'transport')
+    assert opts.gre_eddy_mbs is True
+    assert opts.gre_gradwarp == 'transport'
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--gre-gradwarp', 'jacobian')
+
 def test_shoreline_selection_warns_of_removal(minimal_args, capsys):
     _parse(minimal_args, '--hmc-method', 'shoreline')
     assert 'scheduled for removal' in capsys.readouterr().err

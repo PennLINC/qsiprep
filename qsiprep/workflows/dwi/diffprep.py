@@ -726,7 +726,7 @@ def init_diffprep_hmc_wf(
     #    init_sdc_wf. The warp is applied downstream (to_dwi_ref_warps),
     #    decoupled from HMC.
     if unit.is_gre or unit.is_nipreps_syn:
-        b0_sdc_wf = init_sdc_wf(unit)
+        b0_sdc_wf = init_sdc_wf(unit, gradwarp=has_gradwarp)
         b0_sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
 
         if has_gradwarp:
