@@ -1897,7 +1897,7 @@ def test_gre_into_eddy_ignores_the_gradwarp_mode(tmp_path, monkeypatch):
     assert _connects(wf, 'sdc_wf', 'eddy', 'outputnode.fieldmap_hz', 'field')
 
 
-def test_invert_displacement_field_round_trips(tmp_path):
+def test_invert_displacement_field_round_trips(tmp_path, monkeypatch):
     """phi^-1(phi(x)) == x to well under a tenth of a voxel for a gradwarp-sized field."""
     import nibabel as nb
     import numpy as np
@@ -1919,6 +1919,8 @@ def test_invert_displacement_field_round_trips(tmp_path):
     field = tmp_path / 'field.nii'
     nb.Nifti1Image(disp, affine).to_filename(str(field))
 
+    # The interface writes into the working directory.
+    monkeypatch.chdir(tmp_path)
     result = InvertDisplacementField(in_file=str(field)).run()
     inv = nb.load(result.outputs.out_file)
     assert inv.shape == disp.shape
