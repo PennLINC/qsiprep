@@ -802,6 +802,27 @@ def test_extract_first_volume_returns_a_3d_image(tmp_path):
     assert (out_img.affine == in_img.affine).all()
 
 
+def test_extract_first_volume_writes_into_the_working_directory(tmp_path, monkeypatch):
+    """A raw BIDS input lives on a read-only mount; the extract must not land beside it."""
+    import nibabel as nb
+    import numpy as np
+
+    from qsiprep.workflows.dwi.base import _extract_first_volume
+
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    path = bids / 'sub-01_dwi.nii.gz'
+    nb.Nifti1Image(np.zeros((4, 4, 4, 3), dtype='float32'), np.eye(4)).to_filename(str(path))
+    work = tmp_path / 'work'
+    work.mkdir()
+    monkeypatch.chdir(work)
+
+    out = _extract_first_volume(str(path))
+
+    assert out == str(work / 'sub-01_dwi_vol0.nii.gz')
+    assert not (bids / 'sub-01_dwi_vol0.nii.gz').exists()
+
+
 def test_extract_first_volume_passes_an_already_3d_image_through(tmp_path):
     import nibabel as nb
     import numpy as np

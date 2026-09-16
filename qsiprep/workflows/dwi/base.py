@@ -632,7 +632,14 @@ def _extract_first_volume(in_file, newpath=None):
     the sampling grid, not on image content, so any single volume works;
     volume 0 is cheapest and needs no bvals/bvecs. Nipype ``Function`` nodes
     run in a fresh namespace, so imports live inside the function body.
+
+    The extract goes into ``newpath``, defaulting to the working directory:
+    with nothing between the BIDS input and this node (a single series and
+    ``--denoise-method none``), ``in_file`` is the raw BIDS file, and writing
+    next to it fails on the read-only input mount every container run uses.
     """
+    import os
+
     import nibabel as nb
     from nilearn.image import index_img
     from nipype.utils.filemanip import fname_presuffix
@@ -640,6 +647,6 @@ def _extract_first_volume(in_file, newpath=None):
     if nb.load(in_file).ndim == 3:
         return in_file
 
-    out_file = fname_presuffix(in_file, suffix='_vol0', newpath=newpath)
+    out_file = fname_presuffix(in_file, suffix='_vol0', newpath=newpath or os.getcwd())
     index_img(in_file, 0).to_filename(out_file)
     return out_file
