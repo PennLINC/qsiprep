@@ -5,6 +5,7 @@ import pytest
 from qsiprep.tests.utils import (
     COMPLEX_DWI_SKELETON,
     SHARED_DWI_GRADIENTS,
+    annexify,
     build_test_dataset,
 )
 from qsiprep.utils.bids import (
@@ -45,7 +46,9 @@ def test_find_bids_root_finds_dataset_description(tmp_path):
     )
     dwi = root / 'sub-01' / 'dwi' / 'sub-01_part-mag_dwi.nii.gz'
 
-    assert find_bids_root(dwi) == root.resolve()
+    # samefile, not ==: find_bids_root no longer resolves symlinks (so it does
+    # not escape git-annex trees), and a tmp_path may itself sit under a symlink.
+    assert find_bids_root(dwi).samefile(root)
 
 
 def test_find_bids_root_returns_none_outside_a_dataset(tmp_path):
@@ -311,3 +314,63 @@ def test_find_bval_applies_to_epi_fieldmaps(tmp_path):
     assert find_bval(fmap_dir / 'sub-01_dir-PA_run-1_epi.nii.gz') == str(
         fmap_dir / 'sub-01_dir-PA_epi.bval'
     )
+
+
+# --- git-annex / datalad symlinked inputs ---------------------------------
+# `datalad get` leaves data files as symlinks into .git/annex/objects. Path
+# resolution must NOT follow those symlinks out of the BIDS tree, or the
+# sidecars beside the symlink become invisible (returning None), which silently
+# corrupts downstream gradient handling (ConformDwi skips the bvec flip).
+
+
+def test_annex_symlinked_dwi_resolves_gradients_and_sidecar(tmp_path):
+    """A DWI symlinked outside the tree still finds its colocated files."""
+    root = build_test_dataset(
+        tmp_path / 'ds',
+        {'01': [{'dwi': [{'suffix': 'dwi', 'metadata': {'PhaseEncodingDirection': 'j'}}]}]},
+        extra_files={
+            'sub-01/dwi/sub-01_dwi.bval': '0 1000\n',
+            'sub-01/dwi/sub-01_dwi.bvec': '1 0\n0 1\n0 0\n',
+        },
+    )
+    annexify(root)
+    dwi_dir = root / 'sub-01' / 'dwi'
+    dwi = dwi_dir / 'sub-01_dwi.nii.gz'
+
+    assert dwi.is_symlink()
+    assert dwi.resolve().parent != dwi.parent  # resolve() escapes the BIDS tree
+
+    assert find_bids_root(dwi).samefile(root)
+    assert find_bval(dwi) == str(dwi_dir / 'sub-01_dwi.bval')
+    assert find_bvec(dwi) == str(dwi_dir / 'sub-01_dwi.bvec')
+    assert load_sidecar(dwi) == {'PhaseEncodingDirection': 'j'}
+
+
+def test_annex_symlinked_dwi_inherits_shared_gradients(tmp_path):
+    """Inheritance still reaches shared gradients when the images are symlinks."""
+    root = build_test_dataset(
+        tmp_path / 'ds', COMPLEX_DWI_SKELETON, extra_files=SHARED_DWI_GRADIENTS
+    )
+    annexify(root)
+    dwi_dir = root / 'sub-01' / 'dwi'
+
+    for part in ('mag', 'phase'):
+        image = dwi_dir / f'sub-01_part-{part}_dwi.nii.gz'
+        assert image.is_symlink()
+        assert find_bval(image) == str(dwi_dir / 'sub-01_dwi.bval')
+        assert find_bvec(image) == str(dwi_dir / 'sub-01_dwi.bvec')
+
+
+def test_annex_symlinked_epi_fieldmap_finds_secret_bval(tmp_path):
+    """Fieldmap discovery of an inherited bval survives annex symlinks."""
+    root = build_test_dataset(
+        tmp_path / 'ds',
+        {'01': [{'fmap': [{'dir': 'PA', 'run': '1', 'suffix': 'epi'}]}]},
+        extra_files={'sub-01/fmap/sub-01_dir-PA_epi.bval': '0 0\n'},
+    )
+    annexify(root)
+    fmap_dir = root / 'sub-01' / 'fmap'
+    epi = fmap_dir / 'sub-01_dir-PA_run-1_epi.nii.gz'
+
+    assert epi.is_symlink()
+    assert find_bval(epi) == str(fmap_dir / 'sub-01_dir-PA_epi.bval')

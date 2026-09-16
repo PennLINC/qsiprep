@@ -100,6 +100,42 @@ def build_test_dataset(root, skeleton, extra_files=None, n_volumes=1, affine=Non
     return root
 
 
+def annexify(root, store=None):
+    """Rewrite a dataset's data files as git-annex-style symlinks.
+
+    Emulates a datalad/git-annex checkout after ``datalad get``: every
+    ``.nii.gz`` is moved into an object store *outside* the BIDS tree and
+    replaced in place with a relative symlink pointing to it, exactly as
+    ``git annex`` leaves data files. Sidecars (``.json``/``.bval``/``.bvec``)
+    stay as real files beside the symlink. ``Path.resolve()`` on such a data
+    file therefore escapes the BIDS tree -- the failure mode this emulates.
+
+    Parameters
+    ----------
+    root : :obj:`str` or :obj:`pathlib.Path`
+        The dataset root (as built by :func:`build_test_dataset`).
+    store : :obj:`str` or :obj:`pathlib.Path`, optional
+        Where to move the data objects. Defaults to a sibling ``<root>_annex``
+        directory, which is outside the BIDS tree.
+
+    Returns
+    -------
+    :obj:`pathlib.Path`
+        The dataset root.
+    """
+    root = Path(root)
+    store = Path(store) if store is not None else root.parent / f'{root.name}_annex'
+    store.mkdir(parents=True, exist_ok=True)
+    for index, nifti in enumerate(sorted(root.glob('**/*.nii.gz'))):
+        if nifti.is_symlink():
+            continue
+        obj = store / f'OBJ-{index}-{nifti.name}'
+        obj.write_bytes(nifti.read_bytes())
+        nifti.unlink()
+        nifti.symlink_to(os.path.relpath(obj, nifti.parent))
+    return root
+
+
 def download_test_data(dset, data_dir=None):
     """Download test data."""
     URLS = {

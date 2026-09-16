@@ -103,6 +103,19 @@ class BIDSWarning(RuntimeWarning):
     pass
 
 
+def _norm(path):
+    """Absolute, lexically-normalized path that does *not* follow symlinks.
+
+    ``Path.resolve()`` follows symlinks, which moves a git-annex/datalad data
+    file (a symlink into ``.git/annex/objects``) out of its BIDS directory, so
+    its JSON/bval/bvec sidecars -- which sit beside the *symlink*, not the annex
+    object -- can no longer be found. Lexical normalization with
+    :func:`os.path.abspath` keeps the file at its BIDS location while still
+    resolving ``.`` and ``..``.
+    """
+    return Path(os.path.abspath(path))
+
+
 def find_bids_root(path):
     """Locate the root of the BIDS dataset containing ``path``.
 
@@ -117,7 +130,7 @@ def find_bids_root(path):
         The closest ancestor directory holding a ``dataset_description.json``,
         or ``None`` if ``path`` is not inside a BIDS dataset.
     """
-    for parent in Path(path).resolve().parents:
+    for parent in _norm(path).parents:
         if (parent / 'dataset_description.json').is_file():
             return parent
 
@@ -169,7 +182,7 @@ def _inheritance_levels(path):
     already been copied into a working directory -- only ever match files
     sitting beside them.
     """
-    path = Path(path).resolve()
+    path = _norm(path)
     root = find_bids_root(path)
     if root is None:
         return [path.parent]
