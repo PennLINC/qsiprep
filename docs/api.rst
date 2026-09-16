@@ -9,7 +9,7 @@ Internal configuration system
 *****************************
 
 .. automodule:: qsiprep.config
-   :members: from_dict, load, get, dumps, to_filename, init_spaces
+   :members: from_dict, load, get, dumps, to_filename
 
 
 ***********

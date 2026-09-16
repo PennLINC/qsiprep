@@ -876,7 +876,7 @@ def _base_config():
     config.workflow.b0_threshold = 100
     config.workflow.sdc_method = 'drbuddi'
     config.workflow.shoreline_model = None
-    config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
+    config.workflow.output_spaces = ['acpc:res-2mm', 'MNI152NLin2009cAsym']
     config.workflow.gpu = None  # --gpu not given, so legacy use_cuda keys apply
     config.execution.sloppy = False
     return config

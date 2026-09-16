@@ -18,6 +18,9 @@ sub-tester/anat/sub-tester_space-ACPC_desc-intramodal_dwiref.nii.gz
 sub-tester/anat/sub-tester_space-ACPC_desc-preproc_T1w.json
 sub-tester/anat/sub-tester_space-ACPC_desc-preproc_T1w.nii.gz
 sub-tester/anat/sub-tester_space-ACPC_dseg.nii.gz
+sub-tester/anat/sub-tester_space-MNI152NLin2009cAsym_desc-brain_mask.nii.gz
+sub-tester/anat/sub-tester_space-MNI152NLin2009cAsym_desc-preproc_T1w.nii.gz
+sub-tester/anat/sub-tester_space-MNI152NLin2009cAsym_dseg.nii.gz
 sub-tester/ses-1
 sub-tester/ses-1/anat
 sub-tester/ses-1/anat/sub-tester_ses-1_from-orig_to-anat_mode-image_xfm.txt

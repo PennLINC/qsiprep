@@ -127,8 +127,9 @@ def test_denoise_method_cli_parameter(tmp_path):
             str(tmp_path),
             str(tmp_path / 'out'),
             'participant',
-            '--output-resolution',
-            '2',
+            '--output-spaces',
+            'acpc:res-2mm',
+            'MNI152NLin2009cAsym',
             '--denoise-method',
             spec,
         ]
@@ -144,8 +145,9 @@ def test_denoise_method_cli_rejects_invalid_parameter(tmp_path):
                 str(tmp_path),
                 str(tmp_path / 'out'),
                 'participant',
-                '--output-resolution',
-                '2',
+                '--output-spaces',
+                'acpc:res-2mm',
+                'MNI152NLin2009cAsym',
                 '--denoise-method',
                 'dwidenoise;decomposition:invalid',
             ]

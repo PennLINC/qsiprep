@@ -726,8 +726,13 @@ def init_diffprep_hmc_wf(
     #    init_sdc_wf. The warp is applied downstream (to_dwi_ref_warps),
     #    decoupled from HMC.
     if unit.is_gre or unit.is_nipreps_syn:
+        from ...utils.spaces import select_acpc_anchor
+
         b0_sdc_wf = init_sdc_wf(unit)
-        b0_sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
+        b0_sdc_wf.inputs.inputnode.template = select_acpc_anchor(
+            config.workflow.parsed_output_spaces(),
+            config.workflow.parsed_acpc_anchor(),
+        ).fullname
 
         if has_gradwarp:
             connect_gradwarp_sdc_reference(

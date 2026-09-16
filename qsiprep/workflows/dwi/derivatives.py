@@ -64,10 +64,34 @@ def _tsnr_meta(n_b0, median_tsnr):
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def init_dwi_derivatives_wf(source_file) -> Workflow:
-    """Set up a battery of datasinks to store derivatives in the right location."""
+def init_dwi_derivatives_wf(
+    source_file,
+    resolution=None,
+    write_hmc_optimization=True,
+    name='dwi_derivatives_wf',
+) -> Workflow:
+    """Set up a battery of datasinks to store derivatives in the right location.
+
+    QSIRecon's primary input is the preprocessed ACPC-space DWI this workflow
+    writes, so the single-argument call form (``resolution=None``) must keep
+    producing exactly the filenames it always has: no ``res-`` entity.
+
+    Parameters
+    ----------
+    resolution : Resolution or None
+        Set only when more than one ACPC resolution was requested. Adds a
+        ``res-<label>`` entity to every ACPC DWI sink below.
+    write_hmc_optimization : bool
+        The hmcOptimization sidecar is produced before resampling and does not vary
+        by output resolution. When ``init_dwi_derivatives_wf`` is instantiated once
+        per ACPC resolution, every instance would otherwise write the exact same
+        path -- a same-path collision under nipype's MultiProc plugin. Callers doing
+        that fan-out should pass this as ``True`` for exactly one instance (its first
+        spec) and ``False`` for the rest.
+    """
     output_dir = str(config.execution.output_dir)
-    workflow = Workflow(name='dwi_derivatives_wf')
+    workflow = Workflow(name=name)
+    res_entities = {'res': resolution.label} if resolution is not None else {}
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
@@ -89,7 +113,8 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
     )
 
     if (
-        config.workflow.hmc_method == 'shoreline'
+        write_hmc_optimization
+        and config.workflow.hmc_method == 'shoreline'
         and config.workflow.shoreline_model == '3dshore'
         and config.workflow.shoreline_iters > 1
     ):
@@ -127,6 +152,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             suffix='dwimap',
             extension='.nii.gz',
             compress=True,
+            **res_entities,
         ),
         name='ds_tsnr',
         run_without_submitting=True,
@@ -144,6 +170,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             suffix='dwi',
             extension='.nii.gz',
             compress=True,
+            **res_entities,
         ),
         name='ds_dwi_t1',
         run_without_submitting=True,
@@ -157,6 +184,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             suffix='dwi',
             extension='.bval',
             desc='preproc',
+            **res_entities,
         ),
         name='ds_bvals_t1',
         run_without_submitting=True,
@@ -170,6 +198,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             suffix='dwi',
             extension='.bvec',
             desc='preproc',
+            **res_entities,
         ),
         name='ds_bvecs_t1',
         run_without_submitting=True,
@@ -183,6 +212,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             suffix='dwiref',
             extension='.nii.gz',
             compress=True,
+            **res_entities,
         ),
         name='ds_t1_b0_ref',
         run_without_submitting=True,
@@ -197,6 +227,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             suffix='mask',
             extension='.nii.gz',
             compress=True,
+            **res_entities,
         ),
         name='ds_dwi_mask_t1',
         run_without_submitting=True,
@@ -215,6 +246,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             meta_dict={
                 'Description': _cnr_description(config.workflow.hmc_method),
             },
+            **res_entities,
         ),
         name='ds_cnr_map_t1',
         run_without_submitting=True,
@@ -228,6 +260,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             desc='preproc',
             suffix='dwi',
             extension='.b',
+            **res_entities,
         ),
         name='ds_gradient_table_t1',
         run_without_submitting=True,
@@ -241,6 +274,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             desc='preproc',
             suffix='dwi',
             extension='.b_table.txt',
+            **res_entities,
         ),
         name='ds_btable_t1',
         run_without_submitting=True,
@@ -268,6 +302,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
         (inputnode, ds_gradient_table_t1, [('gradient_table_t1', 'in_file')]),
         (inputnode, ds_btable_t1, [('btable_t1', 'in_file')]),
     ])  # fmt:skip
+
     # If requested, write local bvecs
     # if config.workflow.write_local_bvecs:
     #     ds_local_bvecs_t1 = pe.Node(
