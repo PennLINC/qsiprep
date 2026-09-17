@@ -55,17 +55,12 @@ def _build_parser(**kwargs):
 
     # Deprecated options: {option string: (version it is removed in, what happens instead)}
     deprecations = {
-        '--dwi-only': ('27.0.0', 'Enabling `--anat-modality none` instead.'),
-        '--dwi-no-biascorr': ('27.0.0', 'Enabling `--b1-biascorrect-stage none` instead.'),
         '--b0-to-t1w-transform': ('27.0.0', 'Please use `--b0-to-anat-transform` instead.'),
     }
 
     # Deprecated flags that enable their replacement automatically:
     # {option string: (replacement option, its namespace attribute, the value it is set to)}
-    forwarded_deprecations = {
-        '--dwi-only': ('--anat-modality', 'anat_modality', 'none'),
-        '--dwi-no-biascorr': ('--b1-biascorrect-stage', 'b1_biascorrect_stage', 'none'),
-    }
+    forwarded_deprecations = {}
 
     def _warn_deprecated(option_string):
         removed_in, detail = deprecations[option_string]
@@ -560,16 +555,6 @@ def _build_parser(**kwargs):
             'normalization runs otherwise.'
         ),
     )
-    g_anat.add_argument(
-        '--fs-license-file',
-        metavar='PATH',
-        type=Path,
-        help=(
-            'Path to a FreeSurfer license key file, which the SynthStrip and SynthSeg '
-            'tools require. Register at '
-            'https://surfer.nmr.mgh.harvard.edu/registration.html to obtain one for free.'
-        ),
-    )
 
     g_dwi = parser.add_argument_group(
         'DWI preprocessing',
@@ -608,7 +593,7 @@ def _build_parser(**kwargs):
         action='store',
         type=IntOrAuto,
         default='auto',
-        metavar='N',
+        metavar='{auto,N}',
         help=(
             'Window size in voxels for image-based denoising: either an odd positive '
             'integer or "auto". '
@@ -1069,28 +1054,6 @@ def _build_parser(**kwargs):
         action='count',
         default=0,
         help='Increase log verbosity by one level for each occurrence. Debug level is -vvv.',
-    )
-
-    g_deprecated = parser.add_argument_group(
-        'Deprecated options',
-        description=(
-            'These options still work but will be removed in 27.0.0; each one names its '
-            'replacement. --b0-to-t1w-transform is also deprecated, but is listed under '
-            'Coregistration to the anatomical reference because it is mutually exclusive with its '
-            'replacement.'
-        ),
-    )
-    g_deprecated.add_argument(
-        '--dwi-only',
-        action=DeprecatedForwardAction,
-        default=SUPPRESS,
-        help='DEPRECATED: this flag now enables --anat-modality none. Use that instead.',
-    )
-    g_deprecated.add_argument(
-        '--dwi-no-biascorr',
-        action=DeprecatedForwardAction,
-        default=SUPPRESS,
-        help='DEPRECATED: this flag now enables --b1-biascorrect-stage none. Use that instead.',
     )
 
     g_debug = parser.add_argument_group(

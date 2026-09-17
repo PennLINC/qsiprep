@@ -538,8 +538,8 @@ Many imaging protocols acquire some high-resolution, undistorted anatomical
 reference scans. *QSIPrep* can use either T1-weighted or T2-weighted 3D images as
 the *anatomical reference*. To specify which contrast you'd like to use for your
 anatomical reference, be sure to specify ``--anat-modality`` as either
-``T1w``, ``T2w`` or ``none``. Specifying ``none`` replaces the deprecated
-``--dwi-only`` option, where no anatomical images are used from the input
+``T1w``, ``T2w`` or ``none``. Specifying ``none`` means
+no anatomical images are used from the input
 data and the AC-PC alignment is based either on the adult or infant MNI
 templates.
 
@@ -1100,8 +1100,6 @@ It is possible to use *QSIPrep* to process *only* diffusion-weighted images. In
 the case of infant data, where robust skull-stripping methods are not
 currently available, or where anatomical preprocessing has already been
 performed in another pipeline, the user can specify ``--anat-modality none``.
-(The deprecated ``--dwi-only`` flag now enables ``--anat-modality none``
-automatically, and will be removed in a later version.)
 
 Instead of registering the b=0 template image to the skull-stripped T1w
 image, the b=0 template is registered directly to a template and only the
