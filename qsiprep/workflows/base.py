@@ -567,13 +567,22 @@ to workflows in *QSIPrep*'s documentation]\
             ]),
         ])  # fmt:skip
 
+        # The level this dwiref actually is, from the RESOLVED definition, so that
+        # adding `session` later is a data change rather than a code change.
+        dwiref_space = config.workflow.dwiref_definition
+
+        # The template in its own midpoint space. desc-coreg marks it as the image
+        # whose transform final resampling uses -- which at this level it is, since
+        # ComposeTransforms discards the per-unit registration's result.
+        # from-<level>_to-ACPC maps out of exactly this space, so that transform now
+        # applies to an image shipped beside it.
         ds_intramodal_template = pe.Node(
             DerivativesDataSink(
                 source_file=anat_source_file,
                 base_directory=config.execution.output_dir,
-                datatype='anat',
-                space='ACPC',
-                desc='intramodal',
+                datatype='dwi',
+                space=dwiref_space,
+                desc='coreg',
                 suffix='dwiref',
                 extension='.nii.gz',
                 compress=True,
@@ -583,9 +592,28 @@ to workflows in *QSIPrep*'s documentation]\
         )
         workflow.connect([
             (intramodal_template_wf, ds_intramodal_template, [
-                # The ACPC-resampled template, NOT outputnode.intramodal_template:
-                # that one is in the template's own midpoint space, and tagging
-                # it space-ACPC would mislabel it.
+                ('outputnode.intramodal_template', 'in_file'),
+            ]),
+        ])  # fmt:skip
+
+        # The same template resampled into ACPC, kept so nothing current users rely
+        # on is lost. It carries no desc: the per-output references beside it now
+        # carry desc-preproc, so the two cannot collide.
+        ds_intramodal_template_acpc = pe.Node(
+            DerivativesDataSink(
+                source_file=anat_source_file,
+                base_directory=config.execution.output_dir,
+                datatype='dwi',
+                space='ACPC',
+                suffix='dwiref',
+                extension='.nii.gz',
+                compress=True,
+            ),
+            name='ds_intramodal_template_acpc',
+            run_without_submitting=True,
+        )
+        workflow.connect([
+            (intramodal_template_wf, ds_intramodal_template_acpc, [
                 ('outputnode.intramodal_template_acpc', 'in_file'),
             ]),
         ])  # fmt:skip
@@ -596,10 +624,10 @@ to workflows in *QSIPrep*'s documentation]\
             DerivativesDataSink(
                 source_file=anat_source_file,
                 base_directory=config.execution.output_dir,
-                datatype='anat',
+                datatype='dwi',
                 mode='image',
                 extension='.mat',
-                **{'from': 'intramodal', 'to': 'ACPC'},
+                **{'from': dwiref_space, 'to': 'ACPC'},
                 suffix='xfm',
             ),
             name='ds_intramodal_to_acpc',
@@ -621,7 +649,7 @@ to workflows in *QSIPrep*'s documentation]\
                 DerivativesDataSink(
                     source_file=anat_source_file,
                     base_directory=config.execution.output_dir,
-                    datatype='anat',
+                    datatype='dwi',
                     desc='templateQC',
                     suffix='dwiref',
                     extension='.tsv',
@@ -639,8 +667,10 @@ to workflows in *QSIPrep*'s documentation]\
                 DerivativesDataSink(
                     source_file=anat_source_file,
                     base_directory=config.execution.output_dir,
-                    datatype='anat',
-                    space='ACPC',
+                    datatype='dwi',
+                    # Computed from midpoint-space aligned images, so the previous
+                    # space-ACPC tag described a space this image is not in.
+                    space=dwiref_space,
                     desc='agreement',
                     suffix='dwiref',
                     extension='.nii.gz',
@@ -742,6 +772,32 @@ to workflows in *QSIPrep*'s documentation]\
             ]),
         ])  # fmt:skip
 
+        # The run-level reference: this unit's b=0 after HMC and SDC, in its own
+        # grid. It is written for every preprocessing unit either way, so the
+        # dwiref template's inputs are always on disk.
+        #
+        # desc-coreg marks whichever dwiref supplies the transform final resampling
+        # uses. With a subject-level dwiref that is the template, not this image --
+        # ComposeTransforms prefers the intramodal affine when both exist -- so the
+        # role label follows the RESOLVED level, and the sink is built here in the
+        # parent because that is the only place the resolved level is in scope.
+        ds_run_dwiref = pe.Node(
+            DerivativesDataSink(
+                source_file=source_file,
+                base_directory=config.execution.output_dir,
+                datatype='dwi',
+                suffix='dwiref',
+                extension='.nii.gz',
+                compress=True,
+                **({} if make_intramodal_template else {'desc': 'coreg'}),
+            ),
+            name=f'ds_run_dwiref_{output_wfname}',
+            run_without_submitting=True,
+        )
+        workflow.connect([
+            (dwi_preproc_wf, ds_run_dwiref, [('outputnode.b0_ref_image', 'in_file')]),
+        ])  # fmt:skip
+
         if make_intramodal_template:
             input_name = f'inputnode.{output_wfname}_b0_template'
             output_name = f'outputnode.{output_wfname}_transform'
@@ -776,10 +832,10 @@ to workflows in *QSIPrep*'s documentation]\
                     DerivativesDataSink(
                         source_file=source_file,
                         base_directory=config.execution.output_dir,
-                        datatype='anat',
+                        datatype='dwi',
                         mode='image',
                         extension='.mat',
-                        **{'from': 'orig', 'to': 'intramodal'},
+                        **{'from': 'orig', 'to': dwiref_space},
                         suffix='xfm',
                     ),
                     name=f'ds_orig_to_intramodal_{output_wfname}',

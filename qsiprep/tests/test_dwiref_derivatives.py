@@ -106,3 +106,70 @@ def test_plus_suffixed_output_names_always_raise(names, dwi_dir):
     units = [_unit(name, dwi_dir) for name in names]
     with pytest.raises(RuntimeError, match=r'render to the same BIDS name'):
         check_output_names_are_bids_unique(units)
+
+
+# --- the derivative table -----------------------------------------------------
+# `space` carries the dwiref's LEVEL; `desc-coreg` marks its ROLE -- the one whose
+# transform final resampling actually uses. The two are orthogonal.
+
+
+@pytest.mark.parametrize('session', [None, '1'])
+@pytest.mark.parametrize(
+    ('entities', 'name'),
+    [
+        # Run-level reference, distortion-group resolved: it is the coreg target.
+        (dict(desc='coreg', acquisition='A'), 'sub-01_acq-A_desc-coreg_dwiref.nii.gz'),
+        # Run-level reference, subject resolved: the template is the coreg target.
+        (dict(acquisition='A'), 'sub-01_acq-A_dwiref.nii.gz'),
+        # The template, in its own midpoint space.
+        (dict(space='subject', desc='coreg'), 'sub-01_space-subject_desc-coreg_dwiref.nii.gz'),
+        # The template resampled into ACPC.
+        (dict(space='ACPC'), 'sub-01_space-ACPC_dwiref.nii.gz'),
+        # Per-output reference, after this rename.
+        (
+            dict(space='ACPC', desc='preproc', acquisition='A'),
+            'sub-01_acq-A_space-ACPC_desc-preproc_dwiref.nii.gz',
+        ),
+        (dict(space='subject', desc='agreement'), 'sub-01_space-subject_desc-agreement_dwiref.nii.gz'),
+    ],
+)
+def test_dwiref_derivative_paths(entities, name, session):
+    """Asserted in both --subject-anatomical-reference modes.
+
+    Subject-level products inherit ses-Y under sessionwise processing, which
+    builds one workflow per session; dropping it would make two sessions collide.
+    """
+    expected = f'sub-01/dwi/{name}'
+    if session:
+        expected = f'sub-01/ses-{session}/dwi/{name}'.replace('sub-01_', f'sub-01_ses-{session}_')
+        entities = dict(entities, session=session)
+    assert _render(datatype='dwi', suffix='dwiref', extension='.nii.gz', **entities) == expected
+
+
+def test_the_template_and_the_per_output_reference_do_not_collide():
+    """An entity-free output group renders to bare `sub-01`, which before the
+    desc-preproc rename was the template's own path."""
+    template = _render(datatype='dwi', suffix='dwiref', extension='.nii.gz', space='ACPC')
+    reference = _render(
+        datatype='dwi', suffix='dwiref', extension='.nii.gz', space='ACPC', desc='preproc'
+    )
+    assert template == 'sub-01/dwi/sub-01_space-ACPC_dwiref.nii.gz'
+    assert reference == 'sub-01/dwi/sub-01_space-ACPC_desc-preproc_dwiref.nii.gz'
+    assert template != reference
+
+
+def test_dwiref_transform_paths():
+    assert (
+        _render(
+            datatype='dwi', suffix='xfm', extension='.mat',
+            **{'from': 'subject', 'to': 'ACPC', 'mode': 'image'},
+        )
+        == 'sub-01/dwi/sub-01_from-subject_to-ACPC_mode-image_xfm.mat'
+    )
+    assert (
+        _render(
+            datatype='dwi', suffix='xfm', extension='.mat', acquisition='A',
+            **{'from': 'orig', 'to': 'subject', 'mode': 'image'},
+        )
+        == 'sub-01/dwi/sub-01_acq-A_from-orig_to-subject_mode-image_xfm.mat'
+    )

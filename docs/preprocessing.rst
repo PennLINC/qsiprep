@@ -322,7 +322,13 @@ Volumetric outputs are written out in ``ACPC`` space ::
 
   sub-<label>/[ses-<label>/]
     dwi/
-      <source_entities>_space-ACPC_dwiref.nii.gz
+      # The b=0 reference of the preprocessed series, in its space.
+      <source_entities>_space-ACPC_desc-preproc_dwiref.nii.gz
+
+      # The b=0 reference coregistration targeted, in this group's own grid.
+      # Carries desc-coreg when --dwiref-definition is distortion-group, which
+      # is the level whose reference resampling registers through.
+      <source_entities>[_desc-coreg]_dwiref.nii.gz
 
       # The generous brain mask that should be reduced probably
       <source_entities>_space-ACPC_desc-brain_mask.nii.gz
@@ -393,7 +399,13 @@ Transforms
 
 .. important::
 
-  *QSIPrep* does not currently write out the coregistration transform from dwiref space to ACPC space.
+  With ``--dwiref-definition subject`` *QSIPrep* builds a single midpoint dwiref for
+  the subject, registers it to the anatomical once, and has every DWI group inherit
+  that transform. It writes the template in its own space
+  (``sub-<label>_space-subject_desc-coreg_dwiref.nii.gz``), the same template
+  resampled into ACPC (``sub-<label>_space-ACPC_dwiref.nii.gz``), and the transform
+  between them (``sub-<label>_from-subject_to-ACPC_mode-image_xfm.mat``), so that
+  space is not a dead end.
   When it does start writing this transform out, it will be organized like this::
 
     sub-<label>/
