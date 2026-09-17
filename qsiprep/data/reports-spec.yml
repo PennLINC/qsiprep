@@ -128,12 +128,6 @@ sections:
     static: false
     subtitle: Gibbs Ringing Removal
 
-  - bids: {datatype: figures, desc: biascorr, suffix: dwi}
-    caption: |
-      "Effect of correcting <em>B<sub>1</sub></em> bias on a low and high-<em>b</em> image."
-    static: false
-    subtitle: <em>B<sub>1</sub></em> Bias Correction
-
   - bids: {datatype: figures, desc: gradunwarp, suffix: dwi}
     caption: |
       Effect of gradient nonlinearity correction on the <em>b</em>=0 image the

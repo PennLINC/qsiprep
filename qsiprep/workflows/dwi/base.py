@@ -59,6 +59,7 @@ def init_dwi_preproc_wf(
     output_prefix,
     source_file,
     anatomical_template,
+    do_biascorr=True,
 ) -> Workflow:
     """
     This workflow controls the dwi preprocessing stages of qsiprep.
@@ -218,7 +219,6 @@ def init_dwi_preproc_wf(
                 'hmc_optimization_data',
                 'itk_b0_to_t1',
                 'noise_images',
-                'bias_images',
                 'dwi_files',
                 'cnr_map',
                 'bval_files',
@@ -251,6 +251,7 @@ def init_dwi_preproc_wf(
         unit=unit,
         orientation='LAS' if unit.run.hmc_stage.tool == 'eddy' else 'LPS',
         source_file=source_file,
+        do_biascorr=do_biascorr,
     )
     test_pre_hmc_connect = pe.Node(TestInput(), name='test_pre_hmc_connect')
     hmc_tool = unit.run.hmc_stage.tool
@@ -309,7 +310,6 @@ def init_dwi_preproc_wf(
             ('outputnode.qc_file', 'raw_qc_file'),
             ('outputnode.original_files', 'original_files'),
             ('outputnode.bvec_file', 'original_bvecs'),
-            ('outputnode.bias_images', 'bias_images'),
             ('outputnode.noise_images', 'noise_images'),
             ('outputnode.raw_concatenated', 'raw_concatenated'),
         ]),

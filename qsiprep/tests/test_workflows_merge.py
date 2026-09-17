@@ -35,7 +35,6 @@ def test_dwidenoise_workflow_uses_dwidenoise(monkeypatch, use_phase):
         phase_encoding_direction='j',
         n_volumes=30,
         use_phase=use_phase,
-        do_biascorr=False,
     )
     denoiser = workflow.get_node('denoiser')
 
@@ -59,7 +58,6 @@ def test_dwidenoise_workflow_resolves_auto_window(monkeypatch):
         phase_encoding_direction='j',
         n_volumes=30,
         use_phase=False,
-        do_biascorr=False,
     )
     denoiser = workflow.get_node('denoiser')
 
@@ -86,7 +84,6 @@ def test_dwidenoise2_workflow_ignores_denoise_window(monkeypatch):
         phase_encoding_direction='j',
         n_volumes=30,
         use_phase=False,
-        do_biascorr=False,
     )
     denoiser = workflow.get_node('denoiser')
 
@@ -116,7 +113,6 @@ def test_dwidenoise2_cli_parameters_reach_workflow(monkeypatch):
         n_volumes=30,
         # demodulation is only valid for complex-valued data
         use_phase=True,
-        do_biascorr=False,
     )
     denoiser = workflow.get_node('denoiser')
 
@@ -125,46 +121,6 @@ def test_dwidenoise2_cli_parameters_reach_workflow(monkeypatch):
     # Parameters that weren't requested are left at the dwidenoise2 defaults
     assert not isdefined(denoiser.inputs.estimator)
     assert not isdefined(denoiser.inputs.schedule)
-
-
-@pytest.mark.parametrize('denoise_method', ['dwidenoise', 'dwidenoise2', 'patch2self'])
-def test_denoising_wf_masks_only_biascorr(monkeypatch, denoise_method):
-    """Build the brain mask for bias correction only; the denoisers get no mask."""
-    monkeypatch.setattr(config.workflow, 'denoise_method', denoise_method)
-    monkeypatch.setattr(config.workflow, 'dwi_denoise_window', 5)
-    monkeypatch.setattr(config.workflow, 'unringing_method', 'none')
-    monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
-    monkeypatch.setattr(config.workflow, 'b0_threshold', 100)
-    monkeypatch.setattr(config.nipype, 'omp_nthreads', 1)
-
-    workflow = init_dwi_denoising_wf(
-        source_file='sub-01_dwi.nii.gz',
-        partial_fourier=1.0,
-        phase_encoding_direction='j',
-        n_volumes=30,
-        use_phase=False,
-        do_biascorr=True,
-    )
-
-    node_names = [node.name for node in workflow._get_all_nodes()]
-    assert node_names.count('quick_mask') == 1
-    assert node_names.count('get_b0s') == 1
-
-    quick_mask = workflow.get_node('quick_mask')
-    consumers = {
-        (dest.name, dest_field)
-        for src, dest, data in workflow._graph.edges(data=True)
-        if src is quick_mask
-        for _, dest_field in data['connect']
-    }
-    assert consumers == {('biascorr', 'mask')}
-
-    # The mask comes from the series feeding bias correction, not the raw data
-    get_b0s = workflow.get_node('get_b0s')
-    assert {src.name for src, dest, _ in workflow._graph.edges(data=True) if dest is get_b0s} == {
-        'inputnode',
-        'denoiser',
-    }
 
 
 @pytest.mark.parametrize('demodulate', ['linear', 'hann', 'apc'])
@@ -186,7 +142,6 @@ def test_dwidenoise2_rejects_demodulation_without_phase(monkeypatch, demodulate)
         'partial_fourier': 1.0,
         'phase_encoding_direction': 'j',
         'n_volumes': 30,
-        'do_biascorr': False,
     }
 
     with pytest.raises(ValueError, match='magnitude-only data'):
@@ -240,7 +195,6 @@ def _run_denoising_wf(
         phase_encoding_direction=metadata['PhaseEncodingDirection'].replace('-', ''),
         n_volumes=nb.load(nibs_dwi['dwi_file']).shape[3],
         use_phase=use_phase,
-        do_biascorr=False,
     )
     denoise_wf.inputs.inputnode.dwi_file = nibs_dwi['dwi_file']
     denoise_wf.inputs.inputnode.bval_file = nibs_dwi['bval_file']
@@ -451,7 +405,6 @@ def _build_denoising_wf(
     denoise_method,
     unringing_method,
     use_phase,
-    do_biascorr=False,
     mrtrix_version='dev',
 ):
     """Build (without running) a denoising workflow with the given configuration.
@@ -474,7 +427,6 @@ def _build_denoising_wf(
         phase_encoding_direction='j',
         n_volumes=30,
         use_phase=use_phase,
-        do_biascorr=do_biascorr,
     )
 
 
@@ -556,48 +508,6 @@ def test_no_advice_when_mrdegibbs_is_not_running(
     assert '--mrtrix-version dev' not in caplog.text
 
 
-@pytest.mark.parametrize('mrtrix_version', ['stable', 'dev'])
-def test_biascorr_gets_the_selected_mrtrix_version(monkeypatch, mrtrix_version):
-    """Give dwibiascorrect the option spelling its own MRtrix3 accepts."""
-    workflow = _build_denoising_wf(
-        monkeypatch,
-        'dwidenoise',
-        'mrdegibbs',
-        use_phase=True,
-        do_biascorr=True,
-        mrtrix_version=mrtrix_version,
-    )
-    biascorr = next(node for node in workflow._get_all_nodes() if node.name == 'biascorr')
-
-    assert biascorr.interface.inputs.mrtrix_version == mrtrix_version
-
-
-@pytest.mark.parametrize('mrtrix_version', ['stable', 'dev'])
-def test_biascorr_never_receives_complex_data(monkeypatch, mrtrix_version):
-    """Keep dwibiascorrect on magnitude data under either MRtrix3 version.
-
-    dwibiascorrect is magnitude-only in both, so the split must precede it however
-    the complex data reached that point. Only one ``split_complex`` node is ever
-    built: under ``dev`` it sits right before biascorr, but under ``stable`` it
-    already ran ahead of mrdegibbs, so degibbser's (already-magnitude) output is
-    what feeds biascorr directly.
-    """
-    workflow = _build_denoising_wf(
-        monkeypatch,
-        'dwidenoise',
-        'mrdegibbs',
-        use_phase=True,
-        do_biascorr=True,
-        mrtrix_version=mrtrix_version,
-    )
-    connections = _connections(workflow)
-    feeder = 'split_complex' if mrtrix_version == 'dev' else 'degibbser'
-
-    assert connections[(feeder, 'biascorr')] == {('out_file', 'in_file')}
-    assert connections[(feeder, 'get_b0s')] == {('out_file', 'dwi_series')}
-    assert connections[('biascorr', 'outputnode')] >= {('out_file', 'dwi_file')}
-
-
 @pytest.mark.parametrize('denoise_method', ['dwidenoise', 'dwidenoise2'])
 def test_rpg_unringing_gets_magnitude(monkeypatch, denoise_method):
     """Split to magnitude before rpg unringing, which is TORTOISE and magnitude-only."""
@@ -637,38 +547,6 @@ def test_split_follows_the_denoiser_without_unringing(monkeypatch, denoise_metho
 
     assert connections[('denoiser', 'split_complex')] == {('out_file', 'complex_file')}
     assert connections[('split_complex', 'outputnode')] == {('out_file', 'dwi_file')}
-
-
-@pytest.mark.parametrize('unringing_method', ['mrdegibbs', 'none'])
-@pytest.mark.parametrize('denoise_method', ['dwidenoise', 'dwidenoise2'])
-def test_biascorr_and_get_b0s_get_magnitude_from_split_complex(
-    monkeypatch, denoise_method, unringing_method
-):
-    """dwibiascorrect and the b0 extraction that builds its mask are magnitude-only.
-
-    Complex data must be split to magnitude before feeding either of them, whether the
-    split happens right after denoising (no unringing) or after mrdegibbs (which can
-    consume complex data). ``biascorr`` and ``get_b0s`` must be fed from the same
-    magnitude source, since the mask built from ``get_b0s`` is for the series that
-    ``biascorr`` corrects.
-    """
-    workflow = _build_denoising_wf(
-        monkeypatch,
-        denoise_method,
-        unringing_method,
-        use_phase=True,
-        do_biascorr=True,
-    )
-    connections = _connections(workflow)
-
-    assert connections[('split_complex', 'biascorr')] == {('out_file', 'in_file')}
-    assert connections[('split_complex', 'get_b0s')] == {('out_file', 'dwi_series')}
-    # Neither the denoiser nor the degibbser (still possibly complex-valued) may feed
-    # bias correction or b0 extraction directly; the split must happen first.
-    assert ('denoiser', 'biascorr') not in connections
-    assert ('denoiser', 'get_b0s') not in connections
-    assert ('degibbser', 'biascorr') not in connections
-    assert ('degibbser', 'get_b0s') not in connections
 
 
 def test_boilerplate_describes_where_the_split_happens(monkeypatch):
@@ -759,3 +637,31 @@ def test_denoising_wf_stable_mrdegibbs(monkeypatch, tmp_path, nibs_dwi):
     assert degibbs_out.shape == degibbs_in.shape
 
     _assert_denoising_outputs(nodes, sink_dir, nibs_dwi['dwi_file'])
+
+
+def test_no_bias_correction_plumbing_survives_in_the_merge_stack(monkeypatch):
+    """The pre-0.17 ("legacy") bias-correction path is gone, plumbing included.
+
+    Deleting only the ``biascorr`` node would leave ``bias_image``/``bias_images``
+    output traits and ``Merge`` nodes fed with undefined values, which fails at
+    runtime rather than at construction -- so assert on the traits too.
+    """
+    monkeypatch.setattr(config.workflow, 'denoise_method', 'none')
+    monkeypatch.setattr(config.workflow, 'dwi_denoise_window', 5)
+    monkeypatch.setattr(config.workflow, 'unringing_method', 'none')
+    monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
+    monkeypatch.setattr(config.workflow, 'b0_threshold', 100)
+    monkeypatch.setattr(config.nipype, 'omp_nthreads', 1)
+
+    # No do_biascorr argument: its absence is the point.
+    workflow = init_dwi_denoising_wf(
+        source_file='sub-01_dwi.nii.gz',
+        partial_fourier=1.0,
+        phase_encoding_direction='j',
+        n_volumes=30,
+        use_phase=False,
+    )
+
+    assert not [name for name in workflow.list_node_names() if 'bias' in name]
+    outputs = workflow.get_node('outputnode').outputs.copyable_trait_names()
+    assert 'bias_image' not in outputs

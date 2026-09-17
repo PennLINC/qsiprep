@@ -33,6 +33,31 @@ class _RaisingLayout:
         raise self._exc
 
 
+@pytest.fixture(autouse=True)
+def _restore_config():
+    """Put global config state back.
+
+    These tests install a fake layout on the shared ``config.execution``. Leaving
+    it there breaks any later test that builds a real one -- the suite is ordered
+    alphabetically, so `test_utils_gradcal` picks up the fake and fails. The
+    repo's ``_config()`` convention leaks plain values harmlessly; leaking a stub
+    object is a different matter.
+    """
+    from qsiprep import config
+
+    saved = (
+        config.workflow.dmri_biascorrect,
+        config.execution._layout,
+        config.execution.layout,
+    )
+    yield
+    (
+        config.workflow.dmri_biascorrect,
+        config.execution._layout,
+        config.execution.layout,
+    ) = saved
+
+
 def _config(mode, layout=None):
     from qsiprep import config
 

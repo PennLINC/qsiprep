@@ -45,6 +45,7 @@ def init_dwi_finalize_wf(
     name,
     source_file,
     output_prefix,
+    do_biascorr=True,
     write_derivatives=True,
     make_intramodal_template=False,
 ):
@@ -307,7 +308,7 @@ def init_dwi_finalize_wf(
     # Apply denoising to the interpolated data if requested
     final_denoise_wf = init_finalize_denoising_wf(
         source_file=source_file,
-        do_biascorr=config.workflow.b1_biascorrect_stage == 'final',
+        do_biascorr=do_biascorr,
         num_dwi_acquisitions=len(all_dwis),
     )
 

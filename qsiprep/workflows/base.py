@@ -70,6 +70,7 @@ from .anatomical.volume import anat_biascorrect_enabled, init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
 from .dwi.distortion_group_merge import init_distortion_group_merge_wf
 from .dwi.finalize import init_dwi_finalize_wf
+from .dwi.biascorrect import dmri_biascorrect_enabled
 from .dwi.intramodal_template import init_intramodal_template_wf
 from .dwi.util import get_source_file
 
@@ -423,16 +424,28 @@ to workflows in *QSIPrep*'s documentation]\
     preproc_units = plan_preproc_units(grouping, plan)
     concatenation_scheme = plan_concatenation_scheme(plan)
 
+    # Built unconditionally: the bias-correction decision needs them for every
+    # output, merged or not. With no merging each output maps to a single unit.
+    merged_to_subgroups = defaultdict(list)
+    for subgroup_name, destination_name in concatenation_scheme.items():
+        merged_to_subgroups[destination_name].append(subgroup_name)
+    units_by_name = {unit.output_name: unit for unit in preproc_units}
+
+    # One N4 decision per final output, shared by all of its constituents: a
+    # merged series is concatenated, so it must be corrected consistently or not
+    # at all. Deciding per unit would N4 one constituent and skip another.
+    biascorr_by_output = {
+        destination: dmri_biascorrect_enabled(
+            [path for name in subgroups for path in units_by_name[name].dwi_files]
+        )
+        for destination, subgroups in merged_to_subgroups.items()
+    }
+
     # Read unconditionally below even when no merge is happening.
     merging_group_workflows = {}
     if merging_distortion_groups:
-        # create a mapping of which across-distortion-groups are contained in each merge
         merged_group_names = sorted(set(concatenation_scheme.values()))
-        merged_to_subgroups = defaultdict(list)
-        for subgroup_name, destination_name in concatenation_scheme.items():
-            merged_to_subgroups[destination_name].append(subgroup_name)
         assembly_by_name = {assembly.output_name: assembly for assembly in plan.outputs}
-        units_by_name = {unit.output_name: unit for unit in preproc_units}
 
         for merged_group in merged_group_names:
             # Outputs with a single correction unit keep the direct path:
@@ -616,18 +629,21 @@ to workflows in *QSIPrep*'s documentation]\
         naming_name = output_fname if merged_here else final_output_name
         source_file = get_source_file(list(unit.dwi_files), naming_name, suffix='_dwi')
         output_wfname = output_fname.replace('-', '_')
+        do_biascorr = biascorr_by_output[final_output_name]
         dwi_preproc_wf = init_dwi_preproc_wf(
             unit=unit,
             output_prefix=naming_name,
             source_file=source_file,
             t2w_sdc=t2w_available_for_sdc(subject_data, selection, config.workflow.anat_modality),
             anatomical_template=anatomical_template,
+            do_biascorr=do_biascorr,
         )
         dwi_finalize_wf = init_dwi_finalize_wf(
             unit=unit,
             name=dwi_preproc_wf.name.replace('dwi_preproc', 'dwi_finalize'),
             output_prefix=naming_name,
             source_file=source_file,
+            do_biascorr=do_biascorr,
             write_derivatives=not (
                 merging_distortion_groups
                 and concatenation_scheme[output_fname] in merging_group_workflows
