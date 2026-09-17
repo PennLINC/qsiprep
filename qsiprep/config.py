@@ -624,6 +624,13 @@ class workflow(_Config):
     fed as-is: eddy's ``--field`` sign convention matches FUGUE (validated against
     a FUGUE-forward-distorted ground truth), and the PE polarity is carried by the
     acqp, so one field serves either phase-encoding direction."""
+    gre_t2wreg_init = False
+    """On the TORTOISE path, when a series has both a GRE fieldmap and a T2w, run
+    DIFFPREP's T2Wreg stage initialized with the GRE-derived warp instead of
+    applying the GRE warp after head motion correction: the fieldmap seeds the
+    registration and the T2w refines it. With gradient unwarping the seed is
+    built by the ``gre_gradwarp`` mode and the b=0 T2Wreg registers is
+    gradwarp-corrected inside DIFFPREP."""
     gre_gradwarp = 'reference'
     """How a GRE fieldmap that is applied *after* head motion correction is
     reconciled with gradient unwarping, which the composed transform chain

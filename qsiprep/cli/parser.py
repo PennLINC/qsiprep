@@ -778,6 +778,18 @@ def _build_parser(**kwargs):
         ),
     )
     g_sdc.add_argument(
+        '--gre-init-t2wreg',
+        action='store_true',
+        default=False,
+        dest='gre_t2wreg_init',
+        help=(
+            'With --hmc-method tortoise, a GRE fieldmap and a T2w: initialize DIFFPREP\'s '
+            'T2Wreg susceptibility correction with the GRE-derived warp and let the T2w '
+            'registration refine it, instead of applying the GRE warp after head motion '
+            'correction.'
+        ),
+    )
+    g_sdc.add_argument(
         '--gre-gradwarp',
         action='store',
         choices=['reference', 'hz', 'transport'],

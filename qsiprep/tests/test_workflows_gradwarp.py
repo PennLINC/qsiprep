@@ -28,6 +28,7 @@ def _reset_config():
     config.workflow.force = []
     config.workflow.gre_gradwarp = 'reference'
     config.workflow.gre_eddy_mbs = False
+    config.workflow.gre_t2wreg_init = False
     # Anything that runs the real parser leaves the method axes set, and a stray
     # sdc_method='topup' would silently compile a plan with no DRBUDDI stage.
     # Save them here, and restore below so this module does not pollute in turn.
@@ -1939,3 +1940,55 @@ def test_invert_displacement_field_round_trips(tmp_path, monkeypatch):
     ).reshape(shape + (3,)) * lps
     residual = np.linalg.norm(forward + back - xyz, axis=-1)[inner]
     assert residual.max() < 0.05
+
+
+# --- T2Wreg: gradwarped inputs and a GRE-seeded registration ------------------
+
+
+def test_diffprep_t2wreg_hands_the_gradwarp_field_to_diffprep(tmp_path):
+    """The EPI stage registers a gradwarp-corrected b=0, so its warp is in the corrected frame."""
+    _cfg_for_diffprep(tmp_path)
+    wf = _diffprep_t2wreg_wf(tmp_path, _plain_unit(tmp_path))
+
+    assert wf.get_node('diffprep').inputs.epi_mode == 'T2Wreg'
+    assert _connects(wf, 'inputnode', 'diffprep', 'gradwarp_field', 'grad_nonlin')
+
+
+def test_diffprep_t2wreg_without_gradwarp_passes_no_field(tmp_path):
+    _cfg_for_diffprep(tmp_path)
+    config.workflow.gradient_file = None
+    wf = _diffprep_t2wreg_wf(tmp_path, _plain_unit(tmp_path))
+
+    assert not _connects(wf, 'inputnode', 'diffprep', 'gradwarp_field', 'grad_nonlin')
+
+
+def test_gre_seeds_t2wreg_when_asked(tmp_path, monkeypatch):
+    """GRE + T2w + --gre-init-t2wreg: T2Wreg runs, seeded by the GRE warp, and the GRE warp
+    is not also applied after HMC."""
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    _cfg_for_diffprep(tmp_path)
+    config.workflow.gre_t2wreg_init = True
+    config.workflow.gre_gradwarp = 'transport'
+    try:
+        wf = _diffprep_t2wreg_wf(tmp_path, _phasediff_unit())
+    finally:
+        config.workflow.gre_t2wreg_init = False
+
+    diffprep = wf.get_node('diffprep')
+    assert diffprep.inputs.epi_mode == 'T2Wreg'
+    assert _connects(wf, 'sdc_wf', 'diffprep', 'outputnode.out_warp', 'epireg_initial_field')
+    assert _connects(wf, 'inputnode', 'diffprep', 'gradwarp_field', 'grad_nonlin')
+    # The seed is estimated on a pre-HMC reference, in the gradwarp-corrected frame.
+    assert wf.get_node('sdc_wf').gradwarp_mode == 'transport'
+    assert _connects(wf, 'gre_init_b0_ref_wf', 'sdc_wf', 'outputnode.ref_image', 'inputnode.b0_ref')
+    assert not _connects(wf, 'sdc_wf', 'outputnode', 'outputnode.out_warp', 'to_dwi_ref_warps')
+    assert wf.get_node('outputnode').inputs.sdc_method == 'T2Wreg (GRE-initialized)'
+
+
+def test_gre_with_t2w_stays_on_the_fieldmap_path_by_default(tmp_path, monkeypatch):
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    _cfg_for_diffprep(tmp_path)
+    wf = _diffprep_t2wreg_wf(tmp_path, _phasediff_unit())
+
+    assert wf.get_node('diffprep').inputs.epi_mode == 'off'
+    assert _connects(wf, 'sdc_wf', 'outputnode', 'outputnode.out_warp', 'to_dwi_ref_warps')

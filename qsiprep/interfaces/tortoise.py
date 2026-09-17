@@ -1023,6 +1023,20 @@ class _DIFFPREPInputSpec(TORTOISEInputSpec):
         desc='T2w structural image for --epi T2Wreg (must NOT be a T1w). '
         'Required when epi_mode == "T2Wreg".',
     )
+    grad_nonlin = File(
+        exists=True,
+        argstr='--grad_nonlin %s',
+        desc='Gradwarp displacement field (the TORTOISE "_inv" convention, i.e. the field '
+        'qsiprep builds), so the T2Wreg stage registers a gradwarp-corrected b=0. The '
+        'motion/eddy stage does not consume it.',
+    )
+    epireg_initial_field = File(
+        exists=True,
+        argstr='--EPIREG_initial_field %s',
+        desc='Initial EPI displacement field for T2Wreg, in the b=0 world frame (e.g. the '
+        'warp derived from a GRE fieldmap); the registration refines it. Needs a TORTOISE '
+        'with the EPIREG initial-field option.',
+    )
 
 
 class _DIFFPREPOutputSpec(TraitedSpec):

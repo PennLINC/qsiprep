@@ -325,7 +325,12 @@ def init_diffprep_hmc_wf(
     t2wreg_stage = unit.run.stage_with('t2wreg')
     synb0_target = t2wreg_stage is not None and t2wreg_stage.structural_target == 'synb0'
     # Classic SyN is fieldmap-less too, but has its own path (init_sdc_wf below).
-    use_t2wreg = is_fieldmapless and not unit.is_nipreps_syn and (synb0_target or bool(t2w_sdc))
+    # A GRE fieldmap plus a T2w can also drive T2Wreg: the GRE warp seeds the registration
+    # and the T2w refines it (opt-in, config.workflow.gre_t2wreg_init).
+    gre_init = bool(unit.is_gre and t2w_sdc and config.workflow.gre_t2wreg_init)
+    use_t2wreg = gre_init or (
+        is_fieldmapless and not unit.is_nipreps_syn and (synb0_target or bool(t2w_sdc))
+    )
     epi_mode = 'T2Wreg' if use_t2wreg else 'off'
 
     # Load any user-supplied DIFFPREP config (or our defaults)
@@ -492,6 +497,45 @@ def init_diffprep_hmc_wf(
                     ('outputnode.structural_aligned', 'structural_image'),
                 ]),
             ])  # fmt:skip
+            if gre_init:
+                # Seed T2Wreg with the GRE warp, estimated on a pre-HMC b=0 reference
+                # (DIFFPREP has not run yet). With gradwarp the seed is built in the
+                # corrected frame by init_sdc_wf's gre_gradwarp mode, matching the
+                # gradwarp-corrected b=0 the EPI stage registers.
+                gre_init_b0_ref_wf = init_dwi_reference_wf(
+                    source_file=source_file, name='gre_init_b0_ref_wf', gen_report=False
+                )
+                b0_sdc_wf = init_sdc_wf(unit, gradwarp=has_gradwarp)
+                b0_sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
+                workflow.connect([
+                    (t2wreg_b0s, gre_init_b0_ref_wf, [('b0_average', 'inputnode.b0_template')]),
+                    (inputnode, b0_sdc_wf, [
+                        ('t1_brain', 'inputnode.t1_brain'),
+                        ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
+                    ]),
+                    (b0_sdc_wf, diffprep, [('outputnode.out_warp', 'epireg_initial_field')]),
+                ])  # fmt:skip
+                ref_fields = (
+                    'outputnode.ref_image', 'outputnode.ref_image_brain', 'outputnode.dwi_mask'
+                )
+                if has_gradwarp:
+                    connect_gradwarp_sdc_reference(
+                        workflow, inputnode, gre_init_b0_ref_wf, ref_fields, b0_sdc_wf
+                    )
+                else:
+                    workflow.connect([
+                        (gre_init_b0_ref_wf, b0_sdc_wf, [
+                            (ref_fields[0], 'inputnode.b0_ref'),
+                            (ref_fields[1], 'inputnode.b0_ref_brain'),
+                            (ref_fields[2], 'inputnode.b0_mask'),
+                        ]),
+                    ])  # fmt:skip
+
+        if use_t2wreg and has_gradwarp:
+            # The EPI stage registers a gradwarp-corrected b=0 (TORTOISE with the EPIREG
+            # gradwarp fix), so its warp lives in the corrected frame the composed chain
+            # applies it in. DIFFPREP's motion/eddy stage ignores the field.
+            workflow.connect([(inputnode, diffprep, [('gradwarp_field', 'grad_nonlin')])])
 
         corrected_node = diffprep
 
@@ -699,14 +743,15 @@ def init_diffprep_hmc_wf(
     #    keeps DIFFPREP's output in the native grid and leaves coregistration and
     #    ACPC alignment to qsiprep instead of TORTOISE's StructuralAlignment.
     #
-    #    Known gap: by the gradwarp rule this warp's estimation inputs *should* be
-    #    gradwarp-corrected, since the warp is applied downstream of gradwarp. But
-    #    the EPI stage runs inside the same TORTOISEProcess call as HMC and never
-    #    hands its registration target back, so there is nothing here to interpose
-    #    on. Correcting it would mean gradwarping the series before DIFFPREP,
-    #    which changes head motion correction too; deferred rather than forced.
+    #    By the gradwarp rule this warp's estimation inputs must be gradwarp-corrected,
+    #    since the warp is applied downstream of gradwarp: the gradwarp field is handed
+    #    to DIFFPREP (--grad_nonlin), whose EPI stage resamples its b=0 through it
+    #    before registering. Head motion correction does not use the field.
     if use_t2wreg:
-        outputnode.inputs.sdc_method = 'T2Wreg (SynB0)' if synb0_target else 'T2Wreg'
+        if gre_init:
+            outputnode.inputs.sdc_method = 'T2Wreg (GRE-initialized)'
+        else:
+            outputnode.inputs.sdc_method = 'T2Wreg (SynB0)' if synb0_target else 'T2Wreg'
         # b0_ref_for_coreg is already gradwarp- and SDC-corrected on this branch
         # (see apply_sdc_to_b0 above), so it needs no further correction here.
         workflow.connect([
