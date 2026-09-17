@@ -137,7 +137,7 @@ concatenated. Specifically, image denoising (using ``dwidenoise`` or
 unringing (using ``mrdegibbs``) is disabled by default but can be enabled
 with ``--unringing-method mrdegibbs``. B1 bias field correction is applied by
 default (using ``dwibiascorrect``) and can be disabled with
-``--b1-biascorrect-stage none``. The intensity of b=0 images is harmonized
+``--dmri-biascorrect none``. The intensity of b=0 images is harmonized
 across scans (i.e. scaled to an average value) by default, but this can be
 turned off using ``--dwi-no-b0-harmonization``.
 
@@ -158,9 +158,11 @@ every other MRtrix3 command follows ``--mrtrix-version``.
 .. tip::
 
   If prescan normalization is enabled,
-  we recommend using ``--b1-biascorrect-stage none``.
+  we recommend using ``--dmri-biascorrect none``.
   This will skip B1 bias field correction,
   which may introduce artifacts on normalized data.
+  ``--dmri-biascorrect auto`` will make that choice for you when every DWI is
+  flagged ``NORM`` in its BIDS ``ImageType`` metadata.
 
 Together, denoising (MP-PCA or patch2self), Gibbs unringing B1 bias field
 correction, and b=0 intensity normalization are referred to as *denoising* in
@@ -676,7 +678,7 @@ DWI preprocessing
         dwi_denoise_window=5,
         denoise_method='dwidenoise',
         unringing_method='mrdegibbs',
-        b1_biascorr_stage='final',
+        dmri_biascorrect='n4',
         no_b0_harmonization=False,
         denoise_before_combining=True,
         template='MNI152NLin2009cAsym',
