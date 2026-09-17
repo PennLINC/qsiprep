@@ -573,8 +573,6 @@ class workflow(_Config):
     b1_biascorrect_stage = None
     """The stage of processing at which to apply B1 bias correction. Either "final" (after
     resampling), "none" (skipped entirely) or "legacy" (before concatenation)."""
-    denoise_after_combining = False
-    """Run ``dwidenoise`` after combining dwis, but before motion correction."""
     denoise_method = None
     """Image-based denoising method. Either "dwidenoise" (MRtrix), "patch2self" (DIPY)
     or "none". DWIDenoise parameters may be appended as semicolon-delimited name:value

@@ -130,16 +130,16 @@ will do a case-insensitive match of "mprage" within the "t1w" query.
 Denoising and Merging Images
 ============================
 
-The user can decide whether to do certain preprocessing steps and, if so,
-whether they are performed *before* or *after* the DWI series are
-concatenated. Specifically, image denoising (using ``dwidenoise`` or
-``patch2self``) can be disabled with ``--denoise-method none``. Gibbs
-unringing (using ``mrdegibbs``) is disabled by default but can be enabled
-with ``--unringing-method mrdegibbs``. B1 bias field correction is applied by
-default (using ``dwibiascorrect``) and can be disabled with
-``--b1-biascorrect-stage none``. The intensity of b=0 images is harmonized
-across scans (i.e. scaled to an average value) by default, but this can be
-turned off using ``--dwi-no-b0-harmonization``.
+The user can decide whether to do certain preprocessing steps.
+Specifically, image denoising (using ``dwidenoise``, ``dwidenoise2``, or ``patch2self``)
+can be disabled with ``--denoise-method none``.
+Gibbs unringing (using ``mrdegibbs`` for full Fourier acquisitions or
+``rpg`` for partial Fourier acquisitions) is disabled by default but can be enabled
+with ``--unringing-method mrdegibbs|rpg``.
+B1 bias field correction is applied by default (using ``dwibiascorrect``) and can be disabled with
+``--b1-biascorrect-stage none``.
+The intensity of b=0 images is harmonized across scans (i.e., scaled to an average value) by default,
+but this can be turned off using ``--dwi-no-b0-harmonization``.
 
 When phase data are available and the denoising method is ``dwidenoise`` or
 ``dwidenoise2``, denoising itself is complex-valued under either ``--mrtrix-version``:
@@ -173,31 +173,6 @@ applied directly to the BIDS inputs, which should be uninterpolated and as
 data, it is recommended in the MRtrix3 documentation to apply MP-PCA before
 Gibbs unringing. B1 bias field correction and b=0 intensity harmonization
 do not have as specific requirements about their inputs so are run last.
-
-The last, and potentially very important decision, is whether the denoising
-operations are applied to each input DWI series individually or whether the
-denoising operations are applied to the concatenated input DWI files. At
-present, there is little data to guide this choice. The more volumes
-available, the more data MP-PCA/patch2self have to work with. However, if
-there if the head is in a vastly different location in different scans,
-denoising might be impacted in unpredictable ways.
-
-Consider MP-PCA. If a voxel contains CSF in one DWI series and the subject
-repositions their head between scans so that the voxel contains corpus
-callosum in the next DWI series, the non-noise signal will be very different
-in the two series. Similarly, if the head is repositioned different areas
-will be closer to the head coil and therefore be inconsistently affected by
-B1 bias field. Similar problems can also occur *within* a DWI series due to
-subject head motion, but these methods have been shown to work well even in
-the presence of within-scan head movement. If the head position changes
-across scans is of a similar magnitude to that of within-scan head motion, it
-is likely fine to use the ``--denoise-after-combining`` option. To gauge how
-much between-scan motion occurred, users can inspect the :ref:`qc_data` to see
-whether Framewise Displacement is large where a new series begins.
-
-By default, the scans in the same warped space are individually denoised before
-they are concatenated. When warped groups are concatenated an additional b=0
-image intensity normalization is performed.
 
 
 Preprocessing HCP-style
