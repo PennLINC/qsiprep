@@ -1071,28 +1071,6 @@ def _build_parser(**kwargs):
         help='Increase log verbosity by one level for each occurrence. Debug level is -vvv.',
     )
 
-    g_deprecated = parser.add_argument_group(
-        'Deprecated options',
-        description=(
-            'These options still work but will be removed in 27.0.0; each one names its '
-            'replacement. --b0-to-t1w-transform is also deprecated, but is listed under '
-            'Coregistration to the anatomical reference because it is mutually exclusive with its '
-            'replacement.'
-        ),
-    )
-    g_deprecated.add_argument(
-        '--dwi-only',
-        action=DeprecatedForwardAction,
-        default=SUPPRESS,
-        help='DEPRECATED: this flag now enables --anat-modality none. Use that instead.',
-    )
-    g_deprecated.add_argument(
-        '--dwi-no-biascorr',
-        action=DeprecatedForwardAction,
-        default=SUPPRESS,
-        help='DEPRECATED: this flag now enables --b1-biascorrect-stage none. Use that instead.',
-    )
-
     g_debug = parser.add_argument_group(
         'Debugging and developer options',
         description=(
