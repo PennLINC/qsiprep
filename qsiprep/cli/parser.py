@@ -30,15 +30,6 @@ from .. import config
 from ..utils.gpu import GPU_ALIASES, GPU_TASKS
 from ..utils.misc import load_shoreline_config, parse_denoise_method
 
-B0_TO_ANAT_TRANSFORM_DEFAULT = 'Rigid'
-"""Default for ``--b0-to-anat-transform``.
-
-Applied after parsing rather than by argparse, because the option is declared with
-``default=SUPPRESS`` so that its mutual exclusion with the deprecated
-``--b0-to-t1w-transform`` is checked reliably.
-"""
-
-
 def _build_parser(**kwargs):
     """Build parser object.
 
@@ -58,7 +49,6 @@ def _build_parser(**kwargs):
     # Deprecated options: {option string: (version it is removed in, what happens instead)}
     deprecations = {
         '--dwi-only': ('27.0.0', 'Enabling `--anat-modality none` instead.'),
-        '--b0-to-t1w-transform': ('27.0.0', 'Please use `--b0-to-anat-transform` instead.'),
     }
 
     # Deprecated flags that enable their replacement automatically:
@@ -102,13 +92,6 @@ def _build_parser(**kwargs):
             pending = getattr(namespace, '_forwarded_deprecations', [])
             namespace._forwarded_deprecations = [*pending, option_string]
 
-    class DeprecatedStoreAction(Action):
-        """Warn about a deprecated option, then store its value like ``store`` would."""
-
-        def __call__(self, parser, namespace, values, option_string=None):
-            _warn_deprecated(option_string or self.option_strings[0])
-            setattr(namespace, self.dest, values)
-
     class DeprecationForwardingParser(ArgumentParser):
         """Enables the replacements for any deprecated options that were given."""
 
@@ -126,14 +109,6 @@ def _build_parser(**kwargs):
                 setattr(namespace, dest, value)
             if hasattr(namespace, '_forwarded_deprecations'):
                 del namespace._forwarded_deprecations
-
-            # --b0-to-t1w-transform was renamed; the two are mutually exclusive, so at
-            # most one of them is set here.
-            if hasattr(namespace, 'b0_to_t1w_transform'):
-                namespace.b0_to_anat_transform = namespace.b0_to_t1w_transform
-                del namespace.b0_to_t1w_transform
-            if not hasattr(namespace, 'b0_to_anat_transform'):
-                namespace.b0_to_anat_transform = B0_TO_ANAT_TRANSFORM_DEFAULT
 
             # The method axes (--hmc-method/--sdc-method), normalized after the
             # whole command line has been read.
@@ -724,28 +699,15 @@ How to combine the corrected results of an output's correction units.
     )
 
     g_coreg = parser.add_argument_group('Options for dwi-to-Anatomical coregistration')
-    # Both are declared with default=SUPPRESS so that "was this given?" is just
-    # hasattr. argparse's own mutual-exclusion check compares the parsed value against
-    # the default by identity, which would miss `--b0-to-anat-transform Rigid` when
-    # 'Rigid' happens to be interned; against SUPPRESS it always fires. The default is
-    # applied in DeprecationForwardingParser instead.
-    g_b0_to_anat = g_coreg.add_mutually_exclusive_group()
-    g_b0_to_anat.add_argument(
-        '--b0-to-anat-transform',
+    g_coreg.add_argument(
+        '--dwi2anat-dof',
         action='store',
-        default=SUPPRESS,
-        choices=['Rigid', 'Affine'],
-        help='Degrees of freedom when registering b0 to anatomical images: '
-        '6 (Rigid, rotation and translation) or 12 (Affine). '
-        f'(default: {B0_TO_ANAT_TRANSFORM_DEFAULT})',
-    )
-    g_b0_to_anat.add_argument(
-        '--b0-to-t1w-transform',
-        action=DeprecatedStoreAction,
-        default=SUPPRESS,
-        choices=['Rigid', 'Affine'],
-        help='DEPRECATED: renamed to `--b0-to-anat-transform`, which this option now sets. '
-        'Use that instead.',
+        type=int,
+        choices=[6, 12],
+        default=6,
+        help='Degrees of freedom when registering the DWI reference to the '
+        'anatomical images: 6 (rigid: rotation and translation) or 12 (affine). '
+        '(default: 6)',
     )
     g_coreg.add_argument(
         '--intramodal-template-iters',

@@ -575,7 +575,7 @@ def _dwi_preproc_cfg(tmp_path):
     config.workflow.shoreline_iters = 2
     config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
     config.workflow.anat_modality = 't1w'
-    config.workflow.b0_to_anat_transform = 'Rigid'
+    config.workflow.dwi2anat_dof = 6
     config.workflow.hmc_transform = 'Affine'
 
 

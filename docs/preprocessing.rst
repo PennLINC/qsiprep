@@ -667,7 +667,7 @@ DWI preprocessing
         output_prefix='',
         ignore=[],
         b0_threshold=100,
-        b0_to_anat_transform='Rigid',
+        dwi2anat_dof=6,
         hmc_model='3dSHORE',
         hmc_transform='Rigid',
         shoreline_iters=2,

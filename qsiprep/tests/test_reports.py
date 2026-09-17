@@ -460,7 +460,7 @@ def test_diffusion_summary_renders_gradient_correction():
         pe_direction='j',
         hmc_transform='Affine',
         hmc_model='eddy',
-        b0_to_anat_transform='Rigid',
+        dwi2anat_dof=6,
         denoise_method='dwidenoise',
         dwi_denoise_window=5,
         gradient_correction='through-plane only (ImageType: DIS2D)',
@@ -475,7 +475,7 @@ def _diffusion_summary(**overrides):
         'distortion_correction': 'TOPUP',
         'pe_direction': 'j',
         'hmc_model': 'eddy',
-        'b0_to_anat_transform': 'Rigid',
+        'dwi2anat_dof': 6,
         'denoise_method': 'dwidenoise',
         'dwi_denoise_window': 5,
     }

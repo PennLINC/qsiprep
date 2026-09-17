@@ -28,7 +28,7 @@ def _config():
     config.workflow.subject_anatomical_reference = 'unbiased'
     config.workflow.hmc_method = 'tortoise'
     config.workflow.sdc_method = 'drbuddi'
-    config.workflow.b0_to_anat_transform = 'Rigid'
+    config.workflow.dwi2anat_dof = 6
     return config
 
 

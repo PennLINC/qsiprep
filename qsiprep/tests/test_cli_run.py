@@ -440,48 +440,6 @@ def test_prefer_dedicated_fmaps_is_removed(minimal_args, capsys):
     assert 'unrecognized arguments: --prefer-dedicated-fmaps' in capsys.readouterr().err
 
 
-@pytest.mark.parametrize('value', ['Rigid', 'Affine'])
-def test_b0_to_t1w_transform_forwards_its_value(minimal_args, capsys, value):
-    """The renamed option keeps working, and sets the new one."""
-    from qsiprep.cli.parser import _build_parser
-
-    opts = _build_parser().parse_args([*minimal_args, '--b0-to-t1w-transform', value])
-
-    warning = capsys.readouterr().err
-    assert '--b0-to-t1w-transform' in warning
-    assert '--b0-to-anat-transform' in warning
-    assert opts.b0_to_anat_transform == value
-    assert not hasattr(opts, 'b0_to_t1w_transform')
-
-
-@pytest.mark.parametrize('value', ['Rigid', 'Affine'])
-def test_b0_to_anat_transform_is_not_deprecated(minimal_args, capsys, value):
-    from qsiprep.cli.parser import _build_parser
-
-    opts = _build_parser().parse_args([*minimal_args, '--b0-to-anat-transform', value])
-
-    assert capsys.readouterr().err == ''
-    assert opts.b0_to_anat_transform == value
-
-
-def test_b0_to_anat_transform_defaults_to_rigid(minimal_args):
-    from qsiprep.cli.parser import _build_parser
-
-    opts = _build_parser().parse_args(minimal_args)
-    assert opts.b0_to_anat_transform == 'Rigid'
-
-
-def test_b0_transform_options_are_mutually_exclusive(minimal_args, capsys):
-    """Both name the same setting, so giving both is ambiguous."""
-    from qsiprep.cli.parser import _build_parser
-
-    with pytest.raises(SystemExit):
-        _build_parser().parse_args(
-            [*minimal_args, '--b0-to-anat-transform', 'Rigid', '--b0-to-t1w-transform', 'Affine']
-        )
-    assert 'not allowed with' in capsys.readouterr().err
-
-
 def test_ignore_accepts_shims_and_fov(minimal_args):
     """The grouping honors both; they must be reachable from the CLI."""
     from qsiprep.cli.parser import _build_parser

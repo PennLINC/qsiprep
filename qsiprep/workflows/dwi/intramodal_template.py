@@ -18,7 +18,7 @@ from ...interfaces.ants import MultivariateTemplateConstruction2
 from ...interfaces.images import ExtractWM
 from ...interfaces.template_qc import TemplateQC
 from .hmc import init_b0_hmc_wf
-from .registration import init_b0_to_anat_registration_wf
+from .registration import DWI2ANAT_DOF_TO_TRANSFORM, init_b0_to_anat_registration_wf
 from .util import _list_squeeze
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -211,7 +211,7 @@ def init_intramodal_template_wf(
     # calculate dwi registration to T1w
     b0_coreg_wf = init_b0_to_anat_registration_wf(
         write_report=True,
-        transform_type=config.workflow.b0_to_anat_transform,
+        transform_type=DWI2ANAT_DOF_TO_TRANSFORM[config.workflow.dwi2anat_dof],
     )
     workflow.connect([
         (inputnode, b0_coreg_wf, [

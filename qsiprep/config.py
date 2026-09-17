@@ -565,9 +565,8 @@ class workflow(_Config):
     """Anatomical template to use. This field doesn't include the cohort."""
     b0_threshold = None
     """Any value in the .bval file less than this will be considered a b=0 image."""
-    b0_to_anat_transform = None
-    """Transformation model for b=0-to-anatomical coregistration. Either 'Rigid' or
-    'Affine'."""
+    dwi2anat_dof = None
+    """Degrees of freedom for DWI-to-anatomical coregistration: 6 or 12."""
     anat_biascorrect = None
     """Whether to N4-correct anatomicals: ``n4``, ``auto`` or ``none``."""
     dmri_biascorrect = None

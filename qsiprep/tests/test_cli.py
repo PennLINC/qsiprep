@@ -1427,3 +1427,23 @@ def test_dmri_biascorrect_replaces_b1_biascorrect_stage(tmp_path):
     for removed in (['--b1-biascorrect-stage', 'none'], ['--dwi-no-biascorr']):
         with pytest.raises(SystemExit):
             parser.parse_args([*base, *removed])
+
+
+def test_dwi2anat_dof_replaces_b0_to_anat_transform(tmp_path):
+    """The option changed name, type and spelling of its values."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    base = _cli_base(tmp_path)
+
+    assert parser.parse_args([*base, '--dwi2anat-dof', '12']).dwi2anat_dof == 12
+    assert parser.parse_args(base).dwi2anat_dof == 6
+
+    # 9 is deliberately not offered: antsRegistration has no 9-DOF transform.
+    for bad in (
+        ['--dwi2anat-dof', '9'],
+        ['--b0-to-anat-transform', 'Rigid'],
+        ['--b0-to-t1w-transform', 'Rigid'],
+    ):
+        with pytest.raises(SystemExit):
+            parser.parse_args([*base, *bad])

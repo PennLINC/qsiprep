@@ -28,10 +28,11 @@ from .fsl import init_fsl_hmc_wf
 from .gradwarp import describe_gradient_correction, init_gradwarp_wf
 from .hmc_sdc import init_qsiprep_hmcsdc_wf
 from .pre_hmc import init_dwi_pre_hmc_wf
-from .registration import init_b0_to_anat_registration_wf, init_direct_b0_acpc_wf
+from .registration import DWI2ANAT_DOF_TO_TRANSFORM, init_b0_to_anat_registration_wf, init_direct_b0_acpc_wf
 from .util import _create_mem_gb, _get_wf_name
 
 DEFAULT_MEMORY_MIN_GB = 0.01
+
 
 
 def _t2wreg_target(unit, t2w_sdc):
@@ -366,7 +367,7 @@ def init_dwi_preproc_wf(
         # calculate dwi registration to T1w
         b0_coreg_wf = init_b0_to_anat_registration_wf(
             write_report=True,
-            transform_type=config.workflow.b0_to_anat_transform,
+            transform_type=DWI2ANAT_DOF_TO_TRANSFORM[config.workflow.dwi2anat_dof],
         )
     else:
         b0_coreg_wf = init_direct_b0_acpc_wf(write_report=True)
@@ -486,7 +487,7 @@ def init_dwi_preproc_wf(
                 if config.workflow.hmc_method == 'shoreline'
                 else config.workflow.hmc_method
             ),
-            b0_to_anat_transform=config.workflow.b0_to_anat_transform,
+            dwi2anat_dof=config.workflow.dwi2anat_dof,
             dmri_biascorrect=config.workflow.dmri_biascorrect,
             dmri_biascorrect_applied=do_biascorr,
             denoise_method=config.workflow.denoise_method,

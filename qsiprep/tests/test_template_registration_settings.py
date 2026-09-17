@@ -113,7 +113,7 @@ def _config(**overrides):
     config.workflow.b0_threshold = 100
     config.workflow.hmc_transform = 'Rigid'
     config.workflow.hmc_method = 'tortoise'
-    config.workflow.b0_to_anat_transform = 'Rigid'
+    config.workflow.dwi2anat_dof = 6
     for key, value in overrides.items():
         setattr(config.workflow, key, value)
     return config

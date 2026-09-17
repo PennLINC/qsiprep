@@ -57,7 +57,7 @@ DIFFUSION_TEMPLATE = """{dmri_biascorrect_warning}\t\t<h3 class="elem-title">Sum
 \t\t<ul class="elem-desc">
 \t\t\t<li>Phase-encoding (PE) direction: {pedir}</li>
 \t\t\t<li>Susceptibility distortion correction: {sdc}</li>
-\t\t\t<li>Coregistration Transform: {coregistration}</li>
+\t\t\t<li>Coregistration DOF: {coregistration}</li>
 \t\t\t<li>DWI bias correction: {dmri_biascorrect}</li>
 \t\t\t<li>Denoising Method: {denoise_method}</li>
 \t\t\t<li>Denoising Window: {denoise_window}</li>
@@ -235,7 +235,7 @@ class DiffusionSummaryInputSpec(BaseInterfaceInputSpec):
     impute_slice_threshold = traits.CFloat(desc='threshold for imputing a slice')
     hmc_transform = traits.Str(desc='transform optimized during HMC (SHORELine runs only)')
     hmc_model = traits.Str(desc='model used for hmc')
-    b0_to_anat_transform = traits.Enum('Rigid', 'Affine', desc='Transform type for coregistration')
+    dwi2anat_dof = traits.Enum(6, 12, desc='Degrees of freedom for coregistration')
     dmri_biascorrect = traits.Enum(
         'n4', 'auto', 'none', desc='--dmri-biascorrect mode requested'
     )
@@ -294,7 +294,7 @@ class DiffusionSummary(SummaryInterface):
             dmri_biascorrect_warning=biascorrect_warning,
             pedir=pedir,
             sdc=self.inputs.distortion_correction,
-            coregistration=self.inputs.b0_to_anat_transform,
+            coregistration=self.inputs.dwi2anat_dof,
             hmc_transform_line=hmc_transform_line,
             hmc_model=self.inputs.hmc_model,
             denoise_method=self.inputs.denoise_method,
