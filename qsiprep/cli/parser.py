@@ -55,17 +55,12 @@ def _build_parser(**kwargs):
 
     # Deprecated options: {option string: (version it is removed in, what happens instead)}
     deprecations = {
-        '--dwi-only': ('27.0.0', 'Enabling `--anat-modality none` instead.'),
-        '--dwi-no-biascorr': ('27.0.0', 'Enabling `--b1-biascorrect-stage none` instead.'),
         '--b0-to-t1w-transform': ('27.0.0', 'Please use `--b0-to-anat-transform` instead.'),
     }
 
     # Deprecated flags that enable their replacement automatically:
     # {option string: (replacement option, its namespace attribute, the value it is set to)}
-    forwarded_deprecations = {
-        '--dwi-only': ('--anat-modality', 'anat_modality', 'none'),
-        '--dwi-no-biascorr': ('--b1-biascorrect-stage', 'b1_biascorrect_stage', 'none'),
-    }
+    forwarded_deprecations = {}
 
     def _warn_deprecated(option_string):
         removed_in, detail = deprecations[option_string]
