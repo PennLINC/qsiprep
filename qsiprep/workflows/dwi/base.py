@@ -487,6 +487,8 @@ def init_dwi_preproc_wf(
                 else config.workflow.hmc_method
             ),
             b0_to_anat_transform=config.workflow.b0_to_anat_transform,
+            dmri_biascorrect=config.workflow.dmri_biascorrect,
+            dmri_biascorrect_applied=do_biascorr,
             denoise_method=config.workflow.denoise_method,
             dwi_denoise_window=config.workflow.dwi_denoise_window,
             gradient_correction=describe_gradient_correction(

@@ -493,3 +493,36 @@ def test_diffusion_summary_shows_hmc_transform_when_given():
     segment = _diffusion_summary(hmc_model='3dSHORE', hmc_transform='Rigid')._generate_segment()
     assert '<li>HMC Transform: Rigid</li>' in segment
     assert 'HMC Model: 3dSHORE' in segment
+
+
+def test_diffusion_summary_warns_only_under_dmri_biascorrect_auto():
+    """`auto` is a heuristic over metadata, so the report says so.
+
+    How well the ImageType check generalises across vendors and sequences is not
+    established, so a run that let it decide carries a warning box. An explicit
+    n4/none run does not.
+    """
+    for mode in ('n4', 'none'):
+        segment = _diffusion_summary(
+            dmri_biascorrect=mode, dmri_biascorrect_applied=(mode == 'n4')
+        )._generate_segment()
+        assert 'alert-warning' not in segment
+
+    segment = _diffusion_summary(
+        dmri_biascorrect='auto', dmri_biascorrect_applied=False
+    )._generate_segment()
+    assert 'alert-warning' in segment
+
+
+def test_diffusion_summary_reports_the_resolved_biascorrect_outcome():
+    """Under `auto` the mode alone cannot say whether N4 ran, so state the outcome."""
+    applied = _diffusion_summary(
+        dmri_biascorrect='auto', dmri_biascorrect_applied=True
+    )._generate_segment()
+    skipped = _diffusion_summary(
+        dmri_biascorrect='auto', dmri_biascorrect_applied=False
+    )._generate_segment()
+
+    assert 'applied' in applied
+    assert 'skipped' in skipped
+    assert applied != skipped

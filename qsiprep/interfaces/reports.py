@@ -53,11 +53,12 @@ SUBJECT_SESSION_ANAT_TEMPLATE = """\t<ul class="elem-desc">
 \t</ul>
 """
 
-DIFFUSION_TEMPLATE = """\t\t<h3 class="elem-title">Summary</h3>
+DIFFUSION_TEMPLATE = """{dmri_biascorrect_warning}\t\t<h3 class="elem-title">Summary</h3>
 \t\t<ul class="elem-desc">
 \t\t\t<li>Phase-encoding (PE) direction: {pedir}</li>
 \t\t\t<li>Susceptibility distortion correction: {sdc}</li>
 \t\t\t<li>Coregistration Transform: {coregistration}</li>
+\t\t\t<li>DWI bias correction: {dmri_biascorrect}</li>
 \t\t\t<li>Denoising Method: {denoise_method}</li>
 \t\t\t<li>Denoising Window: {denoise_window}</li>
 {hmc_transform_line}\t\t\t<li>HMC Model: {hmc_model}</li>
@@ -87,6 +88,15 @@ GROUPING_TEMPLATE = """\t<ul>
 \t\t<li>Output Name: {output_name}</li>
 {input_files}
 </ul>
+"""
+
+DMRI_BIASCORRECT_AUTO_WARNING = """\t\t<div class="alert alert-warning" role="alert">
+\t\t\t<strong>Automatic bias-correction decision.</strong>
+\t\t\tThis run used <code>--dmri-biascorrect auto</code>, which decides whether to run
+\t\t\tN4 from the BIDS <code>ImageType</code> metadata. How well that check generalizes
+\t\t\tacross vendors and sequences is not established. Confirm the decision below
+\t\t\tmatches your expectation for this data.
+\t\t</div>
 """
 
 MRTRIX_DEV_WARNING = """\t<div class="alert alert-warning" role="alert">
@@ -226,6 +236,10 @@ class DiffusionSummaryInputSpec(BaseInterfaceInputSpec):
     hmc_transform = traits.Str(desc='transform optimized during HMC (SHORELine runs only)')
     hmc_model = traits.Str(desc='model used for hmc')
     b0_to_anat_transform = traits.Enum('Rigid', 'Affine', desc='Transform type for coregistration')
+    dmri_biascorrect = traits.Enum(
+        'n4', 'auto', 'none', desc='--dmri-biascorrect mode requested'
+    )
+    dmri_biascorrect_applied = traits.Bool(desc='whether N4 actually ran for this output')
     denoise_method = traits.Str(desc='method used for image denoising')
     dwi_denoise_window = traits.Either(
         traits.Int(), traits.Str(), desc='window size for dwidenoise'
@@ -264,7 +278,20 @@ class DiffusionSummary(SummaryInterface):
         if isdefined(self.inputs.hmc_transform):
             hmc_transform_line = f'\t\t\t<li>HMC Transform: {self.inputs.hmc_transform}</li>\n'
 
+        biascorrect = ''
+        biascorrect_warning = ''
+        if isdefined(self.inputs.dmri_biascorrect):
+            biascorrect = self.inputs.dmri_biascorrect
+            if biascorrect == 'auto':
+                biascorrect_warning = DMRI_BIASCORRECT_AUTO_WARNING
+            if isdefined(self.inputs.dmri_biascorrect_applied):
+                # Under `auto` the mode alone does not say whether N4 ran.
+                outcome = 'applied' if self.inputs.dmri_biascorrect_applied else 'skipped'
+                biascorrect = f'{biascorrect} ({outcome})'
+
         return DIFFUSION_TEMPLATE.format(
+            dmri_biascorrect=biascorrect,
+            dmri_biascorrect_warning=biascorrect_warning,
             pedir=pedir,
             sdc=self.inputs.distortion_correction,
             coregistration=self.inputs.b0_to_anat_transform,
