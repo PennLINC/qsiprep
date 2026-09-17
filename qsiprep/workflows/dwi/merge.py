@@ -134,8 +134,7 @@ def init_merge_and_denoise_wf(
         desc.append(
             'A total of %d DWI series in the %s distortion group were '
             'concatenated, with preprocessing operations performed on individual '
-            'DWI series before concatenation.'
-            % (num_dwis, phase_id)
+            'DWI series before concatenation.' % (num_dwis, phase_id)
         )
     workflow.__desc__ = ' '.join(desc)
     conformed_bvals = pe.Node(niu.Merge(num_dwis), name='conformed_bvals')
