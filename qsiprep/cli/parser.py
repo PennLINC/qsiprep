@@ -58,7 +58,6 @@ def _build_parser(**kwargs):
     # Deprecated options: {option string: (version it is removed in, what happens instead)}
     deprecations = {
         '--dwi-only': ('27.0.0', 'Enabling `--anat-modality none` instead.'),
-        '--dwi-no-biascorr': ('27.0.0', 'Enabling `--b1-biascorrect-stage none` instead.'),
         '--b0-to-t1w-transform': ('27.0.0', 'Please use `--b0-to-anat-transform` instead.'),
     }
 
@@ -66,7 +65,6 @@ def _build_parser(**kwargs):
     # {option string: (replacement option, its namespace attribute, the value it is set to)}
     forwarded_deprecations = {
         '--dwi-only': ('--anat-modality', 'anat_modality', 'none'),
-        '--dwi-no-biascorr': ('--b1-biascorrect-stage', 'b1_biascorrect_stage', 'none'),
     }
 
     def _warn_deprecated(option_string):
@@ -644,19 +642,13 @@ def _build_parser(**kwargs):
         ' Fourier acquisitions (default: none).',
     )
     g_conf.add_argument(
-        '--dwi-no-biascorr',
-        action=DeprecatedForwardAction,
-        default=SUPPRESS,
-        help='DEPRECATED: this flag now enables `--b1-biascorrect-stage none`. Use that instead.',
-    )
-    g_conf.add_argument(
         '--anat-biascorrect',
         action='store',
         choices=['n4', 'auto', 'none'],
         default='n4',
         help=(
             'Whether to run N4 bias field correction on ANATOMICAL images. '
-            'Note this is separate from --b1-biascorrect-stage, which only governs '
+            'Note this is separate from --dmri-biascorrect, which only governs '
             'the DWIs. '
             '"n4" (default) always runs it; scanner-side intensity normalization '
             '(e.g. Siemens NORM) does not remove the need for it. '
@@ -666,18 +658,21 @@ def _build_parser(**kwargs):
         ),
     )
     g_conf.add_argument(
-        '--b1-biascorrect-stage',
+        '--dmri-biascorrect',
         action='store',
-        choices=['final', 'none', 'legacy'],
-        default='final',
+        choices=['n4', 'auto', 'none'],
+        default='n4',
         help=(
-            'Which stage to apply B1 bias correction. '
-            'The default "final" will apply it after all the data has been resampled '
-            'to its final space. '
-            '"none" will skip B1 bias correction and '
-            '"legacy" will behave consistent with qsiprep < 0.17. '
-            'For prescan-normalized data, we recommend using "none", '
-            'as bias correction may introduce artifacts on normalized data.'
+            'Whether to run N4 bias field correction on the DWIs, after all data '
+            'has been resampled to its final space. '
+            'Note this is separate from --anat-biascorrect, which only governs '
+            'the anatomicals. '
+            '"n4" (default) always runs it. '
+            '"none" never runs it; for prescan-normalized data we recommend this, '
+            'as bias correction may introduce artifacts on normalized data. '
+            '"auto" skips it when the BIDS ImageType metadata of every DWI '
+            'contains "NORM", which is how Siemens and others flag '
+            'console-applied normalization.'
         ),
     )
     g_conf.add_argument(

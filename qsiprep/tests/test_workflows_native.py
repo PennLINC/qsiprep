@@ -64,7 +64,7 @@ def _cfg(hmc_method='eddy', sdc_method='topup', layout=None):
     config.workflow.sdc_method = sdc_method
     config.workflow.shoreline_model = None
     config.workflow.b0_threshold = 100
-    config.workflow.b1_biascorrect_stage = 'final'
+    config.workflow.dmri_biascorrect = 'n4'
     config.workflow.eddy_config = None
     config.workflow.no_b0_harmonization = False
     config.workflow.denoise_method = 'dwidenoise'

@@ -366,7 +366,6 @@ def _dest(option):
 # (deprecated flag, the option it enables, the value that option is set to)
 FORWARDED_FLAGS = [
     ('--dwi-only', '--anat-modality', 'none'),
-    ('--dwi-no-biascorr', '--b1-biascorrect-stage', 'none'),
 ]
 
 
@@ -411,7 +410,6 @@ def test_forwarded_flag_conflicting_with_its_replacement_is_an_error(
     other = {
         'anat_modality': 'T2w',
         'subject_anatomical_reference': 'sessionwise',
-        'b1_biascorrect_stage': 'legacy',
     }[_dest(option)]
 
     for extra_args in ([flag, option, other], [option, other, flag]):

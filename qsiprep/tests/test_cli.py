@@ -142,7 +142,7 @@ def test_cuda(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dmri-biascorrect=none',
         '--sdc-method=drbuddi',
         f'--eddy-config={eddy_config}',
         '--output-resolution=5',
@@ -187,7 +187,7 @@ def test_drbuddi_rpe(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dmri-biascorrect=none',
         '--sdc-method=drbuddi',
         # The dataset ships epi fieldmaps whose IntendedFor points at the DWIs,
         # so the modern grouping would correct each DWI with its own epi fmap
@@ -230,7 +230,7 @@ def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dmri-biascorrect=none',
         '--hmc-method=shoreline',
         f'--shoreline-config={shoreline_config}',
         '--sdc-method=drbuddi',
@@ -267,7 +267,7 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dmri-biascorrect=none',
         '--hmc-method=shoreline',
         f'--shoreline-config={shoreline_config}',
         '--sdc-method=drbuddi',
@@ -313,7 +313,7 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
         '--sloppy',
         '--write-graph',
         '--sdc-anat-reference=invt1w',
-        '--b1-biascorrect-stage=none',
+        '--dmri-biascorrect=none',
         '--hmc-method=shoreline',
         f'--shoreline-config={shoreline_config}',
         '--output-resolution=5',
@@ -352,7 +352,7 @@ def test_diffprep(data_dir, output_dir, working_dir):
         'participant',
         f'-w={work_dir}',
         '--sloppy',
-        '--b1-biascorrect-stage=none',
+        '--dmri-biascorrect=none',
         '--hmc-method=tortoise',
         '--output-resolution=5',
     ]
@@ -397,7 +397,7 @@ def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dmri-biascorrect=none',
         '--hmc-method=tortoise',
         '--sdc-method=drbuddi',
         '--output-resolution=2',
@@ -444,7 +444,7 @@ def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dmri-biascorrect=none',
         '--hmc-method=tortoise',
         '--sdc-method=drbuddi',
         '--output-resolution=5',
@@ -502,7 +502,7 @@ def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dmri-biascorrect=none',
         '--hmc-method=tortoise',
         '--sdc-method=drbuddi',
         '--output-resolution=5',
@@ -548,7 +548,7 @@ def test_dsdti_nofmap(data_dir, output_dir, working_dir):
         f'--eddy-config={eddy_config}',
         '--denoise-method=none',
         '--unringing-method=rpg',
-        '--b1-biascorrect-stage=none',
+        '--dmri-biascorrect=none',
         '--output-resolution=5',
     ]
 
@@ -597,7 +597,7 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
         '--ignore',
         'fieldmaps',
         '--sdc-anat-reference=invt1w',
-        '--b1-biascorrect-stage=final',
+        '--dmri-biascorrect=final',
         '--output-resolution=5',
     ]
 
@@ -635,7 +635,7 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
         'participant',
         f'-w={work_dir}',
         '--sloppy',
-        '--b1-biascorrect-stage=none',
+        '--dmri-biascorrect=none',
         '--hmc-method=shoreline',
         f'--shoreline-config={shoreline_config}',
         '--output-resolution=5',
@@ -756,7 +756,7 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--sloppy',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dmri-biascorrect=none',
         '--write-graph',
         '--output-resolution=5',
         '--hmc-method=shoreline',
@@ -793,7 +793,7 @@ def test_forrest_gump(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--sloppy',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dmri-biascorrect=none',
         '--write-graph',
         '--output-resolution=5',
         f'--bids-filter-file={bids_filter}',
@@ -829,7 +829,7 @@ def test_forrest_gump_patch2self(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--sloppy',
         '--denoise-method=patch2self',
-        '--b1-biascorrect-stage=none',
+        '--dmri-biascorrect=none',
         '--write-graph',
         '--output-resolution=5',
         f'--bids-filter-file={bids_filter}',
@@ -1390,3 +1390,40 @@ def test_parser_rejects_unknown_mrtrix_version(tmp_path):
                 '2',
             ]
         )
+
+
+def _cli_base(tmp_path):
+    """Minimal valid positional args for the parser.
+
+    ``bids_dir`` goes through ``_path_exists`` (``qsiprep/cli/parser.py``), which
+    calls ``parser.error`` when the directory is missing -- so both directories
+    must exist, or a test asserting ``SystemExit`` passes because the path was
+    invalid rather than because the option under test was removed.
+    """
+    bids_dir = tmp_path / 'bids'
+    bids_dir.mkdir()
+    out_dir = tmp_path / 'out'
+    out_dir.mkdir()
+    return [str(bids_dir), str(out_dir), 'participant', '--output-resolution', '2.0']
+
+
+def test_cli_base_is_itself_valid(tmp_path):
+    """Guard the guard: every option test below is meaningless if this fails."""
+    from qsiprep.cli.parser import _build_parser
+
+    _build_parser().parse_args(_cli_base(tmp_path))
+
+
+def test_dmri_biascorrect_replaces_b1_biascorrect_stage(tmp_path):
+    """The old options are gone outright; the new one parses."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    base = _cli_base(tmp_path)
+
+    assert parser.parse_args([*base, '--dmri-biascorrect', 'auto']).dmri_biascorrect == 'auto'
+    assert parser.parse_args(base).dmri_biascorrect == 'n4'
+
+    for removed in (['--b1-biascorrect-stage', 'none'], ['--dwi-no-biascorr']):
+        with pytest.raises(SystemExit):
+            parser.parse_args([*base, *removed])
