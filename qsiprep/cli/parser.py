@@ -821,28 +821,18 @@ def _build_parser(**kwargs):
         description="Alignment of the DWI reference to the subject's anatomical space.",
     )
     g_coreg.add_argument(
-        '--dwi2anat-dof',
-        action='store',
-        type=int,
-        choices=[6, 12],
-        default=6,
-        help=(
-            'Degrees of freedom when registering the DWI reference to the '
-            'anatomical images: 6 (rigid: rotation and translation) or 12 (affine). '
-            '(default: 6)'
-        ),
-    )
-    g_coreg.add_argument(
         '--dwiref-definition',
         action='store',
         choices=['distortion-group', 'subject'],
         default='distortion-group',
-        help='Which reference image DWI-to-anatomical coregistration targets. '
-        '"distortion-group" (default) registers each distortion group\'s own b=0 '
-        'reference to the anatomical. "subject" builds a single midpoint template '
-        "from every group's reference, registers that once, and has every group "
-        'inherit the result, which makes preprocessed data directly comparable '
-        'across groups.',
+        help=(
+            'Which reference image DWI-to-anatomical coregistration targets. '
+            '"distortion-group" (default) registers each distortion group\'s own b=0 '
+            'reference to the anatomical. "subject" builds a single midpoint template '
+            "from every group's reference, registers that once, and has every group "
+            'inherit the result, which makes preprocessed data directly comparable '
+            'across groups.'
+        ),
     )
     g_coreg.add_argument(
         '--dwiref-construction-iters',
@@ -862,6 +852,18 @@ def _build_parser(**kwargs):
         choices=['Rigid', 'Affine', 'BSplineSyN', 'SyN'],
         action='store',
         help='Transformation used for building the dwiref template.',
+    )
+    g_coreg.add_argument(
+        '--dwi2anat-dof',
+        action='store',
+        type=int,
+        choices=[6, 12],
+        default=6,
+        help=(
+            'Degrees of freedom when registering the DWI reference to the '
+            'anatomical images: 6 (rigid: rotation and translation) or 12 (affine). '
+            '(default: 6)'
+        ),
     )
 
     g_resource = parser.add_argument_group(
