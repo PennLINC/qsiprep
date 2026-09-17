@@ -608,7 +608,7 @@ def _build_parser(**kwargs):
         action='store',
         type=IntOrAuto,
         default='auto',
-        metavar='N',
+        metavar='{auto,N}',
         help=(
             'Window size in voxels for image-based denoising: either an odd positive '
             'integer or "auto". '
