@@ -53,7 +53,7 @@ SUBJECT_SESSION_ANAT_TEMPLATE = """\t<ul class="elem-desc">
 \t</ul>
 """
 
-DIFFUSION_TEMPLATE = """{dmri_biascorrect_warning}\t\t<h3 class="elem-title">Summary</h3>
+DIFFUSION_TEMPLATE = """{dwi_biascorrect_warning}\t\t<h3 class="elem-title">Summary</h3>
 \t\t<ul class="elem-desc">
 \t\t\t<li>Phase-encoding (PE) direction: {pedir}</li>
 \t\t\t<li>Susceptibility distortion correction: {sdc}</li>
@@ -90,7 +90,7 @@ GROUPING_TEMPLATE = """\t<ul>
 </ul>
 """
 
-DMRI_BIASCORRECT_AUTO_WARNING = """\t\t<div class="alert alert-warning" role="alert">
+DWI_BIASCORRECT_AUTO_WARNING = """\t\t<div class="alert alert-warning" role="alert">
 \t\t\t<strong>Automatic bias-correction decision.</strong>
 \t\t\tThis run used <code>--dwi-biascorrect auto</code>, which decides whether to run
 \t\t\tN4 from the BIDS <code>ImageType</code> metadata. How well that check generalizes
@@ -237,7 +237,7 @@ class DiffusionSummaryInputSpec(BaseInterfaceInputSpec):
     hmc_model = traits.Str(desc='model used for hmc')
     dwi2anat_dof = traits.Enum(6, 12, desc='Degrees of freedom for coregistration')
     dwi_biascorrect = traits.Enum('n4', 'auto', 'none', desc='--dwi-biascorrect mode requested')
-    dmri_biascorrect_applied = traits.Bool(desc='whether N4 actually ran for this output')
+    dwi_biascorrect_applied = traits.Bool(desc='whether N4 actually ran for this output')
     denoise_method = traits.Str(desc='method used for image denoising')
     dwi_denoise_window = traits.Either(
         traits.Int(), traits.Str(), desc='window size for dwidenoise'
@@ -281,15 +281,15 @@ class DiffusionSummary(SummaryInterface):
         if isdefined(self.inputs.dwi_biascorrect):
             biascorrect = self.inputs.dwi_biascorrect
             if biascorrect == 'auto':
-                biascorrect_warning = DMRI_BIASCORRECT_AUTO_WARNING
-            if isdefined(self.inputs.dmri_biascorrect_applied):
+                biascorrect_warning = DWI_BIASCORRECT_AUTO_WARNING
+            if isdefined(self.inputs.dwi_biascorrect_applied):
                 # Under `auto` the mode alone does not say whether N4 ran.
-                outcome = 'applied' if self.inputs.dmri_biascorrect_applied else 'skipped'
+                outcome = 'applied' if self.inputs.dwi_biascorrect_applied else 'skipped'
                 biascorrect = f'{biascorrect} ({outcome})'
 
         return DIFFUSION_TEMPLATE.format(
             dwi_biascorrect=biascorrect,
-            dmri_biascorrect_warning=biascorrect_warning,
+            dwi_biascorrect_warning=biascorrect_warning,
             pedir=pedir,
             sdc=self.inputs.distortion_correction,
             coregistration=self.inputs.dwi2anat_dof,

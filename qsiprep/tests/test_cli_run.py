@@ -704,3 +704,177 @@ def test_t1w_derived_references_require_t1w_modality(minimal_args, capsys, refer
 def test_shoreline_selection_warns_of_removal(minimal_args, capsys):
     _parse(minimal_args, '--hmc-method', 'shoreline')
     assert 'scheduled for removal' in capsys.readouterr().err
+
+
+def test_parser_defaults_to_stable_mrtrix(tmp_path):
+    """Default to a released MRtrix3, so existing runs are unchanged."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    opts = parser.parse_args([str(bids), str(out), 'participant', '--output-resolution', '2'])
+    assert opts.mrtrix_version == 'stable'
+
+
+def test_parser_accepts_dev_mrtrix(tmp_path):
+    """``dev`` selects the development branch, which is what complex mrdegibbs needs."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    opts = parser.parse_args(
+        [
+            str(bids),
+            str(out),
+            'participant',
+            '--mrtrix-version',
+            'dev',
+            '--output-resolution',
+            '2',
+        ]
+    )
+    assert opts.mrtrix_version == 'dev'
+
+
+def test_parser_rejects_unknown_mrtrix_version(tmp_path):
+    """Reject version strings; the flag names installations, not releases."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                str(bids),
+                str(out),
+                'participant',
+                '--mrtrix-version',
+                '3.0.8',
+                '--output-resolution',
+                '2',
+            ]
+        )
+
+
+def _cli_base(tmp_path):
+    """Minimal valid positional args for the parser.
+
+    ``bids_dir`` goes through ``_path_exists`` (``qsiprep/cli/parser.py``), which
+    calls ``parser.error`` when the directory is missing -- so both directories
+    must exist, or a test asserting ``SystemExit`` passes because the path was
+    invalid rather than because the option under test was removed.
+    """
+    bids_dir = tmp_path / 'bids'
+    bids_dir.mkdir()
+    out_dir = tmp_path / 'out'
+    out_dir.mkdir()
+    return [str(bids_dir), str(out_dir), 'participant', '--output-resolution', '2.0']
+
+
+def test_cli_base_is_itself_valid(tmp_path):
+    """Guard the guard: every option test below is meaningless if this fails."""
+    from qsiprep.cli.parser import _build_parser
+
+    _build_parser().parse_args(_cli_base(tmp_path))
+
+
+def test_dwi_biascorrect_replaces_b1_biascorrect_stage(tmp_path):
+    """The old options are gone outright; the new one parses."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    base = _cli_base(tmp_path)
+
+    assert parser.parse_args([*base, '--dwi-biascorrect', 'auto']).dwi_biascorrect == 'auto'
+    assert parser.parse_args(base).dwi_biascorrect == 'n4'
+
+    for removed in (['--b1-biascorrect-stage', 'none'], ['--dwi-no-biascorr']):
+        with pytest.raises(SystemExit):
+            parser.parse_args([*base, *removed])
+
+
+def test_dwi2anat_dof_replaces_b0_to_anat_transform(tmp_path):
+    """The option changed name, type and spelling of its values."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    base = _cli_base(tmp_path)
+
+    assert parser.parse_args([*base, '--dwi2anat-dof', '12']).dwi2anat_dof == 12
+    assert parser.parse_args(base).dwi2anat_dof == 6
+
+    # 9 is deliberately not offered: antsRegistration has no 9-DOF transform.
+    for bad in (
+        ['--dwi2anat-dof', '9'],
+        ['--b0-to-anat-transform', 'Rigid'],
+        ['--b0-to-t1w-transform', 'Rigid'],
+    ):
+        with pytest.raises(SystemExit):
+            parser.parse_args([*base, *bad])
+
+
+def test_dwiref_construction_flags_replace_intramodal_template_flags(tmp_path):
+    """The old spellings are gone; the new ones parse."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    base = _cli_base(tmp_path)
+
+    args = parser.parse_args(
+        [*base, '--dwiref-construction-iters', '3', '--dwiref-construction-transform', 'Affine']
+    )
+    assert args.dwiref_construction_iters == 3
+    assert args.dwiref_construction_transform == 'Affine'
+
+    defaults = parser.parse_args(base)
+    # iters is a pure parameter now, defaulting to the value that reproduces the
+    # previous behaviour; --dwiref-definition is what toggles the feature.
+    assert defaults.dwiref_construction_iters == 2
+    assert defaults.dwiref_construction_transform == 'BSplineSyN'
+
+    for removed in (
+        ['--intramodal-template-iters', '2'],
+        ['--intramodal-template-transform', 'Affine'],
+    ):
+        with pytest.raises(SystemExit):
+            parser.parse_args([*base, *removed])
+
+
+def test_dwiref_definition_parses(tmp_path):
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    base = _cli_base(tmp_path)
+
+    assert parser.parse_args(base).dwiref_definition == 'distortion-group'
+    subject = parser.parse_args([*base, '--dwiref-definition', 'subject'])
+    assert subject.dwiref_definition == 'subject'
+
+    # `session` is the deferred remainder of #1114.
+    with pytest.raises(SystemExit):
+        parser.parse_args([*base, '--dwiref-definition', 'session'])
+
+
+def test_dwiref_construction_iters_defaults_to_two(tmp_path):
+    from qsiprep.cli.parser import _build_parser
+
+    assert _build_parser().parse_args(_cli_base(tmp_path)).dwiref_construction_iters == 2
+
+
+@pytest.mark.parametrize('bad', ['0', '1', '-1'])
+def test_dwiref_construction_iters_rejects_values_below_two(tmp_path, bad):
+    """The nonlinear branch passes iters straight to mvtc2 with no floor of its own.
+
+    Only the linear branch clamps, so once iters stops being the feature toggle an
+    unvalidated 0 or negative would reach antsMultivariateTemplateConstruction2.
+    """
+    from qsiprep.cli.parser import _build_parser
+
+    with pytest.raises(SystemExit):
+        _build_parser().parse_args([*_cli_base(tmp_path), '--dwiref-construction-iters', bad])

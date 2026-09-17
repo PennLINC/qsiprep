@@ -3,7 +3,7 @@
 from ... import config
 
 
-def dmri_biascorrect_enabled(dwi_files=None):
+def dwi_biascorrect_enabled(dwi_files=None):
     """Should N4 bias correction run on these DWI images?
 
     ``--dwi-biascorrect`` governs DWIs only; ``--anat-biascorrect`` governs the

@@ -495,7 +495,7 @@ def test_diffusion_summary_shows_hmc_transform_when_given():
     assert 'HMC Model: 3dSHORE' in segment
 
 
-def test_diffusion_summary_warns_only_under_dmri_biascorrect_auto():
+def test_diffusion_summary_warns_only_under_dwi_biascorrect_auto():
     """`auto` is a heuristic over metadata, so the report says so.
 
     How well the ImageType check generalises across vendors and sequences is not
@@ -504,12 +504,12 @@ def test_diffusion_summary_warns_only_under_dmri_biascorrect_auto():
     """
     for mode in ('n4', 'none'):
         segment = _diffusion_summary(
-            dwi_biascorrect=mode, dmri_biascorrect_applied=(mode == 'n4')
+            dwi_biascorrect=mode, dwi_biascorrect_applied=(mode == 'n4')
         )._generate_segment()
         assert 'alert-warning' not in segment
 
     segment = _diffusion_summary(
-        dwi_biascorrect='auto', dmri_biascorrect_applied=False
+        dwi_biascorrect='auto', dwi_biascorrect_applied=False
     )._generate_segment()
     assert 'alert-warning' in segment
 
@@ -517,10 +517,10 @@ def test_diffusion_summary_warns_only_under_dmri_biascorrect_auto():
 def test_diffusion_summary_reports_the_resolved_biascorrect_outcome():
     """Under `auto` the mode alone cannot say whether N4 ran, so state the outcome."""
     applied = _diffusion_summary(
-        dwi_biascorrect='auto', dmri_biascorrect_applied=True
+        dwi_biascorrect='auto', dwi_biascorrect_applied=True
     )._generate_segment()
     skipped = _diffusion_summary(
-        dwi_biascorrect='auto', dmri_biascorrect_applied=False
+        dwi_biascorrect='auto', dwi_biascorrect_applied=False
     )._generate_segment()
 
     assert 'applied' in applied

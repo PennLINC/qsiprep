@@ -9,7 +9,7 @@ is a milder error than skipping it when it was needed.
 
 import pytest
 
-from qsiprep.workflows.dwi.biascorrect import dmri_biascorrect_enabled
+from qsiprep.workflows.dwi.biascorrect import dwi_biascorrect_enabled
 
 
 class _FakeLayout:
@@ -73,7 +73,7 @@ def _config(mode, layout=None):
 def test_explicit_modes_never_consult_metadata(mode, expected):
     """n4 and none are unconditional; a raising layout must not reach them."""
     _config(mode, _RaisingLayout(OSError('should never be read')))
-    assert dmri_biascorrect_enabled(['/a_dwi.nii.gz']) is expected
+    assert dwi_biascorrect_enabled(['/a_dwi.nii.gz']) is expected
 
 
 def test_auto_skips_when_every_file_is_norm():
@@ -81,7 +81,7 @@ def test_auto_skips_when_every_file_is_norm():
         'auto',
         _FakeLayout({'/a_dwi.nii.gz': ['ORIGINAL', 'NORM'], '/b_dwi.nii.gz': ['NORM']}),
     )
-    assert dmri_biascorrect_enabled(['/a_dwi.nii.gz', '/b_dwi.nii.gz']) is False
+    assert dwi_biascorrect_enabled(['/a_dwi.nii.gz', '/b_dwi.nii.gz']) is False
 
 
 def test_auto_runs_on_a_mixed_set_and_warns(caplog):
@@ -91,29 +91,29 @@ def test_auto_runs_on_a_mixed_set_and_warns(caplog):
         _FakeLayout({'/a_dwi.nii.gz': ['NORM'], '/b_dwi.nii.gz': ['ORIGINAL']}),
     )
     with caplog.at_level('WARNING', logger='nipype.workflow'):
-        assert dmri_biascorrect_enabled(['/a_dwi.nii.gz', '/b_dwi.nii.gz']) is True
+        assert dwi_biascorrect_enabled(['/a_dwi.nii.gz', '/b_dwi.nii.gz']) is True
     assert '1 of 2' in caplog.text
 
 
 def test_auto_treats_absent_image_type_as_unnormalized():
     """A missing ImageType key, not merely an empty list."""
     _config('auto', _FakeLayout({'/a_dwi.nii.gz': None}))
-    assert dmri_biascorrect_enabled(['/a_dwi.nii.gz']) is True
+    assert dwi_biascorrect_enabled(['/a_dwi.nii.gz']) is True
 
 
 @pytest.mark.parametrize('exc', [OSError('unreadable'), ValueError('bad'), KeyError('x')])
 def test_auto_treats_unreadable_metadata_as_unnormalized(exc):
     """A layout that raises must not take down the workflow build."""
     _config('auto', _RaisingLayout(exc))
-    assert dmri_biascorrect_enabled(['/a_dwi.nii.gz']) is True
+    assert dwi_biascorrect_enabled(['/a_dwi.nii.gz']) is True
 
 
 def test_auto_runs_without_a_layout():
     _config('auto', None)
-    assert dmri_biascorrect_enabled(['/a_dwi.nii.gz']) is True
+    assert dwi_biascorrect_enabled(['/a_dwi.nii.gz']) is True
 
 
 def test_auto_runs_with_no_files():
     _config('auto', _FakeLayout({}))
-    assert dmri_biascorrect_enabled([]) is True
-    assert dmri_biascorrect_enabled(None) is True
+    assert dwi_biascorrect_enabled([]) is True
+    assert dwi_biascorrect_enabled(None) is True

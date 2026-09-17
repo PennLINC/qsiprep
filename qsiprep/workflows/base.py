@@ -68,7 +68,7 @@ from ..utils.plan import method_selection_from_config
 from ..utils.sdc import t2w_available_for_sdc, t2w_sdc_enabled
 from .anatomical.volume import anat_biascorrect_enabled, init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
-from .dwi.biascorrect import dmri_biascorrect_enabled
+from .dwi.biascorrect import dwi_biascorrect_enabled
 from .dwi.distortion_group_merge import init_distortion_group_merge_wf
 from .dwi.finalize import init_dwi_finalize_wf
 from .dwi.intramodal_template import init_intramodal_template_wf
@@ -472,7 +472,7 @@ to workflows in *QSIPrep*'s documentation]\
     # merged series is concatenated, so it must be corrected consistently or not
     # at all. Deciding per unit would N4 one constituent and skip another.
     biascorr_by_output = {
-        destination: dmri_biascorrect_enabled(
+        destination: dwi_biascorrect_enabled(
             [path for name in subgroups for path in units_by_name[name].dwi_files]
         )
         for destination, subgroups in merged_to_subgroups.items()

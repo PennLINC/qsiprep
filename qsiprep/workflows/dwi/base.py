@@ -492,7 +492,7 @@ def init_dwi_preproc_wf(
             ),
             dwi2anat_dof=config.workflow.dwi2anat_dof,
             dwi_biascorrect=config.workflow.dwi_biascorrect,
-            dmri_biascorrect_applied=do_biascorr,
+            dwi_biascorrect_applied=do_biascorr,
             denoise_method=config.workflow.denoise_method,
             dwi_denoise_window=config.workflow.dwi_denoise_window,
             gradient_correction=describe_gradient_correction(
