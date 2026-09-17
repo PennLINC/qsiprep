@@ -126,6 +126,41 @@ def init_qsiprep_wf():
     return qsiprep_wf
 
 
+
+def check_output_names_are_bids_unique(preproc_units):
+    """Fail when two units' derivatives would render to the same BIDS path.
+
+    QSIPlan uniquifies same-named correction units with a ``+N`` suffix
+    (``_unique_id``), which is an in-memory key rather than a BIDS entity, so
+    ``sub-01`` and ``sub-01+2`` can parse identically and every per-unit
+    derivative of the second silently overwrites the first.
+
+    The check parses the same path the datasinks will, via ``get_source_file``,
+    because the subject and session entity patterns are path-anchored: a
+    synthetic probe directory gives a different -- and, under pybids >= 0.19,
+    wrongly permissive -- answer.
+
+    No rule about ``+`` is encoded. The installed pybids is asked what it
+    actually does, so this stays correct across the 0.19 entity-pattern change
+    and also catches collisions that have nothing to do with ``+``.
+    """
+    from bids.layout import parse_file_entities
+
+    seen = {}
+    for unit in preproc_units:
+        source_file = get_source_file(list(unit.dwi_files), unit.output_name, suffix='_dwi')
+        key = tuple(sorted(parse_file_entities(source_file).items()))
+        if key in seen:
+            raise RuntimeError(
+                f'Output names {seen[key]!r} and {unit.output_name!r} render to the '
+                f'same BIDS name ({key}), so their derivatives would overwrite each '
+                'other. This is usually QSIPlan\'s "+N" uniquifier reaching a '
+                'filename, where its distinguishing character is not a BIDS entity. '
+                'Please report the dataset.'
+            )
+        seen[key] = unit.output_name
+
+
 def init_single_subject_wf(subject_id: str, session_ids: list):
     """Organize the preprocessing pipeline for a single subject.
 
@@ -423,6 +458,9 @@ to workflows in *QSIPrep*'s documentation]\
     # so they always agree on the (possibly split) run names.
     preproc_units = plan_preproc_units(grouping, plan)
     concatenation_scheme = plan_concatenation_scheme(plan)
+
+    # Refuse to build anything that would overwrite its own outputs.
+    check_output_names_are_bids_unique(preproc_units)
 
     # Built unconditionally: the bias-correction decision needs them for every
     # output, merged or not. With no merging each output maps to a single unit.
