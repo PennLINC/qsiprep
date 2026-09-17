@@ -2,7 +2,7 @@
 
 Two defects:
 
-1. ``--intramodal-template-transform`` and ``--intramodal-template-iters`` were
+1. ``--dwiref-construction-transform`` and ``--dwiref-construction-iters`` were
    never passed to the workflow, so every template was BSplineSyN with 2
    iterations regardless of what the user asked for -- silently warping genuine
    between-session differences into agreement for anyone who chose a linear
@@ -93,7 +93,7 @@ def test_dwi_b0_alignment_does_not_initialize_by_com_by_default():
 
 
 def test_iteration_count_is_honoured():
-    """--intramodal-template-iters was ignored; the count was always 2."""
+    """--dwiref-construction-iters was ignored; the count was always 2."""
     wf = _build('BSplineSyN', num_iterations=5, name='iters_nonlinear')
     node = next(n for n in wf._get_all_nodes() if n.name == 'ants_mvtc2')
     assert node.inputs.iteration_limit == 5

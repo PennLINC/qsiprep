@@ -104,7 +104,7 @@ def test_single_group_subject_skips_the_template_instead_of_failing():
 
     Cohorts routinely mix single- and multi-session subjects: in CRASH, 24 of 59
     subjects have one session. Raising here meant a single
-    --intramodal-template-iters flag failed 41% of the dataset outright.
+    --dwiref-construction-iters flag failed 41% of the dataset outright.
     """
     import inspect
 

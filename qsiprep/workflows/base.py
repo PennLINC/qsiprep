@@ -482,7 +482,7 @@ to workflows in *QSIPrep*'s documentation]\
     }
 
     make_intramodal_template = False
-    if config.workflow.intramodal_template_iters > 0:
+    if config.workflow.dwiref_construction_iters > 0:
         if len(outputs_to_files) < 2:
             # Having one group is a normal condition, not a user error: a cohort
             # routinely mixes single- and multi-session subjects. Raising here
@@ -507,8 +507,8 @@ to workflows in *QSIPrep*'s documentation]\
         intramodal_template_wf = init_intramodal_template_wf(
             inputs_list=sorted(outputs_to_files.keys()),
             t1w_source_file=anat_source_file,
-            transform=config.workflow.intramodal_template_transform,
-            num_iterations=config.workflow.intramodal_template_iters or 2,
+            transform=config.workflow.dwiref_construction_transform,
+            num_iterations=config.workflow.dwiref_construction_iters or 2,
             name='intramodal_template_wf',
         )
         workflow.connect([
@@ -573,7 +573,7 @@ to workflows in *QSIPrep*'s documentation]\
         # for linear templates: mvtc2 exposes no per-input aligned images, and its
         # per-group transform is an [affine, warp] pair that does not fit a
         # single-file .mat sink.
-        intramodal_linear = config.workflow.intramodal_template_transform in ('Rigid', 'Affine')
+        intramodal_linear = config.workflow.dwiref_construction_transform in ('Rigid', 'Affine')
         if intramodal_linear:
             ds_template_qc = pe.Node(
                 DerivativesDataSink(

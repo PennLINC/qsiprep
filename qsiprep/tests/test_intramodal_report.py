@@ -12,7 +12,7 @@ def _config():
 
     config.execution.sloppy = False
     config.nipype.omp_nthreads = 1
-    config.workflow.intramodal_template_iters = 2
+    config.workflow.dwiref_construction_iters = 2
     config.workflow.dwi2anat_dof = 6
     return config
 

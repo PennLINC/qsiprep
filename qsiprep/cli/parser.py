@@ -710,7 +710,7 @@ How to combine the corrected results of an output's correction units.
         '(default: 6)',
     )
     g_coreg.add_argument(
-        '--intramodal-template-iters',
+        '--dwiref-construction-iters',
         action='store',
         default=0,
         type=int,
@@ -719,17 +719,17 @@ How to combine the corrected results of an output's correction units.
             'from the b0 templates from all DWI runs and sessions. '
             'Has no effect if there is only one group. '
             'If 0, all b0 templates are directly registered to the t1w image. '
-            'Enabling the intramodal template method when there are multiple runs/sessions '
+            'Enabling the dwiref template method when there are multiple runs/sessions '
             'results in a single DWI reference image, which makes it possible to '
             'directly compare AC-PC-space preprocessed DWI data across groups.'
         ),
     )
     g_coreg.add_argument(
-        '--intramodal-template-transform',
+        '--dwiref-construction-transform',
         default='BSplineSyN',
         choices=['Rigid', 'Affine', 'BSplineSyN', 'SyN'],
         action='store',
-        help='Transformation used for building the intramodal template.',
+        help='Transformation used for building the dwiref template.',
     )
 
     # FreeSurfer options

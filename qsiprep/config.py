@@ -605,10 +605,10 @@ class workflow(_Config):
     """Ignore particular steps for *QSIPrep*."""
     infant = False
     """Configure pipelines specifically for infant brains"""
-    intramodal_template_iters = None
-    """Number of iterations for intramodal template construction."""
-    intramodal_template_transform = None
-    """Transformation used for building the intramodal template."""
+    dwiref_construction_iters = None
+    """Number of iterations for dwiref template construction."""
+    dwiref_construction_transform = None
+    """Transformation used for building the dwiref template."""
     mrtrix_version = 'stable'
     """Which MRtrix3 installation to use: "stable" (a released version) or "dev"
     (the development branch, which is required for complex-valued ``mrdegibbs``)."""

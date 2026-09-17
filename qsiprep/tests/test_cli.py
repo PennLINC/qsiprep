@@ -639,8 +639,8 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
         '--hmc-method=shoreline',
         f'--shoreline-config={shoreline_config}',
         '--output-resolution=5',
-        '--intramodal-template-transform=BSplineSyN',
-        '--intramodal-template-iters=2',
+        '--dwiref-construction-transform=BSplineSyN',
+        '--dwiref-construction-iters=2',
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)
@@ -1447,3 +1447,28 @@ def test_dwi2anat_dof_replaces_b0_to_anat_transform(tmp_path):
     ):
         with pytest.raises(SystemExit):
             parser.parse_args([*base, *bad])
+
+
+def test_dwiref_construction_flags_replace_intramodal_template_flags(tmp_path):
+    """Pure rename: choices and defaults are unchanged in this step."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    base = _cli_base(tmp_path)
+
+    args = parser.parse_args(
+        [*base, '--dwiref-construction-iters', '3', '--dwiref-construction-transform', 'Affine']
+    )
+    assert args.dwiref_construction_iters == 3
+    assert args.dwiref_construction_transform == 'Affine'
+
+    defaults = parser.parse_args(base)
+    assert defaults.dwiref_construction_iters == 0
+    assert defaults.dwiref_construction_transform == 'BSplineSyN'
+
+    for removed in (
+        ['--intramodal-template-iters', '2'],
+        ['--intramodal-template-transform', 'Affine'],
+    ):
+        with pytest.raises(SystemExit):
+            parser.parse_args([*base, *removed])

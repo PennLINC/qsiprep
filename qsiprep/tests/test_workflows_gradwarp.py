@@ -506,7 +506,7 @@ def _finalize_cfg(tmp_path):
     config.execution.sloppy = False
     config.workflow.sdc_method = 'topup'
     config.workflow.output_resolution = 1.2
-    config.workflow.intramodal_template_iters = 0
+    config.workflow.dwiref_construction_iters = 0
     config.nipype.omp_nthreads = 1
 
 
