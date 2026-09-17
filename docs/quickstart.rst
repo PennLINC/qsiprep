@@ -33,7 +33,7 @@ Grouping scans
 
 .. note::
    This section explains ``--separate-all-dwis``, ``--denoise-after-combining`` and
-   ``--dwi-denoise-window``
+   ``--dwidenoise-window``
 
 Assuming that ``sub-1/ses-1/fmap/sub-1_dir-PA_epi.nii.gz`` has a JSON sidecar containing the ``IntendedFor`` field for fieldmap correction
 (`see here <https://bids-specification.readthedocs.io/en/v1.10.0/04-modality-specific-files/01-magnetic-resonance-imaging-data.html#expressing-the-mr-protocol-intent-for-fieldmaps>`_)::
@@ -222,7 +222,7 @@ of these steps to better match your data.
 +-----------------+-----------------------------+---------------------------+----------------------------------+
 | Disable with    |  ``--denoise-method none``  | Disabled by default       | ``--b1-biascorrect-stage none``  |
 +-----------------+-----------------------------+---------------------------+----------------------------------+
-| Change behavior |  ``--dwi-denoise-window N`` | ``--unringing-method``    | ``--b1-biascorrect-stage``       |
+| Change behavior |  ``--dwidenoise-window N`` | ``--unringing-method``    | ``--b1-biascorrect-stage``       |
 | with            |  changes denoising window   | enables Gibbs unringing   | selects the stage: final         |
 |                 |  to N voxels                |                           | (default), none or legacy        |
 +-----------------+-----------------------------+---------------------------+----------------------------------+
