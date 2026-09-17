@@ -18,8 +18,7 @@ One way to process these data would be to call *QSIPrep* like this::
 
   qsiprep \
     /path/to/inputs /path/to/outputs participant \
-    --output-resolution X \
-    --fs-license-file /path/to/license.txt
+    --output-resolution X
 
 .. warning::
    The above example sets the ``--output-resolution`` to ``X``, where in

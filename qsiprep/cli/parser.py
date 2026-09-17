@@ -560,16 +560,6 @@ def _build_parser(**kwargs):
             'normalization runs otherwise.'
         ),
     )
-    g_anat.add_argument(
-        '--fs-license-file',
-        metavar='PATH',
-        type=Path,
-        help=(
-            'Path to a FreeSurfer license key file, which the SynthStrip and SynthSeg '
-            'tools require. Register at '
-            'https://surfer.nmr.mgh.harvard.edu/registration.html to obtain one for free.'
-        ),
-    )
 
     g_dwi = parser.add_argument_group(
         'DWI preprocessing',
