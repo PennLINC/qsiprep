@@ -573,7 +573,7 @@ class workflow(_Config):
     pairs."""
     distortion_group_merge = 'concat'
     """How to combine images across distortion groups (concatenate, average or none)."""
-    dwi_denoise_window = None
+    dwidenoise_window = None
     """Window size in voxels for image-based denoising, integer or "auto"."""
     diffprep_config = None
     """Configuration JSON for running TORTOISE DIFFPREP."""

@@ -673,7 +673,7 @@ DWI preprocessing
         eddy_config=None,
         reportlets_dir='.',
         output_spaces=['T1w'],
-        dwi_denoise_window=5,
+        dwidenoise_window=5,
         denoise_method='dwidenoise',
         unringing_method='mrdegibbs',
         b1_biascorr_stage='final',
