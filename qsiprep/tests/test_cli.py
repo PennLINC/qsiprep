@@ -597,7 +597,7 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
         '--ignore',
         'fieldmaps',
         '--sdc-anat-reference=invt1w',
-        '--dmri-biascorrect=final',
+        '--dmri-biascorrect=n4',
         '--output-resolution=5',
     ]
 
