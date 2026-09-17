@@ -748,3 +748,59 @@ def test_t1w_derived_references_require_t1w_modality(minimal_args, capsys, refer
 def test_shoreline_selection_warns_of_removal(minimal_args, capsys):
     _parse(minimal_args, '--hmc-method', 'shoreline')
     assert 'scheduled for removal' in capsys.readouterr().err
+
+
+def test_parser_defaults_to_stable_mrtrix(tmp_path):
+    """Default to a released MRtrix3, so existing runs are unchanged."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    opts = parser.parse_args([str(bids), str(out), 'participant', '--output-resolution', '2'])
+    assert opts.mrtrix_version == 'stable'
+
+
+def test_parser_accepts_dev_mrtrix(tmp_path):
+    """``dev`` selects the development branch, which is what complex mrdegibbs needs."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    opts = parser.parse_args(
+        [
+            str(bids),
+            str(out),
+            'participant',
+            '--mrtrix-version',
+            'dev',
+            '--output-resolution',
+            '2',
+        ]
+    )
+    assert opts.mrtrix_version == 'dev'
+
+
+def test_parser_rejects_unknown_mrtrix_version(tmp_path):
+    """Reject version strings; the flag names installations, not releases."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                str(bids),
+                str(out),
+                'participant',
+                '--mrtrix-version',
+                '3.0.8',
+                '--output-resolution',
+                '2',
+            ]
+        )
