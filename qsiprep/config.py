@@ -570,9 +570,8 @@ class workflow(_Config):
     'Affine'."""
     anat_biascorrect = None
     """Whether to N4-correct anatomicals: ``n4``, ``auto`` or ``none``."""
-    b1_biascorrect_stage = None
-    """The stage of processing at which to apply B1 bias correction. Either "final" (after
-    resampling), "none" (skipped entirely) or "legacy" (before concatenation)."""
+    dmri_biascorrect = None
+    """Whether to N4-correct DWIs: ``n4``, ``auto`` or ``none``."""
     denoise_after_combining = False
     """Run ``dwidenoise`` after combining dwis, but before motion correction."""
     denoise_method = None
