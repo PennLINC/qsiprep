@@ -6,7 +6,7 @@ from ... import config
 def dmri_biascorrect_enabled(dwi_files=None):
     """Should N4 bias correction run on these DWI images?
 
-    ``--dmri-biascorrect`` governs DWIs only; ``--anat-biascorrect`` governs the
+    ``--dwi-biascorrect`` governs DWIs only; ``--anat-biascorrect`` governs the
     anatomicals and never reaches this path.
 
     ``auto`` inspects the BIDS ``ImageType`` metadata for ``NORM``, which is how
@@ -28,7 +28,7 @@ def dmri_biascorrect_enabled(dwi_files=None):
         unit's files: the constituents are concatenated, so they must share a single
         decision.
     """
-    mode = config.workflow.dmri_biascorrect or 'n4'
+    mode = config.workflow.dwi_biascorrect or 'n4'
     if mode == 'n4':
         return True
     if mode == 'none':
@@ -36,13 +36,13 @@ def dmri_biascorrect_enabled(dwi_files=None):
 
     if not dwi_files:
         config.loggers.workflow.warning(
-            '--dmri-biascorrect auto: no DWI files to inspect; running N4.'
+            '--dwi-biascorrect auto: no DWI files to inspect; running N4.'
         )
         return True
     layout = config.execution.layout
     if layout is None:
         config.loggers.workflow.warning(
-            '--dmri-biascorrect auto: no BIDS layout available; running N4.'
+            '--dwi-biascorrect auto: no BIDS layout available; running N4.'
         )
         return True
 
@@ -56,14 +56,14 @@ def dmri_biascorrect_enabled(dwi_files=None):
 
     if all(normalized):
         config.loggers.workflow.info(
-            '--dmri-biascorrect auto: all %d DWI image(s) are marked NORM in '
+            '--dwi-biascorrect auto: all %d DWI image(s) are marked NORM in '
             'ImageType; skipping N4.',
             len(normalized),
         )
         return False
     if any(normalized):
         config.loggers.workflow.warning(
-            '--dmri-biascorrect auto: %d of %d DWI images are marked NORM. '
+            '--dwi-biascorrect auto: %d of %d DWI images are marked NORM. '
             'Running N4 on all of them, since a concatenated set cannot be '
             'corrected consistently otherwise.',
             sum(normalized),

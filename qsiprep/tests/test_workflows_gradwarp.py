@@ -570,7 +570,7 @@ def _dwi_preproc_cfg(tmp_path):
     config.workflow.hmc_method = 'eddy'
     config.workflow.sdc_method = 'topup'
     config.workflow.b0_threshold = 100
-    config.workflow.dmri_biascorrect = 'n4'
+    config.workflow.dwi_biascorrect = 'n4'
     config.workflow.eddy_config = None
     config.workflow.no_b0_harmonization = False
     config.workflow.denoise_method = 'dwidenoise'

@@ -167,7 +167,7 @@ def test_finalize_biascorr_gets_the_selected_mrtrix_version(
 ):
     """Give every dwibiascorrect node the option spelling its MRtrix3 accepts.
 
-    dmri_biascorrect defaults to "n4", so these nodes are on the common path.
+    dwi_biascorrect defaults to "n4", so these nodes are on the common path.
     A node left on the default spelling fails at runtime under --mrtrix-version dev.
     """
     from qsiprep import config

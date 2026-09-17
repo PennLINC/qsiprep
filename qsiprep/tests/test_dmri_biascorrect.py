@@ -1,4 +1,4 @@
-"""The ``--dmri-biascorrect auto`` heuristic.
+"""The ``--dwi-biascorrect auto`` heuristic.
 
 ``auto`` decides from the BIDS ``ImageType`` metadata whether the DWIs were already
 intensity-normalized on the console. It is deliberately conservative: N4 is skipped
@@ -46,13 +46,13 @@ def _restore_config():
     from qsiprep import config
 
     saved = (
-        config.workflow.dmri_biascorrect,
+        config.workflow.dwi_biascorrect,
         config.execution._layout,
         config.execution.layout,
     )
     yield
     (
-        config.workflow.dmri_biascorrect,
+        config.workflow.dwi_biascorrect,
         config.execution._layout,
         config.execution.layout,
     ) = saved
@@ -61,7 +61,7 @@ def _restore_config():
 def _config(mode, layout=None):
     from qsiprep import config
 
-    config.workflow.dmri_biascorrect = mode
+    config.workflow.dwi_biascorrect = mode
     # `layout` is a plain class attribute assigned by execution.init() from
     # `_layout` (config.py:512), not a property, so both must be set.
     config.execution._layout = layout

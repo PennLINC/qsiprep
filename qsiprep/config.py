@@ -569,7 +569,7 @@ class workflow(_Config):
     """Degrees of freedom for DWI-to-anatomical coregistration: 6 or 12."""
     anat_biascorrect = None
     """Whether to N4-correct anatomicals: ``n4``, ``auto`` or ``none``."""
-    dmri_biascorrect = None
+    dwi_biascorrect = None
     """Whether to N4-correct DWIs: ``n4``, ``auto`` or ``none``."""
     denoise_after_combining = False
     """Run ``dwidenoise`` after combining dwis, but before motion correction."""

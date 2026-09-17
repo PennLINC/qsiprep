@@ -2,7 +2,7 @@
 
 Covers three defects found together:
 
-1. ``--dmri-biascorrect`` governs only the DWIs, so there was no way to skip
+1. ``--dwi-biascorrect`` governs only the DWIs, so there was no way to skip
    N4 on anatomicals -- a problem for console-normalized data, where N4 can add
    artifacts rather than remove them.
 2. The anatomical merge registered whole heads. A rigid fit is then driven partly

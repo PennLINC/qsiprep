@@ -694,7 +694,7 @@ def gen_denoising_boilerplate(do_biascorr):
     """Generate a methods boilerplate for the denoising workflow.
 
     ``do_biascorr`` is the resolved decision for this output, not the
-    ``--dmri-biascorrect`` mode: under ``auto`` the mode alone cannot say whether
+    ``--dwi-biascorrect`` mode: under ``auto`` the mode alone cannot say whether
     N4 actually ran, so reading the config here would state the wrong thing.
     """
     no_b0_harmonization = config.workflow.no_b0_harmonization

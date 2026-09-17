@@ -495,7 +495,7 @@ def _build_parser(**kwargs):
         default='n4',
         help=(
             'Whether to run N4 bias field correction on ANATOMICAL images. '
-            'Note this is separate from --dmri-biascorrect, which only governs '
+            'Note this is separate from --dwi-biascorrect, which only governs '
             'the DWIs. '
             '"n4" (default) always runs it; scanner-side intensity normalization '
             '(e.g. Siemens NORM) does not remove the need for it. '
@@ -618,7 +618,7 @@ def _build_parser(**kwargs):
         ),
     )
     g_dwi.add_argument(
-        '--dmri-biascorrect',
+        '--dwi-biascorrect',
         action='store',
         choices=['n4', 'auto', 'none'],
         default='n4',
