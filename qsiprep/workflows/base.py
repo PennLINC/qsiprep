@@ -68,9 +68,9 @@ from ..utils.plan import method_selection_from_config
 from ..utils.sdc import t2w_available_for_sdc, t2w_sdc_enabled
 from .anatomical.volume import anat_biascorrect_enabled, init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
+from .dwi.biascorrect import dmri_biascorrect_enabled
 from .dwi.distortion_group_merge import init_distortion_group_merge_wf
 from .dwi.finalize import init_dwi_finalize_wf
-from .dwi.biascorrect import dmri_biascorrect_enabled
 from .dwi.intramodal_template import init_intramodal_template_wf
 from .dwi.util import get_source_file
 
@@ -124,7 +124,6 @@ def init_qsiprep_wf():
         log_dir.mkdir(exist_ok=True, parents=True)
         config.to_filename(log_dir / 'qsiprep.toml')
     return qsiprep_wf
-
 
 
 def check_output_names_are_bids_unique(preproc_units):

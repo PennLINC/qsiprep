@@ -24,16 +24,18 @@ def _render(**entities):
     ('entities', 'expected'),
     [
         (
-            dict(
-                datatype='dwi',
-                suffix='xfm',
-                extension='.mat',
-                **{'from': 'subject', 'to': 'ACPC', 'mode': 'image'},
-            ),
+            {
+                'datatype': 'dwi',
+                'suffix': 'xfm',
+                'extension': '.mat',
+                'from': 'subject',
+                'to': 'ACPC',
+                'mode': 'image',
+            },
             'sub-01/dwi/sub-01_from-subject_to-ACPC_mode-image_xfm.mat',
         ),
         (
-            dict(datatype='dwi', suffix='dwiref', extension='.tsv', desc='templateQC'),
+            {'datatype': 'dwi', 'suffix': 'dwiref', 'extension': '.tsv', 'desc': 'templateQC'},
             'sub-01/dwi/sub-01_desc-templateQC_dwiref.tsv',
         ),
     ],
@@ -118,19 +120,22 @@ def test_plus_suffixed_output_names_always_raise(names, dwi_dir):
     ('entities', 'name'),
     [
         # Run-level reference, distortion-group resolved: it is the coreg target.
-        (dict(desc='coreg', acquisition='A'), 'sub-01_acq-A_desc-coreg_dwiref.nii.gz'),
+        ({'desc': 'coreg', 'acquisition': 'A'}, 'sub-01_acq-A_desc-coreg_dwiref.nii.gz'),
         # Run-level reference, subject resolved: the template is the coreg target.
-        (dict(acquisition='A'), 'sub-01_acq-A_dwiref.nii.gz'),
+        ({'acquisition': 'A'}, 'sub-01_acq-A_dwiref.nii.gz'),
         # The template, in its own midpoint space.
-        (dict(space='subject', desc='coreg'), 'sub-01_space-subject_desc-coreg_dwiref.nii.gz'),
+        ({'space': 'subject', 'desc': 'coreg'}, 'sub-01_space-subject_desc-coreg_dwiref.nii.gz'),
         # The template resampled into ACPC.
-        (dict(space='ACPC'), 'sub-01_space-ACPC_dwiref.nii.gz'),
+        ({'space': 'ACPC'}, 'sub-01_space-ACPC_dwiref.nii.gz'),
         # Per-output reference, after this rename.
         (
-            dict(space='ACPC', desc='preproc', acquisition='A'),
+            {'space': 'ACPC', 'desc': 'preproc', 'acquisition': 'A'},
             'sub-01_acq-A_space-ACPC_desc-preproc_dwiref.nii.gz',
         ),
-        (dict(space='subject', desc='agreement'), 'sub-01_space-subject_desc-agreement_dwiref.nii.gz'),
+        (
+            {'space': 'subject', 'desc': 'agreement'},
+            'sub-01_space-subject_desc-agreement_dwiref.nii.gz',
+        ),
     ],
 )
 def test_dwiref_derivative_paths(entities, name, session):
@@ -161,14 +166,19 @@ def test_the_template_and_the_per_output_reference_do_not_collide():
 def test_dwiref_transform_paths():
     assert (
         _render(
-            datatype='dwi', suffix='xfm', extension='.mat',
+            datatype='dwi',
+            suffix='xfm',
+            extension='.mat',
             **{'from': 'subject', 'to': 'ACPC', 'mode': 'image'},
         )
         == 'sub-01/dwi/sub-01_from-subject_to-ACPC_mode-image_xfm.mat'
     )
     assert (
         _render(
-            datatype='dwi', suffix='xfm', extension='.mat', acquisition='A',
+            datatype='dwi',
+            suffix='xfm',
+            extension='.mat',
+            acquisition='A',
             **{'from': 'orig', 'to': 'subject', 'mode': 'image'},
         )
         == 'sub-01/dwi/sub-01_acq-A_from-orig_to-subject_mode-image_xfm.mat'

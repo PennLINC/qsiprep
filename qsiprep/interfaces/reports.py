@@ -236,9 +236,7 @@ class DiffusionSummaryInputSpec(BaseInterfaceInputSpec):
     hmc_transform = traits.Str(desc='transform optimized during HMC (SHORELine runs only)')
     hmc_model = traits.Str(desc='model used for hmc')
     dwi2anat_dof = traits.Enum(6, 12, desc='Degrees of freedom for coregistration')
-    dmri_biascorrect = traits.Enum(
-        'n4', 'auto', 'none', desc='--dmri-biascorrect mode requested'
-    )
+    dmri_biascorrect = traits.Enum('n4', 'auto', 'none', desc='--dmri-biascorrect mode requested')
     dmri_biascorrect_applied = traits.Bool(desc='whether N4 actually ran for this output')
     denoise_method = traits.Str(desc='method used for image denoising')
     dwi_denoise_window = traits.Either(

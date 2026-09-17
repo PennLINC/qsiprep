@@ -30,6 +30,7 @@ from .. import config
 from ..utils.gpu import GPU_ALIASES, GPU_TASKS
 from ..utils.misc import load_shoreline_config, parse_denoise_method
 
+
 def _build_parser(**kwargs):
     """Build parser object.
 
@@ -212,9 +213,7 @@ def _build_parser(**kwargs):
         try:
             parsed = int(value)
         except (TypeError, ValueError):
-            raise parser.error(
-                f'--dwiref-construction-iters must be an integer, not {value!r}'
-            )
+            raise parser.error(f'--dwiref-construction-iters must be an integer, not {value!r}')
         if parsed < 2:
             raise parser.error(
                 f'--dwiref-construction-iters must be at least 2; got {parsed}. '
@@ -750,7 +749,7 @@ How to combine the corrected results of an output's correction units.
         help='Which reference image DWI-to-anatomical coregistration targets. '
         '"distortion-group" (default) registers each distortion group\'s own b=0 '
         'reference to the anatomical. "subject" builds a single midpoint template '
-        'from every group\'s reference, registers that once, and has every group '
+        "from every group's reference, registers that once, and has every group "
         'inherit the result, which makes preprocessed data directly comparable '
         'across groups.',
     )

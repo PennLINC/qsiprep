@@ -666,7 +666,6 @@ def init_dwi_denoising_wf(
         chain.advance(degibbser, 'out_file', is_complex=unring_complex)
         step_num += 1
 
-
     # The workflow always hands downstream steps magnitude data
     chain.to_magnitude()
     chain.feed(outputnode, 'dwi_file')

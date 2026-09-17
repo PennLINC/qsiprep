@@ -1484,7 +1484,8 @@ def test_dwiref_definition_parses(tmp_path):
     base = _cli_base(tmp_path)
 
     assert parser.parse_args(base).dwiref_definition == 'distortion-group'
-    assert parser.parse_args([*base, '--dwiref-definition', 'subject']).dwiref_definition == 'subject'
+    subject = parser.parse_args([*base, '--dwiref-definition', 'subject'])
+    assert subject.dwiref_definition == 'subject'
 
     # `session` is the deferred remainder of #1114.
     with pytest.raises(SystemExit):

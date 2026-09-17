@@ -28,11 +28,14 @@ from .fsl import init_fsl_hmc_wf
 from .gradwarp import describe_gradient_correction, init_gradwarp_wf
 from .hmc_sdc import init_qsiprep_hmcsdc_wf
 from .pre_hmc import init_dwi_pre_hmc_wf
-from .registration import DWI2ANAT_DOF_TO_TRANSFORM, init_b0_to_anat_registration_wf, init_direct_b0_acpc_wf
+from .registration import (
+    DWI2ANAT_DOF_TO_TRANSFORM,
+    init_b0_to_anat_registration_wf,
+    init_direct_b0_acpc_wf,
+)
 from .util import _create_mem_gb, _get_wf_name
 
 DEFAULT_MEMORY_MIN_GB = 0.01
-
 
 
 def _t2wreg_target(unit, t2w_sdc):
