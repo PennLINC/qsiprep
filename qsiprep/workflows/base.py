@@ -481,16 +481,20 @@ to workflows in *QSIPrep*'s documentation]\
         for unit in preproc_units
     }
 
+    # The resolved dwiref level for this subject, which may fall back below the
+    # requested one. Everything downstream keys off the resolved value: the
+    # derivative labels must describe what was actually built.
     make_intramodal_template = False
-    if config.workflow.dwiref_construction_iters > 0:
+    if config.workflow.dwiref_definition == 'subject':
         if len(outputs_to_files) < 2:
             # Having one group is a normal condition, not a user error: a cohort
             # routinely mixes single- and multi-session subjects. Raising here
             # meant one flag could fail a large fraction of a dataset outright,
             # so skip the template for this subject and carry on.
             config.loggers.workflow.warning(
-                'Skipping the intramodal template for sub-%s: it needs at least 2 '
-                'DWI groups and this subject has %d. Everything else is unaffected.',
+                'Falling back to --dwiref-definition distortion-group for sub-%s: a '
+                'subject-level dwiref needs at least 2 DWI groups and this subject '
+                'has %d. Everything else is unaffected.',
                 subject_id,
                 len(outputs_to_files),
             )
@@ -508,7 +512,7 @@ to workflows in *QSIPrep*'s documentation]\
             inputs_list=sorted(outputs_to_files.keys()),
             t1w_source_file=anat_source_file,
             transform=config.workflow.dwiref_construction_transform,
-            num_iterations=config.workflow.dwiref_construction_iters or 2,
+            num_iterations=config.workflow.dwiref_construction_iters,
             name='intramodal_template_wf',
         )
         workflow.connect([

@@ -639,6 +639,7 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
         '--hmc-method=shoreline',
         f'--shoreline-config={shoreline_config}',
         '--output-resolution=5',
+        '--dwiref-definition=subject',
         '--dwiref-construction-transform=BSplineSyN',
         '--dwiref-construction-iters=2',
     ]
@@ -1450,7 +1451,7 @@ def test_dwi2anat_dof_replaces_b0_to_anat_transform(tmp_path):
 
 
 def test_dwiref_construction_flags_replace_intramodal_template_flags(tmp_path):
-    """Pure rename: choices and defaults are unchanged in this step."""
+    """The old spellings are gone; the new ones parse."""
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -1463,7 +1464,9 @@ def test_dwiref_construction_flags_replace_intramodal_template_flags(tmp_path):
     assert args.dwiref_construction_transform == 'Affine'
 
     defaults = parser.parse_args(base)
-    assert defaults.dwiref_construction_iters == 0
+    # iters is a pure parameter now, defaulting to the value that reproduces the
+    # previous behaviour; --dwiref-definition is what toggles the feature.
+    assert defaults.dwiref_construction_iters == 2
     assert defaults.dwiref_construction_transform == 'BSplineSyN'
 
     for removed in (
@@ -1472,3 +1475,36 @@ def test_dwiref_construction_flags_replace_intramodal_template_flags(tmp_path):
     ):
         with pytest.raises(SystemExit):
             parser.parse_args([*base, *removed])
+
+
+def test_dwiref_definition_parses(tmp_path):
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    base = _cli_base(tmp_path)
+
+    assert parser.parse_args(base).dwiref_definition == 'distortion-group'
+    assert parser.parse_args([*base, '--dwiref-definition', 'subject']).dwiref_definition == 'subject'
+
+    # `session` is the deferred remainder of #1114.
+    with pytest.raises(SystemExit):
+        parser.parse_args([*base, '--dwiref-definition', 'session'])
+
+
+def test_dwiref_construction_iters_defaults_to_two(tmp_path):
+    from qsiprep.cli.parser import _build_parser
+
+    assert _build_parser().parse_args(_cli_base(tmp_path)).dwiref_construction_iters == 2
+
+
+@pytest.mark.parametrize('bad', ['0', '1', '-1'])
+def test_dwiref_construction_iters_rejects_values_below_two(tmp_path, bad):
+    """The nonlinear branch passes iters straight to mvtc2 with no floor of its own.
+
+    Only the linear branch clamps, so once iters stops being the feature toggle an
+    unvalidated 0 or negative would reach antsMultivariateTemplateConstruction2.
+    """
+    from qsiprep.cli.parser import _build_parser
+
+    with pytest.raises(SystemExit):
+        _build_parser().parse_args([*_cli_base(tmp_path), '--dwiref-construction-iters', bad])

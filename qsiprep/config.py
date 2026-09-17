@@ -605,6 +605,8 @@ class workflow(_Config):
     """Ignore particular steps for *QSIPrep*."""
     infant = False
     """Configure pipelines specifically for infant brains"""
+    dwiref_definition = None
+    """Which dwiref coregistration targets: ``distortion-group`` or ``subject``."""
     dwiref_construction_iters = None
     """Number of iterations for dwiref template construction."""
     dwiref_construction_transform = None

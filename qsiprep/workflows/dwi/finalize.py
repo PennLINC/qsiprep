@@ -239,10 +239,10 @@ def init_dwi_finalize_wf(
         ),
         name='outputnode',
     )
-    # ``make_intramodal_template`` (not just the config setting) gates this
-    # block: with a single DWI group the template is skipped upstream and the
-    # intramodal inputs are never connected, so these nodes must not exist.
-    if config.workflow.dwiref_construction_iters > 0 and make_intramodal_template:
+    # ``make_intramodal_template`` is the RESOLVED level, not the requested one:
+    # with a single DWI group the template is skipped upstream and the intramodal
+    # inputs are never connected, so these nodes must not exist.
+    if make_intramodal_template:
         # The reportlet shows one image -- this session's b=0 -- on the template
         # grid before and after its own transform, with white-matter contours
         # from the anatomy held fixed as landmarks.

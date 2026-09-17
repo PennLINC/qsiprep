@@ -203,6 +203,26 @@ def _build_parser(**kwargs):
             raise parser.error("Argument can't be less than one.")
         return value
 
+    def _iters_at_least_two(value, parser):
+        """Ensure the dwiref construction iteration count is usable.
+
+        Only the linear template branch clamps the count; the default nonlinear
+        branch hands it straight to antsMultivariateTemplateConstruction2.
+        """
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            raise parser.error(
+                f'--dwiref-construction-iters must be an integer, not {value!r}'
+            )
+        if parsed < 2:
+            raise parser.error(
+                f'--dwiref-construction-iters must be at least 2; got {parsed}. '
+                'Use --dwiref-definition to turn the dwiref template off, not the '
+                'iteration count.'
+            )
+        return parsed
+
     def _int_or_auto(value, parser):
         """Ensure an argument is an odd integer >= 3 or 'auto'."""
         if value.lower() == 'auto':
@@ -284,6 +304,7 @@ def _build_parser(**kwargs):
     PositiveInt = partial(_min_one, parser=parser)
     IntOrAuto = partial(_int_or_auto, parser=parser)
     DenoiseMethod = partial(_denoise_method, parser=parser)
+    IterCount = partial(_iters_at_least_two, parser=parser)
     BIDSFilter = partial(_bids_filter, parser=parser)
 
     # Arguments as specified by BIDS-Apps
@@ -712,17 +733,26 @@ How to combine the corrected results of an output's correction units.
     g_coreg.add_argument(
         '--dwiref-construction-iters',
         action='store',
-        default=0,
-        type=int,
+        default=2,
+        type=IterCount,
         help=(
-            'Number of iterations for finding the midpoint image '
-            'from the b0 templates from all DWI runs and sessions. '
-            'Has no effect if there is only one group. '
-            'If 0, all b0 templates are directly registered to the t1w image. '
-            'Enabling the dwiref template method when there are multiple runs/sessions '
-            'results in a single DWI reference image, which makes it possible to '
-            'directly compare AC-PC-space preprocessed DWI data across groups.'
+            'Number of iterations for finding the midpoint image from the b=0 '
+            'references of all DWI groups. Must be at least 2. '
+            'Has no effect unless --dwiref-definition is above "distortion-group", '
+            'and none if there is only one group.'
         ),
+    )
+    g_coreg.add_argument(
+        '--dwiref-definition',
+        action='store',
+        choices=['distortion-group', 'subject'],
+        default='distortion-group',
+        help='Which reference image DWI-to-anatomical coregistration targets. '
+        '"distortion-group" (default) registers each distortion group\'s own b=0 '
+        'reference to the anatomical. "subject" builds a single midpoint template '
+        'from every group\'s reference, registers that once, and has every group '
+        'inherit the result, which makes preprocessed data directly comparable '
+        'across groups.',
     )
     g_coreg.add_argument(
         '--dwiref-construction-transform',

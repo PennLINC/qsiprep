@@ -506,7 +506,7 @@ def _finalize_cfg(tmp_path):
     config.execution.sloppy = False
     config.workflow.sdc_method = 'topup'
     config.workflow.output_resolution = 1.2
-    config.workflow.dwiref_construction_iters = 0
+    config.workflow.dwiref_definition = 'distortion-group'
     config.nipype.omp_nthreads = 1
 
 
@@ -521,6 +521,9 @@ def _finalize_wf(tmp_path, write_derivatives=False):
         name='dwi_finalize_wf',
         source_file=dwi,
         output_prefix='sub-01',
+        # These tests are about gradwarp, not N4; building the bias-correction
+        # node would need b0_threshold, which this fixture does not configure.
+        do_biascorr=False,
         write_derivatives=write_derivatives,
     )
 

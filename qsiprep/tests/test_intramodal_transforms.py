@@ -112,6 +112,6 @@ def test_single_group_subject_skips_the_template_instead_of_failing():
 
     src = inspect.getsource(base.init_single_subject_wf)
     assert "raise Exception('Cannot make an intramodal with less than 2 groups.')" not in src
-    assert 'Skipping the intramodal template' in src
+    assert 'Falling back to --dwiref-definition distortion-group' in src
     # and the flag must still be honoured when there ARE enough groups
     assert 'make_intramodal_template = True' in src
