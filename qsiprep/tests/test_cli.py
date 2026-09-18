@@ -285,8 +285,6 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
     Was in DSCSDSI.sh.
 
     This tests the following features:
-    - Whether the --anat-only workflow is successful
-    - Whether the regular qsiprep workflow can resume using the working directory from --anat-only
     - The SHORELine motion correction workflow
     - Skipping B1 biascorrection
     - Using the SyN-SDC distortion correction method
@@ -683,10 +681,10 @@ def test_multi_t1w(data_dir, output_dir, working_dir):
     anat_dir = Path(writable_bids_dir) / 'sub-PNC' / 'anat'
     source_t1w = anat_dir / 'sub-PNC_T1w.nii.gz'
     shifted_t1w = anat_dir / 'sub-PNC_run-02_T1w.nii.gz'
-    source_json = anat_dir / 'sub-PNC_T1w.json'
-    shifted_json = anat_dir / 'sub-PNC_run-02_T1w.json'
 
     # Generate a second, translated T1w to test robust template construction.
+    # The entity-less source sidecar is inherited by the run-02 image. Copying it
+    # under a run-specific name would give that image two matching sidecars.
     source_img = nb.load(str(source_t1w))
     shifted_affine = source_img.affine.copy()
     shifted_affine[:3, 3] = shifted_affine[:3, 3] + np.array([2.0, 4.0, 1.0])
@@ -694,7 +692,6 @@ def test_multi_t1w(data_dir, output_dir, working_dir):
         np.asanyarray(source_img.dataobj), shifted_affine, source_img.header
     )
     nb.save(shifted_img, shifted_t1w)
-    shutil.copy2(source_json, shifted_json)
 
     test_data_path = get_test_data_path()
     eddy_config = os.path.join(test_data_path, 'eddy_config.json')
@@ -708,7 +705,6 @@ def test_multi_t1w(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         '--sloppy',
         '--output-resolution=5',
-        '--anat-only',
     ]
     _run_and_generate(TEST_NAME, parameters, test_main=False, check_outputs=False)
 
@@ -721,7 +717,6 @@ def test_multi_t1w(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         '--sloppy',
         '--output-resolution=5',
-        '--anat-only',
         '--subject-anatomical-reference=unbiased',
     ]
     _run_and_generate(
