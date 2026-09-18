@@ -494,7 +494,7 @@ def init_dwi_preproc_wf(
             dwi_biascorrect=config.workflow.dwi_biascorrect,
             dwi_biascorrect_applied=do_biascorr,
             denoise_method=config.workflow.denoise_method,
-            dwi_denoise_window=config.workflow.dwi_denoise_window,
+            dwidenoise_window=config.workflow.dwidenoise_window,
             gradient_correction=describe_gradient_correction(
                 gradwarp_wf.plan if gradwarp_wf is not None else None
             ),

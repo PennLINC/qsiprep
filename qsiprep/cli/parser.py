@@ -46,15 +46,11 @@ def _build_parser(**kwargs):
     from pathlib import Path
 
     # Deprecated options: {option string: (version it is removed in, what happens instead)}
-    deprecations = {
-        '--dwi-only': ('27.0.0', 'Enabling `--anat-modality none` instead.'),
-    }
+    deprecations = {}
 
     # Deprecated flags that enable their replacement automatically:
     # {option string: (replacement option, its namespace attribute, the value it is set to)}
-    forwarded_deprecations = {
-        '--dwi-only': ('--anat-modality', 'anat_modality', 'none'),
-    }
+    forwarded_deprecations = {}
 
     def _warn_deprecated(option_string):
         removed_in, detail = deprecations[option_string]
@@ -525,16 +521,6 @@ def _build_parser(**kwargs):
             'normalization runs otherwise.'
         ),
     )
-    g_anat.add_argument(
-        '--fs-license-file',
-        metavar='PATH',
-        type=Path,
-        help=(
-            'Path to a FreeSurfer license key file, which the SynthStrip and SynthSeg '
-            'tools require. Register at '
-            'https://surfer.nmr.mgh.harvard.edu/registration.html to obtain one for free.'
-        ),
-    )
 
     g_dwi = parser.add_argument_group(
         'DWI preprocessing',
@@ -569,11 +555,11 @@ def _build_parser(**kwargs):
         ),
     )
     g_dwi.add_argument(
-        '--dwi-denoise-window',
+        '--dwidenoise-window',
         action='store',
         type=IntOrAuto,
         default='auto',
-        metavar='N',
+        metavar='{auto,N}',
         help=(
             'Window size in voxels for image-based denoising: either an odd positive '
             'integer or "auto". '
@@ -1034,28 +1020,6 @@ def _build_parser(**kwargs):
         help='Increase log verbosity by one level for each occurrence. Debug level is -vvv.',
     )
 
-    g_deprecated = parser.add_argument_group(
-        'Deprecated options',
-        description=(
-            'These options still work but will be removed in 27.0.0; each one names its '
-            'replacement. --b0-to-t1w-transform is also deprecated, but is listed under '
-            'Coregistration to the anatomical reference because it is mutually exclusive with its '
-            'replacement.'
-        ),
-    )
-    g_deprecated.add_argument(
-        '--dwi-only',
-        action=DeprecatedForwardAction,
-        default=SUPPRESS,
-        help='DEPRECATED: this flag now enables --anat-modality none. Use that instead.',
-    )
-    g_deprecated.add_argument(
-        '--dwi-no-biascorr',
-        action=DeprecatedForwardAction,
-        default=SUPPRESS,
-        help='DEPRECATED: this flag now enables --b1-biascorrect-stage none. Use that instead.',
-    )
-
     g_debug = parser.add_argument_group(
         'Debugging and developer options',
         description=(
@@ -1108,29 +1072,29 @@ def _build_parser(**kwargs):
     return parser
 
 
-def check_denoise_window(denoise_method, dwi_denoise_window):
-    """Report a ``--dwi-denoise-window`` that the selected denoising method will ignore.
+def check_denoise_window(denoise_method, dwidenoise_window):
+    """Report a ``--dwidenoise-window`` that the selected denoising method will ignore.
 
     Only ``dwidenoise`` takes a window size. Leaving the others to silently ignore it would
     hide a request that never took effect.
     """
-    if dwi_denoise_window == 'auto':
+    if dwidenoise_window == 'auto':
         # The default, so an unused value is not a sign that anything was misunderstood
         return
 
     if denoise_method == 'patch2self':
         config.loggers.cli.error(
-            'The --dwi-denoise-window option is not used when --denoise-method=patch2self'
+            'The --dwidenoise-window option is not used when --denoise-method=patch2self'
         )
     elif denoise_method == 'dwidenoise2':
         config.loggers.cli.warning(
-            'The --dwi-denoise-window option is not used when --denoise-method=dwidenoise2. '
+            'The --dwidenoise-window option is not used when --denoise-method=dwidenoise2. '
             'dwidenoise2 sizes its patches per iteration from its multi-resolution schedule, '
             'which can be selected with "dwidenoise2;schedule:<name>" instead.'
         )
     elif denoise_method == 'none':
         config.loggers.cli.warning(
-            'The --dwi-denoise-window option is not used when --denoise-method=none'
+            'The --dwidenoise-window option is not used when --denoise-method=none'
         )
 
 
@@ -1254,7 +1218,7 @@ def parse_args(args=None, namespace=None):
 
     # Validate the tricky options here
     denoise_method, denoise_params = parse_denoise_method(config.workflow.denoise_method)
-    check_denoise_window(denoise_method, config.workflow.dwi_denoise_window)
+    check_denoise_window(denoise_method, config.workflow.dwidenoise_window)
     if (
         config.workflow.denoise_after_combining
         and denoise_params.get('demodulate', 'none') != 'none'

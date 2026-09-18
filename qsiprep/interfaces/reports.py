@@ -239,7 +239,7 @@ class DiffusionSummaryInputSpec(BaseInterfaceInputSpec):
     dwi_biascorrect = traits.Enum('n4', 'auto', 'none', desc='--dwi-biascorrect mode requested')
     dwi_biascorrect_applied = traits.Bool(desc='whether N4 actually ran for this output')
     denoise_method = traits.Str(desc='method used for image denoising')
-    dwi_denoise_window = traits.Either(
+    dwidenoise_window = traits.Either(
         traits.Int(), traits.Str(), desc='window size for dwidenoise'
     )
     gradient_correction = traits.Str(
@@ -296,7 +296,7 @@ class DiffusionSummary(SummaryInterface):
             hmc_transform_line=hmc_transform_line,
             hmc_model=self.inputs.hmc_model,
             denoise_method=self.inputs.denoise_method,
-            denoise_window=self.inputs.dwi_denoise_window,
+            denoise_window=self.inputs.dwidenoise_window,
             gradient_correction=self.inputs.gradient_correction,
             output_spaces='ACPC',
             confounds=re.sub(r'[\t ]+', ', ', conflist),
