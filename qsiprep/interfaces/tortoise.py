@@ -484,7 +484,6 @@ class _DRBUDDIAggregateOutputsInputSpec(TORTOISEInputSpec):
 class _DRBUDDIAggregateOutputsOutputSpec(TraitedSpec):
     # Aggregated outputs for convenience
     sdc_warps = OutputMultiObject(File(exists=True))
-    sdc_scaling_images = OutputMultiObject(File(exists=True))
     # Fieldmap outputs for the reports
     up_fa_corrected_image = File(exists=True)
     down_fa_corrected_image = File(exists=True)
@@ -524,24 +523,8 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
         else:
             down_warp = self.inputs.deformation_minv
 
-        # Calculate the scaling images
-        scaling_blip_up_file = op.join(runtime.cwd, 'blip_up_scale.nii.gz')
-        scaling_blip_down_file = op.join(runtime.cwd, 'blip_down_scale.nii.gz')
-        scaling_blip_up_img = nim.math_img(
-            'a/b', a=self.inputs.undistorted_reference, b=self.inputs.blip_up_b0_corrected
-        )
-        scaling_blip_up_img.to_filename(scaling_blip_up_file)
-        scaling_blip_down_img = nim.math_img(
-            'a/b', a=self.inputs.undistorted_reference, b=self.inputs.blip_down_b0_corrected
-        )
-        scaling_blip_down_img.to_filename(scaling_blip_down_file)
-
         self._results['sdc_warps'] = [
             self.inputs.deformation_finv if blip_dir == 'up' else down_warp
-            for blip_dir in self.inputs.blip_assignments
-        ]
-        self._results['sdc_scaling_images'] = [
-            scaling_blip_up_file if blip_dir == 'up' else scaling_blip_down_file
             for blip_dir in self.inputs.blip_assignments
         ]
 

@@ -281,7 +281,6 @@ def init_diffprep_hmc_wf(
                 'bval_files',
                 'to_dwi_ref_affines',
                 'to_dwi_ref_warps',
-                'sdc_scaling_images',
                 'fieldmap_type',
                 'b0_up_image',
                 'b0_up_corrected_image',
@@ -675,7 +674,6 @@ def init_diffprep_hmc_wf(
             (extract_b0s, drbuddi_wf, [('b0_average', 'inputnode.b0_ref')]),
             (drbuddi_wf, outputnode, [
                 ('outputnode.sdc_warps', 'to_dwi_ref_warps'),
-                ('outputnode.sdc_scaling_images', 'sdc_scaling_images'),
                 ('outputnode.method', 'sdc_method'),
                 ('outputnode.fieldmap_type', 'fieldmap_type'),
                 ('outputnode.b0_up_image', 'b0_up_image'),

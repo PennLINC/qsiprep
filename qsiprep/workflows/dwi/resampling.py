@@ -163,7 +163,6 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 'fieldwarps',
                 'gradwarp_field',
                 'output_grid',
-                'sdc_scaling_images',
                 'ec_jacobian_images',
                 # Only written out if TOPUP was used
                 'fieldmap_hz',

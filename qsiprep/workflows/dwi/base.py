@@ -235,7 +235,6 @@ def init_dwi_preproc_wf(
                 'coreg_score',
                 'raw_concatenated',
                 'carpetplot_data',
-                'sdc_scaling_images',
                 'fieldmap_hz',
             ]
         ),
@@ -405,9 +404,6 @@ def init_dwi_preproc_wf(
 
         workflow.connect([
             (inputnode, fmap_unwarp_report_wf, [('t1_seg', 'inputnode.in_seg')]),
-            (hmc_wf, outputnode, [
-                ('outputnode.sdc_scaling_images', 'sdc_scaling_images'),
-            ]),
             (hmc_wf, fmap_unwarp_report_wf, [
                 ('outputnode.pre_sdc_template', 'inputnode.in_pre'),
                 ('outputnode.b0_template', 'inputnode.in_post'),

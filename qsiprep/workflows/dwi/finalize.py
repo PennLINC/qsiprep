@@ -211,7 +211,6 @@ def init_dwi_finalize_wf(
                 'raw_concatenated',
                 'confounds',
                 'carpetplot_data',
-                'sdc_scaling_images',
                 # Only written out if TOPUP was used
                 'fieldmap_hz',
             ]
@@ -332,7 +331,6 @@ def init_dwi_finalize_wf(
             ('intramodal_template_to_t1_warp',
              'inputnode.intramodal_template_to_t1_warp'),
             ('itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
-            ('sdc_scaling_images', 'inputnode.sdc_scaling_images'),
         ]),
         (transform_dwis_t1, outputnode, [
             ('outputnode.bvals', 'bvals_t1'),

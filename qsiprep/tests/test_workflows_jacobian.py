@@ -226,3 +226,37 @@ def test_sdc_unwarp_wf_has_no_dead_jacobian_node():
     workflow = init_sdc_unwarp_wf()
     assert workflow.get_node('jac_dfm') is None
     assert 'out_jacobian' not in workflow.get_node('outputnode').outputs.copyable_trait_names()
+
+
+def test_sdc_scaling_images_channel_is_gone():
+    """DRBUDDI's ratio images are replaced by the analytic determinant.
+
+    The channel existed only for DRBUDDI, whose warps already arrive as
+    ``fieldwarps`` -- so ComposeJacobianWeights derives its determinant the
+    same way as every other backend's, and the bespoke plumbing is dead.
+    """
+    import subprocess
+
+    # Excludes this file itself: its grep invocation and assertion message
+    # necessarily contain the literal string being searched for, which would
+    # otherwise make this test self-matching and permanently red.
+    hits = subprocess.run(
+        [
+            'grep',
+            '-rn',
+            '--include=*.py',
+            '--exclude=test_workflows_jacobian.py',
+            'sdc_scaling_images',
+            'qsiprep/',
+        ],
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert hits == '', f'sdc_scaling_images still referenced:\n{hits}'
+
+
+def test_drbuddi_aggregate_has_no_scaling_output():
+    from qsiprep.interfaces.tortoise import DRBUDDIAggregateOutputs
+
+    outputs = DRBUDDIAggregateOutputs().output_spec().copyable_trait_names()
+    assert 'sdc_scaling_images' not in outputs

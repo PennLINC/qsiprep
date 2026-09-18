@@ -679,7 +679,6 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.raw_concatenated', 'inputnode.raw_concatenated'),
                 ('outputnode.confounds', 'inputnode.confounds'),
                 ('outputnode.carpetplot_data', 'inputnode.carpetplot_data'),
-                ('outputnode.sdc_scaling_images', 'inputnode.sdc_scaling_images'),
                 ('outputnode.fieldmap_hz', 'inputnode.fieldmap_hz'),
             ]),
         ])  # fmt:skip

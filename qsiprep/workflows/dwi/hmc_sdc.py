@@ -97,7 +97,6 @@ def init_qsiprep_hmcsdc_wf(
                 'bval_files',
                 'to_dwi_ref_affines',
                 'to_dwi_ref_warps',
-                'sdc_scaling_images',
                 # From SDC
                 'fieldmap_type',
                 'b0_up_image',
@@ -240,7 +239,6 @@ def init_qsiprep_hmcsdc_wf(
             (dwi_hmc_wf, drbuddi_wf, [('outputnode.final_template', 'inputnode.b0_ref')]),
             (drbuddi_wf, outputnode, [
                 ('outputnode.sdc_warps', 'to_dwi_ref_warps'),
-                ('outputnode.sdc_scaling_images', 'sdc_scaling_images'),
                 ('outputnode.method', 'sdc_method'),
                 ('outputnode.fieldmap_type', 'fieldmap_type'),
                 ('outputnode.b0_up_image', 'b0_up_image'),
