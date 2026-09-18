@@ -109,7 +109,7 @@ def test_hmc_xforms_never_reach_the_jacobian_node():
         if dst == 'compose_jacobian'
         for pair in connect
     }
-    assert not any('hmc' in source for source, _ in forwarded)
+    assert not any('hmc' in _source_name(source) for source, _ in forwarded)
 
 
 def test_coreg_and_template_transforms_never_reach_the_jacobian_node():
@@ -122,7 +122,23 @@ def test_coreg_and_template_transforms_never_reach_the_jacobian_node():
     }
     excluded = ('itk_b0_to_t1', 'intramodal', 't1_2_mni')
     for source, _ in forwarded:
-        assert not any(name in source for name in excluded), source
+        assert not any(name in _source_name(source) for name in excluded), source
+
+
+def test_source_name_detects_a_functor_wrapped_forbidden_field():
+    """Pin the normalization itself, not just today's wiring.
+
+    ``gradwarp_field`` is already threaded through a functor wrapper
+    (``(('gradwarp_field', _listify), 'gradwarp_field')`` in
+    ``resampling.py``), so wrapping a field to adapt its shape is an
+    established pattern here -- exactly how a forbidden field (e.g.
+    ``hmc_xforms``) could plausibly be wired in without tripping a check that
+    only looks at the raw, unnormalized ``source`` half of the pair. This
+    test fails if ``_source_name`` (or the exclusion checks above) stop
+    unwrapping functor connections before the membership test.
+    """
+    forwarded = {(('hmc_xforms', lambda x: x), 'hmc_affines')}
+    assert any('hmc' in _source_name(source) for source, _ in forwarded)
 
 
 @pytest.mark.parametrize(
