@@ -6,6 +6,8 @@ The numeric correctness of the weights lives in
 ``test_interfaces_jacobian.py`` and ``test_jacobian_conservation.py``.
 """
 
+import os
+
 import pytest
 from qsiplan.models import CorrectionMethod
 
@@ -211,7 +213,14 @@ def test_sdc_unwarp_wf_has_no_dead_jacobian_node():
     It was computed and discarded for years. ComposeJacobianWeights derives the
     determinant of the *composed* gradwarp-and-SDC warp instead, so leaving
     this node in place would be a second, subtly-wrong source of truth.
+
+    ``init_sdc_unwarp_wf`` hard-requires FSL (it raises if ``FSLDIR`` is
+    unset), which is present in the qsiprep container but not in every dev
+    environment, hence the skip guard below.
     """
+    if not os.environ.get('FSLDIR'):
+        pytest.skip('FSLDIR is not set; init_sdc_unwarp_wf requires FSL')
+
     from qsiprep.workflows.fieldmap.unwarp import init_sdc_unwarp_wf
 
     workflow = init_sdc_unwarp_wf()
