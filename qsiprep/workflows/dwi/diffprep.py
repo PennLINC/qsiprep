@@ -27,6 +27,7 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
 from ... import config
 from ...interfaces.gradients import ExtractB0s, SliceQC
+from ...interfaces.jacobian import OkanQuadraticJacobian
 from ...interfaces.nilearn import EnhanceB0
 from ...interfaces.shoreline import CalculateCNR
 from ...interfaces.tortoise import (
@@ -274,6 +275,7 @@ def init_diffprep_hmc_wf(
                 'slice_quality',
                 'motion_params',
                 'ec_file',
+                'ec_jacobian_images',
                 'cnr_map',
                 'bvec_files_to_transform',
                 'dwi_files_to_transform',
@@ -534,6 +536,26 @@ def init_diffprep_hmc_wf(
     # own, and the map is a required downstream ApplyTransforms input.
     calculate_cnr = pe.Node(CalculateCNR(), name='calculate_cnr', mem_gb=2)
 
+    # TORTOISE eddy-current Jacobian, for --jacobian-weighting. Built from
+    # effective_correction_mode (post-sloppy), not the configured
+    # correction_mode: passing the configured value would attempt quadratic
+    # recovery from motion-only transforms on every --sloppy run. 'cubic' is
+    # a valid, existing DIFFPREP mode that OkanQuadraticJacobian does not
+    # implement a determinant for; record that gap once here (not inside the
+    # interface, which nipype may re-instantiate per node execution) so it
+    # reaches the derivatives sidecar exactly once per DWI run.
+    ec_jacobian = pe.Node(
+        OkanQuadraticJacobian(correction_mode=effective_correction_mode),
+        name='ec_jacobian',
+    )
+    if effective_correction_mode == 'cubic':
+        config.record_unmodulated(
+            ['eddy-current'],
+            reason="DIFFPREP ran with correction_mode='cubic', whose "
+            'eddy-current polynomial (cubic Okan terms) has no implemented '
+            'Jacobian determinant.',
+        )
+
     workflow.connect([
         (corrected_node, split_outputs, [
             ('corrected_dwi_file', 'corrected_dwi_file'),
@@ -553,6 +575,13 @@ def init_diffprep_hmc_wf(
             ('spm_motion_file', 'motion_params'),
             ('diffprep_ec_file', 'ec_file'),
         ]),
+
+        # Eddy-current Jacobian: evaluated on the DIFFPREP input grid (the
+        # grid _moteddy.nii -- and thus extract_b0s.b0_average -- is in), not
+        # the output grid.
+        (corrected_node, ec_jacobian, [('transformations_file', 'transformations_file')]),
+        (extract_b0s, ec_jacobian, [('b0_average', 'reference_image')]),
+        (ec_jacobian, outputnode, [('ec_jacobian_images', 'ec_jacobian_images')]),
 
         # Pre-SDC enhancement (report)
         (corrected_node, extract_b0s, [('corrected_dwi_file', 'dwi_series')]),

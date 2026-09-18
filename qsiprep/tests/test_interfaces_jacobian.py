@@ -398,3 +398,100 @@ def test_compose_weights_applies_ec_only(tmp_path):
     weights = interface.run(cwd=str(tmp_path)).outputs.jacobian_weight_images
     assert len(weights) == 3
     assert len(set(weights)) == 3
+
+
+# --- OkanQuadraticJacobian ---------------------------------------------------
+
+from qsiprep.interfaces.jacobian import OkanQuadraticJacobian
+
+# An identity Okan row is NOT all zeros. Per the sourced formula (module
+# docstring in qsiprep/interfaces/jacobian.py), columns 6-8 are the linear
+# coefficients of the eddy-current phase-axis polynomial, and identity means
+# the coefficient for the volume's own phase-encode axis is 1 (the other two
+# are 0) -- SetIdentity() in TORTOISE's itkOkanQuadraticTransform.hxx sets
+# exactly this. Phase=1 ("vertical"/j-axis) is TORTOISE's own default and the
+# common AP/PA case, so column 7 (0-indexed) is the one set to 1 here.
+_IDENTITY_ROW = [0.0] * 6 + [0.0, 1.0, 0.0] + [0.0] * 15
+
+
+def _write_transformations(path, rows):
+    """Write a DIFFPREP _moteddy_transformations.txt with 24 columns per row."""
+    with open(path, 'w') as handle:
+        for row in rows:
+            handle.write(' '.join(f'{value:.8f}' for value in row) + '\n')
+    return str(path)
+
+
+def test_okan_jacobian_of_identity_parameters_is_unity(tmp_path):
+    """Identity parameters (see _IDENTITY_ROW) mean no eddy current, det = 1."""
+    transformations = _write_transformations(tmp_path / 'x.txt', [_IDENTITY_ROW] * 3)
+    result = OkanQuadraticJacobian(
+        transformations_file=transformations,
+        reference_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
+        correction_mode='quadratic',
+    ).run()
+
+    maps = result.outputs.ec_jacobian_images
+    assert len(maps) == 3
+    for path in maps:
+        interior = np.asanyarray(nb.load(path).dataobj)[2:-2, 2:-2, 2:-2]
+        np.testing.assert_allclose(interior, 1.0, atol=1e-4)
+
+
+def test_okan_jacobian_ignores_the_rigid_columns(tmp_path):
+    """Columns 0-5 are rigid motion, excluded by the scope policy.
+
+    Two (identical) rows, not one: ``OutputMultiObject`` collapses a
+    single-element list to a bare string, and this test wants a real list to
+    index into.
+    """
+    rigid_row = [1.0, 2.0, 3.0, 0.05, 0.05, 0.05] + _IDENTITY_ROW[6:]
+    transformations = _write_transformations(tmp_path / 'x.txt', [rigid_row, rigid_row])
+    result = OkanQuadraticJacobian(
+        transformations_file=transformations,
+        reference_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
+        correction_mode='quadratic',
+    ).run()
+
+    interior = np.asanyarray(
+        nb.load(result.outputs.ec_jacobian_images[0]).dataobj
+    )[2:-2, 2:-2, 2:-2]
+    np.testing.assert_allclose(interior, 1.0, atol=1e-4)
+
+
+def test_okan_jacobian_is_undefined_for_motion_only(tmp_path):
+    """--sloppy forces correction_mode=motion, where no EC component exists."""
+    transformations = _write_transformations(tmp_path / 'x.txt', [_IDENTITY_ROW] * 2)
+    result = OkanQuadraticJacobian(
+        transformations_file=transformations,
+        reference_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
+        correction_mode='motion',
+    ).run()
+    assert not isdefined(result.outputs.ec_jacobian_images)
+
+
+def test_okan_jacobian_is_undefined_for_cubic_and_does_not_raise(tmp_path):
+    """Cubic is a valid existing mode, so it must degrade, not abort.
+
+    Weighting is on by default, so raising here would newly break runs that
+    work today and push users to --no-jacobian-weighting, losing gradwarp and
+    SDC weighting as collateral. Silently applying the quadratic formula to
+    cubic parameters is what is forbidden.
+    """
+    transformations = _write_transformations(tmp_path / 'x.txt', [_IDENTITY_ROW] * 2)
+    result = OkanQuadraticJacobian(
+        transformations_file=transformations,
+        reference_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
+        correction_mode='cubic',
+    ).run()
+    assert not isdefined(result.outputs.ec_jacobian_images)
+
+
+def test_okan_jacobian_rejects_a_short_row(tmp_path):
+    transformations = _write_transformations(tmp_path / 'x.txt', [[0.0] * 20])
+    with pytest.raises(ValueError, match='24'):
+        OkanQuadraticJacobian(
+            transformations_file=transformations,
+            reference_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
+            correction_mode='quadratic',
+        ).run()

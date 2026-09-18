@@ -236,6 +236,8 @@ def init_dwi_preproc_wf(
                 'raw_concatenated',
                 'carpetplot_data',
                 'fieldmap_hz',
+                # Only written out by the TORTOISE/DIFFPREP backend.
+                'ec_jacobian_images',
             ]
         ),
         name='outputnode',
@@ -416,6 +418,13 @@ def init_dwi_preproc_wf(
 
     if doing_topup:
         workflow.connect([(hmc_wf, outputnode, [('outputnode.fieldmap_hz', 'fieldmap_hz')])])
+
+    if hmc_tool == 'tortoise':
+        # Only init_diffprep_hmc_wf's outputnode has this field -- shoreline
+        # and eddy have no TORTOISE eddy-current Jacobian to report.
+        workflow.connect([
+            (hmc_wf, outputnode, [('outputnode.ec_jacobian_images', 'ec_jacobian_images')]),
+        ])  # fmt:skip
 
     # DRBUDDI has some extra reports that we want to save. Make sure we get them!
     if doing_drbuddi:

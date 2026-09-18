@@ -195,6 +195,8 @@ def init_dwi_finalize_wf(
                 'hmc_xforms',
                 'fieldwarps',
                 'gradwarp_field',
+                # Only set by the TORTOISE/DIFFPREP backend.
+                'ec_jacobian_images',
                 'output_grid',
                 'subjects_dir',
                 'subject_id',
@@ -322,6 +324,7 @@ def init_dwi_finalize_wf(
             ('hmc_xforms', 'inputnode.hmc_xforms'),
             ('fieldwarps', 'inputnode.fieldwarps'),
             ('gradwarp_field', 'inputnode.gradwarp_field'),
+            ('ec_jacobian_images', 'inputnode.ec_jacobian_images'),
             ('dwi_files', 'inputnode.dwi_files'),
             ('dwi_sampling_grid', 'inputnode.output_grid'),
             ('b0_to_intramodal_template_transforms',

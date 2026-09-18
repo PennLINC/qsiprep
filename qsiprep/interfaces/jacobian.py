@@ -7,6 +7,110 @@ TORTOISE eddy current -- and of nothing else. See
 motion, coregistration and the intramodal/template warps are excluded, and for
 the derivation showing that excluding them does not move the coordinates at
 which the remaining determinants are evaluated.
+
+TORTOISE eddy-current Jacobian: sourced formula
+------------------------------------------------
+
+The Okan quadratic coordinate-map is not documented anywhere in this
+repository, and TORTOISE's public documentation
+(https://tortoisedti.nichd.nih.gov/transformation-files.html) covers only the
+older 14-column (v3) format. The 24-column (V4) layout implemented here was
+sourced directly from TORTOISE's own C++ source
+(https://github.com/rordenlab/TORTOISEV4, Apache-2.0 -- the source tree the
+container's ``/src/TORTOISEV4`` binaries are built from):
+
+* ``src/main/itkOkanQuadraticTransform.h`` -- ``NQUADPARAMS = 24``.
+* ``src/main/itkOkanQuadraticTransform.hxx`` -- ``TransformPoint`` (~line 155),
+  ``ComputeMatrix`` (~line 421), ``ComputeJacobianWithRespectToPosition``
+  (~line 583), and the read-back constructor
+  ``OkanQuadraticTransform(const ParametersType params)`` (~line 74) that
+  infers the phase axis from columns 6-8 when no other metadata is available.
+* ``src/main/DIFFPREP.cxx`` -- ``WriteOutputFiles`` (~line 1828: the identity
+  row and per-volume ``GetParameters()`` serialization to
+  ``_moteddy_transformations.txt``), ``ChangeImageHeaderToDP`` (~line 267:
+  the coordinate frame), the ``correction_mode != "off"`` resampling loop
+  (~line 2147: confirms the transform is used by
+  ``itk::ResampleImageFilter`` as an output-space -> input-space map, matching
+  qsiprep's non-slice-to-volume, non-outlier-replacement configuration), and
+  ``PE_string`` (~line 58: phase axis from the BIDS ``PhaseEncodingDirection``
+  at *write* time).
+* ``settings/mecc_settings/*.mec`` -- the 1-indexed column commentary matches
+  the 0-indexed source exactly (off by one), and confirms that qsiprep's
+  correction modes (``quadratic.mec``, ``cubic.mec``, ``rigid.mec`` -- the
+  non-``_isoc`` presets) never optimize the eddy centre: columns 21-23 stay at
+  their initial value of 0 for every qsiprep run.
+
+**Parameter layout** (0-indexed, 24 columns per DWI volume, one row per
+volume in acquisition order)::
+
+    0-2    rigid translation x, y, z (mm)
+    3-5    Euler rotation angles theta_x, theta_y, theta_z (radians);
+           R = Rz . Ry . Rx, composed in exactly that order (ComputeMatrix)
+    6-8    linear coefficients of the eddy-current phase-axis polynomial,
+           along x, y, z respectively. At identity, the coefficient for the
+           volume's own phase-encode axis is 1 and the other two are 0.
+    9-11   quadratic cross terms xy, xz, yz
+    12-13  quadratic terms (x^2 - y^2) and (2z^2 - x^2 - y^2)
+    14-20  cubic terms, active only when correction_mode == 'cubic'
+    21-23  eddy-current/rotation centre x, y, z (mm); always 0 for qsiprep
+           (which never requests a "_isoc" .mec preset)
+
+**The map** (``TransformPoint``; forward, output-space -> input-space, i.e.
+exactly what ``itk::ResampleImageFilter`` needs -- no inversion)::
+
+    p -= center                # columns 21-23
+    p  = R @ p + T             # columns 3-5, 0-2 ("rigid" part)
+    new_phase = c6*p.x + c7*p.y + c8*p.z
+              + c9*p.x*p.y + c10*p.x*p.z + c11*p.y*p.z
+              + c12*(p.x**2 - p.y**2) + c13*(2*p.z**2 - p.x**2 - p.y**2)
+    p[phase] = new_phase       # ASSIGNMENT, not addition: only the
+                                # phase-encode axis is replaced -- eddy
+                                # currents distort that axis alone
+    p += center
+
+``phase`` in ``{0, 1, 2}`` ("Read"/"Phase"/"Slice", i.e. the array axis, not a
+scanner axis) comes from the DWI's ``PhaseEncodingDirection`` ("i"->0,
+"j"->1, "k"->2) when TORTOISE *writes* the file. Reading it back (this module
+has no other source for it) reproduces TORTOISE's own heuristic: compare
+columns 6, 7, 8 and take the largest, since identity leaves that column at 1
+and the other two at 0 (see ``_okan_phase_axis``).
+
+**Coordinate frame.** ``TransformPoint`` does not operate in the DWI's own
+oblique scanner-physical space. ``ChangeImageHeaderToDP`` rewrites the image
+header to identity direction cosines before motion+eddy estimation and
+resampling, re-centring the origin so a continuous (generally non-integer)
+voxel index ``indo`` lands at physical ``(0, 0, 0)`` -- the scanner isocenter,
+for qsiprep's default ``rot_eddy_center="isocenter"``. Physical coordinates in
+this "DP frame" are therefore ``spacing * (index - indo)``, with **no
+rotation applied**: TORTOISE operates directly on the image's own
+voxel-aligned Read/Phase/Slice axes. ``indo`` still depends on the original
+image's true (possibly oblique) affine -- see ``_okan_coordinate_frame``.
+Because the DP frame is a fixed per-image *rotation* of physical space (by
+the image's own direction cosines), a Jacobian determinant computed in the DP
+frame equals the one computed in true LPS/RAS space (determinants are
+invariant under a shared orthogonal change of domain and codomain
+coordinates); the *absolute* coordinates fed into the polynomial still need
+the DP frame's centring to come out right, which is why
+``_okan_coordinate_frame`` reproduces it rather than assuming the array's
+geometric centre.
+
+**EC-only Jacobian.** ``okan_quadratic_jacobian`` uses only columns 6-23,
+treating the rigid part (0-5) as identity (``R = I``, ``T = 0``): head motion
+is excluded from Jacobian weighting by policy (see the design spec). Because
+the map replaces only ``p[phase]`` and leaves the other two coordinates
+untouched, its Jacobian matrix has two rows equal to elementary basis
+vectors, so ``det = d(new_phase)/d(p[phase])`` -- the partial derivative of
+the polynomial with respect to its own axis, holding the other two fixed
+(this matches the ``do_cubic == False`` branch of
+``ComputeJacobianWithRespectToPosition``, restricted to the ``R = I`` case).
+
+**Cubic is out of scope.** ``correction_mode == 'cubic'`` activates columns
+14-20 (``do_cubic``); this module does not implement that determinant.
+``OkanQuadraticJacobian`` returns ``Undefined`` for it rather than either
+raising (which would break otherwise-working runs) or silently applying the
+quadratic-only formula to cubic parameters (which would under-count the
+warp's volume change) -- see the mode-gating tests in
+``test_interfaces_jacobian.py``.
 """
 
 import os
@@ -17,6 +121,8 @@ from nilearn import image as nim
 from nipype import logging
 from nipype.interfaces import ants
 from nipype.utils.filemanip import fname_presuffix
+
+from .tortoise import _read_okan_transformations
 
 LOGGER = logging.getLogger('nipype.interface')
 
@@ -294,6 +400,7 @@ from nipype.interfaces.base import (
     SimpleInterface,
     TraitedSpec,
     isdefined,
+    traits,
 )
 
 
@@ -461,4 +568,292 @@ class ComposeJacobianWeights(SimpleInterface):
             weights.append(cache[cache_key])
 
         self._results['jacobian_weight_images'] = weights
+        return runtime
+
+
+#: Columns per DIFFPREP ``_moteddy_transformations.txt`` row: 6 rigid + 8
+#: quadratic + 7 cubic + 3 eddy centre. See the module docstring for the full
+#: layout and its source.
+OKAN_NPARAMS = 24
+
+
+def _okan_phase_axis(parameters):
+    """Infer the eddy-current phase-encode axis (0/1/2) from one 24-parameter
+    row.
+
+    Reproduces the tie-broken heuristic in TORTOISE's own
+    ``OkanQuadraticTransform(const ParametersType params)`` read-back
+    constructor (``itkOkanQuadraticTransform.hxx``): compare columns 6, 7, 8
+    in that order, with each later comparison overwriting the previous one on
+    a tie. Real transformation files always resolve this cleanly, because the
+    phase-encode column of an identity row is 1 and the other two are 0, and
+    a fitted eddy-current correction perturbs that column only slightly.
+    """
+    c6, c7, c8 = parameters[6], parameters[7], parameters[8]
+    phase = 1
+    if c8 >= c7 and c8 >= c6:
+        phase = 2
+    if c6 >= c7 and c6 >= c8:
+        phase = 0
+    if c7 >= c6 and c7 >= c8:
+        phase = 1
+    return phase
+
+
+def _okan_coordinate_frame(affine):
+    """TORTOISE's "DP frame" axis spacing and isocenter index for ``affine``.
+
+    Returns ``(spacing, indo)``: the per-axis voxel spacing (mm) and the
+    continuous voxel index of the physical origin (scanner isocenter),
+    computed the way ``DIFFPREP::ChangeImageHeaderToDP`` does for
+    ``rot_eddy_center="isocenter"`` (qsiprep's default; see the module
+    docstring). ``affine`` is a nibabel-style RAS+ affine; it is converted to
+    ITK's LPS convention first (negate x, y), matching TORTOISE's own
+    ITK-based image I/O.
+    """
+    affine = np.asarray(affine, dtype=float)
+    lps = np.diag([-1.0, -1.0, 1.0, 1.0]) @ affine
+    linear = lps[:3, :3]
+    spacing = np.linalg.norm(linear, axis=0)
+    direction = linear / spacing
+    origin = lps[:3, 3]
+    indo = (direction.T @ (-origin)) / spacing
+    return spacing, indo
+
+
+def okan_quadratic_jacobian(parameters, shape, affine):
+    """Analytic ``det grad phi`` of the eddy-current-only component.
+
+    Uses only columns 6-23 of one DIFFPREP 24-parameter row, treating the
+    rigid part (columns 0-5) as identity -- see the module docstring for the
+    sourced formula and the derivation of why this reduces to a single
+    partial derivative.
+    """
+    parameters = np.asarray(parameters, dtype=float)
+    if parameters.size != OKAN_NPARAMS:
+        raise ValueError(
+            f'expected {OKAN_NPARAMS} Okan transform parameters, got {parameters.size}'
+        )
+
+    phase = _okan_phase_axis(parameters)
+    spacing, indo = _okan_coordinate_frame(affine)
+
+    ii, jj, kk = np.meshgrid(
+        np.arange(shape[0]), np.arange(shape[1]), np.arange(shape[2]), indexing='ij'
+    )
+    x = spacing[0] * (ii - indo[0]) - parameters[21]
+    y = spacing[1] * (jj - indo[1]) - parameters[22]
+    z = spacing[2] * (kk - indo[2]) - parameters[23]
+
+    c6, c7, c8, c9, c10, c11, c12, c13 = parameters[6:14]
+    if phase == 0:
+        det = c6 + c9 * y + c10 * z + 2 * c12 * x - 2 * c13 * x
+    elif phase == 1:
+        det = c7 + c9 * x + c11 * z - 2 * c12 * y - 2 * c13 * y
+    else:
+        det = c8 + c10 * x + c11 * y + 4 * c13 * z
+    return det
+
+
+def _okan_transform_point(px, py, pz, parameters):
+    """Full 24-parameter forward map (rigid + quadratic + cubic), vectorized.
+
+    Implements ``OkanQuadraticTransform::TransformPoint`` exactly (see the
+    module docstring). ``px, py, pz`` are DP-frame physical coordinates
+    (broadcastable arrays). Used only by ``resample_with_okan_transform``, the
+    ship-gate helper -- production Jacobian weighting never needs the full
+    point map, only its EC-only determinant (``okan_quadratic_jacobian``).
+    """
+    phase = _okan_phase_axis(parameters)
+    center_x, center_y, center_z = parameters[21], parameters[22], parameters[23]
+    x = px - center_x
+    y = py - center_y
+    z = pz - center_z
+
+    ax, ay, az = parameters[3], parameters[4], parameters[5]
+    cos_x, sin_x = np.cos(ax), np.sin(ax)
+    cos_y, sin_y = np.cos(ay), np.sin(ay)
+    cos_z, sin_z = np.cos(az), np.sin(az)
+    rot_x = np.array([[1, 0, 0], [0, cos_x, -sin_x], [0, sin_x, cos_x]])
+    rot_y = np.array([[cos_y, 0, sin_y], [0, 1, 0], [-sin_y, 0, cos_y]])
+    rot_z = np.array([[cos_z, -sin_z, 0], [sin_z, cos_z, 0], [0, 0, 1]])
+    matrix = rot_z @ rot_y @ rot_x
+
+    rx = matrix[0, 0] * x + matrix[0, 1] * y + matrix[0, 2] * z + parameters[0]
+    ry = matrix[1, 0] * x + matrix[1, 1] * y + matrix[1, 2] * z + parameters[1]
+    rz = matrix[2, 0] * x + matrix[2, 1] * y + matrix[2, 2] * z + parameters[2]
+
+    c6, c7, c8, c9, c10, c11, c12, c13 = parameters[6:14]
+    new_phase = (
+        c6 * rx
+        + c7 * ry
+        + c8 * rz
+        + c9 * rx * ry
+        + c10 * rx * rz
+        + c11 * ry * rz
+        + c12 * (rx**2 - ry**2)
+        + c13 * (2 * rz**2 - rx**2 - ry**2)
+    )
+
+    c14, c15, c16, c17, c18, c19, c20 = parameters[14:21]
+    total_change = (
+        c14 * rx * ry * rz
+        + c15 * rz * (rx**2 - ry**2)
+        + c16 * rx * (4 * rz**2 - rx**2 - ry**2)
+        + c17 * ry * (4 * rz**2 - rx**2 - ry**2)
+        + c18 * rx * (rx**2 - 3 * ry**2)
+        + c19 * ry * (3 * rx**2 - ry**2)
+        + c20 * rz * (2 * rz**2 - 3 * rx**2 - 3 * ry**2)
+    )
+
+    out = [rx, ry, rz]
+    out[phase] = new_phase + total_change
+    out[0] = out[0] + center_x
+    out[1] = out[1] + center_y
+    out[2] = out[2] + center_z
+    return out[0], out[1], out[2]
+
+
+def resample_with_okan_transform(image, transformations_file, out_path):
+    """Reconstruct DIFFPREP's motion+eddy resampling from its own parameters.
+
+    Ship-gate helper only (see ``test_reconstructed_transform_reproduces_
+    moteddy`` in ``test_interfaces_diffprep.py``): applies the *full*
+    24-parameter ``OkanQuadraticTransform`` (rigid + quadratic + cubic, all
+    unconditionally -- columns a given ``correction_mode`` never populates
+    are simply zero, so including them is a no-op) to every volume of
+    ``image`` and resamples it against itself, replicating TORTOISE's own
+    ``ResampleImageFilter``-based resampling in
+    ``DIFFPREP::WriteOutputFiles`` (see the module docstring): for each
+    output voxel, the transform maps the output DP-frame physical point to
+    the point to sample in the input image, and ITK's default (linear)
+    interpolator reads it there.
+    """
+    from scipy.ndimage import map_coordinates
+
+    img = nb.load(image)
+    data = np.asanyarray(img.dataobj).astype(np.float64)
+    if data.ndim == 3:
+        data = data[..., np.newaxis]
+    shape3 = data.shape[:3]
+    nvols = data.shape[3]
+
+    rows = _read_okan_transformations(transformations_file)
+    if len(rows) != nvols:
+        raise ValueError(
+            f'{transformations_file} has {len(rows)} transform rows but {image} '
+            f'has {nvols} volumes.'
+        )
+
+    spacing, indo = _okan_coordinate_frame(img.affine)
+    ii, jj, kk = np.meshgrid(
+        np.arange(shape3[0]), np.arange(shape3[1]), np.arange(shape3[2]), indexing='ij'
+    )
+    x_out = spacing[0] * (ii - indo[0])
+    y_out = spacing[1] * (jj - indo[1])
+    z_out = spacing[2] * (kk - indo[2])
+
+    out = np.zeros(data.shape, dtype=np.float32)
+    for vol in range(nvols):
+        params = np.asarray(rows[vol], dtype=float)
+        if params.size < OKAN_NPARAMS:
+            raise ValueError(f'expected {OKAN_NPARAMS} columns per row, got {params.size}')
+        x_in, y_in, z_in = _okan_transform_point(x_out, y_out, z_out, params)
+        idx_in = np.stack(
+            [
+                x_in / spacing[0] + indo[0],
+                y_in / spacing[1] + indo[1],
+                z_in / spacing[2] + indo[2],
+            ]
+        )
+        out[..., vol] = map_coordinates(data[..., vol], idx_in, order=1, mode='constant', cval=0.0)
+
+    result_data = out[..., 0] if out.shape[3] == 1 else out
+    nb.Nifti1Image(result_data, img.affine, img.header).to_filename(out_path)
+    return out_path
+
+
+class _OkanQuadraticJacobianInputSpec(BaseInterfaceInputSpec):
+    transformations_file = File(
+        exists=True,
+        mandatory=True,
+        desc='DIFFPREP _moteddy_transformations.txt file with 24 columns per volume',
+    )
+    reference_image = File(
+        exists=True,
+        mandatory=True,
+        desc='DIFFPREP input grid (the extract_b0s.b0_average grid): the '
+        'eddy-current Jacobian is evaluated here, not on the output grid',
+    )
+    correction_mode = traits.Enum(
+        'motion',
+        'quadratic',
+        'cubic',
+        mandatory=True,
+        desc="qsiprep's effective_correction_mode (after the --sloppy "
+        'downgrade). "motion" has no eddy-current component; "cubic" is a '
+        'valid DIFFPREP mode this module does not implement a determinant '
+        'for, so it degrades (Undefined output, logged warning) rather than '
+        'raising or misapplying the quadratic formula.',
+    )
+
+
+class _OkanQuadraticJacobianOutputSpec(TraitedSpec):
+    ec_jacobian_images = OutputMultiObject(
+        File(exists=True),
+        desc="per-volume eddy-current Jacobian determinants; Undefined for "
+        "correction_mode in ('motion', 'cubic')",
+    )
+
+
+class OkanQuadraticJacobian(SimpleInterface):
+    """Per-volume TORTOISE eddy-current Jacobian determinant maps.
+
+    See the module docstring for the sourced Okan quadratic-transform formula
+    this implements. Only ``correction_mode == 'quadratic'`` is supported:
+    'motion' has no eddy-current component to weight, and 'cubic' is a valid,
+    existing DIFFPREP mode this module does not implement a determinant for.
+    Both return ``Undefined`` rather than raising, so a weighting-enabled run
+    never aborts on an otherwise-working DIFFPREP configuration -- the caller
+    is expected to record the 'cubic' gap via
+    ``qsiprep.config.record_unmodulated``.
+    """
+
+    input_spec = _OkanQuadraticJacobianInputSpec
+    output_spec = _OkanQuadraticJacobianOutputSpec
+
+    def _run_interface(self, runtime):
+        if self.inputs.correction_mode == 'motion':
+            LOGGER.warning(
+                "correction_mode='motion' has no eddy-current component to "
+                'weight; ec_jacobian_images will be Undefined.'
+            )
+            return runtime
+        if self.inputs.correction_mode == 'cubic':
+            LOGGER.warning(
+                "correction_mode='cubic' is not supported for eddy-current "
+                'Jacobian weighting (only the quadratic terms are '
+                'implemented here); ec_jacobian_images will be Undefined and '
+                'the eddy-current component of this run will be unmodulated.'
+            )
+            return runtime
+
+        rows = _read_okan_transformations(self.inputs.transformations_file)
+        ref = nb.load(self.inputs.reference_image)
+        shape = ref.shape[:3]
+        affine = ref.affine
+
+        images = []
+        for index, row in enumerate(rows):
+            det = okan_quadratic_jacobian(row, shape, affine)
+            out_path = fname_presuffix(
+                self.inputs.reference_image,
+                suffix=f'_ecjac-{index:05d}',
+                newpath=runtime.cwd,
+                use_ext=True,
+            )
+            nb.Nifti1Image(det.astype('float32'), affine, ref.header).to_filename(out_path)
+            images.append(out_path)
+
+        self._results['ec_jacobian_images'] = images
         return runtime

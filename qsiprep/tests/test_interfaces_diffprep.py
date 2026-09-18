@@ -1564,3 +1564,40 @@ def test_diffprep_passes_ncores_to_tortoise():
     assert node.inputs.ncores == 8
     # nipype's accounting and the process's real budget must agree
     assert node.n_procs == 8
+
+
+@pytest.mark.integration
+@pytest.mark.diffprep
+def test_reconstructed_transform_reproduces_moteddy(tmp_path, working_dir):
+    """The ship gate: our reconstruction must match TORTOISE's own output.
+
+    Reproducing ``_moteddy.nii`` validates the *combined* motion+EC map, which
+    is what pins the parameter convention. Splitting the EC determinant out of
+    it is licensed separately, by DIFFPREP's motion component being rigid
+    (columns 0-5), unlike SHORELine's affine default. Both must hold.
+    """
+    from pathlib import Path
+
+    import nibabel as nb
+    import numpy as np
+
+    from qsiprep.interfaces.jacobian import resample_with_okan_transform
+
+    work = Path(working_dir)
+    transformations = next(work.rglob('*_moteddy_transformations.txt'))
+    tortoise_output = next(work.rglob('*_moteddy.nii'))
+    imported = next(work.rglob('*_proc.nii'))
+
+    ours = resample_with_okan_transform(
+        str(imported), str(transformations), str(tmp_path / 'ours.nii.gz')
+    )
+    mine = np.asanyarray(nb.load(ours).dataobj)
+    theirs = np.asanyarray(nb.load(str(tortoise_output)).dataobj)
+
+    inside = theirs > np.percentile(theirs, 60)
+    r = np.corrcoef(mine[inside], theirs[inside])[0, 1]
+    assert r > 0.99, (
+        f'Reconstructed motion+eddy resampling vs TORTOISE _moteddy.nii: '
+        f'r={r:.5f}. Below 0.99 means the 24-parameter convention is wrong, '
+        'and the EC Jacobian must NOT ship -- fall back to documenting the gap.'
+    )
