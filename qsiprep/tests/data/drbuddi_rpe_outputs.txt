@@ -11,6 +11,8 @@ sub-tinytensors/dwi/sub-tinytensors_desc-confounds_timeseries.json
 sub-tinytensors/dwi/sub-tinytensors_desc-confounds_timeseries.tsv
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-brain_mask.nii.gz
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-image_qc.tsv
+sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-jacobian_dwimap.json
+sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-jacobian_dwimap.nii.gz
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-preproc_dwi.b
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-preproc_dwi.b_table.txt
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-preproc_dwi.bval

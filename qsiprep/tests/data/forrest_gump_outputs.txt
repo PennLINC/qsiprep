@@ -24,6 +24,8 @@ sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_desc-confounds_timeseries.json
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_desc-confounds_timeseries.tsv
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_desc-brain_mask.nii.gz
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_desc-image_qc.tsv
+sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_desc-jacobian_dwimap.json
+sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_desc-jacobian_dwimap.nii.gz
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_desc-preproc_dwi.b
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_desc-preproc_dwi.b_table.txt
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_desc-preproc_dwi.bval

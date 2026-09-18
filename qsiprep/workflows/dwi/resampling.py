@@ -184,6 +184,11 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 'local_bvecs',
                 'b0_series',
                 'resampled_qc',
+                # Only defined when config.workflow.jacobian_weighting applied
+                # weights: the unique output-grid weight maps and the
+                # per-volume index into them.
+                'jacobian_weights',
+                'jacobian_weight_index',
                 # Only written out if TOPUP was used
                 'fieldmap_hz_resampled',
             ]
@@ -280,6 +285,10 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             ]),
             (compose_jacobian, scale_dwis, [
                 ('jacobian_weight_images', 'jacobian_weight_images'),
+            ]),
+            (scale_dwis, outputnode, [
+                ('resampled_weight_images', 'jacobian_weights'),
+                ('weight_index', 'jacobian_weight_index'),
             ]),
         ])  # fmt:skip
 

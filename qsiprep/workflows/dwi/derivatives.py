@@ -13,6 +13,8 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
 from ... import config
 from ...interfaces import DerivativesDataSink
+from ...interfaces.bids import DerivativesMaybeDataSink
+from ...interfaces.jacobian import StackJacobianWeights
 from ...interfaces.tsnr import DWITSNR
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -83,6 +85,10 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
                 'btable_t1',
                 'hmc_optimization_data',
                 'series_qc',
+                # Only defined when config.workflow.jacobian_weighting applied
+                # weights: see StackJacobianWeights below.
+                'jacobian_weights',
+                'jacobian_weight_index',
             ]
         ),
         name='inputnode',
@@ -268,6 +274,41 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
         (inputnode, ds_gradient_table_t1, [('gradient_table_t1', 'in_file')]),
         (inputnode, ds_btable_t1, [('btable_t1', 'in_file')]),
     ])  # fmt:skip
+
+    # The Jacobian weight derivative records the weights QSIPrep applied, and
+    # nothing else. When jacobian_weighting is off, or when every applied
+    # modulation was internal to a backend (e.g. --hmc-method eddy with TOPUP
+    # and no gradwarp), ComposeJacobianWeights produces no maps, jacobian_weights
+    # stays Undefined all the way down this pipe, and DerivativesMaybeDataSink
+    # no-ops -- no file is written. A unity map is never synthesized for that
+    # case: it would assert "we modulated by 1", which is false.
+    if config.workflow.jacobian_weighting:
+        stack_jacobian = pe.Node(StackJacobianWeights(), name='stack_jacobian')
+        ds_jacobian = pe.Node(
+            DerivativesMaybeDataSink(
+                source_file=source_file,
+                base_directory=output_dir,
+                space='ACPC',
+                desc='jacobian',
+                suffix='dwimap',
+                extension='.nii.gz',
+                compress=True,
+            ),
+            name='ds_jacobian',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+        workflow.connect([
+            (inputnode, stack_jacobian, [
+                ('jacobian_weights', 'weight_images'),
+                ('jacobian_weight_index', 'weight_index'),
+            ]),
+            (stack_jacobian, ds_jacobian, [
+                ('out_file', 'in_file'),
+                ('meta_dict', 'meta_dict'),
+            ]),
+        ])  # fmt:skip
+
     # If requested, write local bvecs
     # if config.workflow.write_local_bvecs:
     #     ds_local_bvecs_t1 = pe.Node(

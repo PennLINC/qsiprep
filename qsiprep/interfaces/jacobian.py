@@ -122,6 +122,7 @@ from nipype import logging
 from nipype.interfaces import ants
 from nipype.utils.filemanip import fname_presuffix
 
+from .. import config
 from .tortoise import _read_okan_transformations
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -856,4 +857,90 @@ class OkanQuadraticJacobian(SimpleInterface):
             images.append(out_path)
 
         self._results['ec_jacobian_images'] = images
+        return runtime
+
+
+def _jacobian_sidecar(weight_index, applied, unmodulated, reason):
+    """Sidecar for the Jacobian weight derivative.
+
+    ``weight_index`` is zero-based, one entry per volume of the preprocessed
+    DWI series, indexing volumes of the 4D weight file. Repeated maps appear as
+    repeated indices, which makes the dedup visible rather than implicit; the
+    collapsed single-map case is all zeros, written in full so consumers need
+    no special case.
+    """
+    sidecar = {
+        'JacobianWeightIndex': list(weight_index),
+        'AppliedCorrections': list(applied),
+        'UnmodulatedCorrections': list(unmodulated),
+        'Description': (
+            'Multiplicative Jacobian intensity modulation applied to the '
+            'preprocessed DWI series immediately after spatial resampling. '
+            'Dividing by the indexed volume reverses that multiplication at '
+            'that point in the pipeline; it does not recover an unmodulated '
+            'series, because denoising and bias-field correction run after '
+            'resampling and do not commute with it.'
+        ),
+    }
+    if unmodulated and reason:
+        sidecar['UnmodulatedReason'] = reason
+    return sidecar
+
+
+class _StackJacobianWeightsInputSpec(BaseInterfaceInputSpec):
+    # Not mandatory: QSIPrep's own inputnode.jacobian_weight_images is
+    # Undefined whenever ComposeJacobianWeights applied no weights (weighting
+    # disabled, or every modulation was internal to the HMC backend). That is
+    # a normal, expected run outcome, not an error -- see the module and
+    # derivatives-workflow docstrings for the "no weights" contract. A
+    # mandatory trait here would make nipype's own mandatory-input check raise
+    # ``ValueError`` on exactly that run instead of letting this interface
+    # no-op and leave its outputs Undefined for ``DerivativesMaybeDataSink``.
+    weight_images = InputMultiObject(
+        File(exists=True),
+        desc='unique output-grid weight maps, first-appearance order',
+    )
+    weight_index = traits.List(
+        traits.Int(), desc='per-volume index into weight_images'
+    )
+
+
+class _StackJacobianWeightsOutputSpec(TraitedSpec):
+    out_file = File(desc='3D if one unique map, else 4D; Undefined if no weights were applied')
+    meta_dict = traits.Dict(desc='sidecar for the derivative')
+
+
+class StackJacobianWeights(SimpleInterface):
+    """Stack the unique weight maps and build the sidecar.
+
+    3D when every volume shares one map, 4D otherwise. The index is written
+    out in full either way, so consumers need no special case. Undefined
+    ``weight_images`` (no weights were applied this run) is propagated as
+    Undefined outputs rather than raising or synthesizing a map of ones.
+    """
+
+    input_spec = _StackJacobianWeightsInputSpec
+    output_spec = _StackJacobianWeightsOutputSpec
+
+    def _run_interface(self, runtime):
+        if not isdefined(self.inputs.weight_images):
+            return runtime
+
+        images = [nb.load(path) for path in self.inputs.weight_images]
+        out_file = os.path.join(runtime.cwd, 'jacobian_weights.nii.gz')
+        if len(images) == 1:
+            data = np.asanyarray(images[0].dataobj)
+        else:
+            data = np.stack([np.asanyarray(img.dataobj) for img in images], axis=-1)
+        nb.Nifti1Image(
+            data.astype('float32'), images[0].affine, images[0].header
+        ).to_filename(out_file)
+
+        self._results['out_file'] = out_file
+        self._results['meta_dict'] = _jacobian_sidecar(
+            weight_index=self.inputs.weight_index,
+            applied=config.workflow.jacobian_applied_corrections,
+            unmodulated=config.workflow.jacobian_unmodulated_corrections,
+            reason=config.workflow.jacobian_unmodulated_reason,
+        )
         return runtime

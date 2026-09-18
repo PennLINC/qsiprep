@@ -6,12 +6,15 @@ The numeric correctness of the weights lives in
 ``test_interfaces_jacobian.py`` and ``test_jacobian_conservation.py``.
 """
 
+import json
 import os
 
 import pytest
+from bids.layout.writing import build_path
 from qsiplan.models import CorrectionMethod
 
 from qsiprep import config
+from qsiprep.data import load as load_data
 from qsiprep.tests.preproc_factory import make_preproc_unit
 
 
@@ -260,3 +263,86 @@ def test_drbuddi_aggregate_has_no_scaling_output():
 
     outputs = DRBUDDIAggregateOutputs().output_spec().copyable_trait_names()
     assert 'sdc_scaling_images' not in outputs
+
+
+def _patterns():
+    return json.loads(load_data('io_spec.json').read_text())['default_path_patterns']
+
+
+def test_jacobian_derivative_path_renders():
+    """Assert the rendered path, not the datasink inputs.
+
+    Entity-level checks are blind to a pattern that silently drops an entity or
+    collides with another derivative's name.
+    """
+    # strict=True: with strict=False an entity the pattern does not support is
+    # silently dropped, so the test would pass while the real filename lost it.
+    out = build_path(
+        {
+            'subject': '01',
+            'datatype': 'dwi',
+            'space': 'ACPC',
+            'desc': 'jacobian',
+            'suffix': 'dwimap',
+            'extension': '.nii.gz',
+        },
+        _patterns(),
+        strict=True,
+    )
+    assert out == 'sub-01/dwi/sub-01_space-ACPC_desc-jacobian_dwimap.nii.gz'
+
+
+def test_jacobian_derivative_does_not_collide_with_preproc_dwi():
+    preproc = build_path(
+        {
+            'subject': '01', 'datatype': 'dwi', 'space': 'ACPC', 'desc': 'preproc',
+            'suffix': 'dwi', 'extension': '.nii.gz',
+        },
+        _patterns(),
+        strict=False,
+    )
+    jacobian = build_path(
+        {
+            'subject': '01', 'datatype': 'dwi', 'space': 'ACPC', 'desc': 'jacobian',
+            'suffix': 'dwimap', 'extension': '.nii.gz',
+        },
+        _patterns(),
+        strict=False,
+    )
+    assert preproc != jacobian
+    assert not jacobian.endswith('_dwi.nii.gz')
+
+
+def test_jacobian_sidecar_index_is_zero_based_and_full_length():
+    from qsiprep.interfaces.jacobian import _jacobian_sidecar
+
+    sidecar = _jacobian_sidecar(
+        weight_index=[0, 0, 1, 0], applied=['gradwarp', 'sdc'],
+        unmodulated=[], reason=None,
+    )
+    assert sidecar['JacobianWeightIndex'] == [0, 0, 1, 0]
+    assert sidecar['AppliedCorrections'] == ['gradwarp', 'sdc']
+    assert sidecar['UnmodulatedCorrections'] == []
+    assert 'UnmodulatedReason' not in sidecar
+
+
+def test_jacobian_sidecar_records_a_gap():
+    from qsiprep.interfaces.jacobian import _jacobian_sidecar
+
+    sidecar = _jacobian_sidecar(
+        weight_index=[0, 0], applied=['gradwarp', 'sdc'],
+        unmodulated=['eddy-current'],
+        reason='TORTOISE correction_mode=cubic is not supported',
+    )
+    assert sidecar['UnmodulatedCorrections'] == ['eddy-current']
+    assert 'cubic' in sidecar['UnmodulatedReason']
+
+
+def test_jacobian_sidecar_collapsed_case_is_written_in_full():
+    """All-zeros rather than omitted, so consumers need no special case."""
+    from qsiprep.interfaces.jacobian import _jacobian_sidecar
+
+    sidecar = _jacobian_sidecar(
+        weight_index=[0] * 5, applied=['sdc'], unmodulated=[], reason=None
+    )
+    assert sidecar['JacobianWeightIndex'] == [0, 0, 0, 0, 0]

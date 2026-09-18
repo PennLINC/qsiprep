@@ -233,6 +233,10 @@ def init_dwi_finalize_wf(
                 'gradient_table_t1',
                 'btable_t1',
                 'hmc_optimization_data',
+                # Only defined when config.workflow.jacobian_weighting applied
+                # weights: forwarded from transform_dwis_t1.
+                'jacobian_weights',
+                'jacobian_weight_index',
                 # Only written out if TOPUP was used
                 'fieldmap_hz_t1',
             ]
@@ -364,6 +368,14 @@ def init_dwi_finalize_wf(
             (inputnode, transform_dwis_t1, [('fieldmap_hz', 'inputnode.fieldmap_hz')]),
             (transform_dwis_t1, outputnode, [
                 ('outputnode.fieldmap_hz_resampled', 'fieldmap_hz_t1'),
+            ]),
+        ])  # fmt:skip
+
+    if config.workflow.jacobian_weighting:
+        workflow.connect([
+            (transform_dwis_t1, outputnode, [
+                ('outputnode.jacobian_weights', 'jacobian_weights'),
+                ('outputnode.jacobian_weight_index', 'jacobian_weight_index'),
             ]),
         ])  # fmt:skip
 
@@ -602,6 +614,14 @@ def init_dwi_finalize_wf(
         ]),
         (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')]),
     ])  # fmt:skip
+
+    if config.workflow.jacobian_weighting:
+        workflow.connect([
+            (outputnode, dwi_derivatives_wf, [
+                ('jacobian_weights', 'inputnode.jacobian_weights'),
+                ('jacobian_weight_index', 'inputnode.jacobian_weight_index'),
+            ]),
+        ])  # fmt:skip
 
     if doing_topup:
         workflow.connect([
