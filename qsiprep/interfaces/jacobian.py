@@ -16,8 +16,15 @@ import numpy as np
 from nilearn import image as nim
 from nipype import logging
 from nipype.interfaces import ants
+from nipype.utils.filemanip import fname_presuffix
 
 LOGGER = logging.getLogger('nipype.interface')
+
+#: NIfTI intent code ITK's NiftiImageIO uses to recognize a 5D image as a
+#: displacement field. Without it, ``CreateJacobianDeterminantImage`` still
+#: runs, but silently miscomputes cross-derivatives of the first vector
+#: component -- see ``jacobian_determinant``.
+VECTOR_INTENT_CODE = 1007
 
 #: Tolerances for comparing a displacement field's affine against the
 #: composition reference. Loose enough for float32 header round-trips, tight
@@ -52,6 +59,10 @@ def validate_field_geometry(field_path, reference_path):
     intended coordinate domain, and it cannot detect an inverted field -- an
     inverse has identical headers. Direction is established behaviourally, by
     the conservation oracle and the positivity guard.
+
+    This does not check the NIfTI vector intent code; that normalization
+    happens in ``jacobian_determinant`` immediately before the ANTs shellout
+    that depends on it, not here.
     """
     field = nb.load(field_path)
     reference = nb.load(reference_path)
@@ -167,7 +178,46 @@ def jacobian_determinant(field_path, out_path, mask_path=None):
     before any absolute value is taken -- otherwise a fold at -0.5 would become
     an innocuous-looking weight of 0.5 and no later check could recover it.
     Pass ``mask_path`` to get that check; without it the sign is only logged.
+
+    A field lacking the ``NIFTI_INTENT_VECTOR`` (1007) intent code is silently
+    miscomputed by ``CreateJacobianDeterminantImage``: without it, ANTs treats
+    the file as a generic vector array rather than a displacement field, and
+    cross-derivatives of the first vector component are folded into the
+    diagonal, giving a determinant that is positive, plausible, and wrong
+    (e.g. a pure shear with det = 1 measured back at 1.3 for one hand-authored
+    field, 0.7 for another -- the exact wrong value depends on the field's own
+    sign convention, which is the point: it is never flagged as wrong). The
+    positivity guard cannot catch this because the number looks fine. A
+    displacement field reaching this function is a displacement field by
+    contract (the ``gradwarp_field``/``fieldwarps``
+    slots it comes from admit nothing else), so the intent code is normalized
+    here rather than validated-and-rejected: a producer such as
+    ``MaskWarpDimensions`` forwards its input header verbatim and never sets
+    it, and a user-supplied ``--gradient-file`` field is never checked either.
+    The caller's file is never mutated in place; a corrected copy is written
+    to scratch and ANTs runs against that copy instead.
     """
+    intent_code = nb.load(field_path).header.get_intent('code')[0]
+    if intent_code != VECTOR_INTENT_CODE:
+        corrected_path = fname_presuffix(
+            field_path, suffix='_vecintent', newpath=os.path.dirname(out_path) or None
+        )
+        img = nb.load(field_path)
+        header = img.header.copy()
+        header.set_intent(VECTOR_INTENT_CODE)
+        nb.Nifti1Image(np.asanyarray(img.dataobj), img.affine, header).to_filename(
+            corrected_path
+        )
+        LOGGER.warning(
+            'Displacement field %s is missing the NIFTI_INTENT_VECTOR intent '
+            'code; CreateJacobianDeterminantImage silently miscomputes '
+            'cross-derivatives of the first component without it. Normalized '
+            'a copy at %s and using that instead.',
+            field_path,
+            corrected_path,
+        )
+        field_path = corrected_path
+
     jac = ants.CreateJacobianDeterminantImage(
         imageDimension=3,
         deformationField=field_path,

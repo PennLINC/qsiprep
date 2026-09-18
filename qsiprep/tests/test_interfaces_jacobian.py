@@ -31,15 +31,45 @@ def _write_map(path, value, shape=(8, 8, 8), affine=None):
     return str(path)
 
 
-def _write_linear_field(path, matrix, shape=(8, 8, 8)):
-    """Write an ITK displacement field encoding phi(x) = matrix @ x."""
+def _write_linear_field(path, matrix, shape=(8, 8, 8), set_intent=True):
+    """Write an ITK displacement field encoding phi(x) = matrix @ x.
+
+    The x and y displacement components are negated before writing, matching
+    the RAS-to-LPS convention ITK applies to any NIfTI it recognizes as a
+    displacement field (i.e. tagged with the ``NIFTI_INTENT_VECTOR`` intent
+    code -- see below). This is the same convention already established
+    elsewhere in this codebase for hand-authored vector fields; compare
+    ``FUGUEvsm2ANTSwarp`` and ``_fix_hdr`` in ``qsiprep/workflows/fieldmap/
+    pepolar.py``, both of which negate components with a "ITK is LPS"
+    comment. Without it, a diagonal field with a nonzero x or y scaling term
+    reads back with the wrong sign once the intent code is set (measured: a
+    2x scale came back as 0, not 2, when the naive un-negated data was
+    intent-tagged).
+
+    ``set_intent`` defaults to True, tagging the header with intent code 1007
+    (``NIFTI_INTENT_VECTOR``), which is what ``CreateJacobianDeterminantImage``
+    needs to apply the RAS-to-LPS conversion above; without it, ANTs instead
+    treats the file as a generic vector array and silently folds
+    cross-derivatives of the first vector component into the diagonal (see
+    ``test_jacobian_determinant_normalizes_missing_vector_intent``). Pass
+    ``set_intent=False`` to reproduce a header as a real producer -- e.g.
+    ``MaskWarpDimensions``, which forwards its input header verbatim -- might
+    emit it, while still encoding correctly-signed data as that same real
+    producer would.
+    """
     coords = np.stack(
         np.meshgrid(*[np.arange(n, dtype='float32') for n in shape], indexing='ij'),
         axis=-1,
     )
     mapped = coords @ np.asarray(matrix, dtype='float32').T
-    data = (mapped - coords).reshape(shape + (1, 3)).astype('float32')
-    nb.Nifti1Image(data, np.eye(4)).to_filename(str(path))
+    displacement = (mapped - coords).astype('float32')
+    displacement[..., 0] *= -1
+    displacement[..., 1] *= -1
+    data = displacement.reshape(shape + (1, 3)).astype('float32')
+    img = nb.Nifti1Image(data, np.eye(4))
+    if set_intent:
+        img.header.set_intent(1007)
+    img.to_filename(str(path))
     return str(path)
 
 
@@ -165,6 +195,36 @@ def test_jacobian_determinant_of_shear_is_unity(tmp_path):
         pytest.skip('CreateJacobianDeterminantImage required for this test')
     shear = np.array([[1.0, 0.3, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
     field = _write_linear_field(tmp_path / 'shear.nii.gz', shear)
+
+    out = jacobian_determinant(field, str(tmp_path / 'det.nii.gz'))
+    interior = np.asanyarray(nb.load(out).dataobj)[2:-2, 2:-2, 2:-2]
+    np.testing.assert_allclose(interior, 1.0, atol=5e-2)
+
+
+def test_jacobian_determinant_normalizes_missing_vector_intent(tmp_path):
+    """A field without the vector intent code must not silently corrupt weights.
+
+    ``CreateJacobianDeterminantImage`` does not require the NIfTI
+    ``NIFTI_INTENT_VECTOR`` (1007) intent code to run, but without it, it
+    silently folds cross-derivatives of the first vector component into the
+    diagonal: this shear, with det = 1, measures back at 0.7 when the intent
+    code is missing (a different wrong number than the 1.3 seen for a
+    differently-signed field in ``test_jacobian_determinant_of_shear_is_unity``
+    -- the exact value depends on the field's own sign convention, which is
+    the point: it is never flagged as wrong). It is positive and plausible, so
+    nothing downstream -- the positivity guard included -- can catch it. A
+    real producer can omit the intent code entirely: ``MaskWarpDimensions``
+    forwards its input header verbatim, and a user-supplied ``--gradient-file``
+    field is never checked. This test reproduces exactly that: a
+    correctly-signed shear field written with no intent code must still come
+    back at 1.0, proving ``jacobian_determinant`` normalizes the header rather
+    than trusting it.
+    """
+    if shutil.which('CreateJacobianDeterminantImage') is None:
+        pytest.skip('CreateJacobianDeterminantImage required for this test')
+    shear = np.array([[1.0, 0.3, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
+    field = _write_linear_field(tmp_path / 'shear_no_intent.nii.gz', shear, set_intent=False)
+    assert nb.load(field).header.get_intent('code')[0] != 1007
 
     out = jacobian_determinant(field, str(tmp_path / 'det.nii.gz'))
     interior = np.asanyarray(nb.load(out).dataobj)[2:-2, 2:-2, 2:-2]
