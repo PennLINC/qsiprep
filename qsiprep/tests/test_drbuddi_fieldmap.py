@@ -107,3 +107,37 @@ def test_derivatives_wf_writes_fieldmap_only_with_meta():
     assert ds is not None
     assert ds.inputs.suffix == 'fieldmap'
     assert ds.inputs.meta_dict == meta
+
+
+def test_fieldmap_datasink_builds_a_dwi_path(tmp_path):
+    """A 'fieldmap' suffix in the dwi datatype must have a path template.
+
+    Regression: io_spec.json registered 'graddev' but not 'fieldmap' for dwi
+    derivatives, so the datasink built the node fine but raised "Could not build
+    path" at run time. Exercise the actual path build, not just node existence.
+    """
+    import nibabel as nb
+    import numpy as np
+
+    from qsiprep.interfaces.bids import DerivativesDataSink
+
+    src = tmp_path / 'sub-01_ses-1_acq-HBCD_run-01_dwi.nii.gz'
+    img = nb.Nifti1Image(np.zeros((4, 4, 4), dtype=np.float32), np.eye(4))
+    img.to_filename(str(src))
+    field = tmp_path / 'fieldmap_hz.nii.gz'
+    img.to_filename(str(field))
+
+    ds = DerivativesDataSink(
+        base_directory=str(tmp_path / 'out'),
+        source_file=str(src),
+        space='ACPC',
+        suffix='fieldmap',
+        extension='.nii.gz',
+        compress=True,
+        meta_dict={'Units': 'Hz', 'EstimationMethod': 'DRBUDDI'},
+    )
+    ds.inputs.in_file = str(field)
+    out = ds.run().outputs.out_file
+    out = out[0] if isinstance(out, list) else out
+    assert '/dwi/' in out
+    assert out.endswith('_space-ACPC_fieldmap.nii.gz')
