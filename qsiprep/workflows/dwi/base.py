@@ -423,7 +423,9 @@ def init_dwi_preproc_wf(
             (fmap_unwarp_report_wf, ds_report_sdc, [('outputnode.report', 'in_file')]),
         ])  # fmt:skip
 
-    if doing_topup:
+    # Both TOPUP and DRBUDDI now expose an estimated field in Hz for the
+    # derivatives; the backend leaves it undefined otherwise.
+    if doing_topup or doing_drbuddi:
         workflow.connect([(hmc_wf, outputnode, [('outputnode.fieldmap_hz', 'fieldmap_hz')])])
 
     # DRBUDDI has some extra reports that we want to save. Make sure we get them!

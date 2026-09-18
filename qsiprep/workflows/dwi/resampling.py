@@ -38,7 +38,7 @@ def init_dwi_trans_wf(
     write_local_bvecs=False,
     write_reports=True,
     concatenate=True,
-    doing_topup=False,
+    fieldmap_hz_source=None,
 ):
     """
     This workflow samples dwi images to the ``output_grid`` in a "single shot"
@@ -262,18 +262,36 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
         (dwi_transform, scale_dwis, [('output_image', 'dwi_files')]),
     ])  # fmt:skip
 
-    if doing_topup:
-        fieldmap_hz_tfm = pe.Node(
-            ants.ApplyTransforms(interpolation='NearestNeighbor', float=True),
-            name='fieldmap_hz_tfm',
-            mem_gb=1,
-        )
+    if fieldmap_hz_source is not None:
+        # TOPUP's field is in eddy space and rides the full volume-0 composite;
+        # DRBUDDI's is already the fieldwarp, in the motion-corrected DWI frame,
+        # so it takes only the stages that move it to the output grid (no hmc,
+        # fieldwarp or gradwarp). A smooth field interpolates linearly; NN was
+        # only ever used to keep TOPUP's field bit-identical.
+        if fieldmap_hz_source == 'topup':
+            fieldmap_hz_tfm = pe.Node(
+                ants.ApplyTransforms(interpolation='NearestNeighbor', float=True),
+                name='fieldmap_hz_tfm',
+                mem_gb=1,
+            )
+            transform_src = [
+                (compose_transforms, fieldmap_hz_tfm, [(('out_warps', _get_first), 'transforms')]),
+            ]
+        else:
+            fieldmap_hz_tfm = pe.Node(
+                ants.ApplyTransforms(interpolation='LanczosWindowedSinc', float=True),
+                name='fieldmap_hz_tfm',
+                mem_gb=1,
+            )
+            transform_src = [
+                (compose_transforms, fieldmap_hz_tfm, [('fieldmap_hz_transforms', 'transforms')]),
+            ]
         workflow.connect([
             (inputnode, fieldmap_hz_tfm, [
                 ('fieldmap_hz', 'input_image'),
                 ('output_grid', 'reference_image'),
             ]),
-            (compose_transforms, fieldmap_hz_tfm, [(('out_warps', _get_first), 'transforms')]),
+            *transform_src,
             (fieldmap_hz_tfm, outputnode, [('output_image', 'fieldmap_hz_resampled')]),
         ])  # fmt:skip
 

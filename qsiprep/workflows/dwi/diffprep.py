@@ -291,6 +291,8 @@ def init_diffprep_hmc_wf(
                 'down_fa_image',
                 'down_fa_corrected_image',
                 't2w_image',
+                # DRBUDDI's distortion estimate as a Hz field (PEPOLAR only).
+                'fieldmap_hz',
             ],
         ),
         name='outputnode',
@@ -671,6 +673,7 @@ def init_diffprep_hmc_wf(
                 ('outputnode.down_fa_corrected_image', 'down_fa_corrected_image'),
                 ('outputnode.t2w_image', 't2w_image'),
                 ('outputnode.b0_ref', 'b0_template'),
+                ('outputnode.fieldmap_hz', 'fieldmap_hz'),
             ]),
         ])  # fmt:skip
         return workflow

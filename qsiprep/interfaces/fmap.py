@@ -218,6 +218,85 @@ class FieldToHz(SimpleInterface):
         return runtime
 
 
+class DisplacementToFieldmapInputSpec(BaseInterfaceInputSpec):
+    displacement_field = File(
+        exists=True,
+        mandatory=True,
+        desc='an ANTs displacement field (5D, mm) that unwarps the blip-up series',
+    )
+    pe_dir = traits.Str(
+        mandatory=True, desc="BIDS PhaseEncodingDirection of the blip-up series (e.g. 'j')"
+    )
+    readout_time = traits.Float(
+        mandatory=True, desc='TotalReadoutTime of the blip-up series, in seconds'
+    )
+
+
+class DisplacementToFieldmapOutputSpec(TraitedSpec):
+    fieldmap_hz = File(desc='the off-resonance field in Hz, on the displacement-field grid')
+
+
+class DisplacementToFieldmap(SimpleInterface):
+    """Convert an ANTs displacement field (mm) into an off-resonance field in Hz.
+
+    DRBUDDI estimates susceptibility distortion as ANTs displacement fields
+    (``deformation_FINV.nii.gz`` maps the blip-up series to the corrected b=0),
+    not as a Hz field. Downstream reuse (movement-by-susceptibility in eddy, or
+    handing a realistic field to a simulator) wants Hz, so recover it here from
+    the geometry of the blip-up acquisition.
+
+    The one non-obvious step is the coordinate convention. nibabel reports the
+    image affine in RAS+, but ANTs stores each displacement *vector component* in
+    LPS physical space (ITK's convention), regardless of the file's orientation.
+    Projecting the LPS-stored displacement onto the phase-encoding axis therefore
+    requires expressing that axis in LPS too; the two sign flips on x and y
+    cancel in the dot product, but only when both operands use the same
+    convention (it matters for oblique acquisitions, where the PE axis mixes L/P
+    and S).
+
+    The absolute sign follows the BIDS/FSL fieldmap convention: an acquisition
+    with ``PhaseEncodingDirection`` *p* shifts signal along the ``+`` image axis
+    by ``Hz * TotalReadoutTime * sign(p)`` voxels. Whether DRBUDDI's ``FINV`` is
+    the push or the pull field is settled empirically against a known-good field
+    (e.g. TOPUP on the same data); if that check inverts, flip the sign here.
+    """
+
+    input_spec = DisplacementToFieldmapInputSpec
+    output_spec = DisplacementToFieldmapOutputSpec
+
+    def _run_interface(self, runtime):
+        img = nb.load(self.inputs.displacement_field)
+        data = np.asanyarray(img.dataobj, dtype=np.float32)
+        if data.ndim == 5:
+            # ANTs convention: (X, Y, Z, 1, 3); the singleton is a "time" axis.
+            comp = data[:, :, :, 0, :]
+        elif data.ndim == 4 and data.shape[-1] == 3:
+            comp = data
+        else:
+            raise ValueError(f'Expected a 3-vector displacement field, got shape {data.shape}')
+
+        axis = 'ijk'.index(self.inputs.pe_dir[0])
+        # PE voxel-axis direction and voxel size, from the RAS affine.
+        col_ras = img.affine[:3, axis]
+        voxel_size = float(np.linalg.norm(col_ras))
+        # Same axis in LPS, to match the LPS-stored displacement components.
+        col_lps = col_ras * np.array([-1.0, -1.0, 1.0])
+
+        # Signed voxel shift along +axis = (displacement . unit_axis) / voxel_size.
+        shift_vox = (comp * col_lps).sum(axis=-1) / (voxel_size**2)
+        polarity = -1.0 if self.inputs.pe_dir.endswith('-') else 1.0
+        field_hz = polarity * shift_vox / self.inputs.readout_time
+
+        out_img = nb.Nifti1Image(field_hz.astype(np.float32), img.affine, img.header)
+        out_img.header.set_data_dtype(np.float32)
+        # Drop any vector intent left over from the displacement field.
+        out_img.header.set_intent('none')
+        out_file = op.abspath('fieldmap_hz.nii.gz')
+        out_img.to_filename(out_file)
+        self._results['fieldmap_hz'] = out_file
+        return runtime
+
+
 class Phasediff2FieldmapInputSpec(BaseInterfaceInputSpec):
     in_file = File(exists=True, mandatory=True, desc='input fieldmap')
     metadata = traits.Dict(mandatory=True, desc='BIDS metadata dictionary')

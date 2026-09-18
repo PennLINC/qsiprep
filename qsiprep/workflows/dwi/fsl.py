@@ -592,6 +592,14 @@ def init_fsl_hmc_wf(
             ]),
         ])  # fmt:skip
 
+        if not run_topup:
+            # With no TOPUP field to prefer, expose DRBUDDI's own Hz field. When
+            # TOPUP also ran, its field (set above) is kept; DRBUDDI is only a
+            # residual refinement there.
+            workflow.connect([
+                (drbuddi_wf, outputnode, [('outputnode.fieldmap_hz', 'fieldmap_hz')]),
+            ])  # fmt:skip
+
         return workflow
 
     if unit.is_gre or unit.is_nipreps_syn:

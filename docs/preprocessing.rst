@@ -353,6 +353,17 @@ Volumetric outputs are written out in ``ACPC`` space ::
       <source_entities>_space-ACPC_graddev.json
       <source_entities>_space-ACPC_graddev.nii.gz
 
+      # Estimated susceptibility off-resonance field in Hz, on the preprocessed
+      # DWI grid. Written when a PEPOLAR correction produced one: TOPUP
+      # (``--sdc-method topup``) or DRBUDDI (``--sdc-method drbuddi`` /
+      # ``topup+drbuddi``, any HMC backend). A positive value shifts signal by
+      # ``field_Hz * TotalReadoutTime * sign(PhaseEncodingDirection)`` voxels
+      # along the + phase-encoding axis; the sidecar records the estimation
+      # method and readout time. Absent for GRE-fieldmap, SyN, and T2w-only
+      # (fieldmap-less) corrections.
+      <source_entities>_space-ACPC_fieldmap.json
+      <source_entities>_space-ACPC_fieldmap.nii.gz
+
 
 Transforms
 ==========
@@ -387,6 +398,11 @@ Transforms
       ses-<label>/
         dwi/
           sub-<label>_ses-<label>_from-orig_to-dwiref_mode-image_desc-eddy_xfm.h5
+
+  The full susceptibility *warp* is still not written, but the estimated
+  off-resonance *field* is: PEPOLAR runs (TOPUP or DRBUDDI) save it in Hz on the
+  preprocessed DWI grid as ``_space-ACPC_fieldmap.nii.gz`` (see the derivatives
+  list above).
 
 
 .. important::

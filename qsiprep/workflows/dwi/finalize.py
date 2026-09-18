@@ -27,6 +27,7 @@ from ...interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SeriesQC
+from ...utils.sdc import pe_readout_time
 from .derivatives import init_dwi_derivatives_wf
 from .gradwarp import resolve_gradwarp_plan
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
@@ -153,10 +154,36 @@ def init_dwi_finalize_wf(
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
 
-    # TOPUP alone exposes a field in Hz for the final resampling path. Dispatch
-    # from the compiled run, not the deprecated config spelling: those can
-    # disagree after automatic method resolution.
+    # Both TOPUP and DRBUDDI can expose a field in Hz for the final resampling
+    # path. Dispatch from the compiled run, not the deprecated config spelling:
+    # those can disagree after automatic method resolution. TOPUP's field is in
+    # eddy space; DRBUDDI's, recovered from its displacement field, needs the
+    # blip-up readout time, so it is only written when that is known. TOPUP wins
+    # when both ran (topup+drbuddi), where DRBUDDI is only a residual refinement.
     doing_topup = unit.run.stage_with('topup') is not None
+    doing_drbuddi = unit.run.stage_with('drbuddi') is not None
+    if doing_topup:
+        fieldmap_hz_source = 'topup'
+    elif doing_drbuddi and pe_readout_time(unit) is not None:
+        fieldmap_hz_source = 'drbuddi'
+    else:
+        fieldmap_hz_source = None
+    has_fieldmap_hz = fieldmap_hz_source is not None
+    fieldmap_meta = None
+    if has_fieldmap_hz:
+        fieldmap_meta = {
+            'Units': 'Hz',
+            'EstimationMethod': 'DRBUDDI' if fieldmap_hz_source == 'drbuddi' else 'TOPUP',
+            'PhaseEncodingDirection': unit.pe_dir,
+            'Description': (
+                'Susceptibility off-resonance field on the preprocessed DWI grid. A '
+                'positive value shifts signal by field_Hz * TotalReadoutTime * '
+                'sign(PhaseEncodingDirection) voxels along the + phase-encoding axis.'
+            ),
+        }
+        readout_time = pe_readout_time(unit)
+        if readout_time is not None:
+            fieldmap_meta['TotalReadoutTime'] = readout_time
 
     # Determine resource usage
     for scan in all_dwis:
@@ -299,7 +326,7 @@ def init_dwi_finalize_wf(
         mem_gb=mem_gb['resampled'],
         use_compression=False,
         concatenate=True,
-        doing_topup=doing_topup,
+        fieldmap_hz_source=fieldmap_hz_source,
     )
 
     # Apply denoising to the interpolated data if requested
@@ -356,7 +383,7 @@ def init_dwi_finalize_wf(
         ]),
     ])  # fmt:skip
 
-    if doing_topup:
+    if has_fieldmap_hz:
         workflow.connect([
             (inputnode, transform_dwis_t1, [('fieldmap_hz', 'inputnode.fieldmap_hz')]),
             (transform_dwis_t1, outputnode, [
@@ -405,6 +432,7 @@ def init_dwi_finalize_wf(
 
     dwi_derivatives_wf = init_dwi_derivatives_wf(
         source_file=source_file,
+        fieldmap_meta=fieldmap_meta,
     )
 
     # Combine all the QC measures for a series QC
@@ -600,10 +628,13 @@ def init_dwi_finalize_wf(
         (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')]),
     ])  # fmt:skip
 
-    if doing_topup:
+    if has_fieldmap_hz:
         workflow.connect([
             (transform_dwis_t1, series_qc, [
                 ('outputnode.fieldmap_hz_resampled', 't1_fieldmap_hz_file'),
+            ]),
+            (outputnode, dwi_derivatives_wf, [
+                ('fieldmap_hz_t1', 'inputnode.fieldmap_hz_t1'),
             ]),
         ])  # fmt:skip
 

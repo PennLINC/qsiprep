@@ -23,6 +23,7 @@ from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
 from ... import config
+from ...interfaces.fmap import DisplacementToFieldmap
 from ...interfaces.tortoise import (
     DRBUDDI,
     DRBUDDIAggregateOutputs,
@@ -30,6 +31,7 @@ from ...interfaces.tortoise import (
     generate_drbuddi_boilerplate,
     sloppy_epi_working_res,
 )
+from ...utils.sdc import pe_readout_time
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
@@ -153,6 +155,10 @@ def init_drbuddi_wf(
                 'down_fa_image',
                 'down_fa_corrected_image',
                 't2w_image',
+                # The distortion estimate as a Hz off-resonance field, recovered
+                # from the blip-up displacement field. Undefined when the blip-up
+                # readout time is unknown.
+                'fieldmap_hz',
             ]
         ),
         name='outputnode',
@@ -259,5 +265,19 @@ def init_drbuddi_wf(
             ('b0_ref', 'b0_ref'),
         ]),
     ])  # fmt:skip
+
+    # Turn the blip-up displacement field (FINV) into a Hz off-resonance field on
+    # DRBUDDI's working grid, so a Hz fieldmap can reach the derivatives. Only
+    # when the blip-up readout time is known; otherwise leave fieldmap_hz unset.
+    readout_time = pe_readout_time(unit)
+    if readout_time is not None:
+        field_to_hz = pe.Node(
+            DisplacementToFieldmap(pe_dir=unit.pe_dir, readout_time=readout_time),
+            name='field_to_hz',
+        )
+        workflow.connect([
+            (drbuddi, field_to_hz, [('deformation_finv', 'displacement_field')]),
+            (field_to_hz, outputnode, [('fieldmap_hz', 'fieldmap_hz')]),
+        ])  # fmt:skip
 
     return workflow
