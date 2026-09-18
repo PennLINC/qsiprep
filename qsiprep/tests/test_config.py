@@ -174,3 +174,21 @@ def test_path_valued_options_are_declared_in_their_section(tmp_path):
             if hasattr(section, action.dest) and action.dest not in section._paths:
                 undeclared.append(f'{section.__name__}.{action.dest}')
     assert undeclared == []
+
+
+def test_record_unmodulated_is_idempotent_across_runs(monkeypatch):
+    """Two DWI runs in one invocation must not duplicate the recorded corrections.
+
+    ``record_unmodulated`` is called once per DWI run (from ``init_fsl_hmc_wf``),
+    but the fact it records is invocation-level (the resolved ``--eddy-config``
+    resampling method is the same for every run), so a second call with the same
+    corrections must not append duplicates, and the first recorded reason wins.
+    """
+    monkeypatch.setattr(config.workflow, 'jacobian_unmodulated_corrections', [])
+    monkeypatch.setattr(config.workflow, 'jacobian_unmodulated_reason', None)
+
+    config.record_unmodulated(['eddy-current', 'susceptibility'], reason='first run reason')
+    config.record_unmodulated(['eddy-current', 'susceptibility'], reason='second run reason')
+
+    assert config.workflow.jacobian_unmodulated_corrections == ['eddy-current', 'susceptibility']
+    assert config.workflow.jacobian_unmodulated_reason == 'first run reason'

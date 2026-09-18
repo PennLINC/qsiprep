@@ -708,6 +708,23 @@ class workflow(_Config):
     _paths = ('gradient_file', 'shoreline_config')
 
 
+def record_unmodulated(corrections, reason=None):
+    """Record corrections that ran without Jacobian modulation, idempotently.
+
+    These are invocation-level facts -- every cause is a global CLI setting
+    (``--eddy-config``'s resampling method, ``--diffprep-config``'s correction
+    mode, the Okan validation outcome), so one shared list across runs is
+    correct. But the workflow builders that record them run once per DWI run,
+    so appending unconditionally would duplicate every entry N times and put
+    that duplication into every derivative sidecar.
+    """
+    for correction in corrections:
+        if correction not in workflow.jacobian_unmodulated_corrections:
+            workflow.jacobian_unmodulated_corrections.append(correction)
+    if reason is not None and workflow.jacobian_unmodulated_reason is None:
+        workflow.jacobian_unmodulated_reason = reason
+
+
 class loggers:
     """Keep loggers easily accessible (see :py:func:`init`)."""
 

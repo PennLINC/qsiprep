@@ -199,11 +199,9 @@ def init_fsl_hmc_wf(
             'eddy-current component.',
             eddy_args.get('method'),
         )
-        config.workflow.jacobian_unmodulated_corrections += [
-            'eddy-current', 'susceptibility'
-        ]
-        config.workflow.jacobian_unmodulated_reason = (
-            f'FSL eddy ran with --resamp={eddy_args.get("method")} rather than jac'
+        config.record_unmodulated(
+            ['eddy-current', 'susceptibility'],
+            reason=f'FSL eddy ran with --resamp={eddy_args.get("method")} rather than jac',
         )
 
     gather_inputs = pe.Node(
