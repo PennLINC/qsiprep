@@ -111,6 +111,26 @@ def test_derivatives_wf_writes_fieldmap_only_with_meta():
     assert ds.inputs.meta_dict == meta
 
 
+def test_derivatives_wf_writes_component_fieldmaps():
+    """component_specs adds one datasink per QC field, each with its own entities."""
+    _cfg()
+    from qsiprep.workflows.dwi.derivatives import init_dwi_derivatives_wf
+
+    specs = [
+        {'entities': {'direction': 'PA'}, 'meta': {'Units': 'Hz'}},
+        {'entities': {'direction': 'AP'}, 'meta': {'Units': 'Hz'}},
+        {'entities': {'desc': 'asymmetry'}, 'meta': {'Units': 'Hz'}},
+    ]
+    wf = init_dwi_derivatives_wf(
+        source_file='/data/sub-01_dwi.nii.gz',
+        fieldmap_meta={'Units': 'Hz'},
+        component_specs=specs,
+    )
+    assert wf.get_node('ds_component_fieldmap_0').inputs.direction == 'PA'
+    assert wf.get_node('ds_component_fieldmap_1').inputs.direction == 'AP'
+    assert wf.get_node('ds_component_fieldmap_2').inputs.desc == 'asymmetry'
+
+
 def test_fieldmap_datasink_builds_a_dwi_path(tmp_path):
     """A 'fieldmap' suffix in the dwi datatype must have a path template.
 

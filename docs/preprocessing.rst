@@ -364,6 +364,16 @@ Volumetric outputs are written out in ``ACPC`` space ::
       <source_entities>_space-ACPC_fieldmap.json
       <source_entities>_space-ACPC_fieldmap.nii.gz
 
+      # DRBUDDI only: per-blip QC decomposition of the field above. DRBUDDI writes
+      # one displacement field per phase-encoding polarity and relaxes their
+      # antisymmetry in later stages, so each blip's field carries distortion that
+      # no single dB0 produces. The main field above is their antisymmetric
+      # average; these expose the parts. dir-<AP/PA> are the per-series fields;
+      # desc-asymmetry is their half-difference, which is ~zero for a pure
+      # susceptibility field and thus flags eddy-current/motion residue for QC.
+      <source_entities>_dir-<label>_space-ACPC_fieldmap.nii.gz
+      <source_entities>_space-ACPC_desc-asymmetry_fieldmap.nii.gz
+
 
 Transforms
 ==========

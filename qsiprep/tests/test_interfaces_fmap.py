@@ -118,6 +118,24 @@ def test_displacement_to_fieldmap_antisymmetric_average(tmp_path):
     assert _first_hz(_run(up_only, tmp_path / 'up_only')) == pytest.approx(10.0)
 
 
+def test_displacement_to_fieldmap_component_fields(tmp_path):
+    """Both fields also emit the per-blip QC components [up, down, asymmetry]."""
+    from nipype.interfaces.base import isdefined
+
+    up = _write_disp(tmp_path / 'up.nii.gz', [0.0, -1.0, 0.0], _RAS)
+    down = _write_disp(tmp_path / 'down.nii.gz', [0.0, 3.0, 0.0], _RAS)
+    both = DisplacementToFieldmap(
+        displacement_field=up, opposite_displacement_field=down, pe_dir='j', readout_time=0.05
+    )
+    comps = _run(both, tmp_path / 'both').outputs.component_fieldmaps
+    values = [float(nb.load(f).get_fdata().flat[0]) for f in comps]
+    # up = +10, down = +30, asymmetry = (up - down) / 2 = -10.
+    assert values == pytest.approx([10.0, 30.0, -10.0])
+
+    up_only = DisplacementToFieldmap(displacement_field=up, pe_dir='j', readout_time=0.05)
+    assert not isdefined(_run(up_only, tmp_path / 'up_only').outputs.component_fieldmaps)
+
+
 def test_b0rpe_fieldmap_writes_metadata_not_a_path(tmp_path):
     """The sidecar holds the fieldmap's metadata rather than a JSON file path."""
     root = build_test_dataset(

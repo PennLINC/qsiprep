@@ -239,6 +239,11 @@ class DisplacementToFieldmapInputSpec(BaseInterfaceInputSpec):
 
 class DisplacementToFieldmapOutputSpec(TraitedSpec):
     fieldmap_hz = File(desc='the off-resonance field in Hz, on the displacement-field grid')
+    component_fieldmaps = OutputMultiObject(
+        File(exists=True),
+        desc='QC fields in Hz, only when both blip fields are given, always in this order: '
+        '[blip-up (plus polarity), blip-down (minus polarity), asymmetry = half-difference]',
+    )
 
 
 class DisplacementToFieldmap(SimpleInterface):
@@ -298,33 +303,44 @@ class DisplacementToFieldmap(SimpleInterface):
         shift_vox = (comp * col_lps).sum(axis=-1) / (voxel_size**2)
         return polarity * shift_vox / self.inputs.readout_time, img
 
+    def _save(self, field_hz, img, name):
+        """Write one Hz field on ``img``'s grid, dropping the vector intent."""
+        out_img = nb.Nifti1Image(field_hz.astype(np.float32), img.affine, img.header)
+        out_img.header.set_data_dtype(np.float32)
+        out_img.header.set_intent('none')
+        out_file = op.abspath(name)
+        out_img.to_filename(out_file)
+        return out_file
+
     def _run_interface(self, runtime):
         polarity = -1.0 if self.inputs.pe_dir.endswith('-') else 1.0
-        field_hz, img = self._field_hz(self.inputs.displacement_field, polarity)
+        up_hz, img = self._field_hz(self.inputs.displacement_field, polarity)
+        field_hz = up_hz
 
         if isdefined(self.inputs.opposite_displacement_field):
             # The blip-down series has the opposite polarity; converting MINV with
-            # it yields the same-signed physical field, so the mean is the
-            # antisymmetric average. Both fields share DRBUDDI's working grid.
+            # it yields the same-signed physical field. Both fields share DRBUDDI's
+            # working grid. The B0 field is their antisymmetric average and the
+            # non-antisymmetric residue is their half-difference -- the latter kept
+            # as a QC field, since a pure Delta-B0 cannot produce it.
             down_hz, down_img = self._field_hz(self.inputs.opposite_displacement_field, -polarity)
-            if down_hz.shape == field_hz.shape and np.allclose(
+            if down_hz.shape == up_hz.shape and np.allclose(
                 down_img.affine, img.affine, atol=1e-3
             ):
-                field_hz = 0.5 * (field_hz + down_hz)
+                field_hz = 0.5 * (up_hz + down_hz)
+                self._results['component_fieldmaps'] = [
+                    self._save(up_hz, img, 'fieldmap_up_hz.nii.gz'),
+                    self._save(down_hz, img, 'fieldmap_down_hz.nii.gz'),
+                    self._save(0.5 * (up_hz - down_hz), img, 'fieldmap_asymmetry_hz.nii.gz'),
+                ]
             else:
                 LOGGER.warning(
                     'Blip-down field grid %s does not match blip-up %s; using blip-up alone.',
                     down_hz.shape,
-                    field_hz.shape,
+                    up_hz.shape,
                 )
 
-        out_img = nb.Nifti1Image(field_hz.astype(np.float32), img.affine, img.header)
-        out_img.header.set_data_dtype(np.float32)
-        # Drop any vector intent left over from the displacement field.
-        out_img.header.set_intent('none')
-        out_file = op.abspath('fieldmap_hz.nii.gz')
-        out_img.to_filename(out_file)
-        self._results['fieldmap_hz'] = out_file
+        self._results['fieldmap_hz'] = self._save(field_hz, img, 'fieldmap_hz.nii.gz')
         return runtime
 
 

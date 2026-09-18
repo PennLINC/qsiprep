@@ -293,6 +293,7 @@ def init_diffprep_hmc_wf(
                 't2w_image',
                 # DRBUDDI's distortion estimate as a Hz field (PEPOLAR only).
                 'fieldmap_hz',
+                'component_fieldmaps',
             ],
         ),
         name='outputnode',
@@ -674,6 +675,7 @@ def init_diffprep_hmc_wf(
                 ('outputnode.t2w_image', 't2w_image'),
                 ('outputnode.b0_ref', 'b0_template'),
                 ('outputnode.fieldmap_hz', 'fieldmap_hz'),
+                ('outputnode.component_fieldmaps', 'component_fieldmaps'),
             ]),
         ])  # fmt:skip
         return workflow

@@ -681,6 +681,7 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.carpetplot_data', 'inputnode.carpetplot_data'),
                 ('outputnode.sdc_scaling_images', 'inputnode.sdc_scaling_images'),
                 ('outputnode.fieldmap_hz', 'inputnode.fieldmap_hz'),
+                ('outputnode.component_fieldmaps', 'inputnode.component_fieldmaps'),
             ]),
         ])  # fmt:skip
 

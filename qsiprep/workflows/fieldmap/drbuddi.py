@@ -159,6 +159,8 @@ def init_drbuddi_wf(
                 # from the blip-up displacement field. Undefined when the blip-up
                 # readout time is unknown.
                 'fieldmap_hz',
+                # QC fields in Hz [blip-up, blip-down, asymmetry], on the same grid.
+                'component_fieldmaps',
             ]
         ),
         name='outputnode',
@@ -280,7 +282,10 @@ def init_drbuddi_wf(
                 ('deformation_finv', 'displacement_field'),
                 ('deformation_minv', 'opposite_displacement_field'),
             ]),
-            (field_to_hz, outputnode, [('fieldmap_hz', 'fieldmap_hz')]),
+            (field_to_hz, outputnode, [
+                ('fieldmap_hz', 'fieldmap_hz'),
+                ('component_fieldmaps', 'component_fieldmaps'),
+            ]),
         ])  # fmt:skip
 
     return workflow

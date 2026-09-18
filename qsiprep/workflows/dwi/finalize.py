@@ -7,6 +7,7 @@ Final steps on the preprocessed data
 """
 
 import os
+import re
 
 from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
@@ -37,6 +38,15 @@ from .resampling import init_dwi_trans_wf
 from .util import _create_mem_gb, init_dwi_reference_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
+
+
+def _dir_label(files, fallback):
+    """The BIDS ``dir-`` entity of the first file, or ``fallback`` if absent."""
+    for path in files or ():
+        match = re.search(r'_dir-([A-Za-z0-9]+)', os.path.basename(path))
+        if match:
+            return match.group(1)
+    return fallback
 
 
 def init_dwi_finalize_wf(
@@ -185,6 +195,53 @@ def init_dwi_finalize_wf(
         if readout_time is not None:
             fieldmap_meta['TotalReadoutTime'] = readout_time
 
+    # DRBUDDI additionally decomposes the field into per-blip QC fields. Written in
+    # field_to_hz's order [blip-up, blip-down, asymmetry]; label the per-direction
+    # ones with the source series' actual dir entity, the residual with desc.
+    has_components = fieldmap_hz_source == 'drbuddi'
+    component_specs = None
+    if has_components:
+        plus_dir = _dir_label(unit.plus_files, 'blipUp')
+        minus_dir = _dir_label(unit.minus_files, 'blipDown')
+        base_meta = {'Units': 'Hz', 'EstimationMethod': 'DRBUDDI'}
+        if readout_time is not None:
+            base_meta['TotalReadoutTime'] = readout_time
+        component_specs = [
+            {
+                'entities': {'direction': plus_dir},
+                'meta': {
+                    **base_meta,
+                    'Description': (
+                        f'Off-resonance field in Hz from the {plus_dir} (blip-up) series '
+                        'alone; keeps the non-antisymmetric residue (see the desc-asymmetry '
+                        'map). QC, not the recommended field.'
+                    ),
+                },
+            },
+            {
+                'entities': {'direction': minus_dir},
+                'meta': {
+                    **base_meta,
+                    'Description': (
+                        f'Off-resonance field in Hz from the {minus_dir} (blip-down) series '
+                        'alone; keeps the non-antisymmetric residue. QC, not the recommended '
+                        'field.'
+                    ),
+                },
+            },
+            {
+                'entities': {'desc': 'asymmetry'},
+                'meta': {
+                    **base_meta,
+                    'Description': (
+                        f'Non-antisymmetric residual in Hz, ({plus_dir} field - {minus_dir} '
+                        'field) / 2. A pure susceptibility field is zero here, so this maps '
+                        'eddy-current, motion and other non-Delta-B0 distortion for QC.'
+                    ),
+                },
+            },
+        ]
+
     # Determine resource usage
     for scan in all_dwis:
         if not os.path.exists(scan):
@@ -237,8 +294,9 @@ def init_dwi_finalize_wf(
                 'confounds',
                 'carpetplot_data',
                 'sdc_scaling_images',
-                # Only written out if TOPUP was used
+                # Written out if TOPUP or DRBUDDI produced a field
                 'fieldmap_hz',
+                'component_fieldmaps',
             ]
         ),
         name='inputnode',
@@ -257,8 +315,9 @@ def init_dwi_finalize_wf(
                 'gradient_table_t1',
                 'btable_t1',
                 'hmc_optimization_data',
-                # Only written out if TOPUP was used
+                # Written out if TOPUP or DRBUDDI produced a field
                 'fieldmap_hz_t1',
+                'component_fieldmaps_t1',
             ]
         ),
         name='outputnode',
@@ -390,6 +449,15 @@ def init_dwi_finalize_wf(
                 ('outputnode.fieldmap_hz_resampled', 'fieldmap_hz_t1'),
             ]),
         ])  # fmt:skip
+    if has_components:
+        workflow.connect([
+            (inputnode, transform_dwis_t1, [
+                ('component_fieldmaps', 'inputnode.component_fieldmaps'),
+            ]),
+            (transform_dwis_t1, outputnode, [
+                ('outputnode.component_fieldmaps_resampled', 'component_fieldmaps_t1'),
+            ]),
+        ])  # fmt:skip
 
     # The workflow is done if we will be concatenating images later
     if not write_derivatives:
@@ -433,6 +501,7 @@ def init_dwi_finalize_wf(
     dwi_derivatives_wf = init_dwi_derivatives_wf(
         source_file=source_file,
         fieldmap_meta=fieldmap_meta,
+        component_specs=component_specs,
     )
 
     # Combine all the QC measures for a series QC
@@ -635,6 +704,12 @@ def init_dwi_finalize_wf(
             ]),
             (outputnode, dwi_derivatives_wf, [
                 ('fieldmap_hz_t1', 'inputnode.fieldmap_hz_t1'),
+            ]),
+        ])  # fmt:skip
+    if has_components:
+        workflow.connect([
+            (outputnode, dwi_derivatives_wf, [
+                ('component_fieldmaps_t1', 'inputnode.component_fieldmaps_t1'),
             ]),
         ])  # fmt:skip
 

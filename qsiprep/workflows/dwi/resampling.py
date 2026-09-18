@@ -163,8 +163,10 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 'gradwarp_field',
                 'output_grid',
                 'sdc_scaling_images',
-                # Only written out if TOPUP was used
+                # Written out if TOPUP or DRBUDDI produced a field
                 'fieldmap_hz',
+                # DRBUDDI-only QC fields [blip-up, blip-down, asymmetry]
+                'component_fieldmaps',
             ]
         ),
         name='inputnode',
@@ -183,8 +185,9 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 'local_bvecs',
                 'b0_series',
                 'resampled_qc',
-                # Only written out if TOPUP was used
+                # Written out if TOPUP or DRBUDDI produced a field
                 'fieldmap_hz_resampled',
+                'component_fieldmaps_resampled',
             ]
         ),
         name='outputnode',
@@ -294,6 +297,28 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             *transform_src,
             (fieldmap_hz_tfm, outputnode, [('output_image', 'fieldmap_hz_resampled')]),
         ])  # fmt:skip
+
+        if fieldmap_hz_source == 'drbuddi':
+            # The QC component fields share DRBUDDI's grid and the same route to the
+            # output grid, so resample them with the same transforms in one MapNode.
+            component_fieldmap_tfm = pe.MapNode(
+                ants.ApplyTransforms(interpolation='LanczosWindowedSinc', float=True),
+                iterfield=['input_image'],
+                name='component_fieldmap_tfm',
+                mem_gb=1,
+            )
+            workflow.connect([
+                (inputnode, component_fieldmap_tfm, [
+                    ('component_fieldmaps', 'input_image'),
+                    ('output_grid', 'reference_image'),
+                ]),
+                (compose_transforms, component_fieldmap_tfm, [
+                    ('fieldmap_hz_transforms', 'transforms'),
+                ]),
+                (component_fieldmap_tfm, outputnode, [
+                    ('output_image', 'component_fieldmaps_resampled'),
+                ]),
+            ])  # fmt:skip
 
     # If concatenation is not happening here, send the still-split images to outputs
     if not concatenate:

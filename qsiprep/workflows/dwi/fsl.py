@@ -160,6 +160,7 @@ def init_fsl_hmc_wf(
                 # From SDC
                 'fieldmap_type',
                 'fieldmap_hz',
+                'component_fieldmaps',
                 'b0_up_image',
                 'b0_up_corrected_image',
                 'b0_down_image',
@@ -595,10 +596,16 @@ def init_fsl_hmc_wf(
         if not run_topup:
             # With no TOPUP field to prefer, expose DRBUDDI's own Hz field. When
             # TOPUP also ran, its field (set above) is kept; DRBUDDI is only a
-            # residual refinement there.
+            # residual refinement there. The QC component fields are DRBUDDI's
+            # regardless, since TOPUP has no analogous per-blip decomposition.
             workflow.connect([
                 (drbuddi_wf, outputnode, [('outputnode.fieldmap_hz', 'fieldmap_hz')]),
             ])  # fmt:skip
+        workflow.connect([
+            (drbuddi_wf, outputnode, [
+                ('outputnode.component_fieldmaps', 'component_fieldmaps'),
+            ]),
+        ])  # fmt:skip
 
         return workflow
 
