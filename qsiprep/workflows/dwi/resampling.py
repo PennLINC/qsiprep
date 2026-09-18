@@ -269,8 +269,10 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
         # TOPUP's field is in eddy space and rides the full volume-0 composite;
         # DRBUDDI's is already the fieldwarp, in the motion-corrected DWI frame,
         # so it takes only the stages that move it to the output grid (no hmc,
-        # fieldwarp or gradwarp). A smooth field interpolates linearly; NN was
-        # only ever used to keep TOPUP's field bit-identical.
+        # fieldwarp or gradwarp). A Hz field is smooth, so it interpolates
+        # linearly: sinc would overshoot and ring at the steep field gradients by
+        # the sinuses (fabricating extreme Hz), and NN would be blocky. TOPUP keeps
+        # NearestNeighbor only to leave its long-standing QC values bit-identical.
         if fieldmap_hz_source == 'topup':
             fieldmap_hz_tfm = pe.Node(
                 ants.ApplyTransforms(interpolation='NearestNeighbor', float=True),
@@ -282,7 +284,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             ]
         else:
             fieldmap_hz_tfm = pe.Node(
-                ants.ApplyTransforms(interpolation='LanczosWindowedSinc', float=True),
+                ants.ApplyTransforms(interpolation='Linear', float=True),
                 name='fieldmap_hz_tfm',
                 mem_gb=1,
             )
@@ -300,9 +302,10 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
 
         if fieldmap_hz_source == 'drbuddi':
             # The QC component fields share DRBUDDI's grid and the same route to the
-            # output grid, so resample them with the same transforms in one MapNode.
+            # output grid, so resample them (linearly, as above) with the same
+            # transforms in one MapNode.
             component_fieldmap_tfm = pe.MapNode(
-                ants.ApplyTransforms(interpolation='LanczosWindowedSinc', float=True),
+                ants.ApplyTransforms(interpolation='Linear', float=True),
                 iterfield=['input_image'],
                 name='component_fieldmap_tfm',
                 mem_gb=1,
