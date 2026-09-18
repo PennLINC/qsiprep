@@ -563,8 +563,6 @@ class workflow(_Config):
     """Whether to N4-correct anatomicals: ``n4``, ``auto`` or ``none``."""
     dwi_biascorrect = None
     """Whether to N4-correct DWIs: ``n4``, ``auto`` or ``none``."""
-    denoise_after_combining = False
-    """Run ``dwidenoise`` after combining dwis, but before motion correction."""
     denoise_method = None
     """Image-based denoising method. Either "dwidenoise" (MRtrix), "patch2self" (DIPY)
     or "none". DWIDenoise parameters may be appended as semicolon-delimited name:value

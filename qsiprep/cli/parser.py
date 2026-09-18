@@ -582,11 +582,6 @@ def _build_parser(**kwargs):
         ),
     )
     g_dwi.add_argument(
-        '--denoise-after-combining',
-        action='store_true',
-        help='Run denoising after combining the DWI series, but before head motion correction.',
-    )
-    g_dwi.add_argument(
         '--unringing-method',
         action='store',
         default='none',
@@ -1227,20 +1222,8 @@ def parse_args(args=None, namespace=None):
         )
 
     # Validate the tricky options here
-    denoise_method, denoise_params = parse_denoise_method(config.workflow.denoise_method)
+    denoise_method, _ = parse_denoise_method(config.workflow.denoise_method)
     check_denoise_window(denoise_method, config.workflow.dwidenoise_window)
-    if (
-        config.workflow.denoise_after_combining
-        and denoise_params.get('demodulate', 'none') != 'none'
-    ):
-        # Temporary workaround for a bug in dwidenoise2: the concatenated series
-        # cannot be denoised with phase data.
-        parser.error(
-            '--denoise-after-combining cannot be used with phase demodulation '
-            f'("demodulate:{denoise_params["demodulate"]}"). '
-            'Remove the demodulate parameter and use "--ignore phase" to denoise '
-            'the magnitude data only.'
-        )
 
     bids_dir = config.execution.bids_dir
     output_dir = config.execution.output_dir
