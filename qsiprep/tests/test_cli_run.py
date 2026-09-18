@@ -357,6 +357,79 @@ def minimal_args(tmp_path):
     bids_dir.mkdir()
     return [str(bids_dir), str(tmp_path / 'out'), 'participant', '--output-resolution', '2']
 
+
+def _dest(option):
+    """Turn an option string back into the namespace attribute it sets."""
+    return option.lstrip('-').replace('-', '_')
+
+
+# (deprecated flag, the option it enables, the value that option is set to)
+FORWARDED_FLAGS = [
+    ('--dwi-only', '--anat-modality', 'none'),
+]
+
+
+@pytest.mark.parametrize(('flag', 'option', 'value'), FORWARDED_FLAGS)
+def test_forwarded_flag_warns_and_enables_its_replacement(
+    minimal_args, capsys, flag, option, value
+):
+    """A deprecated flag warns, names its replacement, and turns it on."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    opts = parser.parse_args([*minimal_args, flag])
+
+    warning = capsys.readouterr().err
+    assert flag in warning
+    assert 'deprecated' in warning
+    assert f'{option} {value}' in warning
+
+    assert getattr(opts, _dest(option)) == value
+    # The deprecated flag itself must not reach the config object
+    assert not hasattr(opts, _dest(flag))
+
+
+@pytest.mark.parametrize(('flag', 'option', 'value'), FORWARDED_FLAGS)
+def test_forwarded_flag_agrees_with_an_explicit_replacement(minimal_args, flag, option, value):
+    """Asking for the same thing twice is not a conflict, in either order."""
+    from qsiprep.cli.parser import _build_parser
+
+    for extra_args in ([flag, option, value], [option, value, flag]):
+        opts = _build_parser().parse_args(minimal_args + extra_args)
+        assert getattr(opts, _dest(option)) == value
+
+
+@pytest.mark.parametrize(('flag', 'option', 'value'), FORWARDED_FLAGS)
+def test_forwarded_flag_conflicting_with_its_replacement_is_an_error(
+    minimal_args, capsys, flag, option, value
+):
+    """Silently picking a winner would hide half of what the user asked for."""
+    from qsiprep.cli.parser import _build_parser
+
+    # A value the flag does not forward to
+    other = {
+        'anat_modality': 'T2w',
+        'subject_anatomical_reference': 'sessionwise',
+    }[_dest(option)]
+
+    for extra_args in ([flag, option, other], [option, other, flag]):
+        with pytest.raises(SystemExit):
+            _build_parser().parse_args(minimal_args + extra_args)
+        assert 'conflicts with' in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(('flag', 'option', 'value'), FORWARDED_FLAGS)
+def test_replacement_option_is_not_deprecated(minimal_args, capsys, flag, option, value):
+    """The replacement option is silent and takes effect."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    opts = parser.parse_args([*minimal_args, option, value])
+
+    assert capsys.readouterr().err == ''
+    assert getattr(opts, _dest(option)) == value
+
+
 def test_prefer_dedicated_fmaps_is_removed(minimal_args, capsys):
     """The deprecated flag is no longer accepted by the parser."""
     from qsiprep.cli.parser import _build_parser

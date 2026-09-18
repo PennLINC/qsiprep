@@ -66,6 +66,7 @@ USELESS_OPTS = [
     'bids_database_dir',
     'bids_filter_file',
     'use_plugin',
+    'fs_license_file',
     'work_dir',
 ]
 
