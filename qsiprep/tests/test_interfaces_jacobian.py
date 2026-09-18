@@ -280,3 +280,121 @@ def test_compose_fields_returns_a_single_field(tmp_path):
     composed = nb.load(out)
     assert composed.shape[:3] == (8, 8, 8)
     assert np.isfinite(np.asanyarray(composed.dataobj)).all()
+
+
+# --- ComposeJacobianWeights -------------------------------------------------
+
+
+from nipype.interfaces.base import isdefined
+
+from qsiprep.interfaces.jacobian import ComposeJacobianWeights
+
+
+def _dwi_volumes(tmp_path, count):
+    return [_write_map(tmp_path / f'dwi{i}.nii.gz', 1.0) for i in range(count)]
+
+
+def test_compose_weights_with_no_fields_is_undefined(tmp_path):
+    """Nothing to modulate means no weight, not a map of ones."""
+    interface = ComposeJacobianWeights(
+        dwi_files=_dwi_volumes(tmp_path, 3),
+        b0_ref_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
+        mask=_write_map(tmp_path / 'mask.nii.gz', 1.0),
+    )
+    result = interface.run(cwd=str(tmp_path))
+    assert not isdefined(result.outputs.jacobian_weight_images)
+
+
+def test_compose_weights_returns_one_path_per_volume(tmp_path):
+    if shutil.which('CreateJacobianDeterminantImage') is None:
+        pytest.skip('CreateJacobianDeterminantImage required for this test')
+    interface = ComposeJacobianWeights(
+        dwi_files=_dwi_volumes(tmp_path, 4),
+        b0_ref_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
+        mask=_write_map(tmp_path / 'mask.nii.gz', 1.0),
+        gradwarp_field=[str(write_itk_field(tmp_path / 'g.nii.gz'))],
+    )
+    weights = interface.run(cwd=str(tmp_path)).outputs.jacobian_weight_images
+    assert len(weights) == 4
+
+
+def test_compose_weights_dedups_a_single_shared_field(tmp_path):
+    """One gradwarp field for the whole run costs one determinant, not N."""
+    if shutil.which('CreateJacobianDeterminantImage') is None:
+        pytest.skip('CreateJacobianDeterminantImage required for this test')
+    interface = ComposeJacobianWeights(
+        dwi_files=_dwi_volumes(tmp_path, 4),
+        b0_ref_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
+        mask=_write_map(tmp_path / 'mask.nii.gz', 1.0),
+        gradwarp_field=[str(write_itk_field(tmp_path / 'g.nii.gz'))],
+    )
+    weights = interface.run(cwd=str(tmp_path)).outputs.jacobian_weight_images
+    assert len(set(weights)) == 1
+
+
+def test_compose_weights_keeps_two_blip_directions_distinct(tmp_path):
+    """DRBUDDI rpe_series has one warp per blip direction, so two maps."""
+    if shutil.which('CreateJacobianDeterminantImage') is None:
+        pytest.skip('CreateJacobianDeterminantImage required for this test')
+    up = str(write_itk_field(tmp_path / 'up.nii.gz', amplitude=0.4))
+    down = str(write_itk_field(tmp_path / 'down.nii.gz', amplitude=0.2))
+    interface = ComposeJacobianWeights(
+        dwi_files=_dwi_volumes(tmp_path, 4),
+        b0_ref_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
+        mask=_write_map(tmp_path / 'mask.nii.gz', 1.0),
+        fieldwarps=[up, up, down, down],
+    )
+    weights = interface.run(cwd=str(tmp_path)).outputs.jacobian_weight_images
+    assert len(set(weights)) == 2
+    assert weights[0] == weights[1]
+    assert weights[2] == weights[3]
+
+
+def test_compose_weights_broadcasts_a_single_fieldwarp(tmp_path):
+    if shutil.which('CreateJacobianDeterminantImage') is None:
+        pytest.skip('CreateJacobianDeterminantImage required for this test')
+    interface = ComposeJacobianWeights(
+        dwi_files=_dwi_volumes(tmp_path, 3),
+        b0_ref_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
+        mask=_write_map(tmp_path / 'mask.nii.gz', 1.0),
+        fieldwarps=[str(write_itk_field(tmp_path / 'f.nii.gz'))],
+    )
+    weights = interface.run(cwd=str(tmp_path)).outputs.jacobian_weight_images
+    assert len(weights) == 3
+    assert len(set(weights)) == 1
+
+
+def test_compose_weights_rejects_a_mislatticed_field(tmp_path):
+    interface = ComposeJacobianWeights(
+        dwi_files=_dwi_volumes(tmp_path, 2),
+        b0_ref_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
+        mask=_write_map(tmp_path / 'mask.nii.gz', 1.0),
+        fieldwarps=[str(write_itk_field(tmp_path / 'f.nii.gz', shape=(6, 6, 6)))],
+    )
+    with pytest.raises(ValueError, match='shape'):
+        interface.run(cwd=str(tmp_path))
+
+
+def test_compose_weights_rejects_mismatched_ec_count(tmp_path):
+    interface = ComposeJacobianWeights(
+        dwi_files=_dwi_volumes(tmp_path, 4),
+        b0_ref_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
+        mask=_write_map(tmp_path / 'mask.nii.gz', 1.0),
+        ec_jacobian_images=[_write_map(tmp_path / 'ec0.nii.gz', 1.0)],
+    )
+    with pytest.raises(ValueError, match='eddy-current'):
+        interface.run(cwd=str(tmp_path))
+
+
+def test_compose_weights_applies_ec_only(tmp_path):
+    """TORTOISE EC with no gradwarp and no SDC still produces weights."""
+    ec = [_write_map(tmp_path / f'ec{i}.nii.gz', 1.0 + 0.1 * i) for i in range(3)]
+    interface = ComposeJacobianWeights(
+        dwi_files=_dwi_volumes(tmp_path, 3),
+        b0_ref_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
+        mask=_write_map(tmp_path / 'mask.nii.gz', 1.0),
+        ec_jacobian_images=ec,
+    )
+    weights = interface.run(cwd=str(tmp_path)).outputs.jacobian_weight_images
+    assert len(weights) == 3
+    assert len(set(weights)) == 3

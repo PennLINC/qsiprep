@@ -284,3 +284,181 @@ def validate_scalar_geometry(image_path, reference_path):
 
 def _abspath(path, cwd):
     return path if os.path.isabs(path) else os.path.join(cwd, path)
+
+
+from nipype.interfaces.base import (
+    BaseInterfaceInputSpec,
+    File,
+    InputMultiObject,
+    OutputMultiObject,
+    SimpleInterface,
+    TraitedSpec,
+    isdefined,
+)
+
+
+class _ComposeJacobianWeightsInputSpec(BaseInterfaceInputSpec):
+    dwi_files = InputMultiObject(
+        File(exists=True),
+        mandatory=True,
+        desc='split DWI volumes, in their native grid; supplies the volume count',
+    )
+    b0_ref_image = File(
+        exists=True,
+        mandatory=True,
+        desc='undistorted b=0 reference; the lattice the weight maps live on and '
+        'the reference for composing two fields',
+    )
+    # NOTE for the implementer: only this image's *grid* is used -- as the
+    # ``-r`` reference for composition and as the geometry the input fields are
+    # validated against. Its voxel content is never read. That matters because
+    # on the DRBUDDI-with-T2w path ``b0_ref_image`` is the *structural* image
+    # rather than a b=0 (``DRBUDDIAggregateOutputs`` returns
+    # ``structural_image`` as ``b0_ref`` when one exists,
+    # ``qsiprep/interfaces/tortoise.py:503-507``). That is still correct here:
+    # ``init_structural_to_b0_alignment_wf`` resamples the T2w with ``b0_ref``
+    # as its ``reference_image`` (``qsiprep/workflows/dwi/registration.py:157``),
+    # so the structural is on the b=0 lattice. Do not "fix" this by reaching for
+    # a different input.
+    mask = File(
+        exists=True,
+        mandatory=True,
+        desc='native-space brain mask, for the positivity guard',
+    )
+    gradwarp_field = InputMultiObject(
+        File(exists=True),
+        desc='gradient nonlinearity displacement field (one, shared by every volume)',
+    )
+    fieldwarps = InputMultiObject(
+        File(exists=True),
+        desc='SDC displacement field(s): one shared, or one per DWI volume',
+    )
+    ec_jacobian_images = InputMultiObject(
+        File(exists=True),
+        desc='per-volume eddy-current Jacobian determinants (TORTOISE DIFFPREP)',
+    )
+
+
+class _ComposeJacobianWeightsOutputSpec(TraitedSpec):
+    jacobian_weight_images = OutputMultiObject(
+        File(exists=True),
+        desc='one weight map per DWI volume, with repeats where volumes share one',
+    )
+
+
+class ComposeJacobianWeights(SimpleInterface):
+    """Build per-volume Jacobian weight maps for the native distortion warps.
+
+    The weight for a volume is ``|det grad(gradwarp . fieldwarp)|`` evaluated in
+    undistorted b=0-reference space, times that volume's eddy-current Jacobian
+    when one exists. Head motion, coregistration and the intramodal/template
+    warps are excluded by policy; see the design spec.
+
+    Unique ``(gradwarp, fieldwarp)`` combinations are computed once and shared,
+    so a run with one gradwarp field and one SDC warp costs a single ANTs call
+    even with hundreds of volumes.
+    """
+
+    input_spec = _ComposeJacobianWeightsInputSpec
+    output_spec = _ComposeJacobianWeightsOutputSpec
+
+    def _run_interface(self, runtime):
+        num_dwis = len(self.inputs.dwi_files)
+        reference = self.inputs.b0_ref_image
+
+        gradwarp = None
+        if isdefined(self.inputs.gradwarp_field) and self.inputs.gradwarp_field:
+            if len(self.inputs.gradwarp_field) != 1:
+                raise ValueError(
+                    'Expected a single gradwarp field, got '
+                    f'{len(self.inputs.gradwarp_field)}.'
+                )
+            gradwarp = self.inputs.gradwarp_field[0]
+            validate_field_geometry(gradwarp, reference)
+
+        fieldwarps = [None] * num_dwis
+        if isdefined(self.inputs.fieldwarps) and self.inputs.fieldwarps:
+            supplied = list(self.inputs.fieldwarps)
+            if len(supplied) == 1:
+                LOGGER.info('Using a single SDC warp for all DWI volumes')
+                fieldwarps = supplied * num_dwis
+            elif len(supplied) == num_dwis:
+                LOGGER.info('Using per-volume SDC warps')
+                fieldwarps = supplied
+            else:
+                raise ValueError(
+                    f'Got {len(supplied)} SDC warps for {num_dwis} DWI volumes; '
+                    'expected 1 or one per volume.'
+                )
+            for warp in set(fieldwarps):
+                validate_field_geometry(warp, reference)
+
+        validate_scalar_geometry(self.inputs.mask, reference)
+
+        ec_images = [None] * num_dwis
+        if isdefined(self.inputs.ec_jacobian_images) and self.inputs.ec_jacobian_images:
+            supplied = list(self.inputs.ec_jacobian_images)
+            if len(supplied) != num_dwis:
+                raise ValueError(
+                    f'Got {len(supplied)} eddy-current Jacobians for {num_dwis} '
+                    'DWI volumes; expected one per volume.'
+                )
+            for ec_image in set(supplied):
+                validate_scalar_geometry(ec_image, reference)
+            ec_images = supplied
+
+        if gradwarp is None and not any(fieldwarps) and not any(ec_images):
+            LOGGER.info('No distortion transforms to modulate; no weights produced')
+            return runtime
+
+        # One determinant per unique (gradwarp, fieldwarp) pair.
+        determinants = {}
+        for fieldwarp in dict.fromkeys(fieldwarps):
+            key = weight_key(gradwarp, fieldwarp)
+            if not key or key in determinants:
+                continue
+            fields = [path for path in (gradwarp, fieldwarp) if path]
+            if len(fields) == 2:
+                composed = compose_fields(
+                    fields,
+                    reference,
+                    os.path.join(runtime.cwd, f'composite{len(determinants)}.nii.gz'),
+                )
+            else:
+                composed = fields[0]
+            determinants[key] = jacobian_determinant(
+                composed,
+                os.path.join(runtime.cwd, f'jacobian{len(determinants)}.nii.gz'),
+                mask_path=self.inputs.mask,
+            )
+
+        # Per-volume weight = shared determinant x that volume's EC Jacobian.
+        weights = []
+        cache = {}
+        for index, (fieldwarp, ec_image) in enumerate(zip(fieldwarps, ec_images, strict=True)):
+            factors = []
+            key = weight_key(gradwarp, fieldwarp)
+            if key:
+                factors.append(determinants[key])
+            if ec_image:
+                factors.append(ec_image)
+
+            # Tag the roles rather than collapsing missing factors into an
+            # untagged tuple: (None, 'f.nii.gz') and ('f.nii.gz', None) are
+            # different weights that would otherwise share a key.
+            cache_key = (gradwarp, fieldwarp, ec_image)
+            if cache_key not in cache:
+                cache[cache_key] = multiply_maps(
+                    factors,
+                    fname_presuffix(
+                        self.inputs.dwi_files[index],
+                        suffix=f'_jacobian-{index:05d}',
+                        newpath=runtime.cwd,
+                        use_ext=True,
+                    ),
+                )
+                check_weight_map(cache[cache_key], self.inputs.mask)
+            weights.append(cache[cache_key])
+
+        self._results['jacobian_weight_images'] = weights
+        return runtime
