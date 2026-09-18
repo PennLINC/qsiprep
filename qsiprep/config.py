@@ -599,6 +599,14 @@ class workflow(_Config):
     """Gradient nonlinearity coefficient file or displacement field."""
     hmc_method = None
     """Which software corrects head motion: eddy, shoreline or tortoise."""
+    jacobian_applied_corrections = []
+    """Which spatial distortion corrections QSIPrep Jacobian-modulated (sidecar record)."""
+    jacobian_unmodulated_corrections = []
+    """Which spatial distortion corrections were NOT Jacobian-modulated (sidecar record)."""
+    jacobian_unmodulated_reason = None
+    """Why some correction(s) went unmodulated, e.g. an eddy --resamp=lsr config."""
+    jacobian_weighting = True
+    """Apply Jacobian intensity modulation for the spatial distortion corrections."""
     hmc_transform = None
     """Transformation SHORELine optimizes during head motion correction: Affine or
     Rigid. Derived from ``--shoreline-config``; None unless ``hmc_method`` is

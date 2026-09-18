@@ -49,6 +49,7 @@ def _build_parser(**kwargs):
         Action,
         ArgumentDefaultsHelpFormatter,
         ArgumentParser,
+        BooleanOptionalAction,
     )
     from functools import partial
     from pathlib import Path
@@ -822,6 +823,18 @@ How to combine the corrected results of an output's correction units.
         'json is specified, a default one will be used. The current default '
         'json can be found here: '
         'https://github.com/PennLINC/qsiprep/blob/main/qsiprep/data/eddy_params.json',
+    )
+    g_moco.add_argument(
+        '--jacobian-weighting',
+        action=BooleanOptionalAction,
+        default=True,
+        help='Apply Jacobian intensity modulation for gradient-nonlinearity, '
+        'susceptibility and eddy-current distortion corrections (default: on). '
+        'This option controls only the modulation QSIPrep itself applies. With '
+        '--hmc-method eddy, FSL eddy applies its own modulation for '
+        'eddy-current and TOPUP susceptibility distortions whenever its '
+        'resampling method is "jac" (the default; see --eddy-config), and that '
+        'is internal to eddy and unaffected by this option.',
     )
     g_moco.add_argument(
         '--diffprep-config',

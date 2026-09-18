@@ -1390,3 +1390,36 @@ def test_parser_rejects_unknown_mrtrix_version(tmp_path):
                 '2',
             ]
         )
+
+
+def test_jacobian_weighting_defaults_on(tmp_path):
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    opts = parser.parse_args(
+        [str(bids), str(out), 'participant', '--output-resolution', '2']
+    )
+    assert opts.jacobian_weighting is True
+
+
+def test_no_jacobian_weighting_turns_it_off(tmp_path):
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    opts = parser.parse_args(
+        [
+            str(bids),
+            str(out),
+            'participant',
+            '--output-resolution',
+            '2',
+            '--no-jacobian-weighting',
+        ]
+    )
+    assert opts.jacobian_weighting is False

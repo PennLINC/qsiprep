@@ -188,6 +188,24 @@ def init_fsl_hmc_wf(
     with open(eddy_cfg_file) as f:
         eddy_args = json.load(f)
 
+    from ...utils.eddy_config import eddy_modulates_distortion
+
+    if not eddy_modulates_distortion(eddy_args):
+        config.loggers.workflow.warning(
+            'eddy is configured with method=%s, not "jac", so eddy-current '
+            'and susceptibility distortion corrections will NOT be '
+            'Jacobian-modulated. QSIPrep cannot retrofit this: eddy has '
+            'already baked its resampling in and exports no field for the '
+            'eddy-current component.',
+            eddy_args.get('method'),
+        )
+        config.workflow.jacobian_unmodulated_corrections += [
+            'eddy-current', 'susceptibility'
+        ]
+        config.workflow.jacobian_unmodulated_reason = (
+            f'FSL eddy ran with --resamp={eddy_args.get("method")} rather than jac'
+        )
+
     gather_inputs = pe.Node(
         GatherEddyInputs(
             b0_threshold=config.workflow.b0_threshold,
