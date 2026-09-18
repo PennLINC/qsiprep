@@ -68,7 +68,7 @@ def _cfg(hmc_method='eddy', sdc_method='topup', layout=None):
     config.workflow.eddy_config = None
     config.workflow.no_b0_harmonization = False
     config.workflow.denoise_method = 'dwidenoise'
-    config.workflow.dwi_denoise_window = 5
+    config.workflow.dwidenoise_window = 5
     config.workflow.shoreline_iters = 2
     config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
     return config
@@ -238,7 +238,7 @@ def test_diffusion_summary_renders_pe_direction(tmp_path, pe_direction, expected
         hmc_model='eddy',
         b0_to_anat_transform='Rigid',
         denoise_method='dwidenoise',
-        dwi_denoise_window=5,
+        dwidenoise_window=5,
         validation_reports=[str(report)],
     )
     assert expected in summary._generate_segment()

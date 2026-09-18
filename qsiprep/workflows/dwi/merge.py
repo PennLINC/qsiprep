@@ -459,7 +459,7 @@ def init_dwi_denoising_wf(
         # complex-valued data; only the data feeding it differs, which is wired up below.
         if denoise_method == 'dwidenoise2':
             # dwidenoise2 sizes its patches per iteration from its multi-resolution schedule,
-            # so there is no kernel to configure and dwi_denoise_window does not apply here.
+            # so there is no kernel to configure and dwidenoise_window does not apply here.
             denoiser = pe.Node(
                 DWIDenoise2(nthreads=omp_nthreads, **dwidenoise2_params),
                 name='denoiser',
@@ -478,23 +478,23 @@ def init_dwi_denoising_wf(
                 (gradient_table, denoiser, [('gradient_file', 'grad_file')]),
             ])  # fmt:skip
         elif denoise_method == 'dwidenoise':
-            dwi_denoise_window = config.workflow.dwi_denoise_window
+            dwidenoise_window = config.workflow.dwidenoise_window
             auto_str = ''
-            if dwi_denoise_window == 'auto':
+            if dwidenoise_window == 'auto':
                 # Configure the denoising window
                 import numpy as np
 
-                dwi_denoise_window = closest_odd(int(np.ceil(np.cbrt(n_volumes))))
-                dwi_denoise_window = max(dwi_denoise_window, 3)
+                dwidenoise_window = closest_odd(int(np.ceil(np.cbrt(n_volumes))))
+                dwidenoise_window = max(dwidenoise_window, 3)
                 config.loggers.workflow.info(
-                    f'Automatically using {dwi_denoise_window}, {dwi_denoise_window}, '
-                    f'{dwi_denoise_window} window for dwidenoise'
+                    f'Automatically using {dwidenoise_window}, {dwidenoise_window}, '
+                    f'{dwidenoise_window} window for dwidenoise'
                 )
                 auto_str = 'n automatically-determined'
 
             denoiser = pe.Node(
                 DWIDenoise(
-                    extent=(dwi_denoise_window, dwi_denoise_window, dwi_denoise_window),
+                    extent=(dwidenoise_window, dwidenoise_window, dwidenoise_window),
                     nthreads=omp_nthreads,
                 ),
                 name='denoiser',
@@ -517,7 +517,7 @@ def init_dwi_denoising_wf(
                 mppca_desc = (
                     'denoised using the Marchenko-Pastur PCA method implemented in dwidenoise '
                     '[@mrtrix3; @dwidenoise1; @dwidenoise2] '
-                    f'with a{auto_str} window size of {dwi_denoise_window} voxels. '
+                    f'with a{auto_str} window size of {dwidenoise_window} voxels. '
                 )
 
             if denoise_complex:
