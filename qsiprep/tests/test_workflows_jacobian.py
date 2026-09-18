@@ -187,3 +187,17 @@ def test_each_sdc_branch_emits_a_warp_for_weighting(method, sources, monkeypatch
         f'{method} produced no out_warp, so nothing would reach fieldwarps '
         'and this backend would be silently unweighted.'
     )
+
+
+def test_sdc_unwarp_wf_has_no_dead_jacobian_node():
+    """The SDC-warp-only Jacobian is not what the weighting needs.
+
+    It was computed and discarded for years. ComposeJacobianWeights derives the
+    determinant of the *composed* gradwarp-and-SDC warp instead, so leaving
+    this node in place would be a second, subtly-wrong source of truth.
+    """
+    from qsiprep.workflows.fieldmap.unwarp import init_sdc_unwarp_wf
+
+    workflow = init_sdc_unwarp_wf()
+    assert workflow.get_node('jac_dfm') is None
+    assert 'out_jacobian' not in workflow.get_node('outputnode').outputs.copyable_trait_names()
