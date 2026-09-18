@@ -364,9 +364,7 @@ def _dest(option):
 
 
 # (deprecated flag, the option it enables, the value that option is set to)
-FORWARDED_FLAGS = [
-    ('--dwi-only', '--anat-modality', 'none'),
-]
+FORWARDED_FLAGS = []
 
 
 @pytest.mark.parametrize(('flag', 'option', 'value'), FORWARDED_FLAGS)
@@ -760,6 +758,8 @@ def test_parser_rejects_unknown_mrtrix_version(tmp_path):
                 '2',
             ]
         )
+
+
 def _cli_base(tmp_path):
     """Minimal valid positional args for the parser.
 

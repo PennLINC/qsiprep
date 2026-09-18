@@ -46,15 +46,11 @@ def _build_parser(**kwargs):
     from pathlib import Path
 
     # Deprecated options: {option string: (version it is removed in, what happens instead)}
-    deprecations = {
-        '--dwi-only': ('27.0.0', 'Enabling `--anat-modality none` instead.'),
-    }
+    deprecations = {}
 
     # Deprecated flags that enable their replacement automatically:
     # {option string: (replacement option, its namespace attribute, the value it is set to)}
-    forwarded_deprecations = {
-        '--dwi-only': ('--anat-modality', 'anat_modality', 'none'),
-    }
+    forwarded_deprecations = {}
 
     def _warn_deprecated(option_string):
         removed_in, detail = deprecations[option_string]
@@ -466,12 +462,6 @@ def _build_parser(**kwargs):
             'skull-stripped and segmented for use in the visual reports. T2w is forced when '
             '--infant is given.'
         ),
-    )
-    g_anat.add_argument(
-        '--dwi-only',
-        action=DeprecatedForwardAction,
-        default=SUPPRESS,
-        help='Deprecated; equivalent to --anat-modality none.',
     )
     g_anat.add_argument(
         '--infant',
