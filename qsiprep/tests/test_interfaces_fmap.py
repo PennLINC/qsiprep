@@ -98,6 +98,26 @@ def test_displacement_to_fieldmap_oblique(tmp_path):
     assert _first_hz(_run(iface, tmp_path / 'w')) == pytest.approx(20.0)
 
 
+def test_displacement_to_fieldmap_antisymmetric_average(tmp_path):
+    """With both blip fields, the output is the antisymmetric average.
+
+    DRBUDDI relaxes the antisymmetry constraint late, so FINV and MINV share a
+    non-antisymmetric residue that is not an off-resonance field. Here the pure B0
+    part is +2 mm anterior ([0, -2, 0]) and both fields carry a +1 mm symmetric
+    residue: FINV = [0, -1, 0], MINV = -B0 + residue = [0, 3, 0]. Averaging
+    (blip-up at +j, blip-down at -j) cancels the residue and recovers the B0 field
+    (20 Hz); the blip-up field alone keeps it (10 Hz).
+    """
+    up = _write_disp(tmp_path / 'up.nii.gz', [0.0, -1.0, 0.0], _RAS)
+    down = _write_disp(tmp_path / 'down.nii.gz', [0.0, 3.0, 0.0], _RAS)
+    both = DisplacementToFieldmap(
+        displacement_field=up, opposite_displacement_field=down, pe_dir='j', readout_time=0.05
+    )
+    up_only = DisplacementToFieldmap(displacement_field=up, pe_dir='j', readout_time=0.05)
+    assert _first_hz(_run(both, tmp_path / 'both')) == pytest.approx(20.0)
+    assert _first_hz(_run(up_only, tmp_path / 'up_only')) == pytest.approx(10.0)
+
+
 def test_b0rpe_fieldmap_writes_metadata_not_a_path(tmp_path):
     """The sidecar holds the fieldmap's metadata rather than a JSON file path."""
     root = build_test_dataset(

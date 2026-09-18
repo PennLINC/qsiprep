@@ -276,7 +276,10 @@ def init_drbuddi_wf(
             name='field_to_hz',
         )
         workflow.connect([
-            (drbuddi, field_to_hz, [('deformation_finv', 'displacement_field')]),
+            (drbuddi, field_to_hz, [
+                ('deformation_finv', 'displacement_field'),
+                ('deformation_minv', 'opposite_displacement_field'),
+            ]),
             (field_to_hz, outputnode, [('fieldmap_hz', 'fieldmap_hz')]),
         ])  # fmt:skip
 

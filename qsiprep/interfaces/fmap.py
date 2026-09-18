@@ -222,7 +222,12 @@ class DisplacementToFieldmapInputSpec(BaseInterfaceInputSpec):
     displacement_field = File(
         exists=True,
         mandatory=True,
-        desc='an ANTs displacement field (5D, mm) that unwarps the blip-up series',
+        desc='an ANTs displacement field (5D, mm) unwarping the blip-up series (DRBUDDI FINV)',
+    )
+    opposite_displacement_field = File(
+        exists=True,
+        desc='the matching blip-down field (DRBUDDI MINV); when given, the fieldmap is the '
+        'antisymmetric average of the two, isolating the susceptibility component',
     )
     pe_dir = traits.Str(
         mandatory=True, desc="BIDS PhaseEncodingDirection of the blip-up series (e.g. 'j')"
@@ -237,13 +242,20 @@ class DisplacementToFieldmapOutputSpec(TraitedSpec):
 
 
 class DisplacementToFieldmap(SimpleInterface):
-    """Convert an ANTs displacement field (mm) into an off-resonance field in Hz.
+    """Convert DRBUDDI displacement fields (mm) into an off-resonance field in Hz.
 
-    DRBUDDI estimates susceptibility distortion as ANTs displacement fields
-    (``deformation_FINV.nii.gz`` maps the blip-up series to the corrected b=0),
-    not as a Hz field. Downstream reuse (movement-by-susceptibility in eddy, or
-    handing a realistic field to a simulator) wants Hz, so recover it here from
-    the geometry of the blip-up acquisition.
+    DRBUDDI estimates susceptibility distortion as ANTs displacement fields, not a
+    Hz field. It writes two: ``deformation_FINV`` unwarps the blip-up series to the
+    corrected b=0 and ``deformation_MINV`` unwarps the blip-down series to the same
+    place. They are not two fieldmaps -- a single off-resonance field distorts the
+    two polarities oppositely, so they encode one physical field with opposite sign
+    (MINV ~= -FINV). They are not *exactly* antisymmetric: DRBUDDI constrains the two
+    deformations to be antisymmetric only in its early stages and relaxes that later,
+    so each field also absorbs distortion that no single Delta-B0 produces. That
+    non-antisymmetric part is not an off-resonance field and cannot be reproduced by
+    a forward model from one Hz map. Passing both fields averages them
+    antisymmetrically, which keeps the shared Delta-B0 component and cancels that
+    residue; with only the blip-up field the conversion still works, but keeps it.
 
     The one non-obvious step is the coordinate convention. nibabel reports the
     image affine in RAS+, but ANTs stores each displacement *vector component* in
@@ -264,8 +276,9 @@ class DisplacementToFieldmap(SimpleInterface):
     input_spec = DisplacementToFieldmapInputSpec
     output_spec = DisplacementToFieldmapOutputSpec
 
-    def _run_interface(self, runtime):
-        img = nb.load(self.inputs.displacement_field)
+    def _field_hz(self, path, polarity):
+        """Project one displacement field onto the PE axis and scale to Hz."""
+        img = nb.load(path)
         data = np.asanyarray(img.dataobj, dtype=np.float32)
         if data.ndim == 5:
             # ANTs convention: (X, Y, Z, 1, 3); the singleton is a "time" axis.
@@ -281,11 +294,29 @@ class DisplacementToFieldmap(SimpleInterface):
         voxel_size = float(np.linalg.norm(col_ras))
         # Same axis in LPS, to match the LPS-stored displacement components.
         col_lps = col_ras * np.array([-1.0, -1.0, 1.0])
-
         # Signed voxel shift along +axis = (displacement . unit_axis) / voxel_size.
         shift_vox = (comp * col_lps).sum(axis=-1) / (voxel_size**2)
+        return polarity * shift_vox / self.inputs.readout_time, img
+
+    def _run_interface(self, runtime):
         polarity = -1.0 if self.inputs.pe_dir.endswith('-') else 1.0
-        field_hz = polarity * shift_vox / self.inputs.readout_time
+        field_hz, img = self._field_hz(self.inputs.displacement_field, polarity)
+
+        if isdefined(self.inputs.opposite_displacement_field):
+            # The blip-down series has the opposite polarity; converting MINV with
+            # it yields the same-signed physical field, so the mean is the
+            # antisymmetric average. Both fields share DRBUDDI's working grid.
+            down_hz, down_img = self._field_hz(self.inputs.opposite_displacement_field, -polarity)
+            if down_hz.shape == field_hz.shape and np.allclose(
+                down_img.affine, img.affine, atol=1e-3
+            ):
+                field_hz = 0.5 * (field_hz + down_hz)
+            else:
+                LOGGER.warning(
+                    'Blip-down field grid %s does not match blip-up %s; using blip-up alone.',
+                    down_hz.shape,
+                    field_hz.shape,
+                )
 
         out_img = nb.Nifti1Image(field_hz.astype(np.float32), img.affine, img.header)
         out_img.header.set_data_dtype(np.float32)

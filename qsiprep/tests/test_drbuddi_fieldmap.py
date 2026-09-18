@@ -55,12 +55,14 @@ def test_drbuddi_wf_builds_field_to_hz(tmp_path):
     # The lead (+polarity) series is PA ('j'); its readout time drives the scale.
     assert node.inputs.pe_dir == 'j'
     assert node.inputs.readout_time == pytest.approx(0.0917)
-    # The FINV field feeds it, and its Hz output reaches the workflow outputnode.
+    # Both blip fields (FINV up, MINV down) feed it, and its Hz output reaches the
+    # workflow outputnode.
     edges = wf._graph.edges(data=True)
     assert any(
         u.name == 'drbuddi'
         and v.name == 'field_to_hz'
         and ('deformation_finv', 'displacement_field') in d['connect']
+        and ('deformation_minv', 'opposite_displacement_field') in d['connect']
         for u, v, d in edges
     )
     assert any(
