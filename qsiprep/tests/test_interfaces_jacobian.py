@@ -495,3 +495,67 @@ def test_okan_jacobian_rejects_a_short_row(tmp_path):
             reference_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
             correction_mode='quadratic',
         ).run()
+
+
+# --- StackJacobianWeights ---------------------------------------------------
+
+from qsiprep.interfaces.jacobian import StackJacobianWeights
+
+
+def test_stack_jacobian_weights_single_image_is_3d(tmp_path):
+    """The collapsed (all-volumes-share-one-map) case stays 3D."""
+    weight_image = _write_map(tmp_path / 'w0.nii.gz', 1.0)
+    result = StackJacobianWeights(
+        weight_images=[weight_image], weight_index=[0, 0, 0]
+    ).run(cwd=str(tmp_path))
+    out = nb.load(result.outputs.out_file)
+    assert out.ndim == 3
+
+
+def test_stack_jacobian_weights_two_images_stack_on_last_axis(tmp_path):
+    """Multiple unique maps stack on the last axis, in first-appearance order."""
+    first = _write_map(tmp_path / 'w0.nii.gz', 1.0)
+    second = _write_map(tmp_path / 'w1.nii.gz', 2.0)
+    result = StackJacobianWeights(
+        weight_images=[first, second], weight_index=[0, 1, 0]
+    ).run(cwd=str(tmp_path))
+    out = nb.load(result.outputs.out_file)
+    data = np.asanyarray(out.dataobj)
+    assert out.ndim == 4
+    assert data.shape[-1] == 2
+    assert np.allclose(data[..., 0], 1.0)
+    assert np.allclose(data[..., 1], 2.0)
+
+
+def test_stack_jacobian_weights_undefined_input_stays_undefined(tmp_path):
+    """No weights applied this run: no crash, and nothing is written.
+
+    This is the case the brief's original ``mandatory=True`` input spec would
+    have raised ``ValueError`` on -- see the task-12 report. Pinning it here
+    keeps that regression from coming back.
+    """
+    result = StackJacobianWeights().run(cwd=str(tmp_path))
+    assert not isdefined(result.outputs.out_file)
+    assert not isdefined(result.outputs.meta_dict)
+
+
+def test_stack_jacobian_weights_meta_dict_index_matches_shape(monkeypatch, tmp_path):
+    """The sidecar's index travels with the stacked file, unmodified."""
+    from qsiprep import config
+
+    monkeypatch.setattr(config.workflow, 'jacobian_applied_corrections', ['gradwarp', 'sdc'])
+    monkeypatch.setattr(config.workflow, 'jacobian_unmodulated_corrections', [])
+    monkeypatch.setattr(config.workflow, 'jacobian_unmodulated_reason', None)
+
+    first = _write_map(tmp_path / 'w0.nii.gz', 1.0)
+    second = _write_map(tmp_path / 'w1.nii.gz', 2.0)
+    result = StackJacobianWeights(
+        weight_images=[first, second], weight_index=[0, 0, 1, 0]
+    ).run(cwd=str(tmp_path))
+
+    out = nb.load(result.outputs.out_file)
+    meta = result.outputs.meta_dict
+    assert meta['JacobianWeightIndex'] == [0, 0, 1, 0]
+    assert meta['AppliedCorrections'] == ['gradwarp', 'sdc']
+    # every index must address a real frame of the stacked file
+    assert max(meta['JacobianWeightIndex']) < out.shape[-1]

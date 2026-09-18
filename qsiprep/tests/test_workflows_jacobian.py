@@ -15,6 +15,7 @@ from qsiplan.models import CorrectionMethod
 
 from qsiprep import config
 from qsiprep.data import load as load_data
+from qsiprep.tests.gradient_fixtures import write_dwi_with_gradients
 from qsiprep.tests.preproc_factory import make_preproc_unit
 
 
@@ -346,3 +347,121 @@ def test_jacobian_sidecar_collapsed_case_is_written_in_full():
         weight_index=[0] * 5, applied=['sdc'], unmodulated=[], reason=None
     )
     assert sidecar['JacobianWeightIndex'] == [0, 0, 0, 0, 0]
+
+
+# --- stack_jacobian / ds_jacobian wiring ------------------------------------
+#
+# A dropped connection here produces no error at construction or run time --
+# just a silently absent derivative (see the task-12 report). These tests
+# therefore check edges, not just node presence, mirroring
+# ``test_tsnr_is_wired_into_derivatives`` (qsiprep/tests/test_tsnr.py) and the
+# ``_finalize_wf``/``_finalize_cfg`` setup in test_workflows_gradwarp.py.
+
+
+def _derivatives_wf(tmp_path):
+    from qsiprep.workflows.dwi.derivatives import init_dwi_derivatives_wf
+
+    config.execution.output_dir = str(tmp_path)
+    config.workflow.hmc_method = 'tortoise'
+    config.workflow.write_local_bvecs = False
+    return init_dwi_derivatives_wf('/data/sub-01/ses-1/dwi/sub-01_ses-1_dwi.nii.gz')
+
+
+def _derivatives_edges(workflow):
+    return {(u.name, v.name): d['connect'] for u, v, d in workflow._graph.edges(data=True)}
+
+
+def test_stack_jacobian_and_sink_exist_when_weighting_on(tmp_path):
+    wf = _derivatives_wf(tmp_path)
+    assert wf.get_node('stack_jacobian') is not None
+    assert wf.get_node('ds_jacobian') is not None
+
+
+def test_stack_jacobian_and_sink_absent_when_weighting_off(tmp_path):
+    config.workflow.jacobian_weighting = False
+    wf = _derivatives_wf(tmp_path)
+    assert wf.get_node('stack_jacobian') is None
+    assert wf.get_node('ds_jacobian') is None
+
+
+def test_stack_jacobian_connects_to_the_sink(tmp_path):
+    """A missing edge here is the silent-absence failure mode; a missing node
+    is not the only way to lose the file."""
+    wf = _derivatives_wf(tmp_path)
+    edges = _derivatives_edges(wf)
+    assert set(edges[('stack_jacobian', 'ds_jacobian')]) == {
+        ('out_file', 'in_file'),
+        ('meta_dict', 'meta_dict'),
+    }
+
+
+def test_stack_jacobian_receives_weights_from_inputnode(tmp_path):
+    wf = _derivatives_wf(tmp_path)
+    edges = _derivatives_edges(wf)
+    assert set(edges[('inputnode', 'stack_jacobian')]) == {
+        ('jacobian_weights', 'weight_images'),
+        ('jacobian_weight_index', 'weight_index'),
+    }
+
+
+def _finalize_wf(tmp_path, write_derivatives=True):
+    from qsiprep.workflows.dwi.finalize import init_dwi_finalize_wf
+
+    config.execution.output_dir = str(tmp_path)
+    config.execution.sloppy = False
+    config.workflow.sdc_method = 'topup'
+    config.workflow.intramodal_template_iters = 0
+    dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz')
+    unit = make_preproc_unit([dwi])
+    return init_dwi_finalize_wf(
+        unit=unit,
+        name='dwi_finalize_wf',
+        source_file=dwi,
+        output_prefix='sub-01',
+        write_derivatives=write_derivatives,
+    )
+
+
+def test_jacobian_weights_reach_the_derivatives_workflow_through_finalize(tmp_path):
+    """The full inter-workflow chain: trans_wf -> finalize outputnode -> derivatives_wf.
+
+    This is the shape of the boundary Task 10 and Task 11 each missed once in
+    ``workflows/base.py`` (a dropped edge between two outputnodes, no error,
+    just an absent derivative). ``init_dwi_trans_wf``/``init_dwi_derivatives_wf``
+    are only ever called from inside ``init_dwi_finalize_wf`` for this
+    channel, so this is the boundary that matters for it, not ``base.py``.
+    """
+    wf = _finalize_wf(tmp_path)
+    trans_wf = wf.get_node('transform_dwis_t1')
+    outputnode = wf.get_node('outputnode')
+    deriv_wf = wf.get_node('dwi_derivatives_wf')
+    assert deriv_wf.get_node('stack_jacobian') is not None
+
+    trans_to_out = wf._graph.get_edge_data(trans_wf, outputnode)
+    assert trans_to_out is not None
+    assert ('outputnode.jacobian_weights', 'jacobian_weights') in trans_to_out['connect']
+    assert (
+        'outputnode.jacobian_weight_index',
+        'jacobian_weight_index',
+    ) in trans_to_out['connect']
+
+    out_to_deriv = wf._graph.get_edge_data(outputnode, deriv_wf)
+    assert out_to_deriv is not None
+    assert ('jacobian_weights', 'inputnode.jacobian_weights') in out_to_deriv['connect']
+    assert (
+        'jacobian_weight_index',
+        'inputnode.jacobian_weight_index',
+    ) in out_to_deriv['connect']
+
+
+def test_jacobian_weights_do_not_reach_finalize_when_weighting_off(tmp_path):
+    config.workflow.jacobian_weighting = False
+    wf = _finalize_wf(tmp_path)
+    trans_wf = wf.get_node('transform_dwis_t1')
+    outputnode = wf.get_node('outputnode')
+    deriv_wf = wf.get_node('dwi_derivatives_wf')
+    assert deriv_wf.get_node('stack_jacobian') is None
+
+    edge = wf._graph.get_edge_data(trans_wf, outputnode)
+    connect = edge['connect'] if edge is not None else []
+    assert not any('jacobian_weights' in str(pair) for pair in connect)
