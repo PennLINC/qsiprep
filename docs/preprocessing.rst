@@ -800,6 +800,79 @@ since it addresses a completely separate problem
      behaviour here. The coregistration reference on this branch *is*
      gradwarp-corrected; only the susceptibility estimate is not.
 
+.. _jacobian_weighting:
+
+Jacobian intensity modulation
+------------------------------
+
+Correcting a spatial distortion moves signal between voxels, so the corrected
+image must also be rescaled by the local volume change -- the Jacobian
+determinant of the correction -- or regions the acquisition compressed stay
+artificially bright. This intensity correction is standard practice for
+eddy-current-induced distortion: it is part of the original quadratic
+eddy-current correction model :footcite:t:`rohde2004`, whose Jacobian is what
+TORTOISE's ``DIFFPREP`` eddy-current correction is analytically weighted by
+here (see ``qsiprep/interfaces/jacobian.py``). *QSIPrep* applies the same
+principle -- rescaling by the local Jacobian determinant of the corrective
+warp -- for gradient nonlinearity and susceptibility distortion correction as
+well. It is **not** applied for head motion (a rigid or affine realignment is
+not a measured volume change), nor for coregistration, the intramodal
+template, or template-space normalization: modulating by a
+spatial-normalization warp is VBM-style volume modulation, which would
+corrupt DWI signal intensities and every model fitted to them.
+
+Which component performs the modulation depends on the backend:
+
+============================== ==========================================
+Correction                     Modulated by
+============================== ==========================================
+Gradient nonlinearity          *QSIPrep*
+Susceptibility (TOPUP)         ``eddy``, internally
+Susceptibility (DRBUDDI)       *QSIPrep*
+Susceptibility (GRE, SyN)      *QSIPrep*
+Susceptibility (T2Wreg)        *QSIPrep*
+Eddy current (``eddy``)        ``eddy``, internally
+Eddy current (DIFFPREP)        *QSIPrep*
+============================== ==========================================
+
+``--no-jacobian-weighting`` disables only the modulation *QSIPrep* itself
+applies -- gradient nonlinearity, and susceptibility/eddy current wherever
+*QSIPrep* is the one applying them per the table above. It cannot disable
+``eddy``'s internal modulation: ``eddy``'s ``--resamp`` accepts only ``jac``
+or ``lsr``, and ``lsr`` requires exactly two opposite-polarity acquisitions,
+so on ``--hmc-method eddy`` with TOPUP the eddy-current and susceptibility
+modulation is internal to ``eddy`` and unaffected by the flag -- there is no
+QSIPrep-held weight for it to disable. Conversely, if you supply
+``--eddy-config`` with ``"method": "lsr"``, ``eddy`` does not
+Jacobian-modulate those two corrections at all, and *QSIPrep* cannot retrofit
+it: ``eddy`` has already baked its resampling in. The run warns, and the gap
+is recorded in the derivative sidecar's ``UnmodulatedCorrections`` (below).
+
+The weight map *QSIPrep* itself applied is written out as
+``*_space-ACPC_desc-jacobian_dwimap.nii.gz``, with a sidecar giving
+``JacobianWeightIndex`` (one zero-based entry per DWI volume, indexing
+volumes of the weight file), ``AppliedCorrections``, and
+``UnmodulatedCorrections`` with a reason where coverage is partial. This file
+is written only when *QSIPrep* actually applied a modulation of its own: for
+example, on ``--hmc-method eddy`` with TOPUP and no gradwarp, every
+modulation is internal to ``eddy``, so QSIPrep holds no weight map at all and
+writes no derivative. A unity map is deliberately not synthesized for that
+case, since it would assert "this run modulated by 1," which would be false.
+Dividing the preprocessed series by the indexed weight volume reverses that
+multiplication *at the point in the pipeline where it was applied*; it does
+not recover a fully unmodulated series, because denoising and bias-field
+correction run after resampling and do not commute with it.
+
+.. note::
+   **Known limitation: no Jacobian weight derivative under
+   ``--distortion-group-merge``.**
+   :func:`~qsiprep.workflows.dwi.distortion_group_merge.init_distortion_group_merge_wf`
+   builds the merged derivatives without wiring the Jacobian fields, so
+   merged outputs get no ``*_desc-jacobian_dwimap.nii.gz`` derivative --
+   even though the underlying merged data *was* modulated during resampling,
+   like any other run. Only the published weight map is missing; the merged
+   data itself is unaffected.
+
 .. _fsl_wf:
 
 Head-motion / Eddy Current / Distortion correction (FSL)
@@ -816,7 +889,12 @@ To ensure that the FSL workflow works as intended, all inputs are forced into
 to the FSL standard orientation. The head motion, eddy current, and susceptibility
 distortion corrections are applied at the end of ``eddy``, which means that
 there will be *two* total interpolations in the FSL-based *QSIPrep* workflow, as
-the final interpolation into T1w/AC-PC space is done externally in ANTs.
+the final interpolation into T1w/AC-PC space is done externally in ANTs. Eddy
+current and susceptibility (TOPUP) Jacobian modulation (see
+:ref:`jacobian_weighting`) happens inside ``eddy`` itself, at that first
+interpolation; any gradwarp modulation *QSIPrep* applies happens at the
+second, external interpolation, alongside the rest of the composed transform
+chain.
 
 The FSL workflow can take three different forms.
 

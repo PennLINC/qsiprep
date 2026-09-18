@@ -565,6 +565,27 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
         desc.append(topup_boilerplate(fieldmap_type, pepolar_method))
     # DRBUDDI is described in its own workflow
 
+    # Jacobian modulation: whether eddy's own resampling Jacobian-modulated
+    # the eddy-current (and, when TOPUP ran, susceptibility) corrections it
+    # applied. This is independent of --no-jacobian-weighting, which controls
+    # only the modulation QSIPrep itself applies -- see eddy_modulates_distortion.
+    from ..utils.eddy_config import eddy_modulates_distortion
+
+    if eddy_modulates_distortion(eddy_config):
+        desc.append(
+            'Eddy-current correction, and susceptibility distortion correction '
+            'when TOPUP was used, were Jacobian-modulated by eddy itself as part '
+            'of its `jac` resampling.'
+        )
+    else:
+        desc.append(
+            'Eddy-current correction, and susceptibility distortion correction '
+            'when TOPUP was used, were not Jacobian-modulated, because eddy was '
+            f'configured with resampling method "{ext_eddy.inputs.method}" rather '
+            'than "jac"; QSIPrep cannot retrofit this modulation once eddy has '
+            'resampled the data.'
+        )
+
     # move by susceptibility
     if (
         isdefined(ext_eddy.inputs.estimate_move_by_susceptibility)

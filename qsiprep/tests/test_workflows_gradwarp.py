@@ -41,11 +41,16 @@ def _reset_config():
     # to have left a number behind.
     config.workflow.shoreline_iters = 2
     config.nipype.omp_nthreads = 1
+    # The gradwarp boilerplate now branches on this too; leaking a non-default
+    # value would silently change the text another test asserts on.
+    jacobian_weighting = config.workflow.jacobian_weighting
+    config.workflow.jacobian_weighting = True
     yield
     _reset_plan_logging()
     config.workflow.gradient_file = None
     config.workflow.ignore = []
     config.workflow.force = []
+    config.workflow.jacobian_weighting = jacobian_weighting
     for key, value in axis_keys.items():
         setattr(config.workflow, key, value)
 
@@ -1568,3 +1573,50 @@ def test_eddy_summary_leaves_hmc_transform_undefined(tmp_path):
     # _dwi_preproc_cfg sets this, standing in for a stale value.
     assert config.workflow.hmc_transform == 'Affine'
     assert not isdefined(wf.get_node('summary').inputs.hmc_transform)
+
+
+# --- Jacobian-modulation boilerplate -----------------------------------------
+
+
+def test_boilerplate_states_modulation_when_enabled():
+    from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
+
+    config.workflow.jacobian_weighting = True
+    text = gradwarp_boilerplate('3D', 'metadata')
+    assert 'Jacobian' in text
+
+
+def test_boilerplate_states_the_absence_when_disabled():
+    from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
+
+    config.workflow.jacobian_weighting = False
+    text = gradwarp_boilerplate('3D', 'metadata')
+    assert 'without Jacobian' in text or 'no Jacobian' in text
+
+
+def test_dis3d_boilerplate_makes_no_jacobian_claim():
+    """A DIS3D unit has no field, so there is nothing to have been modulated."""
+    from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
+
+    config.workflow.jacobian_weighting = True
+    assert 'Jacobian' not in gradwarp_boilerplate(None)
+
+
+def test_eddy_boilerplate_flags_lsr_as_unmodulated():
+    # Lives in qsiprep/interfaces/eddy.py, not qsiprep/workflows/dwi/fsl.py --
+    # fsl.py only calls it.
+    from qsiprep.interfaces.eddy import boilerplate_from_eddy_config
+
+    text = boilerplate_from_eddy_config(
+        {'method': 'lsr', 'flm': 'quadratic', 'slm': 'linear'}, 'epi', pepolar_method='topup'
+    )
+    assert 'not Jacobian-modulated' in text
+
+
+def test_eddy_boilerplate_states_modulation_for_the_jac_default():
+    from qsiprep.interfaces.eddy import boilerplate_from_eddy_config
+
+    text = boilerplate_from_eddy_config(
+        {'method': 'jac', 'flm': 'quadratic', 'slm': 'linear'}, 'epi', pepolar_method='topup'
+    )
+    assert 'Jacobian-modulated by eddy itself' in text

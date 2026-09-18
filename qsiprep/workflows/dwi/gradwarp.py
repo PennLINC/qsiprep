@@ -289,13 +289,41 @@ def _resampling_sentence():
     )
 
 
+#: Whether *QSIPrep* itself Jacobian-modulated the gradwarp field, keyed by
+#: ``config.workflow.jacobian_weighting``. A ``DIS3D`` unit builds no field
+#: (see :func:`gradwarp_boilerplate`), so there is nothing to modulate and
+#: this text is never reached for it.
+_JACOBIAN_SENTENCE = {
+    True: (
+        ' A Jacobian intensity correction was applied to compensate for the '
+        'local volume change this correction introduces.'
+    ),
+    False: (
+        ' This correction was applied without Jacobian intensity modulation '
+        '(--no-jacobian-weighting), so the local volume change it introduces '
+        'was not compensated for.'
+    ),
+}
+
+
+def _jacobian_sentence():
+    """Whether *QSIPrep* itself Jacobian-modulated this field.
+
+    Reads ``config.workflow.jacobian_weighting`` directly -- display
+    vocabulary describing what ``ComposeJacobianWeights`` did with this
+    field, not routing, matching ``_resampling_sentence``'s allowlisted read
+    of ``hmc_method`` just above it.
+    """
+    return _JACOBIAN_SENTENCE[bool(config.workflow.jacobian_weighting)]
+
+
 def gradwarp_boilerplate(warp_dim, basis='metadata'):
     """Methods text for the resolved plan and the selected HMC backend.
 
-    A ``DIS3D`` unit gets no displacement field, so it gets no resampling
-    sentence either -- there is nothing to have been combined with anything.
-    A forced plan cannot attribute the correction it applied to the scanner
-    tags, since it did not read them.
+    A ``DIS3D`` unit gets no displacement field, so it gets no resampling or
+    Jacobian sentence either -- there is nothing to have been combined with
+    anything, or modulated. A forced plan cannot attribute the correction it
+    applied to the scanner tags, since it did not read them.
     """
     if warp_dim is None:
         return _CORRECTION_TEXT[None]
@@ -303,7 +331,7 @@ def gradwarp_boilerplate(warp_dim, basis='metadata'):
         text = _FORCED_CORRECTION_TEXT.get(warp_dim, _CORRECTION_TEXT[warp_dim])
     else:
         text = _CORRECTION_TEXT[warp_dim]
-    return text + _resampling_sentence()
+    return text + _resampling_sentence() + _jacobian_sentence()
 
 
 #: Report phrasing for each resolved state.
