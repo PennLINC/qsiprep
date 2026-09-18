@@ -471,7 +471,7 @@ def _build_parser(**kwargs):
         '--dwi-only',
         action=DeprecatedForwardAction,
         default=SUPPRESS,
-        help=SUPPRESS,
+        help='Deprecated; equivalent to --anat-modality none.',
     )
     g_anat.add_argument(
         '--infant',
