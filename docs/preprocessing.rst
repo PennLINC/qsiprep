@@ -667,7 +667,6 @@ DWI preprocessing
         unringing_method='mrdegibbs',
         dwi_biascorrect='n4',
         no_b0_harmonization=False,
-        denoise_before_combining=True,
         template='MNI152NLin2009cAsym',
         output_dir='.',
         omp_nthreads=1,
