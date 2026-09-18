@@ -22,6 +22,7 @@ from ...interfaces.gradients import (  # LocalGradientRotation,
     GradientRotation,
 )
 from ...interfaces.images import ChooseInterpolator
+from ...interfaces.jacobian import ComposeJacobianWeights
 from ...interfaces.nilearn import Merge
 from .qc import init_modelfree_qc_wf
 from .util import init_dwi_reference_wf
@@ -163,6 +164,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 'gradwarp_field',
                 'output_grid',
                 'sdc_scaling_images',
+                'ec_jacobian_images',
                 # Only written out if TOPUP was used
                 'fieldmap_hz',
             ]
@@ -260,6 +262,27 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
         (get_interpolation, dwi_transform, [('interpolation_method', 'interpolation')]),
         (dwi_transform, scale_dwis, [('output_image', 'dwi_files')]),
     ])  # fmt:skip
+
+    # The weight covers gradwarp and SDC only. HMC is excluded by policy and is
+    # coordinate-safe to exclude because it is the outermost transform in the
+    # pull-back (see the design spec); coregistration and the intramodal and
+    # template warps are excluded because modulating by a spatial-normalization
+    # warp is VBM-style volume modulation, wrong for DWI signal.
+    if config.workflow.jacobian_weighting:
+        compose_jacobian = pe.Node(ComposeJacobianWeights(), name='compose_jacobian')
+        workflow.connect([
+            (inputnode, compose_jacobian, [
+                ('dwi_files', 'dwi_files'),
+                ('b0_ref_image', 'b0_ref_image'),
+                ('dwi_mask', 'mask'),
+                (('gradwarp_field', _listify), 'gradwarp_field'),
+                ('fieldwarps', 'fieldwarps'),
+                ('ec_jacobian_images', 'ec_jacobian_images'),
+            ]),
+            (compose_jacobian, scale_dwis, [
+                ('jacobian_weight_images', 'jacobian_weight_images'),
+            ]),
+        ])  # fmt:skip
 
     if doing_topup:
         fieldmap_hz_tfm = pe.Node(
