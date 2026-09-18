@@ -266,28 +266,23 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
     ])  # fmt:skip
 
     if fieldmap_hz_source is not None:
-        # TOPUP's field is in eddy space and rides the full volume-0 composite;
-        # DRBUDDI's is already the fieldwarp, in the motion-corrected DWI frame,
-        # so it takes only the stages that move it to the output grid (no hmc,
-        # fieldwarp or gradwarp). A Hz field is smooth, so it interpolates
-        # linearly: sinc would overshoot and ring at the steep field gradients by
-        # the sinuses (fabricating extreme Hz), and NN would be blocky. TOPUP keeps
-        # NearestNeighbor only to leave its long-standing QC values bit-identical.
+        # A Hz field is smooth, so it interpolates linearly regardless of source:
+        # sinc would overshoot and ring at the steep field gradients by the sinuses
+        # (fabricating extreme Hz), and NN would be blocky. Only the transforms
+        # differ. TOPUP's field is in eddy space and rides the full volume-0
+        # composite; DRBUDDI's is already the fieldwarp, in the motion-corrected
+        # DWI frame, so it takes only the stages that move it to the output grid
+        # (no hmc, fieldwarp or gradwarp).
+        fieldmap_hz_tfm = pe.Node(
+            ants.ApplyTransforms(interpolation='Linear', float=True),
+            name='fieldmap_hz_tfm',
+            mem_gb=1,
+        )
         if fieldmap_hz_source == 'topup':
-            fieldmap_hz_tfm = pe.Node(
-                ants.ApplyTransforms(interpolation='NearestNeighbor', float=True),
-                name='fieldmap_hz_tfm',
-                mem_gb=1,
-            )
             transform_src = [
                 (compose_transforms, fieldmap_hz_tfm, [(('out_warps', _get_first), 'transforms')]),
             ]
         else:
-            fieldmap_hz_tfm = pe.Node(
-                ants.ApplyTransforms(interpolation='Linear', float=True),
-                name='fieldmap_hz_tfm',
-                mem_gb=1,
-            )
             transform_src = [
                 (compose_transforms, fieldmap_hz_tfm, [('fieldmap_hz_transforms', 'transforms')]),
             ]
