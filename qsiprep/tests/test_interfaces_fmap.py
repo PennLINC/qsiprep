@@ -5,6 +5,8 @@ from pathlib import Path
 
 import nibabel as nb
 import numpy as np
+import pytest
+from nipype.interfaces.base import isdefined
 
 from qsiprep.interfaces.fmap import (
     B0RPEFieldmap,
@@ -273,3 +275,41 @@ def test_median_and_cleanup_write_float32_from_integer_input(tmp_path):
         tmp_path / 'c',
     )
     assert nb.load(clean.outputs.out_file).get_data_dtype() == np.float32
+
+
+def _unit_image(path, value=1.0):
+    nb.Nifti1Image(np.full((8, 8, 8), value, dtype='float32'), np.eye(4)).to_filename(
+        str(path)
+    )
+    return str(path)
+
+
+def test_apply_jacobian_weights_passes_through_without_weights(tmp_path):
+    """No weights means the resampled DWIs are handed on untouched."""
+    from qsiprep.interfaces.fmap import ApplyJacobianWeights
+
+    dwis = [_unit_image(tmp_path / f'd{i}.nii.gz') for i in range(3)]
+    result = ApplyJacobianWeights(
+        dwi_files=dwis,
+        reference_image=_unit_image(tmp_path / 'grid.nii.gz'),
+    ).run()
+    assert result.outputs.scaled_images == dwis
+    assert not isdefined(result.outputs.resampled_weight_images)
+
+
+def test_apply_jacobian_weights_rejects_a_count_mismatch(tmp_path):
+    from qsiprep.interfaces.fmap import ApplyJacobianWeights
+
+    with pytest.raises(Exception, match='Mismatch'):
+        ApplyJacobianWeights(
+            dwi_files=[_unit_image(tmp_path / f'd{i}.nii.gz') for i in range(3)],
+            jacobian_weight_images=[_unit_image(tmp_path / 'w.nii.gz')],
+            reference_image=_unit_image(tmp_path / 'grid.nii.gz'),
+        ).run()
+
+
+def test_apply_scaling_images_name_is_gone():
+    """The old name must not linger as an alias -- it meant something else."""
+    import qsiprep.interfaces.fmap as fmap
+
+    assert not hasattr(fmap, 'ApplyScalingImages')

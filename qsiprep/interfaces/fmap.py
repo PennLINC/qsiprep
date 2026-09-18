@@ -56,6 +56,7 @@ from .epi_fmap import (
     read_nifti_sidecar,
 )
 from .images import to_lps
+from .jacobian import WEIGHT_FLOOR
 from .reports import topup_selection_to_report
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -1014,12 +1015,12 @@ def add_epi_fmaps_to_dwi_b0s(epi_fmaps, b0_threshold, max_per_spec, dwi_spec_lin
     return topup_imain, topup_spec_lines, new_report
 
 
-class _ApplyScalingImagesInputSpec(ApplyTransformsInputSpec):
+class _ApplyJacobianWeightsInputSpec(ApplyTransformsInputSpec):
     input_image = traits.File(mandatory=False)
-    scaling_image_files = InputMultiObject(
+    jacobian_weight_images = InputMultiObject(
         File(exists=True),
         mandatory=False,
-        desc='list of sdc scaling image files in undistorted b0ref space',
+        desc='per-volume Jacobian weight maps, in undistorted b0ref space',
     )
     dwi_files = InputMultiObject(
         File(exists=True),
@@ -1050,22 +1051,39 @@ class _ApplyScalingImagesInputSpec(ApplyTransformsInputSpec):
     transforms = File(mandatory=False)
 
 
-class _ApplyScalingImagesOutputSpec(TraitedSpec):
-    scaled_images = OutputMultiObject(File(exists=True), desc='Scaled dwi files')
+class _ApplyJacobianWeightsOutputSpec(TraitedSpec):
+    scaled_images = OutputMultiObject(File(exists=True), desc='Weighted dwi files')
+    resampled_weight_images = OutputMultiObject(
+        File(exists=True),
+        desc='the unique weight maps, resampled to the output grid, in '
+        'first-appearance order; indexed by the derivative sidecar',
+    )
+    weight_index = traits.List(
+        traits.Int(),
+        desc='for each DWI volume, its index into resampled_weight_images',
+    )
 
 
-class ApplyScalingImages(SimpleInterface):
-    input_spec = _ApplyScalingImagesInputSpec
-    output_spec = _ApplyScalingImagesOutputSpec
+class ApplyJacobianWeights(SimpleInterface):
+    """Transport Jacobian weight maps to the output grid and multiply them in.
+
+    The maps arrive in undistorted b=0-reference space. Resampling them through
+    the intramodal and coregistration transforms is what evaluates the gradwarp
+    and SDC determinants at the coordinates the full composite evaluates them
+    at -- see the design spec's coordinate-safety section.
+    """
+
+    input_spec = _ApplyJacobianWeightsInputSpec
+    output_spec = _ApplyJacobianWeightsOutputSpec
 
     def _run_interface(self, runtime):
-        if not isdefined(self.inputs.scaling_image_files):
+        if not isdefined(self.inputs.jacobian_weight_images):
             LOGGER.info('Not applying scaling to resampled DWIs')
             self._results['scaled_images'] = self.inputs.dwi_files
             return runtime
         LOGGER.info('Applying scaling to resampled dwis')
 
-        if not len(self.inputs.scaling_image_files) == len(self.inputs.dwi_files):
+        if not len(self.inputs.jacobian_weight_images) == len(self.inputs.dwi_files):
             raise Exception('Mismatch between scaling images and dwis')
 
         # The affine transform to the t1 can come from hmcsdc or the intramodal template
@@ -1095,24 +1113,25 @@ class ApplyScalingImages(SimpleInterface):
             if isdefined(transform)
         ][::-1]
 
-        # There are a few unique scaling images. Find them
-        scaling_images_to_dwis = defaultdict(list)
-        for dwi_image, scaling_image in zip(
-            self.inputs.dwi_files, self.inputs.scaling_image_files, strict=False
+        # There are a few unique weight images. Find them
+        weights_to_dwis = defaultdict(list)
+        for dwi_image, weight_image in zip(
+            self.inputs.dwi_files, self.inputs.jacobian_weight_images, strict=False
         ):
-            scaling_images_to_dwis[scaling_image].append(dwi_image)
+            weights_to_dwis[weight_image].append(dwi_image)
 
-        # Apply the transform, link the resampled scaling image to resampled dwis
-        dwi_files_to_scalings = {}
-        for scaling_image in scaling_images_to_dwis:
-            resampled_scaling_image = fname_presuffix(
-                scaling_image, suffix='_resampled', newpath=runtime.cwd
+        # Apply the transform, link the resampled weight map to resampled dwis
+        dwi_files_to_weights = {}
+        resampled_unique = []
+        for weight_image in weights_to_dwis:
+            resampled_weight_image = fname_presuffix(
+                weight_image, suffix='_resampled', newpath=runtime.cwd
             )
             xfm = ants.ApplyTransforms(
-                input_image=scaling_image,
+                input_image=weight_image,
                 transforms=transform_stack,
                 reference_image=self.inputs.reference_image,
-                output_image=resampled_scaling_image,
+                output_image=resampled_weight_image,
                 interpolation='LanczosWindowedSinc',
                 dimension=3,
             )
@@ -1120,19 +1139,49 @@ class ApplyScalingImages(SimpleInterface):
             xfm.resource_monitor = False
             runtime = xfm.run().runtime
             LOGGER.info(runtime.cmdline)
-            for dwi_file in scaling_images_to_dwis[scaling_image]:
-                dwi_files_to_scalings[dwi_file] = resampled_scaling_image
+            resampled_unique.append(resampled_weight_image)
+            for dwi_file in weights_to_dwis[weight_image]:
+                dwi_files_to_weights[dwi_file] = resampled_weight_image
+
+        # LanczosWindowedSinc can undershoot below zero on a positive scalar
+        # map. The pre-transport guard cannot see that, because it ran before
+        # this resampling, so clamp with an explicit floor and say so rather
+        # than letting a negative weight through.
+        for resampled_weight_image in resampled_unique:
+            img = nb.load(resampled_weight_image)
+            data = np.asanyarray(img.dataobj)
+            if data.min() <= 0:
+                LOGGER.warning(
+                    'Resampled weight map %s undershot to %.4f (Lanczos ringing '
+                    'on a positive scalar map); clamping to %g.',
+                    resampled_weight_image,
+                    data.min(),
+                    WEIGHT_FLOOR,
+                )
+                nb.Nifti1Image(
+                    np.maximum(data, WEIGHT_FLOOR).astype('float32'),
+                    img.affine,
+                    img.header,
+                ).to_filename(resampled_weight_image)
 
         # Do the math
         scaled_dwi_images = []
         for dwi_file in self.inputs.dwi_files:
             scaled_dwi_file = fname_presuffix(dwi_file, newpath=runtime.cwd, suffix='_scaled')
-            image.math_img('a*b', a=dwi_file, b=dwi_files_to_scalings[dwi_file]).to_filename(
+            image.math_img('a*b', a=dwi_file, b=dwi_files_to_weights[dwi_file]).to_filename(
                 scaled_dwi_file
             )
 
             scaled_dwi_images.append(scaled_dwi_file)
         self._results['scaled_images'] = scaled_dwi_images
+        self._results['resampled_weight_images'] = resampled_unique
+        # The per-volume lookup, as indices into resampled_unique. Task 12
+        # cannot build JacobianWeightIndex without this: resampled_unique is
+        # deduplicated, so it alone does not say which volume used which map.
+        self._results['weight_index'] = [
+            resampled_unique.index(dwi_files_to_weights[dwi_file])
+            for dwi_file in self.inputs.dwi_files
+        ]
 
         return runtime
 
