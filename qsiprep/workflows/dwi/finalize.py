@@ -45,6 +45,7 @@ def init_dwi_finalize_wf(
     name,
     source_file,
     output_prefix,
+    do_biascorr=True,
     write_derivatives=True,
     make_intramodal_template=False,
 ):
@@ -238,10 +239,10 @@ def init_dwi_finalize_wf(
         ),
         name='outputnode',
     )
-    # ``make_intramodal_template`` (not just the config setting) gates this
-    # block: with a single DWI group the template is skipped upstream and the
-    # intramodal inputs are never connected, so these nodes must not exist.
-    if config.workflow.intramodal_template_iters > 0 and make_intramodal_template:
+    # ``make_intramodal_template`` is the RESOLVED level, not the requested one:
+    # with a single DWI group the template is skipped upstream and the intramodal
+    # inputs are never connected, so these nodes must not exist.
+    if make_intramodal_template:
         # The reportlet shows one image -- this session's b=0 -- on the template
         # grid before and after its own transform, with white-matter contours
         # from the anatomy held fixed as landmarks.
@@ -307,7 +308,7 @@ def init_dwi_finalize_wf(
     # Apply denoising to the interpolated data if requested
     final_denoise_wf = init_finalize_denoising_wf(
         source_file=source_file,
-        do_biascorr=config.workflow.b1_biascorrect_stage == 'final',
+        do_biascorr=do_biascorr,
         num_dwi_acquisitions=len(all_dwis),
     )
 

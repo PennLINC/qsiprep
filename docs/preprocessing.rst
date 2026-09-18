@@ -137,7 +137,7 @@ Gibbs unringing (using ``mrdegibbs`` for full Fourier acquisitions or
 ``rpg`` for partial Fourier acquisitions) is disabled by default but can be enabled
 with ``--unringing-method mrdegibbs|rpg``.
 B1 bias field correction is applied by default (using ``dwibiascorrect``) and can be disabled with
-``--b1-biascorrect-stage none``.
+``--dwi-biascorrect none``.
 The intensity of b=0 images is harmonized across scans (i.e., scaled to an average value) by default,
 but this can be turned off using ``--dwi-no-b0-harmonization``.
 
@@ -158,9 +158,11 @@ every other MRtrix3 command follows ``--mrtrix-version``.
 .. tip::
 
   If prescan normalization is enabled,
-  we recommend using ``--b1-biascorrect-stage none``.
+  we recommend using ``--dwi-biascorrect none``.
   This will skip B1 bias field correction,
   which may introduce artifacts on normalized data.
+  ``--dwi-biascorrect auto`` will make that choice for you when every DWI is
+  flagged ``NORM`` in its BIDS ``ImageType`` metadata.
 
 Together, denoising (MP-PCA or patch2self), Gibbs unringing B1 bias field
 correction, and b=0 intensity normalization are referred to as *denoising* in
@@ -295,7 +297,13 @@ Volumetric outputs are written out in ``ACPC`` space ::
 
   sub-<label>/[ses-<label>/]
     dwi/
-      <source_entities>_space-ACPC_dwiref.nii.gz
+      # The b=0 reference of the preprocessed series, in its space.
+      <source_entities>_space-ACPC_desc-preproc_dwiref.nii.gz
+
+      # The b=0 reference coregistration targeted, in this group's own grid.
+      # Carries desc-coreg when --dwiref-definition is distortion-group, which
+      # is the level whose reference resampling registers through.
+      <source_entities>[_desc-coreg]_dwiref.nii.gz
 
       # The generous brain mask that should be reduced probably
       <source_entities>_space-ACPC_desc-brain_mask.nii.gz
@@ -366,7 +374,13 @@ Transforms
 
 .. important::
 
-  *QSIPrep* does not currently write out the coregistration transform from dwiref space to ACPC space.
+  With ``--dwiref-definition subject`` *QSIPrep* builds a single midpoint dwiref for
+  the subject, registers it to the anatomical once, and has every DWI group inherit
+  that transform. It writes the template in its own space
+  (``sub-<label>_space-subject_desc-coreg_dwiref.nii.gz``), the same template
+  resampled into ACPC (``sub-<label>_space-ACPC_dwiref.nii.gz``), and the transform
+  between them (``sub-<label>_from-subject_to-ACPC_mode-image_xfm.mat``), so that
+  space is not a dead end.
   When it does start writing this transform out, it will be organized like this::
 
     sub-<label>/
@@ -640,7 +654,7 @@ DWI preprocessing
         output_prefix='',
         ignore=[],
         b0_threshold=100,
-        b0_to_anat_transform='Rigid',
+        dwi2anat_dof=6,
         hmc_model='3dSHORE',
         hmc_transform='Rigid',
         shoreline_iters=2,
@@ -651,9 +665,8 @@ DWI preprocessing
         dwidenoise_window=5,
         denoise_method='dwidenoise',
         unringing_method='mrdegibbs',
-        b1_biascorr_stage='final',
+        dwi_biascorrect='n4',
         no_b0_harmonization=False,
-        denoise_before_combining=True,
         template='MNI152NLin2009cAsym',
         output_dir='.',
         omp_nthreads=1,

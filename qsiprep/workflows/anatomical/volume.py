@@ -633,7 +633,7 @@ def _dilate_mask(in_file, iterations=8):
 def anat_biascorrect_enabled(image_files=None):
     """Should N4 bias correction run on these anatomical images?
 
-    ``--anat-biascorrect`` governs anatomicals only; ``--b1-biascorrect-stage``
+    ``--anat-biascorrect`` governs anatomicals only; ``--dwi-biascorrect``
     governs the DWIs and never reaches this path.
 
     ``auto`` inspects the BIDS ``ImageType`` metadata for ``NORM``, which is how

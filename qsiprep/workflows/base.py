@@ -68,6 +68,7 @@ from ..utils.plan import method_selection_from_config
 from ..utils.sdc import t2w_available_for_sdc, t2w_sdc_enabled
 from .anatomical.volume import anat_biascorrect_enabled, init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
+from .dwi.biascorrect import dwi_biascorrect_enabled
 from .dwi.distortion_group_merge import init_distortion_group_merge_wf
 from .dwi.finalize import init_dwi_finalize_wf
 from .dwi.intramodal_template import init_intramodal_template_wf
@@ -123,6 +124,40 @@ def init_qsiprep_wf():
         log_dir.mkdir(exist_ok=True, parents=True)
         config.to_filename(log_dir / 'qsiprep.toml')
     return qsiprep_wf
+
+
+def check_output_names_are_bids_unique(preproc_units):
+    """Fail when two units' derivatives would render to the same BIDS path.
+
+    QSIPlan uniquifies same-named correction units with a ``+N`` suffix
+    (``_unique_id``), which is an in-memory key rather than a BIDS entity, so
+    ``sub-01`` and ``sub-01+2`` can parse identically and every per-unit
+    derivative of the second silently overwrites the first.
+
+    The check parses the same path the datasinks will, via ``get_source_file``,
+    because the subject and session entity patterns are path-anchored: a
+    synthetic probe directory gives a different -- and, under pybids >= 0.19,
+    wrongly permissive -- answer.
+
+    No rule about ``+`` is encoded. The installed pybids is asked what it
+    actually does, so this stays correct across the 0.19 entity-pattern change
+    and also catches collisions that have nothing to do with ``+``.
+    """
+    from bids.layout import parse_file_entities
+
+    seen = {}
+    for unit in preproc_units:
+        source_file = get_source_file(list(unit.dwi_files), unit.output_name, suffix='_dwi')
+        key = tuple(sorted(parse_file_entities(source_file).items()))
+        if key in seen:
+            raise RuntimeError(
+                f'Output names {seen[key]!r} and {unit.output_name!r} render to the '
+                f'same BIDS name ({key}), so their derivatives would overwrite each '
+                'other. This is usually QSIPlan\'s "+N" uniquifier reaching a '
+                'filename, where its distinguishing character is not a BIDS entity. '
+                'Please report the dataset.'
+            )
+        seen[key] = unit.output_name
 
 
 def init_single_subject_wf(subject_id: str, session_ids: list):
@@ -423,16 +458,31 @@ to workflows in *QSIPrep*'s documentation]\
     preproc_units = plan_preproc_units(grouping, plan)
     concatenation_scheme = plan_concatenation_scheme(plan)
 
+    # Refuse to build anything that would overwrite its own outputs.
+    check_output_names_are_bids_unique(preproc_units)
+
+    # Built unconditionally: the bias-correction decision needs them for every
+    # output, merged or not. With no merging each output maps to a single unit.
+    merged_to_subgroups = defaultdict(list)
+    for subgroup_name, destination_name in concatenation_scheme.items():
+        merged_to_subgroups[destination_name].append(subgroup_name)
+    units_by_name = {unit.output_name: unit for unit in preproc_units}
+
+    # One N4 decision per final output, shared by all of its constituents: a
+    # merged series is concatenated, so it must be corrected consistently or not
+    # at all. Deciding per unit would N4 one constituent and skip another.
+    biascorr_by_output = {
+        destination: dwi_biascorrect_enabled(
+            [path for name in subgroups for path in units_by_name[name].dwi_files]
+        )
+        for destination, subgroups in merged_to_subgroups.items()
+    }
+
     # Read unconditionally below even when no merge is happening.
     merging_group_workflows = {}
     if merging_distortion_groups:
-        # create a mapping of which across-distortion-groups are contained in each merge
         merged_group_names = sorted(set(concatenation_scheme.values()))
-        merged_to_subgroups = defaultdict(list)
-        for subgroup_name, destination_name in concatenation_scheme.items():
-            merged_to_subgroups[destination_name].append(subgroup_name)
         assembly_by_name = {assembly.output_name: assembly for assembly in plan.outputs}
-        units_by_name = {unit.output_name: unit for unit in preproc_units}
 
         for merged_group in merged_group_names:
             # Outputs with a single correction unit keep the direct path:
@@ -468,16 +518,20 @@ to workflows in *QSIPrep*'s documentation]\
         for unit in preproc_units
     }
 
+    # The resolved dwiref level for this subject, which may fall back below the
+    # requested one. Everything downstream keys off the resolved value: the
+    # derivative labels must describe what was actually built.
     make_intramodal_template = False
-    if config.workflow.intramodal_template_iters > 0:
+    if config.workflow.dwiref_definition == 'subject':
         if len(outputs_to_files) < 2:
             # Having one group is a normal condition, not a user error: a cohort
             # routinely mixes single- and multi-session subjects. Raising here
             # meant one flag could fail a large fraction of a dataset outright,
             # so skip the template for this subject and carry on.
             config.loggers.workflow.warning(
-                'Skipping the intramodal template for sub-%s: it needs at least 2 '
-                'DWI groups and this subject has %d. Everything else is unaffected.',
+                'Falling back to --dwiref-definition distortion-group for sub-%s: a '
+                'subject-level dwiref needs at least 2 DWI groups and this subject '
+                'has %d. Everything else is unaffected.',
                 subject_id,
                 len(outputs_to_files),
             )
@@ -494,8 +548,8 @@ to workflows in *QSIPrep*'s documentation]\
         intramodal_template_wf = init_intramodal_template_wf(
             inputs_list=sorted(outputs_to_files.keys()),
             t1w_source_file=anat_source_file,
-            transform=config.workflow.intramodal_template_transform,
-            num_iterations=config.workflow.intramodal_template_iters or 2,
+            transform=config.workflow.dwiref_construction_transform,
+            num_iterations=config.workflow.dwiref_construction_iters,
             name='intramodal_template_wf',
         )
         workflow.connect([
@@ -512,13 +566,22 @@ to workflows in *QSIPrep*'s documentation]\
             ]),
         ])  # fmt:skip
 
+        # The level this dwiref actually is, from the RESOLVED definition, so that
+        # adding `session` later is a data change rather than a code change.
+        dwiref_space = config.workflow.dwiref_definition
+
+        # The template in its own midpoint space. desc-coreg marks it as the image
+        # whose transform final resampling uses -- which at this level it is, since
+        # ComposeTransforms discards the per-unit registration's result.
+        # from-<level>_to-ACPC maps out of exactly this space, so that transform now
+        # applies to an image shipped beside it.
         ds_intramodal_template = pe.Node(
             DerivativesDataSink(
                 source_file=anat_source_file,
                 base_directory=config.execution.output_dir,
-                datatype='anat',
-                space='ACPC',
-                desc='intramodal',
+                datatype='dwi',
+                space=dwiref_space,
+                desc='coreg',
                 suffix='dwiref',
                 extension='.nii.gz',
                 compress=True,
@@ -528,9 +591,28 @@ to workflows in *QSIPrep*'s documentation]\
         )
         workflow.connect([
             (intramodal_template_wf, ds_intramodal_template, [
-                # The ACPC-resampled template, NOT outputnode.intramodal_template:
-                # that one is in the template's own midpoint space, and tagging
-                # it space-ACPC would mislabel it.
+                ('outputnode.intramodal_template', 'in_file'),
+            ]),
+        ])  # fmt:skip
+
+        # The same template resampled into ACPC, kept so nothing current users rely
+        # on is lost. It carries no desc: the per-output references beside it now
+        # carry desc-preproc, so the two cannot collide.
+        ds_intramodal_template_acpc = pe.Node(
+            DerivativesDataSink(
+                source_file=anat_source_file,
+                base_directory=config.execution.output_dir,
+                datatype='dwi',
+                space='ACPC',
+                suffix='dwiref',
+                extension='.nii.gz',
+                compress=True,
+            ),
+            name='ds_intramodal_template_acpc',
+            run_without_submitting=True,
+        )
+        workflow.connect([
+            (intramodal_template_wf, ds_intramodal_template_acpc, [
                 ('outputnode.intramodal_template_acpc', 'in_file'),
             ]),
         ])  # fmt:skip
@@ -541,10 +623,10 @@ to workflows in *QSIPrep*'s documentation]\
             DerivativesDataSink(
                 source_file=anat_source_file,
                 base_directory=config.execution.output_dir,
-                datatype='anat',
+                datatype='dwi',
                 mode='image',
                 extension='.mat',
-                **{'from': 'intramodal', 'to': 'ACPC'},
+                **{'from': dwiref_space, 'to': 'ACPC'},
                 suffix='xfm',
             ),
             name='ds_intramodal_to_acpc',
@@ -560,13 +642,13 @@ to workflows in *QSIPrep*'s documentation]\
         # for linear templates: mvtc2 exposes no per-input aligned images, and its
         # per-group transform is an [affine, warp] pair that does not fit a
         # single-file .mat sink.
-        intramodal_linear = config.workflow.intramodal_template_transform in ('Rigid', 'Affine')
+        intramodal_linear = config.workflow.dwiref_construction_transform in ('Rigid', 'Affine')
         if intramodal_linear:
             ds_template_qc = pe.Node(
                 DerivativesDataSink(
                     source_file=anat_source_file,
                     base_directory=config.execution.output_dir,
-                    datatype='anat',
+                    datatype='dwi',
                     desc='templateQC',
                     suffix='dwiref',
                     extension='.tsv',
@@ -584,8 +666,10 @@ to workflows in *QSIPrep*'s documentation]\
                 DerivativesDataSink(
                     source_file=anat_source_file,
                     base_directory=config.execution.output_dir,
-                    datatype='anat',
-                    space='ACPC',
+                    datatype='dwi',
+                    # Computed from midpoint-space aligned images, so the previous
+                    # space-ACPC tag described a space this image is not in.
+                    space=dwiref_space,
                     desc='agreement',
                     suffix='dwiref',
                     extension='.nii.gz',
@@ -616,18 +700,21 @@ to workflows in *QSIPrep*'s documentation]\
         naming_name = output_fname if merged_here else final_output_name
         source_file = get_source_file(list(unit.dwi_files), naming_name, suffix='_dwi')
         output_wfname = output_fname.replace('-', '_')
+        do_biascorr = biascorr_by_output[final_output_name]
         dwi_preproc_wf = init_dwi_preproc_wf(
             unit=unit,
             output_prefix=naming_name,
             source_file=source_file,
             t2w_sdc=t2w_available_for_sdc(subject_data, selection, config.workflow.anat_modality),
             anatomical_template=anatomical_template,
+            do_biascorr=do_biascorr,
         )
         dwi_finalize_wf = init_dwi_finalize_wf(
             unit=unit,
             name=dwi_preproc_wf.name.replace('dwi_preproc', 'dwi_finalize'),
             output_prefix=naming_name,
             source_file=source_file,
+            do_biascorr=do_biascorr,
             write_derivatives=not (
                 merging_distortion_groups
                 and concatenation_scheme[output_fname] in merging_group_workflows
@@ -684,6 +771,32 @@ to workflows in *QSIPrep*'s documentation]\
             ]),
         ])  # fmt:skip
 
+        # The run-level reference: this unit's b=0 after HMC and SDC, in its own
+        # grid. It is written for every preprocessing unit either way, so the
+        # dwiref template's inputs are always on disk.
+        #
+        # desc-coreg marks whichever dwiref supplies the transform final resampling
+        # uses. With a subject-level dwiref that is the template, not this image --
+        # ComposeTransforms prefers the intramodal affine when both exist -- so the
+        # role label follows the RESOLVED level, and the sink is built here in the
+        # parent because that is the only place the resolved level is in scope.
+        ds_run_dwiref = pe.Node(
+            DerivativesDataSink(
+                source_file=source_file,
+                base_directory=config.execution.output_dir,
+                datatype='dwi',
+                suffix='dwiref',
+                extension='.nii.gz',
+                compress=True,
+                **({} if make_intramodal_template else {'desc': 'coreg'}),
+            ),
+            name=f'ds_run_dwiref_{output_wfname}',
+            run_without_submitting=True,
+        )
+        workflow.connect([
+            (dwi_preproc_wf, ds_run_dwiref, [('outputnode.b0_ref_image', 'in_file')]),
+        ])  # fmt:skip
+
         if make_intramodal_template:
             input_name = f'inputnode.{output_wfname}_b0_template'
             output_name = f'outputnode.{output_wfname}_transform'
@@ -718,10 +831,10 @@ to workflows in *QSIPrep*'s documentation]\
                     DerivativesDataSink(
                         source_file=source_file,
                         base_directory=config.execution.output_dir,
-                        datatype='anat',
+                        datatype='dwi',
                         mode='image',
                         extension='.mat',
-                        **{'from': 'orig', 'to': 'intramodal'},
+                        **{'from': 'orig', 'to': dwiref_space},
                         suffix='xfm',
                     ),
                     name=f'ds_orig_to_intramodal_{output_wfname}',

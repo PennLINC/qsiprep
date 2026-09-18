@@ -2,7 +2,7 @@
 
 Two defects:
 
-1. ``--intramodal-template-transform`` and ``--intramodal-template-iters`` were
+1. ``--dwiref-construction-transform`` and ``--dwiref-construction-iters`` were
    never passed to the workflow, so every template was BSplineSyN with 2
    iterations regardless of what the user asked for -- silently warping genuine
    between-session differences into agreement for anyone who chose a linear
@@ -15,19 +15,19 @@ Two defects:
 import pytest
 
 
-def _config():
+def _config(dwi2anat_dof=6):
     from qsiprep import config
 
     config.execution.sloppy = False
     config.nipype.omp_nthreads = 1
-    config.workflow.b0_to_anat_transform = 'Rigid'
+    config.workflow.dwi2anat_dof = dwi2anat_dof
     return config
 
 
-def _build(transform, num_iterations=2, name=None):
+def _build(transform, num_iterations=2, name=None, dwi2anat_dof=6):
     from qsiprep.workflows.dwi.intramodal_template import init_intramodal_template_wf
 
-    _config()
+    _config(dwi2anat_dof)
     return init_intramodal_template_wf(
         inputs_list=['group_a', 'group_b'],
         t1w_source_file='/data/sub-01_T1w.nii.gz',
@@ -93,7 +93,24 @@ def test_dwi_b0_alignment_does_not_initialize_by_com_by_default():
 
 
 def test_iteration_count_is_honoured():
-    """--intramodal-template-iters was ignored; the count was always 2."""
+    """--dwiref-construction-iters was ignored; the count was always 2."""
     wf = _build('BSplineSyN', num_iterations=5, name='iters_nonlinear')
     node = next(n for n in wf._get_all_nodes() if n.name == 'ants_mvtc2')
     assert node.inputs.iteration_limit == 5
+
+
+@pytest.mark.parametrize(('dof', 'expected'), [(6, 'Rigid'), (12, 'Affine')])
+def test_dwi2anat_dof_reaches_the_template_coregistration(dof, expected):
+    """The config value must drive the ANTs node, not just the mapping constant.
+
+    Asserting ``DWI2ANAT_DOF_TO_TRANSFORM[dof] == expected`` would pass with this
+    production consumer still reading the removed attribute, so set the config and
+    build the real workflow.
+    """
+    from qsiprep.workflows.dwi.registration import DWI2ANAT_DOF_TO_TRANSFORM
+
+    assert DWI2ANAT_DOF_TO_TRANSFORM[dof] == expected
+
+    wf = _build('Affine', name=f'imt_dof{dof}', dwi2anat_dof=dof)
+    coreg = wf.get_node('b0_anat_coreg').get_node('b0_to_anat')
+    assert coreg.inputs.transforms == [expected]

@@ -506,7 +506,7 @@ def _finalize_cfg(tmp_path):
     config.execution.sloppy = False
     config.workflow.sdc_method = 'topup'
     config.workflow.output_resolution = 1.2
-    config.workflow.intramodal_template_iters = 0
+    config.workflow.dwiref_definition = 'distortion-group'
     config.nipype.omp_nthreads = 1
 
 
@@ -521,6 +521,9 @@ def _finalize_wf(tmp_path, write_derivatives=False):
         name='dwi_finalize_wf',
         source_file=dwi,
         output_prefix='sub-01',
+        # These tests are about gradwarp, not N4; building the bias-correction
+        # node would need b0_threshold, which this fixture does not configure.
+        do_biascorr=False,
         write_derivatives=write_derivatives,
     )
 
@@ -567,7 +570,7 @@ def _dwi_preproc_cfg(tmp_path):
     config.workflow.hmc_method = 'eddy'
     config.workflow.sdc_method = 'topup'
     config.workflow.b0_threshold = 100
-    config.workflow.b1_biascorrect_stage = 'final'
+    config.workflow.dwi_biascorrect = 'n4'
     config.workflow.eddy_config = None
     config.workflow.no_b0_harmonization = False
     config.workflow.denoise_method = 'dwidenoise'
@@ -575,7 +578,7 @@ def _dwi_preproc_cfg(tmp_path):
     config.workflow.shoreline_iters = 2
     config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
     config.workflow.anat_modality = 't1w'
-    config.workflow.b0_to_anat_transform = 'Rigid'
+    config.workflow.dwi2anat_dof = 6
     config.workflow.hmc_transform = 'Affine'
 
 

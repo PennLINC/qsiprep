@@ -363,6 +363,71 @@ def _dest(option):
     return option.lstrip('-').replace('-', '_')
 
 
+# (deprecated flag, the option it enables, the value that option is set to)
+FORWARDED_FLAGS = []
+
+
+@pytest.mark.parametrize(('flag', 'option', 'value'), FORWARDED_FLAGS)
+def test_forwarded_flag_warns_and_enables_its_replacement(
+    minimal_args, capsys, flag, option, value
+):
+    """A deprecated flag warns, names its replacement, and turns it on."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    opts = parser.parse_args([*minimal_args, flag])
+
+    warning = capsys.readouterr().err
+    assert flag in warning
+    assert 'deprecated' in warning
+    assert f'{option} {value}' in warning
+
+    assert getattr(opts, _dest(option)) == value
+    # The deprecated flag itself must not reach the config object
+    assert not hasattr(opts, _dest(flag))
+
+
+@pytest.mark.parametrize(('flag', 'option', 'value'), FORWARDED_FLAGS)
+def test_forwarded_flag_agrees_with_an_explicit_replacement(minimal_args, flag, option, value):
+    """Asking for the same thing twice is not a conflict, in either order."""
+    from qsiprep.cli.parser import _build_parser
+
+    for extra_args in ([flag, option, value], [option, value, flag]):
+        opts = _build_parser().parse_args(minimal_args + extra_args)
+        assert getattr(opts, _dest(option)) == value
+
+
+@pytest.mark.parametrize(('flag', 'option', 'value'), FORWARDED_FLAGS)
+def test_forwarded_flag_conflicting_with_its_replacement_is_an_error(
+    minimal_args, capsys, flag, option, value
+):
+    """Silently picking a winner would hide half of what the user asked for."""
+    from qsiprep.cli.parser import _build_parser
+
+    # A value the flag does not forward to
+    other = {
+        'anat_modality': 'T2w',
+        'subject_anatomical_reference': 'sessionwise',
+    }[_dest(option)]
+
+    for extra_args in ([flag, option, other], [option, other, flag]):
+        with pytest.raises(SystemExit):
+            _build_parser().parse_args(minimal_args + extra_args)
+        assert 'conflicts with' in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(('flag', 'option', 'value'), FORWARDED_FLAGS)
+def test_replacement_option_is_not_deprecated(minimal_args, capsys, flag, option, value):
+    """The replacement option is silent and takes effect."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    opts = parser.parse_args([*minimal_args, option, value])
+
+    assert capsys.readouterr().err == ''
+    assert getattr(opts, _dest(option)) == value
+
+
 def test_prefer_dedicated_fmaps_is_removed(minimal_args, capsys):
     """The deprecated flag is no longer accepted by the parser."""
     from qsiprep.cli.parser import _build_parser
@@ -371,48 +436,6 @@ def test_prefer_dedicated_fmaps_is_removed(minimal_args, capsys):
         _build_parser().parse_args([*minimal_args, '--prefer-dedicated-fmaps'])
 
     assert 'unrecognized arguments: --prefer-dedicated-fmaps' in capsys.readouterr().err
-
-
-@pytest.mark.parametrize('value', ['Rigid', 'Affine'])
-def test_b0_to_t1w_transform_forwards_its_value(minimal_args, capsys, value):
-    """The renamed option keeps working, and sets the new one."""
-    from qsiprep.cli.parser import _build_parser
-
-    opts = _build_parser().parse_args([*minimal_args, '--b0-to-t1w-transform', value])
-
-    warning = capsys.readouterr().err
-    assert '--b0-to-t1w-transform' in warning
-    assert '--b0-to-anat-transform' in warning
-    assert opts.b0_to_anat_transform == value
-    assert not hasattr(opts, 'b0_to_t1w_transform')
-
-
-@pytest.mark.parametrize('value', ['Rigid', 'Affine'])
-def test_b0_to_anat_transform_is_not_deprecated(minimal_args, capsys, value):
-    from qsiprep.cli.parser import _build_parser
-
-    opts = _build_parser().parse_args([*minimal_args, '--b0-to-anat-transform', value])
-
-    assert capsys.readouterr().err == ''
-    assert opts.b0_to_anat_transform == value
-
-
-def test_b0_to_anat_transform_defaults_to_rigid(minimal_args):
-    from qsiprep.cli.parser import _build_parser
-
-    opts = _build_parser().parse_args(minimal_args)
-    assert opts.b0_to_anat_transform == 'Rigid'
-
-
-def test_b0_transform_options_are_mutually_exclusive(minimal_args, capsys):
-    """Both name the same setting, so giving both is ambiguous."""
-    from qsiprep.cli.parser import _build_parser
-
-    with pytest.raises(SystemExit):
-        _build_parser().parse_args(
-            [*minimal_args, '--b0-to-anat-transform', 'Rigid', '--b0-to-t1w-transform', 'Affine']
-        )
-    assert 'not allowed with' in capsys.readouterr().err
 
 
 def test_ignore_accepts_shims_and_fov(minimal_args):
@@ -735,3 +758,106 @@ def test_parser_rejects_unknown_mrtrix_version(tmp_path):
                 '2',
             ]
         )
+
+
+def _cli_base(tmp_path):
+    """Minimal valid positional args for the parser.
+
+    ``bids_dir`` goes through ``_path_exists`` (``qsiprep/cli/parser.py``), which
+    calls ``parser.error`` when the directory is missing -- so both directories
+    must exist, or a test asserting ``SystemExit`` passes because the path was
+    invalid rather than because the option under test was removed.
+    """
+    bids_dir = tmp_path / 'bids'
+    bids_dir.mkdir()
+    out_dir = tmp_path / 'out'
+    out_dir.mkdir()
+    return [str(bids_dir), str(out_dir), 'participant', '--output-resolution', '2.0']
+
+
+def test_cli_base_is_itself_valid(tmp_path):
+    """Guard the guard: every option test below is meaningless if this fails."""
+    from qsiprep.cli.parser import _build_parser
+
+    _build_parser().parse_args(_cli_base(tmp_path))
+
+
+def test_dwi2anat_dof_replaces_b0_to_anat_transform(tmp_path):
+    """The option changed name, type and spelling of its values."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    base = _cli_base(tmp_path)
+
+    assert parser.parse_args([*base, '--dwi2anat-dof', '12']).dwi2anat_dof == 12
+    assert parser.parse_args(base).dwi2anat_dof == 6
+
+    # 9 is deliberately not offered: antsRegistration has no 9-DOF transform.
+    for bad in (
+        ['--dwi2anat-dof', '9'],
+        ['--b0-to-anat-transform', 'Rigid'],
+        ['--b0-to-t1w-transform', 'Rigid'],
+    ):
+        with pytest.raises(SystemExit):
+            parser.parse_args([*base, *bad])
+
+
+def test_dwiref_construction_flags_replace_intramodal_template_flags(tmp_path):
+    """The old spellings are gone; the new ones parse."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    base = _cli_base(tmp_path)
+
+    args = parser.parse_args(
+        [*base, '--dwiref-construction-iters', '3', '--dwiref-construction-transform', 'Affine']
+    )
+    assert args.dwiref_construction_iters == 3
+    assert args.dwiref_construction_transform == 'Affine'
+
+    defaults = parser.parse_args(base)
+    # iters is a pure parameter now, defaulting to the value that reproduces the
+    # previous behaviour; --dwiref-definition is what toggles the feature.
+    assert defaults.dwiref_construction_iters == 2
+    assert defaults.dwiref_construction_transform == 'BSplineSyN'
+
+    for removed in (
+        ['--intramodal-template-iters', '2'],
+        ['--intramodal-template-transform', 'Affine'],
+    ):
+        with pytest.raises(SystemExit):
+            parser.parse_args([*base, *removed])
+
+
+def test_dwiref_definition_parses(tmp_path):
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    base = _cli_base(tmp_path)
+
+    assert parser.parse_args(base).dwiref_definition == 'distortion-group'
+    subject = parser.parse_args([*base, '--dwiref-definition', 'subject'])
+    assert subject.dwiref_definition == 'subject'
+
+    # `session` is the deferred remainder of #1114.
+    with pytest.raises(SystemExit):
+        parser.parse_args([*base, '--dwiref-definition', 'session'])
+
+
+def test_dwiref_construction_iters_defaults_to_two(tmp_path):
+    from qsiprep.cli.parser import _build_parser
+
+    assert _build_parser().parse_args(_cli_base(tmp_path)).dwiref_construction_iters == 2
+
+
+@pytest.mark.parametrize('bad', ['0', '1', '-1'])
+def test_dwiref_construction_iters_rejects_values_below_two(tmp_path, bad):
+    """The nonlinear branch passes iters straight to mvtc2 with no floor of its own.
+
+    Only the linear branch clamps, so once iters stops being the feature toggle an
+    unvalidated 0 or negative would reach antsMultivariateTemplateConstruction2.
+    """
+    from qsiprep.cli.parser import _build_parser
+
+    with pytest.raises(SystemExit):
+        _build_parser().parse_args([*_cli_base(tmp_path), '--dwiref-construction-iters', bad])

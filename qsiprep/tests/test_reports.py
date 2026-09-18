@@ -460,7 +460,7 @@ def test_diffusion_summary_renders_gradient_correction():
         pe_direction='j',
         hmc_transform='Affine',
         hmc_model='eddy',
-        b0_to_anat_transform='Rigid',
+        dwi2anat_dof=6,
         denoise_method='dwidenoise',
         dwidenoise_window=5,
         gradient_correction='through-plane only (ImageType: DIS2D)',
@@ -475,7 +475,7 @@ def _diffusion_summary(**overrides):
         'distortion_correction': 'TOPUP',
         'pe_direction': 'j',
         'hmc_model': 'eddy',
-        'b0_to_anat_transform': 'Rigid',
+        'dwi2anat_dof': 6,
         'denoise_method': 'dwidenoise',
         'dwidenoise_window': 5,
     }
@@ -493,3 +493,36 @@ def test_diffusion_summary_shows_hmc_transform_when_given():
     segment = _diffusion_summary(hmc_model='3dSHORE', hmc_transform='Rigid')._generate_segment()
     assert '<li>HMC Transform: Rigid</li>' in segment
     assert 'HMC Model: 3dSHORE' in segment
+
+
+def test_diffusion_summary_warns_only_under_dwi_biascorrect_auto():
+    """`auto` is a heuristic over metadata, so the report says so.
+
+    How well the ImageType check generalises across vendors and sequences is not
+    established, so a run that let it decide carries a warning box. An explicit
+    n4/none run does not.
+    """
+    for mode in ('n4', 'none'):
+        segment = _diffusion_summary(
+            dwi_biascorrect=mode, dwi_biascorrect_applied=(mode == 'n4')
+        )._generate_segment()
+        assert 'alert-warning' not in segment
+
+    segment = _diffusion_summary(
+        dwi_biascorrect='auto', dwi_biascorrect_applied=False
+    )._generate_segment()
+    assert 'alert-warning' in segment
+
+
+def test_diffusion_summary_reports_the_resolved_biascorrect_outcome():
+    """Under `auto` the mode alone cannot say whether N4 ran, so state the outcome."""
+    applied = _diffusion_summary(
+        dwi_biascorrect='auto', dwi_biascorrect_applied=True
+    )._generate_segment()
+    skipped = _diffusion_summary(
+        dwi_biascorrect='auto', dwi_biascorrect_applied=False
+    )._generate_segment()
+
+    assert 'applied' in applied
+    assert 'skipped' in skipped
+    assert applied != skipped
