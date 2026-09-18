@@ -170,11 +170,10 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
         )[0]
 
     # Make sure we always go through these two checks
-    if not config.workflow.anat_only and subject_data['dwi'] == []:
+    if subject_data['dwi'] == []:
         raise Exception(
             f'No dwi images found for participant {subject_id}. '
-            'All workflows require dwi images unless '
-            '--anat-only is specified.'
+            'All workflows require dwi images.'
         )
 
     if not config.workflow.anat_modality == 'none' and not subject_data.get(
@@ -251,7 +250,6 @@ to workflows in *QSIPrep*'s documentation]\
     bidssrc = pe.Node(
         BIDSDataGrabber(
             subject_data=subject_data,  # Data has already been selected with sub/ses filters
-            anat_only=config.workflow.anat_only,
             anatomical_contrast=config.workflow.anat_modality,
         ),
         name='bidssrc',
@@ -362,9 +360,6 @@ to workflows in *QSIPrep*'s documentation]\
         ]),
         (about, ds_report_about, [('out_report', 'in_file')]),
     ])  # fmt:skip
-
-    if config.workflow.anat_only:
-        return workflow
 
     # Group the subject's DWI scans from BIDS metadata alone,
     # then compile the execution plan for the selected methods.
