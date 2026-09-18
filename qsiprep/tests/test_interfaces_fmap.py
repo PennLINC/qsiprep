@@ -313,3 +313,50 @@ def test_apply_scaling_images_name_is_gone():
     import qsiprep.interfaces.fmap as fmap
 
     assert not hasattr(fmap, 'ApplyScalingImages')
+
+
+def test_floor_nonpositive_weights_clamps_without_going_negative(tmp_path, caplog):
+    """A resampled weight map with a negative region is floored, not left negative.
+
+    ApplyJacobianWeights delegates this to _floor_nonpositive_weights after
+    resampling. Exercising the full interface here would require a real
+    antsApplyTransforms binary (not available in this environment), so this
+    hits the exact function the interface calls on each resampled map -- the
+    smallest unit that actually performs the clamp.
+    """
+    from qsiprep.interfaces.fmap import WEIGHT_FLOOR, _floor_nonpositive_weights
+
+    data = np.ones((6, 6, 6), dtype='float32')
+    data[0, 0, 0] = -0.5  # a lone undershoot voxel
+    data[1, 1, 1] = 0.0  # exactly zero must also be floored
+    weight_path = tmp_path / 'weight.nii.gz'
+    nb.Nifti1Image(data, np.eye(4)).to_filename(str(weight_path))
+
+    with caplog.at_level('WARNING'):
+        _floor_nonpositive_weights(str(weight_path))
+
+    out = nb.load(str(weight_path)).get_fdata()
+    assert out.min() >= WEIGHT_FLOOR - 1e-6
+    assert np.isclose(out[0, 0, 0], WEIGHT_FLOOR, atol=1e-6)
+    assert np.isclose(out[1, 1, 1], WEIGHT_FLOOR, atol=1e-6)
+    untouched = np.ones_like(out, dtype=bool)
+    untouched[0, 0, 0] = False
+    untouched[1, 1, 1] = False
+    assert np.all(out[untouched] == 1.0)  # everywhere else is unchanged
+    assert any('non-positive' in message for message in caplog.messages)
+
+
+def test_floor_nonpositive_weights_is_a_noop_when_all_positive(tmp_path, caplog):
+    """A clean map is left untouched and logs nothing."""
+    from qsiprep.interfaces.fmap import _floor_nonpositive_weights
+
+    weight_path = tmp_path / 'weight.nii.gz'
+    nb.Nifti1Image(np.ones((4, 4, 4), dtype='float32'), np.eye(4)).to_filename(
+        str(weight_path)
+    )
+
+    with caplog.at_level('WARNING'):
+        _floor_nonpositive_weights(str(weight_path))
+
+    assert np.all(nb.load(str(weight_path)).get_fdata() == 1.0)
+    assert caplog.messages == []

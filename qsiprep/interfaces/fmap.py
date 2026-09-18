@@ -1064,6 +1064,41 @@ class _ApplyJacobianWeightsOutputSpec(TraitedSpec):
     )
 
 
+def _floor_nonpositive_weights(weight_image_path):
+    """Floor any non-positive voxel of a resampled weight map in place.
+
+    ComposeJacobianWeights' positivity guard only inspects the native-space
+    map inside the brain mask, before this resampling runs. It cannot see what
+    LanczosWindowedSinc produces on the output grid, so a non-positive voxel
+    here may be sinc ringing near a sharp edge, or it may be a genuine fold
+    outside the brain mask that guard never checked. We floor either way -- a
+    non-positive weight must never multiply DWI data -- but we report what was
+    measured instead of asserting which cause it was.
+    """
+    img = nb.load(weight_image_path)
+    data = np.asanyarray(img.dataobj)
+    nonpositive = int((data <= 0).sum())
+    if nonpositive:
+        LOGGER.warning(
+            'Resampled weight map %s has %d non-positive voxels '
+            '(minimum %.4f); flooring them to %g. Small-magnitude '
+            'undershoot near sharp edges is expected from '
+            'LanczosWindowedSinc ringing. A large or spatially '
+            'coherent negative region instead suggests the composed '
+            'warp folds outside the brain mask, where '
+            'ComposeJacobianWeights does not check it.',
+            weight_image_path,
+            nonpositive,
+            float(data.min()),
+            WEIGHT_FLOOR,
+        )
+        nb.Nifti1Image(
+            np.maximum(data, WEIGHT_FLOOR).astype('float32'),
+            img.affine,
+            img.header,
+        ).to_filename(weight_image_path)
+
+
 class ApplyJacobianWeights(SimpleInterface):
     """Transport Jacobian weight maps to the output grid and multiply them in.
 
@@ -1143,26 +1178,10 @@ class ApplyJacobianWeights(SimpleInterface):
             for dwi_file in weights_to_dwis[weight_image]:
                 dwi_files_to_weights[dwi_file] = resampled_weight_image
 
-        # LanczosWindowedSinc can undershoot below zero on a positive scalar
-        # map. The pre-transport guard cannot see that, because it ran before
-        # this resampling, so clamp with an explicit floor and say so rather
-        # than letting a negative weight through.
+        # The pre-transport guard cannot see post-resampling values -- see
+        # _floor_nonpositive_weights.
         for resampled_weight_image in resampled_unique:
-            img = nb.load(resampled_weight_image)
-            data = np.asanyarray(img.dataobj)
-            if data.min() <= 0:
-                LOGGER.warning(
-                    'Resampled weight map %s undershot to %.4f (Lanczos ringing '
-                    'on a positive scalar map); clamping to %g.',
-                    resampled_weight_image,
-                    data.min(),
-                    WEIGHT_FLOOR,
-                )
-                nb.Nifti1Image(
-                    np.maximum(data, WEIGHT_FLOOR).astype('float32'),
-                    img.affine,
-                    img.header,
-                ).to_filename(resampled_weight_image)
+            _floor_nonpositive_weights(resampled_weight_image)
 
         # Do the math
         scaled_dwi_images = []
