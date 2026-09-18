@@ -172,8 +172,7 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
     # Make sure we always go through these two checks
     if subject_data['dwi'] == []:
         raise Exception(
-            f'No dwi images found for participant {subject_id}. '
-            'All workflows require dwi images.'
+            f'No dwi images found for participant {subject_id}. All workflows require dwi images.'
         )
 
     if not config.workflow.anat_modality == 'none' and not subject_data.get(
