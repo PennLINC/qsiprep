@@ -11,17 +11,44 @@ any of the real datasets those markers use (they are pulled from CircleCI-only
 URLs; see ``.circleci/continue_config.yml``) or running qsiprep end to end.
 
 For every integration marker whose CLI flags could be identified in
-``qsiprep/tests/test_cli.py``, this builds the actual HMC sub-workflow
-(``init_fsl_hmc_wf`` for eddy, ``init_diffprep_hmc_wf`` for TORTOISE) under
-that test's configuration, using synthetic ``PreprocUnit``\\ s from
-``qsiprep.tests.preproc_factory`` -- no BIDS layout, no data download, no
-Docker. It then asks two structural questions:
+``qsiprep/tests/test_cli.py``, this builds the actual HMC sub-workflow that
+``qsiprep/workflows/dwi/base.py`` (``init_dwi_preproc_wf``, the
+``hmc_tool ==`` dispatch around line 267) would build for that marker's own
+``--hmc-method`` -- ``init_fsl_hmc_wf`` for ``eddy``,
+``init_qsiprep_hmcsdc_wf`` for ``shoreline``, ``init_diffprep_hmc_wf`` for
+``tortoise`` -- under that test's configuration, using synthetic
+``PreprocUnit``\\ s from ``qsiprep.tests.preproc_factory`` -- no BIDS layout,
+no data download, no Docker. Matching the dispatch matters: an earlier
+version of this module built ``init_fsl_hmc_wf`` (the eddy path) for
+``maternal_brain_project``, which actually runs ``--hmc-method=shoreline`` and
+so never touches ``init_fsl_hmc_wf`` or ``GatherEddyInputs`` at all -- fixed
+below.
+
+It then asks two structural questions:
 
 * Is ``outputnode.to_dwi_ref_warps`` wired from a source that can produce a
-  real per-run warp (an SDC/DRBUDDI/T2Wreg sub-workflow), or only from
-  ``GatherEddyInputs.forward_warps``, which ``qsiprep/interfaces/eddy.py``
-  hardcodes to ``[]`` because eddy has already applied TOPUP internally
-  ("these have already had HMC, SDC applied")?
+  real per-run warp (an SDC/DRBUDDI/T2Wreg sub-workflow), or only from a
+  provably-empty source? Two such sources exist, and they are different
+  mechanisms, not one:
+
+  - ``GatherEddyInputs.forward_warps`` (``qsiprep/interfaces/eddy.py``),
+    unconditionally hardcoded to ``[]`` because eddy has already applied
+    TOPUP internally ("these have already had HMC, SDC applied"). This is the
+    eddy-only ``init_fsl_hmc_wf`` path.
+  - ``sdc_bypass_wf`` (``qsiprep/workflows/fieldmap/base.py:116,140-149``):
+    ``init_sdc_wf`` names its returned sub-workflow ``'sdc_bypass_wf'``
+    instead of ``'sdc_wf'`` precisely when ``does_sdc`` is ``False`` (no
+    scanner-measured fieldmap and not classic SyN), and in that branch it
+    never connects anything to its own ``outputnode.out_warp`` -- confirmed
+    directly by construction: building ``init_qsiprep_hmcsdc_wf`` with
+    ``method=None`` yields a ``to_dwi_ref_warps`` edge from a node literally
+    named ``sdc_bypass_wf``, vs. ``sdc_wf`` for a GRE/SyN unit. This is the
+    SHORELine (``init_qsiprep_hmcsdc_wf``) path's equivalent; it shares
+    ``init_sdc_wf`` with the eddy path's GRE/SyN branch, so the same
+    "sdc_wf-vs-bypass" name distinction applies there too, it is just never
+    the deciding factor for the eddy markers checked here (they either hit
+    GatherEddyInputs or a real fieldmap/DRBUDDI path).
+
 * For TORTOISE, what ``correction_mode`` is baked into the ``ec_jacobian``
   node's inputs? ``OkanQuadraticJacobian`` returns ``Undefined`` for
   ``'motion'`` and ``'cubic'`` (see ``qsiprep/interfaces/jacobian.py``), and
@@ -64,12 +91,22 @@ from qsiprep.tests.utils import get_test_data_path
 
 SRC = '/data/sub-01_dwi.nii.gz'
 
-#: GatherEddyInputs._run_interface (qsiprep/interfaces/eddy.py) unconditionally
-#: sets ``forward_warps = []``. An edge from ``gather_inputs`` to
-#: ``to_dwi_ref_warps`` is therefore a *provably empty* source, unlike
-#: ``sdc_wf``/``drbuddi_wf``/``corrected_node``. Edge presence alone is not
-#: enough to conclude a warp is real.
-_EMPTY_FIELDWARP_SOURCES = {'gather_inputs'}
+#: Node names whose ``to_dwi_ref_warps`` output is provably never a real
+#: per-run warp -- each verified by reading the source, not by inference:
+#:
+#: * ``gather_inputs``: ``GatherEddyInputs._run_interface``
+#:   (qsiprep/interfaces/eddy.py) unconditionally sets ``forward_warps = []``.
+#:   Only reachable via the eddy backend (``init_fsl_hmc_wf``).
+#: * ``sdc_bypass_wf``: ``init_sdc_wf`` (qsiprep/workflows/fieldmap/base.py)
+#:   names its own sub-workflow this way exactly when ``does_sdc`` is False,
+#:   and never connects anything to that sub-workflow's own
+#:   ``outputnode.out_warp`` in that branch. Reachable from both the eddy
+#:   backend's GRE/SyN branch and the SHORELine backend
+#:   (``init_qsiprep_hmcsdc_wf``), which share ``init_sdc_wf``.
+#:
+#: Edge presence alone is not enough to conclude a warp is real -- that was
+#: the bug in the first version of this check.
+_EMPTY_FIELDWARP_SOURCES = {'gather_inputs', 'sdc_bypass_wf'}
 
 
 class _StubLayout:
@@ -98,6 +135,7 @@ def _reset_config():
         'hmc_method',
         'sdc_method',
         'shoreline_model',
+        'hmc_transform',
         'b0_threshold',
         'b1_biascorrect_stage',
         'eddy_config',
@@ -128,7 +166,12 @@ def _cfg(hmc_method, sdc_method, sloppy):
     config.execution.layout = _StubLayout()
     config.workflow.hmc_method = hmc_method
     config.workflow.sdc_method = sdc_method
-    config.workflow.shoreline_model = None
+    # Only the shoreline backend reads these (init_dwi_model_hmc_wf); the CLI
+    # parser resolves them from --shoreline-config (or the shipped defaults,
+    # 3dshore/Affine -- see load_shoreline_config(None)) only when
+    # --hmc-method shoreline, and forces them to None otherwise.
+    config.workflow.shoreline_model = '3dshore' if hmc_method == 'shoreline' else None
+    config.workflow.hmc_transform = 'Affine' if hmc_method == 'shoreline' else None
     config.workflow.b0_threshold = 100
     config.workflow.b1_biascorrect_stage = 'final'
     config.workflow.eddy_config = None
@@ -186,7 +229,16 @@ def _fixture_lists_jacobian(name):
 
 
 def test_dsdti_synfmap_writes_jacobian(tmp_path):
-    """``--ignore fieldmaps --sdc-anat-reference=invt1w`` -> fieldmap-less SyN-SDC."""
+    """``--ignore fieldmaps --sdc-anat-reference=invt1w`` -> fieldmap-less SyN-SDC.
+
+    ``sdc_method='syn'`` below is config plumbing for ``_cfg``, not a mirror of
+    the real marker's CLI: ``test_dsdti_synfmap`` never passes ``--sdc-method``
+    at all. The branch that actually matters here
+    (``fsl.py``'s ``unit.is_gre or unit.is_nipreps_syn`` check) keys off the
+    synthetic unit's ``method=CorrectionMethod.NIPREPS_SYN`` below, not off
+    ``config.workflow.sdc_method`` (that config field only selects between
+    TOPUP/DRBUDDI for PEPOLAR units; see ``qsiplan/plan.py:280-294``).
+    """
     _cfg(hmc_method='eddy', sdc_method='syn', sloppy=True)
     from qsiprep.workflows.dwi.fsl import init_fsl_hmc_wf
 
@@ -198,8 +250,11 @@ def test_dsdti_synfmap_writes_jacobian(tmp_path):
     assert _fixture_lists_jacobian('dsdti_synfmap') is True
 
 
-def test_maternal_brain_project_and_forrest_gump_write_jacobian(tmp_path, monkeypatch):
-    """Both datasets ship a GRE (phasediff) fieldmap; neither passes --sdc-method."""
+def test_forrest_gump_writes_jacobian(monkeypatch):
+    """``test_forrest_gump`` passes no ``--hmc-method``, so it defaults to eddy
+    (``qsiprep/cli/parser.py:143-144``) with a GRE (phasediff) fieldmap and no
+    ``--sdc-method`` override -> ``init_fsl_hmc_wf``'s GRE branch.
+    """
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg(hmc_method='eddy', sdc_method='fieldmap', sloppy=True)
     from qsiprep.workflows.dwi.fsl import init_fsl_hmc_wf
@@ -214,8 +269,70 @@ def test_maternal_brain_project_and_forrest_gump_write_jacobian(tmp_path, monkey
 
     has_real, source = _has_real_fieldwarps(wf)
     assert has_real, f'expected a real SDC warp source, got {source!r}'
-    assert _fixture_lists_jacobian('maternal_brain_project') is True
+    assert source == 'sdc_wf'
     assert _fixture_lists_jacobian('forrest_gump') is True
+
+
+def test_maternal_brain_project_writes_jacobian(monkeypatch):
+    """``test_maternal_brain_project`` passes ``--hmc-method=shoreline``
+    (``qsiprep/tests/test_cli.py:762``), which ``base.py``'s ``hmc_tool``
+    dispatch (around line 267) routes to ``init_qsiprep_hmcsdc_wf`` --
+    *not* ``init_fsl_hmc_wf``/``GatherEddyInputs``, which only exist on the
+    eddy path. The dataset ships a GRE (phasediff) fieldmap and no
+    ``--sdc-method`` override, which here means ``unit.has_scanner_measured_
+    fieldmap`` is True, so ``init_sdc_wf`` builds the real ``'sdc_wf'``
+    (not the ``'sdc_bypass_wf'`` no-op).
+
+    An earlier version of this test built ``init_fsl_hmc_wf`` for this marker
+    -- exactly the "workflow the real marker never runs" mistake this module
+    otherwise guards against.
+    """
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    _cfg(hmc_method='shoreline', sdc_method='auto', sloppy=True)
+    from qsiprep.workflows.dwi.hmc_sdc import init_qsiprep_hmcsdc_wf
+
+    unit = make_preproc_unit(
+        [SRC],
+        method=CorrectionMethod.PHASEDIFF,
+        estimation_sources=['/data/sub-01_phasediff.nii.gz', '/data/sub-01_magnitude1.nii.gz'],
+        metadata={'EchoTime1': 0.004, 'EchoTime2': 0.006},
+    )
+    wf = init_qsiprep_hmcsdc_wf(
+        unit,
+        source_file=SRC,
+        t2w_sdc=False,
+        anatomical_template=config.workflow.anatomical_template,
+    )
+
+    has_real, source = _has_real_fieldwarps(wf)
+    assert has_real, f'expected a real SDC warp source, got {source!r}'
+    assert source == 'sdc_wf'
+    assert _fixture_lists_jacobian('maternal_brain_project') is True
+
+
+def test_shoreline_no_fieldmap_has_no_real_fieldwarps(tmp_path):
+    """Pins the SHORELine backend's own provably-empty source.
+
+    Not a live marker check (no integration test runs bare SHORELine with no
+    fieldmap and no DRBUDDI in this suite) -- it documents why
+    ``sdc_bypass_wf`` belongs in ``_EMPTY_FIELDWARP_SOURCES`` at all, the same
+    way ``test_dsdti_topup_only_branch_has_no_jacobian`` documents
+    ``gather_inputs``.
+    """
+    _cfg(hmc_method='shoreline', sdc_method='auto', sloppy=True)
+    from qsiprep.workflows.dwi.hmc_sdc import init_qsiprep_hmcsdc_wf
+
+    unit = make_preproc_unit([SRC], method=None)
+    wf = init_qsiprep_hmcsdc_wf(
+        unit,
+        source_file=SRC,
+        t2w_sdc=False,
+        anatomical_template=config.workflow.anatomical_template,
+    )
+
+    has_real, source = _has_real_fieldwarps(wf)
+    assert not has_real
+    assert source == 'sdc_bypass_wf'
 
 
 def test_drbuddi_rpe_writes_jacobian(tmp_path):
