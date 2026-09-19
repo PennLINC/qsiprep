@@ -1113,13 +1113,13 @@ class ApplyJacobianWeights(SimpleInterface):
 
     def _run_interface(self, runtime):
         if not isdefined(self.inputs.jacobian_weight_images):
-            LOGGER.info('Not applying scaling to resampled DWIs')
+            LOGGER.info('Not applying Jacobian weights to resampled DWIs')
             self._results['scaled_images'] = self.inputs.dwi_files
             return runtime
-        LOGGER.info('Applying scaling to resampled dwis')
+        LOGGER.info('Applying Jacobian weights to resampled dwis')
 
         if not len(self.inputs.jacobian_weight_images) == len(self.inputs.dwi_files):
-            raise Exception('Mismatch between scaling images and dwis')
+            raise Exception('Mismatch between Jacobian weight images and dwis')
 
         # The affine transform to the t1 can come from hmcsdc or the intramodal template
         coreg_to_t1 = traits.Undefined
