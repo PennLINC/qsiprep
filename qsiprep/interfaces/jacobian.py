@@ -113,6 +113,7 @@ warp's volume change) -- see the mode-gating tests in
 ``test_interfaces_jacobian.py``.
 """
 
+import itertools
 import os
 
 import nibabel as nb
@@ -159,8 +160,83 @@ def weight_key(gradwarp, fieldwarp):
     return tuple(path for path in (gradwarp, fieldwarp) if path)
 
 
+#: How far apart (mm, along any one axis) two images' world-frame bounding
+#: boxes may sit and still be considered "the same coordinate domain". A
+#: small negative slack tolerates float32 header round-trips leaving the
+#: boxes just touching rather than cleanly overlapping; it is not big enough
+#: to paper over a genuinely different subject or space.
+WORLD_OVERLAP_SLACK_MM = 1e-2
+
+
+def _world_bounding_box(img):
+    """The axis-aligned world-space bounding box of ``img``'s voxel grid."""
+    shape = img.shape[:3]
+    corners = np.array(list(itertools.product(*[(0, dim - 1) for dim in shape])))
+    world = nb.affines.apply_affine(img.affine, corners)
+    return world.min(axis=0), world.max(axis=0)
+
+
+def _assert_world_frames_overlap(path_a, path_b, img_a=None, img_b=None):
+    """Raise unless ``path_a`` and ``path_b`` occupy overlapping world space.
+
+    This is the one thing ANTs' physical-space composition and resampling
+    cannot rescue: an input in a completely unrelated coordinate frame (wrong
+    subject, wrong units, a header bug) produces a plausible-looking but
+    meaningless result rather than an error. A different sampling lattice --
+    different shape, different voxel size, different origin from padding or
+    cropping -- is not an error; ANTs resamples through each input's own
+    affine, so lattice disagreement alone is not evidence of anything wrong.
+    """
+    img_a = img_a if img_a is not None else nb.load(path_a)
+    img_b = img_b if img_b is not None else nb.load(path_b)
+    min_a, max_a = _world_bounding_box(img_a)
+    min_b, max_b = _world_bounding_box(img_b)
+    overlap_min = np.maximum(min_a, min_b)
+    overlap_max = np.minimum(max_a, max_b)
+    if np.any(overlap_max - overlap_min < -WORLD_OVERLAP_SLACK_MM):
+        raise ValueError(
+            f'{path_a} and {path_b} do not occupy overlapping world space '
+            f'({(min_a, max_a)} vs {(min_b, max_b)}). A different sampling '
+            'lattice is fine -- ANTs composes and resamples in physical '
+            'coordinates -- but these are not in a compatible coordinate '
+            'domain at all.'
+        )
+
+
+def resample_like(source_path, like_path, out_path, interpolation='nearest'):
+    """Resample ``source_path`` onto ``like_path``'s grid, if it is not already.
+
+    A no-op that returns ``source_path`` unchanged when the two already share
+    a lattice, so the common (already-matching) case does no I/O and stays
+    byte-identical. Used to make a mask or scalar map meaningful against a
+    weight map or reference that legitimately lives on a different grid (e.g.
+    a native-space mask against a DRBUDDI-output-grid reference) -- a
+    mislatticed input must not silently move which voxels a downstream check
+    inspects, so it is resampled onto the grid actually being inspected rather
+    than compared in place or ignored.
+    """
+    source = nb.load(source_path)
+    like = nb.load(like_path)
+    if source.shape[:3] == like.shape[:3] and np.allclose(
+        source.affine, like.affine, rtol=AFFINE_RTOL, atol=AFFINE_ATOL
+    ):
+        return source_path
+    resampled = nim.resample_to_img(source, like, interpolation=interpolation)
+    resampled.to_filename(out_path)
+    return out_path
+
+
 def validate_field_geometry(field_path, reference_path):
-    """Raise unless ``field_path`` is sampled on ``reference_path``'s lattice.
+    """Raise unless ``field_path`` is a plausible displacement field for composition
+    against ``reference_path``.
+
+    Composition and resampling both happen in ANTs, in physical (world)
+    coordinates, so ``field_path`` does not need to share ``reference_path``'s
+    sampling lattice -- only its coordinate domain. This used to require exact
+    shape-and-affine agreement; that was too strict; see the module's C1 fix
+    notes. What is still checked is what ANTs cannot rescue: a field with the
+    wrong number of vector components, or one in a world frame that does not
+    even overlap the reference (see ``_assert_world_frames_overlap``).
 
     This is a cheap structural screen. It cannot prove that a field encodes the
     intended coordinate domain, and it cannot detect an inverted field -- an
@@ -174,29 +250,14 @@ def validate_field_geometry(field_path, reference_path):
     field = nb.load(field_path)
     reference = nb.load(reference_path)
 
-    if field.shape[:3] != reference.shape[:3]:
-        raise ValueError(
-            f'Displacement field {field_path} has spatial shape {field.shape[:3]}, '
-            f'but the composition reference {reference_path} has '
-            f'{reference.shape[:3]}. A field on a different lattice cannot be '
-            'composed here; see the coordinate-domain table in the design spec.'
-        )
-    if not np.allclose(field.affine, reference.affine, rtol=AFFINE_RTOL, atol=AFFINE_ATOL):
-        raise ValueError(
-            f'Displacement field {field_path} has an affine that does not match '
-            f'the composition reference {reference_path}. QSIPrep deliberately '
-            'requires exact agreement here rather than resampling: telling a '
-            'world-compatible-but-differently-sampled field apart from one in '
-            'the wrong coordinate domain needs case work no current input '
-            'exercises.'
-        )
-
     components = field.shape[4] if field.ndim == 5 else field.shape[-1]
     if components != 3:
         raise ValueError(
             f'Displacement field {field_path} has {components} vector components, '
             'expected 3.'
         )
+
+    _assert_world_frames_overlap(field_path, reference_path, img_a=field, img_b=reference)
 
 
 def check_weight_map(map_path, mask_path):
@@ -368,25 +429,34 @@ def jacobian_determinant(field_path, out_path, mask_path=None):
 
 
 def validate_scalar_geometry(image_path, reference_path):
-    """Raise unless a scalar map shares ``reference_path``'s sampling grid.
+    """Raise unless a scalar map is a plausible input for this composition.
 
-    ``validate_field_geometry`` covers displacement fields. Scalar inputs --
-    the eddy-current Jacobians, the brain mask, and every map that goes into a
-    product -- need the same check, or a mislatticed input is multiplied
-    elementwise against the wrong voxels or silently moves which voxels the
-    positivity guard inspects.
+    ``validate_field_geometry`` covers displacement fields; this covers scalar
+    inputs -- the eddy-current Jacobians and the brain mask. It used to require
+    an identical sampling lattice against ``reference_path``, which is wrong
+    for the same reason ``validate_field_geometry``'s equivalent requirement
+    was: a native-space mask against a DRBUDDI-output-grid reference is a
+    legitimate, differently-sampled pairing, not an error (see the module's C1
+    fix notes). What is still checked is a genuinely wrong input -- something
+    that is not a 3D scalar map at all, or sits in a world frame that does not
+    even overlap the reference.
+
+    Callers that actually combine a scalar map against something on a
+    different grid (the positivity guard's mask, in particular) are
+    responsible for resampling it there first with ``resample_like``; this
+    function only screens for gross mistakes, it does not make two grids
+    compatible.
     """
     image = nb.load(image_path)
     reference = nb.load(reference_path)
-    if image.shape[:3] != reference.shape[:3]:
+
+    extra_dims = image.shape[3:]
+    if extra_dims and any(dim != 1 for dim in extra_dims):
         raise ValueError(
-            f'{image_path} has spatial shape {image.shape[:3]}, but '
-            f'{reference_path} has {reference.shape[:3]}.'
+            f'{image_path} is not a 3D scalar map (shape {image.shape}).'
         )
-    if not np.allclose(image.affine, reference.affine, rtol=AFFINE_RTOL, atol=AFFINE_ATOL):
-        raise ValueError(
-            f'{image_path} has an affine that does not match {reference_path}.'
-        )
+
+    _assert_world_frames_overlap(image_path, reference_path, img_a=image, img_b=reference)
 
 
 def _abspath(path, cwd):
@@ -501,8 +571,6 @@ class ComposeJacobianWeights(SimpleInterface):
             for warp in set(fieldwarps):
                 validate_field_geometry(warp, reference)
 
-        validate_scalar_geometry(self.inputs.mask, reference)
-
         ec_images = [None] * num_dwis
         if isdefined(self.inputs.ec_jacobian_images) and self.inputs.ec_jacobian_images:
             supplied = list(self.inputs.ec_jacobian_images)
@@ -519,6 +587,13 @@ class ComposeJacobianWeights(SimpleInterface):
             LOGGER.info('No distortion transforms to modulate; no weights produced')
             return runtime
 
+        # The mask is only needed from here on (the positivity guard, on
+        # whatever grid each determinant/weight map ends up on). Validated and
+        # used only past the no-op return above (C2): a run with nothing to
+        # modulate must not be killed by a mask/reference mismatch it never
+        # needed to resolve.
+        validate_scalar_geometry(self.inputs.mask, reference)
+
         # One determinant per unique (gradwarp, fieldwarp) pair.
         determinants = {}
         for fieldwarp in dict.fromkeys(fieldwarps):
@@ -534,10 +609,20 @@ class ComposeJacobianWeights(SimpleInterface):
                 )
             else:
                 composed = fields[0]
+            # The determinant is emitted on `composed`'s own grid (see
+            # jacobian_determinant), which is not always `reference`'s grid
+            # (e.g. a lone SDC warp already on its own output grid). Resample
+            # the mask there rather than assume it lines up, so a mislatticed
+            # mask cannot silently move which voxels the fold check inspects.
+            mask_for_determinant = resample_like(
+                self.inputs.mask,
+                composed,
+                os.path.join(runtime.cwd, f'mask_for_jacobian{len(determinants)}.nii.gz'),
+            )
             determinants[key] = jacobian_determinant(
                 composed,
                 os.path.join(runtime.cwd, f'jacobian{len(determinants)}.nii.gz'),
-                mask_path=self.inputs.mask,
+                mask_path=mask_for_determinant,
             )
 
         # Per-volume weight = shared determinant x that volume's EC Jacobian.
@@ -556,7 +641,7 @@ class ComposeJacobianWeights(SimpleInterface):
             # different weights that would otherwise share a key.
             cache_key = (gradwarp, fieldwarp, ec_image)
             if cache_key not in cache:
-                cache[cache_key] = multiply_maps(
+                weight_map = multiply_maps(
                     factors,
                     fname_presuffix(
                         self.inputs.dwi_files[index],
@@ -565,7 +650,22 @@ class ComposeJacobianWeights(SimpleInterface):
                         use_ext=True,
                     ),
                 )
-                check_weight_map(cache[cache_key], self.inputs.mask)
+                cache[cache_key] = weight_map
+                # Same reasoning as mask_for_determinant above: the weight map
+                # is on whatever grid its factors are on, not necessarily
+                # `reference`'s. This branch runs once per unique weight map,
+                # so no further dedup is needed here.
+                mask_for_weight = resample_like(
+                    self.inputs.mask,
+                    weight_map,
+                    fname_presuffix(
+                        self.inputs.mask,
+                        suffix=f'_mask-{len(cache):05d}',
+                        newpath=runtime.cwd,
+                        use_ext=True,
+                    ),
+                )
+                check_weight_map(weight_map, mask_for_weight)
             weights.append(cache[cache_key])
 
         self._results['jacobian_weight_images'] = weights
@@ -868,9 +968,16 @@ def _jacobian_sidecar(weight_index, applied, unmodulated, reason):
     repeated indices, which makes the dedup visible rather than implicit; the
     collapsed single-map case is all zeros, written in full so consumers need
     no special case.
+
+    ``weight_index`` is guarded with ``isdefined`` rather than assumed present:
+    ``weight_images`` defined with ``weight_index`` left Undefined is
+    unreachable in the current wiring (``StackJacobianWeights`` always
+    receives both together), but ``list(Undefined)`` raises ``TypeError``
+    rather than something informative, so it is cheap to guard against a
+    future caller that decouples them.
     """
     sidecar = {
-        'JacobianWeightIndex': list(weight_index),
+        'JacobianWeightIndex': list(weight_index) if isdefined(weight_index) else [],
         'AppliedCorrections': list(applied),
         'UnmodulatedCorrections': list(unmodulated),
         'Description': (

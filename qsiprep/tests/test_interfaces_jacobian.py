@@ -8,6 +8,7 @@ the ``pennlinc/qsiprep:test`` image, which ships ANTs.
 """
 
 import shutil
+from pathlib import Path
 
 import nibabel as nb
 import numpy as np
@@ -18,10 +19,54 @@ from qsiprep.interfaces.jacobian import (
     compose_fields,
     jacobian_determinant,
     multiply_maps,
+    resample_like,
     validate_field_geometry,
+    validate_scalar_geometry,
     weight_key,
 )
 from qsiprep.tests.gradient_fixtures import write_itk_field
+
+#: The real DRBUDDI shape/affine mismatch this module's C1 fix addresses,
+#: read directly off cached DRBUDDI outputs for a real dataset (see the
+#: fix report): the native/input grid (e.g. ``b0_up.nii``) is (60, 60, 37)
+#: with one origin, while DRBUDDI's own output grid (``b0_corrected_final.nii``,
+#: ``deformation_FINV.nii.gz``) is (76, 76, 37) with a shifted origin -- same
+#: voxel size, same orientation, genuinely different lattice, still the same
+#: physical head.
+NATIVE_SHAPE = (60, 60, 37)
+NATIVE_AFFINE = np.array(
+    [
+        [-4.0, 0.0, 0.0, 119.0],
+        [0.0, 4.0, 0.0, -101.522],
+        [0.0, 0.0, 4.0, -60.338],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+)
+DRBUDDI_SHAPE = (76, 76, 37)
+DRBUDDI_AFFINE = np.array(
+    [
+        [-4.0, 0.0, 0.0, 151.0],
+        [0.0, 4.0, 0.0, -133.522],
+        [0.0, 0.0, 4.0, -60.338],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+)
+
+
+def _write_field(path, shape, affine, amplitude=0.05):
+    """A small, smooth ITK displacement field on an arbitrary shape/affine."""
+    path = Path(path)
+    grid = np.meshgrid(*[np.linspace(-1.0, 1.0, n) for n in shape], indexing='ij')
+    data = np.zeros(shape + (1, 3), dtype='float32')
+    for component in range(3):
+        data[..., 0, component] = amplitude * grid[component] ** 2
+    # RAS -> LPS negation for x/y, matching write_itk_field's convention.
+    data[..., 0, 0] *= -1
+    data[..., 0, 1] *= -1
+    img = nb.Nifti1Image(data, affine)
+    img.header.set_intent(1007)
+    img.to_filename(str(path))
+    return str(path)
 
 
 def _write_map(path, value, shape=(8, 8, 8), affine=None):
@@ -107,17 +152,34 @@ def test_validate_field_geometry_accepts_matching_grid(tmp_path):
     validate_field_geometry(str(field), reference)
 
 
-def test_validate_field_geometry_rejects_wrong_shape(tmp_path):
+def test_validate_field_geometry_accepts_a_differently_sampled_overlapping_field(tmp_path):
+    """C1: a different lattice is not an error -- ANTs composes in physical space.
+
+    Reproduces the real DRBUDDI shape/affine mismatch (see ``NATIVE_*`` /
+    ``DRBUDDI_*`` above): before the fix, this raised on every DRBUDDI run.
+    """
+    reference = _write_map(
+        tmp_path / 'ref.nii.gz', 1.0, shape=DRBUDDI_SHAPE, affine=DRBUDDI_AFFINE
+    )
+    field = _write_field(tmp_path / 'field.nii.gz', NATIVE_SHAPE, NATIVE_AFFINE)
+    validate_field_geometry(str(field), reference)
+
+
+def test_validate_field_geometry_rejects_wrong_component_count(tmp_path):
+    """The one thing ANTs' physical-space composition cannot rescue."""
     reference = _write_map(tmp_path / 'ref.nii.gz', 1.0)
-    field = write_itk_field(tmp_path / 'field.nii.gz', shape=(6, 6, 6))
-    with pytest.raises(ValueError, match='shape'):
-        validate_field_geometry(str(field), reference)
+    not_a_field = _write_map(tmp_path / 'notfield.nii.gz', 1.0, shape=(8, 8, 8, 1, 2))
+    with pytest.raises(ValueError, match='vector components'):
+        validate_field_geometry(str(not_a_field), reference)
 
 
-def test_validate_field_geometry_rejects_wrong_affine(tmp_path):
-    reference = _write_map(tmp_path / 'ref.nii.gz', 1.0, affine=np.diag([2.0, 2, 2, 1]))
-    field = write_itk_field(tmp_path / 'field.nii.gz', shape=(8, 8, 8))
-    with pytest.raises(ValueError, match='affine'):
+def test_validate_field_geometry_rejects_a_disjoint_world_frame(tmp_path):
+    """A field in a genuinely different coordinate domain still must raise."""
+    reference = _write_map(tmp_path / 'ref.nii.gz', 1.0, shape=(8, 8, 8))
+    far_affine = np.eye(4)
+    far_affine[:3, 3] = 10_000.0
+    field = _write_field(tmp_path / 'field.nii.gz', (8, 8, 8), far_affine)
+    with pytest.raises(ValueError, match='overlapping world space'):
         validate_field_geometry(str(field), reference)
 
 
@@ -260,13 +322,44 @@ def test_jacobian_determinant_tolerates_edge_negatives_outside_mask(tmp_path):
     assert (np.asanyarray(nb.load(out).dataobj) >= 0).all()
 
 
-def test_validate_scalar_geometry_rejects_a_wrong_grid(tmp_path):
-    from qsiprep.interfaces.jacobian import validate_scalar_geometry
+def test_validate_scalar_geometry_accepts_a_differently_sampled_overlapping_map(tmp_path):
+    """C1: same relaxation as validate_field_geometry, for the mask/EC inputs."""
+    reference = _write_map(
+        tmp_path / 'ref.nii.gz', 1.0, shape=DRBUDDI_SHAPE, affine=DRBUDDI_AFFINE
+    )
+    mask = _write_map(tmp_path / 'mask.nii.gz', 1.0, shape=NATIVE_SHAPE, affine=NATIVE_AFFINE)
+    validate_scalar_geometry(mask, reference)
 
+
+def test_validate_scalar_geometry_rejects_a_non_3d_map(tmp_path):
     reference = _write_map(tmp_path / 'ref.nii.gz', 1.0)
-    other = _write_map(tmp_path / 'other.nii.gz', 1.0, shape=(6, 6, 6))
-    with pytest.raises(ValueError, match='shape'):
+    not_scalar = _write_map(tmp_path / 'other.nii.gz', 1.0, shape=(8, 8, 8, 4))
+    with pytest.raises(ValueError, match='3D scalar'):
+        validate_scalar_geometry(not_scalar, reference)
+
+
+def test_validate_scalar_geometry_rejects_a_disjoint_world_frame(tmp_path):
+    reference = _write_map(tmp_path / 'ref.nii.gz', 1.0, shape=(8, 8, 8))
+    far_affine = np.eye(4)
+    far_affine[:3, 3] = 10_000.0
+    other = _write_map(tmp_path / 'other.nii.gz', 1.0, shape=(8, 8, 8), affine=far_affine)
+    with pytest.raises(ValueError, match='overlapping world space'):
         validate_scalar_geometry(other, reference)
+
+
+def test_resample_like_is_a_noop_when_grids_already_match(tmp_path):
+    like = _write_map(tmp_path / 'like.nii.gz', 1.0)
+    mask = _write_map(tmp_path / 'mask.nii.gz', 1.0)
+    assert resample_like(mask, like, str(tmp_path / 'out.nii.gz')) == mask
+
+
+def test_resample_like_resamples_onto_the_target_grid(tmp_path):
+    like = _write_map(tmp_path / 'like.nii.gz', 1.0, shape=DRBUDDI_SHAPE, affine=DRBUDDI_AFFINE)
+    mask = _write_map(tmp_path / 'mask.nii.gz', 1.0, shape=NATIVE_SHAPE, affine=NATIVE_AFFINE)
+    out = resample_like(mask, like, str(tmp_path / 'out.nii.gz'))
+    resampled = nb.load(out)
+    assert resampled.shape[:3] == DRBUDDI_SHAPE
+    assert np.allclose(resampled.affine, DRBUDDI_AFFINE)
 
 
 def test_compose_fields_returns_a_single_field(tmp_path):
@@ -300,6 +393,24 @@ def test_compose_weights_with_no_fields_is_undefined(tmp_path):
         dwi_files=_dwi_volumes(tmp_path, 3),
         b0_ref_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
         mask=_write_map(tmp_path / 'mask.nii.gz', 1.0),
+    )
+    result = interface.run(cwd=str(tmp_path))
+    assert not isdefined(result.outputs.jacobian_weight_images)
+
+
+def test_compose_weights_with_no_fields_ignores_a_mismatched_mask(tmp_path):
+    """C2: the early no-op return must come before the mask is even looked at.
+
+    A run with nothing to modulate must not be killed by a mask/reference
+    mismatch it never needed to resolve -- even a mask in a totally disjoint
+    world frame, which *would* raise if validated.
+    """
+    far_affine = np.eye(4)
+    far_affine[:3, 3] = 10_000.0
+    interface = ComposeJacobianWeights(
+        dwi_files=_dwi_volumes(tmp_path, 3),
+        b0_ref_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
+        mask=_write_map(tmp_path / 'mask.nii.gz', 1.0, affine=far_affine),
     )
     result = interface.run(cwd=str(tmp_path))
     assert not isdefined(result.outputs.jacobian_weight_images)
@@ -364,15 +475,63 @@ def test_compose_weights_broadcasts_a_single_fieldwarp(tmp_path):
     assert len(set(weights)) == 1
 
 
-def test_compose_weights_rejects_a_mislatticed_field(tmp_path):
+def test_compose_weights_rejects_a_disjoint_field(tmp_path):
+    """A field in a genuinely unrelated coordinate domain is still an error."""
+    far_affine = np.eye(4)
+    far_affine[:3, 3] = 10_000.0
     interface = ComposeJacobianWeights(
         dwi_files=_dwi_volumes(tmp_path, 2),
-        b0_ref_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
+        b0_ref_image=_write_map(tmp_path / 'ref.nii.gz', 1.0, shape=(8, 8, 8)),
         mask=_write_map(tmp_path / 'mask.nii.gz', 1.0),
-        fieldwarps=[str(write_itk_field(tmp_path / 'f.nii.gz', shape=(6, 6, 6)))],
+        fieldwarps=[str(_write_field(tmp_path / 'f.nii.gz', (8, 8, 8), far_affine))],
     )
-    with pytest.raises(ValueError, match='shape'):
+    with pytest.raises(ValueError, match='overlapping world space'):
         interface.run(cwd=str(tmp_path))
+
+
+def test_compose_weights_succeeds_on_a_native_mask_against_a_drbuddi_grid_reference(tmp_path):
+    """C1 regression: the guard used to break every DRBUDDI run.
+
+    Reproduces the real shape/affine mismatch measured on cached DRBUDDI
+    outputs (see ``NATIVE_*``/``DRBUDDI_*`` above): ``b0_ref_image`` is
+    DRBUDDI's own output grid (``fsl.py``/``diffprep.py`` override it from
+    ``drbuddi_wf.outputnode.b0_ref``), the SDC warp DRBUDDI produces is on
+    that same grid, and the brain mask is still on the native input grid.
+    Before the fix, ``validate_scalar_geometry(mask, reference)`` raised here
+    unconditionally. Now it must succeed and produce a sane (near-unity, in
+    this near-identity synthetic case) determinant.
+    """
+    if shutil.which('CreateJacobianDeterminantImage') is None:
+        pytest.skip('CreateJacobianDeterminantImage required for this test')
+
+    reference = _write_map(
+        tmp_path / 'ref.nii.gz', 1.0, shape=DRBUDDI_SHAPE, affine=DRBUDDI_AFFINE
+    )
+    # DRBUDDI's own SDC warp: on DRBUDDI's own output grid, like the real
+    # deformation_FINV.nii.gz.
+    fieldwarp = _write_field(
+        tmp_path / 'drbuddi_warp.nii.gz', DRBUDDI_SHAPE, DRBUDDI_AFFINE, amplitude=0.02
+    )
+    # The brain mask: still on the native (pre-DRBUDDI) input grid, like the
+    # real b0_up.nii, genuinely different from the reference above.
+    mask = _write_map(tmp_path / 'mask.nii.gz', 1.0, shape=NATIVE_SHAPE, affine=NATIVE_AFFINE)
+
+    interface = ComposeJacobianWeights(
+        dwi_files=_dwi_volumes(tmp_path, 2),
+        b0_ref_image=reference,
+        mask=mask,
+        fieldwarps=[fieldwarp],
+    )
+    weights = interface.run(cwd=str(tmp_path)).outputs.jacobian_weight_images
+
+    assert len(weights) == 2
+    for weight_path in set(weights):
+        determinant = np.asanyarray(nb.load(weight_path).dataobj)
+        assert np.isfinite(determinant).all()
+        assert (determinant > 0).all()
+        # A small, smooth synthetic warp should not move the determinant far
+        # from unity -- this is the "sane" check the task asked for.
+        assert 0.5 < float(np.median(determinant)) < 2.0
 
 
 def test_compose_weights_rejects_mismatched_ec_count(tmp_path):
