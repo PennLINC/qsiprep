@@ -297,12 +297,49 @@ def check_weight_map(map_path, mask_path):
             )
 
 
-def multiply_maps(paths, out_path):
-    """Voxelwise product of one or more scalar maps."""
-    if len(paths) == 1:
-        return paths[0]
-    product = nim.load_img(paths[0])
-    for path in paths[1:]:
+def multiply_maps(paths, out_path, like_path=None):
+    """Voxelwise product of one or more scalar maps, reconciled onto one lattice.
+
+    ``nilearn.image.math_img`` requires exact voxel correspondence between its
+    inputs and raises ``ValueError`` when their shapes or affines differ. That
+    is reachable in production: with ``--hmc-method tortoise --sdc-method
+    drbuddi`` and the default ``correction_mode='quadratic'``, the SDC
+    determinant is evaluated on whatever grid its warp arrived on (DRBUDDI's
+    own output grid) while the per-volume eddy-current Jacobian is always
+    evaluated on DIFFPREP's native input grid (see ``OkanQuadraticJacobian``)
+    -- two genuinely different lattices for the same physical head.
+
+    ``like_path`` is the grid every factor is resampled onto (via
+    ``resample_like``, with linear interpolation -- these are continuous
+    determinant maps, not masks, so ``resample_like``'s nearest-neighbour
+    default would introduce blocky discontinuities into a smoothly varying
+    weight) before multiplying. It defaults to ``paths[0]``, so a lone factor
+    already on that grid -- the common case -- costs no extra I/O, since
+    ``resample_like`` itself no-ops when the grids already match.
+
+    ``ComposeJacobianWeights`` passes its own ``b0_ref_image`` explicitly:
+    that input's own docstring already commits to being "the lattice the
+    weight maps live on", and every factor reaching this function has already
+    been validated to at least share its world frame (``validate_field_
+    geometry`` / ``validate_scalar_geometry``), which is what makes resampling
+    onto it safe rather than an incidental fix.
+    """
+    target = like_path if like_path is not None else paths[0]
+    onlattice = [
+        resample_like(
+            path,
+            target,
+            fname_presuffix(
+                path, suffix='_onlattice', newpath=os.path.dirname(out_path) or None
+            ),
+            interpolation='linear',
+        )
+        for path in paths
+    ]
+    if len(onlattice) == 1:
+        return onlattice[0]
+    product = nim.load_img(onlattice[0])
+    for path in onlattice[1:]:
         product = nim.math_img('a*b', a=product, b=path)
     product.to_filename(out_path)
     return out_path
@@ -649,6 +686,10 @@ class ComposeJacobianWeights(SimpleInterface):
                         newpath=runtime.cwd,
                         use_ext=True,
                     ),
+                    # Reconcile onto `reference`'s grid -- see multiply_maps'
+                    # docstring for why that is the deliberate, documented
+                    # choice rather than an incidental one.
+                    like_path=reference,
                 )
                 cache[cache_key] = weight_map
                 # Same reasoning as mask_for_determinant above: the weight map

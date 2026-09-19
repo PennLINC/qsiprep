@@ -534,6 +534,119 @@ def test_compose_weights_succeeds_on_a_native_mask_against_a_drbuddi_grid_refere
         assert 0.5 < float(np.median(determinant)) < 2.0
 
 
+def test_compose_weights_reconciles_ec_jacobian_lattice_against_sdc_determinant(tmp_path):
+    """F1 regression: the SDC determinant and the EC Jacobian on genuinely
+    different lattices used to crash ``multiply_maps`` with a ``nilearn``
+    ``ValueError`` (mismatched shape/affine) before either factor ever
+    reached ``check_weight_map``.
+
+    Reproduces the real ``--hmc-method tortoise --sdc-method drbuddi``
+    ``correction_mode='quadratic'`` shapes: the SDC determinant lives on
+    DRBUDDI's own output grid (``DRBUDDI_SHAPE``, 76x76x37 in the real run
+    this was measured on), the per-volume EC Jacobian on DIFFPREP's native
+    input grid (``NATIVE_SHAPE``, 60x60x37). No CI marker catches this
+    because every TORTOISE marker passes ``--sloppy``, which forces
+    ``correction_mode='motion'`` (no EC Jacobian at all).
+    """
+    if shutil.which('CreateJacobianDeterminantImage') is None:
+        pytest.skip('CreateJacobianDeterminantImage required for this test')
+
+    reference = _write_map(
+        tmp_path / 'ref.nii.gz', 1.0, shape=DRBUDDI_SHAPE, affine=DRBUDDI_AFFINE
+    )
+    fieldwarp = _write_field(
+        tmp_path / 'drbuddi_warp.nii.gz', DRBUDDI_SHAPE, DRBUDDI_AFFINE, amplitude=0.02
+    )
+    mask = _write_map(tmp_path / 'mask.nii.gz', 1.0, shape=NATIVE_SHAPE, affine=NATIVE_AFFINE)
+    ec_images = [
+        _write_map(
+            tmp_path / f'ec{i}.nii.gz', 1.0 + 0.02 * i, shape=NATIVE_SHAPE, affine=NATIVE_AFFINE
+        )
+        for i in range(2)
+    ]
+
+    interface = ComposeJacobianWeights(
+        dwi_files=_dwi_volumes(tmp_path, 2),
+        b0_ref_image=reference,
+        mask=mask,
+        fieldwarps=[fieldwarp],
+        ec_jacobian_images=ec_images,
+    )
+    weights = interface.run(cwd=str(tmp_path)).outputs.jacobian_weight_images
+
+    assert len(weights) == 2
+    for i, weight_path in enumerate(weights):
+        img = nb.load(weight_path)
+        # Reconciled onto b0_ref_image's grid -- see multiply_maps' like_path.
+        assert img.shape[:3] == DRBUDDI_SHAPE
+        assert np.allclose(img.affine, DRBUDDI_AFFINE)
+        determinant = np.asanyarray(img.dataobj)
+        # Positivity is only a contract inside the brain mask (that is what
+        # check_weight_map enforces); the native mask's own footprint does
+        # not cover the whole of DRBUDDI's larger output grid, and voxels
+        # outside it are free to be zero-filled by resampling.
+        mask_on_weight_grid = resample_like(
+            mask, weight_path, str(tmp_path / f'mask_check_{i}.nii.gz')
+        )
+        inmask = np.asanyarray(nb.load(mask_on_weight_grid).dataobj) > 0
+        assert np.isfinite(determinant[inmask]).all()
+        assert (determinant[inmask] > 0).all()
+
+
+def test_compose_weights_reconciles_ec_jacobian_lattice_with_gradwarp(tmp_path):
+    """Same F1 regression, with a gradwarp field also in the mix.
+
+    Here the gradwarp+SDC composite is built directly onto ``b0_ref_image``'s
+    grid (``compose_fields``' own ``reference_image``), so this exercises the
+    "composed factor already matches the target grid, only the EC Jacobian
+    needs resampling" path, rather than the lone-SDC-warp path the test above
+    covers.
+    """
+    if shutil.which('CreateJacobianDeterminantImage') is None:
+        pytest.skip('CreateJacobianDeterminantImage required for this test')
+    if shutil.which('antsApplyTransforms') is None:
+        pytest.skip('antsApplyTransforms required for this test')
+
+    reference = _write_map(
+        tmp_path / 'ref.nii.gz', 1.0, shape=DRBUDDI_SHAPE, affine=DRBUDDI_AFFINE
+    )
+    fieldwarp = _write_field(
+        tmp_path / 'drbuddi_warp.nii.gz', DRBUDDI_SHAPE, DRBUDDI_AFFINE, amplitude=0.02
+    )
+    gradwarp = _write_field(
+        tmp_path / 'gradwarp.nii.gz', NATIVE_SHAPE, NATIVE_AFFINE, amplitude=0.01
+    )
+    mask = _write_map(tmp_path / 'mask.nii.gz', 1.0, shape=NATIVE_SHAPE, affine=NATIVE_AFFINE)
+    ec_images = [
+        _write_map(
+            tmp_path / f'ec{i}.nii.gz', 1.0 + 0.02 * i, shape=NATIVE_SHAPE, affine=NATIVE_AFFINE
+        )
+        for i in range(2)
+    ]
+
+    interface = ComposeJacobianWeights(
+        dwi_files=_dwi_volumes(tmp_path, 2),
+        b0_ref_image=reference,
+        mask=mask,
+        gradwarp_field=[gradwarp],
+        fieldwarps=[fieldwarp],
+        ec_jacobian_images=ec_images,
+    )
+    weights = interface.run(cwd=str(tmp_path)).outputs.jacobian_weight_images
+
+    assert len(weights) == 2
+    for i, weight_path in enumerate(weights):
+        img = nb.load(weight_path)
+        assert img.shape[:3] == DRBUDDI_SHAPE
+        determinant = np.asanyarray(img.dataobj)
+        mask_on_weight_grid = resample_like(
+            mask, weight_path, str(tmp_path / f'mask_check_{i}.nii.gz')
+        )
+        inmask = np.asanyarray(nb.load(mask_on_weight_grid).dataobj) > 0
+        assert np.isfinite(determinant[inmask]).all()
+        assert (determinant[inmask] > 0).all()
+
+
 def test_compose_weights_rejects_mismatched_ec_count(tmp_path):
     interface = ComposeJacobianWeights(
         dwi_files=_dwi_volumes(tmp_path, 4),
