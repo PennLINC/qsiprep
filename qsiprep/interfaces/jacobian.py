@@ -250,7 +250,24 @@ def validate_field_geometry(field_path, reference_path):
     field = nb.load(field_path)
     reference = nb.load(reference_path)
 
-    components = field.shape[4] if field.ndim == 5 else field.shape[-1]
+    # Only the two real displacement-field layouts are accepted: 4D
+    # (X, Y, Z, 3) or 5D (X, Y, Z, 1, 3) -- ITK's own convention for a vector
+    # image. Reading ``field.shape[-1]`` as a component count for any
+    # non-5D image (the previous check) let a plain 3D scalar image whose
+    # last spatial dimension happened to equal 3 pass as a displacement
+    # field, so anything else is rejected outright, by shape, before a
+    # component count is even considered.
+    shape = field.shape
+    if field.ndim == 4:
+        components = shape[3]
+    elif field.ndim == 5 and shape[3] == 1:
+        components = shape[4]
+    else:
+        raise ValueError(
+            f'Displacement field {field_path} has shape {shape}, expected a 4D '
+            'image shaped (X, Y, Z, 3) or a 5D image shaped (X, Y, Z, 1, 3).'
+        )
+
     if components != 3:
         raise ValueError(
             f'Displacement field {field_path} has {components} vector components, '

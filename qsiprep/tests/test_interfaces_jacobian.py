@@ -173,6 +173,21 @@ def test_validate_field_geometry_rejects_wrong_component_count(tmp_path):
         validate_field_geometry(str(not_a_field), reference)
 
 
+def test_validate_field_geometry_rejects_a_3d_scalar_image_with_a_trailing_axis_of_3(tmp_path):
+    """F3 regression: ``field.shape[-1]`` alone is not enough to detect a field.
+
+    A plain 3D scalar image whose last spatial dimension happens to equal 3
+    used to pass this guard (the previous check read ``field.shape[-1]`` as a
+    component count for any non-5D image), letting a scalar map through
+    composition as if it were a displacement field. Only the two real
+    layouts -- 4D (X, Y, Z, 3) and 5D (X, Y, Z, 1, 3) -- are accepted.
+    """
+    reference = _write_map(tmp_path / 'ref.nii.gz', 1.0)
+    scalar = _write_map(tmp_path / 'scalar.nii.gz', 1.0, shape=(4, 4, 3))
+    with pytest.raises(ValueError, match=r'\(4, 4, 3\)'):
+        validate_field_geometry(str(scalar), reference)
+
+
 def test_validate_field_geometry_rejects_a_disjoint_world_frame(tmp_path):
     """A field in a genuinely different coordinate domain still must raise."""
     reference = _write_map(tmp_path / 'ref.nii.gz', 1.0, shape=(8, 8, 8))
