@@ -199,8 +199,8 @@ def init_qsiprep_hmcsdc_wf(
         # No TOPUP-in-eddy carve-out for this backend (see the note above
         # has_gradwarp): every SDC warp SHORELine produces, including
         # DRBUDDI's, is carried as to_dwi_ref_warps and reaches
-        # ComposeJacobianWeights externally.
-        config.record_applied(['sdc'])
+        # ComposeJacobianWeights externally (recorded by
+        # jacobian_provenance.jacobian_provenance_for, not here).
         drbuddi_wf = init_drbuddi_wf(
             unit=unit,
             t2w_sdc=t2w_sdc,
@@ -283,7 +283,7 @@ def init_qsiprep_hmcsdc_wf(
         )
         # init_sdc_wf's out_warp reaches ComposeJacobianWeights externally
         # (see the has_gradwarp note above: no TOPUP-in-eddy carve-out here).
-        config.record_applied(['sdc'])
+        # Recorded by jacobian_provenance.jacobian_provenance_for, not here.
 
     # Perform SDC if possible. This will pass-through if no sdc is to be done
     b0_sdc_wf = init_sdc_wf(unit)

@@ -66,8 +66,22 @@ def _tsnr_meta(n_b0, median_tsnr):
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def init_dwi_derivatives_wf(source_file) -> Workflow:
-    """Set up a battery of datasinks to store derivatives in the right location."""
+def init_dwi_derivatives_wf(
+    source_file,
+    jacobian_applied_corrections=(),
+    jacobian_unmodulated_corrections=(),
+    jacobian_unmodulated_reason=None,
+) -> Workflow:
+    """Set up a battery of datasinks to store derivatives in the right location.
+
+    The three ``jacobian_*`` arguments are this *run*'s own Jacobian-provenance
+    facts -- see ``qsiprep.workflows.dwi.jacobian_provenance.
+    jacobian_provenance_for``, which the caller (``init_dwi_finalize_wf``)
+    computes from the ``unit`` it has and this function does not. They are set
+    directly as ``StackJacobianWeights`` node inputs (build-time constants, not
+    threaded through ``connect``) rather than read from ``config.workflow``,
+    because they are per-run facts, not invocation-global ones.
+    """
     output_dir = str(config.execution.output_dir)
     workflow = Workflow(name='dwi_derivatives_wf')
     inputnode = pe.Node(
@@ -283,7 +297,14 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
     # no-ops -- no file is written. A unity map is never synthesized for that
     # case: it would assert "we modulated by 1", which is false.
     if config.workflow.jacobian_weighting:
-        stack_jacobian = pe.Node(StackJacobianWeights(), name='stack_jacobian')
+        stack_jacobian = pe.Node(
+            StackJacobianWeights(
+                applied_corrections=list(jacobian_applied_corrections),
+                unmodulated_corrections=list(jacobian_unmodulated_corrections),
+                unmodulated_reason=jacobian_unmodulated_reason,
+            ),
+            name='stack_jacobian',
+        )
         ds_jacobian = pe.Node(
             DerivativesMaybeDataSink(
                 source_file=source_file,

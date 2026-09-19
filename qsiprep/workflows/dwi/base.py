@@ -34,7 +34,7 @@ from .util import _create_mem_gb, _get_wf_name
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def _t2wreg_target(unit, t2w_sdc):
+def resolve_t2wreg_target(unit, t2w_sdc):
     """The structural target DIFFPREP's T2Wreg stage registers to, or ``None``.
 
     Mirrors ``use_t2wreg``/``synb0_target`` in
@@ -44,6 +44,11 @@ def _t2wreg_target(unit, t2w_sdc):
     produce no SDC figure. The plan encodes the stage and its target
     (``'synb0'`` needs no T2w); the ``t2w_sdc`` bool additionally honors
     --anat-modality/--ignore t2w for the ``'t2w'`` target.
+
+    Public (not module-private) because
+    :mod:`qsiprep.workflows.dwi.jacobian_provenance` also needs it, to decide
+    whether a TORTOISE unit's T2Wreg stage actually reaches ``fieldwarps`` --
+    the same question this predicate answers for the reportlet gate below.
     """
     stage = unit.run.stage_with('t2wreg')
     if stage is None:
@@ -352,10 +357,10 @@ def init_dwi_preproc_wf(
         # double-correct data the scanner already corrected.
         if gradwarp_wf.plan.warp_dim is not None:
             # This field reaches resampling.py's ComposeJacobianWeights
-            # whenever Jacobian weighting is on (see init_dwi_trans_wf), so
-            # its existence at this build-time branch is exactly the fact
-            # AppliedCorrections needs to record.
-            config.record_applied(['gradwarp'])
+            # whenever Jacobian weighting is on (see init_dwi_trans_wf).
+            # ``jacobian_provenance.jacobian_provenance_for`` recomputes this
+            # same condition (``resolve_gradwarp_plan(unit).warp_dim is not
+            # None``) from ``unit`` alone for the sidecar.
             workflow.connect([
                 (gradwarp_wf, outputnode, [
                     ('outputnode.gradwarp_field', 'gradwarp_field'),
@@ -394,13 +399,13 @@ def init_dwi_preproc_wf(
     # considerably more detailed reports.
     doing_topup = unit.run.stage_with('topup') is not None
     doing_drbuddi = unit.run.stage_with('drbuddi') is not None
-    t2wreg_target = _t2wreg_target(unit, t2w_sdc)
-    if unit.is_gre or unit.is_nipreps_syn or doing_topup or t2wreg_target:
+    report_t2wreg_target = resolve_t2wreg_target(unit, t2w_sdc)
+    if unit.is_gre or unit.is_nipreps_syn or doing_topup or report_t2wreg_target:
         fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
         ds_report_sdc = pe.Node(
             DerivativesDataSink(
                 datatype='figures',
-                desc='sdcT2w' if t2wreg_target == 't2w' else 'sdc',
+                desc='sdcT2w' if report_t2wreg_target == 't2w' else 'sdc',
                 suffix='dwi',
                 source_file=source_file,
             ),

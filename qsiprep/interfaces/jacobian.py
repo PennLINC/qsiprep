@@ -123,7 +123,6 @@ from nipype import logging
 from nipype.interfaces import ants
 from nipype.utils.filemanip import fname_presuffix
 
-from .. import config
 from .tortoise import _read_okan_transformations
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -973,9 +972,10 @@ class OkanQuadraticJacobian(SimpleInterface):
     'motion' has no eddy-current component to weight, and 'cubic' is a valid,
     existing DIFFPREP mode this module does not implement a determinant for.
     Both return ``Undefined`` rather than raising, so a weighting-enabled run
-    never aborts on an otherwise-working DIFFPREP configuration -- the caller
-    is expected to record the 'cubic' gap via
-    ``qsiprep.config.record_unmodulated``.
+    never aborts on an otherwise-working DIFFPREP configuration -- the
+    'cubic' gap reaches the sidecar via
+    ``qsiprep.workflows.dwi.jacobian_provenance.jacobian_provenance_for``,
+    computed independently of this interface's execution.
     """
 
     input_spec = _OkanQuadraticJacobianInputSpec
@@ -1068,6 +1068,25 @@ class _StackJacobianWeightsInputSpec(BaseInterfaceInputSpec):
     weight_index = traits.List(
         traits.Int(), desc='per-volume index into weight_images'
     )
+    # Build-time facts about this run, computed by
+    # ``qsiprep.workflows.dwi.jacobian_provenance.jacobian_provenance_for``
+    # and set as node inputs during workflow construction -- not read from
+    # ``config.workflow`` here, because they are per-run facts (which
+    # corrections a *specific* unit's compiled plan actually Jacobian-
+    # modulated), not invocation-global ones. See that module's docstring.
+    applied_corrections = traits.List(
+        traits.Str(), usedefault=True, desc='corrections QSIPrep itself Jacobian-modulated'
+    )
+    unmodulated_corrections = traits.List(
+        traits.Str(), usedefault=True, desc='corrections that ran without Jacobian modulation'
+    )
+    unmodulated_reason = traits.Either(
+        None,
+        traits.Str(),
+        default=None,
+        usedefault=True,
+        desc='why the unmodulated corrections went unmodulated',
+    )
 
 
 class _StackJacobianWeightsOutputSpec(TraitedSpec):
@@ -1104,8 +1123,8 @@ class StackJacobianWeights(SimpleInterface):
         self._results['out_file'] = out_file
         self._results['meta_dict'] = _jacobian_sidecar(
             weight_index=self.inputs.weight_index,
-            applied=config.workflow.jacobian_applied_corrections,
-            unmodulated=config.workflow.jacobian_unmodulated_corrections,
-            reason=config.workflow.jacobian_unmodulated_reason,
+            applied=self.inputs.applied_corrections,
+            unmodulated=self.inputs.unmodulated_corrections,
+            reason=self.inputs.unmodulated_reason,
         )
         return runtime

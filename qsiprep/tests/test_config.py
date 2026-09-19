@@ -176,37 +176,10 @@ def test_path_valued_options_are_declared_in_their_section(tmp_path):
     assert undeclared == []
 
 
-def test_record_unmodulated_is_idempotent_across_runs(monkeypatch):
-    """Two DWI runs in one invocation must not duplicate the recorded corrections.
-
-    ``record_unmodulated`` is called once per DWI run (from ``init_fsl_hmc_wf``),
-    but the fact it records is invocation-level (the resolved ``--eddy-config``
-    resampling method is the same for every run), so a second call with the same
-    corrections must not append duplicates, and the first recorded reason wins.
-    """
-    monkeypatch.setattr(config.workflow, 'jacobian_unmodulated_corrections', [])
-    monkeypatch.setattr(config.workflow, 'jacobian_unmodulated_reason', None)
-
-    config.record_unmodulated(['eddy-current', 'susceptibility'], reason='first run reason')
-    config.record_unmodulated(['eddy-current', 'susceptibility'], reason='second run reason')
-
-    assert config.workflow.jacobian_unmodulated_corrections == ['eddy-current', 'susceptibility']
-    assert config.workflow.jacobian_unmodulated_reason == 'first run reason'
-
-
-def test_record_applied_is_idempotent_across_runs(monkeypatch):
-    """Counterpart to ``test_record_unmodulated_is_idempotent_across_runs``.
-
-    ``record_applied`` is called from the workflow builders that decide
-    gradwarp/SDC/eddy-current wiring (``qsiprep/workflows/dwi/base.py``,
-    ``fsl.py``, ``diffprep.py``, ``hmc_sdc.py``), once per DWI run, and those
-    facts are invocation-level, so a second run recording the same correction
-    must not duplicate it.
-    """
-    monkeypatch.setattr(config.workflow, 'jacobian_applied_corrections', [])
-
-    config.record_applied(['gradwarp', 'sdc'])
-    config.record_applied(['gradwarp', 'sdc'])
-    config.record_applied(['eddy-current'])
-
-    assert config.workflow.jacobian_applied_corrections == ['gradwarp', 'sdc', 'eddy-current']
+#: ``config.record_applied``/``config.record_unmodulated`` and the four
+#: ``jacobian_*`` config fields were removed: Jacobian provenance is now a
+#: pure per-unit computation (``qsiprep.workflows.dwi.jacobian_provenance.
+#: jacobian_provenance_for``), not invocation-global mutable state. See
+#: ``qsiprep/tests/test_jacobian_provenance.py`` for its coverage, including
+#: the two-different-units-in-one-invocation case these tests could not
+#: express.

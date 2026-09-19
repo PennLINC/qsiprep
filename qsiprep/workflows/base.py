@@ -616,11 +616,14 @@ to workflows in *QSIPrep*'s documentation]\
         naming_name = output_fname if merged_here else final_output_name
         source_file = get_source_file(list(unit.dwi_files), naming_name, suffix='_dwi')
         output_wfname = output_fname.replace('-', '_')
+        unit_t2w_sdc = t2w_available_for_sdc(
+            subject_data, selection, config.workflow.anat_modality
+        )
         dwi_preproc_wf = init_dwi_preproc_wf(
             unit=unit,
             output_prefix=naming_name,
             source_file=source_file,
-            t2w_sdc=t2w_available_for_sdc(subject_data, selection, config.workflow.anat_modality),
+            t2w_sdc=unit_t2w_sdc,
             anatomical_template=anatomical_template,
         )
         dwi_finalize_wf = init_dwi_finalize_wf(
@@ -628,6 +631,7 @@ to workflows in *QSIPrep*'s documentation]\
             name=dwi_preproc_wf.name.replace('dwi_preproc', 'dwi_finalize'),
             output_prefix=naming_name,
             source_file=source_file,
+            t2w_sdc=unit_t2w_sdc,
             write_derivatives=not (
                 merging_distortion_groups
                 and concatenation_scheme[output_fname] in merging_group_workflows

@@ -599,12 +599,6 @@ class workflow(_Config):
     """Gradient nonlinearity coefficient file or displacement field."""
     hmc_method = None
     """Which software corrects head motion: eddy, shoreline or tortoise."""
-    jacobian_applied_corrections = []
-    """Which spatial distortion corrections QSIPrep Jacobian-modulated (sidecar record)."""
-    jacobian_unmodulated_corrections = []
-    """Which spatial distortion corrections were NOT Jacobian-modulated (sidecar record)."""
-    jacobian_unmodulated_reason = None
-    """Why some correction(s) went unmodulated, e.g. an eddy --resamp=lsr config."""
     jacobian_weighting = True
     """Apply Jacobian intensity modulation for the spatial distortion corrections."""
     hmc_transform = None
@@ -706,39 +700,6 @@ class workflow(_Config):
     # unlisted Path reaches the workflow-building subprocess as the literal
     # string "PosixPath('/path')".
     _paths = ('gradient_file', 'shoreline_config')
-
-
-def record_unmodulated(corrections, reason=None):
-    """Record corrections that ran without Jacobian modulation, idempotently.
-
-    These are invocation-level facts -- every cause is a global CLI setting
-    (``--eddy-config``'s resampling method, ``--diffprep-config``'s correction
-    mode, the Okan validation outcome), so one shared list across runs is
-    correct. But the workflow builders that record them run once per DWI run,
-    so appending unconditionally would duplicate every entry N times and put
-    that duplication into every derivative sidecar.
-    """
-    for correction in corrections:
-        if correction not in workflow.jacobian_unmodulated_corrections:
-            workflow.jacobian_unmodulated_corrections.append(correction)
-    if reason is not None and workflow.jacobian_unmodulated_reason is None:
-        workflow.jacobian_unmodulated_reason = reason
-
-
-def record_applied(corrections):
-    """Record corrections QSIPrep itself Jacobian-modulated, idempotently.
-
-    Counterpart to ``record_unmodulated``. Called from the same kind of site --
-    the workflow builders that decide, once per DWI run, whether the gradwarp
-    field, an external SDC warp, or the TORTOISE eddy-current Jacobian will
-    actually reach ``ComposeJacobianWeights`` -- rather than from the interface
-    itself, since interface execution can happen in a different worker process
-    under a parallel nipype plugin and would not reliably update this
-    process-level list before ``StackJacobianWeights`` reads it back.
-    """
-    for correction in corrections:
-        if correction not in workflow.jacobian_applied_corrections:
-            workflow.jacobian_applied_corrections.append(correction)
 
 
 class loggers:

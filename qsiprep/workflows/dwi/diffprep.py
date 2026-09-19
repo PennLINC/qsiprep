@@ -70,7 +70,7 @@ def _as_transform_list(value):
     return [value]
 
 
-def _load_diffprep_config(config_path):
+def load_diffprep_config(config_path):
     """Load a --diffprep-config JSON, or return defaults."""
     if config_path is None:
         config_path = as_path(files('qsiprep.data') / 'diffprep_params.json')
@@ -330,7 +330,7 @@ def init_diffprep_hmc_wf(
     epi_mode = 'T2Wreg' if use_t2wreg else 'off'
 
     # Load any user-supplied DIFFPREP config (or our defaults)
-    diffprep_cfg = _load_diffprep_config(config.workflow.diffprep_config)
+    diffprep_cfg = load_diffprep_config(config.workflow.diffprep_config)
     # "use_cuda" counts as user intent only when the user's own config file sets
     # it -- the shipped default must not "conflict" with --gpu on every run.
     _legacy_use_cuda = diffprep_cfg.get('use_cuda') if config.workflow.diffprep_config else None
@@ -541,24 +541,15 @@ def init_diffprep_hmc_wf(
     # correction_mode: passing the configured value would attempt quadratic
     # recovery from motion-only transforms on every --sloppy run. 'cubic' is
     # a valid, existing DIFFPREP mode that OkanQuadraticJacobian does not
-    # implement a determinant for; record that gap once here (not inside the
-    # interface, which nipype may re-instantiate per node execution) so it
-    # reaches the derivatives sidecar exactly once per DWI run.
+    # implement a determinant for. Whether this run's eddy-current component
+    # was applied, unmodulated (cubic), or simply did not occur (motion) is
+    # derived from ``effective_correction_mode`` by
+    # ``jacobian_provenance.jacobian_provenance_for`` for the sidecar, rather
+    # than recorded here.
     ec_jacobian = pe.Node(
         OkanQuadraticJacobian(correction_mode=effective_correction_mode),
         name='ec_jacobian',
     )
-    if effective_correction_mode == 'cubic':
-        config.record_unmodulated(
-            ['eddy-current'],
-            reason="DIFFPREP ran with correction_mode='cubic', whose "
-            'eddy-current polynomial (cubic Okan terms) has no implemented '
-            'Jacobian determinant.',
-        )
-    elif effective_correction_mode == 'quadratic':
-        # 'motion' has no eddy-current component at all -- neither applied nor
-        # unmodulated, it simply did not occur (see the module docstring).
-        config.record_applied(['eddy-current'])
 
     workflow.connect([
         (corrected_node, split_outputs, [
@@ -680,8 +671,8 @@ def init_diffprep_hmc_wf(
         #
         # DRBUDDI's warp is carried as to_dwi_ref_warps and applied downstream
         # of gradwarp/HMC, not baked into DIFFPREP's own resampling, so it
-        # reaches ComposeJacobianWeights externally.
-        config.record_applied(['sdc'])
+        # reaches ComposeJacobianWeights externally (recorded by
+        # jacobian_provenance.jacobian_provenance_for, not here).
         drbuddi_wf = init_drbuddi_wf(
             unit=unit,
             t2w_sdc=t2w_sdc,
@@ -745,8 +736,8 @@ def init_diffprep_hmc_wf(
         outputnode.inputs.sdc_method = 'T2Wreg (SynB0)' if synb0_target else 'T2Wreg'
         # The EPI stage's field is carried as a warp (to_dwi_ref_warps) rather
         # than baked in -- see the module comment above -- so it reaches
-        # ComposeJacobianWeights externally, like the DRBUDDI branch.
-        config.record_applied(['sdc'])
+        # ComposeJacobianWeights externally, like the DRBUDDI branch
+        # (recorded by jacobian_provenance.jacobian_provenance_for, not here).
         # b0_ref_for_coreg is already gradwarp- and SDC-corrected on this branch
         # (see apply_sdc_to_b0 above), so it needs no further correction here.
         workflow.connect([
@@ -767,8 +758,8 @@ def init_diffprep_hmc_wf(
     #    decoupled from HMC.
     if unit.is_gre or unit.is_nipreps_syn:
         # This warp is applied downstream (to_dwi_ref_warps), decoupled from
-        # HMC, so it reaches ComposeJacobianWeights externally.
-        config.record_applied(['sdc'])
+        # HMC, so it reaches ComposeJacobianWeights externally (recorded by
+        # jacobian_provenance.jacobian_provenance_for, not here).
         b0_sdc_wf = init_sdc_wf(unit)
         b0_sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
 

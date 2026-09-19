@@ -826,18 +826,23 @@ def test_stack_jacobian_weights_undefined_input_stays_undefined(tmp_path):
     assert not isdefined(result.outputs.meta_dict)
 
 
-def test_stack_jacobian_weights_meta_dict_index_matches_shape(monkeypatch, tmp_path):
-    """The sidecar's index travels with the stacked file, unmodified."""
-    from qsiprep import config
+def test_stack_jacobian_weights_meta_dict_index_matches_shape(tmp_path):
+    """The sidecar's index travels with the stacked file, unmodified.
 
-    monkeypatch.setattr(config.workflow, 'jacobian_applied_corrections', ['gradwarp', 'sdc'])
-    monkeypatch.setattr(config.workflow, 'jacobian_unmodulated_corrections', [])
-    monkeypatch.setattr(config.workflow, 'jacobian_unmodulated_reason', None)
-
+    ``applied_corrections``/``unmodulated_corrections``/``unmodulated_reason``
+    are build-time inputs set by the caller (see
+    ``qsiprep.workflows.dwi.jacobian_provenance.jacobian_provenance_for``),
+    not read from ``config.workflow`` -- so this test sets them directly on
+    the interface rather than monkeypatching global config.
+    """
     first = _write_map(tmp_path / 'w0.nii.gz', 1.0)
     second = _write_map(tmp_path / 'w1.nii.gz', 2.0)
     result = StackJacobianWeights(
-        weight_images=[first, second], weight_index=[0, 0, 1, 0]
+        weight_images=[first, second],
+        weight_index=[0, 0, 1, 0],
+        applied_corrections=['gradwarp', 'sdc'],
+        unmodulated_corrections=[],
+        unmodulated_reason=None,
     ).run(cwd=str(tmp_path))
 
     out = nb.load(result.outputs.out_file)

@@ -89,6 +89,7 @@ from qsiplan.models import CorrectionMethod
 from qsiprep import config
 from qsiprep.tests.preproc_factory import make_preproc_unit
 from qsiprep.tests.utils import get_test_data_path
+from qsiprep.workflows.dwi.jacobian_provenance import jacobian_provenance_for
 
 SRC = '/data/sub-01_dwi.nii.gz'
 
@@ -153,24 +154,12 @@ def _reset_config():
     saved_sloppy = config.execution.sloppy
     saved_layout = config.execution.layout
     saved_omp_nthreads = config.nipype.omp_nthreads
-    # jacobian_applied_corrections/jacobian_unmodulated_corrections are
-    # mutable lists appended to in place by config.record_applied /
-    # record_unmodulated during workflow construction (see base.py, fsl.py,
-    # diffprep.py, hmc_sdc.py). Saving a reference to the list and restoring
-    # it below would restore the SAME (already-mutated) object, so these are
-    # hard-reset to fresh empty state on both sides instead of save/restore.
-    config.workflow.jacobian_applied_corrections = []
-    config.workflow.jacobian_unmodulated_corrections = []
-    config.workflow.jacobian_unmodulated_reason = None
     yield
     for name, value in saved_workflow.items():
         setattr(config.workflow, name, value)
     config.execution.sloppy = saved_sloppy
     config.execution.layout = saved_layout
     config.nipype.omp_nthreads = saved_omp_nthreads
-    config.workflow.jacobian_applied_corrections = []
-    config.workflow.jacobian_unmodulated_corrections = []
-    config.workflow.jacobian_unmodulated_reason = None
 
 
 def _cfg(hmc_method, sdc_method, sloppy):
@@ -261,9 +250,9 @@ def test_dsdti_synfmap_writes_jacobian(tmp_path):
     has_real, source = _has_real_fieldwarps(wf)
     assert has_real, f'expected a real SDC warp source, got {source!r}'
     assert _fixture_lists_jacobian('dsdti_synfmap') is True
-    # I1: config.record_applied('sdc') is called by init_fsl_hmc_wf's own
-    # GRE/SyN branch, not monkeypatched -- this is the real population.
-    assert config.workflow.jacobian_applied_corrections == ['sdc']
+    # jacobian_provenance_for mirrors init_fsl_hmc_wf's own GRE/SyN branch
+    # (unit.is_gre or unit.is_nipreps_syn) from this same, real unit.
+    assert jacobian_provenance_for(unit, t2w_sdc=False) == (['sdc'], [], None)
 
 
 def test_forrest_gump_writes_jacobian(monkeypatch):
@@ -287,7 +276,7 @@ def test_forrest_gump_writes_jacobian(monkeypatch):
     assert has_real, f'expected a real SDC warp source, got {source!r}'
     assert source == 'sdc_wf'
     assert _fixture_lists_jacobian('forrest_gump') is True
-    assert config.workflow.jacobian_applied_corrections == ['sdc']
+    assert jacobian_provenance_for(unit, t2w_sdc=False) == (['sdc'], [], None)
 
 
 def test_maternal_brain_project_writes_jacobian(monkeypatch):
@@ -325,9 +314,9 @@ def test_maternal_brain_project_writes_jacobian(monkeypatch):
     assert has_real, f'expected a real SDC warp source, got {source!r}'
     assert source == 'sdc_wf'
     assert _fixture_lists_jacobian('maternal_brain_project') is True
-    # I1: the SHORELine backend's own branch (hmc_sdc.py) records this too --
-    # "no TOPUP carve-out" for this backend, see its has_gradwarp comment.
-    assert config.workflow.jacobian_applied_corrections == ['sdc']
+    # jacobian_provenance_for's shoreline branch has no TOPUP carve-out either
+    # (see its docstring) -- any correction method reaches fieldwarps.
+    assert jacobian_provenance_for(unit, t2w_sdc=False) == (['sdc'], [], None)
 
 
 def test_shoreline_no_fieldmap_has_no_real_fieldwarps(tmp_path):
@@ -353,9 +342,8 @@ def test_shoreline_no_fieldmap_has_no_real_fieldwarps(tmp_path):
     has_real, source = _has_real_fieldwarps(wf)
     assert not has_real
     assert source == 'sdc_bypass_wf'
-    # No fieldmap at all on the SHORELine backend: nothing for record_applied
-    # to record.
-    assert config.workflow.jacobian_applied_corrections == []
+    # No fieldmap at all on the SHORELine backend: nothing to apply.
+    assert jacobian_provenance_for(unit, t2w_sdc=False) == ([], [], None)
 
 
 def test_drbuddi_rpe_writes_jacobian(tmp_path):
@@ -369,7 +357,7 @@ def test_drbuddi_rpe_writes_jacobian(tmp_path):
     has_real, source = _has_real_fieldwarps(wf)
     assert has_real, f'expected a real DRBUDDI warp source, got {source!r}'
     assert _fixture_lists_jacobian('drbuddi_rpe') is True
-    assert config.workflow.jacobian_applied_corrections == ['sdc']
+    assert jacobian_provenance_for(unit, t2w_sdc=False) == (['sdc'], [], None)
 
 
 def test_diffprep_writes_no_jacobian(tmp_path):
@@ -394,8 +382,7 @@ def test_diffprep_writes_no_jacobian(tmp_path):
     assert _fixture_lists_jacobian('diffprep') is False
     # 'motion' has no eddy-current component at all -- it does not occur, so
     # it belongs in neither AppliedCorrections nor UnmodulatedCorrections.
-    assert config.workflow.jacobian_applied_corrections == []
-    assert config.workflow.jacobian_unmodulated_corrections == []
+    assert jacobian_provenance_for(unit, t2w_sdc=False) == ([], [], None)
 
 
 def test_diffprep_drbuddi_writes_jacobian(tmp_path):
@@ -418,7 +405,7 @@ def test_diffprep_drbuddi_writes_jacobian(tmp_path):
     # --sloppy still downgrades to correction_mode='motion', so only 'sdc' is
     # applied here; see test_diffprep_quadratic_records_eddy_current_applied
     # for the non-sloppy 'eddy-current' case.
-    assert config.workflow.jacobian_applied_corrections == ['sdc']
+    assert jacobian_provenance_for(unit, t2w_sdc=False) == (['sdc'], [], None)
 
 
 def test_diffprep_quadratic_records_eddy_current_applied(tmp_path):
@@ -436,10 +423,10 @@ def test_diffprep_quadratic_records_eddy_current_applied(tmp_path):
     wf = init_diffprep_hmc_wf(unit, source_file=SRC, t2w_sdc=False)
 
     assert wf.get_node('ec_jacobian').inputs.correction_mode == 'quadratic'
-    # ec_jacobian is built (and recorded) before the SDC branch dispatch below
-    # it in diffprep.py, hence this order rather than 'sdc' first.
-    assert config.workflow.jacobian_applied_corrections == ['eddy-current', 'sdc']
-    assert config.workflow.jacobian_unmodulated_corrections == []
+    # jacobian_provenance_for orders eddy-current before sdc, matching the
+    # order diffprep.py itself used to record them in (ec_jacobian is built
+    # before the SDC branch dispatch).
+    assert jacobian_provenance_for(unit, t2w_sdc=False) == (['eddy-current', 'sdc'], [], None)
 
 
 def test_dsdti_topup_only_branch_has_no_jacobian(tmp_path):
@@ -462,8 +449,8 @@ def test_dsdti_topup_only_branch_has_no_jacobian(tmp_path):
     assert source == 'gather_inputs'
     assert _fixture_lists_jacobian('dsdti_topup') is False
     # TOPUP is baked into eddy's own resampling on this path -- QSIPrep itself
-    # applies nothing external, so record_applied must not fire for 'sdc'.
-    assert config.workflow.jacobian_applied_corrections == []
+    # applies nothing external, so 'sdc' must not appear as applied.
+    assert jacobian_provenance_for(unit, t2w_sdc=False) == ([], [], None)
 
 
 #: A full ``--eddy-config`` override with ``method='lsr'`` instead of the
@@ -498,10 +485,10 @@ def test_lsr_records_susceptibility_only_when_topup_is_the_sdc_method(tmp_path):
     weight from it), but 'susceptibility' must be recorded as unmodulated
     only when TOPUP is actually this run's susceptibility source.
     ``init_fsl_hmc_wf`` used to record both unconditionally at eddy-config-read
-    time, before ``run_topup`` was even known -- wrong for DRBUDDI/GRE/SyN,
+    time (via ``config.record_applied``/``config.record_unmodulated``, since
+    removed), before ``run_topup`` was even known -- wrong for DRBUDDI/GRE/SyN,
     whose warp is applied downstream of eddy and *is* Jacobian-modulated by
-    QSIPrep (``config.record_applied(['sdc'])``) regardless of eddy's own
-    resampling method.
+    QSIPrep regardless of eddy's own resampling method.
     """
     eddy_cfg = tmp_path / 'eddy_lsr.json'
     eddy_cfg.write_text(json.dumps(_LSR_EDDY_ARGS))
@@ -512,12 +499,10 @@ def test_lsr_records_susceptibility_only_when_topup_is_the_sdc_method(tmp_path):
     unit = _rpe_unit(tmp_path, CorrectionMethod.PEPOLAR)
     init_fsl_hmc_wf(unit, source_file=SRC, t2w_sdc=False)
 
-    assert config.workflow.jacobian_unmodulated_corrections == ['eddy-current', 'susceptibility']
-    assert config.workflow.jacobian_applied_corrections == []
-
-    config.workflow.jacobian_unmodulated_corrections = []
-    config.workflow.jacobian_applied_corrections = []
-    config.workflow.jacobian_unmodulated_reason = None
+    applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)
+    assert unmodulated == ['eddy-current', 'susceptibility']
+    assert applied == []
+    assert reason == 'FSL eddy ran with --resamp=lsr rather than jac'
 
     _cfg(hmc_method='eddy', sdc_method='drbuddi', sloppy=True)
     config.workflow.eddy_config = str(eddy_cfg)
@@ -526,5 +511,7 @@ def test_lsr_records_susceptibility_only_when_topup_is_the_sdc_method(tmp_path):
 
     # DRBUDDI's warp is applied downstream of eddy and QSIPrep modulates it
     # itself -- 'lsr' only ever affects eddy's own eddy-current component.
-    assert config.workflow.jacobian_unmodulated_corrections == ['eddy-current']
-    assert config.workflow.jacobian_applied_corrections == ['sdc']
+    applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)
+    assert unmodulated == ['eddy-current']
+    assert applied == ['sdc']
+    assert reason == 'FSL eddy ran with --resamp=lsr rather than jac'

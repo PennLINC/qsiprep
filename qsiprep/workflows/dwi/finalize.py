@@ -31,6 +31,7 @@ from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SeriesQC
 from .derivatives import init_dwi_derivatives_wf
 from .gradwarp import resolve_gradwarp_plan
+from .jacobian_provenance import jacobian_provenance_for
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
 from .resampling import init_dwi_trans_wf
 
@@ -45,6 +46,7 @@ def init_dwi_finalize_wf(
     name,
     source_file,
     output_prefix,
+    t2w_sdc=False,
     write_derivatives=True,
     make_intramodal_template=False,
 ):
@@ -95,6 +97,11 @@ def init_dwi_finalize_wf(
             Is this the final output? If so, write the final derivatives. If these
             resampled outputs will be combined with other distortion groups at the end,
             then return the resampled, non-concatenated images
+        t2w_sdc : bool
+            Whether a T2w is available for TORTOISE's fieldmap-less T2Wreg stage
+            (honoring --anat-modality/--ignore t2w). Passed straight through to
+            ``jacobian_provenance_for`` for the Jacobian sidecar; the same value
+            ``init_dwi_preproc_wf`` receives for this unit.
 
     **Inputs**
 
@@ -418,8 +425,16 @@ def init_dwi_finalize_wf(
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
 
+    (
+        jacobian_applied_corrections,
+        jacobian_unmodulated_corrections,
+        jacobian_unmodulated_reason,
+    ) = jacobian_provenance_for(unit, t2w_sdc)
     dwi_derivatives_wf = init_dwi_derivatives_wf(
         source_file=source_file,
+        jacobian_applied_corrections=jacobian_applied_corrections,
+        jacobian_unmodulated_corrections=jacobian_unmodulated_corrections,
+        jacobian_unmodulated_reason=jacobian_unmodulated_reason,
     )
 
     # Combine all the QC measures for a series QC
