@@ -78,6 +78,7 @@ split/recombine has no expected-output manifest yet. This module still builds
 its workflow and records the expected answer for when that manifest exists.
 """
 
+import json
 from pathlib import Path
 
 import nibabel as nb
@@ -463,3 +464,67 @@ def test_dsdti_topup_only_branch_has_no_jacobian(tmp_path):
     # TOPUP is baked into eddy's own resampling on this path -- QSIPrep itself
     # applies nothing external, so record_applied must not fire for 'sdc'.
     assert config.workflow.jacobian_applied_corrections == []
+
+
+#: A full ``--eddy-config`` override with ``method='lsr'`` instead of the
+#: shipped default ``'jac'`` -- see ``qsiprep/tests/data/eddy_params.json``'s
+#: real default (mirrored here) for the keys ``ExtendedEddy`` otherwise fills
+#: in from trait defaults; only ``method`` matters for this test.
+_LSR_EDDY_ARGS = {
+    'flm': 'quadratic',
+    'slm': 'linear',
+    'fep': False,
+    'interp': 'spline',
+    'nvoxhp': 1000,
+    'fudge_factor': 10,
+    'dont_sep_offs_move': False,
+    'dont_peas': False,
+    'niter': 5,
+    'method': 'lsr',
+    'repol': True,
+    'num_threads': 1,
+    'is_shelled': True,
+    'use_cuda': False,
+    'cnr_maps': True,
+    'residuals': False,
+    'output_type': 'NIFTI_GZ',
+    'args': '',
+}
+
+
+def test_lsr_records_susceptibility_only_when_topup_is_the_sdc_method(tmp_path):
+    """F2 regression: ``--resamp=lsr`` always leaves 'eddy-current'
+    unmodulated (eddy has baked its own resampling in and exports nothing to
+    weight from it), but 'susceptibility' must be recorded as unmodulated
+    only when TOPUP is actually this run's susceptibility source.
+    ``init_fsl_hmc_wf`` used to record both unconditionally at eddy-config-read
+    time, before ``run_topup`` was even known -- wrong for DRBUDDI/GRE/SyN,
+    whose warp is applied downstream of eddy and *is* Jacobian-modulated by
+    QSIPrep (``config.record_applied(['sdc'])``) regardless of eddy's own
+    resampling method.
+    """
+    eddy_cfg = tmp_path / 'eddy_lsr.json'
+    eddy_cfg.write_text(json.dumps(_LSR_EDDY_ARGS))
+    from qsiprep.workflows.dwi.fsl import init_fsl_hmc_wf
+
+    _cfg(hmc_method='eddy', sdc_method='topup', sloppy=True)
+    config.workflow.eddy_config = str(eddy_cfg)
+    unit = _rpe_unit(tmp_path, CorrectionMethod.PEPOLAR)
+    init_fsl_hmc_wf(unit, source_file=SRC, t2w_sdc=False)
+
+    assert config.workflow.jacobian_unmodulated_corrections == ['eddy-current', 'susceptibility']
+    assert config.workflow.jacobian_applied_corrections == []
+
+    config.workflow.jacobian_unmodulated_corrections = []
+    config.workflow.jacobian_applied_corrections = []
+    config.workflow.jacobian_unmodulated_reason = None
+
+    _cfg(hmc_method='eddy', sdc_method='drbuddi', sloppy=True)
+    config.workflow.eddy_config = str(eddy_cfg)
+    unit = _rpe_unit(tmp_path, CorrectionMethod.PEPOLAR)
+    init_fsl_hmc_wf(unit, source_file=SRC, t2w_sdc=False)
+
+    # DRBUDDI's warp is applied downstream of eddy and QSIPrep modulates it
+    # itself -- 'lsr' only ever affects eddy's own eddy-current component.
+    assert config.workflow.jacobian_unmodulated_corrections == ['eddy-current']
+    assert config.workflow.jacobian_applied_corrections == ['sdc']

@@ -189,17 +189,30 @@ def init_fsl_hmc_wf(
 
     from ...utils.eddy_config import eddy_modulates_distortion
 
-    if not eddy_modulates_distortion(eddy_args):
+    # Whether eddy is Jacobian-modulating its own resampling at all. This is
+    # known now, but whether TOPUP is the run's susceptibility source is not
+    # decided until `run_topup` below (~line 341) -- only TOPUP's field is
+    # baked into eddy's resampling and thus left unmodulated by this setting;
+    # DRBUDDI/GRE/SyN warps are applied downstream of eddy and QSIPrep
+    # Jacobian-modulates those itself regardless of eddy's resampling method
+    # (see the `config.record_applied(['sdc'])` call sites below). So only
+    # 'eddy-current' -- eddy's own component, never modulated under a
+    # non-'jac' method regardless of the SDC method -- is recorded here;
+    # 'susceptibility' is recorded further down, gated on `run_topup`.
+    eddy_will_modulate = eddy_modulates_distortion(eddy_args)
+    if not eddy_will_modulate:
         config.loggers.workflow.warning(
-            'eddy is configured with method=%s, not "jac", so eddy-current '
-            'and susceptibility distortion corrections will NOT be '
+            'eddy is configured with method=%s, not "jac", so its own '
+            'eddy-current distortion correction will NOT be '
             'Jacobian-modulated. QSIPrep cannot retrofit this: eddy has '
             'already baked its resampling in and exports no field for the '
-            'eddy-current component.',
+            'eddy-current component. Whether the susceptibility component is '
+            "also affected depends on whether TOPUP is this run's SDC "
+            'method, resolved separately.',
             eddy_args.get('method'),
         )
         config.record_unmodulated(
-            ['eddy-current', 'susceptibility'],
+            ['eddy-current'],
             reason=f'FSL eddy ran with --resamp={eddy_args.get("method")} rather than jac',
         )
 
@@ -340,6 +353,18 @@ def init_fsl_hmc_wf(
     # TOPUP+eddy stage pools every blip group.
     run_topup = unit.run.stage_with('topup') is not None
     run_drbuddi = unit.run.stage_with('drbuddi') is not None
+    # Only TOPUP's susceptibility field is baked into eddy's own resampling
+    # (see the `eddy_will_modulate` block above), so 'susceptibility' is only
+    # unmodulated when TOPUP is actually this run's susceptibility source.
+    # DRBUDDI/GRE/SyN apply their warp downstream of eddy regardless of
+    # `run_topup`, and QSIPrep Jacobian-modulates that warp itself
+    # (`config.record_applied(['sdc'])` below), so recording 'susceptibility'
+    # as unmodulated in that case would mislabel the sidecar.
+    if run_topup and not eddy_will_modulate:
+        config.record_unmodulated(
+            ['susceptibility'],
+            reason=f'FSL eddy ran with --resamp={eddy_args.get("method")} rather than jac',
+        )
     if fieldmap_type == 'synb0' and not run_topup:
         # The plan gave this unit no TOPUP stage (e.g. --sdc-method drbuddi):
         # nothing on the eddy path consumes the synthetic b=0, so the series
