@@ -192,3 +192,21 @@ def test_record_unmodulated_is_idempotent_across_runs(monkeypatch):
 
     assert config.workflow.jacobian_unmodulated_corrections == ['eddy-current', 'susceptibility']
     assert config.workflow.jacobian_unmodulated_reason == 'first run reason'
+
+
+def test_record_applied_is_idempotent_across_runs(monkeypatch):
+    """Counterpart to ``test_record_unmodulated_is_idempotent_across_runs``.
+
+    ``record_applied`` is called from the workflow builders that decide
+    gradwarp/SDC/eddy-current wiring (``qsiprep/workflows/dwi/base.py``,
+    ``fsl.py``, ``diffprep.py``, ``hmc_sdc.py``), once per DWI run, and those
+    facts are invocation-level, so a second run recording the same correction
+    must not duplicate it.
+    """
+    monkeypatch.setattr(config.workflow, 'jacobian_applied_corrections', [])
+
+    config.record_applied(['gradwarp', 'sdc'])
+    config.record_applied(['gradwarp', 'sdc'])
+    config.record_applied(['eddy-current'])
+
+    assert config.workflow.jacobian_applied_corrections == ['gradwarp', 'sdc', 'eddy-current']

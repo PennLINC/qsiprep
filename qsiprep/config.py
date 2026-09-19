@@ -725,6 +725,22 @@ def record_unmodulated(corrections, reason=None):
         workflow.jacobian_unmodulated_reason = reason
 
 
+def record_applied(corrections):
+    """Record corrections QSIPrep itself Jacobian-modulated, idempotently.
+
+    Counterpart to ``record_unmodulated``. Called from the same kind of site --
+    the workflow builders that decide, once per DWI run, whether the gradwarp
+    field, an external SDC warp, or the TORTOISE eddy-current Jacobian will
+    actually reach ``ComposeJacobianWeights`` -- rather than from the interface
+    itself, since interface execution can happen in a different worker process
+    under a parallel nipype plugin and would not reliably update this
+    process-level list before ``StackJacobianWeights`` reads it back.
+    """
+    for correction in corrections:
+        if correction not in workflow.jacobian_applied_corrections:
+            workflow.jacobian_applied_corrections.append(correction)
+
+
 class loggers:
     """Keep loggers easily accessible (see :py:func:`init`)."""
 

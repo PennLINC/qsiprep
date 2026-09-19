@@ -152,12 +152,24 @@ def _reset_config():
     saved_sloppy = config.execution.sloppy
     saved_layout = config.execution.layout
     saved_omp_nthreads = config.nipype.omp_nthreads
+    # jacobian_applied_corrections/jacobian_unmodulated_corrections are
+    # mutable lists appended to in place by config.record_applied /
+    # record_unmodulated during workflow construction (see base.py, fsl.py,
+    # diffprep.py, hmc_sdc.py). Saving a reference to the list and restoring
+    # it below would restore the SAME (already-mutated) object, so these are
+    # hard-reset to fresh empty state on both sides instead of save/restore.
+    config.workflow.jacobian_applied_corrections = []
+    config.workflow.jacobian_unmodulated_corrections = []
+    config.workflow.jacobian_unmodulated_reason = None
     yield
     for name, value in saved_workflow.items():
         setattr(config.workflow, name, value)
     config.execution.sloppy = saved_sloppy
     config.execution.layout = saved_layout
     config.nipype.omp_nthreads = saved_omp_nthreads
+    config.workflow.jacobian_applied_corrections = []
+    config.workflow.jacobian_unmodulated_corrections = []
+    config.workflow.jacobian_unmodulated_reason = None
 
 
 def _cfg(hmc_method, sdc_method, sloppy):
@@ -248,6 +260,9 @@ def test_dsdti_synfmap_writes_jacobian(tmp_path):
     has_real, source = _has_real_fieldwarps(wf)
     assert has_real, f'expected a real SDC warp source, got {source!r}'
     assert _fixture_lists_jacobian('dsdti_synfmap') is True
+    # I1: config.record_applied('sdc') is called by init_fsl_hmc_wf's own
+    # GRE/SyN branch, not monkeypatched -- this is the real population.
+    assert config.workflow.jacobian_applied_corrections == ['sdc']
 
 
 def test_forrest_gump_writes_jacobian(monkeypatch):
@@ -271,6 +286,7 @@ def test_forrest_gump_writes_jacobian(monkeypatch):
     assert has_real, f'expected a real SDC warp source, got {source!r}'
     assert source == 'sdc_wf'
     assert _fixture_lists_jacobian('forrest_gump') is True
+    assert config.workflow.jacobian_applied_corrections == ['sdc']
 
 
 def test_maternal_brain_project_writes_jacobian(monkeypatch):
@@ -308,6 +324,9 @@ def test_maternal_brain_project_writes_jacobian(monkeypatch):
     assert has_real, f'expected a real SDC warp source, got {source!r}'
     assert source == 'sdc_wf'
     assert _fixture_lists_jacobian('maternal_brain_project') is True
+    # I1: the SHORELine backend's own branch (hmc_sdc.py) records this too --
+    # "no TOPUP carve-out" for this backend, see its has_gradwarp comment.
+    assert config.workflow.jacobian_applied_corrections == ['sdc']
 
 
 def test_shoreline_no_fieldmap_has_no_real_fieldwarps(tmp_path):
@@ -333,6 +352,9 @@ def test_shoreline_no_fieldmap_has_no_real_fieldwarps(tmp_path):
     has_real, source = _has_real_fieldwarps(wf)
     assert not has_real
     assert source == 'sdc_bypass_wf'
+    # No fieldmap at all on the SHORELine backend: nothing for record_applied
+    # to record.
+    assert config.workflow.jacobian_applied_corrections == []
 
 
 def test_drbuddi_rpe_writes_jacobian(tmp_path):
@@ -346,6 +368,7 @@ def test_drbuddi_rpe_writes_jacobian(tmp_path):
     has_real, source = _has_real_fieldwarps(wf)
     assert has_real, f'expected a real DRBUDDI warp source, got {source!r}'
     assert _fixture_lists_jacobian('drbuddi_rpe') is True
+    assert config.workflow.jacobian_applied_corrections == ['sdc']
 
 
 def test_diffprep_writes_no_jacobian(tmp_path):
@@ -368,6 +391,10 @@ def test_diffprep_writes_no_jacobian(tmp_path):
     assert not has_real, f'expected no real SDC warp source, got {source!r}'
     assert ec_mode == 'motion'
     assert _fixture_lists_jacobian('diffprep') is False
+    # 'motion' has no eddy-current component at all -- it does not occur, so
+    # it belongs in neither AppliedCorrections nor UnmodulatedCorrections.
+    assert config.workflow.jacobian_applied_corrections == []
+    assert config.workflow.jacobian_unmodulated_corrections == []
 
 
 def test_diffprep_drbuddi_writes_jacobian(tmp_path):
@@ -387,6 +414,31 @@ def test_diffprep_drbuddi_writes_jacobian(tmp_path):
     # No _outputs.txt ships for this marker yet (check_outputs=False in
     # test_cli.py's test_diffprep_drbuddi): nothing to compare against.
     assert _fixture_lists_jacobian('diffprep_drbuddi') is None
+    # --sloppy still downgrades to correction_mode='motion', so only 'sdc' is
+    # applied here; see test_diffprep_quadratic_records_eddy_current_applied
+    # for the non-sloppy 'eddy-current' case.
+    assert config.workflow.jacobian_applied_corrections == ['sdc']
+
+
+def test_diffprep_quadratic_records_eddy_current_applied(tmp_path):
+    """Non-``--sloppy`` TORTOISE DRBUDDI: both 'sdc' and 'eddy-current' apply.
+
+    ``diffprep_cfg``'s default ``correction_mode`` is ``'quadratic'``
+    (``qsiprep/workflows/dwi/diffprep.py:85``), only downgraded to
+    ``'motion'`` by ``--sloppy`` -- see ``test_diffprep_drbuddi_writes_
+    jacobian`` for that case.
+    """
+    _cfg(hmc_method='tortoise', sdc_method='drbuddi', sloppy=False)
+    from qsiprep.workflows.dwi.diffprep import init_diffprep_hmc_wf
+
+    unit = _rpe_unit(tmp_path, CorrectionMethod.PEPOLAR)
+    wf = init_diffprep_hmc_wf(unit, source_file=SRC, t2w_sdc=False)
+
+    assert wf.get_node('ec_jacobian').inputs.correction_mode == 'quadratic'
+    # ec_jacobian is built (and recorded) before the SDC branch dispatch below
+    # it in diffprep.py, hence this order rather than 'sdc' first.
+    assert config.workflow.jacobian_applied_corrections == ['eddy-current', 'sdc']
+    assert config.workflow.jacobian_unmodulated_corrections == []
 
 
 def test_dsdti_topup_only_branch_has_no_jacobian(tmp_path):
@@ -408,3 +460,6 @@ def test_dsdti_topup_only_branch_has_no_jacobian(tmp_path):
     assert not has_real
     assert source == 'gather_inputs'
     assert _fixture_lists_jacobian('dsdti_topup') is False
+    # TOPUP is baked into eddy's own resampling on this path -- QSIPrep itself
+    # applies nothing external, so record_applied must not fire for 'sdc'.
+    assert config.workflow.jacobian_applied_corrections == []

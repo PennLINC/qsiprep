@@ -10,6 +10,7 @@ import pytest
 from qsiplan.models import CorrectionMethod
 
 from qsiprep import config
+from qsiprep.tests.gradient_fixtures import write_siemens_grad
 from qsiprep.tests.preproc_factory import make_preproc_unit
 
 SRC = '/data/sub-01_dwi.nii.gz'
@@ -328,6 +329,49 @@ def test_dwi_preproc_wf_drbuddi_without_t2w_builds(tmp_path, monkeypatch):
         anatomical_template='MNI152NLin2009cAsym',
     )
     assert wf.get_node('extended_pepolar_report_wf') is not None
+
+
+def test_dwi_preproc_wf_records_gradwarp_applied(tmp_path, monkeypatch):
+    """I1: ``config.record_applied(['gradwarp'])`` fires for real, unmocked.
+
+    ``init_dwi_preproc_wf``'s gradwarp block (``qsiprep/workflows/dwi/
+    base.py``, the ``if gradwarp_wf.plan.warp_dim is not None:`` branch)
+    is the single, backend-independent site where QSIPrep decides a gradwarp
+    field will reach ``ComposeJacobianWeights``. No fieldmap is configured
+    here, so 'sdc' must not appear.
+    """
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    saved_applied = config.workflow.jacobian_applied_corrections
+    saved_unmodulated = config.workflow.jacobian_unmodulated_corrections
+    config.workflow.jacobian_applied_corrections = []
+    config.workflow.jacobian_unmodulated_corrections = []
+    try:
+        cfg = _cfg(hmc_method='eddy', sdc_method='topup', layout=_StubLayout())
+        cfg.workflow.anat_modality = 'none'
+        cfg.workflow.b0_to_anat_transform = 'Rigid'
+        cfg.workflow.hmc_transform = 'Affine'
+        cfg.workflow.diffprep_config = None
+        cfg.workflow.tortoise_gpu_cpu_ratio = None
+        cfg.workflow.gpu = None
+        cfg.workflow.impute_slice_threshold = 0
+        cfg.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
+        cfg.workflow.jacobian_weighting = True
+        from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
+
+        src = _write_dwi(tmp_path / 'sub-01_dwi.nii.gz')
+        unit = make_preproc_unit([src], metadata={'Manufacturer': 'SIEMENS'})
+        init_dwi_preproc_wf(
+            unit,
+            t2w_sdc=False,
+            output_prefix='sub-01',
+            source_file=src,
+            anatomical_template='MNI152NLin2009cAsym',
+        )
+        assert config.workflow.jacobian_applied_corrections == ['gradwarp']
+    finally:
+        config.workflow.gradient_file = None
+        config.workflow.jacobian_applied_corrections = saved_applied
+        config.workflow.jacobian_unmodulated_corrections = saved_unmodulated
 
 
 def test_drbuddi_wf_feeds_sidecar_map_and_discriminator(tmp_path):

@@ -351,6 +351,11 @@ def init_dwi_preproc_wf(
         # A DIS3D unit gets no spatial correction -- applying one would
         # double-correct data the scanner already corrected.
         if gradwarp_wf.plan.warp_dim is not None:
+            # This field reaches resampling.py's ComposeJacobianWeights
+            # whenever Jacobian weighting is on (see init_dwi_trans_wf), so
+            # its existence at this build-time branch is exactly the fact
+            # AppliedCorrections needs to record.
+            config.record_applied(['gradwarp'])
             workflow.connect([
                 (gradwarp_wf, outputnode, [
                     ('outputnode.gradwarp_field', 'gradwarp_field'),

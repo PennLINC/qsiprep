@@ -555,6 +555,10 @@ def init_diffprep_hmc_wf(
             'eddy-current polynomial (cubic Okan terms) has no implemented '
             'Jacobian determinant.',
         )
+    elif effective_correction_mode == 'quadratic':
+        # 'motion' has no eddy-current component at all -- neither applied nor
+        # unmodulated, it simply did not occur (see the module docstring).
+        config.record_applied(['eddy-current'])
 
     workflow.connect([
         (corrected_node, split_outputs, [
@@ -673,6 +677,11 @@ def init_diffprep_hmc_wf(
         # a single recombined series in the original merged order, so
         # GatherDRBUDDIInputs re-splits it into up/down exactly as it does for
         # the FSL backend.
+        #
+        # DRBUDDI's warp is carried as to_dwi_ref_warps and applied downstream
+        # of gradwarp/HMC, not baked into DIFFPREP's own resampling, so it
+        # reaches ComposeJacobianWeights externally.
+        config.record_applied(['sdc'])
         drbuddi_wf = init_drbuddi_wf(
             unit=unit,
             t2w_sdc=t2w_sdc,
@@ -734,6 +743,10 @@ def init_diffprep_hmc_wf(
     #    which changes head motion correction too; deferred rather than forced.
     if use_t2wreg:
         outputnode.inputs.sdc_method = 'T2Wreg (SynB0)' if synb0_target else 'T2Wreg'
+        # The EPI stage's field is carried as a warp (to_dwi_ref_warps) rather
+        # than baked in -- see the module comment above -- so it reaches
+        # ComposeJacobianWeights externally, like the DRBUDDI branch.
+        config.record_applied(['sdc'])
         # b0_ref_for_coreg is already gradwarp- and SDC-corrected on this branch
         # (see apply_sdc_to_b0 above), so it needs no further correction here.
         workflow.connect([
@@ -753,6 +766,9 @@ def init_diffprep_hmc_wf(
     #    init_sdc_wf. The warp is applied downstream (to_dwi_ref_warps),
     #    decoupled from HMC.
     if unit.is_gre or unit.is_nipreps_syn:
+        # This warp is applied downstream (to_dwi_ref_warps), decoupled from
+        # HMC, so it reaches ComposeJacobianWeights externally.
+        config.record_applied(['sdc'])
         b0_sdc_wf = init_sdc_wf(unit)
         b0_sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
 

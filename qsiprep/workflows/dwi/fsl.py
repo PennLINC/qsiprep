@@ -558,6 +558,10 @@ def init_fsl_hmc_wf(
     if run_drbuddi:
         outputnode.inputs.sdc_method = 'DRBUDDI'
         config.loggers.workflow.info('Running DRBUDDI for SDC')
+        # Unlike TOPUP-only (baked into eddy's own resampling, see above),
+        # DRBUDDI's warp is carried in to_dwi_ref_warps and applied downstream
+        # of eddy, so it reaches ComposeJacobianWeights externally.
+        config.record_applied(['sdc'])
 
         # Let gather_inputs know we're doing pepolar, even though it's not topup
         gather_inputs.inputs.topup_requested = True
@@ -614,6 +618,10 @@ def init_fsl_hmc_wf(
     if unit.is_gre or unit.is_nipreps_syn:
         config.loggers.workflow.info(f'Computing fieldmap directly from {fieldmap_type}')
         outputnode.inputs.sdc_method = fieldmap_type
+        # This warp is applied downstream of eddy (out_warp -> to_dwi_ref_warps),
+        # not baked into eddy's own resampling, so it reaches
+        # ComposeJacobianWeights externally.
+        config.record_applied(['sdc'])
         b0_sdc_wf = init_sdc_wf(unit)
 
         # Send to SDC workflow
