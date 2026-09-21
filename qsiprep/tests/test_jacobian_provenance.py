@@ -151,6 +151,45 @@ def test_tortoise_under_sloppy():
     assert jacobian_provenance_for(unit, t2w_sdc=False) == ([], [], None)
 
 
+def test_tortoise_cubic(tmp_path):
+    """M4: correction_mode='cubic' has no implemented determinant (only the
+    quadratic terms are), so the eddy-current component is unmodulated --
+    reviewer-verified correct; this pins it down with a direct test.
+    """
+    diffprep_cfg = tmp_path / 'diffprep_cubic.json'
+    diffprep_cfg.write_text(json.dumps({'correction_mode': 'cubic'}))
+    _cfg(hmc_method='tortoise', sdc_method='auto', sloppy=False)
+    config.workflow.diffprep_config = str(diffprep_cfg)
+    unit = make_preproc_unit([SRC], method=None)
+
+    applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)
+    assert applied == []
+    assert unmodulated == ['eddy-current']
+    assert reason == (
+        "DIFFPREP ran with correction_mode='cubic', whose eddy-current polynomial "
+        '(cubic Okan terms) has no implemented Jacobian determinant.'
+    )
+
+
+def test_tortoise_t2wreg():
+    """M4: DIFFPREP's fieldmap-less T2Wreg stage (no PEPOLAR, no GRE/SyN, a T2w
+    and --anat-modality/--ignore t2w allowing its use) applies 'sdc' --
+    reviewer-verified correct; this pins it down with a direct test.
+
+    Also checks the ``t2w_sdc=False`` case (T2w unavailable to TORTOISE,
+    e.g. ``--ignore t2w``): the stage still exists in the plan (T2Wreg can
+    target a SyNb0 too) but ``resolve_t2wreg_target`` withholds the 't2w'
+    target, so no 'sdc' is applied.
+    """
+    _cfg(hmc_method='tortoise', sdc_method='auto', sloppy=False)
+    unit = make_preproc_unit([SRC], method=None, anat_files=['/data/sub-01_T2w.nii.gz'])
+
+    # Default correction_mode='quadratic' also applies 'eddy-current'; the
+    # point under test is the second entry, 'sdc'.
+    assert jacobian_provenance_for(unit, t2w_sdc=True) == (['eddy-current', 'sdc'], [], None)
+    assert jacobian_provenance_for(unit, t2w_sdc=False) == (['eddy-current'], [], None)
+
+
 def test_eddy_lsr_with_topup(tmp_path):
     """F2: 'lsr' + TOPUP-only leaves both eddy-current and susceptibility unmodulated."""
     eddy_cfg = tmp_path / 'eddy_lsr.json'
