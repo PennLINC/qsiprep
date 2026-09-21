@@ -467,17 +467,21 @@ def test_sdc_warp_glyph_field_shows_the_inverse(tmp_path):
     np.testing.assert_allclose(mag[6:12, 6:12, 6:12].mean(), np.linalg.norm(d_lps), atol=0.2)
 
 
-def test_sdc_warp_motion_plane_is_the_still_axis(tmp_path):
-    """The slice normal is the RAS axis with the least displacement (PE plane)."""
-    from qsiprep.interfaces.reports import sdc_warp_motion_plane
+def test_sdc_warp_display_planes_contain_the_ped(tmp_path):
+    """The two display planes contain the PE axis; the perpendicular one is skipped."""
+    from qsiprep.interfaces.reports import sdc_warp_display_planes
 
     disp = np.zeros((10, 10, 10, 3))
-    disp[..., 1] = 2.0  # RAS-y (A-P) displacement
-    disp[..., 2] = 0.4  # a little RAS-z (S-I)
+    disp[..., 1] = 2.0  # RAS-y (A-P) dominant -> the PE axis
+    disp[..., 2] = 0.4  # a little RAS-z (S-I) tilt
     affine = np.diag([-2.0, -2.0, 2.0, 1.0])  # voxel axis a -> RAS axis a
-    slice_axis, still_ras, vox_to_ras = sdc_warp_motion_plane(disp, affine)
-    assert still_ras == 0  # RAS-x (L-R) has no displacement
-    assert slice_axis == 0  # slice along the matching voxel axis -> sagittal
+    ped_ras, slice_axes, _vox = sdc_warp_display_planes(disp, affine)
+    assert ped_ras == 1  # A-P is the phase-encode axis
+    # Slice normals are the two non-PE axes, so their planes contain the PE axis;
+    # slicing along the PE axis itself (a perpendicular plane) is excluded.
+    assert 1 not in slice_axes
+    assert set(slice_axes) == {0, 2}
+    assert slice_axes[0] == 0  # most-informative first: the least-displaced normal leads
 
 
 def test_sdc_warp_plot_builds_a_valid_svg(tmp_path):

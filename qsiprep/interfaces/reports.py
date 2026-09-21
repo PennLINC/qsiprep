@@ -536,22 +536,118 @@ def sdc_warp_glyph_field(warp_file):
     return disp_ras, np.linalg.norm(disp, axis=-1), affine
 
 
-def sdc_warp_motion_plane(disp_ras, affine):
-    """Voxel axis to slice along: the one mapping to the least-displaced RAS axis.
+def sdc_warp_display_planes(disp_ras, affine):
+    """PE axis and the two slice normals whose planes are *not* perpendicular to it.
 
-    Susceptibility displacement is confined to the phase-encode plane, so the RAS
-    axis with the smallest mean displacement is the through-plane direction.
-    Returns ``(slice_axis, still_ras, vox_to_ras)``.
+    Susceptibility displacement runs along the phase-encode axis, so the RAS axis
+    with the *largest* mean displacement is essentially the PE direction. A plane
+    perpendicular to it hides the displacement; the two planes that contain it --
+    sliced along each of the other two axes -- show it. Returns
+    ``(ped_ras, slice_axes, vox_to_ras)``, ``slice_axes`` being the two voxel axes
+    to slice along, most-informative first (its plane's normal is the least
+    displaced, so it carries the most PE signal in-plane).
     """
     vox_to_ras = np.argmax(np.abs(affine[:3, :3]), axis=0)
-    still_ras = int(np.argmin([np.abs(disp_ras[..., a]).mean() for a in range(3)]))
-    slice_axis = int(np.where(vox_to_ras == still_ras)[0][0])
-    return slice_axis, still_ras, vox_to_ras
+    ras_disp = np.array([np.abs(disp_ras[..., a]).mean() for a in range(3)])
+    ped_ras = int(np.argmax(ras_disp))
+    normal_ras = sorted((a for a in range(3) if a != ped_ras), key=lambda a: ras_disp[a])
+    slice_axes = [int(np.where(vox_to_ras == n)[0][0]) for n in normal_ras]
+    return ped_ras, slice_axes, vox_to_ras
+
+
+def _glyph_slice(disp_ras, mag, b0, affine, slice_axis, sl, vox_to_ras):
+    """Background, physical mesh, in-plane displacement components for one slice."""
+    inplane = sorted((a for a in range(3) if a != slice_axis), key=lambda a: vox_to_ras[a])
+    h_ax, v_ax = inplane  # voxel axes -> horizontal, vertical
+    h_ras, v_ras = vox_to_ras[h_ax], vox_to_ras[v_ax]
+    gvv, ghh = np.meshgrid(
+        np.arange(disp_ras.shape[v_ax]), np.arange(disp_ras.shape[h_ax]), indexing='ij'
+    )
+    h = affine[h_ras, slice_axis] * sl + affine[h_ras, h_ax] * ghh + affine[h_ras, v_ax] * gvv
+    v = affine[v_ras, slice_axis] * sl + affine[v_ras, h_ax] * ghh + affine[v_ras, v_ax] * gvv
+    take = [slice(None)] * 3
+    take[slice_axis] = sl
+
+    def grid(arr):
+        plane = arr[tuple(take)]
+        return plane.T if h_ax < v_ax else plane
+
+    return {
+        'bg': grid(b0),
+        'H': h + affine[h_ras, 3],
+        'V': v + affine[v_ras, 3],
+        'dh': grid(disp_ras[..., h_ras]),
+        'dv': grid(disp_ras[..., v_ras]),
+        'm2': grid(mag),
+        'h_ras': h_ras,
+        'v_ras': v_ras,
+    }
+
+
+def _glyph_slice_positions(b0, mag, slice_axis, n):
+    """``n`` slice indices spread over the part of the brain that carries displacement."""
+    others = tuple(a for a in range(3) if a != slice_axis)
+    brain = (b0 > 0.1 * b0.max()).sum(axis=others)
+    valid = np.where((brain > brain.max() * 0.15) & (mag.sum(axis=others) > 0))[0]
+    if valid.size == 0:
+        valid = np.where(brain > 0)[0]
+    if valid.size == 0:
+        valid = np.array([b0.shape[slice_axis] // 2])
+    picks = sorted({int(np.quantile(valid, q)) for q in np.linspace(0.5 / n, 1 - 0.5 / n, n)})
+    while len(picks) < n:  # small brains can collapse the quantiles
+        picks.append(picks[-1])
+    return picks[:n]
+
+
+def _draw_glyph(ax, panel, clim, step):
+    """Draw one glyph panel; anterior/superior/left to screen-left/top."""
+    xd, ud, yd, vd = -panel['H'], -panel['dh'], panel['V'], panel['dv']
+    ax.pcolormesh(xd, yd, panel['bg'], cmap='gray', shading='nearest', rasterized=True)
+    keep = panel['m2'][::step, ::step] > 0.5
+    q = ax.quiver(
+        xd[::step, ::step][keep],
+        yd[::step, ::step][keep],
+        ud[::step, ::step][keep],
+        vd[::step, ::step][keep],
+        panel['m2'][::step, ::step][keep],
+        cmap='turbo',
+        clim=clim,
+        angles='xy',
+        scale_units='xy',
+        scale=1.0,
+        width=0.005,
+        headwidth=4,
+        pivot='tail',
+    )
+    ax.set_aspect('equal')
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ends = {0: ('R', 'L'), 1: ('A', 'P'), 2: ('S', 'I')}  # (positive end, negative end)
+    for frac, txt in [
+        ((0.03, 0.5), ends[panel['h_ras']][0]),
+        ((0.95, 0.5), ends[panel['h_ras']][1]),
+        ((0.5, 0.95), ends[panel['v_ras']][0]),
+        ((0.5, 0.05), ends[panel['v_ras']][1]),
+    ]:
+        ax.text(
+            *frac,
+            txt,
+            transform=ax.transAxes,
+            color='yellow',
+            fontsize=8,
+            ha='center',
+            va='center',
+            weight='bold',
+        )
+    for sp in ax.spines.values():
+        sp.set_color('0.4')
+    return q
 
 
 class _SDCWarpPlotInputSpec(BaseInterfaceInputSpec):
     warp_file = File(exists=True, mandatory=True, desc='SDC displacement field on the ACPC grid')
     b0_ref = File(exists=True, mandatory=True, desc='ACPC b=0 reference image for the background')
+    n_slices = traits.Int(3, usedefault=True, desc='slices to show per plane')
     step = traits.Int(4, usedefault=True, desc='draw an arrow every N voxels')
 
 
@@ -563,8 +659,9 @@ class SDCWarpPlot(SimpleInterface):
     """Quiver of the SDC displacement field over the ACPC b=0, like Slicer's glyphs.
 
     Shows how the phase-encoding direction sat relative to the ACPC output and how
-    large the susceptibility displacements are, on the plane that carries the
-    motion. Uses the Slicer point-transform convention (see
+    large the susceptibility displacements are. A few slices are drawn in each of
+    the two planes that contain the PE axis (the plane perpendicular to it would
+    hide the displacement). Uses the Slicer point-transform convention (see
     :func:`sdc_warp_glyph_field`).
     """
 
@@ -578,83 +675,31 @@ class SDCWarpPlot(SimpleInterface):
         import matplotlib.pyplot as plt
 
         disp_ras, mag, affine = sdc_warp_glyph_field(self.inputs.warp_file)
-        slice_axis, _still, vox_to_ras = sdc_warp_motion_plane(disp_ras, affine)
         b0 = np.asarray(nb.load(self.inputs.b0_ref).dataobj, dtype=float)
+        _ped, slice_axes, vox_to_ras = sdc_warp_display_planes(disp_ras, affine)
 
-        inplane = sorted((a for a in range(3) if a != slice_axis), key=lambda a: vox_to_ras[a])
-        h_ax, v_ax = inplane  # voxel axes -> horizontal, vertical
-        h_ras, v_ras = vox_to_ras[h_ax], vox_to_ras[v_ax]
-        sl = int(mag.sum(axis=tuple(inplane)).argmax())
-
-        # Physical (RAS) coordinate mesh of the slice; rows = vertical, cols = horizontal.
-        gh = np.arange(disp_ras.shape[h_ax])
-        gv = np.arange(disp_ras.shape[v_ax])
-        gvv, ghh = np.meshgrid(gv, gh, indexing='ij')
-        H = affine[h_ras, slice_axis] * sl + affine[h_ras, h_ax] * ghh + affine[h_ras, v_ax] * gvv
-        H = H + affine[h_ras, 3]
-        V = affine[v_ras, slice_axis] * sl + affine[v_ras, h_ax] * ghh + affine[v_ras, v_ax] * gvv
-        V = V + affine[v_ras, 3]
-
-        take = [slice(None)] * 3
-        take[slice_axis] = sl
-
-        def grid(arr):
-            plane = arr[tuple(take)]
-            return plane.T if h_ax < v_ax else plane
-
-        bg, dh, dv, m2 = (
-            grid(b0),
-            grid(disp_ras[..., h_ras]),
-            grid(disp_ras[..., v_ras]),
-            grid(mag),
+        n = self.inputs.n_slices
+        clim = (
+            0.0,
+            max(float(np.percentile(mag[mag > 0.05], 99)) if (mag > 0.05).any() else 1.0, 1.0),
         )
+        plane_name = {0: 'sagittal', 1: 'coronal', 2: 'axial'}
 
-        # Display coords: each in-plane RAS axis' positive end goes to screen-left / top.
-        xd, ud, yd, vd = -H, -dh, V, dv
-        ends = {0: ('R', 'L'), 1: ('A', 'P'), 2: ('S', 'I')}  # (positive end, negative end)
-        vmax = float(np.percentile(mag[mag > 0.05], 99)) if (mag > 0.05).any() else 1.0
-
-        fig, ax = plt.subplots(figsize=(8, 6.5), facecolor='black')
-        ax.pcolormesh(xd, yd, bg, cmap='gray', shading='nearest', rasterized=True)
-        s = self.inputs.step
-        keep = m2[::s, ::s] > 0.5
-        q = ax.quiver(
-            xd[::s, ::s][keep],
-            yd[::s, ::s][keep],
-            ud[::s, ::s][keep],
-            vd[::s, ::s][keep],
-            m2[::s, ::s][keep],
-            cmap='turbo',
-            clim=(0.0, max(vmax, 1.0)),
-            angles='xy',
-            scale_units='xy',
-            scale=1.0,
-            width=0.004,
-            headwidth=4,
-            pivot='tail',
+        fig, axes = plt.subplots(
+            len(slice_axes),
+            n,
+            figsize=(3.6 * n, 3.4 * len(slice_axes)),
+            facecolor='black',
+            squeeze=False,
         )
-        ax.set_aspect('equal')
-        ax.set_xticks([])
-        ax.set_yticks([])
-        for frac, txt in [
-            ((0.01, 0.5), ends[h_ras][0]),
-            ((0.98, 0.5), ends[h_ras][1]),
-            ((0.5, 0.98), ends[v_ras][0]),
-            ((0.5, 0.02), ends[v_ras][1]),
-        ]:
-            ax.text(
-                *frac,
-                txt,
-                transform=ax.transAxes,
-                color='yellow',
-                fontsize=11,
-                ha='center',
-                va='center',
-                weight='bold',
-            )
-        for sp in ax.spines.values():
-            sp.set_color('white')
-        cb = fig.colorbar(q, ax=ax, fraction=0.035, pad=0.02)
+        q = None
+        for row, slice_axis in enumerate(slice_axes):
+            for col, sl in enumerate(_glyph_slice_positions(b0, mag, slice_axis, n)):
+                panel = _glyph_slice(disp_ras, mag, b0, affine, slice_axis, sl, vox_to_ras)
+                q = _draw_glyph(axes[row][col], panel, clim, self.inputs.step)
+            axes[row][0].set_ylabel(plane_name[int(vox_to_ras[slice_axis])], color='white')
+        fig.suptitle('SDC displacement field (ACPC space)', color='white')
+        cb = fig.colorbar(q, ax=axes, fraction=0.02, pad=0.02)
         cb.set_label('|displacement| (mm)', color='white')
         cb.ax.yaxis.set_tick_params(color='white')
         plt.setp(plt.getp(cb.ax, 'yticklabels'), color='white')
