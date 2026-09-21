@@ -371,6 +371,21 @@ def test_validate_scalar_geometry_rejects_a_non_3d_map(tmp_path):
         validate_scalar_geometry(not_scalar, reference)
 
 
+def test_validate_scalar_geometry_rejects_a_singleton_trailing_dimension(tmp_path):
+    """C4: a (X, Y, Z, 1) scalar map used to pass this guard, then blow up
+    downstream -- ``check_weight_map``'s ``weights[mask]`` indexes a bare 3D
+    weight array with a 4D boolean mask, raising a dimensionality error deep
+    inside the guard rather than a clear message here. Nothing in this
+    pipeline squeezes a validated scalar map before using it as a plain
+    ndarray (``check_weight_map``, ``multiply_maps``), so a trailing singleton
+    is rejected outright rather than accepted and silently mishandled later.
+    """
+    reference = _write_map(tmp_path / 'ref.nii.gz', 1.0)
+    singleton_4d = _write_map(tmp_path / 'singleton.nii.gz', 1.0, shape=(8, 8, 8, 1))
+    with pytest.raises(ValueError, match='3D scalar'):
+        validate_scalar_geometry(singleton_4d, reference)
+
+
 def test_validate_scalar_geometry_rejects_a_disjoint_world_frame(tmp_path):
     reference = _write_map(tmp_path / 'ref.nii.gz', 1.0, shape=(8, 8, 8))
     far_affine = np.eye(4)

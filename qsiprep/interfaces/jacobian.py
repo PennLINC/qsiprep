@@ -614,12 +614,24 @@ def validate_scalar_geometry(image_path, reference_path):
     responsible for resampling it there first with ``resample_like``; this
     function only screens for gross mistakes, it does not make two grids
     compatible.
+
+    ``ndim`` must be exactly 3 (C4 fix): a trailing singleton dimension, e.g.
+    ``(X, Y, Z, 1)``, used to pass here (any-but-1 trailing dims were already
+    rejected), then reach a consumer that treats it as a plain 3D array
+    without ever squeezing it -- ``check_weight_map``'s ``weights[mask]``
+    indexes a 3D weight array with a 4D boolean mask, raising a bare
+    dimensionality error deep inside the guard instead of a clear one here.
+    Squeezing the singleton here instead was the other option; rejecting it
+    was chosen because nothing in this pipeline actually produces such a
+    scalar map for a real run (the EC Jacobian and the brain mask are always
+    plain 3D), so there is no real caller to accommodate, and squeezing would
+    only need to be threaded through every downstream consumer for a case
+    that should not occur.
     """
     image = nb.load(image_path)
     reference = nb.load(reference_path)
 
-    extra_dims = image.shape[3:]
-    if extra_dims and any(dim != 1 for dim in extra_dims):
+    if image.ndim != 3:
         raise ValueError(
             f'{image_path} is not a 3D scalar map (shape {image.shape}).'
         )
