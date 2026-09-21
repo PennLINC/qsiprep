@@ -65,13 +65,122 @@ def test_compose_jacobian_node_exists():
 
 
 def test_compose_jacobian_feeds_the_weighting_node():
+    """``compose_jacobian`` feeds the dedup step, not the multiply step directly.
+
+    Resampling was split out of what used to be a single ``scale_dwis`` node
+    into a dedup step (``dedupe_jacobian_weights``), a parallel resampling
+    ``MapNode`` (``resample_jacobian_weights``), a per-map floor ``MapNode``
+    (``floor_jacobian_weights``), and a multiply-only ``scale_dwis``. Per-volume
+    weight images now reach the dedup step first; see
+    ``test_jacobian_weights_reach_scale_dwis_through_the_parallel_pipeline``
+    for the rest of the chain.
+    """
     edges = _edges(_trans_wf())
     assert any(
         src == 'compose_jacobian'
-        and dst == 'scale_dwis'
+        and dst == 'dedupe_jacobian_weights'
         and ('jacobian_weight_images', 'jacobian_weight_images') in connect
         for src, dst, connect in edges
     )
+
+
+def test_jacobian_weights_reach_scale_dwis_through_the_parallel_pipeline():
+    """The full replacement chain for the old single-node ``scale_dwis``.
+
+    Each edge here used to be internal Python state inside one interface
+    (``ApplyJacobianWeights``); asserting them individually is what makes a
+    dropped connection in the split visible at construction time instead of
+    as a silently-absent or silently-unweighted derivative.
+    """
+    edges = _edges(_trans_wf())
+
+    def _has(src, dst, pair):
+        return any(s == src and d == dst and pair in connect for s, d, connect in edges)
+
+    assert _has(
+        'compose_jacobian',
+        'dedupe_jacobian_weights',
+        ('jacobian_weight_images', 'jacobian_weight_images'),
+    )
+    assert _has(
+        'dedupe_jacobian_weights',
+        'resample_jacobian_weights',
+        ('unique_weight_images', 'input_image'),
+    )
+    assert _has(
+        'dedupe_jacobian_weights',
+        'resample_jacobian_weights',
+        ('transforms', 'transforms'),
+    )
+    assert _has(
+        'resample_jacobian_weights',
+        'floor_jacobian_weights',
+        ('output_image', 'weight_image'),
+    )
+    assert _has(
+        'floor_jacobian_weights', 'scale_dwis', ('weight_image', 'resampled_weight_images')
+    )
+    assert _has('dedupe_jacobian_weights', 'scale_dwis', ('weight_index', 'weight_index'))
+    assert _has('floor_jacobian_weights', 'outputnode', ('weight_image', 'jacobian_weights'))
+    assert _has(
+        'dedupe_jacobian_weights', 'outputnode', ('weight_index', 'jacobian_weight_index')
+    )
+
+
+def test_jacobian_weight_resampling_is_a_parallel_mapnode():
+    """The whole point of the split: resampling must not still be a serial node.
+
+    ``dwi_transform`` (this same workflow, constructed a few lines above the
+    Jacobian block in ``resampling.py``) is the existing example of the
+    pattern this follows -- a ``MapNode`` with an ``iterfield`` that Nipype's
+    plugins (e.g. MultiProc) fan out across worker slots. If
+    ``resample_jacobian_weights`` were a plain ``Node`` wrapping a Python
+    for-loop, as ``scale_dwis`` used to be, this test would fail.
+    """
+    from nipype.pipeline.engine import MapNode
+
+    wf = _trans_wf()
+    resample_node = wf.get_node('resample_jacobian_weights')
+    assert isinstance(resample_node, MapNode)
+    assert resample_node.iterfield == ['input_image']
+
+    floor_node = wf.get_node('floor_jacobian_weights')
+    assert isinstance(floor_node, MapNode)
+    assert floor_node.iterfield == ['weight_image']
+
+
+def test_resample_jacobian_weights_mapnode_expands_per_unique_map(tmp_path):
+    """MapNode fan-out, demonstrated directly: N inputs become N independent subnodes.
+
+    This is the mechanism that makes the resampling actually run in parallel
+    under a concurrent plugin (e.g. MultiProc), rather than merely looking
+    parallel in the graph: each unique map becomes its own subnode that the
+    plugin can schedule onto a separate worker slot. Exercised on a bare
+    MapNode built the same way as ``resample_jacobian_weights`` rather than on
+    the full workflow, since ``unique_weight_images`` is only populated at
+    runtime by the upstream dedup node.
+    """
+    import nibabel as nb
+    import numpy as np
+    from nipype.interfaces import ants
+    from nipype.pipeline import engine as pe
+
+    node = pe.MapNode(
+        ants.ApplyTransforms(interpolation='LanczosWindowedSinc', dimension=3),
+        name='resample_jacobian_weights',
+        iterfield=['input_image'],
+    )
+    paths = []
+    for letter in 'abcd':
+        path = tmp_path / f'{letter}.nii.gz'
+        nb.Nifti1Image(np.ones((4, 4, 4), dtype='float32'), np.eye(4)).to_filename(str(path))
+        paths.append(str(path))
+    node.inputs.input_image = paths
+
+    subnodes = list(node._make_nodes())
+
+    assert len(subnodes) == 4
+    assert {index for index, _ in subnodes} == {0, 1, 2, 3}
 
 
 def test_compose_jacobian_consumes_gradwarp_and_fieldwarps():
@@ -93,7 +202,14 @@ def test_compose_jacobian_consumes_gradwarp_and_fieldwarps():
 
 def test_no_jacobian_weighting_removes_the_node():
     config.workflow.jacobian_weighting = False
-    assert _trans_wf().get_node('compose_jacobian') is None
+    wf = _trans_wf()
+    assert wf.get_node('compose_jacobian') is None
+    # The whole parallel resampling pipeline is gated the same way
+    # ``compose_jacobian`` always was -- none of it should exist when the
+    # feature is off, not just its entry point.
+    assert wf.get_node('dedupe_jacobian_weights') is None
+    assert wf.get_node('resample_jacobian_weights') is None
+    assert wf.get_node('floor_jacobian_weights') is None
 
 
 def test_no_jacobian_weighting_leaves_weights_unconnected():
@@ -465,3 +581,81 @@ def test_jacobian_weights_do_not_reach_finalize_when_weighting_off(tmp_path):
     edge = wf._graph.get_edge_data(trans_wf, outputnode)
     connect = edge['connect'] if edge is not None else []
     assert not any('jacobian_weights' in str(pair) for pair in connect)
+
+
+# --- known limitation: zero real weight maps at run time -------------------
+#
+# Flagged, not fixed -- see the mapnode-report for this task. Reported rather
+# than improvised around, per this task's explicit instruction to stop when
+# preserving the output contracts conflicts with the split.
+
+
+def test_zero_unique_weights_is_a_defined_empty_list(tmp_path):
+    """DeduplicateJacobianWeights' own contract: correct, on its own.
+
+    This is not the bug -- an empty, *defined* list is exactly what
+    ``resample_jacobian_weights``' MapNode needs to not choke on
+    ``isdefined()``, and it is what
+    ``test_deduplicate_jacobian_weights_passes_through_without_weights``
+    (``test_interfaces_fmap.py``) already pins. The problem is one level
+    further down: see
+    ``test_a_defined_empty_iterfield_still_crashes_the_mapnode`` below.
+    """
+    import nibabel as nb
+    import numpy as np
+
+    from qsiprep.interfaces.fmap import DeduplicateJacobianWeights
+
+    dwi = tmp_path / 'd0.nii.gz'
+    nb.Nifti1Image(np.ones((4, 4, 4), dtype='float32'), np.eye(4)).to_filename(str(dwi))
+
+    result = DeduplicateJacobianWeights(dwi_files=[str(dwi)]).run()
+    assert result.outputs.unique_weight_images == []
+
+
+def test_a_defined_empty_iterfield_still_crashes_the_mapnode(tmp_path, monkeypatch):
+    """The real conflict: nipype cannot run a MapNode over zero items.
+
+    ``ComposeJacobianWeights`` leaves ``jacobian_weight_images`` Undefined
+    when there is nothing to modulate (no gradwarp, no SDC, no eddy-current
+    Jacobian) -- a real, tested, silent no-op
+    (``test_compose_weights_with_no_fields_is_undefined`` in
+    ``test_interfaces_jacobian.py``; ``derivatives.py``: "A unity map is
+    never synthesized for that case"). ``DeduplicateJacobianWeights`` turns
+    that into a defined ``[]`` (see the test above), which is the only way to
+    avoid ``MapNode._check_iterfield`` treating an *Undefined* input as an
+    error. But nipype's own ``MultiObject.validate`` collapses ANY defined
+    empty list back to ``Undefined`` the moment it lands on a MapNode's own
+    dynamically-created iterfield trait (this happens for every MapNode,
+    regardless of the wrapped interface or the value's origin) -- so the
+    crash still happens, just one hop later, inside
+    ``resample_jacobian_weights`` itself, in a real run with no real
+    distortion corrections.
+
+    A placeholder map was considered to keep the MapNode non-empty and
+    rejected: ``StackJacobianWeights`` gates solely on
+    ``isdefined(weight_images)``, so a discarded-looking placeholder would
+    still make it write a real jacobian derivative file for a run that
+    applied no weighting at all -- exactly what "A unity map is never
+    synthesized" forbids. This test pins the underlying nipype behaviour
+    directly (not the full qsiprep workflow, which would need a real ANTs
+    binary to execute) so the conflict stays verifiable rather than merely
+    asserted in prose.
+    """
+    from nipype.interfaces import ants
+    from nipype.pipeline import engine as pe
+
+    # A crash writes a crashfile to the current directory by default;
+    # keep it out of the repo.
+    monkeypatch.chdir(tmp_path)
+
+    node = pe.MapNode(
+        ants.ApplyTransforms(interpolation='LanczosWindowedSinc', dimension=3),
+        name='resample_jacobian_weights',
+        iterfield=['input_image'],
+        base_dir=str(tmp_path),
+    )
+    node.inputs.input_image = []
+
+    with pytest.raises(ValueError, match='was not set but it is listed in iterfields'):
+        node.run()

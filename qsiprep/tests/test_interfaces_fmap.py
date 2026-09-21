@@ -285,27 +285,135 @@ def _unit_image(path, value=1.0):
 
 
 def test_apply_jacobian_weights_passes_through_without_weights(tmp_path):
-    """No weights means the resampled DWIs are handed on untouched."""
+    """No weights means the resampled DWIs are handed on untouched.
+
+    ``ApplyJacobianWeights`` used to also transport the maps itself (one
+    ``antsApplyTransforms`` call per unique map in a Python for-loop), so it
+    took ``jacobian_weight_images`` and ``reference_image`` directly. That
+    transport now happens upstream (``DeduplicateJacobianWeights`` plus a
+    parallel ``MapNode``, see ``resampling.py``); this interface only
+    multiplies an already-resampled map into each DWI, so it takes
+    ``resampled_weight_images``/``weight_index`` instead.
+    """
     from qsiprep.interfaces.fmap import ApplyJacobianWeights
 
     dwis = [_unit_image(tmp_path / f'd{i}.nii.gz') for i in range(3)]
-    result = ApplyJacobianWeights(
-        dwi_files=dwis,
-        reference_image=_unit_image(tmp_path / 'grid.nii.gz'),
-    ).run()
+    result = ApplyJacobianWeights(dwi_files=dwis).run()
     assert result.outputs.scaled_images == dwis
-    assert not isdefined(result.outputs.resampled_weight_images)
 
 
-def test_apply_jacobian_weights_rejects_a_count_mismatch(tmp_path):
+def test_apply_jacobian_weights_output_spec_no_longer_carries_the_maps():
+    """The maps and their ordering are no longer this interface's to produce.
+
+    ``resampled_weight_images`` is now ``resample_jacobian_weights``'/
+    ``floor_jacobian_weights``' output in the workflow, and ``weight_index``
+    is ``DeduplicateJacobianWeights``'; ``ApplyJacobianWeights`` only consumes
+    both to do the multiply, so it must not also claim to produce the maps.
+    """
+    from qsiprep.interfaces.fmap import ApplyJacobianWeights
+
+    outputs = ApplyJacobianWeights().output_spec().copyable_trait_names()
+    assert 'resampled_weight_images' not in outputs
+    assert 'scaled_images' in outputs
+
+
+def test_apply_jacobian_weights_rejects_a_weight_index_count_mismatch(tmp_path):
+    """A defensive internal-consistency check, distinct from the dedup step's.
+
+    ``DeduplicateJacobianWeights`` guarantees ``weight_index`` is the right
+    length when it builds it (see ``test_deduplicate_jacobian_weights_*``
+    below); this guards ``ApplyJacobianWeights`` itself against being wired to
+    a mismatched ``weight_index``, e.g. a future mis-wire onto the wrong
+    upstream node, rather than silently multiplying the wrong volumes.
+    """
     from qsiprep.interfaces.fmap import ApplyJacobianWeights
 
     with pytest.raises(Exception, match='Mismatch'):
         ApplyJacobianWeights(
             dwi_files=[_unit_image(tmp_path / f'd{i}.nii.gz') for i in range(3)],
-            jacobian_weight_images=[_unit_image(tmp_path / 'w.nii.gz')],
-            reference_image=_unit_image(tmp_path / 'grid.nii.gz'),
+            resampled_weight_images=[_unit_image(tmp_path / 'w.nii.gz')],
+            weight_index=[0, 0],
         ).run()
+
+
+def test_deduplicate_jacobian_weights_passes_through_without_weights(tmp_path):
+    """No weights means an empty, defined map list -- never Undefined.
+
+    ``resample_jacobian_weights`` downstream is a ``MapNode`` over
+    ``unique_weight_images``; Nipype's ``MapNode._check_iterfield`` raises if
+    an iterfield input is ``Undefined`` at run time, so this must stay a
+    defined empty list rather than falling back to ``Undefined`` the way the
+    old monolithic interface's ``jacobian_weight_images`` did.
+    """
+    from qsiprep.interfaces.fmap import DeduplicateJacobianWeights
+
+    dwis = [_unit_image(tmp_path / f'd{i}.nii.gz') for i in range(3)]
+    result = DeduplicateJacobianWeights(dwi_files=dwis).run()
+    assert result.outputs.unique_weight_images == []
+    assert not isdefined(result.outputs.weight_index)
+
+
+def test_deduplicate_jacobian_weights_rejects_a_count_mismatch(tmp_path):
+    """The count check the old ``ApplyJacobianWeights`` used to do itself."""
+    from qsiprep.interfaces.fmap import DeduplicateJacobianWeights
+
+    with pytest.raises(Exception, match='Mismatch'):
+        DeduplicateJacobianWeights(
+            dwi_files=[_unit_image(tmp_path / f'd{i}.nii.gz') for i in range(3)],
+            jacobian_weight_images=[_unit_image(tmp_path / 'w.nii.gz')],
+        ).run()
+
+
+def test_deduplicate_jacobian_weights_dedups_in_first_appearance_order(tmp_path):
+    """Ordering is explicit (first-appearance), not incidental.
+
+    ``weight_index`` indexes into ``unique_weight_images`` by position; if
+    dedup used set/dict iteration order instead of first-appearance order,
+    parallel resampling downstream would still preserve *some* order, but not
+    necessarily the one ``weight_index`` was computed against, silently
+    mislabelling volumes in the sidecar. ``w_b`` is deliberately not
+    lexicographically or hash-order first, so a wrong implementation (e.g.
+    ``sorted(set(...))``) would produce ``[w_b, w_a]`` instead.
+    """
+    from qsiprep.interfaces.fmap import DeduplicateJacobianWeights
+
+    dwis = [_unit_image(tmp_path / f'd{i}.nii.gz') for i in range(4)]
+    w_a = _unit_image(tmp_path / 'w_a.nii.gz', value=2.0)
+    w_b = _unit_image(tmp_path / 'w_b.nii.gz', value=3.0)
+    weights = [w_a, w_b, w_a, w_b]
+
+    result = DeduplicateJacobianWeights(dwi_files=dwis, jacobian_weight_images=weights).run()
+
+    assert result.outputs.unique_weight_images == [w_a, w_b]
+    assert result.outputs.weight_index == [0, 1, 0, 1]
+
+
+def test_deduplicate_jacobian_weights_assembles_the_transform_chain(tmp_path):
+    """The (volume-independent) transform chain moved here unchanged.
+
+    Order matters: ApplyTransforms applies transforms last-to-first, so the
+    chain from undistorted b0-reference space to the output grid must list
+    the coregistration-to-t1 transform first and the intramodal pieces after
+    it, reversed from application order.
+    """
+    from qsiprep.interfaces.fmap import DeduplicateJacobianWeights
+
+    dwis = [_unit_image(tmp_path / f'd{i}.nii.gz') for i in range(2)]
+    weights = [_unit_image(tmp_path / 'w.nii.gz')] * 2
+    affine = str(tmp_path / 'to_intramodal.mat')
+    warp = str(tmp_path / 'to_intramodal_warp.nii.gz')
+    coreg = str(tmp_path / 'coreg_to_t1.mat')
+    for path in (affine, warp, coreg):
+        Path(path).write_text('placeholder')
+
+    result = DeduplicateJacobianWeights(
+        dwi_files=dwis,
+        jacobian_weight_images=weights,
+        b0_to_intramodal_template_transforms=[affine, warp],
+        hmcsdc_dwi_ref_to_t1w_affine=coreg,
+    ).run()
+
+    assert result.outputs.transforms == [coreg, warp, affine]
 
 
 def test_apply_scaling_images_name_is_gone():
@@ -318,11 +426,12 @@ def test_apply_scaling_images_name_is_gone():
 def test_floor_nonpositive_weights_clamps_without_going_negative(tmp_path, caplog):
     """A resampled weight map with a negative region is floored, not left negative.
 
-    ApplyJacobianWeights delegates this to _floor_nonpositive_weights after
-    resampling. Exercising the full interface here would require a real
-    antsApplyTransforms binary (not available in this environment), so this
-    hits the exact function the interface calls on each resampled map -- the
-    smallest unit that actually performs the clamp.
+    ``FloorJacobianWeight`` (a ``MapNode``, one call per unique map) delegates
+    this to ``_floor_nonpositive_weights`` after resampling. Exercising the
+    full interface here would require a real antsApplyTransforms binary (not
+    available in this environment), so this hits the exact function it calls
+    on each resampled map -- the smallest unit that actually performs the
+    clamp.
     """
     from qsiprep.interfaces.fmap import WEIGHT_FLOOR, _floor_nonpositive_weights
 
@@ -360,3 +469,26 @@ def test_floor_nonpositive_weights_is_a_noop_when_all_positive(tmp_path, caplog)
 
     assert np.all(nb.load(str(weight_path)).get_fdata() == 1.0)
     assert caplog.messages == []
+
+
+def test_floor_jacobian_weight_interface_delegates_and_returns_the_path(tmp_path, caplog):
+    """The MapNode-facing wrapper around ``_floor_nonpositive_weights``.
+
+    Runs as a ``MapNode`` (one call per unique map) alongside
+    ``resample_jacobian_weights``; the wrapper's own job is just to floor in
+    place and hand the same path on, so this only needs to check that it does
+    so rather than re-testing the flooring logic itself.
+    """
+    from qsiprep.interfaces.fmap import FloorJacobianWeight
+
+    data = np.ones((4, 4, 4), dtype='float32')
+    data[0, 0, 0] = -1.0
+    weight_path = tmp_path / 'weight.nii.gz'
+    nb.Nifti1Image(data, np.eye(4)).to_filename(str(weight_path))
+
+    with caplog.at_level('WARNING'):
+        result = FloorJacobianWeight(weight_image=str(weight_path)).run()
+
+    assert result.outputs.weight_image == str(weight_path)
+    assert nb.load(str(weight_path)).get_fdata()[0, 0, 0] > -1.0
+    assert any('non-positive' in message for message in caplog.messages)
