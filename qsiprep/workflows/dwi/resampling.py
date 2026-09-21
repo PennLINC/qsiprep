@@ -284,7 +284,14 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
     # template warps are excluded because modulating by a spatial-normalization
     # warp is VBM-style volume modulation, wrong for DWI signal.
     if config.workflow.jacobian_weighting:
-        compose_jacobian = pe.Node(ComposeJacobianWeights(), name='compose_jacobian')
+        # num_threads/n_procs paired as for scale_dwis above: the node shells
+        # out to antsApplyTransforms and CreateJacobianDeterminantImage, which
+        # run single-threaded on nipype's default.
+        compose_jacobian = pe.Node(
+            ComposeJacobianWeights(num_threads=config.nipype.omp_nthreads),
+            name='compose_jacobian',
+            n_procs=config.nipype.omp_nthreads,
+        )
         workflow.connect([
             (inputnode, compose_jacobian, [
                 ('dwi_files', 'dwi_files'),

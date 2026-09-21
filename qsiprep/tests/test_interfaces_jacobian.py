@@ -1063,3 +1063,96 @@ def test_stack_jacobian_weights_meta_dict_index_matches_shape(tmp_path):
     assert meta['AppliedCorrections'] == ['gradwarp', 'sdc']
     # every index must address a real frame of the stacked file
     assert max(meta['JacobianWeightIndex']) < out.shape[-1]
+
+
+# --- ITK threading forwarded to the ANTs calls -------------------------------
+#
+# Every ANTs call in this module ran with nipype's default of one ITK thread,
+# because none of them set num_threads. These tests stub the ANTs interfaces so
+# they check the wiring without needing the binaries, which are absent from the
+# dev environment (every real-ANTs test above skips) and so only exercised in
+# the container.
+
+
+class _RecordingAnts:
+    """Stub ANTs interface that records its kwargs and writes its output."""
+
+    def __init__(self, calls):
+        self.calls = calls
+
+    def __call__(self, **kwargs):
+        self.calls.append(kwargs)
+        out = kwargs.get('output_image') or kwargs.get('outputImage')
+        nb.Nifti1Image(np.ones((8, 8, 8), dtype='float32'), np.eye(4)).to_filename(out)
+        return _RecordingRun()
+
+
+class _RecordingRun:
+    terminal_output = None
+    resource_monitor = None
+    cmdline = 'stubbed-ants-call'
+
+    def run(self):
+        return self
+
+
+def test_jacobian_determinant_forwards_num_threads(tmp_path, monkeypatch):
+    from qsiprep.interfaces import jacobian as jac_mod
+
+    calls = []
+    monkeypatch.setattr(jac_mod.ants, 'CreateJacobianDeterminantImage', _RecordingAnts(calls))
+    field = _write_linear_field(tmp_path / 'f.nii.gz', np.eye(3))
+
+    jac_mod.jacobian_determinant(field, str(tmp_path / 'det.nii.gz'), num_threads=7)
+
+    assert calls[0]['num_threads'] == 7
+
+
+def test_compose_fields_forwards_num_threads(tmp_path, monkeypatch):
+    from qsiprep.interfaces import jacobian as jac_mod
+
+    calls = []
+    monkeypatch.setattr(jac_mod.ants, 'ApplyTransforms', _RecordingAnts(calls))
+    first = _write_linear_field(tmp_path / 'a.nii.gz', np.eye(3))
+    second = _write_linear_field(tmp_path / 'b.nii.gz', np.eye(3))
+    reference = _write_map(tmp_path / 'ref.nii.gz', 1.0)
+
+    jac_mod.compose_fields([first, second], reference, str(tmp_path / 'c.nii.gz'), num_threads=5)
+
+    assert calls[0]['num_threads'] == 5
+
+
+def test_transport_scalar_map_forwards_num_threads(tmp_path, monkeypatch):
+    from qsiprep.interfaces import jacobian as jac_mod
+
+    calls = []
+    monkeypatch.setattr(jac_mod.ants, 'ApplyTransforms', _RecordingAnts(calls))
+    image = _write_map(tmp_path / 'ec.nii.gz', 1.0)
+    warp = _write_linear_field(tmp_path / 'w.nii.gz', np.eye(3))
+    reference = _write_map(tmp_path / 'ref.nii.gz', 1.0)
+
+    jac_mod.transport_scalar_map(
+        image, warp, reference, str(tmp_path / 'out.nii.gz'), num_threads=3
+    )
+
+    assert calls[0]['num_threads'] == 3
+
+
+def test_compose_jacobian_weights_passes_its_num_threads_to_ants(tmp_path, monkeypatch):
+    """The interface's trait has to reach the ANTs call, not just exist."""
+    from qsiprep.interfaces import jacobian as jac_mod
+
+    calls = []
+    monkeypatch.setattr(jac_mod.ants, 'CreateJacobianDeterminantImage', _RecordingAnts(calls))
+    reference = _write_map(tmp_path / 'ref.nii.gz', 1.0)
+    warp = _write_linear_field(tmp_path / 'warp.nii.gz', np.eye(3))
+
+    jac_mod.ComposeJacobianWeights(
+        dwi_files=[_write_map(tmp_path / 'd0.nii.gz', 1.0)],
+        b0_ref_image=reference,
+        mask=_write_map(tmp_path / 'mask.nii.gz', 1.0),
+        fieldwarps=[warp],
+        num_threads=4,
+    ).run(cwd=str(tmp_path))
+
+    assert calls[0]['num_threads'] == 4

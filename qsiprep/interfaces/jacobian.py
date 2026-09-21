@@ -430,7 +430,7 @@ def multiply_maps(paths, out_path, like_path=None):
     return out_path
 
 
-def compose_fields(field_paths, reference, out_path):
+def compose_fields(field_paths, reference, out_path, num_threads=1):
     """Compose displacement fields into one, on ``reference``'s grid.
 
     ``field_paths`` is given in QSIPrep's native-to-target chain order; it is
@@ -449,15 +449,20 @@ def compose_fields(field_paths, reference, out_path):
         interpolation='LanczosWindowedSinc',
         dimension=3,
         float=True,
+        num_threads=num_threads,
     )
     xfm.terminal_output = 'allatonce'
     xfm.resource_monitor = False
-    runtime = xfm.run().runtime
-    LOGGER.info(runtime.cmdline)
+    # Logged before the call, not after: an ANTs call that never returns is
+    # exactly the case worth seeing, and a node that prints nothing while it
+    # runs is indistinguishable from a hung one.
+    LOGGER.info('Composing %d displacement fields: %s', len(field_paths), xfm.cmdline)
+    xfm.run()
+    LOGGER.info('Composed %d displacement fields into %s', len(field_paths), out_path)
     return out_path
 
 
-def transport_scalar_map(image_path, transform_path, reference_path, out_path):
+def transport_scalar_map(image_path, transform_path, reference_path, out_path, num_threads=1):
     """Resample a scalar map through ``transform_path`` onto ``reference_path``'s
     grid -- coordinate transport, not lattice realignment (C1 fix).
 
@@ -490,15 +495,17 @@ def transport_scalar_map(image_path, transform_path, reference_path, out_path):
         default_value=1.0,
         dimension=3,
         float=True,
+        num_threads=num_threads,
     )
     xfm.terminal_output = 'allatonce'
     xfm.resource_monitor = False
-    runtime = xfm.run().runtime
-    LOGGER.info(runtime.cmdline)
+    LOGGER.info('Transporting %s through %s: %s', image_path, transform_path, xfm.cmdline)
+    xfm.run()
+    LOGGER.info('Transported scalar map to %s', out_path)
     return out_path
 
 
-def jacobian_determinant(field_path, out_path, mask_path=None):
+def jacobian_determinant(field_path, out_path, mask_path=None, num_threads=1):
     """``|det grad phi|`` of a displacement field, on the field's own grid.
 
     ``CreateJacobianDeterminantImage`` takes no reference image; it emits on
@@ -553,11 +560,13 @@ def jacobian_determinant(field_path, out_path, mask_path=None):
         outputImage=out_path,
         doLogJacobian=0,
         useGeometric=0,
+        num_threads=num_threads,
     )
     jac.terminal_output = 'allatonce'
     jac.resource_monitor = False
-    runtime = jac.run().runtime
-    LOGGER.info(runtime.cmdline)
+    LOGGER.info('Computing the Jacobian determinant of %s: %s', field_path, jac.cmdline)
+    jac.run()
+    LOGGER.info('Computed the Jacobian determinant into %s', out_path)
 
     img = nb.load(out_path)
     signed = np.asanyarray(img.dataobj)
@@ -684,6 +693,12 @@ class _ComposeJacobianWeightsInputSpec(BaseInterfaceInputSpec):
         File(exists=True),
         desc='per-volume eddy-current Jacobian determinants (TORTOISE DIFFPREP)',
     )
+    # Every other ANTs path in QSIPrep threads its calls (ApplyJacobianWeights,
+    # ComposeTransforms, the TORTOISE interfaces). Without this the three ANTs
+    # calls below inherit nipype's default of one ITK thread and run serially.
+    num_threads = traits.Int(
+        1, usedefault=True, nohash=True, desc='ITK threads for each ANTs call'
+    )
 
 
 class _ComposeJacobianWeightsOutputSpec(TraitedSpec):
@@ -717,6 +732,12 @@ class ComposeJacobianWeights(SimpleInterface):
     def _run_interface(self, runtime):
         num_dwis = len(self.inputs.dwi_files)
         reference = self.inputs.b0_ref_image
+        num_threads = self.inputs.num_threads
+        LOGGER.info(
+            'Building Jacobian weights for %d volumes with %d ITK thread(s)',
+            num_dwis,
+            num_threads,
+        )
 
         gradwarp = None
         if isdefined(self.inputs.gradwarp_field) and self.inputs.gradwarp_field:
@@ -774,7 +795,11 @@ class ComposeJacobianWeights(SimpleInterface):
         # `reference`'s (C1 fix -- see `transport_scalar_map`).
         determinants = {}
         composed_transforms = {}
-        for fieldwarp in dict.fromkeys(fieldwarps):
+        unique_fieldwarps = list(dict.fromkeys(fieldwarps))
+        LOGGER.info(
+            'Found %d unique SDC warp(s) across %d volumes', len(unique_fieldwarps), num_dwis
+        )
+        for fieldwarp in unique_fieldwarps:
             key = weight_key(gradwarp, fieldwarp)
             if not key or key in determinants:
                 continue
@@ -784,6 +809,7 @@ class ComposeJacobianWeights(SimpleInterface):
                     fields,
                     reference,
                     os.path.join(runtime.cwd, f'composite{len(determinants)}.nii.gz'),
+                    num_threads=num_threads,
                 )
             else:
                 composed = fields[0]
@@ -802,6 +828,7 @@ class ComposeJacobianWeights(SimpleInterface):
                 composed,
                 os.path.join(runtime.cwd, f'jacobian{len(determinants)}.nii.gz'),
                 mask_path=mask_for_determinant,
+                num_threads=num_threads,
             )
 
         # Per-volume weight = shared determinant x that volume's EC Jacobian,
@@ -815,6 +842,8 @@ class ComposeJacobianWeights(SimpleInterface):
         # right space, and transporting it through a nonexistent transform
         # would be both wrong (no reference-relating transform to use) and
         # pointless (nothing to reconcile).
+        LOGGER.info('Computed %d unique Jacobian determinant(s)', len(determinants))
+
         weights = []
         cache = {}
         for index, (fieldwarp, ec_image) in enumerate(zip(fieldwarps, ec_images, strict=True)):
@@ -840,6 +869,7 @@ class ComposeJacobianWeights(SimpleInterface):
                             newpath=runtime.cwd,
                             use_ext=True,
                         ),
+                        num_threads=num_threads,
                     )
                 if ec_factor:
                     factors.append(ec_factor)
@@ -872,8 +902,15 @@ class ComposeJacobianWeights(SimpleInterface):
                     ),
                 )
                 check_weight_map(weight_map, mask_for_weight)
+                LOGGER.info(
+                    'Built Jacobian weight map %d (volume %d of %d)',
+                    len(cache),
+                    index + 1,
+                    num_dwis,
+                )
             weights.append(cache[cache_key])
 
+        LOGGER.info('Finished: %d unique weight map(s) for %d volumes', len(cache), num_dwis)
         self._results['jacobian_weight_images'] = weights
         return runtime
 
