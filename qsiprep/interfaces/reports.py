@@ -514,6 +514,158 @@ from sub-1_dir-PA_dwi.nii.gz.
     return ''.join(desc)
 
 
+def sdc_warp_glyph_field(warp_file):
+    """Displacement vectors to visualize an SDC warp, matching Slicer's glyphs.
+
+    Slicer shows where seed *points* travel, which follows the inverse of an
+    image-resampling (fixed->moving) displacement field -- the same reason
+    ``antsApplyTransformsToPoints`` uses the inverse of the image transform. So
+    the field is inverted, then its vectors are read with the ITK-LPS components
+    converted to RAS (flip x and y). Returns ``(disp_ras, magnitude, affine)``,
+    with ``disp_ras`` the displayed ``(X, Y, Z, 3)`` field in RAS mm and
+    ``magnitude`` its per-voxel size.
+    """
+    import SimpleITK as sitk
+
+    affine = nb.load(warp_file).affine
+    inverse = sitk.InvertDisplacementField(
+        sitk.Cast(sitk.ReadImage(warp_file), sitk.sitkVectorFloat64)
+    )
+    disp = np.moveaxis(sitk.GetArrayFromImage(inverse), [0, 1, 2], [2, 1, 0])  # (X,Y,Z,3) LPS
+    disp_ras = disp * np.array([-1.0, -1.0, 1.0])
+    return disp_ras, np.linalg.norm(disp, axis=-1), affine
+
+
+def sdc_warp_motion_plane(disp_ras, affine):
+    """Voxel axis to slice along: the one mapping to the least-displaced RAS axis.
+
+    Susceptibility displacement is confined to the phase-encode plane, so the RAS
+    axis with the smallest mean displacement is the through-plane direction.
+    Returns ``(slice_axis, still_ras, vox_to_ras)``.
+    """
+    vox_to_ras = np.argmax(np.abs(affine[:3, :3]), axis=0)
+    still_ras = int(np.argmin([np.abs(disp_ras[..., a]).mean() for a in range(3)]))
+    slice_axis = int(np.where(vox_to_ras == still_ras)[0][0])
+    return slice_axis, still_ras, vox_to_ras
+
+
+class _SDCWarpPlotInputSpec(BaseInterfaceInputSpec):
+    warp_file = File(exists=True, mandatory=True, desc='SDC displacement field on the ACPC grid')
+    b0_ref = File(exists=True, mandatory=True, desc='ACPC b=0 reference image for the background')
+    step = traits.Int(4, usedefault=True, desc='draw an arrow every N voxels')
+
+
+class _SDCWarpPlotOutputSpec(TraitedSpec):
+    out_file = File(exists=True, desc='SVG glyph figure of the SDC displacement field')
+
+
+class SDCWarpPlot(SimpleInterface):
+    """Quiver of the SDC displacement field over the ACPC b=0, like Slicer's glyphs.
+
+    Shows how the phase-encoding direction sat relative to the ACPC output and how
+    large the susceptibility displacements are, on the plane that carries the
+    motion. Uses the Slicer point-transform convention (see
+    :func:`sdc_warp_glyph_field`).
+    """
+
+    input_spec = _SDCWarpPlotInputSpec
+    output_spec = _SDCWarpPlotOutputSpec
+
+    def _run_interface(self, runtime):
+        import matplotlib as mpl
+
+        mpl.use('Agg')
+        import matplotlib.pyplot as plt
+
+        disp_ras, mag, affine = sdc_warp_glyph_field(self.inputs.warp_file)
+        slice_axis, _still, vox_to_ras = sdc_warp_motion_plane(disp_ras, affine)
+        b0 = np.asarray(nb.load(self.inputs.b0_ref).dataobj, dtype=float)
+
+        inplane = sorted((a for a in range(3) if a != slice_axis), key=lambda a: vox_to_ras[a])
+        h_ax, v_ax = inplane  # voxel axes -> horizontal, vertical
+        h_ras, v_ras = vox_to_ras[h_ax], vox_to_ras[v_ax]
+        sl = int(mag.sum(axis=tuple(inplane)).argmax())
+
+        # Physical (RAS) coordinate mesh of the slice; rows = vertical, cols = horizontal.
+        gh = np.arange(disp_ras.shape[h_ax])
+        gv = np.arange(disp_ras.shape[v_ax])
+        gvv, ghh = np.meshgrid(gv, gh, indexing='ij')
+        H = affine[h_ras, slice_axis] * sl + affine[h_ras, h_ax] * ghh + affine[h_ras, v_ax] * gvv
+        H = H + affine[h_ras, 3]
+        V = affine[v_ras, slice_axis] * sl + affine[v_ras, h_ax] * ghh + affine[v_ras, v_ax] * gvv
+        V = V + affine[v_ras, 3]
+
+        take = [slice(None)] * 3
+        take[slice_axis] = sl
+
+        def grid(arr):
+            plane = arr[tuple(take)]
+            return plane.T if h_ax < v_ax else plane
+
+        bg, dh, dv, m2 = (
+            grid(b0),
+            grid(disp_ras[..., h_ras]),
+            grid(disp_ras[..., v_ras]),
+            grid(mag),
+        )
+
+        # Display coords: each in-plane RAS axis' positive end goes to screen-left / top.
+        xd, ud, yd, vd = -H, -dh, V, dv
+        ends = {0: ('R', 'L'), 1: ('A', 'P'), 2: ('S', 'I')}  # (positive end, negative end)
+        vmax = float(np.percentile(mag[mag > 0.05], 99)) if (mag > 0.05).any() else 1.0
+
+        fig, ax = plt.subplots(figsize=(8, 6.5), facecolor='black')
+        ax.pcolormesh(xd, yd, bg, cmap='gray', shading='nearest', rasterized=True)
+        s = self.inputs.step
+        keep = m2[::s, ::s] > 0.5
+        q = ax.quiver(
+            xd[::s, ::s][keep],
+            yd[::s, ::s][keep],
+            ud[::s, ::s][keep],
+            vd[::s, ::s][keep],
+            m2[::s, ::s][keep],
+            cmap='turbo',
+            clim=(0.0, max(vmax, 1.0)),
+            angles='xy',
+            scale_units='xy',
+            scale=1.0,
+            width=0.004,
+            headwidth=4,
+            pivot='tail',
+        )
+        ax.set_aspect('equal')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        for frac, txt in [
+            ((0.01, 0.5), ends[h_ras][0]),
+            ((0.98, 0.5), ends[h_ras][1]),
+            ((0.5, 0.98), ends[v_ras][0]),
+            ((0.5, 0.02), ends[v_ras][1]),
+        ]:
+            ax.text(
+                *frac,
+                txt,
+                transform=ax.transAxes,
+                color='yellow',
+                fontsize=11,
+                ha='center',
+                va='center',
+                weight='bold',
+            )
+        for sp in ax.spines.values():
+            sp.set_color('white')
+        cb = fig.colorbar(q, ax=ax, fraction=0.035, pad=0.02)
+        cb.set_label('|displacement| (mm)', color='white')
+        cb.ax.yaxis.set_tick_params(color='white')
+        plt.setp(plt.getp(cb.ax, 'yticklabels'), color='white')
+
+        out_file = os.path.join(runtime.cwd, 'sdc_warp_glyph.svg')
+        fig.savefig(out_file, bbox_inches='tight', facecolor='black')
+        plt.close(fig)
+        self._results['out_file'] = out_file
+        return runtime
+
+
 class _SeriesQCInputSpec(BaseInterfaceInputSpec):
     pre_qc = File(exists=True, desc='qc file from the raw data', mandatory=True)
     t1_qc = File(exists=True, desc='qc file from preprocessed image in t1 space')

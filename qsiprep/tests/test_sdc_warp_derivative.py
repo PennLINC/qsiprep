@@ -444,6 +444,60 @@ def test_compose_sdc_warp_reproduces_pipeline_correction(tmp_path):
     assert np.corrcoef(pipeline[mask], distorted[mask])[0, 1] < ncc
 
 
+def test_sdc_warp_glyph_field_shows_the_inverse(tmp_path):
+    """The glyph field is the INVERSE (point-transport) direction, not the raw field.
+
+    Slicer displays where seed points travel, which follows the inverse of an
+    image-resampling displacement field. For a uniform +d warp the inverse is -d,
+    so the RAS glyph must be the opposite of the naive LPS->RAS of the raw field --
+    this is exactly the sign that was wrong before.
+    """
+    from qsiprep.interfaces.reports import sdc_warp_glyph_field
+
+    d_lps = np.array([0.0, 2.0, -1.0])  # uniform displacement, ITK-LPS mm
+    warp = _write_sdc_field(tmp_path / 'w.nii.gz', d_lps, n=18, vary=0.0)
+
+    disp_ras, mag, _ = sdc_warp_glyph_field(warp)
+    interior = disp_ras[6:12, 6:12, 6:12].reshape(-1, 3).mean(0)
+
+    raw_ras = d_lps * np.array([-1.0, -1.0, 1.0])  # naive (wrong) direction
+    # inverse of a uniform +d is -d; in RAS that is -(raw_ras)
+    np.testing.assert_allclose(interior, -raw_ras, atol=0.2)
+    assert np.dot(interior, raw_ras) < 0  # opposite of the raw field
+    np.testing.assert_allclose(mag[6:12, 6:12, 6:12].mean(), np.linalg.norm(d_lps), atol=0.2)
+
+
+def test_sdc_warp_motion_plane_is_the_still_axis(tmp_path):
+    """The slice normal is the RAS axis with the least displacement (PE plane)."""
+    from qsiprep.interfaces.reports import sdc_warp_motion_plane
+
+    disp = np.zeros((10, 10, 10, 3))
+    disp[..., 1] = 2.0  # RAS-y (A-P) displacement
+    disp[..., 2] = 0.4  # a little RAS-z (S-I)
+    affine = np.diag([-2.0, -2.0, 2.0, 1.0])  # voxel axis a -> RAS axis a
+    slice_axis, still_ras, vox_to_ras = sdc_warp_motion_plane(disp, affine)
+    assert still_ras == 0  # RAS-x (L-R) has no displacement
+    assert slice_axis == 0  # slice along the matching voxel axis -> sagittal
+
+
+def test_sdc_warp_plot_builds_a_valid_svg(tmp_path):
+    """The reportlet interface renders an SVG from a warp + ACPC b=0 (no ANTs)."""
+    from qsiprep.interfaces.reports import SDCWarpPlot
+
+    warp = _write_sdc_field(tmp_path / 'w.nii.gz', [0.0, 2.0, -0.5], n=20, vary=0.03)
+    affine = np.diag([-1.0, -1.0, 1.0, 1.0])
+    affine[:3, 3] = [9.5, 9.5, -9.5]  # match _write_sdc_field's grid
+    b0 = tmp_path / 'b0.nii.gz'
+    nb.Nifti1Image(
+        np.random.default_rng(0).random((20, 20, 20)).astype('float32'), affine
+    ).to_filename(str(b0))
+
+    out = SDCWarpPlot(warp_file=warp, b0_ref=str(b0)).run(cwd=str(tmp_path)).outputs.out_file
+    assert out.endswith('.svg')
+    assert os.path.getsize(out) > 0
+    assert '<svg' in open(out).read(4096)
+
+
 def test_invert_displacement_field_round_trips(tmp_path):
     """The helper produces a usable inverse of a displacement field."""
     import SimpleITK as sitk

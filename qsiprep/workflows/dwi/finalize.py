@@ -26,7 +26,7 @@ from ...interfaces.gradients import ExtractB0s
 from ...interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
-from ...interfaces.reports import GradientPlot, SeriesQC
+from ...interfaces.reports import GradientPlot, SDCWarpPlot, SeriesQC
 from ...utils.sdc import pe_readout_time
 from .derivatives import init_dwi_derivatives_wf
 from .gradwarp import resolve_gradwarp_plan
@@ -661,10 +661,30 @@ def init_dwi_finalize_wf(
         ])  # fmt:skip
 
     if sdc_warp_source is not None:
+        # Glyph reportlet: the SDC displacement field over the ACPC b=0, showing how
+        # the phase-encoding direction sat relative to the output and how large the
+        # deformations are (Slicer's transform-glyph view, no Slicer needed).
+        sdc_warp_plot = pe.Node(SDCWarpPlot(), name='sdc_warp_plot', mem_gb=DEFAULT_MEMORY_MIN_GB)
+        ds_report_sdcwarp = pe.Node(
+            DerivativesDataSink(
+                datatype='figures',
+                desc='sdcwarp',
+                suffix='dwi',
+                source_file=source_file,
+            ),
+            name='ds_report_sdcwarp',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
         workflow.connect([
             (outputnode, dwi_derivatives_wf, [
                 ('sdc_warp_to_template', 'inputnode.sdc_warp_to_template'),
             ]),
+            (outputnode, sdc_warp_plot, [
+                ('sdc_warp_to_template', 'warp_file'),
+                ('t1_b0_ref', 'b0_ref'),
+            ]),
+            (sdc_warp_plot, ds_report_sdcwarp, [('out_file', 'in_file')]),
         ])  # fmt:skip
 
     return workflow

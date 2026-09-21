@@ -215,6 +215,17 @@ sections:
     static: false
     subtitle: Susceptibility distortion correction
 
+  - bids: {datatype: figures, desc: sdcwarp, suffix: dwi}
+    caption: |
+      The estimated susceptibility (EPI) distortion displacement field, shown over
+      the preprocessed <em>b</em>=0 in ACPC space on the plane that carries the
+      motion. Each arrow shows the direction and magnitude (mm) of the displacement,
+      so you can see how the phase-encoding direction sat relative to the ACPC output
+      and how large the deformations were (largest in frontal and temporal regions).
+      This matches how 3D Slicer renders the exported transform.
+    static: false
+    subtitle: Susceptibility distortion displacement field
+
   - bids: {datatype: figures, desc: sdcT2w, suffix: dwi}
     caption: |
       Results of performing susceptibility distortion correction (SDC) using
