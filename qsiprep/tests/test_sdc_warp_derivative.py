@@ -163,14 +163,16 @@ def test_compose_transforms_exposes_the_sdc_warp_subchain(tmp_path):
 
 
 def test_trans_wf_builds_compose_sdc_warp_only_when_requested():
-    """``write_sdc_warp`` gates the ComposeSDCWarp node and its wiring."""
+    """``sdc_warp_source`` gates the ComposeSDCWarp node and its wiring."""
     _cfg()
     from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
 
     without = init_dwi_trans_wf(source_file='/data/sub-01_dwi.nii.gz', mem_gb=1)
     assert without.get_node('compose_sdc_warp') is None
 
-    wf = init_dwi_trans_wf(source_file='/data/sub-01_dwi.nii.gz', mem_gb=1, write_sdc_warp=True)
+    wf = init_dwi_trans_wf(
+        source_file='/data/sub-01_dwi.nii.gz', mem_gb=1, sdc_warp_source='drbuddi'
+    )
     assert wf.get_node('compose_sdc_warp') is not None
     edges = wf._graph.edges(data=True)
     # It rides the SDC-warp sub-chain (not the full composite) and volume 0's warp.
@@ -190,6 +192,44 @@ def test_trans_wf_builds_compose_sdc_warp_only_when_requested():
         u.name == 'compose_sdc_warp'
         and v.name == 'outputnode'
         and ('sdc_warp_to_template', 'sdc_warp_to_template') in d['connect']
+        for u, v, d in edges
+    )
+
+
+def test_trans_wf_topup_builds_hz_to_warp_chain():
+    """TOPUP has no standalone warp, so the field is turned into one first."""
+    _cfg()
+    from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
+
+    wf = init_dwi_trans_wf(
+        source_file='/data/sub-01_dwi.nii.gz',
+        mem_gb=1,
+        sdc_warp_source='topup',
+        sdc_pe_dir='j',
+        sdc_readout_time=0.05,
+    )
+    # Hz field -> voxel-shift map -> ANTs warp -> the same conjugation node.
+    assert wf.get_node('hz_to_vsm') is not None
+    assert wf.get_node('vsm_to_warp') is not None
+    assert wf.get_node('vsm_to_warp').inputs.pe_dir == 'j'
+    edges = wf._graph.edges(data=True)
+    assert any(
+        u.name == 'inputnode'
+        and v.name == 'hz_to_vsm'
+        and ('fieldmap_hz', 'in_file') in d['connect']
+        for u, v, d in edges
+    )
+    assert any(
+        u.name == 'vsm_to_warp'
+        and v.name == 'compose_sdc_warp'
+        and ('out_file', 'sdc_warp') in d['connect']
+        for u, v, d in edges
+    )
+    # TOPUP does not feed a standalone fieldwarp into the conjugation.
+    assert not any(
+        u.name == 'inputnode'
+        and v.name == 'compose_sdc_warp'
+        and any(dst == 'sdc_warp' for _, dst in d['connect'])
         for u, v, d in edges
     )
 
@@ -214,6 +254,34 @@ def test_derivatives_wf_writes_sdc_warp_only_with_meta():
     assert ds.inputs.meta_dict == meta
     # No Hz-era keys leak in.
     assert 'Units' not in meta
+
+
+def test_topup_hz_to_warp_builds_pe_axis_displacement(tmp_path):
+    """The TOPUP recipe: field(Hz) * readout -> voxel shift -> mm along the PE axis.
+
+    ``_hz_to_vsm`` scales the field by the readout time; ``FUGUEvsm2ANTSwarp`` then
+    turns the voxel-shift map into an ANTs displacement field whose only non-zero
+    component is along the phase-encoding axis, magnitude shift * voxel size.
+    """
+    from qsiprep.interfaces.niworkflows import FUGUEvsm2ANTSwarp
+    from qsiprep.workflows.dwi.resampling import _hz_to_vsm
+
+    affine = np.diag([2.0, 3.0, 4.0, 1.0])  # voxel sizes i=2, j=3, k=4 mm
+    hz, trt = 10.0, 0.05
+    hz_path = str(tmp_path / 'hz.nii.gz')
+    nb.Nifti1Image(np.full((6, 6, 6), hz, dtype='float32'), affine).to_filename(hz_path)
+
+    vsm = _hz_to_vsm(hz_path, trt, newpath=str(tmp_path))
+    np.testing.assert_allclose(nb.load(vsm).get_fdata(), hz * trt)
+
+    warp = FUGUEvsm2ANTSwarp(in_file=vsm, pe_dir='j').run(cwd=str(tmp_path)).outputs.out_file
+    field = np.asarray(nb.load(warp).dataobj).reshape((6, 6, 6, 3))
+    interior = field[2:4, 2:4, 2:4].reshape(-1, 3).mean(0)
+    # 'j' (no minus) carries FUGUEvsm2ANTSwarp's -1 sign; magnitude = shift * voxel_j.
+    np.testing.assert_allclose(interior[1], -hz * trt * 3.0, atol=1e-3)
+    np.testing.assert_allclose(interior[0], 0.0, atol=1e-6)
+    np.testing.assert_allclose(interior[2], 0.0, atol=1e-6)
+    assert nb.load(warp).header.get_intent()[0] == 'vector'
 
 
 def test_sdc_warp_datasink_builds_a_dwi_xfm_path(tmp_path):

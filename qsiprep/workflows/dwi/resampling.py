@@ -24,6 +24,7 @@ from ...interfaces.gradients import (  # LocalGradientRotation,
 )
 from ...interfaces.images import ChooseInterpolator
 from ...interfaces.nilearn import Merge
+from ...interfaces.niworkflows import FUGUEvsm2ANTSwarp
 from .qc import init_modelfree_qc_wf
 from .util import init_dwi_reference_wf
 
@@ -40,7 +41,9 @@ def init_dwi_trans_wf(
     write_reports=True,
     concatenate=True,
     doing_topup=False,
-    write_sdc_warp=False,
+    sdc_warp_source=None,
+    sdc_pe_dir=None,
+    sdc_readout_time=None,
 ):
     """
     This workflow samples dwi images to the ``output_grid`` in a "single shot"
@@ -281,23 +284,44 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             (fieldmap_hz_tfm, outputnode, [('output_image', 'fieldmap_hz_resampled')]),
         ])  # fmt:skip
 
-    if write_sdc_warp:
+    if sdc_warp_source is not None:
         # Re-express the SDC (susceptibility) displacement field on the output
         # grid as a transform, so its vectors are rotated into ACPC world
         # coordinates. It rides only the stages that carry the corrected DWI
-        # frame to the output grid (compose_transforms.sdc_warp_transforms),
-        # conjugating volume 0's fieldwarp -- see ComposeSDCWarp.
+        # frame to the output grid (compose_transforms.sdc_warp_transforms) --
+        # see ComposeSDCWarp.
         compose_sdc_warp = pe.Node(ComposeSDCWarp(), name='compose_sdc_warp', mem_gb=1)
         workflow.connect([
-            (inputnode, compose_sdc_warp, [
-                (('fieldwarps', _get_first), 'sdc_warp'),
-                ('output_grid', 'reference_image'),
-            ]),
+            (inputnode, compose_sdc_warp, [('output_grid', 'reference_image')]),
             (compose_transforms, compose_sdc_warp, [
                 ('sdc_warp_transforms', 'to_template_transforms'),
             ]),
             (compose_sdc_warp, outputnode, [('sdc_warp_to_template', 'sdc_warp_to_template')]),
         ])  # fmt:skip
+
+        if sdc_warp_source == 'drbuddi':
+            # DRBUDDI writes the susceptibility warp directly; conjugate volume 0's.
+            workflow.connect([
+                (inputnode, compose_sdc_warp, [(('fieldwarps', _get_first), 'sdc_warp')]),
+            ])  # fmt:skip
+        else:
+            # TOPUP only estimates an off-resonance field (eddy applies it and
+            # leaves no standalone warp -- its fieldwarps carry eddy's *combined*
+            # motion/eddy-current/SDC correction, not a pure susceptibility warp).
+            # Turn the field into a displacement field the same way a GRE fieldmap
+            # is: voxel shift = field_Hz * TotalReadoutTime, then an ANTs warp
+            # along the PE axis.
+            hz_to_vsm = pe.Node(
+                niu.Function(function=_hz_to_vsm, output_names=['out_file']),
+                name='hz_to_vsm',
+            )
+            hz_to_vsm.inputs.readout_time = sdc_readout_time
+            vsm_to_warp = pe.Node(FUGUEvsm2ANTSwarp(pe_dir=sdc_pe_dir), name='vsm_to_warp')
+            workflow.connect([
+                (inputnode, hz_to_vsm, [('fieldmap_hz', 'in_file')]),
+                (hz_to_vsm, vsm_to_warp, [('out_file', 'in_file')]),
+                (vsm_to_warp, compose_sdc_warp, [('out_file', 'sdc_warp')]),
+            ])  # fmt:skip
 
     # If concatenation is not happening here, send the still-split images to outputs
     if not concatenate:
@@ -349,6 +373,18 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
     #     ])  # fmt:skip
 
     return workflow
+
+
+def _hz_to_vsm(in_file, readout_time, newpath=None):
+    """Off-resonance field (Hz) -> voxel-shift map: shift = field_Hz * readout."""
+    import nibabel as nb
+    from nipype.utils.filemanip import fname_presuffix
+
+    img = nb.load(in_file)
+    vsm = img.get_fdata() * float(readout_time)
+    out_file = fname_presuffix(in_file, suffix='_vsm', newpath=newpath)
+    nb.Nifti1Image(vsm.astype('float32'), img.affine, img.header).to_filename(out_file)
+    return out_file
 
 
 def _first(inlist):

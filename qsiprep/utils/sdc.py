@@ -30,3 +30,19 @@ def t2w_available_for_sdc(subject_data, selection, anat_modality):
     with an empty input.
     """
     return bool(subject_data.get('t2w')) and anat_modality != 'none' and t2w_sdc_enabled(selection)
+
+
+def pe_readout_time(unit):
+    """``TotalReadoutTime`` (s) of a unit's lead phase-encode series, or ``None``.
+
+    Turning TOPUP's off-resonance field (Hz) into a displacement field needs the
+    readout time: the voxel shift is ``field_Hz * TotalReadoutTime``. The lead
+    series is the ``+`` polarity one for a reverse-PE pair, matching
+    :attr:`~qsiplan.adapters.PreprocUnit.pe_dir`. Returns ``None`` when the
+    metadata is absent so callers can decline rather than fail.
+    """
+    lead = unit.plus_files[0] if unit.has_bidirectional_dwi else unit.dwi_files[0]
+    trt = unit.sidecar_overrides().get(lead, {}).get('TotalReadoutTime')
+    if trt is None:
+        trt = unit.dwi_metadata.get('TotalReadoutTime')
+    return float(trt) if trt is not None else None

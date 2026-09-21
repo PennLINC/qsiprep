@@ -27,6 +27,7 @@ from ...interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SeriesQC
+from ...utils.sdc import pe_readout_time
 from .derivatives import init_dwi_derivatives_wf
 from .gradwarp import resolve_gradwarp_plan
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
@@ -158,23 +159,43 @@ def init_dwi_finalize_wf(
     # disagree after automatic method resolution.
     doing_topup = unit.run.stage_with('topup') is not None
 
-    # DRBUDDI estimates susceptibility distortion as a displacement field
-    # (sdc_warps -> fieldwarps), which is emitted to derivatives, re-expressed on
-    # the ACPC grid. TOPUP-only runs have no standalone warp -- eddy applies the
-    # field internally -- so nothing is written there.
+    # The susceptibility distortion is emitted to derivatives as a displacement
+    # field on the ACPC grid. DRBUDDI writes the warp directly (sdc_warps ->
+    # fieldwarps). TOPUP leaves no standalone warp -- eddy applies its field
+    # internally -- so the warp is rebuilt from TOPUP's off-resonance field, which
+    # needs the readout time; without it, nothing is written.
     doing_drbuddi = unit.run.stage_with('drbuddi') is not None
-    sdc_warp_meta = None
+    readout_time = pe_readout_time(unit)
     if doing_drbuddi:
-        sdc_warp_meta = {
-            'EstimationMethod': 'DRBUDDI',
-            'Description': (
+        sdc_warp_source = 'drbuddi'
+    elif doing_topup and readout_time is not None:
+        sdc_warp_source = 'topup'
+    else:
+        sdc_warp_source = None
+
+    sdc_warp_meta = None
+    if sdc_warp_source is not None:
+        _common = (
+            'expressed on the ACPC output grid as an ITK/ANTs displacement field '
+            '(LPS vector components). Applying it to the distorted DWI (e.g. '
+            'antsApplyTransforms) resamples it to the corrected ACPC space; as an ITK '
+            'point transform it maps ACPC (corrected) points to their distorted '
+            'DWI-reference locations.'
+        )
+        if sdc_warp_source == 'drbuddi':
+            description = (
                 'Susceptibility (EPI) distortion displacement field for the first DWI '
-                'volume, expressed on the ACPC output grid as an ITK/ANTs displacement '
-                'field (LPS vector components). Applying it to the distorted DWI (e.g. '
-                'antsApplyTransforms) resamples it to the corrected ACPC space; as an ITK '
-                'point transform it maps ACPC (corrected) points to their distorted '
-                'DWI-reference locations.'
-            ),
+                f'volume, {_common}'
+            )
+        else:
+            description = (
+                'Susceptibility (EPI) distortion displacement field, rebuilt from the '
+                'TOPUP off-resonance field (voxel shift = field_Hz * TotalReadoutTime), '
+                f'{_common}'
+            )
+        sdc_warp_meta = {
+            'EstimationMethod': 'DRBUDDI' if sdc_warp_source == 'drbuddi' else 'TOPUP',
+            'Description': description,
         }
 
     # Determine resource usage
@@ -321,7 +342,9 @@ def init_dwi_finalize_wf(
         use_compression=False,
         concatenate=True,
         doing_topup=doing_topup,
-        write_sdc_warp=doing_drbuddi,
+        sdc_warp_source=sdc_warp_source,
+        sdc_pe_dir=unit.pe_dir,
+        sdc_readout_time=readout_time,
     )
 
     # Apply denoising to the interpolated data if requested
@@ -386,7 +409,7 @@ def init_dwi_finalize_wf(
             ]),
         ])  # fmt:skip
 
-    if doing_drbuddi:
+    if sdc_warp_source is not None:
         workflow.connect([
             (transform_dwis_t1, outputnode, [
                 ('outputnode.sdc_warp_to_template', 'sdc_warp_to_template'),
@@ -637,7 +660,7 @@ def init_dwi_finalize_wf(
             ]),
         ])  # fmt:skip
 
-    if doing_drbuddi:
+    if sdc_warp_source is not None:
         workflow.connect([
             (outputnode, dwi_derivatives_wf, [
                 ('sdc_warp_to_template', 'inputnode.sdc_warp_to_template'),
