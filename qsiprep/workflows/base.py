@@ -672,6 +672,7 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.bval_files', 'inputnode.bval_files'),
                 ('outputnode.bvec_files', 'inputnode.bvec_files'),
                 ('outputnode.b0_ref_image', 'inputnode.b0_ref_image'),
+                ('outputnode.dwi_mask', 'inputnode.dwi_mask'),
                 ('outputnode.b0_indices', 'inputnode.b0_indices'),
                 ('outputnode.hmc_xforms', 'inputnode.hmc_xforms'),
                 ('outputnode.fieldwarps', 'inputnode.fieldwarps'),

@@ -676,9 +676,15 @@ class _ComposeJacobianWeightsInputSpec(BaseInterfaceInputSpec):
     # as its ``reference_image`` (``qsiprep/workflows/dwi/registration.py:157``),
     # so the structural is on the b=0 lattice. Do not "fix" this by reaching for
     # a different input.
+    # Not mandatory, though it is required whenever there is anything to
+    # modulate. nipype checks mandatory inputs in _check_mandatory_inputs,
+    # which runs BEFORE _run_interface and therefore before the node writes
+    # its result file. MultiProc's run_node then raises FileNotFoundError on
+    # the missing result, the job is never marked failed, and the workflow
+    # hangs with the slot still held instead of reporting the error. Raising
+    # from inside _run_interface instead produces an ordinary node failure.
     mask = File(
         exists=True,
-        mandatory=True,
         desc='native-space brain mask, for the positivity guard',
     )
     gradwarp_field = InputMultiObject(
@@ -786,6 +792,12 @@ class ComposeJacobianWeights(SimpleInterface):
         # used only past the no-op return above (C2): a run with nothing to
         # modulate must not be killed by a mask/reference mismatch it never
         # needed to resolve.
+        if not isdefined(self.inputs.mask):
+            raise ValueError(
+                'ComposeJacobianWeights has distortion transforms to modulate but no '
+                'brain mask, so the folded-warp guard cannot run. Connect the DWI '
+                'reference mask to this node.'
+            )
         validate_scalar_geometry(self.inputs.mask, reference)
 
         # One determinant per unique (gradwarp, fieldwarp) pair. `composed`

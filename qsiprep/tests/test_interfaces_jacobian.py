@@ -1156,3 +1156,54 @@ def test_compose_jacobian_weights_passes_its_num_threads_to_ants(tmp_path, monke
     ).run(cwd=str(tmp_path))
 
     assert calls[0]['num_threads'] == 4
+
+
+# --- a missing mask must fail visibly, not hang the workflow ----------------
+#
+# The mask input used to be mandatory and nothing in qsiprep/workflows/base.py
+# connected it, so every run that reached this node raised in nipype's
+# _check_mandatory_inputs. That check runs before _run_interface and therefore
+# before the node writes its result file, so MultiProc's run_node then died on
+# the missing result_*.pklz, never marked the job failed, and held the
+# processor slot until CI's 1h no-output timeout killed the build.
+
+
+def test_missing_mask_is_not_a_nipype_mandatory_error(tmp_path):
+    """Constructing and running without a mask must reach _run_interface.
+
+    A mandatory-input error is raised before the node can write its result,
+    which is the failure mode that hangs MultiProc rather than reporting.
+    """
+    reference = _write_map(tmp_path / 'ref.nii.gz', 1.0)
+    warp = _write_linear_field(tmp_path / 'warp.nii.gz', np.eye(3))
+
+    interface = ComposeJacobianWeights(
+        dwi_files=[_write_map(tmp_path / 'd0.nii.gz', 1.0)],
+        b0_ref_image=reference,
+        fieldwarps=[warp],
+    )
+
+    with pytest.raises(ValueError, match='no.*brain mask|brain mask'):
+        interface.run(cwd=str(tmp_path))
+
+
+def test_missing_mask_is_tolerated_when_there_is_nothing_to_modulate(tmp_path):
+    """No gradwarp, no SDC, no EC: the mask is never needed, so do not ask."""
+    reference = _write_map(tmp_path / 'ref.nii.gz', 1.0)
+
+    result = ComposeJacobianWeights(
+        dwi_files=[_write_map(tmp_path / 'd0.nii.gz', 1.0)],
+        b0_ref_image=reference,
+    ).run(cwd=str(tmp_path))
+
+    assert not isdefined(result.outputs.jacobian_weight_images)
+
+
+def test_base_workflow_connects_the_dwi_mask_to_finalize():
+    """The node's mask has to come from somewhere; nothing connected it."""
+    import inspect
+
+    from qsiprep.workflows import base
+
+    src = inspect.getsource(base)
+    assert "('outputnode.dwi_mask', 'inputnode.dwi_mask')" in src
