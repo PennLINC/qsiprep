@@ -52,9 +52,7 @@ def test_first_listed_transform_is_applied_first_to_the_point(tmp_path):
         pytest.skip('antsApplyTransforms required for this test')
 
     reference = tmp_path / 'ref.nii.gz'
-    nb.Nifti1Image(np.zeros((8, 8, 8), dtype='float32'), np.eye(4)).to_filename(
-        str(reference)
-    )
+    nb.Nifti1Image(np.zeros((8, 8, 8), dtype='float32'), np.eye(4)).to_filename(str(reference))
     scale = _write_itk_affine(tmp_path / 'scale.txt', _SCALE_2X)
     translate = _write_itk_affine(tmp_path / 'translate.txt', _TRANSLATE_10)
 
@@ -102,7 +100,7 @@ def test_first_listed_transform_is_applied_first_to_the_point(tmp_path):
         'per-volume HMC affine so the gradwarp and SDC determinants are '
         'evaluated at the right coordinates. Do not work around it. See '
         '"Disambiguating \'applied first\'" in the design spec, and note that '
-        'under the 20mm reading QSIPrep\'s existing resampling would be '
+        "under the 20mm reading QSIPrep's existing resampling would be "
         'sampling native per-volume data at b=0-reference coordinates, so '
         'check that too.'
     )

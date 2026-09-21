@@ -278,9 +278,7 @@ def test_median_and_cleanup_write_float32_from_integer_input(tmp_path):
 
 
 def _unit_image(path, value=1.0):
-    nb.Nifti1Image(np.full((8, 8, 8), value, dtype='float32'), np.eye(4)).to_filename(
-        str(path)
-    )
+    nb.Nifti1Image(np.full((8, 8, 8), value, dtype='float32'), np.eye(4)).to_filename(str(path))
     return str(path)
 
 
@@ -485,13 +483,10 @@ def test_floor_nonpositive_weights_is_a_noop_when_all_positive(tmp_path, caplog)
     from qsiprep.interfaces.fmap import _floor_nonpositive_weights
 
     weight_path = tmp_path / 'weight.nii.gz'
-    nb.Nifti1Image(np.ones((4, 4, 4), dtype='float32'), np.eye(4)).to_filename(
-        str(weight_path)
-    )
+    nb.Nifti1Image(np.ones((4, 4, 4), dtype='float32'), np.eye(4)).to_filename(str(weight_path))
 
     with caplog.at_level('WARNING'):
         _floor_nonpositive_weights(str(weight_path))
 
     assert np.all(nb.load(str(weight_path)).get_fdata() == 1.0)
     assert caplog.messages == []
-

@@ -307,8 +307,7 @@ def validate_field_geometry(field_path, reference_path):
 
     if components != 3:
         raise ValueError(
-            f'Displacement field {field_path} has {components} vector components, '
-            'expected 3.'
+            f'Displacement field {field_path} has {components} vector components, expected 3.'
         )
 
     _assert_world_frames_overlap(field_path, reference_path, img_a=field, img_b=reference)
@@ -324,9 +323,7 @@ def check_weight_map(map_path, mask_path):
     mask = np.asanyarray(nb.load(mask_path).dataobj) > 0
 
     if not np.isfinite(weights).all():
-        raise ValueError(
-            f'Jacobian weight map {map_path} contains non-finite values.'
-        )
+        raise ValueError(f'Jacobian weight map {map_path} contains non-finite values.')
 
     inside = weights[mask]
     if inside.size == 0:
@@ -418,9 +415,7 @@ def multiply_maps(paths, out_path, like_path=None):
         resample_like(
             path,
             target,
-            fname_presuffix(
-                path, suffix='_onlattice', newpath=os.path.dirname(out_path) or None
-            ),
+            fname_presuffix(path, suffix='_onlattice', newpath=os.path.dirname(out_path) or None),
             interpolation='linear',
             fill_value=1.0,
         )
@@ -541,9 +536,7 @@ def jacobian_determinant(field_path, out_path, mask_path=None):
         img = nb.load(field_path)
         header = img.header.copy()
         header.set_intent(VECTOR_INTENT_CODE)
-        nb.Nifti1Image(np.asanyarray(img.dataobj), img.affine, header).to_filename(
-            corrected_path
-        )
+        nb.Nifti1Image(np.asanyarray(img.dataobj), img.affine, header).to_filename(corrected_path)
         LOGGER.warning(
             'Displacement field %s is missing the NIFTI_INTENT_VECTOR intent '
             'code; CreateJacobianDeterminantImage silently miscomputes '
@@ -590,9 +583,7 @@ def jacobian_determinant(field_path, out_path, mask_path=None):
             field_path,
         )
 
-    nb.Nifti1Image(
-        np.abs(signed).astype('float32'), img.affine, img.header
-    ).to_filename(out_path)
+    nb.Nifti1Image(np.abs(signed).astype('float32'), img.affine, img.header).to_filename(out_path)
     return out_path
 
 
@@ -632,9 +623,7 @@ def validate_scalar_geometry(image_path, reference_path):
     reference = nb.load(reference_path)
 
     if image.ndim != 3:
-        raise ValueError(
-            f'{image_path} is not a 3D scalar map (shape {image.shape}).'
-        )
+        raise ValueError(f'{image_path} is not a 3D scalar map (shape {image.shape}).')
 
     _assert_world_frames_overlap(image_path, reference_path, img_a=image, img_b=reference)
 
@@ -733,8 +722,7 @@ class ComposeJacobianWeights(SimpleInterface):
         if isdefined(self.inputs.gradwarp_field) and self.inputs.gradwarp_field:
             if len(self.inputs.gradwarp_field) != 1:
                 raise ValueError(
-                    'Expected a single gradwarp field, got '
-                    f'{len(self.inputs.gradwarp_field)}.'
+                    f'Expected a single gradwarp field, got {len(self.inputs.gradwarp_field)}.'
                 )
             gradwarp = self.inputs.gradwarp_field[0]
             validate_field_geometry(gradwarp, reference)
@@ -1120,7 +1108,7 @@ class _OkanQuadraticJacobianInputSpec(BaseInterfaceInputSpec):
 class _OkanQuadraticJacobianOutputSpec(TraitedSpec):
     ec_jacobian_images = OutputMultiObject(
         File(exists=True),
-        desc="per-volume eddy-current Jacobian determinants; Undefined for "
+        desc='per-volume eddy-current Jacobian determinants; Undefined for '
         "correction_mode in ('motion', 'cubic')",
     )
 
@@ -1226,9 +1214,7 @@ class _StackJacobianWeightsInputSpec(BaseInterfaceInputSpec):
         File(exists=True),
         desc='unique output-grid weight maps, first-appearance order',
     )
-    weight_index = traits.List(
-        traits.Int(), desc='per-volume index into weight_images'
-    )
+    weight_index = traits.List(traits.Int(), desc='per-volume index into weight_images')
     # Build-time facts about this run, computed by
     # ``qsiprep.workflows.dwi.jacobian_provenance.jacobian_provenance_for``
     # and set as node inputs during workflow construction -- not read from
@@ -1277,9 +1263,9 @@ class StackJacobianWeights(SimpleInterface):
             data = np.asanyarray(images[0].dataobj)
         else:
             data = np.stack([np.asanyarray(img.dataobj) for img in images], axis=-1)
-        nb.Nifti1Image(
-            data.astype('float32'), images[0].affine, images[0].header
-        ).to_filename(out_file)
+        nb.Nifti1Image(data.astype('float32'), images[0].affine, images[0].header).to_filename(
+            out_file
+        )
 
         self._results['out_file'] = out_file
         self._results['meta_dict'] = _jacobian_sidecar(

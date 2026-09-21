@@ -952,9 +952,9 @@ def test_okan_jacobian_ignores_the_rigid_columns(tmp_path):
         correction_mode='quadratic',
     ).run(cwd=str(tmp_path))
 
-    interior = np.asanyarray(
-        nb.load(result.outputs.ec_jacobian_images[0]).dataobj
-    )[2:-2, 2:-2, 2:-2]
+    interior = np.asanyarray(nb.load(result.outputs.ec_jacobian_images[0]).dataobj)[
+        2:-2, 2:-2, 2:-2
+    ]
     np.testing.assert_allclose(interior, 1.0, atol=1e-4)
 
 
@@ -1004,9 +1004,9 @@ from qsiprep.interfaces.jacobian import StackJacobianWeights
 def test_stack_jacobian_weights_single_image_is_3d(tmp_path):
     """The collapsed (all-volumes-share-one-map) case stays 3D."""
     weight_image = _write_map(tmp_path / 'w0.nii.gz', 1.0)
-    result = StackJacobianWeights(
-        weight_images=[weight_image], weight_index=[0, 0, 0]
-    ).run(cwd=str(tmp_path))
+    result = StackJacobianWeights(weight_images=[weight_image], weight_index=[0, 0, 0]).run(
+        cwd=str(tmp_path)
+    )
     out = nb.load(result.outputs.out_file)
     assert out.ndim == 3
 
@@ -1015,9 +1015,9 @@ def test_stack_jacobian_weights_two_images_stack_on_last_axis(tmp_path):
     """Multiple unique maps stack on the last axis, in first-appearance order."""
     first = _write_map(tmp_path / 'w0.nii.gz', 1.0)
     second = _write_map(tmp_path / 'w1.nii.gz', 2.0)
-    result = StackJacobianWeights(
-        weight_images=[first, second], weight_index=[0, 1, 0]
-    ).run(cwd=str(tmp_path))
+    result = StackJacobianWeights(weight_images=[first, second], weight_index=[0, 1, 0]).run(
+        cwd=str(tmp_path)
+    )
     out = nb.load(result.outputs.out_file)
     data = np.asanyarray(out.dataobj)
     assert out.ndim == 4

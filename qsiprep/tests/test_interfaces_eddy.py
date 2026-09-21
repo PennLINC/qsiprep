@@ -92,22 +92,20 @@ def test_gather_eddy_inputs_exports_no_warps(tmp_path, monkeypatch):
     # test, which would leave this invariant unguarded wherever the real
     # binary happens to be missing.
     def _fake_select_best_b0_report(b0_files, prefix, num_threads=1):
-        return pd.DataFrame({
-            'mean_cc': [1.0] * len(b0_files),
-            'translation_total_mm': [0.0] * len(b0_files),
-            'rotation_total_deg': [0.0] * len(b0_files),
-        })
+        return pd.DataFrame(
+            {
+                'mean_cc': [1.0] * len(b0_files),
+                'translation_total_mm': [0.0] * len(b0_files),
+                'rotation_total_deg': [0.0] * len(b0_files),
+            }
+        )
 
-    monkeypatch.setattr(
-        epi_fmap_mod, 'select_best_b0_report', _fake_select_best_b0_report
-    )
+    monkeypatch.setattr(epi_fmap_mod, 'select_best_b0_report', _fake_select_best_b0_report)
 
     dwi = write_dwi_with_gradients(tmp_path / 'sub-1_dwi.nii.gz', nvols=4)
     stem = str(dwi).split('.nii')[0]
     json_file = tmp_path / 'sub-1_dwi.json'
-    json_file.write_text(
-        '{"PhaseEncodingDirection": "j", "TotalReadoutTime": 0.05}'
-    )
+    json_file.write_text('{"PhaseEncodingDirection": "j", "TotalReadoutTime": 0.05}')
 
     result = GatherEddyInputs(
         dwi_file=dwi,

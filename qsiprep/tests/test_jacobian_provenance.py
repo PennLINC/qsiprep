@@ -62,9 +62,7 @@ def _cfg(hmc_method, sdc_method='auto', sloppy=False):
 
 
 def _pepolar_unit(method):
-    return make_preproc_unit(
-        [SRC, PARTNER], method=method, pe_dirs={SRC: 'j', PARTNER: 'j-'}
-    )
+    return make_preproc_unit([SRC, PARTNER], method=method, pe_dirs={SRC: 'j', PARTNER: 'j-'})
 
 
 #: A full ``--eddy-config`` override with ``method='lsr'`` -- see

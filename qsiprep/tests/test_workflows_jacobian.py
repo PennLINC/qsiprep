@@ -199,8 +199,7 @@ def test_no_jacobian_weighting_leaves_weights_unconnected():
     config.workflow.jacobian_weighting = False
     edges = _edges(_trans_wf())
     assert not any(
-        ('jacobian_weight_images', 'jacobian_weight_images') in connect
-        for _, _, connect in edges
+        ('jacobian_weight_images', 'jacobian_weight_images') in connect for _, _, connect in edges
     )
 
 
@@ -208,10 +207,7 @@ def test_hmc_xforms_never_reach_the_jacobian_node():
     """HMC is excluded by policy; a wire here would silently modulate by it."""
     edges = _edges(_trans_wf())
     forwarded = {
-        pair
-        for src, dst, connect in edges
-        if dst == 'compose_jacobian'
-        for pair in connect
+        pair for src, dst, connect in edges if dst == 'compose_jacobian' for pair in connect
     }
     assert not any('hmc' in _source_name(source) for source, _ in forwarded)
 
@@ -219,10 +215,7 @@ def test_hmc_xforms_never_reach_the_jacobian_node():
 def test_coreg_and_template_transforms_never_reach_the_jacobian_node():
     edges = _edges(_trans_wf())
     forwarded = {
-        pair
-        for src, dst, connect in edges
-        if dst == 'compose_jacobian'
-        for pair in connect
+        pair for src, dst, connect in edges if dst == 'compose_jacobian' for pair in connect
     }
     excluded = ('itk_b0_to_t1', 'intramodal', 't1_2_mni')
     for source, _ in forwarded:
@@ -253,7 +246,7 @@ def test_source_name_detects_a_functor_wrapped_forbidden_field():
             ['/data/sub-1/dwi/sub-1_dwi.nii.gz', '/data/sub-1/fmap/sub-1_epi.nii.gz'],
             marks=pytest.mark.xfail(
                 reason=(
-                    "pre-existing bug, unrelated to jacobian weighting: "
+                    'pre-existing bug, unrelated to jacobian weighting: '
                     "init_sdc_wf's PEPOLAR branch calls "
                     'init_pepolar_unwarp_wf(omp_nthreads=...) '
                     '(qsiprep/workflows/fieldmap/base.py:166), but '
@@ -394,16 +387,24 @@ def test_jacobian_derivative_path_renders():
 def test_jacobian_derivative_does_not_collide_with_preproc_dwi():
     preproc = build_path(
         {
-            'subject': '01', 'datatype': 'dwi', 'space': 'ACPC', 'desc': 'preproc',
-            'suffix': 'dwi', 'extension': '.nii.gz',
+            'subject': '01',
+            'datatype': 'dwi',
+            'space': 'ACPC',
+            'desc': 'preproc',
+            'suffix': 'dwi',
+            'extension': '.nii.gz',
         },
         _patterns(),
         strict=False,
     )
     jacobian = build_path(
         {
-            'subject': '01', 'datatype': 'dwi', 'space': 'ACPC', 'desc': 'jacobian',
-            'suffix': 'dwimap', 'extension': '.nii.gz',
+            'subject': '01',
+            'datatype': 'dwi',
+            'space': 'ACPC',
+            'desc': 'jacobian',
+            'suffix': 'dwimap',
+            'extension': '.nii.gz',
         },
         _patterns(),
         strict=False,
@@ -416,8 +417,10 @@ def test_jacobian_sidecar_index_is_zero_based_and_full_length():
     from qsiprep.interfaces.jacobian import _jacobian_sidecar
 
     sidecar = _jacobian_sidecar(
-        weight_index=[0, 0, 1, 0], applied=['gradwarp', 'sdc'],
-        unmodulated=[], reason=None,
+        weight_index=[0, 0, 1, 0],
+        applied=['gradwarp', 'sdc'],
+        unmodulated=[],
+        reason=None,
     )
     assert sidecar['JacobianWeightIndex'] == [0, 0, 1, 0]
     assert sidecar['AppliedCorrections'] == ['gradwarp', 'sdc']
@@ -429,7 +432,8 @@ def test_jacobian_sidecar_records_a_gap():
     from qsiprep.interfaces.jacobian import _jacobian_sidecar
 
     sidecar = _jacobian_sidecar(
-        weight_index=[0, 0], applied=['gradwarp', 'sdc'],
+        weight_index=[0, 0],
+        applied=['gradwarp', 'sdc'],
         unmodulated=['eddy-current'],
         reason='TORTOISE correction_mode=cubic is not supported',
     )
@@ -441,9 +445,7 @@ def test_jacobian_sidecar_collapsed_case_is_written_in_full():
     """All-zeros rather than omitted, so consumers need no special case."""
     from qsiprep.interfaces.jacobian import _jacobian_sidecar
 
-    sidecar = _jacobian_sidecar(
-        weight_index=[0] * 5, applied=['sdc'], unmodulated=[], reason=None
-    )
+    sidecar = _jacobian_sidecar(weight_index=[0] * 5, applied=['sdc'], unmodulated=[], reason=None)
     assert sidecar['JacobianWeightIndex'] == [0, 0, 0, 0, 0]
 
 
@@ -563,7 +565,6 @@ def test_jacobian_weights_do_not_reach_finalize_when_weighting_off(tmp_path):
     edge = wf._graph.get_edge_data(trans_wf, outputnode)
     connect = edge['connect'] if edge is not None else []
     assert not any('jacobian_weights' in str(pair) for pair in connect)
-
 
 
 # --- regression: zero real weight maps at run time --------------------------
