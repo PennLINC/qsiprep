@@ -176,13 +176,32 @@ def test_first_listed_transform_is_applied_first_to_the_point(tmp_path):
     displacement = field.reshape(field.shape[:3] + (3,))[0, 0, 0]
     magnitude = np.abs(displacement).max()
 
+    # Separate "the other convention" from "something else entirely" (an
+    # affine collapse, a zero field, a units problem). Only 10 and 20 are
+    # convention answers; anything else means the experiment itself is wrong
+    # and neither party's prediction has been tested.
+    assert magnitude == pytest.approx(10.0, abs=0.5) or magnitude == pytest.approx(
+        20.0, abs=0.5
+    ), (
+        f'Composite displacement at the origin was {magnitude:.3f}mm, which is '
+        'neither 10mm nor 20mm. This test has not discriminated anything -- the '
+        'experiment is broken (collapsed affines, an empty field, or a units '
+        'mismatch), not the convention. Investigate before reading anything '
+        'into it.'
+    )
+
     assert magnitude == pytest.approx(10.0, abs=0.5), (
         'transforms=[scale, translate] produced a displacement of '
         f'{magnitude:.3f}mm. 10mm means phi = translate . scale, i.e. the '
         'FIRST-listed transform is innermost (applied first to the point), '
-        'which is what ComposeJacobianWeights assumes. 20mm would mean the '
-        'opposite convention and the composition design must be revisited '
-        '-- see "Disambiguating \'applied first\'" in the design spec.'
+        'which is what ComposeJacobianWeights assumes. 20mm means the opposite '
+        'convention: STOP, and rework the composition to include the '
+        'per-volume HMC affine so the gradwarp and SDC determinants are '
+        'evaluated at the right coordinates. Do not work around it. See '
+        '"Disambiguating \'applied first\'" in the design spec, and note that '
+        'under the 20mm reading QSIPrep\'s existing resampling would be '
+        'sampling native per-volume data at b=0-reference coordinates, so '
+        'check that too.'
     )
 ```
 
@@ -218,14 +237,26 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ### Task 2: Determine what DRBUDDI's `_JAC` outputs contain
 
+> **Execution order: run this task AFTER Task 3 and BEFORE Task 4.** It needs
+> `jacobian_determinant`, which Task 3 creates. It is placed here in the
+> document because it is a gate, not because it runs second.
+>
+> **Why it must precede Task 4 and not merely Task 10:** Tasks 5 and 7 retire
+> the legacy scaling-image path. If this gate ran after them and failed, the
+> ratio images would already be disconnected from the renamed interface and the
+> spec's option-(2) fallback would be unreachable. A failure here means the
+> plan shape changes — analytic for the other backends, ratios retained for
+> DRBUDDI — so **stop and re-plan** rather than carrying a conditional branch
+> through eight tasks.
+
 `DRBUDDIAggregateOutputs` already receives `blip_up_b0_corrected_jac` and `blip_down_b0_corrected_jac` (`qsiprep/interfaces/tortoise.py:400-442`, wired at `qsiprep/workflows/fieldmap/drbuddi.py:241`) and does nothing with them. If they are the Jacobian-modulated corrected b=0 images, then `_JAC / b0_corrected` is TORTOISE's own determinant and gives a real oracle for Task 10. This task finds out. It gates Task 10 only.
 
 **Files:**
 - Create: `qsiprep/tests/test_drbuddi_jac_semantics.py`
 
 **Interfaces:**
-- Consumes: nothing.
-- Produces: a recorded finding (in the test docstring) plus `test_jac_over_corrected_matches_analytic_determinant`, which Task 10 relies on.
+- Consumes: `jacobian_determinant` (Task 3).
+- Produces: a recorded finding (in the test docstring) plus the gate result that Tasks 4–12 proceed on.
 
 - [ ] **Step 1: Write the investigation test**
 
@@ -248,16 +279,27 @@ import pytest
 
 @pytest.mark.integration
 @pytest.mark.drbuddi_rpe
-def test_jac_over_corrected_matches_analytic_determinant(working_dir):
+@pytest.mark.parametrize(
+    ('blip', 'warp_name'),
+    [
+        ('up', 'deformation_FINV.nii.gz'),
+        # The down direction's warp is the composite that already carries the
+        # bdown_to_bup rigid (qsiprep/interfaces/tortoise.py:508), so testing
+        # it checks that the rigid composition is handled too -- the up case
+        # alone would not.
+        ('down', 'blip_down_composite.nii.gz'),
+    ],
+)
+def test_jac_over_corrected_matches_analytic_determinant(working_dir, blip, warp_name):
     """``_JAC / _corrected`` should equal the determinant of the DRBUDDI warp."""
     from pathlib import Path
 
     from qsiprep.interfaces.jacobian import jacobian_determinant
 
     work = Path(working_dir)
-    corrected = next(work.rglob('blip_up_b0_corrected.nii'))
-    jac = next(work.rglob('blip_up_b0_corrected_JAC.nii'))
-    warp = next(work.rglob('deformation_FINV.nii.gz'))
+    corrected = next(work.rglob(f'blip_{blip}_b0_corrected.nii'))
+    jac = next(work.rglob(f'blip_{blip}_b0_corrected_JAC.nii'))
+    warp = next(work.rglob(warp_name))
 
     corrected_data = np.asanyarray(nb.load(str(corrected)).dataobj)
     jac_data = np.asanyarray(nb.load(str(jac)).dataobj)
@@ -270,25 +312,36 @@ def test_jac_over_corrected_matches_analytic_determinant(working_dir):
         nb.load(str(jacobian_determinant(str(warp), str(work / 'analytic.nii.gz')))).dataobj
     )
 
+    # Correlation alone is not an equivalence check: a map that is globally
+    # mis-scaled, or biased in a way that varies smoothly across the brain,
+    # correlates strongly while being wrong everywhere. Require voxelwise
+    # agreement, and report the correlation only as context.
     r = np.corrcoef(tortoise_ratio[inside], analytic[inside])[0, 1]
-    assert r > 0.95, (
-        f'TORTOISE _JAC/_corrected vs analytic determinant: r={r:.4f}. '
-        'If this is low, _JAC is not simple Jacobian modulation -- record what '
-        'it is here and fall back to the option (2) path in the spec.'
-    )
-    np.testing.assert_allclose(
-        np.median(tortoise_ratio[inside]), np.median(analytic[inside]), rtol=0.05
+    relative_error = np.abs(analytic[inside] - tortoise_ratio[inside]) / tortoise_ratio[inside]
+    p95 = float(np.percentile(relative_error, 95))
+
+    assert p95 < 0.05, (
+        f'95th-percentile voxelwise relative error between TORTOISE '
+        f'_JAC/_corrected and the analytic determinant is {p95:.4f} (r={r:.4f}). '
+        'Above 5% means _JAC is not simple Jacobian modulation, or our '
+        'determinant is wrong. STOP and re-plan on the spec option-(2) path: '
+        'analytic Jacobians for the other backends, DRBUDDI keeps its ratio '
+        'images, and the sdc_scaling_images deletion in Task 10 does not '
+        'happen. Record here what _JAC actually turned out to be.'
     )
 ```
 
-- [ ] **Step 2: Run it**
+- [ ] **Step 2: Run it (after Task 3 has landed)**
 
 ```bash
 micromamba run -n linc311 python -m pytest \
   qsiprep/tests/test_drbuddi_jac_semantics.py -v -m drbuddi_rpe
 ```
 
-Expected now: FAIL on `ImportError: qsiprep.interfaces.jacobian` — `jacobian_determinant` arrives in Task 3. That is fine; this test is re-run at the end of Task 3 and again in Task 10.
+Expected: PASS for both blip directions. **If either fails, stop and re-plan** —
+do not continue to Task 4. Record the measured 95th-percentile relative error
+and the correlation in the commit message either way, so the decision is
+evidenced rather than remembered.
 
 - [ ] **Step 3: Commit**
 
@@ -495,6 +548,44 @@ def test_jacobian_determinant_of_shear_is_unity(tmp_path):
     np.testing.assert_allclose(interior, 1.0, atol=5e-2)
 
 
+def test_jacobian_determinant_rejects_a_fold_in_mask(tmp_path):
+    """A folded warp has a negative determinant and must not be absolute-valued.
+
+    Without this case the three positive-determinant tests above all pass while
+    a fold at -0.5 silently becomes a weight of 0.5.
+    """
+    if shutil.which('CreateJacobianDeterminantImage') is None:
+        pytest.skip('CreateJacobianDeterminantImage required for this test')
+    # phi(x) = diag(-1, 1, 1) @ x is an orientation reversal: det = -1.
+    field = _write_linear_field(tmp_path / 'fold.nii.gz', np.diag([-1.0, 1.0, 1.0]))
+    mask = _write_map(tmp_path / 'mask.nii.gz', 1.0)
+
+    with pytest.raises(ValueError, match='non-positive'):
+        jacobian_determinant(field, str(tmp_path / 'det.nii.gz'), mask_path=mask)
+
+
+def test_jacobian_determinant_tolerates_edge_negatives_outside_mask(tmp_path):
+    if shutil.which('CreateJacobianDeterminantImage') is None:
+        pytest.skip('CreateJacobianDeterminantImage required for this test')
+    field = _write_linear_field(tmp_path / 'scale.nii.gz', np.diag([2.0, 1.0, 1.0]))
+    mask_data = np.zeros((8, 8, 8), dtype='uint8')
+    mask_data[3:5, 3:5, 3:5] = 1
+    mask = str(tmp_path / 'mask.nii.gz')
+    nb.Nifti1Image(mask_data, np.eye(4)).to_filename(mask)
+
+    out = jacobian_determinant(field, str(tmp_path / 'det.nii.gz'), mask_path=mask)
+    assert (np.asanyarray(nb.load(out).dataobj) >= 0).all()
+
+
+def test_validate_scalar_geometry_rejects_a_wrong_grid(tmp_path):
+    from qsiprep.interfaces.jacobian import validate_scalar_geometry
+
+    reference = _write_map(tmp_path / 'ref.nii.gz', 1.0)
+    other = _write_map(tmp_path / 'other.nii.gz', 1.0, shape=(6, 6, 6))
+    with pytest.raises(ValueError, match='shape'):
+        validate_scalar_geometry(other, reference)
+
+
 def test_compose_fields_returns_a_single_field(tmp_path):
     if shutil.which('antsApplyTransforms') is None:
         pytest.skip('antsApplyTransforms required for this test')
@@ -546,6 +637,11 @@ LOGGER = logging.getLogger('nipype.interface')
 #: enough that a different lattice or orientation fails.
 AFFINE_RTOL = 1e-5
 AFFINE_ATOL = 1e-4
+
+#: Floor for a resampled weight map. Lanczos ringing can push a positive
+#: scalar map slightly negative; a weight can be small but never zero or
+#: negative.
+WEIGHT_FLOOR = 1e-3
 
 #: In-mask median outside this range is a smell, not an error: a correct
 #: distortion field redistributes signal without changing its total, so the
@@ -673,12 +769,17 @@ def compose_fields(field_paths, reference, out_path):
     return out_path
 
 
-def jacobian_determinant(field_path, out_path):
+def jacobian_determinant(field_path, out_path, mask_path=None):
     """``|det grad phi|`` of a displacement field, on the field's own grid.
 
     ``CreateJacobianDeterminantImage`` takes no reference image; it emits on
     the deformation field's grid. ``doLogJacobian=0`` because the weight is
     multiplicative, and ``useGeometric=0`` for the plain determinant.
+
+    A folded warp produces a *negative* determinant, so the sign is inspected
+    before any absolute value is taken -- otherwise a fold at -0.5 would become
+    an innocuous-looking weight of 0.5 and no later check could recover it.
+    Pass ``mask_path`` to get that check; without it the sign is only logged.
     """
     jac = ants.CreateJacobianDeterminantImage(
         imageDimension=3,
@@ -692,15 +793,56 @@ def jacobian_determinant(field_path, out_path):
     runtime = jac.run().runtime
     LOGGER.info(runtime.cmdline)
 
-    # CreateJacobianDeterminantImage can emit small negative values at the
-    # field's edge from one-sided differences. The weight is multiplicative, so
-    # take the absolute value; check_weight_map still catches genuine in-mask
-    # folding.
     img = nb.load(out_path)
+    signed = np.asanyarray(img.dataobj)
+
+    # Inspect the SIGN before taking any absolute value. In-mask negatives mean
+    # the composed warp folds, which is a hard error; outside the mask,
+    # CreateJacobianDeterminantImage legitimately emits small negatives at the
+    # field's edge from one-sided differences, and those are harmless.
+    if mask_path is not None:
+        mask = np.asanyarray(nb.load(mask_path).dataobj) > 0
+        inside = signed[mask]
+        if inside.size and inside.min() <= 0:
+            raise ValueError(
+                f'Jacobian determinant of {field_path} is non-positive inside '
+                f'the brain mask (minimum {inside.min():.4f}), i.e. the composed '
+                'warp folds there. Refusing to build a weight map from it.'
+            )
+    elif np.nanmin(signed) <= 0:
+        LOGGER.warning(
+            'Jacobian determinant of %s contains non-positive values and no '
+            'mask was supplied to localise them. Edge negatives are expected; '
+            'interior ones are a fold.',
+            field_path,
+        )
+
     nb.Nifti1Image(
-        np.abs(np.asanyarray(img.dataobj)).astype('float32'), img.affine, img.header
+        np.abs(signed).astype('float32'), img.affine, img.header
     ).to_filename(out_path)
     return out_path
+
+
+def validate_scalar_geometry(image_path, reference_path):
+    """Raise unless a scalar map shares ``reference_path``'s sampling grid.
+
+    ``validate_field_geometry`` covers displacement fields. Scalar inputs --
+    the eddy-current Jacobians, the brain mask, and every map that goes into a
+    product -- need the same check, or a mislatticed input is multiplied
+    elementwise against the wrong voxels or silently moves which voxels the
+    positivity guard inspects.
+    """
+    image = nb.load(image_path)
+    reference = nb.load(reference_path)
+    if image.shape[:3] != reference.shape[:3]:
+        raise ValueError(
+            f'{image_path} has spatial shape {image.shape[:3]}, but '
+            f'{reference_path} has {reference.shape[:3]}.'
+        )
+    if not np.allclose(image.affine, reference.affine, rtol=AFFINE_RTOL, atol=AFFINE_ATOL):
+        raise ValueError(
+            f'{image_path} has an affine that does not match {reference_path}.'
+        )
 
 
 def _abspath(path, cwd):
@@ -905,6 +1047,17 @@ class _ComposeJacobianWeightsInputSpec(BaseInterfaceInputSpec):
         desc='undistorted b=0 reference; the lattice the weight maps live on and '
         'the reference for composing two fields',
     )
+    # NOTE for the implementer: only this image's *grid* is used -- as the
+    # ``-r`` reference for composition and as the geometry the input fields are
+    # validated against. Its voxel content is never read. That matters because
+    # on the DRBUDDI-with-T2w path ``b0_ref_image`` is the *structural* image
+    # rather than a b=0 (``DRBUDDIAggregateOutputs`` returns
+    # ``structural_image`` as ``b0_ref`` when one exists,
+    # ``qsiprep/interfaces/tortoise.py:503-507``). That is still correct here:
+    # ``init_structural_to_b0_alignment_wf`` resamples the T2w with ``b0_ref``
+    # as its ``reference_image`` (``qsiprep/workflows/dwi/registration.py:157``),
+    # so the structural is on the b=0 lattice. Do not "fix" this by reaching for
+    # a different input.
     mask = File(
         exists=True,
         mandatory=True,
@@ -978,6 +1131,8 @@ class ComposeJacobianWeights(SimpleInterface):
             for warp in set(fieldwarps):
                 validate_field_geometry(warp, reference)
 
+        validate_scalar_geometry(self.inputs.mask, reference)
+
         ec_images = [None] * num_dwis
         if isdefined(self.inputs.ec_jacobian_images) and self.inputs.ec_jacobian_images:
             supplied = list(self.inputs.ec_jacobian_images)
@@ -986,6 +1141,8 @@ class ComposeJacobianWeights(SimpleInterface):
                     f'Got {len(supplied)} eddy-current Jacobians for {num_dwis} '
                     'DWI volumes; expected one per volume.'
                 )
+            for ec_image in set(supplied):
+                validate_scalar_geometry(ec_image, reference)
             ec_images = supplied
 
         if gradwarp is None and not any(fieldwarps) and not any(ec_images):
@@ -1006,7 +1163,9 @@ class ComposeJacobianWeights(SimpleInterface):
             else:
                 composed = fields[0]
             determinants[key] = jacobian_determinant(
-                composed, os.path.join(runtime.cwd, f'jacobian{len(determinants)}.nii.gz')
+                composed,
+                os.path.join(runtime.cwd, f'jacobian{len(determinants)}.nii.gz'),
+                mask_path=self.inputs.mask,
             )
 
         # Per-volume weight = shared determinant x that volume's EC Jacobian.
@@ -1020,7 +1179,10 @@ class ComposeJacobianWeights(SimpleInterface):
             if ec_image:
                 factors.append(ec_image)
 
-            cache_key = tuple(factors)
+            # Tag the roles rather than collapsing missing factors into an
+            # untagged tuple: (None, 'f.nii.gz') and ('f.nii.gz', None) are
+            # different weights that would otherwise share a key.
+            cache_key = (gradwarp, fieldwarp, ec_image)
             if cache_key not in cache:
                 cache[cache_key] = multiply_maps(
                     factors,
@@ -1157,6 +1319,10 @@ class _ApplyJacobianWeightsOutputSpec(TraitedSpec):
         desc='the unique weight maps, resampled to the output grid, in '
         'first-appearance order; indexed by the derivative sidecar',
     )
+    weight_index = traits.List(
+        traits.Int(),
+        desc='for each DWI volume, its index into resampled_weight_images',
+    )
 
 
 class ApplyJacobianWeights(SimpleInterface):
@@ -1172,9 +1338,22 @@ class ApplyJacobianWeights(SimpleInterface):
     output_spec = _ApplyJacobianWeightsOutputSpec
 ```
 
-In `_run_interface`, rename `self.inputs.scaling_image_files` to
-`self.inputs.jacobian_weight_images` throughout, keep the existing transform-stack
-and dedup logic exactly as it is, and record the resampled maps:
+In `_run_interface`, apply this **exact** rename list — the snippet below uses
+`weights_to_dwis`, which does not exist until you rename it, and a literal
+implementation without these renames raises `NameError`:
+
+| Current name (`qsiprep/interfaces/fmap.py:1062-1135`) | New name |
+|---|---|
+| `self.inputs.scaling_image_files` | `self.inputs.jacobian_weight_images` |
+| `scaling_images_to_dwis` | `weights_to_dwis` |
+| `dwi_files_to_scalings` | `dwi_files_to_weights` |
+| `scaling_image` (loop variable) | `weight_image` |
+| `resampled_scaling_image` | `resampled_weight_image` |
+
+Keep the transform-stack construction (`fmap.py:1071-1096`) and the
+`defaultdict` dedup exactly as they are — the transport chain is unchanged and
+is what evaluates the determinants at the right coordinates. Then record the
+resampled maps and the per-volume index:
 
 ```python
         # Apply the transform, link the resampled weight map to resampled dwis
@@ -1200,7 +1379,35 @@ and dedup logic exactly as it is, and record the resampled maps:
             for dwi_file in weights_to_dwis[weight_image]:
                 dwi_files_to_weights[dwi_file] = resampled_weight_image
 
+        # LanczosWindowedSinc can undershoot below zero on a positive scalar
+        # map. The pre-transport guard cannot see that, because it ran before
+        # this resampling, so clamp with an explicit floor and say so rather
+        # than letting a negative weight through.
+        for resampled_weight_image in resampled_unique:
+            img = nb.load(resampled_weight_image)
+            data = np.asanyarray(img.dataobj)
+            if data.min() <= 0:
+                LOGGER.warning(
+                    'Resampled weight map %s undershot to %.4f (Lanczos ringing '
+                    'on a positive scalar map); clamping to %g.',
+                    resampled_weight_image,
+                    data.min(),
+                    WEIGHT_FLOOR,
+                )
+                nb.Nifti1Image(
+                    np.maximum(data, WEIGHT_FLOOR).astype('float32'),
+                    img.affine,
+                    img.header,
+                ).to_filename(resampled_weight_image)
+
         self._results['resampled_weight_images'] = resampled_unique
+        # The per-volume lookup, as indices into resampled_unique. Task 12
+        # cannot build JacobianWeightIndex without this: resampled_unique is
+        # deduplicated, so it alone does not say which volume used which map.
+        self._results['weight_index'] = [
+            resampled_unique.index(dwi_files_to_weights[dwi_file])
+            for dwi_file in self.inputs.dwi_files
+        ]
 ```
 
 Then update the import in `qsiprep/workflows/dwi/resampling.py`:
@@ -1215,15 +1422,36 @@ and the node construction:
     scale_dwis = pe.Node(ApplyJacobianWeights(), name='scale_dwis')
 ```
 
+**Close the broken-connection window in this same task.** Renaming the trait
+invalidates the existing `('sdc_scaling_images', 'scaling_image_files')`
+connection in `init_dwi_trans_wf`, and nothing would catch that until Task 7,
+because an import test does not build the workflow — Nipype validates
+connections at construction time. So in *this* task, delete that one entry from
+the `(inputnode, scale_dwis, [...])` block, leaving `scale_dwis` with no weight
+input. That is a valid intermediate state: the interface's no-weights branch
+passes the DWIs through untouched, so the pipeline still runs, just without
+weighting until Task 7 wires `compose_jacobian` in.
+
+Keep the rest of that connect block — the intramodal and coregistration
+transforms `scale_dwis` uses to transport the maps are unchanged.
+
 - [ ] **Step 4: Run the tests to verify they pass**
 
 ```bash
 micromamba run -n linc311 python -m pytest \
   qsiprep/tests/test_interfaces_fmap.py -v
-micromamba run -n linc311 python -c "import qsiprep.workflows.dwi.resampling"
+micromamba run -n linc311 python -c "
+from qsiprep import config
+config.workflow.output_resolution = 2.0
+from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
+init_dwi_trans_wf(source_file='/data/sub-1_dwi.nii.gz', mem_gb=1)
+print('workflow constructs')
+"
 ```
 
-Expected: PASS, and the import succeeds. Also grep for stragglers:
+Expected: PASS, and the workflow *constructs* — an import alone would not
+exercise Nipype's connection validation, which is what a stale trait name
+breaks. Also grep for stragglers:
 
 ```bash
 grep -rn "ApplyScalingImages\|scaling_image_files" --include=*.py qsiprep/
@@ -1359,6 +1587,30 @@ def eddy_modulates_distortion(eddy_args):
     broader about least-squares restoration's intensity semantics.
     """
     return effective_eddy_resampling_method(eddy_args) == 'jac'
+```
+
+In `qsiprep/workflows/dwi/fsl.py`, right after `eddy_args` is loaded
+(`qsiprep/workflows/dwi/fsl.py:182`), emit the user-visible runtime warning
+and record the gap for the derivative sidecar:
+
+```python
+    from ...utils.eddy_config import eddy_modulates_distortion
+
+    if not eddy_modulates_distortion(eddy_args):
+        config.loggers.workflow.warning(
+            'eddy is configured with method=%s, not "jac", so eddy-current '
+            'and susceptibility distortion corrections will NOT be '
+            'Jacobian-modulated. QSIPrep cannot retrofit this: eddy has '
+            'already baked its resampling in and exports no field for the '
+            'eddy-current component.',
+            eddy_args.get('method'),
+        )
+        config.workflow.jacobian_unmodulated_corrections += [
+            'eddy-current', 'susceptibility'
+        ]
+        config.workflow.jacobian_unmodulated_reason = (
+            f'FSL eddy ran with --resamp={eddy_args.get("method")} rather than jac'
+        )
 ```
 
 In `qsiprep/cli/parser.py`, immediately after the `--eddy-config` argument:
@@ -1587,6 +1839,78 @@ Add a comment above the node recording why:
     # warp is VBM-style volume modulation, wrong for DWI signal.
 ```
 
+
+- [ ] **Step 3a: Add the per-backend wiring tests**
+
+The tests above build the generic resampling workflow. They prove
+`compose_jacobian` is wired, but not that each fieldmap backend actually
+*delivers* a warp into `fieldwarps` — which is the whole reason GRE, SyN,
+T2Wreg and DRBUDDI need no per-backend code. Assert that claim per branch, or
+a backend could silently stop emitting a warp and weighting would quietly
+become a no-op for it.
+
+```python
+# Append to qsiprep/tests/test_workflows_jacobian.py
+
+import pytest
+from qsiplan.models import CorrectionMethod
+
+from qsiprep.tests.preproc_factory import make_preproc_unit
+
+
+@pytest.mark.parametrize(
+    ('method', 'sources'),
+    [
+        (
+            CorrectionMethod.PEPOLAR,
+            ['/data/sub-1/dwi/sub-1_dwi.nii.gz', '/data/sub-1/fmap/sub-1_epi.nii.gz'],
+        ),
+        (
+            CorrectionMethod.FIELDMAP,
+            [
+                '/data/sub-1/fmap/sub-1_phasediff.nii.gz',
+                '/data/sub-1/fmap/sub-1_magnitude1.nii.gz',
+            ],
+        ),
+        (CorrectionMethod.SYN, ['/data/sub-1/dwi/sub-1_dwi.nii.gz']),
+    ],
+)
+def test_each_sdc_branch_emits_a_warp_for_weighting(method, sources):
+    """Every SDC branch must reach ``to_dwi_ref_warps``.
+
+    ``to_dwi_ref_warps`` becomes ``fieldwarps``, which is the single input
+    ComposeJacobianWeights derives the SDC determinant from. A branch that
+    stops populating it loses weighting silently rather than loudly.
+    """
+    from qsiprep.workflows.fieldmap import init_sdc_wf
+
+    unit = make_preproc_unit(
+        ['/data/sub-1/dwi/sub-1_dwi.nii.gz'],
+        method=method,
+        pe_dir='j',
+        estimation_sources=sources,
+    )
+    workflow = init_sdc_wf(unit)
+    outputnode = workflow.get_node('outputnode')
+    assert 'out_warp' in outputnode.outputs.copyable_trait_names()
+
+    connected = {
+        pair
+        for _, dst, data in workflow._graph.edges(data=True)
+        if dst.name == 'outputnode'
+        for pair in data['connect']
+    }
+    assert any(target == 'out_warp' for _, target in connected), (
+        f'{method} produced no out_warp, so nothing would reach fieldwarps '
+        'and this backend would be silently unweighted.'
+    )
+```
+
+Note the one branch deliberately absent from the list: TOPUP-only. It
+populates `to_dwi_ref_warps` with `GatherEddyInputs.forward_warps`, which is
+empty by design (Task 9), because `eddy` already applied and modulated that
+field.
+
 - [ ] **Step 4: Run the tests to verify they pass**
 
 ```bash
@@ -1703,14 +2027,31 @@ def test_gather_eddy_inputs_exports_no_warps(tmp_path):
     ``fieldwarps`` and ``ComposeJacobianWeights`` would derive a determinant
     for a distortion ``eddy`` has already Jacobian-modulated internally --
     applying it twice. The empty list is load-bearing, not incidental.
+
+    Asserted on the interface's actual *output*, not on its source text: a
+    source-text check passes even if later code overwrites the list.
     """
-    import inspect
-
     from qsiprep.interfaces.eddy import GatherEddyInputs
+    from qsiprep.tests.gradient_fixtures import write_dwi_with_gradients
 
-    source = inspect.getsource(GatherEddyInputs._run_interface)
-    assert "self._results['forward_warps'] = []" in source
-    assert "self._results['forward_transforms'] = []" in source
+    dwi = write_dwi_with_gradients(tmp_path / 'sub-1_dwi.nii.gz', nvols=4)
+    stem = str(dwi).split('.nii')[0]
+    json_file = tmp_path / 'sub-1_dwi.json'
+    json_file.write_text(
+        '{"PhaseEncodingDirection": "j", "TotalReadoutTime": 0.05}'
+    )
+
+    result = GatherEddyInputs(
+        dwi_file=dwi,
+        bval_file=stem + '.bval',
+        bvec_file=stem + '.bvec',
+        json_file=str(json_file),
+        original_files=[dwi] * 4,
+        topup_requested=True,
+    ).run(cwd=str(tmp_path))
+
+    assert result.outputs.forward_warps == []
+    assert result.outputs.forward_transforms == []
 ```
 
 - [ ] **Step 2: Run the test**
@@ -1748,14 +2089,17 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Consumes: `ComposeJacobianWeights` (Task 4), the Task 2 finding.
 - Produces: the `sdc_scaling_images` channel is gone; `DRBUDDIAggregateOutputs` no longer has an `sdc_scaling_images` output.
 
-- [ ] **Step 1: Re-run the Task 2 gate**
+- [ ] **Step 1: Confirm the Task 2 gate is still green**
 
 ```bash
 micromamba run -n linc311 python -m pytest \
   qsiprep/tests/test_drbuddi_jac_semantics.py -v -m drbuddi_rpe
 ```
 
-Record the correlation. Proceed only if it passes.
+The gate was already decided before Task 4 (see Task 2's execution-order
+banner), so this is a re-confirmation, not the decision point. If it has gone
+red since, something in Tasks 3–9 changed the determinant; investigate that
+rather than proceeding with the deletion.
 
 - [ ] **Step 2: Write the failing test**
 
@@ -1997,7 +2341,29 @@ Implement in `qsiprep/interfaces/jacobian.py`, following the formula recorded in
 - `resample_with_okan_transform(image, transformations_file, out_path) -> str` — the full 24-parameter resampling used only by the ship-gate test.
 - `OkanQuadraticJacobian(SimpleInterface)` — reads the transformations file (reusing `_read_okan_transformations` from `qsiprep.interfaces.tortoise`), validates 24 columns per row, returns `Undefined` for `correction_mode` in `('motion', 'cubic')` with a `LOGGER.warning` naming the gap, and otherwise writes one 3D map per volume.
 
-Then wire it in `qsiprep/workflows/dwi/diffprep.py`: add an `ec_jacobian_images` field to the outputnode, build the node from `corrected_node.transformations_file` with `correction_mode=correction_mode`, and forward it. Add the matching passthrough field to `qsiprep/workflows/dwi/base.py` and `finalize.py` so it reaches `init_dwi_trans_wf` — the same four-file path the deleted `sdc_scaling_images` channel used.
+Then wire it in `qsiprep/workflows/dwi/diffprep.py`:
+
+- add an `ec_jacobian_images` field to the outputnode;
+- build the node from `corrected_node.transformations_file`;
+- pass **`effective_correction_mode`**, not `correction_mode`. The workflow
+  already derives it at `qsiprep/workflows/dwi/diffprep.py:351`, dropping
+  `quadratic` to `motion` under `--sloppy`. Passing the configured value would
+  attempt quadratic recovery from motion-only transforms on every `--sloppy`
+  run;
+- wire `reference_image` from `extract_b0s.b0_average` — the EC Jacobian is
+  evaluated on the DIFFPREP input grid, which is the grid `_moteddy.nii` is in
+  (`qsiprep/interfaces/tortoise.py:1123`). Do not use the output grid.
+
+Add the matching passthrough field to `qsiprep/workflows/dwi/base.py` and
+`finalize.py` so it reaches `init_dwi_trans_wf` — the same four-file path the
+deleted `sdc_scaling_images` channel used.
+
+`OkanQuadraticJacobian` must also validate that the transformations file has
+one row per DWI volume, and derive its identity row from the sourced
+convention rather than assuming 24 zeros encode identity (record in Step 1
+whether it does; if the convention uses non-zero defaults for the eddy centre,
+24 zeros is *not* identity and the first two unit tests above need their
+expected rows changed accordingly).
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
@@ -2065,6 +2431,8 @@ def test_jacobian_derivative_path_renders():
     Entity-level checks are blind to a pattern that silently drops an entity or
     collides with another derivative's name.
     """
+    # strict=True: with strict=False an entity the pattern does not support is
+    # silently dropped, so the test would pass while the real filename lost it.
     out = build_path(
         dict(
             subject='01',
@@ -2075,7 +2443,7 @@ def test_jacobian_derivative_path_renders():
             extension='.nii.gz',
         ),
         _patterns(),
-        strict=False,
+        strict=True,
     )
     assert out == 'sub-01/dwi/sub-01_space-ACPC_desc-jacobian_dwimap.nii.gz'
 
@@ -2165,8 +2533,11 @@ def _jacobian_sidecar(weight_index, applied, unmodulated, reason):
         'UnmodulatedCorrections': list(unmodulated),
         'Description': (
             'Multiplicative Jacobian intensity modulation applied to the '
-            'preprocessed DWI series. Divide the series by the indexed volume '
-            'of this file to recover the unmodulated data.'
+            'preprocessed DWI series immediately after spatial resampling. '
+            'Dividing by the indexed volume reverses that multiplication at '
+            'that point in the pipeline; it does not recover an unmodulated '
+            'series, because denoising and bias-field correction run after '
+            'resampling and do not commute with it.'
         ),
     }
     if unmodulated and reason:
@@ -2193,7 +2564,104 @@ Add the sink alongside the existing ones, following the `ds_cnr_map_t1` shape:
     )
 ```
 
-Build the 4D file from `resampled_weight_images` with a small node that stacks the unique maps and emits the index array feeding `_jacobian_sidecar`. Gate the whole block on `config.workflow.jacobian_weighting`.
+**The derivative contract, stated so it is not ambiguous.** The file records
+*the weights QSIPrep applied*, nothing else. Consequences:
+
+- When `ComposeJacobianWeights` produced no weights (`jacobian_weight_images`
+  is `Undefined` -- e.g. `--hmc-method eddy` with TOPUP and no gradwarp, where
+  every applied modulation is internal to `eddy`), **no file is written**. Use
+  `DerivativesMaybeDataSink` (`qsiprep/interfaces/bids.py:245`), which no-ops
+  on an undefined input. Do not synthesize a map of ones: that would assert
+  "we modulated by 1", which is false -- the modulation happened inside `eddy`
+  and QSIPrep has no map for it.
+- `--no-jacobian-weighting` likewise writes nothing.
+- This narrows the spec's "always" to "whenever QSIPrep applied weights".
+  Update the spec's Derivatives section to say so.
+
+**Stack and route.** Add to `qsiprep/interfaces/jacobian.py`:
+
+```python
+class _StackJacobianWeightsInputSpec(BaseInterfaceInputSpec):
+    weight_images = InputMultiObject(
+        File(exists=True),
+        mandatory=True,
+        desc='unique output-grid weight maps, first-appearance order',
+    )
+    weight_index = traits.List(
+        traits.Int(), mandatory=True, desc='per-volume index into weight_images'
+    )
+
+
+class _StackJacobianWeightsOutputSpec(TraitedSpec):
+    out_file = File(exists=True, desc='3D if one unique map, else 4D')
+    meta_dict = traits.Dict(desc='sidecar for the derivative')
+
+
+class StackJacobianWeights(SimpleInterface):
+    # Stack the unique weight maps and build the sidecar. 3D when every volume
+    # shares one map, 4D otherwise. The index is written out in full either
+    # way, so consumers need no special case.
+
+    input_spec = _StackJacobianWeightsInputSpec
+    output_spec = _StackJacobianWeightsOutputSpec
+
+    def _run_interface(self, runtime):
+        from ... import config
+        from ..workflows.dwi.derivatives import _jacobian_sidecar
+
+        images = [nb.load(path) for path in self.inputs.weight_images]
+        out_file = os.path.join(runtime.cwd, 'jacobian_weights.nii.gz')
+        if len(images) == 1:
+            data = np.asanyarray(images[0].dataobj)
+        else:
+            data = np.stack([np.asanyarray(img.dataobj) for img in images], axis=-1)
+        nb.Nifti1Image(
+            data.astype('float32'), images[0].affine, images[0].header
+        ).to_filename(out_file)
+
+        self._results['out_file'] = out_file
+        self._results['meta_dict'] = _jacobian_sidecar(
+            weight_index=self.inputs.weight_index,
+            applied=config.workflow.jacobian_applied_corrections,
+            unmodulated=config.workflow.jacobian_unmodulated_corrections,
+            reason=config.workflow.jacobian_unmodulated_reason,
+        )
+        return runtime
+```
+
+`AppliedCorrections` / `UnmodulatedCorrections` / the reason have no producing
+interface, so they are recorded on the config object at workflow-build time --
+which is when they are known, since they follow from the backend, the fieldmap
+branch, the effective eddy method and the TORTOISE correction mode. Add three
+fields to `qsiprep/config.py` beside `jacobian_weighting`:
+
+```python
+    jacobian_applied_corrections = []
+    """Corrections whose determinants QSIPrep multiplied in."""
+
+    jacobian_unmodulated_corrections = []
+    """Corrections that ran but were not Jacobian-modulated."""
+
+    jacobian_unmodulated_reason = None
+    """Why, in prose, for the sidecar."""
+```
+
+`init_fsl_hmc_wf` and `init_diffprep_wf` append to these as they decide (the
+`lsr` branch, the `cubic` branch, a failed Okan gate); `init_dwi_trans_wf`
+appends `gradwarp` and `sdc` when it wires those inputs.
+
+**Routing**, all four boundaries -- a missed one gives a silently absent
+derivative:
+
+1. `init_dwi_trans_wf`: add `jacobian_weights` and `jacobian_weight_index` to
+   its outputnode, connected from `scale_dwis`.
+2. `init_dwi_finalize_wf`: the same two fields on its outputnode, forwarded
+   from `transform_dwis_t1`.
+3. `init_dwi_derivatives_wf`: the same two fields on its inputnode.
+4. Inside the derivatives workflow: `StackJacobianWeights` -> `ds_jacobian`,
+   with `meta_dict` connected to the sink.
+
+Gate the whole block on `config.workflow.jacobian_weighting`.
 
 - [ ] **Step 4: Update the expected-output lists**
 
@@ -2324,20 +2792,32 @@ def test_multiplying_by_the_jacobian_conserves_total_signal(tmp_path):
 
     modulated_total = float((warped_data * weights).sum())
     unmodulated_total = float(warped_data.sum())
+    divided_total = float((warped_data / weights).sum())
 
-    assert modulated_total == pytest.approx(raw_total, rel=0.05), (
+    multiply_error = abs(modulated_total - raw_total)
+    divide_error = abs(divided_total - raw_total)
+    skip_error = abs(unmodulated_total - raw_total)
+
+    assert modulated_total == pytest.approx(raw_total, rel=0.02), (
         f'Modulated total {modulated_total:.1f} should match the raw total '
         f'{raw_total:.1f}. If it is off by roughly the square of the expected '
-        'factor, the weight is being applied twice; if it moved the wrong way, '
-        'the weight is inverted (divided instead of multiplied, or the field '
-        'direction is backwards).'
+        'factor, the weight is being applied twice.'
     )
 
-    # The test proves nothing unless the unweighted case actually fails it.
-    assert abs(unmodulated_total - raw_total) > abs(modulated_total - raw_total), (
-        'Unweighted resampling conserved signal as well as weighted '
-        'resampling did, so this field is too weak to discriminate. Raise '
-        'the amplitude in _compressing_field.'
+    # A tolerance alone does not discriminate: for a mild deformation both
+    # multiply and divide can land inside it. Require multiplying to beat both
+    # alternatives by a clear margin, which is what actually pins the
+    # convention.
+    assert multiply_error * 3 < divide_error, (
+        f'Multiplying by the Jacobian left an error of {multiply_error:.1f}; '
+        f'dividing left {divide_error:.1f}. Multiplying must be decisively '
+        'better. If they are comparable, this deformation is too mild to '
+        'discriminate -- raise the amplitude in _compressing_field.'
+    )
+    assert multiply_error * 3 < skip_error, (
+        f'Multiplying left an error of {multiply_error:.1f}; not weighting at '
+        f'all left {skip_error:.1f}. If those are comparable the test proves '
+        'nothing -- raise the amplitude in _compressing_field.'
     )
 ```
 
@@ -2521,11 +3001,26 @@ Existing markers already cover every affected path; no new CI jobs are needed.
 ```bash
 for marker in dsdti_topup dsdti_synfmap maternal_brain_project forrest_gump \
               drbuddi_rpe diffprep diffprep_drbuddi; do
+  # A separate output directory per marker: with one shared /tmp/out, files
+  # from an earlier backend make a later one look like it produced output.
   docker run --rm -v /mnt/c/Users/tsalo/Documents/linc/qsiprep:/src \
-    -v /tmp/out:/out --entrypoint pytest pennlinc/qsiprep:test \
+    -v "/tmp/out/$marker:/out" --entrypoint pytest pennlinc/qsiprep:test \
     /src/qsiprep/tests -m "$marker" -v --output_dir=/out 2>&1 | tail -30
 done
 ```
+
+Expected derivative counts per marker, so an empty result is a failure rather
+than a silent pass:
+
+| Marker | Jacobian derivative expected? |
+|---|---|
+| `dsdti_topup` | No — eddy+TOPUP, no gradwarp, so every modulation is internal to `eddy` |
+| `dsdti_synfmap` | Yes — SyN warp |
+| `maternal_brain_project` | Yes — GRE fieldmap |
+| `forrest_gump` | Yes — GRE fieldmap |
+| `drbuddi_rpe` | Yes — two unique maps (up/down) |
+| `diffprep` | Yes if the Okan gate passed, else no |
+| `diffprep_drbuddi` | Yes |
 
 Per the CircleCI note: step output is truncated at ~400 KB. If a run's log is
 cut, recover the failures by replaying `check_generated_files` against the
@@ -2539,12 +3034,23 @@ sidecar is well-formed:
 ```bash
 micromamba run -n linc311 python - <<'PY'
 import json
+import sys
 from pathlib import Path
 
 import nibabel as nb
 import numpy as np
 
-for nii in Path('/tmp/out').rglob('*_desc-jacobian_dwimap.nii.gz'):
+found = sorted(Path('/tmp/out').rglob('*_desc-jacobian_dwimap.nii.gz'))
+if not found:
+    sys.exit(
+        'No Jacobian derivatives found. An empty glob is not a pass -- either '
+        'the sink is not wired, or this marker legitimately produces none '
+        '(eddy+TOPUP with no gradwarp), in which case assert that explicitly '
+        'for this marker rather than iterating over nothing.'
+    )
+print(f'{len(found)} Jacobian derivative(s)')
+
+for nii in found:
     sidecar = json.loads(nii.with_suffix('').with_suffix('.json').read_text())
     data = np.asanyarray(nb.load(str(nii)).dataobj)
     index = sidecar['JacobianWeightIndex']
@@ -2584,9 +3090,23 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 **Type consistency.** `jacobian_weight_images` is the output of `ComposeJacobianWeights` (Task 4) and the input of `ApplyJacobianWeights` (Task 5) — same name both sides. `ec_jacobian_images` is the output of `OkanQuadraticJacobian` (Task 11), the inputnode field added in Task 7, and the `ComposeJacobianWeights` input in Task 4 — consistent. `resampled_weight_images` is produced in Task 5 and consumed in Task 12. `jacobian_determinant` is defined in Task 3 and used in Tasks 2, 4 and 13. `weight_key`/`multiply_maps`/`compose_fields`/`validate_field_geometry`/`check_weight_map` are all defined in Task 3 before Task 4 uses them. `effective_eddy_resampling_method`/`eddy_modulates_distortion` are defined in Task 6 and used in Task 14. `_jacobian_sidecar` is defined and used within Task 12.
 
-**Ordering dependencies.** Task 1 → Task 4 (convention). Task 2 → Task 10 (DRBUDDI gate). Task 3 → Tasks 2, 4, 13. Task 4 → Task 7. Task 5 → Tasks 7, 12. Task 6 → Tasks 7, 14. Task 11's formula-sourcing step precedes its own code. Task 15 is last.
+**Ordering dependencies.** The document order is not the execution order in
+one place: **Task 2 executes after Task 3 and before Task 4**, because it needs
+`jacobian_determinant` and because it must gate the DRBUDDI decision *before*
+Tasks 5 and 7 retire the legacy scaling-image path — otherwise its stop-and-
+re-plan outcome would be unreachable. Task 2 carries that banner at its head.
 
-**Three stop-and-report gates**, each with a defined fallback rather than a workaround: Task 1 Step 3 (ordering convention), Task 10 Step 1 (DRBUDDI `_JAC`), Task 11 Step 5 (Okan ship gate). Task 13 Step 2 is a fourth — a conservation failure blocks everything.
+Otherwise: Task 1 → Task 4 (convention). Task 3 → Tasks 2, 4, 13. Task 4 →
+Task 7. Task 5 → Tasks 7, 12. Task 6 → Tasks 7, 14. Task 11's formula-sourcing
+step precedes its own code. Task 15 is last.
+
+**Execution order in full:** 0, 1, 3, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15.
+
+**Four stop-and-report gates**, each with a defined fallback rather than a
+workaround, and each positioned before the work it protects: Task 1 Step 3
+(ordering convention), Task 2 Step 2 (DRBUDDI `_JAC`, run before any removal),
+Task 11 Step 5 (Okan ship gate), Task 13 Step 2 (conservation, which blocks
+everything).
 
 ---
 

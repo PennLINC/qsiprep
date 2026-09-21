@@ -69,8 +69,10 @@ These were settled with the maintainer before design and are not open:
 2. **Default.** On by default, with `--no-jacobian-weighting` to opt out.
 3. **DRBUDDI.** Its empirical ratio images are replaced by the analytic Jacobian
    of its own warps, so every path uses one mechanism.
-4. **Derivatives.** The weight maps are written out, in output space, always
-   (unless weighting is disabled).
+4. **Derivatives.** The weight maps are written out, in output space, whenever
+   QSIPrep applied weights (not "always": weighting can be disabled, and a
+   backend can apply every modulation internally, leaving QSIPrep with no map
+   to write).
 5. **TORTOISE eddy current.** In scope, gated behind a convention-validation
    test with a defined fallback.
 
@@ -505,10 +507,23 @@ than enumerating what the flag suppresses.
 carrying the unique output-grid weight maps it already computes internally and
 currently discards. A new sink in `qsiprep/workflows/dwi/derivatives.py` writes:
 
-    sub-X[_ses-Y]..._space-ACPC_desc-jacobian_dwi.nii.gz
+    sub-X[_ses-Y]..._space-ACPC_desc-jacobian_dwimap.nii.gz
 
-a 4D file of the unique maps, collapsing to 3D when all volumes share one, plus
-a sidecar. The sidecar schema, specified rather than left to the implementer:
+using the `dwimap` suffix rather than `dwi`: `io_spec.json` supports
+`space`/`desc` on `dwimap`, the file is a map rather than a DWI series, and
+`_dwi.nii.gz` would be picked up by downstream tools (e.g. QSIRecon) that glob
+for DWI series.
+
+This file is written **only when QSIPrep actually applied Jacobian weights**.
+When `ComposeJacobianWeights` produced no weights (weighting disabled, or
+every applied modulation was internal to a backend -- e.g. `--hmc-method eddy`
+with TOPUP and no gradwarp, where the EC and SDC modulation both happen inside
+`eddy`), no file is written; QSIPrep does not synthesize a map of ones, which
+would falsely assert that a modulation of 1 was applied.
+
+It is a 4D file of the unique maps, collapsing to 3D when all volumes share
+one, plus a sidecar. The sidecar schema, specified rather than left to the
+implementer:
 
 ```json
 {
