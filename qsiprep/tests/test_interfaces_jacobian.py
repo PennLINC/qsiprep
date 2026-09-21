@@ -928,7 +928,7 @@ def test_okan_jacobian_of_identity_parameters_is_unity(tmp_path):
         transformations_file=transformations,
         reference_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
         correction_mode='quadratic',
-    ).run()
+    ).run(cwd=str(tmp_path))
 
     maps = result.outputs.ec_jacobian_images
     assert len(maps) == 3
@@ -950,7 +950,7 @@ def test_okan_jacobian_ignores_the_rigid_columns(tmp_path):
         transformations_file=transformations,
         reference_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
         correction_mode='quadratic',
-    ).run()
+    ).run(cwd=str(tmp_path))
 
     interior = np.asanyarray(
         nb.load(result.outputs.ec_jacobian_images[0]).dataobj
@@ -965,7 +965,7 @@ def test_okan_jacobian_is_undefined_for_motion_only(tmp_path):
         transformations_file=transformations,
         reference_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
         correction_mode='motion',
-    ).run()
+    ).run(cwd=str(tmp_path))
     assert not isdefined(result.outputs.ec_jacobian_images)
 
 
@@ -982,7 +982,7 @@ def test_okan_jacobian_is_undefined_for_cubic_and_does_not_raise(tmp_path):
         transformations_file=transformations,
         reference_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
         correction_mode='cubic',
-    ).run()
+    ).run(cwd=str(tmp_path))
     assert not isdefined(result.outputs.ec_jacobian_images)
 
 
@@ -993,7 +993,7 @@ def test_okan_jacobian_rejects_a_short_row(tmp_path):
             transformations_file=transformations,
             reference_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
             correction_mode='quadratic',
-        ).run()
+        ).run(cwd=str(tmp_path))
 
 
 # --- StackJacobianWeights ---------------------------------------------------
