@@ -462,7 +462,7 @@ def test_diffusion_summary_renders_gradient_correction():
         hmc_model='eddy',
         b0_to_anat_transform='Rigid',
         denoise_method='dwidenoise',
-        dwi_denoise_window=5,
+        dwidenoise_window=5,
         gradient_correction='through-plane only (ImageType: DIS2D)',
     )
     assert 'through-plane only' in summary._generate_segment()
@@ -477,7 +477,7 @@ def _diffusion_summary(**overrides):
         'hmc_model': 'eddy',
         'b0_to_anat_transform': 'Rigid',
         'denoise_method': 'dwidenoise',
-        'dwi_denoise_window': 5,
+        'dwidenoise_window': 5,
     }
     inputs.update(overrides)
     return DiffusionSummary(**inputs)

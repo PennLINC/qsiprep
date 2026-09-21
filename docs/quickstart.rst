@@ -18,8 +18,7 @@ One way to process these data would be to call *QSIPrep* like this::
 
   qsiprep \
     /path/to/inputs /path/to/outputs participant \
-    --output-resolution X \
-    --fs-license-file /path/to/license.txt
+    --output-resolution X
 
 .. warning::
    The above example sets the ``--output-resolution`` to ``X``, where in
@@ -32,8 +31,7 @@ Grouping scans
 **************
 
 .. note::
-   This section explains ``--separate-all-dwis``, ``--denoise-after-combining`` and
-   ``--dwi-denoise-window``
+   This section explains ``--separate-all-dwis`` and ``--dwidenoise-window``
 
 Assuming that ``sub-1/ses-1/fmap/sub-1_dir-PA_epi.nii.gz`` has a JSON sidecar containing the ``IntendedFor`` field for fieldmap correction
 (`see here <https://bids-specification.readthedocs.io/en/v1.10.0/04-modality-specific-files/01-magnetic-resonance-imaging-data.html#expressing-the-mr-protocol-intent-for-fieldmaps>`_)::
@@ -54,7 +52,6 @@ Otherwise, there will be one output in the derivatives directory for each input 
 
 It is beneficial to have as much data as possible available for head motion correction.
 However, the denoising preprocessing step has important caveats that should be considered.
-For a discussion see :ref:`merge_denoise`.
 
 .. _preview_grouping:
 
@@ -222,7 +219,7 @@ of these steps to better match your data.
 +-----------------+-----------------------------+---------------------------+----------------------------------+
 | Disable with    |  ``--denoise-method none``  | Disabled by default       | ``--b1-biascorrect-stage none``  |
 +-----------------+-----------------------------+---------------------------+----------------------------------+
-| Change behavior |  ``--dwi-denoise-window N`` | ``--unringing-method``    | ``--b1-biascorrect-stage``       |
+| Change behavior |  ``--dwidenoise-window N`` | ``--unringing-method``    | ``--b1-biascorrect-stage``       |
 | with            |  changes denoising window   | enables Gibbs unringing   | selects the stage: final         |
 |                 |  to N voxels                |                           | (default), none or legacy        |
 +-----------------+-----------------------------+---------------------------+----------------------------------+
@@ -237,10 +234,7 @@ Not included in this table is the b=0 intensity harmonization step, which
 applies simple scaling if there is more than one NIfTI file being processed.
 It can be disabled with ``--no-b0-harmonization``.
 
-Each of these steps can be applied at the same time, which by default is
-before any images are concatenated. The user can instead run these steps
-together *after* images are concatenated by specifying
-``--denoise-after-combining``. See :ref:`merge_denoise` for more info.
+Each of these steps can be applied at the same time, before any images are concatenated.
 
 
 *******************

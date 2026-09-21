@@ -168,13 +168,6 @@ if os.getenv('IS_DOCKER_8395080871'):
         _exec_env = 'docker'
     del _cgroup
 
-_fs_license = os.getenv('FS_LICENSE')
-if not _fs_license and os.getenv('FREESURFER_HOME'):
-    _fs_home = os.getenv('FREESURFER_HOME')
-    if _fs_home and (Path(_fs_home) / 'license.txt').is_file():
-        _fs_license = str(Path(_fs_home) / 'license.txt')
-    del _fs_home
-
 _templateflow_home = Path(
     os.getenv('TEMPLATEFLOW_HOME', os.path.join(os.getenv('HOME'), '.cache', 'templateflow'))
 )
@@ -282,7 +275,7 @@ class environment(_Config):
     """
     Read-only options regarding the platform and environment.
 
-    Crawls runtime descriptive settings (e.g., default FreeSurfer license,
+    Crawls runtime descriptive settings (e.g.,
     execution environment, nipype and *QSIPrep* versions, etc.).
     The ``environment`` section is not loaded in from file,
     only written out when settings are exported.
@@ -542,7 +535,6 @@ class execution(_Config):
 
 
 # These variables are not necessary anymore
-del _fs_license
 del _exec_env
 del _nipype_ver
 del _templateflow_home
@@ -573,15 +565,13 @@ class workflow(_Config):
     b1_biascorrect_stage = None
     """The stage of processing at which to apply B1 bias correction. Either "final" (after
     resampling), "none" (skipped entirely) or "legacy" (before concatenation)."""
-    denoise_after_combining = False
-    """Run ``dwidenoise`` after combining dwis, but before motion correction."""
     denoise_method = None
     """Image-based denoising method. Either "dwidenoise" (MRtrix), "patch2self" (DIPY)
     or "none". DWIDenoise parameters may be appended as semicolon-delimited name:value
     pairs."""
     distortion_group_merge = 'concat'
     """How to combine images across distortion groups (concatenate, average or none)."""
-    dwi_denoise_window = None
+    dwidenoise_window = None
     """Window size in voxels for image-based denoising, integer or "auto"."""
     diffprep_config = None
     """Configuration JSON for running TORTOISE DIFFPREP."""

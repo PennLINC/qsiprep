@@ -143,7 +143,7 @@ def _reset_config():
         'eddy_config',
         'no_b0_harmonization',
         'denoise_method',
-        'dwi_denoise_window',
+        'dwidenoise_window',
         'shoreline_iters',
         'anatomical_template',
         'jacobian_weighting',
@@ -179,7 +179,7 @@ def _cfg(hmc_method, sdc_method, sloppy):
     config.workflow.eddy_config = None
     config.workflow.no_b0_harmonization = False
     config.workflow.denoise_method = 'dwidenoise'
-    config.workflow.dwi_denoise_window = 5
+    config.workflow.dwidenoise_window = 5
     config.workflow.shoreline_iters = 2
     config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
     config.workflow.jacobian_weighting = True

@@ -233,7 +233,7 @@ def test_describe_dwidenoise2_filter_follows_fixed_rank():
     ],
 )
 def test_check_denoise_window_warns_when_unused(caplog, denoise_method, window, expected):
-    """Warn when --dwi-denoise-window cannot affect the selected denoising method."""
+    """Warn when --dwidenoise-window cannot affect the selected denoising method."""
     from qsiprep.cli.parser import check_denoise_window
 
     with caplog.at_level(logging.WARNING, logger='cli'):
@@ -259,7 +259,7 @@ def test_check_denoise_window_errors_for_patch2self(caplog):
 def test_denoise_window_help_mentions_dwidenoise2():
     """Say in the help text that dwidenoise2 ignores the window."""
     parser = _build_parser()
-    action = next(a for a in parser._actions if '--dwi-denoise-window' in a.option_strings)
+    action = next(a for a in parser._actions if '--dwidenoise-window' in a.option_strings)
 
     assert 'dwidenoise2' in action.help
     assert 'schedule' in action.help

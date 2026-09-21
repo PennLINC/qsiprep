@@ -363,75 +363,6 @@ def _dest(option):
     return option.lstrip('-').replace('-', '_')
 
 
-# (deprecated flag, the option it enables, the value that option is set to)
-FORWARDED_FLAGS = [
-    ('--dwi-only', '--anat-modality', 'none'),
-    ('--dwi-no-biascorr', '--b1-biascorrect-stage', 'none'),
-]
-
-
-@pytest.mark.parametrize(('flag', 'option', 'value'), FORWARDED_FLAGS)
-def test_forwarded_flag_warns_and_enables_its_replacement(
-    minimal_args, capsys, flag, option, value
-):
-    """A deprecated flag warns, names its replacement, and turns it on."""
-    from qsiprep.cli.parser import _build_parser
-
-    parser = _build_parser()
-    opts = parser.parse_args([*minimal_args, flag])
-
-    warning = capsys.readouterr().err
-    assert flag in warning
-    assert 'deprecated' in warning
-    assert f'{option} {value}' in warning
-
-    assert getattr(opts, _dest(option)) == value
-    # The deprecated flag itself must not reach the config object
-    assert not hasattr(opts, _dest(flag))
-
-
-@pytest.mark.parametrize(('flag', 'option', 'value'), FORWARDED_FLAGS)
-def test_forwarded_flag_agrees_with_an_explicit_replacement(minimal_args, flag, option, value):
-    """Asking for the same thing twice is not a conflict, in either order."""
-    from qsiprep.cli.parser import _build_parser
-
-    for extra_args in ([flag, option, value], [option, value, flag]):
-        opts = _build_parser().parse_args(minimal_args + extra_args)
-        assert getattr(opts, _dest(option)) == value
-
-
-@pytest.mark.parametrize(('flag', 'option', 'value'), FORWARDED_FLAGS)
-def test_forwarded_flag_conflicting_with_its_replacement_is_an_error(
-    minimal_args, capsys, flag, option, value
-):
-    """Silently picking a winner would hide half of what the user asked for."""
-    from qsiprep.cli.parser import _build_parser
-
-    # A value the flag does not forward to
-    other = {
-        'anat_modality': 'T2w',
-        'subject_anatomical_reference': 'sessionwise',
-        'b1_biascorrect_stage': 'legacy',
-    }[_dest(option)]
-
-    for extra_args in ([flag, option, other], [option, other, flag]):
-        with pytest.raises(SystemExit):
-            _build_parser().parse_args(minimal_args + extra_args)
-        assert 'conflicts with' in capsys.readouterr().err
-
-
-@pytest.mark.parametrize(('flag', 'option', 'value'), FORWARDED_FLAGS)
-def test_replacement_option_is_not_deprecated(minimal_args, capsys, flag, option, value):
-    """The replacement option is silent and takes effect."""
-    from qsiprep.cli.parser import _build_parser
-
-    parser = _build_parser()
-    opts = parser.parse_args([*minimal_args, option, value])
-
-    assert capsys.readouterr().err == ''
-    assert getattr(opts, _dest(option)) == value
-
-
 def test_prefer_dedicated_fmaps_is_removed(minimal_args, capsys):
     """The deprecated flag is no longer accepted by the parser."""
     from qsiprep.cli.parser import _build_parser
@@ -748,3 +679,92 @@ def test_t1w_derived_references_require_t1w_modality(minimal_args, capsys, refer
 def test_shoreline_selection_warns_of_removal(minimal_args, capsys):
     _parse(minimal_args, '--hmc-method', 'shoreline')
     assert 'scheduled for removal' in capsys.readouterr().err
+
+
+def test_parser_defaults_to_stable_mrtrix(tmp_path):
+    """Default to a released MRtrix3, so existing runs are unchanged."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    opts = parser.parse_args([str(bids), str(out), 'participant', '--output-resolution', '2'])
+    assert opts.mrtrix_version == 'stable'
+
+
+def test_parser_accepts_dev_mrtrix(tmp_path):
+    """``dev`` selects the development branch, which is what complex mrdegibbs needs."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    opts = parser.parse_args(
+        [
+            str(bids),
+            str(out),
+            'participant',
+            '--mrtrix-version',
+            'dev',
+            '--output-resolution',
+            '2',
+        ]
+    )
+    assert opts.mrtrix_version == 'dev'
+
+
+def test_parser_rejects_unknown_mrtrix_version(tmp_path):
+    """Reject version strings; the flag names installations, not releases."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                str(bids),
+                str(out),
+                'participant',
+                '--mrtrix-version',
+                '3.0.8',
+                '--output-resolution',
+                '2',
+            ]
+        )
+
+
+def test_jacobian_weighting_defaults_on(tmp_path):
+    """Weighting is on unless the user turns it off."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    opts = parser.parse_args([str(bids), str(out), 'participant', '--output-resolution', '2'])
+    assert opts.jacobian_weighting is True
+
+
+def test_no_jacobian_weighting_turns_it_off(tmp_path):
+    """--no-jacobian-weighting is the BooleanOptionalAction off-switch."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    opts = parser.parse_args(
+        [
+            str(bids),
+            str(out),
+            'participant',
+            '--output-resolution',
+            '2',
+            '--no-jacobian-weighting',
+        ]
+    )
+    assert opts.jacobian_weighting is False

@@ -23,7 +23,7 @@ from qsiprep.workflows.dwi.merge import init_dwi_denoising_wf
 def test_dwidenoise_workflow_uses_dwidenoise(monkeypatch, use_phase):
     """Build a DWIDenoise node, not Patch2Self, when ``dwidenoise`` is requested."""
     monkeypatch.setattr(config.workflow, 'denoise_method', 'dwidenoise')
-    monkeypatch.setattr(config.workflow, 'dwi_denoise_window', 5)
+    monkeypatch.setattr(config.workflow, 'dwidenoise_window', 5)
     monkeypatch.setattr(config.workflow, 'unringing_method', 'none')
     monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
     monkeypatch.setattr(config.workflow, 'b0_threshold', 100)
@@ -47,7 +47,7 @@ def test_dwidenoise_workflow_uses_dwidenoise(monkeypatch, use_phase):
 def test_dwidenoise_workflow_resolves_auto_window(monkeypatch):
     """Resolve the default ``auto`` window size into a cuboid extent for dwidenoise."""
     monkeypatch.setattr(config.workflow, 'denoise_method', 'dwidenoise')
-    monkeypatch.setattr(config.workflow, 'dwi_denoise_window', 'auto')
+    monkeypatch.setattr(config.workflow, 'dwidenoise_window', 'auto')
     monkeypatch.setattr(config.workflow, 'unringing_method', 'none')
     monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
     monkeypatch.setattr(config.workflow, 'b0_threshold', 100)
@@ -71,10 +71,10 @@ def test_dwidenoise2_workflow_ignores_denoise_window(monkeypatch):
     """Leave the kernel to dwidenoise2's schedule rather than the requested window.
 
     dwidenoise2 sizes its patches per iteration from its multi-resolution schedule and
-    exposes no kernel options, so ``--dwi-denoise-window`` cannot apply to it.
+    exposes no kernel options, so ``--dwidenoise-window`` cannot apply to it.
     """
     monkeypatch.setattr(config.workflow, 'denoise_method', 'dwidenoise2')
-    monkeypatch.setattr(config.workflow, 'dwi_denoise_window', 5)
+    monkeypatch.setattr(config.workflow, 'dwidenoise_window', 5)
     monkeypatch.setattr(config.workflow, 'unringing_method', 'none')
     monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
     monkeypatch.setattr(config.workflow, 'b0_threshold', 100)
@@ -103,7 +103,7 @@ def test_dwidenoise2_cli_parameters_reach_workflow(monkeypatch):
         'denoise_method',
         'dwidenoise2;demodulate:hann;decomposition:bdcsvd',
     )
-    monkeypatch.setattr(config.workflow, 'dwi_denoise_window', 5)
+    monkeypatch.setattr(config.workflow, 'dwidenoise_window', 5)
     monkeypatch.setattr(config.workflow, 'unringing_method', 'none')
     monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
     monkeypatch.setattr(config.workflow, 'b0_threshold', 100)
@@ -131,7 +131,7 @@ def test_dwidenoise2_cli_parameters_reach_workflow(monkeypatch):
 def test_denoising_wf_masks_only_biascorr(monkeypatch, denoise_method):
     """Build the brain mask for bias correction only; the denoisers get no mask."""
     monkeypatch.setattr(config.workflow, 'denoise_method', denoise_method)
-    monkeypatch.setattr(config.workflow, 'dwi_denoise_window', 5)
+    monkeypatch.setattr(config.workflow, 'dwidenoise_window', 5)
     monkeypatch.setattr(config.workflow, 'unringing_method', 'none')
     monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
     monkeypatch.setattr(config.workflow, 'b0_threshold', 100)
@@ -175,7 +175,7 @@ def test_dwidenoise2_rejects_demodulation_without_phase(monkeypatch, demodulate)
     magnitude-only data, so the workflow rejects the request up front instead.
     """
     monkeypatch.setattr(config.workflow, 'denoise_method', f'dwidenoise2;demodulate:{demodulate}')
-    monkeypatch.setattr(config.workflow, 'dwi_denoise_window', 5)
+    monkeypatch.setattr(config.workflow, 'dwidenoise_window', 5)
     monkeypatch.setattr(config.workflow, 'unringing_method', 'none')
     monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
     monkeypatch.setattr(config.workflow, 'b0_threshold', 100)
@@ -203,7 +203,7 @@ def _run_denoising_wf(
     nibs_dwi,
     denoise_method,
     use_phase,
-    dwi_denoise_window='auto',
+    dwidenoise_window='auto',
     unringing_method='none',
     mrtrix_version='dev',
 ):
@@ -220,7 +220,7 @@ def _run_denoising_wf(
         Directory holding the files that reached the workflow's ``outputnode``.
     """
     monkeypatch.setattr(config.workflow, 'denoise_method', denoise_method)
-    monkeypatch.setattr(config.workflow, 'dwi_denoise_window', dwi_denoise_window)
+    monkeypatch.setattr(config.workflow, 'dwidenoise_window', dwidenoise_window)
     monkeypatch.setattr(config.workflow, 'unringing_method', unringing_method)
     monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
     monkeypatch.setattr(config.workflow, 'b0_threshold', 100)
@@ -310,7 +310,7 @@ def _assert_denoising_outputs(nodes, sink_dir, raw_file):
 
 
 @pytest.mark.parametrize(
-    ('denoise_method', 'dwi_denoise_window', 'interface', 'expected_inputs'),
+    ('denoise_method', 'dwidenoise_window', 'interface', 'expected_inputs'),
     [
         pytest.param(
             'dwidenoise', 5, mrtrix.DWIDenoise, {'extent': (5, 5, 5)}, id='dwidenoise_window5'
@@ -359,7 +359,7 @@ def test_denoising_wf_magnitude(
     tmp_path,
     nibs_dwi,
     denoise_method,
-    dwi_denoise_window,
+    dwidenoise_window,
     interface,
     expected_inputs,
 ):
@@ -370,7 +370,7 @@ def test_denoising_wf_magnitude(
         nibs_dwi,
         denoise_method=denoise_method,
         use_phase=False,
-        dwi_denoise_window=dwi_denoise_window,
+        dwidenoise_window=dwidenoise_window,
     )
 
     denoiser = nodes['denoiser']
@@ -461,7 +461,7 @@ def _build_denoising_wf(
     writes complex data.
     """
     monkeypatch.setattr(config.workflow, 'denoise_method', denoise_method)
-    monkeypatch.setattr(config.workflow, 'dwi_denoise_window', 5)
+    monkeypatch.setattr(config.workflow, 'dwidenoise_window', 5)
     monkeypatch.setattr(config.workflow, 'unringing_method', unringing_method)
     monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
     monkeypatch.setattr(config.workflow, 'b0_threshold', 100)
