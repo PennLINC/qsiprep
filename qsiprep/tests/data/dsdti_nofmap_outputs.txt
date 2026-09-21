@@ -21,6 +21,8 @@ sub-PNC/dwi
 sub-PNC/dwi/sub-PNC_acq-realistic_desc-confounds_timeseries.json
 sub-PNC/dwi/sub-PNC_acq-realistic_desc-confounds_timeseries.tsv
 sub-PNC/dwi/sub-PNC_acq-realistic_desc-pepolar_qc.tsv
+sub-PNC/dwi/sub-PNC_acq-realistic_from-dwiref_to-ACPC_mode-image_desc-sdc_xfm.json
+sub-PNC/dwi/sub-PNC_acq-realistic_from-dwiref_to-ACPC_mode-image_desc-sdc_xfm.nii.gz
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-brain_mask.nii.gz
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-image_qc.tsv
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-preproc_dwi.b
