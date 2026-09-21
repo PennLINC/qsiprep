@@ -156,6 +156,22 @@ AFFINE_ATOL = 1e-4
 #: negative.
 WEIGHT_FLOOR = 1e-3
 
+#: Fraction of in-mask voxels allowed to have a non-positive determinant
+#: before it is treated as a broken composition rather than as real signal
+#: pile-up.
+#:
+#: A susceptibility field genuinely drives the Jacobian to zero where EPI
+#: signal piles up (orbitofrontal, temporal poles), so a localised
+#: non-positive region is a property of the data, not a bug, and refusing to
+#: run there would reject ordinary GRE and SyN fieldmaps. A wrong field, an
+#: inverted field or a wrong composition order instead folds a large part of
+#: the brain. Extent is what separates them.
+#:
+#: 0.05 is a starting value picked to sit well above pile-up and well below a
+#: globally folded warp. The measured fraction is always logged, so it can be
+#: tightened once real runs report their numbers.
+FOLD_FRACTION_LIMIT = 0.05
+
 #: In-mask median outside this range is a smell, not an error: a correct
 #: distortion field redistributes signal without changing its total, so the
 #: median determinant should sit near unity.
@@ -313,6 +329,50 @@ def validate_field_geometry(field_path, reference_path):
     _assert_world_frames_overlap(field_path, reference_path, img_a=field, img_b=reference)
 
 
+def _report_nonpositive(inside, subject, consequence):
+    """Raise on a widespread fold; warn on a localised one.
+
+    ``inside`` is the in-mask sample. A non-positive determinant used to abort
+    the run on the first offending voxel. That is wrong for susceptibility
+    correction: a real GRE or SyN field drives the Jacobian to zero wherever
+    EPI signal piles up, so the old guard rejected ordinary fieldmaps. It also
+    contradicted ``ApplyJacobianWeights._floor_nonpositive_weights``, which
+    exists to floor exactly these voxels and could never be reached on a
+    lone-SDC run.
+
+    Localised non-positive voxels are therefore reported and left to that
+    floor. Only an extent beyond ``FOLD_FRACTION_LIMIT`` still raises, because
+    that is what a wrong or inverted field looks like.
+    """
+    nonpositive = int((inside <= 0).sum())
+    if not nonpositive:
+        return
+
+    fraction = nonpositive / inside.size
+    if fraction > FOLD_FRACTION_LIMIT:
+        raise ValueError(
+            f'{subject} is non-positive over {fraction:.1%} of the brain mask '
+            f'({nonpositive} of {inside.size} voxels, minimum '
+            f'{float(inside.min()):.4f}). That is far more than signal pile-up '
+            f'explains, so the composed warp folds across the brain -- most '
+            f'likely a wrong, inverted or wrongly ordered field. {consequence}'
+        )
+
+    LOGGER.warning(
+        '%s is non-positive at %d of %d in-mask voxels (%.2f%%, minimum '
+        '%.4f). This is expected where susceptibility distortion piles EPI '
+        'signal up; those voxels are floored to %g downstream. Raising starts '
+        'above %.0f%%.',
+        subject,
+        nonpositive,
+        inside.size,
+        100 * fraction,
+        float(inside.min()),
+        WEIGHT_FLOOR,
+        100 * FOLD_FRACTION_LIMIT,
+    )
+
+
 def check_weight_map(map_path, mask_path):
     """Raise on a non-finite or non-positive in-mask weight; warn if off-unity.
 
@@ -340,13 +400,11 @@ def check_weight_map(map_path, mask_path):
             'mask is genuinely empty.'
         )
 
-    if inside.min() <= 0:
-        raise ValueError(
-            f'Jacobian weight map {map_path} has non-positive values inside the '
-            f'brain mask (minimum {inside.min():.4f}). This means the composed '
-            'warp folds. Applying it would multiply DWI signal by a negative '
-            'number.'
-        )
+    _report_nonpositive(
+        inside,
+        f'Jacobian weight map {map_path}',
+        'Applying it would multiply DWI signal by a negative number.',
+    )
 
     median = float(np.median(inside))
     if not MEDIAN_WARN_RANGE[0] <= median <= MEDIAN_WARN_RANGE[1]:
@@ -578,11 +636,11 @@ def jacobian_determinant(field_path, out_path, mask_path=None, num_threads=1):
     if mask_path is not None:
         mask = np.asanyarray(nb.load(mask_path).dataobj) > 0
         inside = signed[mask]
-        if inside.size and inside.min() <= 0:
-            raise ValueError(
-                f'Jacobian determinant of {field_path} is non-positive inside '
-                f'the brain mask (minimum {inside.min():.4f}), i.e. the composed '
-                'warp folds there. Refusing to build a weight map from it.'
+        if inside.size:
+            _report_nonpositive(
+                inside,
+                f'Jacobian determinant of {field_path}',
+                'Refusing to build a weight map from it.',
             )
     elif np.nanmin(signed) <= 0:
         LOGGER.warning(

@@ -198,14 +198,25 @@ def test_validate_field_geometry_rejects_a_disjoint_world_frame(tmp_path):
         validate_field_geometry(str(field), reference)
 
 
-def test_check_weight_map_rejects_nonpositive_in_mask(tmp_path):
+def test_check_weight_map_reports_one_nonpositive_voxel_without_raising(tmp_path, caplog):
+    """One folded voxel is reported, not fatal.
+
+    This asserted a raise until forrest_gump showed why that is wrong: a real
+    GRE field drives the Jacobian to zero in EPI pile-up regions, so aborting
+    on the first such voxel rejects ordinary fieldmaps. One voxel in 512 is
+    0.2%, far below FOLD_FRACTION_LIMIT, and fmap.py's
+    _floor_nonpositive_weights handles it downstream.
+    """
     weights = _write_map(tmp_path / 'w.nii.gz', 1.0)
     data = np.asanyarray(nb.load(weights).dataobj).copy()
     data[4, 4, 4] = -0.5
     nb.Nifti1Image(data, np.eye(4)).to_filename(weights)
     mask = _write_map(tmp_path / 'm.nii.gz', 1.0)
-    with pytest.raises(ValueError, match='non-positive'):
+
+    with caplog.at_level('WARNING'):
         check_weight_map(weights, mask)
+
+    assert any('non-positive at 1 of' in record.message for record in caplog.records)
 
 
 def test_check_weight_map_rejects_nonfinite(tmp_path):
@@ -1207,3 +1218,51 @@ def test_base_workflow_connects_the_dwi_mask_to_finalize():
 
     src = inspect.getsource(base)
     assert "('outputnode.dwi_mask', 'inputnode.dwi_mask')" in src
+
+
+# --- folds: extent, not first offending voxel -------------------------------
+#
+# The guard used to raise on a single non-positive in-mask voxel. A real GRE or
+# SyN susceptibility field drives the Jacobian to zero wherever EPI signal
+# piles up, so that rejected ordinary fieldmaps -- forrest_gump failed with
+# "minimum 0.0000". It also contradicted _floor_nonpositive_weights in
+# fmap.py, which exists to floor these voxels and could never be reached on a
+# lone-SDC run.
+
+
+def _map_with_nonpositive_fraction(path, fraction, shape=(10, 10, 10)):
+    data = np.ones(shape, dtype='float32')
+    flat = data.reshape(-1)
+    flat[: int(round(fraction * flat.size))] = 0.0
+    nb.Nifti1Image(data, np.eye(4)).to_filename(str(path))
+    return str(path)
+
+
+def test_check_weight_map_tolerates_localised_pile_up(tmp_path, caplog):
+    """2% non-positive is what a real susceptibility field looks like."""
+    from qsiprep.interfaces.jacobian import check_weight_map
+
+    weights = _map_with_nonpositive_fraction(tmp_path / 'w.nii.gz', 0.02)
+    mask = _write_map(tmp_path / 'mask.nii.gz', 1.0, shape=(10, 10, 10))
+
+    check_weight_map(weights, mask)  # must not raise
+
+
+def test_check_weight_map_raises_on_a_widespread_fold(tmp_path):
+    """Half the brain folded is a broken field, not pile-up."""
+    from qsiprep.interfaces.jacobian import check_weight_map
+
+    weights = _map_with_nonpositive_fraction(tmp_path / 'w.nii.gz', 0.5)
+    mask = _write_map(tmp_path / 'mask.nii.gz', 1.0, shape=(10, 10, 10))
+
+    with pytest.raises(ValueError, match='50.0% of the brain mask'):
+        check_weight_map(weights, mask)
+
+
+def test_fold_report_is_silent_when_everything_is_positive(tmp_path, caplog):
+    from qsiprep.interfaces.jacobian import _report_nonpositive
+
+    with caplog.at_level('WARNING'):
+        _report_nonpositive(np.ones(100), 'subject', 'consequence')
+
+    assert not caplog.records
