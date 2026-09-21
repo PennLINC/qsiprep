@@ -162,6 +162,33 @@ def test_compose_transforms_exposes_the_sdc_warp_subchain(tmp_path):
     assert got == [coreg]
 
 
+def _tiny_dwi(path, nvols=4):
+    nb.Nifti1Image(np.zeros((4, 4, 4, nvols), dtype='int16'), np.eye(4)).to_filename(str(path))
+    stem = str(path).split('.nii')[0]
+    np.savetxt(stem + '.bval', np.array([0] + [1000] * (nvols - 1))[None, :], fmt='%d')
+    np.savetxt(stem + '.bvec', np.zeros((3, nvols)), fmt='%.1f')
+    return str(path)
+
+
+def test_sdc_warp_source_emits_for_every_standalone_warp_method(tmp_path):
+    """GRE, SyN and T2Wreg all write a standalone warp, so all emit the derivative."""
+    from qsiplan.models import CorrectionMethod
+
+    from qsiprep.tests.preproc_factory import make_preproc_unit
+    from qsiprep.utils.sdc import sdc_warp_source
+
+    dwi = _tiny_dwi(tmp_path / 'sub-01_dwi.nii.gz')
+    for method in (
+        CorrectionMethod.PHASEDIFF,  # GRE fieldmap
+        CorrectionMethod.NIPREPS_SYN,  # fieldmap-less SyN
+        CorrectionMethod.T2WREG,  # TORTOISE T2Wreg
+    ):
+        unit = make_preproc_unit([dwi], method=method)
+        assert sdc_warp_source(unit) == 'fieldwarp', method
+    # No susceptibility correction -> nothing is emitted.
+    assert sdc_warp_source(make_preproc_unit([dwi])) is None
+
+
 def test_trans_wf_builds_compose_sdc_warp_only_when_requested():
     """``sdc_warp_source`` gates the ComposeSDCWarp node and its wiring."""
     _cfg()
@@ -171,7 +198,7 @@ def test_trans_wf_builds_compose_sdc_warp_only_when_requested():
     assert without.get_node('compose_sdc_warp') is None
 
     wf = init_dwi_trans_wf(
-        source_file='/data/sub-01_dwi.nii.gz', mem_gb=1, sdc_warp_source='drbuddi'
+        source_file='/data/sub-01_dwi.nii.gz', mem_gb=1, sdc_warp_source='fieldwarp'
     )
     assert wf.get_node('compose_sdc_warp') is not None
     edges = wf._graph.edges(data=True)

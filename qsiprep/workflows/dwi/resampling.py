@@ -299,8 +299,9 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             (compose_sdc_warp, outputnode, [('sdc_warp_to_template', 'sdc_warp_to_template')]),
         ])  # fmt:skip
 
-        if sdc_warp_source == 'drbuddi':
-            # DRBUDDI writes the susceptibility warp directly; conjugate volume 0's.
+        if sdc_warp_source == 'fieldwarp':
+            # DRBUDDI, GRE, SyN and T2Wreg all write the susceptibility warp
+            # directly (fieldwarps); conjugate volume 0's onto the output grid.
             workflow.connect([
                 (inputnode, compose_sdc_warp, [(('fieldwarps', _get_first), 'sdc_warp')]),
             ])  # fmt:skip

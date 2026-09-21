@@ -46,3 +46,24 @@ def pe_readout_time(unit):
     if trt is None:
         trt = unit.dwi_metadata.get('TotalReadoutTime')
     return float(trt) if trt is not None else None
+
+
+def sdc_warp_source(unit):
+    """Which SDC displacement-field derivative to emit for ``unit``, or ``None``.
+
+    ``'fieldwarp'`` when a susceptibility method wrote a standalone warp into
+    ``fieldwarps`` -- DRBUDDI, a GRE/phasediff fieldmap, fieldmap-less SyN, or
+    TORTOISE T2Wreg. ``'topup'`` when only TOPUP ran: eddy applies its field and
+    leaves no standalone warp, so it is rebuilt from the off-resonance field,
+    which needs a readout time. ``None`` when no susceptibility correction ran.
+    """
+    if (
+        unit.is_gre
+        or unit.is_nipreps_syn
+        or unit.using_t2w_for_sdc
+        or unit.run.stage_with('drbuddi') is not None
+    ):
+        return 'fieldwarp'
+    if unit.run.stage_with('topup') is not None and pe_readout_time(unit) is not None:
+        return 'topup'
+    return None

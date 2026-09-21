@@ -372,17 +372,17 @@ Transforms
         sub-<label>_ses-<label>_from-orig_to-anat_mode-image_xfm.txt
         sub-<label>_ses-<label>_from-anat_to-orig_mode-image_xfm.txt
       dwi/
-        # Susceptibility (EPI) distortion displacement field, written for PEPOLAR
-        # runs (TOPUP or DRBUDDI, any HMC backend), composed onto the ACPC output
-        # grid as an ITK/ANTs displacement field (a transform, so its vectors are
-        # rotated into ACPC world coordinates -- not a resampled scalar). Applying
-        # it to the susceptibility-distorted DWI resamples it to the corrected ACPC
-        # space; the sidecar records the estimation method and the warp direction.
-        # DRBUDDI writes its warp directly; for TOPUP (where Eddy applies the field
-        # internally and leaves no standalone warp) it is rebuilt from the estimated
-        # off-resonance field, exactly as a GRE fieldmap is turned into a warp
-        # (voxel shift = field_Hz * TotalReadoutTime). Absent for GRE-fieldmap, SyN,
-        # and T2w-only (fieldmap-less) corrections.
+        # Susceptibility (EPI) distortion displacement field, written whenever
+        # distortion correction ran (any HMC backend), composed onto the ACPC
+        # output grid as an ITK/ANTs displacement field (a transform, so its
+        # vectors are rotated into ACPC world coordinates -- not a resampled
+        # scalar). Applying it to the susceptibility-distorted DWI resamples it to
+        # the corrected ACPC space; the sidecar records the estimation method and
+        # the warp direction. DRBUDDI, a GRE/phasediff fieldmap, fieldmap-less SyN
+        # and TORTOISE T2Wreg all write their warp directly; for TOPUP (where Eddy
+        # applies the field internally and leaves no standalone warp) it is rebuilt
+        # from the estimated off-resonance field (voxel shift =
+        # field_Hz * TotalReadoutTime). Absent only when no SDC was applied.
         sub-<label>_ses-<label>_from-dwiref_to-ACPC_mode-image_desc-sdc_xfm.nii.gz
         sub-<label>_ses-<label>_from-dwiref_to-ACPC_mode-image_desc-sdc_xfm.json
 

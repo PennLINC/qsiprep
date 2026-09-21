@@ -27,7 +27,7 @@ from ...interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SDCWarpPlot, SeriesQC
-from ...utils.sdc import pe_readout_time
+from ...utils.sdc import pe_readout_time, sdc_warp_source
 from .derivatives import init_dwi_derivatives_wf
 from .gradwarp import resolve_gradwarp_plan
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
@@ -154,27 +154,23 @@ def init_dwi_finalize_wf(
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
 
-    # TOPUP alone exposes a field in Hz for the final resampling path. Dispatch
-    # from the compiled run, not the deprecated config spelling: those can
-    # disagree after automatic method resolution.
+    # Dispatch from the compiled run, not the deprecated config spelling: those
+    # can disagree after automatic method resolution.
     doing_topup = unit.run.stage_with('topup') is not None
+    doing_drbuddi = unit.run.stage_with('drbuddi') is not None
 
     # The susceptibility distortion is emitted to derivatives as a displacement
-    # field on the ACPC grid. DRBUDDI writes the warp directly (sdc_warps ->
-    # fieldwarps). TOPUP leaves no standalone warp -- eddy applies its field
-    # internally -- so the warp is rebuilt from TOPUP's off-resonance field, which
-    # needs the readout time; without it, nothing is written.
-    doing_drbuddi = unit.run.stage_with('drbuddi') is not None
+    # field on the ACPC grid. Every susceptibility method that produces a
+    # standalone warp -- DRBUDDI, a GRE/phasediff fieldmap, fieldmap-less SyN, and
+    # TORTOISE's T2Wreg -- exposes it as fieldwarps, so it is emitted directly.
+    # TOPUP is the exception: eddy applies its field internally and leaves no
+    # standalone warp, so it is rebuilt from the estimated off-resonance field
+    # (needs the readout time; without it, nothing is written).
     readout_time = pe_readout_time(unit)
-    if doing_drbuddi:
-        sdc_warp_source = 'drbuddi'
-    elif doing_topup and readout_time is not None:
-        sdc_warp_source = 'topup'
-    else:
-        sdc_warp_source = None
+    warp_source = sdc_warp_source(unit)
 
     sdc_warp_meta = None
-    if sdc_warp_source is not None:
+    if warp_source is not None:
         _common = (
             'expressed on the ACPC output grid as an ITK/ANTs displacement field '
             '(LPS vector components). Applying it to the distorted DWI (e.g. '
@@ -182,21 +178,28 @@ def init_dwi_finalize_wf(
             'point transform it maps ACPC (corrected) points to their distorted '
             'DWI-reference locations.'
         )
-        if sdc_warp_source == 'drbuddi':
-            description = (
-                'Susceptibility (EPI) distortion displacement field for the first DWI '
-                f'volume, {_common}'
-            )
-        else:
+        if warp_source == 'topup':
+            estimation_method = 'TOPUP'
             description = (
                 'Susceptibility (EPI) distortion displacement field, rebuilt from the '
                 'TOPUP off-resonance field (voxel shift = field_Hz * TotalReadoutTime), '
                 f'{_common}'
             )
-        sdc_warp_meta = {
-            'EstimationMethod': 'DRBUDDI' if sdc_warp_source == 'drbuddi' else 'TOPUP',
-            'Description': description,
-        }
+        else:
+            estimation_method = (
+                'DRBUDDI'
+                if doing_drbuddi
+                else 'GRE fieldmap'
+                if unit.is_gre
+                else 'SyN (fieldmap-less)'
+                if unit.is_nipreps_syn
+                else 'TORTOISE T2Wreg'
+            )
+            description = (
+                'Susceptibility (EPI) distortion displacement field for the first DWI '
+                f'volume, {_common}'
+            )
+        sdc_warp_meta = {'EstimationMethod': estimation_method, 'Description': description}
 
     # Determine resource usage
     for scan in all_dwis:
@@ -342,7 +345,7 @@ def init_dwi_finalize_wf(
         use_compression=False,
         concatenate=True,
         doing_topup=doing_topup,
-        sdc_warp_source=sdc_warp_source,
+        sdc_warp_source=warp_source,
         sdc_pe_dir=unit.pe_dir,
         sdc_readout_time=readout_time,
     )
@@ -409,7 +412,7 @@ def init_dwi_finalize_wf(
             ]),
         ])  # fmt:skip
 
-    if sdc_warp_source is not None:
+    if warp_source is not None:
         workflow.connect([
             (transform_dwis_t1, outputnode, [
                 ('outputnode.sdc_warp_to_template', 'sdc_warp_to_template'),
@@ -660,7 +663,7 @@ def init_dwi_finalize_wf(
             ]),
         ])  # fmt:skip
 
-    if sdc_warp_source is not None:
+    if warp_source is not None:
         # Glyph reportlet: the SDC displacement field over the ACPC b=0, showing how
         # the phase-encoding direction sat relative to the output and how large the
         # deformations are (Slicer's transform-glyph view, no Slicer needed).
