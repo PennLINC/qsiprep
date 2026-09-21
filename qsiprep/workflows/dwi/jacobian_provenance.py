@@ -101,6 +101,17 @@ def _eddy_provenance(unit):
         if run_topup:
             unmodulated.append('susceptibility')
 
+    # ``fsl.py:594`` branches on ``run_drbuddi`` alone (no ``is_pepolar``
+    # conjunct); the extra ``unit.is_pepolar`` guard here is redundant with
+    # it, not a divergence: ``qsiplan.plan._stages_for_unit`` only ever calls
+    # ``_pepolar_stages`` (the sole place a ``drbuddi`` ``PlanStage`` is ever
+    # constructed, both under eddy and under DIFFPREP/SHORELine) when
+    # ``unit.is_pepolar`` is true (``qsiplan/plan.py``, verified against both
+    # the checked-out dev tree and the pinned ``qsiplan==0.4.0`` tag). So
+    # ``run_drbuddi`` already implies ``unit.is_pepolar`` by construction of
+    # the planner, and this conjunct can never actually diverge from the
+    # builder's condition -- kept anyway as a documented, load-bearing
+    # invariant check rather than trusting an external package silently.
     if (unit.is_pepolar and run_drbuddi) or unit.is_gre or unit.is_nipreps_syn:
         applied.append('sdc')
 
