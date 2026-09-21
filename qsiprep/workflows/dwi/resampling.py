@@ -15,11 +15,7 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
 from ... import config
 from ...interfaces.ants import GetImageType
-from ...interfaces.fmap import (
-    ApplyJacobianWeights,
-    DeduplicateJacobianWeights,
-    FloorJacobianWeight,
-)
+from ...interfaces.fmap import ApplyJacobianWeights
 from ...interfaces.gradients import (  # LocalGradientRotation,
     ComposeTransforms,
     ExtractB0s,
@@ -211,7 +207,13 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
         name='dwi_transform',
         iterfield=['input_image', 'transforms'],
     )
-    scale_dwis = pe.Node(ApplyJacobianWeights(), name='scale_dwis')
+    # num_threads parallelizes the per-unique-map antsApplyTransports calls
+    # inside the interface's own ThreadPoolExecutor -- see ApplyJacobianWeights'
+    # docstring -- matching how compose_transforms/ComposeTransforms exposes
+    # the same knob for its per-volume calls.
+    scale_dwis = pe.Node(
+        ApplyJacobianWeights(num_threads=config.nipype.omp_nthreads), name='scale_dwis'
+    )
     rotate_gradients = pe.Node(GradientRotation(), name='rotate_gradients')
     cnr_image_type = pe.Node(GetImageType(), name='cnr_image_type')
     cnr_tfm = pe.Node(
@@ -260,6 +262,14 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
         (inputnode, get_interpolation, [('dwi_files', 'dwi_files')]),
         (get_interpolation, dwi_transform, [('interpolation_method', 'interpolation')]),
         (dwi_transform, scale_dwis, [('output_image', 'dwi_files')]),
+        (inputnode, scale_dwis, [
+            ('output_grid', 'reference_image'),
+            ('itk_b0_to_t1', 'hmcsdc_dwi_ref_to_t1w_affine'),
+            ('b0_to_intramodal_template_transforms', 'b0_to_intramodal_template_transforms'),
+            (('intramodal_template_to_t1_affine', _get_first),
+             'intramodal_template_to_t1_affine'),
+            ('intramodal_template_to_t1_warp', 'intramodal_template_to_t1_warp'),
+        ]),
     ])  # fmt:skip
 
     # The weight covers gradwarp and SDC only. HMC is excluded by policy and is
@@ -269,29 +279,6 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
     # warp is VBM-style volume modulation, wrong for DWI signal.
     if config.workflow.jacobian_weighting:
         compose_jacobian = pe.Node(ComposeJacobianWeights(), name='compose_jacobian')
-        # Dedup + transform-chain assembly is cheap Python bookkeeping (no
-        # subprocess calls), so it stays a plain Node. The expensive part --
-        # one antsApplyTransforms call per unique map -- is a MapNode so
-        # Nipype can run those calls across worker slots in parallel, the
-        # same way dwi_transform already does for the per-volume warps above.
-        # A distinct eddy-current Jacobian per volume (TORTOISE, quadratic
-        # mode) collapses the old dedup cache to one unique map per volume,
-        # which used to mean N sequential ANTs processes in a single node.
-        dedupe_jacobian_weights = pe.Node(
-            DeduplicateJacobianWeights(), name='dedupe_jacobian_weights'
-        )
-        resample_jacobian_weights = pe.MapNode(
-            ants.ApplyTransforms(interpolation='LanczosWindowedSinc', dimension=3, float=True),
-            name='resample_jacobian_weights',
-            iterfield=['input_image'],
-        )
-        # One call per unique map, run alongside the resampling above rather
-        # than serially afterward.
-        floor_jacobian_weights = pe.MapNode(
-            FloorJacobianWeight(),
-            name='floor_jacobian_weights',
-            iterfield=['weight_image'],
-        )
         workflow.connect([
             (inputnode, compose_jacobian, [
                 ('dwi_files', 'dwi_files'),
@@ -301,31 +288,13 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 ('fieldwarps', 'fieldwarps'),
                 ('ec_jacobian_images', 'ec_jacobian_images'),
             ]),
-            (inputnode, dedupe_jacobian_weights, [
-                ('dwi_files', 'dwi_files'),
-                ('itk_b0_to_t1', 'hmcsdc_dwi_ref_to_t1w_affine'),
-                ('b0_to_intramodal_template_transforms', 'b0_to_intramodal_template_transforms'),
-                (('intramodal_template_to_t1_affine', _get_first),
-                 'intramodal_template_to_t1_affine'),
-                ('intramodal_template_to_t1_warp', 'intramodal_template_to_t1_warp'),
-            ]),
-            (compose_jacobian, dedupe_jacobian_weights, [
+            (compose_jacobian, scale_dwis, [
                 ('jacobian_weight_images', 'jacobian_weight_images'),
             ]),
-            (dedupe_jacobian_weights, resample_jacobian_weights, [
-                ('unique_weight_images', 'input_image'),
-                ('transforms', 'transforms'),
+            (scale_dwis, outputnode, [
+                ('resampled_weight_images', 'jacobian_weights'),
+                ('weight_index', 'jacobian_weight_index'),
             ]),
-            (inputnode, resample_jacobian_weights, [('output_grid', 'reference_image')]),
-            (resample_jacobian_weights, floor_jacobian_weights, [
-                ('output_image', 'weight_image'),
-            ]),
-            (floor_jacobian_weights, scale_dwis, [
-                ('weight_image', 'resampled_weight_images'),
-            ]),
-            (dedupe_jacobian_weights, scale_dwis, [('weight_index', 'weight_index')]),
-            (floor_jacobian_weights, outputnode, [('weight_image', 'jacobian_weights')]),
-            (dedupe_jacobian_weights, outputnode, [('weight_index', 'jacobian_weight_index')]),
         ])  # fmt:skip
 
     if doing_topup:
