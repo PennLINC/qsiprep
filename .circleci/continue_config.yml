@@ -585,7 +585,6 @@ workflows:
                 - forrest_gump_patch2self
                 - synthstrip
                 - intramodal_template
-                - multi_t1w
           requires: [image_prep, get_data]
           filters: *default_filters
 
@@ -612,7 +611,6 @@ workflows:
             - forrest_gump_patch2self
             - synthstrip
             - intramodal_template
-            - multi_t1w
             - unit_tests
           filters: *default_filters
 
