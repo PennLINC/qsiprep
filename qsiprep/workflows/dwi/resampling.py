@@ -209,10 +209,16 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
     )
     # num_threads parallelizes the per-unique-map antsApplyTransports calls
     # inside the interface's own ThreadPoolExecutor -- see ApplyJacobianWeights'
-    # docstring -- matching how compose_transforms/ComposeTransforms exposes
-    # the same knob for its per-volume calls.
+    # docstring. n_procs must be paired with it (as every other in-node
+    # fan-out in this repo does -- e.g. diffprep.py's synth_dwis, fsl.py's
+    # gather_inputs, hmc.py's iter_reg, anatomical/volume.py's n4_correct) so
+    # nipype's MultiProc scheduler reserves that many slots for this node
+    # instead of co-scheduling other work against a node that is itself
+    # running up to omp_nthreads concurrent antsApplyTransforms processes.
     scale_dwis = pe.Node(
-        ApplyJacobianWeights(num_threads=config.nipype.omp_nthreads), name='scale_dwis'
+        ApplyJacobianWeights(num_threads=config.nipype.omp_nthreads),
+        name='scale_dwis',
+        n_procs=config.nipype.omp_nthreads,
     )
     rotate_gradients = pe.Node(GradientRotation(), name='rotate_gradients')
     cnr_image_type = pe.Node(GetImageType(), name='cnr_image_type')

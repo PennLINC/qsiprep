@@ -110,6 +110,25 @@ def test_scale_dwis_num_threads_is_set_from_omp_nthreads():
     assert scale_dwis.inputs.num_threads == 4
 
 
+def test_scale_dwis_n_procs_matches_num_threads():
+    """I2: the Node's own ``n_procs`` must be paired with ``num_threads``.
+
+    ``ApplyJacobianWeights`` drives a ``ThreadPoolExecutor`` of up to
+    ``num_threads`` concurrent ``antsApplyTransforms`` subprocesses, but if
+    the Node's own ``n_procs`` is left at nipype's default of 1, MultiProc
+    does not know this node needs more than one scheduling slot and will
+    co-schedule other work against it -- oversubscribing the machine by up to
+    ``num_threads``x. Every other in-node fan-out in this repo pairs
+    ``num_threads`` on the interface with a matching ``n_procs`` on the Node
+    (e.g. diffprep.py's synth_dwis, fsl.py's gather_inputs, hmc.py's iter_reg,
+    anatomical/volume.py's n4_correct); scale_dwis must too.
+    """
+    config.nipype.omp_nthreads = 4
+    wf = _trans_wf()
+    scale_dwis = wf.get_node('scale_dwis')
+    assert scale_dwis.n_procs == 4
+
+
 def test_compose_jacobian_consumes_gradwarp_and_fieldwarps():
     edges = _edges(_trans_wf())
     forwarded = {
