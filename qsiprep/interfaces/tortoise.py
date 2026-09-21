@@ -1017,6 +1017,14 @@ class _DIFFPREPOutputSpec(TraitedSpec):
         exists=True,
         desc='Per-volume 24-parameter Okan-quadratic transforms as written by DIFFPREP.',
     )
+    # Declared so nipype keeps it. remove_unnecessary_outputs is on
+    # (config.py:334) and deletes files in the node directory that no output
+    # points at, which silently removed this one. The EC Jacobian ship gate
+    # reads it to check our reconstruction against _moteddy.nii, and needs the
+    # image DIFFPREP actually resampled rather than the pre-import input.
+    imported_dwi_file = File(
+        desc='The "_proc" copy the import step staged, in TORTOISE\'s own layout.'
+    )
     # epi_mode == 'T2Wreg' only. The EPI stage's displacement field is emitted as
     # a transform rather than baked into the image, so qsiprep can compose it with
     # HMC and coregistration and resample once -- the same contract DRBUDDI has.
@@ -1111,6 +1119,7 @@ class DIFFPREP(TORTOISECommandLine):
         # in EVERY case -- including T2Wreg, see below.
         outputs['corrected_dwi_file'] = proc_base + '_moteddy.nii'
         outputs['corrected_bmtxt_file'] = proc_base + '_moteddy.bmtxt'
+        outputs['imported_dwi_file'] = proc_base + '.nii'
 
         if self.inputs.epi_mode == 'T2Wreg':
             # Deliberately NOT the ``*_TORTOISE_final.nii`` FINALDATA image:

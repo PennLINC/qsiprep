@@ -1584,9 +1584,17 @@ def test_reconstructed_transform_reproduces_moteddy(tmp_path, working_dir):
     from qsiprep.interfaces.jacobian import resample_with_okan_transform
 
     work = Path(working_dir)
-    transformations = next(work.rglob('*_moteddy_transformations.txt'))
-    tortoise_output = next(work.rglob('*_moteddy.nii'))
-    imported = next(work.rglob('*_proc.nii'))
+
+    def _one(pattern):
+        # next() on an empty rglob raises StopIteration, which pytest reports
+        # without naming the pattern that found nothing.
+        found = sorted(work.rglob(pattern))
+        assert found, f'No {pattern} under {work}; DIFFPREP did not run or its output was pruned.'
+        return found[0]
+
+    transformations = _one('*_moteddy_transformations.txt')
+    tortoise_output = _one('*_moteddy.nii')
+    imported = _one('*_proc.nii')
 
     ours = resample_with_okan_transform(
         str(imported), str(transformations), str(tmp_path / 'ours.nii.gz')
@@ -1601,3 +1609,28 @@ def test_reconstructed_transform_reproduces_moteddy(tmp_path, working_dir):
         f'r={r:.5f}. Below 0.99 means the 24-parameter convention is wrong, '
         'and the EC Jacobian must NOT ship -- fall back to documenting the gap.'
     )
+
+
+def test_diffprep_declares_the_imported_proc_image(tmp_path, monkeypatch):
+    """Undeclared files in the node directory get pruned.
+
+    ``remove_unnecessary_outputs`` is on (qsiprep/config.py:334), so nipype
+    deletes anything in the node directory that no output points at. The
+    ``_proc.nii`` the import step stages was undeclared and therefore removed,
+    which broke the EC Jacobian ship gate: it compares our reconstruction
+    against ``_moteddy.nii`` and needs the image DIFFPREP resampled.
+    """
+    from qsiprep.interfaces.tortoise import DIFFPREP
+
+    dwi, bmtxt, json_file = _stage_diffprep_outputs(tmp_path, t2wreg=False)
+    _write_dummy_nii(tmp_path / 'dwi_temp_proc' / 'dwi_proc.nii')
+    monkeypatch.chdir(tmp_path)
+
+    outputs = DIFFPREP(
+        dwi_file=str(dwi),
+        bmtxt_file=str(bmtxt),
+        json_file=str(json_file),
+        epi_mode='off',
+    )._list_outputs()
+
+    assert outputs['imported_dwi_file'].endswith('dwi_temp_proc/dwi_proc.nii')
