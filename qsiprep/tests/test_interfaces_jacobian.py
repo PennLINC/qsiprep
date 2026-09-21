@@ -238,6 +238,24 @@ def test_check_weight_map_ignores_nonpositive_outside_mask(tmp_path):
     check_weight_map(weights, mask)
 
 
+def test_check_weight_map_rejects_an_empty_mask(tmp_path):
+    """C3: an all-zero (or fully-off-grid) resampled mask must raise, not
+    silently skip the positivity/median guard.
+
+    ``inside.size == 0`` previously short-circuited both checks below it via
+    ``if inside.size and ...`` -- exactly the situation the guard exists for
+    (something is very likely wrong: a world-frame mismatch between the
+    weight map and the mask) disabled it instead of flagging it. The error
+    names both images so the mismatch can actually be found.
+    """
+    weights = _write_map(tmp_path / 'w.nii.gz', 1.0)
+    mask = _write_map(tmp_path / 'm.nii.gz', 0.0)
+    with pytest.raises(ValueError, match='world.frame') as excinfo:
+        check_weight_map(weights, mask)
+    assert weights in str(excinfo.value)
+    assert mask in str(excinfo.value)
+
+
 # --- ANTs-backed helpers ---------------------------------------------------
 
 

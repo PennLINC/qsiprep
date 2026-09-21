@@ -329,7 +329,21 @@ def check_weight_map(map_path, mask_path):
         )
 
     inside = weights[mask]
-    if inside.size and inside.min() <= 0:
+    if inside.size == 0:
+        # An empty in-mask region disables every check below it (C3) exactly
+        # when something is most likely wrong: a mask that only overlaps this
+        # weight map's grid on paper. A genuinely empty brain mask is not a
+        # scenario this pipeline should ever produce for a real subject, so
+        # this is treated as an error, not a silent no-op.
+        raise ValueError(
+            f'Jacobian weight map {map_path} has no positive voxels in mask '
+            f'{mask_path} -- the positivity/median guard has nothing to check. '
+            'This usually means the mask and the weight map do not share a '
+            'world frame (e.g. a mismatched reference image), not that the '
+            'mask is genuinely empty.'
+        )
+
+    if inside.min() <= 0:
         raise ValueError(
             f'Jacobian weight map {map_path} has non-positive values inside the '
             f'brain mask (minimum {inside.min():.4f}). This means the composed '
@@ -337,18 +351,17 @@ def check_weight_map(map_path, mask_path):
             'number.'
         )
 
-    if inside.size:
-        median = float(np.median(inside))
-        if not MEDIAN_WARN_RANGE[0] <= median <= MEDIAN_WARN_RANGE[1]:
-            LOGGER.warning(
-                'Jacobian weight map %s has an in-mask median of %.4f, outside '
-                '%s. A correct distortion field redistributes signal without '
-                'changing its total, so this may indicate a wrong field, an '
-                'inverted field, or a wrong composition order.',
-                map_path,
-                median,
-                MEDIAN_WARN_RANGE,
-            )
+    median = float(np.median(inside))
+    if not MEDIAN_WARN_RANGE[0] <= median <= MEDIAN_WARN_RANGE[1]:
+        LOGGER.warning(
+            'Jacobian weight map %s has an in-mask median of %.4f, outside '
+            '%s. A correct distortion field redistributes signal without '
+            'changing its total, so this may indicate a wrong field, an '
+            'inverted field, or a wrong composition order.',
+            map_path,
+            median,
+            MEDIAN_WARN_RANGE,
+        )
 
 
 def multiply_maps(paths, out_path, like_path=None):
