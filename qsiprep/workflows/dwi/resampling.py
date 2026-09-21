@@ -17,6 +17,7 @@ from ... import config
 from ...interfaces.ants import GetImageType
 from ...interfaces.fmap import ApplyScalingImages
 from ...interfaces.gradients import (  # LocalGradientRotation,
+    ComposeSDCWarp,
     ComposeTransforms,
     ExtractB0s,
     GradientRotation,
@@ -39,6 +40,7 @@ def init_dwi_trans_wf(
     write_reports=True,
     concatenate=True,
     doing_topup=False,
+    write_sdc_warp=False,
 ):
     """
     This workflow samples dwi images to the ``output_grid`` in a "single shot"
@@ -185,6 +187,8 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 'resampled_qc',
                 # Only written out if TOPUP was used
                 'fieldmap_hz_resampled',
+                # The SDC displacement field on the output grid (PEPOLAR/DRBUDDI)
+                'sdc_warp_to_template',
             ]
         ),
         name='outputnode',
@@ -275,6 +279,24 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             ]),
             (compose_transforms, fieldmap_hz_tfm, [(('out_warps', _get_first), 'transforms')]),
             (fieldmap_hz_tfm, outputnode, [('output_image', 'fieldmap_hz_resampled')]),
+        ])  # fmt:skip
+
+    if write_sdc_warp:
+        # Re-express the SDC (susceptibility) displacement field on the output
+        # grid as a transform, so its vectors are rotated into ACPC world
+        # coordinates. It rides only the stages that carry the corrected DWI
+        # frame to the output grid (compose_transforms.sdc_warp_transforms),
+        # conjugating volume 0's fieldwarp -- see ComposeSDCWarp.
+        compose_sdc_warp = pe.Node(ComposeSDCWarp(), name='compose_sdc_warp', mem_gb=1)
+        workflow.connect([
+            (inputnode, compose_sdc_warp, [
+                (('fieldwarps', _get_first), 'sdc_warp'),
+                ('output_grid', 'reference_image'),
+            ]),
+            (compose_transforms, compose_sdc_warp, [
+                ('sdc_warp_transforms', 'to_template_transforms'),
+            ]),
+            (compose_sdc_warp, outputnode, [('sdc_warp_to_template', 'sdc_warp_to_template')]),
         ])  # fmt:skip
 
     # If concatenation is not happening here, send the still-split images to outputs

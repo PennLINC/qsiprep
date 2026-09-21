@@ -62,8 +62,13 @@ def _tsnr_meta(n_b0, median_tsnr):
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def init_dwi_derivatives_wf(source_file) -> Workflow:
-    """Set up a battery of datasinks to store derivatives in the right location."""
+def init_dwi_derivatives_wf(source_file, sdc_warp_meta=None) -> Workflow:
+    """Set up a battery of datasinks to store derivatives in the right location.
+
+    When ``sdc_warp_meta`` is given (a dict of sidecar metadata), the SDC
+    (susceptibility) displacement field is also written, on the ACPC output grid,
+    as an ITK/ANTs displacement-field transform.
+    """
     output_dir = str(config.execution.output_dir)
     workflow = Workflow(name='dwi_derivatives_wf')
     inputnode = pe.Node(
@@ -81,6 +86,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
                 'btable_t1',
                 'hmc_optimization_data',
                 'series_qc',
+                'sdc_warp_to_template',
             ]
         ),
         name='inputnode',
@@ -262,6 +268,29 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
         (inputnode, ds_gradient_table_t1, [('gradient_table_t1', 'in_file')]),
         (inputnode, ds_btable_t1, [('btable_t1', 'in_file')]),
     ])  # fmt:skip
+
+    # The SDC (susceptibility) displacement field on the ACPC grid, as an ITK
+    # transform. Only written when the backend produced a standalone warp
+    # (DRBUDDI); the caller signals that by passing the sidecar metadata.
+    if sdc_warp_meta is not None:
+        ds_sdc_warp_t1 = pe.Node(
+            DerivativesDataSink(
+                source_file=source_file,
+                base_directory=output_dir,
+                mode='image',
+                suffix='xfm',
+                desc='sdc',
+                extension='.nii.gz',
+                compress=True,
+                meta_dict=sdc_warp_meta,
+                **{'from': 'dwiref', 'to': 'ACPC'},
+            ),
+            name='ds_sdc_warp_t1',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+        workflow.connect([(inputnode, ds_sdc_warp_t1, [('sdc_warp_to_template', 'in_file')])])
+
     # If requested, write local bvecs
     # if config.workflow.write_local_bvecs:
     #     ds_local_bvecs_t1 = pe.Node(

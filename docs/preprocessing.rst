@@ -371,6 +371,18 @@ Transforms
       anat/
         sub-<label>_ses-<label>_from-orig_to-anat_mode-image_xfm.txt
         sub-<label>_ses-<label>_from-anat_to-orig_mode-image_xfm.txt
+      dwi/
+        # Susceptibility (EPI) distortion displacement field, written for PEPOLAR
+        # runs corrected with DRBUDDI (``--sdc-method drbuddi`` / ``topup+drbuddi``,
+        # any HMC backend). It is the SDC warp for the first DWI volume, composed
+        # onto the ACPC output grid as an ITK/ANTs displacement field (a transform,
+        # so its vectors are rotated into ACPC world coordinates -- not a resampled
+        # scalar). Applying it to the susceptibility-distorted DWI resamples it to
+        # the corrected ACPC space; the sidecar records the estimation method and
+        # the warp direction. Absent for TOPUP-only runs, where Eddy applies the
+        # field internally and no standalone warp exists.
+        sub-<label>_ses-<label>_from-dwiref_to-ACPC_mode-image_desc-sdc_xfm.nii.gz
+        sub-<label>_ses-<label>_from-dwiref_to-ACPC_mode-image_desc-sdc_xfm.json
 
 
 .. important::

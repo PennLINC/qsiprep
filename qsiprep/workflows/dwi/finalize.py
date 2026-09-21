@@ -158,6 +158,25 @@ def init_dwi_finalize_wf(
     # disagree after automatic method resolution.
     doing_topup = unit.run.stage_with('topup') is not None
 
+    # DRBUDDI estimates susceptibility distortion as a displacement field
+    # (sdc_warps -> fieldwarps), which is emitted to derivatives, re-expressed on
+    # the ACPC grid. TOPUP-only runs have no standalone warp -- eddy applies the
+    # field internally -- so nothing is written there.
+    doing_drbuddi = unit.run.stage_with('drbuddi') is not None
+    sdc_warp_meta = None
+    if doing_drbuddi:
+        sdc_warp_meta = {
+            'EstimationMethod': 'DRBUDDI',
+            'Description': (
+                'Susceptibility (EPI) distortion displacement field for the first DWI '
+                'volume, expressed on the ACPC output grid as an ITK/ANTs displacement '
+                'field (LPS vector components). Applying it to the distorted DWI (e.g. '
+                'antsApplyTransforms) resamples it to the corrected ACPC space; as an ITK '
+                'point transform it maps ACPC (corrected) points to their distorted '
+                'DWI-reference locations.'
+            ),
+        }
+
     # Determine resource usage
     for scan in all_dwis:
         if not os.path.exists(scan):
@@ -232,6 +251,8 @@ def init_dwi_finalize_wf(
                 'hmc_optimization_data',
                 # Only written out if TOPUP was used
                 'fieldmap_hz_t1',
+                # The SDC displacement field on the ACPC grid (PEPOLAR/DRBUDDI)
+                'sdc_warp_to_template',
             ]
         ),
         name='outputnode',
@@ -300,6 +321,7 @@ def init_dwi_finalize_wf(
         use_compression=False,
         concatenate=True,
         doing_topup=doing_topup,
+        write_sdc_warp=doing_drbuddi,
     )
 
     # Apply denoising to the interpolated data if requested
@@ -364,6 +386,13 @@ def init_dwi_finalize_wf(
             ]),
         ])  # fmt:skip
 
+    if doing_drbuddi:
+        workflow.connect([
+            (transform_dwis_t1, outputnode, [
+                ('outputnode.sdc_warp_to_template', 'sdc_warp_to_template'),
+            ]),
+        ])  # fmt:skip
+
     # The workflow is done if we will be concatenating images later
     if not write_derivatives:
         if gradwarp_plan is not None:
@@ -405,6 +434,7 @@ def init_dwi_finalize_wf(
 
     dwi_derivatives_wf = init_dwi_derivatives_wf(
         source_file=source_file,
+        sdc_warp_meta=sdc_warp_meta,
     )
 
     # Combine all the QC measures for a series QC
@@ -604,6 +634,13 @@ def init_dwi_finalize_wf(
         workflow.connect([
             (transform_dwis_t1, series_qc, [
                 ('outputnode.fieldmap_hz_resampled', 't1_fieldmap_hz_file'),
+            ]),
+        ])  # fmt:skip
+
+    if doing_drbuddi:
+        workflow.connect([
+            (outputnode, dwi_derivatives_wf, [
+                ('sdc_warp_to_template', 'inputnode.sdc_warp_to_template'),
             ]),
         ])  # fmt:skip
 
