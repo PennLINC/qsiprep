@@ -38,7 +38,7 @@ def init_dwi_trans_wf(
     write_local_bvecs=False,
     write_reports=True,
     concatenate=True,
-    fieldmap_hz_source=None,
+    doing_topup=False,
 ):
     """
     This workflow samples dwi images to the ``output_grid`` in a "single shot"
@@ -163,10 +163,8 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 'gradwarp_field',
                 'output_grid',
                 'sdc_scaling_images',
-                # Written out if TOPUP or DRBUDDI produced a field
+                # Only written out if TOPUP was used
                 'fieldmap_hz',
-                # DRBUDDI-only QC fields [blip-up, blip-down, asymmetry]
-                'component_fieldmaps',
             ]
         ),
         name='inputnode',
@@ -185,9 +183,8 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 'local_bvecs',
                 'b0_series',
                 'resampled_qc',
-                # Written out if TOPUP or DRBUDDI produced a field
+                # Only written out if TOPUP was used
                 'fieldmap_hz_resampled',
-                'component_fieldmaps_resampled',
             ]
         ),
         name='outputnode',
@@ -265,58 +262,20 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
         (dwi_transform, scale_dwis, [('output_image', 'dwi_files')]),
     ])  # fmt:skip
 
-    if fieldmap_hz_source is not None:
-        # A Hz field is smooth, so it interpolates linearly regardless of source:
-        # sinc would overshoot and ring at the steep field gradients by the sinuses
-        # (fabricating extreme Hz), and NN would be blocky. Only the transforms
-        # differ. TOPUP's field is in eddy space and rides the full volume-0
-        # composite; DRBUDDI's is already the fieldwarp, in the motion-corrected
-        # DWI frame, so it takes only the stages that move it to the output grid
-        # (no hmc, fieldwarp or gradwarp).
+    if doing_topup:
         fieldmap_hz_tfm = pe.Node(
-            ants.ApplyTransforms(interpolation='Linear', float=True),
+            ants.ApplyTransforms(interpolation='NearestNeighbor', float=True),
             name='fieldmap_hz_tfm',
             mem_gb=1,
         )
-        if fieldmap_hz_source == 'topup':
-            transform_src = [
-                (compose_transforms, fieldmap_hz_tfm, [(('out_warps', _get_first), 'transforms')]),
-            ]
-        else:
-            transform_src = [
-                (compose_transforms, fieldmap_hz_tfm, [('fieldmap_hz_transforms', 'transforms')]),
-            ]
         workflow.connect([
             (inputnode, fieldmap_hz_tfm, [
                 ('fieldmap_hz', 'input_image'),
                 ('output_grid', 'reference_image'),
             ]),
-            *transform_src,
+            (compose_transforms, fieldmap_hz_tfm, [(('out_warps', _get_first), 'transforms')]),
             (fieldmap_hz_tfm, outputnode, [('output_image', 'fieldmap_hz_resampled')]),
         ])  # fmt:skip
-
-        if fieldmap_hz_source == 'drbuddi':
-            # The QC component fields share DRBUDDI's grid and the same route to the
-            # output grid, so resample them (linearly, as above) with the same
-            # transforms in one MapNode.
-            component_fieldmap_tfm = pe.MapNode(
-                ants.ApplyTransforms(interpolation='Linear', float=True),
-                iterfield=['input_image'],
-                name='component_fieldmap_tfm',
-                mem_gb=1,
-            )
-            workflow.connect([
-                (inputnode, component_fieldmap_tfm, [
-                    ('component_fieldmaps', 'input_image'),
-                    ('output_grid', 'reference_image'),
-                ]),
-                (compose_transforms, component_fieldmap_tfm, [
-                    ('fieldmap_hz_transforms', 'transforms'),
-                ]),
-                (component_fieldmap_tfm, outputnode, [
-                    ('output_image', 'component_fieldmaps_resampled'),
-                ]),
-            ])  # fmt:skip
 
     # If concatenation is not happening here, send the still-split images to outputs
     if not concatenate:

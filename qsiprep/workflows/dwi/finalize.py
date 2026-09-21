@@ -7,7 +7,6 @@ Final steps on the preprocessed data
 """
 
 import os
-import re
 
 from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
@@ -28,7 +27,6 @@ from ...interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SeriesQC
-from ...utils.sdc import pe_readout_time
 from .derivatives import init_dwi_derivatives_wf
 from .gradwarp import resolve_gradwarp_plan
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
@@ -38,15 +36,6 @@ from .resampling import init_dwi_trans_wf
 from .util import _create_mem_gb, init_dwi_reference_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
-
-
-def _dir_label(files, fallback):
-    """The BIDS ``dir-`` entity of the first file, or ``fallback`` if absent."""
-    for path in files or ():
-        match = re.search(r'_dir-([A-Za-z0-9]+)', os.path.basename(path))
-        if match:
-            return match.group(1)
-    return fallback
 
 
 def init_dwi_finalize_wf(
@@ -164,83 +153,10 @@ def init_dwi_finalize_wf(
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
 
-    # Both TOPUP and DRBUDDI can expose a field in Hz for the final resampling
-    # path. Dispatch from the compiled run, not the deprecated config spelling:
-    # those can disagree after automatic method resolution. TOPUP's field is in
-    # eddy space; DRBUDDI's, recovered from its displacement field, needs the
-    # blip-up readout time, so it is only written when that is known. TOPUP wins
-    # when both ran (topup+drbuddi), where DRBUDDI is only a residual refinement.
+    # TOPUP alone exposes a field in Hz for the final resampling path. Dispatch
+    # from the compiled run, not the deprecated config spelling: those can
+    # disagree after automatic method resolution.
     doing_topup = unit.run.stage_with('topup') is not None
-    doing_drbuddi = unit.run.stage_with('drbuddi') is not None
-    if doing_topup:
-        fieldmap_hz_source = 'topup'
-    elif doing_drbuddi and pe_readout_time(unit) is not None:
-        fieldmap_hz_source = 'drbuddi'
-    else:
-        fieldmap_hz_source = None
-    has_fieldmap_hz = fieldmap_hz_source is not None
-    fieldmap_meta = None
-    if has_fieldmap_hz:
-        fieldmap_meta = {
-            'Units': 'Hz',
-            'EstimationMethod': 'DRBUDDI' if fieldmap_hz_source == 'drbuddi' else 'TOPUP',
-            'PhaseEncodingDirection': unit.pe_dir,
-            'Description': (
-                'Susceptibility off-resonance field on the preprocessed DWI grid. A '
-                'positive value shifts signal by field_Hz * TotalReadoutTime * '
-                'sign(PhaseEncodingDirection) voxels along the + phase-encoding axis.'
-            ),
-        }
-        readout_time = pe_readout_time(unit)
-        if readout_time is not None:
-            fieldmap_meta['TotalReadoutTime'] = readout_time
-
-    # DRBUDDI additionally decomposes the field into per-blip QC fields. Written in
-    # field_to_hz's order [blip-up, blip-down, asymmetry]; label the per-direction
-    # ones with the source series' actual dir entity, the residual with desc.
-    has_components = fieldmap_hz_source == 'drbuddi'
-    component_specs = None
-    if has_components:
-        plus_dir = _dir_label(unit.plus_files, 'blipUp')
-        minus_dir = _dir_label(unit.minus_files, 'blipDown')
-        base_meta = {'Units': 'Hz', 'EstimationMethod': 'DRBUDDI'}
-        if readout_time is not None:
-            base_meta['TotalReadoutTime'] = readout_time
-        component_specs = [
-            {
-                'entities': {'direction': plus_dir},
-                'meta': {
-                    **base_meta,
-                    'Description': (
-                        f'Off-resonance field in Hz from the {plus_dir} (blip-up) series '
-                        'alone; keeps the non-antisymmetric residue (see the desc-asymmetry '
-                        'map). QC, not the recommended field.'
-                    ),
-                },
-            },
-            {
-                'entities': {'direction': minus_dir},
-                'meta': {
-                    **base_meta,
-                    'Description': (
-                        f'Off-resonance field in Hz from the {minus_dir} (blip-down) series '
-                        'alone; keeps the non-antisymmetric residue. QC, not the recommended '
-                        'field.'
-                    ),
-                },
-            },
-            {
-                'entities': {'desc': 'asymmetry'},
-                'meta': {
-                    **base_meta,
-                    'Description': (
-                        f'Non-antisymmetric residual in Hz, ({plus_dir} field - {minus_dir} '
-                        'field) / 2. A pure susceptibility field is zero here, so this maps '
-                        'eddy-current, motion and other non-Delta-B0 distortion for QC.'
-                    ),
-                },
-            },
-        ]
 
     # Determine resource usage
     for scan in all_dwis:
@@ -294,9 +210,8 @@ def init_dwi_finalize_wf(
                 'confounds',
                 'carpetplot_data',
                 'sdc_scaling_images',
-                # Written out if TOPUP or DRBUDDI produced a field
+                # Only written out if TOPUP was used
                 'fieldmap_hz',
-                'component_fieldmaps',
             ]
         ),
         name='inputnode',
@@ -315,9 +230,8 @@ def init_dwi_finalize_wf(
                 'gradient_table_t1',
                 'btable_t1',
                 'hmc_optimization_data',
-                # Written out if TOPUP or DRBUDDI produced a field
+                # Only written out if TOPUP was used
                 'fieldmap_hz_t1',
-                'component_fieldmaps_t1',
             ]
         ),
         name='outputnode',
@@ -385,7 +299,7 @@ def init_dwi_finalize_wf(
         mem_gb=mem_gb['resampled'],
         use_compression=False,
         concatenate=True,
-        fieldmap_hz_source=fieldmap_hz_source,
+        doing_topup=doing_topup,
     )
 
     # Apply denoising to the interpolated data if requested
@@ -442,20 +356,11 @@ def init_dwi_finalize_wf(
         ]),
     ])  # fmt:skip
 
-    if has_fieldmap_hz:
+    if doing_topup:
         workflow.connect([
             (inputnode, transform_dwis_t1, [('fieldmap_hz', 'inputnode.fieldmap_hz')]),
             (transform_dwis_t1, outputnode, [
                 ('outputnode.fieldmap_hz_resampled', 'fieldmap_hz_t1'),
-            ]),
-        ])  # fmt:skip
-    if has_components:
-        workflow.connect([
-            (inputnode, transform_dwis_t1, [
-                ('component_fieldmaps', 'inputnode.component_fieldmaps'),
-            ]),
-            (transform_dwis_t1, outputnode, [
-                ('outputnode.component_fieldmaps_resampled', 'component_fieldmaps_t1'),
             ]),
         ])  # fmt:skip
 
@@ -500,8 +405,6 @@ def init_dwi_finalize_wf(
 
     dwi_derivatives_wf = init_dwi_derivatives_wf(
         source_file=source_file,
-        fieldmap_meta=fieldmap_meta,
-        component_specs=component_specs,
     )
 
     # Combine all the QC measures for a series QC
@@ -697,19 +600,10 @@ def init_dwi_finalize_wf(
         (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')]),
     ])  # fmt:skip
 
-    if has_fieldmap_hz:
+    if doing_topup:
         workflow.connect([
             (transform_dwis_t1, series_qc, [
                 ('outputnode.fieldmap_hz_resampled', 't1_fieldmap_hz_file'),
-            ]),
-            (outputnode, dwi_derivatives_wf, [
-                ('fieldmap_hz_t1', 'inputnode.fieldmap_hz_t1'),
-            ]),
-        ])  # fmt:skip
-    if has_components:
-        workflow.connect([
-            (outputnode, dwi_derivatives_wf, [
-                ('component_fieldmaps_t1', 'inputnode.component_fieldmaps_t1'),
             ]),
         ])  # fmt:skip
 

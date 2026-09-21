@@ -62,19 +62,8 @@ def _tsnr_meta(n_b0, median_tsnr):
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def _nth(seq, index):
-    return seq[index]
-
-
-def init_dwi_derivatives_wf(source_file, fieldmap_meta=None, component_specs=None) -> Workflow:
-    """Set up a battery of datasinks to store derivatives in the right location.
-
-    When ``fieldmap_meta`` is given (a dict of sidecar metadata), an estimated
-    off-resonance field in Hz is also written, on the preprocessed DWI grid.
-    ``component_specs`` (a list of ``{'entities': ..., 'meta': ...}``, matching the
-    order of ``component_fieldmaps_t1``) additionally writes DRBUDDI's per-blip QC
-    fields, each distinguished by its own entities (e.g. ``dir-AP``, ``desc-asymmetry``).
-    """
+def init_dwi_derivatives_wf(source_file) -> Workflow:
+    """Set up a battery of datasinks to store derivatives in the right location."""
     output_dir = str(config.execution.output_dir)
     workflow = Workflow(name='dwi_derivatives_wf')
     inputnode = pe.Node(
@@ -92,8 +81,6 @@ def init_dwi_derivatives_wf(source_file, fieldmap_meta=None, component_specs=Non
                 'btable_t1',
                 'hmc_optimization_data',
                 'series_qc',
-                'fieldmap_hz_t1',
-                'component_fieldmaps_t1',
             ]
         ),
         name='inputnode',
@@ -275,53 +262,6 @@ def init_dwi_derivatives_wf(source_file, fieldmap_meta=None, component_specs=Non
         (inputnode, ds_gradient_table_t1, [('gradient_table_t1', 'in_file')]),
         (inputnode, ds_btable_t1, [('btable_t1', 'in_file')]),
     ])  # fmt:skip
-
-    # Estimated off-resonance field in Hz on the preprocessed DWI grid. Only
-    # written when the backend produced one (TOPUP or DRBUDDI); the caller signals
-    # that by passing the sidecar metadata.
-    if fieldmap_meta is not None:
-        ds_fieldmap_t1 = pe.Node(
-            DerivativesDataSink(
-                source_file=source_file,
-                base_directory=output_dir,
-                space='ACPC',
-                suffix='fieldmap',
-                extension='.nii.gz',
-                compress=True,
-                meta_dict=fieldmap_meta,
-            ),
-            name='ds_fieldmap_t1',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB,
-        )
-        workflow.connect([(inputnode, ds_fieldmap_t1, [('fieldmap_hz_t1', 'in_file')])])
-
-    # DRBUDDI's per-blip QC fields, each with its own entities (dir-<AP/PA> for the
-    # per-direction fields, desc-asymmetry for the residual). One datasink per
-    # component, indexed out of the resampled list in field_to_hz's order.
-    if component_specs:
-        for index, spec in enumerate(component_specs):
-            ds_component = pe.Node(
-                DerivativesDataSink(
-                    source_file=source_file,
-                    base_directory=output_dir,
-                    space='ACPC',
-                    suffix='fieldmap',
-                    extension='.nii.gz',
-                    compress=True,
-                    meta_dict=spec['meta'],
-                    **spec['entities'],
-                ),
-                name=f'ds_component_fieldmap_{index}',
-                run_without_submitting=True,
-                mem_gb=DEFAULT_MEMORY_MIN_GB,
-            )
-            workflow.connect([
-                (inputnode, ds_component, [
-                    (('component_fieldmaps_t1', _nth, index), 'in_file'),
-                ]),
-            ])  # fmt:skip
-
     # If requested, write local bvecs
     # if config.workflow.write_local_bvecs:
     #     ds_local_bvecs_t1 = pe.Node(

@@ -30,20 +30,3 @@ def t2w_available_for_sdc(subject_data, selection, anat_modality):
     with an empty input.
     """
     return bool(subject_data.get('t2w')) and anat_modality != 'none' and t2w_sdc_enabled(selection)
-
-
-def pe_readout_time(unit):
-    """``TotalReadoutTime`` (s) of a PEPOLAR unit's blip-up series, or ``None``.
-
-    DRBUDDI reports its distortion estimate as a displacement field, not a Hz
-    fieldmap; converting one to the other needs the blip-up acquisition's
-    readout time. The blip-up series is the lead ``+`` polarity series for a
-    reverse-PE pair, matching :attr:`~qsiplan.adapters.PreprocUnit.pe_dir`.
-    Returns ``None`` when the metadata is absent, so callers can decline to
-    write the Hz fieldmap rather than fail.
-    """
-    lead = unit.plus_files[0] if unit.has_bidirectional_dwi else unit.dwi_files[0]
-    trt = unit.sidecar_overrides().get(lead, {}).get('TotalReadoutTime')
-    if trt is None:
-        trt = unit.dwi_metadata.get('TotalReadoutTime')
-    return float(trt) if trt is not None else None

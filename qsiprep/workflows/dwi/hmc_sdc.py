@@ -109,9 +109,8 @@ def init_qsiprep_hmcsdc_wf(
                 'down_fa_image',
                 'down_fa_corrected_image',
                 't2w_image',
-                # Defined only on the PEPOLAR (DRBUDDI) branch below.
+                # Will not be defined
                 'fieldmap_hz',
-                'component_fieldmaps',
             ],
         ),
         name='outputnode',
@@ -250,8 +249,6 @@ def init_qsiprep_hmcsdc_wf(
                 ('outputnode.down_fa_corrected_image', 'down_fa_corrected_image'),
                 ('outputnode.t2w_image', 't2w_image'),
                 ('outputnode.b0_ref', 'b0_template'),
-                ('outputnode.fieldmap_hz', 'fieldmap_hz'),
-                ('outputnode.component_fieldmaps', 'component_fieldmaps'),
             ]),
         ])  # fmt:skip
 

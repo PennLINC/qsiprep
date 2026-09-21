@@ -384,10 +384,6 @@ class ComposeTransformsOutputSpec(TraitedSpec):
     transform_lists = OutputMultiObject(
         traits.List(File(exists=True)), desc='lists of transforms for each image'
     )
-    fieldmap_hz_transforms = OutputMultiObject(
-        traits.Either(File(exists=True), traits.Enum('identity')),
-        desc='ANTs-ordered transforms that carry a Hz fieldmap to the output grid',
-    )
     log_cmdline = File(desc='a list of command lines used to apply transforms')
 
 
@@ -437,25 +433,6 @@ class ComposeTransforms(SimpleInterface):
     @classmethod
     def _popped_keys(cls):
         return list(cls._POPPED_KEYS)
-
-    @classmethod
-    def _fieldmap_stage_names(cls, included):
-        """Stages that carry a Hz fieldmap from its own frame to the output grid.
-
-        A susceptibility field is applied to the DWI *as* the ``fieldwarp`` stage,
-        and (for DRBUDDI/GRE/SyN) it is estimated on already-gradwarp-corrected
-        images, so re-applying ``hmc``, ``fieldwarp``, or ``gradwarp`` to the
-        field itself would double-count. Only the stages that move the field
-        between spaces (to the intramodal template, then to the anatomical
-        reference) remain. ``included`` is the stage names actually present, in
-        :attr:`_TRANSFORM_STAGES` order.
-        """
-        drop = {'hmc', 'fieldwarp'}
-        if 'fieldwarp' in included:
-            drop.add('gradwarp')
-        # Keep only real SDC/anatomical stages: a Hz field's derivative stays in
-        # the anatomical (ACPC) space, so any MNI stages are excluded too.
-        return [name for name in included if name in cls._TRANSFORM_STAGES and name not in drop]
 
     def _run_interface(self, runtime):
         dwi_files = self.inputs.dwi_files
@@ -545,18 +522,6 @@ class ComposeTransforms(SimpleInterface):
 
         # Check that all the transform lists have the same numbers of transforms
         assert all(len(xform_list) == len(image_transforms[0]) for xform_list in image_transforms)
-
-        # The Hz-fieldmap subset, for volume 0 only, in ANTs (reversed) order.
-        # Computed here while names and lists are still aligned in stage order.
-        fm_names = self._fieldmap_stage_names(image_transform_names)
-        fm_lists = [
-            tlist
-            for tlist, name in zip(image_transforms, image_transform_names, strict=True)
-            if name in fm_names
-        ]
-        self._results['fieldmap_hz_transforms'] = [tlist[0] for tlist in reversed(fm_lists)] or [
-            'identity'
-        ]
 
         # If there is just a coreg transform, then we have everything
         if image_transform_names == ['b=0 to T1w']:
