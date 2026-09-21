@@ -252,7 +252,12 @@ def test_dsdti_synfmap_writes_jacobian(tmp_path):
     assert _fixture_lists_jacobian('dsdti_synfmap') is True
     # jacobian_provenance_for mirrors init_fsl_hmc_wf's own GRE/SyN branch
     # (unit.is_gre or unit.is_nipreps_syn) from this same, real unit.
-    assert jacobian_provenance_for(unit, t2w_sdc=False) == (['sdc'], [], None)
+    applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)
+    assert (applied, unmodulated, reason) == (['sdc'], [], None)
+    # I3: jacobian_provenance_for never inspects the workflow it mirrors --
+    # relate it to the has_real_fieldwarps oracle so a drift between the two
+    # is caught here rather than only by a full build+sidecar comparison.
+    assert has_real == ('sdc' in applied)
 
 
 def test_forrest_gump_writes_jacobian(monkeypatch):
@@ -276,7 +281,9 @@ def test_forrest_gump_writes_jacobian(monkeypatch):
     assert has_real, f'expected a real SDC warp source, got {source!r}'
     assert source == 'sdc_wf'
     assert _fixture_lists_jacobian('forrest_gump') is True
-    assert jacobian_provenance_for(unit, t2w_sdc=False) == (['sdc'], [], None)
+    applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)
+    assert (applied, unmodulated, reason) == (['sdc'], [], None)
+    assert has_real == ('sdc' in applied)
 
 
 def test_maternal_brain_project_writes_jacobian(monkeypatch):
@@ -316,7 +323,9 @@ def test_maternal_brain_project_writes_jacobian(monkeypatch):
     assert _fixture_lists_jacobian('maternal_brain_project') is True
     # jacobian_provenance_for's shoreline branch has no TOPUP carve-out either
     # (see its docstring) -- any correction method reaches fieldwarps.
-    assert jacobian_provenance_for(unit, t2w_sdc=False) == (['sdc'], [], None)
+    applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)
+    assert (applied, unmodulated, reason) == (['sdc'], [], None)
+    assert has_real == ('sdc' in applied)
 
 
 def test_shoreline_no_fieldmap_has_no_real_fieldwarps(tmp_path):
@@ -343,7 +352,9 @@ def test_shoreline_no_fieldmap_has_no_real_fieldwarps(tmp_path):
     assert not has_real
     assert source == 'sdc_bypass_wf'
     # No fieldmap at all on the SHORELine backend: nothing to apply.
-    assert jacobian_provenance_for(unit, t2w_sdc=False) == ([], [], None)
+    applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)
+    assert (applied, unmodulated, reason) == ([], [], None)
+    assert has_real == ('sdc' in applied)
 
 
 def test_drbuddi_rpe_writes_jacobian(tmp_path):
@@ -357,7 +368,9 @@ def test_drbuddi_rpe_writes_jacobian(tmp_path):
     has_real, source = _has_real_fieldwarps(wf)
     assert has_real, f'expected a real DRBUDDI warp source, got {source!r}'
     assert _fixture_lists_jacobian('drbuddi_rpe') is True
-    assert jacobian_provenance_for(unit, t2w_sdc=False) == (['sdc'], [], None)
+    applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)
+    assert (applied, unmodulated, reason) == (['sdc'], [], None)
+    assert has_real == ('sdc' in applied)
 
 
 def test_diffprep_writes_no_jacobian(tmp_path):
@@ -382,7 +395,9 @@ def test_diffprep_writes_no_jacobian(tmp_path):
     assert _fixture_lists_jacobian('diffprep') is False
     # 'motion' has no eddy-current component at all -- it does not occur, so
     # it belongs in neither AppliedCorrections nor UnmodulatedCorrections.
-    assert jacobian_provenance_for(unit, t2w_sdc=False) == ([], [], None)
+    applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)
+    assert (applied, unmodulated, reason) == ([], [], None)
+    assert has_real == ('sdc' in applied)
 
 
 def test_diffprep_drbuddi_writes_jacobian(tmp_path):
@@ -405,7 +420,9 @@ def test_diffprep_drbuddi_writes_jacobian(tmp_path):
     # --sloppy still downgrades to correction_mode='motion', so only 'sdc' is
     # applied here; see test_diffprep_quadratic_records_eddy_current_applied
     # for the non-sloppy 'eddy-current' case.
-    assert jacobian_provenance_for(unit, t2w_sdc=False) == (['sdc'], [], None)
+    applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)
+    assert (applied, unmodulated, reason) == (['sdc'], [], None)
+    assert has_real == ('sdc' in applied)
 
 
 def test_diffprep_quadratic_records_eddy_current_applied(tmp_path):
@@ -450,7 +467,9 @@ def test_dsdti_topup_only_branch_has_no_jacobian(tmp_path):
     assert _fixture_lists_jacobian('dsdti_topup') is False
     # TOPUP is baked into eddy's own resampling on this path -- QSIPrep itself
     # applies nothing external, so 'sdc' must not appear as applied.
-    assert jacobian_provenance_for(unit, t2w_sdc=False) == ([], [], None)
+    applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)
+    assert (applied, unmodulated, reason) == ([], [], None)
+    assert has_real == ('sdc' in applied)
 
 
 #: A full ``--eddy-config`` override with ``method='lsr'`` instead of the
