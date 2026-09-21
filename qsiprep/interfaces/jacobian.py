@@ -202,7 +202,7 @@ def _assert_world_frames_overlap(path_a, path_b, img_a=None, img_b=None):
         )
 
 
-def resample_like(source_path, like_path, out_path, interpolation='nearest'):
+def resample_like(source_path, like_path, out_path, interpolation='nearest', fill_value=0):
     """Resample ``source_path`` onto ``like_path``'s grid, if it is not already.
 
     A no-op that returns ``source_path`` unchanged when the two already share
@@ -213,6 +213,26 @@ def resample_like(source_path, like_path, out_path, interpolation='nearest'):
     mislatticed input must not silently move which voxels a downstream check
     inspects, so it is resampled onto the grid actually being inspected rather
     than compared in place or ignored.
+
+    ``fill_value`` is what appears outside ``source_path``'s own field of
+    view once resampled onto ``like_path``'s (generally larger) grid. It
+    defaults to 0, the correct value for a mask (a mask is absent, i.e.
+    false, outside its own FOV) -- see ``multiply_maps`` for why a
+    determinant factor needs a different default (C1 fix notes).
+
+    ``force_resample=True`` is passed to ``nilearn.image.resample_to_img``
+    unconditionally, on every code path that actually resamples (never on the
+    no-op early return above, which is ours, not nilearn's, and never touches
+    nilearn at all). Without it, nilearn silently ignores ``fill_value``
+    whenever the two grids differ only by an axis-aligned, whole-voxel
+    translation -- e.g. exactly DRBUDDI's own padding of a native grid -- by
+    taking an internal "padding" fast path that fills the non-overlapping
+    region with hard zeros regardless of ``fill_value`` (see
+    ``nilearn.image.resampling.resample_img``, the ``not force_resample``
+    branch that special-cases ``A == I`` and integer ``b``). Whether that fast
+    path triggers is sensitive to floating-point noise in the affine
+    inversion, so relying on it *not* triggering is not a fix -- only
+    ``force_resample=True`` reliably disables it.
     """
     source = nb.load(source_path)
     like = nb.load(like_path)
@@ -220,7 +240,13 @@ def resample_like(source_path, like_path, out_path, interpolation='nearest'):
         source.affine, like.affine, rtol=AFFINE_RTOL, atol=AFFINE_ATOL
     ):
         return source_path
-    resampled = nim.resample_to_img(source, like, interpolation=interpolation)
+    resampled = nim.resample_to_img(
+        source,
+        like,
+        interpolation=interpolation,
+        fill_value=fill_value,
+        force_resample=True,
+    )
     resampled.to_filename(out_path)
     return out_path
 
@@ -333,6 +359,16 @@ def multiply_maps(paths, out_path, like_path=None):
     already on that grid -- the common case -- costs no extra I/O, since
     ``resample_like`` itself no-ops when the grids already match.
 
+    Every factor is also resampled with ``fill_value=1.0`` (C1 fix): a
+    determinant factor undefined outside its own field of view means "no
+    volume change known here", whose multiplicative identity is 1.0, not
+    nilearn's default of 0. A gradwarp field is shared by every volume and
+    typically already spans the whole reference grid, but an EC Jacobian is
+    evaluated on DIFFPREP's native grid, which is routinely smaller than
+    DRBUDDI's padded output grid -- zero-filling that gap would multiply real
+    DWI signal in the padded band by (after ``_floor_nonpositive_weights``'s
+    floor) roughly 1/1000.
+
     ``ComposeJacobianWeights`` passes its own ``b0_ref_image`` explicitly:
     that input's own docstring already commits to being "the lattice the
     weight maps live on", and every factor reaching this function has already
@@ -349,6 +385,7 @@ def multiply_maps(paths, out_path, like_path=None):
                 path, suffix='_onlattice', newpath=os.path.dirname(out_path) or None
             ),
             interpolation='linear',
+            fill_value=1.0,
         )
         for path in paths
     ]

@@ -368,6 +368,21 @@ def test_resample_like_is_a_noop_when_grids_already_match(tmp_path):
     assert resample_like(mask, like, str(tmp_path / 'out.nii.gz')) == mask
 
 
+def test_resample_like_noop_path_ignores_fill_value(tmp_path):
+    """C1: ``force_resample=True`` is only ever passed on the branch that
+    actually calls into nilearn. The matching-lattice early return is ours,
+    not nilearn's, so a non-default ``fill_value`` must not disturb it --
+    the common (already-matching) case must still cost no I/O and return the
+    source path byte-identical, regardless of ``fill_value``.
+    """
+    like = _write_map(tmp_path / 'like.nii.gz', 1.0)
+    source = _write_map(tmp_path / 'source.nii.gz', 1.0)
+    out_path = str(tmp_path / 'out.nii.gz')
+    result = resample_like(source, like, out_path, fill_value=1.0)
+    assert result == source
+    assert not Path(out_path).exists()
+
+
 def test_resample_like_resamples_onto_the_target_grid(tmp_path):
     like = _write_map(tmp_path / 'like.nii.gz', 1.0, shape=DRBUDDI_SHAPE, affine=DRBUDDI_AFFINE)
     mask = _write_map(tmp_path / 'mask.nii.gz', 1.0, shape=NATIVE_SHAPE, affine=NATIVE_AFFINE)
@@ -375,6 +390,40 @@ def test_resample_like_resamples_onto_the_target_grid(tmp_path):
     resampled = nb.load(out)
     assert resampled.shape[:3] == DRBUDDI_SHAPE
     assert np.allclose(resampled.affine, DRBUDDI_AFFINE)
+
+
+def test_resample_like_default_fill_value_is_zero_for_masks(tmp_path):
+    """C1: the default preserves current mask behaviour -- absent outside its
+    own FOV, i.e. zero-filled -- only a determinant factor (``multiply_maps``)
+    opts into ``fill_value=1.0``.
+    """
+    like = _write_map(tmp_path / 'like.nii.gz', 1.0, shape=DRBUDDI_SHAPE, affine=DRBUDDI_AFFINE)
+    mask = _write_map(tmp_path / 'mask.nii.gz', 1.0, shape=NATIVE_SHAPE, affine=NATIVE_AFFINE)
+    out = resample_like(mask, like, str(tmp_path / 'out.nii.gz'))
+    resampled = np.asanyarray(nb.load(out).dataobj)
+    assert (resampled[0, 0, 0] == 0).all()
+
+
+def test_resample_like_fill_value_reaches_outside_the_source_fov(tmp_path):
+    """C1: with ``fill_value=1.0`` and the exact real-world lattice mismatch
+    (an axis-aligned, whole-voxel padding offset -- DRBUDDI's own padding of
+    DIFFPREP's native grid), voxels outside the source's field of view come
+    back as the fill value, not zero. This is the mechanism the previous fix
+    attempt (passing ``fill_value`` alone, without ``force_resample=True``)
+    was verified NOT to guarantee -- nilearn's padding fast path ignores
+    ``fill_value`` on exactly this kind of lattice relationship unless
+    ``force_resample=True`` is also passed.
+    """
+    like = _write_map(tmp_path / 'like.nii.gz', 1.0, shape=DRBUDDI_SHAPE, affine=DRBUDDI_AFFINE)
+    source = _write_map(tmp_path / 'source.nii.gz', 1.0, shape=NATIVE_SHAPE, affine=NATIVE_AFFINE)
+    out = resample_like(
+        source, like, str(tmp_path / 'out.nii.gz'), interpolation='linear', fill_value=1.0
+    )
+    resampled = np.asanyarray(nb.load(out).dataobj)
+    # A corner of the DRBUDDI-sized grid that is genuinely outside the
+    # smaller native-grid footprint.
+    assert resampled[0, 0, 0] == pytest.approx(1.0)
+    assert not np.any(resampled == 0)
 
 
 def test_compose_fields_returns_a_single_field(tmp_path):
@@ -597,15 +646,35 @@ def test_compose_weights_reconciles_ec_jacobian_lattice_against_sdc_determinant(
         assert np.allclose(img.affine, DRBUDDI_AFFINE)
         determinant = np.asanyarray(img.dataobj)
         # Positivity is only a contract inside the brain mask (that is what
-        # check_weight_map enforces); the native mask's own footprint does
-        # not cover the whole of DRBUDDI's larger output grid, and voxels
-        # outside it are free to be zero-filled by resampling.
+        # check_weight_map enforces), but the native EC Jacobian's own
+        # footprint does not cover the whole of DRBUDDI's larger output grid.
+        # C1: voxels outside that footprint must NOT be zero-filled by
+        # resampling -- a determinant factor undefined somewhere means "no
+        # volume change known here", whose multiplicative identity is 1.0, not
+        # 0. A zero-filled band there would flow through
+        # ``_floor_nonpositive_weights`` (floor to 1e-3) and silently
+        # annihilate real DWI signal in exactly the padded region DRBUDDI adds
+        # to retain susceptibility-displaced signal.
         mask_on_weight_grid = resample_like(
             mask, weight_path, str(tmp_path / f'mask_check_{i}.nii.gz')
         )
         inmask = np.asanyarray(nb.load(mask_on_weight_grid).dataobj) > 0
         assert np.isfinite(determinant[inmask]).all()
         assert (determinant[inmask] > 0).all()
+
+        outside = ~inmask
+        # Sanity check that the native footprint genuinely does not cover the
+        # whole DRBUDDI grid -- otherwise this test would vacuously pass.
+        assert outside.any()
+        assert np.isfinite(determinant[outside]).all()
+        # atol=1e-2 comfortably separates "the multiplicative identity" from
+        # "zero-filled" (the SDC determinant factor itself is not bit-exact
+        # unity at its own edges -- ANTs' one-sided edge differences -- so a
+        # tight tolerance around 1.0 would be the wrong thing to assert here).
+        assert np.allclose(determinant[outside], 1.0, atol=1e-2), (
+            'Voxels outside the native EC Jacobian footprint must reconcile to '
+            'the multiplicative identity (1.0), never be zero-filled.'
+        )
 
 
 def test_compose_weights_reconciles_ec_jacobian_lattice_with_gradwarp(tmp_path):
