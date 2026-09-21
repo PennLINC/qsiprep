@@ -19,17 +19,60 @@ from qsiprep.tests.gradient_fixtures import write_dwi_with_gradients
 from qsiprep.tests.preproc_factory import make_preproc_unit
 
 
-@pytest.fixture(autouse=True)
-def _reset_config():
-    saved = (config.workflow.jacobian_weighting, config.workflow.output_resolution)
+def _reset_config_impl():
+    """The body of ``_reset_config``, factored out so it can be driven
+    directly by ``test_reset_config_fixture_restores_omp_nthreads`` (M6)
+    without going through pytest's fixture machinery.
+    """
+    saved = (
+        config.workflow.jacobian_weighting,
+        config.workflow.output_resolution,
+        config.nipype.omp_nthreads,
+    )
     config.workflow.jacobian_weighting = True
     config.workflow.output_resolution = 2.0
     # config.nipype.init() normally resolves this; it is not run in these bare
     # construction tests, so init_modelfree_qc_wf's DSIStudioGQIReconstruction
     # node (which requires an int thread_count) fails to build without it.
+    # Several tests below (e.g. test_scale_dwis_num_threads_is_set_from_
+    # omp_nthreads) then set their own value; it must not leak into whatever
+    # test or module runs next (M6), so the pre-fixture value is restored on
+    # teardown rather than a hard-coded constant.
     config.nipype.omp_nthreads = 1
     yield
-    config.workflow.jacobian_weighting, config.workflow.output_resolution = saved
+    (
+        config.workflow.jacobian_weighting,
+        config.workflow.output_resolution,
+        config.nipype.omp_nthreads,
+    ) = saved
+
+
+@pytest.fixture(autouse=True)
+def _reset_config():
+    yield from _reset_config_impl()
+
+
+def test_reset_config_fixture_restores_omp_nthreads():
+    """M6 regression: the fixture used to hard-set omp_nthreads to 1 on setup
+    and never restore it on teardown, so a test that changed it (e.g.
+    ``test_scale_dwis_num_threads_is_set_from_omp_nthreads``, which sets it
+    to 4) leaked that value into whatever module ran next. Drives the
+    fixture's own generator body directly, standing in for pytest's fixture
+    machinery, so the setup/teardown contract can be checked without
+    depending on test collection order.
+    """
+    config.nipype.omp_nthreads = 99
+    gen = _reset_config_impl()
+    next(gen)
+    assert config.nipype.omp_nthreads == 1
+
+    # Simulate a test in this module changing it, as
+    # test_scale_dwis_num_threads_is_set_from_omp_nthreads does.
+    config.nipype.omp_nthreads = 4
+
+    with pytest.raises(StopIteration):
+        next(gen)
+    assert config.nipype.omp_nthreads == 99
 
 
 def _trans_wf():
