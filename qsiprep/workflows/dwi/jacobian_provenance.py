@@ -60,10 +60,20 @@ def _shoreline_sdc_applied(unit):
     No TOPUP-in-eddy carve-out exists for this backend: every SDC warp it
     produces (PEPOLAR -- including a TOPUP-only plan, via DRBUDDI's own
     wrapping -- or a GRE/SyN fieldmap) is carried in ``to_dwi_ref_warps`` and
-    reaches ``ComposeJacobianWeights`` externally. So this is simply whether
-    any correction method was selected at all.
+    reaches ``ComposeJacobianWeights`` externally.
+
+    This is *not* simply whether any correction method was selected --
+    ``unit.method`` is also non-``None`` for the fieldmap-less methods
+    (SYNB0, T2Wreg), and those are only ever applied by the TORTOISE backend
+    (``init_sdc_wf``'s own docstring, ``qsiprep/workflows/fieldmap/base.py``);
+    on SHORELine (and eddy), ``qsiplan.plan._stages_for_unit`` never attaches
+    an ``ESTIMATE_AND_APPLY`` stage for either, so no warp is ever built. The
+    condition mirrors ``init_sdc_wf``'s own ``does_sdc`` gate exactly
+    (``qsiprep/workflows/fieldmap/base.py:114-115``): a real SDC warp exists
+    here precisely when there is a scanner-measured fieldmap (PEPOLAR or GRE)
+    or classic NiPreps SyN.
     """
-    return unit.method is not None
+    return unit.has_scanner_measured_fieldmap or unit.is_nipreps_syn
 
 
 def _eddy_provenance(unit):

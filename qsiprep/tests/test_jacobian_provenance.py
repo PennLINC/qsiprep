@@ -190,6 +190,41 @@ def test_tortoise_t2wreg():
     assert jacobian_provenance_for(unit, t2w_sdc=False) == (['eddy-current'], [], None)
 
 
+@pytest.mark.parametrize(
+    ('method', 'expect_applied'),
+    [
+        (CorrectionMethod.PEPOLAR, True),
+        (CorrectionMethod.PHASEDIFF, True),
+        (CorrectionMethod.NIPREPS_SYN, True),
+        (CorrectionMethod.SYNB0, False),
+        (CorrectionMethod.T2WREG, False),
+        (None, False),
+    ],
+)
+def test_shoreline_sdc_provenance(method, expect_applied):
+    """C2: SHORELine's 'sdc' provenance mirrors ``init_sdc_wf``'s own
+    ``does_sdc`` gate (``qsiprep/workflows/fieldmap/base.py:114-115``) --
+    a scanner-measured fieldmap (PEPOLAR or GRE) or classic NiPreps SyN --
+    not merely ``unit.method is not None``. SYNB0 and T2Wreg are fieldmap-less
+    methods only the TORTOISE backend ever applies (see ``init_sdc_wf``'s own
+    docstring); on SHORELine they build the ``sdc_bypass_wf`` no-op, same as
+    no method at all, so both must NOT be recorded as 'sdc' applied even
+    though ``unit.method`` is non-``None`` for both. Before this fix,
+    ``_shoreline_sdc_applied`` returned True for any non-``None`` method and
+    over-reported 'sdc' for both.
+    """
+    _cfg(hmc_method='shoreline', sdc_method='auto')
+    if method in (CorrectionMethod.PEPOLAR,):
+        unit = _pepolar_unit(method)
+    else:
+        unit = make_preproc_unit([SRC], method=method)
+
+    applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)
+    assert ('sdc' in applied) is expect_applied
+    assert unmodulated == []
+    assert reason is None
+
+
 def test_eddy_lsr_with_topup(tmp_path):
     """F2: 'lsr' + TOPUP-only leaves both eddy-current and susceptibility unmodulated."""
     eddy_cfg = tmp_path / 'eddy_lsr.json'

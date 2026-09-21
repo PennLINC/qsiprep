@@ -357,6 +357,45 @@ def test_shoreline_no_fieldmap_has_no_real_fieldwarps(tmp_path):
     assert has_real == ('sdc' in applied)
 
 
+@pytest.mark.parametrize('method', [CorrectionMethod.SYNB0, CorrectionMethod.T2WREG])
+def test_shoreline_fieldmapless_has_no_real_fieldwarps(method):
+    """C2 regression: SHORELine + a fieldmap-less method (SYNB0/T2Wreg) is
+    still a ``unit.method is not None`` case, but ``init_sdc_wf``'s own
+    ``does_sdc`` gate (``qsiprep/workflows/fieldmap/base.py:114-115``,
+    ``unit.has_scanner_measured_fieldmap or unit.is_nipreps_syn``) is False
+    for both -- SYNB0 and T2Wreg are fieldmap-less, so neither is a scanner-
+    measured fieldmap nor classic NiPreps SyN -- so it builds the
+    ``sdc_bypass_wf`` no-op, same as ``method=None`` above. T2Wreg and SyNb0
+    are only ever applied by the TORTOISE backend
+    (``qsiprep/workflows/fieldmap/base.py``'s own ``init_sdc_wf`` docstring);
+    on SHORELine, ``_stages_for_unit`` (``qsiplan/plan.py``) never attaches an
+    ``ESTIMATE_AND_APPLY`` stage for either, so no warp is ever produced here.
+
+    Before this fix, ``_shoreline_sdc_applied`` returned True for any non-None
+    method, so it predicted 'sdc' applied for both -- exactly the drift this
+    module's ``has_real == ('sdc' in applied)`` assertion below is built to
+    catch, and exactly the gap the original enumerated cases (GRE, and
+    ``method=None`` above) did not cover.
+    """
+    _cfg(hmc_method='shoreline', sdc_method='auto', sloppy=True)
+    from qsiprep.workflows.dwi.hmc_sdc import init_qsiprep_hmcsdc_wf
+
+    unit = make_preproc_unit([SRC], method=method)
+    wf = init_qsiprep_hmcsdc_wf(
+        unit,
+        source_file=SRC,
+        t2w_sdc=False,
+        anatomical_template=config.workflow.anatomical_template,
+    )
+
+    has_real, source = _has_real_fieldwarps(wf)
+    assert not has_real
+    assert source == 'sdc_bypass_wf'
+    applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)
+    assert (applied, unmodulated, reason) == ([], [], None)
+    assert has_real == ('sdc' in applied)
+
+
 def test_drbuddi_rpe_writes_jacobian(tmp_path):
     """``--sdc-method=drbuddi`` on a blip-up/blip-down series."""
     _cfg(hmc_method='eddy', sdc_method='drbuddi', sloppy=True)
