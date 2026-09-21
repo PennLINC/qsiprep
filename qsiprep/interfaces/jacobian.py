@@ -8,6 +8,18 @@ motion, coregistration and the intramodal/template warps are excluded, and for
 the derivation showing that excluding them does not move the coordinates at
 which the remaining determinants are evaluated.
 
+The eddy-current and gradwarp/SDC factors that *do* remain are evaluated in
+two different coordinate domains -- TORTOISE's eddy-current Jacobian on
+DIFFPREP's distorted-native grid (see ``diffprep.py:578``'s
+``extract_b0s.b0_average``), the gradwarp/SDC determinant in undistorted
+b0-reference space -- so combining them by a plain per-voxel product would be
+evaluating a native-domain function at reference-space coordinates. C1 fix:
+``ComposeJacobianWeights`` transports the eddy-current Jacobian through the
+same composed gradwarp/SDC warp before multiplying (``transport_scalar_map``),
+except in the one case where no such warp exists at all (no gradwarp, no SDC),
+where the eddy-current Jacobian is already in the run's sole coordinate
+domain.
+
 TORTOISE eddy-current Jacobian: sourced formula
 ------------------------------------------------
 
@@ -347,9 +359,21 @@ def multiply_maps(paths, out_path, like_path=None):
     is reachable in production: with ``--hmc-method tortoise --sdc-method
     drbuddi`` and the default ``correction_mode='quadratic'``, the SDC
     determinant is evaluated on whatever grid its warp arrived on (DRBUDDI's
-    own output grid) while the per-volume eddy-current Jacobian is always
-    evaluated on DIFFPREP's native input grid (see ``OkanQuadraticJacobian``)
-    -- two genuinely different lattices for the same physical head.
+    own output grid) while a lone-field determinant (or, in the no-gradwarp-
+    no-SDC case, the EC Jacobian used directly) can be on DIFFPREP's native
+    input grid -- two genuinely different *lattices* for the same physical
+    head, but still the same coordinate domain: resampling here is lattice
+    realignment in a shared world frame, not a coordinate-domain change.
+
+    This is deliberately *not* the tool that relates the EC Jacobian's own
+    coordinate domain to the SDC/gradwarp determinant's -- those two are
+    evaluated in genuinely different domains (DIFFPREP's distorted-native
+    space vs. undistorted b0-reference space), related only by the composed
+    gradwarp/SDC warp itself, not by an affine lattice realignment. That
+    reconciliation happens once, in ``transport_scalar_map``, before an EC
+    Jacobian and a composed-warp determinant ever reach this function
+    together -- see the module docstring's C1 fix notes and
+    ``ComposeJacobianWeights._run_interface``.
 
     ``like_path`` is the grid every factor is resampled onto (via
     ``resample_like``, with linear interpolation -- these are continuous
@@ -415,6 +439,47 @@ def compose_fields(field_paths, reference, out_path):
         output_image=out_path,
         print_out_composite_warp_file=True,
         interpolation='LanczosWindowedSinc',
+        dimension=3,
+        float=True,
+    )
+    xfm.terminal_output = 'allatonce'
+    xfm.resource_monitor = False
+    runtime = xfm.run().runtime
+    LOGGER.info(runtime.cmdline)
+    return out_path
+
+
+def transport_scalar_map(image_path, transform_path, reference_path, out_path):
+    """Resample a scalar map through ``transform_path`` onto ``reference_path``'s
+    grid -- coordinate transport, not lattice realignment (C1 fix).
+
+    ``image_path`` is a scalar field defined over one coordinate domain (e.g.
+    the eddy-current Jacobian, evaluated on DIFFPREP's distorted-native grid);
+    ``transform_path`` is the same warp/composite already used to relate that
+    domain to ``reference_path``'s (e.g. the gradwarp/SDC composite that
+    ``jacobian_determinant`` is evaluated from). Applying it here means: for
+    each point ``v`` of ``reference_path``'s grid, sample ``image_path`` at
+    ``transform_path``'s corresponding native-space point -- exactly what
+    ``antsApplyTransforms`` does for any other image, and exactly what
+    ``multiply_maps``'s ``resample_like``-based reconciliation does *not* do
+    (that only realigns two images already agreed to share one coordinate
+    domain onto one lattice; see its docstring).
+
+    ``interpolation='Linear'`` because this is a smooth, continuous
+    determinant map, not a mask (nearest-neighbour would introduce blocky
+    discontinuities). ``default_value=1.0`` keeps the same "no volume change
+    known here" convention as ``multiply_maps``'s ``fill_value=1.0``: outside
+    the transported footprint (e.g. DIFFPREP's native grid is routinely
+    smaller than a DRBUDDI-padded output grid), the multiplicative identity is
+    1.0, not ANTs' own default of 0.
+    """
+    xfm = ants.ApplyTransforms(
+        input_image=image_path,
+        reference_image=reference_path,
+        transforms=[transform_path],
+        output_image=out_path,
+        interpolation='Linear',
+        default_value=1.0,
         dimension=3,
         float=True,
     )
@@ -619,8 +684,13 @@ class ComposeJacobianWeights(SimpleInterface):
 
     The weight for a volume is ``|det grad(gradwarp . fieldwarp)|`` evaluated in
     undistorted b=0-reference space, times that volume's eddy-current Jacobian
-    when one exists. Head motion, coregistration and the intramodal/template
-    warps are excluded by policy; see the design spec.
+    when one exists -- the eddy-current factor evaluated not at the same
+    b0-reference point, but at the native-space point that same composed
+    gradwarp/SDC warp maps it to (C1 fix; see ``transport_scalar_map``). When
+    there is no gradwarp and no SDC warp, the eddy-current Jacobian is already
+    in the run's one and only coordinate domain, so no transport is applied.
+    Head motion, coregistration and the intramodal/template warps are excluded
+    by policy; see the design spec.
 
     Unique ``(gradwarp, fieldwarp)`` combinations are computed once and shared,
     so a run with one gradwarp field and one SDC warp costs a single ANTs call
@@ -684,8 +754,13 @@ class ComposeJacobianWeights(SimpleInterface):
         # needed to resolve.
         validate_scalar_geometry(self.inputs.mask, reference)
 
-        # One determinant per unique (gradwarp, fieldwarp) pair.
+        # One determinant per unique (gradwarp, fieldwarp) pair. `composed`
+        # (the gradwarp/SDC warp itself, not just its determinant) is kept
+        # too: it is also the transform that relates the EC Jacobian's own
+        # coordinate domain (DIFFPREP's distorted-native grid) to
+        # `reference`'s (C1 fix -- see `transport_scalar_map`).
         determinants = {}
+        composed_transforms = {}
         for fieldwarp in dict.fromkeys(fieldwarps):
             key = weight_key(gradwarp, fieldwarp)
             if not key or key in determinants:
@@ -699,6 +774,7 @@ class ComposeJacobianWeights(SimpleInterface):
                 )
             else:
                 composed = fields[0]
+            composed_transforms[key] = composed
             # The determinant is emitted on `composed`'s own grid (see
             # jacobian_determinant), which is not always `reference`'s grid
             # (e.g. a lone SDC warp already on its own output grid). Resample
@@ -715,7 +791,17 @@ class ComposeJacobianWeights(SimpleInterface):
                 mask_path=mask_for_determinant,
             )
 
-        # Per-volume weight = shared determinant x that volume's EC Jacobian.
+        # Per-volume weight = shared determinant x that volume's EC Jacobian,
+        # the latter transported through the same composed warp (C1 fix): the
+        # EC Jacobian lives on DIFFPREP's distorted-native grid, while the
+        # determinant above is evaluated in `reference`'s undistorted space,
+        # so `factors` must never combine a raw `ec_image` with a `key`
+        # (a composed gradwarp/SDC warp) -- see `transport_scalar_map` and the
+        # module docstring's C1 fix notes. Only when there is truly no
+        # gradwarp and no SDC warp (`key` falsy) is `ec_image` already in the
+        # right space, and transporting it through a nonexistent transform
+        # would be both wrong (no reference-relating transform to use) and
+        # pointless (nothing to reconcile).
         weights = []
         cache = {}
         for index, (fieldwarp, ec_image) in enumerate(zip(fieldwarps, ec_images, strict=True)):
@@ -723,14 +809,27 @@ class ComposeJacobianWeights(SimpleInterface):
             key = weight_key(gradwarp, fieldwarp)
             if key:
                 factors.append(determinants[key])
-            if ec_image:
-                factors.append(ec_image)
 
             # Tag the roles rather than collapsing missing factors into an
             # untagged tuple: (None, 'f.nii.gz') and ('f.nii.gz', None) are
             # different weights that would otherwise share a key.
             cache_key = (gradwarp, fieldwarp, ec_image)
             if cache_key not in cache:
+                ec_factor = ec_image
+                if ec_image and key:
+                    ec_factor = transport_scalar_map(
+                        ec_image,
+                        composed_transforms[key],
+                        reference,
+                        fname_presuffix(
+                            ec_image,
+                            suffix=f'_ectransport-{len(cache):05d}',
+                            newpath=runtime.cwd,
+                            use_ext=True,
+                        ),
+                    )
+                if ec_factor:
+                    factors.append(ec_factor)
                 weight_map = multiply_maps(
                     factors,
                     fname_presuffix(

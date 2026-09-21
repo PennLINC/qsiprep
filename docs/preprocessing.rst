@@ -821,6 +821,15 @@ template, or template-space normalization: modulating by a
 spatial-normalization warp is VBM-style volume modulation, which would
 corrupt DWI signal intensities and every model fitted to them.
 
+When a DIFFPREP run's eddy-current Jacobian and its gradwarp/susceptibility
+Jacobian both apply, the two are evaluated in genuinely different coordinate
+frames -- the eddy-current Jacobian on DIFFPREP's distorted-native grid, the
+gradwarp/susceptibility determinant in undistorted b=0-reference space -- so
+*QSIPrep* does not simply multiply the two at the same voxel. The
+eddy-current factor is instead transported through the composed
+gradwarp/susceptibility warp before the product is taken, so both factors
+describe the same physical point.
+
 Which component performs the modulation depends on the backend:
 
 ============================== ==========================================

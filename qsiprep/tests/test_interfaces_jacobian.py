@@ -731,6 +731,116 @@ def test_compose_weights_reconciles_ec_jacobian_lattice_with_gradwarp(tmp_path):
         assert (determinant[inmask] > 0).all()
 
 
+def test_compose_weights_transports_ec_jacobian_through_the_composed_warp(tmp_path):
+    """C1 regression: the EC Jacobian and the SDC determinant live in
+    different coordinate DOMAINS, not just different lattices.
+
+    ``multiply_maps`` reconciles differing *sampling grids* via
+    ``resample_like`` (lattice realignment in a shared world frame -- see its
+    docstring), which is the right tool for ``test_compose_weights_reconciles_
+    ec_jacobian_lattice_against_sdc_determinant`` above. It is the wrong tool
+    here: the EC Jacobian is evaluated on DIFFPREP's distorted-native grid
+    (``diffprep.py:578``'s ``extract_b0s.b0_average``), while the SDC
+    determinant is evaluated in undistorted b0-reference space. A b0-reference
+    point ``v`` and the native point sampled by plain lattice realignment are
+    the *same voxel index after resampling*, not the same physical point --
+    the SDC warp is precisely the function that relates them. The correct
+    weight is ``J_S(v) * J_E(composed(v))``, where ``composed`` is the same
+    gradwarp/SDC warp already used for ``J_S``, not ``J_S(v) * J_E(v))``.
+
+    ``test_compose_weights_reconciles_ec_jacobian_lattice_against_sdc_
+    determinant`` and its gradwarp twin cannot catch this: both use spatially
+    *constant* EC maps, which are invariant under any transport, correct or
+    not. This test uses an EC map that is linear in x (spatially varying) and
+    an SDC warp that is an upper-triangular shear+scale mixing x and y
+    (non-diagonal, so its action does not commute with -- does not preserve
+    the level sets of -- the EC map's x-only dependence). Both are exactly
+    representable by linear interpolation/finite differencing, so the
+    "coordinate-correct" and "coordinate-wrong" (bug) formulas can be checked
+    to near-float32 precision rather than a loose tolerance, and the
+    comparison is restricted to an interior sub-box so that ``composed(v)``
+    always lands inside the EC image's own footprint (no ``fill_value=1.0``
+    contamination at the edges).
+
+    Scale is chosen to be realistic: 1 grid unit stands for 1 mm (affine is
+    ``eye(4)``, matching every other linear-field test in this module); the
+    shear (5% along x, 8% cross term from y) and EC gradient (0.2%/mm) are
+    within the ranges QSIPrep's own guards treat as plausible
+    (``MEDIAN_WARN_RANGE`` = 0.9-1.1 for a 40mm-wide test volume).
+    """
+    if shutil.which('CreateJacobianDeterminantImage') is None:
+        pytest.skip('CreateJacobianDeterminantImage required for this test')
+    if shutil.which('antsApplyTransforms') is None:
+        pytest.skip('antsApplyTransforms required for this test')
+
+    shape = (40, 40, 40)
+    # Upper-triangular shear+scale: det = 1.05 exactly (product of diagonal),
+    # and mixes x and y so a purely-x-dependent EC map does not commute with it.
+    matrix = np.array(
+        [
+            [1.05, 0.08, 0.0],
+            [0.00, 1.00, 0.0],
+            [0.00, 0.00, 1.0],
+        ]
+    )
+    fieldwarp = _write_linear_field(tmp_path / 'sdc_warp.nii.gz', matrix, shape=shape)
+
+    # EC Jacobian: linear in x only, on the same (native) grid/affine as
+    # everything else in this synthetic test.
+    xx, _, _ = np.meshgrid(
+        np.arange(shape[0], dtype='float32'),
+        np.arange(shape[1], dtype='float32'),
+        np.arange(shape[2], dtype='float32'),
+        indexing='ij',
+    )
+    ec_data = (1.0 + 0.002 * xx).astype('float32')
+    ec_path = str(tmp_path / 'ec0.nii.gz')
+    nb.Nifti1Image(ec_data, np.eye(4)).to_filename(ec_path)
+
+    reference = _write_map(tmp_path / 'ref.nii.gz', 1.0, shape=shape)
+    mask = _write_map(tmp_path / 'mask.nii.gz', 1.0, shape=shape)
+
+    interface = ComposeJacobianWeights(
+        # Two volumes, not one: nipype's ``OutputMultiObject`` collapses a
+        # single-element list to a bare scalar, which would silently turn
+        # ``weights[0]`` into the first *character* of the path below.
+        dwi_files=_dwi_volumes(tmp_path, 2),
+        b0_ref_image=reference,
+        mask=mask,
+        fieldwarps=[fieldwarp],
+        ec_jacobian_images=[ec_path, ec_path],
+    )
+    weights = interface.run(cwd=str(tmp_path)).outputs.jacobian_weight_images
+    combined = np.asanyarray(nb.load(weights[0]).dataobj)
+
+    # Interior sub-box: composed_x = 1.05x + 0.08y stays well inside [0, 39]
+    # for x, y in [5, 25] (min 5.65, max 28.25), clear of both the EC image's
+    # own edge and any ANTs one-sided-difference/interpolation boundary noise.
+    idx = np.arange(5, 26)
+    zidx = np.arange(5, 36)
+    xs, ys, zs = np.meshgrid(idx, idx, zidx, indexing='ij')
+    got = combined[xs, ys, zs]
+
+    det = 1.05  # det(matrix) -- exact, since the field is exactly linear.
+    composed_x = 1.05 * xs + 0.08 * ys
+    correct = det * (1.0 + 0.002 * composed_x)
+    buggy = det * (1.0 + 0.002 * xs)  # the pre-fix behaviour: J_S(v) * J_E(v)
+
+    max_diff = float(np.max(np.abs(correct - buggy)))
+    assert max_diff > 1e-3, (
+        f'test setup produced a negligible correct-vs-buggy gap ({max_diff}); '
+        'strengthen the field before trusting this regression'
+    )
+
+    assert np.allclose(got, correct, atol=2e-3), (
+        'Combined weight must equal J_S(v) * J_E(composed(v)) -- the EC '
+        'Jacobian transported through the composed gradwarp/SDC warp -- not '
+        f'evaluated at v directly. Max |correct - got| = '
+        f'{float(np.max(np.abs(correct - got)))}, measured coordinate-domain '
+        f'gap max |correct - buggy| = {max_diff}.'
+    )
+
+
 def test_compose_weights_rejects_mismatched_ec_count(tmp_path):
     interface = ComposeJacobianWeights(
         dwi_files=_dwi_volumes(tmp_path, 4),
