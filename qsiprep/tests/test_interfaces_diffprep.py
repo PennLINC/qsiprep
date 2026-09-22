@@ -1634,3 +1634,21 @@ def test_diffprep_declares_the_imported_proc_image(tmp_path, monkeypatch):
     )._list_outputs()
 
     assert outputs['imported_dwi_file'].endswith('dwi_temp_proc/dwi_proc.nii')
+
+
+def test_imported_image_is_consumed_so_nipype_keeps_it():
+    """Declaring the output is not enough; something has to consume it.
+
+    Workflow._set_needed_outputs (nipype workflows.py:711) rebuilds
+    needed_outputs from each node's out-edges, and clean_working_directory
+    then deletes every file in the node directory that no *needed* output
+    points at. An output nothing connects to is pruned exactly like an
+    undeclared one, which is why declaring imported_dwi_file alone did not
+    keep _proc.nii. The edge below is what makes nipype keep the file.
+    """
+    _base_config()
+    wf = _build(_make_unit(None), t2w_sdc=False)
+
+    edge = wf._graph.get_edge_data(wf.get_node('diffprep'), wf.get_node('outputnode'))
+    assert edge is not None, 'diffprep does not reach outputnode at all'
+    assert ('imported_dwi_file', 'imported_dwi_file') in edge['connect']
