@@ -17,6 +17,7 @@ from ...interfaces import DerivativesDataSink
 from ...interfaces.ants import MultivariateTemplateConstruction2
 from ...interfaces.images import ExtractWM
 from ...interfaces.template_qc import TemplateQC
+from ...utils.misc import DWI2ANAT_DOF_TO_TRANSFORM
 from .hmc import init_b0_hmc_wf
 from .registration import init_b0_to_anat_registration_wf
 from .util import _list_squeeze
@@ -24,14 +25,14 @@ from .util import _list_squeeze
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_intramodal_template_wf(
+def init_dwiref_wf(
     inputs_list,
     t1w_source_file,
     transform='BSplineSyN',
     num_iterations=2,
-    name='intramodal_template_wf',
+    name='dwiref_wf',
 ):
-    """Create an unbiased intramodal template for a subject. This aligns the b=0 references
+    """Create an unbiased dwiref for a subject. This aligns the b=0 references
     from all the scans of a subject. Can be rigid, affine or nonlinear (BSplineSyN).
 
     Parameters
@@ -55,9 +56,9 @@ def init_intramodal_template_wf(
     Outputs
     -------
     [workflow_name]_transform
-        transform files to the intramodal template
+        transform files to the dwiref
 
-    intramodal_template_to_t1w_transform
+    dwiref_to_t1w_transform
         Transform from the b0
 
     """
@@ -94,13 +95,14 @@ def init_intramodal_template_wf(
         niu.IdentityInterface(
             fields=output_names
             + [
-                'intramodal_template',
-                'intramodal_template_acpc',
-                'intramodal_template_wm_seg',
+                'dwiref',
+                'dwiref_acpc',
+                'dwiref_wm_seg',
                 'template_qc_file',
                 'template_agreement_map',
-                'intramodal_template_to_t1_affine',
-                'intramodal_template_to_t1_warp',
+                'dwiref_to_t1_affine',
+                'dwiref_to_t1_warp',
+                't1_to_dwiref_affine',
             ]
         ),
         name='outputnode',
@@ -148,7 +150,7 @@ def init_intramodal_template_wf(
             initialize_com=True,
             boilerplate=False,
             settings='unbiased_template',
-            name='intramodal_linear_template',
+            name='dwiref_linear_template',
         )
         workflow.connect([
             (rename_inputs, linear_template_wf, [('out_file', 'inputnode.b0_images')]),
@@ -156,7 +158,7 @@ def init_intramodal_template_wf(
                 (('outputnode.forward_transforms', _list_squeeze), 'inlist'),
             ]),
             (linear_template_wf, outputnode, [
-                ('outputnode.final_template', 'intramodal_template'),
+                ('outputnode.final_template', 'dwiref'),
             ]),
         ])  # fmt:skip
 
@@ -198,7 +200,7 @@ def init_intramodal_template_wf(
         workflow.connect([
             (rename_inputs, ants_mvtc2, [('out_file', 'input_images')]),
             (ants_mvtc2, split_outputs, [('forward_transforms', 'inlist')]),
-            (ants_mvtc2, outputnode, [('templates', 'intramodal_template')]),
+            (ants_mvtc2, outputnode, [('templates', 'dwiref')]),
         ])  # fmt:skip
 
         template_node, template_field = ants_mvtc2, 'templates'
@@ -211,7 +213,7 @@ def init_intramodal_template_wf(
     # calculate dwi registration to T1w
     b0_coreg_wf = init_b0_to_anat_registration_wf(
         write_report=True,
-        transform_type=config.workflow.b0_to_anat_transform,
+        transform_type=DWI2ANAT_DOF_TO_TRANSFORM[config.workflow.dwi2anat_dof],
     )
     workflow.connect([
         (inputnode, b0_coreg_wf, [
@@ -222,14 +224,15 @@ def init_intramodal_template_wf(
         ]),
         (template_node, b0_coreg_wf, [(template_field, 'inputnode.ref_b0_brain')]),
         (b0_coreg_wf, outputnode, [
-            ('outputnode.itk_b0_to_t1', 'intramodal_template_to_t1_affine'),
+            ('outputnode.itk_b0_to_t1', 'dwiref_to_t1_affine'),
+            ('outputnode.itk_t1_to_b0', 't1_to_dwiref_affine'),
         ]),
     ])  # fmt:skip
 
     ds_report_imtcoreg = pe.Node(
         DerivativesDataSink(
             datatype='figures',
-            desc='intramodalcoreg',
+            desc='dwirefcoreg',
             source_file=t1w_source_file,
         ),
         name='ds_report_imtcoreg',
@@ -248,13 +251,13 @@ def init_intramodal_template_wf(
     workflow.connect([
         (inputnode, template_to_acpc, [('t1_brain', 'reference_image')]),
         (b0_coreg_wf, template_to_acpc, [('outputnode.itk_b0_to_t1', 'transforms')]),
-        (template_to_acpc, outputnode, [('output_image', 'intramodal_template_acpc')]),
+        (template_to_acpc, outputnode, [('output_image', 'dwiref_acpc')]),
         (template_node, template_to_acpc, [(template_field, 'input_image')]),
     ])  # fmt:skip
 
     # White matter contours for the registration reportlet: invert the
     # template->anat affine to carry the anatomical segmentation into template
-    # space. itk_b0_to_t1 is an affine regardless of the intramodal transform
+    # space. itk_b0_to_t1 is an affine regardless of the dwiref construction
     # type, so the exact inversion stays valid for Rigid/Affine/SyN alike.
     seg_to_template = pe.Node(
         ants.ApplyTransforms(
@@ -274,7 +277,7 @@ def init_intramodal_template_wf(
     template_wm = pe.Node(ExtractWM(), name='template_wm')
     workflow.connect([
         (seg_to_template, template_wm, [('output_image', 'in_seg')]),
-        (template_wm, outputnode, [('out', 'intramodal_template_wm_seg')]),
+        (template_wm, outputnode, [('out', 'dwiref_wm_seg')]),
     ])  # fmt:skip
 
     return workflow

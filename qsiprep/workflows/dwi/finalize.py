@@ -45,8 +45,9 @@ def init_dwi_finalize_wf(
     name,
     source_file,
     output_prefix,
+    do_biascorr=True,
     write_derivatives=True,
-    make_intramodal_template=False,
+    make_dwiref=False,
 ):
     """
     This workflow controls the resampling parts of the dwi preprocessing workflow.
@@ -64,7 +65,7 @@ def init_dwi_finalize_wf(
                                   b0_threshold=100,
                                   low_mem=False,
                                   output_prefix='',
-                                  make_intramodal_template=False,
+                                  make_dwiref=False,
                                   write_local_bvecs=False,
                                   do_biascorr=True,
                                   source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
@@ -121,8 +122,8 @@ def init_dwi_finalize_wf(
             A NIfTI1 file with the grid spacing and FoV to resample the DWIs
         b0_ref_image
             A Nifti of the b0 reference that was used for hmc and sdc
-        intramodal_template
-            The intramodal template image created from all b0 ref images
+        dwiref
+            The dwiref image created from all b0 ref images
         source_file
             The file name template used for derivatives
         raw_qc_file
@@ -177,9 +178,9 @@ def init_dwi_finalize_wf(
         niu.IdentityInterface(
             fields=[
                 'itk_b0_to_t1',
-                'b0_to_intramodal_template_transforms',
-                'intramodal_template_to_t1_affine',
-                'intramodal_template_to_t1_warp',
+                'b0_to_dwiref_transforms',
+                'dwiref_to_t1_affine',
+                'dwiref_to_t1_warp',
                 't1_2_mni_forward_transform',
                 'hmc_optimization_data',
                 'dwi_files',
@@ -187,8 +188,8 @@ def init_dwi_finalize_wf(
                 'bval_files',
                 'bvec_files',
                 'b0_ref_image',
-                'intramodal_template',
-                'intramodal_template_wm_seg',
+                'dwiref',
+                'dwiref_wm_seg',
                 'b0_indices',
                 'dwi_mask',
                 'original_files',
@@ -238,10 +239,10 @@ def init_dwi_finalize_wf(
         ),
         name='outputnode',
     )
-    # ``make_intramodal_template`` (not just the config setting) gates this
-    # block: with a single DWI group the template is skipped upstream and the
-    # intramodal inputs are never connected, so these nodes must not exist.
-    if config.workflow.intramodal_template_iters > 0 and make_intramodal_template:
+    # ``make_dwiref`` is the RESOLVED level, not the requested one:
+    # with a single DWI group the template is skipped upstream and the dwiref
+    # inputs are never connected, so these nodes must not exist.
+    if make_dwiref:
         # The reportlet shows one image -- this session's b=0 -- on the template
         # grid before and after its own transform, with white-matter contours
         # from the anatomy held fixed as landmarks.
@@ -263,15 +264,15 @@ def init_dwi_finalize_wf(
             ),
             name='b0_to_im_template',
         )
-        ds_report_intramodal = pe.Node(
+        ds_report_dwiref_coreg = pe.Node(
             DerivativesDataSink(
                 datatype='figures',
-                desc='intramodalcoreg',
+                desc='dwirefcoreg',
                 suffix='dwi',
                 source_file=source_file,
                 base_directory=config.execution.output_dir,
             ),
-            name='ds_report_intramodal',
+            name='ds_report_dwiref_coreg',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
@@ -280,17 +281,17 @@ def init_dwi_finalize_wf(
             # between them is the transform being assessed.
             (inputnode, b0_to_template_grid, [
                 ('b0_ref_image', 'input_image'),
-                ('intramodal_template', 'reference_image'),
+                ('dwiref', 'reference_image'),
             ]),
             (inputnode, b0_aligned_to_template, [
                 ('b0_ref_image', 'input_image'),
-                ('intramodal_template', 'reference_image'),
-                ('b0_to_intramodal_template_transforms', 'transforms'),
+                ('dwiref', 'reference_image'),
+                ('b0_to_dwiref_transforms', 'transforms'),
             ]),
             (b0_to_template_grid, b0_to_im_template, [('output_image', 'before')]),
             (b0_aligned_to_template, b0_to_im_template, [('output_image', 'after')]),
-            (inputnode, b0_to_im_template, [('intramodal_template_wm_seg', 'wm_seg')]),
-            (b0_to_im_template, ds_report_intramodal, [('out_report', 'in_file')]),
+            (inputnode, b0_to_im_template, [('dwiref_wm_seg', 'wm_seg')]),
+            (b0_to_im_template, ds_report_dwiref_coreg, [('out_report', 'in_file')]),
         ])  # fmt:skip
 
     # Do the resampling
@@ -307,7 +308,7 @@ def init_dwi_finalize_wf(
     # Apply denoising to the interpolated data if requested
     final_denoise_wf = init_finalize_denoising_wf(
         source_file=source_file,
-        do_biascorr=config.workflow.b1_biascorrect_stage == 'final',
+        do_biascorr=do_biascorr,
         num_dwi_acquisitions=len(all_dwis),
     )
 
@@ -325,12 +326,12 @@ def init_dwi_finalize_wf(
             ('gradwarp_field', 'inputnode.gradwarp_field'),
             ('dwi_files', 'inputnode.dwi_files'),
             ('dwi_sampling_grid', 'inputnode.output_grid'),
-            ('b0_to_intramodal_template_transforms',
-             'inputnode.b0_to_intramodal_template_transforms'),
-            ('intramodal_template_to_t1_affine',
-             'inputnode.intramodal_template_to_t1_affine'),
-            ('intramodal_template_to_t1_warp',
-             'inputnode.intramodal_template_to_t1_warp'),
+            ('b0_to_dwiref_transforms',
+             'inputnode.b0_to_dwiref_transforms'),
+            ('dwiref_to_t1_affine',
+             'inputnode.dwiref_to_t1_affine'),
+            ('dwiref_to_t1_warp',
+             'inputnode.dwiref_to_t1_warp'),
             ('itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
             ('sdc_scaling_images', 'inputnode.sdc_scaling_images'),
         ]),
