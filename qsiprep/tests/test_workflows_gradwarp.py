@@ -816,7 +816,7 @@ def test_single_subject_wf_wires_gradwarp_field_to_finalize():
     same way ``fieldwarps`` does, in the connect block joining the two per-unit
     workflows (too heavy to build end-to-end in a unit test -- BIDS layout,
     anatomical workflow, etc. -- so this checks the wiring is textually present,
-    matching the precedent in test_intramodal_transforms.py).
+    matching the precedent in test_dwiref_transforms.py).
     """
     from qsiprep.workflows import base
 

@@ -802,7 +802,7 @@ def test_dwi2anat_dof_replaces_b0_to_anat_transform(tmp_path):
             parser.parse_args([*base, *bad])
 
 
-def test_dwiref_construction_flags_replace_intramodal_template_flags(tmp_path):
+def test_dwiref_construction_flags_replace_the_old_spellings(tmp_path):
     """The old spellings are gone; the new ones parse."""
     from qsiprep.cli.parser import _build_parser
 

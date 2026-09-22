@@ -222,6 +222,7 @@ def init_dwi_preproc_wf(
                 'confounds',
                 'hmc_optimization_data',
                 'itk_b0_to_t1',
+                'itk_t1_to_b0',
                 'noise_images',
                 'dwi_files',
                 'cnr_map',
@@ -521,6 +522,7 @@ def init_dwi_preproc_wf(
         (b0_coreg_wf, ds_report_coreg, [('outputnode.report', 'in_file')]),
         (b0_coreg_wf, outputnode, [
             (('outputnode.itk_b0_to_t1', _get_first), 'itk_b0_to_t1'),
+            (('outputnode.itk_t1_to_b0', _get_first), 'itk_t1_to_b0'),
             ('outputnode.coreg_metric', 'coreg_score'),
         ]),
     ])  # fmt:skip

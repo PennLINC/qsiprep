@@ -605,11 +605,11 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
 
 
 @pytest.mark.integration
-@pytest.mark.intramodal_template
-def test_intramodal_template(data_dir, output_dir, working_dir):
-    """IntramodalTemplate test
+@pytest.mark.dwiref
+def test_dwiref(data_dir, output_dir, working_dir):
+    """Subject-level dwiref test
 
-    A two-session dataset is used to create an intramodal template.
+    A two-session dataset is used to build a subject-level dwiref.
 
     This tests the following features:
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
@@ -620,7 +620,7 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
     ------
     - twoses BIDS data (data/DSDTI_fmap)
     """
-    TEST_NAME = 'intramodal_template'
+    TEST_NAME = 'dwiref'
 
     dataset_dir = download_test_data('twoses', data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.

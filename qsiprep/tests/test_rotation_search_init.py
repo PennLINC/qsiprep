@@ -10,7 +10,7 @@ candidate of an ``antsAI`` grid search over rotations (+-81 degrees per axis,
 so that a 20-degree grid point lands next to identity) run on 4 mm resamples
 of the inputs.
 
-The intramodal b=0 template registrations and the SyN fieldmap registration are
+The b=0 dwiref registrations and the SyN fieldmap registration are
 deliberately untouched: their inputs share an orientation by construction, and
 ``affine.json`` (shared with the fieldmap workflow) must keep its
 center-of-mass initialization.

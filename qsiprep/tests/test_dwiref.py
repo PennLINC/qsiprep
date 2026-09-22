@@ -25,10 +25,10 @@ def _config(dwi2anat_dof=6):
 
 
 def _build(transform, num_iterations=2, name=None, dwi2anat_dof=6):
-    from qsiprep.workflows.dwi.intramodal_template import init_intramodal_template_wf
+    from qsiprep.workflows.dwi.dwiref import init_dwiref_wf
 
     _config(dwi2anat_dof)
-    return init_intramodal_template_wf(
+    return init_dwiref_wf(
         inputs_list=['group_a', 'group_b'],
         t1w_source_file='/data/sub-01_T1w.nii.gz',
         transform=transform,
@@ -45,7 +45,7 @@ def _names(wf):
 def test_linear_transforms_use_the_b0_hmc_workflow(transform):
     """antsMultivariateTemplateConstruction2 cannot do Rigid at all."""
     names = _names(_build(transform))
-    assert any('intramodal_linear_template' in n for n in names)
+    assert any('dwiref_linear_template' in n for n in names)
     assert not any('ants_mvtc2' in n for n in names)
 
 
@@ -53,7 +53,7 @@ def test_linear_transforms_use_the_b0_hmc_workflow(transform):
 def test_nonlinear_transforms_still_use_mvtc2(transform):
     names = _names(_build(transform))
     assert any('ants_mvtc2' in n for n in names)
-    assert not any('intramodal_linear_template' in n for n in names)
+    assert not any('dwiref_linear_template' in n for n in names)
 
 
 def test_requested_transform_reaches_the_nonlinear_backend():

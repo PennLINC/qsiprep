@@ -563,7 +563,7 @@ def test_distortion_group_merge_wf_writes_the_assembly_sidecar(tmp_path):
 def test_dwi2anat_dof_reaches_the_per_unit_coregistration(tmp_path, monkeypatch, dof, expected):
     """The second production consumer of --dwi2anat-dof.
 
-    A test covering only the intramodal template would pass with this call site
+    A test covering only the dwiref would pass with this call site
     still reading the removed config attribute.
     """
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')

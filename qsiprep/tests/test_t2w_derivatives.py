@@ -15,6 +15,7 @@ workflows. They are different images and both are worth writing:
 from pathlib import Path
 
 import pytest
+from nipype.interfaces.base import isdefined
 
 
 def _config():
@@ -90,7 +91,8 @@ def test_subject_dwiref_is_written_to_dwi():
     """The b=0 average across sessions existed only inside a report figure.
 
     It now lives in dwi/ with every other dwiref: `space` carries its level
-    and `desc-coreg` marks it as the reference resampling registers through.
+    `space` alone names its level, following fMRIPrep 26.0.0's space-subject_boldref;
+    the coregistration role is marked on the transforms instead.
     """
     from qsiprep.interfaces import DerivativesDataSink
 
@@ -99,7 +101,6 @@ def test_subject_dwiref_is_written_to_dwi():
         base_directory='/tmp/out',
         datatype='dwi',
         space='subject',
-        desc='coreg',
         suffix='dwiref',
         extension='.nii.gz',
         compress=True,
@@ -107,7 +108,7 @@ def test_subject_dwiref_is_written_to_dwi():
     assert node.inputs.datatype == 'dwi'
     assert node.inputs.suffix == 'dwiref'
     assert node.inputs.space == 'subject'
-    assert node.inputs.desc == 'coreg'
+    assert not isdefined(node.inputs.desc)
 
 
 def test_average_images_normalizes_intensities():
@@ -119,9 +120,9 @@ def test_average_images_normalizes_intensities():
     """
     import inspect
 
-    from qsiprep.workflows.dwi import hmc, intramodal_template
+    from qsiprep.workflows.dwi import dwiref, hmc
 
-    for mod in (hmc, intramodal_template):
+    for mod in (hmc, dwiref):
         src = inspect.getsource(mod)
         for line in src.splitlines():
             if 'AverageImages(' in line and 'warp' not in line.lower():
@@ -149,13 +150,12 @@ def test_subject_dwiref_path_builds():
             'datatype': 'dwi',
             'suffix': 'dwiref',
             'space': 'subject',
-            'desc': 'coreg',
             'extension': '.nii.gz',
         },
         patterns,
         strict=False,
     )
-    assert out == 'sub-01/dwi/sub-01_space-subject_desc-coreg_dwiref.nii.gz'
+    assert out == 'sub-01/dwi/sub-01_space-subject_dwiref.nii.gz'
 
 
 def test_existing_dwiref_and_anat_paths_still_build():
@@ -201,18 +201,18 @@ def test_existing_dwiref_and_anat_paths_still_build():
     )
 
 
-def test_intramodal_template_is_resampled_before_being_written():
+def test_dwiref_is_resampled_before_being_written():
     """The written template must be the ACPC-resampled one.
 
-    outputnode.intramodal_template lives in the template's own midpoint space --
+    outputnode.dwiref lives in the template's own midpoint space --
     measured ~57mm from ACPC in y on real data. Writing that tagged space-ACPC
     produces a file that silently fails to overlay the anatomicals, which is the
     worst kind of wrong: it looks like a valid derivative.
     """
-    from qsiprep.workflows.dwi.intramodal_template import init_intramodal_template_wf
+    from qsiprep.workflows.dwi.dwiref import init_dwiref_wf
 
     _config()
-    wf = init_intramodal_template_wf(
+    wf = init_dwiref_wf(
         inputs_list=['a', 'b'],
         t1w_source_file='/data/sub-01_T1w.nii.gz',
         transform='Rigid',
@@ -221,7 +221,7 @@ def test_intramodal_template_is_resampled_before_being_written():
     )
     node = next((n for n in wf._get_all_nodes() if n.name == 'template_to_acpc'), None)
     assert node is not None, 'template is never resampled into ACPC'
-    assert 'intramodal_template_acpc' in wf.get_node('outputnode').outputs.copyable_trait_names()
+    assert 'dwiref_acpc' in wf.get_node('outputnode').outputs.copyable_trait_names()
 
 
 def test_base_sinks_both_templates_to_their_own_spaces():
@@ -238,6 +238,6 @@ def test_base_sinks_both_templates_to_their_own_spaces():
     src = inspect.getsource(base)
     # Check the connections themselves, not proximity in the file -- nodes get
     # added between a sink and its connect block over time.
-    assert "('outputnode.intramodal_template_acpc', 'in_file')" in src
-    assert "('outputnode.intramodal_template', 'in_file')" in src
-    assert "name='ds_intramodal_template_acpc'" in src
+    assert "('outputnode.dwiref_acpc', 'in_file')" in src
+    assert "('outputnode.dwiref', 'in_file')" in src
+    assert "name='ds_dwiref_acpc'" in src

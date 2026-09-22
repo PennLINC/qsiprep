@@ -31,8 +31,9 @@ def _render(**entities):
                 'from': 'subject',
                 'to': 'ACPC',
                 'mode': 'image',
+                'desc': 'coreg',
             },
-            'sub-01/dwi/sub-01_from-subject_to-ACPC_mode-image_xfm.mat',
+            'sub-01/dwi/sub-01_from-subject_to-ACPC_mode-image_desc-coreg_xfm.mat',
         ),
         (
             {'datatype': 'dwi', 'suffix': 'dwiref', 'extension': '.tsv', 'desc': 'templateQC'},
@@ -111,23 +112,27 @@ def test_plus_suffixed_output_names_always_raise(names, dwi_dir):
 
 
 # --- the derivative table -----------------------------------------------------
-# `space` carries the dwiref's LEVEL; `desc-coreg` marks its ROLE -- the one whose
-# transform final resampling actually uses. The two are orthogonal.
+# `space` names the level a dwiref belongs to, following fMRIPrep 26.0.0's
+# space-run / space-session / space-subject scheme. `desc-coreg` marks the
+# transforms rather than the images.
 
 
 @pytest.mark.parametrize('session', [None, '1'])
 @pytest.mark.parametrize(
     ('entities', 'name'),
     [
-        # Run-level reference, distortion-group resolved: it is the coreg target.
-        ({'desc': 'coreg', 'acquisition': 'A'}, 'sub-01_acq-A_desc-coreg_dwiref.nii.gz'),
-        # Run-level reference, subject resolved: the template is the coreg target.
-        ({'acquisition': 'A'}, 'sub-01_acq-A_dwiref.nii.gz'),
+        # Run-level reference. Written for every unit, under one name, whatever
+        # --dwiref-definition resolves to.
+        (
+            {'space': 'distortiongroup', 'acquisition': 'A'},
+            'sub-01_acq-A_space-distortiongroup_dwiref.nii.gz',
+        ),
         # The template, in its own midpoint space.
-        ({'space': 'subject', 'desc': 'coreg'}, 'sub-01_space-subject_desc-coreg_dwiref.nii.gz'),
-        # The template resampled into ACPC.
-        ({'space': 'ACPC'}, 'sub-01_space-ACPC_dwiref.nii.gz'),
-        # Per-output reference, after this rename.
+        ({'space': 'subject'}, 'sub-01_space-subject_dwiref.nii.gz'),
+        # The same template resampled into ACPC. `space` is taken, so the level
+        # moves to `desc`.
+        ({'space': 'ACPC', 'desc': 'subject'}, 'sub-01_space-ACPC_desc-subject_dwiref.nii.gz'),
+        # Reference of the preprocessed series.
         (
             {'space': 'ACPC', 'desc': 'preproc', 'acquisition': 'A'},
             'sub-01_acq-A_space-ACPC_desc-preproc_dwiref.nii.gz',
@@ -151,35 +156,58 @@ def test_dwiref_derivative_paths(entities, name, session):
     assert _render(datatype='dwi', suffix='dwiref', extension='.nii.gz', **entities) == expected
 
 
-def test_the_template_and_the_per_output_reference_do_not_collide():
-    """An entity-free output group renders to bare `sub-01`, which before the
-    desc-preproc rename was the template's own path."""
-    template = _render(datatype='dwi', suffix='dwiref', extension='.nii.gz', space='ACPC')
+def test_the_two_acpc_space_images_do_not_collide():
+    """An entity-free output group renders to bare `sub-01`, so both ACPC-space
+    images need a desc to stay apart."""
+    template = _render(
+        datatype='dwi', suffix='dwiref', extension='.nii.gz', space='ACPC', desc='subject'
+    )
     reference = _render(
         datatype='dwi', suffix='dwiref', extension='.nii.gz', space='ACPC', desc='preproc'
     )
-    assert template == 'sub-01/dwi/sub-01_space-ACPC_dwiref.nii.gz'
+    assert template == 'sub-01/dwi/sub-01_space-ACPC_desc-subject_dwiref.nii.gz'
     assert reference == 'sub-01/dwi/sub-01_space-ACPC_desc-preproc_dwiref.nii.gz'
     assert template != reference
 
 
-def test_dwiref_transform_paths():
+@pytest.mark.parametrize(
+    ('entities', 'expected'),
+    [
+        # Resolved level distortion-group: one hop into anatomy, and back.
+        (
+            {'from': 'distortiongroup', 'to': 'ACPC', 'acquisition': 'A'},
+            'sub-01_acq-A_from-distortiongroup_to-ACPC_mode-image_desc-coreg_xfm.mat',
+        ),
+        (
+            {'from': 'ACPC', 'to': 'distortiongroup', 'acquisition': 'A'},
+            'sub-01_acq-A_from-ACPC_to-distortiongroup_mode-image_desc-coreg_xfm.mat',
+        ),
+        # Resolved level subject: two hops, group into template and template
+        # into anatomy, each with an inverse.
+        (
+            {'from': 'distortiongroup', 'to': 'subject', 'acquisition': 'A'},
+            'sub-01_acq-A_from-distortiongroup_to-subject_mode-image_desc-coreg_xfm.mat',
+        ),
+        (
+            {'from': 'subject', 'to': 'ACPC'},
+            'sub-01_from-subject_to-ACPC_mode-image_desc-coreg_xfm.mat',
+        ),
+        (
+            {'from': 'ACPC', 'to': 'subject'},
+            'sub-01_from-ACPC_to-subject_mode-image_desc-coreg_xfm.mat',
+        ),
+    ],
+)
+def test_dwiref_transform_paths(entities, expected):
+    """desc-coreg goes on the transforms, following fMRIPrep 26.0.0."""
     assert (
         _render(
             datatype='dwi',
             suffix='xfm',
             extension='.mat',
-            **{'from': 'subject', 'to': 'ACPC', 'mode': 'image'},
+            mode='image',
+            desc='coreg',
+            **entities,
         )
-        == 'sub-01/dwi/sub-01_from-subject_to-ACPC_mode-image_xfm.mat'
-    )
-    assert (
-        _render(
-            datatype='dwi',
-            suffix='xfm',
-            extension='.mat',
-            acquisition='A',
-            **{'from': 'orig', 'to': 'subject', 'mode': 'image'},
-        )
-        == 'sub-01/dwi/sub-01_acq-A_from-orig_to-subject_mode-image_xfm.mat'
+        == f'sub-01/dwi/{expected}'
     )

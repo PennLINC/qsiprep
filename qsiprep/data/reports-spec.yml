@@ -34,10 +34,10 @@ sections:
     static: false
     subtitle: Spatial normalization of the anatomical reference
 
-  - bids: {datatype: figures, desc: intramodalcoreg, suffix: [T1w, T2w]}
-    caption: Coregistration of the intramodal DWI template to the anatomical reference image.
+  - bids: {datatype: figures, desc: dwirefcoreg, suffix: [T1w, T2w]}
+    caption: Coregistration of the DWI dwiref to the anatomical reference image.
     static: false
-    subtitle: Coregistration of the intramodal to anatomical templates
+    subtitle: Coregistration of the dwiref to anatomical
 
 - name: <em>B<sub>0</sub></em> field mapping
   ordering: session,acquisition,run,fmapid
@@ -273,11 +273,11 @@ sections:
     static: false
     subtitle: Reorientation of DWI reference image to AC-PC
 
-  - bids: {datatype: figures, desc: intramodalcoreg, suffix: dwi}
+  - bids: {datatype: figures, desc: dwirefcoreg, suffix: dwi}
     caption: |
-      b=0 reference image warped to the across-scan/session intramodal template.
+      b=0 reference image warped to the across-scan/session dwiref.
     static: false
-    subtitle: Alignment of dMRI to intramodal template
+    subtitle: Alignment of dMRI to dwiref
 
   - bids: {datatype: figures, desc: biascorrpost.*, suffix: dwi, regex_search: True}
     caption: |

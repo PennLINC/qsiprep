@@ -39,7 +39,7 @@ def init_distortion_group_merge_wf(
     assembly=None,
     units=(),
 ) -> Workflow:
-    """Create an unbiased intramodal template for a subject. This aligns the b=0 references
+    """Create an unbiased dwiref for a subject. This aligns the b=0 references
     from all the scans of a subject. Can be rigid, affine or nonlinear (BSplineSyN).
 
     Parameters
