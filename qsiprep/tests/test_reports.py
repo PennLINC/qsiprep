@@ -1,6 +1,7 @@
 """Tests for visual report assembly."""
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -493,3 +494,101 @@ def test_diffusion_summary_shows_hmc_transform_when_given():
     segment = _diffusion_summary(hmc_model='3dSHORE', hmc_transform='Rigid')._generate_segment()
     assert '<li>HMC Transform: Rigid</li>' in segment
     assert 'HMC Model: 3dSHORE' in segment
+
+
+# --- SeriesQC: n/a values and the QC warnings reportlet ----------------------
+
+
+def _merged_qc_csv(path, warning='', neighbor_corr=0.99):
+    """A merged_qc.csv as DSIStudioMergeQC writes it."""
+    import pandas as pd
+
+    from qsiprep.interfaces.dsi_studio import QC_WARNINGS_COLUMN
+
+    pd.DataFrame(
+        {
+            'neighbor_corr': [neighbor_corr],
+            'coherence_index': [0.4],
+            QC_WARNINGS_COLUMN: [warning],
+        }
+    ).to_csv(path, index=False)
+    return str(path)
+
+
+def _run_series_qc(tmp_path, monkeypatch, pre_qc, t1_qc=None):
+    import qsiprep.interfaces.reports as reports_mod
+    from qsiprep.interfaces.reports import SeriesQC
+
+    # Motion summary is not what these tests are about; it needs a full
+    # confounds table otherwise.
+    monkeypatch.setattr(reports_mod, 'calculate_motion_summary', lambda _: {'mean_fd': [0.1]})
+    confounds = tmp_path / 'confounds.tsv'
+    confounds.touch()
+
+    interface = SeriesQC(
+        pre_qc=pre_qc,
+        confounds_file=str(confounds),
+        output_file_name='sub-01_ses-1_dwi',
+    )
+    if t1_qc is not None:
+        interface.inputs.t1_qc = t1_qc
+    interface._run_interface(SimpleNamespace(cwd=str(tmp_path)))
+    return interface._results
+
+
+def test_series_qc_writes_missing_values_as_bids_na(tmp_path, monkeypatch):
+    """BIDS spells a missing TSV value n/a, not an empty cell."""
+    results = _run_series_qc(
+        tmp_path,
+        monkeypatch,
+        _merged_qc_csv(tmp_path / 'pre.csv'),
+        t1_qc=_merged_qc_csv(tmp_path / 't1.csv', neighbor_corr=float('nan')),
+    )
+
+    lines = open(results['series_qc_file']).read().splitlines()
+    row = dict(zip(lines[0].split('\t'), lines[1].split('\t'), strict=True))
+    assert row['t1_neighbor_corr'] == 'n/a'
+    assert row['raw_neighbor_corr'] == '0.99'
+
+
+def test_series_qc_keeps_the_warning_column_out_of_the_table(tmp_path, monkeypatch):
+    results = _run_series_qc(tmp_path, monkeypatch, _merged_qc_csv(tmp_path / 'pre.csv'))
+
+    header = open(results['series_qc_file']).readline()
+    assert 'qc_warnings' not in header
+
+
+def test_series_qc_writes_no_report_when_qc_succeeded(tmp_path, monkeypatch):
+    """DerivativesMaybeDataSink then writes nothing, so the report is quiet."""
+    results = _run_series_qc(tmp_path, monkeypatch, _merged_qc_csv(tmp_path / 'pre.csv'))
+
+    assert 'qc_warnings_report' not in results
+
+
+def test_series_qc_reports_which_stage_failed_and_why(tmp_path, monkeypatch):
+    results = _run_series_qc(
+        tmp_path,
+        monkeypatch,
+        _merged_qc_csv(tmp_path / 'pre.csv'),
+        t1_qc=_merged_qc_csv(
+            tmp_path / 't1.csv',
+            warning='SRC QC: DSI Studio was killed by SIGSEGV.',
+            neighbor_corr=float('nan'),
+        ),
+    )
+
+    report = open(results['qc_warnings_report']).read()
+    assert 'class="alert alert-warning"' in report
+    assert '<li>Resampled data: SRC QC: DSI Studio was killed by SIGSEGV.</li>' in report
+    assert 'Raw data' not in report  # that stage succeeded
+
+
+def test_series_qc_escapes_the_warning_text(tmp_path, monkeypatch):
+    results = _run_series_qc(
+        tmp_path,
+        monkeypatch,
+        _merged_qc_csv(tmp_path / 'pre.csv', warning='SRC QC: <b>odd</b> & worse'),
+    )
+
+    report = open(results['qc_warnings_report']).read()
+    assert '&lt;b&gt;odd&lt;/b&gt; &amp; worse' in report

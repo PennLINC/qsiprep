@@ -21,7 +21,7 @@ from ... import config
 from ...data import load as load_data
 from ...interfaces import DerivativesDataSink
 from ...interfaces.bias import N4WeightMask
-from ...interfaces.bids import DerivativesSidecar
+from ...interfaces.bids import DerivativesMaybeDataSink, DerivativesSidecar
 from ...interfaces.dsi_studio import DSIStudioBTable
 from ...interfaces.dwi_merge import MergeFinalConfounds, SplitResampledDWIs
 from ...interfaces.gradients import ExtractB0s
@@ -452,6 +452,18 @@ def init_dwi_finalize_wf(
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
+    # Only written when DSI Studio could not measure a QC stage; see SeriesQC.
+    ds_report_qc_warnings = pe.Node(
+        DerivativesMaybeDataSink(
+            datatype='figures',
+            desc='qcwarnings',
+            suffix='dwi',
+            source_file=source_file,
+        ),
+        name='ds_report_qc_warnings',
+        run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB,
+    )
 
     # Write a metadata sidecar for the derivatives
     merged_sidecar_data = unit_to_sidecar(unit)
@@ -583,6 +595,7 @@ def init_dwi_finalize_wf(
             ('outputnode.series_qc_postproc', 't1_qc_postproc'),
         ]),
         (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
+        (series_qc, ds_report_qc_warnings, [('qc_warnings_report', 'in_file')]),
         (transform_dwis_t1, series_qc, [
             ('outputnode.cnr_map_resampled', 't1_cnr_file'),
         ]),

@@ -87,13 +87,36 @@ def test_dsi_studio_qc_sanitizes_environment(monkeypatch, tmp_path):
 # --- DSI Studio failing silently ---------------------------------------------
 #
 # DSI Studio can fail three ways without saying so: a non-zero exit, a crash on
-# a signal, or exit 0 with an empty qc.txt. All three used to surface much
-# later as "IndexError: list index out of range" in load_src_qc_file, naming
-# neither the file, the command, nor the input. A segfault on a DWI series with
-# extreme intensity outliers is one way to reach the third case.
+# a signal, or exit 0 with an empty qc.txt. None was checked, and the only
+# symptom used to be "IndexError: list index out of range" in load_src_qc_file.
+# QC must not fail a run, so each case now logs a warning, carries the reason
+# downstream, and the QC values become n/a. A segfault on a DWI series with
+# extreme intensity outliers is how this was found.
+
+import numpy as np  # noqa: E402
+
+from qsiprep.interfaces.dsi_studio import (  # noqa: E402
+    FIB_QC_MEASURES,
+    QC_WARNINGS_COLUMN,
+    SRC_QC_MEASURES,
+    DSIStudioMergeQC,
+    load_fib_qc_file,
+    load_src_qc_file,
+)
+
+#: A real SRC QC row, from the passing forrest_gump run.
+_SRC_HEADER = (
+    'file name\tdimension\tresolution\tdwi count(b0/dwi)\tmax b-value\t'
+    'DWI contrast\tneighboring DWI correlation\t'
+    'neighboring DWI correlation(masked)\t#bad slices\n'
+)
+_SRC_ROW = (
+    'scaled_merged\t32 39 34 \t5 5 5 \t1/32\t800.000000\t1.054243\t0.996735\t0.991714\t0\t\t\n'
+)
 
 
-def _qc_interface(tmp_path, monkeypatch, returncode, qc_contents):
+def _run_qc(tmp_path, monkeypatch, returncode, qc_contents):
+    """Run DSIStudioSrcQC against a stubbed dsi_studio; return its results."""
     src_file = tmp_path / 'input.src.gz'
     src_file.touch()
     if qc_contents is not None:
@@ -105,90 +128,145 @@ def _qc_interface(tmp_path, monkeypatch, returncode, qc_contents):
     monkeypatch.setattr(dsi_studio_mod, 'Popen', Mock(return_value=process))
 
     interface = DSIStudioSrcQC(src_file=str(src_file))
-    return lambda: interface._run_interface(SimpleNamespace(cwd=str(tmp_path)))
+    interface._run_interface(SimpleNamespace(cwd=str(tmp_path)))
+    return interface._results
 
 
-def test_qc_reports_a_segfault_by_name(tmp_path, monkeypatch):
-    """A crash must name the signal, not be swallowed."""
-    run = _qc_interface(tmp_path, monkeypatch, -11, '')
+def test_qc_warns_on_a_segfault_and_names_the_signal(tmp_path, monkeypatch, caplog):
+    with caplog.at_level('WARNING'):
+        results = _run_qc(tmp_path, monkeypatch, -11, '')
 
-    with pytest.raises(RuntimeError, match='killed by SIGSEGV'):
-        run()
-
-
-def test_qc_reports_a_nonzero_exit(tmp_path, monkeypatch):
-    run = _qc_interface(tmp_path, monkeypatch, 1, '')
-
-    with pytest.raises(RuntimeError, match='exited with status 1'):
-        run()
+    assert 'SIGSEGV' in results['warning']
+    assert any('SIGSEGV' in message for message in caplog.messages)
 
 
-def test_qc_reports_an_empty_output_despite_success(tmp_path, monkeypatch):
+def test_qc_warns_on_a_nonzero_exit(tmp_path, monkeypatch):
+    results = _run_qc(tmp_path, monkeypatch, 1, '')
+
+    assert 'exited with status 1' in results['warning']
+
+
+def test_qc_warns_on_an_empty_output_despite_success(tmp_path, monkeypatch):
     """Exit 0 plus an empty qc.txt is how DSI Studio reports giving up."""
-    run = _qc_interface(tmp_path, monkeypatch, 0, '')
+    results = _run_qc(tmp_path, monkeypatch, 0, '')
 
-    with pytest.raises(RuntimeError, match='empty'):
-        run()
-
-
-def test_qc_reports_a_missing_output(tmp_path, monkeypatch):
-    run = _qc_interface(tmp_path, monkeypatch, 0, None)
-
-    with pytest.raises(RuntimeError, match='wrote no'):
-        run()
+    assert 'empty QC file' in results['warning']
 
 
-def test_qc_accepts_a_real_measurement(tmp_path, monkeypatch):
-    header = 'file name\tdimension\tresolution\n'
-    run = _qc_interface(tmp_path, monkeypatch, 0, header + 'input\t32 39 34\t5 5 5\n')
+def test_qc_creates_an_empty_file_when_none_was_written(tmp_path, monkeypatch):
+    """qc_txt is declared exists=True, so a missing file would fail the node."""
+    results = _run_qc(tmp_path, monkeypatch, 0, None)
 
-    run()  # must not raise
-
-
-def test_load_src_qc_file_names_the_empty_file(tmp_path):
-    from qsiprep.interfaces.dsi_studio import load_src_qc_file
-
-    empty = tmp_path / 'qc.txt'
-    empty.write_text('')
-
-    with pytest.raises(ValueError, match='no measurements.*file is empty'):
-        load_src_qc_file(str(empty))
+    assert 'wrote no QC file' in results['warning']
+    assert os.path.getsize(results['qc_txt']) == 0
 
 
-def test_load_src_qc_file_names_a_header_only_file(tmp_path):
-    from qsiprep.interfaces.dsi_studio import load_src_qc_file
+def test_qc_is_silent_on_a_real_measurement(tmp_path, monkeypatch, caplog):
+    with caplog.at_level('WARNING'):
+        results = _run_qc(tmp_path, monkeypatch, 0, _SRC_HEADER + _SRC_ROW)
 
-    header_only = tmp_path / 'qc.txt'
-    header_only.write_text('file name\tdimension\tresolution\n')
-
-    with pytest.raises(ValueError, match='only a header'):
-        load_src_qc_file(str(header_only))
+    assert 'warning' not in results
+    assert not caplog.records
 
 
-def test_load_src_qc_file_reports_an_unexpected_field_count(tmp_path):
-    from qsiprep.interfaces.dsi_studio import load_src_qc_file
+def test_load_src_qc_file_parses_a_real_row(tmp_path):
+    qc = tmp_path / 'qc.txt'
+    qc.write_text(_SRC_HEADER + _SRC_ROW)
 
-    odd = tmp_path / 'qc.txt'
-    odd.write_text('header\n' + '\t'.join(['a', 'b', 'c']) + '\n')
+    data = load_src_qc_file(str(qc))
+
+    assert list(data) == list(SRC_QC_MEASURES)
+    assert data['dimension_y'] == [39.0]
+    assert data['neighbor_corr'] == [0.996735]
+    assert data['num_directions'] == [32.0]
+
+
+@pytest.mark.parametrize('contents', ['', _SRC_HEADER], ids=['empty', 'header-only'])
+def test_load_src_qc_file_returns_na_with_every_column(tmp_path, contents):
+    """Every run's image_qc.tsv must keep the same columns."""
+    qc = tmp_path / 'qc.txt'
+    qc.write_text(contents)
+
+    data = load_src_qc_file(str(qc), prefix='raw_')
+
+    assert list(data) == ['raw_' + name for name in SRC_QC_MEASURES]
+    assert all(np.isnan(value[0]) for value in data.values())
+
+
+def test_load_src_qc_file_still_rejects_an_unknown_format(tmp_path):
+    """A row DSI Studio did write, in a shape we do not know, is a version
+    mismatch rather than a failed measurement, so it is not hidden as n/a.
+    """
+    qc = tmp_path / 'qc.txt'
+    qc.write_text('header\n' + '\t'.join(['a', 'b', 'c']) + '\n')
 
     with pytest.raises(ValueError, match='expected 7, 8 or 9 tab-separated fields, got 3'):
-        load_src_qc_file(str(odd))
+        load_src_qc_file(str(qc))
 
 
-def test_load_fib_qc_file_names_the_empty_file(tmp_path):
-    from qsiprep.interfaces.dsi_studio import load_fib_qc_file
+def test_load_fib_qc_file_returns_na_when_empty(tmp_path):
+    qc = tmp_path / 'fib_qc.txt'
+    qc.write_text('')
 
-    empty = tmp_path / 'fib_qc.txt'
-    empty.write_text('')
+    data = load_fib_qc_file(str(qc))
 
-    with pytest.raises(ValueError, match='no measurements'):
-        load_fib_qc_file(str(empty))
+    assert list(data) == list(FIB_QC_MEASURES)
+    assert np.isnan(data['coherence_index'][0])
 
 
 def test_load_fib_qc_file_still_reads_a_good_file(tmp_path):
-    from qsiprep.interfaces.dsi_studio import load_fib_qc_file
-
     good = tmp_path / 'fib_qc.txt'
     good.write_text('header line\ncoherence index\t0.42\n')
 
     assert load_fib_qc_file(str(good)) == {'coherence_index': [0.42]}
+
+
+def _merge(tmp_path, src_contents, fib_contents, **warnings):
+    src = tmp_path / 'src_qc.txt'
+    src.write_text(src_contents)
+    fib = tmp_path / 'fib_qc.txt'
+    fib.write_text(fib_contents)
+    interface = DSIStudioMergeQC(src_qc=str(src), fib_qc=str(fib), **warnings)
+    interface._run_interface(SimpleNamespace(cwd=str(tmp_path)))
+    import pandas as pd
+
+    return pd.read_csv(interface._results['qc_file'], keep_default_na=False)
+
+
+def test_merge_qc_has_an_empty_warning_column_when_qc_succeeds(tmp_path):
+    table = _merge(tmp_path, _SRC_HEADER + _SRC_ROW, 'header\ncoherence\t0.42\n')
+
+    assert table[QC_WARNINGS_COLUMN][0] == ''
+    assert table['neighbor_corr'][0] == pytest.approx(0.996735)
+
+
+def test_merge_qc_passes_the_upstream_reason_through(tmp_path):
+    """The reason DSIStudioSrcQC gave is what reaches the report."""
+    table = _merge(
+        tmp_path,
+        '',
+        'header\ncoherence\t0.42\n',
+        src_qc_warning='DSI Studio was killed by SIGSEGV.',
+    )
+
+    assert table[QC_WARNINGS_COLUMN][0] == 'SRC QC: DSI Studio was killed by SIGSEGV.'
+    assert table['neighbor_corr'][0] == ''  # NaN, read back unconverted
+    assert table['coherence_index'][0] == pytest.approx(0.42)
+
+
+def test_merge_qc_trusts_nothing_from_a_stage_that_crashed(tmp_path):
+    """After a crash, whatever DSI Studio wrote cannot be assumed complete."""
+    table = _merge(
+        tmp_path,
+        _SRC_HEADER + _SRC_ROW,
+        'header\ncoherence\t0.42\n',
+        src_qc_warning='DSI Studio exited with status 1.',
+    )
+
+    assert table['neighbor_corr'][0] == ''
+
+
+def test_merge_qc_notices_an_empty_file_with_no_upstream_reason(tmp_path):
+    table = _merge(tmp_path, _SRC_HEADER + _SRC_ROW, '')
+
+    assert table[QC_WARNINGS_COLUMN][0] == 'FIB QC: The QC file is empty.'
