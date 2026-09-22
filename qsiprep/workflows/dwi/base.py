@@ -18,6 +18,7 @@ from ...interfaces import DerivativesDataSink, DerivativesMaybeDataSink
 from ...interfaces.confounds import DMRISummary
 from ...interfaces.reports import DiffusionSummary
 from ...interfaces.utils import TestInput
+from ...utils.misc import DWI2ANAT_DOF_TO_TRANSFORM
 from ..fieldmap.pepolar import init_extended_pepolar_report_wf
 
 # dwi workflows
@@ -28,11 +29,7 @@ from .fsl import init_fsl_hmc_wf
 from .gradwarp import describe_gradient_correction, init_gradwarp_wf
 from .hmc_sdc import init_qsiprep_hmcsdc_wf
 from .pre_hmc import init_dwi_pre_hmc_wf
-from .registration import (
-    DWI2ANAT_DOF_TO_TRANSFORM,
-    init_b0_to_anat_registration_wf,
-    init_direct_b0_acpc_wf,
-)
+from .registration import init_b0_to_anat_registration_wf, init_direct_b0_acpc_wf
 from .util import _create_mem_gb, _get_wf_name
 
 DEFAULT_MEMORY_MIN_GB = 0.01

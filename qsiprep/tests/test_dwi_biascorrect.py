@@ -9,7 +9,7 @@ is a milder error than skipping it when it was needed.
 
 import pytest
 
-from qsiprep.workflows.dwi.biascorrect import dwi_biascorrect_enabled
+from qsiprep.utils.misc import dwi_biascorrect_enabled
 
 
 class _FakeLayout:

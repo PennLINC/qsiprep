@@ -166,12 +166,6 @@ def init_structural_to_b0_alignment_wf(name='structural_to_b0_alignment_wf'):
     return workflow
 
 
-#: ``--dwi2anat-dof`` is user-facing; antsRegistration wants a transform name.
-#: 9 is not offered: antsRegistration has no 9-DOF transform (Rigid=6,
-#: Similarity=7, Affine=12), unlike the FLIRT/mri_coreg path fMRIPrep uses.
-DWI2ANAT_DOF_TO_TRANSFORM = {6: 'Rigid', 12: 'Affine'}
-
-
 def init_b0_to_anat_registration_wf(
     write_report=True, transform_type='Rigid', name='b0_anat_coreg'
 ):

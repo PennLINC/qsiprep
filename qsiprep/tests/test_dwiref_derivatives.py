@@ -68,21 +68,26 @@ def test_existing_dwiref_paths_are_unchanged():
     )
 
 
-def _unit(output_name, dwi_dir):
-    """A stand-in carrying only what the guard reads."""
+def _units(names, dwi_dir):
+    """Stand-ins carrying only what the check reads.
+
+    The input directory matters: get_source_file places the output name in the
+    first input's own directory, and the subject and session entity patterns are
+    path-anchored, so that directory is what supplies those entities.
+    """
     import types
 
-    return types.SimpleNamespace(
-        output_name=output_name,
-        dwi_files=[f'{dwi_dir}/{output_name}_dwi.nii.gz'],
-    )
+    return [
+        types.SimpleNamespace(output_name=name, dwi_files=[f'{dwi_dir}/{name}_dwi.nii.gz'])
+        for name in names
+    ]
 
 
 def test_distinct_output_names_never_raise():
-    from qsiprep.workflows.base import check_output_names_are_bids_unique
+    from qsiprep.utils.bids import check_output_names_are_bids_unique
 
     check_output_names_are_bids_unique(
-        [_unit('sub-01_acq-A', '/data/sub-01/dwi'), _unit('sub-01_acq-B', '/data/sub-01/dwi')]
+        _units(['sub-01_acq-A', 'sub-01_acq-B'], '/data/sub-01/dwi')
     )
 
 
@@ -104,11 +109,10 @@ def test_plus_suffixed_output_names_always_raise(names, dwi_dir):
     A synthetic probe directory would make the session case pass wrongly under
     0.19, leaving a silent overwrite unguarded. That is the bug this pins.
     """
-    from qsiprep.workflows.base import check_output_names_are_bids_unique
+    from qsiprep.utils.bids import check_output_names_are_bids_unique
 
-    units = [_unit(name, dwi_dir) for name in names]
     with pytest.raises(RuntimeError, match=r'render to the same BIDS name'):
-        check_output_names_are_bids_unique(units)
+        check_output_names_are_bids_unique(_units(names, dwi_dir))
 
 
 # --- the derivative table -----------------------------------------------------

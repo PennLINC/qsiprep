@@ -17,8 +17,9 @@ from ...interfaces import DerivativesDataSink
 from ...interfaces.ants import MultivariateTemplateConstruction2
 from ...interfaces.images import ExtractWM
 from ...interfaces.template_qc import TemplateQC
+from ...utils.misc import DWI2ANAT_DOF_TO_TRANSFORM
 from .hmc import init_b0_hmc_wf
-from .registration import DWI2ANAT_DOF_TO_TRANSFORM, init_b0_to_anat_registration_wf
+from .registration import init_b0_to_anat_registration_wf
 from .util import _list_squeeze
 
 DEFAULT_MEMORY_MIN_GB = 0.01

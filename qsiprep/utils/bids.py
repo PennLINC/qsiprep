@@ -47,6 +47,7 @@ import numpy as np
 import pandas as pd
 from bids import BIDSLayout
 from bids.layout import Query
+from nipype.utils.filemanip import split_filename
 
 from .. import config
 
@@ -309,6 +310,90 @@ def find_bvec(path):
     bvec_files = find_associated_files(path, '.bvec')
 
     return str(bvec_files[-1]) if bvec_files else None
+
+
+def _get_concatenated_bids_name(all_dwis):
+    """A display name for a list of dwi files, for reportlet source files.
+
+    Output naming proper lives in :func:`qsiplan.models.derive_output_name`;
+    this common-prefix fallback only names reportlet source files when the
+    caller has no output prefix (:func:`get_source_file`).
+    """
+    # If a single file, use its name, otherwise use the common prefix
+    if len(all_dwis) > 1:
+        no_runs = []
+        for dwi in all_dwis:
+            no_runs.append(
+                '_'.join([part for part in dwi.split('_') if not part.startswith('run')])
+            )
+
+        input_fname = os.path.commonprefix(no_runs)
+        fname = split_filename(input_fname)[1]
+        parts = fname.split('_')
+        full_parts = [part for part in parts if not part.endswith('-')]
+        fname = '_'.join(full_parts)
+
+    else:
+        input_fname = all_dwis[0]
+        fname = split_filename(input_fname)[1]
+
+    if fname.endswith('_dwi'):
+        fname = fname[:-4]
+
+    return fname.replace('.', '').replace(' ', '')
+
+
+def get_source_file(dwi_files, output_prefix=None, suffix=''):
+    """The reportlets need a source file. This file might not exist in the input data."""
+    if output_prefix is None:
+        output_prefix = _get_concatenated_bids_name(dwi_files)
+    return str(Path(dwi_files[0]).parent / output_prefix) + suffix + '.nii.gz'
+
+
+def check_output_names_are_bids_unique(preproc_units):
+    """Fail when two units' derivatives would render to the same BIDS path.
+
+    QSIPlan uniquifies same-named correction units with a ``+N`` suffix
+    (``_unique_id``), which is an in-memory key rather than a BIDS entity, so
+    ``sub-01`` and ``sub-01+2`` can parse identically and every per-unit
+    derivative of the second silently overwrites the first.
+
+    The path checked is the one the datasinks use, built with
+    :func:`get_source_file`. That matters: the subject and session entity
+    patterns are path-anchored, so parsing a synthetic probe directory gives a
+    different, and under pybids >= 0.19 wrongly permissive, answer.
+
+    Parameters
+    ----------
+    preproc_units : list of :class:`qsiplan.adapters.PreprocUnit`
+        Every correction unit for one subject.
+
+    Raises
+    ------
+    RuntimeError
+        If two units' output names parse to the same entity set.
+
+    Notes
+    -----
+    No rule about ``+`` is encoded. The installed pybids is asked what it actually
+    does, so this stays correct across the 0.19 entity-pattern change and also
+    catches collisions that have nothing to do with ``+``.
+    """
+    from bids.layout import parse_file_entities
+
+    seen = {}
+    for unit in preproc_units:
+        source_file = get_source_file(list(unit.dwi_files), unit.output_name, suffix='_dwi')
+        key = tuple(sorted(parse_file_entities(source_file).items()))
+        if key in seen:
+            raise RuntimeError(
+                f'Output names {seen[key]!r} and {unit.output_name!r} render to the '
+                f'same BIDS name ({key}), so their derivatives would overwrite each '
+                'other. This is usually QSIPlan\'s "+N" uniquifier reaching a '
+                'filename, where its distinguishing character is not a BIDS entity. '
+                'Please report the dataset.'
+            )
+        seen[key] = unit.output_name
 
 
 def collect_participants(bids_dir, participant_label=None, strict=False, bids_validate=True):

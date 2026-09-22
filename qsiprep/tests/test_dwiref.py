@@ -107,7 +107,7 @@ def test_dwi2anat_dof_reaches_the_template_coregistration(dof, expected):
     production consumer still reading the removed attribute, so set the config and
     build the real workflow.
     """
-    from qsiprep.workflows.dwi.registration import DWI2ANAT_DOF_TO_TRANSFORM
+    from qsiprep.utils.misc import DWI2ANAT_DOF_TO_TRANSFORM
 
     assert DWI2ANAT_DOF_TO_TRANSFORM[dof] == expected
 

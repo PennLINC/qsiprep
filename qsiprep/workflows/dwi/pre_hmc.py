@@ -13,11 +13,11 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from ... import config
 from ...interfaces.dwi_merge import MergeDWIs
 from ...interfaces.nilearn import Merge
+from ...utils.bids import get_source_file
 
 # dwi workflows
 from .merge import gen_denoising_boilerplate, init_merge_and_denoise_wf
 from .qc import init_modelfree_qc_wf
-from .util import get_source_file
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
