@@ -26,8 +26,6 @@ sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_desc-confounds_timeseries.jso
 sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_desc-confounds_timeseries.tsv
 sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_desc-brain_mask.nii.gz
 sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_desc-image_qc.tsv
-sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_desc-jacobian_dwimap.json
-sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_desc-jacobian_dwimap.nii.gz
 sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_desc-preproc_dwi.b
 sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_desc-preproc_dwi.b_table.txt
 sub-tester/ses-1/dwi/sub-tester_ses-1_acq-HASC55PA_space-ACPC_desc-preproc_dwi.bval
@@ -46,8 +44,6 @@ sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_desc-confounds_timeseries.jso
 sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_desc-confounds_timeseries.tsv
 sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_desc-brain_mask.nii.gz
 sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_desc-image_qc.tsv
-sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_desc-jacobian_dwimap.json
-sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_desc-jacobian_dwimap.nii.gz
 sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_desc-preproc_dwi.b
 sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_desc-preproc_dwi.b_table.txt
 sub-tester/ses-2/dwi/sub-tester_ses-2_acq-HASC55AP_space-ACPC_desc-preproc_dwi.bval

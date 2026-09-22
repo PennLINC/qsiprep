@@ -331,11 +331,13 @@ def test_maternal_brain_project_writes_jacobian(monkeypatch):
 def test_shoreline_no_fieldmap_has_no_real_fieldwarps(tmp_path):
     """Pins the SHORELine backend's own provably-empty source.
 
-    Not a live marker check (no integration test runs bare SHORELine with no
-    fieldmap and no DRBUDDI in this suite) -- it documents why
-    ``sdc_bypass_wf`` belongs in ``_EMPTY_FIELDWARP_SOURCES`` at all, the same
-    way ``test_dsdti_topup_only_branch_has_no_jacobian`` documents
-    ``gather_inputs``.
+    This is a live marker check. ``intramodal_template`` runs
+    --hmc-method=shoreline over two sessions that each hold one phase-encoding
+    direction and no fieldmap, so each session takes ``sdc_bypass_wf`` and has
+    nothing to modulate. Its output fixture wrongly expected a
+    desc-jacobian_dwimap until that run proved otherwise; the expectation was
+    removed rather than a unity map synthesised, for the reason given in
+    ``init_dwi_derivatives_wf``.
     """
     _cfg(hmc_method='shoreline', sdc_method='auto', sloppy=True)
     from qsiprep.workflows.dwi.hmc_sdc import init_qsiprep_hmcsdc_wf
