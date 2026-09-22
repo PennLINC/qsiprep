@@ -270,8 +270,8 @@ def init_dwi_derivatives_wf(source_file, sdc_warp_meta=None) -> Workflow:
     ])  # fmt:skip
 
     # The SDC (susceptibility) displacement field on the ACPC grid, as an ITK
-    # transform. Only written when the backend produced a standalone warp
-    # (DRBUDDI); the caller signals that by passing the sidecar metadata.
+    # transform. Only written when distortion correction ran; the caller signals
+    # that by passing the sidecar metadata.
     if sdc_warp_meta is not None:
         ds_sdc_warp_t1 = pe.Node(
             DerivativesDataSink(

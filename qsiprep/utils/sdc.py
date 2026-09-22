@@ -48,22 +48,44 @@ def pe_readout_time(unit):
     return float(trt) if trt is not None else None
 
 
-def sdc_warp_source(unit):
-    """Which SDC displacement-field derivative to emit for ``unit``, or ``None``.
+def t2wreg_target(unit, t2w_sdc):
+    """The structural target DIFFPREP's T2Wreg stage registers to, or ``None``.
 
-    ``'fieldwarp'`` when a susceptibility method wrote a standalone warp into
-    ``fieldwarps`` -- DRBUDDI, a GRE/phasediff fieldmap, fieldmap-less SyN, or
-    TORTOISE T2Wreg. ``'topup'`` when only TOPUP ran: eddy applies its field and
-    leaves no standalone warp, so it is rebuilt from the off-resonance field,
-    which needs a readout time. ``None`` when no susceptibility correction ran.
+    Mirrors ``use_t2wreg``/``synb0_target`` in
+    :mod:`qsiprep.workflows.dwi.diffprep`. A SynB0 unit carries the T2Wreg
+    stage without being a ``CorrectionMethod.T2WREG`` estimation, so the stage
+    (not the method) is what says T2Wreg runs. ``'synb0'`` needs no T2w; the
+    ``t2w_sdc`` bool additionally honors --anat-modality/--ignore t2w for the
+    ``'t2w'`` target, which the plan does not see.
     """
-    if (
-        unit.is_gre
-        or unit.is_nipreps_syn
-        or unit.using_t2w_for_sdc
-        or unit.run.stage_with('drbuddi') is not None
-    ):
-        return 'fieldwarp'
-    if unit.run.stage_with('topup') is not None and pe_readout_time(unit) is not None:
-        return 'topup'
-    return None
+    stage = unit.run.stage_with('t2wreg')
+    if stage is None:
+        return None
+    if stage.structural_target == 'synb0':
+        return 'synb0'
+    return 't2w' if t2w_sdc else None
+
+
+def sdc_warp_source(unit, t2w_sdc):
+    """Where the SDC displacement-field derivative comes from, and its method label.
+
+    Returns ``(source, estimation_method)``. ``source`` is ``'fieldwarp'`` when a
+    susceptibility method wrote a standalone warp into ``fieldwarps`` --
+    DRBUDDI, a GRE/phasediff fieldmap, fieldmap-less SyN, or TORTOISE T2Wreg --
+    and ``'topup'`` when only TOPUP ran: eddy applies its field and leaves no
+    standalone warp, so it is rebuilt from the off-resonance field, which needs
+    a readout time. ``(None, None)`` when no susceptibility correction ran.
+    """
+    target = t2wreg_target(unit, t2w_sdc)
+    topup = unit.run.stage_with('topup')
+    if unit.run.stage_with('drbuddi') is not None:
+        return 'fieldwarp', 'DRBUDDI'
+    if unit.is_gre:
+        return 'fieldwarp', 'GRE fieldmap'
+    if unit.is_nipreps_syn:
+        return 'fieldwarp', 'SyN (fieldmap-less)'
+    if target is not None:
+        return 'fieldwarp', 'TORTOISE T2Wreg (SynB0)' if target == 'synb0' else 'TORTOISE T2Wreg'
+    if topup is not None and pe_readout_time(unit) is not None:
+        return 'topup', 'TOPUP (SynB0)' if topup.structural_target == 'synb0' else 'TOPUP'
+    return None, None

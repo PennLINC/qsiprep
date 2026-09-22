@@ -46,6 +46,7 @@ def init_dwi_finalize_wf(
     output_prefix,
     write_derivatives=True,
     make_intramodal_template=False,
+    t2w_sdc=False,
 ):
     """
     This workflow controls the resampling parts of the dwi preprocessing workflow.
@@ -94,6 +95,9 @@ def init_dwi_finalize_wf(
             Is this the final output? If so, write the final derivatives. If these
             resampled outputs will be combined with other distortion groups at the end,
             then return the resampled, non-concatenated images
+        t2w_sdc : bool
+            Whether a T2w is available for SDC; decides, with the plan, whether
+            DIFFPREP's T2Wreg ran and so whether it left an SDC warp to write
 
     **Inputs**
 
@@ -157,7 +161,6 @@ def init_dwi_finalize_wf(
     # Dispatch from the compiled run, not the deprecated config spelling: those
     # can disagree after automatic method resolution.
     doing_topup = unit.run.stage_with('topup') is not None
-    doing_drbuddi = unit.run.stage_with('drbuddi') is not None
 
     # The susceptibility distortion is emitted to derivatives as a displacement
     # field on the ACPC grid. Every susceptibility method that produces a
@@ -167,37 +170,22 @@ def init_dwi_finalize_wf(
     # standalone warp, so it is rebuilt from the estimated off-resonance field
     # (needs the readout time; without it, nothing is written).
     readout_time = pe_readout_time(unit)
-    warp_source = sdc_warp_source(unit)
+    warp_source, estimation_method = sdc_warp_source(unit, t2w_sdc)
 
     sdc_warp_meta = None
     if warp_source is not None:
-        _common = (
-            'expressed on the ACPC output grid as an ITK/ANTs displacement field '
-            '(LPS vector components). Applying it to the distorted DWI (e.g. '
-            'antsApplyTransforms) resamples it to the corrected ACPC space; as an ITK '
-            'point transform it maps ACPC (corrected) points to their distorted '
-            'DWI-reference locations.'
+        description = (
+            'Susceptibility (EPI) distortion displacement field of the first DWI series, '
+            'as an ITK/ANTs displacement field on the ACPC output grid with its vectors in '
+            'ACPC world coordinates (LPS). At each point of the corrected ACPC image, the '
+            'vector points to where that tissue appeared in the distorted data, also in '
+            'ACPC coordinates. It holds no DWI-to-ACPC coregistration: as an image '
+            'transform it undistorts an image that is already rigidly aligned to ACPC.'
         )
         if warp_source == 'topup':
-            estimation_method = 'TOPUP'
-            description = (
-                'Susceptibility (EPI) distortion displacement field, rebuilt from the '
-                'TOPUP off-resonance field (voxel shift = field_Hz * TotalReadoutTime), '
-                f'{_common}'
-            )
-        else:
-            estimation_method = (
-                'DRBUDDI'
-                if doing_drbuddi
-                else 'GRE fieldmap'
-                if unit.is_gre
-                else 'SyN (fieldmap-less)'
-                if unit.is_nipreps_syn
-                else 'TORTOISE T2Wreg'
-            )
-            description = (
-                'Susceptibility (EPI) distortion displacement field for the first DWI '
-                f'volume, {_common}'
+            description += (
+                ' Rebuilt from the TOPUP off-resonance field: voxel shift = '
+                'field_Hz * TotalReadoutTime along the phase-encoding axis.'
             )
         sdc_warp_meta = {'EstimationMethod': estimation_method, 'Description': description}
 
@@ -275,7 +263,7 @@ def init_dwi_finalize_wf(
                 'hmc_optimization_data',
                 # Only written out if TOPUP was used
                 'fieldmap_hz_t1',
-                # The SDC displacement field on the ACPC grid (PEPOLAR/DRBUDDI)
+                # The SDC displacement field on the ACPC grid
                 'sdc_warp_to_template',
             ]
         ),

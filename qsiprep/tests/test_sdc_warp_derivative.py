@@ -171,22 +171,61 @@ def _tiny_dwi(path, nvols=4):
 
 
 def test_sdc_warp_source_emits_for_every_standalone_warp_method(tmp_path):
-    """GRE, SyN and T2Wreg all write a standalone warp, so all emit the derivative."""
+    """GRE and SyN write a standalone warp, so both emit the derivative."""
     from qsiplan.models import CorrectionMethod
 
     from qsiprep.tests.preproc_factory import make_preproc_unit
     from qsiprep.utils.sdc import sdc_warp_source
 
     dwi = _tiny_dwi(tmp_path / 'sub-01_dwi.nii.gz')
-    for method in (
-        CorrectionMethod.PHASEDIFF,  # GRE fieldmap
-        CorrectionMethod.NIPREPS_SYN,  # fieldmap-less SyN
-        CorrectionMethod.T2WREG,  # TORTOISE T2Wreg
+    for method, label in (
+        (CorrectionMethod.PHASEDIFF, 'GRE fieldmap'),
+        (CorrectionMethod.NIPREPS_SYN, 'SyN (fieldmap-less)'),
     ):
         unit = make_preproc_unit([dwi], method=method)
-        assert sdc_warp_source(unit) == 'fieldwarp', method
+        assert sdc_warp_source(unit, t2w_sdc=False) == ('fieldwarp', label), method
     # No susceptibility correction -> nothing is emitted.
-    assert sdc_warp_source(make_preproc_unit([dwi])) is None
+    assert sdc_warp_source(make_preproc_unit([dwi]), t2w_sdc=False) == (None, None)
+
+
+@pytest.mark.parametrize(
+    ('hmc', 'method', 't2w_sdc', 'expected'),
+    [
+        # DIFFPREP's T2Wreg writes a warp, whether it targets a T2w or SynB0.
+        ('tortoise', 'T2WREG', True, ('fieldwarp', 'TORTOISE T2Wreg')),
+        ('tortoise', 'SYNB0', False, ('fieldwarp', 'TORTOISE T2Wreg (SynB0)')),
+        # A T2w target without a usable T2w (--anat-modality none): T2Wreg is skipped.
+        ('tortoise', 'T2WREG', False, (None, None)),
+        # Only DIFFPREP runs T2Wreg; eddy and SHORELine leave these uncorrected.
+        ('eddy', 'T2WREG', True, (None, None)),
+        ('shoreline', 'T2WREG', True, (None, None)),
+        # On eddy, SynB0 feeds TOPUP instead.
+        ('eddy', 'SYNB0', False, ('topup', 'TOPUP (SynB0)')),
+    ],
+)
+def test_sdc_warp_source_follows_the_t2wreg_stage(
+    tmp_path, monkeypatch, hmc, method, t2w_sdc, expected
+):
+    """The T2Wreg decision comes from the plan's stage, not the estimation method."""
+    from qsiplan.models import CorrectionMethod
+
+    from qsiprep.tests.preproc_factory import make_preproc_unit
+    from qsiprep.utils.sdc import sdc_warp_source
+
+    monkeypatch.setattr(config.workflow, 'hmc_method', hmc)
+    # The default method selection: other tests leave an --sdc-method behind.
+    monkeypatch.setattr(config.workflow, 'sdc_method', None)
+    monkeypatch.setattr(config.workflow, 'pepolar_method', None)
+    dwi = _tiny_dwi(tmp_path / 'sub-01_dwi.nii.gz')
+    # SynB0 synthesizes its b=0 from the T1w; T2Wreg registers to the T2w.
+    anat = str(tmp_path / ('sub-01_T1w.nii.gz' if method == 'SYNB0' else 'sub-01_T2w.nii.gz'))
+    unit = make_preproc_unit(
+        [dwi],
+        method=getattr(CorrectionMethod, method),
+        estimation_sources=[anat] if method == 'SYNB0' else None,
+        anat_files=[anat],
+    )
+    assert sdc_warp_source(unit, t2w_sdc=t2w_sdc) == expected
 
 
 def test_trans_wf_builds_compose_sdc_warp_only_when_requested():
@@ -223,6 +262,36 @@ def test_trans_wf_builds_compose_sdc_warp_only_when_requested():
     )
 
 
+def test_trans_wf_takes_volume_0_warp_from_a_single_path_or_a_list():
+    """GRE's init_sdc_wf hands over one warp path; the others a per-volume list.
+
+    Indexing a bare path would take its first character. The connection function
+    is rebuilt from source here exactly as nipype does at run time.
+    """
+    _cfg()
+    from nipype.utils.functions import create_function_from_source
+
+    from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
+
+    wf = init_dwi_trans_wf(
+        source_file='/data/sub-01_dwi.nii.gz', mem_gb=1, sdc_warp_source='fieldwarp'
+    )
+    (source,) = [
+        src
+        for u, v, d in wf._graph.edges(data=True)
+        if u.name == 'inputnode' and v.name == 'compose_sdc_warp'
+        for src, dst in d['connect']
+        if dst == 'sdc_warp'
+    ]
+    port, func_source, _ = source
+    assert port == 'fieldwarps'
+    first_warp = create_function_from_source(func_source)
+    assert first_warp('/work/vsm2dfm/fmap_antswarp.nii.gz') == (
+        '/work/vsm2dfm/fmap_antswarp.nii.gz'
+    )
+    assert first_warp(['/work/finv.nii.gz', '/work/minv.nii.gz']) == '/work/finv.nii.gz'
+
+
 def test_trans_wf_topup_builds_hz_to_warp_chain():
     """TOPUP has no standalone warp, so the field is turned into one first."""
     _cfg()
@@ -235,19 +304,20 @@ def test_trans_wf_topup_builds_hz_to_warp_chain():
         sdc_pe_dir='j',
         sdc_readout_time=0.05,
     )
-    # Hz field -> voxel-shift map -> ANTs warp -> the same conjugation node.
-    assert wf.get_node('hz_to_vsm') is not None
-    assert wf.get_node('vsm_to_warp') is not None
-    assert wf.get_node('vsm_to_warp').inputs.pe_dir == 'j'
+    # Hz field -> ANTs warp -> the same conjugation node.
+    hz_to_warp = wf.get_node('hz_to_warp')
+    assert hz_to_warp is not None
+    assert hz_to_warp.inputs.pe_dir == 'j'
+    assert hz_to_warp.inputs.readout_time == 0.05
     edges = wf._graph.edges(data=True)
     assert any(
         u.name == 'inputnode'
-        and v.name == 'hz_to_vsm'
+        and v.name == 'hz_to_warp'
         and ('fieldmap_hz', 'in_file') in d['connect']
         for u, v, d in edges
     )
     assert any(
-        u.name == 'vsm_to_warp'
+        u.name == 'hz_to_warp'
         and v.name == 'compose_sdc_warp'
         and ('out_file', 'sdc_warp') in d['connect']
         for u, v, d in edges
@@ -283,32 +353,68 @@ def test_derivatives_wf_writes_sdc_warp_only_with_meta():
     assert 'Units' not in meta
 
 
-def test_topup_hz_to_warp_builds_pe_axis_displacement(tmp_path):
-    """The TOPUP recipe: field(Hz) * readout -> voxel shift -> mm along the PE axis.
+_HZ, _TRT = 10.0, 0.05  # a uniform field: every voxel shifts _HZ * _TRT voxels
+_LAS = np.diag([-2.0, 3.0, 4.0, 1.0])  # eddy's grid; voxel sizes i=2, j=3, k=4 mm
 
-    ``_hz_to_vsm`` scales the field by the readout time; ``FUGUEvsm2ANTSwarp`` then
-    turns the voxel-shift map into an ANTs displacement field whose only non-zero
-    component is along the phase-encoding axis, magnitude shift * voxel size.
+
+def _topup_warp_vector(tmp_path, affine, pe_dir):
+    """The single LPS displacement ``_hz_to_warp`` writes for a uniform field."""
+    from qsiprep.workflows.dwi.resampling import _hz_to_warp
+
+    hz_path = str(tmp_path / 'hz.nii.gz')
+    nb.Nifti1Image(np.full((6, 6, 6), _HZ, dtype='float32'), affine).to_filename(hz_path)
+    warp = nb.load(_hz_to_warp(hz_path, _TRT, pe_dir, newpath=str(tmp_path)))
+    assert warp.shape == (6, 6, 6, 1, 3)
+    assert warp.header.get_intent()[0] == 'vector'
+    np.testing.assert_allclose(warp.affine, affine)
+    field = np.asarray(warp.dataobj).reshape(-1, 3)
+    np.testing.assert_allclose(field, field[:1].repeat(len(field), 0))
+    return field[0]
+
+
+@pytest.mark.parametrize(
+    ('pe_dir', 'expected_lps'),
+    [
+        # TOPUP shifts along the voxel axis its acqp row names, on the LAS+ grid
+        # it ran on: +i is Left (LPS +x), +j is Anterior (LPS -y), +k is Superior.
+        ('i', (_HZ * _TRT * 2.0, 0.0, 0.0)),
+        ('i-', (-_HZ * _TRT * 2.0, 0.0, 0.0)),
+        ('j', (0.0, -_HZ * _TRT * 3.0, 0.0)),
+        ('j-', (0.0, _HZ * _TRT * 3.0, 0.0)),
+        ('k', (0.0, 0.0, _HZ * _TRT * 4.0)),
+    ],
+)
+def test_topup_hz_to_warp_follows_the_grid_axes(tmp_path, pe_dir, expected_lps):
+    """field(Hz) * readout voxels along the PE voxel axis, in world mm via the affine."""
+    np.testing.assert_allclose(_topup_warp_vector(tmp_path, _LAS, pe_dir), expected_lps, atol=1e-6)
+
+
+def test_topup_hz_to_warp_matches_fugue_where_fugue_is_right(tmp_path):
+    """On LAS+ the j axis is Anterior, as ``FUGUEvsm2ANTSwarp`` hard-codes.
+
+    That j-axis result matched DRBUDDI's blip-up warp on real reverse-PE data
+    (slope 1.02, r 0.965), so it anchors the sign. FUGUEvsm2ANTSwarp's i axis
+    is hard-coded to Right and would disagree on this grid; ``_hz_to_warp`` does not.
     """
     from qsiprep.interfaces.niworkflows import FUGUEvsm2ANTSwarp
-    from qsiprep.workflows.dwi.resampling import _hz_to_vsm
 
-    affine = np.diag([2.0, 3.0, 4.0, 1.0])  # voxel sizes i=2, j=3, k=4 mm
-    hz, trt = 10.0, 0.05
-    hz_path = str(tmp_path / 'hz.nii.gz')
-    nb.Nifti1Image(np.full((6, 6, 6), hz, dtype='float32'), affine).to_filename(hz_path)
+    vsm_path = str(tmp_path / 'vsm.nii.gz')
+    nb.Nifti1Image(np.full((6, 6, 6), _HZ * _TRT, dtype='float32'), _LAS).to_filename(vsm_path)
+    fugue = FUGUEvsm2ANTSwarp(in_file=vsm_path, pe_dir='j').run(cwd=str(tmp_path))
+    fugue_vector = np.asarray(nb.load(fugue.outputs.out_file).dataobj).reshape(-1, 3)[0]
 
-    vsm = _hz_to_vsm(hz_path, trt, newpath=str(tmp_path))
-    np.testing.assert_allclose(nb.load(vsm).get_fdata(), hz * trt)
+    (tmp_path / 'ours').mkdir()
+    ours = _topup_warp_vector(tmp_path / 'ours', _LAS, 'j')
+    np.testing.assert_allclose(ours, fugue_vector, atol=1e-6)
 
-    warp = FUGUEvsm2ANTSwarp(in_file=vsm, pe_dir='j').run(cwd=str(tmp_path)).outputs.out_file
-    field = np.asarray(nb.load(warp).dataobj).reshape((6, 6, 6, 3))
-    interior = field[2:4, 2:4, 2:4].reshape(-1, 3).mean(0)
-    # 'j' (no minus) carries FUGUEvsm2ANTSwarp's -1 sign; magnitude = shift * voxel_j.
-    np.testing.assert_allclose(interior[1], -hz * trt * 3.0, atol=1e-3)
-    np.testing.assert_allclose(interior[0], 0.0, atol=1e-6)
-    np.testing.assert_allclose(interior[2], 0.0, atol=1e-6)
-    assert nb.load(warp).header.get_intent()[0] == 'vector'
+
+def test_topup_hz_to_warp_follows_an_oblique_grid(tmp_path):
+    """An oblique grid carries the shift along its rotated PE column, not a world axis."""
+    affine = np.eye(4)
+    affine[:3, :3] = _rotation('z', 30) @ np.diag([2.0, 3.0, 4.0])
+    step_ras = affine[:3, 1]  # one voxel along j, in RAS mm
+    expected = _HZ * _TRT * step_ras * np.array([-1.0, -1.0, 1.0])
+    np.testing.assert_allclose(_topup_warp_vector(tmp_path, affine, 'j'), expected, atol=1e-6)
 
 
 def test_sdc_warp_datasink_builds_a_dwi_xfm_path(tmp_path):

@@ -372,19 +372,36 @@ Transforms
         sub-<label>_ses-<label>_from-orig_to-anat_mode-image_xfm.txt
         sub-<label>_ses-<label>_from-anat_to-orig_mode-image_xfm.txt
       dwi/
-        # Susceptibility (EPI) distortion displacement field, written whenever
-        # distortion correction ran (any HMC backend), composed onto the ACPC
-        # output grid as an ITK/ANTs displacement field (a transform, so its
-        # vectors are rotated into ACPC world coordinates -- not a resampled
-        # scalar). Applying it to the susceptibility-distorted DWI resamples it to
-        # the corrected ACPC space; the sidecar records the estimation method and
-        # the warp direction. DRBUDDI, a GRE/phasediff fieldmap, fieldmap-less SyN
-        # and TORTOISE T2Wreg all write their warp directly; for TOPUP (where Eddy
-        # applies the field internally and leaves no standalone warp) it is rebuilt
-        # from the estimated off-resonance field (voxel shift =
-        # field_Hz * TotalReadoutTime). Absent only when no SDC was applied.
-        sub-<label>_ses-<label>_from-dwiref_to-ACPC_mode-image_desc-sdc_xfm.nii.gz
-        sub-<label>_ses-<label>_from-dwiref_to-ACPC_mode-image_desc-sdc_xfm.json
+        # Susceptibility distortion displacement field (see below)
+        <source_entities>_from-dwiref_to-ACPC_mode-image_desc-sdc_xfm.nii.gz
+        <source_entities>_from-dwiref_to-ACPC_mode-image_desc-sdc_xfm.json
+
+The ``desc-sdc`` transform is the susceptibility distortion correction (SDC) as a
+displacement field, so the correction can be inspected and compared across methods.
+It is an ITK/ANTs displacement field on the ACPC output grid, with its vectors in
+ACPC world coordinates (ITK's LPS convention).
+At each point of the corrected ACPC image, the vector points to where that tissue
+appeared in the distorted data, also in ACPC coordinates.
+It describes the first DWI series; with reverse phase-encoding data, the opposing
+series was distorted in roughly the opposite direction.
+It can be opened in 3D Slicer or ITK-SNAP to inspect it over the preprocessed data,
+and the susceptibility distortion figure in the HTML report draws its vectors the way
+Slicer does.
+
+The field holds no DWI-to-ACPC coregistration, so applying it directly to a DWI in
+its native space does not produce the corrected ACPC image.
+Applied as an image transform, it undistorts an image that has already been rigidly
+aligned to ACPC.
+
+DRBUDDI, GRE fieldmaps, fieldmap-less SyN, and TORTOISE T2Wreg (including SynB0)
+write this field directly.
+Eddy applies TOPUP's field internally and leaves no standalone field, so for TOPUP
+the displacement is rebuilt from TOPUP's off-resonance field:
+the voxel shift is the field in Hz times ``TotalReadoutTime``, along the
+phase-encoding axis.
+The sidecar's ``EstimationMethod`` records which method produced the field.
+The field is written whenever distortion correction ran, except under
+``--distortion-group-merge``, where the merged output has no single field.
 
 
 .. important::
