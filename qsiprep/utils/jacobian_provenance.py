@@ -23,12 +23,10 @@ this module cannot enforce by itself; the workflow modules cross-reference it
 in comments at each branch point instead of duplicating this reasoning.
 """
 
-from ... import config
-from ...utils.eddy_config import eddy_modulates_distortion
-from .base import resolve_t2wreg_target
-from .diffprep import load_diffprep_config
-from .fsl import load_eddy_args
-from .gradwarp import resolve_gradwarp_plan
+from .. import config
+from .diffprep_config import load_diffprep_config
+from .eddy_config import eddy_modulates_distortion, load_eddy_args
+from .sdc import resolve_t2wreg_target
 
 #: Reason string for both eddy-current and susceptibility unmodulated entries
 #: under a non-'jac' eddy resampling method -- eddy has already baked its
@@ -50,6 +48,10 @@ def _gradwarp_applied(unit):
     ``None`` and its ``warp_dim`` is not ``None`` (a DIS3D unit needing no
     spatial correction produces a plan with ``warp_dim=None``).
     """
+    # Imported here, not at module level: resolve_gradwarp_plan lives in a
+    # workflow module that imports describe_jacobian_modulation from this one.
+    from ..workflows.dwi.gradwarp import resolve_gradwarp_plan
+
     plan = resolve_gradwarp_plan(unit)
     return plan is not None and plan.warp_dim is not None
 
@@ -211,3 +213,26 @@ def jacobian_provenance_for(unit, t2w_sdc=False):
         raise ValueError(f'Unknown HMC tool: {hmc_tool!r}')
 
     return applied, unmodulated, reason
+
+
+_JACOBIAN_SENTENCE = {
+    True: (
+        ' A Jacobian intensity correction was applied to compensate for the '
+        'local volume change this correction introduces.'
+    ),
+    False: (
+        ' This correction was applied without Jacobian intensity modulation '
+        '(--no-jacobian-weighting), so the local volume change it introduces '
+        'was not compensated for.'
+    ),
+}
+
+
+def describe_jacobian_modulation():
+    """Methods text: whether *QSIPrep* itself Jacobian-modulated a displacement field.
+
+    Reads ``config.workflow.jacobian_weighting`` directly. This is display
+    vocabulary describing what ``ComposeJacobianWeights`` did, not routing.
+    Used by ``gradwarp_boilerplate`` for the gradient nonlinearity field.
+    """
+    return _JACOBIAN_SENTENCE[bool(config.workflow.jacobian_weighting)]

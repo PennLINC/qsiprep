@@ -178,7 +178,7 @@ def test_path_valued_options_are_declared_in_their_section(tmp_path):
 
 #: ``config.record_applied``/``config.record_unmodulated`` and the four
 #: ``jacobian_*`` config fields were removed: Jacobian provenance is now a
-#: pure per-unit computation (``qsiprep.workflows.dwi.jacobian_provenance.
+#: pure per-unit computation (``qsiprep.utils.jacobian_provenance.
 #: jacobian_provenance_for``), not invocation-global mutable state. See
 #: ``qsiprep/tests/test_jacobian_provenance.py`` for its coverage, including
 #: the two-different-units-in-one-invocation case these tests could not

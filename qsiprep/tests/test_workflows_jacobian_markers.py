@@ -89,7 +89,7 @@ from qsiplan.models import CorrectionMethod
 from qsiprep import config
 from qsiprep.tests.preproc_factory import make_preproc_unit
 from qsiprep.tests.utils import get_test_data_path
-from qsiprep.workflows.dwi.jacobian_provenance import jacobian_provenance_for
+from qsiprep.utils.jacobian_provenance import jacobian_provenance_for
 
 SRC = '/data/sub-01_dwi.nii.gz'
 

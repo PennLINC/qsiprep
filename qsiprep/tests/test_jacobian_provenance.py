@@ -1,4 +1,4 @@
-"""Unit tests for ``qsiprep.workflows.dwi.jacobian_provenance``.
+"""Unit tests for ``qsiprep.utils.jacobian_provenance``.
 
 ``jacobian_provenance_for`` replaces the old ``config.record_applied``/
 ``config.record_unmodulated`` invocation-global accumulation (see git history)
@@ -21,7 +21,7 @@ from qsiplan.models import CorrectionMethod
 
 from qsiprep import config
 from qsiprep.tests.preproc_factory import make_preproc_unit
-from qsiprep.workflows.dwi.jacobian_provenance import jacobian_provenance_for
+from qsiprep.utils.jacobian_provenance import jacobian_provenance_for
 
 SRC = '/data/sub-01_dwi.nii.gz'
 PARTNER = '/data/sub-01_dir-PA_dwi.nii.gz'

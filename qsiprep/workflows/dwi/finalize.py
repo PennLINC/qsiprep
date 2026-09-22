@@ -29,9 +29,9 @@ from ...interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SeriesQC
+from ...utils.jacobian_provenance import jacobian_provenance_for
 from .derivatives import init_dwi_derivatives_wf
 from .gradwarp import resolve_gradwarp_plan
-from .jacobian_provenance import jacobian_provenance_for
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
 from .resampling import init_dwi_trans_wf
 

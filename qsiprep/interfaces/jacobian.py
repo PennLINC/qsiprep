@@ -1239,7 +1239,7 @@ class OkanQuadraticJacobian(SimpleInterface):
     Both return ``Undefined`` rather than raising, so a weighting-enabled run
     never aborts on an otherwise-working DIFFPREP configuration -- the
     'cubic' gap reaches the sidecar via
-    ``qsiprep.workflows.dwi.jacobian_provenance.jacobian_provenance_for``,
+    ``qsiprep.utils.jacobian_provenance.jacobian_provenance_for``,
     computed independently of this interface's execution.
     """
 
@@ -1332,7 +1332,7 @@ class _StackJacobianWeightsInputSpec(BaseInterfaceInputSpec):
     )
     weight_index = traits.List(traits.Int(), desc='per-volume index into weight_images')
     # Build-time facts about this run, computed by
-    # ``qsiprep.workflows.dwi.jacobian_provenance.jacobian_provenance_for``
+    # ``qsiprep.utils.jacobian_provenance.jacobian_provenance_for``
     # and set as node inputs during workflow construction -- not read from
     # ``config.workflow`` here, because they are per-run facts (which
     # corrections a *specific* unit's compiled plan actually Jacobian-

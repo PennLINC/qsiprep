@@ -18,6 +18,7 @@ from ...interfaces import DerivativesDataSink, DerivativesMaybeDataSink
 from ...interfaces.confounds import DMRISummary
 from ...interfaces.reports import DiffusionSummary
 from ...interfaces.utils import TestInput
+from ...utils.sdc import resolve_t2wreg_target
 from ..fieldmap.pepolar import init_extended_pepolar_report_wf
 
 # dwi workflows
@@ -32,30 +33,6 @@ from .registration import init_b0_to_anat_registration_wf, init_direct_b0_acpc_w
 from .util import _create_mem_gb, _get_wf_name
 
 DEFAULT_MEMORY_MIN_GB = 0.01
-
-
-def resolve_t2wreg_target(unit, t2w_sdc):
-    """The structural target DIFFPREP's T2Wreg stage registers to, or ``None``.
-
-    Mirrors ``use_t2wreg``/``synb0_target`` in
-    :mod:`qsiprep.workflows.dwi.diffprep`. T2Wreg does real susceptibility
-    distortion correction but carries no measured fieldmap, so without this
-    predicate the fieldmap-less case would fall through the reportlet gate and
-    produce no SDC figure. The plan encodes the stage and its target
-    (``'synb0'`` needs no T2w); the ``t2w_sdc`` bool additionally honors
-    --anat-modality/--ignore t2w for the ``'t2w'`` target.
-
-    Public (not module-private) because
-    :mod:`qsiprep.workflows.dwi.jacobian_provenance` also needs it, to decide
-    whether a TORTOISE unit's T2Wreg stage actually reaches ``fieldwarps`` --
-    the same question this predicate answers for the reportlet gate below.
-    """
-    stage = unit.run.stage_with('t2wreg')
-    if stage is None:
-        return None
-    if stage.structural_target == 'synb0':
-        return 'synb0'
-    return 't2w' if t2w_sdc else None
 
 
 def init_dwi_preproc_wf(

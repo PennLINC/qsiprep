@@ -21,6 +21,7 @@ from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 from ... import config
 from ...interfaces import DerivativesDataSink
 from ...interfaces.gradunwarp import CreateNonlinearityDisplacementMap, MaskWarpDimensions
+from ...utils.jacobian_provenance import describe_jacobian_modulation
 from .resampling import _listify
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -293,28 +294,6 @@ def _resampling_sentence():
 #: ``config.workflow.jacobian_weighting``. A ``DIS3D`` unit builds no field
 #: (see :func:`gradwarp_boilerplate`), so there is nothing to modulate and
 #: this text is never reached for it.
-_JACOBIAN_SENTENCE = {
-    True: (
-        ' A Jacobian intensity correction was applied to compensate for the '
-        'local volume change this correction introduces.'
-    ),
-    False: (
-        ' This correction was applied without Jacobian intensity modulation '
-        '(--no-jacobian-weighting), so the local volume change it introduces '
-        'was not compensated for.'
-    ),
-}
-
-
-def _jacobian_sentence():
-    """Whether *QSIPrep* itself Jacobian-modulated this field.
-
-    Reads ``config.workflow.jacobian_weighting`` directly -- display
-    vocabulary describing what ``ComposeJacobianWeights`` did with this
-    field, not routing, matching ``_resampling_sentence``'s allowlisted read
-    of ``hmc_method`` just above it.
-    """
-    return _JACOBIAN_SENTENCE[bool(config.workflow.jacobian_weighting)]
 
 
 def gradwarp_boilerplate(warp_dim, basis='metadata'):
@@ -331,7 +310,7 @@ def gradwarp_boilerplate(warp_dim, basis='metadata'):
         text = _FORCED_CORRECTION_TEXT.get(warp_dim, _CORRECTION_TEXT[warp_dim])
     else:
         text = _CORRECTION_TEXT[warp_dim]
-    return text + _resampling_sentence() + _jacobian_sentence()
+    return text + _resampling_sentence() + describe_jacobian_modulation()
 
 
 #: Report phrasing for each resolved state.

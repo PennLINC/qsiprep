@@ -75,7 +75,7 @@ def init_dwi_derivatives_wf(
     """Set up a battery of datasinks to store derivatives in the right location.
 
     The three ``jacobian_*`` arguments are this *run*'s own Jacobian-provenance
-    facts -- see ``qsiprep.workflows.dwi.jacobian_provenance.
+    facts -- see ``qsiprep.utils.jacobian_provenance.
     jacobian_provenance_for``, which the caller (``init_dwi_finalize_wf``)
     computes from the ``unit`` it has and this function does not. They are set
     directly as ``StackJacobianWeights`` node inputs (build-time constants, not

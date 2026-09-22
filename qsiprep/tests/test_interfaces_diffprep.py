@@ -164,7 +164,7 @@ def test_diffprep_config_use_cuda_default_and_override(tmp_path):
     """
     import json as _json
 
-    from qsiprep.workflows.dwi.diffprep import load_diffprep_config
+    from qsiprep.utils.diffprep_config import load_diffprep_config
 
     assert load_diffprep_config(None)['use_cuda'] is False
 
@@ -203,7 +203,7 @@ def test_diffprep_correction_mode_defaults_to_quadratic():
     The CLI exposes one ``--hmc-method tortoise`` rather than a value per mode,
     so the config JSON is the only way to reach ``motion`` or ``cubic``.
     """
-    from qsiprep.workflows.dwi.diffprep import load_diffprep_config
+    from qsiprep.utils.diffprep_config import load_diffprep_config
 
     assert load_diffprep_config(None)['correction_mode'] == 'quadratic'
 
@@ -1373,7 +1373,7 @@ def test_t2wreg_is_recognised_as_sdc_for_reporting():
     from qsiplan.models import CorrectionMethod
 
     from qsiprep.tests.preproc_factory import make_preproc_unit
-    from qsiprep.workflows.dwi.base import resolve_t2wreg_target
+    from qsiprep.utils.sdc import resolve_t2wreg_target
 
     config = _base_config()
     try:

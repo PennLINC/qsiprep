@@ -6,7 +6,6 @@ Implementing the FSL preprocessing workflow
 
 """
 
-import json
 import os
 
 from nipype.interfaces import fsl
@@ -32,6 +31,7 @@ from ...interfaces.images import ConformDwi, IntraModalMerge, SplitDWIsFSL
 from ...interfaces.nilearn import EnhanceB0
 from ...interfaces.reports import TopupSummary
 from ...interfaces.synb0 import Synb0FieldQC
+from ...utils.eddy_config import eddy_modulates_distortion, load_eddy_args
 from ...utils.gpu import gpu_enabled
 from ..fieldmap.base import init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf
@@ -47,23 +47,6 @@ from .gradwarp import (
 from .util import add_synb0_outputs, init_dwi_reference_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
-
-
-def load_eddy_args():
-    """Load the effective ``--eddy-config`` JSON, or the shipped default.
-
-    Shared by ``init_fsl_hmc_wf`` (which needs the dict to build ``eddy``'s
-    node and to warn/describe boilerplate) and
-    ``jacobian_provenance.jacobian_provenance_for`` (which needs only
-    ``eddy_modulates_distortion`` of it) so the two never parse the file
-    independently and risk disagreeing about what it says.
-    """
-    if config.workflow.eddy_config is None:
-        eddy_cfg_file = str(load_data('eddy_params.json'))
-    else:
-        eddy_cfg_file = config.workflow.eddy_config
-    with open(eddy_cfg_file) as f:
-        return json.load(f)
 
 
 def init_fsl_hmc_wf(
@@ -202,8 +185,6 @@ def init_fsl_hmc_wf(
         eddy_cfg_file = config.workflow.eddy_config
 
     eddy_args = load_eddy_args()
-
-    from ...utils.eddy_config import eddy_modulates_distortion
 
     # Whether eddy is Jacobian-modulating its own resampling at all. This is
     # known now, but whether TOPUP is the run's susceptibility source is not

@@ -1054,7 +1054,7 @@ def test_stack_jacobian_weights_meta_dict_index_matches_shape(tmp_path):
 
     ``applied_corrections``/``unmodulated_corrections``/``unmodulated_reason``
     are build-time inputs set by the caller (see
-    ``qsiprep.workflows.dwi.jacobian_provenance.jacobian_provenance_for``),
+    ``qsiprep.utils.jacobian_provenance.jacobian_provenance_for``),
     not read from ``config.workflow`` -- so this test sets them directly on
     the interface rather than monkeypatching global config.
     """

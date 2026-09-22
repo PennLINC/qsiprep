@@ -30,3 +30,27 @@ def t2w_available_for_sdc(subject_data, selection, anat_modality):
     with an empty input.
     """
     return bool(subject_data.get('t2w')) and anat_modality != 'none' and t2w_sdc_enabled(selection)
+
+
+def resolve_t2wreg_target(unit, t2w_sdc):
+    """The structural target DIFFPREP's T2Wreg stage registers to, or ``None``.
+
+    Mirrors ``use_t2wreg``/``synb0_target`` in
+    :mod:`qsiprep.workflows.dwi.diffprep`. T2Wreg does real susceptibility
+    distortion correction but carries no measured fieldmap, so without this
+    predicate the fieldmap-less case would fall through the reportlet gate and
+    produce no SDC figure. The plan encodes the stage and its target
+    (``'synb0'`` needs no T2w); the ``t2w_sdc`` bool additionally honors
+    --anat-modality/--ignore t2w for the ``'t2w'`` target.
+
+    Used by ``init_dwi_preproc_wf``'s SDC reportlet gate and by
+    :mod:`qsiprep.utils.jacobian_provenance`, which asks the same question to
+    decide whether a TORTOISE unit's T2Wreg stage actually reaches
+    ``fieldwarps``.
+    """
+    stage = unit.run.stage_with('t2wreg')
+    if stage is None:
+        return None
+    if stage.structural_target == 'synb0':
+        return 'synb0'
+    return 't2w' if t2w_sdc else None

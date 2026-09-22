@@ -18,7 +18,6 @@ This mirrors the SDC coverage of :func:`~qsiprep.workflows.dwi.fsl.init_fsl_hmc_
 """
 
 import json
-from importlib.resources import files
 
 from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
@@ -40,8 +39,8 @@ from ...interfaces.tortoise import (
     TORTOISEConvert,
     generate_diffprep_boilerplate,
 )
+from ...utils.diffprep_config import load_diffprep_config
 from ...utils.gpu import gpu_enabled
-from ...utils.resources import as_path
 from ..fieldmap.base import init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf
 from ..fieldmap.synb0 import init_synb0_wf
@@ -70,28 +69,6 @@ def _as_transform_list(value):
     return [value]
 
 
-def load_diffprep_config(config_path):
-    """Load a --diffprep-config JSON, or return defaults."""
-    if config_path is None:
-        config_path = as_path(files('qsiprep.data') / 'diffprep_params.json')
-    with open(config_path) as fobj:
-        cfg = json.load(fobj)
-    cfg.setdefault('b0_id', -1)
-    cfg.setdefault('is_human_brain', True)
-    cfg.setdefault('rot_eddy_center', 'isocenter')
-    cfg.setdefault('extra_args', [])
-    # --hmc-method exposes a single "tortoise" value, so this is the only way to
-    # reach DIFFPREP's rigid-only ('motion') or 'cubic' eddy modes.
-    cfg.setdefault('correction_mode', 'quadratic')
-    # No default for "use_cuda": its absence must stay observable so a shipped
-    # default is never mistaken for user intent (see _legacy_use_cuda below).
-    # Opt-in MAPMRI shell synthesis for DRBUDDI's registration target;
-    # None/0 = off.
-    cfg.setdefault('drbuddi_synth_shell_bval', None)
-    cfg.setdefault('drbuddi_synth_shell_ndirs', 30)
-    return cfg
-
-
 def _resolve_phase_encoding(pe_dir):
     """Validate a BIDS PhaseEncodingDirection value, falling back to 'j'."""
     if pe_dir in _VALID_PE:
@@ -114,7 +91,6 @@ def _write_sidecar_json(nii_file, phase_encoding_direction, working_dir=None):
     ``copyfile=True`` propagation to the ``diffprep`` node stage a valid sidecar
     even after the upstream node's cache is cleared.
     """
-    import json
     import os
     import os.path as op
 
