@@ -566,11 +566,6 @@ to workflows in *QSIPrep*'s documentation]\
         # adding `session` later is a data change rather than a code change.
         dwiref_space = config.workflow.dwiref_definition
 
-        # The template in its own midpoint space. desc-coreg marks it as the image
-        # whose transform final resampling uses -- which at this level it is, since
-        # ComposeTransforms discards the per-unit registration's result.
-        # from-<level>_to-ACPC maps out of exactly this space, so that transform now
-        # applies to an image shipped beside it.
         ds_dwiref = pe.Node(
             DerivativesDataSink(
                 source_file=anat_source_file,
@@ -584,11 +579,7 @@ to workflows in *QSIPrep*'s documentation]\
             name='ds_dwiref',
             run_without_submitting=True,
         )
-        workflow.connect([
-            (dwiref_wf, ds_dwiref, [
-                ('outputnode.dwiref', 'in_file'),
-            ]),
-        ])  # fmt:skip
+        workflow.connect([(dwiref_wf, ds_dwiref, [('outputnode.dwiref', 'in_file')])])
 
         # The same template resampled into ACPC, kept so nothing current users rely
         # on is lost. It carries no desc: the per-output references beside it now
@@ -607,11 +598,7 @@ to workflows in *QSIPrep*'s documentation]\
             name='ds_dwiref_acpc',
             run_without_submitting=True,
         )
-        workflow.connect([
-            (dwiref_wf, ds_dwiref_acpc, [
-                ('outputnode.dwiref_acpc', 'in_file'),
-            ]),
-        ])  # fmt:skip
+        workflow.connect([(dwiref_wf, ds_dwiref_acpc, [('outputnode.dwiref_acpc', 'in_file')])])
 
         # Without this the dwiref space is a dead end: nothing can be mapped
         # into or out of it after the fact.
@@ -630,9 +617,7 @@ to workflows in *QSIPrep*'s documentation]\
             run_without_submitting=True,
         )
         workflow.connect([
-            (dwiref_wf, ds_dwiref_to_acpc, [
-                ('outputnode.dwiref_to_t1_affine', 'in_file'),
-            ]),
+            (dwiref_wf, ds_dwiref_to_acpc, [('outputnode.dwiref_to_t1_affine', 'in_file')]),
         ])  # fmt:skip
 
         ds_acpc_to_dwiref = pe.Node(
@@ -650,9 +635,7 @@ to workflows in *QSIPrep*'s documentation]\
             run_without_submitting=True,
         )
         workflow.connect([
-            (dwiref_wf, ds_acpc_to_dwiref, [
-                ('outputnode.t1_to_dwiref_affine', 'in_file'),
-            ]),
+            (dwiref_wf, ds_acpc_to_dwiref, [('outputnode.t1_to_dwiref_affine', 'in_file')]),
         ])  # fmt:skip
 
         # TemplateQC and the per-group distortiongroup->dwiref transform export exist only
@@ -674,9 +657,7 @@ to workflows in *QSIPrep*'s documentation]\
                 run_without_submitting=True,
             )
             workflow.connect([
-                (dwiref_wf, ds_template_qc, [
-                    ('outputnode.template_qc_file', 'in_file'),
-                ]),
+                (dwiref_wf, ds_template_qc, [('outputnode.template_qc_file', 'in_file')]),
             ])  # fmt:skip
 
             ds_template_agreement = pe.Node(
@@ -835,9 +816,7 @@ to workflows in *QSIPrep*'s documentation]\
                     name=f'ds_{src}_to_{dst}_{output_wfname}',
                     run_without_submitting=True,
                 )
-                workflow.connect([
-                    (dwi_preproc_wf, ds_coreg_xfm, [(field, 'in_file')]),
-                ])  # fmt:skip
+                workflow.connect([(dwi_preproc_wf, ds_coreg_xfm, [(field, 'in_file')])])
 
         if make_dwiref:
             input_name = f'inputnode.{output_wfname}_b0_template'
@@ -849,19 +828,10 @@ to workflows in *QSIPrep*'s documentation]\
                 ]),
                 (dwiref_wf, dwi_finalize_wf, [
                     (output_name, 'inputnode.b0_to_dwiref_transforms'),
-                    (
-                        'outputnode.dwiref_to_t1_affine',
-                        'inputnode.dwiref_to_t1_affine',
-                    ),
-                    (
-                        'outputnode.dwiref_to_t1_warp',
-                        'inputnode.dwiref_to_t1_warp',
-                    ),
+                    ('outputnode.dwiref_to_t1_affine', 'inputnode.dwiref_to_t1_affine'),
+                    ('outputnode.dwiref_to_t1_warp', 'inputnode.dwiref_to_t1_warp'),
                     ('outputnode.dwiref', 'inputnode.dwiref'),
-                    (
-                        'outputnode.dwiref_wm_seg',
-                        'inputnode.dwiref_wm_seg',
-                    ),
+                    ('outputnode.dwiref_wm_seg', 'inputnode.dwiref_wm_seg'),
                 ]),
             ])  # fmt:skip
 
