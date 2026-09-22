@@ -56,7 +56,7 @@ from .epi_fmap import (
     read_nifti_sidecar,
 )
 from .images import to_lps
-from .jacobian import WEIGHT_FLOOR
+from .jacobian import UNMODULATED_WEIGHT
 from .reports import topup_selection_to_report
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -1022,9 +1022,10 @@ def _floor_nonpositive_weights(weight_image_path):
     map inside the brain mask, before this resampling runs. It cannot see what
     LanczosWindowedSinc produces on the output grid, so a non-positive voxel
     here may be sinc ringing near a sharp edge, or it may be a genuine fold
-    outside the brain mask that guard never checked. We floor either way -- a
-    non-positive weight must never multiply DWI data -- but we report what was
-    measured instead of asserting which cause it was.
+    where susceptibility piles EPI signal up. Neither is a measurement of a
+    volume change, so both become UNMODULATED_WEIGHT and the voxel keeps the
+    intensity resampling gave it. We report what was measured instead of
+    asserting which cause it was.
     """
     img = nb.load(weight_image_path)
     data = np.asanyarray(img.dataobj)
@@ -1032,7 +1033,8 @@ def _floor_nonpositive_weights(weight_image_path):
     if nonpositive:
         LOGGER.warning(
             'Resampled weight map %s has %d non-positive voxels '
-            '(minimum %.4f); flooring them to %g. Small-magnitude '
+            '(minimum %.4f); leaving those voxels unmodulated (weight %g). '
+            'Small-magnitude '
             'undershoot near sharp edges is expected from '
             'LanczosWindowedSinc ringing. A large or spatially '
             'coherent negative region instead suggests the composed '
@@ -1041,10 +1043,10 @@ def _floor_nonpositive_weights(weight_image_path):
             weight_image_path,
             nonpositive,
             float(data.min()),
-            WEIGHT_FLOOR,
+            UNMODULATED_WEIGHT,
         )
         nb.Nifti1Image(
-            np.maximum(data, WEIGHT_FLOOR).astype('float32'),
+            np.where(data > 0, data, UNMODULATED_WEIGHT).astype('float32'),
             img.affine,
             img.header,
         ).to_filename(weight_image_path)

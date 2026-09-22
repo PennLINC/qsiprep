@@ -447,20 +447,26 @@ def test_apply_scaling_images_name_is_gone():
     assert not hasattr(fmap, 'ApplyScalingImages')
 
 
-def test_floor_nonpositive_weights_clamps_without_going_negative(tmp_path, caplog):
-    """A resampled weight map with a negative region is floored, not left negative.
+def test_nonpositive_weights_leave_the_voxel_unmodulated(tmp_path, caplog):
+    """A non-positive weight must not annihilate the voxel.
+
+    This asserted a floor of 1e-3 until forrest_gump showed what that does:
+    2.7% of in-mask voxels were multiplied by 1e-3, which is the only way
+    Jacobian weighting alters DWI intensities beyond the modulation itself.
+    Neither Lanczos undershoot nor a genuinely zero determinant measures a
+    volume change, so both leave the voxel as resampling produced it.
 
     ApplyJacobianWeights delegates this to _floor_nonpositive_weights after
     resampling. Exercising the full interface here would require a real
     antsApplyTransforms binary (not available in this environment), so this
-    hits the exact function the interface calls on each resampled map -- the
-    smallest unit that actually performs the clamp.
+    hits the exact function the interface calls on each resampled map.
     """
-    from qsiprep.interfaces.fmap import WEIGHT_FLOOR, _floor_nonpositive_weights
+    from qsiprep.interfaces.fmap import UNMODULATED_WEIGHT, _floor_nonpositive_weights
 
     data = np.ones((6, 6, 6), dtype='float32')
     data[0, 0, 0] = -0.5  # a lone undershoot voxel
-    data[1, 1, 1] = 0.0  # exactly zero must also be floored
+    data[1, 1, 1] = 0.0  # exactly zero is replaced too
+    data[2, 2, 2] = 0.25  # a small POSITIVE weight is a measurement; keep it
     weight_path = tmp_path / 'weight.nii.gz'
     nb.Nifti1Image(data, np.eye(4)).to_filename(str(weight_path))
 
@@ -468,12 +474,13 @@ def test_floor_nonpositive_weights_clamps_without_going_negative(tmp_path, caplo
         _floor_nonpositive_weights(str(weight_path))
 
     out = nb.load(str(weight_path)).get_fdata()
-    assert out.min() >= WEIGHT_FLOOR - 1e-6
-    assert np.isclose(out[0, 0, 0], WEIGHT_FLOOR, atol=1e-6)
-    assert np.isclose(out[1, 1, 1], WEIGHT_FLOOR, atol=1e-6)
+    assert out.min() > 0
+    assert np.isclose(out[0, 0, 0], UNMODULATED_WEIGHT, atol=1e-6)
+    assert np.isclose(out[1, 1, 1], UNMODULATED_WEIGHT, atol=1e-6)
+    assert np.isclose(out[2, 2, 2], 0.25, atol=1e-6)
     untouched = np.ones_like(out, dtype=bool)
-    untouched[0, 0, 0] = False
-    untouched[1, 1, 1] = False
+    for index in ((0, 0, 0), (1, 1, 1), (2, 2, 2)):
+        untouched[index] = False
     assert np.all(out[untouched] == 1.0)  # everywhere else is unchanged
     assert any('non-positive' in message for message in caplog.messages)
 

@@ -151,10 +151,19 @@ VECTOR_INTENT_CODE = 1007
 AFFINE_RTOL = 1e-5
 AFFINE_ATOL = 1e-4
 
-#: Floor for a resampled weight map. Lanczos ringing can push a positive
-#: scalar map slightly negative; a weight can be small but never zero or
-#: negative.
-WEIGHT_FLOOR = 1e-3
+#: What a non-positive resampled weight becomes. 1.0 means "leave this voxel's
+#: intensity alone", the same "no volume change known here" convention as
+#: ``multiply_maps``' ``fill_value=1.0`` and ``transport_scalar_map``'s
+#: ``default_value=1.0``.
+#:
+#: This was 1e-3, which annihilated the voxel instead. That is wrong in both
+#: places it applies. Lanczos undershoot near a sharp edge is a resampling
+#: artefact, not a measurement, and a determinant that is genuinely zero where
+#: susceptibility piles signal up says the volume change is unrecoverable
+#: there, not that the signal is. On forrest_gump 2.7% of in-mask voxels were
+#: multiplied by 1e-3, which is the only way this branch alters DWI intensities
+#: beyond the modulation itself.
+UNMODULATED_WEIGHT = 1.0
 
 #: Fraction of in-mask voxels allowed to have a non-positive determinant
 #: before it is treated as a broken composition rather than as real signal
@@ -361,14 +370,14 @@ def _report_nonpositive(inside, subject, consequence):
     LOGGER.warning(
         '%s is non-positive at %d of %d in-mask voxels (%.2f%%, minimum '
         '%.4f). This is expected where susceptibility distortion piles EPI '
-        'signal up; those voxels are floored to %g downstream. Raising starts '
-        'above %.0f%%.',
+        'signal up; those voxels are left unmodulated (weight %g) downstream. '
+        'Raising starts above %.0f%%.',
         subject,
         nonpositive,
         inside.size,
         100 * fraction,
         float(inside.min()),
-        WEIGHT_FLOOR,
+        UNMODULATED_WEIGHT,
         100 * FOLD_FRACTION_LIMIT,
     )
 
