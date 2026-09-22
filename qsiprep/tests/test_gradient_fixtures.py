@@ -72,6 +72,12 @@ def test_itk_field_is_nonzero(tmp_path):
     assert np.abs(np.asanyarray(img.dataobj)).max() > 0
 
 
+def test_itk_field_carries_the_vector_intent(tmp_path):
+    """ANTs reads a 5D field lacking NIFTI_INTENT_VECTOR as all zeros."""
+    img = nb.load(str(write_itk_field(tmp_path / 'field.nii')))
+    assert img.header.get_intent()[0] == 'vector'
+
+
 def test_write_dwi_with_gradients_makes_siblings(tmp_path):
     path = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz', nvols=5)
     stem = str(path).split('.nii')[0]
