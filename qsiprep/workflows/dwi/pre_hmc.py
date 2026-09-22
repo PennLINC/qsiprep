@@ -26,7 +26,7 @@ def init_dwi_pre_hmc_wf(
     unit,
     orientation,
     source_file,
-    do_biascorr=True,
+    do_biascorr,
     calculate_qc=True,
     name='pre_hmc_wf',
 ):
@@ -49,7 +49,9 @@ def init_dwi_pre_hmc_wf(
         wf = init_dwi_pre_hmc_wf(
             make_preproc_unit(['/completely/made/up/path/sub-01_dwi.nii.gz']),
             orientation="LPS",
-            source_file='/completely/made/up/path/sub-01_dwi.nii.gz')
+            source_file='/completely/made/up/path/sub-01_dwi.nii.gz',
+            do_biascorr=True,
+        )
 
     **Parameters**
 

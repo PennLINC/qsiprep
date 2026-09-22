@@ -490,6 +490,7 @@ to workflows in *QSIPrep*'s documentation]\
             # only exercised when corrected units actually combine.
             if len(merged_to_subgroups[merged_group]) < 2:
                 continue
+
             merging_group_workflows[merged_group] = init_distortion_group_merge_wf(
                 merging_strategy=config.workflow.distortion_group_merge,
                 source_file=merged_group + '_dwi.nii.gz',
@@ -499,7 +500,6 @@ to workflows in *QSIPrep*'s documentation]\
                 assembly=assembly_by_name[merged_group],
                 units=[units_by_name[key] for key in merged_to_subgroups[merged_group]],
             )
-
             workflow.connect([
                 (anat_preproc_wf, merging_group_workflows[merged_group], [
                     ('outputnode.t1_brain', 'inputnode.t1_brain'),
@@ -518,16 +518,12 @@ to workflows in *QSIPrep*'s documentation]\
         for unit in preproc_units
     }
 
-    # The resolved dwiref level for this subject, which may fall back below the
-    # requested one. Everything downstream keys off the resolved value: the
-    # derivative labels must describe what was actually built.
+    # Determine the level (distortion-group, subject) at which to generate the dwiref.
     make_intramodal_template = False
     if config.workflow.dwiref_definition == 'subject':
         if len(outputs_to_files) < 2:
-            # Having one group is a normal condition, not a user error: a cohort
-            # routinely mixes single- and multi-session subjects. Raising here
-            # meant one flag could fail a large fraction of a dataset outright,
-            # so skip the template for this subject and carry on.
+            # Warn, but don't error, when users request dwiref method that requires more than one
+            # input file but only have one.
             config.loggers.workflow.warning(
                 'Falling back to --dwiref-definition distortion-group for sub-%s: a '
                 'subject-level dwiref needs at least 2 DWI groups and this subject '

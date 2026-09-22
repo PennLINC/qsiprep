@@ -89,7 +89,12 @@ def test_pre_hmc_single_series_builds(tmp_path):
     from qsiprep.workflows.dwi.pre_hmc import init_dwi_pre_hmc_wf
 
     src = _write_dwi(tmp_path / 'sub-01_dwi.nii.gz')
-    wf = init_dwi_pre_hmc_wf(make_preproc_unit([src]), orientation='LAS', source_file=src)
+    wf = init_dwi_pre_hmc_wf(
+        make_preproc_unit([src]),
+        orientation='LAS',
+        source_file=src,
+        do_biascorr=True,
+    )
     assert wf.get_node('outputnode') is not None
     # A single series is merged directly, not split into polarity groups.
     assert wf.get_node('merge_plus') is None
@@ -99,7 +104,12 @@ def test_pre_hmc_rpe_series_splits_into_polarity_groups(tmp_path):
     _cfg(layout=_StubLayout())
     from qsiprep.workflows.dwi.pre_hmc import init_dwi_pre_hmc_wf
 
-    wf = init_dwi_pre_hmc_wf(_rpe_unit(tmp_path), orientation='LAS', source_file=SRC)
+    wf = init_dwi_pre_hmc_wf(
+        _rpe_unit(tmp_path),
+        orientation='LAS',
+        source_file=SRC,
+        do_biascorr=True,
+    )
     assert wf.get_node('merge_plus') is not None
     assert wf.get_node('merge_minus') is not None
 

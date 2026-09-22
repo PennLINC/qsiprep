@@ -180,9 +180,6 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             source_file=source_file,
             base_directory=output_dir,
             space='ACPC',
-            # Carries the same desc as the series it accompanies. Without it an
-            # entity-free output group renders to the same path as the
-            # subject-level dwiref template.
             desc='preproc',
             suffix='dwiref',
             extension='.nii.gz',
