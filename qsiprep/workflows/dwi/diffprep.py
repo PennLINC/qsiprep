@@ -17,8 +17,6 @@ where possible:
 This mirrors the SDC coverage of :func:`~qsiprep.workflows.dwi.fsl.init_fsl_hmc_wf`.
 """
 
-import json
-
 from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
@@ -90,7 +88,11 @@ def _write_sidecar_json(nii_file, phase_encoding_direction, working_dir=None):
     the basename is reused. Keeping the output in the node's directory lets the
     ``copyfile=True`` propagation to the ``diffprep`` node stage a valid sidecar
     even after the upstream node's cache is cleared.
+
+    Every import is local: nipype runs a Function node's source on its own,
+    so module-level imports are not visible here.
     """
+    import json
     import os
     import os.path as op
 
