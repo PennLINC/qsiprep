@@ -1,6 +1,7 @@
 import logging
 import os
 import os.path as op
+import signal
 from glob import glob
 from subprocess import PIPE, Popen
 
@@ -142,6 +143,52 @@ class _DSIStudioQCOutputSpec(TraitedSpec):
     qc_txt = File(exists=True, desc='Text file with QC measures')
 
 
+def _describe_exit(returncode):
+    """Render a subprocess status, naming the signal when there was one."""
+    if returncode is None:
+        return 'did not report an exit status'
+    if returncode < 0:
+        signum = -returncode
+        try:
+            name = signal.Signals(signum).name
+        except ValueError:
+            name = f'signal {signum}'
+        return f'was killed by {name}'
+    return f'exited with status {returncode}'
+
+
+def _check_qc_output(cmd, returncode, qc_txt, src_file):
+    """Raise unless DSI Studio actually produced QC measurements.
+
+    DSI Studio can fail without saying so. It exits non-zero, or crashes on a
+    signal, or returns 0 having written an empty qc.txt, and in every case the
+    only symptom used to appear much later as ``IndexError: list index out of
+    range`` in ``load_src_qc_file`` -- naming neither the file, the command,
+    nor the input that caused it. A segfault on a DWI series with extreme
+    intensity outliers is one way to get here.
+    """
+    status = _describe_exit(returncode)
+    command = ' '.join(cmd)
+
+    if returncode != 0:
+        raise RuntimeError(
+            f'DSI Studio {status} while computing QC for {src_file}.\nCommand: {command}'
+        )
+
+    if not op.exists(qc_txt):
+        raise RuntimeError(
+            f'DSI Studio {status} but wrote no {qc_txt} for {src_file}.\nCommand: {command}'
+        )
+
+    if op.getsize(qc_txt) == 0:
+        raise RuntimeError(
+            f'DSI Studio {status} but wrote an empty {qc_txt} for {src_file}. '
+            'It reports success this way when it cannot process the input at '
+            'all, for instance when the image has extreme intensity outliers.\n'
+            f'Command: {command}'
+        )
+
+
 class DSIStudioQC(SimpleInterface):
     output_spec = _DSIStudioQCOutputSpec
 
@@ -164,7 +211,10 @@ class DSIStudioQC(SimpleInterface):
             LOGGER.info(out.decode())
         if err:
             LOGGER.critical(err.decode())
-        self._results['qc_txt'] = op.join(runtime.cwd, 'qc.txt')
+
+        qc_txt = op.join(runtime.cwd, 'qc.txt')
+        _check_qc_output(cmd, proc.returncode, qc_txt, src_file)
+        self._results['qc_txt'] = qc_txt
         return runtime
 
 
@@ -327,10 +377,31 @@ class DSIStudioBTable(SimpleInterface):
         return runtime
 
 
+def _qc_row(fname, lines, kind):
+    """Return the single data row of a DSI Studio qc.txt, or explain its absence.
+
+    A well-formed file has a header and one row per input. Anything shorter
+    means DSI Studio did not measure the image, which used to surface as
+    ``IndexError: list index out of range`` with no mention of the file.
+    """
+    if len(lines) >= 2:
+        return lines[1]
+
+    if not lines:
+        detail = 'the file is empty'
+    else:
+        detail = f'it holds only a header: {lines[0].strip()!r}'
+    raise ValueError(
+        f'DSI Studio {kind} QC file {fname} has no measurements -- {detail}. '
+        'DSI Studio writes this when it cannot process the image, which it '
+        'can do while still exiting 0.'
+    )
+
+
 def load_src_qc_file(fname, prefix=''):
     with open(fname) as qc_file:
         qc_data = qc_file.readlines()
-    data = qc_data[1]
+    data = _qc_row(fname, qc_data, 'SRC')
     parts = data.strip().split('\t')
     dwi_contrast = np.nan
     ndc_masked = np.nan
@@ -341,7 +412,10 @@ def load_src_qc_file(fname, prefix=''):
     elif len(parts) == 9:
         _, dims, voxel_size, dirs, max_b, dwi_contrast, ndc, ndc_masked, bad_slices = parts
     else:
-        raise Exception('Unknown QC File format')
+        raise ValueError(
+            f'Unrecognized DSI Studio QC row in {fname}: expected 7, 8 or 9 '
+            f'tab-separated fields, got {len(parts)}: {data.strip()!r}'
+        )
 
     voxelsx, voxelsy, voxelsz = map(float, voxel_size.strip().split())
     dimx, dimy, dimz = map(float, dims.strip().split())
@@ -370,8 +444,11 @@ def load_src_qc_file(fname, prefix=''):
 
 def load_fib_qc_file(fname):
     with open(fname) as fibqc_f:
-        lines = [line.strip().split() for line in fibqc_f]
-    return {'coherence_index': [float(lines[1][-1])]}
+        raw = fibqc_f.readlines()
+    row = _qc_row(fname, raw, 'FIB').strip().split()
+    if not row:
+        raise ValueError(f'DSI Studio FIB QC file {fname} has an empty measurement row.')
+    return {'coherence_index': [float(row[-1])]}
 
 
 def btable_from_bvals_bvecs(bval_file, bvec_file, output_file):
