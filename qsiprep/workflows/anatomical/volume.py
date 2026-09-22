@@ -638,8 +638,9 @@ def anat_biascorrect_enabled(image_files=None):
 
     ``auto`` inspects the BIDS ``ImageType`` metadata for ``NORM``, which is how
     Siemens (among others) flags that intensity normalization was already applied
-    on the console. Note that console normalization does not remove the need for
-    N4; ``auto`` and ``none`` are for deliberately skipping it anyway.
+    on the console. Console normalization does not necessarily remove the need
+    for N4, which is why ``n4`` stays the default; ``auto`` and ``none`` are for
+    deliberately skipping it.
 
     N4 is skipped only when EVERY input image is marked normalized. A mixed set
     still needs correction to be merged sensibly, and an image whose metadata is

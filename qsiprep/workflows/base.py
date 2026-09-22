@@ -549,9 +549,8 @@ to workflows in *QSIPrep*'s documentation]\
         )
         workflow.connect([(dwiref_wf, ds_dwiref, [('outputnode.dwiref', 'in_file')])])
 
-        # The same template resampled into ACPC, kept so nothing current users rely
-        # on is lost. It carries no desc: the per-output references beside it now
-        # carry desc-preproc, so the two cannot collide.
+        # The same template resampled into ACPC. desc carries the level, so it
+        # cannot collide with the per-output space-ACPC_desc-preproc references.
         ds_dwiref_acpc = pe.Node(
             DerivativesDataSink(
                 source_file=anat_source_file,

@@ -217,9 +217,9 @@ of these steps to better match your data.
 | Default         |  ``dwidenoise`` (MRtrix3)   | None applied              | ``dwibiascorrect``               |
 |                 |                             |                           | (ANTs/MRtrix3)                   |
 +-----------------+-----------------------------+---------------------------+----------------------------------+
-| Disable with    |  ``--denoise-method none``  | Disabled by default       | ``--dwi-biascorrect none``      |
+| Disable with    |  ``--denoise-method none``  | Disabled by default       | ``--dwi-biascorrect none``       |
 +-----------------+-----------------------------+---------------------------+----------------------------------+
-| Change behavior |  ``--dwidenoise-window N`` | ``--unringing-method``    | ``--dwi-biascorrect``           |
+| Change behavior |  ``--dwidenoise-window N``  | ``--unringing-method``    | ``--dwi-biascorrect``            |
 | with            |  changes denoising window   | enables Gibbs unringing   | n4 (default), auto or            |
 |                 |  to N voxels                |                           | none                             |
 +-----------------+-----------------------------+---------------------------+----------------------------------+

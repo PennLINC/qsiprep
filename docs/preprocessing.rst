@@ -369,15 +369,16 @@ Transforms
     sub-<label>/
       ses-<label>/
         dwi/
-          sub-<label>_ses-<label>_from-orig_to-dwiref_mode-image_desc-eddy_xfm.h5
+          sub-<label>_ses-<label>_from-orig_to-distortiongroup_mode-image_desc-eddy_xfm.h5
 
 
 .. important::
 
   ``--dwiref-definition`` selects which reference image coregistration targets, and
-  the target's space is named after it. The naming follows *fMRIPrep*'s
-  ``--bold-coreg-level``: the level is carried by ``space``, and ``desc-coreg`` marks
-  the transforms rather than the images.
+  the target's space is named after it. The naming follows ``--bold-coreg-level``
+  in *fMRIPrep* 26.0 (earlier *fMRIPrep* releases wrote ``desc-coreg_boldref``
+  instead): the level is carried by ``space``, and ``desc-coreg`` marks the
+  transforms rather than the images.
 
   At ``--dwiref-definition distortion-group`` (default) each group's own reference is
   the target, so it is registered to the anatomical directly::
@@ -404,7 +405,10 @@ Transforms
   ``from-distortiongroup_to-subject``, is written only when
   ``--dwiref-construction-transform`` is ``Rigid`` or ``Affine``.
   ``antsMultivariateTemplateConstruction2`` produces an affine and warp pair per
-  group, which does not fit a single-file transform output.
+  group, which does not fit a single-file transform output. So under
+  ``--dwiref-definition subject`` with the default ``BSplineSyN``, no transform
+  out of ``space-distortiongroup`` is written at all; choose ``Rigid`` or
+  ``Affine`` if you need one.
 
 
 .. _dwi_confounds:

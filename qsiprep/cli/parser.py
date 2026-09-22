@@ -494,7 +494,7 @@ def _build_parser(**kwargs):
             'Note this is separate from --dwi-biascorrect, which only governs '
             'the DWIs. '
             '"n4" (default) always runs it; scanner-side intensity normalization '
-            '(e.g. Siemens NORM) does not remove the need for it. '
+            '(e.g. Siemens NORM) does not necessarily remove the need for it. '
             '"none" never runs it. '
             '"auto" skips it when the BIDS ImageType metadata contains "NORM", which is '
             'how Siemens and others flag console-applied normalization.'
@@ -821,10 +821,10 @@ def _build_parser(**kwargs):
         default=2,
         type=IterCount,
         help=(
-            'Number of iterations for finding the midpoint image from the b=0 '
-            'references of all DWI groups. Must be at least 2. '
-            'Has no effect unless --dwiref-definition is above "distortion-group", '
-            'and none if there is only one group.'
+            'Number of iterations for building the subject-level dwiref template '
+            'from the b=0 references of all DWI groups. Must be at least 2 '
+            '(default: 2). Only used when --dwiref-definition is "subject" and the '
+            'subject has more than one DWI group.'
         ),
     )
     g_coreg.add_argument(
@@ -832,7 +832,10 @@ def _build_parser(**kwargs):
         default='BSplineSyN',
         choices=['Rigid', 'Affine', 'BSplineSyN', 'SyN'],
         action='store',
-        help='Transformation used for building the dwiref template.',
+        help=(
+            'Transformation used for building the subject-level dwiref template. '
+            'Only used when --dwiref-definition is "subject".'
+        ),
     )
     g_coreg.add_argument(
         '--dwi2anat-dof',

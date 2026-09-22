@@ -35,9 +35,9 @@ sections:
     subtitle: Spatial normalization of the anatomical reference
 
   - bids: {datatype: figures, desc: dwirefcoreg, suffix: [T1w, T2w]}
-    caption: Coregistration of the DWI dwiref to the anatomical reference image.
+    caption: Coregistration of the subject-level dwiref template to the anatomical reference image.
     static: false
-    subtitle: Coregistration of the dwiref to anatomical
+    subtitle: Coregistration of the subject-level dwiref to anatomical
 
 - name: <em>B<sub>0</sub></em> field mapping
   ordering: session,acquisition,run,fmapid
@@ -275,9 +275,9 @@ sections:
 
   - bids: {datatype: figures, desc: dwirefcoreg, suffix: dwi}
     caption: |
-      b=0 reference image warped to the across-scan/session dwiref.
+      Distortion-group b=0 reference warped to the subject-level dwiref template.
     static: false
-    subtitle: Alignment of dMRI to dwiref
+    subtitle: Alignment of dMRI to the subject-level dwiref
 
   - bids: {datatype: figures, desc: biascorrpost.*, suffix: dwi, regex_search: True}
     caption: |
