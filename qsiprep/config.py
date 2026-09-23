@@ -551,8 +551,6 @@ class workflow(_Config):
     """Modality to use as the anatomical reference. Images of this
     contrast will be skull stripped and segmented for use in the
     visual reports. If --infant, T2w is forced."""
-    anat_only = False
-    """Execute the anatomical preprocessing only."""
     anatomical_template = None
     """Anatomical template to use. This field doesn't include the cohort."""
     b0_threshold = None

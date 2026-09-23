@@ -33,6 +33,8 @@ sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_desc-preproc_dwi.bv
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_desc-preproc_dwi.json
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_desc-preproc_dwi.nii.gz
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_desc-preproc_dwiref.nii.gz
+sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_desc-sdc_displacement.json
+sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_desc-sdc_displacement.nii.gz
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_desc-slice_qc.json
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_model-eddy_stat-cnr_dwimap.json
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_model-eddy_stat-cnr_dwimap.nii.gz

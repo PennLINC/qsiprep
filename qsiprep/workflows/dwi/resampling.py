@@ -17,6 +17,7 @@ from ... import config
 from ...interfaces.ants import GetImageType
 from ...interfaces.fmap import ApplyScalingImages
 from ...interfaces.gradients import (  # LocalGradientRotation,
+    ComposeSDCWarp,
     ComposeTransforms,
     ExtractB0s,
     GradientRotation,
@@ -39,6 +40,9 @@ def init_dwi_trans_wf(
     write_reports=True,
     concatenate=True,
     doing_topup=False,
+    sdc_warp_source=None,
+    sdc_pe_dir=None,
+    sdc_readout_time=None,
 ):
     """
     This workflow samples dwi images to the ``output_grid`` in a "single shot"
@@ -185,6 +189,10 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 'resampled_qc',
                 # Only written out if TOPUP was used
                 'fieldmap_hz_resampled',
+                # The SDC displacement field on the output grid
+                'sdc_warp_to_template',
+                # TOPUP+DRBUDDI only: DRBUDDI's refinement of the TOPUP field
+                'sdc_refinement_to_template',
             ]
         ),
         name='outputnode',
@@ -277,6 +285,68 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             (fieldmap_hz_tfm, outputnode, [('output_image', 'fieldmap_hz_resampled')]),
         ])  # fmt:skip
 
+    if sdc_warp_source is not None:
+        # Re-express the SDC (susceptibility) displacement field on the output
+        # grid as a transform, so its vectors are rotated into ACPC world
+        # coordinates. It rides only the stages that carry the corrected DWI
+        # frame to the output grid (compose_transforms.sdc_warp_transforms) --
+        # see ComposeSDCWarp.
+        compose_sdc_warp = pe.Node(ComposeSDCWarp(), name='compose_sdc_warp', mem_gb=1)
+        workflow.connect([
+            (inputnode, compose_sdc_warp, [('output_grid', 'reference_image')]),
+            (compose_transforms, compose_sdc_warp, [
+                ('sdc_warp_transforms', 'to_template_transforms'),
+            ]),
+            (compose_sdc_warp, outputnode, [('sdc_warp_to_template', 'sdc_warp_to_template')]),
+        ])  # fmt:skip
+
+        if sdc_warp_source == 'fieldwarp':
+            # DRBUDDI, GRE, SyN and T2Wreg all write the susceptibility warp
+            # directly (fieldwarps); conjugate volume 0's onto the output grid.
+            workflow.connect([
+                (inputnode, compose_sdc_warp, [(('fieldwarps', _first_warp), 'sdc_warps')]),
+            ])  # fmt:skip
+        else:
+            # TOPUP only estimates an off-resonance field (eddy applies it and
+            # leaves no standalone warp -- its fieldwarps carry eddy's *combined*
+            # motion/eddy-current/SDC correction, not a pure susceptibility warp),
+            # so the displacement field is rebuilt from the field.
+            hz_to_warp = pe.Node(
+                niu.Function(function=_hz_to_warp, output_names=['out_file']),
+                name='hz_to_warp',
+            )
+            hz_to_warp.inputs.readout_time = sdc_readout_time
+            hz_to_warp.inputs.pe_dir = sdc_pe_dir
+            workflow.connect([(inputnode, hz_to_warp, [('fieldmap_hz', 'in_file')])])
+
+            if sdc_warp_source == 'topup':
+                workflow.connect([(hz_to_warp, compose_sdc_warp, [('out_file', 'sdc_warps')])])
+            else:
+                # TOPUP+DRBUDDI: DRBUDDI refined the series eddy had already
+                # corrected with TOPUP's field, so its fieldwarp is only the
+                # residual. The total field runs a corrected point through
+                # DRBUDDI's refinement, then TOPUP's field; the refinement is also
+                # conjugated on its own, to show where DRBUDDI changed TOPUP's answer.
+                sdc_warp_chain = pe.Node(niu.Merge(2), name='sdc_warp_chain')
+                compose_sdc_refinement = pe.Node(
+                    ComposeSDCWarp(), name='compose_sdc_refinement', mem_gb=1
+                )
+                workflow.connect([
+                    (inputnode, sdc_warp_chain, [(('fieldwarps', _first_warp), 'in1')]),
+                    (hz_to_warp, sdc_warp_chain, [('out_file', 'in2')]),
+                    (sdc_warp_chain, compose_sdc_warp, [('out', 'sdc_warps')]),
+                    (inputnode, compose_sdc_refinement, [
+                        ('output_grid', 'reference_image'),
+                        (('fieldwarps', _first_warp), 'sdc_warps'),
+                    ]),
+                    (compose_transforms, compose_sdc_refinement, [
+                        ('sdc_warp_transforms', 'to_template_transforms'),
+                    ]),
+                    (compose_sdc_refinement, outputnode, [
+                        ('sdc_warp_to_template', 'sdc_refinement_to_template'),
+                    ]),
+                ])  # fmt:skip
+
     # If concatenation is not happening here, send the still-split images to outputs
     if not concatenate:
         workflow.connect([(scale_dwis, outputnode, [('scaled_images', 'dwi_resampled')])])
@@ -327,6 +397,43 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
     #     ])  # fmt:skip
 
     return workflow
+
+
+def _hz_to_warp(in_file, readout_time, pe_dir, newpath=None):
+    """TOPUP off-resonance field (Hz) -> ITK displacement field along the PE axis.
+
+    TOPUP shifts each voxel by ``field_Hz * TotalReadoutTime`` voxels along its
+    acquisition-parameter vector, which qsiprep writes from the raw BIDS
+    ``PhaseEncodingDirection`` in the voxel axes of the grid TOPUP ran on (LAS+,
+    not the input's own orientation). The shift is therefore taken along that
+    voxel axis of this image and carried to world space by its affine, so the
+    vector is right on any grid; ``FUGUEvsm2ANTSwarp`` instead hard-codes
+    +i=R, +j=A, +k=I, which is wrong for the i and k axes of an LAS+ grid.
+    """
+    import os
+
+    import nibabel as nb
+    import numpy as np
+    from nipype.utils.filemanip import fname_presuffix
+
+    img = nb.load(in_file)
+    axis = 'ijk'.index(pe_dir[0])
+    sign = -1.0 if pe_dir.endswith('-') else 1.0
+    shift = np.asanyarray(img.dataobj, dtype='float32') * float(readout_time) * sign
+    # One voxel step along the PE axis in world mm, RAS -> ITK's LPS.
+    step_lps = img.affine[:3, axis] * np.array([-1.0, -1.0, 1.0])
+    field = (shift[..., np.newaxis] * step_lps)[:, :, :, np.newaxis, :].astype('float32')
+
+    out = nb.Nifti1Image(field, img.affine)
+    out.header.set_intent('vector')
+    out_file = fname_presuffix(in_file, suffix='_warp', newpath=newpath or os.getcwd())
+    out.to_filename(out_file)
+    return out_file
+
+
+def _first_warp(fieldwarps):
+    """Volume 0's SDC warp: GRE hands over a single path, the others a list."""
+    return fieldwarps if isinstance(fieldwarps, str) else fieldwarps[0]
 
 
 def _first(inlist):

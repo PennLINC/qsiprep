@@ -20,6 +20,8 @@ sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-preproc_dwi.bvec
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-preproc_dwi.json
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-preproc_dwi.nii.gz
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-preproc_dwiref.nii.gz
+sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-sdc_displacement.json
+sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-sdc_displacement.nii.gz
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-slice_qc.json
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_model-tensor_stat-cnr_dwimap.json
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_model-tensor_stat-cnr_dwimap.nii.gz

@@ -28,7 +28,7 @@ from scipy.spatial.transform import Rotation as R
 from sklearn.metrics import r2_score
 from transforms3d.affines import decompose44
 
-from ..utils.misc import safe_unit_vector
+from ..utils.misc import invert_displacement_field, safe_unit_vector
 
 LOGGER = logging.getLogger('nipype.interface')
 tensor_index = {'xx': (0, 0), 'xy': (0, 1), 'xz': (0, 2), 'yy': (1, 1), 'yz': (1, 2), 'zz': (2, 2)}
@@ -380,6 +380,11 @@ class ComposeTransformsOutputSpec(TraitedSpec):
     transform_lists = OutputMultiObject(
         traits.List(File(exists=True)), desc='lists of transforms for each image'
     )
+    sdc_warp_transforms = OutputMultiObject(
+        traits.Either(File(exists=True), traits.Enum('identity')),
+        desc='ANTs-ordered transforms that move the SDC displacement field from the '
+        'corrected DWI frame to the output (ACPC) grid, for volume 0',
+    )
     log_cmdline = File(desc='a list of command lines used to apply transforms')
 
 
@@ -429,6 +434,23 @@ class ComposeTransforms(SimpleInterface):
     @classmethod
     def _popped_keys(cls):
         return list(cls._POPPED_KEYS)
+
+    @classmethod
+    def _sdc_warp_stage_names(cls, included):
+        """Stages that move the SDC displacement field to the output grid.
+
+        The susceptibility warp *is* the ``fieldwarp`` stage, applied to the DWI
+        after ``hmc`` and ``gradwarp`` (see :attr:`_TRANSFORM_STAGES`). It
+        therefore lives in the motion- and gradwarp-corrected DWI frame, so only
+        the stages that move that frame to the anatomical reference remain: the
+        intramodal-template stages, then the b=0-to-T1w coregistration. ``hmc``,
+        ``gradwarp`` and ``fieldwarp`` itself are dropped (re-applying them would
+        double-count), and MNI stages are excluded because the derivative stays
+        in ACPC. ``included`` is the stage names actually present, in
+        :attr:`_TRANSFORM_STAGES` order.
+        """
+        drop = {'hmc', 'gradwarp', 'fieldwarp'}
+        return [name for name in included if name in cls._TRANSFORM_STAGES and name not in drop]
 
     def _run_interface(self, runtime):
         dwi_files = self.inputs.dwi_files
@@ -519,6 +541,18 @@ class ComposeTransforms(SimpleInterface):
         # Check that all the transform lists have the same numbers of transforms
         assert all(len(xform_list) == len(image_transforms[0]) for xform_list in image_transforms)
 
+        # The SDC-warp subset, for volume 0 only, in ANTs (reversed) order.
+        # Computed here while names and lists are still aligned in stage order.
+        sdc_names = self._sdc_warp_stage_names(image_transform_names)
+        sdc_lists = [
+            tlist
+            for tlist, name in zip(image_transforms, image_transform_names, strict=True)
+            if name in sdc_names
+        ]
+        self._results['sdc_warp_transforms'] = [tlist[0] for tlist in reversed(sdc_lists)] or [
+            'identity'
+        ]
+
         # If there is just a coreg transform, then we have everything
         if image_transform_names == ['b=0 to T1w']:
             self._results['out_warps'] = image_transforms[0]
@@ -587,6 +621,105 @@ class ComposeTransforms(SimpleInterface):
                     '\n-------\n'.join(['\n-------\n'.join([el[1], el[3]]) for el in out_files]),
                     file=cmdfile,
                 )
+        return runtime
+
+
+class ComposeSDCWarpInputSpec(BaseInterfaceInputSpec):
+    sdc_warps = InputMultiObject(
+        File(exists=True),
+        mandatory=True,
+        desc='the SDC (susceptibility) displacement fields for volume 0, in the order a '
+        'corrected point passes through them on its way back to the distorted data '
+        '(e.g. DRBUDDI deformation_FINV alone, or DRBUDDI refinement then TOPUP)',
+    )
+    to_template_transforms = InputMultiObject(
+        traits.Either(File(exists=True), traits.Enum('identity')),
+        mandatory=True,
+        desc='ANTs-ordered transforms carrying the corrected DWI frame to the output (ACPC) '
+        'grid (ComposeTransforms.sdc_warp_transforms)',
+    )
+    reference_image = File(exists=True, mandatory=True, desc='the output (ACPC) grid')
+
+
+class ComposeSDCWarpOutputSpec(TraitedSpec):
+    sdc_warp_to_template = File(
+        exists=True, desc='the SDC displacement field, on the output (ACPC) grid'
+    )
+
+
+class ComposeSDCWarp(SimpleInterface):
+    """Express the SDC displacement field on the output (ACPC) grid.
+
+    The susceptibility warp is estimated in the corrected DWI frame. Writing it
+    to derivatives means re-expressing it on the ACPC output grid *as a
+    transform*, so its displacement vectors are rotated into ACPC world
+    coordinates -- a scalar image resample would move the values but leave the
+    vectors pointing along the DWI axes.
+
+    With ``A`` the DWI-frame-to-ACPC transform (the inverse of
+    ``to_template_transforms``) and ``W`` the SDC warp, the field on the ACPC
+    grid is the conjugation ``A o W o A^-1``: at an ACPC point it pulls back to
+    the DWI frame, applies ``W``, and pushes forward, so a uniform DWI-frame
+    displacement ``d`` becomes ``R d`` where ``R`` is ``A``'s rotation.
+    antsApplyTransforms composes, first-applied-first, ``to_template_transforms``
+    (ACPC->DWI = ``A^-1``), then ``W``, then the inverse of
+    ``to_template_transforms`` (``A``); ``-o [field, 1]`` writes the composite as
+    a displacement field on the reference grid. Affine stages are inverted on the
+    fly; a non-linear stage (a non-default intramodal-template warp) is inverted
+    numerically first.
+
+    Several ``sdc_warps`` make ``W`` their composition, applied to a point in the
+    order given: for TOPUP+DRBUDDI, DRBUDDI's refinement carries a corrected
+    point into the TOPUP-corrected series, and TOPUP's field carries it on to
+    the distorted data.
+    """
+
+    input_spec = ComposeSDCWarpInputSpec
+    output_spec = ComposeSDCWarpOutputSpec
+
+    def _run_interface(self, runtime):
+        import SimpleITK as sitk
+
+        forward = [t for t in self.inputs.to_template_transforms if t != 'identity']
+        out_file = os.path.join(runtime.cwd, 'sdc_warp_to_template.nii.gz')
+
+        # A^-1 (forward, ACPC->DWI), then W, then A (reverse of forward, inverted).
+        sdc_warps = list(self.inputs.sdc_warps)
+        transforms = list(forward) + sdc_warps
+        invert_flags = [False] * (len(forward) + len(sdc_warps))
+        for transform in reversed(forward):
+            if transform.endswith(('.nii', '.nii.gz')):
+                # antsApplyTransforms can invert an affine on the fly but not a
+                # displacement field, so a nonlinear stage is inverted here.
+                inverse = fname_presuffix(transform, suffix='_inverse', newpath=runtime.cwd)
+                sitk.WriteImage(invert_displacement_field(transform), inverse)
+                transforms.append(inverse)
+                invert_flags.append(False)
+            else:
+                transforms.append(transform)
+                invert_flags.append(True)
+
+        xfm = ants.ApplyTransforms(
+            dimension=3,
+            # input_image is ignored because print_out_composite_warp_file is True
+            input_image=self.inputs.reference_image,
+            reference_image=self.inputs.reference_image,
+            transforms=transforms,
+            invert_transform_flags=invert_flags,
+            output_image=out_file,
+            print_out_composite_warp_file=True,
+            interpolation='LanczosWindowedSinc',
+        )
+        xfm.terminal_output = 'allatonce'
+        xfm.resource_monitor = False
+        xfm.run()
+
+        # print_out_composite_warp_file writes a float64 field; store as float32.
+        field = nb.load(out_file, mmap=False)
+        field.set_data_dtype(np.dtype('float32'))
+        field.to_filename(out_file)
+
+        self._results['sdc_warp_to_template'] = out_file
         return runtime
 
 

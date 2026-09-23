@@ -30,6 +30,7 @@ from nipype.interfaces.base import (
     traits,
 )
 
+from ..viz.utils import plot_sdc_warp
 from .bids import get_bids_params
 from .gradients import concatenate_bvals, concatenate_bvecs
 
@@ -540,6 +541,41 @@ from sub-1_dir-PA_dwi.nii.gz.
         desc += group_desc
 
     return ''.join(desc)
+
+
+class _SDCWarpPlotInputSpec(BaseInterfaceInputSpec):
+    warp_file = File(exists=True, mandatory=True, desc='SDC displacement field on the ACPC grid')
+    b0_ref = File(exists=True, mandatory=True, desc='ACPC b=0 reference image for the background')
+    n_slices = traits.Int(3, usedefault=True, desc='slices to show per plane')
+    step = traits.Int(4, usedefault=True, desc='draw an arrow every N voxels')
+    title = traits.Str('SDC displacement field (ACPC space)', usedefault=True, desc='figure title')
+
+
+class _SDCWarpPlotOutputSpec(TraitedSpec):
+    out_file = File(exists=True, desc='SVG glyph figure of the SDC displacement field')
+
+
+class SDCWarpPlot(SimpleInterface):
+    """Quiver of the SDC displacement field over the ACPC b=0, like Slicer's glyphs.
+
+    Shows how the phase-encoding direction sat relative to the ACPC output and how
+    large the susceptibility displacements are (see
+    :func:`qsiprep.viz.utils.plot_sdc_warp`).
+    """
+
+    input_spec = _SDCWarpPlotInputSpec
+    output_spec = _SDCWarpPlotOutputSpec
+
+    def _run_interface(self, runtime):
+        self._results['out_file'] = plot_sdc_warp(
+            self.inputs.warp_file,
+            self.inputs.b0_ref,
+            os.path.join(runtime.cwd, 'sdc_warp_glyph.svg'),
+            n_slices=self.inputs.n_slices,
+            step=self.inputs.step,
+            title=self.inputs.title,
+        )
+        return runtime
 
 
 class _SeriesQCInputSpec(BaseInterfaceInputSpec):

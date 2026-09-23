@@ -28,7 +28,8 @@ from ...interfaces.gradients import ExtractB0s
 from ...interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
-from ...interfaces.reports import GradientPlot, SeriesQC
+from ...interfaces.reports import GradientPlot, SDCWarpPlot, SeriesQC
+from ...utils.sdc import pe_readout_time, sdc_warp_source
 from .derivatives import init_dwi_derivatives_wf
 from .gradwarp import resolve_gradwarp_plan
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
@@ -48,6 +49,7 @@ def init_dwi_finalize_wf(
     do_biascorr=True,
     write_derivatives=True,
     make_dwiref=False,
+    t2w_sdc=False,
 ):
     """
     This workflow controls the resampling parts of the dwi preprocessing workflow.
@@ -96,6 +98,9 @@ def init_dwi_finalize_wf(
             Is this the final output? If so, write the final derivatives. If these
             resampled outputs will be combined with other distortion groups at the end,
             then return the resampled, non-concatenated images
+        t2w_sdc : bool
+            Whether a T2w is available for SDC; decides, with the plan, whether
+            DIFFPREP's T2Wreg ran and so whether it left an SDC warp to write
 
     **Inputs**
 
@@ -156,10 +161,59 @@ def init_dwi_finalize_wf(
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
 
-    # TOPUP alone exposes a field in Hz for the final resampling path. Dispatch
-    # from the compiled run, not the deprecated config spelling: those can
-    # disagree after automatic method resolution.
+    # Dispatch from the compiled run, not the deprecated config spelling: those
+    # can disagree after automatic method resolution.
     doing_topup = unit.run.stage_with('topup') is not None
+
+    # Determine information to be used for displacement map.
+    readout_time = pe_readout_time(unit)
+    warp_source, estimation_method = sdc_warp_source(unit, t2w_sdc)
+
+    sdc_warp_meta = None
+    if warp_source is not None:
+        layout = (
+            'Stored on the ACPC output grid in the ITK displacement-field layout, with '
+            'vectors in ACPC world coordinates (LPS, mm), so 3D Slicer or ITK-SNAP can '
+            'display it. It is a map for inspection, not a transform for resampling: '
+            'it holds no DWI-to-ACPC coregistration, and qsiprep applies the correction '
+            'in DWI space.'
+        )
+        description = (
+            'Susceptibility (EPI) distortion displacement of the first DWI series. At '
+            'each point of the corrected ACPC image, the vector points to where that '
+            f'tissue appeared in the distorted data. {layout}'
+        )
+        rebuilt_topup = (
+            'the TOPUP off-resonance field, rebuilt as voxel shift = '
+            'field_Hz * TotalReadoutTime along the phase-encoding axis'
+        )
+        if warp_source == 'topup':
+            description += f' Rebuilt from {rebuilt_topup}.'
+        elif warp_source == 'topup+drbuddi':
+            description += (
+                f" The total correction: {rebuilt_topup}, followed by DRBUDDI's refinement "
+                '(also written on its own as desc-sdcrefinement).'
+            )
+        sdc_warp_meta = {
+            'EstimationMethod': estimation_method,
+            'Units': 'mm',
+            'VectorConvention': 'LPS',
+            'Description': description,
+        }
+
+    sdc_refinement_meta = None
+    if warp_source == 'topup+drbuddi':
+        sdc_refinement_meta = {
+            'EstimationMethod': 'DRBUDDI',
+            'Units': 'mm',
+            'VectorConvention': 'LPS',
+            'Description': (
+                "DRBUDDI's refinement of the first DWI series after eddy had already "
+                "corrected it with TOPUP's field: the part of the total correction "
+                '(desc-sdc) that DRBUDDI changed. Large vectors mark where DRBUDDI '
+                f'disagreed with TOPUP. {layout}'
+            ),
+        }
 
     # Determine resource usage
     for scan in all_dwis:
@@ -215,6 +269,8 @@ def init_dwi_finalize_wf(
                 'sdc_scaling_images',
                 # Only written out if TOPUP was used
                 'fieldmap_hz',
+                # Transforms to ACPC space, in the order they apply
+                'sdc_transform_files',
             ]
         ),
         name='inputnode',
@@ -235,6 +291,10 @@ def init_dwi_finalize_wf(
                 'hmc_optimization_data',
                 # Only written out if TOPUP was used
                 'fieldmap_hz_t1',
+                # The SDC displacement field on the ACPC grid
+                'sdc_warp_to_template',
+                # TOPUP+DRBUDDI only: DRBUDDI's refinement of the TOPUP field
+                'sdc_refinement_to_template',
             ]
         ),
         name='outputnode',
@@ -303,6 +363,9 @@ def init_dwi_finalize_wf(
         use_compression=False,
         concatenate=True,
         doing_topup=doing_topup,
+        sdc_warp_source=warp_source,
+        sdc_pe_dir=unit.pe_dir,
+        sdc_readout_time=readout_time,
     )
 
     # Apply denoising to the interpolated data if requested
@@ -367,6 +430,24 @@ def init_dwi_finalize_wf(
             ]),
         ])  # fmt:skip
 
+    sdc_fields = []  # (outputnode field, report desc, figure title)
+    if warp_source is not None:
+        sdc_fields.append(
+            ('sdc_warp_to_template', 'sdcwarp', f'SDC displacement field, {estimation_method}')
+        )
+    if warp_source == 'topup+drbuddi':
+        sdc_fields.append(
+            (
+                'sdc_refinement_to_template',
+                'sdcrefinement',
+                'DRBUDDI refinement of the TOPUP field',
+            )
+        )
+    for field, _, _ in sdc_fields:
+        workflow.connect([
+            (transform_dwis_t1, outputnode, [(f'outputnode.{field}', field)]),
+        ])  # fmt:skip
+
     # The workflow is done if we will be concatenating images later
     if not write_derivatives:
         if gradwarp_plan is not None:
@@ -408,6 +489,8 @@ def init_dwi_finalize_wf(
 
     dwi_derivatives_wf = init_dwi_derivatives_wf(
         source_file=source_file,
+        sdc_warp_meta=sdc_warp_meta,
+        sdc_refinement_meta=sdc_refinement_meta,
     )
 
     # Combine all the QC measures for a series QC
@@ -608,6 +691,40 @@ def init_dwi_finalize_wf(
             (transform_dwis_t1, series_qc, [
                 ('outputnode.fieldmap_hz_resampled', 't1_fieldmap_hz_file'),
             ]),
+        ])  # fmt:skip
+
+    if sdc_fields:
+        workflow.connect([
+            (inputnode, dwi_derivatives_wf, [
+                ('sdc_transform_files', 'inputnode.sdc_transform_files'),
+            ]),
+        ])  # fmt:skip
+
+    # Glyph reportlets to exhibit the effect of SDC in ACPC space
+    for field, desc, title in sdc_fields:
+        plot = pe.Node(
+            SDCWarpPlot(title=f'{title} (ACPC space)'),
+            name=f'{desc}_plot',
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+        ds_report = pe.Node(
+            DerivativesDataSink(
+                datatype='figures',
+                desc=desc,
+                suffix='dwi',
+                source_file=source_file,
+            ),
+            name=f'ds_report_{desc}',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+        workflow.connect([
+            (outputnode, dwi_derivatives_wf, [(field, f'inputnode.{field}')]),
+            (outputnode, plot, [
+                (field, 'warp_file'),
+                ('t1_b0_ref', 'b0_ref'),
+            ]),
+            (plot, ds_report, [('out_file', 'in_file')]),
         ])  # fmt:skip
 
     return workflow
