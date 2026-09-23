@@ -351,17 +351,23 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
         # frame to the output grid (compose_transforms.sdc_warp_transforms) --
         # see ComposeSDCWarp.
         compose_sdc_warp = pe.Node(ComposeSDCWarp(), name='compose_sdc_warp', mem_gb=1)
-        # A node rather than an inline connection function: the DIFFPREP T2Wreg
-        # path already reaches ``fieldwarps`` through an inline function
-        # (``_as_transform_list`` in diffprep.py), and nipype refuses two inline
-        # functions in series across an IdentityInterface.
-        first_sdc_warp = pe.Node(
-            niu.Function(function=_first_warp, output_names=['out']),
-            name='first_sdc_warp',
-            run_without_submitting=True,
-        )
+
+        def _first_sdc_warp_node():
+            # Volume 0's susceptibility warp, as a node rather than an inline
+            # connection function: the DIFFPREP T2Wreg path already reaches
+            # ``fieldwarps`` through one (``_as_transform_list`` in diffprep.py),
+            # and nipype refuses two inline functions in series across an
+            # IdentityInterface. Built only on the branches that read a
+            # standalone warp; on the TOPUP branch ``fieldwarps`` is empty.
+            node = pe.Node(
+                niu.Function(function=_first_warp, output_names=['out']),
+                name='first_sdc_warp',
+                run_without_submitting=True,
+            )
+            workflow.connect([(inputnode, node, [('fieldwarps', 'fieldwarps')])])
+            return node
+
         workflow.connect([
-            (inputnode, first_sdc_warp, [('fieldwarps', 'fieldwarps')]),
             (inputnode, compose_sdc_warp, [('output_grid', 'reference_image')]),
             (compose_transforms, compose_sdc_warp, [
                 ('sdc_warp_transforms', 'to_template_transforms'),
@@ -372,6 +378,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
         if sdc_warp_source == 'fieldwarp':
             # DRBUDDI, GRE, SyN and T2Wreg all write the susceptibility warp
             # directly (fieldwarps); conjugate volume 0's onto the output grid.
+            first_sdc_warp = _first_sdc_warp_node()
             workflow.connect([
                 (first_sdc_warp, compose_sdc_warp, [('out', 'sdc_warps')]),
             ])  # fmt:skip
@@ -400,6 +407,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 compose_sdc_refinement = pe.Node(
                     ComposeSDCWarp(), name='compose_sdc_refinement', mem_gb=1
                 )
+                first_sdc_warp = _first_sdc_warp_node()
                 workflow.connect([
                     (first_sdc_warp, sdc_warp_chain, [('out', 'in1')]),
                     (hz_to_warp, sdc_warp_chain, [('out_file', 'in2')]),

@@ -364,6 +364,9 @@ def test_trans_wf_topup_builds_hz_to_warp_chain():
         for u, v, d in edges
     )
     assert wf.get_node('compose_sdc_refinement') is None
+    # eddy hands over an empty fieldwarps list on this branch, so no node may
+    # try to index it (the dsdti_nofmap CI failure of 2026-09-23).
+    assert wf.get_node('first_sdc_warp') is None
 
 
 def test_trans_wf_topup_drbuddi_builds_total_and_refinement():
