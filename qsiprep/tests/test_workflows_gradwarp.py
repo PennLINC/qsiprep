@@ -1154,6 +1154,53 @@ def test_diffprep_drbuddi_seed_is_built_for_the_up_series(tmp_path, monkeypatch,
     assert wf.get_node('drbuddi_sdc_wf.gather_drbuddi_inputs').inputs.dwi_series_pedir == 'j'
 
 
+@pytest.mark.parametrize(
+    ('builder', 'b0_node', 'b0_field'),
+    [
+        ('shoreline', 'dwi_hmc_wf', 'outputnode.final_template'),
+        ('eddy', 'extract_b0_series', 'b0_average'),
+    ],
+)
+def test_gre_seeds_drbuddi_after_shoreline_and_eddy(
+    tmp_path, monkeypatch, builder, b0_node, b0_field
+):
+    """DRBUDDI starts from the GRE candidate on every HMC path, with the warp built
+    on the b=0 average of the volumes DRBUDDI corrects."""
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    if builder == 'shoreline':
+        _cfg_for_shoreline(tmp_path)
+    else:
+        _cfg_for_fsl(tmp_path, 'drbuddi')
+    config.workflow.gradient_file = None
+    unit = _rpe_unit_with_gre_candidate(tmp_path)
+    wf = (_shoreline_wf if builder == 'shoreline' else _fsl_wf)(tmp_path, unit)
+
+    assert _connects(wf, b0_node, 'drbuddi_gre_init_b0_ref_wf', b0_field, 'inputnode.b0_template')
+    assert _connects(
+        wf, 'sdc_wf', 'drbuddi_sdc_wf', 'outputnode.out_warp', 'inputnode.initial_field'
+    )
+    assert wf.get_node('drbuddi_sdc_wf.drbuddi').inputs.keep_initial_transform_fixed is True
+    desc = ' '.join(wf.visit_desc().split())
+    assert desc.index('estimated based on a field map') < desc.index(
+        'initialized with the field map-derived deformation described above'
+    )
+
+
+def test_gre_does_not_seed_drbuddi_after_topup(tmp_path, monkeypatch):
+    """After TOPUP, DRBUDDI only refines TOPUP's correction; starting it from the
+    full GRE warp would correct twice."""
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    _cfg_for_fsl(tmp_path, 'topup+drbuddi')
+    config.workflow.gradient_file = None
+    unit = _rpe_unit_with_gre_candidate(tmp_path)
+    assert unit.gre_init_estimation is not None
+    wf = _fsl_wf(tmp_path, unit)
+
+    assert wf.get_node('drbuddi_sdc_wf') is not None
+    assert wf.get_node('drbuddi_gre_init_b0_ref_wf') is None
+    assert wf.get_node('drbuddi_sdc_wf.negate_initial_field') is None
+
+
 def test_diffprep_drbuddi_unseeded_without_a_gre_candidate(tmp_path, monkeypatch):
     """With no GRE fieldmap listing the series (none acquired, or --ignore
     fieldmaps dropped fmap/), DRBUDDI starts from identity."""

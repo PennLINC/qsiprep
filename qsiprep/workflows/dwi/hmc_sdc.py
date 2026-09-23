@@ -17,7 +17,7 @@ from ...interfaces.gradients import CombineMotions, GradientRotation, SliceQC
 from ...interfaces.images import SplitDWIsBvals, TSplit
 from ...utils.gpu import gpu_enabled
 from ..fieldmap.base import init_sdc_wf
-from ..fieldmap.drbuddi import init_drbuddi_wf
+from ..fieldmap.drbuddi import connect_gre_seed, init_drbuddi_wf, seeds_from_gre
 from .gradwarp import (
     connect_gradwarp_sdc_reference,
     connect_gradwarp_sdc_volumes,
@@ -197,10 +197,12 @@ def init_qsiprep_hmcsdc_wf(
     ])  # fmt:skip
 
     if unit.is_pepolar:
+        gre_seed = seeds_from_gre(unit)
         drbuddi_wf = init_drbuddi_wf(
             unit=unit,
             t2w_sdc=t2w_sdc,
             use_cuda=gpu_enabled('drbuddi'),
+            initialize_from_field=gre_seed,
         )
 
         # apply the head motion correction transforms
@@ -264,6 +266,16 @@ def init_qsiprep_hmcsdc_wf(
             workflow.connect([
                 (apply_hmc_transforms, drbuddi_wf, [('output_image', 'inputnode.dwi_files')]),
             ])  # fmt:skip
+        if gre_seed:
+            connect_gre_seed(
+                workflow,
+                inputnode,
+                unit,
+                (dwi_hmc_wf, 'outputnode.final_template'),
+                drbuddi_wf,
+                has_gradwarp,
+                source_file,
+            )
 
         return workflow
 

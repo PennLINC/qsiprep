@@ -1082,16 +1082,17 @@ Registration-based correction (DRBUDDI, T2Wreg) infers the distortion by
 matching images, which is ambiguous where the field piles several voxels'
 signal into one or drops it out.
 A GRE fieldmap measures the field directly.
-With ``--hmc-method tortoise``, a GRE fieldmap that lists a series but lost to
-another correction starts that correction's TORTOISE registration instead of
-going unused.
+A GRE fieldmap that lists a series but lost to another correction starts that
+correction's TORTOISE registration instead of going unused.
 See :ref:`gre_init_usage` for how to curate the dataset and which options to
 use.
 
 DRBUDDI
    When a reverse phase-encoded correction wins, DRBUDDI starts from the GRE
    warp: the warp for the blip-up series' phase encoding is the initial blip-up
-   transform and its negation the initial blip-down transform.
+   transform and its negation the initial blip-down transform. This applies
+   after every HMC method, except when DRBUDDI refines a TOPUP correction
+   (``--sdc-method topup+drbuddi``).
 
 T2Wreg
    When an anatomical reference is forced over the GRE fieldmap

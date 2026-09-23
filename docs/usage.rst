@@ -158,17 +158,20 @@ lists it, QSIPrep starts the registration from the GRE-derived warp and holds
 that warp fixed through the registration's multi-resolution pyramid, so the
 registration refines the GRE estimate rather than replacing it.
 
-There is no option to turn this on. It happens whenever
+There is no option to turn this on. It happens whenever a GRE fieldmap
+(``phasediff``, ``phase1``/``phase2`` or ``fieldmap``, with its magnitude
+images) lists a series that a different correction wins:
 
-* ``--hmc-method tortoise`` is used,
-* a GRE fieldmap (``phasediff``, ``phase1``/``phase2`` or ``fieldmap``, with its
-  magnitude images) lists the series, and
-* a different correction wins the series: reverse phase encoding, or an
-  anatomical reference forced with ``--force sdc-anat-reference``.
+* **reverse phase encoding**, corrected by DRBUDDI: with ``--hmc-method
+  tortoise`` or ``shoreline``, or ``--hmc-method eddy --sdc-method drbuddi``.
+  Not with ``--sdc-method topup+drbuddi``, where DRBUDDI only refines TOPUP's
+  correction.
+* **an anatomical reference** forced with ``--force sdc-anat-reference``,
+  corrected by T2Wreg (``--hmc-method tortoise``).
 
 ``--ignore fieldmaps`` (which skips ``fmap/``) and ``--ignore sdc`` turn it off.
-With ``--hmc-method eddy``, a GRE fieldmap is handed to ``eddy`` itself instead
-(see :ref:`fsl_wf`).
+A GRE fieldmap that is itself the applied correction is handed to ``eddy``
+under ``--hmc-method eddy`` (see :ref:`fsl_wf`).
 
 
 DRBUDDI from a GRE fieldmap
@@ -218,7 +221,8 @@ fieldmap and the GRE fieldmap name the DWI series::
 The ``B0FieldIdentifier``/``B0FieldSource`` form above works too, with the
 ``epi`` fieldmap carrying ``"B0FieldIdentifier": "pepolar"``.
 
-Then run with the TORTOISE backend, whose default ``--sdc-method`` is DRBUDDI::
+Then run with an HMC method that corrects the pair with DRBUDDI, for example
+TORTOISE, whose default ``--sdc-method`` is DRBUDDI::
 
     qsiprep /path/to/bids /path/to/output participant \
         --hmc-method tortoise --output-resolution 1.5

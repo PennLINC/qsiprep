@@ -34,7 +34,7 @@ from ...interfaces.reports import TopupSummary
 from ...interfaces.synb0 import Synb0FieldQC
 from ...utils.gpu import gpu_enabled
 from ..fieldmap.base import init_sdc_wf
-from ..fieldmap.drbuddi import init_drbuddi_wf
+from ..fieldmap.drbuddi import connect_gre_seed, init_drbuddi_wf, seeds_from_gre
 from ..fieldmap.synb0 import init_synb0_wf
 from .gradwarp import (
     connect_gradwarp_coreg_reference,
@@ -552,10 +552,12 @@ def init_fsl_hmc_wf(
         if unit.extra_b0:
             gather_inputs.inputs.epi_fmaps = list(unit.extra_b0)
 
+        gre_seed = seeds_from_gre(unit)
         drbuddi_wf = init_drbuddi_wf(
             unit=unit,
             t2w_sdc=t2w_sdc,
             use_cuda=gpu_enabled('drbuddi'),
+            initialize_from_field=gre_seed,
         )
 
         if has_gradwarp:
@@ -597,6 +599,16 @@ def init_fsl_hmc_wf(
                 ('outputnode.b0_ref', 'b0_template'),
             ]),
         ])  # fmt:skip
+        if gre_seed:
+            connect_gre_seed(
+                workflow,
+                inputnode,
+                unit,
+                (extract_b0_series, 'b0_average'),
+                drbuddi_wf,
+                has_gradwarp,
+                source_file,
+            )
 
         return workflow
 

@@ -17,7 +17,6 @@ where possible:
 This mirrors the SDC coverage of :func:`~qsiprep.workflows.dwi.fsl.init_fsl_hmc_wf`.
 """
 
-import dataclasses
 import json
 from importlib.resources import files
 
@@ -42,8 +41,8 @@ from ...interfaces.tortoise import (
 )
 from ...utils.gpu import gpu_enabled
 from ...utils.resources import as_path
-from ..fieldmap.base import init_sdc_wf
-from ..fieldmap.drbuddi import init_drbuddi_wf
+from ..fieldmap.base import gre_seed_unit, init_sdc_wf
+from ..fieldmap.drbuddi import connect_gre_seed, init_drbuddi_wf, seeds_from_gre
 from ..fieldmap.synb0 import init_synb0_wf
 from .gradwarp import (
     connect_gradwarp_coreg_reference,
@@ -210,18 +209,6 @@ def _build_rpe_diffprep_stage(
     return recombine
 
 
-def _gre_seed_unit(unit):
-    """``unit`` seen through its GRE candidate, led by the series ``unit.pe_dir``
-    names: init_sdc_wf builds the warp for its lead series' phase encoding, and
-    that series is TORTOISE's EPI/blip-up series (the plus series of a pair)."""
-    lead = unit.plus_files[0] if unit.has_bidirectional_dwi else unit.dwi_files[0]
-    return dataclasses.replace(
-        unit,
-        estimation=unit.gre_init_estimation,
-        dwi_files=(lead, *(path for path in unit.dwi_files if path != lead)),
-    )
-
-
 def _seed_t2wreg_with_gre(
     workflow, inputnode, diffprep, unit, source_file, has_gradwarp, b0_source
 ):
@@ -239,7 +226,12 @@ def _seed_t2wreg_with_gre(
     gre_init_b0_ref_wf = init_dwi_reference_wf(
         source_file=source_file, name='gre_init_b0_ref_wf', gen_report=False
     )
-    b0_sdc_wf = init_sdc_wf(_gre_seed_unit(unit), gradwarp=has_gradwarp, use='t2wreg')
+    config.loggers.workflow.info(
+        'Initializing T2Wreg for %s with GRE fieldmap %s.',
+        unit.output_name,
+        unit.gre_init_estimation.b0field_id,
+    )
+    b0_sdc_wf = init_sdc_wf(gre_seed_unit(unit), gradwarp=has_gradwarp, use='t2wreg')
     b0_sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
     diffprep.inputs.keep_initial_transform_fixed = config.workflow.gre_init_keep_fixed
     workflow.connect([
@@ -386,16 +378,8 @@ def init_diffprep_hmc_wf(
     # A GRE fieldmap that lists this unit's DWI without being the applied
     # correction starts the TORTOISE registration that is: T2Wreg when an
     # anatomical reference was forced over it, DRBUDDI when a PEPOLAR pair won.
-    gre_seed = unit.gre_init_estimation
-    gre_t2wreg_init = use_t2wreg and gre_seed is not None
-    gre_drbuddi_init = unit.is_pepolar and gre_seed is not None
-    if gre_t2wreg_init or gre_drbuddi_init:
-        config.loggers.workflow.info(
-            'Initializing %s for %s with GRE fieldmap %s.',
-            'T2Wreg' if gre_t2wreg_init else 'DRBUDDI',
-            unit.output_name,
-            gre_seed.b0field_id,
-        )
+    gre_t2wreg_init = use_t2wreg and unit.gre_init_estimation is not None
+    gre_drbuddi_init = seeds_from_gre(unit)
 
     # Load any user-supplied DIFFPREP config (or our defaults)
     diffprep_cfg = _load_diffprep_config(config.workflow.diffprep_config)
@@ -751,7 +735,6 @@ def init_diffprep_hmc_wf(
             synth_shell_bval=synth_shell_bval,
             synth_shell_ndirs=diffprep_cfg.get('drbuddi_synth_shell_ndirs', 30),
             initialize_from_field=gre_drbuddi_init,
-            keep_initial_fixed=config.workflow.gre_init_keep_fixed,
         )
 
         if has_gradwarp:
@@ -793,47 +776,15 @@ def init_diffprep_hmc_wf(
         ])  # fmt:skip
 
         if gre_drbuddi_init:
-            # The GRE warp is built for DRBUDDI's up series on the pre-gradwarp b=0;
-            # init_sdc_wf transports it into the frame of the gradwarped up/down
-            # volumes before init_drbuddi_wf negates it for the down series.
-            drbuddi_gre_b0_ref_wf = init_dwi_reference_wf(
-                source_file=source_file, name='drbuddi_gre_init_b0_ref_wf', gen_report=False
+            connect_gre_seed(
+                workflow,
+                inputnode,
+                unit,
+                (extract_b0s, 'b0_average'),
+                drbuddi_wf,
+                has_gradwarp,
+                source_file,
             )
-            gre_seed_sdc_wf = init_sdc_wf(
-                _gre_seed_unit(unit), gradwarp=has_gradwarp, use='drbuddi'
-            )
-            gre_seed_sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
-            gre_ref_fields = (
-                'outputnode.ref_image',
-                'outputnode.ref_image_brain',
-                'outputnode.dwi_mask',
-            )
-            workflow.connect([
-                (extract_b0s, drbuddi_gre_b0_ref_wf, [('b0_average', 'inputnode.b0_template')]),
-                (inputnode, gre_seed_sdc_wf, [
-                    ('t1_brain', 'inputnode.t1_brain'),
-                    ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-                ]),
-                (gre_seed_sdc_wf, drbuddi_wf, [
-                    ('outputnode.out_warp', 'inputnode.initial_field'),
-                ]),
-            ])  # fmt:skip
-            if has_gradwarp:
-                connect_gradwarp_sdc_reference(
-                    workflow,
-                    inputnode,
-                    drbuddi_gre_b0_ref_wf,
-                    gre_ref_fields,
-                    gre_seed_sdc_wf,
-                )
-            else:
-                workflow.connect([
-                    (drbuddi_gre_b0_ref_wf, gre_seed_sdc_wf, [
-                        (gre_ref_fields[0], 'inputnode.b0_ref'),
-                        (gre_ref_fields[1], 'inputnode.b0_ref_brain'),
-                        (gre_ref_fields[2], 'inputnode.b0_mask'),
-                    ]),
-                ])  # fmt:skip
         return workflow
 
     # 2. Fieldmap-less with a T2w -> TORTOISE T2Wreg. The EPI stage's displacement

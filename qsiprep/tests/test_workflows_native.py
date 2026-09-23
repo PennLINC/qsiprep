@@ -375,9 +375,7 @@ def test_drbuddi_wf_seeds_up_down_from_initial_field(tmp_path):
     _cfg(hmc_method='tortoise', sdc_method='drbuddi')
     from qsiprep.workflows.fieldmap import init_drbuddi_wf
 
-    wf = init_drbuddi_wf(
-        _rpe_unit(tmp_path), t2w_sdc=False, initialize_from_field=True, keep_initial_fixed=True
-    )
+    wf = init_drbuddi_wf(_rpe_unit(tmp_path), t2w_sdc=False, initialize_from_field=True)
     assert wf.get_node('negate_initial_field') is not None
     assert wf.get_node('drbuddi').inputs.keep_initial_transform_fixed is True
     assert {'initial_fixed_transform', 'initial_moving_transform'} <= _drbuddi_seed_targets(wf)

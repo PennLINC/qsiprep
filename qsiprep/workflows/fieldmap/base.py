@@ -32,6 +32,8 @@ False           False       HMC only
 
 """
 
+import dataclasses
+
 from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
@@ -46,6 +48,18 @@ from .pepolar import init_pepolar_unwarp_wf
 from .unwarp import init_sdc_unwarp_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
+
+
+def gre_seed_unit(unit):
+    """``unit`` seen through its GRE candidate, led by the series ``unit.pe_dir``
+    names: init_sdc_wf builds the warp for its lead series' phase encoding, and
+    that series is TORTOISE's EPI/blip-up series (the plus series of a pair)."""
+    lead = unit.plus_files[0] if unit.has_bidirectional_dwi else unit.dwi_files[0]
+    return dataclasses.replace(
+        unit,
+        estimation=unit.gre_init_estimation,
+        dwi_files=(lead, *(path for path in unit.dwi_files if path != lead)),
+    )
 
 
 def init_sdc_wf(unit, gradwarp=False, use='apply'):
