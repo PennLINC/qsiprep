@@ -31,7 +31,11 @@ from ...interfaces.mrtrix import (
 from ...interfaces.nilearn import Merge
 from ...interfaces.tortoise import Gibbs
 from ...utils.bids import IMPORTANT_DWI_FIELDS, update_metadata_from_nifti_header
-from ...utils.misc import describe_dwidenoise2, parse_denoise_method
+from ...utils.misc import (
+    check_dwidenoise2_demodulation,
+    describe_dwidenoise2,
+    load_dwidenoise2_config,
+)
 from .qc import init_modelfree_qc_wf
 from .util import _get_wf_name
 
@@ -398,10 +402,12 @@ def init_dwi_denoising_wf(
     ])  # fmt:skip
 
     # Which steps to apply?
-    denoise_method, dwidenoise2_params = parse_denoise_method(
-        config.workflow.denoise_method,
-        use_phase=use_phase,
-    )
+    denoise_method = config.workflow.denoise_method
+    dwidenoise2_params = {}
+    if denoise_method == 'dwidenoise2':
+        if config.workflow.dwidenoise2_config is not None:
+            dwidenoise2_params = load_dwidenoise2_config(config.workflow.dwidenoise2_config)
+        check_dwidenoise2_demodulation(dwidenoise2_params, use_phase)
 
     unringing_method = config.workflow.unringing_method
     do_denoise = denoise_method in ('patch2self', 'dwidenoise', 'dwidenoise2')

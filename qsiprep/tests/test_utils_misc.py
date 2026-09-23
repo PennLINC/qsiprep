@@ -8,6 +8,7 @@ import pytest
 
 from qsiprep.cli.parser import _build_parser
 from qsiprep.utils.misc import (
+    check_dwidenoise2_demodulation,
     describe_dwidenoise2,
     format_dwidenoise2_schedule,
     load_dwidenoise2_config,
@@ -569,3 +570,14 @@ def test_describe_dwidenoise2_schedule(schedule, expected):
     parameters = {} if schedule is None else {'schedule': schedule}
 
     assert expected in describe_dwidenoise2(parameters, complex_data=False)
+
+
+@pytest.mark.parametrize('demodulate', ['linear', 'hann', 'apc'])
+def test_check_dwidenoise2_demodulation(demodulate):
+    """Reject phase demodulation of magnitude-only data, which dwidenoise2 cannot do."""
+    with pytest.raises(ValueError, match='magnitude-only data'):
+        check_dwidenoise2_demodulation({'demodulate': demodulate}, use_phase=False)
+
+    check_dwidenoise2_demodulation({'demodulate': demodulate}, use_phase=True)
+    check_dwidenoise2_demodulation({'demodulate': 'none'}, use_phase=False)
+    check_dwidenoise2_demodulation({}, use_phase=False)

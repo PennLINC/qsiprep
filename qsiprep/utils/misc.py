@@ -484,6 +484,28 @@ def load_dwidenoise2_config(path):
     return params
 
 
+def check_dwidenoise2_demodulation(params, use_phase):
+    """Reject phase demodulation of magnitude-only data.
+
+    dwidenoise2 fails partway through a run when asked to demodulate magnitude data, so the
+    workflow rejects the request while it is being built.
+
+    Parameters
+    ----------
+    params : dict
+        DWIDenoise2 parameters, as returned by :func:`load_dwidenoise2_config`.
+    use_phase : bool
+        Whether phase data are available for the series being denoised.
+    """
+    demodulation = params.get('demodulate', 'none')
+    if not use_phase and demodulation != 'none':
+        raise ValueError(
+            f'dwidenoise2 cannot apply {demodulation!r} phase demodulation to '
+            'magnitude-only data. Provide phase data or set "demodulate" to "none" in '
+            '--dwidenoise2-config.'
+        )
+
+
 def _format_schedule_value(value):
     if isinstance(value, bool):
         return 'true' if value else 'false'
