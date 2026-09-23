@@ -12,7 +12,6 @@ from qsiprep.utils.misc import (
     describe_dwidenoise2,
     format_dwidenoise2_schedule,
     load_dwidenoise2_config,
-    parse_denoise_method,
     safe_unit_vector,
 )
 
@@ -57,107 +56,13 @@ def test_angle_between_finite_for_zero_vector():
     assert np.isfinite(angle)
 
 
-def test_parse_denoise_method_parameters():
-    method, parameters = parse_denoise_method(
-        'dwidenoise2;demodulate:hann;decomposition:bdcsvd;'
-        'preserve_noise_bias:true;noise_dof:8;schedule:vlarge',
-        use_phase=True,
-    )
-
-    assert method == 'dwidenoise2'
-    assert parameters == {
-        'demodulate': 'hann',
-        'decomposition': 'bdcsvd',
-        'preserve_noise_bias': True,
-        'noise_dof': 8,
-        'schedule': 'vlarge',
-    }
-
-
-@pytest.mark.parametrize(
-    'spec',
-    [
-        'unknown',
-        'patch2self;decomposition:bdcsvd',
-        'dwidenoise;decomposition:bdcsvd',
-        'dwidenoise2;decomposition',
-        'dwidenoise2;unknown:value',
-        'dwidenoise2;decomposition:bdcsvd;decomposition:selfadjoint',
-        'dwidenoise2;decomposition:invalid',
-        'dwidenoise2;preserve_noise_bias:maybe',
-        # The kernel and subsampling are set by the schedule, not by command-line options
-        'dwidenoise2;extent:1,2',
-        'dwidenoise2;shape:sphere',
-        'dwidenoise2;radius:2.5',
-        'dwidenoise2;subsample:2',
-        'dwidenoise2;onepass:true',
-        # dwidenoise2 renamed its demodulation and estimator choices
-        'dwidenoise2;demodulate:nonlinear',
-        'dwidenoise2;estimator:MRM2023',
-    ],
-)
-def test_parse_denoise_method_rejects_invalid_specs(spec):
-    with pytest.raises(ValueError, match='.'):
-        parse_denoise_method(spec, use_phase=True)
-
-
-@pytest.mark.parametrize('demodulate', ['linear', 'hann', 'apc'])
-def test_parse_denoise_method_rejects_demodulation_without_phase(demodulate):
-    """Reject phase demodulation of magnitude-only data, which dwidenoise2 cannot do."""
-    spec = f'dwidenoise2;demodulate:{demodulate}'
-    with pytest.raises(ValueError, match='magnitude-only data'):
-        parse_denoise_method(spec, use_phase=False)
-
-    assert parse_denoise_method(spec, use_phase=True) == (
-        'dwidenoise2',
-        {'demodulate': demodulate},
-    )
-
-    # The CLI validates the specification before it knows whether phase data exist, so an
-    # unknown phase state skips the check rather than guessing
-    assert parse_denoise_method(spec) == ('dwidenoise2', {'demodulate': demodulate})
-
-
-def test_denoise_parameters_match_interface():
-    """Every allowlisted dwidenoise2 parameter must be a trait on DWIDenoise2InputSpec."""
+def test_dwidenoise2_config_keys_match_interface():
+    """Every key a --dwidenoise2-config file may set must be a trait on DWIDenoise2."""
     from qsiprep.interfaces.mrtrix import DWIDenoise2
-    from qsiprep.utils.misc import _DWIDENOISE_PARAMETERS
+    from qsiprep.utils.misc import _DWIDENOISE2_CONFIG_KEYS
 
     trait_names = set(DWIDenoise2.input_spec().trait_names())
-    missing = sorted(_DWIDENOISE_PARAMETERS - trait_names)
-    assert not missing
-
-
-def test_denoise_method_cli_parameter(tmp_path):
-    spec = 'dwidenoise2;demodulate:apc;decomposition:bdcsvd'
-    opts = _build_parser().parse_args(
-        [
-            str(tmp_path),
-            str(tmp_path / 'out'),
-            'participant',
-            '--output-resolution',
-            '2',
-            '--denoise-method',
-            spec,
-        ]
-    )
-
-    assert opts.denoise_method == spec
-
-
-def test_denoise_method_cli_rejects_invalid_parameter(tmp_path):
-    with pytest.raises(SystemExit):
-        _build_parser().parse_args(
-            [
-                str(tmp_path),
-                str(tmp_path / 'out'),
-                'participant',
-                '--output-resolution',
-                '2',
-                '--denoise-method',
-                'dwidenoise;decomposition:invalid',
-            ]
-        )
+    assert sorted(_DWIDENOISE2_CONFIG_KEYS - trait_names) == []
 
 
 def test_describe_dwidenoise2_covers_defaults():
@@ -270,7 +175,7 @@ def test_denoise_window_help_mentions_dwidenoise2():
     action = next(a for a in parser._actions if '--dwidenoise-window' in a.option_strings)
 
     assert 'dwidenoise2' in action.help
-    assert 'schedule' in action.help
+    assert '--dwidenoise2-config' in action.help
 
 
 def _dwidenoise2_json(tmp_path, text=None, **settings):

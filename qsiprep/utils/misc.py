@@ -21,110 +21,6 @@ _DWIDENOISE_ENUM_PARAMETERS = {
     'filter_method': ('optshrink', 'optthresh', 'truncate'),
     'vst_method': ('none', 'linear', 'foi', 'koay', 'mom'),
 }
-_DWIDENOISE_STRING_PARAMETERS = {
-    'demod_axes',
-    'eigenspectra',
-    'lamplus',
-    'max_dist',
-    'noise_image',
-    'patchcount',
-    'preconditioned_input',
-    'preconditioned_output',
-    'rank_input',
-    'rank_output',
-    'rank_pcanonzero',
-    'schedule',
-    'sum_aggregation',
-    'sum_optshrink',
-    'variance_removed',
-    'voxelcount',
-    'grad_file',
-    'bvec_file',
-    'bval_file',
-}
-_DWIDENOISE_PARAMETERS = (
-    set(_DWIDENOISE_ENUM_PARAMETERS)
-    | _DWIDENOISE_STRING_PARAMETERS
-    | {
-        'fixed_rank',
-        'noise_dof',
-        'noise_in',
-        'preserve_noise_bias',
-        'residual_statistics',
-    }
-)
-
-
-def parse_denoise_method(spec, use_phase=None):
-    """Parse a denoising method and semicolon-delimited parameters.
-
-    Parameters for dwidenoise2 use ``name:value`` syntax, for example
-    ``dwidenoise2;demodulate:apc;decomposition:bdcsvd``.
-
-    Parameters
-    ----------
-    spec : str
-        The ``--denoise-method`` specification.
-    use_phase : bool or None
-        Whether phase data are available for the series being denoised. ``None`` means
-        that is not known yet, as when the CLI validates the specification before any
-        scan has been selected, and skips the checks that depend on it.
-    """
-    elements = spec.split(';')
-    method = elements[0].strip()
-    if method not in ('dwidenoise', 'dwidenoise2', 'patch2self', 'none'):
-        raise ValueError(f'Unknown denoising method: {method!r}')
-    if len(elements) > 1 and method != 'dwidenoise2':
-        raise ValueError(f'{method!r} does not accept DWIDenoise2 parameters')
-
-    parameters = {}
-    for element in elements[1:]:
-        name, separator, value = element.partition(':')
-        name = name.strip()
-        value = value.strip()
-        if not separator or not name or not value:
-            raise ValueError(f'Invalid DWIDenoise2 parameter: {element!r}')
-        if name not in _DWIDENOISE_PARAMETERS:
-            raise ValueError(f'Unknown DWIDenoise2 parameter: {name!r}')
-        if name in parameters:
-            raise ValueError(f'Duplicate DWIDenoise2 parameter: {name!r}')
-
-        if name in _DWIDENOISE_ENUM_PARAMETERS:
-            choices = _DWIDENOISE_ENUM_PARAMETERS[name]
-            if value not in choices:
-                raise ValueError(f'Invalid value for {name!r}: {value!r}; choose from {choices}')
-            parsed_value = value
-        elif name == 'preserve_noise_bias':
-            bool_values = {'true': True, 'false': False, '1': True, '0': False}
-            try:
-                parsed_value = bool_values[value.lower()]
-            except KeyError as exc:
-                raise ValueError(f'Invalid boolean value for {name!r}: {value!r}') from exc
-        elif name in ('fixed_rank', 'noise_dof'):
-            parsed_value = int(value)
-        elif name == 'noise_in':
-            try:
-                parsed_value = float(value)
-            except ValueError:
-                parsed_value = value
-        elif name == 'residual_statistics':
-            parsed_value = tuple(item.strip() for item in value.split(','))
-            if len(parsed_value) != 3 or not all(parsed_value):
-                raise ValueError(f'{name!r} must contain three file names')
-        else:
-            parsed_value = value
-
-        parameters[name] = parsed_value
-
-    if method == 'dwidenoise2' and use_phase is False:
-        demodulation = parameters.get('demodulate', 'none')
-        if demodulation != 'none':
-            raise ValueError(
-                f'dwidenoise2 cannot apply {demodulation!r} phase demodulation to '
-                'magnitude-only data. Provide phase data or use "demodulate:none".'
-            )
-
-    return method, parameters
 
 
 _DWIDENOISE2_CONFIG_KEYS = frozenset(_DWIDENOISE_ENUM_PARAMETERS) | {
@@ -618,7 +514,7 @@ def describe_dwidenoise2(parameters, complex_data):
     Parameters
     ----------
     parameters : dict
-        DWIDenoise2 parameters, as returned by :func:`parse_denoise_method`.
+        DWIDenoise2 parameters, as returned by :func:`load_dwidenoise2_config`.
     complex_data : bool
         Whether ``dwidenoise2`` is run on complex-valued data. Phase demodulation only
         applies to complex data, and only magnitude data need a nonlinear
