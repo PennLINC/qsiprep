@@ -1,12 +1,18 @@
 """Tests for qsiprep.utils.misc."""
 
+import json
 import logging
 
 import numpy as np
 import pytest
 
 from qsiprep.cli.parser import _build_parser
-from qsiprep.utils.misc import describe_dwidenoise2, parse_denoise_method, safe_unit_vector
+from qsiprep.utils.misc import (
+    describe_dwidenoise2,
+    load_dwidenoise2_config,
+    parse_denoise_method,
+    safe_unit_vector,
+)
 
 
 def test_safe_unit_vector_zero_magnitude_substitutes_x_axis():
@@ -263,3 +269,231 @@ def test_denoise_window_help_mentions_dwidenoise2():
 
     assert 'dwidenoise2' in action.help
     assert 'schedule' in action.help
+
+
+def _dwidenoise2_json(tmp_path, text=None, **settings):
+    """Write a --dwidenoise2-config file and return its path."""
+    path = tmp_path / 'dwidenoise2.json'
+    path.write_text(json.dumps(settings) if text is None else text)
+    return str(path)
+
+
+def test_load_dwidenoise2_config_accepts_empty_file(tmp_path):
+    assert load_dwidenoise2_config(_dwidenoise2_json(tmp_path)) == {}
+
+
+def test_load_dwidenoise2_config_full(tmp_path):
+    rows = [
+        {'spatial_subsample': 8, 'kernel': 'aspect=2.0', 'update_noise': True},
+        {'spatial_subsample': [4, 4, 2], 'kernel': 'rmse=0.02', 'temporal_subsample': 0.5},
+        {'spatial_subsample': 2, 'kernel': 'rank', 'update_noise': False, 'partitions': 2},
+    ]
+    path = _dwidenoise2_json(
+        tmp_path,
+        demodulate='linear',
+        decomposition='selfadjoint',
+        demod_axes=[0, 1],
+        noise_dof=4,
+        preserve_noise_bias=True,
+        schedule=rows,
+    )
+
+    params = load_dwidenoise2_config(path)
+
+    assert params == {
+        'demodulate': 'linear',
+        'decomposition': 'selfadjoint',
+        'demod_axes': '0,1',
+        'noise_dof': 4,
+        'preserve_noise_bias': True,
+        'schedule': [
+            {'spatial_subsample': 8, 'kernel': 'aspect=2.0', 'update_noise': True},
+            {'spatial_subsample': (4, 4, 2), 'kernel': 'rmse=0.02', 'temporal_subsample': 0.5},
+            {'spatial_subsample': 2, 'kernel': 'rank', 'update_noise': False, 'partitions': 2},
+        ],
+    }
+
+
+@pytest.mark.parametrize(
+    'settings',
+    [
+        # A single estimating row
+        {'schedule': [{'kernel': 'cuboid=1x', 'update_noise': True}]},
+        # A single non-estimating row with a scalar noise level
+        {'noise_in': 0.5, 'schedule': [{'spatial_subsample': 1}]},
+        {'schedule': [{'update_noise': True, 'temporal_subsample': 1.0}]},
+        {'schedule': [{'update_noise': True}, {'kernel': 'rmse=0.999'}]},
+        {'fixed_rank': 12, 'schedule': [{'kernel': 'rank_fixed', 'update_noise': True}]},
+        # dwidenoise2 supplies its bundled fixedrank schedule
+        {'fixed_rank': 12},
+        {'fixed_rank': 12, 'aggregator': 'exclusive'},
+        # dwidenoise2 runs a single pass at subsample 1 for exclusive aggregation
+        {'vst_method': 'none', 'aggregator': 'exclusive'},
+        {'aggregator': 'exclusive', 'schedule': [{'update_noise': True, 'spatial_subsample': 1}]},
+        {'schedule': [{'update_noise': True, 'max_partition_size': 'none', 'partitions': 3}]},
+        {'schedule': [{'update_noise': True, 'max_partition_size': 384}]},
+        {'schedule': [{'update_noise': True, 'kernel': 'voxels=1e2'}]},
+        {'schedule': [{'update_noise': True, 'kernel': 'cuboid=5,5,3'}]},
+        {'schedule': [{'update_noise': True, 'kernel': 'cuboid'}]},
+        {'schedule': [{'update_noise': True, 'kernel': 'aspect_ratio=2'}]},
+        {'schedule': [{'update_noise': True, 'kernel': 'radius=2.5'}]},
+    ],
+)
+def test_load_dwidenoise2_config_accepts_boundaries(tmp_path, settings):
+    load_dwidenoise2_config(_dwidenoise2_json(tmp_path, **settings))
+
+
+@pytest.mark.parametrize(
+    ('settings', 'message'),
+    [
+        # Top-level keys and values
+        ({'unknown': 1}, 'unknown key'),
+        ({'grad_file': 'x'}, 'unknown key'),
+        ({'schedule_name': 'vlarge'}, 'unknown key'),
+        ({'decomposition': 'invalid'}, 'decomposition'),
+        ({'estimator': 'MRM2023'}, 'estimator'),
+        ({'preserve_noise_bias': 'true'}, 'preserve_noise_bias'),
+        ({'fixed_rank': 0}, 'fixed_rank'),
+        ({'fixed_rank': True}, 'fixed_rank'),
+        ({'fixed_rank': 2.0}, 'fixed_rank'),
+        ({'noise_dof': 0}, 'noise_dof'),
+        ({'noise_in': -1}, 'noise_in'),
+        ({'noise_in': 'noise.nii.gz'}, 'noise_in'),
+        ({'noise_in': True}, 'noise_in'),
+        ({'demod_axes': '0,1'}, 'demod_axes'),
+        ({'demod_axes': []}, 'demod_axes'),
+        ({'demod_axes': [0, -1]}, 'demod_axes'),
+        ({'demod_axes': [0, True]}, 'demod_axes'),
+        ({'fixed_rank': 3, 'noise_in': 1.0}, 'fixed_rank'),
+        # Schedule structure
+        ({'schedule': []}, 'non-empty list'),
+        ({'schedule': 'vlarge'}, 'non-empty list'),
+        ({'schedule': ['aspect=2.0']}, 'row 1'),
+        ({'schedule': [{'update_noise': True, 'extent': 3}]}, 'unknown column'),
+        # Schedule cell values
+        ({'schedule': [{'update_noise': True, 'spatial_subsample': 0}]}, 'spatial_subsample'),
+        ({'schedule': [{'update_noise': True, 'spatial_subsample': 2.0}]}, 'spatial_subsample'),
+        ({'schedule': [{'update_noise': True, 'spatial_subsample': [2, 2]}]}, 'spatial_subsample'),
+        (
+            {'schedule': [{'update_noise': True, 'spatial_subsample': [1, True, 1]}]},
+            'spatial_subsample',
+        ),
+        ({'schedule': [{'update_noise': 'true'}]}, 'update_noise'),
+        ({'schedule': [{'update_noise': True, 'smooth_noise': 1}]}, 'smooth_noise'),
+        ({'schedule': [{'update_noise': True, 'temporal_subsample': 0}]}, 'temporal_subsample'),
+        ({'schedule': [{'update_noise': True, 'temporal_subsample': True}]}, 'temporal_subsample'),
+        ({'schedule': [{'update_noise': True, 'partitions': 1.0}]}, 'partitions'),
+        ({'schedule': [{'update_noise': True, 'max_partition_size': 0}]}, 'max_partition_size'),
+        (
+            {'schedule': [{'update_noise': True, 'max_partition_size': 'all'}]},
+            'max_partition_size',
+        ),
+        ({'schedule': [{'update_noise': True, 'kernel': 'aspect=-1'}]}, 'kernel'),
+        ({'schedule': [{'update_noise': True, 'kernel': 'aspect=nan'}]}, 'kernel'),
+        ({'schedule': [{'update_noise': True, 'kernel': 'voxels=inf'}]}, 'kernel'),
+        ({'schedule': [{'update_noise': True, 'kernel': 'radius=0'}]}, 'kernel'),
+        ({'schedule': [{'update_noise': True, 'kernel': 'cuboid=0'}]}, 'kernel'),
+        ({'schedule': [{'update_noise': True, 'kernel': 'cuboid=2,2'}]}, 'kernel'),
+        ({'schedule': [{'update_noise': True, 'kernel': 'cuboid=2.5'}]}, 'kernel'),
+        ({'schedule': [{'update_noise': True, 'kernel': 'cuboid=x'}]}, 'kernel'),
+        ({'schedule': [{'update_noise': True, 'kernel': 'rank=2'}]}, 'kernel'),
+        ({'schedule': [{'update_noise': True, 'kernel': 'sphere'}]}, 'kernel'),
+        ({'schedule': [{'update_noise': True, 'kernel': 2}]}, 'kernel'),
+        ({'schedule': [{'update_noise': True}, {'kernel': 'rmse=1'}]}, 'kernel'),
+        # Rule 1: partitions and max_partition_size together
+        (
+            {'schedule': [{'update_noise': True, 'partitions': 2, 'max_partition_size': 10}]},
+            'partitions',
+        ),
+        # Rule 2: smoothing a row that does not estimate
+        (
+            {'schedule': [{'smooth_noise': True, 'update_noise': False}, {}]},
+            'smooth_noise',
+        ),
+        # Rule 3: the first row has no rank density yet
+        ({'schedule': [{'kernel': 'rmse=0.02'}, {}]}, 'first'),
+        ({'schedule': [{'kernel': 'rank'}, {}]}, 'first'),
+        # Rule 4: a non-final row must estimate
+        ({'schedule': [{'update_noise': False}, {'update_noise': True}]}, 'update_noise'),
+        # Rule 5: the reconstruction row may not be smoothed
+        ({'schedule': [{}, {'update_noise': True, 'smooth_noise': True}]}, 'smooth_noise'),
+        # Rule 7: the reconstruction row uses all volumes
+        ({'schedule': [{}, {'temporal_subsample': 0.5}]}, 'row 2 .*temporal_subsample'),
+        # Only ASCII digits, which dwidenoise2 can parse
+        ({'schedule': [{'update_noise': True, 'kernel': 'aspect=٢'}]}, 'kernel'),
+        ({'schedule': [{'update_noise': True, 'kernel': 'cuboid=²'}]}, 'kernel'),
+        # Integers too large for a float
+        ({'noise_in': 10**400}, 'noise_in'),
+        ({'schedule': [{'update_noise': True, 'temporal_subsample': 10**400}]}, 'temporal'),
+        # Rule 8: something must set the noise level
+        ({'schedule': [{}]}, 'noise level'),
+        ({'schedule': [{'update_noise': False}]}, 'noise level'),
+        # Rule 9: fixed_rank and rank_fixed go together
+        ({'fixed_rank': 3, 'schedule': [{'update_noise': True}]}, 'rank_fixed'),
+        (
+            {'fixed_rank': 3, 'schedule': [{'kernel': 'rank_fixed'}, {'kernel': 'rank_fixed'}]},
+            'fixed_rank',
+        ),
+        (
+            {'schedule': [{'update_noise': True}, {'kernel': 'rank_fixed'}]},
+            'row 2 sets "kernel" "rank_fixed"',
+        ),
+        # Rule 10: no transform means no iterations and no noise seed
+        ({'vst_method': 'none', 'schedule': [{}, {}]}, 'vst_method'),
+        ({'vst_method': 'none', 'noise_in': 1.0}, 'vst_method'),
+        # Rule 11: exclusive aggregation needs unit subsampling on the last row
+        ({'aggregator': 'exclusive'}, 'exclusive'),
+        (
+            {'aggregator': 'exclusive', 'schedule': [{'update_noise': True}]},
+            'exclusive',
+        ),
+        (
+            {
+                'aggregator': 'exclusive',
+                'schedule': [{'update_noise': True, 'spatial_subsample': [1, 1, 2]}],
+            },
+            'exclusive',
+        ),
+    ],
+)
+def test_load_dwidenoise2_config_rejects(tmp_path, settings, message):
+    path = _dwidenoise2_json(tmp_path, **settings)
+    with pytest.raises(ValueError, match=message) as excinfo:
+        load_dwidenoise2_config(path)
+    assert path in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    'text',
+    [
+        '{"decomposition": "bdcsvd", "decomposition": "selfadjoint"}',
+        '{"schedule": [{"update_noise": true, "kernel": "rank", "kernel": "cuboid"}]}',
+    ],
+)
+def test_load_dwidenoise2_config_rejects_duplicate_keys(tmp_path, text):
+    with pytest.raises(ValueError, match='duplicate key'):
+        load_dwidenoise2_config(_dwidenoise2_json(tmp_path, text=text))
+
+
+@pytest.mark.parametrize(
+    'text',
+    [
+        '{"noise_in": NaN}',
+        '{"noise_in": Infinity}',
+        '{"schedule": [{"update_noise": true, "temporal_subsample": NaN}]}',
+    ],
+)
+def test_load_dwidenoise2_config_rejects_non_finite_numbers(tmp_path, text):
+    with pytest.raises(ValueError, match='.'):
+        load_dwidenoise2_config(_dwidenoise2_json(tmp_path, text=text))
+
+
+@pytest.mark.parametrize('text', ['[]', '{', '"schedule"'])
+def test_load_dwidenoise2_config_rejects_malformed_files(tmp_path, text):
+    with pytest.raises(ValueError, match='dwidenoise2 configuration file'):
+        load_dwidenoise2_config(_dwidenoise2_json(tmp_path, text=text))
+
+
+def test_load_dwidenoise2_config_rejects_missing_file(tmp_path):
+    with pytest.raises(ValueError, match='does not exist'):
+        load_dwidenoise2_config(str(tmp_path / 'missing.json'))

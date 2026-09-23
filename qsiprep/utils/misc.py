@@ -3,6 +3,8 @@
 """Miscellaneous utility functions."""
 
 import logging
+import math
+import re
 
 import numpy as np
 
@@ -123,6 +125,363 @@ def parse_denoise_method(spec, use_phase=None):
             )
 
     return method, parameters
+
+
+_DWIDENOISE2_CONFIG_KEYS = frozenset(_DWIDENOISE_ENUM_PARAMETERS) | {
+    'demod_axes',
+    'fixed_rank',
+    'noise_dof',
+    'noise_in',
+    'preserve_noise_bias',
+    'schedule',
+}
+"""Keys a ``--dwidenoise2-config`` file may set."""
+
+# Schedule columns in the order they are written, as defined in dwidenoise2's
+# cpp/core/denoise/schedule.cpp. update_noise has no fixed default: dwidenoise2 resolves an
+# omitted value to true on every row but the last, and false on the last.
+_SCHEDULE_COLUMNS = (
+    'spatial_subsample',
+    'kernel',
+    'smooth_noise',
+    'update_noise',
+    'temporal_subsample',
+    'partitions',
+    'max_partition_size',
+)
+_SCHEDULE_DEFAULTS = {
+    'spatial_subsample': 2,
+    'kernel': 'aspect=2.0',
+    'smooth_noise': False,
+    'temporal_subsample': 1.0,
+    'partitions': 1,
+    'max_partition_size': 'none',
+}
+# An unsigned decimal or exponent-notation number. float() alone would also accept a sign,
+# "nan" and "inf".
+_UNSIGNED_FLOAT = re.compile(r'(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][+-]?[0-9]+)?')
+# ASCII digits only: Python's \d and str.isdigit() also match digits that dwidenoise2 cannot parse
+_POSITIVE_INT = re.compile(r'[0-9]*[1-9][0-9]*')
+
+
+class _DuplicateKeyError(ValueError):
+    """A JSON object repeats a key."""
+
+
+def _reject_duplicate_keys(pairs):
+    """Build a dict from JSON object pairs, raising on a repeated key."""
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise _DuplicateKeyError(f'has a duplicate key {key!r}')
+        result[key] = value
+    return result
+
+
+def _is_int(value):
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _is_number(value):
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        # A JSON integer too large to convert to a float
+        return False
+
+
+def _positive_float(text):
+    """Parse a positive number from a kernel parameter, or return None."""
+    if not _UNSIGNED_FLOAT.fullmatch(text):
+        return None
+    value = float(text)
+    return value if value > 0 and math.isfinite(value) else None
+
+
+def _kernel_type(value):
+    """Return the kernel type named by a schedule ``kernel`` value, or None if it is invalid.
+
+    The grammar follows ``parse_kernel`` in dwidenoise2's cpp/core/denoise/schedule.cpp.
+    """
+    if not isinstance(value, str):
+        return None
+    key, separator, param = value.partition('=')
+    if key in ('rank', 'rank_fixed'):
+        return key if not separator else None
+    if key == 'cuboid':
+        if not separator:
+            return key
+        if param.endswith('x'):
+            return key if _positive_float(param[:-1]) else None
+        extents = param.split(',')
+        if len(extents) in (1, 3) and all(_POSITIVE_INT.fullmatch(e) for e in extents):
+            return key
+        return None
+    if key in ('aspect', 'aspect_ratio', 'radius', 'voxels', 'rmse') and separator:
+        number = _positive_float(param)
+        if number is None or (key == 'rmse' and number >= 1):
+            return None
+        return 'aspect' if key == 'aspect_ratio' else key
+    return None
+
+
+def _parse_schedule_cell(column, value, where):
+    """Check one schedule cell and return the value to store."""
+    if column == 'spatial_subsample':
+        if _is_int(value) and value >= 1:
+            return value
+        if (
+            isinstance(value, list)
+            and len(value) == 3
+            and all(_is_int(v) and v >= 1 for v in value)
+        ):
+            return tuple(value)
+        raise ValueError(
+            f'{where}: "spatial_subsample" must be a positive integer or a list of three '
+            f'positive integers (got {value!r}).'
+        )
+    if column == 'kernel':
+        if _kernel_type(value) is None:
+            raise ValueError(
+                f'{where}: invalid "kernel" {value!r}; valid kernels are "aspect=<ratio>", '
+                '"rmse=<tolerance below 1>", "rank", "radius=<mm>", "voxels=<count>", '
+                '"cuboid", "cuboid=<n>", "cuboid=<x>,<y>,<z>", "cuboid=<ratio>x" and '
+                '"rank_fixed".'
+            )
+        return value
+    if column in ('smooth_noise', 'update_noise'):
+        if not isinstance(value, bool):
+            raise ValueError(f'{where}: "{column}" must be true or false (got {value!r}).')
+        return value
+    if column == 'temporal_subsample':
+        if not _is_number(value) or not 0 < value <= 1:
+            raise ValueError(
+                f'{where}: "temporal_subsample" must be a number in (0, 1] (got {value!r}).'
+            )
+        return value
+    if column == 'partitions':
+        if not _is_int(value) or value < 1:
+            raise ValueError(f'{where}: "partitions" must be a positive integer (got {value!r}).')
+        return value
+    # max_partition_size
+    if value == 'none' or (_is_int(value) and value >= 1):
+        return value
+    raise ValueError(
+        f'{where}: "max_partition_size" must be a positive integer or "none" (got {value!r}).'
+    )
+
+
+def _resolved_update_noise(schedule):
+    """Return each row's update_noise as dwidenoise2 resolves it."""
+    last = len(schedule) - 1
+    return [row.get('update_noise', i != last) for i, row in enumerate(schedule)]
+
+
+def _load_dwidenoise2_schedule(rows, source):
+    """Check the rows of a ``schedule`` key and return them with triplets as tuples."""
+    if not isinstance(rows, list) or not rows:
+        raise ValueError(f'{source}: "schedule" must be a non-empty list of rows.')
+
+    schedule = []
+    for number, row in enumerate(rows, start=1):
+        where = f'{source}: schedule row {number}'
+        if not isinstance(row, dict):
+            raise ValueError(f'{where} must be a JSON object (got {row!r}).')
+        unknown = sorted(set(row) - set(_SCHEDULE_COLUMNS))
+        if unknown:
+            raise ValueError(
+                f'{where} has unknown column(s) {", ".join(unknown)}; '
+                f'valid columns are {", ".join(_SCHEDULE_COLUMNS)}.'
+            )
+        parsed = {
+            column: _parse_schedule_cell(column, value, where) for column, value in row.items()
+        }
+        # Rule 1
+        if parsed.get('partitions', 1) > 1 and parsed.get('max_partition_size', 'none') != 'none':
+            raise ValueError(f'{where} sets both "partitions" and "max_partition_size".')
+        schedule.append(parsed)
+
+    last = len(schedule) - 1
+    update_noise = _resolved_update_noise(schedule)
+    # Rule 3
+    if _kernel_type(schedule[0].get('kernel', 'aspect=2.0')) in ('rmse', 'rank'):
+        raise ValueError(
+            f'{source}: the first schedule row may not use the "rmse" or "rank" kernel, which '
+            'need a signal-rank density from an earlier row.'
+        )
+    for i, row in enumerate(schedule):
+        where = f'{source}: schedule row {i + 1}'
+        # Rule 2
+        if row.get('smooth_noise', False) and not update_noise[i]:
+            raise ValueError(f'{where} sets "smooth_noise" true but "update_noise" false.')
+        # Rule 4
+        if i != last and not update_noise[i]:
+            raise ValueError(
+                f'{where} sets "update_noise" false; only the last row may skip estimating the '
+                'noise level.'
+            )
+        # Rule 5
+        if i == last and row.get('smooth_noise', False):
+            raise ValueError(
+                f'{where} is the last (reconstruction) row and may not set "smooth_noise" true.'
+            )
+    # Rule 7
+    if schedule[-1].get('temporal_subsample', 1.0) < 1:
+        raise ValueError(
+            f'{source}: schedule row {last + 1} is the last (reconstruction) row and must use '
+            'all volumes ("temporal_subsample" 1).'
+        )
+    return schedule
+
+
+def _check_dwidenoise2_combinations(params, source):
+    """Apply the rules dwidenoise2 checks after it resolves its schedule (rules 8-11)."""
+    schedule = params.get('schedule')
+    fixed_rank = 'fixed_rank' in params
+    vst_none = params.get('vst_method') == 'none'
+    exclusive = params.get('aggregator') == 'exclusive'
+
+    if fixed_rank and 'noise_in' in params:
+        raise ValueError(f'{source} sets both "fixed_rank" and "noise_in".')
+    # Rule 10
+    if vst_none and 'noise_in' in params:
+        raise ValueError(
+            f'{source} sets "noise_in" with "vst_method" "none"; the noise level only '
+            'parameterizes the variance-stabilizing transform.'
+        )
+
+    if schedule is None:
+        # dwidenoise2 then uses its fixedrank schedule, a single pass sized for the
+        # aggregator, or its default schedule, whose last row subsamples by 2.
+        if exclusive and not fixed_rank and not vst_none:
+            raise ValueError(
+                f'{source} sets "aggregator" "exclusive" without a schedule. The default '
+                'schedule subsamples its last row by 2; provide a schedule whose last row has '
+                '"spatial_subsample" 1.'
+            )
+        return
+
+    kernels = [_kernel_type(row.get('kernel', 'aspect=2.0')) for row in schedule]
+    # Rule 8
+    if not any(_resolved_update_noise(schedule)) and 'noise_in' not in params:
+        raise ValueError(
+            f'{source}: no schedule row estimates the noise level and "noise_in" is not set. '
+            'A single row needs "update_noise" true.'
+        )
+    # Rule 9
+    if fixed_rank and (len(schedule) > 1 or kernels[0] != 'rank_fixed'):
+        raise ValueError(
+            f'{source} sets "fixed_rank", which needs a single schedule row using the '
+            '"rank_fixed" kernel.'
+        )
+    if not fixed_rank and 'rank_fixed' in kernels:
+        row_number = kernels.index('rank_fixed') + 1
+        raise ValueError(
+            f'{source}: schedule row {row_number} sets "kernel" "rank_fixed", which needs '
+            '"fixed_rank".'
+        )
+    # Rule 10
+    if vst_none and len(schedule) > 1:
+        raise ValueError(f'{source} sets "vst_method" "none", which allows only one schedule row.')
+    # Rule 11
+    if exclusive:
+        subsample = schedule[-1].get('spatial_subsample', _SCHEDULE_DEFAULTS['spatial_subsample'])
+        factors = subsample if isinstance(subsample, tuple) else (subsample,) * 3
+        if max(factors) > 1:
+            raise ValueError(
+                f'{source} sets "aggregator" "exclusive", which needs the last schedule row to '
+                'have "spatial_subsample" 1.'
+            )
+
+
+def load_dwidenoise2_config(path):
+    """Load and check a ``--dwidenoise2-config`` JSON file.
+
+    Parameters
+    ----------
+    path : str or os.PathLike
+        The configuration file.
+
+    Returns
+    -------
+    dict
+        DWIDenoise2 input values. ``schedule`` is present only when the file sets it, as a
+        list of row dicts with ``spatial_subsample`` triplets as tuples. ``demod_axes`` is
+        joined into the comma-separated string the interface takes.
+
+    Raises
+    ------
+    ValueError
+        If the file does not exist, cannot be read, is not a JSON object, repeats a key, has
+        an unknown key or an invalid value, or breaks one of the schedule rules that
+        dwidenoise2 enforces.
+    """
+    import json
+    import os
+
+    source = f'dwidenoise2 configuration file {path}'
+    if not os.path.exists(path):
+        raise ValueError(f'{source} does not exist.')
+    try:
+        with open(path, encoding='utf-8') as f:
+            cfg = json.load(f, object_pairs_hook=_reject_duplicate_keys)
+    except _DuplicateKeyError as err:
+        raise ValueError(f'{source} {err}.') from err
+    except OSError as err:
+        raise ValueError(f'{source} could not be read: {err}') from err
+    except (json.JSONDecodeError, UnicodeDecodeError) as err:
+        raise ValueError(f'{source} is not valid JSON: {err}') from err
+    if not isinstance(cfg, dict):
+        raise ValueError(f'{source} must contain a JSON object.')
+
+    unknown = sorted(set(cfg) - _DWIDENOISE2_CONFIG_KEYS)
+    if unknown:
+        raise ValueError(
+            f'{source} has unknown key(s) {", ".join(unknown)}; '
+            f'valid keys are {", ".join(sorted(_DWIDENOISE2_CONFIG_KEYS))}.'
+        )
+
+    params = {}
+    for name, value in cfg.items():
+        if name == 'schedule':
+            continue
+        if name in _DWIDENOISE_ENUM_PARAMETERS:
+            choices = _DWIDENOISE_ENUM_PARAMETERS[name]
+            if not isinstance(value, str) or value not in choices:
+                raise ValueError(
+                    f'{source} sets {name}={value!r}; must be one of {", ".join(choices)}.'
+                )
+        elif name == 'preserve_noise_bias':
+            if not isinstance(value, bool):
+                raise ValueError(f'{source} sets {name}={value!r}; must be true or false.')
+        elif name in ('fixed_rank', 'noise_dof'):
+            if not _is_int(value) or value < 1:
+                raise ValueError(f'{source} sets {name}={value!r}; must be an integer >= 1.')
+        elif name == 'noise_in':
+            if not _is_number(value) or value < 0:
+                raise ValueError(
+                    f'{source} sets {name}={value!r}; must be a number >= 0. Noise-map files '
+                    'are not supported.'
+                )
+        elif name == 'demod_axes':
+            if (
+                not isinstance(value, list)
+                or not value
+                or not all(_is_int(axis) and axis >= 0 for axis in value)
+            ):
+                raise ValueError(
+                    f'{source} sets {name}={value!r}; must be a non-empty list of '
+                    'non-negative integers.'
+                )
+            value = ','.join(str(axis) for axis in value)
+        params[name] = value
+
+    if 'schedule' in cfg:
+        params['schedule'] = _load_dwidenoise2_schedule(cfg['schedule'], source)
+    _check_dwidenoise2_combinations(params, source)
+    return params
 
 
 # dwidenoise2's own defaults, mirrored here so the boilerplate describes what actually ran
