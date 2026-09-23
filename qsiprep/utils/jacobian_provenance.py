@@ -26,7 +26,7 @@ in comments at each branch point instead of duplicating this reasoning.
 from .. import config
 from .diffprep_config import load_diffprep_config
 from .eddy_config import eddy_modulates_distortion, load_eddy_args
-from .sdc import resolve_t2wreg_target
+from .sdc import t2wreg_target
 
 #: Reason string for both eddy-current and susceptibility unmodulated entries
 #: under a non-'jac' eddy resampling method -- eddy has already baked its
@@ -52,7 +52,7 @@ def t2wreg_is_weighted(unit, t2w_sdc):
     Only TORTOISE's T2Wreg (EPIREG) field is exempt, and ``--force jacobian``
     lifts the exemption. Every other field (DRBUDDI, GRE, SyN) is weighted.
     """
-    if resolve_t2wreg_target(unit, t2w_sdc) is None:
+    if t2wreg_target(unit, t2w_sdc) is None:
         return True
     return bool(config.workflow.force_jacobian)
 
@@ -159,7 +159,7 @@ def _tortoise_provenance(unit, t2w_sdc):
 
     The SDC component reaches ``fieldwarps`` externally for every branch
     DIFFPREP's own decision tree takes except "no fieldmap, no T2w": PEPOLAR
-    (DRBUDDI), the T2Wreg fieldmap-less case (``resolve_t2wreg_target``
+    (DRBUDDI), the T2Wreg fieldmap-less case (``t2wreg_target``
     mirrors the same ``use_t2wreg`` gate ``diffprep.py`` computes, including
     its ``t2w_sdc``/``--anat-modality`` dependency), and GRE/SyN.
     """
@@ -180,7 +180,7 @@ def _tortoise_provenance(unit, t2w_sdc):
         applied.append('sdc')
     elif unit.is_gre or unit.is_nipreps_syn:
         applied.append('sdc')
-    elif resolve_t2wreg_target(unit, t2w_sdc) is not None:
+    elif t2wreg_target(unit, t2w_sdc) is not None:
         if t2wreg_is_weighted(unit, t2w_sdc):
             applied.append('sdc')
         else:

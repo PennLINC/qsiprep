@@ -16,6 +16,7 @@ from ...interfaces import DerivativesDataSink
 from ...interfaces.bids import DerivativesMaybeDataSink
 from ...interfaces.jacobian import StackJacobianWeights
 from ...interfaces.tsnr import DWITSNR
+from ...utils.sdc import sdc_displacement_sidecar
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
@@ -68,19 +69,24 @@ LOGGER = logging.getLogger('nipype.workflow')
 
 def init_dwi_derivatives_wf(
     source_file,
+    sdc_warp_meta=None,
+    sdc_refinement_meta=None,
     jacobian_applied_corrections=(),
     jacobian_unmodulated_corrections=(),
     jacobian_unmodulated_reason=None,
 ) -> Workflow:
     """Set up a battery of datasinks to store derivatives in the right location.
 
-    The three ``jacobian_*`` arguments are this *run*'s own Jacobian-provenance
-    facts -- see ``qsiprep.utils.jacobian_provenance.
-    jacobian_provenance_for``, which the caller (``init_dwi_finalize_wf``)
-    computes from the ``unit`` it has and this function does not. They are set
-    directly as ``StackJacobianWeights`` node inputs (build-time constants, not
-    threaded through ``connect``) rather than read from ``config.workflow``,
-    because they are per-run facts, not invocation-global ones.
+    When ``sdc_warp_meta`` is given (a dict of sidecar metadata), the SDC
+    (susceptibility) displacement is also written as a map on the ACPC output grid,
+    for inspection rather than for resampling. ``sdc_refinement_meta`` does the
+    same for DRBUDDI's refinement of the TOPUP field (TOPUP+DRBUDDI only).
+
+    The three ``jacobian_*`` arguments are this run's own intensity-modulation
+    provenance -- see ``qsiprep.utils.jacobian_provenance.jacobian_provenance_for``,
+    which the caller (``init_dwi_finalize_wf``) computes from the ``unit`` it has
+    and this function does not. They are set directly as ``StackJacobianWeights``
+    node inputs, because they are per-run facts, not invocation-global ones.
     """
     output_dir = str(config.execution.output_dir)
     workflow = Workflow(name='dwi_derivatives_wf')
@@ -104,6 +110,9 @@ def init_dwi_derivatives_wf(
                 'jacobian_weights',
                 'jacobian_weight_index',
                 'jacobian_method',
+                'sdc_warp_to_template',
+                'sdc_refinement_to_template',
+                'sdc_transform_files',
             ]
         ),
         name='inputnode',
@@ -331,6 +340,47 @@ def init_dwi_derivatives_wf(
                 ('out_file', 'in_file'),
                 ('meta_dict', 'meta_dict'),
             ]),
+        ])  # fmt:skip
+
+    # The SDC displacement in ACPC space. It is a map of the
+    # correction, not a transform: the correction is applied separately.
+    # Only written when SDC is applied.
+    for name, field, desc, meta in (
+        ('ds_sdc_warp_t1', 'sdc_warp_to_template', 'sdc', sdc_warp_meta),
+        (
+            'ds_sdc_refinement_t1',
+            'sdc_refinement_to_template',
+            'sdcrefinement',
+            sdc_refinement_meta,
+        ),
+    ):
+        if meta is None:
+            continue
+        sidecar = pe.Node(
+            niu.Function(function=sdc_displacement_sidecar, output_names=['meta']),
+            name=f'{name}_sidecar',
+            run_without_submitting=True,
+        )
+        sidecar.inputs.meta = meta
+        sidecar.inputs.output_dir = output_dir
+        ds_sdc_field = pe.Node(
+            DerivativesDataSink(
+                source_file=source_file,
+                base_directory=output_dir,
+                space='ACPC',
+                desc=desc,
+                suffix='displacement',
+                extension='.nii.gz',
+                compress=True,
+            ),
+            name=name,
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+        workflow.connect([
+            (inputnode, sidecar, [('sdc_transform_files', 'transform_files')]),
+            (inputnode, ds_sdc_field, [(field, 'in_file')]),
+            (sidecar, ds_sdc_field, [('meta', 'meta_dict')]),
         ])  # fmt:skip
 
     # If requested, write local bvecs

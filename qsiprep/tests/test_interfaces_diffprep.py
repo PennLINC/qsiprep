@@ -1373,22 +1373,22 @@ def test_t2wreg_is_recognised_as_sdc_for_reporting():
     from qsiplan.models import CorrectionMethod
 
     from qsiprep.tests.preproc_factory import make_preproc_unit
-    from qsiprep.utils.sdc import resolve_t2wreg_target
+    from qsiprep.utils.sdc import t2wreg_target
 
     config = _base_config()
     try:
         config.workflow.hmc_method = 'tortoise'
         t2w = ['/data/sub-01_T2w.nii.gz']
         fieldmapless = make_preproc_unit(['/data/sub-01_dwi.nii.gz'], anat_files=t2w)
-        assert resolve_t2wreg_target(fieldmapless, '/path/to/T2w.nii.gz') == 't2w'
+        assert t2wreg_target(fieldmapless, '/path/to/T2w.nii.gz') == 't2w'
 
         # No T2w -> no T2Wreg -> nothing to show.
-        assert resolve_t2wreg_target(_make_unit(None), '') is None
+        assert t2wreg_target(_make_unit(None), '') is None
         # A measured fieldmap goes through its own SDC reports instead.
         rpe = _make_unit('rpe_series', rpe_series=['/data/sub-01_dir-PA_dwi.nii.gz'])
-        assert resolve_t2wreg_target(rpe, '/path/to/T2w.nii.gz') is None
+        assert t2wreg_target(rpe, '/path/to/T2w.nii.gz') is None
         epi = _make_unit('epi', epi=['/data/sub-01_epi.nii.gz'])
-        assert resolve_t2wreg_target(epi, '/path/to/T2w.nii.gz') is None
+        assert t2wreg_target(epi, '/path/to/T2w.nii.gz') is None
 
         # A SynB0 unit registers to the synthetic b=0 -- no T2w required.
         synb0 = make_preproc_unit(
@@ -1397,12 +1397,12 @@ def test_t2wreg_is_recognised_as_sdc_for_reporting():
             estimation_sources=['/data/sub-01_T1w.nii.gz'],
             anat_files=['/data/sub-01_T1w.nii.gz'],
         )
-        assert resolve_t2wreg_target(synb0, '') == 'synb0'
+        assert t2wreg_target(synb0, '') == 'synb0'
 
         # Other methods do not run T2Wreg at all.
         config.workflow.hmc_method = 'eddy'
         fieldmapless = make_preproc_unit(['/data/sub-01_dwi.nii.gz'], anat_files=t2w)
-        assert resolve_t2wreg_target(fieldmapless, '/path/to/T2w.nii.gz') is None
+        assert t2wreg_target(fieldmapless, '/path/to/T2w.nii.gz') is None
     finally:
         config.workflow.hmc_method = 'eddy'
 

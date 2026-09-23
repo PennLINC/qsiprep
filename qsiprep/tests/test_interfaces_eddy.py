@@ -44,12 +44,33 @@ def test_find_eddy_cuda_none_returns_default(tmp_path, monkeypatch):
 
 
 def test_find_eddy_cuda_ignores_non_versioned(tmp_path, monkeypatch):
-    """Non-versioned eddy binaries (eddy, eddy_cpu) are not matched."""
+    """The eddy wrapper and eddy_cpu are not mistaken for a CUDA binary."""
     _make_exe(tmp_path / 'eddy')
     _make_exe(tmp_path / 'eddy_cpu')
     monkeypatch.setenv('PATH', str(tmp_path))
-    # No eddy_cuda<ver> present -> fallback default.
+    # No eddy_cuda (versioned or plain) present -> fallback default.
     assert _find_eddy_cuda() == 'eddy_cuda10.2'
+
+
+def test_find_eddy_cuda_plain_fallback(tmp_path, monkeypatch):
+    """An unversioned eddy_cuda is used when no versioned binary is present.
+
+    The pixi-based qsiprep image ships a single, unversioned ``eddy_cuda``; the
+    wrapper ``eddy`` and ``eddy_cpu`` alongside it must not be picked instead.
+    """
+    _make_exe(tmp_path / 'eddy')
+    _make_exe(tmp_path / 'eddy_cpu')
+    _make_exe(tmp_path / 'eddy_cuda')
+    monkeypatch.setenv('PATH', str(tmp_path))
+    assert _find_eddy_cuda() == 'eddy_cuda'
+
+
+def test_find_eddy_cuda_prefers_versioned_over_plain(tmp_path, monkeypatch):
+    """A version-suffixed binary is preferred over a plain eddy_cuda."""
+    _make_exe(tmp_path / 'eddy_cuda')
+    _make_exe(tmp_path / 'eddy_cuda11.0')
+    monkeypatch.setenv('PATH', str(tmp_path))
+    assert _find_eddy_cuda() == 'eddy_cuda11.0'
 
 
 def test_extended_eddy_cmd_uses_finder(tmp_path, monkeypatch):

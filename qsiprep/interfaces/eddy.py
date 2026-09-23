@@ -46,12 +46,15 @@ def _find_eddy_cuda(default='eddy_cuda10.2'):
     FSL ships version-specific binaries whose name encodes the CUDA version
     (``eddy_cuda11.0``). Older code hardcoded ``eddy_cuda10.2``, which current
     FSL builds no longer provide. Scan the directories on ``PATH`` for any
-    ``eddy_cuda<major>.<minor>`` executable and return the newest one.
+    ``eddy_cuda<major>.<minor>`` executable and return the newest one. Some
+    packagings (e.g. the pixi-based qsiprep image) instead ship a single,
+    *unversioned* ``eddy_cuda``; use it as a fallback when no versioned binary is
+    present, so ``--gpu eddy`` works there too.
 
     Parameters
     ----------
     default : str
-        Name returned when no ``eddy_cuda*`` binary is found, so the downstream
+        Name returned when no ``eddy_cuda`` binary is found, so the downstream
         missing-dependency check reports a recognizable command.
 
     Returns
@@ -60,6 +63,7 @@ def _find_eddy_cuda(default='eddy_cuda10.2'):
         Basename of the selected eddy CUDA binary, or ``default`` if none found.
     """
     found = {}
+    plain = None
     for directory in os.environ.get('PATH', '').split(os.pathsep):
         if not directory or not os.path.isdir(directory):
             continue
@@ -69,26 +73,34 @@ def _find_eddy_cuda(default='eddy_cuda10.2'):
             continue
         for entry in entries:
             match = _EDDY_CUDA_RE.match(entry)
-            if match is None:
+            if match is None and entry != 'eddy_cuda':
                 continue
             full_path = os.path.join(directory, entry)
             if not os.path.isfile(full_path) or not os.access(full_path, os.X_OK):
+                continue
+            if match is None:
+                # Unversioned eddy_cuda: keep the first one on PATH.
+                if plain is None:
+                    plain = entry
                 continue
             version = (int(match.group(1)), int(match.group(2)))
             # Keep the first match on PATH for each basename.
             found.setdefault(entry, version)
 
-    if not found:
-        LOGGER.warning('No eddy_cuda* binary found on PATH; falling back to %s', default)
-        return default
+    if found:
+        # A version-suffixed binary is preferred over a plain one, newest first.
+        if len(found) > 1:
+            LOGGER.warning(
+                'Multiple eddy_cuda binaries found on PATH (%s); using the newest.',
+                ', '.join(sorted(found)),
+            )
+        return max(found, key=found.get)
 
-    if len(found) > 1:
-        LOGGER.warning(
-            'Multiple eddy_cuda binaries found on PATH (%s); using the newest.',
-            ', '.join(sorted(found)),
-        )
+    if plain is not None:
+        return plain
 
-    return max(found, key=found.get)
+    LOGGER.warning('No eddy_cuda binary found on PATH; falling back to %s', default)
+    return default
 
 
 class GatherEddyInputsInputSpec(BaseInterfaceInputSpec):

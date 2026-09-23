@@ -33,6 +33,8 @@ sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-preproc_dwi.bvec
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-preproc_dwi.json
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-preproc_dwi.nii.gz
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-preproc_dwiref.nii.gz
+sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-sdc_displacement.json
+sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-sdc_displacement.nii.gz
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-slice_qc.json
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_model-3dshore_stat-cnr_dwimap.json
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_model-3dshore_stat-cnr_dwimap.nii.gz

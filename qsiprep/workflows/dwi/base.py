@@ -19,7 +19,7 @@ from ...interfaces.confounds import DMRISummary
 from ...interfaces.reports import DiffusionSummary
 from ...interfaces.utils import TestInput
 from ...utils.misc import DWI2ANAT_DOF_TO_TRANSFORM
-from ...utils.sdc import resolve_t2wreg_target
+from ...utils.sdc import t2wreg_target
 from ..fieldmap.pepolar import init_extended_pepolar_report_wf
 
 # dwi workflows
@@ -380,13 +380,13 @@ def init_dwi_preproc_wf(
     # considerably more detailed reports.
     doing_topup = unit.run.stage_with('topup') is not None
     doing_drbuddi = unit.run.stage_with('drbuddi') is not None
-    report_t2wreg_target = resolve_t2wreg_target(unit, t2w_sdc)
-    if unit.is_gre or unit.is_nipreps_syn or doing_topup or report_t2wreg_target:
+    t2wreg_to = t2wreg_target(unit, t2w_sdc)
+    if unit.is_gre or unit.is_nipreps_syn or doing_topup or t2wreg_to:
         fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
         ds_report_sdc = pe.Node(
             DerivativesDataSink(
                 datatype='figures',
-                desc='sdcT2w' if report_t2wreg_target == 't2w' else 'sdc',
+                desc='sdcT2w' if t2wreg_to == 't2w' else 'sdc',
                 suffix='dwi',
                 source_file=source_file,
             ),
