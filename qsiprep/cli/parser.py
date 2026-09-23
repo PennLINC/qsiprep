@@ -130,7 +130,6 @@ def _build_parser(**kwargs):
             for flag, dest, hmc_method in (
                 ('--gre-eddy-mbs', 'gre_eddy_mbs', 'eddy'),
                 ('--gre-init-t2wreg', 'gre_t2wreg_init', 'tortoise'),
-                ('--gre-init-drbuddi', 'gre_drbuddi_init', 'tortoise'),
             ):
                 if getattr(namespace, dest, False) and namespace.hmc_method != hmc_method:
                     self.error(f'{flag} requires --hmc-method {hmc_method}')
@@ -793,19 +792,6 @@ def _build_parser(**kwargs):
             '(a T2w, or SynB0 with --sdc-anat-reference synb0), run TORTOISE T2Wreg '
             'initialized with the GRE-derived warp instead of applying the GRE warp after '
             'head motion correction. Requires --hmc-method tortoise.'
-        ),
-    )
-    g_sdc.add_argument(
-        '--gre-init-drbuddi',
-        action='store_true',
-        default=False,
-        dest='gre_drbuddi_init',
-        help=(
-            'For a reverse phase-encoded (PEPOLAR) series that also has a GRE fieldmap, '
-            'initialize DRBUDDI with the GRE-derived warp instead of starting from '
-            'identity; the blip-up/blip-down data then refine it. The GRE fieldmap must '
-            'list the series (IntendedFor or B0FieldSource) without being the correction '
-            'applied to it. Requires --hmc-method tortoise.'
         ),
     )
     g_sdc.add_argument(

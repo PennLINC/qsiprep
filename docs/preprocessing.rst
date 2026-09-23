@@ -1077,20 +1077,22 @@ Registration-based correction (DRBUDDI, T2Wreg) infers the distortion by
 matching images, which is ambiguous where the field piles several voxels'
 signal into one or drops it out.
 A GRE fieldmap measures the field directly.
-With ``--hmc-method tortoise``, two opt-in flags start a TORTOISE registration
-from the GRE-derived warp instead of applying that warp on its own:
+With ``--hmc-method tortoise``, a GRE fieldmap can therefore start a TORTOISE
+registration instead of only being applied on its own:
 
-``--gre-init-drbuddi``
-   For a reverse phase-encoded series that a GRE fieldmap also lists, DRBUDDI
-   starts from the GRE warp: the warp for the series' own phase encoding is the
-   initial blip-up transform and its negation the initial blip-down transform.
-   The reverse phase-encoded correction has to be linked explicitly (an ``epi``
-   fieldmap's ``IntendedFor``, or ``B0FieldIdentifier``/``B0FieldSource``):
-   once a GRE fieldmap's ``IntendedFor`` names the series, *QSIPrep* no longer
-   infers reverse phase-encoding pairs in that session, and the GRE fieldmap
-   is applied on its own.
+DRBUDDI (automatic)
+   When a reverse phase-encoded series is also listed by a GRE fieldmap,
+   DRBUDDI starts from the GRE warp: the warp for the series' own phase
+   encoding is the initial blip-up transform and its negation the initial
+   blip-down transform. No option is needed; ``--ignore fieldmaps`` (which
+   skips ``fmap/``) or ``--ignore sdc`` turns it off.
+   The reverse phase-encoded correction has to be linked explicitly (an
+   ``epi`` fieldmap's ``IntendedFor``, or ``B0FieldIdentifier``/
+   ``B0FieldSource``): once a GRE fieldmap's ``IntendedFor`` names the series,
+   *QSIPrep* no longer infers reverse phase-encoding pairs in that session, and
+   the GRE fieldmap is applied on its own.
 
-``--gre-init-t2wreg``
+T2Wreg (``--gre-init-t2wreg``)
    For a series corrected with a GRE fieldmap, run T2Wreg against the T2w (or
    against a SynB0 image with ``--sdc-anat-reference synb0``) starting from the
    GRE warp, instead of applying the GRE warp after head motion correction.
@@ -1099,8 +1101,7 @@ In both cases the initial warp is held fixed through the registration's
 multi-resolution pyramid, so each stage estimates a residual correction on top
 of it rather than smoothing it away.
 The methods boilerplate and the visual report's distortion-correction entry
-record the initialization, and *QSIPrep* warns about series a flag cannot apply
-to.
+record the initialization.
 
 With ``--hmc-method eddy``, ``--gre-eddy-mbs`` hands a GRE fieldmap to ``eddy``
 (``--field``) instead of applying it after ``eddy``, which also lets ``eddy``

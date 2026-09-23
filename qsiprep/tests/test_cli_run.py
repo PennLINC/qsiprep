@@ -694,16 +694,11 @@ def test_gre_flags_default_off_and_parse(minimal_args):
     opts = _parse(minimal_args)
     assert opts.gre_eddy_mbs is False
     assert opts.gre_t2wreg_init is False
-    assert opts.gre_drbuddi_init is False
     assert opts.gre_gradwarp == 'transport'
     opts = _parse(minimal_args, '--gre-eddy-mbs', '--gre-gradwarp', 'reference')
     assert opts.gre_eddy_mbs is True
     assert opts.gre_gradwarp == 'reference'
-    opts = _parse(
-        minimal_args, '--hmc-method', 'tortoise', '--gre-init-t2wreg', '--gre-init-drbuddi'
-    )
-    assert opts.gre_t2wreg_init is True
-    assert opts.gre_drbuddi_init is True
+    assert _parse(minimal_args, '--hmc-method', 'tortoise', '--gre-init-t2wreg').gre_t2wreg_init
     with pytest.raises(SystemExit):
         _parse(minimal_args, '--gre-gradwarp', 'jacobian')
 
@@ -713,7 +708,6 @@ def test_gre_flags_default_off_and_parse(minimal_args):
     [
         ('--gre-eddy-mbs', 'tortoise', 'eddy'),
         ('--gre-init-t2wreg', 'eddy', 'tortoise'),
-        ('--gre-init-drbuddi', 'eddy', 'tortoise'),
     ],
 )
 def test_gre_flags_require_their_hmc_method(minimal_args, capsys, flag, hmc_method, required):

@@ -628,13 +628,10 @@ class workflow(_Config):
     target (a T2w, or SynB0 with ``--sdc-anat-reference synb0``), run DIFFPREP's
     T2Wreg stage initialized with the GRE-derived warp instead of applying the GRE
     warp after head motion correction."""
-    gre_drbuddi_init = False
-    """On the TORTOISE path, when a PEPOLAR series also has a GRE fieldmap among
-    its application candidates, initialize DRBUDDI with the GRE-derived warp (the
-    up field, its negation the down field) instead of starting from identity."""
     gre_init_keep_fixed = True
-    """Hold a GRE initialization (``gre_t2wreg_init`` / ``gre_drbuddi_init``)
-    fixed through TORTOISE's multi-resolution pyramid
+    """Hold a GRE initialization (of T2Wreg with ``gre_t2wreg_init``, or of
+    DRBUDDI when a PEPOLAR series also has a GRE fieldmap) fixed through
+    TORTOISE's multi-resolution pyramid
     (``--DRBUDDI_keep_initial_transform_fixed``), so each stage learns a residual
     on top of it rather than low-passing and re-estimating it."""
     gre_gradwarp = 'transport'

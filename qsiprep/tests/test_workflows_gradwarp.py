@@ -29,7 +29,6 @@ def _reset_config():
     config.workflow.gre_gradwarp = 'transport'
     config.workflow.gre_eddy_mbs = False
     config.workflow.gre_t2wreg_init = False
-    config.workflow.gre_drbuddi_init = False
     # Anything that runs the real parser leaves the method axes set, and a stray
     # sdc_method='topup' would silently compile a plan with no DRBUDDI stage.
     # Save them here, and restore below so this module does not pollute in turn.
@@ -54,7 +53,6 @@ def _reset_config():
     config.workflow.gre_gradwarp = 'transport'
     config.workflow.gre_eddy_mbs = False
     config.workflow.gre_t2wreg_init = False
-    config.workflow.gre_drbuddi_init = False
     config.workflow.ignore = []
     config.workflow.force = []
     for key, value in axis_keys.items():
@@ -1075,7 +1073,7 @@ def test_diffprep_dis3d_does_not_gradwarp_sdc_inputs(tmp_path):
 
 def _rpe_unit_with_gre_candidate(tmp_path):
     """A PEPOLAR unit whose AP series also has a phasediff GRE fieldmap kept as a
-    non-applied candidate (the shape --gre-init-drbuddi triggers on)."""
+    non-applied candidate, which seeds DRBUDDI."""
     import dataclasses
 
     import nibabel as nb
@@ -1125,18 +1123,14 @@ def _rpe_unit_with_gre_candidate(tmp_path):
 
 
 def test_diffprep_drbuddi_seeded_by_gre_candidate(tmp_path, monkeypatch):
-    """--gre-init-drbuddi: a PEPOLAR unit that also carries a GRE fieldmap seeds
-    DRBUDDI's initial field from a GRE warp built on the pre-SDC b=0."""
+    """A PEPOLAR unit that also carries a GRE fieldmap seeds DRBUDDI's initial
+    field from a GRE warp built on the pre-SDC b=0."""
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg_for_diffprep(tmp_path)
     config.workflow.gradient_file = None
-    config.workflow.gre_drbuddi_init = True
-    try:
-        unit = _rpe_unit_with_gre_candidate(tmp_path)
-        assert unit.gre_init_estimation is not None
-        wf = _diffprep_wf(tmp_path, unit)
-    finally:
-        config.workflow.gre_drbuddi_init = False
+    unit = _rpe_unit_with_gre_candidate(tmp_path)
+    assert unit.gre_init_estimation is not None
+    wf = _diffprep_wf(tmp_path, unit)
 
     assert wf.get_node('drbuddi_gre_init_b0_ref_wf') is not None
     assert _connects(
@@ -1148,33 +1142,18 @@ def test_diffprep_drbuddi_seeded_by_gre_candidate(tmp_path, monkeypatch):
     assert 'unwarped b=0' not in desc
 
 
-def test_diffprep_drbuddi_unseeded_without_the_flag(tmp_path, monkeypatch):
-    """The GRE candidate alone does nothing without --gre-init-drbuddi."""
+def test_diffprep_drbuddi_unseeded_without_a_gre_candidate(tmp_path, monkeypatch):
+    """With no GRE fieldmap listing the series (none acquired, or --ignore
+    fieldmaps dropped fmap/), DRBUDDI starts from identity."""
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg_for_diffprep(tmp_path)
     config.workflow.gradient_file = None
-    config.workflow.gre_drbuddi_init = False
-    wf = _diffprep_wf(tmp_path, _rpe_unit_with_gre_candidate(tmp_path))
+    unit = _rpe_unit(tmp_path)
+    assert unit.gre_init_estimation is None
+    wf = _diffprep_wf(tmp_path, unit)
     assert wf.get_node('drbuddi_gre_init_b0_ref_wf') is None
-    assert not _connects(
-        wf, 'sdc_wf', 'drbuddi_sdc_wf', 'outputnode.out_warp', 'inputnode.initial_field'
-    )
+    assert wf.get_node('drbuddi_sdc_wf').get_node('negate_initial_field') is None
     assert 'initialized with the field map' not in wf.visit_desc()
-
-
-def test_diffprep_drbuddi_seed_warns_without_a_gre_candidate(tmp_path, monkeypatch):
-    """A PEPOLAR unit no GRE fieldmap lists runs DRBUDDI unseeded, and says so."""
-    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
-    _cfg_for_diffprep(tmp_path)
-    config.workflow.gradient_file = None
-    config.workflow.gre_drbuddi_init = True
-    warnings = []
-    monkeypatch.setattr(
-        config.loggers.workflow, 'warning', lambda msg, *args: warnings.append(msg % args)
-    )
-    wf = _diffprep_wf(tmp_path, _rpe_unit(tmp_path))
-    assert wf.get_node('drbuddi_gre_init_b0_ref_wf') is None
-    assert any(w.startswith('--gre-init-drbuddi has no effect') for w in warnings)
 
 
 def test_diffprep_drbuddi_gre_seed_transports_with_gradwarp(tmp_path, monkeypatch):
@@ -1183,12 +1162,8 @@ def test_diffprep_drbuddi_gre_seed_transports_with_gradwarp(tmp_path, monkeypatc
     volumes -- not skipped."""
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg_for_diffprep(tmp_path)  # sets gradient_file -> has_gradwarp
-    config.workflow.gre_drbuddi_init = True
     config.workflow.gre_gradwarp = 'transport'
-    try:
-        wf = _diffprep_wf(tmp_path, _rpe_unit_with_gre_candidate(tmp_path))
-    finally:
-        config.workflow.gre_drbuddi_init = False
+    wf = _diffprep_wf(tmp_path, _rpe_unit_with_gre_candidate(tmp_path))
     assert wf.get_node('drbuddi_gre_init_b0_ref_wf') is not None
     assert wf.get_node('sdc_wf').gradwarp_mode == 'transport'
     assert _connects(
@@ -1204,12 +1179,8 @@ def test_diffprep_drbuddi_gre_seed_reference_mode_no_node_collision(tmp_path, mo
     ('gradwarp_sdc_inputs') -- both default to the same name."""
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg_for_diffprep(tmp_path)
-    config.workflow.gre_drbuddi_init = True
     config.workflow.gre_gradwarp = 'reference'
-    try:
-        wf = _diffprep_wf(tmp_path, _rpe_unit_with_gre_candidate(tmp_path))
-    finally:
-        config.workflow.gre_drbuddi_init = False
+    wf = _diffprep_wf(tmp_path, _rpe_unit_with_gre_candidate(tmp_path))
     assert wf.get_node('gradwarp_sdc_inputs') is not None  # DWI volumes
     assert wf.get_node('gradwarp_seed_inputs') is not None  # seed reference (distinct)
     assert _connects(

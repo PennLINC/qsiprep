@@ -380,25 +380,20 @@ def init_diffprep_hmc_wf(
         is_fieldmapless and not unit.is_nipreps_syn and (synb0_from_plan or bool(t2w_sdc))
     )
     epi_mode = 'T2Wreg' if use_t2wreg else 'off'
-    # With gre_drbuddi_init a PEPOLAR unit whose DWI a GRE fieldmap also lists
-    # (a non-applied application candidate) seeds DRBUDDI with that fieldmap.
-    gre_drbuddi_init = bool(
-        unit.is_pepolar
-        and config.workflow.gre_drbuddi_init
-        and unit.gre_init_estimation is not None
-    )
+    # A PEPOLAR unit whose DWI a GRE fieldmap also lists (a non-applied
+    # application candidate) always seeds DRBUDDI with that fieldmap.
+    gre_drbuddi_init = unit.is_pepolar and unit.gre_init_estimation is not None
     if gre_init_wants and not gre_init:
         config.loggers.workflow.warning(
             '--gre-init-t2wreg has no effect on %s: it has no T2w or SynB0 target, so '
             'its GRE fieldmap is applied after head motion correction.',
             unit.output_name,
         )
-    if config.workflow.gre_drbuddi_init and not gre_drbuddi_init:
-        config.loggers.workflow.warning(
-            '--gre-init-drbuddi has no effect on %s: it needs a reverse phase-encoded '
-            'correction and a GRE fieldmap that also lists the series (IntendedFor or '
-            'B0FieldSource).',
+    if gre_drbuddi_init:
+        config.loggers.workflow.info(
+            'Initializing DRBUDDI for %s with GRE fieldmap %s.',
             unit.output_name,
+            unit.gre_init_estimation.b0field_id,
         )
 
     # Load any user-supplied DIFFPREP config (or our defaults)
