@@ -110,7 +110,6 @@ def init_sdc_wf(unit):
         The fieldmap in Hz for eddy
 
     """
-    omp_nthreads = config.nipype.omp_nthreads
     does_sdc = unit.has_scanner_measured_fieldmap or unit.is_nipreps_syn
     workflow = Workflow(name='sdc_wf' if does_sdc else 'sdc_bypass_wf')
     inputnode = pe.Node(
