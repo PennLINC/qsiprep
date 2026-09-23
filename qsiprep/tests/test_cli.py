@@ -139,7 +139,7 @@ def test_cuda(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--sdc-method=drbuddi',
         f'--eddy-config={eddy_config}',
         '--output-resolution=5',
@@ -184,7 +184,7 @@ def test_drbuddi_rpe(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--sdc-method=drbuddi',
         # The dataset ships epi fieldmaps whose IntendedFor points at the DWIs,
         # so the modern grouping would correct each DWI with its own epi fmap
@@ -227,7 +227,7 @@ def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=shoreline',
         f'--shoreline-config={shoreline_config}',
         '--sdc-method=drbuddi',
@@ -264,7 +264,7 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=shoreline',
         f'--shoreline-config={shoreline_config}',
         '--sdc-method=drbuddi',
@@ -308,7 +308,7 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
         '--sloppy',
         '--write-graph',
         '--sdc-anat-reference=invt1w',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=shoreline',
         f'--shoreline-config={shoreline_config}',
         '--output-resolution=5',
@@ -347,7 +347,7 @@ def test_diffprep(data_dir, output_dir, working_dir):
         'participant',
         f'-w={work_dir}',
         '--sloppy',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=tortoise',
         '--output-resolution=5',
     ]
@@ -392,7 +392,7 @@ def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=tortoise',
         '--sdc-method=drbuddi',
         '--output-resolution=2',
@@ -439,7 +439,7 @@ def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=tortoise',
         '--sdc-method=drbuddi',
         '--output-resolution=5',
@@ -497,7 +497,7 @@ def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=tortoise',
         '--sdc-method=drbuddi',
         '--output-resolution=5',
@@ -543,7 +543,7 @@ def test_dsdti_nofmap(data_dir, output_dir, working_dir):
         f'--eddy-config={eddy_config}',
         '--denoise-method=none',
         '--unringing-method=rpg',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--output-resolution=5',
     ]
 
@@ -592,7 +592,7 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
         '--ignore',
         'fieldmaps',
         '--sdc-anat-reference=invt1w',
-        '--b1-biascorrect-stage=final',
+        '--dwi-biascorrect=n4',
         '--output-resolution=5',
     ]
 
@@ -600,11 +600,11 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
 
 
 @pytest.mark.integration
-@pytest.mark.intramodal_template
-def test_intramodal_template(data_dir, output_dir, working_dir):
-    """IntramodalTemplate test
+@pytest.mark.dwiref
+def test_dwiref(data_dir, output_dir, working_dir):
+    """Subject-level dwiref test
 
-    A two-session dataset is used to create an intramodal template.
+    A two-session dataset is used to build a subject-level dwiref.
 
     This tests the following features:
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
@@ -615,7 +615,7 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
     ------
     - twoses BIDS data (data/DSDTI_fmap)
     """
-    TEST_NAME = 'intramodal_template'
+    TEST_NAME = 'dwiref'
 
     dataset_dir = download_test_data('twoses', data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
@@ -630,12 +630,13 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
         'participant',
         f'-w={work_dir}',
         '--sloppy',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=shoreline',
         f'--shoreline-config={shoreline_config}',
         '--output-resolution=5',
-        '--intramodal-template-transform=BSplineSyN',
-        '--intramodal-template-iters=2',
+        '--dwiref-definition=subject',
+        '--dwiref-construction-transform=BSplineSyN',
+        '--dwiref-construction-iters=2',
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)
@@ -668,7 +669,7 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--sloppy',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--write-graph',
         '--output-resolution=5',
         '--hmc-method=shoreline',
@@ -705,7 +706,7 @@ def test_forrest_gump(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--sloppy',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--write-graph',
         '--output-resolution=5',
         f'--bids-filter-file={bids_filter}',
@@ -741,7 +742,7 @@ def test_forrest_gump_patch2self(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--sloppy',
         '--denoise-method=patch2self',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--write-graph',
         '--output-resolution=5',
         f'--bids-filter-file={bids_filter}',

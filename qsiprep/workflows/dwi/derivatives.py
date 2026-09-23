@@ -180,6 +180,7 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
             source_file=source_file,
             base_directory=output_dir,
             space='ACPC',
+            desc='preproc',
             suffix='dwiref',
             extension='.nii.gz',
             compress=True,

@@ -34,10 +34,10 @@ sections:
     static: false
     subtitle: Spatial normalization of the anatomical reference
 
-  - bids: {datatype: figures, desc: intramodalcoreg, suffix: [T1w, T2w]}
-    caption: Coregistration of the intramodal DWI template to the anatomical reference image.
+  - bids: {datatype: figures, desc: dwirefcoreg, suffix: [T1w, T2w]}
+    caption: Coregistration of the subject-level dwiref template to the anatomical reference image.
     static: false
-    subtitle: Coregistration of the intramodal to anatomical templates
+    subtitle: Coregistration of the subject-level dwiref to anatomical
 
 - name: <em>B<sub>0</sub></em> field mapping
   ordering: session,acquisition,run,fmapid
@@ -127,12 +127,6 @@ sections:
       "Effect of removing Gibbs ringing on a low and high-<em>b</em> image."
     static: false
     subtitle: Gibbs Ringing Removal
-
-  - bids: {datatype: figures, desc: biascorr, suffix: dwi}
-    caption: |
-      "Effect of correcting <em>B<sub>1</sub></em> bias on a low and high-<em>b</em> image."
-    static: false
-    subtitle: <em>B<sub>1</sub></em> Bias Correction
 
   - bids: {datatype: figures, desc: gradunwarp, suffix: dwi}
     caption: |
@@ -279,11 +273,11 @@ sections:
     static: false
     subtitle: Reorientation of DWI reference image to AC-PC
 
-  - bids: {datatype: figures, desc: intramodalcoreg, suffix: dwi}
+  - bids: {datatype: figures, desc: dwirefcoreg, suffix: dwi}
     caption: |
-      b=0 reference image warped to the across-scan/session intramodal template.
+      Distortion-group b=0 reference warped to the subject-level dwiref template.
     static: false
-    subtitle: Alignment of dMRI to intramodal template
+    subtitle: Alignment of dMRI to the subject-level dwiref
 
   - bids: {datatype: figures, desc: biascorrpost.*, suffix: dwi, regex_search: True}
     caption: |

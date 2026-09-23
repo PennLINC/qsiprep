@@ -584,7 +584,7 @@ workflows:
                 - forrest_gump
                 - forrest_gump_patch2self
                 - synthstrip
-                - intramodal_template
+                - dwiref
           requires: [image_prep, get_data]
           filters: *default_filters
 
@@ -610,7 +610,7 @@ workflows:
             - forrest_gump
             - forrest_gump_patch2self
             - synthstrip
-            - intramodal_template
+            - dwiref
             - unit_tests
           filters: *default_filters
 
