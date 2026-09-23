@@ -30,14 +30,6 @@ from .. import config
 from ..utils.gpu import GPU_ALIASES, GPU_TASKS
 from ..utils.misc import load_shoreline_config, parse_denoise_method
 
-B0_TO_ANAT_TRANSFORM_DEFAULT = 'Rigid'
-"""Default for --b0-to-anat-transform.
-
-Applied after parsing rather than by argparse, because the option is declared with
-default=SUPPRESS so that its mutual exclusion with the deprecated
---b0-to-t1w-transform is checked reliably.
-"""
-
 
 def _build_parser(**kwargs):
     """Build parser object.
@@ -54,9 +46,7 @@ def _build_parser(**kwargs):
     from pathlib import Path
 
     # Deprecated options: {option string: (version it is removed in, what happens instead)}
-    deprecations = {
-        '--b0-to-t1w-transform': ('27.0.0', 'Please use `--b0-to-anat-transform` instead.'),
-    }
+    deprecations = {}
 
     # Deprecated flags that enable their replacement automatically:
     # {option string: (replacement option, its namespace attribute, the value it is set to)}
@@ -68,18 +58,6 @@ def _build_parser(**kwargs):
             f'{option_string} has been deprecated and will be removed in {removed_in}. {detail}',
             file=sys.stderr,
         )
-
-    class DeprecatedAction(Action):
-        """Warn that a deprecated option is ignored, and keep it out of the namespace.
-
-        Declared with default=SUPPRESS so the dest never reaches the config object.
-        """
-
-        def __init__(self, option_strings, dest, nargs=0, **kwargs):
-            super().__init__(option_strings, dest, nargs=nargs, **kwargs)
-
-        def __call__(self, parser, namespace, values, option_string=None):
-            _warn_deprecated(option_string or self.option_strings[0])
 
     class DeprecatedForwardAction(Action):
         """Warn about a deprecated flag, and record that its replacement must be enabled.
@@ -96,13 +74,6 @@ def _build_parser(**kwargs):
             _warn_deprecated(option_string)
             pending = getattr(namespace, '_forwarded_deprecations', [])
             namespace._forwarded_deprecations = [*pending, option_string]
-
-    class DeprecatedStoreAction(Action):
-        """Warn about a deprecated option, then store its value like store would."""
-
-        def __call__(self, parser, namespace, values, option_string=None):
-            _warn_deprecated(option_string or self.option_strings[0])
-            setattr(namespace, self.dest, values)
 
     class DeprecationForwardingParser(ArgumentParser):
         """Enables the replacements for any deprecated options that were given."""
@@ -121,14 +92,6 @@ def _build_parser(**kwargs):
                 setattr(namespace, dest, value)
             if hasattr(namespace, '_forwarded_deprecations'):
                 del namespace._forwarded_deprecations
-
-            # --b0-to-t1w-transform was renamed; the two are mutually exclusive, so at
-            # most one of them is set here.
-            if hasattr(namespace, 'b0_to_t1w_transform'):
-                namespace.b0_to_anat_transform = namespace.b0_to_t1w_transform
-                del namespace.b0_to_t1w_transform
-            if not hasattr(namespace, 'b0_to_anat_transform'):
-                namespace.b0_to_anat_transform = B0_TO_ANAT_TRANSFORM_DEFAULT
 
             # The method axes (--hmc-method/--sdc-method), normalized after the
             # whole command line has been read.
@@ -186,23 +149,6 @@ def _build_parser(**kwargs):
 
             return namespace, extras
 
-    class ToDict(Action):
-        def __call__(self, parser, namespace, values, option_string=None):
-            d = {}
-            for spec in values:
-                try:
-                    name, loc = spec.split('=')
-                    loc = Path(loc)
-                except ValueError:
-                    loc = Path(spec)
-                    name = loc.name
-
-                if name in d:
-                    raise ValueError(f'Received duplicate derivative name: {name}')
-
-                d[name] = loc
-            setattr(namespace, self.dest, d)
-
     def _path_exists(path, parser):
         """Ensure a given path exists."""
         if path is None or not Path(path).exists():
@@ -222,6 +168,24 @@ def _build_parser(**kwargs):
         if value < 1:
             raise parser.error("Argument can't be less than one.")
         return value
+
+    def _iters_at_least_two(value, parser):
+        """Ensure the dwiref construction iteration count is usable.
+
+        Only the linear template branch clamps the count; the default nonlinear
+        branch hands it straight to antsMultivariateTemplateConstruction2.
+        """
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            raise parser.error(f'--dwiref-construction-iters must be an integer, not {value!r}')
+        if parsed < 2:
+            raise parser.error(
+                f'--dwiref-construction-iters must be at least 2; got {parsed}. '
+                'Use --dwiref-definition to turn the dwiref template off, not the '
+                'iteration count.'
+            )
+        return parsed
 
     def _int_or_auto(value, parser):
         """Ensure an argument is an odd integer >= 3 or 'auto'."""
@@ -303,6 +267,7 @@ def _build_parser(**kwargs):
     PositiveInt = partial(_min_one, parser=parser)
     IntOrAuto = partial(_int_or_auto, parser=parser)
     DenoiseMethod = partial(_denoise_method, parser=parser)
+    IterCount = partial(_iters_at_least_two, parser=parser)
     BIDSFilter = partial(_bids_filter, parser=parser)
 
     g_required = parser.add_argument_group(
@@ -408,11 +373,6 @@ def _build_parser(**kwargs):
             '--ignore disables processing that the input data would otherwise trigger; '
             '--force enables processing that the input metadata would otherwise skip.'
         ),
-    )
-    g_scope.add_argument(
-        '--anat-only',
-        action='store_true',
-        help='Run the anatomical workflows only.',
     )
     g_scope.add_argument(
         '--boilerplate-only',
@@ -525,10 +485,11 @@ def _build_parser(**kwargs):
         choices=['n4', 'auto', 'none'],
         default='n4',
         help=(
-            'Whether to run N4 bias field correction on the anatomical images. This is '
-            'separate from --b1-biascorrect-stage, which governs the DWIs only. '
-            '"n4" always runs it; scanner-side intensity normalization (Siemens NORM, '
-            'for example) does not remove the need for it. '
+            'Whether to run N4 bias field correction on ANATOMICAL images. '
+            'Note this is separate from --dwi-biascorrect, which only governs '
+            'the DWIs. '
+            '"n4" (default) always runs it; scanner-side intensity normalization '
+            '(e.g. Siemens NORM) does not necessarily remove the need for it. '
             '"none" never runs it. '
             '"auto" skips it when the BIDS ImageType metadata contains "NORM", which is '
             'how Siemens and others flag console-applied normalization.'
@@ -633,18 +594,21 @@ def _build_parser(**kwargs):
         ),
     )
     g_dwi.add_argument(
-        '--b1-biascorrect-stage',
+        '--dwi-biascorrect',
         action='store',
-        choices=['final', 'none', 'legacy'],
-        default='final',
+        choices=['n4', 'auto', 'none'],
+        default='n4',
         help=(
-            'Which stage to apply B1 bias correction at. '
-            '"final" applies it after all the data have been resampled to their final '
-            'space. '
-            '"none" skips B1 bias correction. '
-            '"legacy" behaves consistently with QSIPrep < 0.17. '
-            'For prescan-normalized data we recommend "none", because bias correction '
-            'may introduce artifacts on normalized data.'
+            'Whether to run N4 bias field correction on the DWIs, after all data '
+            'has been resampled to its final space. '
+            'Note this is separate from --anat-biascorrect, which only governs '
+            'the anatomicals. '
+            '"n4" (default) always runs it. '
+            '"none" never runs it; for prescan-normalized data we recommend this, '
+            'as bias correction may introduce artifacts on normalized data. '
+            '"auto" skips it when the BIDS ImageType metadata of every DWI '
+            'contains "NORM", which is how Siemens and others flag '
+            'console-applied normalization.'
         ),
     )
     g_dwi.add_argument(
@@ -832,55 +796,53 @@ def _build_parser(**kwargs):
         'Coregistration to the anatomical reference',
         description="Alignment of the DWI reference to the subject's anatomical space.",
     )
-    # Both are declared with default=SUPPRESS so that "was this given?" is just
-    # hasattr. argparse's own mutual-exclusion check compares the parsed value against
-    # the default by identity, which would miss `--b0-to-anat-transform Rigid` when
-    # 'Rigid' happens to be interned; against SUPPRESS it always fires. The default is
-    # applied in DeprecationForwardingParser instead.
-    g_b0_to_anat = g_coreg.add_mutually_exclusive_group()
-    g_b0_to_anat.add_argument(
-        '--b0-to-anat-transform',
+    g_coreg.add_argument(
+        '--dwiref-definition',
         action='store',
-        default=SUPPRESS,
-        choices=['Rigid', 'Affine'],
+        choices=['distortion-group', 'subject'],
+        default='distortion-group',
         help=(
-            'Degrees of freedom when registering the b=0 reference to the anatomical '
-            'images: 6 (Rigid, rotation and translation) or 12 (Affine). The default is '
-            f'{B0_TO_ANAT_TRANSFORM_DEFAULT}.'
-        ),
-    )
-    g_b0_to_anat.add_argument(
-        '--b0-to-t1w-transform',
-        action=DeprecatedStoreAction,
-        default=SUPPRESS,
-        choices=['Rigid', 'Affine'],
-        help=(
-            'DEPRECATED: renamed to --b0-to-anat-transform, which this option now '
-            'sets. Use that instead.'
+            'Which reference image DWI-to-anatomical coregistration targets. '
+            '"distortion-group" (default) registers each distortion group\'s own b=0 '
+            'reference to the anatomical. "subject" builds a single midpoint template '
+            "from every group's reference, registers that once, and has every group "
+            'inherit the result, which makes preprocessed data directly comparable '
+            'across groups.'
         ),
     )
     g_coreg.add_argument(
-        '--intramodal-template-iters',
+        '--dwiref-construction-iters',
         action='store',
-        default=0,
-        type=int,
-        metavar='N',
+        default=2,
+        type=IterCount,
         help=(
-            'Number of iterations for finding the midpoint image from the b=0 templates '
-            'of all DWI runs and sessions. This has no effect if there is only one '
-            'group. If 0, all b=0 templates are registered directly to the anatomical '
-            'reference. Enabling the intramodal template method when there are multiple '
-            'runs or sessions produces a single DWI reference image, which makes it '
-            'possible to compare AC-PC-space preprocessed DWI data directly across '
-            'groups.'
+            'Number of iterations for building the subject-level dwiref template '
+            'from the b=0 references of all DWI groups. Must be at least 2 '
+            '(default: 2). Only used when --dwiref-definition is "subject" and the '
+            'subject has more than one DWI group.'
         ),
     )
     g_coreg.add_argument(
-        '--intramodal-template-transform',
+        '--dwiref-construction-transform',
         default='BSplineSyN',
         choices=['Rigid', 'Affine', 'BSplineSyN', 'SyN'],
         action='store',
-        help='Transformation used for building the intramodal template.',
+        help=(
+            'Transformation used for building the subject-level dwiref template. '
+            'Only used when --dwiref-definition is "subject".'
+        ),
+    )
+    g_coreg.add_argument(
+        '--dwi2anat-dof',
+        action='store',
+        type=int,
+        choices=[6, 12],
+        default=6,
+        help=(
+            'Degrees of freedom when registering the DWI reference to the '
+            'anatomical images: 6 (rigid: rotation and translation) or 12 (affine). '
+            '(default: 6)'
+        ),
     )
 
     g_resource = parser.add_argument_group(
@@ -1337,20 +1299,16 @@ def parse_args(args=None, namespace=None):
     #         elif isinstance(ses_filter, list):
     #             session_filters.extend(ses_filter)
 
-    # Examine the available sessions for each participant. Anatomical-only runs
-    # do not require DWI data, so use the requested anatomical modality to
-    # discover sessions in that case.
-    session_suffix = [config.workflow.anat_modality] if config.workflow.anat_only else ['dwi']
+    # Examine the available sessions for each participant.
     for subject_id in participant_label:
         sessions = config.execution.layout.get_sessions(
             subject=subject_id,
             session=session_filters or Query.OPTIONAL,
-            suffix=session_suffix,
+            suffix=['dwi'],
         )
 
         if session_filters and not sessions:
-            modality = 'DWI' if not config.workflow.anat_only else config.workflow.anat_modality
-            parser.error(f'No {modality} files found with session filter {session_filters}')
+            parser.error(f'No DWI files found with session filter {session_filters}')
 
         # If there are no sessions, there is only one option:
         if not sessions:

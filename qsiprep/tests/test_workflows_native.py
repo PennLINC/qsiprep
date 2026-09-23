@@ -64,7 +64,7 @@ def _cfg(hmc_method='eddy', sdc_method='topup', layout=None):
     config.workflow.sdc_method = sdc_method
     config.workflow.shoreline_model = None
     config.workflow.b0_threshold = 100
-    config.workflow.b1_biascorrect_stage = 'final'
+    config.workflow.dwi_biascorrect = 'n4'
     config.workflow.eddy_config = None
     config.workflow.no_b0_harmonization = False
     config.workflow.denoise_method = 'dwidenoise'
@@ -89,7 +89,12 @@ def test_pre_hmc_single_series_builds(tmp_path):
     from qsiprep.workflows.dwi.pre_hmc import init_dwi_pre_hmc_wf
 
     src = _write_dwi(tmp_path / 'sub-01_dwi.nii.gz')
-    wf = init_dwi_pre_hmc_wf(make_preproc_unit([src]), orientation='LAS', source_file=src)
+    wf = init_dwi_pre_hmc_wf(
+        make_preproc_unit([src]),
+        orientation='LAS',
+        source_file=src,
+        do_biascorr=True,
+    )
     assert wf.get_node('outputnode') is not None
     # A single series is merged directly, not split into polarity groups.
     assert wf.get_node('merge_plus') is None
@@ -99,7 +104,12 @@ def test_pre_hmc_rpe_series_splits_into_polarity_groups(tmp_path):
     _cfg(layout=_StubLayout())
     from qsiprep.workflows.dwi.pre_hmc import init_dwi_pre_hmc_wf
 
-    wf = init_dwi_pre_hmc_wf(_rpe_unit(tmp_path), orientation='LAS', source_file=SRC)
+    wf = init_dwi_pre_hmc_wf(
+        _rpe_unit(tmp_path),
+        orientation='LAS',
+        source_file=SRC,
+        do_biascorr=True,
+    )
     assert wf.get_node('merge_plus') is not None
     assert wf.get_node('merge_minus') is not None
 
@@ -236,7 +246,7 @@ def test_diffusion_summary_renders_pe_direction(tmp_path, pe_direction, expected
         pe_direction=pe_direction,
         hmc_transform='Affine',
         hmc_model='eddy',
-        b0_to_anat_transform='Rigid',
+        dwi2anat_dof=6,
         denoise_method='dwidenoise',
         dwidenoise_window=5,
         validation_reports=[str(report)],
@@ -312,7 +322,7 @@ def test_dwi_preproc_wf_drbuddi_without_t2w_builds(tmp_path, monkeypatch):
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     cfg = _cfg(hmc_method='tortoise', sdc_method='drbuddi', layout=_StubLayout())
     cfg.workflow.anat_modality = 't1w'
-    cfg.workflow.b0_to_anat_transform = 'Rigid'
+    cfg.workflow.dwi2anat_dof = 6
     cfg.workflow.hmc_transform = 'Affine'
     cfg.workflow.diffprep_config = None
     cfg.workflow.tortoise_gpu_cpu_ratio = None
@@ -547,3 +557,28 @@ def test_distortion_group_merge_wf_writes_the_assembly_sidecar(tmp_path):
         name='bare_merge_wf',
     )
     assert bare.get_node('merged_sidecar') is None
+
+
+@pytest.mark.parametrize(('dof', 'expected'), [(6, 'Rigid'), (12, 'Affine')])
+def test_dwi2anat_dof_reaches_the_per_unit_coregistration(tmp_path, monkeypatch, dof, expected):
+    """The second production consumer of --dwi2anat-dof.
+
+    A test covering only the dwiref would pass with this call site
+    still reading the removed config attribute.
+    """
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    cfg = _cfg(hmc_method='eddy', sdc_method='topup', layout=_StubLayout())
+    cfg.workflow.anat_modality = 't1w'
+    cfg.workflow.dwi2anat_dof = dof
+    cfg.workflow.impute_slice_threshold = 0
+    from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
+
+    wf = init_dwi_preproc_wf(
+        _rpe_unit(tmp_path),
+        t2w_sdc=False,
+        output_prefix='sub-01',
+        source_file=SRC,
+        anatomical_template='MNI152NLin2009cAsym',
+    )
+    coreg = wf.get_node('b0_anat_coreg').get_node('b0_to_anat')
+    assert coreg.inputs.transforms == [expected]

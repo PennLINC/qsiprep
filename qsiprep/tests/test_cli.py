@@ -1,13 +1,10 @@
 """Command-line interface tests."""
 
 import os
-import shutil
 import sys
 from pathlib import Path
 from unittest.mock import patch
 
-import nibabel as nb
-import numpy as np
 import pytest
 from nipype import config as nipype_config
 
@@ -142,7 +139,7 @@ def test_cuda(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--sdc-method=drbuddi',
         f'--eddy-config={eddy_config}',
         '--output-resolution=5',
@@ -187,7 +184,7 @@ def test_drbuddi_rpe(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--sdc-method=drbuddi',
         # The dataset ships epi fieldmaps whose IntendedFor points at the DWIs,
         # so the modern grouping would correct each DWI with its own epi fmap
@@ -230,7 +227,7 @@ def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=shoreline',
         f'--shoreline-config={shoreline_config}',
         '--sdc-method=drbuddi',
@@ -267,7 +264,7 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=shoreline',
         f'--shoreline-config={shoreline_config}',
         '--sdc-method=drbuddi',
@@ -285,8 +282,6 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
     Was in DSCSDSI.sh.
 
     This tests the following features:
-    - Whether the --anat-only workflow is successful
-    - Whether the regular qsiprep workflow can resume using the working directory from --anat-only
     - The SHORELine motion correction workflow
     - Skipping B1 biascorrection
     - Using the SyN-SDC distortion correction method
@@ -313,7 +308,7 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
         '--sloppy',
         '--write-graph',
         '--sdc-anat-reference=invt1w',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=shoreline',
         f'--shoreline-config={shoreline_config}',
         '--output-resolution=5',
@@ -352,7 +347,7 @@ def test_diffprep(data_dir, output_dir, working_dir):
         'participant',
         f'-w={work_dir}',
         '--sloppy',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=tortoise',
         '--output-resolution=5',
     ]
@@ -397,7 +392,7 @@ def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=tortoise',
         '--sdc-method=drbuddi',
         '--output-resolution=2',
@@ -444,7 +439,7 @@ def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=tortoise',
         '--sdc-method=drbuddi',
         '--output-resolution=5',
@@ -502,7 +497,7 @@ def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=tortoise',
         '--sdc-method=drbuddi',
         '--output-resolution=5',
@@ -548,7 +543,7 @@ def test_dsdti_nofmap(data_dir, output_dir, working_dir):
         f'--eddy-config={eddy_config}',
         '--denoise-method=none',
         '--unringing-method=rpg',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--output-resolution=5',
     ]
 
@@ -597,7 +592,7 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
         '--ignore',
         'fieldmaps',
         '--sdc-anat-reference=invt1w',
-        '--b1-biascorrect-stage=final',
+        '--dwi-biascorrect=n4',
         '--output-resolution=5',
     ]
 
@@ -605,11 +600,11 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
 
 
 @pytest.mark.integration
-@pytest.mark.intramodal_template
-def test_intramodal_template(data_dir, output_dir, working_dir):
-    """IntramodalTemplate test
+@pytest.mark.dwiref
+def test_dwiref(data_dir, output_dir, working_dir):
+    """Subject-level dwiref test
 
-    A two-session dataset is used to create an intramodal template.
+    A two-session dataset is used to build a subject-level dwiref.
 
     This tests the following features:
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
@@ -620,7 +615,7 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
     ------
     - twoses BIDS data (data/DSDTI_fmap)
     """
-    TEST_NAME = 'intramodal_template'
+    TEST_NAME = 'dwiref'
 
     dataset_dir = download_test_data('twoses', data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
@@ -635,98 +630,16 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
         'participant',
         f'-w={work_dir}',
         '--sloppy',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=shoreline',
         f'--shoreline-config={shoreline_config}',
         '--output-resolution=5',
-        '--intramodal-template-transform=BSplineSyN',
-        '--intramodal-template-iters=2',
+        '--dwiref-definition=subject',
+        '--dwiref-construction-transform=BSplineSyN',
+        '--dwiref-construction-iters=2',
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)
-
-
-@pytest.mark.integration
-@pytest.mark.multi_t1w
-def test_multi_t1w(data_dir, output_dir, working_dir):
-    """MultiT1w test
-
-    This tests the following features:
-    - freesurfer's robust template
-    - Explicitly testing --subject-anatomical-reference unbiased
-
-    Inputs
-    ------
-    - DSDTI BIDS data (data/DSDTI)
-    """
-    TEST_NAME = 'multi_t1w'
-    UNBIASED_TEST_NAME = 'multi_t1w_unbiased'
-
-    dataset_dir = download_test_data('DSDTI', data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, 'DSDTI')
-    work_dir = os.path.join(working_dir, TEST_NAME)
-    writable_bids_dir = os.path.join(work_dir, 'DSDTI')
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    unbiased_out_dir = os.path.join(output_dir, UNBIASED_TEST_NAME)
-    unbiased_work_dir = os.path.join(working_dir, UNBIASED_TEST_NAME)
-
-    if os.path.isdir(writable_bids_dir):
-        shutil.rmtree(writable_bids_dir)
-    shutil.copytree(dataset_dir, writable_bids_dir)
-
-    # CRITICAL: delete the fieldmap data.
-    fmap_dir = Path(writable_bids_dir) / 'sub-PNC' / 'fmap'
-    if fmap_dir.exists():
-        shutil.rmtree(fmap_dir)
-
-    anat_dir = Path(writable_bids_dir) / 'sub-PNC' / 'anat'
-    source_t1w = anat_dir / 'sub-PNC_T1w.nii.gz'
-    shifted_t1w = anat_dir / 'sub-PNC_run-02_T1w.nii.gz'
-    source_json = anat_dir / 'sub-PNC_T1w.json'
-    shifted_json = anat_dir / 'sub-PNC_run-02_T1w.json'
-
-    # Generate a second, translated T1w to test robust template construction.
-    source_img = nb.load(str(source_t1w))
-    shifted_affine = source_img.affine.copy()
-    shifted_affine[:3, 3] = shifted_affine[:3, 3] + np.array([2.0, 4.0, 1.0])
-    shifted_img = source_img.__class__(
-        np.asanyarray(source_img.dataobj), shifted_affine, source_img.header
-    )
-    nb.save(shifted_img, shifted_t1w)
-    shutil.copy2(source_json, shifted_json)
-
-    test_data_path = get_test_data_path()
-    eddy_config = os.path.join(test_data_path, 'eddy_config.json')
-
-    parameters = [
-        writable_bids_dir,
-        out_dir,
-        'participant',
-        f'-w={work_dir}',
-        f'--eddy-config={eddy_config}',
-        '--denoise-method=none',
-        '--sloppy',
-        '--output-resolution=5',
-        '--anat-only',
-    ]
-    _run_and_generate(TEST_NAME, parameters, test_main=False, check_outputs=False)
-
-    unbiased_parameters = [
-        writable_bids_dir,
-        unbiased_out_dir,
-        'participant',
-        f'-w={unbiased_work_dir}',
-        f'--eddy-config={eddy_config}',
-        '--denoise-method=none',
-        '--sloppy',
-        '--output-resolution=5',
-        '--anat-only',
-        '--subject-anatomical-reference=unbiased',
-    ]
-    _run_and_generate(
-        UNBIASED_TEST_NAME, unbiased_parameters, test_main=False, check_outputs=False
-    )
 
 
 @pytest.mark.integration
@@ -756,7 +669,7 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--sloppy',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--write-graph',
         '--output-resolution=5',
         '--hmc-method=shoreline',
@@ -793,7 +706,7 @@ def test_forrest_gump(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--sloppy',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--write-graph',
         '--output-resolution=5',
         f'--bids-filter-file={bids_filter}',
@@ -829,7 +742,7 @@ def test_forrest_gump_patch2self(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--sloppy',
         '--denoise-method=patch2self',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--write-graph',
         '--output-resolution=5',
         f'--bids-filter-file={bids_filter}',

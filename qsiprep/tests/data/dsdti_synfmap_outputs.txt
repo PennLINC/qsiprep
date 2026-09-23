@@ -20,6 +20,8 @@ sub-PNC/anat/sub-PNC_space-ACPC_dseg.nii.gz
 sub-PNC/dwi
 sub-PNC/dwi/sub-PNC_acq-realistic_desc-confounds_timeseries.json
 sub-PNC/dwi/sub-PNC_acq-realistic_desc-confounds_timeseries.tsv
+sub-PNC/dwi/sub-PNC_acq-realistic_from-ACPC_to-distortiongroup_mode-image_desc-coreg_xfm.mat
+sub-PNC/dwi/sub-PNC_acq-realistic_from-distortiongroup_to-ACPC_mode-image_desc-coreg_xfm.mat
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-brain_mask.nii.gz
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-image_qc.tsv
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-preproc_dwi.b
@@ -28,9 +30,10 @@ sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-preproc_dwi.bval
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-preproc_dwi.bvec
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-preproc_dwi.json
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-preproc_dwi.nii.gz
+sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-preproc_dwiref.nii.gz
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_desc-slice_qc.json
-sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_dwiref.nii.gz
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_model-eddy_stat-cnr_dwimap.json
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_model-eddy_stat-cnr_dwimap.nii.gz
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_stat-tsnr_dwimap.json
 sub-PNC/dwi/sub-PNC_acq-realistic_space-ACPC_stat-tsnr_dwimap.nii.gz
+sub-PNC/dwi/sub-PNC_acq-realistic_space-distortiongroup_dwiref.nii.gz

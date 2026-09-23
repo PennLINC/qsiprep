@@ -351,7 +351,7 @@ def init_b0_hmc_wf(
     decimal places. See test_template_registration_settings.py.
 
     TODO: Rename to init_unbiased_alignment_wf.
-    Used in three places: intramodal template, anatomical merge, dwi hmc.
+    Used in three places: dwiref, anatomical merge, dwi hmc.
     """
     if align_to is None:
         align_to = 'iterative'
