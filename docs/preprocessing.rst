@@ -1084,26 +1084,18 @@ signal into one or drops it out.
 A GRE fieldmap measures the field directly.
 With ``--hmc-method tortoise``, a GRE fieldmap that lists a series but lost to
 another correction starts that correction's TORTOISE registration instead of
-going unused. No option is needed; ``--ignore fieldmaps`` (which skips
-``fmap/``) or ``--ignore sdc`` turns it off.
+going unused.
+See :ref:`gre_init_usage` for how to curate the dataset and which options to
+use.
 
 DRBUDDI
    When a reverse phase-encoded correction wins, DRBUDDI starts from the GRE
-   warp: the warp for the series' own phase encoding is the initial blip-up
+   warp: the warp for the blip-up series' phase encoding is the initial blip-up
    transform and its negation the initial blip-down transform.
-   The reverse phase-encoded correction has to be linked explicitly (an
-   ``epi`` fieldmap's ``IntendedFor``, or ``B0FieldIdentifier``/
-   ``B0FieldSource``): once a GRE fieldmap's ``IntendedFor`` names the series,
-   *QSIPrep* no longer infers reverse phase-encoding pairs in that session, and
-   the GRE fieldmap is applied on its own.
 
 T2Wreg
-   When ``--sdc-anat-reference t2w`` or ``synb0`` is combined with
-   ``--force sdc-anat-reference``, the anatomical reference replaces the GRE
-   fieldmap as the applied correction, and T2Wreg (against the T2w or the SynB0
-   image) starts from the GRE warp.
-   Without ``--force``, the GRE fieldmap is applied on its own, and a forced
-   ``invt1w`` reference runs SyN, which takes no initial warp.
+   When an anatomical reference is forced over the GRE fieldmap
+   (``--force sdc-anat-reference``), T2Wreg starts from the GRE warp.
 
 In both cases the initial warp is held fixed through the registration's
 multi-resolution pyramid, so each stage estimates a residual correction on top
