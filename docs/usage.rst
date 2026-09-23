@@ -180,13 +180,28 @@ DRBUDDI from a GRE fieldmap
 When both a reverse phase-encoded correction and a GRE fieldmap list a series,
 QSIPrep corrects the series with DRBUDDI and starts DRBUDDI from the GRE
 fieldmap.
-Both links have to be explicit.
 
 Reverse phase-encoded DWI series
 --------------------------------
 
 For a pair of DWI series acquired with opposite phase encoding (for example
-``dir-AP`` and ``dir-PA``), use ``B0FieldIdentifier``/``B0FieldSource``.
+``dir-AP`` and ``dir-PA``), the GRE fieldmap's ``IntendedFor`` is enough, as
+long as nothing in the session carries ``B0FieldIdentifier`` or
+``B0FieldSource``: QSIPrep pairs the two series itself and keeps the GRE
+fieldmap as a candidate::
+
+    sub-01/
+      fmap/
+        sub-01_phasediff.json    {"IntendedFor": ["dwi/sub-01_dir-AP_dwi.nii.gz",
+                                                  "dwi/sub-01_dir-PA_dwi.nii.gz"], ...}
+        sub-01_magnitude1.json
+        sub-01_magnitude2.json
+      dwi/
+        sub-01_dir-AP_dwi.json
+        sub-01_dir-PA_dwi.json
+
+If the session uses ``B0FieldIdentifier``/``B0FieldSource``, link the pair
+with them too.
 Both series are sources of the reverse phase-encoded estimation, and both list
 it and the GRE fieldmap::
 
@@ -228,18 +243,24 @@ TORTOISE, whose default ``--sdc-method`` is DRBUDDI::
         --hmc-method tortoise --output-resolution 1.5
 
 .. warning::
-   Two curations look right but leave DRBUDDI skipped or unseeded:
+   Two setups look right but leave DRBUDDI skipped or unseeded:
 
-   * **Only the GRE fieldmap is linked.** If the GRE fieldmap's ``IntendedFor``
-     names both series of a reverse phase-encoded pair and nothing else is
-     curated, QSIPrep does not pair the series with each other (it stops
-     inferring reverse phase-encoding pairs once anything in the session is
-     linked). The GRE fieldmap is applied on its own and DRBUDDI does not run.
-   * **The pair is curated, the GRE fieldmap is linked by ``IntendedFor``.**
+   * **Other fieldmap links in the session.** Once any file in the session
+     carries ``B0FieldIdentifier`` or ``B0FieldSource``, or an ``epi``
+     fieldmap's ``IntendedFor`` names a series, QSIPrep stops pairing series by
+     itself. A GRE fieldmap whose ``IntendedFor`` names an AP/PA pair that is
+     not otherwise linked is then applied on its own and DRBUDDI does not run;
+     link the pair with ``B0FieldIdentifier``/``B0FieldSource`` as above.
+   * **The pair uses ``B0FieldSource``, the GRE fieldmap only ``IntendedFor``.**
      A series with a ``B0FieldSource`` ignores ``IntendedFor`` links to it, so
      the GRE fieldmap is not a candidate and DRBUDDI starts without it.
      Put the GRE fieldmap's ``B0FieldIdentifier`` in the series'
      ``B0FieldSource``.
+
+To correct both series with the GRE fieldmap itself instead, name only the GRE
+fieldmap in their ``B0FieldSource`` (or pass ``--ignore pepolar-dwis``).
+QSIPrep then processes each phase encoding in its own pipeline, with a GRE warp
+built for that encoding, and concatenates the corrected results.
 
 
 T2Wreg from a GRE fieldmap
@@ -286,9 +307,9 @@ eligible::
 For T2Wreg, add ``--sdc-anat-reference t2w --force sdc-anat-reference``; each
 series should then be corrected by ``auto+t2wreg`` with the GRE fieldmap also
 eligible.
-qsiplan does not model the initialization yet, so it also labels the GRE
-fieldmap "(not used)" and warns that it does not correct any DWI series.
-For a GRE fieldmap listed as also eligible, that warning is expected.
+In both cases the GRE fieldmap is labelled "(initializes DRBUDDI/T2Wreg)", and
+its ``estimation-unused`` warning notes that it initializes those
+registrations.
 
 During the run, QSIPrep logs ``Initializing DRBUDDI for <output> with GRE
 fieldmap <id>`` (or ``T2Wreg``).
