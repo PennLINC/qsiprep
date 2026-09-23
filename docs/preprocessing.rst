@@ -205,7 +205,7 @@ and writes the schedule to a file in the working directory at run time.
   }
 
 The schedules bundled with ``dwidenoise2``
-(https://github.com/tsalo/dwidenoise2/tree/main/share/dwidenoise2/dwidenoise2)
+(https://github.com/Lestropie/dwidenoise2/tree/main/share/dwidenoise2/dwidenoise2)
 describe each column and can be copied into this format.
 Without a ``schedule`` key, ``dwidenoise2`` uses its default schedule.
 

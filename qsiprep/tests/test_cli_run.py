@@ -658,9 +658,6 @@ def test_config_file_reload_uses_command_line_shoreline_config(tmp_path, restore
     assert config.workflow.hmc_transform == 'Rigid'
 
 
-# --- --dwidenoise2-config ---
-
-
 def _dwidenoise2_json(tmp_path, name='dwidenoise2.json', **settings):
     import json
 
