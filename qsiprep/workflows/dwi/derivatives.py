@@ -14,6 +14,7 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from ... import config
 from ...interfaces import DerivativesDataSink
 from ...interfaces.tsnr import DWITSNR
+from ...utils.sdc import sdc_displacement_sidecar
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
@@ -62,27 +63,6 @@ def _tsnr_meta(n_b0, median_tsnr):
 
 
 LOGGER = logging.getLogger('nipype.workflow')
-
-
-def _sdc_sidecar(meta, output_dir, transform_files=None):
-    """An SDC displacement map's sidecar, naming the transforms that carried it into ACPC.
-
-    ``TransformFile`` follows BEP014 ("the file used to transform the source into
-    this file"): the written transform(s) that brought the DWI-space correction
-    onto the ACPC grid, as BIDS URIs into this dataset, in the order they apply.
-    One transform is a plain string. The key is left out when ``transform_files``
-    is not given, i.e. when some step of that chain is not written.
-    """
-    import os
-
-    meta = dict(meta)
-    if transform_files:
-        paths = []
-        for item in [transform_files] if isinstance(transform_files, str) else transform_files:
-            paths.extend([item] if isinstance(item, str) else item)
-        uris = [f'bids::{os.path.relpath(path, output_dir)}' for path in paths]
-        meta['TransformFile'] = uris[0] if len(uris) == 1 else uris
-    return meta
 
 
 def init_dwi_derivatives_wf(source_file, sdc_warp_meta=None, sdc_refinement_meta=None) -> Workflow:
@@ -300,12 +280,9 @@ def init_dwi_derivatives_wf(source_file, sdc_warp_meta=None, sdc_refinement_meta
         (inputnode, ds_btable_t1, [('btable_t1', 'in_file')]),
     ])  # fmt:skip
 
-    # The SDC (susceptibility) displacement on the ACPC grid. It is a map of the
-    # correction, not a transform to chain: the correction itself is applied in
-    # DWI space, before coregistration. Only written when distortion correction
-    # ran; the caller signals that by passing the sidecar metadata. The sidecar
-    # also names the written transforms that carried it into ACPC, when the
-    # caller connects them to inputnode.sdc_transform_files.
+    # The SDC displacement in ACPC space. It is a map of the
+    # correction, not a transform: the correction is applied separately.
+    # Only written when SDC is applied.
     for name, field, desc, meta in (
         ('ds_sdc_warp_t1', 'sdc_warp_to_template', 'sdc', sdc_warp_meta),
         (
@@ -318,7 +295,7 @@ def init_dwi_derivatives_wf(source_file, sdc_warp_meta=None, sdc_refinement_meta
         if meta is None:
             continue
         sidecar = pe.Node(
-            niu.Function(function=_sdc_sidecar, output_names=['meta']),
+            niu.Function(function=sdc_displacement_sidecar, output_names=['meta']),
             name=f'{name}_sidecar',
             run_without_submitting=True,
         )

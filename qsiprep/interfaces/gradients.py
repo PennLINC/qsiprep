@@ -28,7 +28,7 @@ from scipy.spatial.transform import Rotation as R
 from sklearn.metrics import r2_score
 from transforms3d.affines import decompose44
 
-from ..utils.misc import safe_unit_vector
+from ..utils.misc import invert_displacement_field, safe_unit_vector
 
 LOGGER = logging.getLogger('nipype.interface')
 tensor_index = {'xx': (0, 0), 'xy': (0, 1), 'xz': (0, 2), 'yy': (1, 1), 'yz': (1, 2), 'zz': (2, 2)}
@@ -624,22 +624,6 @@ class ComposeTransforms(SimpleInterface):
         return runtime
 
 
-def _invert_displacement_field(warp_path, cwd):
-    """Numerically invert a displacement-field warp.
-
-    antsApplyTransforms can invert an affine on the fly (``[file, 1]``) but not
-    a displacement field, so a non-linear stage on the way to the output grid is
-    inverted here first.
-    """
-    import SimpleITK as sitk
-
-    field = sitk.Cast(sitk.ReadImage(warp_path), sitk.sitkVectorFloat64)
-    inverted = sitk.InvertDisplacementField(field)
-    out_file = fname_presuffix(warp_path, suffix='_inverse', newpath=cwd)
-    sitk.WriteImage(inverted, out_file)
-    return out_file
-
-
 class ComposeSDCWarpInputSpec(BaseInterfaceInputSpec):
     sdc_warps = InputMultiObject(
         File(exists=True),
@@ -694,6 +678,8 @@ class ComposeSDCWarp(SimpleInterface):
     output_spec = ComposeSDCWarpOutputSpec
 
     def _run_interface(self, runtime):
+        import SimpleITK as sitk
+
         forward = [t for t in self.inputs.to_template_transforms if t != 'identity']
         out_file = os.path.join(runtime.cwd, 'sdc_warp_to_template.nii.gz')
 
@@ -703,7 +689,11 @@ class ComposeSDCWarp(SimpleInterface):
         invert_flags = [False] * (len(forward) + len(sdc_warps))
         for transform in reversed(forward):
             if transform.endswith(('.nii', '.nii.gz')):
-                transforms.append(_invert_displacement_field(transform, runtime.cwd))
+                # antsApplyTransforms can invert an affine on the fly but not a
+                # displacement field, so a nonlinear stage is inverted here.
+                inverse = fname_presuffix(transform, suffix='_inverse', newpath=runtime.cwd)
+                sitk.WriteImage(invert_displacement_field(transform), inverse)
+                transforms.append(inverse)
                 invert_flags.append(False)
             else:
                 transforms.append(transform)

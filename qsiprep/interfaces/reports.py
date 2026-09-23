@@ -30,6 +30,7 @@ from nipype.interfaces.base import (
     traits,
 )
 
+from ..viz.utils import plot_sdc_warp
 from .bids import get_bids_params
 from .gradients import concatenate_bvals, concatenate_bvecs
 
@@ -542,156 +543,6 @@ from sub-1_dir-PA_dwi.nii.gz.
     return ''.join(desc)
 
 
-def sdc_warp_glyph_field(warp_file):
-    """Displacement vectors to visualize an SDC warp, matching Slicer's glyphs.
-
-    Slicer shows where seed *points* travel, which follows the inverse of an
-    image-resampling (fixed->moving) displacement field -- the same reason
-    ``antsApplyTransformsToPoints`` uses the inverse of the image transform. So
-    the field is inverted, then its vectors are read with the ITK-LPS components
-    converted to RAS (flip x and y). Returns ``(disp_ras, magnitude, affine)``,
-    with ``disp_ras`` the displayed ``(X, Y, Z, 3)`` field in RAS mm and
-    ``magnitude`` its per-voxel size.
-    """
-    import SimpleITK as sitk
-
-    affine = nb.load(warp_file).affine
-    inverse = sitk.InvertDisplacementField(
-        sitk.Cast(sitk.ReadImage(warp_file), sitk.sitkVectorFloat64)
-    )
-    disp = np.moveaxis(sitk.GetArrayFromImage(inverse), [0, 1, 2], [2, 1, 0])  # (X,Y,Z,3) LPS
-    disp_ras = disp * np.array([-1.0, -1.0, 1.0])
-    return disp_ras, np.linalg.norm(disp, axis=-1), affine
-
-
-def sdc_warp_display_planes(disp_ras, affine):
-    """PE axis and the two slice normals whose planes are *not* perpendicular to it.
-
-    Susceptibility displacement runs along the phase-encode axis, so the RAS axis
-    with the *largest* mean displacement is essentially the PE direction. A plane
-    perpendicular to it hides the displacement; the two planes that contain it --
-    sliced along each of the other two axes -- show it. Returns
-    ``(ped_ras, slice_axes, vox_to_ras)``, ``slice_axes`` being the two voxel axes
-    to slice along, most-informative first (its plane's normal is the least
-    displaced, so it carries the most PE signal in-plane).
-    """
-    vox_to_ras = np.argmax(np.abs(affine[:3, :3]), axis=0)
-    ras_disp = np.array([np.abs(disp_ras[..., a]).mean() for a in range(3)])
-    ped_ras = int(np.argmax(ras_disp))
-    normal_ras = sorted((a for a in range(3) if a != ped_ras), key=lambda a: ras_disp[a])
-    slice_axes = [int(np.where(vox_to_ras == n)[0][0]) for n in normal_ras]
-    return ped_ras, slice_axes, vox_to_ras
-
-
-def _glyph_slice(disp_ras, mag, b0, affine, slice_axis, sl, vox_to_ras):
-    """Background, physical mesh, in-plane displacement components for one slice."""
-    inplane = sorted((a for a in range(3) if a != slice_axis), key=lambda a: vox_to_ras[a])
-    h_ax, v_ax = inplane  # voxel axes -> horizontal, vertical
-    h_ras, v_ras = vox_to_ras[h_ax], vox_to_ras[v_ax]
-    gvv, ghh = np.meshgrid(
-        np.arange(disp_ras.shape[v_ax]), np.arange(disp_ras.shape[h_ax]), indexing='ij'
-    )
-    h = affine[h_ras, slice_axis] * sl + affine[h_ras, h_ax] * ghh + affine[h_ras, v_ax] * gvv
-    v = affine[v_ras, slice_axis] * sl + affine[v_ras, h_ax] * ghh + affine[v_ras, v_ax] * gvv
-    take = [slice(None)] * 3
-    take[slice_axis] = sl
-
-    def grid(arr):
-        plane = arr[tuple(take)]
-        return plane.T if h_ax < v_ax else plane
-
-    return {
-        'bg': grid(b0),
-        'H': h + affine[h_ras, 3],
-        'V': v + affine[v_ras, 3],
-        'dh': grid(disp_ras[..., h_ras]),
-        'dv': grid(disp_ras[..., v_ras]),
-        'm2': grid(mag),
-        'h_ras': h_ras,
-        'v_ras': v_ras,
-    }
-
-
-def _glyph_slice_positions(b0, mag, slice_axis, n):
-    """``n`` slice indices spread over the part of the brain that carries displacement."""
-    others = tuple(a for a in range(3) if a != slice_axis)
-    brain = (b0 > 0.1 * b0.max()).sum(axis=others)
-    valid = np.where((brain > brain.max() * 0.15) & (mag.sum(axis=others) > 0))[0]
-    if valid.size == 0:
-        valid = np.where(brain > 0)[0]
-    if valid.size == 0:
-        valid = np.array([b0.shape[slice_axis] // 2])
-    picks = sorted({int(np.quantile(valid, q)) for q in np.linspace(0.5 / n, 1 - 0.5 / n, n)})
-    while len(picks) < n:  # small brains can collapse the quantiles
-        picks.append(picks[-1])
-    return picks[:n]
-
-
-def sdc_warp_glyph_scale(mag, affine, step):
-    """How to draw a field's arrows so that small and large fields both read.
-
-    Returns ``(min_mag, vmax, arrow_scale)``. Arrows shorter than ``min_mag`` mm
-    are skipped: 0.5 mm, or a tenth of the field's 99th percentile when that is
-    smaller, so a sub-millimetre field such as a DRBUDDI refinement is not left
-    blank. ``vmax`` ends the color scale at that percentile. ``arrow_scale``
-    lengthens the arrows when the largest would otherwise reach less than 40% of
-    the spacing between them; 1 keeps true length in mm. Low-signal voxels are
-    deliberately not masked out: dropout is where the displacement matters most.
-    """
-    moving = mag[mag > 0.01]
-    if not moving.size:
-        return 0.5, 1.0, 1.0
-    p99 = float(np.percentile(moving, 99))
-    spacing = step * float(np.mean(np.linalg.norm(affine[:3, :3], axis=0)))
-    stretch = 0.8 * spacing / p99
-    return min(0.5, 0.1 * p99), p99, stretch if stretch >= 2 else 1.0
-
-
-def _draw_glyph(ax, panel, clim, step, min_mag, arrow_scale):
-    """Draw one glyph panel; anterior/superior/left to screen-left/top."""
-    xd, ud, yd, vd = -panel['H'], -panel['dh'], panel['V'], panel['dv']
-    ax.pcolormesh(xd, yd, panel['bg'], cmap='gray', shading='nearest', rasterized=True)
-    keep = panel['m2'][::step, ::step] > min_mag
-    q = ax.quiver(
-        xd[::step, ::step][keep],
-        yd[::step, ::step][keep],
-        ud[::step, ::step][keep],
-        vd[::step, ::step][keep],
-        panel['m2'][::step, ::step][keep],
-        cmap='turbo',
-        clim=clim,
-        angles='xy',
-        scale_units='xy',
-        scale=1.0 / arrow_scale,
-        width=0.005,
-        headwidth=4,
-        pivot='tail',
-    )
-    ax.set_aspect('equal')
-    ax.set_xticks([])
-    ax.set_yticks([])
-    ends = {0: ('R', 'L'), 1: ('A', 'P'), 2: ('S', 'I')}  # (positive end, negative end)
-    for frac, txt in [
-        ((0.03, 0.5), ends[panel['h_ras']][0]),
-        ((0.95, 0.5), ends[panel['h_ras']][1]),
-        ((0.5, 0.95), ends[panel['v_ras']][0]),
-        ((0.5, 0.05), ends[panel['v_ras']][1]),
-    ]:
-        ax.text(
-            *frac,
-            txt,
-            transform=ax.transAxes,
-            color='yellow',
-            fontsize=8,
-            ha='center',
-            va='center',
-            weight='bold',
-        )
-    for sp in ax.spines.values():
-        sp.set_color('0.4')
-    return q
-
-
 class _SDCWarpPlotInputSpec(BaseInterfaceInputSpec):
     warp_file = File(exists=True, mandatory=True, desc='SDC displacement field on the ACPC grid')
     b0_ref = File(exists=True, mandatory=True, desc='ACPC b=0 reference image for the background')
@@ -708,60 +559,22 @@ class SDCWarpPlot(SimpleInterface):
     """Quiver of the SDC displacement field over the ACPC b=0, like Slicer's glyphs.
 
     Shows how the phase-encoding direction sat relative to the ACPC output and how
-    large the susceptibility displacements are. A few slices are drawn in each of
-    the two planes that contain the PE axis (the plane perpendicular to it would
-    hide the displacement). Uses the Slicer point-transform convention (see
-    :func:`sdc_warp_glyph_field`).
+    large the susceptibility displacements are (see
+    :func:`qsiprep.viz.utils.plot_sdc_warp`).
     """
 
     input_spec = _SDCWarpPlotInputSpec
     output_spec = _SDCWarpPlotOutputSpec
 
     def _run_interface(self, runtime):
-        import matplotlib as mpl
-
-        mpl.use('Agg')
-        import matplotlib.pyplot as plt
-
-        disp_ras, mag, affine = sdc_warp_glyph_field(self.inputs.warp_file)
-        b0 = np.asarray(nb.load(self.inputs.b0_ref).dataobj, dtype=float)
-        _ped, slice_axes, vox_to_ras = sdc_warp_display_planes(disp_ras, affine)
-
-        n = self.inputs.n_slices
-        step = self.inputs.step
-        min_mag, vmax, arrow_scale = sdc_warp_glyph_scale(mag, affine, step)
-        clim = (0.0, vmax)
-        plane_name = {0: 'sagittal', 1: 'coronal', 2: 'axial'}
-
-        fig, axes = plt.subplots(
-            len(slice_axes),
-            n,
-            figsize=(3.6 * n, 3.4 * len(slice_axes)),
-            facecolor='black',
-            squeeze=False,
+        self._results['out_file'] = plot_sdc_warp(
+            self.inputs.warp_file,
+            self.inputs.b0_ref,
+            os.path.join(runtime.cwd, 'sdc_warp_glyph.svg'),
+            n_slices=self.inputs.n_slices,
+            step=self.inputs.step,
+            title=self.inputs.title,
         )
-        q = None
-        for row, slice_axis in enumerate(slice_axes):
-            for col, sl in enumerate(_glyph_slice_positions(b0, mag, slice_axis, n)):
-                panel = _glyph_slice(disp_ras, mag, b0, affine, slice_axis, sl, vox_to_ras)
-                q = _draw_glyph(axes[row][col], panel, clim, step, min_mag, arrow_scale)
-            axes[row][0].set_ylabel(plane_name[int(vox_to_ras[slice_axis])], color='white')
-        title = self.inputs.title
-        if arrow_scale > 1:
-            title += (
-                f'\narrows drawn {arrow_scale:.{0 if arrow_scale >= 10 else 1}f}x longer; '
-                'color shows the true size'
-            )
-        fig.suptitle(title, color='white')
-        cb = fig.colorbar(q, ax=axes, fraction=0.02, pad=0.02)
-        cb.set_label('|displacement| (mm)', color='white')
-        cb.ax.yaxis.set_tick_params(color='white')
-        plt.setp(plt.getp(cb.ax, 'yticklabels'), color='white')
-
-        out_file = os.path.join(runtime.cwd, 'sdc_warp_glyph.svg')
-        fig.savefig(out_file, bbox_inches='tight', facecolor='black')
-        plt.close(fig)
-        self._results['out_file'] = out_file
         return runtime
 
 

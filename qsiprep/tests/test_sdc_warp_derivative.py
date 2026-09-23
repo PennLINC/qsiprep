@@ -470,10 +470,10 @@ def test_derivatives_wf_writes_sdc_warp_only_with_meta():
 )
 def test_sdc_sidecar_names_the_transforms_into_acpc(transform_files, expected):
     """BEP014's TransformFile: the written transforms that carried the map into ACPC."""
-    from qsiprep.workflows.dwi.derivatives import _sdc_sidecar
+    from qsiprep.utils.sdc import sdc_displacement_sidecar
 
     meta = {'EstimationMethod': 'DRBUDDI', 'Units': 'mm'}
-    got = _sdc_sidecar(meta, '/out', transform_files)
+    got = sdc_displacement_sidecar(meta, '/out', transform_files)
     assert got['TransformFile'] == expected
     assert got['Units'] == 'mm'
     assert 'TransformFile' not in meta  # the input metadata is not modified
@@ -481,9 +481,9 @@ def test_sdc_sidecar_names_the_transforms_into_acpc(transform_files, expected):
 
 def test_sdc_sidecar_leaves_out_an_unwritten_chain():
     """No transform files (a nonlinear subject dwiref): no half-chain TransformFile."""
-    from qsiprep.workflows.dwi.derivatives import _sdc_sidecar
+    from qsiprep.utils.sdc import sdc_displacement_sidecar
 
-    assert 'TransformFile' not in _sdc_sidecar({'Units': 'mm'}, '/out')
+    assert 'TransformFile' not in sdc_displacement_sidecar({'Units': 'mm'}, '/out')
 
 
 def test_connect_sdc_transform_files_keeps_the_order_they_apply():
@@ -868,7 +868,7 @@ def test_sdc_warp_glyph_field_shows_the_inverse(tmp_path):
     so the RAS glyph must be the opposite of the naive LPS->RAS of the raw field --
     this is exactly the sign that was wrong before.
     """
-    from qsiprep.interfaces.reports import sdc_warp_glyph_field
+    from qsiprep.viz.utils import sdc_warp_glyph_field
 
     d_lps = np.array([0.0, 2.0, -1.0])  # uniform displacement, ITK-LPS mm
     warp = _write_sdc_field(tmp_path / 'w.nii.gz', d_lps, n=18, vary=0.0)
@@ -885,7 +885,7 @@ def test_sdc_warp_glyph_field_shows_the_inverse(tmp_path):
 
 def test_sdc_warp_display_planes_contain_the_ped(tmp_path):
     """The two display planes contain the PE axis; the perpendicular one is skipped."""
-    from qsiprep.interfaces.reports import sdc_warp_display_planes
+    from qsiprep.viz.utils import sdc_warp_display_planes
 
     disp = np.zeros((10, 10, 10, 3))
     disp[..., 1] = 2.0  # RAS-y (A-P) dominant -> the PE axis
@@ -939,7 +939,7 @@ def test_sdc_warp_plot_builds_a_valid_svg(tmp_path):
 )
 def test_sdc_warp_glyph_scale_adapts_to_the_field(p99, expected):
     """Small fields get visible arrows; large ones stay at true length."""
-    from qsiprep.interfaces.reports import sdc_warp_glyph_scale
+    from qsiprep.viz.utils import sdc_warp_glyph_scale
 
     mag = np.full(1000, p99)  # every voxel at the 99th percentile
     affine = np.diag([2.0, 2.0, 2.0, 1.0])  # step 4 -> arrows 8 mm apart
@@ -947,7 +947,7 @@ def test_sdc_warp_glyph_scale_adapts_to_the_field(p99, expected):
 
 
 def test_sdc_warp_glyph_scale_handles_a_still_field():
-    from qsiprep.interfaces.reports import sdc_warp_glyph_scale
+    from qsiprep.viz.utils import sdc_warp_glyph_scale
 
     assert sdc_warp_glyph_scale(np.zeros(100), np.eye(4), step=4) == (0.5, 1.0, 1.0)
 
@@ -956,17 +956,15 @@ def test_invert_displacement_field_round_trips(tmp_path):
     """The helper produces a usable inverse of a displacement field."""
     import SimpleITK as sitk
 
-    from qsiprep.interfaces.gradients import _invert_displacement_field
+    from qsiprep.utils.misc import invert_displacement_field
 
     warp = _write_sdc_field(tmp_path / 'W.nii.gz', [0.3, 2.0, -0.5], vary=0.02)
-    inverse = _invert_displacement_field(warp, str(tmp_path))
+    inverse = invert_displacement_field(warp)
 
     forward = sitk.DisplacementFieldTransform(
         sitk.Cast(sitk.ReadImage(warp), sitk.sitkVectorFloat64)
     )
-    backward = sitk.DisplacementFieldTransform(
-        sitk.Cast(sitk.ReadImage(inverse), sitk.sitkVectorFloat64)
-    )
+    backward = sitk.DisplacementFieldTransform(inverse)
     # Composing a field with its inverse returns (near) the original point.
     for point in ([0.0, 0.0, 0.0], [2.0, -1.0, 3.0]):
         there = forward.TransformPoint(point)

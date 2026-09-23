@@ -887,12 +887,18 @@ to workflows in *QSIPrep*'s documentation]\
 
 
 def connect_sdc_transform_files(workflow, sinks, dwi_finalize_wf, output_wfname):
-    """Hand the written DWI-to-ACPC transforms to the SDC displacement maps' sidecars.
+    """Pass the written DWI-to-ACPC transforms to the SDC maps' sidecars.
 
-    ``sinks`` are the datasinks of every transform that carries the corrected
-    DWI frame into ACPC, in the order they apply. Under a nonlinear subject-level
-    dwiref the per-group hop is not written, so the caller connects nothing and
-    the sidecars leave ``TransformFile`` out rather than name half a chain.
+    Parameters
+    ----------
+    workflow : Workflow
+        The subject workflow.
+    sinks : list of Node
+        Datasinks of the transforms, in the order they apply.
+    dwi_finalize_wf : Workflow
+        The workflow that writes the SDC maps.
+    output_wfname : str
+        Suffix for the merge node's name.
     """
     chain = pe.Node(
         niu.Merge(len(sinks)),

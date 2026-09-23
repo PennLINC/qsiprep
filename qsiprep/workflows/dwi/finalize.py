@@ -165,16 +165,7 @@ def init_dwi_finalize_wf(
     # can disagree after automatic method resolution.
     doing_topup = unit.run.stage_with('topup') is not None
 
-    # The susceptibility distortion is emitted to derivatives as a displacement
-    # map on the ACPC grid. Every susceptibility method that produces a
-    # standalone warp -- DRBUDDI, a GRE/phasediff fieldmap, fieldmap-less SyN, and
-    # TORTOISE's T2Wreg -- exposes it as fieldwarps, so it is emitted directly.
-    # TOPUP is the exception: eddy applies its field internally and leaves no
-    # standalone warp, so it is rebuilt from the estimated off-resonance field
-    # (needs the readout time; without it, nothing is written). With
-    # TOPUP+DRBUDDI, DRBUDDI's fieldwarp only refines the TOPUP-corrected series:
-    # the total is the rebuilt TOPUP field after the refinement, and the
-    # refinement is written too.
+    # Determine information to be used for displacement map.
     readout_time = pe_readout_time(unit)
     warp_source, estimation_method = sdc_warp_source(unit, t2w_sdc)
 
@@ -278,8 +269,7 @@ def init_dwi_finalize_wf(
                 'sdc_scaling_images',
                 # Only written out if TOPUP was used
                 'fieldmap_hz',
-                # The written transforms that carry the DWI frame into ACPC, in the
-                # order they apply; named in the SDC maps' sidecars when given
+                # Transforms to ACPC space, in the order they apply
                 'sdc_transform_files',
             ]
         ),
@@ -703,17 +693,14 @@ def init_dwi_finalize_wf(
             ]),
         ])  # fmt:skip
 
-    # Glyph reportlets: each SDC displacement field over the ACPC b=0, showing how
-    # the phase-encoding direction sat relative to the output and how large the
-    # deformations are (Slicer's transform-glyph view, no Slicer needed). Each
-    # figure scales its colors to its own field, so the small DRBUDDI refinement
-    # stays visible next to the total.
     if sdc_fields:
         workflow.connect([
             (inputnode, dwi_derivatives_wf, [
                 ('sdc_transform_files', 'inputnode.sdc_transform_files'),
             ]),
         ])  # fmt:skip
+
+    # Glyph reportlets to exhibit the effect of SDC in ACPC space
     for field, desc, title in sdc_fields:
         plot = pe.Node(
             SDCWarpPlot(title=f'{title} (ACPC space)'),

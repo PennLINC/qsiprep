@@ -33,13 +33,19 @@ def t2w_available_for_sdc(subject_data, selection, anat_modality):
 
 
 def pe_readout_time(unit):
-    """``TotalReadoutTime`` (s) of a unit's lead phase-encode series, or ``None``.
+    """Get the ``TotalReadoutTime`` of a unit's lead phase-encoding series.
 
-    Turning TOPUP's off-resonance field (Hz) into a displacement field needs the
-    readout time: the voxel shift is ``field_Hz * TotalReadoutTime``. The lead
-    series is the ``+`` polarity one for a reverse-PE pair, matching
-    :attr:`~qsiplan.adapters.PreprocUnit.pe_dir`. Returns ``None`` when the
-    metadata is absent so callers can decline rather than fail.
+    The lead series is the ``+`` polarity one of a reverse-PE pair, matching
+    ``unit.pe_dir``.
+
+    Parameters
+    ----------
+    unit : qsiplan.adapters.PreprocUnit
+
+    Returns
+    -------
+    float or None
+        Readout time in seconds, or None when the metadata is missing.
     """
     lead = unit.plus_files[0] if unit.has_bidirectional_dwi else unit.dwi_files[0]
     trt = unit.sidecar_overrides().get(lead, {}).get('TotalReadoutTime')
@@ -49,14 +55,21 @@ def pe_readout_time(unit):
 
 
 def t2wreg_target(unit, t2w_sdc):
-    """The structural target DIFFPREP's T2Wreg stage registers to, or ``None``.
+    """Get the structural target of DIFFPREP's T2Wreg stage.
 
-    Mirrors ``use_t2wreg``/``synb0_target`` in
-    :mod:`qsiprep.workflows.dwi.diffprep`. A SynB0 unit carries the T2Wreg
-    stage without being a ``CorrectionMethod.T2WREG`` estimation, so the stage
-    (not the method) is what says T2Wreg runs. ``'synb0'`` needs no T2w; the
-    ``t2w_sdc`` bool additionally honors --anat-modality/--ignore t2w for the
-    ``'t2w'`` target, which the plan does not see.
+    Mirrors ``use_t2wreg`` in :mod:`qsiprep.workflows.dwi.diffprep`. SynB0 units
+    carry the T2Wreg stage without being T2WREG estimations, so the stage decides.
+
+    Parameters
+    ----------
+    unit : qsiplan.adapters.PreprocUnit
+    t2w_sdc : bool
+        Whether a T2w is available for SDC (honors --anat-modality and --ignore).
+
+    Returns
+    -------
+    str or None
+        ``'synb0'`` or ``'t2w'``, or None when T2Wreg does not run.
     """
     stage = unit.run.stage_with('t2wreg')
     if stage is None:
@@ -67,17 +80,23 @@ def t2wreg_target(unit, t2w_sdc):
 
 
 def sdc_warp_source(unit, t2w_sdc):
-    """Where the SDC displacement-field derivative comes from, and its method label.
+    """Decide where a unit's SDC displacement map comes from.
 
-    Returns ``(source, estimation_method)``. ``source`` is ``'fieldwarp'`` when a
-    susceptibility method wrote a standalone warp into ``fieldwarps`` --
-    DRBUDDI, a GRE/phasediff fieldmap, fieldmap-less SyN, or TORTOISE T2Wreg --
-    and ``'topup'`` when only TOPUP ran: eddy applies its field and leaves no
-    standalone warp, so it is rebuilt from the off-resonance field, which needs
-    a readout time. ``'topup+drbuddi'`` when DRBUDDI refined a series eddy had
-    already corrected with TOPUP's field: the fieldwarp is then only DRBUDDI's
-    residual, and the total needs the rebuilt TOPUP field too. ``(None, None)``
-    when no susceptibility correction ran.
+    Parameters
+    ----------
+    unit : qsiplan.adapters.PreprocUnit
+    t2w_sdc : bool
+        Whether a T2w is available for SDC.
+
+    Returns
+    -------
+    source : str or None
+        ``'fieldwarp'`` when the method wrote a standalone warp (DRBUDDI, GRE, SyN,
+        T2Wreg); ``'topup'`` when the warp is rebuilt from TOPUP's field, which
+        eddy applied internally; ``'topup+drbuddi'`` when DRBUDDI refined a
+        TOPUP-corrected series, so its warp is only the residual; None without SDC.
+    estimation_method : str or None
+        The sidecar's ``EstimationMethod``.
     """
     target = t2wreg_target(unit, t2w_sdc)
     topup = unit.run.stage_with('topup')
@@ -97,3 +116,34 @@ def sdc_warp_source(unit, t2w_sdc):
     if topup is not None and readout_time is not None:
         return 'topup', 'TOPUP (SynB0)' if topup.structural_target == 'synb0' else 'TOPUP'
     return None, None
+
+
+def sdc_displacement_sidecar(meta, output_dir, transform_files=None):
+    """Build an SDC displacement map's sidecar.
+
+    Parameters
+    ----------
+    meta : dict
+        Sidecar metadata.
+    output_dir : str
+        Root of the derivatives dataset.
+    transform_files : str or list, optional
+        Written transforms that carried the map into ACPC, in the order they
+        apply. Left out when part of that chain is not written.
+
+    Returns
+    -------
+    dict
+        ``meta``, plus BEP014's ``TransformFile`` as BIDS URIs when
+        ``transform_files`` is given.
+    """
+    import os
+
+    meta = dict(meta)
+    if transform_files:
+        paths = []
+        for item in [transform_files] if isinstance(transform_files, str) else transform_files:
+            paths.extend([item] if isinstance(item, str) else item)
+        uris = [f'bids::{os.path.relpath(path, output_dir)}' for path in paths]
+        meta['TransformFile'] = uris[0] if len(uris) == 1 else uris
+    return meta
