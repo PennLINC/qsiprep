@@ -127,8 +127,14 @@ def _build_parser(**kwargs):
                     f'--sdc-method {namespace.sdc_method} requires --hmc-method eddy: '
                     'SHORELine and TORTOISE correct PEPOLAR units with DRBUDDI'
                 )
-            if getattr(namespace, 'gre_eddy_mbs', False) and namespace.hmc_method != 'eddy':
-                self.error('--gre-eddy-mbs requires --hmc-method eddy')
+            if getattr(namespace, 'gre_sdc_after_eddy', False):
+                if namespace.hmc_method != 'eddy':
+                    self.error('--gre-sdc-after-eddy requires --hmc-method eddy')
+                print(
+                    '--gre-sdc-after-eddy restores applying a GRE fieldmap after eddy for '
+                    'comparison, and is scheduled for removal in a future release.',
+                    file=sys.stderr,
+                )
 
             # --force values land on their own boolean attributes so config
             # (and qsiplan's policy bridge) can read them by name.
@@ -769,27 +775,13 @@ def _build_parser(**kwargs):
     )
 
     g_sdc.add_argument(
-        '--gre-eddy-mbs',
+        '--gre-sdc-after-eddy',
         action='store_true',
         default=False,
         help=(
-            'Hand a GRE fieldmap to FSL eddy via --field so eddy applies the '
-            'susceptibility correction itself and estimates movement-by-susceptibility, '
-            'instead of applying the fieldmap warp after eddy. Requires --hmc-method eddy.'
-        ),
-    )
-    g_sdc.add_argument(
-        '--gre-gradwarp',
-        action='store',
-        choices=['transport', 'reference', 'hz'],
-        default='transport',
-        help=(
-            'How a GRE fieldmap is combined with gradient unwarping (--gradient-file). '
-            '"transport" (the default) estimates the warp on the raw b=0 and composes it '
-            'with the gradwarp field and its inverse; "reference" registers the fieldmap '
-            'to the gradwarp-corrected b=0 and uses it as-is; "hz" gradwarps the fieldmap '
-            'and its magnitude image first. No effect without gradient unwarping or with '
-            '--gre-eddy-mbs.'
+            'Deprecated; to be removed in a future release. Apply a GRE fieldmap after '
+            'eddy, as QSIPrep used to, instead of handing it to eddy (--field). For '
+            'comparing the two on real data. Requires --hmc-method eddy.'
         ),
     )
 

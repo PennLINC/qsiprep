@@ -742,14 +742,11 @@ the composed transform: the DRBUDDI, T2Wreg and SyN fieldmap-less branches,
 on every HMC backend.
 A GRE fieldmap is acquired with the same gradients as the DWI, so its content
 sits in the uncorrected frame whichever b=0 it is registered to.
-By default (``--gre-gradwarp transport``) its warp is estimated on the raw b=0
-and then composed with the gradwarp field and its inverse, which carries it
-exactly into the corrected frame.
-``--gre-gradwarp reference`` instead registers the fieldmap to the
-gradwarp-corrected b=0 and uses it as-is, and ``--gre-gradwarp hz`` resamples
-the fieldmap through the gradwarp field before registering it.
-The exceptions are ``eddy`` combined with ``TOPUP``, and a GRE fieldmap handed
-to ``eddy`` with ``--gre-eddy-mbs``: ``eddy`` resamples the raw data itself and
+Its warp is therefore estimated on the raw b=0 and then composed with the
+gradwarp field and its inverse, which carries it exactly into the corrected
+frame.
+The exceptions are the fields ``eddy`` applies itself, from ``TOPUP`` or from a
+GRE fieldmap: ``eddy`` resamples the raw data itself and
 applies the susceptibility field internally,
 so both the field estimate and gradwarp are applied together at the very end,
 and estimating the field on raw (rather than gradwarp-corrected) b=0 images
@@ -890,8 +887,16 @@ dedicated fieldmaps (in the ``fmap/`` directory) or DWI series
 Fieldmap-based Distortion Correction
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-If a GRE fieldmap or SyN-based fieldmapless distortion correction
-are detected, these will be performed on the outputs of ``eddy``.
+A GRE fieldmap is handed to ``eddy`` (``--field``), which applies it within
+its own model, the way it applies a ``TOPUP`` field.
+Setting ``estimate_move_by_susceptibility`` in the ``--eddy-config`` file also
+lets ``eddy`` estimate how the field changes with head orientation
+(movement-by-susceptibility).
+The deprecated ``--gre-sdc-after-eddy`` restores the old behaviour of applying
+the GRE fieldmap to the outputs of ``eddy``, for comparing the two on real
+data; it will be removed in a future release.
+SyN-based fieldmapless distortion correction is performed on the outputs of
+``eddy``.
 For details see :ref:`dwi_sdc`.
 
 .. workflow::
@@ -1106,10 +1111,8 @@ of it rather than smoothing it away.
 The methods boilerplate and the visual report's distortion-correction entry
 record the initialization.
 
-With ``--hmc-method eddy``, ``--gre-eddy-mbs`` hands a GRE fieldmap to ``eddy``
-(``--field``) instead of applying it after ``eddy``, which also lets ``eddy``
-estimate how the field changes with head orientation
-(movement-by-susceptibility).
+With ``--hmc-method eddy``, a GRE fieldmap goes into ``eddy`` itself
+(see :ref:`fsl_wf`).
 
 
 .. _best_b0:

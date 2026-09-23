@@ -690,21 +690,17 @@ def test_t1w_derived_references_require_t1w_modality(minimal_args, capsys, refer
     )
 
 
-def test_gre_flags_default_off_and_parse(minimal_args):
-    opts = _parse(minimal_args)
-    assert opts.gre_eddy_mbs is False
-    assert opts.gre_gradwarp == 'transport'
-    opts = _parse(minimal_args, '--gre-eddy-mbs', '--gre-gradwarp', 'reference')
-    assert opts.gre_eddy_mbs is True
-    assert opts.gre_gradwarp == 'reference'
-    with pytest.raises(SystemExit):
-        _parse(minimal_args, '--gre-gradwarp', 'jacobian')
+def test_gre_sdc_after_eddy_is_off_and_warns_of_removal(minimal_args, capsys):
+    assert _parse(minimal_args).gre_sdc_after_eddy is False
+    capsys.readouterr()
+    assert _parse(minimal_args, '--gre-sdc-after-eddy').gre_sdc_after_eddy is True
+    assert 'scheduled for removal' in capsys.readouterr().err
 
 
-def test_gre_eddy_mbs_requires_eddy(minimal_args, capsys):
+def test_gre_sdc_after_eddy_requires_eddy(minimal_args, capsys):
     with pytest.raises(SystemExit):
-        _parse(minimal_args, '--hmc-method', 'tortoise', '--gre-eddy-mbs')
-    assert '--gre-eddy-mbs requires --hmc-method eddy' in capsys.readouterr().err
+        _parse(minimal_args, '--hmc-method', 'tortoise', '--gre-sdc-after-eddy')
+    assert '--gre-sdc-after-eddy requires --hmc-method eddy' in capsys.readouterr().err
 
 
 def test_shoreline_selection_warns_of_removal(minimal_args, capsys):

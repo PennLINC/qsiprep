@@ -216,11 +216,9 @@ def init_fsl_hmc_wf(
     else:
         eddy_args['num_threads'] = omp_nthreads
         config.loggers.workflow.info('Using %d threads in eddy', eddy_args['num_threads'])
-    # A GRE fieldmap handed to eddy (--field) lets eddy estimate how the field
-    # changes with head orientation.
-    gre_to_eddy = unit.is_gre and config.workflow.gre_eddy_mbs
-    if gre_to_eddy:
-        eddy_args['estimate_move_by_susceptibility'] = True
+    # A GRE fieldmap goes into eddy (--field) the way TOPUP's field does, so
+    # movement-by-susceptibility follows --eddy-config for both.
+    gre_to_eddy = unit.is_gre and not config.workflow.gre_sdc_after_eddy
     pre_eddy_b0_ref_wf = init_dwi_reference_wf(
         source_file=source_file,
         name='pre_eddy_b0_ref_wf',

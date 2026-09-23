@@ -616,29 +616,15 @@ class workflow(_Config):
     sdc_method = None
     """Which tool corrects susceptibility distortion for PEPOLAR data:
     topup, drbuddi or topup+drbuddi (the parser resolves ``auto``)."""
-    gre_eddy_mbs = False
-    """Feed a GRE fieldmap into FSL eddy via ``--field`` so eddy corrects
-    susceptibility distortion in-run and estimates movement-by-susceptibility,
-    instead of applying the fieldmap after eddy. Only affects the eddy HMC path on
-    a series whose fieldmap is GRE. The field goes in as Hz with no sign flip: the
-    phase-encoding polarity is carried by the acqp, so one field serves either
-    direction."""
+    gre_sdc_after_eddy = False
+    """Deprecated. Apply a GRE fieldmap's warp after eddy instead of handing the
+    field to eddy (``--field``). Only affects the eddy HMC path."""
     gre_init_keep_fixed = True
     """Hold a GRE fieldmap's warp that initializes T2Wreg or DRBUDDI (when the
     fieldmap lists a series another correction won) fixed through TORTOISE's
     multi-resolution pyramid
     (``--DRBUDDI_keep_initial_transform_fixed``), so each stage learns a residual
     on top of it rather than low-passing and re-estimating it."""
-    gre_gradwarp = 'transport'
-    """How a GRE fieldmap is reconciled with gradient unwarping, which the
-    composed transform chain applies before the fieldmap warp. ``transport``:
-    register the fieldmap to the raw b=0, build the warp in the raw frame and
-    transport it into the gradwarp-corrected frame by composing it with the
-    gradwarp field and its inverse. ``reference``: register the fieldmap to the
-    gradwarp-corrected b=0 and use it as-is (the field's content stays in the raw
-    frame). ``hz``: gradwarp the fieldmap and its magnitude before registering
-    them. Ignored without gradient unwarping and when the fieldmap goes into eddy
-    (``gre_eddy_mbs``)."""
     separate_all_dwis = False
     """Process all dwis separately - do not attempt concatenation."""
     shoreline_config = None

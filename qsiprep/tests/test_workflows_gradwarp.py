@@ -26,8 +26,7 @@ def _reset_config():
     config.workflow.gradient_file = None
     config.workflow.ignore = []
     config.workflow.force = []
-    config.workflow.gre_gradwarp = 'transport'
-    config.workflow.gre_eddy_mbs = False
+    config.workflow.gre_sdc_after_eddy = False
     # Anything that runs the real parser leaves the method axes set, and a stray
     # sdc_method='topup' would silently compile a plan with no DRBUDDI stage.
     # Save them here, and restore below so this module does not pollute in turn.
@@ -49,8 +48,7 @@ def _reset_config():
     yield
     _reset_plan_logging()
     config.workflow.gradient_file = None
-    config.workflow.gre_gradwarp = 'transport'
-    config.workflow.gre_eddy_mbs = False
+    config.workflow.gre_sdc_after_eddy = False
     config.workflow.ignore = []
     config.workflow.force = []
     for key, value in axis_keys.items():
@@ -1160,7 +1158,6 @@ def test_diffprep_drbuddi_gre_seed_transports_with_gradwarp(tmp_path, monkeypatc
     volumes -- not skipped."""
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg_for_diffprep(tmp_path)  # sets gradient_file -> has_gradwarp
-    config.workflow.gre_gradwarp = 'transport'
     wf = _diffprep_wf(tmp_path, _rpe_unit_with_gre_candidate(tmp_path))
     assert wf.get_node('drbuddi_gre_init_b0_ref_wf') is not None
     assert wf.get_node('sdc_wf').gradwarp_mode == 'transport'
@@ -1169,21 +1166,6 @@ def test_diffprep_drbuddi_gre_seed_transports_with_gradwarp(tmp_path, monkeypatc
     )
     # transport composes the warp with the gradwarp field inside the seed's sdc wf
     assert _connects(wf, 'inputnode', 'sdc_wf', 'gradwarp_field', 'inputnode.gradwarp_field')
-
-
-def test_diffprep_drbuddi_gre_seed_reference_mode_no_node_collision(tmp_path, monkeypatch):
-    """reference mode gradwarps the seed's b=0 reference through DISTINCT nodes
-    ('gradwarp_seed_inputs') so it does not clash with the DWI-volume gradwarp
-    ('gradwarp_sdc_inputs') -- both default to the same name."""
-    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
-    _cfg_for_diffprep(tmp_path)
-    config.workflow.gre_gradwarp = 'reference'
-    wf = _diffprep_wf(tmp_path, _rpe_unit_with_gre_candidate(tmp_path))
-    assert wf.get_node('gradwarp_sdc_inputs') is not None  # DWI volumes
-    assert wf.get_node('gradwarp_seed_inputs') is not None  # seed reference (distinct)
-    assert _connects(
-        wf, 'sdc_wf', 'drbuddi_sdc_wf', 'outputnode.out_warp', 'inputnode.initial_field'
-    )
 
 
 def test_diffprep_syn_branch_gradwarps_the_sdc_reference(tmp_path):
@@ -1736,7 +1718,7 @@ def _phasediff_unit():
     )
 
 
-def _cfg_gre(gre_eddy_mbs):
+def _cfg_gre(after_eddy=False):
     config.workflow.hmc_method = 'eddy'
     config.workflow.sdc_method = 'topup'
     config.workflow.b0_threshold = 100
@@ -1744,7 +1726,7 @@ def _cfg_gre(gre_eddy_mbs):
     config.workflow.denoise_method = 'dwidenoise'
     config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
     config.workflow.gradient_file = None  # no gradient unwarping
-    config.workflow.gre_eddy_mbs = gre_eddy_mbs
+    config.workflow.gre_sdc_after_eddy = after_eddy
     config.execution.sloppy = False
     config.nipype.omp_nthreads = 1
 
@@ -1758,22 +1740,44 @@ def _incoming(wf, dst_name):
     }
 
 
-def test_gre_eddy_mbs_feeds_the_fieldmap_into_eddy(tmp_path, monkeypatch):
-    """With gre_eddy_mbs, the GRE fieldmap goes to eddy --field for MBS."""
+def test_gre_fieldmap_goes_into_eddy(tmp_path, monkeypatch):
+    """The GRE fieldmap goes to eddy --field, like TOPUP's field."""
+    from nipype.interfaces.base import isdefined
+
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
-    _cfg_gre(True)
+    _cfg_gre()
     wf = _fsl_wf(tmp_path, _phasediff_unit())
     eddy = next(n for n in wf._get_all_nodes() if n.name == 'eddy')
 
     assert {'field', 'field_mat'} <= _incoming(wf, 'eddy')
-    assert eddy.inputs.estimate_move_by_susceptibility is True
     assert any(n.name == 'gre_to_eddy_reg' for n in wf._get_all_nodes())
-    # eddy now bakes in the SDC: the field must NOT also be applied after eddy.
+    # eddy bakes in the SDC: the field must NOT also be applied after eddy.
     assert not _connects(wf, 'sdc_wf', 'outputnode', 'outputnode.out_warp', 'to_dwi_ref_warps')
+    # Movement-by-susceptibility is left to --eddy-config.
+    assert not isdefined(eddy.inputs.estimate_move_by_susceptibility)
     desc = ' '.join(wf.visit_desc().split())
-    assert '[@eddysus]' in desc
     assert 'was passed to eddy' in desc
+    assert '[@eddysus]' not in desc
     assert 'unwarped b=0' not in desc
+
+
+def test_eddy_config_turns_on_movement_by_susceptibility_for_a_gre_field(tmp_path, monkeypatch):
+    import json
+
+    from qsiprep.data import load as load_data
+
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    _cfg_gre()
+    eddy_params = json.loads(load_data('eddy_params.json').read_text())
+    eddy_params['estimate_move_by_susceptibility'] = True
+    eddy_config = tmp_path / 'eddy_params.json'
+    eddy_config.write_text(json.dumps(eddy_params))
+    config.workflow.eddy_config = str(eddy_config)
+    wf = _fsl_wf(tmp_path, _phasediff_unit())
+    eddy = next(n for n in wf._get_all_nodes() if n.name == 'eddy')
+
+    assert eddy.inputs.estimate_move_by_susceptibility is True
+    assert '[@eddysus]' in wf.visit_desc()
 
 
 def test_gre_field_sent_to_eddy_is_the_registered_hz_map(tmp_path, monkeypatch):
@@ -1783,7 +1787,7 @@ def test_gre_field_sent_to_eddy_is_the_registered_hz_map(tmp_path, monkeypatch):
     conversion between it and ``out_hz`` changes the correction strength.
     """
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
-    _cfg_gre(True)
+    _cfg_gre()
     wf = _fsl_wf(tmp_path, _phasediff_unit())
     unwarp = wf.get_node('sdc_wf.sdc_unwarp_wf')
 
@@ -1792,12 +1796,12 @@ def test_gre_field_sent_to_eddy_is_the_registered_hz_map(tmp_path, monkeypatch):
     assert _connects(wf, 'sdc_wf', 'eddy', 'outputnode.fieldmap_hz', 'field')
 
 
-def test_gre_without_the_flag_applies_the_field_after_eddy(tmp_path, monkeypatch):
-    """Default GRE behavior is unchanged: the warp is applied after eddy."""
+def test_gre_sdc_after_eddy_applies_the_field_after_eddy(tmp_path, monkeypatch):
+    """The deprecated legacy path: the warp is applied after eddy."""
     from nipype.interfaces.base import isdefined
 
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
-    _cfg_gre(False)
+    _cfg_gre(after_eddy=True)
     wf = _fsl_wf(tmp_path, _phasediff_unit())
     eddy = next(n for n in wf._get_all_nodes() if n.name == 'eddy')
 
@@ -1807,23 +1811,21 @@ def test_gre_without_the_flag_applies_the_field_after_eddy(tmp_path, monkeypatch
     assert not any(n.name == 'gre_to_eddy_reg' for n in wf._get_all_nodes())
 
 
-def test_gre_eddy_mbs_with_gradwarp_still_feeds_eddy(tmp_path, monkeypatch):
-    """Gradient unwarping no longer blocks the GRE field from entering eddy.
-
-    eddy applies the field in the raw, gradient-distorted frame (exactly like
+def test_gre_into_eddy_with_gradwarp(tmp_path, monkeypatch):
+    """eddy applies the field in the raw, gradient-distorted frame (exactly like
     TOPUP's field) and gradient unwarping is composed downstream; only the
     coregistration reference is gradwarp-corrected, mirroring the TOPUP-only
-    branch.
+    branch. Nothing may transport the field.
     """
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
-    _cfg_gre(True)
+    _cfg_gre()
     config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
     wf = _fsl_wf(tmp_path, _phasediff_unit())
-    eddy = next(n for n in wf._get_all_nodes() if n.name == 'eddy')
 
-    # Guard lifted: the field still enters eddy even with gradient unwarping.
     assert {'field', 'field_mat'} <= _incoming(wf, 'eddy')
-    assert eddy.inputs.estimate_move_by_susceptibility is True
+    assert _connects(wf, 'sdc_wf', 'eddy', 'outputnode.fieldmap_hz', 'field')
+    assert wf.get_node('sdc_wf').gradwarp_mode == 'reference'
+    assert 'transport_warp' not in {n.name for n in wf._get_all_nodes()}
     assert any(n.name == 'gre_to_eddy_reg' for n in wf._get_all_nodes())
     # No double SDC: the field is not also applied after eddy.
     assert not _connects(wf, 'sdc_wf', 'outputnode', 'outputnode.out_warp', 'to_dwi_ref_warps')
@@ -1833,78 +1835,36 @@ def test_gre_eddy_mbs_with_gradwarp_still_feeds_eddy(tmp_path, monkeypatch):
 
 # --- GRE fieldmaps applied after HMC under gradient unwarping ----------------
 #
-# The composed chain applies the fieldmap warp before gradwarp, so a GRE warp
-# has to be expressed in the gradwarp-corrected frame. ``gre_gradwarp`` picks
-# how: ``reference`` (register to the corrected b=0, content stays raw), ``hz``
-# (gradwarp the fieldmap first) or ``transport`` (estimate on the raw b=0 and
-# compose with the gradwarp field and its inverse).
+# The composed chain applies the fieldmap warp before gradwarp, so a GRE warp is
+# estimated on the raw b=0 and transported: composed with the gradwarp field and
+# its inverse.
 
 
-def _gre_sdc_wf(tmp_path, mode, gradwarp=True):
+def _gre_sdc_wf(gradwarp=True):
     from qsiprep.workflows.fieldmap.base import init_sdc_wf
 
-    config.workflow.gre_gradwarp = mode
     config.execution.sloppy = False
     return init_sdc_wf(_phasediff_unit(), gradwarp=gradwarp)
 
 
-def test_sdc_wf_exposes_a_gradwarp_field_input(tmp_path, monkeypatch):
-    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
-    wf = _gre_sdc_wf(tmp_path, 'reference')
-    assert 'gradwarp_field' in wf.get_node('inputnode').inputs.trait_get()
-    assert wf.gradwarp_mode == 'reference'
-
-
-def test_sdc_wf_reference_mode_leaves_the_fieldmap_raw(tmp_path, monkeypatch):
-    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
-    wf = _gre_sdc_wf(tmp_path, 'reference')
-    names = {n.name for n in wf._graph.nodes}
-    assert 'gradwarp_fmap' not in names
-    assert 'transport_warp' not in names
-    assert _connects(wf, 'phdiff_wf', 'sdc_unwarp_wf', 'outputnode.fmap', 'inputnode.fmap')
-    assert _connects(wf, 'sdc_unwarp_wf', 'outputnode', 'outputnode.out_warp', 'out_warp')
-
-
-def test_sdc_wf_without_gradwarp_ignores_the_mode(tmp_path, monkeypatch):
+def test_sdc_wf_without_gradwarp_uses_the_warp_as_estimated(tmp_path, monkeypatch):
     """No gradwarp field will ever be connected, so no node may depend on one."""
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
-    for mode in ('hz', 'transport'):
-        wf = _gre_sdc_wf(tmp_path, mode, gradwarp=False)
-        assert wf.gradwarp_mode == 'reference'
-        names = {n.name for n in wf._graph.nodes}
-        assert not names & {'gradwarp_fmap', 'transport_warp', 'invert_gradwarp'}
-
-
-def test_sdc_wf_hz_mode_gradwarps_the_fieldmap_before_registration(tmp_path, monkeypatch):
-    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
-    wf = _gre_sdc_wf(tmp_path, 'hz')
-
-    assert wf.gradwarp_mode == 'hz'
-    for node, field, dest in (
-        ('gradwarp_fmap', 'fmap', 'inputnode.fmap'),
-        ('gradwarp_fmap_ref', 'fmap_ref', 'inputnode.fmap_ref'),
-        ('gradwarp_fmap_mask', 'fmap_mask', 'inputnode.fmap_mask'),
-    ):
-        assert _connects(wf, 'inputnode', node, 'gradwarp_field', 'transforms')
-        assert _connects(wf, 'phdiff_wf', node, f'outputnode.{field}', 'input_image')
-        # Resampled onto its own grid: only the displacement changes.
-        assert _connects(wf, 'phdiff_wf', node, f'outputnode.{field}', 'reference_image')
-        assert _connects(wf, node, 'sdc_unwarp_wf', 'output_image', dest)
-        assert not _connects(wf, 'phdiff_wf', 'sdc_unwarp_wf', f'outputnode.{field}', dest)
-    assert wf.get_node('gradwarp_fmap_mask').inputs.interpolation == 'NearestNeighbor'
-    # The warp itself is used as estimated, on the corrected reference.
+    wf = _gre_sdc_wf(gradwarp=False)
+    assert 'gradwarp_field' in wf.get_node('inputnode').inputs.trait_get()
+    assert wf.gradwarp_mode == 'reference'
+    assert not {'transport_warp', 'invert_gradwarp'} & {n.name for n in wf._graph.nodes}
+    assert _connects(wf, 'phdiff_wf', 'sdc_unwarp_wf', 'outputnode.fmap', 'inputnode.fmap')
     assert _connects(wf, 'sdc_unwarp_wf', 'outputnode', 'outputnode.out_warp', 'out_warp')
-    assert 'transport_warp' not in {n.name for n in wf._graph.nodes}
 
 
 def test_sdc_wf_transport_mode_composes_gradwarp_raw_warp_inverse(tmp_path, monkeypatch):
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
-    wf = _gre_sdc_wf(tmp_path, 'transport')
+    wf = _gre_sdc_wf()
 
     assert wf.gradwarp_mode == 'transport'
     # The fieldmap goes in raw.
     assert _connects(wf, 'phdiff_wf', 'sdc_unwarp_wf', 'outputnode.fmap', 'inputnode.fmap')
-    assert 'gradwarp_fmap' not in {n.name for n in wf._graph.nodes}
     # Order matters: antsApplyTransforms applies the first listed first.
     assert _connects(wf, 'inputnode', 'transport_stack', 'gradwarp_field', 'in1')
     assert _connects(wf, 'sdc_unwarp_wf', 'transport_stack', 'outputnode.out_warp', 'in2')
@@ -1953,9 +1913,8 @@ def test_transport_warp_cmdline_lists_the_transforms_in_stack_order(tmp_path):
 
 
 @pytest.mark.parametrize('builder', ['diffprep', 'shoreline', 'fsl'])
-def test_transport_mode_feeds_raw_references_to_the_sdc_wf(tmp_path, monkeypatch, builder):
+def test_gre_warp_is_transported_from_raw_references(tmp_path, monkeypatch, builder):
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
-    config.workflow.gre_gradwarp = 'transport'
     if builder == 'diffprep':
         _cfg_for_diffprep(tmp_path)
         wf = _diffprep_wf(tmp_path, _phasediff_unit())
@@ -1976,7 +1935,7 @@ def test_transport_mode_feeds_raw_references_to_the_sdc_wf(tmp_path, monkeypatch
         )
     else:
         _cfg_for_fsl(tmp_path, 'drbuddi')
-        config.workflow.gre_eddy_mbs = False
+        config.workflow.gre_sdc_after_eddy = True
         wf = _fsl_wf(tmp_path, _phasediff_unit())
         source, fields = (
             'b0_ref_for_coreg',
@@ -1991,40 +1950,6 @@ def test_transport_mode_feeds_raw_references_to_the_sdc_wf(tmp_path, monkeypatch
     assert 'gradwarp_sdc_inputs' not in {n.name for n in wf._graph.nodes}
     assert _connects(wf, 'inputnode', 'sdc_wf', 'gradwarp_field', 'inputnode.gradwarp_field')
     assert _connects(wf, 'sdc_wf', 'outputnode', 'outputnode.out_warp', 'to_dwi_ref_warps')
-
-
-def test_hz_mode_keeps_the_corrected_references_and_passes_the_field(tmp_path, monkeypatch):
-    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
-    config.workflow.gre_gradwarp = 'hz'
-    _cfg_for_diffprep(tmp_path)
-    wf = _diffprep_wf(tmp_path, _phasediff_unit())
-
-    assert wf.get_node('sdc_wf').gradwarp_mode == 'hz'
-    assert _connects(wf, 'gradwarp_sdc_inputs', 'sdc_wf', 'output_image', 'inputnode.b0_ref')
-    assert _connects(wf, 'inputnode', 'sdc_wf', 'gradwarp_field', 'inputnode.gradwarp_field')
-
-
-def test_reference_mode_does_not_pass_the_field_into_the_sdc_wf(tmp_path, monkeypatch):
-    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
-    config.workflow.gre_gradwarp = 'reference'
-    _cfg_for_diffprep(tmp_path)
-    wf = _diffprep_wf(tmp_path, _phasediff_unit())
-
-    assert _connects(wf, 'gradwarp_sdc_inputs', 'sdc_wf', 'output_image', 'inputnode.b0_ref')
-    assert not _connects(wf, 'inputnode', 'sdc_wf', 'gradwarp_field', 'inputnode.gradwarp_field')
-
-
-def test_gre_into_eddy_ignores_the_gradwarp_mode(tmp_path, monkeypatch):
-    """eddy takes the field raw; nothing may transport or gradwarp it."""
-    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
-    _cfg_gre(True)
-    config.workflow.gre_gradwarp = 'transport'
-    config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
-    wf = _fsl_wf(tmp_path, _phasediff_unit())
-
-    assert wf.get_node('sdc_wf').gradwarp_mode == 'reference'
-    assert not {'transport_warp', 'gradwarp_fmap'} & {n.name for n in wf._get_all_nodes()}
-    assert _connects(wf, 'sdc_wf', 'eddy', 'outputnode.fieldmap_hz', 'field')
 
 
 def test_invert_displacement_field_round_trips(tmp_path, monkeypatch):
@@ -2134,7 +2059,6 @@ def test_forced_t2w_reference_is_seeded_by_the_gre_fieldmap(tmp_path, monkeypatc
 
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg_for_diffprep(tmp_path)
-    config.workflow.gre_gradwarp = 'transport'
     unit = _forced_anat_unit_with_gre(CorrectionMethod.T2WREG)
     assert unit.run.stage_with('t2wreg').structural_target == 't2w'
     wf = _diffprep_t2wreg_wf(tmp_path, unit)

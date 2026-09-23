@@ -217,11 +217,11 @@ def _seed_t2wreg_with_gre(
 
     ``b0_source`` is ``(node, field)`` giving the pre-HMC b=0 average the seed is
     estimated on (DIFFPREP has not run yet). ``init_sdc_wf`` builds the GRE
-    correction warp -- in the gradwarp-corrected frame via its ``gre_gradwarp``
-    mode when gradient unwarping is active -- and hands it to DIFFPREP's EPI stage
-    as ``epireg_initial_field``; the structural target then refines it. The seed
-    is held through the SyN pyramid (``keep_initial_transform_fixed``). Shared by
-    the T2w and SynB0 branches so their seed wiring cannot drift.
+    correction warp, transported into the gradwarp-corrected frame when gradient
+    unwarping is active, and hands it to DIFFPREP's EPI stage as
+    ``epireg_initial_field``; the structural target then refines it. The seed is
+    held through the SyN pyramid (``keep_initial_transform_fixed``). Shared by the
+    T2w and SynB0 branches so their seed wiring cannot drift.
     """
     src_node, src_field = b0_source
     gre_init_b0_ref_wf = init_dwi_reference_wf(
@@ -783,9 +783,9 @@ def init_diffprep_hmc_wf(
 
         if gre_drbuddi_init:
             # The GRE warp is built for the lead series' phase encoding, which is
-            # DRBUDDI's up series, and on the pre-gradwarp b=0; init_sdc_wf's
-            # gradwarp mode moves it into the frame of the gradwarped up/down
-            # volumes before init_drbuddi_wf negates it for the down series.
+            # DRBUDDI's up series, and on the pre-gradwarp b=0; init_sdc_wf
+            # transports it into the frame of the gradwarped up/down volumes
+            # before init_drbuddi_wf negates it for the down series.
             gre_unit = dataclasses.replace(unit, estimation=unit.gre_init_estimation)
             drbuddi_gre_b0_ref_wf = init_dwi_reference_wf(
                 source_file=source_file, name='drbuddi_gre_init_b0_ref_wf', gen_report=False
@@ -808,15 +808,12 @@ def init_diffprep_hmc_wf(
                 ]),
             ])  # fmt:skip
             if has_gradwarp:
-                # Distinct node prefix: connect_gradwarp_sdc_volumes above already
-                # holds the default 'gradwarp_sdc_inputs' name for the DWI volumes.
                 connect_gradwarp_sdc_reference(
                     workflow,
                     inputnode,
                     drbuddi_gre_b0_ref_wf,
                     gre_ref_fields,
                     gre_seed_sdc_wf,
-                    name_prefix='gradwarp_seed_inputs',
                 )
             else:
                 workflow.connect([
