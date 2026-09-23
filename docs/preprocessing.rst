@@ -348,18 +348,16 @@ The ``desc-sdc`` displacement map shows the susceptibility distortion correction
 (SDC) on the ACPC output grid, so the correction can be inspected and compared
 across methods and runs.
 At each point of the corrected ACPC image, the vector points to where that tissue
-appeared in the distorted data, in ACPC world coordinates (millimetres, in ITK's LPS
-convention).
+appeared in the distorted data, in ACPC LPS+ (ITK) mm world coordinates.
 It describes the first DWI series; with reverse phase-encoding data, the opposing
-series was distorted in roughly the opposite direction.
+series will be distorted in roughly the opposite direction.
 It is stored in the ITK displacement-field layout so that 3D Slicer and ITK-SNAP can
 display it over the preprocessed data, and the susceptibility distortion figure in
 the HTML report draws its vectors the way Slicer does.
 
-The map is for inspection, not for resampling.
-*QSIPrep* applies the correction in DWI space, before coregistration; this map is
-that correction re-expressed on the ACPC grid, so it is not a step that can be
-chained with the transforms described below.
+.. warning::
+    Do not attempt to use the displacement maps for resampling.
+    They are not valid transforms, and only exist for inspection.
 
 DRBUDDI, GRE fieldmaps, fieldmap-less SyN, and TORTOISE T2Wreg (including SynB0)
 produce the displacement directly.
@@ -373,15 +371,14 @@ displacement followed by DRBUDDI's refinement.
 The refinement alone is also written, as ``desc-sdcrefinement``, and drawn in its
 own report figure; its largest vectors mark where DRBUDDI disagreed with TOPUP.
 The sidecar's ``EstimationMethod`` records which method produced the map, its
-``Units`` are ``mm``, and ``VectorConvention`` is ``LPS``.
 ``TransformFile`` gives the written transform(s) that carried the correction from
 the DWI frame into ACPC, as BIDS URIs in the order they apply, following the draft
 BIDS extension for spaces and mappings (BEP014).
 Under ``--dwiref-definition subject`` with a nonlinear
 ``--dwiref-construction-transform``, the per-group transform is not written, so
 ``TransformFile`` is left out.
-The map is written whenever distortion correction ran, except under
-``--distortion-group-merge``, where the merged output has no single map.
+The map is only written when distortion correction is run and
+``--distortion-group-merge none`` is used (or no distortion groups exist to merge).
 
 
 Transforms
