@@ -437,6 +437,50 @@ Volumetric outputs are written out in ``ACPC`` space ::
       <source_entities>_space-ACPC_graddev.json
       <source_entities>_space-ACPC_graddev.nii.gz
 
+      # Susceptibility distortion correction as a displacement map (vectors in
+      # mm), present whenever distortion correction ran; see below.
+      <source_entities>_space-ACPC_desc-sdc_displacement.json
+      <source_entities>_space-ACPC_desc-sdc_displacement.nii.gz
+      # TOPUP+DRBUDDI only: DRBUDDI's refinement of the TOPUP correction.
+      <source_entities>_space-ACPC_desc-sdcrefinement_displacement.json
+      <source_entities>_space-ACPC_desc-sdcrefinement_displacement.nii.gz
+
+The ``desc-sdc`` displacement map shows the susceptibility distortion correction
+(SDC) on the ACPC output grid, so the correction can be inspected and compared
+across methods and runs.
+At each point of the corrected ACPC image, the vector points to where that tissue
+appeared in the distorted data, in ACPC LPS+ (ITK) mm world coordinates.
+It describes the first DWI series; with reverse phase-encoding data, the opposing
+series will be distorted in roughly the opposite direction.
+It is stored in the ITK displacement-field layout so that 3D Slicer and ITK-SNAP can
+display it over the preprocessed data, and the susceptibility distortion figure in
+the HTML report draws its vectors the way Slicer does.
+
+.. warning::
+    Do not attempt to use the displacement maps for resampling.
+    They are not valid transforms, and only exist for inspection.
+
+DRBUDDI, GRE fieldmaps, fieldmap-less SyN, and TORTOISE T2Wreg (including SynB0)
+produce the displacement directly.
+Eddy applies TOPUP's field internally and leaves no standalone displacement, so for
+TOPUP it is rebuilt from TOPUP's off-resonance map:
+the voxel shift is the field in Hz times ``TotalReadoutTime``, along the
+phase-encoding axis.
+With TOPUP+DRBUDDI, eddy corrects the series with TOPUP's field and DRBUDDI then
+refines the result, so ``desc-sdc`` is the total of the two: TOPUP's rebuilt
+displacement followed by DRBUDDI's refinement.
+The refinement alone is also written, as ``desc-sdcrefinement``, and drawn in its
+own report figure; its largest vectors mark where DRBUDDI disagreed with TOPUP.
+The sidecar's ``EstimationMethod`` records which method produced the map, its
+``TransformFile`` gives the written transform(s) that carried the correction from
+the DWI frame into ACPC, as BIDS URIs in the order they apply, following the draft
+BIDS extension for spaces and mappings (BEP014).
+Under ``--dwiref-definition subject`` with a nonlinear
+``--dwiref-construction-transform``, the per-group transform is not written, so
+``TransformFile`` is left out.
+The map is only written when distortion correction is run and
+``--distortion-group-merge none`` is used (or no distortion groups exist to merge).
+
 
 Transforms
 ==========

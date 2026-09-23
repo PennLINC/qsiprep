@@ -1102,3 +1102,22 @@ def validate_gradient_flags(gradient_file, force, ignore):
 
 if __name__ == '__main__':
     pass
+
+
+def invert_displacement_field(warp_file):
+    """Numerically invert an ITK displacement field.
+
+    Parameters
+    ----------
+    warp_file : str
+        ITK displacement field.
+
+    Returns
+    -------
+    SimpleITK.Image
+        The inverse displacement field.
+    """
+    import SimpleITK as sitk
+
+    field = sitk.Cast(sitk.ReadImage(warp_file), sitk.sitkVectorFloat64)
+    return sitk.InvertDisplacementField(field)

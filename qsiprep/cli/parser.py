@@ -377,11 +377,6 @@ def _build_parser(**kwargs):
         ),
     )
     g_scope.add_argument(
-        '--anat-only',
-        action='store_true',
-        help='Run the anatomical workflows only.',
-    )
-    g_scope.add_argument(
         '--boilerplate-only',
         '--boilerplate',
         action='store_true',
@@ -1323,20 +1318,16 @@ def parse_args(args=None, namespace=None):
     #         elif isinstance(ses_filter, list):
     #             session_filters.extend(ses_filter)
 
-    # Examine the available sessions for each participant. Anatomical-only runs
-    # do not require DWI data, so use the requested anatomical modality to
-    # discover sessions in that case.
-    session_suffix = [config.workflow.anat_modality] if config.workflow.anat_only else ['dwi']
+    # Examine the available sessions for each participant.
     for subject_id in participant_label:
         sessions = config.execution.layout.get_sessions(
             subject=subject_id,
             session=session_filters or Query.OPTIONAL,
-            suffix=session_suffix,
+            suffix=['dwi'],
         )
 
         if session_filters and not sessions:
-            modality = 'DWI' if not config.workflow.anat_only else config.workflow.anat_modality
-            parser.error(f'No {modality} files found with session filter {session_filters}')
+            parser.error(f'No DWI files found with session filter {session_filters}')
 
         # If there are no sessions, there is only one option:
         if not sessions:
