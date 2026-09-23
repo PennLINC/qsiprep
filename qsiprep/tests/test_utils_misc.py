@@ -244,6 +244,10 @@ def test_load_dwidenoise2_config_full(tmp_path):
         {'schedule': [{'update_noise': True, 'kernel': 'cuboid'}]},
         {'schedule': [{'update_noise': True, 'kernel': 'aspect_ratio=2'}]},
         {'schedule': [{'update_noise': True, 'kernel': 'radius=2.5'}]},
+        # Schedules bundled with dwidenoise2
+        {'schedule': 'default'},
+        {'schedule': 'vlarge'},
+        {'schedule': 'legacy', 'aggregator': 'exclusive', 'vst_method': 'none'},
     ],
 )
 def test_load_dwidenoise2_config_accepts_boundaries(tmp_path, settings):
@@ -272,9 +276,13 @@ def test_load_dwidenoise2_config_accepts_boundaries(tmp_path, settings):
         ({'demod_axes': [0, -1]}, 'demod_axes'),
         ({'demod_axes': [0, True]}, 'demod_axes'),
         ({'fixed_rank': 3, 'noise_in': 1.0}, 'fixed_rank'),
+        ({'fixed_rank': 3, 'estimator': 'exp2'}, 'estimator'),
         # Schedule structure
         ({'schedule': []}, 'non-empty list'),
-        ({'schedule': 'vlarge'}, 'non-empty list'),
+        ({'schedule': 5}, 'non-empty list'),
+        ({'schedule': 'huge'}, 'unknown schedule name'),
+        ({'schedule': 'apriori'}, 'rankpermm_in'),
+        ({'schedule': 'fixedrank'}, 'not supported'),
         ({'schedule': ['aspect=2.0']}, 'row 1'),
         ({'schedule': [{'update_noise': True, 'extent': 3}]}, 'unknown column'),
         # Schedule cell values
@@ -324,6 +332,8 @@ def test_load_dwidenoise2_config_accepts_boundaries(tmp_path, settings):
         ({'schedule': [{'update_noise': False}, {'update_noise': True}]}, 'update_noise'),
         # Rule 5: the reconstruction row may not be smoothed
         ({'schedule': [{}, {'update_noise': True, 'smooth_noise': True}]}, 'smooth_noise'),
+        # ...reported as such even when the row leaves update_noise to its default
+        ({'schedule': [{}, {'smooth_noise': True}]}, 'last .*smooth_noise'),
         # Rule 7: the reconstruction row uses all volumes
         ({'schedule': [{}, {'temporal_subsample': 0.5}]}, 'row 2 .*temporal_subsample'),
         # Only ASCII digits, which dwidenoise2 can parse
@@ -458,23 +468,57 @@ def test_format_dwidenoise2_schedule_accepts_list_triplets():
 
 
 @pytest.mark.parametrize(
-    ('schedule', 'expected'),
+    ('parameters', 'expected'),
     [
-        (None, 'following its default schedule'),
+        ({}, 'multi-resolution series of iterations following its default schedule'),
         (
-            [{'update_noise': True}],
-            'following a custom 1-iteration schedule provided in the QSIPrep configuration file',
+            {'schedule': [{'update_noise': True}]},
+            'in a single pass over the data following a custom 1-iteration schedule provided '
+            'with `--dwidenoise2-config`',
         ),
         (
-            [{}, {}, {'kernel': 'rank'}],
-            'following a custom 3-iteration schedule provided in the QSIPrep configuration file',
+            {'schedule': [{}, {}, {'kernel': 'rank'}]},
+            'iterations following a custom 3-iteration schedule provided with '
+            '`--dwidenoise2-config`',
+        ),
+        # Without a schedule, dwidenoise2 reduces to one pass in these cases
+        ({'fixed_rank': 5}, 'single pass over the data following its bundled "fixedrank"'),
+        ({'vst_method': 'none'}, 'single pass over the data following a single-iteration'),
+    ],
+)
+def test_describe_dwidenoise2_schedule(parameters, expected):
+    assert expected in describe_dwidenoise2(parameters, complex_data=False)
+
+
+@pytest.mark.parametrize('name', ['default', 'legacy', 'vlarge'])
+def test_describe_dwidenoise2_named_schedule(tmp_path, name):
+    """Name a bundled schedule rather than calling it custom."""
+    params = load_dwidenoise2_config(_dwidenoise2_json(tmp_path, schedule=name))
+
+    assert f'its bundled "{name}" schedule' in describe_dwidenoise2(params, complex_data=False)
+
+
+@pytest.mark.parametrize(
+    ('parameters', 'expected'),
+    [
+        # A noise level only seeds the transform, and the default schedule re-estimates it
+        (
+            {'noise_in': 0.5},
+            'an initial noise level of 0.5 seeded the variance-stabilizing transform, after '
+            'which the noise level was estimated',
+        ),
+        # ...unless no row estimates the noise level
+        (
+            {'noise_in': 0.5, 'schedule': [{'spatial_subsample': 1}]},
+            'a fixed noise level of 0.5 was used throughout',
         ),
     ],
 )
-def test_describe_dwidenoise2_schedule(schedule, expected):
-    parameters = {} if schedule is None else {'schedule': schedule}
+def test_describe_dwidenoise2_noise_in(parameters, expected):
+    description = describe_dwidenoise2(parameters, complex_data=False)
 
-    assert expected in describe_dwidenoise2(parameters, complex_data=False)
+    assert expected in description
+    assert 'noise map' not in description
 
 
 @pytest.mark.parametrize('demodulate', ['linear', 'hann', 'apc'])

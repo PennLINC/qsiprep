@@ -580,11 +580,12 @@ def _build_parser(**kwargs):
             'Path to a JSON file with settings for dwidenoise2. This is valid only with '
             '--denoise-method dwidenoise2. Every key is optional, and unknown keys are an '
             'error. Keys other than "schedule" set the dwidenoise2 option of the same name '
-            '(for example "demodulate", "decomposition", "estimator", "filter_method" or '
-            '"noise_in"). "schedule" is a list of noise estimation iterations, each a JSON '
-            'object whose keys are dwidenoise2 schedule columns (for example '
-            '"spatial_subsample", "kernel" and "update_noise"). Without a schedule, '
-            'dwidenoise2 uses its default schedule.'
+            '(for example "demodulate", "decomposition", "estimator" or "noise_in"; '
+            '"filter_method" sets -filter). "schedule" is a list of noise estimation '
+            'iterations, each a JSON object whose keys are dwidenoise2 schedule columns (for '
+            'example "spatial_subsample", "kernel" and "update_noise"), or the name of a '
+            'bundled schedule ("default", "legacy" or "vlarge"). Without a schedule, '
+            'dwidenoise2 uses its default schedule. See the documentation for every key.'
         ),
     )
     g_dwi.add_argument(

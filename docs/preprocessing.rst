@@ -181,21 +181,68 @@ dwidenoise2 settings
 
 ``--dwidenoise2-config`` takes a JSON file with settings for ``--denoise-method dwidenoise2``.
 Every key is optional, and unknown keys are an error.
-Keys other than ``schedule`` set the ``dwidenoise2`` option of the same name.
+An omitted key takes the ``dwidenoise2`` default.
+
+Options
+```````
+
+Each of the following keys sets the ``dwidenoise2`` option of the same name,
+except ``filter_method``, which sets ``-filter``.
+
+================================  ==========================================================
+Key                               JSON value
+================================  ==========================================================
+``aggregator``                    ``"exclusive"``, ``"gaussian"``, ``"invl0"``, ``"rank"``
+                                  or ``"uniform"``
+``datatype``                      ``"float32"`` or ``"float64"``
+``debias_anchor``                 ``"sample"`` or ``"group_mean"``
+``decomposition``                 ``"bdcsvd"`` or ``"selfadjoint"``
+``demean``                        ``"none"``, ``"volume_groups"``, ``"shells"`` or ``"all"``
+``demod_axes``                    a list of non-negative integers, such as ``[0, 1]``
+``demodulate``                    ``"none"``, ``"linear"``, ``"hann"`` or ``"apc"``
+``estimator``                     ``"exp1"``, ``"exp2"``, ``"med"``, ``"mrm2023"`` or
+                                  ``"tbme2022"``
+``filter_method``                 ``"optshrink"``, ``"optthresh"`` or ``"truncate"``
+``fixed_rank``                    an integer of at least 1
+``noise_dof``                     an integer of at least 1
+``noise_in``                      a number of at least 0; noise-map files are not supported
+``preserve_noise_bias``           ``true`` or ``false``
+``vst_method``                    ``"none"``, ``"linear"``, ``"foi"``, ``"koay"`` or ``"mom"``
+``schedule``                      a list of iterations, or the name of a bundled schedule
+                                  (see below)
+================================  ==========================================================
+
+The ``dwidenoise2`` options ``-aggregator_fwhm`` and ``-rankpermm_in``
+and the diagnostic export options (such as ``-rank_output`` and ``-eigenspectra``)
+cannot be set.
+
+Phase demodulation (``demodulate`` other than ``"none"``) needs phase data,
+supplied as ``part-phase`` files alongside the magnitude data;
+setting it for magnitude-only data is an error.
+``noise_in`` only seeds the variance-stabilizing transform:
+any schedule iteration that updates the noise level re-estimates it.
+
+Schedules
+`````````
+
 ``schedule`` lists the iterations of the multi-resolution noise estimation.
 Each iteration is an object whose keys are the columns of a ``dwidenoise2`` schedule file:
-``spatial_subsample``, ``kernel``, ``smooth_noise``, ``update_noise``,
-``temporal_subsample``, ``partitions`` and ``max_partition_size``.
+
+- ``spatial_subsample``: a positive integer, or a list of three positive integers
+- ``kernel``: a string such as ``"aspect=2.0"``, ``"rmse=0.02"``, ``"rank"``, ``"radius=4"``,
+  ``"voxels=100"``, ``"cuboid=1x"`` or ``"rank_fixed"``
+- ``smooth_noise``, ``update_noise``: ``true`` or ``false``
+- ``temporal_subsample``: a number greater than 0 and at most 1
+- ``partitions``: a positive integer
+- ``max_partition_size``: a positive integer or ``"none"``
+
 An omitted column takes the ``dwidenoise2`` default.
 The last iteration is the reconstruction pass.
-QSIPrep checks the file when the command line is parsed,
-including the rules ``dwidenoise2`` applies to schedules,
-and writes the schedule to a file in the working directory at run time.
 
 .. code-block:: json
 
   {
-    "demodulate": "linear",
+    "estimator": "exp2",
     "decomposition": "bdcsvd",
     "schedule": [
       {"spatial_subsample": 8, "kernel": "aspect=2.0", "update_noise": true},
@@ -204,10 +251,31 @@ and writes the schedule to a file in the working directory at run time.
     ]
   }
 
-The schedules bundled with ``dwidenoise2``
-(https://github.com/Lestropie/dwidenoise2/tree/main/share/dwidenoise2/dwidenoise2)
-describe each column and can be copied into this format.
-Without a ``schedule`` key, ``dwidenoise2`` uses its default schedule.
+``schedule`` may instead name one of the schedules bundled with ``dwidenoise2``:
+``"default"``, ``"legacy"`` or ``"vlarge"``.
+``dwidenoise2`` recommends ``"vlarge"`` for series of more than 255 volumes.
+``"apriori"`` is not supported, because it needs ``-rankpermm_in``,
+and ``"fixedrank"`` is selected automatically when ``fixed_rank`` is set without a schedule.
+The bundled schedule files
+(https://github.com/tsalo/dwidenoise2/tree/cd08ec1a0f5eb1dbc9962f80c20c2bb3428c4f93/share/dwidenoise2/dwidenoise2),
+from the commit installed in the QSIPrep image, describe each column in detail.
+
+Without a ``schedule`` key, ``dwidenoise2`` uses its default schedule,
+except that it uses the single-iteration ``fixedrank`` schedule when ``fixed_rank`` is set
+and a single iteration when ``vst_method`` is ``"none"``.
+
+Checks
+``````
+
+QSIPrep checks the file when the command line is parsed,
+including the rules ``dwidenoise2`` applies to schedules
+and most of the rules it applies to combinations of options
+(for example, ``fixed_rank`` cannot be combined with ``estimator`` or ``noise_in``).
+Whether ``demodulate`` is compatible with the data is checked when the workflow is built,
+once QSIPrep knows whether phase data are available.
+At run time, QSIPrep writes the schedule to a file in the working directory,
+and copies the configuration file to ``sub-<label>/log/<run uuid>/dwidenoise2.json``
+in the output directory.
 
 
 Preprocessing HCP-style

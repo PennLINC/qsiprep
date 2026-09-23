@@ -53,6 +53,54 @@ _SCHEDULE_DEFAULTS = {
     'partitions': 1,
     'max_partition_size': 'none',
 }
+# Schedules bundled with dwidenoise2 (share/dwidenoise2/dwidenoise2/<name>.txt at the pinned
+# commit) that a configuration file can name instead of listing rows. "apriori" needs
+# -rankpermm_in, which QSIPrep does not expose, and "fixedrank" is what dwidenoise2 uses
+# anyway when fixed_rank is set without a schedule.
+_NAMED_SCHEDULES = {
+    'default': [
+        {'spatial_subsample': 8, 'kernel': 'aspect=2.0', 'update_noise': True},
+        {'spatial_subsample': 4, 'kernel': 'rmse=0.02', 'update_noise': True},
+        {
+            'spatial_subsample': 2,
+            'kernel': 'rmse=0.02',
+            'update_noise': True,
+            'smooth_noise': True,
+        },
+        {'spatial_subsample': 2, 'kernel': 'rank', 'update_noise': False},
+    ],
+    'legacy': [
+        {
+            'spatial_subsample': 1,
+            'temporal_subsample': 1,
+            'partitions': 1,
+            'update_noise': True,
+            'kernel': 'cuboid=1x',
+        },
+    ],
+    'vlarge': [
+        {
+            'spatial_subsample': 4,
+            'temporal_subsample': 0.333333,
+            'max_partition_size': 384,
+            'smooth_noise': True,
+            'update_noise': True,
+            'kernel': 'aspect=2.0',
+        },
+        {
+            'spatial_subsample': 4,
+            'temporal_subsample': 1,
+            'max_partition_size': 384,
+            'update_noise': False,
+            'kernel': 'rank',
+        },
+    ],
+}
+_UNSUPPORTED_NAMED_SCHEDULES = {
+    'apriori': 'it needs -rankpermm_in, which QSIPrep does not expose',
+    'fixedrank': 'dwidenoise2 uses it automatically when "fixed_rank" is set without a schedule',
+}
+
 # An unsigned decimal or exponent-notation number. float() alone would also accept a sign,
 # "nan" and "inf".
 _UNSIGNED_FLOAT = re.compile(r'(?:[0-9]+\.?[0-9]*|\.[0-9]+)(?:[eE][+-]?[0-9]+)?')
@@ -176,9 +224,28 @@ def _resolved_update_noise(schedule):
 
 
 def _load_dwidenoise2_schedule(rows, source):
-    """Check the rows of a ``schedule`` key and return them with triplets as tuples."""
+    """Check the rows of a ``schedule`` key and return them with triplets as tuples.
+
+    ``rows`` may instead name a schedule bundled with dwidenoise2, which is expanded to its
+    rows.
+    """
+    if isinstance(rows, str):
+        if rows in _UNSUPPORTED_NAMED_SCHEDULES:
+            raise ValueError(
+                f'{source}: the bundled "{rows}" schedule is not supported, because '
+                f'{_UNSUPPORTED_NAMED_SCHEDULES[rows]}.'
+            )
+        if rows not in _NAMED_SCHEDULES:
+            raise ValueError(
+                f'{source}: unknown schedule name {rows!r}; valid names are '
+                f'{", ".join(sorted(_NAMED_SCHEDULES))}.'
+            )
+        rows = _NAMED_SCHEDULES[rows]
     if not isinstance(rows, list) or not rows:
-        raise ValueError(f'{source}: "schedule" must be a non-empty list of rows.')
+        raise ValueError(
+            f'{source}: "schedule" must be a non-empty list of rows or the name of a bundled '
+            'schedule.'
+        )
 
     schedule = []
     for number, row in enumerate(rows, start=1):
@@ -209,6 +276,12 @@ def _load_dwidenoise2_schedule(rows, source):
         )
     for i, row in enumerate(schedule):
         where = f'{source}: schedule row {i + 1}'
+        # Rule 5, checked before rule 2 so that a last row that sets smooth_noise without
+        # update_noise is not reported as setting update_noise false
+        if i == last and row.get('smooth_noise', False):
+            raise ValueError(
+                f'{where} is the last (reconstruction) row and may not set "smooth_noise" true.'
+            )
         # Rule 2
         if row.get('smooth_noise', False) and not update_noise[i]:
             raise ValueError(f'{where} sets "smooth_noise" true but "update_noise" false.')
@@ -217,11 +290,6 @@ def _load_dwidenoise2_schedule(rows, source):
             raise ValueError(
                 f'{where} sets "update_noise" false; only the last row may skip estimating the '
                 'noise level.'
-            )
-        # Rule 5
-        if i == last and row.get('smooth_noise', False):
-            raise ValueError(
-                f'{where} is the last (reconstruction) row and may not set "smooth_noise" true.'
             )
     # Rule 7
     if schedule[-1].get('temporal_subsample', 1.0) < 1:
@@ -241,6 +309,13 @@ def _check_dwidenoise2_combinations(params, source):
 
     if fixed_rank and 'noise_in' in params:
         raise ValueError(f'{source} sets both "fixed_rank" and "noise_in".')
+    # A fixed rank replaces the noise level estimator (make_imposed() in dwidenoise2's
+    # estimator/imposed/imposed.cpp)
+    if fixed_rank and 'estimator' in params:
+        raise ValueError(
+            f'{source} sets both "fixed_rank" and "estimator"; a fixed signal rank replaces '
+            'the noise level estimator.'
+        )
     # Rule 10
     if vst_none and 'noise_in' in params:
         raise ValueError(
@@ -304,7 +379,8 @@ def load_dwidenoise2_config(path):
     -------
     dict
         DWIDenoise2 input values. ``schedule`` is present only when the file sets it, as a
-        list of row dicts with ``spatial_subsample`` triplets as tuples. ``demod_axes`` is
+        list of row dicts with ``spatial_subsample`` triplets as tuples; a bundled schedule
+        named by the file is expanded to its rows. ``demod_axes`` is
         joined into the comma-separated string the interface takes.
 
     Raises
@@ -530,21 +606,39 @@ def describe_dwidenoise2(parameters, complex_data):
     # The kernel size and the number of PCAs are set per iteration by the schedule rather
     # than by a fixed window
     schedule = parameters.get('schedule')
-    if schedule is None:
-        schedule_desc = 'its default schedule'
+    if schedule is not None:
+        n_iterations = len(schedule)
+        name = next((k for k, rows in _NAMED_SCHEDULES.items() if rows == schedule), None)
+        if name is not None:
+            schedule_desc = f'its bundled "{name}" schedule'
+        else:
+            schedule_desc = (
+                f'a custom {n_iterations}-iteration schedule provided with `--dwidenoise2-config`'
+            )
+    elif 'fixed_rank' in used:
+        # dwidenoise2 then loads its bundled single-row "fixedrank" schedule
+        n_iterations = 1
+        schedule_desc = 'its bundled "fixedrank" schedule'
+    elif used.get('vst_method') == 'none':
+        # Without a variance-stabilizing transform, iterations cannot inform one another
+        n_iterations = 1
+        schedule_desc = 'a single-iteration schedule'
     else:
-        schedule_desc = (
-            f'a custom {len(schedule)}-iteration schedule provided in the QSIPrep '
-            'configuration file'
-        )
+        n_iterations = len(_NAMED_SCHEDULES['default'])
+        schedule_desc = 'its default schedule'
 
-    sentences = [
+    method = (
         'denoised using the Marchenko-Pastur PCA method [@dwidenoise1; @dwidenoise2] as '
-        'implemented in `dwidenoise2` [@dwidenoise2software; @cordero2019complex], which '
-        'estimates the noise level over a multi-resolution series of iterations following '
-        f'{schedule_desc}, sizing the sliding-window patch for noise estimation and for '
-        'denoising separately.'
-    ]
+        'implemented in `dwidenoise2` [@dwidenoise2software; @cordero2019complex]'
+    )
+    if n_iterations > 1:
+        sentences = [
+            f'{method}, which estimates the noise level over a multi-resolution series of '
+            f'iterations following {schedule_desc}, sizing the sliding-window patch for noise '
+            'estimation and for denoising separately.'
+        ]
+    else:
+        sentences = [f'{method}, in a single pass over the data following {schedule_desc}.']
 
     preconditioning = []
     if complex_data and used['demodulate'] != 'none':
@@ -580,15 +674,25 @@ def describe_dwidenoise2(parameters, complex_data):
         if used['decomposition'] == 'bdcsvd'
         else 'a self-adjoint eigendecomposition'
     )
-    if 'noise_in' in used:
-        estimation = 'the noise level was taken from a pre-estimated noise map'
-    elif 'fixed_rank' in used:
+    estimated = (
+        'the noise level was estimated from the eigenspectrum using '
+        f'{_DWIDENOISE2_ESTIMATORS[used["estimator"]]}'
+    )
+    if 'fixed_rank' in used:
         estimation = f'the signal rank was fixed at {used["fixed_rank"]}'
+    elif 'noise_in' in used:
+        # -noise_in only seeds the variance-stabilizing transform. Any schedule row that
+        # updates the noise level re-estimates it, so it is used as given only when none do.
+        # Without a schedule, the default one is used, which re-estimates it.
+        if schedule is not None and not any(_resolved_update_noise(schedule)):
+            estimation = f'a fixed noise level of {used["noise_in"]} was used throughout'
+        else:
+            estimation = (
+                f'an initial noise level of {used["noise_in"]} seeded the '
+                f'variance-stabilizing transform, after which {estimated}'
+            )
     else:
-        estimation = (
-            'the noise level was estimated from the eigenspectrum using '
-            f'{_DWIDENOISE2_ESTIMATORS[used["estimator"]]}'
-        )
+        estimation = estimated
     sentences.append(f'Each patch was decomposed with {decomposition}, and {estimation}.')
 
     # dwidenoise2 truncates rather than shrinks when the rank is given rather than estimated

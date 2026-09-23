@@ -33,6 +33,7 @@ qsiprep base processing workflows
 
 import dataclasses
 import os
+import shutil
 import sys
 from collections import defaultdict
 from copy import deepcopy
@@ -125,6 +126,12 @@ def init_qsiprep_wf():
         )
         log_dir.mkdir(exist_ok=True, parents=True)
         config.to_filename(log_dir / 'qsiprep.toml')
+        # The toml only records the path, so keep the settings dwidenoise2 actually ran with
+        if (
+            config.workflow.denoise_method == 'dwidenoise2'
+            and config.workflow.dwidenoise2_config is not None
+        ):
+            shutil.copyfile(config.workflow.dwidenoise2_config, log_dir / 'dwidenoise2.json')
     return qsiprep_wf
 
 
