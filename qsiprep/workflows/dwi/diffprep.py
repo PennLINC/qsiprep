@@ -213,7 +213,7 @@ def _build_rpe_diffprep_stage(
 def _seed_t2wreg_with_gre(
     workflow, inputnode, diffprep, unit, source_file, has_gradwarp, b0_source
 ):
-    """Seed a T2Wreg run (T2w or SynB0 target) with the unit's own GRE fieldmap.
+    """Seed a T2Wreg run (T2w or SynB0 target) with the unit's GRE candidate.
 
     ``b0_source`` is ``(node, field)`` giving the pre-HMC b=0 average the seed is
     estimated on (DIFFPREP has not run yet). ``init_sdc_wf`` builds the GRE
@@ -227,7 +227,8 @@ def _seed_t2wreg_with_gre(
     gre_init_b0_ref_wf = init_dwi_reference_wf(
         source_file=source_file, name='gre_init_b0_ref_wf', gen_report=False
     )
-    b0_sdc_wf = init_sdc_wf(unit, gradwarp=has_gradwarp, use='t2wreg')
+    gre_unit = dataclasses.replace(unit, estimation=unit.gre_init_estimation)
+    b0_sdc_wf = init_sdc_wf(gre_unit, gradwarp=has_gradwarp, use='t2wreg')
     b0_sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
     diffprep.inputs.keep_initial_transform_fixed = config.workflow.gre_init_keep_fixed
     workflow.connect([
@@ -367,33 +368,22 @@ def init_diffprep_hmc_wf(
     # by ``t2w_sdc``).
     is_fieldmapless = not unit.has_scanner_measured_fieldmap
     t2wreg_stage = unit.run.stage_with('t2wreg')
-    synb0_from_plan = t2wreg_stage is not None and t2wreg_stage.structural_target == 'synb0'
+    synb0_target = t2wreg_stage is not None and t2wreg_stage.structural_target == 'synb0'
     # Classic SyN is fieldmap-less too, but has its own path (init_sdc_wf below).
-    # With gre_t2wreg_init a GRE unit runs T2Wreg seeded by its own fieldmap. It has
-    # no t2wreg plan stage, so the target comes from --sdc-anat-reference: 'synb0',
-    # otherwise the subject's T2w.
-    gre_init_wants = bool(unit.is_gre and config.workflow.gre_t2wreg_init)
-    gre_init_synb0 = gre_init_wants and config.workflow.sdc_anat_reference == 'synb0'
-    gre_init = bool(gre_init_wants and (gre_init_synb0 or t2w_sdc))
-    synb0_target = synb0_from_plan or gre_init_synb0
-    use_t2wreg = gre_init or (
-        is_fieldmapless and not unit.is_nipreps_syn and (synb0_from_plan or bool(t2w_sdc))
-    )
+    use_t2wreg = is_fieldmapless and not unit.is_nipreps_syn and (synb0_target or bool(t2w_sdc))
     epi_mode = 'T2Wreg' if use_t2wreg else 'off'
-    # A PEPOLAR unit whose DWI a GRE fieldmap also lists (a non-applied
-    # application candidate) always seeds DRBUDDI with that fieldmap.
-    gre_drbuddi_init = unit.is_pepolar and unit.gre_init_estimation is not None
-    if gre_init_wants and not gre_init:
-        config.loggers.workflow.warning(
-            '--gre-init-t2wreg has no effect on %s: it has no T2w or SynB0 target, so '
-            'its GRE fieldmap is applied after head motion correction.',
-            unit.output_name,
-        )
-    if gre_drbuddi_init:
+    # A GRE fieldmap that lists this unit's DWI without being the applied
+    # correction starts the TORTOISE registration that is: T2Wreg when an
+    # anatomical reference was forced over it, DRBUDDI when a PEPOLAR pair won.
+    gre_seed = unit.gre_init_estimation
+    gre_t2wreg_init = use_t2wreg and gre_seed is not None
+    gre_drbuddi_init = unit.is_pepolar and gre_seed is not None
+    if gre_t2wreg_init or gre_drbuddi_init:
         config.loggers.workflow.info(
-            'Initializing DRBUDDI for %s with GRE fieldmap %s.',
+            'Initializing %s for %s with GRE fieldmap %s.',
+            'T2Wreg' if gre_t2wreg_init else 'DRBUDDI',
             unit.output_name,
-            unit.gre_init_estimation.b0field_id,
+            gre_seed.b0field_id,
         )
 
     # Load any user-supplied DIFFPREP config (or our defaults)
@@ -545,10 +535,7 @@ def init_diffprep_hmc_wf(
                 ]),
                 (synb0_wf, diffprep, [('outputnode.synthetic_b0', 'structural_image')]),
             ])  # fmt:skip
-            if gre_init:
-                # Seed the SynB0-target T2Wreg with the unit's GRE fieldmap: the
-                # synthetic distortion-free b=0 then refines the GRE prior. Same
-                # seed wiring as the T2w target, on the raw b=0 used for SynB0.
+            if gre_t2wreg_init:
                 _seed_t2wreg_with_gre(
                     workflow,
                     inputnode,
@@ -577,8 +564,7 @@ def init_diffprep_hmc_wf(
                     ('outputnode.structural_aligned', 'structural_image'),
                 ]),
             ])  # fmt:skip
-            if gre_init:
-                # Seed the T2w-target T2Wreg with the unit's GRE fieldmap.
+            if gre_t2wreg_init:
                 _seed_t2wreg_with_gre(
                     workflow,
                     inputnode,
@@ -854,7 +840,7 @@ def init_diffprep_hmc_wf(
     #    to DIFFPREP (--grad_nonlin), whose EPI stage resamples its b=0 through it
     #    before registering. Head motion correction does not use the field.
     if use_t2wreg:
-        if gre_init:
+        if gre_t2wreg_init:
             outputnode.inputs.sdc_method = (
                 'T2Wreg (SynB0, GRE-initialized)' if synb0_target else 'T2Wreg (GRE-initialized)'
             )

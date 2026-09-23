@@ -1077,25 +1077,28 @@ Registration-based correction (DRBUDDI, T2Wreg) infers the distortion by
 matching images, which is ambiguous where the field piles several voxels'
 signal into one or drops it out.
 A GRE fieldmap measures the field directly.
-With ``--hmc-method tortoise``, a GRE fieldmap can therefore start a TORTOISE
-registration instead of only being applied on its own:
+With ``--hmc-method tortoise``, a GRE fieldmap that lists a series but lost to
+another correction starts that correction's TORTOISE registration instead of
+going unused. No option is needed; ``--ignore fieldmaps`` (which skips
+``fmap/``) or ``--ignore sdc`` turns it off.
 
-DRBUDDI (automatic)
-   When a reverse phase-encoded series is also listed by a GRE fieldmap,
-   DRBUDDI starts from the GRE warp: the warp for the series' own phase
-   encoding is the initial blip-up transform and its negation the initial
-   blip-down transform. No option is needed; ``--ignore fieldmaps`` (which
-   skips ``fmap/``) or ``--ignore sdc`` turns it off.
+DRBUDDI
+   When a reverse phase-encoded correction wins, DRBUDDI starts from the GRE
+   warp: the warp for the series' own phase encoding is the initial blip-up
+   transform and its negation the initial blip-down transform.
    The reverse phase-encoded correction has to be linked explicitly (an
    ``epi`` fieldmap's ``IntendedFor``, or ``B0FieldIdentifier``/
    ``B0FieldSource``): once a GRE fieldmap's ``IntendedFor`` names the series,
    *QSIPrep* no longer infers reverse phase-encoding pairs in that session, and
    the GRE fieldmap is applied on its own.
 
-T2Wreg (``--gre-init-t2wreg``)
-   For a series corrected with a GRE fieldmap, run T2Wreg against the T2w (or
-   against a SynB0 image with ``--sdc-anat-reference synb0``) starting from the
-   GRE warp, instead of applying the GRE warp after head motion correction.
+T2Wreg
+   When ``--sdc-anat-reference t2w`` or ``synb0`` is combined with
+   ``--force sdc-anat-reference``, the anatomical reference replaces the GRE
+   fieldmap as the applied correction, and T2Wreg (against the T2w or the SynB0
+   image) starts from the GRE warp.
+   Without ``--force``, the GRE fieldmap is applied on its own, and a forced
+   ``invt1w`` reference runs SyN, which takes no initial warp.
 
 In both cases the initial warp is held fixed through the registration's
 multi-resolution pyramid, so each stage estimates a residual correction on top

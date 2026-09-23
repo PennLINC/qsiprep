@@ -127,12 +127,8 @@ def _build_parser(**kwargs):
                     f'--sdc-method {namespace.sdc_method} requires --hmc-method eddy: '
                     'SHORELine and TORTOISE correct PEPOLAR units with DRBUDDI'
                 )
-            for flag, dest, hmc_method in (
-                ('--gre-eddy-mbs', 'gre_eddy_mbs', 'eddy'),
-                ('--gre-init-t2wreg', 'gre_t2wreg_init', 'tortoise'),
-            ):
-                if getattr(namespace, dest, False) and namespace.hmc_method != hmc_method:
-                    self.error(f'{flag} requires --hmc-method {hmc_method}')
+            if getattr(namespace, 'gre_eddy_mbs', False) and namespace.hmc_method != 'eddy':
+                self.error('--gre-eddy-mbs requires --hmc-method eddy')
 
             # --force values land on their own boolean attributes so config
             # (and qsiplan's policy bridge) can read them by name.
@@ -780,18 +776,6 @@ def _build_parser(**kwargs):
             'Hand a GRE fieldmap to FSL eddy via --field so eddy applies the '
             'susceptibility correction itself and estimates movement-by-susceptibility, '
             'instead of applying the fieldmap warp after eddy. Requires --hmc-method eddy.'
-        ),
-    )
-    g_sdc.add_argument(
-        '--gre-init-t2wreg',
-        action='store_true',
-        default=False,
-        dest='gre_t2wreg_init',
-        help=(
-            'For a series corrected with a GRE fieldmap that also has a structural target '
-            '(a T2w, or SynB0 with --sdc-anat-reference synb0), run TORTOISE T2Wreg '
-            'initialized with the GRE-derived warp instead of applying the GRE warp after '
-            'head motion correction. Requires --hmc-method tortoise.'
         ),
     )
     g_sdc.add_argument(

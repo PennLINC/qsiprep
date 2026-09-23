@@ -693,27 +693,18 @@ def test_t1w_derived_references_require_t1w_modality(minimal_args, capsys, refer
 def test_gre_flags_default_off_and_parse(minimal_args):
     opts = _parse(minimal_args)
     assert opts.gre_eddy_mbs is False
-    assert opts.gre_t2wreg_init is False
     assert opts.gre_gradwarp == 'transport'
     opts = _parse(minimal_args, '--gre-eddy-mbs', '--gre-gradwarp', 'reference')
     assert opts.gre_eddy_mbs is True
     assert opts.gre_gradwarp == 'reference'
-    assert _parse(minimal_args, '--hmc-method', 'tortoise', '--gre-init-t2wreg').gre_t2wreg_init
     with pytest.raises(SystemExit):
         _parse(minimal_args, '--gre-gradwarp', 'jacobian')
 
 
-@pytest.mark.parametrize(
-    ('flag', 'hmc_method', 'required'),
-    [
-        ('--gre-eddy-mbs', 'tortoise', 'eddy'),
-        ('--gre-init-t2wreg', 'eddy', 'tortoise'),
-    ],
-)
-def test_gre_flags_require_their_hmc_method(minimal_args, capsys, flag, hmc_method, required):
+def test_gre_eddy_mbs_requires_eddy(minimal_args, capsys):
     with pytest.raises(SystemExit):
-        _parse(minimal_args, '--hmc-method', hmc_method, flag)
-    assert f'{flag} requires --hmc-method {required}' in capsys.readouterr().err
+        _parse(minimal_args, '--hmc-method', 'tortoise', '--gre-eddy-mbs')
+    assert '--gre-eddy-mbs requires --hmc-method eddy' in capsys.readouterr().err
 
 
 def test_shoreline_selection_warns_of_removal(minimal_args, capsys):

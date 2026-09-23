@@ -28,7 +28,6 @@ def _reset_config():
     config.workflow.force = []
     config.workflow.gre_gradwarp = 'transport'
     config.workflow.gre_eddy_mbs = False
-    config.workflow.gre_t2wreg_init = False
     # Anything that runs the real parser leaves the method axes set, and a stray
     # sdc_method='topup' would silently compile a plan with no DRBUDDI stage.
     # Save them here, and restore below so this module does not pollute in turn.
@@ -52,7 +51,6 @@ def _reset_config():
     config.workflow.gradient_file = None
     config.workflow.gre_gradwarp = 'transport'
     config.workflow.gre_eddy_mbs = False
-    config.workflow.gre_t2wreg_init = False
     config.workflow.ignore = []
     config.workflow.force = []
     for key, value in axis_keys.items():
@@ -2096,17 +2094,50 @@ def test_diffprep_t2wreg_without_gradwarp_passes_no_field(tmp_path):
     assert not _connects(wf, 'inputnode', 'diffprep', 'gradwarp_field', 'grad_nonlin')
 
 
-def test_gre_seeds_t2wreg_when_asked(tmp_path, monkeypatch):
-    """GRE + T2w + --gre-init-t2wreg: T2Wreg runs, seeded by the GRE warp, and the GRE warp
-    is not also applied after HMC."""
+def _forced_anat_unit_with_gre(method):
+    """What --force sdc-anat-reference leaves when a phasediff GRE fieldmap also
+    lists the series: the anatomical estimation is applied and the GRE fieldmap
+    stays an application candidate."""
+    import dataclasses
+
+    from qsiplan.models import CorrectionMethod, Provenance
+
+    gre_unit = _phasediff_unit()
+    dwi = gre_unit.dwi_files[0]
+    anat = (
+        '/data/sub-01_T2w.nii.gz'
+        if method is CorrectionMethod.T2WREG
+        else '/data/sub-01_T1w.nii.gz'
+    )
+    unit = make_preproc_unit(
+        [dwi],
+        method=method,
+        estimation_sources=[anat],
+        anat_files=[anat],
+        provenance=Provenance.FORCED,
+        b0field_id='auto+anat',
+    )
+    gre = gre_unit.estimation
+    grouping = dataclasses.replace(
+        unit.grouping,
+        files={**gre_unit.grouping.files, **unit.grouping.files},
+        estimations={**unit.grouping.estimations, gre.b0field_id: gre},
+        application_candidates={dwi: (unit.estimation.b0field_id, gre.b0field_id)},
+    )
+    return dataclasses.replace(unit, grouping=grouping)
+
+
+def test_forced_t2w_reference_is_seeded_by_the_gre_fieldmap(tmp_path, monkeypatch):
+    """--force sdc-anat-reference over a GRE fieldmap: T2Wreg runs against the T2w,
+    starting from the GRE warp, and the GRE warp is not also applied after HMC."""
+    from qsiplan.models import CorrectionMethod
+
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg_for_diffprep(tmp_path)
-    config.workflow.gre_t2wreg_init = True
     config.workflow.gre_gradwarp = 'transport'
-    try:
-        wf = _diffprep_t2wreg_wf(tmp_path, _phasediff_unit())
-    finally:
-        config.workflow.gre_t2wreg_init = False
+    unit = _forced_anat_unit_with_gre(CorrectionMethod.T2WREG)
+    assert unit.run.stage_with('t2wreg').structural_target == 't2w'
+    wf = _diffprep_t2wreg_wf(tmp_path, unit)
 
     diffprep = wf.get_node('diffprep')
     assert diffprep.inputs.epi_mode == 'T2Wreg'
@@ -2128,38 +2159,37 @@ def test_gre_seeds_t2wreg_when_asked(tmp_path, monkeypatch):
     assert 'unwarped b=0' not in desc
 
 
-def test_gre_seeds_synb0_when_asked(tmp_path, monkeypatch):
-    """GRE + --gre-init-t2wreg + --sdc-anat-reference synb0, no T2w: T2Wreg runs
-    against a T1w-synthesised distortion-free b=0 (SynB0), seeded by the GRE warp,
-    via the SynB0 branch (not the T2w branch)."""
+def test_forced_synb0_reference_is_seeded_by_the_gre_fieldmap(tmp_path, monkeypatch):
+    """A forced SynB0 reference over a GRE fieldmap runs T2Wreg against the
+    synthetic b=0 through the SynB0 branch, starting from the GRE warp."""
+    from qsiplan.models import CorrectionMethod
+
     from qsiprep.workflows.dwi.diffprep import init_diffprep_hmc_wf
 
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg_for_diffprep(tmp_path)
-    config.workflow.gradient_file = None  # no gradwarp for this experiment
-    config.workflow.gre_t2wreg_init = True
-    config.workflow.sdc_anat_reference = 'synb0'
-    config.workflow.anat_modality = 'T1w'
-    try:
-        wf = init_diffprep_hmc_wf(
-            _phasediff_unit(), source_file='/data/x_dwi.nii.gz', t2w_sdc=False
-        )
-    finally:
-        config.workflow.gre_t2wreg_init = False
-        config.workflow.sdc_anat_reference = 'none'
-        config.workflow.anat_modality = None
+    config.workflow.gradient_file = None
+    unit = _forced_anat_unit_with_gre(CorrectionMethod.SYNB0)
+    assert unit.run.stage_with('t2wreg').structural_target == 'synb0'
+    wf = init_diffprep_hmc_wf(unit, source_file='/data/x_dwi.nii.gz', t2w_sdc=False)
 
     diffprep = wf.get_node('diffprep')
     assert diffprep.inputs.epi_mode == 'T2Wreg'
-    # SynB0 branch taken, T2w branch not
     assert wf.get_node('synb0_wf') is not None
-    assert wf.get_node('raw_b0s') is not None
     assert wf.get_node('t2wreg_b0s') is None
-    assert wf.get_node('t2w_to_b0_wf') is None
-    # GRE seed wired into the SynB0-target run, held fixed
     assert _connects(wf, 'sdc_wf', 'diffprep', 'outputnode.out_warp', 'epireg_initial_field')
     assert diffprep.inputs.keep_initial_transform_fixed is True
     assert wf.get_node('outputnode').inputs.sdc_method == 'T2Wreg (SynB0, GRE-initialized)'
+
+
+def test_t2wreg_without_a_gre_candidate_is_not_seeded(tmp_path, monkeypatch):
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    _cfg_for_diffprep(tmp_path)
+    wf = _diffprep_t2wreg_wf(tmp_path, _plain_unit(tmp_path))
+
+    assert wf.get_node('diffprep').inputs.epi_mode == 'T2Wreg'
+    assert wf.get_node('gre_init_b0_ref_wf') is None
+    assert wf.get_node('outputnode').inputs.sdc_method == 'T2Wreg'
 
 
 def test_gre_with_t2w_stays_on_the_fieldmap_path_by_default(tmp_path, monkeypatch):
