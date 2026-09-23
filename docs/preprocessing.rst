@@ -176,6 +176,39 @@ data, it is recommended in the MRtrix3 documentation to apply MP-PCA before
 Gibbs unringing. B1 bias field correction and b=0 intensity harmonization
 do not have as specific requirements about their inputs so are run last.
 
+dwidenoise2 settings
+--------------------
+
+``--dwidenoise2-config`` takes a JSON file with settings for ``--denoise-method dwidenoise2``.
+Every key is optional, and unknown keys are an error.
+Keys other than ``schedule`` set the ``dwidenoise2`` option of the same name.
+``schedule`` lists the iterations of the multi-resolution noise estimation.
+Each iteration is an object whose keys are the columns of a ``dwidenoise2`` schedule file:
+``spatial_subsample``, ``kernel``, ``smooth_noise``, ``update_noise``,
+``temporal_subsample``, ``partitions`` and ``max_partition_size``.
+An omitted column takes the ``dwidenoise2`` default.
+The last iteration is the reconstruction pass.
+QSIPrep checks the file when the command line is parsed,
+including the rules ``dwidenoise2`` applies to schedules,
+and writes the schedule to a file in the working directory at run time.
+
+.. code-block:: json
+
+  {
+    "demodulate": "linear",
+    "decomposition": "bdcsvd",
+    "schedule": [
+      {"spatial_subsample": 8, "kernel": "aspect=2.0", "update_noise": true},
+      {"spatial_subsample": [4, 4, 2], "kernel": "rmse=0.02", "update_noise": true},
+      {"spatial_subsample": 2, "kernel": "rank", "update_noise": false}
+    ]
+  }
+
+The schedules bundled with ``dwidenoise2``
+(https://github.com/tsalo/dwidenoise2/tree/main/share/dwidenoise2/dwidenoise2)
+describe each column and can be copied into this format.
+Without a ``schedule`` key, ``dwidenoise2`` uses its default schedule.
+
 
 Preprocessing HCP-style
 =======================
