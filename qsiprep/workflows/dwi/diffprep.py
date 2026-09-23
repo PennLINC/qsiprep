@@ -210,6 +210,18 @@ def _build_rpe_diffprep_stage(
     return recombine
 
 
+def _gre_seed_unit(unit):
+    """``unit`` seen through its GRE candidate, led by the series ``unit.pe_dir``
+    names: init_sdc_wf builds the warp for its lead series' phase encoding, and
+    that series is TORTOISE's EPI/blip-up series (the plus series of a pair)."""
+    lead = unit.plus_files[0] if unit.has_bidirectional_dwi else unit.dwi_files[0]
+    return dataclasses.replace(
+        unit,
+        estimation=unit.gre_init_estimation,
+        dwi_files=(lead, *(path for path in unit.dwi_files if path != lead)),
+    )
+
+
 def _seed_t2wreg_with_gre(
     workflow, inputnode, diffprep, unit, source_file, has_gradwarp, b0_source
 ):
@@ -227,8 +239,7 @@ def _seed_t2wreg_with_gre(
     gre_init_b0_ref_wf = init_dwi_reference_wf(
         source_file=source_file, name='gre_init_b0_ref_wf', gen_report=False
     )
-    gre_unit = dataclasses.replace(unit, estimation=unit.gre_init_estimation)
-    b0_sdc_wf = init_sdc_wf(gre_unit, gradwarp=has_gradwarp, use='t2wreg')
+    b0_sdc_wf = init_sdc_wf(_gre_seed_unit(unit), gradwarp=has_gradwarp, use='t2wreg')
     b0_sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
     diffprep.inputs.keep_initial_transform_fixed = config.workflow.gre_init_keep_fixed
     workflow.connect([
@@ -782,15 +793,15 @@ def init_diffprep_hmc_wf(
         ])  # fmt:skip
 
         if gre_drbuddi_init:
-            # The GRE warp is built for the lead series' phase encoding, which is
-            # DRBUDDI's up series, and on the pre-gradwarp b=0; init_sdc_wf
-            # transports it into the frame of the gradwarped up/down volumes
-            # before init_drbuddi_wf negates it for the down series.
-            gre_unit = dataclasses.replace(unit, estimation=unit.gre_init_estimation)
+            # The GRE warp is built for DRBUDDI's up series on the pre-gradwarp b=0;
+            # init_sdc_wf transports it into the frame of the gradwarped up/down
+            # volumes before init_drbuddi_wf negates it for the down series.
             drbuddi_gre_b0_ref_wf = init_dwi_reference_wf(
                 source_file=source_file, name='drbuddi_gre_init_b0_ref_wf', gen_report=False
             )
-            gre_seed_sdc_wf = init_sdc_wf(gre_unit, gradwarp=has_gradwarp, use='drbuddi')
+            gre_seed_sdc_wf = init_sdc_wf(
+                _gre_seed_unit(unit), gradwarp=has_gradwarp, use='drbuddi'
+            )
             gre_seed_sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
             gre_ref_fields = (
                 'outputnode.ref_image',

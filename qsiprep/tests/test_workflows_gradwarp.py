@@ -872,7 +872,7 @@ def _connects(wf, src_name, dst_name, source_field, dest_field):
     return False
 
 
-def _rpe_unit(tmp_path, image_type=None):
+def _rpe_unit(tmp_path, image_type=None, minus_first=False):
     from qsiplan.models import CorrectionMethod
 
     main = write_dwi_with_gradients(tmp_path / 'sub-01_dir-AP_dwi.nii.gz')
@@ -883,7 +883,7 @@ def _rpe_unit(tmp_path, image_type=None):
     return make_preproc_unit(
         [main, partner],
         method=CorrectionMethod.PEPOLAR,
-        pe_dirs={main: 'j', partner: 'j-'},
+        pe_dirs={main: 'j-', partner: 'j'} if minus_first else {main: 'j', partner: 'j-'},
         metadata=metadata,
     )
 
@@ -1067,9 +1067,10 @@ def test_diffprep_dis3d_does_not_gradwarp_sdc_inputs(tmp_path):
     assert wf.get_node('gradwarp_sdc_inputs') is None
 
 
-def _rpe_unit_with_gre_candidate(tmp_path):
+def _rpe_unit_with_gre_candidate(tmp_path, minus_first=False):
     """A PEPOLAR unit whose AP series also has a phasediff GRE fieldmap kept as a
-    non-applied candidate, which seeds DRBUDDI."""
+    non-applied candidate, which seeds DRBUDDI. ``minus_first`` gives the first
+    series (AP) the minus polarity, as dir-AP/dir-PA data usually has."""
     import dataclasses
 
     import nibabel as nb
@@ -1082,7 +1083,7 @@ def _rpe_unit_with_gre_candidate(tmp_path):
         Provenance,
     )
 
-    unit = _rpe_unit(tmp_path)
+    unit = _rpe_unit(tmp_path, minus_first=minus_first)
     ap = unit.dwi_files[0]
     pd = str(tmp_path / 'sub-01_phasediff.nii.gz')
     mag = str(tmp_path / 'sub-01_magnitude1.nii.gz')
@@ -1136,6 +1137,21 @@ def test_diffprep_drbuddi_seeded_by_gre_candidate(tmp_path, monkeypatch):
     assert 'initialized with the field map-derived deformation described above' in desc
     assert desc.index('estimated based on a field map') < desc.index('DRBUDDI [@drbuddi]')
     assert 'unwarped b=0' not in desc
+
+
+@pytest.mark.parametrize('minus_first', [False, True])
+def test_diffprep_drbuddi_seed_is_built_for_the_up_series(tmp_path, monkeypatch, minus_first):
+    """The GRE warp is DRBUDDI's initial up field, so it must be built for the
+    up (plus) series' phase encoding even when the minus series comes first."""
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    _cfg_for_diffprep(tmp_path)
+    config.workflow.gradient_file = None
+    unit = _rpe_unit_with_gre_candidate(tmp_path, minus_first=minus_first)
+    wf = _diffprep_wf(tmp_path, unit)
+
+    seed_metadata = wf.get_node('sdc_wf.sdc_unwarp_wf.inputnode').inputs.metadata
+    assert seed_metadata['PhaseEncodingDirection'] == unit.pe_dir == 'j'
+    assert wf.get_node('drbuddi_sdc_wf.gather_drbuddi_inputs').inputs.dwi_series_pedir == 'j'
 
 
 def test_diffprep_drbuddi_unseeded_without_a_gre_candidate(tmp_path, monkeypatch):
