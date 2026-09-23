@@ -738,12 +738,21 @@ TORTOISE itself handles this.
 
 Susceptibility distortion correction (SDC) is estimated on gradwarp-corrected
 b=0/FA images whenever the resulting SDC warp is applied *after* gradwarp in
-the composed transform: the DRBUDDI, GRE fieldmap and SyN fieldmap-less
-branches, on every HMC backend.
-The one exception is ``eddy`` combined with ``TOPUP``: ``eddy`` resamples
-the raw data itself and applies the susceptibility field internally,
+the composed transform: the DRBUDDI, T2Wreg and SyN fieldmap-less branches,
+on every HMC backend.
+A GRE fieldmap is acquired with the same gradients as the DWI, so its content
+sits in the uncorrected frame whichever b=0 it is registered to.
+By default (``--gre-gradwarp transport``) its warp is estimated on the raw b=0
+and then composed with the gradwarp field and its inverse, which carries it
+exactly into the corrected frame.
+``--gre-gradwarp reference`` instead registers the fieldmap to the
+gradwarp-corrected b=0 and uses it as-is, and ``--gre-gradwarp hz`` resamples
+the fieldmap through the gradwarp field before registering it.
+The exceptions are ``eddy`` combined with ``TOPUP``, and a GRE fieldmap handed
+to ``eddy`` with ``--gre-eddy-mbs``: ``eddy`` resamples the raw data itself and
+applies the susceptibility field internally,
 so both the field estimate and gradwarp are applied together at the very end,
-and estimating the TOPUP field on raw (rather than gradwarp-corrected) b=0 images
+and estimating the field on raw (rather than gradwarp-corrected) b=0 images
 is what keeps that single step internally consistent.
 
 The b=0 image that DWI-to-anatomical coregistration is estimated from is
@@ -794,20 +803,6 @@ since it addresses a completely separate problem
      does not propagate the nonlinear susceptibility transform into the L
      matrix — and is recorded in the ``GradientDeviationOrientation`` key of
      the ``*_graddev.json`` sidecar.
-
-   - **TORTOISE's fieldmap-less T2Wreg path is not gradwarp-corrected.**
-     When ``--hmc-method tortoise`` is used with no fieldmap and a T2w
-     structural image is available, susceptibility distortion is estimated
-     by TORTOISE's own ``T2Wreg`` registration, running entirely inside the
-     ``TORTOISEProcess``/``DIFFPREP`` binary, so QSIPrep has no opportunity to
-     hand that binary a gradwarp-corrected image. Stock TORTOISE does not
-     gradwarp-correct it either: the code in ``EPIREG.cxx`` that is meant to do
-     so builds its filename from the ``--grad_nonlin`` argument rather than
-     from the field TORTOISE generates, and so cannot find the file (the
-     equivalent code in ``DRBUDDI.cxx`` has this fixed, with the old form left
-     commented out beside it). QSIPrep therefore matches TORTOISE's real
-     behaviour here. The coregistration reference on this branch *is*
-     gradwarp-corrected; only the susceptibility estimate is not.
 
 .. _fsl_wf:
 
@@ -1071,6 +1066,46 @@ The are three kinds of SDC available in *QSIPrep*:
 
 *QSIPrep* determines if a fieldmap should be used based on the ``"IntendedFor"``
 fields in the JSON sidecars in the ``fmap/`` directory.
+
+
+.. _gre_init:
+
+Initializing TORTOISE registration with a GRE fieldmap
+------------------------------------------------------
+
+Registration-based correction (DRBUDDI, T2Wreg) infers the distortion by
+matching images, which is ambiguous where the field piles several voxels'
+signal into one or drops it out.
+A GRE fieldmap measures the field directly.
+With ``--hmc-method tortoise``, two opt-in flags start a TORTOISE registration
+from the GRE-derived warp instead of applying that warp on its own:
+
+``--gre-init-drbuddi``
+   For a reverse phase-encoded series that a GRE fieldmap also lists, DRBUDDI
+   starts from the GRE warp: the warp for the series' own phase encoding is the
+   initial blip-up transform and its negation the initial blip-down transform.
+   The reverse phase-encoded correction has to be linked explicitly (an ``epi``
+   fieldmap's ``IntendedFor``, or ``B0FieldIdentifier``/``B0FieldSource``):
+   once a GRE fieldmap's ``IntendedFor`` names the series, *QSIPrep* no longer
+   infers reverse phase-encoding pairs in that session, and the GRE fieldmap
+   is applied on its own.
+
+``--gre-init-t2wreg``
+   For a series corrected with a GRE fieldmap, run T2Wreg against the T2w (or
+   against a SynB0 image with ``--sdc-anat-reference synb0``) starting from the
+   GRE warp, instead of applying the GRE warp after head motion correction.
+
+In both cases the initial warp is held fixed through the registration's
+multi-resolution pyramid, so each stage estimates a residual correction on top
+of it rather than smoothing it away.
+The methods boilerplate and the visual report's distortion-correction entry
+record the initialization, and *QSIPrep* warns about series a flag cannot apply
+to.
+
+With ``--hmc-method eddy``, ``--gre-eddy-mbs`` hands a GRE fieldmap to ``eddy``
+(``--field``) instead of applying it after ``eddy``, which also lets ``eddy``
+estimate how the field changes with head orientation
+(movement-by-susceptibility).
 
 
 .. _best_b0:
