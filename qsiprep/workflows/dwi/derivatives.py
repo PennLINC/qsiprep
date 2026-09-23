@@ -68,8 +68,8 @@ def init_dwi_derivatives_wf(source_file, sdc_warp_meta=None, sdc_refinement_meta
     """Set up a battery of datasinks to store derivatives in the right location.
 
     When ``sdc_warp_meta`` is given (a dict of sidecar metadata), the SDC
-    (susceptibility) displacement field is also written, on the ACPC output grid,
-    as an ITK/ANTs displacement-field transform. ``sdc_refinement_meta`` does the
+    (susceptibility) displacement is also written as a map on the ACPC output grid,
+    for inspection rather than for resampling. ``sdc_refinement_meta`` does the
     same for DRBUDDI's refinement of the TOPUP field (TOPUP+DRBUDDI only).
     """
     output_dir = str(config.execution.output_dir)
@@ -278,9 +278,10 @@ def init_dwi_derivatives_wf(source_file, sdc_warp_meta=None, sdc_refinement_meta
         (inputnode, ds_btable_t1, [('btable_t1', 'in_file')]),
     ])  # fmt:skip
 
-    # The SDC (susceptibility) displacement field on the ACPC grid, as an ITK
-    # transform. Only written when distortion correction ran; the caller signals
-    # that by passing the sidecar metadata.
+    # The SDC (susceptibility) displacement on the ACPC grid. It is a map of the
+    # correction, not a transform to chain: the correction itself is applied in
+    # DWI space, before coregistration. Only written when distortion correction
+    # ran; the caller signals that by passing the sidecar metadata.
     for name, field, desc, meta in (
         ('ds_sdc_warp_t1', 'sdc_warp_to_template', 'sdc', sdc_warp_meta),
         (
@@ -296,13 +297,12 @@ def init_dwi_derivatives_wf(source_file, sdc_warp_meta=None, sdc_refinement_meta
             DerivativesDataSink(
                 source_file=source_file,
                 base_directory=output_dir,
-                mode='image',
-                suffix='xfm',
+                space='ACPC',
                 desc=desc,
+                suffix='displacement',
                 extension='.nii.gz',
                 compress=True,
                 meta_dict=meta,
-                **{'from': 'dwiref', 'to': 'ACPC'},
             ),
             name=name,
             run_without_submitting=True,

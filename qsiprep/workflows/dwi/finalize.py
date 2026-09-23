@@ -166,7 +166,7 @@ def init_dwi_finalize_wf(
     doing_topup = unit.run.stage_with('topup') is not None
 
     # The susceptibility distortion is emitted to derivatives as a displacement
-    # field on the ACPC grid. Every susceptibility method that produces a
+    # map on the ACPC grid. Every susceptibility method that produces a
     # standalone warp -- DRBUDDI, a GRE/phasediff fieldmap, fieldmap-less SyN, and
     # TORTOISE's T2Wreg -- exposes it as fieldwarps, so it is emitted directly.
     # TOPUP is the exception: eddy applies its field internally and leaves no
@@ -180,13 +180,17 @@ def init_dwi_finalize_wf(
 
     sdc_warp_meta = None
     if warp_source is not None:
+        layout = (
+            'Stored on the ACPC output grid in the ITK displacement-field layout, with '
+            'vectors in ACPC world coordinates (LPS, mm), so 3D Slicer or ITK-SNAP can '
+            'display it. It is a map for inspection, not a transform for resampling: '
+            'it holds no DWI-to-ACPC coregistration, and qsiprep applies the correction '
+            'in DWI space.'
+        )
         description = (
-            'Susceptibility (EPI) distortion displacement field of the first DWI series, '
-            'as an ITK/ANTs displacement field on the ACPC output grid with its vectors in '
-            'ACPC world coordinates (LPS). At each point of the corrected ACPC image, the '
-            'vector points to where that tissue appeared in the distorted data, also in '
-            'ACPC coordinates. It holds no DWI-to-ACPC coregistration: as an image '
-            'transform it undistorts an image that is already rigidly aligned to ACPC.'
+            'Susceptibility (EPI) distortion displacement of the first DWI series. At '
+            'each point of the corrected ACPC image, the vector points to where that '
+            f'tissue appeared in the distorted data. {layout}'
         )
         rebuilt_topup = (
             'the TOPUP off-resonance field, rebuilt as voxel shift = '
@@ -197,20 +201,24 @@ def init_dwi_finalize_wf(
         elif warp_source == 'topup+drbuddi':
             description += (
                 f" The total correction: {rebuilt_topup}, followed by DRBUDDI's refinement "
-                '(also written on its own as the desc-sdcrefinement transform).'
+                '(also written on its own as desc-sdcrefinement).'
             )
-        sdc_warp_meta = {'EstimationMethod': estimation_method, 'Description': description}
+        sdc_warp_meta = {
+            'EstimationMethod': estimation_method,
+            'Units': 'mm',
+            'Description': description,
+        }
 
     sdc_refinement_meta = None
     if warp_source == 'topup+drbuddi':
         sdc_refinement_meta = {
             'EstimationMethod': 'DRBUDDI',
+            'Units': 'mm',
             'Description': (
                 "DRBUDDI's refinement of the first DWI series after eddy had already "
-                "corrected it with TOPUP's field, as an ITK/ANTs displacement field on the "
-                'ACPC output grid with its vectors in ACPC world coordinates (LPS). It is '
-                'the part of the total correction (desc-sdc) that DRBUDDI changed: large '
-                'vectors mark where DRBUDDI disagreed with TOPUP.'
+                "corrected it with TOPUP's field: the part of the total correction "
+                '(desc-sdc) that DRBUDDI changed. Large vectors mark where DRBUDDI '
+                f'disagreed with TOPUP. {layout}'
             ),
         }
 

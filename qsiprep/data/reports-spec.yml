@@ -218,8 +218,8 @@ sections:
       the phase-encoding direction sat relative to the ACPC output and how large the
       deformations were (usually largest in frontal and temporal regions). Arrows are
       drawn to scale unless the field is small, in which case the title gives how
-      much they were lengthened. This matches how 3D Slicer renders the exported
-      transform.
+      much they were lengthened. This matches how 3D Slicer draws the exported
+      displacement map.
     static: false
     subtitle: Susceptibility distortion displacement field
 

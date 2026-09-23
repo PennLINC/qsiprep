@@ -1,10 +1,10 @@
-"""The SDC displacement field reaches the derivatives, re-expressed in ACPC space.
+"""The SDC displacement reaches the derivatives, re-expressed in ACPC space.
 
-DRBUDDI estimates susceptibility distortion as an ANTs displacement field in the
-corrected DWI frame. These tests check that ``ComposeSDCWarp`` re-expresses it on
-the ACPC output grid *as a transform* -- rotating its vectors into ACPC world
-coordinates rather than merely resampling the values -- and that the workflow
-wires it into every DRBUDDI backend's derivatives with a valid path and sidecar.
+Susceptibility distortion is corrected with a displacement field in the corrected
+DWI frame. These tests check that ``ComposeSDCWarp`` re-expresses it on the ACPC
+output grid *as a transform* -- rotating its vectors into ACPC world coordinates
+rather than merely resampling the values -- and that every SDC method writes it
+as a ``space-ACPC_desc-sdc_displacement`` map with a valid path and sidecar.
 
 The composition tests need ``antsApplyTransforms``/``antsApplyTransformsToPoints``
 and are skipped when those binaries are absent, so the file is still collectable
@@ -416,14 +416,11 @@ def test_derivatives_wf_writes_sdc_warp_only_with_meta():
     wf = init_dwi_derivatives_wf(source_file='/data/sub-01_dwi.nii.gz', sdc_warp_meta=meta)
     ds = wf.get_node('ds_sdc_warp_t1')
     assert ds is not None
-    assert ds.inputs.suffix == 'xfm'
-    assert ds.inputs.mode == 'image'
+    # A map of the correction on the ACPC grid, not a from/to transform.
+    assert ds.inputs.space == 'ACPC'
     assert ds.inputs.desc == 'sdc'
-    assert getattr(ds.inputs, 'from') == 'dwiref'
-    assert ds.inputs.to == 'ACPC'
+    assert ds.inputs.suffix == 'displacement'
     assert ds.inputs.meta_dict == meta
-    # No Hz-era keys leak in.
-    assert 'Units' not in meta
     # The TOPUP+DRBUDDI refinement has its own datasink, only when asked for.
     assert wf.get_node('ds_sdc_refinement_t1') is None
 
@@ -435,7 +432,7 @@ def test_derivatives_wf_writes_sdc_warp_only_with_meta():
     )
     ds = wf.get_node('ds_sdc_refinement_t1')
     assert ds.inputs.desc == 'sdcrefinement'
-    assert ds.inputs.suffix == 'xfm'
+    assert ds.inputs.suffix == 'displacement'
     assert ds.inputs.meta_dict == refinement_meta
     assert wf.get_node('ds_sdc_warp_t1').inputs.desc == 'sdc'
 
@@ -472,11 +469,13 @@ def test_finalize_writes_the_refinement_only_for_topup_drbuddi(tmp_path, monkeyp
 
     if sdc_method == 'topup':
         assert total['EstimationMethod'] == 'TOPUP'
+        assert total['Units'] == 'mm'
         assert refinement is None
         assert wf.get_node('sdcrefinement_plot') is None
         return
 
     assert total['EstimationMethod'] == 'TOPUP+DRBUDDI'
+    assert total['Units'] == refinement.inputs.meta_dict['Units'] == 'mm'
     assert 'desc-sdcrefinement' in total['Description']
     assert refinement.inputs.meta_dict['EstimationMethod'] == 'DRBUDDI'
     assert wf.get_node('sdcwarp_plot').inputs.title == (
@@ -552,9 +551,13 @@ def test_topup_hz_to_warp_follows_an_oblique_grid(tmp_path):
     np.testing.assert_allclose(_topup_warp_vector(tmp_path, affine, 'j'), expected, atol=1e-6)
 
 
-def test_sdc_warp_datasink_builds_a_dwi_xfm_path(tmp_path):
-    """A dwi ``xfm`` suffix must resolve to a from/to/mode/desc path template."""
-    from qsiprep.interfaces.bids import DerivativesDataSink
+@pytest.mark.parametrize(
+    ('node', 'desc'), [('ds_sdc_warp_t1', 'sdc'), ('ds_sdc_refinement_t1', 'sdcrefinement')]
+)
+def test_sdc_displacement_datasinks_write_space_acpc_maps(tmp_path, node, desc):
+    """The workflow's own datasinks resolve to ``space-ACPC_desc-<desc>_displacement``."""
+    _cfg()
+    from qsiprep.workflows.dwi.derivatives import init_dwi_derivatives_wf
 
     src = tmp_path / 'sub-01_ses-1_acq-HBCD_run-01_dwi.nii.gz'
     nb.Nifti1Image(np.zeros((4, 4, 4), dtype='float32'), np.eye(4)).to_filename(str(src))
@@ -563,22 +566,18 @@ def test_sdc_warp_datasink_builds_a_dwi_xfm_path(tmp_path):
     vec.header.set_intent('vector')
     vec.to_filename(str(field))
 
-    ds = DerivativesDataSink(
-        base_directory=str(tmp_path / 'out'),
-        source_file=str(src),
-        mode='image',
-        suffix='xfm',
-        desc='sdc',
-        extension='.nii.gz',
-        compress=True,
-        meta_dict={'EstimationMethod': 'DRBUDDI'},
-        **{'from': 'dwiref', 'to': 'ACPC'},
+    meta = {'EstimationMethod': 'DRBUDDI', 'Units': 'mm'}
+    wf = init_dwi_derivatives_wf(
+        source_file=str(src), sdc_warp_meta=meta, sdc_refinement_meta=meta
     )
-    ds.inputs.in_file = str(field)
-    out = ds.run().outputs.out_file
+    datasink = wf.get_node(node).interface
+    datasink.inputs.base_directory = str(tmp_path / 'out')
+    datasink.inputs.in_file = str(field)
+    out = datasink.run().outputs.out_file
     out = out[0] if isinstance(out, list) else out
-    assert '/dwi/' in out
-    assert out.endswith('_from-dwiref_to-ACPC_mode-image_desc-sdc_xfm.nii.gz')
+    assert out.endswith(
+        f'/dwi/sub-01_ses-1_acq-HBCD_run-01_space-ACPC_desc-{desc}_displacement.nii.gz'
+    )
 
 
 # ---------------------------------------------------------------------------
