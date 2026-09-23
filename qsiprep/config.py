@@ -617,44 +617,36 @@ class workflow(_Config):
     """Which tool corrects susceptibility distortion for PEPOLAR data:
     topup, drbuddi or topup+drbuddi (the parser resolves ``auto``)."""
     gre_eddy_mbs = False
-    """Feed a GRE (phase-difference) fieldmap into FSL eddy via ``--field`` so
-    eddy corrects susceptibility distortion in-run and estimates movement-by-
-    susceptibility, instead of applying the GRE fieldmap after eddy. Only affects
-    the eddy HMC path on a series whose fieldmap is GRE. The fieldmap is in Hz and
-    fed as-is: eddy's ``--field`` sign convention matches FUGUE (validated against
-    a FUGUE-forward-distorted ground truth), and the PE polarity is carried by the
-    acqp, so one field serves either phase-encoding direction."""
+    """Feed a GRE fieldmap into FSL eddy via ``--field`` so eddy corrects
+    susceptibility distortion in-run and estimates movement-by-susceptibility,
+    instead of applying the fieldmap after eddy. Only affects the eddy HMC path on
+    a series whose fieldmap is GRE. The field goes in as Hz with no sign flip: the
+    phase-encoding polarity is carried by the acqp, so one field serves either
+    direction."""
     gre_t2wreg_init = False
-    """On the TORTOISE path, when a series has both a GRE fieldmap and a T2w, run
-    DIFFPREP's T2Wreg stage initialized with the GRE-derived warp instead of
-    applying the GRE warp after head motion correction: the fieldmap seeds the
-    registration and the T2w refines it. With gradient unwarping the seed is
-    built by the ``gre_gradwarp`` mode and the b=0 T2Wreg registers is
-    gradwarp-corrected inside DIFFPREP."""
+    """On the TORTOISE path, when a series has a GRE fieldmap and a structural
+    target (a T2w, or SynB0 with ``--sdc-anat-reference synb0``), run DIFFPREP's
+    T2Wreg stage initialized with the GRE-derived warp instead of applying the GRE
+    warp after head motion correction."""
     gre_drbuddi_init = False
-    """On the TORTOISE path, when a PEPOLAR (reverse-PE) series also has a GRE
-    fieldmap, initialize DRBUDDI's diffeomorphic search with the GRE-derived
-    warp (as the up field, its negation as the down field) instead of letting
-    DRBUDDI cold-start from the blip pair alone. The blip-up/blip-down data then
-    refines the GRE prior; the prior is most useful at the skull base where the
-    blip pair is ambiguous. The GRE symmetric counterpart to a PEPOLAR run."""
+    """On the TORTOISE path, when a PEPOLAR series also has a GRE fieldmap among
+    its application candidates, initialize DRBUDDI with the GRE-derived warp (the
+    up field, its negation the down field) instead of starting from identity."""
     gre_init_keep_fixed = True
     """Hold a GRE initialization (``gre_t2wreg_init`` / ``gre_drbuddi_init``)
-    fixed as a base field through TORTOISE's multi-resolution SyN pyramid, so the
-    fine-scale prior survives instead of being low-passed and re-estimated. Maps
-    to ``--DRBUDDI_keep_initial_transform_fixed``. Requires a TORTOISE build that
-    exposes the flag (>= 26.9.5); has no effect otherwise."""
-    gre_gradwarp = 'reference'
-    """How a GRE fieldmap that is applied *after* head motion correction is
-    reconciled with gradient unwarping, which the composed transform chain
-    applies before the fieldmap warp. ``reference``: register the fieldmap to
-    the gradwarp-corrected b=0 and use it as-is (the field's content stays in
-    the raw frame). ``hz``: gradwarp the fieldmap and its magnitude before
-    registering them. ``transport``: register the fieldmap to the raw b=0,
-    build the warp in the raw frame and transport it into the gradwarp-corrected
-    frame by composing it with the gradwarp field and its inverse. Ignored when
-    no gradient unwarping happens, for PEPOLAR data, and when the fieldmap goes
-    into eddy (``gre_eddy_mbs``)."""
+    fixed through TORTOISE's multi-resolution pyramid
+    (``--DRBUDDI_keep_initial_transform_fixed``), so each stage learns a residual
+    on top of it rather than low-passing and re-estimating it."""
+    gre_gradwarp = 'transport'
+    """How a GRE fieldmap is reconciled with gradient unwarping, which the
+    composed transform chain applies before the fieldmap warp. ``transport``:
+    register the fieldmap to the raw b=0, build the warp in the raw frame and
+    transport it into the gradwarp-corrected frame by composing it with the
+    gradwarp field and its inverse. ``reference``: register the fieldmap to the
+    gradwarp-corrected b=0 and use it as-is (the field's content stays in the raw
+    frame). ``hz``: gradwarp the fieldmap and its magnitude before registering
+    them. Ignored without gradient unwarping and when the fieldmap goes into eddy
+    (``gre_eddy_mbs``)."""
     separate_all_dwis = False
     """Process all dwis separately - do not attempt concatenation."""
     shoreline_config = None

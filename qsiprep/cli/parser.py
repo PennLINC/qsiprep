@@ -127,6 +127,13 @@ def _build_parser(**kwargs):
                     f'--sdc-method {namespace.sdc_method} requires --hmc-method eddy: '
                     'SHORELine and TORTOISE correct PEPOLAR units with DRBUDDI'
                 )
+            for flag, dest, hmc_method in (
+                ('--gre-eddy-mbs', 'gre_eddy_mbs', 'eddy'),
+                ('--gre-init-t2wreg', 'gre_t2wreg_init', 'tortoise'),
+                ('--gre-init-drbuddi', 'gre_drbuddi_init', 'tortoise'),
+            ):
+                if getattr(namespace, dest, False) and namespace.hmc_method != hmc_method:
+                    self.error(f'{flag} requires --hmc-method {hmc_method}')
 
             # --force values land on their own boolean attributes so config
             # (and qsiplan's policy bridge) can read them by name.
@@ -771,10 +778,9 @@ def _build_parser(**kwargs):
         action='store_true',
         default=False,
         help=(
-            'Hand a GRE (phase-difference or fieldmap) fieldmap to FSL eddy via '
-            '--field so eddy applies the susceptibility correction itself and '
-            'estimates movement-by-susceptibility, instead of applying the '
-            'fieldmap warp after eddy. Only affects --hmc-method eddy.'
+            'Hand a GRE fieldmap to FSL eddy via --field so eddy applies the '
+            'susceptibility correction itself and estimates movement-by-susceptibility, '
+            'instead of applying the fieldmap warp after eddy. Requires --hmc-method eddy.'
         ),
     )
     g_sdc.add_argument(
@@ -783,10 +789,10 @@ def _build_parser(**kwargs):
         default=False,
         dest='gre_t2wreg_init',
         help=(
-            'With --hmc-method tortoise, a GRE fieldmap and a T2w: initialize DIFFPREP\'s '
-            'T2Wreg susceptibility correction with the GRE-derived warp and let the T2w '
-            'registration refine it, instead of applying the GRE warp after head motion '
-            'correction.'
+            'For a series corrected with a GRE fieldmap that also has a structural target '
+            '(a T2w, or SynB0 with --sdc-anat-reference synb0), run TORTOISE T2Wreg '
+            'initialized with the GRE-derived warp instead of applying the GRE warp after '
+            'head motion correction. Requires --hmc-method tortoise.'
         ),
     )
     g_sdc.add_argument(
@@ -795,25 +801,25 @@ def _build_parser(**kwargs):
         default=False,
         dest='gre_drbuddi_init',
         help=(
-            'With --hmc-method tortoise, a reverse-PE (PEPOLAR) series that also has a GRE '
-            'fieldmap: initialize DRBUDDI\'s diffeomorphic search with the GRE-derived warp '
-            '(as the up field, its negation as the down field) instead of cold-starting from '
-            'the blip pair alone. The blip-up/blip-down data then refines the prior.'
+            'For a reverse phase-encoded (PEPOLAR) series that also has a GRE fieldmap, '
+            'initialize DRBUDDI with the GRE-derived warp instead of starting from '
+            'identity; the blip-up/blip-down data then refine it. The GRE fieldmap must '
+            'list the series (IntendedFor or B0FieldSource) without being the correction '
+            'applied to it. Requires --hmc-method tortoise.'
         ),
     )
     g_sdc.add_argument(
         '--gre-gradwarp',
         action='store',
-        choices=['reference', 'hz', 'transport'],
-        default='reference',
+        choices=['transport', 'reference', 'hz'],
+        default='transport',
         help=(
-            'How a GRE fieldmap applied after head motion correction is combined '
-            'with gradient unwarping (--gradient-file). "reference" registers the '
-            'fieldmap to the gradwarp-corrected b=0 and uses it as-is; "hz" '
-            'gradwarps the fieldmap and its magnitude image first; "transport" '
-            'estimates the warp on the raw b=0 and composes it with the gradwarp '
-            'field and its inverse. No effect without gradient unwarping, for '
-            'PEPOLAR data, or with --gre-eddy-mbs.'
+            'How a GRE fieldmap is combined with gradient unwarping (--gradient-file). '
+            '"transport" (the default) estimates the warp on the raw b=0 and composes it '
+            'with the gradwarp field and its inverse; "reference" registers the fieldmap '
+            'to the gradwarp-corrected b=0 and uses it as-is; "hz" gradwarps the fieldmap '
+            'and its magnitude image first. No effect without gradient unwarping or with '
+            '--gre-eddy-mbs.'
         ),
     )
 
