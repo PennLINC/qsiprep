@@ -13,11 +13,11 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from ... import config
 from ...interfaces.dwi_merge import MergeDWIs
 from ...interfaces.nilearn import Merge
+from ...utils.bids import get_source_file
 
 # dwi workflows
 from .merge import gen_denoising_boilerplate, init_merge_and_denoise_wf
 from .qc import init_modelfree_qc_wf
-from .util import get_source_file
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
@@ -26,6 +26,7 @@ def init_dwi_pre_hmc_wf(
     unit,
     orientation,
     source_file,
+    do_biascorr,
     calculate_qc=True,
     name='pre_hmc_wf',
 ):
@@ -48,7 +49,9 @@ def init_dwi_pre_hmc_wf(
         wf = init_dwi_pre_hmc_wf(
             make_preproc_unit(['/completely/made/up/path/sub-01_dwi.nii.gz']),
             orientation="LPS",
-            source_file='/completely/made/up/path/sub-01_dwi.nii.gz')
+            source_file='/completely/made/up/path/sub-01_dwi.nii.gz',
+            do_biascorr=True,
+        )
 
     **Parameters**
 
@@ -86,7 +89,6 @@ def init_dwi_pre_hmc_wf(
                 'original_files',
                 'denoising_confounds',
                 'noise_images',
-                'bias_images',
                 'qc_file',
                 'raw_concatenated',
                 'validation_reports',
@@ -94,13 +96,7 @@ def init_dwi_pre_hmc_wf(
         ),
         name='outputnode',
     )
-    workflow.__postdesc__ = gen_denoising_boilerplate()
-
-    # Doing biascorr here is the old way.
-    do_biascorr = False
-    if config.workflow.b1_biascorrect_stage == 'legacy':
-        do_biascorr = True
-        config.loggers.workflow.warning('Applying bias correction before merging. Check results!')
+    workflow.__postdesc__ = gen_denoising_boilerplate(do_biascorr)
 
     # Special case: Two reverse PE DWI series are going to get combined for eddy
     if unit.has_bidirectional_dwi:
@@ -116,7 +112,6 @@ def init_dwi_pre_hmc_wf(
             source_file=plus_source_file,
             phase_id=f'{pe_axis}+ phase-encoding direction',
             calculate_qc=False,
-            do_biascorr=do_biascorr,
             name='merge_plus',
         )
 
@@ -129,7 +124,6 @@ def init_dwi_pre_hmc_wf(
             source_file=minus_source_file,
             phase_id=f'{pe_axis}- phase-encoding direction',
             calculate_qc=False,
-            do_biascorr=do_biascorr,
             name='merge_minus',
         )
 
@@ -139,7 +133,6 @@ def init_dwi_pre_hmc_wf(
         pm_bids_dwis = pe.Node(niu.Merge(2), name='pm_bids_dwis')
         pm_bvals = pe.Node(niu.Merge(2), name='pm_bvals')
         pm_bvecs = pe.Node(niu.Merge(2), name='pm_bvecs')
-        pm_bias = pe.Node(niu.Merge(2), name='pm_bias')
         pm_noise_images = pe.Node(niu.Merge(2), name='pm_noise')
         pm_denoising_confounds = pe.Node(niu.Merge(2), name='pm_denoising_confounds')
         pm_raw_images = pe.Node(niu.Merge(2), name='pm_raw_images')
@@ -159,7 +152,6 @@ def init_dwi_pre_hmc_wf(
             (merge_plus, pm_bids_dwis, [('outputnode.original_files', 'in1')]),
             (merge_plus, pm_bvals, [('outputnode.merged_bval', 'in1')]),
             (merge_plus, pm_bvecs, [('outputnode.merged_bvec', 'in1')]),
-            (merge_plus, pm_bias, [('outputnode.bias_images', 'in1')]),
             (merge_plus, pm_noise_images, [('outputnode.noise_images', 'in1')]),
             (merge_plus, pm_raw_images, [('outputnode.merged_raw_image', 'in1')]),
             (merge_plus, pm_denoising_confounds, [('outputnode.denoising_confounds', 'in1')]),
@@ -170,7 +162,6 @@ def init_dwi_pre_hmc_wf(
             (merge_minus, pm_bids_dwis, [('outputnode.original_files', 'in2')]),
             (merge_minus, pm_bvals, [('outputnode.merged_bval', 'in2')]),
             (merge_minus, pm_bvecs, [('outputnode.merged_bvec', 'in2')]),
-            (merge_minus, pm_bias, [('outputnode.bias_images', 'in2')]),
             (merge_minus, pm_noise_images, [('outputnode.noise_images', 'in2')]),
             (merge_minus, pm_raw_images, [('outputnode.merged_raw_image', 'in2')]),
             (merge_minus, pm_denoising_confounds, [('outputnode.denoising_confounds', 'in2')]),
@@ -192,7 +183,6 @@ def init_dwi_pre_hmc_wf(
             ]),
             (pm_validation, outputnode, [('out', 'validation_reports')]),
             (pm_noise_images, outputnode, [('out', 'noise_images')]),
-            (pm_bias, outputnode, [('out', 'bias_images')]),
             (pm_raw_images, raw_rpe_concat, [('out', 'in_files')]),
             (raw_rpe_concat, outputnode, [('out_file', 'raw_concatenated')]),
 
@@ -221,7 +211,6 @@ def init_dwi_pre_hmc_wf(
         orientation=orientation,
         calculate_qc=True,
         phase_id=unit.pe_dir,
-        do_biascorr=do_biascorr,
         source_file=source_file,
     )
 
@@ -231,7 +220,6 @@ def init_dwi_pre_hmc_wf(
             ('outputnode.merged_bval', 'bval_file'),
             ('outputnode.merged_bvec', 'bvec_file'),
             ('outputnode.merged_json', 'json_file'),
-            ('outputnode.bias_images', 'bias_images'),
             ('outputnode.noise_images', 'noise_images'),
             ('outputnode.validation_reports', 'validation_reports'),
             ('outputnode.denoising_confounds', 'denoising_confounds'),

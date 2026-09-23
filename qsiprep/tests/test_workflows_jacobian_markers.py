@@ -139,7 +139,7 @@ def _reset_config():
         'shoreline_model',
         'hmc_transform',
         'b0_threshold',
-        'b1_biascorrect_stage',
+        'dwi_biascorrect',
         'eddy_config',
         'no_b0_harmonization',
         'denoise_method',
@@ -175,7 +175,7 @@ def _cfg(hmc_method, sdc_method, sloppy):
     config.workflow.shoreline_model = '3dshore' if hmc_method == 'shoreline' else None
     config.workflow.hmc_transform = 'Affine' if hmc_method == 'shoreline' else None
     config.workflow.b0_threshold = 100
-    config.workflow.b1_biascorrect_stage = 'final'
+    config.workflow.dwi_biascorrect = 'n4'
     config.workflow.eddy_config = None
     config.workflow.no_b0_harmonization = False
     config.workflow.denoise_method = 'dwidenoise'
@@ -331,7 +331,7 @@ def test_maternal_brain_project_writes_jacobian(monkeypatch):
 def test_shoreline_no_fieldmap_has_no_real_fieldwarps(tmp_path):
     """Pins the SHORELine backend's own provably-empty source.
 
-    This is a live marker check. ``intramodal_template`` runs
+    This is a live marker check. ``dwiref`` runs
     --hmc-method=shoreline over two sessions that each hold one phase-encoding
     direction and no fieldmap, so each session takes ``sdc_bypass_wf`` and has
     nothing to modulate. Its output fixture wrongly expected a

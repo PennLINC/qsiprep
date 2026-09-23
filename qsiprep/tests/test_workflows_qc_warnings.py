@@ -24,7 +24,7 @@ def _reset_config():
         config.workflow.jacobian_weighting,
         config.workflow.output_resolution,
         config.workflow.sdc_method,
-        config.workflow.intramodal_template_iters,
+        config.workflow.dwiref_construction_iters,
         config.execution.output_dir,
         config.execution.sloppy,
         config.nipype.omp_nthreads,
@@ -39,7 +39,7 @@ def _reset_config():
         config.workflow.jacobian_weighting,
         config.workflow.output_resolution,
         config.workflow.sdc_method,
-        config.workflow.intramodal_template_iters,
+        config.workflow.dwiref_construction_iters,
         config.execution.output_dir,
         config.execution.sloppy,
         config.nipype.omp_nthreads,
@@ -68,7 +68,7 @@ def test_finalize_sinks_the_qc_warnings_reportlet(tmp_path):
     config.execution.output_dir = str(tmp_path)
     config.execution.sloppy = False
     config.workflow.sdc_method = 'topup'
-    config.workflow.intramodal_template_iters = 0
+    config.workflow.dwiref_construction_iters = 0
     dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz')
     wf = init_dwi_finalize_wf(
         unit=make_preproc_unit([dwi]),

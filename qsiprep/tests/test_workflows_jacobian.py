@@ -217,7 +217,7 @@ def test_coreg_and_template_transforms_never_reach_the_jacobian_node():
     forwarded = {
         pair for src, dst, connect in edges if dst == 'compose_jacobian' for pair in connect
     }
-    excluded = ('itk_b0_to_t1', 'intramodal', 't1_2_mni')
+    excluded = ('itk_b0_to_t1', 'dwiref', 't1_2_mni')
     for source, _ in forwarded:
         assert not any(name in _source_name(source) for name in excluded), source
 
@@ -510,7 +510,7 @@ def _finalize_wf(tmp_path, write_derivatives=True):
     config.execution.output_dir = str(tmp_path)
     config.execution.sloppy = False
     config.workflow.sdc_method = 'topup'
-    config.workflow.intramodal_template_iters = 0
+    config.workflow.dwiref_construction_iters = 0
     dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz')
     unit = make_preproc_unit([dwi])
     return init_dwi_finalize_wf(

@@ -361,7 +361,7 @@ def test_apply_jacobian_weights_assembles_the_transform_chain(tmp_path, monkeypa
 
     Order matters: ApplyTransforms applies transforms last-to-first, so the
     chain from undistorted b0-reference space to the output grid must list
-    the coregistration-to-t1 transform first and the intramodal pieces after
+    the coregistration-to-t1 transform first and the dwiref pieces after
     it, reversed from application order.
     """
     from qsiprep.interfaces import fmap as fmap_module
@@ -378,8 +378,8 @@ def test_apply_jacobian_weights_assembles_the_transform_chain(tmp_path, monkeypa
 
     dwis = [_unit_image(tmp_path / f'd{i}.nii.gz') for i in range(2)]
     weights = [_unit_image(tmp_path / 'w.nii.gz')] * 2
-    affine = str(tmp_path / 'to_intramodal.mat')
-    warp = str(tmp_path / 'to_intramodal_warp.nii.gz')
+    affine = str(tmp_path / 'to_dwiref.mat')
+    warp = str(tmp_path / 'to_dwiref_warp.nii.gz')
     coreg = str(tmp_path / 'coreg_to_t1.mat')
     for path in (affine, warp, coreg):
         Path(path).write_text('placeholder')
@@ -388,7 +388,7 @@ def test_apply_jacobian_weights_assembles_the_transform_chain(tmp_path, monkeypa
         dwi_files=dwis,
         jacobian_weight_images=weights,
         reference_image=_unit_image(tmp_path / 'grid.nii.gz'),
-        b0_to_intramodal_template_transforms=[affine, warp],
+        b0_to_dwiref_transforms=[affine, warp],
         hmcsdc_dwi_ref_to_t1w_affine=coreg,
     ).run(cwd=str(tmp_path))
 

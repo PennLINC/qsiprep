@@ -147,9 +147,9 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 'itk_b0_to_t1',
                 't1_mask',
                 't1_brain',
-                'b0_to_intramodal_template_transforms',
-                'intramodal_template_to_t1_warp',
-                'intramodal_template_to_t1_affine',
+                'b0_to_dwiref_transforms',
+                'dwiref_to_t1_warp',
+                'dwiref_to_t1_affine',
                 't1_2_mni_forward_transform',
                 'name_source',
                 'dwi_files',
@@ -236,10 +236,10 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             ('itk_b0_to_t1', 'hmcsdc_dwi_ref_to_t1w_affine'),
             ('fieldwarps', 'fieldwarps'),
             (('gradwarp_field', _listify), 'gradwarp'),
-            ('b0_to_intramodal_template_transforms', 'b0_to_intramodal_template_transforms'),
-            (('intramodal_template_to_t1_affine', _get_first),
-             'intramodal_template_to_t1_affine'),
-            ('intramodal_template_to_t1_warp', 'intramodal_template_to_t1_warp'),
+            ('b0_to_dwiref_transforms', 'b0_to_dwiref_transforms'),
+            (('dwiref_to_t1_affine', _get_first),
+             'dwiref_to_t1_affine'),
+            ('dwiref_to_t1_warp', 'dwiref_to_t1_warp'),
         ]),
         # TODO: check that the cnr_tfm is also appropriately warped for shoreline
         (compose_transforms, cnr_tfm, [(('out_warps', _get_first), 'transforms')]),
@@ -271,16 +271,15 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
         (inputnode, scale_dwis, [
             ('output_grid', 'reference_image'),
             ('itk_b0_to_t1', 'hmcsdc_dwi_ref_to_t1w_affine'),
-            ('b0_to_intramodal_template_transforms', 'b0_to_intramodal_template_transforms'),
-            (('intramodal_template_to_t1_affine', _get_first),
-             'intramodal_template_to_t1_affine'),
-            ('intramodal_template_to_t1_warp', 'intramodal_template_to_t1_warp'),
+            ('b0_to_dwiref_transforms', 'b0_to_dwiref_transforms'),
+            (('dwiref_to_t1_affine', _get_first), 'dwiref_to_t1_affine'),
+            ('dwiref_to_t1_warp', 'dwiref_to_t1_warp'),
         ]),
     ])  # fmt:skip
 
     # The weight covers gradwarp and SDC only. HMC is excluded by policy and is
     # coordinate-safe to exclude because it is the outermost transform in the
-    # pull-back (see the design spec); coregistration and the intramodal and
+    # pull-back (see the design spec); coregistration and the dwiref and
     # template warps are excluded because modulating by a spatial-normalization
     # warp is VBM-style volume modulation, wrong for DWI signal.
     if config.workflow.jacobian_weighting:

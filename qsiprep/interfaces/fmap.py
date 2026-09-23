@@ -1067,17 +1067,13 @@ class _ApplyJacobianWeightsInputSpec(ApplyTransformsInputSpec):
     reference_image = File(exists=True, mandatory=True, desc='output grid')
 
     # Transforms to apply
-    b0_to_intramodal_template_transforms = InputMultiObject(
+    b0_to_dwiref_transforms = InputMultiObject(
         File(exists=True),
         mandatory=False,
-        desc='list of transforms to register the b=0 to the intramodal template.',
+        desc='list of transforms to register the b=0 to the dwiref.',
     )
-    intramodal_template_to_t1_affine = File(
-        exists=True, mandatory=False, desc='affine from the intramodal template to t1'
-    )
-    intramodal_template_to_t1_warp = File(
-        exists=True, mandatory=False, desc='warp from the intramodal template to t1'
-    )
+    dwiref_to_t1_affine = File(exists=True, mandatory=False, desc='affine from the dwiref to t1')
+    dwiref_to_t1_warp = File(exists=True, mandatory=False, desc='warp from the dwiref to t1')
     hmcsdc_dwi_ref_to_t1w_affine = File(
         exists=True, mandatory=False, desc='affine from dwi ref to t1w'
     )
@@ -1136,7 +1132,7 @@ class ApplyJacobianWeights(SimpleInterface):
     """Transport Jacobian weight maps to the output grid and multiply them in.
 
     The maps arrive in undistorted b=0-reference space. Resampling them through
-    the intramodal and coregistration transforms is what evaluates the gradwarp
+    the dwiref and coregistration transforms is what evaluates the gradwarp
     and SDC determinants at the coordinates the full composite evaluates them
     at -- see the design spec's coordinate-safety section.
 
@@ -1174,30 +1170,30 @@ class ApplyJacobianWeights(SimpleInterface):
         if not len(self.inputs.jacobian_weight_images) == len(self.inputs.dwi_files):
             raise Exception('Mismatch between Jacobian weight images and dwis')
 
-        # The affine transform to the t1 can come from hmcsdc or the intramodal template
+        # The affine transform to the t1 can come from hmcsdc or the dwiref
         coreg_to_t1 = traits.Undefined
-        if isdefined(self.inputs.intramodal_template_to_t1_affine):
+        if isdefined(self.inputs.dwiref_to_t1_affine):
             if isdefined(self.inputs.hmcsdc_dwi_ref_to_t1w_affine):
-                LOGGER.warning('Two b0 to t1 transforms are provided: using intramodal')
-            coreg_to_t1 = self.inputs.intramodal_template_to_t1_affine
+                LOGGER.warning('Two b0 to t1 transforms are provided: using the dwiref')
+            coreg_to_t1 = self.inputs.dwiref_to_t1_affine
         else:
             coreg_to_t1 = self.inputs.hmcsdc_dwi_ref_to_t1w_affine
 
-        # Handle transforms to intramodal transforms
-        intramodal_transforms = self.inputs.b0_to_intramodal_template_transforms
-        intramodal_affine = traits.Undefined
-        intramodal_warp = traits.Undefined
-        if isdefined(intramodal_transforms):
-            intramodal_affine = intramodal_transforms[0]
-            if len(intramodal_transforms) == 2:
-                intramodal_warp = intramodal_transforms[1]
-            elif len(intramodal_transforms) > 2:
-                raise Exception('Unsupported intramodal template transform')
+        # Handle transforms to dwiref transforms
+        dwiref_transforms = self.inputs.b0_to_dwiref_transforms
+        dwiref_affine = traits.Undefined
+        dwiref_warp = traits.Undefined
+        if isdefined(dwiref_transforms):
+            dwiref_affine = dwiref_transforms[0]
+            if len(dwiref_transforms) == 2:
+                dwiref_warp = dwiref_transforms[1]
+            elif len(dwiref_transforms) > 2:
+                raise Exception('Unsupported dwiref transform')
 
         # Find the chain of transforms from undistorted b=0 reference to the output space
         transform_stack = [
             transform
-            for transform in [intramodal_affine, intramodal_warp, coreg_to_t1]
+            for transform in [dwiref_affine, dwiref_warp, coreg_to_t1]
             if isdefined(transform)
         ][::-1]
 

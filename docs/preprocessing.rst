@@ -137,7 +137,7 @@ Gibbs unringing (using ``mrdegibbs`` for full Fourier acquisitions or
 ``rpg`` for partial Fourier acquisitions) is disabled by default but can be enabled
 with ``--unringing-method mrdegibbs|rpg``.
 B1 bias field correction is applied by default (using ``dwibiascorrect``) and can be disabled with
-``--b1-biascorrect-stage none``.
+``--dwi-biascorrect none``.
 The intensity of b=0 images is harmonized across scans (i.e., scaled to an average value) by default,
 but this can be turned off using ``--dwi-no-b0-harmonization``.
 
@@ -158,9 +158,11 @@ every other MRtrix3 command follows ``--mrtrix-version``.
 .. tip::
 
   If prescan normalization is enabled,
-  we recommend using ``--b1-biascorrect-stage none``.
+  we recommend using ``--dwi-biascorrect none``.
   This will skip B1 bias field correction,
   which may introduce artifacts on normalized data.
+  ``--dwi-biascorrect auto`` will make that choice for you when every DWI is
+  flagged ``NORM`` in its BIDS ``ImageType`` metadata.
 
 Together, denoising (MP-PCA or patch2self), Gibbs unringing B1 bias field
 correction, and b=0 intensity normalization are referred to as *denoising* in
@@ -295,7 +297,13 @@ Volumetric outputs are written out in ``ACPC`` space ::
 
   sub-<label>/[ses-<label>/]
     dwi/
-      <source_entities>_space-ACPC_dwiref.nii.gz
+      # The b=0 reference of the preprocessed series, in its space.
+      <source_entities>_space-ACPC_desc-preproc_dwiref.nii.gz
+
+      # The b=0 reference for this distortion group, in its own grid, after
+      # head-motion and susceptibility distortion correction. Written for every
+      # group whatever --dwiref-definition is set to.
+      <source_entities>_space-distortiongroup_dwiref.nii.gz
 
       # The generous brain mask that should be reduced probably
       <source_entities>_space-ACPC_desc-brain_mask.nii.gz
@@ -361,19 +369,46 @@ Transforms
     sub-<label>/
       ses-<label>/
         dwi/
-          sub-<label>_ses-<label>_from-orig_to-dwiref_mode-image_desc-eddy_xfm.h5
+          sub-<label>_ses-<label>_from-orig_to-distortiongroup_mode-image_desc-eddy_xfm.h5
 
 
 .. important::
 
-  *QSIPrep* does not currently write out the coregistration transform from dwiref space to ACPC space.
-  When it does start writing this transform out, it will be organized like this::
+  ``--dwiref-definition`` selects which reference image coregistration targets, and
+  the target's space is named after it. The naming follows ``--bold-coreg-level``
+  in *fMRIPrep* 26.0 (earlier *fMRIPrep* releases wrote ``desc-coreg_boldref``
+  instead): the level is carried by ``space``, and ``desc-coreg`` marks the
+  transforms rather than the images.
+
+  At ``--dwiref-definition distortion-group`` (default) each group's own reference is
+  the target, so it is registered to the anatomical directly::
+
+    sub-<label>/[ses-<label>/]
+      dwi/
+        <source_entities>_space-distortiongroup_dwiref.nii.gz
+        <source_entities>_from-distortiongroup_to-ACPC_mode-image_desc-coreg_xfm.mat
+        <source_entities>_from-ACPC_to-distortiongroup_mode-image_desc-coreg_xfm.mat
+
+  At ``--dwiref-definition subject`` *QSIPrep* builds one midpoint reference from
+  every group's reference, registers that to the anatomical once, and has every group
+  inherit the result. The per-group registration is not written, because it is not
+  what resampling uses::
 
     sub-<label>/
-      ses-<label>/
-        dwi/
-          sub-<label>_ses-<label>_from-dwiref_to-ACPC_mode-image_xfm.h5
-          sub-<label>_ses-<label>_from-ACPC_to-dwiref_mode-image_xfm.h5
+      dwi/
+        sub-<label>_space-subject_dwiref.nii.gz
+        sub-<label>_space-ACPC_desc-subject_dwiref.nii.gz
+        sub-<label>_from-subject_to-ACPC_mode-image_desc-coreg_xfm.mat
+        sub-<label>_from-ACPC_to-subject_mode-image_desc-coreg_xfm.mat
+
+  The transform mapping each group into the subject-level space,
+  ``from-distortiongroup_to-subject``, is written only when
+  ``--dwiref-construction-transform`` is ``Rigid`` or ``Affine``.
+  ``antsMultivariateTemplateConstruction2`` produces an affine and warp pair per
+  group, which does not fit a single-file transform output. So under
+  ``--dwiref-definition subject`` with the default ``BSplineSyN``, no transform
+  out of ``space-distortiongroup`` is written at all; choose ``Rigid`` or
+  ``Affine`` if you need one.
 
 
 .. _dwi_confounds:
@@ -640,7 +675,7 @@ DWI preprocessing
         output_prefix='',
         ignore=[],
         b0_threshold=100,
-        b0_to_anat_transform='Rigid',
+        dwi2anat_dof=6,
         hmc_model='3dSHORE',
         hmc_transform='Rigid',
         shoreline_iters=2,
@@ -651,9 +686,8 @@ DWI preprocessing
         dwidenoise_window=5,
         denoise_method='dwidenoise',
         unringing_method='mrdegibbs',
-        b1_biascorr_stage='final',
+        dwi_biascorrect='n4',
         no_b0_harmonization=False,
-        denoise_before_combining=True,
         template='MNI152NLin2009cAsym',
         output_dir='.',
         omp_nthreads=1,
@@ -682,7 +716,7 @@ DWI run, directly from the raw DWI grid.
 It is never applied to the output DWI series as a resampling step of its own.
 Instead it is folded into the composed transform applied at the end of the
 pipeline, in the order head-motion → gradwarp → susceptibility-distortion →
-(intramodal template →) coregistration → (template space).
+(dwiref →) coregistration → (template space).
 The field is also used to correct the *reference* images that downstream
 registrations are estimated from, so that those registrations are estimated in
 the same geometry they are later applied in (see below).

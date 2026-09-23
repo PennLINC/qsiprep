@@ -9,6 +9,8 @@ sub-tinytensors.html
 sub-tinytensors/dwi
 sub-tinytensors/dwi/sub-tinytensors_desc-confounds_timeseries.json
 sub-tinytensors/dwi/sub-tinytensors_desc-confounds_timeseries.tsv
+sub-tinytensors/dwi/sub-tinytensors_from-ACPC_to-distortiongroup_mode-image_desc-coreg_xfm.mat
+sub-tinytensors/dwi/sub-tinytensors_from-distortiongroup_to-ACPC_mode-image_desc-coreg_xfm.mat
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-brain_mask.nii.gz
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-image_qc.tsv
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-jacobian_dwimap.json
@@ -19,9 +21,10 @@ sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-preproc_dwi.bval
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-preproc_dwi.bvec
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-preproc_dwi.json
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-preproc_dwi.nii.gz
+sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-preproc_dwiref.nii.gz
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-slice_qc.json
-sub-tinytensors/dwi/sub-tinytensors_space-ACPC_dwiref.nii.gz
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_model-eddy_stat-cnr_dwimap.json
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_model-eddy_stat-cnr_dwimap.nii.gz
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_stat-tsnr_dwimap.json
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_stat-tsnr_dwimap.nii.gz
+sub-tinytensors/dwi/sub-tinytensors_space-distortiongroup_dwiref.nii.gz

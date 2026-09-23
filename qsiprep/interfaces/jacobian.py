@@ -4,7 +4,7 @@ The weight applied to the resampled DWIs is ``|det grad phi|`` of the composed
 *native-space* distortion warps -- gradient nonlinearity, susceptibility, and
 TORTOISE eddy current -- and of nothing else. See
 ``docs/superpowers/specs/2026-09-17-jacobian-weighting-design.md`` for why head
-motion, coregistration and the intramodal/template warps are excluded, and for
+motion, coregistration and the dwiref/template warps are excluded, and for
 the derivation showing that excluding them does not move the coordinates at
 which the remaining determinants are evaluated.
 
@@ -791,7 +791,7 @@ class ComposeJacobianWeights(SimpleInterface):
     gradwarp/SDC warp maps it to (C1 fix; see ``transport_scalar_map``). When
     there is no gradwarp and no SDC warp, the eddy-current Jacobian is already
     in the run's one and only coordinate domain, so no transport is applied.
-    Head motion, coregistration and the intramodal/template warps are excluded
+    Head motion, coregistration and the dwiref/template warps are excluded
     by policy; see the design spec.
 
     Unique ``(gradwarp, fieldwarp)`` combinations are computed once and shared,

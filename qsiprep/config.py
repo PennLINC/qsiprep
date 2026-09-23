@@ -557,14 +557,12 @@ class workflow(_Config):
     """Anatomical template to use. This field doesn't include the cohort."""
     b0_threshold = None
     """Any value in the .bval file less than this will be considered a b=0 image."""
-    b0_to_anat_transform = None
-    """Transformation model for b=0-to-anatomical coregistration. Either 'Rigid' or
-    'Affine'."""
+    dwi2anat_dof = None
+    """Degrees of freedom for DWI-to-anatomical coregistration: 6 or 12."""
     anat_biascorrect = None
     """Whether to N4-correct anatomicals: ``n4``, ``auto`` or ``none``."""
-    b1_biascorrect_stage = None
-    """The stage of processing at which to apply B1 bias correction. Either "final" (after
-    resampling), "none" (skipped entirely) or "legacy" (before concatenation)."""
+    dwi_biascorrect = None
+    """Whether to N4-correct DWIs: ``n4``, ``auto`` or ``none``."""
     denoise_method = None
     """Image-based denoising method. Either "dwidenoise" (MRtrix), "patch2self" (DIPY)
     or "none". DWIDenoise parameters may be appended as semicolon-delimited name:value
@@ -599,10 +597,12 @@ class workflow(_Config):
     """Ignore particular steps for *QSIPrep*."""
     infant = False
     """Configure pipelines specifically for infant brains"""
-    intramodal_template_iters = None
-    """Number of iterations for intramodal template construction."""
-    intramodal_template_transform = None
-    """Transformation used for building the intramodal template."""
+    dwiref_definition = None
+    """Which dwiref coregistration targets: ``distortion-group`` or ``subject``."""
+    dwiref_construction_iters = None
+    """Number of iterations for dwiref template construction."""
+    dwiref_construction_transform = None
+    """Transformation used for building the dwiref template."""
     mrtrix_version = 'stable'
     """Which MRtrix3 installation to use: "stable" (a released version) or "dev"
     (the development branch, which is required for complex-valued ``mrdegibbs``)."""

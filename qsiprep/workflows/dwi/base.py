@@ -18,6 +18,7 @@ from ...interfaces import DerivativesDataSink, DerivativesMaybeDataSink
 from ...interfaces.confounds import DMRISummary
 from ...interfaces.reports import DiffusionSummary
 from ...interfaces.utils import TestInput
+from ...utils.misc import DWI2ANAT_DOF_TO_TRANSFORM
 from ...utils.sdc import resolve_t2wreg_target
 from ..fieldmap.pepolar import init_extended_pepolar_report_wf
 
@@ -41,6 +42,7 @@ def init_dwi_preproc_wf(
     output_prefix,
     source_file,
     anatomical_template,
+    do_biascorr=True,
 ) -> Workflow:
     """
     This workflow controls the dwi preprocessing stages of qsiprep.
@@ -199,8 +201,8 @@ def init_dwi_preproc_wf(
                 'confounds',
                 'hmc_optimization_data',
                 'itk_b0_to_t1',
+                'itk_t1_to_b0',
                 'noise_images',
-                'bias_images',
                 'dwi_files',
                 'cnr_map',
                 'bval_files',
@@ -234,6 +236,7 @@ def init_dwi_preproc_wf(
         unit=unit,
         orientation='LAS' if unit.run.hmc_stage.tool == 'eddy' else 'LPS',
         source_file=source_file,
+        do_biascorr=do_biascorr,
     )
     test_pre_hmc_connect = pe.Node(TestInput(), name='test_pre_hmc_connect')
     hmc_tool = unit.run.hmc_stage.tool
@@ -292,7 +295,6 @@ def init_dwi_preproc_wf(
             ('outputnode.qc_file', 'raw_qc_file'),
             ('outputnode.original_files', 'original_files'),
             ('outputnode.bvec_file', 'original_bvecs'),
-            ('outputnode.bias_images', 'bias_images'),
             ('outputnode.noise_images', 'noise_images'),
             ('outputnode.raw_concatenated', 'raw_concatenated'),
         ]),
@@ -354,7 +356,7 @@ def init_dwi_preproc_wf(
         # calculate dwi registration to T1w
         b0_coreg_wf = init_b0_to_anat_registration_wf(
             write_report=True,
-            transform_type=config.workflow.b0_to_anat_transform,
+            transform_type=DWI2ANAT_DOF_TO_TRANSFORM[config.workflow.dwi2anat_dof],
         )
     else:
         b0_coreg_wf = init_direct_b0_acpc_wf(write_report=True)
@@ -478,7 +480,9 @@ def init_dwi_preproc_wf(
                 if config.workflow.hmc_method == 'shoreline'
                 else config.workflow.hmc_method
             ),
-            b0_to_anat_transform=config.workflow.b0_to_anat_transform,
+            dwi2anat_dof=config.workflow.dwi2anat_dof,
+            dwi_biascorrect=config.workflow.dwi_biascorrect,
+            dwi_biascorrect_applied=do_biascorr,
             denoise_method=config.workflow.denoise_method,
             dwidenoise_window=config.workflow.dwidenoise_window,
             gradient_correction=describe_gradient_correction(
@@ -507,6 +511,7 @@ def init_dwi_preproc_wf(
         (b0_coreg_wf, ds_report_coreg, [('outputnode.report', 'in_file')]),
         (b0_coreg_wf, outputnode, [
             (('outputnode.itk_b0_to_t1', _get_first), 'itk_b0_to_t1'),
+            (('outputnode.itk_t1_to_b0', _get_first), 'itk_t1_to_b0'),
             ('outputnode.coreg_metric', 'coreg_score'),
         ]),
     ])  # fmt:skip
