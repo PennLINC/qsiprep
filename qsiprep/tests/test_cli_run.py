@@ -751,40 +751,6 @@ def test_parser_rejects_unknown_mrtrix_version(tmp_path):
         )
 
 
-def test_jacobian_weighting_defaults_on(tmp_path):
-    """Weighting is on unless the user turns it off."""
-    from qsiprep.cli.parser import _build_parser
-
-    parser = _build_parser()
-    bids = tmp_path / 'bids'
-    bids.mkdir()
-    out = tmp_path / 'out'
-    opts = parser.parse_args([str(bids), str(out), 'participant', '--output-resolution', '2'])
-    assert opts.jacobian_weighting is True
-
-
-def test_ignore_jacobian_turns_it_off(tmp_path):
-    """--ignore jacobian is the off-switch; --force jacobian is the T2Wreg override."""
-    from qsiprep.cli.parser import _build_parser
-
-    parser = _build_parser()
-    bids = tmp_path / 'bids'
-    bids.mkdir()
-    out = tmp_path / 'out'
-    base = [str(bids), str(out), 'participant', '--output-resolution', '2']
-
-    opts = parser.parse_args([*base, '--ignore', 'jacobian'])
-    assert opts.jacobian_weighting is False
-    assert opts.force_jacobian is False
-
-    opts = parser.parse_args([*base, '--force', 'jacobian'])
-    assert opts.jacobian_weighting is True
-    assert opts.force_jacobian is True
-
-    with pytest.raises(SystemExit):
-        parser.parse_args([*base, '--ignore', 'jacobian', '--force', 'jacobian'])
-
-
 def _cli_base(tmp_path):
     """Minimal valid positional args for the parser.
 

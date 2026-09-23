@@ -25,14 +25,14 @@ def _reset_config_impl():
     without going through pytest's fixture machinery.
     """
     saved = (
-        config.workflow.jacobian_weighting,
+        config.workflow.ignore,
         config.workflow.output_resolution,
         config.nipype.omp_nthreads,
         config.workflow.b0_threshold,
         config.workflow.dwi2anat_dof,
-        config.workflow.force_jacobian,
+        config.workflow.force,
     )
-    config.workflow.jacobian_weighting = True
+    config.workflow.ignore = []
     config.workflow.output_resolution = 2.0
     # config.nipype.init() normally resolves this; it is not run in these bare
     # construction tests, so init_modelfree_qc_wf's DSIStudioGQIReconstruction
@@ -44,12 +44,12 @@ def _reset_config_impl():
     config.nipype.omp_nthreads = 1
     yield
     (
-        config.workflow.jacobian_weighting,
+        config.workflow.ignore,
         config.workflow.output_resolution,
         config.nipype.omp_nthreads,
         config.workflow.b0_threshold,
         config.workflow.dwi2anat_dof,
-        config.workflow.force_jacobian,
+        config.workflow.force,
     ) = saved
 
 
@@ -195,14 +195,14 @@ def test_compose_jacobian_consumes_gradwarp_and_fieldwarps():
     assert 'ec_jacobian_images' in sources
 
 
-def test_no_jacobian_weighting_removes_the_node():
-    config.workflow.jacobian_weighting = False
+def test_ignore_jacobian_removes_the_node():
+    config.workflow.ignore = ['jacobian']
     assert _trans_wf().get_node('compose_jacobian') is None
 
 
-def test_no_jacobian_weighting_leaves_weights_unconnected():
+def test_ignore_jacobian_leaves_weights_unconnected():
     """With weighting off, scale_dwis must get nothing and pass data through."""
-    config.workflow.jacobian_weighting = False
+    config.workflow.ignore = ['jacobian']
     edges = _edges(_trans_wf())
     assert not any(
         ('jacobian_weight_images', 'jacobian_weight_images') in connect for _, _, connect in edges
@@ -475,7 +475,7 @@ def test_stack_jacobian_and_sink_exist_when_weighting_on(tmp_path):
 
 
 def test_stack_jacobian_and_sink_absent_when_weighting_off(tmp_path):
-    config.workflow.jacobian_weighting = False
+    config.workflow.ignore = ['jacobian']
     wf = _derivatives_wf(tmp_path)
     assert wf.get_node('stack_jacobian') is None
     assert wf.get_node('ds_jacobian') is None
@@ -513,7 +513,7 @@ def _finalize_wf(tmp_path, write_derivatives=True):
     # in this module sets them, so they cannot be left to test order.
     config.workflow.b0_threshold = 100
     config.workflow.dwi2anat_dof = 6
-    config.workflow.force_jacobian = False
+    config.workflow.force = []
     dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz')
     unit = make_preproc_unit([dwi])
     return init_dwi_finalize_wf(
@@ -558,7 +558,7 @@ def test_jacobian_weights_reach_the_derivatives_workflow_through_finalize(tmp_pa
 
 
 def test_jacobian_weights_do_not_reach_finalize_when_weighting_off(tmp_path):
-    config.workflow.jacobian_weighting = False
+    config.workflow.ignore = ['jacobian']
     wf = _finalize_wf(tmp_path)
     trans_wf = wf.get_node('transform_dwis_t1')
     outputnode = wf.get_node('outputnode')

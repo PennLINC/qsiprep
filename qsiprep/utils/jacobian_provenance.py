@@ -54,7 +54,7 @@ def t2wreg_is_weighted(unit, t2w_sdc):
     """
     if t2wreg_target(unit, t2w_sdc) is None:
         return True
-    return bool(config.workflow.force_jacobian)
+    return 'jacobian' in (config.workflow.force or [])
 
 
 def _gradwarp_applied(unit):
@@ -255,8 +255,9 @@ _JACOBIAN_SENTENCE = {
 def describe_jacobian_modulation():
     """Methods text: whether *QSIPrep* itself Jacobian-modulated a displacement field.
 
-    Reads ``config.workflow.jacobian_weighting`` directly. This is display
-    vocabulary describing what ``ComposeJacobianWeights`` did, not routing.
-    Used by ``gradwarp_boilerplate`` for the gradient nonlinearity field.
+    Reads ``config.workflow.ignore`` directly (``--ignore jacobian``). This is
+    display vocabulary describing what ``ComposeJacobianWeights`` did, not
+    routing. Used by ``gradwarp_boilerplate`` for the gradient nonlinearity
+    field.
     """
-    return _JACOBIAN_SENTENCE[bool(config.workflow.jacobian_weighting)]
+    return _JACOBIAN_SENTENCE['jacobian' not in (config.workflow.ignore or [])]

@@ -40,7 +40,6 @@ def _reset_config():
             'gradient_file',
             'ignore',
             'force',
-            'force_jacobian',
         )
     }
     saved_sloppy = config.execution.sloppy
@@ -59,7 +58,6 @@ def _cfg(hmc_method, sdc_method='auto', sloppy=False):
     config.workflow.gradient_file = None
     config.workflow.ignore = []
     config.workflow.force = []
-    config.workflow.force_jacobian = False
     config.execution.sloppy = sloppy
 
 
@@ -187,7 +185,7 @@ def test_tortoise_t2wreg():
     assert '--force jacobian' in reason
     assert jacobian_provenance_for(unit, t2w_sdc=False) == (['eddy-current'], [], None)
 
-    config.workflow.force_jacobian = True
+    config.workflow.force = ['jacobian']
     assert jacobian_provenance_for(unit, t2w_sdc=True) == (['eddy-current', 'sdc'], [], None)
 
 

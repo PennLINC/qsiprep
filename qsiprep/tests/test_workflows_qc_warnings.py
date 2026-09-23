@@ -21,7 +21,7 @@ from qsiprep.tests.preproc_factory import make_preproc_unit
 @pytest.fixture(autouse=True)
 def _reset_config():
     saved = (
-        config.workflow.jacobian_weighting,
+        config.workflow.ignore,
         config.workflow.output_resolution,
         config.workflow.sdc_method,
         config.workflow.dwiref_construction_iters,
@@ -29,14 +29,14 @@ def _reset_config():
         config.execution.sloppy,
         config.nipype.omp_nthreads,
     )
-    config.workflow.jacobian_weighting = True
+    config.workflow.ignore = []
     config.workflow.output_resolution = 2.0
     # config.nipype.init() is not run in construction tests, and
     # DSIStudioGQIReconstruction needs an int thread_count to build.
     config.nipype.omp_nthreads = 1
     yield
     (
-        config.workflow.jacobian_weighting,
+        config.workflow.ignore,
         config.workflow.output_resolution,
         config.workflow.sdc_method,
         config.workflow.dwiref_construction_iters,

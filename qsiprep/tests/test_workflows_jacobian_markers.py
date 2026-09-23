@@ -146,7 +146,7 @@ def _reset_config():
         'dwidenoise_window',
         'shoreline_iters',
         'anatomical_template',
-        'jacobian_weighting',
+        'ignore',
         'diffprep_config',
         'tortoise_gpu_cpu_ratio',
     )
@@ -182,7 +182,7 @@ def _cfg(hmc_method, sdc_method, sloppy):
     config.workflow.dwidenoise_window = 5
     config.workflow.shoreline_iters = 2
     config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
-    config.workflow.jacobian_weighting = True
+    config.workflow.ignore = []
     config.workflow.diffprep_config = None
     config.workflow.tortoise_gpu_cpu_ratio = None
 

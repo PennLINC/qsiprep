@@ -131,9 +131,7 @@ def _build_parser(**kwargs):
             # --force values land on their own boolean attributes so config
             # (and qsiplan's policy bridge) can read them by name.
             namespace.force_sdc_anat_reference = 'sdc-anat-reference' in (namespace.force or [])
-            namespace.jacobian_weighting = 'jacobian' not in (namespace.ignore or [])
-            namespace.force_jacobian = 'jacobian' in (namespace.force or [])
-            if namespace.force_jacobian and not namespace.jacobian_weighting:
+            if 'jacobian' in (namespace.force or []) and 'jacobian' in (namespace.ignore or []):
                 self.error('--force jacobian and --ignore jacobian are mutually exclusive')
             if namespace.force_sdc_anat_reference and namespace.sdc_anat_reference == 'none':
                 self.error(
@@ -432,11 +430,11 @@ def _build_parser(**kwargs):
             'in which case distortion corrections will be misapplied. '
             '"gradwarp" disables gradient nonlinearity correction entirely, including '
             'the voxelwise gradient deviation map. '
-            '"jacobian" disables the intensity modulation QSIPrep applies after its '
-            'spatial distortion corrections (gradient nonlinearity, susceptibility, '
-            'TORTOISE eddy current). FSL eddy modulates its own eddy-current and TOPUP '
-            'corrections internally whenever its resampling method is "jac", the '
-            'default; that is not affected by this option.'
+            '"jacobian" disables the Jacobian intensity modulation QSIPrep itself applies '
+            'for gradient-nonlinearity, susceptibility and eddy-current distortion '
+            "corrections. It does not affect FSL eddy's internal modulation, which "
+            'eddy applies whenever its resampling method is "jac" (the default; see '
+            '--eddy-config).'
         ),
     )
     g_scope.add_argument(

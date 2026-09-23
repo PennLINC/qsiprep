@@ -291,7 +291,7 @@ def _resampling_sentence():
 
 
 #: Whether *QSIPrep* itself Jacobian-modulated the gradwarp field, keyed by
-#: ``config.workflow.jacobian_weighting``. A ``DIS3D`` unit builds no field
+#: whether ``jacobian`` is in ``config.workflow.ignore``. A ``DIS3D`` unit builds no field
 #: (see :func:`gradwarp_boilerplate`), so there is nothing to modulate and
 #: this text is never reached for it.
 
