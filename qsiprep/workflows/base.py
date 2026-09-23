@@ -69,7 +69,7 @@ from ..utils.bids import (
 )
 from ..utils.misc import dwi_biascorrect_enabled, fix_multi_source_name
 from ..utils.plan import method_selection_from_config
-from ..utils.sdc import t2w_available_for_sdc, t2w_sdc_enabled
+from ..utils.sdc import sdc_warp_source, t2w_available_for_sdc, t2w_sdc_enabled
 from .anatomical.volume import anat_biascorrect_enabled, init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
 from .dwi.distortion_group_merge import init_distortion_group_merge_wf
@@ -657,14 +657,19 @@ to workflows in *QSIPrep*'s documentation]\
         naming_name = output_fname if merged_here else final_output_name
         source_file = get_source_file(list(unit.dwi_files), naming_name, suffix='_dwi')
         output_wfname = output_fname.replace('-', '_')
+        t2w_sdc = t2w_available_for_sdc(subject_data, selection, config.workflow.anat_modality)
         do_biascorr = biascorr_by_output[final_output_name]
         dwi_preproc_wf = init_dwi_preproc_wf(
             unit=unit,
             output_prefix=naming_name,
             source_file=source_file,
-            t2w_sdc=t2w_available_for_sdc(subject_data, selection, config.workflow.anat_modality),
+            t2w_sdc=t2w_sdc,
             anatomical_template=anatomical_template,
             do_biascorr=do_biascorr,
+        )
+        write_derivatives = not (
+            merging_distortion_groups
+            and concatenation_scheme[output_fname] in merging_group_workflows
         )
         dwi_finalize_wf = init_dwi_finalize_wf(
             unit=unit,
@@ -672,12 +677,13 @@ to workflows in *QSIPrep*'s documentation]\
             output_prefix=naming_name,
             source_file=source_file,
             do_biascorr=do_biascorr,
-            write_derivatives=not (
-                merging_distortion_groups
-                and concatenation_scheme[output_fname] in merging_group_workflows
-            ),
+            write_derivatives=write_derivatives,
             make_dwiref=make_dwiref,
+            t2w_sdc=t2w_sdc,
         )
+        # The SDC displacement maps name, in their sidecars, the written transforms
+        # that carried the correction from the DWI frame into ACPC.
+        names_sdc_transforms = write_derivatives and sdc_warp_source(unit, t2w_sdc)[0] is not None
 
         workflow.connect([
             (anat_preproc_wf, dwi_preproc_wf, [
@@ -776,6 +782,10 @@ to workflows in *QSIPrep*'s documentation]\
                     run_without_submitting=True,
                 )
                 workflow.connect([(dwi_preproc_wf, ds_coreg_xfm, [(field, 'in_file')])])
+                if names_sdc_transforms and dst == 'ACPC':
+                    connect_sdc_transform_files(
+                        workflow, [ds_coreg_xfm], dwi_finalize_wf, output_wfname
+                    )
 
         if make_dwiref:
             input_name = f'inputnode.{output_wfname}_b0_template'
@@ -815,6 +825,13 @@ to workflows in *QSIPrep*'s documentation]\
                 workflow.connect([
                     (dwiref_wf, ds_distortiongroup_to_dwiref, [(output_name, 'in_file')]),
                 ])  # fmt:skip
+                if names_sdc_transforms:
+                    connect_sdc_transform_files(
+                        workflow,
+                        [ds_distortiongroup_to_dwiref, ds_dwiref_to_acpc],
+                        dwi_finalize_wf,
+                        output_wfname,
+                    )
 
         final_merge_wf = (
             merging_group_workflows.get(concatenation_scheme[output_fname])
@@ -859,6 +876,31 @@ to workflows in *QSIPrep*'s documentation]\
             workflow.get_node(node).interface.inputs.datatype = 'figures'
 
     return workflow
+
+
+def connect_sdc_transform_files(workflow, sinks, dwi_finalize_wf, output_wfname):
+    """Pass the written DWI-to-ACPC transforms to the SDC maps' sidecars.
+
+    Parameters
+    ----------
+    workflow : Workflow
+        The subject workflow.
+    sinks : list of Node
+        Datasinks of the transforms, in the order they apply.
+    dwi_finalize_wf : Workflow
+        The workflow that writes the SDC maps.
+    output_wfname : str
+        Suffix for the merge node's name.
+    """
+    chain = pe.Node(
+        niu.Merge(len(sinks)),
+        name=f'sdc_transform_files_{output_wfname}',
+        run_without_submitting=True,
+    )
+    workflow.connect(
+        [(sink, chain, [('out_file', f'in{index}')]) for index, sink in enumerate(sinks, 1)]
+        + [(chain, dwi_finalize_wf, [('out', 'inputnode.sdc_transform_files')])]
+    )
 
 
 def provide_processing_advice(subject_data, layout, unringing_method):

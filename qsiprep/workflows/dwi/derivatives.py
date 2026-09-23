@@ -14,6 +14,7 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from ... import config
 from ...interfaces import DerivativesDataSink
 from ...interfaces.tsnr import DWITSNR
+from ...utils.sdc import sdc_displacement_sidecar
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
@@ -64,8 +65,14 @@ def _tsnr_meta(n_b0, median_tsnr):
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def init_dwi_derivatives_wf(source_file) -> Workflow:
-    """Set up a battery of datasinks to store derivatives in the right location."""
+def init_dwi_derivatives_wf(source_file, sdc_warp_meta=None, sdc_refinement_meta=None) -> Workflow:
+    """Set up a battery of datasinks to store derivatives in the right location.
+
+    When ``sdc_warp_meta`` is given (a dict of sidecar metadata), the SDC
+    (susceptibility) displacement is also written as a map on the ACPC output grid,
+    for inspection rather than for resampling. ``sdc_refinement_meta`` does the
+    same for DRBUDDI's refinement of the TOPUP field (TOPUP+DRBUDDI only).
+    """
     output_dir = str(config.execution.output_dir)
     workflow = Workflow(name='dwi_derivatives_wf')
     inputnode = pe.Node(
@@ -83,6 +90,9 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
                 'btable_t1',
                 'hmc_optimization_data',
                 'series_qc',
+                'sdc_warp_to_template',
+                'sdc_refinement_to_template',
+                'sdc_transform_files',
             ]
         ),
         name='inputnode',
@@ -269,6 +279,48 @@ def init_dwi_derivatives_wf(source_file) -> Workflow:
         (inputnode, ds_gradient_table_t1, [('gradient_table_t1', 'in_file')]),
         (inputnode, ds_btable_t1, [('btable_t1', 'in_file')]),
     ])  # fmt:skip
+
+    # The SDC displacement in ACPC space. It is a map of the
+    # correction, not a transform: the correction is applied separately.
+    # Only written when SDC is applied.
+    for name, field, desc, meta in (
+        ('ds_sdc_warp_t1', 'sdc_warp_to_template', 'sdc', sdc_warp_meta),
+        (
+            'ds_sdc_refinement_t1',
+            'sdc_refinement_to_template',
+            'sdcrefinement',
+            sdc_refinement_meta,
+        ),
+    ):
+        if meta is None:
+            continue
+        sidecar = pe.Node(
+            niu.Function(function=sdc_displacement_sidecar, output_names=['meta']),
+            name=f'{name}_sidecar',
+            run_without_submitting=True,
+        )
+        sidecar.inputs.meta = meta
+        sidecar.inputs.output_dir = output_dir
+        ds_sdc_field = pe.Node(
+            DerivativesDataSink(
+                source_file=source_file,
+                base_directory=output_dir,
+                space='ACPC',
+                desc=desc,
+                suffix='displacement',
+                extension='.nii.gz',
+                compress=True,
+            ),
+            name=name,
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+        workflow.connect([
+            (inputnode, sidecar, [('sdc_transform_files', 'transform_files')]),
+            (inputnode, ds_sdc_field, [(field, 'in_file')]),
+            (sidecar, ds_sdc_field, [('meta', 'meta_dict')]),
+        ])  # fmt:skip
+
     # If requested, write local bvecs
     # if config.workflow.write_local_bvecs:
     #     ds_local_bvecs_t1 = pe.Node(
