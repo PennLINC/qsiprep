@@ -99,7 +99,7 @@ def init_dwi_derivatives_wf(
                 'btable_t1',
                 'hmc_optimization_data',
                 'series_qc',
-                # Only defined when config.workflow.jacobian_weighting applied
+                # Only defined when Jacobian weighting applied (no --ignore jacobian)
                 # weights: see StackJacobianWeights below.
                 'jacobian_weights',
                 'jacobian_weight_index',
@@ -291,13 +291,13 @@ def init_dwi_derivatives_wf(
     ])  # fmt:skip
 
     # The Jacobian weight derivative records the weights QSIPrep applied, and
-    # nothing else. When jacobian_weighting is off, or when every applied
+    # nothing else. When --ignore jacobian is given, or when every applied
     # modulation was internal to a backend (e.g. --hmc-method eddy with TOPUP
     # and no gradwarp), ComposeJacobianWeights produces no maps, jacobian_weights
     # stays Undefined all the way down this pipe, and DerivativesMaybeDataSink
     # no-ops -- no file is written. A unity map is never synthesized for that
     # case: it would assert "we modulated by 1", which is false.
-    if config.workflow.jacobian_weighting:
+    if 'jacobian' not in (config.workflow.ignore or []):
         stack_jacobian = pe.Node(
             StackJacobianWeights(
                 applied_corrections=list(jacobian_applied_corrections),

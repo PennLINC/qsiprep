@@ -585,8 +585,6 @@ class workflow(_Config):
     """Gradient nonlinearity coefficient file or displacement field."""
     hmc_method = None
     """Which software corrects head motion: eddy, shoreline or tortoise."""
-    jacobian_weighting = True
-    """Apply Jacobian intensity modulation for the spatial distortion corrections."""
     hmc_transform = None
     """Transformation SHORELine optimizes during head motion correction: Affine or
     Rigid. Derived from ``--shoreline-config``; None unless ``hmc_method`` is

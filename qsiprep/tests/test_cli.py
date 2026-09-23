@@ -839,6 +839,41 @@ def test_parser_accepts_ignore_gradwarp(tmp_path):
     assert opts.ignore == ['gradwarp']
 
 
+def test_parser_accepts_ignore_jacobian(tmp_path):
+    """'jacobian' is the --ignore off-switch for Jacobian weighting."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    opts = parser.parse_args(
+        [str(bids), str(out), 'participant', '--ignore', 'jacobian', '--output-resolution', '2']
+    )
+    assert opts.ignore == ['jacobian']
+
+
+def test_parser_rejects_removed_jacobian_weighting_flag(tmp_path):
+    """--no-jacobian-weighting was replaced by --ignore jacobian."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                str(bids),
+                str(out),
+                'participant',
+                '--output-resolution',
+                '2',
+                '--no-jacobian-weighting',
+            ]
+        )
+
+
 def test_repeated_force_accumulates(tmp_path):
     """action='store' would keep only the last occurrence, so
     "--force gradwarp1D --force gradwarp3D" would reach the validator as a

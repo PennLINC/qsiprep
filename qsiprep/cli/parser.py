@@ -41,7 +41,6 @@ def _build_parser(**kwargs):
         Action,
         ArgumentDefaultsHelpFormatter,
         ArgumentParser,
-        BooleanOptionalAction,
     )
     from functools import partial
     from pathlib import Path
@@ -397,7 +396,17 @@ def _build_parser(**kwargs):
         action='store',
         nargs='+',
         default=[],
-        choices=['fieldmaps', 'pepolar-dwis', 't2w', 'phase', 'sdc', 'shims', 'fov', 'gradwarp'],
+        choices=[
+            'fieldmaps',
+            'pepolar-dwis',
+            't2w',
+            'phase',
+            'sdc',
+            'shims',
+            'fov',
+            'gradwarp',
+            'jacobian',
+        ],
         help=(
             'Ignore selected aspects of the input dataset to disable the corresponding '
             'parts of the workflow (a space-delimited list). '
@@ -418,7 +427,12 @@ def _build_parser(**kwargs):
             '"fov" concatenates series with differently-oriented fields of view anyway, '
             'in which case distortion corrections will be misapplied. '
             '"gradwarp" disables gradient nonlinearity correction entirely, including '
-            'the voxelwise gradient deviation map.'
+            'the voxelwise gradient deviation map. '
+            '"jacobian" disables the Jacobian intensity modulation QSIPrep itself applies '
+            'for gradient-nonlinearity, susceptibility and eddy-current distortion '
+            "corrections. It does not affect FSL eddy's internal modulation, which "
+            'eddy applies whenever its resampling method is "jac" (the default; see '
+            '--eddy-config).'
         ),
     )
     g_scope.add_argument(
@@ -682,20 +696,6 @@ def _build_parser(**kwargs):
             'Path to a JSON file with settings for the call to eddy. A default is used '
             'if none is given. The current default can be found at '
             'https://github.com/PennLINC/qsiprep/blob/main/qsiprep/data/eddy_params.json'
-        ),
-    )
-    g_hmc.add_argument(
-        '--jacobian-weighting',
-        action=BooleanOptionalAction,
-        default=True,
-        help=(
-            'Apply Jacobian intensity modulation for gradient-nonlinearity, '
-            'susceptibility and eddy-current distortion corrections (default: on). '
-            'This option controls only the modulation QSIPrep itself applies. With '
-            '--hmc-method eddy, FSL eddy applies its own modulation for eddy-current '
-            'and TOPUP susceptibility distortions whenever its resampling method is '
-            '"jac" (the default; see --eddy-config). That is internal to eddy and this '
-            'option does not affect it.'
         ),
     )
     g_hmc.add_argument(

@@ -222,7 +222,7 @@ _JACOBIAN_SENTENCE = {
     ),
     False: (
         ' This correction was applied without Jacobian intensity modulation '
-        '(--no-jacobian-weighting), so the local volume change it introduces '
+        '(--ignore jacobian), so the local volume change it introduces '
         'was not compensated for.'
     ),
 }
@@ -231,8 +231,9 @@ _JACOBIAN_SENTENCE = {
 def describe_jacobian_modulation():
     """Methods text: whether *QSIPrep* itself Jacobian-modulated a displacement field.
 
-    Reads ``config.workflow.jacobian_weighting`` directly. This is display
-    vocabulary describing what ``ComposeJacobianWeights`` did, not routing.
-    Used by ``gradwarp_boilerplate`` for the gradient nonlinearity field.
+    Reads ``config.workflow.ignore`` directly (``--ignore jacobian``). This is
+    display vocabulary describing what ``ComposeJacobianWeights`` did, not
+    routing. Used by ``gradwarp_boilerplate`` for the gradient nonlinearity
+    field.
     """
-    return _JACOBIAN_SENTENCE[bool(config.workflow.jacobian_weighting)]
+    return _JACOBIAN_SENTENCE['jacobian' not in (config.workflow.ignore or [])]

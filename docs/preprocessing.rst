@@ -853,7 +853,7 @@ Eddy current (``eddy``)        ``eddy``, internally
 Eddy current (DIFFPREP)        *QSIPrep*
 ============================== ==========================================
 
-``--no-jacobian-weighting`` disables only the modulation *QSIPrep* itself
+``--ignore jacobian`` disables only the modulation *QSIPrep* itself
 applies -- gradient nonlinearity, and susceptibility/eddy current wherever
 *QSIPrep* is the one applying them per the table above. It cannot disable
 ``eddy``'s internal modulation: ``eddy``'s ``--resamp`` accepts only ``jac``

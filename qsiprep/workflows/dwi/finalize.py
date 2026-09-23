@@ -241,7 +241,7 @@ def init_dwi_finalize_wf(
                 'gradient_table_t1',
                 'btable_t1',
                 'hmc_optimization_data',
-                # Only defined when config.workflow.jacobian_weighting applied
+                # Only defined when Jacobian weighting applied (no --ignore jacobian)
                 # weights: forwarded from transform_dwis_t1.
                 'jacobian_weights',
                 'jacobian_weight_index',
@@ -379,7 +379,7 @@ def init_dwi_finalize_wf(
             ]),
         ])  # fmt:skip
 
-    if config.workflow.jacobian_weighting:
+    if 'jacobian' not in (config.workflow.ignore or []):
         workflow.connect([
             (transform_dwis_t1, outputnode, [
                 ('outputnode.jacobian_weights', 'jacobian_weights'),
@@ -644,7 +644,7 @@ def init_dwi_finalize_wf(
         (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')]),
     ])  # fmt:skip
 
-    if config.workflow.jacobian_weighting:
+    if 'jacobian' not in (config.workflow.ignore or []):
         workflow.connect([
             (outputnode, dwi_derivatives_wf, [
                 ('jacobian_weights', 'inputnode.jacobian_weights'),

@@ -184,7 +184,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 'local_bvecs',
                 'b0_series',
                 'resampled_qc',
-                # Only defined when config.workflow.jacobian_weighting applied
+                # Only defined when Jacobian weighting applied (no --ignore jacobian)
                 # weights: the unique output-grid weight maps and the
                 # per-volume index into them.
                 'jacobian_weights',
@@ -282,7 +282,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
     # pull-back (see the design spec); coregistration and the dwiref and
     # template warps are excluded because modulating by a spatial-normalization
     # warp is VBM-style volume modulation, wrong for DWI signal.
-    if config.workflow.jacobian_weighting:
+    if 'jacobian' not in (config.workflow.ignore or []):
         # num_threads/n_procs paired as for scale_dwis above: the node shells
         # out to antsApplyTransforms and CreateJacobianDeterminantImage, which
         # run single-threaded on nipype's default.

@@ -363,7 +363,7 @@ def test_dwi_preproc_wf_records_gradwarp_applied(tmp_path, monkeypatch):
     cfg.workflow.gpu = None
     cfg.workflow.impute_slice_threshold = 0
     cfg.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
-    cfg.workflow.jacobian_weighting = True
+    cfg.workflow.ignore = []
     from qsiprep.utils.jacobian_provenance import jacobian_provenance_for
     from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
 

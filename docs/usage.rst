@@ -235,7 +235,7 @@ Correcting a spatial distortion moves signal between voxels, so *QSIPrep*
 also rescales the corrected image by the local volume change it introduces
 -- for gradient nonlinearity, susceptibility distortion, and (on the
 TORTOISE/DIFFPREP backend) eddy-current correction. Pass
-``--no-jacobian-weighting`` to disable the modulation *QSIPrep* itself
+``--ignore jacobian`` to disable the modulation *QSIPrep* itself
 applies. It has no effect on FSL ``eddy``'s own, internal Jacobian
 modulation of eddy-current and TOPUP susceptibility distortion correction,
 which ``eddy`` always applies unless it is configured (via

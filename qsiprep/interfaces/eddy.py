@@ -567,7 +567,7 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
 
     # Jacobian modulation: whether eddy's own resampling Jacobian-modulated
     # the eddy-current (and, when TOPUP ran, susceptibility) corrections it
-    # applied. This is independent of --no-jacobian-weighting, which controls
+    # applied. This is independent of --ignore jacobian, which controls
     # only the modulation QSIPrep itself applies -- see eddy_modulates_distortion.
     from ..utils.eddy_config import eddy_modulates_distortion
 

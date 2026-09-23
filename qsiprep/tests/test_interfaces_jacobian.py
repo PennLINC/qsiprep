@@ -984,7 +984,7 @@ def test_okan_jacobian_is_undefined_for_cubic_and_does_not_raise(tmp_path):
     """Cubic is a valid existing mode, so it must degrade, not abort.
 
     Weighting is on by default, so raising here would newly break runs that
-    work today and push users to --no-jacobian-weighting, losing gradwarp and
+    work today and push users to --ignore jacobian, losing gradwarp and
     SDC weighting as collateral. Silently applying the quadratic formula to
     cubic parameters is what is forbidden.
     """
