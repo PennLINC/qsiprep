@@ -430,6 +430,170 @@ def validate_diffprep_config(diffprep_config):
     return
 
 
+SHORELINE_MODELS = ('3dshore', 'tensor', 'none')
+"""Signal models SHORELine can use to predict motion-correction targets."""
+
+SHORELINE_TRANSFORMS = ('Affine', 'Rigid')
+
+#: ``--dwi2anat-dof`` is user-facing; antsRegistration wants a transform name.
+#: 9 is not offered: antsRegistration has no 9-DOF transform (Rigid=6,
+#: Similarity=7, Affine=12), unlike the FLIRT/mri_coreg path fMRIPrep uses.
+DWI2ANAT_DOF_TO_TRANSFORM = {6: 'Rigid', 12: 'Affine'}
+"""Transformations SHORELine can optimize during head motion correction."""
+
+
+def load_shoreline_config(path=None, model=None):
+    """Load a ``--shoreline-config`` JSON file, merged over the shipped defaults.
+
+    Parameters
+    ----------
+    path : str, os.PathLike or None
+        The SHORELine configuration JSON file. ``None`` uses the defaults in
+        ``qsiprep/data/shoreline_params.json``.
+    model : str or None
+        A SHORELine model from the deprecated ``--hmc-model`` alias (``3dshore``,
+        ``tensor`` or ``none``). It replaces the default model, and conflicts with
+        a ``model`` key in the file.
+
+    Returns
+    -------
+    dict
+        Exactly the keys ``model``, ``iters`` and ``transform``.
+
+    Raises
+    ------
+    ValueError
+        If the file does not exist, is not a JSON object, has an unknown key or an
+        invalid value, or sets ``model`` while ``model`` is also given.
+    """
+    import json
+    import os
+
+    from ..data import load as load_data
+
+    cfg = json.loads(load_data('shoreline_params.json').read_text())
+    source = 'The default SHORELine configuration'
+    if path is not None:
+        source = f'SHORELine configuration file {path}'
+        if not os.path.exists(path):
+            raise ValueError(f'{source} does not exist.')
+        try:
+            with open(path, encoding='utf-8') as f:
+                user_cfg = json.load(f)
+        except OSError as err:
+            raise ValueError(f'{source} could not be read: {err}') from err
+        except (json.JSONDecodeError, UnicodeDecodeError) as err:
+            raise ValueError(f'{source} is not valid JSON: {err}') from err
+        if not isinstance(user_cfg, dict):
+            raise ValueError(f'{source} must contain a JSON object.')
+        # Unknown keys are errors so a typo cannot silently fall back to a default.
+        unknown = sorted(set(user_cfg) - set(cfg))
+        if unknown:
+            raise ValueError(
+                f'{source} has unknown key(s) {", ".join(unknown)}; '
+                f'valid keys are {", ".join(sorted(cfg))}.'
+            )
+        if model is not None and 'model' in user_cfg:
+            raise ValueError(f'--hmc-model conflicts with "model" in --shoreline-config {path}.')
+        cfg.update(user_cfg)
+    if model is not None:
+        cfg['model'] = model
+
+    if cfg['model'] not in SHORELINE_MODELS:
+        raise ValueError(
+            f'{source} sets model={cfg["model"]!r}; must be one of {", ".join(SHORELINE_MODELS)}.'
+        )
+    if cfg['transform'] not in SHORELINE_TRANSFORMS:
+        raise ValueError(
+            f'{source} sets transform={cfg["transform"]!r}; must be one of '
+            f'{", ".join(SHORELINE_TRANSFORMS)}.'
+        )
+    iters = cfg['iters']
+    # bool is a subclass of int, so "iters": true has to be rejected explicitly.
+    if (
+        isinstance(iters, bool)
+        or not isinstance(iters, int)
+        or (iters < 1 and cfg['model'] != 'none')
+    ):
+        raise ValueError(
+            f'{source} sets iters={iters!r}; must be an integer >= 1 '
+            '(any integer when model is "none").'
+        )
+    return cfg
+
+
+def dwi_biascorrect_enabled(dwi_files=None):
+    """Should N4 bias correction run on these DWI images?
+
+    ``--dwi-biascorrect`` governs DWIs only; ``--anat-biascorrect`` governs the
+    anatomicals and never reaches this path.
+
+    ``auto`` inspects the BIDS ``ImageType`` metadata for ``NORM``, which is how
+    Siemens (among others) flags that intensity normalization was already applied
+    on the console. Console normalization does not necessarily remove the need
+    for N4, which is why ``n4`` stays the default; ``auto`` and ``none`` are for
+    deliberately skipping it.
+
+    N4 is skipped only when EVERY input image is marked normalized. A mixed set is
+    concatenated into one output and so must be corrected consistently, and an
+    image whose metadata is missing is treated as un-normalized -- the conservative
+    direction, since running N4 unnecessarily is milder than skipping it when it
+    was needed.
+
+    Parameters
+    ----------
+    dwi_files : list of str or None
+        Every DWI feeding one final output. Under ``--distortion-group-merge`` that
+        is the union over all of the output's constituent correction units, not one
+        unit's files: the constituents are concatenated, so they must share a single
+        decision.
+    """
+    from .. import config
+
+    mode = config.workflow.dwi_biascorrect or 'n4'
+    if mode == 'n4':
+        return True
+    if mode == 'none':
+        return False
+
+    if not dwi_files:
+        config.loggers.workflow.warning(
+            '--dwi-biascorrect auto: no DWI files to inspect; running N4.'
+        )
+        return True
+    layout = config.execution.layout
+    if layout is None:
+        config.loggers.workflow.warning(
+            '--dwi-biascorrect auto: no BIDS layout available; running N4.'
+        )
+        return True
+
+    normalized = []
+    for img in dwi_files:
+        try:
+            image_type = layout.get_metadata(img).get('ImageType') or []
+        except (OSError, ValueError, KeyError):
+            image_type = []
+        normalized.append(any(str(t).upper() == 'NORM' for t in image_type))
+
+    if all(normalized):
+        config.loggers.workflow.info(
+            '--dwi-biascorrect auto: all %d DWI image(s) are marked NORM in '
+            'ImageType; skipping N4.',
+            len(normalized),
+        )
+        return False
+    if any(normalized):
+        config.loggers.workflow.warning(
+            '--dwi-biascorrect auto: %d of %d DWI images are marked NORM. '
+            'Running N4 on all of them, since a concatenated set cannot be '
+            'corrected consistently otherwise.',
+            sum(normalized),
+            len(normalized),
+        )
+    return True
+
+
 def validate_gradient_flags(gradient_file, force, ignore):
     """Validate the ``--gradient-file``/``--force``/``--ignore`` combination.
 
@@ -440,19 +604,25 @@ def validate_gradient_flags(gradient_file, force, ignore):
         Existence is assumed to already be checked (the CLI's ``IsFile`` argparse
         type does that); only the extension is validated here.
     force : list of str
-        Values passed to ``--force`` (currently only ``"gradients"`` is defined).
+        Values passed to ``--force``. The gradwarp-related ones are
+        ``"gradwarp1D"`` and ``"gradwarp3D"``.
     ignore : list of str
         Values passed to ``--ignore``.
 
     Raises
     ------
     ValueError
-        If ``--force gradients`` and ``--ignore gradients`` are both given, if
-        ``--force gradients`` is given without ``--gradient-file``, or if
+        If both ``--force gradwarp1D`` and ``--force gradwarp3D`` are given, if a
+        ``--force gradwarp{1,3}D`` is combined with ``--ignore gradwarp``, if a
+        ``--force gradwarp{1,3}D`` is given without ``--gradient-file``, or if
         ``--gradient-file`` does not end in a TORTOISE-recognized extension.
 
     Notes
     -----
+    ``--force gradwarp1D`` and ``--force gradwarp3D`` are mutually exclusive, but
+    ``--force`` takes a list of unrelated values, so argparse cannot express that
+    with a mutually exclusive group. It is checked here instead.
+
     An unrecognized ``--gradient-file`` extension is rejected outright rather than
     merely warned about. TORTOISE itself only warns on an unrecognized extension
     and then silently disables gradient nonlinearity correction; silently
@@ -461,14 +631,25 @@ def validate_gradient_flags(gradient_file, force, ignore):
     """
     from .. import config
 
-    forcing_gradients = 'gradients' in force
-    ignoring_gradients = 'gradients' in ignore
+    # argparse's choices constrain these to "gradwarp1D" and "gradwarp3D".
+    # Deduplicated: "--force gradwarp1D gradwarp1D" names one dimensionality.
+    forced_gradwarp = sorted({value for value in force if value.startswith('gradwarp')})
+    ignoring_gradwarp = 'gradwarp' in ignore
 
-    if forcing_gradients and ignoring_gradients:
-        raise ValueError('"--force gradients" and "--ignore gradients" are contradictory.')
+    if len(forced_gradwarp) > 1:
+        raise ValueError(
+            f'"--force {forced_gradwarp[0]}" and "--force {forced_gradwarp[1]}" are '
+            'mutually exclusive: a run is corrected in one dimension or in three, '
+            'not both.'
+        )
 
-    if forcing_gradients and not gradient_file:
-        raise ValueError('"--force gradients" requires --gradient-file.')
+    if forced_gradwarp and ignoring_gradwarp:
+        raise ValueError(
+            f'"--force {forced_gradwarp[0]}" and "--ignore gradwarp" are contradictory.'
+        )
+
+    if forced_gradwarp and not gradient_file:
+        raise ValueError(f'"--force {forced_gradwarp[0]}" requires --gradient-file.')
 
     if gradient_file:
         gradient_extensions = ('.grad', '.dat', '.gc', '.nii', '.nii.gz')
@@ -478,9 +659,9 @@ def validate_gradient_flags(gradient_file, force, ignore):
                 f'<{gradient_file}>. TORTOISE silently disables gradient nonlinearity '
                 'correction for unrecognized extensions, so QSIPrep rejects it here instead.'
             )
-        if ignoring_gradients:
+        if ignoring_gradwarp:
             config.loggers.cli.warning(
-                '--gradient-file is unused because "--ignore gradients" was given.'
+                '--gradient-file is unused because "--ignore gradwarp" was given.'
             )
 
     return

@@ -47,6 +47,7 @@ import numpy as np
 import pandas as pd
 from bids import BIDSLayout
 from bids.layout import Query
+from nipype.utils.filemanip import split_filename
 
 from .. import config
 
@@ -103,6 +104,19 @@ class BIDSWarning(RuntimeWarning):
     pass
 
 
+def _norm(path):
+    """Absolute, lexically-normalized path that does *not* follow symlinks.
+
+    ``Path.resolve()`` follows symlinks, which moves a git-annex/datalad data
+    file (a symlink into ``.git/annex/objects``) out of its BIDS directory, so
+    its JSON/bval/bvec sidecars -- which sit beside the *symlink*, not the annex
+    object -- can no longer be found. Lexical normalization with
+    :func:`os.path.abspath` keeps the file at its BIDS location while still
+    resolving ``.`` and ``..``.
+    """
+    return Path(os.path.abspath(path))
+
+
 def find_bids_root(path):
     """Locate the root of the BIDS dataset containing ``path``.
 
@@ -117,7 +131,7 @@ def find_bids_root(path):
         The closest ancestor directory holding a ``dataset_description.json``,
         or ``None`` if ``path`` is not inside a BIDS dataset.
     """
-    for parent in Path(path).resolve().parents:
+    for parent in _norm(path).parents:
         if (parent / 'dataset_description.json').is_file():
             return parent
 
@@ -169,7 +183,7 @@ def _inheritance_levels(path):
     already been copied into a working directory -- only ever match files
     sitting beside them.
     """
-    path = Path(path).resolve()
+    path = _norm(path)
     root = find_bids_root(path)
     if root is None:
         return [path.parent]
@@ -298,6 +312,90 @@ def find_bvec(path):
     return str(bvec_files[-1]) if bvec_files else None
 
 
+def _get_concatenated_bids_name(all_dwis):
+    """A display name for a list of dwi files, for reportlet source files.
+
+    Output naming proper lives in :func:`qsiplan.models.derive_output_name`;
+    this common-prefix fallback only names reportlet source files when the
+    caller has no output prefix (:func:`get_source_file`).
+    """
+    # If a single file, use its name, otherwise use the common prefix
+    if len(all_dwis) > 1:
+        no_runs = []
+        for dwi in all_dwis:
+            no_runs.append(
+                '_'.join([part for part in dwi.split('_') if not part.startswith('run')])
+            )
+
+        input_fname = os.path.commonprefix(no_runs)
+        fname = split_filename(input_fname)[1]
+        parts = fname.split('_')
+        full_parts = [part for part in parts if not part.endswith('-')]
+        fname = '_'.join(full_parts)
+
+    else:
+        input_fname = all_dwis[0]
+        fname = split_filename(input_fname)[1]
+
+    if fname.endswith('_dwi'):
+        fname = fname[:-4]
+
+    return fname.replace('.', '').replace(' ', '')
+
+
+def get_source_file(dwi_files, output_prefix=None, suffix=''):
+    """The reportlets need a source file. This file might not exist in the input data."""
+    if output_prefix is None:
+        output_prefix = _get_concatenated_bids_name(dwi_files)
+    return str(Path(dwi_files[0]).parent / output_prefix) + suffix + '.nii.gz'
+
+
+def check_output_names_are_bids_unique(preproc_units):
+    """Fail when two units' derivatives would render to the same BIDS path.
+
+    QSIPlan uniquifies same-named correction units with a ``+N`` suffix
+    (``_unique_id``), which is an in-memory key rather than a BIDS entity, so
+    ``sub-01`` and ``sub-01+2`` can parse identically and every per-unit
+    derivative of the second silently overwrites the first.
+
+    The path checked is the one the datasinks use, built with
+    :func:`get_source_file`. That matters: the subject and session entity
+    patterns are path-anchored, so parsing a synthetic probe directory gives a
+    different, and under pybids >= 0.19 wrongly permissive, answer.
+
+    Parameters
+    ----------
+    preproc_units : list of :class:`qsiplan.adapters.PreprocUnit`
+        Every correction unit for one subject.
+
+    Raises
+    ------
+    RuntimeError
+        If two units' output names parse to the same entity set.
+
+    Notes
+    -----
+    No rule about ``+`` is encoded. The installed pybids is asked what it actually
+    does, so this stays correct across the 0.19 entity-pattern change and also
+    catches collisions that have nothing to do with ``+``.
+    """
+    from bids.layout import parse_file_entities
+
+    seen = {}
+    for unit in preproc_units:
+        source_file = get_source_file(list(unit.dwi_files), unit.output_name, suffix='_dwi')
+        key = tuple(sorted(parse_file_entities(source_file).items()))
+        if key in seen:
+            raise RuntimeError(
+                f'Output names {seen[key]!r} and {unit.output_name!r} render to the '
+                f'same BIDS name ({key}), so their derivatives would overwrite each '
+                'other. This is usually QSIPlan\'s "+N" uniquifier reaching a '
+                'filename, where its distinguishing character is not a BIDS entity. '
+                'Please report the dataset.'
+            )
+        seen[key] = unit.output_name
+
+
 def collect_participants(bids_dir, participant_label=None, strict=False, bids_validate=True):
     """
     List the participants under the BIDS root and checks that participants
@@ -386,7 +484,7 @@ def collect_participants(bids_dir, participant_label=None, strict=False, bids_va
 def collect_data(
     bids_dir,
     participant_label,
-    session_id=None,
+    session_label=None,
     filters=None,
     bids_validate=True,
     ignore=None,
@@ -416,12 +514,12 @@ def collect_data(
     for acq in queries.keys():
         entities = bids_filters.get(acq, {})
 
-        if ('session' in entities.keys()) and (session_id is not None):
+        if ('session' in entities.keys()) and (session_label is not None):
             config.loggers.workflow.warning(
                 'BIDS filter file value for session may conflict with values specified '
                 'on the command line'
             )
-        queries[acq]['session'] = session_id or Query.OPTIONAL
+        queries[acq]['session'] = session_label or Query.OPTIONAL
         queries[acq].update(entities)
 
     subj_data = {
@@ -680,15 +778,15 @@ def update_metadata_from_nifti_header(metadata, nifti_file):
 def parse_bids_for_age_months(
     bids_root: str | Path,
     subject_id: str,
-    session_id: str | None = None,
+    session_label: str | None = None,
 ) -> int | None:
     """
     Given a BIDS root, query the BIDS metadata files for participant age, and return in
     chronological months.
 
     The heuristic followed is:
-    1) Check `sub-<subject_id>[/ses-<session_id>]/<sub-<subject_id>[_ses-<session-id>]_scans.tsv
-    2) Check `sub-<subject_id>/sub-<subject_id>_sessions.tsv`
+    1) Check `sub-<subject>[/ses-<session>]/<sub-<subject>[_ses-<session>]_scans.tsv
+    2) Check `sub-<subject>/sub-<subject>_sessions.tsv`
     3) Check `<root>/participants.tsv`
 
     Notes
@@ -720,16 +818,16 @@ def parse_bids_for_age_months(
     """
     if subject_id.startswith('sub-'):
         subject_id = subject_id[4:]
-    if session_id and session_id.startswith('ses-'):
-        session_id = session_id[4:]
+    if session_label and session_label.startswith('ses-'):
+        session_label = session_label[4:]
 
     # Play nice with sessions
     subject = f'sub-{subject_id}'
-    session = f'ses-{session_id}' if session_id else ''
+    session = f'ses-{session_label}' if session_label else ''
     prefix = f'{subject}' + (f'_{session}' if session else '')
 
     subject_level = session_level = Path(bids_root) / subject
-    if session_id:
+    if session_label:
         session_level = subject_level / session
 
     age = None
@@ -746,8 +844,8 @@ def parse_bids_for_age_months(
         return age
 
     sessions_tsv = subject_level / f'{subject}_sessions.tsv'
-    if sessions_tsv.exists() and session_id is not None:
-        age = _get_age_from_tsv(sessions_tsv, index_column='session_id', index_value=session)
+    if sessions_tsv.exists() and session_label is not None:
+        age = _get_age_from_tsv(sessions_tsv, index_column='session_label', index_value=session)
 
     if age is not None:
         return age

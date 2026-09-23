@@ -28,21 +28,13 @@ import sys
 
 from .. import config
 from ..utils.gpu import GPU_ALIASES, GPU_TASKS
-from ..utils.misc import parse_denoise_method
-
-B0_TO_ANAT_TRANSFORM_DEFAULT = 'Rigid'
-"""Default for ``--b0-to-anat-transform``.
-
-Applied after parsing rather than by argparse, because the option is declared with
-``default=SUPPRESS`` so that its mutual exclusion with the deprecated
-``--b0-to-t1w-transform`` is checked reliably.
-"""
+from ..utils.misc import load_shoreline_config, parse_denoise_method
 
 
 def _build_parser(**kwargs):
     """Build parser object.
 
-    ``kwargs`` are passed to ``argparse.ArgumentParser`` (mainly useful for debugging).
+    kwargs are passed to argparse.ArgumentParser (mainly useful for debugging).
     """
     from argparse import (
         SUPPRESS,
@@ -53,62 +45,12 @@ def _build_parser(**kwargs):
     from functools import partial
     from pathlib import Path
 
-    from packaging.version import Version
-
     # Deprecated options: {option string: (version it is removed in, what happens instead)}
-    deprecations = {
-        '--dwi-only': ('27.0.0', 'Enabling `--anat-modality none` instead.'),
-        '--dwi-no-biascorr': ('27.0.0', 'Enabling `--b1-biascorrect-stage none` instead.'),
-        '--longitudinal': (
-            '27.0.0',
-            'Enabling `--subject-anatomical-reference unbiased` instead.',
-        ),
-        '--prefer-dedicated-fmaps': (
-            '27.0.0',
-            'It has no effect. To keep reverse phase-encoded DWI runs from being paired '
-            'into a PEPOLAR fieldmap (preferring a dedicated fieldmap instead), pass '
-            '"--ignore pepolar-dwis"; which fieldmap is applied to which DWI series is '
-            'otherwise determined by the fieldmaps\' "B0FieldIdentifier"/"B0FieldSource" '
-            '(or "IntendedFor") metadata.',
-        ),
-        '--hmc-model': (
-            '27.0.0',
-            'Use `--hmc-method` instead (with `--shoreline-model` for the '
-            'SHORELine signal model).',
-        ),
-        '--pepolar-method': (
-            '27.0.0',
-            'Use `--sdc-method` instead.',
-        ),
-        '--b0-motion-corr-to': (
-            '27.0.0',
-            'Later versions will always use the "iterative" approach.',
-        ),
-        '--b0-to-t1w-transform': ('27.0.0', 'Please use `--b0-to-anat-transform` instead.'),
-    }
+    deprecations = {}
 
     # Deprecated flags that enable their replacement automatically:
     # {option string: (replacement option, its namespace attribute, the value it is set to)}
-    forwarded_deprecations = {
-        '--dwi-only': ('--anat-modality', 'anat_modality', 'none'),
-        '--dwi-no-biascorr': ('--b1-biascorrect-stage', 'b1_biascorrect_stage', 'none'),
-        '--longitudinal': (
-            '--subject-anatomical-reference',
-            'subject_anatomical_reference',
-            'unbiased',
-        ),
-    }
-
-    # The deprecated --hmc-model vocabulary, mapped onto the method axes.
-    hmc_model_to_method = {
-        'eddy': 'eddy',
-        'tortoise': 'tortoise',
-        '3dSHORE': 'shoreline',
-        'tensor': 'shoreline',
-        'none': 'shoreline',
-    }
-    hmc_model_to_shoreline_model = {'3dSHORE': '3dshore', 'tensor': 'tensor', 'none': 'none'}
-    shoreline_model_to_hmc_model = {v: k for k, v in hmc_model_to_shoreline_model.items()}
+    forwarded_deprecations = {}
 
     def _warn_deprecated(option_string):
         removed_in, detail = deprecations[option_string]
@@ -116,18 +58,6 @@ def _build_parser(**kwargs):
             f'{option_string} has been deprecated and will be removed in {removed_in}. {detail}',
             file=sys.stderr,
         )
-
-    class DeprecatedAction(Action):
-        """Warn that a deprecated option is ignored, and keep it out of the namespace.
-
-        Declared with ``default=SUPPRESS`` so the dest never reaches the config object.
-        """
-
-        def __init__(self, option_strings, dest, nargs=0, **kwargs):
-            super().__init__(option_strings, dest, nargs=nargs, **kwargs)
-
-        def __call__(self, parser, namespace, values, option_string=None):
-            _warn_deprecated(option_string or self.option_strings[0])
 
     class DeprecatedForwardAction(Action):
         """Warn about a deprecated flag, and record that its replacement must be enabled.
@@ -144,13 +74,6 @@ def _build_parser(**kwargs):
             _warn_deprecated(option_string)
             pending = getattr(namespace, '_forwarded_deprecations', [])
             namespace._forwarded_deprecations = [*pending, option_string]
-
-    class DeprecatedStoreAction(Action):
-        """Warn about a deprecated option, then store its value like ``store`` would."""
-
-        def __call__(self, parser, namespace, values, option_string=None):
-            _warn_deprecated(option_string or self.option_strings[0])
-            setattr(namespace, self.dest, values)
 
     class DeprecationForwardingParser(ArgumentParser):
         """Enables the replacements for any deprecated options that were given."""
@@ -170,41 +93,26 @@ def _build_parser(**kwargs):
             if hasattr(namespace, '_forwarded_deprecations'):
                 del namespace._forwarded_deprecations
 
-            # --b0-to-t1w-transform was renamed; the two are mutually exclusive, so at
-            # most one of them is set here.
-            if hasattr(namespace, 'b0_to_t1w_transform'):
-                namespace.b0_to_anat_transform = namespace.b0_to_t1w_transform
-                del namespace.b0_to_t1w_transform
-            if not hasattr(namespace, 'b0_to_anat_transform'):
-                namespace.b0_to_anat_transform = B0_TO_ANAT_TRANSFORM_DEFAULT
-
-            # The method axes (--hmc-method/--sdc-method) and their deprecated
-            # aliases (--hmc-model/--pepolar-method), normalized after the whole
-            # command line has been read. hmc_model/pepolar_method are re-derived
-            # in the legacy vocabulary because config and the workflow builders
-            # still read them.
-            legacy_hmc = getattr(namespace, '_legacy_hmc_model', None)
-            if hasattr(namespace, '_legacy_hmc_model'):
-                del namespace._legacy_hmc_model
-            legacy_pepolar = getattr(namespace, '_legacy_pepolar_method', None)
-            if hasattr(namespace, '_legacy_pepolar_method'):
-                del namespace._legacy_pepolar_method
-
-            if legacy_hmc is not None:
-                if namespace.shoreline_model is not None:
-                    self.error(
-                        '--shoreline-model requires --hmc-method shoreline '
-                        '(not the deprecated --hmc-model)'
-                    )
-                namespace.hmc_method = hmc_model_to_method[legacy_hmc]
-                namespace.shoreline_model = hmc_model_to_shoreline_model.get(legacy_hmc)
+            # The method axes (--hmc-method/--sdc-method), normalized after the
+            # whole command line has been read.
             if namespace.hmc_method is None:
                 namespace.hmc_method = 'eddy'
-            if namespace.shoreline_model is not None and namespace.hmc_method != 'shoreline':
-                self.error('--shoreline-model requires --hmc-method shoreline')
+            if namespace.shoreline_config is not None and namespace.hmc_method != 'shoreline':
+                self.error('--shoreline-config requires --hmc-method shoreline')
+            # SHORELine settings come from --shoreline-config (or the shipped
+            # defaults). Config and the workflow builders read only these resolved
+            # values, which stay None for the other methods.
+            namespace.shoreline_model = None
+            namespace.shoreline_iters = None
+            namespace.hmc_transform = None
             if namespace.hmc_method == 'shoreline':
-                if namespace.shoreline_model is None:
-                    namespace.shoreline_model = '3dshore'
+                try:
+                    shoreline = load_shoreline_config(namespace.shoreline_config)
+                except ValueError as err:
+                    self.error(str(err))
+                namespace.shoreline_model = shoreline['model']
+                namespace.shoreline_iters = shoreline['iters']
+                namespace.hmc_transform = shoreline['transform']
                 print(
                     'SHORELine (--hmc-method shoreline) is scheduled for removal '
                     'in a future major release; eddy and tortoise are the '
@@ -212,25 +120,13 @@ def _build_parser(**kwargs):
                     file=sys.stderr,
                 )
 
-            explicit_sdc = legacy_pepolar.lower() if legacy_pepolar else namespace.sdc_method
-            if explicit_sdc in (None, 'auto'):
+            if namespace.sdc_method in (None, 'auto'):
                 namespace.sdc_method = 'topup' if namespace.hmc_method == 'eddy' else 'drbuddi'
-                # Keep the deprecated vocabulary truthful for any downstream
-                # consumer loading a newly written config file.
-                namespace.pepolar_method = namespace.sdc_method.upper()
-            else:
-                if namespace.hmc_method != 'eddy' and 'topup' in explicit_sdc:
-                    self.error(
-                        f'--sdc-method {explicit_sdc} requires --hmc-method eddy: '
-                        'SHORELine and TORTOISE correct PEPOLAR units with DRBUDDI'
-                    )
-                namespace.sdc_method = explicit_sdc
-                namespace.pepolar_method = explicit_sdc.upper()
-
-            if namespace.hmc_method == 'shoreline':
-                namespace.hmc_model = shoreline_model_to_hmc_model[namespace.shoreline_model]
-            else:
-                namespace.hmc_model = 'eddy' if namespace.hmc_method == 'eddy' else 'tortoise'
+            elif namespace.hmc_method != 'eddy' and 'topup' in namespace.sdc_method:
+                self.error(
+                    f'--sdc-method {namespace.sdc_method} requires --hmc-method eddy: '
+                    'SHORELine and TORTOISE correct PEPOLAR units with DRBUDDI'
+                )
 
             # --force values land on their own boolean attributes so config
             # (and qsiplan's policy bridge) can read them by name.
@@ -253,23 +149,6 @@ def _build_parser(**kwargs):
 
             return namespace, extras
 
-    class ToDict(Action):
-        def __call__(self, parser, namespace, values, option_string=None):
-            d = {}
-            for spec in values:
-                try:
-                    name, loc = spec.split('=')
-                    loc = Path(loc)
-                except ValueError:
-                    loc = Path(spec)
-                    name = loc.name
-
-                if name in d:
-                    raise ValueError(f'Received duplicate derivative name: {name}')
-
-                d[name] = loc
-            setattr(namespace, self.dest, d)
-
     def _path_exists(path, parser):
         """Ensure a given path exists."""
         if path is None or not Path(path).exists():
@@ -289,6 +168,24 @@ def _build_parser(**kwargs):
         if value < 1:
             raise parser.error("Argument can't be less than one.")
         return value
+
+    def _iters_at_least_two(value, parser):
+        """Ensure the dwiref construction iteration count is usable.
+
+        Only the linear template branch clamps the count; the default nonlinear
+        branch hands it straight to antsMultivariateTemplateConstruction2.
+        """
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            raise parser.error(f'--dwiref-construction-iters must be an integer, not {value!r}')
+        if parsed < 2:
+            raise parser.error(
+                f'--dwiref-construction-iters must be at least 2; got {parsed}. '
+                'Use --dwiref-definition to turn the dwiref template off, not the '
+                'iteration count.'
+            )
+        return parsed
 
     def _int_or_auto(value, parser):
         """Ensure an argument is an odd integer >= 3 or 'auto'."""
@@ -358,12 +255,11 @@ def _build_parser(**kwargs):
                 raise parser.error(f'Path does not exist: <{value}>.')
 
     verstr = f'QSIPrep v{config.environment.version}'
-    currentv = Version(config.environment.version)
-    is_release = not any((currentv.is_devrelease, currentv.is_prerelease, currentv.is_postrelease))
 
     parser = DeprecationForwardingParser(
         description=f'{verstr}: q-Space Image Preprocessing workflows',
         formatter_class=ArgumentDefaultsHelpFormatter,
+        add_help=False,
         **kwargs,
     )
     PathExists = partial(_path_exists, parser=parser)
@@ -371,219 +267,645 @@ def _build_parser(**kwargs):
     PositiveInt = partial(_min_one, parser=parser)
     IntOrAuto = partial(_int_or_auto, parser=parser)
     DenoiseMethod = partial(_denoise_method, parser=parser)
+    IterCount = partial(_iters_at_least_two, parser=parser)
     BIDSFilter = partial(_bids_filter, parser=parser)
 
-    # Arguments as specified by BIDS-Apps
-    # required, positional arguments
-    # IMPORTANT: they must go directly with the parser object
-    parser.add_argument(
+    g_required = parser.add_argument_group(
+        'Required arguments',
+        description=(
+            'Every QSIPrep run needs these four. The three positional arguments follow the BIDS '
+            'App convention; --output-resolution has no default and must be given explicitly.'
+        ),
+    )
+    g_required.add_argument(
         'bids_dir',
         action='store',
         type=PathExists,
-        help='The root folder of a BIDS valid dataset (sub-XXXXX folders should '
-        'be found at the top level in this folder).',
+        help=(
+            'The root folder of a valid BIDS dataset. The sub-<label> directories '
+            'should be found at the top level of this folder.'
+        ),
     )
-    parser.add_argument(
+    g_required.add_argument(
         'output_dir',
         action='store',
         type=Path,
-        help='The output path for the outcomes of preprocessing and visual reports',
+        help='The output path for preprocessed derivatives and visual reports.',
     )
-    parser.add_argument(
+    g_required.add_argument(
         'analysis_level',
         choices=['participant'],
-        help='Processing stage to be run, only "participant" in the case of QSIPrep (for now).',
+        help='Processing stage to run. Only "participant" is supported by QSIPrep.',
+    )
+    g_required.add_argument(
+        '--output-resolution',
+        action='store',
+        required=True,
+        type=float,
+        metavar='MM',
+        help=(
+            'The isotropic voxel size in mm that the data will be resampled to after '
+            'preprocessing. If this is smaller than the original voxel size, the data are '
+            'upsampled using BSpline interpolation.'
+        ),
     )
 
-    g_bids = parser.add_argument_group('Options for filtering BIDS queries')
-    g_bids.add_argument(
-        '--skip-bids-validation',
-        action='store_true',
-        default=False,
-        help='Assume the input dataset is BIDS compliant and skip the validation',
+    g_bids = parser.add_argument_group(
+        'Input data and BIDS filtering',
+        description='Select which subjects, sessions and files are read from the input dataset.',
     )
     g_bids.add_argument(
         '--participant-label',
         action='store',
         nargs='+',
         type=_drop_sub,
-        help='A space delimited list of participant identifiers or a single '
-        'identifier (the sub- prefix can be removed)',
+        metavar='LABEL',
+        help=(
+            'A space-delimited list of one or more participant identifiers. The "sub-" '
+            'prefix may be omitted.'
+        ),
     )
     g_bids.add_argument(
-        '--session-id',
+        '--session-label',
         action='store',
         nargs='+',
         type=_drop_ses,
         default=None,
-        help='A space delimited list of session identifiers or a single '
-        'identifier (the ses- prefix can be removed)',
+        metavar='LABEL',
+        help=(
+            'A space-delimited list of one or more session identifiers. The "ses-" '
+            'prefix may be omitted.'
+        ),
     )
-
     g_bids.add_argument(
         '--bids-filter-file',
         dest='bids_filters',
         action='store',
         type=BIDSFilter,
         metavar='FILE',
-        help='A JSON file describing custom BIDS input filters using PyBIDS. '
-        'For further details, please check out '
-        'https://fmriprep.readthedocs.io/en/'
-        f'{currentv.base_version if is_release else "latest"}/faq.html#'
-        'how-do-I-select-only-certain-files-to-be-input-to-fMRIPrep',
+        help=(
+            'A JSON file describing custom BIDS input filters using PyBIDS. For further '
+            'details, see https://fmriprep.org/en/stable/faq.html'
+            '#how-do-i-select-only-certain-files-to-be-input-to-fmriprep'
+        ),
     )
     g_bids.add_argument(
         '--bids-database-dir',
         metavar='PATH',
         type=Path,
-        help='Path to a PyBIDS database folder, for faster indexing (especially '
-        'useful for large datasets). Will be created if not present.',
+        help=(
+            'Path to a PyBIDS database directory, for faster indexing. This is '
+            'especially useful for large datasets. The directory is created if it does not '
+            'already exist.'
+        ),
+    )
+    g_bids.add_argument(
+        '--skip-bids-validation',
+        action='store_true',
+        default=False,
+        help='Assume the input dataset is BIDS-compliant and skip validation.',
     )
 
-    g_perfm = parser.add_argument_group('Options to handle performance')
-    g_perfm.add_argument(
+    g_scope = parser.add_argument_group(
+        'Workflow scope',
+        description=(
+            'Run only part of the workflow, or turn individual corrections on and off. '
+            '--ignore disables processing that the input data would otherwise trigger; '
+            '--force enables processing that the input metadata would otherwise skip.'
+        ),
+    )
+    g_scope.add_argument(
+        '--anat-only',
+        action='store_true',
+        help='Run the anatomical workflows only.',
+    )
+    g_scope.add_argument(
+        '--boilerplate-only',
+        '--boilerplate',
+        action='store_true',
+        default=False,
+        help='Generate the boilerplate methods text and exit without running the workflow.',
+    )
+    g_scope.add_argument(
+        '--reports-only',
+        action='store_true',
+        default=False,
+        help=(
+            "Only generate reports; don't run the workflows. This reruns report "
+            'aggregation only, not reportlet generation for individual nodes.'
+        ),
+    )
+    g_scope.add_argument(
+        '--ignore',
+        required=False,
+        action='store',
+        nargs='+',
+        default=[],
+        choices=['fieldmaps', 'pepolar-dwis', 't2w', 'phase', 'sdc', 'shims', 'fov', 'gradwarp'],
+        help=(
+            'Ignore selected aspects of the input dataset to disable the corresponding '
+            'parts of the workflow (a space-delimited list). '
+            '"fieldmaps" skips the fmap/ directory, but reverse phase-encoded DWI runs '
+            'still drive susceptibility distortion correction. '
+            '"pepolar-dwis" stops pairing DWI series with each other to estimate a '
+            'PEPOLAR fieldmap (curated or inferred); those series are still processed, '
+            'corrected by a fieldmap they are linked to, a fieldmap-less method, or not '
+            'at all. '
+            '"t2w" drops T2w images from the workflow entirely, including T2w-based '
+            'susceptibility distortion correction. '
+            '"phase" ignores phase images, so DWI series are denoised as magnitude-only '
+            'data. '
+            '"sdc" disables susceptibility distortion correction entirely (fieldmaps, '
+            'reverse phase-encoded runs, and fieldmap-less methods are all switched '
+            'off). '
+            '"shims" treats all ShimSetting values as compatible when grouping series. '
+            '"fov" concatenates series with differently-oriented fields of view anyway, '
+            'in which case distortion corrections will be misapplied. '
+            '"gradwarp" disables gradient nonlinearity correction entirely, including '
+            'the voxelwise gradient deviation map.'
+        ),
+    )
+    g_scope.add_argument(
+        '--force',
+        required=False,
+        action='extend',
+        nargs='+',
+        default=[],
+        choices=['gradwarp1D', 'gradwarp3D', 'sdc-anat-reference'],
+        help=(
+            'Force selected corrections on, overriding what the input metadata implies '
+            '(a space-delimited list). '
+            '"gradwarp3D" applies the full 3D gradient nonlinearity correction, and '
+            '"gradwarp1D" the through-plane component of it only, to every DWI run '
+            'regardless of the ImageType field, for data whose DIS2D/DIS3D tags are '
+            'absent or untrustworthy. The two are mutually exclusive, and either '
+            'requires --gradient-file. '
+            '"sdc-anat-reference" escalates --sdc-anat-reference from a fallback to an '
+            'override, so that the selected anatomical reference replaces fieldmap '
+            'application for every DWI series. It requires an --sdc-anat-reference '
+            'other than "none".'
+        ),
+    )
+
+    g_anat = parser.add_argument_group(
+        'Anatomical processing',
+        description=(
+            "Processing of the T1w/T2w images that define the subject's anatomical space."
+        ),
+    )
+    g_anat.add_argument(
+        '--anat-modality',
+        choices=['T1w', 'T2w', 'none'],
+        default='T1w',
+        help=(
+            'Modality to use as the anatomical reference. Images of this contrast are '
+            'skull-stripped and segmented for use in the visual reports. T2w is forced when '
+            '--infant is given.'
+        ),
+    )
+    g_anat.add_argument(
+        '--infant',
+        action='store_true',
+        help=(
+            'Configure the pipelines to process infant brains. This changes the '
+            'anatomical template to MNIInfant, and the appropriate MNIInfant cohort is '
+            "selected from the participant's age."
+        ),
+    )
+    g_anat.add_argument(
+        '--subject-anatomical-reference',
+        choices=['first-lex', 'unbiased', 'sessionwise', 'first-alphabetically'],
+        default='first-lex',
+        help=(
+            'How to define the subject-specific anatomical space. '
+            '"sessionwise" produces one anatomical space per session. The others '
+            'combine anatomical data across sessions to define a single anatomical '
+            'space per subject. '
+            '"first-alphabetically" is deprecated in favor of "first-lex".'
+        ),
+    )
+    g_anat.add_argument(
+        '--anat-biascorrect',
+        action='store',
+        choices=['n4', 'auto', 'none'],
+        default='n4',
+        help=(
+            'Whether to run N4 bias field correction on ANATOMICAL images. '
+            'Note this is separate from --dwi-biascorrect, which only governs '
+            'the DWIs. '
+            '"n4" (default) always runs it; scanner-side intensity normalization '
+            '(e.g. Siemens NORM) does not necessarily remove the need for it. '
+            '"none" never runs it. '
+            '"auto" skips it when the BIDS ImageType metadata contains "NORM", which is '
+            'how Siemens and others flag console-applied normalization.'
+        ),
+    )
+    g_anat.add_argument(
+        '--anatomical-template',
+        required=False,
+        action='store',
+        choices=['MNI152NLin2009cAsym'],
+        default='MNI152NLin2009cAsym',
+        help=(
+            'The standard-space template that anatomical images are normalized to. '
+            'MNI152NLin2009cAsym is currently the only supported value. --infant overrides '
+            'this with the appropriate MNIInfant cohort.'
+        ),
+    )
+    g_anat.add_argument(
+        '--skip-anat-based-spatial-normalization',
+        action='store_true',
+        default=False,
+        help=(
+            'Skip the anatomical-based normalization to template space. The '
+            'normalization runs otherwise.'
+        ),
+    )
+
+    g_dwi = parser.add_argument_group(
+        'DWI preprocessing',
+        description=(
+            'Per-series denoising, Gibbs-ringing removal and intensity correction, applied before '
+            'head motion correction.'
+        ),
+    )
+    g_dwi.add_argument(
+        '--b0-threshold',
+        action='store',
+        type=int,
+        default=100,
+        metavar='N',
+        help=(
+            'Any value in the .bval file below this threshold is treated as a b=0 '
+            'image. Note that setting it too high degrades the preprocessing.'
+        ),
+    )
+    g_dwi.add_argument(
+        '--denoise-method',
+        action='store',
+        type=DenoiseMethod,
+        default='dwidenoise',
+        metavar='METHOD',
+        help=(
+            'Image-based denoising method: "dwidenoise" (MRtrix3), "dwidenoise2", '
+            '"patch2self" (DIPY), or "none". '
+            'Parameters for dwidenoise2 may follow the method as semicolon-delimited '
+            'name:value pairs, for example '
+            '"dwidenoise2;demodulate:linear;decomposition:bdcsvd".'
+        ),
+    )
+    g_dwi.add_argument(
+        '--dwidenoise-window',
+        action='store',
+        type=IntOrAuto,
+        default='auto',
+        metavar='{auto,N}',
+        help=(
+            'Window size in voxels for image-based denoising: either an odd positive '
+            'integer or "auto". '
+            'This applies to the "dwidenoise" method only, where "auto" calculates a '
+            'window size from the number of volumes, following the method described in '
+            'the dwidenoise documentation. '
+            'It is unused by "patch2self" and "dwidenoise2"; dwidenoise2 sizes its '
+            'patches per iteration from its multi-resolution schedule, which is '
+            'selected with "dwidenoise2;schedule:<name>" instead.'
+        ),
+    )
+    g_dwi.add_argument(
+        '--unringing-method',
+        action='store',
+        default='none',
+        choices=['none', 'mrdegibbs', 'rpg'],
+        help=(
+            'Method for Gibbs-ringing removal. '
+            '"none" takes no action. '
+            '"mrdegibbs" uses mrdegibbs from MRtrix3. '
+            '"rpg" uses the TORTOISE method, which is suggested for partial Fourier '
+            'acquisitions.'
+        ),
+    )
+    g_dwi.add_argument(
+        '--mrtrix-version',
+        action='store',
+        choices=['stable', 'dev'],
+        default='stable',
+        help=(
+            'Which MRtrix3 installation to use. '
+            '"stable" is a released MRtrix3. '
+            '"dev" is the MRtrix3 development branch, which is required for '
+            'complex-valued unringing with --unringing-method mrdegibbs. The '
+            'development branch has not been through a release cycle and may contain '
+            'bugs.'
+        ),
+    )
+    g_dwi.add_argument(
+        '--dwi-biascorrect',
+        action='store',
+        choices=['n4', 'auto', 'none'],
+        default='n4',
+        help=(
+            'Whether to run N4 bias field correction on the DWIs, after all data '
+            'has been resampled to its final space. '
+            'Note this is separate from --anat-biascorrect, which only governs '
+            'the anatomicals. '
+            '"n4" (default) always runs it. '
+            '"none" never runs it; for prescan-normalized data we recommend this, '
+            'as bias correction may introduce artifacts on normalized data. '
+            '"auto" skips it when the BIDS ImageType metadata of every DWI '
+            'contains "NORM", which is how Siemens and others flag '
+            'console-applied normalization.'
+        ),
+    )
+    g_dwi.add_argument(
+        '--no-b0-harmonization',
+        action='store_true',
+        help='Skip rescaling the DWI series so that their b=0 intensities match.',
+    )
+
+    g_grouping = parser.add_argument_group(
+        'Grouping and concatenation of DWI series',
+        description=(
+            'How DWI series are combined into outputs. QSIPrep groups series that share an '
+            'acquisition geometry, corrects each group, and then merges the results.'
+        ),
+    )
+    g_grouping.add_argument(
+        '--separate-all-dwis',
+        action='store_true',
+        help=(
+            "Don't attempt to combine DWI series from multiple runs. Each series is "
+            'processed separately.'
+        ),
+    )
+    g_grouping.add_argument(
+        '--distortion-group-merge',
+        action='store',
+        choices=['concat', 'average', 'none'],
+        default='concat',
+        help=(
+            "How to combine the corrected results of an output's correction units. "
+            '"concat" appends the images along the fourth dimension. '
+            '"average" averages the corrected images at the same q-space coordinate, '
+            'for the case where a whole sequence was duplicated in both phase-encoding '
+            'directions. '
+            '"none" keeps each correction unit as its own output.'
+        ),
+    )
+
+    g_hmc = parser.add_argument_group(
+        'Head motion and eddy-current correction',
+        description=(
+            'Correction of subject motion and eddy-current distortion. Each method takes its '
+            'settings from its own JSON configuration file.'
+        ),
+    )
+    g_hmc.add_argument(
+        '--hmc-method',
+        action='store',
+        # DeprecationForwardingParser still normalizes None to 'eddy', so that this
+        # default can move without silently changing behavior. Declaring it here is what
+        # makes --help and the generated docs report the real default.
+        default='eddy',
+        choices=['eddy', 'shoreline', 'tortoise'],
+        help=(
+            'Which software corrects head motion and eddy currents. '
+            '"eddy" (FSL) requires a shelled sampling scheme. '
+            '"shoreline" is model-based, works on arbitrary q-space sampling, is '
+            'configured with --shoreline-config, and is scheduled for removal in a '
+            'future major release. '
+            '"tortoise" (TORTOISE DIFFPREP) performs rigid head motion and '
+            '24-parameter quadratic eddy-current correction on arbitrary sampling; see '
+            '--diffprep-config.'
+        ),
+    )
+    g_hmc.add_argument(
+        '--eddy-config',
+        action='store',
+        metavar='FILE',
+        help=(
+            'Path to a JSON file with settings for the call to eddy. A default is used '
+            'if none is given. The current default can be found at '
+            'https://github.com/PennLINC/qsiprep/blob/main/qsiprep/data/eddy_params.json'
+        ),
+    )
+    g_hmc.add_argument(
+        '--shoreline-config',
+        action='store',
+        type=IsFile,
+        default=None,
+        metavar='FILE',
+        help=(
+            'Path to a JSON file with settings for SHORELine. This is valid only with '
+            '--hmc-method shoreline. Every key is optional. "model" is the signal model '
+            'used to predict motion-correction targets: "3dshore" (the default), "tensor", '
+            'or "none", which warps each non-b=0 image with the transform of its nearest '
+            'b=0 image. "iters" is the number of SHORELine iterations (default: 2). '
+            '"transform" is the transformation optimized during head motion correction: '
+            '"Affine" (the default) or "Rigid". Unknown keys are an error. The current '
+            'defaults can be found at '
+            'https://github.com/PennLINC/qsiprep/blob/main/qsiprep/data/shoreline_params.json'
+        ),
+    )
+    g_hmc.add_argument(
+        '--diffprep-config',
+        action='store',
+        metavar='FILE',
+        help=(
+            'Path to a JSON file with settings for the call to TORTOISE DIFFPREP, used '
+            'only with --hmc-method tortoise. This is also where the correction mode is '
+            'chosen: "correction_mode" may be "motion" (rigid only), "quadratic" (the '
+            'default) or "cubic". A default is used if none is given. The current default '
+            'can be found at '
+            'https://github.com/PennLINC/qsiprep/blob/main/qsiprep/data/diffprep_params.json'
+        ),
+    )
+
+    g_sdc = parser.add_argument_group(
+        'Susceptibility distortion correction',
+        description=(
+            'Correction of susceptibility-induced geometric distortion, from fieldmaps, reverse '
+            'phase-encoded series, or an anatomical reference.'
+        ),
+    )
+    g_sdc.add_argument(
+        '--sdc-method',
+        action='store',
+        # 'auto' is what None already resolved to; DeprecationForwardingParser treats
+        # the two identically.
+        default='auto',
+        choices=['auto', 'topup', 'drbuddi', 'topup+drbuddi'],
+        help=(
+            'Which tool corrects susceptibility distortion for PEPOLAR '
+            '(blip-up/blip-down) data. '
+            '"topup" (FSL) requires --hmc-method eddy. '
+            '"drbuddi" uses TORTOISE. '
+            '"topup+drbuddi" runs TOPUP followed by DRBUDDI refinement, and requires '
+            '--hmc-method eddy. '
+            '"auto" selects TOPUP for eddy and DRBUDDI otherwise. '
+            'Non-PEPOLAR corrections (GRE fieldmaps, SyN, T2w registration) are chosen '
+            'by the input data and their own flags, not by this one.'
+        ),
+    )
+    g_sdc.add_argument(
+        '--sdc-anat-reference',
+        action='store',
+        default='none',
+        choices=['none', 'auto', 'synb0', 't2w', 'invt1w'],
+        help=(
+            'Which anatomical-derived image serves as the reference for fieldmap-less '
+            'susceptibility distortion correction, applied as a fallback to DWI series '
+            'that no fieldmap reaches. '
+            '"synb0" generates a synthetic distortion-free b=0 from the T1w with the '
+            'SynB0-DISCO U-Net. '
+            '"t2w" uses the real T2w (TORTOISE T2Wreg). '
+            '"invt1w" uses the inverted-contrast T1w (nipreps-style SyN prior). '
+            '"auto" picks synb0 when the subject has a T1w, else t2w when it has a T2w, '
+            'else nothing; "invt1w" is never picked automatically. '
+            '"none" disables anatomical SDC entirely. '
+            'The engine consuming the reference is governed by --sdc-method and '
+            '--hmc-method and validated by the plan compiler. With --hmc-method eddy, '
+            'for example, a synthetic b=0 enters TOPUP as a zero-readout-time volume, '
+            'while with --hmc-method tortoise it is the DIFFPREP registration target. '
+            'synb0 and invt1w require a T1w image and a PhaseEncodingDirection on the '
+            'DWI series.'
+        ),
+    )
+
+    g_gradwarp = parser.add_argument_group(
+        'Gradient nonlinearity correction',
+        description=(
+            'Correction of gradient nonlinearity, from a scanner coefficient file or a '
+            'precomputed displacement field. See also --force gradwarp1D, --force '
+            'gradwarp3D and --ignore gradwarp under Workflow scope.'
+        ),
+    )
+    g_gradwarp.add_argument(
+        '--gradient-file',
+        required=False,
+        action='store',
+        type=IsFile,
+        metavar='FILE',
+        help=(
+            'Path to a gradient nonlinearity information file, matching the input to '
+            "TORTOISE's --grad_nonlin: a scanner coefficient file (.grad for Siemens, "
+            '.dat for GE, .gc for the TORTOISE binary format) or an ITK displacement '
+            'field (.nii/.nii.gz). It applies to every DWI run in the dataset. Whether '
+            'the spatial correction is applied to a given run, and in which dimensions, '
+            "is decided from that run's ImageType field unless --force gradwarp1D, "
+            '--force gradwarp3D or --ignore gradwarp says otherwise. The voxelwise '
+            'gradient deviation map is written whenever this is given.'
+        ),
+    )
+
+    g_coreg = parser.add_argument_group(
+        'Coregistration to the anatomical reference',
+        description="Alignment of the DWI reference to the subject's anatomical space.",
+    )
+    g_coreg.add_argument(
+        '--dwiref-definition',
+        action='store',
+        choices=['distortion-group', 'subject'],
+        default='distortion-group',
+        help=(
+            'Which reference image DWI-to-anatomical coregistration targets. '
+            '"distortion-group" (default) registers each distortion group\'s own b=0 '
+            'reference to the anatomical. "subject" builds a single midpoint template '
+            "from every group's reference, registers that once, and has every group "
+            'inherit the result, which makes preprocessed data directly comparable '
+            'across groups.'
+        ),
+    )
+    g_coreg.add_argument(
+        '--dwiref-construction-iters',
+        action='store',
+        default=2,
+        type=IterCount,
+        help=(
+            'Number of iterations for building the subject-level dwiref template '
+            'from the b=0 references of all DWI groups. Must be at least 2 '
+            '(default: 2). Only used when --dwiref-definition is "subject" and the '
+            'subject has more than one DWI group.'
+        ),
+    )
+    g_coreg.add_argument(
+        '--dwiref-construction-transform',
+        default='BSplineSyN',
+        choices=['Rigid', 'Affine', 'BSplineSyN', 'SyN'],
+        action='store',
+        help=(
+            'Transformation used for building the subject-level dwiref template. '
+            'Only used when --dwiref-definition is "subject".'
+        ),
+    )
+    g_coreg.add_argument(
+        '--dwi2anat-dof',
+        action='store',
+        type=int,
+        choices=[6, 12],
+        default=6,
+        help=(
+            'Degrees of freedom when registering the DWI reference to the '
+            'anatomical images: 6 (rigid: rotation and translation) or 12 (affine). '
+            '(default: 6)'
+        ),
+    )
+
+    g_resource = parser.add_argument_group(
+        'Resource management',
+        description=(
+            'CPU, memory and scheduler limits. These change how long a run takes, not what it '
+            'produces.'
+        ),
+    )
+    g_resource.add_argument(
         '--nprocs',
         '--nthreads',
         '--n-cpus',
         dest='nprocs',
         action='store',
         type=PositiveInt,
-        help='Maximum number of threads across all processes',
+        metavar='N',
+        help='Maximum number of threads across all processes.',
     )
-    g_perfm.add_argument(
+    g_resource.add_argument(
         '--omp-nthreads',
         action='store',
         type=PositiveInt,
-        help='Maximum number of threads per-process',
+        metavar='N',
+        help='Maximum number of threads per process.',
     )
-    g_perfm.add_argument(
+    g_resource.add_argument(
         '--mem',
         '--mem-mb',
         dest='memory_gb',
         action='store',
         type=_to_gb,
         metavar='MEMORY_MB',
-        help='Upper bound memory limit for QSIPrep processes',
+        help='Upper bound on the memory available to QSIPrep processes, in MB.',
     )
-    g_perfm.add_argument(
+    g_resource.add_argument(
         '--low-mem',
         action='store_true',
-        help='Attempt to reduce memory usage (will increase disk usage in working directory)',
+        help='Attempt to reduce memory usage. This increases disk usage in the working directory.',
     )
-    g_perfm.add_argument(
+    g_resource.add_argument(
         '--use-plugin',
         '--nipype-plugin-file',
         action='store',
         metavar='FILE',
         type=IsFile,
-        help='Nipype plugin configuration file',
-    )
-    g_perfm.add_argument(
-        '--sloppy',
-        action='store_true',
-        default=False,
-        help='Use low-quality tools for speed - TESTING ONLY',
+        help='Path to a Nipype plugin configuration file.',
     )
 
-    g_subset = parser.add_argument_group('Options for performing only a subset of the workflow')
-    g_subset.add_argument('--anat-only', action='store_true', help='Run anatomical workflows only')
-    g_subset.add_argument(
-        '--dwi-only',
-        action=DeprecatedForwardAction,
-        default=SUPPRESS,
-        help='DEPRECATED: this flag now enables `--anat-modality none`. Use that instead.',
-    )
-    g_subset.add_argument(
-        '--boilerplate-only',
-        '--boilerplate',
-        action='store_true',
-        default=False,
-        help='Generate boilerplate only',
-    )
-    g_subset.add_argument(
-        '--reports-only',
-        action='store_true',
-        default=False,
-        help="Only generate reports, don't run workflows. This will only rerun report "
-        'aggregation, not reportlet generation for specific nodes.',
-    )
-    g_subset.add_argument(
-        '--report-output-level',
-        action='store',
-        choices=['auto', 'root', 'subject', 'session'],
-        default='auto',
-        help='Where should the HTML reports be written? '
-        '"root" will write them to the output directory. '
-        '"subject" will write them into each subject\'s directory. '
-        '"session" will write them into each session\'s directory. '
-        'The default is "auto", which is "session" when '
-        '--subject-anatomical-reference is "sessionwise" and "root" otherwise. '
-        'Reports that cover more than one session, or data without a session level, '
-        'are written to the subject level instead of the session level, with a warning.',
-    )
-
-    g_conf = parser.add_argument_group('Workflow configuration')
-    g_conf.add_argument(
-        '--ignore',
-        required=False,
-        action='store',
-        nargs='+',
-        default=[],
-        choices=['fieldmaps', 'pepolar-dwis', 't2w', 'phase', 'sdc', 'shims', 'fov', 'gradients'],
-        help=(
-            'Ignore selected aspects of the input dataset to disable corresponding '
-            'parts of the workflow (a space delimited list). '
-            '"fieldmaps" skips the fmap/ directory, but reverse phase-encoded dMRI '
-            'runs still drive susceptibility distortion correction. "pepolar-dwis" '
-            'stops pairing DWI series with each other to estimate a PEPOLAR '
-            'fieldmap (curated or inferred); those series are still processed, '
-            'corrected by a fieldmap they are linked to, a fieldmap-less method, or '
-            'not at all. "sdc" disables susceptibility distortion correction '
-            'entirely (field maps, reverse-PE runs, and fieldmap-less methods all '
-            'off). '
-            '"shims" treats all ShimSetting values as compatible when grouping scans. '
-            '"fov" concatenates series with differently-oriented fields of view anyway '
-            '(distortion corrections will be misapplied). '
-            '"gradients" disables gradient nonlinearity correction entirely, '
-            'including the voxelwise gradient deviation map.'
+    g_gpu = parser.add_argument_group(
+        'GPU acceleration',
+        description=(
+            'Run selected tasks on the GPU. GPU builds are not numerically identical to their CPU '
+            'counterparts, so these options change results, not just runtime. The GPU must also '
+            'be exposed to the container (docker run --gpus all or apptainer run --nv).'
         ),
     )
-    g_conf.add_argument(
-        '--force',
-        required=False,
-        action='store',
-        nargs='+',
-        default=[],
-        choices=['gradients', 'sdc-anat-reference'],
-        help=(
-            'Force selected corrections on, overriding what the input metadata '
-            'implies (a space delimited list). "gradients" applies the full 3D '
-            'gradient nonlinearity correction to every DWI run regardless of the '
-            'ImageType field, for data whose DIS2D/DIS3D tags are absent or '
-            'untrustworthy. Requires --gradient-file. '
-            '"sdc-anat-reference" escalates --sdc-anat-reference from a fallback '
-            'to an override: the selected anatomical reference replaces the '
-            'fieldmap application for EVERY DWI series. Requires an '
-            '--sdc-anat-reference other than "none".',
-        ),
-    )
-    g_conf.add_argument(
-        '--gradient-file',
-        required=False,
-        action='store',
-        type=IsFile,
-        help=(
-            'Path to a gradient nonlinearity information file, matching '
-            "TORTOISE's --grad_nonlin: a scanner coefficient file (.grad for "
-            'Siemens, .dat for GE, .gc for the TORTOISE binary format) or an ITK '
-            'displacement field (.nii/.nii.gz). Applies to every DWI run in the '
-            'dataset. Whether the spatial correction is applied to a given run, '
-            "and in which dimensions, is decided from that run's ImageType "
-            'field unless --force/--ignore gradients says otherwise. The '
-            'voxelwise gradient deviation map is written whenever this is given.'
-        ),
-    )
-    g_conf.add_argument(
+    g_gpu.add_argument(
         '--gpu',
         required=False,
         action='store',
@@ -594,520 +916,183 @@ def _build_parser(**kwargs):
         default=None,
         choices=sorted(GPU_TASKS) + list(GPU_ALIASES),
         help=(
-            'Run selected tasks on the GPU (a space delimited list). GPU memory is '
+            'Run selected tasks on the GPU (a space-delimited list). GPU memory is '
             'usually the binding constraint rather than the pipeline, so tasks are '
-            'selected individually: an 8 GB card typically runs "eddy", "diffprep" '
-            'and "drbuddi" but not "synthstrip" or "synthseg". "all" enables every '
-            'task, "none" (the default) disables all of them. The GPU must also be '
-            'exposed to the container ("docker run --gpus all" / '
-            '"apptainer run --nv"). NOTE: GPU builds are not numerically identical '
-            'to their CPU counterparts, so this changes results, not just runtime. '
-            'When given, this overrides "use_cuda" in --eddy-config / '
-            '--diffprep-config; when omitted entirely, those keys still apply.'
+            'selected individually: an 8 GB card typically runs "eddy", "diffprep" and '
+            '"drbuddi" but not "synthstrip" or "synthseg". "all" enables every task and '
+            '"none" disables all of them. When given, this overrides "use_cuda" in '
+            '--eddy-config and --diffprep-config; when omitted entirely, those keys '
+            'still apply.'
         ),
     )
-    g_conf.add_argument(
-        '--infant',
-        action='store_true',
-        help='Configure pipelines to process infant brains. '
-        'If using this parameter, the anatomical-template will be changed to MNIInfant. '
-        "The appropriate MNIInfant cohort will be selected based on the participant's age.",
-    )
-    g_conf.add_argument(
-        '--longitudinal',
-        action=DeprecatedForwardAction,
-        default=SUPPRESS,
-        help=(
-            'DEPRECATED: this flag now enables `--subject-anatomical-reference unbiased`. '
-            'Use that instead.'
-        ),
-    )
-    g_conf.add_argument(
-        '--subject-anatomical-reference',
-        choices=['first-lex', 'unbiased', 'sessionwise', 'first-alphabetically'],
-        default='first-lex',
-        help=(
-            'How to define subject-specific anatomical space. '
-            'sessionwise will produce one anatomical space per session. '
-            'The others combine anatomical data across sessions to define '
-            'one anatomical space per subject. '
-            'The "first-alphabetically" option is deprecated in favor of "first-lex".'
-        ),
-    )
-    g_conf.add_argument(
-        '--skip-anat-based-spatial-normalization',
-        action='store_true',
-        default=False,
-        help='skip running the anat-based normalization to template space. '
-        'Default is to run the normalization.',
-    )
-    g_conf.add_argument(
-        '--anat-modality',
-        choices=['T1w', 'T2w', 'none'],
-        default='T1w',
-        help='Modality to use as the anatomical reference. Images of this '
-        'contrast will be skull stripped and segmented for use in the '
-        'visual reports. If --infant, T2w is forced.',
-    )
-    g_conf.add_argument(
-        '--b0-threshold',
-        action='store',
-        type=int,
-        default=100,
-        help='any value in the .bval file less than this will be considered '
-        'a b=0 image. Current default threshold = 100; this threshold can be '
-        'lowered or increased. Note, setting this too high can result in inaccurate results.',
-    )
-    g_conf.add_argument(
-        '--dwi-denoise-window',
-        action='store',
-        type=IntOrAuto,
-        default='auto',
-        help=(
-            'Window size in voxels for image-based denoising: odd integer or "auto". '
-            'Any non-"auto" value must be an odd, positive integer. '
-            'This argument only applies to the "dwidenoise" denoising method, '
-            'where the "auto" option will calculate a window size '
-            'based on the number of volumes according to the method described by the '
-            'dwidenoise documentation. '
-            'It is not used by the "patch2self" or "dwidenoise2" methods: dwidenoise2 sizes '
-            'its patches per iteration from its multi-resolution schedule, which is selected '
-            'with "dwidenoise2;schedule:<name>" instead.'
-        ),
-    )
-    g_conf.add_argument(
-        '--denoise-method',
-        action='store',
-        type=DenoiseMethod,
-        default='dwidenoise',
-        help=(
-            'Image-based denoising method: "dwidenoise" (MRtrix), "dwidenoise2", '
-            '"patch2self" (DIPY), or "none".\n'
-            'dwidenoise2 parameters may follow the method as semicolon-delimited '
-            'name:value pairs, for example '
-            '"dwidenoise2;demodulate:linear;decomposition:bdcsvd".'
-        ),
-    )
-    g_conf.add_argument(
-        '--mrtrix-version',
-        action='store',
-        choices=['stable', 'dev'],
-        default='stable',
-        help=(
-            'Which MRtrix3 installation to use.\n'
-            ' - stable: a released MRtrix3 (default)\n'
-            ' - dev: the MRtrix3 development branch, which is required for '
-            'complex-valued unringing with --unringing-method mrdegibbs. '
-            'The development branch has not been through a release cycle and may '
-            'contain bugs.'
-        ),
-    )
-    g_conf.add_argument(
-        '--unringing-method',
-        action='store',
-        choices=['none', 'mrdegibbs', 'rpg'],
-        help='Method for Gibbs-ringing removal.\n - none: no action\n - mrdegibbs: '
-        'use mrdegibbs from mrtrix3\n - rpg: Gibbs from TORTOISE, suggested for partial'
-        ' Fourier acquisitions (default: none).',
-    )
-    g_conf.add_argument(
-        '--dwi-no-biascorr',
-        action=DeprecatedForwardAction,
-        default=SUPPRESS,
-        help='DEPRECATED: this flag now enables `--b1-biascorrect-stage none`. Use that instead.',
-    )
-    g_conf.add_argument(
-        '--anat-biascorrect',
-        action='store',
-        choices=['n4', 'auto', 'none'],
-        default='n4',
-        help=(
-            'Whether to run N4 bias field correction on ANATOMICAL images. '
-            'Note this is separate from --b1-biascorrect-stage, which only governs '
-            'the DWIs. '
-            '"n4" (default) always runs it; scanner-side intensity normalization '
-            '(e.g. Siemens NORM) does not remove the need for it. '
-            '"none" never runs it. '
-            '"auto" skips it when the BIDS ImageType metadata contains "NORM", '
-            'which is how Siemens and others flag console-applied normalization.'
-        ),
-    )
-    g_conf.add_argument(
-        '--b1-biascorrect-stage',
-        action='store',
-        choices=['final', 'none', 'legacy'],
-        default='final',
-        help=(
-            'Which stage to apply B1 bias correction. '
-            'The default "final" will apply it after all the data has been resampled '
-            'to its final space. '
-            '"none" will skip B1 bias correction and '
-            '"legacy" will behave consistent with qsiprep < 0.17. '
-            'For prescan-normalized data, we recommend using "none", '
-            'as bias correction may introduce artifacts on normalized data.'
-        ),
-    )
-    g_conf.add_argument(
-        '--no-b0-harmonization',
-        action='store_true',
-        help='skip re-scaling dwi scans to have matching b=0 intensities',
-    )
-    g_conf.add_argument(
-        '--denoise-after-combining',
-        action='store_true',
-        help='run denoising after combining dwis, but before motion correction',
-    )
-    g_conf.add_argument(
-        '--separate-all-dwis',
-        action='store_true',
-        help="don't attempt to combine dwis from multiple runs. Each will be "
-        'processed separately.',
-    )
-    g_conf.add_argument(
-        '--distortion-group-merge',
-        action='store',
-        choices=['concat', 'average', 'none'],
-        default='concat',
-        help="""\
-How to combine the corrected results of an output's correction units.
- - concat: Default. Append images in the 4th dimension
- - average: if a whole sequence was duplicated in both PE
-            directions, average the corrected images of the same
-            q-space coordinate
- - none: keep each correction unit as its own output
-""",
-    )
-    g_conf.add_argument(
-        '--anatomical-template',
-        required=False,
-        action='store',
-        choices=['MNI152NLin2009cAsym'],
-        default='MNI152NLin2009cAsym',
-        help='volume template space (default: MNI152NLin2009cAsym)',
-    )
-    g_conf.add_argument(
-        '--output-resolution',
-        action='store',
-        required=True,
-        type=float,
-        help='the isotropic voxel size in mm the data will be resampled to '
-        'after preprocessing. If set to a lower value than the original voxel '
-        'size, your data will be upsampled using BSpline interpolation.',
-    )
-
-    g_coreg = parser.add_argument_group('Options for dwi-to-Anatomical coregistration')
-    # Both are declared with default=SUPPRESS so that "was this given?" is just
-    # hasattr. argparse's own mutual-exclusion check compares the parsed value against
-    # the default by identity, which would miss `--b0-to-anat-transform Rigid` when
-    # 'Rigid' happens to be interned; against SUPPRESS it always fires. The default is
-    # applied in DeprecationForwardingParser instead.
-    g_b0_to_anat = g_coreg.add_mutually_exclusive_group()
-    g_b0_to_anat.add_argument(
-        '--b0-to-anat-transform',
-        action='store',
-        default=SUPPRESS,
-        choices=['Rigid', 'Affine'],
-        help='Degrees of freedom when registering b0 to anatomical images: '
-        '6 (Rigid, rotation and translation) or 12 (Affine). '
-        f'(default: {B0_TO_ANAT_TRANSFORM_DEFAULT})',
-    )
-    g_b0_to_anat.add_argument(
-        '--b0-to-t1w-transform',
-        action=DeprecatedStoreAction,
-        default=SUPPRESS,
-        choices=['Rigid', 'Affine'],
-        help='DEPRECATED: renamed to `--b0-to-anat-transform`, which this option now sets. '
-        'Use that instead.',
-    )
-    g_coreg.add_argument(
-        '--intramodal-template-iters',
-        action='store',
-        default=0,
-        type=int,
-        help=(
-            'Number of iterations for finding the midpoint image '
-            'from the b0 templates from all DWI runs and sessions. '
-            'Has no effect if there is only one group. '
-            'If 0, all b0 templates are directly registered to the t1w image. '
-            'Enabling the intramodal template method when there are multiple runs/sessions '
-            'results in a single DWI reference image, which makes it possible to '
-            'directly compare AC-PC-space preprocessed DWI data across groups.'
-        ),
-    )
-    g_coreg.add_argument(
-        '--intramodal-template-transform',
-        default='BSplineSyN',
-        choices=['Rigid', 'Affine', 'BSplineSyN', 'SyN'],
-        action='store',
-        help='Transformation used for building the intramodal template.',
-    )
-
-    # FreeSurfer options
-    g_fs = parser.add_argument_group('Specific options for FreeSurfer preprocessing')
-    g_fs.add_argument(
-        '--fs-license-file',
-        metavar='PATH',
-        type=Path,
-        help='Path to FreeSurfer license key file. Get it (for free) by registering '
-        'at https://surfer.nmr.mgh.harvard.edu/registration.html',
-    )
-
-    g_moco = parser.add_argument_group('Specific options for motion correction and coregistration')
-    g_moco.add_argument(
-        '--b0-motion-corr-to',
-        action=DeprecatedStoreAction,
-        default='iterative',
-        choices=['iterative', 'first'],
-        help='DEPRECATED: align to the "first" b0 volume or do an "iterative" registration '
-        'of all b0 images to their midpoint image. '
-        'Later versions will always use "iterative".',
-    )
-    g_moco.add_argument(
-        '--hmc-transform',
-        action='store',
-        default='Affine',
-        choices=['Affine', 'Rigid'],
-        help='transformation to be optimized during head motion correction (default: affine)',
-    )
-    g_hmc_method = g_moco.add_mutually_exclusive_group()
-    g_hmc_method.add_argument(
-        '--hmc-method',
-        action='store',
-        default=None,
-        choices=['eddy', 'shoreline', 'tortoise'],
-        help='which software corrects head motion and eddy currents: '
-        '"eddy" (FSL; requires a shelled sampling scheme; the default), '
-        '"shoreline" (SHORELine; model-based, works on arbitrary q-space '
-        'sampling; see --shoreline-model and --shoreline-iters; scheduled '
-        'for removal in a future major release), or '
-        '"tortoise" (TORTOISE DIFFPREP; rigid head motion and 24-parameter '
-        'quadratic eddy-current correction, arbitrary sampling; see '
-        '--diffprep-config).',
-    )
-    g_hmc_method.add_argument(
-        '--hmc-model',
-        action=DeprecatedStoreAction,
-        dest='_legacy_hmc_model',
-        default=SUPPRESS,
-        choices=[
-            'none',
-            '3dSHORE',
-            'eddy',
-            'tensor',
-            'tortoise',
-        ],
-        help='DEPRECATED: use --hmc-method (and --shoreline-model) instead. '
-        '"eddy" means `--hmc-method eddy`; "tortoise" means `--hmc-method '
-        'tortoise`; "3dSHORE", "tensor" and "none" mean `--hmc-method '
-        'shoreline` with the matching --shoreline-model.',
-    )
-    g_moco.add_argument(
-        '--shoreline-model',
-        action='store',
-        default=None,
-        choices=['3dshore', 'tensor', 'none'],
-        help='signal model SHORELine uses to predict motion-correction target '
-        'images: "3dshore" (the default), "tensor", or "none" (each non-b=0 '
-        'image is warped using the same transform as its nearest b=0 image). '
-        'Only valid with --hmc-method shoreline.',
-    )
-    g_moco.add_argument(
-        '--eddy-config',
-        action='store',
-        help='path to a json file with settings for the call to eddy. If no '
-        'json is specified, a default one will be used. The current default '
-        'json can be found here: '
-        'https://github.com/PennLINC/qsiprep/blob/main/qsiprep/data/eddy_params.json',
-    )
-    g_moco.add_argument(
-        '--diffprep-config',
-        action='store',
-        help='path to a json file with settings for the call to TORTOISE '
-        'DIFFPREP (used only when --hmc-method is tortoise). This is also where '
-        'the correction mode is chosen: "correction_mode" may be "motion" '
-        '(rigid only), "quadratic" (the default) or "cubic". '
-        'If no json is specified, a default one will be used. The '
-        'current default can be found here: '
-        'https://github.com/PennLINC/qsiprep/blob/main/qsiprep/data/diffprep_params.json',
-    )
-    g_moco.add_argument(
+    g_gpu.add_argument(
         '--tortoise-gpu-cpu-ratio',
         action='store',
         type=int,
         default=None,
+        metavar='N',
         help=(
             'How many volumes DIFFPREP gives the GPU per pass, against one per CPU '
             'thread, during motion and eddy correction. TORTOISE does not move the '
-            'series onto the GPU the way eddy_cuda does: it treats the GPU as one '
-            'more worker, so the number of passes is '
+            'series onto the GPU the way eddy_cuda does: it treats the GPU as one more '
+            'worker, so the number of passes is '
             'ceil(nvolumes / (ngpus * ratio + omp-nthreads - ngpus)). '
-            'It describes the machine, not the data -- roughly how many volumes the '
-            'GPU gets through while one CPU core does one. Only worth setting when '
-            'the GPU is fast relative to the core count, since its influence falls '
-            'as --omp-nthreads rises (about 68%% of volumes at 8 cores, 19%% at 64). '
-            'Requires the patched TORTOISE. Unset leaves TORTOISE at its default of 15.'
+            'It describes the machine, not the data, and is roughly how many volumes '
+            'the GPU gets through while one CPU core does one. It is only worth setting '
+            'when the GPU is fast relative to the core count, since its influence falls '
+            'as --omp-nthreads rises: about 68%% of volumes at 8 cores, and 19%% at 64. '
+            'It requires the patched TORTOISE. Left unset, TORTOISE uses its own '
+            'default of 15.'
         ),
     )
-    g_moco.add_argument(
-        '--shoreline-iters',
-        action='store',
-        type=int,
-        default=2,
-        help='number of SHORELine iterations. (default: 2)',
-    )
 
-    # Fieldmap options
-    g_fmap = parser.add_argument_group('Specific options for handling fieldmaps')
-    g_fmap.add_argument(
-        '--prefer-dedicated-fmaps',
-        action=DeprecatedAction,
-        default=SUPPRESS,
-        help='DEPRECATED: this flag has no effect. To keep reverse phase-encoded DWI runs '
-        'from being paired into a PEPOLAR fieldmap (preferring a dedicated fieldmap '
-        'instead), use "--ignore pepolar-dwis"; which fieldmap is applied to which DWI '
-        'series is otherwise determined by the fieldmaps\' "B0FieldIdentifier"/'
-        '"B0FieldSource" (or "IntendedFor") metadata.',
+    g_exec = parser.add_argument_group(
+        'Reports and execution',
+        description=(
+            'Where intermediate files and reports are written, and how the run reports on itself.'
+        ),
     )
-    g_sdc_method = g_fmap.add_mutually_exclusive_group()
-    g_sdc_method.add_argument(
-        '--sdc-method',
-        action='store',
-        default=None,
-        choices=['auto', 'topup', 'drbuddi', 'topup+drbuddi'],
-        help='which tool corrects susceptibility distortion for PEPOLAR '
-        '(blip-up/blip-down) data: "topup" (FSL; --hmc-method eddy only), '
-        '"drbuddi" (TORTOISE), "topup+drbuddi" (TOPUP then DRBUDDI '
-        'refinement; --hmc-method eddy only), or "auto" (the default: TOPUP '
-        'for eddy, DRBUDDI otherwise). Non-PEPOLAR corrections (GRE '
-        'fieldmaps, SyN, T2w registration) are chosen by the input data and '
-        'their own flags, not by this one.',
-    )
-    g_sdc_method.add_argument(
-        '--pepolar-method',
-        action=DeprecatedStoreAction,
-        dest='_legacy_pepolar_method',
-        default=SUPPRESS,
-        choices=['TOPUP', 'DRBUDDI', 'TOPUP+DRBUDDI'],
-        help='DEPRECATED: use --sdc-method instead (same values, lowercased).',
-    )
-    g_fmap.add_argument(
-        '--sdc-anat-reference',
-        action='store',
-        default='none',
-        choices=['none', 'auto', 'synb0', 't2w', 'invt1w'],
-        help='which anatomical-derived image serves as the reference for '
-        'fieldmap-less susceptibility distortion correction, applied as a '
-        'FALLBACK to DWI series that no fieldmap reaches: "synb0" generates '
-        'a synthetic distortion-free b=0 from the T1w with the SynB0-DISCO '
-        'U-Net, "t2w" uses the real T2w (TORTOISE T2Wreg), "invt1w" uses the '
-        'inverted-contrast T1w (nipreps-style SyN prior), "auto" picks synb0 '
-        'when the subject has a T1w, else t2w when it has a T2w, else '
-        'nothing ("invt1w" is never picked automatically), and "none" (the '
-        'default) disables anatomical SDC entirely. The engine consuming the '
-        'reference is governed by --sdc-method/--hmc-method and validated by '
-        'the plan compiler (e.g. with --hmc-method eddy a synthetic b=0 '
-        'enters TOPUP as a zero-readout-time volume; with --hmc-method '
-        'tortoise it is the DIFFPREP registration target). synb0/invt1w '
-        'require a T1w image and a PhaseEncodingDirection on the DWI series.',
-    )
-    g_fmap.add_argument(
-        '--fmap-bspline',
-        action='store_true',
-        default=False,
-        help='Fit a B-Spline field using least-squares (experimental)',
-    )
-    g_fmap.add_argument(
-        '--fmap-no-demean',
-        action='store_false',
-        default=True,
-        help='Do not remove median (within mask) from fieldmap',
-    )
-
-    g_other = parser.add_argument_group('Other options')
-    g_other.add_argument('--version', action='version', version=verstr)
-    g_other.add_argument(
-        '-v',
-        '--verbose',
-        dest='verbose_count',
-        action='count',
-        default=0,
-        help='Increases log verbosity for each occurrence, debug level is -vvv',
-    )
-    g_other.add_argument(
+    g_exec.add_argument(
         '-w',
         '--work-dir',
         action='store',
         type=Path,
         default=Path('work').absolute(),
-        help='Path where intermediate results should be stored',
+        metavar='PATH',
+        help='Path where intermediate results should be stored.',
     )
-    g_other.add_argument(
-        '--resource-monitor',
-        action='store_true',
-        default=False,
-        help="Enable Nipype's resource monitoring to keep track of memory and CPU usage",
+    g_exec.add_argument(
+        '--report-output-level',
+        action='store',
+        choices=['auto', 'root', 'subject', 'session'],
+        default='auto',
+        help=(
+            'Where the HTML reports are written. '
+            '"root" writes them to the output directory. '
+            '"subject" writes them into each subject directory. '
+            '"session" writes them into each session directory. '
+            '"auto" resolves to "session" when --subject-anatomical-reference is '
+            '"sessionwise", and to "root" otherwise. '
+            'Reports that cover more than one session, and data without a session '
+            'level, are written to the subject level instead of the session level, with '
+            'a warning.'
+        ),
     )
-    g_other.add_argument(
+    g_exec.add_argument(
         '--config-file',
         action='store',
         metavar='FILE',
-        help='Use pre-generated configuration file. Values in file will be overridden '
-        'by command-line arguments.',
+        help=(
+            'Use a pre-generated configuration file. Values in the file are overridden '
+            'by command-line arguments.'
+        ),
     )
-    g_other.add_argument(
-        '--write-graph',
-        action='store_true',
-        default=False,
-        help='Write workflow graph.',
-    )
-    g_other.add_argument(
+    g_exec.add_argument(
         '--stop-on-first-crash',
         action='store_true',
         default=False,
-        help='Force stopping on first crash, even if a work directory was specified.',
+        help='Stop on the first crash, even if a work directory was specified.',
     )
-    g_other.add_argument(
+    g_exec.add_argument(
+        '--resource-monitor',
+        action='store_true',
+        default=False,
+        help="Enable Nipype's resource monitoring, to keep track of memory and CPU usage.",
+    )
+    g_exec.add_argument(
         '--notrack',
         action='store_true',
         default=False,
-        help='Opt-out of sending tracking information of this run to '
-        'the QSIPrep developers. This information helps to '
-        'improve QSIPrep and provides an indicator of real '
-        'world usage crucial for obtaining funding.',
+        help=(
+            'Opt out of sending tracking information for this run to the QSIPrep '
+            'developers. This information helps to improve QSIPrep and provides an '
+            'indicator of real-world usage, which is crucial for obtaining funding.'
+        ),
     )
-    g_other.add_argument(
+    g_exec.add_argument(
+        '-v',
+        '--verbose',
+        dest='verbose_count',
+        action='count',
+        default=0,
+        help='Increase log verbosity by one level for each occurrence. Debug level is -vvv.',
+    )
+
+    g_debug = parser.add_argument_group(
+        'Debugging and developer options',
+        description=(
+            'For developing and debugging QSIPrep itself. --sloppy in particular produces '
+            'results that are not fit for analysis.'
+        ),
+    )
+    g_debug.add_argument(
+        '--sloppy',
+        action='store_true',
+        default=False,
+        help=(
+            'Use low-quality, fast settings. FOR TESTING ONLY; the results are not fit '
+            'for analysis.'
+        ),
+    )
+    g_debug.add_argument(
         '--debug',
         action='store',
         nargs='+',
         choices=config.DEBUG_MODES + ('all',),
-        help="Debug mode(s) to enable. 'all' is alias for all available modes.",
+        help=(
+            'Debug modes to enable (a space-delimited list). '
+            '"fieldmaps" retains the intermediate fieldmap estimation files for '
+            'inspection. '
+            '"pdb" drops into the Python debugger when a node raises. '
+            '"all" enables every mode.'
+        ),
     )
+    g_debug.add_argument(
+        '--write-graph',
+        action='store_true',
+        default=False,
+        help='Write out the workflow graph.',
+    )
+
+    g_help = parser.add_argument_group(
+        'Help and version',
+        description='Print information and exit.',
+    )
+    g_help.add_argument(
+        '-h',
+        '--help',
+        action='help',
+        default=SUPPRESS,
+        help='show this help message and exit',
+    )
+    g_help.add_argument('--version', action='version', version=verstr)
+
     return parser
 
 
-def check_denoise_window(denoise_method, dwi_denoise_window):
-    """Report a ``--dwi-denoise-window`` that the selected denoising method will ignore.
+def check_denoise_window(denoise_method, dwidenoise_window):
+    """Report a ``--dwidenoise-window`` that the selected denoising method will ignore.
 
     Only ``dwidenoise`` takes a window size. Leaving the others to silently ignore it would
     hide a request that never took effect.
     """
-    if dwi_denoise_window == 'auto':
+    if dwidenoise_window == 'auto':
         # The default, so an unused value is not a sign that anything was misunderstood
         return
 
     if denoise_method == 'patch2self':
         config.loggers.cli.error(
-            'The --dwi-denoise-window option is not used when --denoise-method=patch2self'
+            'The --dwidenoise-window option is not used when --denoise-method=patch2self'
         )
     elif denoise_method == 'dwidenoise2':
         config.loggers.cli.warning(
-            'The --dwi-denoise-window option is not used when --denoise-method=dwidenoise2. '
+            'The --dwidenoise-window option is not used when --denoise-method=dwidenoise2. '
             'dwidenoise2 sizes its patches per iteration from its multi-resolution schedule, '
             'which can be selected with "dwidenoise2;schedule:<name>" instead.'
         )
     elif denoise_method == 'none':
         config.loggers.cli.warning(
-            'The --dwi-denoise-window option is not used when --denoise-method=none'
+            'The --dwidenoise-window option is not used when --denoise-method=none'
         )
 
 
@@ -1179,6 +1164,11 @@ def parse_args(args=None, namespace=None):
 
     config.execution.log_level = int(max(25 - 5 * opts.verbose_count, logging.DEBUG))
     config.from_dict(vars(opts), init=['nipype'])
+    # The command line is authoritative for SHORELine settings, as it already is
+    # for hmc_method. from_dict skips None values, so without this a --config-file
+    # could leave a stale shoreline_config, hmc_transform or shoreline_iters behind.
+    for key in ('shoreline_config', 'shoreline_model', 'shoreline_iters', 'hmc_transform'):
+        setattr(config.workflow, key, getattr(opts, key))
 
     if not config.execution.notrack:
         import importlib.util
@@ -1225,20 +1215,8 @@ def parse_args(args=None, namespace=None):
         )
 
     # Validate the tricky options here
-    denoise_method, denoise_params = parse_denoise_method(config.workflow.denoise_method)
-    check_denoise_window(denoise_method, config.workflow.dwi_denoise_window)
-    if (
-        config.workflow.denoise_after_combining
-        and denoise_params.get('demodulate', 'none') != 'none'
-    ):
-        # Temporary workaround for a bug in dwidenoise2: the concatenated series
-        # cannot be denoised with phase data.
-        parser.error(
-            '--denoise-after-combining cannot be used with phase demodulation '
-            f'("demodulate:{denoise_params["demodulate"]}"). '
-            'Remove the demodulate parameter and use "--ignore phase" to denoise '
-            'the magnitude data only.'
-        )
+    denoise_method, _ = parse_denoise_method(config.workflow.denoise_method)
+    check_denoise_window(denoise_method, config.workflow.dwidenoise_window)
 
     bids_dir = config.execution.bids_dir
     output_dir = config.execution.output_dir
@@ -1317,7 +1295,7 @@ def parse_args(args=None, namespace=None):
     processing_groups = []
 
     # Determine any session filters
-    session_filters = config.execution.session_id or []
+    session_filters = config.execution.session_label or []
     # if config.execution.bids_filters is not None:
     #     for _, filters in config.execution.bids_filters:
     #         ses_filter = filters.get("session")
@@ -1326,14 +1304,20 @@ def parse_args(args=None, namespace=None):
     #         elif isinstance(ses_filter, list):
     #             session_filters.extend(ses_filter)
 
-    # Examine the available sessions for each participant
+    # Examine the available sessions for each participant. Anatomical-only runs
+    # do not require DWI data, so use the requested anatomical modality to
+    # discover sessions in that case.
+    session_suffix = [config.workflow.anat_modality] if config.workflow.anat_only else ['dwi']
     for subject_id in participant_label:
-        # Find sessions with DWI data
         sessions = config.execution.layout.get_sessions(
             subject=subject_id,
             session=session_filters or Query.OPTIONAL,
-            suffix=['dwi'],
+            suffix=session_suffix,
         )
+
+        if session_filters and not sessions:
+            modality = 'DWI' if not config.workflow.anat_only else config.workflow.anat_modality
+            parser.error(f'No {modality} files found with session filter {session_filters}')
 
         # If there are no sessions, there is only one option:
         if not sessions:

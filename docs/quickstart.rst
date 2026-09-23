@@ -18,8 +18,7 @@ One way to process these data would be to call *QSIPrep* like this::
 
   qsiprep \
     /path/to/inputs /path/to/outputs participant \
-    --output-resolution X \
-    --fs-license-file /path/to/license.txt
+    --output-resolution X
 
 .. warning::
    The above example sets the ``--output-resolution`` to ``X``, where in
@@ -32,8 +31,7 @@ Grouping scans
 **************
 
 .. note::
-   This section explains ``--separate-all-dwis``, ``--denoise-after-combining`` and
-   ``--dwi-denoise-window``
+   This section explains ``--separate-all-dwis`` and ``--dwidenoise-window``
 
 Assuming that ``sub-1/ses-1/fmap/sub-1_dir-PA_epi.nii.gz`` has a JSON sidecar containing the ``IntendedFor`` field for fieldmap correction
 (`see here <https://bids-specification.readthedocs.io/en/v1.10.0/04-modality-specific-files/01-magnetic-resonance-imaging-data.html#expressing-the-mr-protocol-intent-for-fieldmaps>`_)::
@@ -54,7 +52,6 @@ Otherwise, there will be one output in the derivatives directory for each input 
 
 It is beneficial to have as much data as possible available for head motion correction.
 However, the denoising preprocessing step has important caveats that should be considered.
-For a discussion see :ref:`merge_denoise`.
 
 .. _preview_grouping:
 
@@ -135,19 +132,29 @@ Head motion correction method
 *****************************
 
 Head motion correction is selected with ``--hmc-method``, which takes
-``eddy``, ``shoreline`` or ``tortoise``. (The deprecated ``--hmc-model``
-values map onto these: ``eddy`` is ``--hmc-method eddy``, ``tortoise`` is
-``--hmc-method tortoise``, and ``3dSHORE``/``tensor``/``none`` are
-``--hmc-method shoreline`` with the matching ``--shoreline-model``.)
+``eddy``, ``shoreline`` or ``tortoise``.
 
 Choosing ``eddy`` (the default) runs FSL's ``eddy`` for head motion correction
 and eddy current correction. This will work for single-shell and multi-shell
 sampling schemes. The ``shoreline`` option (SHORELine) works for multi-shell,
-Cartesian grid sampling (DSI) and random q-space sampling (CS-DSI); its
-signal model is chosen with ``--shoreline-model``, either ``3dshore`` (the
-default) or ``tensor``.
+Cartesian grid sampling (DSI) and random q-space sampling (CS-DSI). Its
+settings are passed as a JSON file with ``--shoreline-config``, for example:
 
-``--shoreline-model none`` will register all the b=0 images to one another
+.. code-block:: json
+
+   {
+     "model": "tensor",
+     "iters": 2,
+     "transform": "Rigid"
+   }
+
+``"model"`` is the signal model, either ``"3dshore"`` (the default) or
+``"tensor"``; ``"iters"`` is the number of SHORELine iterations (default 2);
+and ``"transform"`` is the transformation optimized during head motion
+correction, ``"Affine"`` (the default) or ``"Rigid"``. Every key is optional.
+See :ref:`configure_shoreline` for details.
+
+Setting ``"model": "none"`` will register all the b=0 images to one another
 and the b>0 images will have the transform from the nearest b=0 image
 applied. This is not recommended. Between ``eddy`` and ``shoreline``, all
 sampling schemes can be motion corrected, though eddy-current correction for
@@ -210,11 +217,11 @@ of these steps to better match your data.
 | Default         |  ``dwidenoise`` (MRtrix3)   | None applied              | ``dwibiascorrect``               |
 |                 |                             |                           | (ANTs/MRtrix3)                   |
 +-----------------+-----------------------------+---------------------------+----------------------------------+
-| Disable with    |  ``--denoise-method none``  | Disabled by default       | ``--b1-biascorrect-stage none``  |
+| Disable with    |  ``--denoise-method none``  | Disabled by default       | ``--dwi-biascorrect none``       |
 +-----------------+-----------------------------+---------------------------+----------------------------------+
-| Change behavior |  ``--dwi-denoise-window N`` | ``--unringing-method``    | ``--b1-biascorrect-stage``       |
-| with            |  changes denoising window   | enables Gibbs unringing   | selects the stage: final         |
-|                 |  to N voxels                |                           | (default), none or legacy        |
+| Change behavior |  ``--dwidenoise-window N``  | ``--unringing-method``    | ``--dwi-biascorrect``            |
+| with            |  changes denoising window   | enables Gibbs unringing   | n4 (default), auto or            |
+|                 |  to N voxels                |                           | none                             |
 +-----------------+-----------------------------+---------------------------+----------------------------------+
 | Notes           |  Set the window to ``auto`` | Technically only supposed | Uses                             |
 |                 |  or a specific voxel number | to be run on full Fourier | N4BiasFieldCorrection on         |
@@ -227,10 +234,7 @@ Not included in this table is the b=0 intensity harmonization step, which
 applies simple scaling if there is more than one NIfTI file being processed.
 It can be disabled with ``--no-b0-harmonization``.
 
-Each of these steps can be applied at the same time, which by default is
-before any images are concatenated. The user can instead run these steps
-together *after* images are concatenated by specifying
-``--denoise-after-combining``. See :ref:`merge_denoise` for more info.
+Each of these steps can be applied at the same time, before any images are concatenated.
 
 
 *******************

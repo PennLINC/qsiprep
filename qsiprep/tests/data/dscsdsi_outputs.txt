@@ -20,6 +20,8 @@ sub-tester/anat/sub-tester_space-ACPC_dseg.nii.gz
 sub-tester/dwi
 sub-tester/dwi/sub-tester_acq-HASC55AP_desc-confounds_timeseries.json
 sub-tester/dwi/sub-tester_acq-HASC55AP_desc-confounds_timeseries.tsv
+sub-tester/dwi/sub-tester_acq-HASC55AP_from-ACPC_to-distortiongroup_mode-image_desc-coreg_xfm.mat
+sub-tester/dwi/sub-tester_acq-HASC55AP_from-distortiongroup_to-ACPC_mode-image_desc-coreg_xfm.mat
 sub-tester/dwi/sub-tester_acq-HASC55AP_from-dwiref_to-ACPC_mode-image_desc-sdc_xfm.json
 sub-tester/dwi/sub-tester_acq-HASC55AP_from-dwiref_to-ACPC_mode-image_desc-sdc_xfm.nii.gz
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-brain_mask.nii.gz
@@ -30,9 +32,10 @@ sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-preproc_dwi.bval
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-preproc_dwi.bvec
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-preproc_dwi.json
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-preproc_dwi.nii.gz
+sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-preproc_dwiref.nii.gz
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-slice_qc.json
-sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_dwiref.nii.gz
-sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_model-3dSHORE_stat-cnr_dwimap.json
-sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_model-3dSHORE_stat-cnr_dwimap.nii.gz
+sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_model-3dshore_stat-cnr_dwimap.json
+sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_model-3dshore_stat-cnr_dwimap.nii.gz
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_stat-tsnr_dwimap.json
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_stat-tsnr_dwimap.nii.gz
+sub-tester/dwi/sub-tester_acq-HASC55AP_space-distortiongroup_dwiref.nii.gz

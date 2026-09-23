@@ -2,7 +2,7 @@
 
 Two defects:
 
-1. ``--intramodal-template-transform`` and ``--intramodal-template-iters`` were
+1. ``--dwiref-construction-transform`` and ``--dwiref-construction-iters`` were
    never passed to the workflow, so every template was BSplineSyN with 2
    iterations regardless of what the user asked for -- silently warping genuine
    between-session differences into agreement for anyone who chose a linear
@@ -15,20 +15,20 @@ Two defects:
 import pytest
 
 
-def _config():
+def _config(dwi2anat_dof=6):
     from qsiprep import config
 
     config.execution.sloppy = False
     config.nipype.omp_nthreads = 1
-    config.workflow.b0_to_anat_transform = 'Rigid'
+    config.workflow.dwi2anat_dof = dwi2anat_dof
     return config
 
 
-def _build(transform, num_iterations=2, name=None):
-    from qsiprep.workflows.dwi.intramodal_template import init_intramodal_template_wf
+def _build(transform, num_iterations=2, name=None, dwi2anat_dof=6):
+    from qsiprep.workflows.dwi.dwiref import init_dwiref_wf
 
-    _config()
-    return init_intramodal_template_wf(
+    _config(dwi2anat_dof)
+    return init_dwiref_wf(
         inputs_list=['group_a', 'group_b'],
         t1w_source_file='/data/sub-01_T1w.nii.gz',
         transform=transform,
@@ -45,7 +45,7 @@ def _names(wf):
 def test_linear_transforms_use_the_b0_hmc_workflow(transform):
     """antsMultivariateTemplateConstruction2 cannot do Rigid at all."""
     names = _names(_build(transform))
-    assert any('intramodal_linear_template' in n for n in names)
+    assert any('dwiref_linear_template' in n for n in names)
     assert not any('ants_mvtc2' in n for n in names)
 
 
@@ -53,7 +53,7 @@ def test_linear_transforms_use_the_b0_hmc_workflow(transform):
 def test_nonlinear_transforms_still_use_mvtc2(transform):
     names = _names(_build(transform))
     assert any('ants_mvtc2' in n for n in names)
-    assert not any('intramodal_linear_template' in n for n in names)
+    assert not any('dwiref_linear_template' in n for n in names)
 
 
 def test_requested_transform_reaches_the_nonlinear_backend():
@@ -93,7 +93,24 @@ def test_dwi_b0_alignment_does_not_initialize_by_com_by_default():
 
 
 def test_iteration_count_is_honoured():
-    """--intramodal-template-iters was ignored; the count was always 2."""
+    """--dwiref-construction-iters was ignored; the count was always 2."""
     wf = _build('BSplineSyN', num_iterations=5, name='iters_nonlinear')
     node = next(n for n in wf._get_all_nodes() if n.name == 'ants_mvtc2')
     assert node.inputs.iteration_limit == 5
+
+
+@pytest.mark.parametrize(('dof', 'expected'), [(6, 'Rigid'), (12, 'Affine')])
+def test_dwi2anat_dof_reaches_the_template_coregistration(dof, expected):
+    """The config value must drive the ANTs node, not just the mapping constant.
+
+    Asserting ``DWI2ANAT_DOF_TO_TRANSFORM[dof] == expected`` would pass with this
+    production consumer still reading the removed attribute, so set the config and
+    build the real workflow.
+    """
+    from qsiprep.utils.misc import DWI2ANAT_DOF_TO_TRANSFORM
+
+    assert DWI2ANAT_DOF_TO_TRANSFORM[dof] == expected
+
+    wf = _build('Affine', name=f'imt_dof{dof}', dwi2anat_dof=dof)
+    coreg = wf.get_node('b0_anat_coreg').get_node('b0_to_anat')
+    assert coreg.inputs.transforms == [expected]

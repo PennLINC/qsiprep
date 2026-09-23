@@ -20,8 +20,10 @@ backends (as the structural target).
 from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
+from nireports.interfaces.reporting.base import (
+    SimpleBeforeAfterRPT as SimpleBeforeAfter,
+)
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 
 from ...interfaces.images import ExtractWM
 from ...interfaces.synb0 import (
@@ -216,14 +218,14 @@ back onto the b=0 reference grid.
     )
     extract_wm = pe.Node(ExtractWM(), name='extract_wm')
     acquired_synthetic_rpt = pe.Node(
-        SimpleBeforeAfterRPT(before_label='Acquired b=0', after_label='Synthetic b=0'),
+        SimpleBeforeAfter(before_label='Acquired b=0', after_label='Synthetic b=0'),
         name='acquired_synthetic_rpt',
         mem_gb=0.1,
     )
     # The two U-Net input channels must be mutually aligned; flickering them
     # against each other shows misregistration one stage before the output.
     unet_input_rpt = pe.Node(
-        SimpleBeforeAfterRPT(before_label='T1w (normalized)', after_label='Distorted b=0'),
+        SimpleBeforeAfter(before_label='T1w (normalized)', after_label='Distorted b=0'),
         name='unet_input_rpt',
         mem_gb=0.1,
     )

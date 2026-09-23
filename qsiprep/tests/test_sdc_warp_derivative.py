@@ -215,7 +215,6 @@ def test_sdc_warp_source_follows_the_t2wreg_stage(
     monkeypatch.setattr(config.workflow, 'hmc_method', hmc)
     # The default method selection: other tests leave an --sdc-method behind.
     monkeypatch.setattr(config.workflow, 'sdc_method', None)
-    monkeypatch.setattr(config.workflow, 'pepolar_method', None)
     dwi = _tiny_dwi(tmp_path / 'sub-01_dwi.nii.gz')
     # SynB0 synthesizes its b=0 from the T1w; T2Wreg registers to the T2w.
     anat = str(tmp_path / ('sub-01_T1w.nii.gz' if method == 'SYNB0' else 'sub-01_T2w.nii.gz'))

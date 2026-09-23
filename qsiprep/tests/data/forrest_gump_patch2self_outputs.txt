@@ -22,6 +22,8 @@ sub-01/ses-forrestgump/anat/sub-01_ses-forrestgump_rec-autobox_from-orig_to-anat
 sub-01/ses-forrestgump/dwi
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_desc-confounds_timeseries.json
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_desc-confounds_timeseries.tsv
+sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_from-ACPC_to-distortiongroup_mode-image_desc-coreg_xfm.mat
+sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_from-distortiongroup_to-ACPC_mode-image_desc-coreg_xfm.mat
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_from-dwiref_to-ACPC_mode-image_desc-sdc_xfm.json
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_from-dwiref_to-ACPC_mode-image_desc-sdc_xfm.nii.gz
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_desc-brain_mask.nii.gz
@@ -32,9 +34,10 @@ sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_desc-preproc_dwi.bv
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_desc-preproc_dwi.bvec
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_desc-preproc_dwi.json
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_desc-preproc_dwi.nii.gz
+sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_desc-preproc_dwiref.nii.gz
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_desc-slice_qc.json
-sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_dwiref.nii.gz
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_model-eddy_stat-cnr_dwimap.json
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_model-eddy_stat-cnr_dwimap.nii.gz
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_stat-tsnr_dwimap.json
 sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-ACPC_stat-tsnr_dwimap.nii.gz
+sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_space-distortiongroup_dwiref.nii.gz

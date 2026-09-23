@@ -20,15 +20,18 @@ of the BIDS specification.
 
 import os
 
-from nipype.interfaces import ants, fsl
+from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from niworkflows.interfaces.images import IntraModalMerge
+from niworkflows.interfaces.nibabel import ApplyMask
 from niworkflows.interfaces.reportlets.masks import BETRPT
 
 from ... import config
 from ...interfaces import DerivativesDataSink, FieldToHz, FieldToRadS
+from ...interfaces.fmap import MedianFilter
+from ...interfaces.niimath import RomeoUnwrap
 from .utils import cleanup_edge_pipeline, demean_image
 
 
@@ -43,7 +46,7 @@ def init_fmap_wf(name='fmap_wf'):
         :simple_form: yes
 
         from qsiprep.workflows.fieldmap.fmap import init_fmap_wf
-        wf = init_fmap_wf(omp_nthreads=6, fmap_bspline=False)
+        wf = init_fmap_wf()
 
     """
     # Check for FSL binary
@@ -92,16 +95,14 @@ def init_fmap_wf(name='fmap_wf'):
     ])  # fmt:skip
 
     torads = pe.Node(FieldToRadS(), name='torads')
-    prelude = pe.Node(fsl.PRELUDE(), name='prelude')
+    prelude = pe.Node(RomeoUnwrap(), name='prelude')
     tohz = pe.Node(FieldToHz(), name='tohz')
 
-    denoise = pe.Node(
-        fsl.SpatialFilter(operation='median', kernel_shape='sphere', kernel_size=3), name='denoise'
-    )
+    denoise = pe.Node(MedianFilter(kernel_radius_mm=3), name='denoise')
     demean = pe.Node(niu.Function(function=demean_image), name='demean')
     cleanup_wf = cleanup_edge_pipeline(name='cleanup_wf')
 
-    applymsk = pe.Node(fsl.ApplyMask(), name='applymsk')
+    applymsk = pe.Node(ApplyMask(), name='applymsk')
 
     workflow.connect([
         (bet, prelude, [
@@ -117,7 +118,7 @@ def init_fmap_wf(name='fmap_wf'):
         (demean, cleanup_wf, [('out', 'inputnode.in_file')]),
         (bet, cleanup_wf, [('mask_file', 'inputnode.in_mask')]),
         (cleanup_wf, applymsk, [('outputnode.out_file', 'in_file')]),
-        (bet, applymsk, [('mask_file', 'mask_file')]),
+        (bet, applymsk, [('mask_file', 'in_mask')]),
         (applymsk, outputnode, [('out_file', 'fmap')]),
     ])  # fmt:skip
 

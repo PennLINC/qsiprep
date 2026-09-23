@@ -18,6 +18,7 @@ from ...interfaces import DerivativesDataSink, DerivativesMaybeDataSink
 from ...interfaces.confounds import DMRISummary
 from ...interfaces.reports import DiffusionSummary
 from ...interfaces.utils import TestInput
+from ...utils.misc import DWI2ANAT_DOF_TO_TRANSFORM
 from ...utils.sdc import t2wreg_target
 from ..fieldmap.pepolar import init_extended_pepolar_report_wf
 
@@ -41,6 +42,7 @@ def init_dwi_preproc_wf(
     output_prefix,
     source_file,
     anatomical_template,
+    do_biascorr=True,
 ) -> Workflow:
     """
     This workflow controls the dwi preprocessing stages of qsiprep.
@@ -199,8 +201,8 @@ def init_dwi_preproc_wf(
                 'confounds',
                 'hmc_optimization_data',
                 'itk_b0_to_t1',
+                'itk_t1_to_b0',
                 'noise_images',
-                'bias_images',
                 'dwi_files',
                 'cnr_map',
                 'bval_files',
@@ -233,15 +235,11 @@ def init_dwi_preproc_wf(
         unit=unit,
         orientation='LAS' if unit.run.hmc_stage.tool == 'eddy' else 'LPS',
         source_file=source_file,
+        do_biascorr=do_biascorr,
     )
     test_pre_hmc_connect = pe.Node(TestInput(), name='test_pre_hmc_connect')
     hmc_tool = unit.run.hmc_stage.tool
     if hmc_tool == 'shoreline':
-        if config.workflow.shoreline_model != 'none' and config.workflow.shoreline_iters < 1:
-            raise Exception(
-                '--shoreline-iters must be > 0 when --shoreline-model is '
-                f'{config.workflow.shoreline_model}'
-            )
         hmc_wf = init_qsiprep_hmcsdc_wf(
             unit=unit,
             source_file=source_file,
@@ -296,7 +294,6 @@ def init_dwi_preproc_wf(
             ('outputnode.qc_file', 'raw_qc_file'),
             ('outputnode.original_files', 'original_files'),
             ('outputnode.bvec_file', 'original_bvecs'),
-            ('outputnode.bias_images', 'bias_images'),
             ('outputnode.noise_images', 'noise_images'),
             ('outputnode.raw_concatenated', 'raw_concatenated'),
         ]),
@@ -353,7 +350,7 @@ def init_dwi_preproc_wf(
         # calculate dwi registration to T1w
         b0_coreg_wf = init_b0_to_anat_registration_wf(
             write_report=True,
-            transform_type=config.workflow.b0_to_anat_transform,
+            transform_type=DWI2ANAT_DOF_TO_TRANSFORM[config.workflow.dwi2anat_dof],
         )
     else:
         b0_coreg_wf = init_direct_b0_acpc_wf(write_report=True)
@@ -468,11 +465,16 @@ def init_dwi_preproc_wf(
         DiffusionSummary(
             # '' (no PE info) -> None, which the summary renders as "MISSING".
             pe_direction=unit.pe_dir or None,
-            hmc_model=config.workflow.hmc_model,
-            b0_to_anat_transform=config.workflow.b0_to_anat_transform,
-            hmc_transform=config.workflow.hmc_transform,
+            hmc_model=(
+                config.workflow.shoreline_model
+                if config.workflow.hmc_method == 'shoreline'
+                else config.workflow.hmc_method
+            ),
+            dwi2anat_dof=config.workflow.dwi2anat_dof,
+            dwi_biascorrect=config.workflow.dwi_biascorrect,
+            dwi_biascorrect_applied=do_biascorr,
             denoise_method=config.workflow.denoise_method,
-            dwi_denoise_window=config.workflow.dwi_denoise_window,
+            dwidenoise_window=config.workflow.dwidenoise_window,
             gradient_correction=describe_gradient_correction(
                 gradwarp_wf.plan if gradwarp_wf is not None else None
             ),
@@ -481,6 +483,11 @@ def init_dwi_preproc_wf(
         mem_gb=DEFAULT_MEMORY_MIN_GB,
         run_without_submitting=True,
     )
+    if hmc_tool == 'shoreline':
+        # Only SHORELine optimizes a selectable transform. Gating on the resolved
+        # method, not the value, keeps a stale hmc_transform out of eddy and
+        # TORTOISE summaries.
+        summary.inputs.hmc_transform = config.workflow.hmc_transform
 
     workflow.connect([
         (inputnode, b0_coreg_wf, [
@@ -494,6 +501,7 @@ def init_dwi_preproc_wf(
         (b0_coreg_wf, ds_report_coreg, [('outputnode.report', 'in_file')]),
         (b0_coreg_wf, outputnode, [
             (('outputnode.itk_b0_to_t1', _get_first), 'itk_b0_to_t1'),
+            (('outputnode.itk_t1_to_b0', _get_first), 'itk_t1_to_b0'),
             ('outputnode.coreg_metric', 'coreg_score'),
         ]),
     ])  # fmt:skip

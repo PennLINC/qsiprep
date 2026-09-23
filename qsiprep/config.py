@@ -168,13 +168,6 @@ if os.getenv('IS_DOCKER_8395080871'):
         _exec_env = 'docker'
     del _cgroup
 
-_fs_license = os.getenv('FS_LICENSE')
-if not _fs_license and os.getenv('FREESURFER_HOME'):
-    _fs_home = os.getenv('FREESURFER_HOME')
-    if _fs_home and (Path(_fs_home) / 'license.txt').is_file():
-        _fs_license = str(Path(_fs_home) / 'license.txt')
-    del _fs_home
-
 _templateflow_home = Path(
     os.getenv('TEMPLATEFLOW_HOME', os.path.join(os.getenv('HOME'), '.cache', 'templateflow'))
 )
@@ -282,7 +275,7 @@ class environment(_Config):
     """
     Read-only options regarding the platform and environment.
 
-    Crawls runtime descriptive settings (e.g., default FreeSurfer license,
+    Crawls runtime descriptive settings (e.g.,
     execution environment, nipype and *QSIPrep* versions, etc.).
     The ``environment`` section is not loaded in from file,
     only written out when settings are exported.
@@ -440,10 +433,10 @@ class execution(_Config):
     """Unique identifier of this particular run."""
     participant_label = None
     """List of participant identifiers that are to be preprocessed."""
-    session_id = None
+    session_label = None
     """List of session identifiers that are to be preprocessed"""
     processing_list = []
-    """List of (subject_id, [session_id, ...]) to be preprocessed together."""
+    """List of (subject_id, [session_label, ...]) to be preprocessed together."""
     skip_anat_based_spatial_normalization = False
     """Should we skip normalizing the anatomical data to a template?"""
     templateflow_home = _templateflow_home
@@ -542,7 +535,6 @@ class execution(_Config):
 
 
 # These variables are not necessary anymore
-del _fs_license
 del _exec_env
 del _nipype_ver
 del _templateflow_home
@@ -565,36 +557,24 @@ class workflow(_Config):
     """Anatomical template to use. This field doesn't include the cohort."""
     b0_threshold = None
     """Any value in the .bval file less than this will be considered a b=0 image."""
-    b0_motion_corr_to = None
-    """Perform SHORELine's initial b=0-based registration to first volume?
-    Or make a template? Either 'iterative' or 'first'. DEPRECATED: later versions will
-    always use 'iterative'."""
-    b0_to_anat_transform = None
-    """Transformation model for b=0-to-anatomical coregistration. Either 'Rigid' or
-    'Affine'."""
+    dwi2anat_dof = None
+    """Degrees of freedom for DWI-to-anatomical coregistration: 6 or 12."""
     anat_biascorrect = None
     """Whether to N4-correct anatomicals: ``n4``, ``auto`` or ``none``."""
-    b1_biascorrect_stage = None
-    """The stage of processing at which to apply B1 bias correction. Either "final" (after
-    resampling), "none" (skipped entirely) or "legacy" (before concatenation)."""
-    denoise_after_combining = False
-    """Run ``dwidenoise`` after combining dwis, but before motion correction."""
+    dwi_biascorrect = None
+    """Whether to N4-correct DWIs: ``n4``, ``auto`` or ``none``."""
     denoise_method = None
     """Image-based denoising method. Either "dwidenoise" (MRtrix), "patch2self" (DIPY)
     or "none". DWIDenoise parameters may be appended as semicolon-delimited name:value
     pairs."""
     distortion_group_merge = 'concat'
     """How to combine images across distortion groups (concatenate, average or none)."""
-    dwi_denoise_window = None
+    dwidenoise_window = None
     """Window size in voxels for image-based denoising, integer or "auto"."""
     diffprep_config = None
     """Configuration JSON for running TORTOISE DIFFPREP."""
     eddy_config = None
     """Configuration for running Eddy."""
-    fmap_bspline = None
-    """Regularize fieldmaps with a field of B-Spline basis."""
-    fmap_demean = None
-    """Remove the mean from fieldmaps."""
     force = None
     """Forced processing choices (see ``--force``): currently ``sdc-anat-reference``."""
     force_sdc_anat_reference = False
@@ -607,20 +587,20 @@ class workflow(_Config):
     """Gradient nonlinearity coefficient file or displacement field."""
     hmc_method = None
     """Which software corrects head motion: eddy, shoreline or tortoise."""
-    hmc_model = None
-    """Model used to generate target images for hmc. DEPRECATED: the legacy
-    vocabulary equivalent of ``hmc_method`` + ``shoreline_model``, kept while
-    workflow builders still read it."""
     hmc_transform = None
-    """Transformation to be used in SHORELine."""
+    """Transformation SHORELine optimizes during head motion correction: Affine or
+    Rigid. Derived from ``--shoreline-config``; None unless ``hmc_method`` is
+    shoreline."""
     ignore = None
     """Ignore particular steps for *QSIPrep*."""
     infant = False
     """Configure pipelines specifically for infant brains"""
-    intramodal_template_iters = None
-    """Number of iterations for intramodal template construction."""
-    intramodal_template_transform = None
-    """Transformation used for building the intramodal template."""
+    dwiref_definition = None
+    """Which dwiref coregistration targets: ``distortion-group`` or ``subject``."""
+    dwiref_construction_iters = None
+    """Number of iterations for dwiref template construction."""
+    dwiref_construction_transform = None
+    """Transformation used for building the dwiref template."""
     mrtrix_version = 'stable'
     """Which MRtrix3 installation to use: "stable" (a released version) or "dev"
     (the development branch, which is required for complex-valued ``mrdegibbs``)."""
@@ -630,10 +610,6 @@ class workflow(_Config):
     """Skip re-scaling dwi scans to have matching b=0 intensities."""
     output_resolution = None
     """Isotropic voxel size for outputs."""
-    pepolar_method = None
-    """SDC method to be used for PEPOLAR fieldmaps. DEPRECATED: the legacy
-    vocabulary equivalent of ``sdc_method``, kept while workflow builders
-    still read it."""
     sdc_anat_reference = 'none'
     """Which anatomical-derived image serves as the reference for fieldmap-less
     susceptibility distortion correction, as a fallback for DWI series no
@@ -644,11 +620,15 @@ class workflow(_Config):
     topup, drbuddi or topup+drbuddi (the parser resolves ``auto``)."""
     separate_all_dwis = False
     """Process all dwis separately - do not attempt concatenation."""
+    shoreline_config = None
+    """Configuration JSON for SHORELine (``--shoreline-config``)."""
     shoreline_iters = None
-    """How many iterations to run SHORELine."""
+    """How many iterations to run SHORELine. Derived from ``--shoreline-config``;
+    None unless ``hmc_method`` is shoreline."""
     shoreline_model = None
     """Signal model SHORELine uses to predict motion-correction targets:
-    3dshore, tensor or none. Only set when ``hmc_method`` is shoreline."""
+    3dshore, tensor or none. Derived from ``--shoreline-config``; None unless
+    ``hmc_method`` is shoreline."""
     tortoise_gpu_cpu_ratio = None
     """Volumes the GPU takes per DIFFPREP pass; None leaves TORTOISE's default."""
     unringing_method = None
@@ -707,7 +687,7 @@ class workflow(_Config):
     # what ``_paths`` names, and toml writes anything else as its repr, so an
     # unlisted Path reaches the workflow-building subprocess as the literal
     # string "PosixPath('/path')".
-    _paths = ('gradient_file',)
+    _paths = ('gradient_file', 'shoreline_config')
 
 
 class loggers:

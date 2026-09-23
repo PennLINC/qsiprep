@@ -15,6 +15,7 @@ workflows. They are different images and both are worth writing:
 from pathlib import Path
 
 import pytest
+from nipype.interfaces.base import isdefined
 
 
 def _config():
@@ -26,9 +27,9 @@ def _config():
     config.workflow.anat_modality = 'T1w'
     config.workflow.anat_biascorrect = 'n4'
     config.workflow.subject_anatomical_reference = 'unbiased'
-    config.workflow.hmc_model = 'tortoise'
-    config.workflow.pepolar_method = 'DRBUDDI'
-    config.workflow.b0_to_anat_transform = 'Rigid'
+    config.workflow.hmc_method = 'tortoise'
+    config.workflow.sdc_method = 'drbuddi'
+    config.workflow.dwi2anat_dof = 6
     return config
 
 
@@ -86,28 +87,28 @@ def test_t2w_sinks_are_distinct_outputs(node_name, desc):
     assert node.inputs.space == 'ACPC'
 
 
-def test_intramodal_template_is_written_to_anat():
+def test_subject_dwiref_is_written_to_dwi():
     """The b=0 average across sessions existed only inside a report figure.
 
-    Writing it into the anat directory means one listing shows every
-    subject-level product together: T1w, both T2ws, and the b=0 average.
+    It now lives in dwi/ with every other dwiref: `space` carries its level
+    `space` alone names its level, following fMRIPrep 26.0.0's space-subject_boldref;
+    the coregistration role is marked on the transforms instead.
     """
     from qsiprep.interfaces import DerivativesDataSink
 
     node = DerivativesDataSink(
         source_file='/data/sub-01_T1w.nii.gz',
         base_directory='/tmp/out',
-        datatype='anat',
-        space='ACPC',
-        desc='intramodal',
+        datatype='dwi',
+        space='subject',
         suffix='dwiref',
         extension='.nii.gz',
         compress=True,
     )
-    assert node.inputs.datatype == 'anat'
+    assert node.inputs.datatype == 'dwi'
     assert node.inputs.suffix == 'dwiref'
-    assert node.inputs.space == 'ACPC'
-    assert node.inputs.desc == 'intramodal'
+    assert node.inputs.space == 'subject'
+    assert not isdefined(node.inputs.desc)
 
 
 def test_average_images_normalizes_intensities():
@@ -119,22 +120,21 @@ def test_average_images_normalizes_intensities():
     """
     import inspect
 
-    from qsiprep.workflows.dwi import hmc, intramodal_template
+    from qsiprep.workflows.dwi import dwiref, hmc
 
-    for mod in (hmc, intramodal_template):
+    for mod in (hmc, dwiref):
         src = inspect.getsource(mod)
         for line in src.splitlines():
             if 'AverageImages(' in line and 'warp' not in line.lower():
                 assert 'normalize=True' in line, line
 
 
-def test_anat_dwiref_path_builds():
-    """The subject-level b=0 template goes in anat/, next to the T1w and T2ws.
+def test_subject_dwiref_path_builds():
+    """The subject-level b=0 template goes in dwi/, with every other dwiref.
 
-    qsiprep ships its own path patterns (data/io_spec.json) and already extends
-    the anat suffix list with a non-BIDS entry (imtcoreg), so adding dwiref is
-    consistent with how this spec is maintained. Without the pattern the sink
-    raises 'Could not build path with entities' and takes the whole run down.
+    qsiprep ships its own path patterns (data/io_spec.json). Without a matching
+    pattern the sink raises 'Could not build path with entities' and takes the
+    whole run down.
     """
     import json
 
@@ -147,16 +147,15 @@ def test_anat_dwiref_path_builds():
     out = build_path(
         {
             'subject': '01',
-            'datatype': 'anat',
+            'datatype': 'dwi',
             'suffix': 'dwiref',
-            'space': 'ACPC',
-            'desc': 'intramodal',
+            'space': 'subject',
             'extension': '.nii.gz',
         },
         patterns,
         strict=False,
     )
-    assert out == 'sub-01/anat/sub-01_space-ACPC_desc-intramodal_dwiref.nii.gz'
+    assert out == 'sub-01/dwi/sub-01_space-subject_dwiref.nii.gz'
 
 
 def test_existing_dwiref_and_anat_paths_still_build():
@@ -202,18 +201,18 @@ def test_existing_dwiref_and_anat_paths_still_build():
     )
 
 
-def test_intramodal_template_is_resampled_before_being_written():
+def test_dwiref_is_resampled_before_being_written():
     """The written template must be the ACPC-resampled one.
 
-    outputnode.intramodal_template lives in the template's own midpoint space --
+    outputnode.dwiref lives in the template's own midpoint space --
     measured ~57mm from ACPC in y on real data. Writing that tagged space-ACPC
     produces a file that silently fails to overlay the anatomicals, which is the
     worst kind of wrong: it looks like a valid derivative.
     """
-    from qsiprep.workflows.dwi.intramodal_template import init_intramodal_template_wf
+    from qsiprep.workflows.dwi.dwiref import init_dwiref_wf
 
     _config()
-    wf = init_intramodal_template_wf(
+    wf = init_dwiref_wf(
         inputs_list=['a', 'b'],
         t1w_source_file='/data/sub-01_T1w.nii.gz',
         transform='Rigid',
@@ -222,17 +221,23 @@ def test_intramodal_template_is_resampled_before_being_written():
     )
     node = next((n for n in wf._get_all_nodes() if n.name == 'template_to_acpc'), None)
     assert node is not None, 'template is never resampled into ACPC'
-    assert 'intramodal_template_acpc' in wf.get_node('outputnode').outputs.copyable_trait_names()
+    assert 'dwiref_acpc' in wf.get_node('outputnode').outputs.copyable_trait_names()
 
 
-def test_base_sinks_the_acpc_template_not_the_raw_one():
-    """Guard the specific mistake: sinking the un-resampled template."""
+def test_base_sinks_both_templates_to_their_own_spaces():
+    """Each template image goes to the path that describes the space it is in.
+
+    The midpoint-space template is space-<level>; the resampled one is space-ACPC.
+    The original defect was sinking the un-resampled template as space-ACPC, which
+    produced a file that silently failed to overlay the anatomicals.
+    """
     import inspect
 
     from qsiprep.workflows import base
 
     src = inspect.getsource(base)
-    # Check the connection itself, not proximity in the file -- nodes get added
-    # between the sink and its connect block over time.
-    assert "('outputnode.intramodal_template_acpc', 'in_file')" in src
-    assert "('outputnode.intramodal_template', 'in_file')" not in src
+    # Check the connections themselves, not proximity in the file -- nodes get
+    # added between a sink and its connect block over time.
+    assert "('outputnode.dwiref_acpc', 'in_file')" in src
+    assert "('outputnode.dwiref', 'in_file')" in src
+    assert "name='ds_dwiref_acpc'" in src

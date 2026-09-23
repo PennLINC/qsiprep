@@ -102,9 +102,9 @@ def generate_reports(
             # The report covers the subject as a whole.
             session_ids = [None]
 
-        for session_id in session_ids:
+        for session_label in session_ids:
             output_level = report_output_level
-            if output_level == 'session' and session_id is None:
+            if output_level == 'session' and session_label is None:
                 output_level = 'subject'
                 config.loggers.workflow.warning(
                     'Session-level reports were requested, '
@@ -112,21 +112,21 @@ def generate_reports(
                     'Writing out reports to subject level.'
                 )
 
-            if session_id is None:
+            if session_label is None:
                 html_report = f'sub-{subject_id}.html'
                 errorname = f'report-{run_uuid}-{subject_label}.err'
                 session_entity = {}
             else:
-                html_report = f'sub-{subject_id}_ses-{session_id}.html'
-                errorname = f'report-{run_uuid}-{subject_label}-{session_id}.err'
-                session_entity = {'session': session_id}
+                html_report = f'sub-{subject_id}_ses-{session_label}.html'
+                errorname = f'report-{run_uuid}-{subject_label}-{session_label}.err'
+                session_entity = {'session': session_label}
 
             if output_level == 'root':
                 report_dir = Path(output_dir)
             elif output_level == 'subject':
                 report_dir = Path(output_dir) / f'sub-{subject_id}'
             else:
-                report_dir = Path(output_dir) / f'sub-{subject_id}' / f'ses-{session_id}'
+                report_dir = Path(output_dir) / f'sub-{subject_id}' / f'ses-{session_label}'
 
             report_error = run_reports(
                 report_dir,

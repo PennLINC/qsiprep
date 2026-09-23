@@ -130,16 +130,16 @@ will do a case-insensitive match of "mprage" within the "t1w" query.
 Denoising and Merging Images
 ============================
 
-The user can decide whether to do certain preprocessing steps and, if so,
-whether they are performed *before* or *after* the DWI series are
-concatenated. Specifically, image denoising (using ``dwidenoise`` or
-``patch2self``) can be disabled with ``--denoise-method none``. Gibbs
-unringing (using ``mrdegibbs``) is disabled by default but can be enabled
-with ``--unringing-method mrdegibbs``. B1 bias field correction is applied by
-default (using ``dwibiascorrect``) and can be disabled with
-``--b1-biascorrect-stage none``. The intensity of b=0 images is harmonized
-across scans (i.e. scaled to an average value) by default, but this can be
-turned off using ``--dwi-no-b0-harmonization``.
+The user can decide whether to do certain preprocessing steps.
+Specifically, image denoising (using ``dwidenoise``, ``dwidenoise2``, or ``patch2self``)
+can be disabled with ``--denoise-method none``.
+Gibbs unringing (using ``mrdegibbs`` for full Fourier acquisitions or
+``rpg`` for partial Fourier acquisitions) is disabled by default but can be enabled
+with ``--unringing-method mrdegibbs|rpg``.
+B1 bias field correction is applied by default (using ``dwibiascorrect``) and can be disabled with
+``--dwi-biascorrect none``.
+The intensity of b=0 images is harmonized across scans (i.e., scaled to an average value) by default,
+but this can be turned off using ``--dwi-no-b0-harmonization``.
 
 When phase data are available and the denoising method is ``dwidenoise`` or
 ``dwidenoise2``, denoising itself is complex-valued under either ``--mrtrix-version``:
@@ -158,9 +158,11 @@ every other MRtrix3 command follows ``--mrtrix-version``.
 .. tip::
 
   If prescan normalization is enabled,
-  we recommend using ``--b1-biascorrect-stage none``.
+  we recommend using ``--dwi-biascorrect none``.
   This will skip B1 bias field correction,
   which may introduce artifacts on normalized data.
+  ``--dwi-biascorrect auto`` will make that choice for you when every DWI is
+  flagged ``NORM`` in its BIDS ``ImageType`` metadata.
 
 Together, denoising (MP-PCA or patch2self), Gibbs unringing B1 bias field
 correction, and b=0 intensity normalization are referred to as *denoising* in
@@ -173,31 +175,6 @@ applied directly to the BIDS inputs, which should be uninterpolated and as
 data, it is recommended in the MRtrix3 documentation to apply MP-PCA before
 Gibbs unringing. B1 bias field correction and b=0 intensity harmonization
 do not have as specific requirements about their inputs so are run last.
-
-The last, and potentially very important decision, is whether the denoising
-operations are applied to each input DWI series individually or whether the
-denoising operations are applied to the concatenated input DWI files. At
-present, there is little data to guide this choice. The more volumes
-available, the more data MP-PCA/patch2self have to work with. However, if
-there if the head is in a vastly different location in different scans,
-denoising might be impacted in unpredictable ways.
-
-Consider MP-PCA. If a voxel contains CSF in one DWI series and the subject
-repositions their head between scans so that the voxel contains corpus
-callosum in the next DWI series, the non-noise signal will be very different
-in the two series. Similarly, if the head is repositioned different areas
-will be closer to the head coil and therefore be inconsistently affected by
-B1 bias field. Similar problems can also occur *within* a DWI series due to
-subject head motion, but these methods have been shown to work well even in
-the presence of within-scan head movement. If the head position changes
-across scans is of a similar magnitude to that of within-scan head motion, it
-is likely fine to use the ``--denoise-after-combining`` option. To gauge how
-much between-scan motion occurred, users can inspect the :ref:`qc_data` to see
-whether Framewise Displacement is large where a new series begins.
-
-By default, the scans in the same warped space are individually denoised before
-they are concatenated. When warped groups are concatenated an additional b=0
-image intensity normalization is performed.
 
 
 Preprocessing HCP-style
@@ -320,7 +297,13 @@ Volumetric outputs are written out in ``ACPC`` space ::
 
   sub-<label>/[ses-<label>/]
     dwi/
-      <source_entities>_space-ACPC_dwiref.nii.gz
+      # The b=0 reference of the preprocessed series, in its space.
+      <source_entities>_space-ACPC_desc-preproc_dwiref.nii.gz
+
+      # The b=0 reference for this distortion group, in its own grid, after
+      # head-motion and susceptibility distortion correction. Written for every
+      # group whatever --dwiref-definition is set to.
+      <source_entities>_space-distortiongroup_dwiref.nii.gz
 
       # The generous brain mask that should be reduced probably
       <source_entities>_space-ACPC_desc-brain_mask.nii.gz
@@ -417,19 +400,46 @@ The field is written whenever distortion correction ran, except under
     sub-<label>/
       ses-<label>/
         dwi/
-          sub-<label>_ses-<label>_from-orig_to-dwiref_mode-image_desc-eddy_xfm.h5
+          sub-<label>_ses-<label>_from-orig_to-distortiongroup_mode-image_desc-eddy_xfm.h5
 
 
 .. important::
 
-  *QSIPrep* does not currently write out the coregistration transform from dwiref space to ACPC space.
-  When it does start writing this transform out, it will be organized like this::
+  ``--dwiref-definition`` selects which reference image coregistration targets, and
+  the target's space is named after it. The naming follows ``--bold-coreg-level``
+  in *fMRIPrep* 26.0 (earlier *fMRIPrep* releases wrote ``desc-coreg_boldref``
+  instead): the level is carried by ``space``, and ``desc-coreg`` marks the
+  transforms rather than the images.
+
+  At ``--dwiref-definition distortion-group`` (default) each group's own reference is
+  the target, so it is registered to the anatomical directly::
+
+    sub-<label>/[ses-<label>/]
+      dwi/
+        <source_entities>_space-distortiongroup_dwiref.nii.gz
+        <source_entities>_from-distortiongroup_to-ACPC_mode-image_desc-coreg_xfm.mat
+        <source_entities>_from-ACPC_to-distortiongroup_mode-image_desc-coreg_xfm.mat
+
+  At ``--dwiref-definition subject`` *QSIPrep* builds one midpoint reference from
+  every group's reference, registers that to the anatomical once, and has every group
+  inherit the result. The per-group registration is not written, because it is not
+  what resampling uses::
 
     sub-<label>/
-      ses-<label>/
-        dwi/
-          sub-<label>_ses-<label>_from-dwiref_to-ACPC_mode-image_xfm.h5
-          sub-<label>_ses-<label>_from-ACPC_to-dwiref_mode-image_xfm.h5
+      dwi/
+        sub-<label>_space-subject_dwiref.nii.gz
+        sub-<label>_space-ACPC_desc-subject_dwiref.nii.gz
+        sub-<label>_from-subject_to-ACPC_mode-image_desc-coreg_xfm.mat
+        sub-<label>_from-ACPC_to-subject_mode-image_desc-coreg_xfm.mat
+
+  The transform mapping each group into the subject-level space,
+  ``from-distortiongroup_to-subject``, is written only when
+  ``--dwiref-construction-transform`` is ``Rigid`` or ``Affine``.
+  ``antsMultivariateTemplateConstruction2`` produces an affine and warp pair per
+  group, which does not fit a single-file transform output. So under
+  ``--dwiref-definition subject`` with the default ``BSplineSyN``, no transform
+  out of ``space-distortiongroup`` is written at all; choose ``Rigid`` or
+  ``Affine`` if you need one.
 
 
 .. _dwi_confounds:
@@ -569,8 +579,8 @@ Many imaging protocols acquire some high-resolution, undistorted anatomical
 reference scans. *QSIPrep* can use either T1-weighted or T2-weighted 3D images as
 the *anatomical reference*. To specify which contrast you'd like to use for your
 anatomical reference, be sure to specify ``--anat-modality`` as either
-``T1w``, ``T2w`` or ``none``. Specifying ``none`` replaces the deprecated
-``--dwi-only`` option, where no anatomical images are used from the input
+``T1w``, ``T2w`` or ``none``. Specifying ``none`` means
+no anatomical images are used from the input
 data and the AC-PC alignment is based either on the adult or infant MNI
 templates.
 
@@ -696,8 +706,7 @@ DWI preprocessing
         output_prefix='',
         ignore=[],
         b0_threshold=100,
-        motion_corr_to='iterative',
-        b0_to_anat_transform='Rigid',
+        dwi2anat_dof=6,
         hmc_model='3dSHORE',
         hmc_transform='Rigid',
         shoreline_iters=2,
@@ -705,17 +714,14 @@ DWI preprocessing
         eddy_config=None,
         reportlets_dir='.',
         output_spaces=['T1w'],
-        dwi_denoise_window=5,
+        dwidenoise_window=5,
         denoise_method='dwidenoise',
         unringing_method='mrdegibbs',
-        b1_biascorr_stage='final',
+        dwi_biascorrect='n4',
         no_b0_harmonization=False,
-        denoise_before_combining=True,
         template='MNI152NLin2009cAsym',
         output_dir='.',
         omp_nthreads=1,
-        fmap_bspline=False,
-        fmap_demean=True,
         use_syn=True,
         force_syn=False,
         low_mem=False,
@@ -741,7 +747,7 @@ DWI run, directly from the raw DWI grid.
 It is never applied to the output DWI series as a resampling step of its own.
 Instead it is folded into the composed transform applied at the end of the
 pipeline, in the order head-motion → gradwarp → susceptibility-distortion →
-(intramodal template →) coregistration → (template space).
+(dwiref →) coregistration → (template space).
 The field is also used to correct the *reference* images that downstream
 registrations are estimated from, so that those registrations are estimated in
 the same geometry they are later applied in (see below).
@@ -751,7 +757,7 @@ head-motion backend.
 With QSIPrep's own model-based HMC the motion transforms are carried, not
 applied, so head motion, gradwarp, susceptibility distortion and coregistration
 are all combined into a single interpolation of the raw data.
-``--hmc-model eddy`` and ``--hmc-model tortoise`` instead write out
+``--hmc-method eddy`` and ``--hmc-method tortoise`` instead write out
 motion- and eddy-corrected volumes before QSIPrep's resampling runs, so the
 data are interpolated twice: once by that backend, and once by the composed
 gradwarp/SDC/coregistration transform.
@@ -821,7 +827,7 @@ since it addresses a completely separate problem
      the ``*_graddev.json`` sidecar.
 
    - **TORTOISE's fieldmap-less T2Wreg path is not gradwarp-corrected.**
-     When ``--hmc-model tortoise`` is used with no fieldmap and a T2w
+     When ``--hmc-method tortoise`` is used with no fieldmap and a T2w
      structural image is available, susceptibility distortion is estimated
      by TORTOISE's own ``T2Wreg`` registration, running entirely inside the
      ``TORTOISEProcess``/``DIFFPREP`` binary, so QSIPrep has no opportunity to
@@ -880,8 +886,6 @@ and eddy current correction will be performed. The workflow looks like this:
         },
         b0_threshold=100,
         impute_slice_threshold=0.,
-        fmap_demean=False,
-        fmap_bspline=False,
         eddy_config=None,
         source_file='/path/to/dwi/sub-X_dwi.nii.gz',
         omp_nthreads=1,
@@ -913,8 +917,6 @@ dedicated fieldmaps (in the ``fmap/`` directory) or DWI series
         },
         b0_threshold=100,
         impute_slice_threshold=0.,
-        fmap_demean=False,
-        fmap_bspline=False,
         eddy_config=None,
         source_file='/path/to/dwi/sub-X_dwi.nii.gz',
         omp_nthreads=1,
@@ -950,8 +952,6 @@ For details see :ref:`dwi_sdc`.
         },
         b0_threshold=100,
         impute_slice_threshold=0.,
-        fmap_demean=False,
-        fmap_bspline=False,
         eddy_config=None,
         source_file='/path/to/dwi/sub-X_dwi.nii.gz',
         omp_nthreads=1,
@@ -998,9 +998,9 @@ signal image and its vector is rotated accordingly. A new model is fit on the
 transformed images and their rotated vectors. The leave-one-out procedure is
 then repeated on this updated DWI and gradient set.
 
-If ``"none"`` is specified as the hmc_model, then only the b0 images are used
-and the non-b0 images are transformed based on their nearest b0 image. This
-is probably not a great idea.
+If ``"model": "none"`` is set in ``--shoreline-config``, then only the b0
+images are used and the non-b0 images are transformed based on their nearest
+b0 image. This is probably not a great idea.
 
 Susceptibility distortion correction is run as part of this pipeline to be
 consistent with the ``TOPUP``/``eddy`` workflow.
@@ -1032,13 +1032,45 @@ are saved for each slice for display in a carpet plot-like thing.
         shoreline_iters=1,
         impute_slice_threshold=0,
         omp_nthreads=1,
-        fmap_bspline=False,
-        fmap_demean=False,
         use_syn=True,
         force_syn=False,
         name='qsiprep_hmcsdc_wf',
         dwi_metadata={},
     )
+
+.. _configure_shoreline:
+
+Configuring SHORELine
+^^^^^^^^^^^^^^^^^^^^^
+
+SHORELine's settings are passed to *QSIPrep* as a JSON file with the
+``--shoreline-config`` option, which is only valid with
+``--hmc-method shoreline``. Every key is optional: missing keys take the
+defaults below, and unknown keys or invalid values are an error.
+
+.. list-table::
+   :header-rows: 1
+
+   * - Key
+     - Allowed values
+     - Default
+     - Meaning
+   * - ``model``
+     - ``"3dshore"``, ``"tensor"``, ``"none"``
+     - ``"3dshore"``
+     - Signal model used to predict each left-out image. ``"none"`` skips the
+       model and gives each b>0 image the transform of its nearest b=0 image.
+   * - ``iters``
+     - An integer of at least 1 (ignored when ``model`` is ``"none"``)
+     - ``2``
+     - Number of SHORELine iterations.
+   * - ``transform``
+     - ``"Affine"``, ``"Rigid"``
+     - ``"Affine"``
+     - Transformation optimized during head motion correction.
+
+The default configuration can be viewed or downloaded `here
+<https://github.com/PennLINC/qsiprep/blob/main/qsiprep/data/shoreline_params.json>`__.
 
 
 .. _dwi_sdc:
@@ -1108,8 +1140,6 @@ It is possible to use *QSIPrep* to process *only* diffusion-weighted images. In
 the case of infant data, where robust skull-stripping methods are not
 currently available, or where anatomical preprocessing has already been
 performed in another pipeline, the user can specify ``--anat-modality none``.
-(The deprecated ``--dwi-only`` flag now enables ``--anat-modality none``
-automatically, and will be removed in a later version.)
 
 Instead of registering the b=0 template image to the skull-stripped T1w
 image, the b=0 template is registered directly to a template and only the

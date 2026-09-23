@@ -9,15 +9,15 @@ Utility workflows
 """
 
 import os
-from pathlib import Path
 
 import nibabel as nb
 import numpy as np
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
-from nipype.utils.filemanip import split_filename
+from nireports.interfaces.reporting.base import (
+    SimpleBeforeAfterRPT as SimpleBeforeAfter,
+)
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 
 from ...interfaces import DerivativesDataSink
 from ..anatomical import init_synthstrip_wf
@@ -202,7 +202,7 @@ def init_dwi_reference_wf(
             raise Exception('Needs a source_file to write a report')
 
         report_desc = 'b0ref' if desc == 'initial' else f'{desc}b0ref'
-        b0ref_reportlet = pe.Node(SimpleBeforeAfterRPT(), name='b0ref_reportlet', mem_gb=0.1)
+        b0ref_reportlet = pe.Node(SimpleBeforeAfter(), name='b0ref_reportlet', mem_gb=0.1)
         ds_report_b0_mask = pe.Node(
             DerivativesDataSink(
                 datatype='figures',
@@ -269,37 +269,6 @@ def tortoise_convert_mem_gb(dwi_files):
     return max(float32_gb * 1.5, DEFAULT_MEMORY_MIN_GB)
 
 
-def _get_concatenated_bids_name(all_dwis):
-    """A display name for a list of dwi files, for reportlet source files.
-
-    Output naming proper lives in :func:`qsiplan.models.derive_output_name`;
-    this common-prefix fallback only names reportlet source files when the
-    caller has no output prefix (:func:`get_source_file`).
-    """
-    # If a single file, use its name, otherwise use the common prefix
-    if len(all_dwis) > 1:
-        no_runs = []
-        for dwi in all_dwis:
-            no_runs.append(
-                '_'.join([part for part in dwi.split('_') if not part.startswith('run')])
-            )
-
-        input_fname = os.path.commonprefix(no_runs)
-        fname = split_filename(input_fname)[1]
-        parts = fname.split('_')
-        full_parts = [part for part in parts if not part.endswith('-')]
-        fname = '_'.join(full_parts)
-
-    else:
-        input_fname = all_dwis[0]
-        fname = split_filename(input_fname)[1]
-
-    if fname.endswith('_dwi'):
-        fname = fname[:-4]
-
-    return fname.replace('.', '').replace(' ', '')
-
-
 def _get_wf_name(dwi_fname):
     """Derive the workflow name based on the output file prefix."""
     spl = dwi_fname.split('_')
@@ -319,10 +288,3 @@ def _list_squeeze(in_list):
 
 def _get_first(in_list):
     return in_list[0]
-
-
-def get_source_file(dwi_files, output_prefix=None, suffix=''):
-    """The reportlets need a source file. This file might not exist in the input data."""
-    if output_prefix is None:
-        output_prefix = _get_concatenated_bids_name(dwi_files)
-    return str(Path(dwi_files[0]).parent / output_prefix) + suffix + '.nii.gz'

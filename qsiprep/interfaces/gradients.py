@@ -353,17 +353,13 @@ class ComposeTransformsInputSpec(ApplyTransformsInputSpec):
     fieldwarps = InputMultiObject(
         File(exists=True), mandtory=False, desc='SDC unwarping transform'
     )
-    b0_to_intramodal_template_transforms = InputMultiObject(
+    b0_to_dwiref_transforms = InputMultiObject(
         File(exists=True),
         mandtory=False,
-        desc='list of transforms to register the b=0 to the intramodal template.',
+        desc='list of transforms to register the b=0 to the dwiref.',
     )
-    intramodal_template_to_t1_affine = File(
-        exists=True, desc='affine from the intramodal template to t1'
-    )
-    intramodal_template_to_t1_warp = File(
-        exists=True, desc='warp from the intramodal template to t1'
-    )
+    dwiref_to_t1_affine = File(exists=True, desc='affine from the dwiref to t1')
+    dwiref_to_t1_warp = File(exists=True, desc='warp from the dwiref to t1')
     hmcsdc_dwi_ref_to_t1w_affine = File(exists=True, desc='affine from dwi ref to t1w')
     t1_2_mni_forward_transform = InputMultiObject(
         File(exists=True), mandatory=False, desc='composite (h5) transform to mni'
@@ -421,9 +417,9 @@ class ComposeTransforms(SimpleInterface):
         'original_b0_indices',
         'hmc_affines',
         'gradwarp',
-        'b0_to_intramodal_template_transforms',
-        'intramodal_template_to_t1_affine',
-        'intramodal_template_to_t1_warp',
+        'b0_to_dwiref_transforms',
+        'dwiref_to_t1_affine',
+        'dwiref_to_t1_warp',
         'fieldwarps',
         'hmcsdc_dwi_ref_to_t1w_affine',
         'interpolation',
@@ -486,44 +482,44 @@ class ComposeTransforms(SimpleInterface):
             LOGGER.info('using a single gradwarp field for all DWI files')
             gradwarp = gradwarp * num_dwis
 
-        # The affine transform to the t1 can come from hmcsdc or the intramodal template
+        # The affine transform to the t1 can come from hmcsdc or the dwiref
         coreg_to_t1 = traits.Undefined
-        if isdefined(self.inputs.intramodal_template_to_t1_affine):
+        if isdefined(self.inputs.dwiref_to_t1_affine):
             if isdefined(self.inputs.hmcsdc_dwi_ref_to_t1w_affine):
-                LOGGER.warning('Two b0 to t1 transforms are provided: using intramodal')
-            coreg_to_t1 = self.inputs.intramodal_template_to_t1_affine
+                LOGGER.warning('Two b0 to t1 transforms are provided: using the dwiref')
+            coreg_to_t1 = self.inputs.dwiref_to_t1_affine
         else:
             coreg_to_t1 = self.inputs.hmcsdc_dwi_ref_to_t1w_affine
         if isdefined(coreg_to_t1):
             coreg_to_t1 = [coreg_to_t1] * num_dwis
 
-        # Handle transforms to intramodal transforms
-        intramodal_transforms = self.inputs.b0_to_intramodal_template_transforms
-        intramodal_affine = traits.Undefined
-        intramodal_warp = traits.Undefined
-        if isdefined(intramodal_transforms):
-            intramodal_affine = [intramodal_transforms[0]] * num_dwis
-            if len(intramodal_transforms) == 2:
-                intramodal_warp = [intramodal_transforms[1]] * num_dwis
-            elif len(intramodal_transforms) > 2:
-                raise Exception('Unsupported intramodal template transform')
+        # Handle transforms to dwiref transforms
+        dwiref_transforms = self.inputs.b0_to_dwiref_transforms
+        dwiref_affine = traits.Undefined
+        dwiref_warp = traits.Undefined
+        if isdefined(dwiref_transforms):
+            dwiref_affine = [dwiref_transforms[0]] * num_dwis
+            if len(dwiref_transforms) == 2:
+                dwiref_warp = [dwiref_transforms[1]] * num_dwis
+            elif len(dwiref_transforms) > 2:
+                raise Exception('Unsupported dwiref transform')
 
-        # If an intramodal template to t1 affine is present, copy for each dwi
-        intramodal_template_to_t1_affine = self.inputs.intramodal_template_to_t1_affine
-        if isdefined(intramodal_template_to_t1_affine):
-            intramodal_template_to_t1_affine = [intramodal_template_to_t1_affine] * num_dwis
+        # If an dwiref to t1 affine is present, copy for each dwi
+        dwiref_to_t1_affine = self.inputs.dwiref_to_t1_affine
+        if isdefined(dwiref_to_t1_affine):
+            dwiref_to_t1_affine = [dwiref_to_t1_affine] * num_dwis
 
-        # If an intramodal template to t1 warp is present, copy for each dwi
-        intramodal_template_to_t1_warp = self.inputs.intramodal_template_to_t1_warp
-        if isdefined(intramodal_template_to_t1_warp):
-            intramodal_template_to_t1_affine = [intramodal_template_to_t1_warp] * num_dwis
+        # If an dwiref to t1 warp is present, copy for each dwi
+        dwiref_to_t1_warp = self.inputs.dwiref_to_t1_warp
+        if isdefined(dwiref_to_t1_warp):
+            dwiref_to_t1_affine = [dwiref_to_t1_warp] * num_dwis
 
         by_name = {
             'hmc': hmc_affines,
             'gradwarp': gradwarp,
             'fieldwarp': fieldwarps,
-            'to b=0 affine': intramodal_affine,
-            'to b=0 warp': intramodal_warp,
+            'to b=0 affine': dwiref_affine,
+            'to b=0 warp': dwiref_warp,
             'b=0 to T1w': coreg_to_t1,
         }
         transform_order = [(by_name[name], name) for name in self._TRANSFORM_STAGES]

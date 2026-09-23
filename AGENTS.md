@@ -164,6 +164,10 @@ QSIPrep is a BIDS App for preprocessing diffusion MRI (dMRI/DWI) data. It handle
 - `qsiprep/interfaces/`: Nipype interfaces wrapping FSL eddy, MRtrix3, DSI Studio, DIPY, ANTs, FreeSurfer, TORTOISE
 - `qsiprep/utils/maths.pyx`: Cython extension for performance-critical math operations
 
+### FSL Dependencies
+
+The `fsl-*` packages in `[tool.pixi.dependencies]` come from the FSL conda channel, which publishes one environment file per FSL release. `scripts/update_fsl_pins.py <release>` rewrites those pins so they all come from a single release (`--check` reports drift without editing, `--list` shows the available releases); run `pixi lock` afterwards. FSL renames its CUDA eddy package from time to time -- it went `fsl-eddy-cuda-10.2` -> `fsl-eddy-cuda-11.0` -> `fsl-eddy-cuda` -- so the script verifies each pin against the channel and refuses to write one the channel cannot satisfy.
+
 ### Linting Notes
 
 QSIPrep currently uses ruff ~= 0.4.3 (older than xcp_d/aslprep). There are 13 suppressed lint rules marked with `# TODO: Fix these` in `pyproject.toml`:

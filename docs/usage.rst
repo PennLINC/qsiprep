@@ -165,11 +165,12 @@ it, is decided from that run's ``ImageType`` field:
 ``DIS3D``            No spatial correction; the scanner already corrected it
 ===================  =======================================================
 
-Use ``--force gradients`` to apply the full 3D correction regardless of
-``ImageType``, for data whose tags are absent or untrustworthy.
-``--force gradients`` requires ``--gradient-file``.
+Use ``--force gradwarp3D`` to apply the full 3D correction, or
+``--force gradwarp1D`` to apply the through-plane component of it only,
+regardless of ``ImageType``, for data whose tags are absent or untrustworthy.
+The two are mutually exclusive, and either requires ``--gradient-file``.
 
-Use ``--ignore gradients`` to disable gradient nonlinearity correction
+Use ``--ignore gradwarp`` to disable gradient nonlinearity correction
 entirely, including the deviation map described below.
 
 .. warning::
@@ -184,7 +185,7 @@ entirely, including the deviation map described below.
    * pass a ready-made ITK displacement field (``.nii``/``.nii.gz``) to
      ``--gradient-file``. QSIPrep uses it as given and expands nothing, so the
      shift does not arise;
-   * pass ``--ignore gradients`` to skip gradient correction.
+   * pass ``--ignore gradwarp`` to skip gradient correction.
 
    Runs tagged ``DIS3D`` are unaffected, since no spatial field is built for
    them, and the gradient deviation map below is unaffected on any GE run: it
@@ -195,7 +196,7 @@ Diffusion-encoding (gradient deviation) correction
 
 Independently of the spatial correction, a voxelwise gradient deviation map
 is written as ``*_space-ACPC_graddev.nii.gz`` whenever ``--gradient-file`` is
-given and ``--ignore gradients`` is absent -- **including for runs tagged**
+given and ``--ignore gradwarp`` is absent -- **including for runs tagged**
 ``DIS3D``. No scanner can correct the diffusion encoding itself: the
 bval/bvec table holds a single value per volume and has nowhere to record
 information that varies across the image. At each voxel, the gradient

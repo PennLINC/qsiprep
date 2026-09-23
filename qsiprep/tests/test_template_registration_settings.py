@@ -2,7 +2,7 @@
 
 The SHORELine settings are tuned for within-scan b=0 motion correction: noisy,
 2 mm, contrast that varies between volumes. Template creation -- the anatomical
-merge and the intramodal b=0 template -- runs on high-SNR images that share
+merge and the b=0 dwiref -- runs on high-SNR images that share
 contrast, and inherited those settings by accident.
 
 The measured difference is the convergence threshold. At 1e-08 with a window of
@@ -112,9 +112,8 @@ def _config(**overrides):
     config.workflow.subject_anatomical_reference = 'unbiased'
     config.workflow.b0_threshold = 100
     config.workflow.hmc_transform = 'Rigid'
-    config.workflow.hmc_model = 'tortoise'
-    config.workflow.b0_motion_corr_to = 'iterative'
-    config.workflow.b0_to_anat_transform = 'Rigid'
+    config.workflow.hmc_method = 'tortoise'
+    config.workflow.dwi2anat_dof = 6
     for key, value in overrides.items():
         setattr(config.workflow, key, value)
     return config
@@ -148,11 +147,11 @@ def test_anat_merge_uses_the_template_settings(tmp_path):
     assert all(v == [1e-06] for v in thr.values()), thr
 
 
-def test_intramodal_b0_template_uses_the_template_settings(tmp_path):
-    from qsiprep.workflows.dwi.intramodal_template import init_intramodal_template_wf
+def test_b0_dwiref_uses_the_template_settings(tmp_path):
+    from qsiprep.workflows.dwi.dwiref import init_dwiref_wf
 
     _config().execution.output_dir = str(tmp_path)
-    wf = init_intramodal_template_wf(
+    wf = init_dwiref_wf(
         inputs_list=['scan1', 'scan2'],
         t1w_source_file='/data/sub-01/anat/sub-01_T1w.nii.gz',
         transform='Rigid',
@@ -163,17 +162,17 @@ def test_intramodal_b0_template_uses_the_template_settings(tmp_path):
     assert all(v == [1e-06] for v in thr.values()), thr
 
 
-def test_nonlinear_intramodal_template_does_not_use_these_settings(tmp_path):
+def test_nonlinear_dwiref_does_not_use_these_settings(tmp_path):
     """BSplineSyN is built by antsMultivariateTemplateConstruction2.
 
     That path never goes through init_b0_hmc_wf, so it carries its own
     registration parameters inside the ANTs script and this change does not reach
     it. Documented here so the boundary is not mistaken for a gap.
     """
-    from qsiprep.workflows.dwi.intramodal_template import init_intramodal_template_wf
+    from qsiprep.workflows.dwi.dwiref import init_dwiref_wf
 
     _config().execution.output_dir = str(tmp_path)
-    wf = init_intramodal_template_wf(
+    wf = init_dwiref_wf(
         inputs_list=['scan1', 'scan2'],
         t1w_source_file='/data/sub-01/anat/sub-01_T1w.nii.gz',
         transform='BSplineSyN',
@@ -198,7 +197,7 @@ def test_within_scan_hmc_still_uses_shoreline(tmp_path):
 
 
 def test_init_b0_hmc_wf_has_no_spatial_bias_correct():
-    """init_qsiprep_intramodal_template_wf passes spatial_bias_correct= to
+    """init_dwiref_wf passes spatial_bias_correct= to
     init_b0_hmc_wf, which does not accept it; it would raise TypeError if it
     ever ran and is left unwired deliberately."""
     import inspect
@@ -206,3 +205,13 @@ def test_init_b0_hmc_wf_has_no_spatial_bias_correct():
     from qsiprep.workflows.dwi.hmc import init_b0_hmc_wf
 
     assert 'spatial_bias_correct' not in inspect.signature(init_b0_hmc_wf).parameters
+
+
+def test_iterative_b0_description_names_the_transform(tmp_path):
+    """The methods text named hmc_model ("tortoise registrations") instead of the transform."""
+    from qsiprep.workflows.dwi.hmc import init_b0_hmc_wf
+
+    _config().execution.output_dir = str(tmp_path)
+    wf = init_b0_hmc_wf(align_to='iterative', transform='Rigid')
+    assert 'iterations of Rigid registrations' in wf.__desc__
+    assert 'tortoise' not in wf.__desc__
