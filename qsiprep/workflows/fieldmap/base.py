@@ -48,7 +48,7 @@ from .unwarp import init_sdc_unwarp_wf
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_sdc_wf(unit, gradwarp=False):
+def init_sdc_wf(unit, gradwarp=False, use='apply'):
     """
     This workflow implements the heuristics to choose a
     :abbr:`SDC (susceptibility distortion correction)` strategy for a
@@ -80,6 +80,17 @@ def init_sdc_wf(unit, gradwarp=False):
     unit : :class:`~qsiplan.adapters.PreprocUnit`
         The DWI series to correct and the fieldmap that corrects them
         (its lead series' sidecar metadata drives the PEPOLAR/SyN setup)
+    gradwarp : bool
+        Whether the caller has a gradwarp field for this unit. For a GRE
+        fieldmap it selects ``config.workflow.gre_gradwarp``, recorded on the
+        workflow as ``gradwarp_mode`` so :func:`connect_gradwarp_sdc_reference`
+        can feed the references this workflow expects: gradwarp-corrected for
+        ``reference`` and ``hz``, raw for ``transport``. Any mode other than
+        ``reference`` also consumes ``inputnode.gradwarp_field``.
+    use : str
+        What the caller does with a GRE fieldmap's warp, for the boilerplate:
+        ``apply`` (unwarp the DWI), ``eddy`` (eddy's ``--field``), or the TORTOISE
+        registration it initializes, ``t2wreg`` or ``drbuddi``.
 
     Inputs
     ------
@@ -112,13 +123,6 @@ def init_sdc_wf(unit, gradwarp=False):
         Name of the method used for SDC
     fieldmap_hz
         The fieldmap in Hz for eddy
-
-    ``gradwarp`` says whether the caller has a gradwarp field for this unit.
-    For a GRE fieldmap it selects ``config.workflow.gre_gradwarp``, recorded on
-    the workflow as ``gradwarp_mode`` so :func:`connect_gradwarp_sdc_reference`
-    can feed the references this workflow expects: gradwarp-corrected for
-    ``reference`` and ``hz``, raw for ``transport``. Any mode other than
-    ``reference`` also consumes ``inputnode.gradwarp_field``.
     """
     omp_nthreads = config.nipype.omp_nthreads
     does_sdc = unit.has_scanner_measured_fieldmap or unit.is_nipreps_syn
@@ -255,6 +259,7 @@ co-registration with the anatomical reference.
 
         if gradwarp:
             workflow.gradwarp_mode = config.workflow.gre_gradwarp
+        workflow.__postdesc__ = _gre_boilerplate(workflow.gradwarp_mode if gradwarp else None, use)
         if workflow.gradwarp_mode == 'hz':
             _connect_gradwarped_fieldmap(workflow, inputnode, fmap_estimator_wf, sdc_unwarp_wf)
         else:
@@ -293,6 +298,57 @@ co-registration with the anatomical reference.
     ])  # fmt:skip
 
     return workflow
+
+
+_GRE_GRADWARP_BOILERPLATE = {
+    'reference': (
+        'The field map was registered to the b=0 reference after gradient nonlinearity '
+        'correction and used without further adjustment.'
+    ),
+    'hz': (
+        'The field map and its magnitude image were resampled through the gradient '
+        'nonlinearity displacement field before registration to the b=0 reference '
+        'after gradient nonlinearity correction.'
+    ),
+    'transport': (
+        'As the field map is subject to the same gradient nonlinearity as the DWI, the '
+        'deformation was estimated against the b=0 reference before gradient '
+        'nonlinearity correction, then moved into the corrected space by composing it '
+        'with the gradient nonlinearity displacement field and its inverse.'
+    ),
+}
+
+
+def _gre_boilerplate(gradwarp_mode, use):
+    """The sentences that follow a GRE fieldmap's estimation in the methods text."""
+    desc = []
+    if gradwarp_mode is not None:
+        desc.append(_GRE_GRADWARP_BOILERPLATE[gradwarp_mode])
+    if use == 'apply':
+        desc.append(
+            'Based on the estimated susceptibility distortion, an unwarped b=0 '
+            'reference was calculated for a more accurate co-registration with the '
+            'anatomical reference.'
+        )
+    elif use == 'eddy':
+        desc.append(
+            'Rather than being applied after eddy, the field map (in Hz, rigidly aligned '
+            "to eddy's first volume) was passed to eddy, which corrected susceptibility "
+            'distortion within its own model.'
+        )
+    elif use == 't2wreg':
+        desc.append(
+            'Rather than being applied directly, this deformation initialized the T2Wreg '
+            'registration'
+            + (
+                ', held fixed through its multi-resolution pyramid so that each stage '
+                'estimated only a residual correction on top of it.'
+                if config.workflow.gre_init_keep_fixed
+                else '.'
+            )
+        )
+    # 'drbuddi': init_drbuddi_wf's boilerplate describes the seed.
+    return '\n'.join(desc) + '\n' if desc else ''
 
 
 # --- GRE fieldmaps and gradient unwarping -------------------------------------

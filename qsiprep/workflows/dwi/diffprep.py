@@ -210,7 +210,9 @@ def _build_rpe_diffprep_stage(
     return recombine
 
 
-def _seed_t2wreg_with_gre(workflow, inputnode, diffprep, unit, source_file, has_gradwarp, b0_source):
+def _seed_t2wreg_with_gre(
+    workflow, inputnode, diffprep, unit, source_file, has_gradwarp, b0_source
+):
     """Seed a T2Wreg run (T2w or SynB0 target) with the unit's own GRE fieldmap.
 
     ``b0_source`` is ``(node, field)`` giving the pre-HMC b=0 average the seed is
@@ -225,7 +227,7 @@ def _seed_t2wreg_with_gre(workflow, inputnode, diffprep, unit, source_file, has_
     gre_init_b0_ref_wf = init_dwi_reference_wf(
         source_file=source_file, name='gre_init_b0_ref_wf', gen_report=False
     )
-    b0_sdc_wf = init_sdc_wf(unit, gradwarp=has_gradwarp)
+    b0_sdc_wf = init_sdc_wf(unit, gradwarp=has_gradwarp, use='t2wreg')
     b0_sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
     diffprep.inputs.keep_initial_transform_fixed = config.workflow.gre_init_keep_fixed
     workflow.connect([
@@ -238,7 +240,9 @@ def _seed_t2wreg_with_gre(workflow, inputnode, diffprep, unit, source_file, has_
     ])  # fmt:skip
     ref_fields = ('outputnode.ref_image', 'outputnode.ref_image_brain', 'outputnode.dwi_mask')
     if has_gradwarp:
-        connect_gradwarp_sdc_reference(workflow, inputnode, gre_init_b0_ref_wf, ref_fields, b0_sdc_wf)
+        connect_gradwarp_sdc_reference(
+            workflow, inputnode, gre_init_b0_ref_wf, ref_fields, b0_sdc_wf
+        )
     else:
         workflow.connect([
             (gre_init_b0_ref_wf, b0_sdc_wf, [
@@ -365,11 +369,9 @@ def init_diffprep_hmc_wf(
     t2wreg_stage = unit.run.stage_with('t2wreg')
     synb0_from_plan = t2wreg_stage is not None and t2wreg_stage.structural_target == 'synb0'
     # Classic SyN is fieldmap-less too, but has its own path (init_sdc_wf below).
-    # A GRE fieldmap can also drive T2Wreg (opt-in, gre_t2wreg_init): the GRE warp
-    # seeds the registration and the structural refines it. A GRE unit has no
-    # t2wreg plan stage, so its structural TARGET comes from --sdc-anat-reference:
-    # 'synb0' registers the seeded b=0 to a T1w-synthesised distortion-free b=0,
-    # otherwise the subject's T2w (which must then exist).
+    # With gre_t2wreg_init a GRE unit runs T2Wreg seeded by its own fieldmap. It has
+    # no t2wreg plan stage, so the target comes from --sdc-anat-reference: 'synb0',
+    # otherwise the subject's T2w.
     gre_init_wants = bool(unit.is_gre and config.workflow.gre_t2wreg_init)
     gre_init_synb0 = gre_init_wants and config.workflow.sdc_anat_reference == 'synb0'
     gre_init = bool(gre_init_wants and (gre_init_synb0 or t2w_sdc))
@@ -378,16 +380,26 @@ def init_diffprep_hmc_wf(
         is_fieldmapless and not unit.is_nipreps_syn and (synb0_from_plan or bool(t2w_sdc))
     )
     epi_mode = 'T2Wreg' if use_t2wreg else 'off'
-    # A reverse-PE (PEPOLAR) series that also has a GRE fieldmap can seed DRBUDDI
-    # (branch 1 below) with the GRE-derived warp, the same way gre_init seeds
-    # T2Wreg. The GRE fieldmap is a non-applied candidate kept on the grouping.
-    # Gradient unwarping composes the same way it does for the T2Wreg seed
-    # (init_sdc_wf's gre_gradwarp mode builds the warp in the corrected frame).
+    # With gre_drbuddi_init a PEPOLAR unit whose DWI a GRE fieldmap also lists
+    # (a non-applied application candidate) seeds DRBUDDI with that fieldmap.
     gre_drbuddi_init = bool(
         unit.is_pepolar
         and config.workflow.gre_drbuddi_init
         and unit.gre_init_estimation is not None
     )
+    if gre_init_wants and not gre_init:
+        config.loggers.workflow.warning(
+            '--gre-init-t2wreg has no effect on %s: it has no T2w or SynB0 target, so '
+            'its GRE fieldmap is applied after head motion correction.',
+            unit.output_name,
+        )
+    if config.workflow.gre_drbuddi_init and not gre_drbuddi_init:
+        config.loggers.workflow.warning(
+            '--gre-init-drbuddi has no effect on %s: it needs a reverse phase-encoded '
+            'correction and a GRE fieldmap that also lists the series (IntendedFor or '
+            'B0FieldSource).',
+            unit.output_name,
+        )
 
     # Load any user-supplied DIFFPREP config (or our defaults)
     diffprep_cfg = _load_diffprep_config(config.workflow.diffprep_config)
@@ -424,7 +436,11 @@ def init_diffprep_hmc_wf(
 
     # Described after the --sloppy downgrade so the methods section reports the
     # correction that actually ran, not the one that was asked for.
-    workflow.__desc__ = generate_diffprep_boilerplate(effective_correction_mode)
+    workflow.__desc__ = generate_diffprep_boilerplate(
+        effective_correction_mode,
+        t2wreg_target=('synb0' if synb0_target else 't2w') if use_t2wreg else None,
+        gradwarped=has_gradwarp,
+    )
 
     diffprep_kwargs = dict(
         # num_threads only sets OMP_NUM_THREADS, which TORTOISEProcess ignores
@@ -539,7 +555,12 @@ def init_diffprep_hmc_wf(
                 # synthetic distortion-free b=0 then refines the GRE prior. Same
                 # seed wiring as the T2w target, on the raw b=0 used for SynB0.
                 _seed_t2wreg_with_gre(
-                    workflow, inputnode, diffprep, unit, source_file, has_gradwarp,
+                    workflow,
+                    inputnode,
+                    diffprep,
+                    unit,
+                    source_file,
+                    has_gradwarp,
                     (raw_b0s, 'b0_average'),
                 )
         elif use_t2wreg:
@@ -564,7 +585,12 @@ def init_diffprep_hmc_wf(
             if gre_init:
                 # Seed the T2w-target T2Wreg with the unit's GRE fieldmap.
                 _seed_t2wreg_with_gre(
-                    workflow, inputnode, diffprep, unit, source_file, has_gradwarp,
+                    workflow,
+                    inputnode,
+                    diffprep,
+                    unit,
+                    source_file,
+                    has_gradwarp,
                     (t2wreg_b0s, 'b0_average'),
                 )
 
@@ -775,31 +801,20 @@ def init_diffprep_hmc_wf(
         ])  # fmt:skip
 
         if gre_drbuddi_init:
-            # Seed DRBUDDI with the GRE fieldmap: build its warp on the pre-SDC b=0
-            # DRBUDDI corrects (extract_b0s -- motion/eddy- but not gradwarp-corrected,
-            # i.e. the raw-gradient frame), then feed it as the initial UP field
-            # (init_drbuddi_wf negates it for the DOWN field). The GRE estimation is a
-            # non-applied candidate on this PEPOLAR unit, so view the unit through it
-            # via a replaced ``estimation``.
-            #
-            # Gradwarp: DRBUDDI's up/down volumes are gradwarp-corrected before it sees
-            # them (connect_gradwarp_sdc_volumes above), so the seed must land in that
-            # corrected frame too. init_sdc_wf(gradwarp=has_gradwarp) does this with the
-            # gre_gradwarp mode -- 'transport' estimates on the raw ref and composes the
-            # warp with the gradwarp field (exact); the transport happens before
-            # init_drbuddi_wf's negate, so FINV and MINV both land corrected.
-            #
-            # NB up/down + sign: the warp is the lead series' PE-polarity correction,
-            # assigned to the up ("+") field, MINV = -FINV. Validated on real data
-            # (nibs-exp/drbuddi-init: FINV vs field r -0.99, MINV = -FINV r -0.95).
+            # The GRE warp is built for the lead series' phase encoding, which is
+            # DRBUDDI's up series, and on the pre-gradwarp b=0; init_sdc_wf's
+            # gradwarp mode moves it into the frame of the gradwarped up/down
+            # volumes before init_drbuddi_wf negates it for the down series.
             gre_unit = dataclasses.replace(unit, estimation=unit.gre_init_estimation)
             drbuddi_gre_b0_ref_wf = init_dwi_reference_wf(
                 source_file=source_file, name='drbuddi_gre_init_b0_ref_wf', gen_report=False
             )
-            gre_seed_sdc_wf = init_sdc_wf(gre_unit, gradwarp=has_gradwarp)
+            gre_seed_sdc_wf = init_sdc_wf(gre_unit, gradwarp=has_gradwarp, use='drbuddi')
             gre_seed_sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
             gre_ref_fields = (
-                'outputnode.ref_image', 'outputnode.ref_image_brain', 'outputnode.dwi_mask'
+                'outputnode.ref_image',
+                'outputnode.ref_image_brain',
+                'outputnode.dwi_mask',
             )
             workflow.connect([
                 (extract_b0s, drbuddi_gre_b0_ref_wf, [('b0_average', 'inputnode.b0_template')]),
@@ -815,7 +830,11 @@ def init_diffprep_hmc_wf(
                 # Distinct node prefix: connect_gradwarp_sdc_volumes above already
                 # holds the default 'gradwarp_sdc_inputs' name for the DWI volumes.
                 connect_gradwarp_sdc_reference(
-                    workflow, inputnode, drbuddi_gre_b0_ref_wf, gre_ref_fields, gre_seed_sdc_wf,
+                    workflow,
+                    inputnode,
+                    drbuddi_gre_b0_ref_wf,
+                    gre_ref_fields,
+                    gre_seed_sdc_wf,
                     name_prefix='gradwarp_seed_inputs',
                 )
             else:

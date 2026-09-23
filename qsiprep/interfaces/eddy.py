@@ -576,9 +576,7 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
         and ext_eddy.inputs.estimate_move_by_susceptibility
     ):
         mbs_niter = ext_eddy.inputs.mbs_niter if isdefined(ext_eddy.inputs.mbs_niter) else 10
-        mbs_lambda = (
-            ext_eddy.inputs.mbs_mbs_lambda if isdefined(ext_eddy.inputs.mbs_lambda) else 10
-        )
+        mbs_lambda = ext_eddy.inputs.mbs_lambda if isdefined(ext_eddy.inputs.mbs_lambda) else 10
         mbs_ksp = ext_eddy.inputs.mbs_ksp if isdefined(ext_eddy.inputs.mbs_ksp) else 10
         desc.append(
             'Dynamic susceptibility distortion correction was '

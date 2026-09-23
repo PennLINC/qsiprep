@@ -118,9 +118,8 @@ def init_drbuddi_wf(
     initialize_from_field : bool
         Seed DRBUDDI's diffeomorphic search from an external displacement field
         (e.g. a GRE-fieldmap-derived warp) supplied on ``inputnode.initial_field``.
-        The field becomes the initial UP (blip-up) transform and its negation the
-        initial DOWN transform. Requires a TORTOISE exposing the initial-transform
-        options.
+        The field becomes the initial up (blip-up) transform and its negation the
+        initial down transform.
     keep_initial_fixed : bool
         When seeding, hold the initial field fixed through the SyN pyramid
         (``--DRBUDDI_keep_initial_transform_fixed``) so the fine-scale prior
@@ -216,9 +215,13 @@ def init_drbuddi_wf(
         fieldmap_type=fieldmap_type,
         t2w_sdc=t2w_sdc,
         with_topup=unit.run.stage_with('topup') is not None,
+        initialized=initialize_from_field,
+        keep_initialization_fixed=keep_initial_fixed,
     )
 
     outputnode.inputs.method = f'PEB/PEPOLAR (phase-encoding based / PE-POLARity): {fieldmap_type}'
+    if initialize_from_field:
+        outputnode.inputs.method += ' (GRE-initialized)'
 
     gather_drbuddi_inputs = pe.Node(
         GatherDRBUDDIInputs(
@@ -252,9 +255,6 @@ def init_drbuddi_wf(
     )
 
     if initialize_from_field:
-        # Seed DRBUDDI from the GRE-derived warp: it is the initial up (blip-up)
-        # field, and its negation the initial down (blip-down) field. Held fixed
-        # through the SyN pyramid when keep_initial_fixed so the prior survives.
         drbuddi.inputs.keep_initial_transform_fixed = keep_initial_fixed
         negate_initial_field = pe.Node(
             niu.Function(

@@ -216,6 +216,11 @@ def init_fsl_hmc_wf(
     else:
         eddy_args['num_threads'] = omp_nthreads
         config.loggers.workflow.info('Using %d threads in eddy', eddy_args['num_threads'])
+    # A GRE fieldmap handed to eddy (--field) lets eddy estimate how the field
+    # changes with head orientation.
+    gre_to_eddy = unit.is_gre and config.workflow.gre_eddy_mbs
+    if gre_to_eddy:
+        eddy_args['estimate_move_by_susceptibility'] = True
     pre_eddy_b0_ref_wf = init_dwi_reference_wf(
         source_file=source_file,
         name='pre_eddy_b0_ref_wf',
@@ -601,23 +606,21 @@ def init_fsl_hmc_wf(
         config.loggers.workflow.info(f'Computing fieldmap directly from {fieldmap_type}')
         outputnode.inputs.sdc_method = fieldmap_type
 
-        # Optionally hand a GRE fieldmap to eddy via --field, so eddy corrects
-        # susceptibility distortion in-run and can estimate movement-by-
-        # susceptibility -- rather than applying the field after eddy. This needs
-        # the field estimated on a PRE-eddy reference (b0_ref_for_coreg is built
-        # from eddy's own output, so feeding it to eddy would be circular). The
-        # field is fed in the raw, gradient-distorted frame exactly like TOPUP's
-        # field, so gradient unwarping (applied downstream) composes correctly
-        # and the SDC workflow needs no gradwarp mode of its own.
-        gre_to_eddy = unit.is_gre and config.workflow.gre_eddy_mbs
-        b0_sdc_wf = init_sdc_wf(unit, gradwarp=has_gradwarp and not gre_to_eddy)
+        # A GRE fieldmap handed to eddy must be estimated on a PRE-eddy reference
+        # (b0_ref_for_coreg is built from eddy's own output). It is fed in the raw,
+        # gradient-distorted frame like TOPUP's field, so gradient unwarping
+        # (applied downstream) composes with it and needs no gradwarp mode here.
+        b0_sdc_wf = init_sdc_wf(
+            unit,
+            gradwarp=has_gradwarp and not gre_to_eddy,
+            use='eddy' if gre_to_eddy else 'apply',
+        )
 
         if gre_to_eddy:
             # Register the field's reference to eddy's first volume for --field_mat.
             gre_to_eddy_reg = pe.Node(
                 fsl.FLIRT(dof=6, output_type='NIFTI_GZ'), name='gre_to_eddy_reg'
             )
-            eddy.inputs.estimate_move_by_susceptibility = True
             workflow.connect([
                 # Estimate the fieldmap on the pre-eddy b=0 reference (the same
                 # distorted reference the non-TOPUP path already builds for eddy's

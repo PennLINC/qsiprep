@@ -8,10 +8,10 @@ import numpy as np
 
 from qsiprep.interfaces.fmap import (
     B0RPEFieldmap,
-    FieldToRadS,
     CleanupEdgeFilter,
     DespikeFilter,
     FieldmapToVSM,
+    FieldToRadS,
     MedianFilter,
     _despike_2d,
     _sphere_footprint,

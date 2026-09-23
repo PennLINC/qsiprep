@@ -57,6 +57,12 @@ def init_fmap_wf(name='fmap_wf'):
             please download the qsiprep container with FSL installed."""
         )
     workflow = Workflow(name=name)
+    workflow.__desc__ = """\
+A deformation field to correct for susceptibility distortions was estimated
+from a directly measured field map, which was masked with a brain mask
+derived from its magnitude image, median-filtered and co-registered to the
+b=0 reference.
+"""
     inputnode = pe.Node(niu.IdentityInterface(fields=['magnitude', 'fieldmap']), name='inputnode')
     outputnode = pe.Node(
         niu.IdentityInterface(fields=['fmap', 'fmap_ref', 'fmap_mask']), name='outputnode'

@@ -391,7 +391,9 @@ def test_drbuddi_wf_unseeded_by_default(tmp_path):
 
     wf = init_drbuddi_wf(_rpe_unit(tmp_path), t2w_sdc=False)
     assert wf.get_node('negate_initial_field') is None
-    assert not ({'initial_fixed_transform', 'initial_moving_transform'} & _drbuddi_seed_targets(wf))
+    assert not (
+        {'initial_fixed_transform', 'initial_moving_transform'} & _drbuddi_seed_targets(wf)
+    )
 
 
 def test_negate_displacement_field_flips_sign_keeps_vector_intent(tmp_path, monkeypatch):
