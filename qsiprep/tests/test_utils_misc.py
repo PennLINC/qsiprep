@@ -549,3 +549,23 @@ def test_format_dwidenoise2_schedule_accepts_list_triplets():
     text = format_dwidenoise2_schedule([{'spatial_subsample': [1, 1, 2], 'update_noise': True}])
 
     assert _schedule_table(text)[1] == ['1,1,2', 'true']
+
+
+@pytest.mark.parametrize(
+    ('schedule', 'expected'),
+    [
+        (None, 'following its default schedule'),
+        (
+            [{'update_noise': True}],
+            'following a custom 1-iteration schedule provided in the QSIPrep configuration file',
+        ),
+        (
+            [{}, {}, {'kernel': 'rank'}],
+            'following a custom 3-iteration schedule provided in the QSIPrep configuration file',
+        ),
+    ],
+)
+def test_describe_dwidenoise2_schedule(schedule, expected):
+    parameters = {} if schedule is None else {'schedule': schedule}
+
+    assert expected in describe_dwidenoise2(parameters, complex_data=False)

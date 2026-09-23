@@ -540,7 +540,6 @@ _DWIDENOISE2_DEFAULTS = {
     'demodulate': 'apc',
     'demean': 'shells',
     'estimator': 'mrm2023',
-    'schedule': 'default',
 }
 
 _DWIDENOISE2_ESTIMATORS = {
@@ -612,10 +611,14 @@ def describe_dwidenoise2(parameters, complex_data):
     used = {**_DWIDENOISE2_DEFAULTS, **parameters}
     # The kernel size and the number of PCAs are set per iteration by the schedule rather
     # than by a fixed window
-    schedule = used['schedule']
-    schedule_desc = (
-        'its default schedule' if schedule == 'default' else f'the {schedule!r} schedule'
-    )
+    schedule = parameters.get('schedule')
+    if schedule is None:
+        schedule_desc = 'its default schedule'
+    else:
+        schedule_desc = (
+            f'a custom {len(schedule)}-iteration schedule provided in the QSIPrep '
+            'configuration file'
+        )
 
     sentences = [
         'denoised using the Marchenko-Pastur PCA method [@dwidenoise1; @dwidenoise2] as '
