@@ -393,6 +393,27 @@ class _DRBUDDIInputSpec(TORTOISEInputSpec):
             'Requires a patched TORTOISE that exposes --epi_working_res.'
         ),
     )
+    initial_fixed_transform = File(
+        exists=True,
+        argstr='--DRBUDDI_initial_fixed_transform %s',
+        desc='Initial displacement field for the UP (blip-up / "+" polarity) data, in the '
+        'b=0 world frame (e.g. a GRE-fieldmap-derived warp). DRBUDDI starts its diffeomorphic '
+        'search from it. Needs a TORTOISE exposing the option.',
+    )
+    initial_moving_transform = File(
+        exists=True,
+        argstr='--DRBUDDI_initial_moving_transform %s',
+        desc='Initial displacement field for the DOWN (blip-down / "-" polarity) data, in the '
+        'b=0 world frame. For a susceptibility field this is the negation of the up field '
+        '(the opposite polarity distorts oppositely). Needs a TORTOISE exposing the option.',
+    )
+    keep_initial_transform_fixed = traits.Bool(
+        argstr='--DRBUDDI_keep_initial_transform_fixed %d',
+        desc='Hold the initial up/down transforms fixed as a base field so each registration '
+        'stage only learns a residual on top of them, instead of letting the multi-resolution '
+        'SyN pyramid low-pass and re-estimate them (which washes out a fine-scale prior such '
+        'as a GRE fieldmap). Needs a TORTOISE exposing the flag.',
+    )
     disable_itk_threads = traits.Bool(True, usedefault=True, argstr='--disable_itk_threads')
     use_cuda = traits.Bool(False, usedefault=True, desc=_USE_CUDA_TRAIT_DESC)
 
@@ -1036,6 +1057,13 @@ class _DIFFPREPInputSpec(TORTOISEInputSpec):
         desc='Initial EPI displacement field for T2Wreg, in the b=0 world frame (e.g. the '
         'warp derived from a GRE fieldmap); the registration refines it. Needs a TORTOISE '
         'with the EPIREG initial-field option.',
+    )
+    keep_initial_transform_fixed = traits.Bool(
+        argstr='--DRBUDDI_keep_initial_transform_fixed %d',
+        desc='Hold the EPIREG initial field (epireg_initial_field) fixed as a base field so '
+        'each registration stage only learns a residual on top of it, instead of letting '
+        "the multi-resolution SyN pyramid low-pass and re-estimate it (which washes out a "
+        'fine-scale prior such as a GRE fieldmap). Needs a TORTOISE exposing the flag.',
     )
 
 

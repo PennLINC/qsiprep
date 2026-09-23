@@ -360,6 +360,60 @@ def test_drbuddi_wf_feeds_sidecar_map_and_discriminator(tmp_path):
     assert gather.inputs.fieldmap_type == 'rpe_series'
 
 
+def _drbuddi_seed_targets(wf):
+    targets = set()
+    for _src, dest, data in wf._graph.edges(data=True):
+        if dest.name == 'drbuddi':
+            targets.update(field for _s, field in data.get('connect', []))
+    return targets
+
+
+def test_drbuddi_wf_seeds_up_down_from_initial_field(tmp_path):
+    """``initialize_from_field`` seeds DRBUDDI's up/down initial transforms from
+    ``inputnode.initial_field`` (up = the field, down = its negation) and holds
+    the seed fixed through the SyN pyramid."""
+    _cfg(hmc_method='tortoise', sdc_method='drbuddi')
+    from qsiprep.workflows.fieldmap import init_drbuddi_wf
+
+    wf = init_drbuddi_wf(
+        _rpe_unit(tmp_path), t2w_sdc=False, initialize_from_field=True, keep_initial_fixed=True
+    )
+    assert wf.get_node('negate_initial_field') is not None
+    assert wf.get_node('drbuddi').inputs.keep_initial_transform_fixed is True
+    assert {'initial_fixed_transform', 'initial_moving_transform'} <= _drbuddi_seed_targets(wf)
+
+
+def test_drbuddi_wf_unseeded_by_default(tmp_path):
+    """Without ``initialize_from_field`` nothing is added: stock DRBUDDI, no
+    negation node, no initial-transform flags (safe on an unpatched TORTOISE)."""
+    _cfg(hmc_method='tortoise', sdc_method='drbuddi')
+    from qsiprep.workflows.fieldmap import init_drbuddi_wf
+
+    wf = init_drbuddi_wf(_rpe_unit(tmp_path), t2w_sdc=False)
+    assert wf.get_node('negate_initial_field') is None
+    assert not ({'initial_fixed_transform', 'initial_moving_transform'} & _drbuddi_seed_targets(wf))
+
+
+def test_negate_displacement_field_flips_sign_keeps_vector_intent(tmp_path, monkeypatch):
+    """The down-field helper negates every vector and preserves the ITK vector
+    intent (without which TORTOISE/ANTs read the field as zeros)."""
+    import nibabel as nb
+    import numpy as np
+
+    from qsiprep.workflows.fieldmap.drbuddi import _negate_displacement_field
+
+    src = tmp_path / 'up.nii.gz'
+    data = np.random.default_rng(0).standard_normal((3, 3, 3, 1, 3)).astype('float32')
+    img = nb.Nifti1Image(data, np.eye(4))
+    img.header.set_intent('vector')
+    img.to_filename(src)
+
+    monkeypatch.chdir(tmp_path)
+    out = nb.load(_negate_displacement_field(str(src)))
+    assert int(out.header['intent_code']) == 1007
+    assert np.allclose(np.asanyarray(out.dataobj), -data)
+
+
 def test_unit_sidecar_round_trips_through_derivatives_sidecar(tmp_path):
     """finalize's sidecar node writes valid JSON from the model (no disk reads).
 

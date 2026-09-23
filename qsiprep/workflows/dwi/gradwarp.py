@@ -502,12 +502,20 @@ def connect_gradwarp_sdc_volumes(workflow, inputnode, source, source_field, drbu
     ])  # fmt:skip
 
 
-def connect_gradwarp_sdc_reference(workflow, inputnode, source, source_fields, b0_sdc_wf):
+def connect_gradwarp_sdc_reference(
+    workflow, inputnode, source, source_fields, b0_sdc_wf, name_prefix='gradwarp_sdc_inputs'
+):
     """Gradwarp the b=0 reference trio that :func:`init_sdc_wf` estimates from.
 
     ``source_fields`` names the reference image, its skull-stripped version and
     its mask on ``source``, in that order. The mask is resampled with nearest
     neighbours: sinc-interpolating a binary image would leave it non-binary.
+
+    ``name_prefix`` names the resample nodes (reference/hz modes only). Override
+    it when one workflow gradwarps two reference trios -- e.g. the DRBUDDI branch,
+    which already uses the default name for the DWI volumes
+    (:func:`connect_gradwarp_sdc_volumes`) and needs a distinct name for the GRE
+    seed's reference.
     """
     ref_field, brain_field, mask_field = source_fields
     mode = getattr(b0_sdc_wf, 'gradwarp_mode', 'reference')
@@ -528,9 +536,9 @@ def connect_gradwarp_sdc_reference(workflow, inputnode, source, source_fields, b
         return
     smooth = _sdc_interpolation()
     for name, source_field, dest, interpolation in (
-        ('gradwarp_sdc_inputs', ref_field, 'inputnode.b0_ref', smooth),
-        ('gradwarp_sdc_inputs_brain', brain_field, 'inputnode.b0_ref_brain', smooth),
-        ('gradwarp_sdc_inputs_mask', mask_field, 'inputnode.b0_mask', 'NearestNeighbor'),
+        (name_prefix, ref_field, 'inputnode.b0_ref', smooth),
+        (f'{name_prefix}_brain', brain_field, 'inputnode.b0_ref_brain', smooth),
+        (f'{name_prefix}_mask', mask_field, 'inputnode.b0_mask', 'NearestNeighbor'),
     ):
         resample = pe.Node(
             ants.ApplyTransforms(dimension=3, interpolation=interpolation, float=True),

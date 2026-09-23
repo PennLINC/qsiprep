@@ -790,6 +790,18 @@ def _build_parser(**kwargs):
         ),
     )
     g_sdc.add_argument(
+        '--gre-init-drbuddi',
+        action='store_true',
+        default=False,
+        dest='gre_drbuddi_init',
+        help=(
+            'With --hmc-method tortoise, a reverse-PE (PEPOLAR) series that also has a GRE '
+            'fieldmap: initialize DRBUDDI\'s diffeomorphic search with the GRE-derived warp '
+            '(as the up field, its negation as the down field) instead of cold-starting from '
+            'the blip pair alone. The blip-up/blip-down data then refines the prior.'
+        ),
+    )
+    g_sdc.add_argument(
         '--gre-gradwarp',
         action='store',
         choices=['reference', 'hz', 'transport'],

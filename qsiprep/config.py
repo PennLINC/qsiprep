@@ -631,6 +631,19 @@ class workflow(_Config):
     registration and the T2w refines it. With gradient unwarping the seed is
     built by the ``gre_gradwarp`` mode and the b=0 T2Wreg registers is
     gradwarp-corrected inside DIFFPREP."""
+    gre_drbuddi_init = False
+    """On the TORTOISE path, when a PEPOLAR (reverse-PE) series also has a GRE
+    fieldmap, initialize DRBUDDI's diffeomorphic search with the GRE-derived
+    warp (as the up field, its negation as the down field) instead of letting
+    DRBUDDI cold-start from the blip pair alone. The blip-up/blip-down data then
+    refines the GRE prior; the prior is most useful at the skull base where the
+    blip pair is ambiguous. The GRE symmetric counterpart to a PEPOLAR run."""
+    gre_init_keep_fixed = True
+    """Hold a GRE initialization (``gre_t2wreg_init`` / ``gre_drbuddi_init``)
+    fixed as a base field through TORTOISE's multi-resolution SyN pyramid, so the
+    fine-scale prior survives instead of being low-passed and re-estimated. Maps
+    to ``--DRBUDDI_keep_initial_transform_fixed``. Requires a TORTOISE build that
+    exposes the flag (>= 26.9.5); has no effect otherwise."""
     gre_gradwarp = 'reference'
     """How a GRE fieldmap that is applied *after* head motion correction is
     reconciled with gradient unwarping, which the composed transform chain
