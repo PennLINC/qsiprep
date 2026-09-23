@@ -1342,3 +1342,31 @@ def test_fold_report_is_silent_when_everything_is_positive(tmp_path, caplog):
         _report_nonpositive(np.ones(100), 'subject', 'consequence')
 
     assert not caplog.records
+
+
+# --- DRBUDDI's LSR ratio ------------------------------------------------------
+
+
+def test_lsr_ratio_fills_undefined_voxels_with_unity(tmp_path):
+    """TORTOISE's LSR branch fills its ratio image with 1 and overwrites only
+    where the division yields a number; a zero b=0 outside the object must not
+    put inf or nan into the weight."""
+    from qsiprep.interfaces.tortoise import lsr_ratio
+
+    reference = np.full((4, 4, 4), 2.0, dtype='float32')
+    blip = np.full((4, 4, 4), 4.0, dtype='float32')
+    blip[0] = 0.0  # outside the object
+    reference[1] = 0.0  # 0 / 4
+    reference[2] = 0.0
+    blip[2] = 0.0  # 0 / 0
+    ref_path = tmp_path / 'ref.nii.gz'
+    blip_path = tmp_path / 'blip.nii.gz'
+    nb.Nifti1Image(reference, np.eye(4)).to_filename(str(ref_path))
+    nb.Nifti1Image(blip, np.eye(4)).to_filename(str(blip_path))
+
+    ratio = np.asanyarray(lsr_ratio(str(ref_path), str(blip_path)).dataobj)
+    assert np.isfinite(ratio).all()
+    np.testing.assert_allclose(ratio[0], 1.0)
+    np.testing.assert_allclose(ratio[1], 0.0)
+    np.testing.assert_allclose(ratio[2], 1.0)
+    np.testing.assert_allclose(ratio[3], 0.5)

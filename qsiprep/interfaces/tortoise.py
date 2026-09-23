@@ -497,6 +497,23 @@ class _DRBUDDIAggregateOutputsOutputSpec(TraitedSpec):
     b0_ref = File(exists=True)
 
 
+def lsr_ratio(reference_file, blip_b0_corrected_file):
+    """TORTOISE's LSR weight for one blip: ``b0_corrected_final / blip_b0_corrected``.
+
+    Voxels where the ratio is not a finite number (the corrected b=0 is zero or
+    the reference is) get a weight of 1, matching ``FINALDATA``'s LSR branch,
+    which fills its ratio image with 1 and overwrites only where the division
+    yields a number.
+    """
+    reference = nb.load(reference_file)
+    numerator = np.asanyarray(reference.dataobj).astype(np.float32)
+    denominator = np.asanyarray(nb.load(blip_b0_corrected_file).dataobj).astype(np.float32)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        ratio = numerator / denominator
+    ratio = np.where(np.isfinite(ratio), ratio, np.float32(1.0)).astype(np.float32)
+    return nb.Nifti1Image(ratio, reference.affine, reference.header)
+
+
 class DRBUDDIAggregateOutputs(SimpleInterface):
     input_spec = _DRBUDDIAggregateOutputsInputSpec
     output_spec = _DRBUDDIAggregateOutputsOutputSpec
@@ -536,14 +553,17 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
 
         # TORTOISE's LSR signal redistribution: the ratio of the harmonic-mean
         # corrected b=0 to each blip's geometry-corrected b=0 is the whole
-        # intensity weight for that blip's volumes.
+        # intensity weight for that blip's volumes. Where the ratio is
+        # undefined (a zero b=0 outside the object) the weight is 1, as in
+        # FINALDATA's LSR branch, which only overwrites its unity fill where
+        # the ratio is a number.
         scaling_blip_up_file = op.join(runtime.cwd, 'blip_up_scale.nii.gz')
         scaling_blip_down_file = op.join(runtime.cwd, 'blip_down_scale.nii.gz')
-        nim.math_img(
-            'a/b', a=self.inputs.undistorted_reference, b=self.inputs.blip_up_b0_corrected
-        ).to_filename(scaling_blip_up_file)
-        nim.math_img(
-            'a/b', a=self.inputs.undistorted_reference, b=self.inputs.blip_down_b0_corrected
+        lsr_ratio(self.inputs.undistorted_reference, self.inputs.blip_up_b0_corrected).to_filename(
+            scaling_blip_up_file
+        )
+        lsr_ratio(
+            self.inputs.undistorted_reference, self.inputs.blip_down_b0_corrected
         ).to_filename(scaling_blip_down_file)
         self._results['sdc_scaling_images'] = [
             scaling_blip_up_file if blip_dir == 'up' else scaling_blip_down_file
