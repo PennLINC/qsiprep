@@ -48,9 +48,14 @@ def init_sdc_wf(unit):
     """
     This workflow implements the heuristics to choose a
     :abbr:`SDC (susceptibility distortion correction)` strategy for a
-    scanner-measured fieldmap (PEPOLAR or GRE). Units with no measured
-    fieldmap pass through unchanged; the fieldmap-less T2Wreg and SyNb0 cases
-    are handled by the TORTOISE backend, not here.
+    GRE fieldmap or the fieldmap-less SyN method. Units with no such fieldmap
+    pass through unchanged; the fieldmap-less T2Wreg and SyNb0 cases are
+    handled by the TORTOISE backend, not here.
+
+    .. note::
+        PEPOLAR fieldmaps are not supported by this workflow. They are handled
+        by the eddy (TOPUP) and TORTOISE (DRBUDDI) backends instead, and passing
+        a PEPOLAR unit raises a :class:`ValueError`.
 
     .. workflow::
         :graph2use: orig
@@ -62,12 +67,9 @@ def init_sdc_wf(unit):
         wf = init_sdc_wf(
             make_preproc_unit(
                 ['/data/sub-03/dwi/sub-03_dwi.nii.gz'],
-                method=CorrectionMethod.PEPOLAR,
+                method=CorrectionMethod.NIPREPS_SYN,
                 pe_dir='j',
-                estimation_sources=[
-                    '/data/sub-03/dwi/sub-03_dwi.nii.gz',
-                    '/data/sub-03/fmap/sub-03_epi.nii.gz',
-                ],
+                estimation_sources=['/data/sub-03/anat/sub-03_T1w.nii.gz'],
             ),
         )
 
@@ -75,7 +77,7 @@ def init_sdc_wf(unit):
     ----------
     unit : :class:`~qsiplan.adapters.PreprocUnit`
         The DWI series to correct and the fieldmap that corrects them
-        (its lead series' sidecar metadata drives the PEPOLAR/SyN setup)
+        (its lead series' sidecar metadata drives the GRE/SyN setup)
 
     Inputs
     ------
