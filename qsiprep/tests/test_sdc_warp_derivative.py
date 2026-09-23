@@ -104,7 +104,7 @@ def _run_compose(coreg, warp, ref, cwd):
     from qsiprep.interfaces.gradients import ComposeSDCWarp
 
     os.makedirs(cwd, exist_ok=True)
-    iface = ComposeSDCWarp(sdc_warp=warp, to_template_transforms=[coreg], reference_image=ref)
+    iface = ComposeSDCWarp(sdc_warps=warp, to_template_transforms=[coreg], reference_image=ref)
     return iface.run(cwd=cwd).outputs.sdc_warp_to_template
 
 
@@ -227,6 +227,40 @@ def test_sdc_warp_source_follows_the_t2wreg_stage(
     assert sdc_warp_source(unit, t2w_sdc=t2w_sdc) == expected
 
 
+def _reverse_pe_unit(tmp_path, dwi_writer=None):
+    """A PEPOLAR unit of an AP/PA DWI pair, planned under the configured methods."""
+    from qsiplan.models import CorrectionMethod
+
+    from qsiprep.tests.preproc_factory import make_preproc_unit
+
+    write = dwi_writer or _tiny_dwi
+    ap = str(write(tmp_path / 'sub-01_dir-AP_dwi.nii.gz'))
+    pa = str(write(tmp_path / 'sub-01_dir-PA_dwi.nii.gz'))
+    unit = make_preproc_unit(
+        [ap, pa], method=CorrectionMethod.PEPOLAR, pe_dirs={ap: 'j-', pa: 'j'}
+    )
+    return unit, ap
+
+
+@pytest.mark.parametrize(
+    ('sdc_method', 'expected'),
+    [
+        ('topup', ('topup', 'TOPUP')),
+        ('drbuddi', ('fieldwarp', 'DRBUDDI')),
+        # DRBUDDI refines what eddy corrected with TOPUP: the total needs both.
+        ('topup+drbuddi', ('topup+drbuddi', 'TOPUP+DRBUDDI')),
+    ],
+)
+def test_sdc_warp_source_separates_topup_drbuddi(tmp_path, monkeypatch, sdc_method, expected):
+    """DRBUDDI's fieldwarp is the whole correction alone, only a residual after TOPUP."""
+    from qsiprep.utils.sdc import sdc_warp_source
+
+    monkeypatch.setattr(config.workflow, 'hmc_method', 'eddy')
+    monkeypatch.setattr(config.workflow, 'sdc_method', sdc_method)
+    unit, _ = _reverse_pe_unit(tmp_path)
+    assert sdc_warp_source(unit, t2w_sdc=False) == expected
+
+
 def test_trans_wf_builds_compose_sdc_warp_only_when_requested():
     """``sdc_warp_source`` gates the ComposeSDCWarp node and its wiring."""
     _cfg()
@@ -250,7 +284,7 @@ def test_trans_wf_builds_compose_sdc_warp_only_when_requested():
     assert any(
         u.name == 'inputnode'
         and v.name == 'compose_sdc_warp'
-        and any(dst == 'sdc_warp' for _, dst in d['connect'])
+        and any(dst == 'sdc_warps' for _, dst in d['connect'])
         for u, v, d in edges
     )
     assert any(
@@ -280,7 +314,7 @@ def test_trans_wf_takes_volume_0_warp_from_a_single_path_or_a_list():
         for u, v, d in wf._graph.edges(data=True)
         if u.name == 'inputnode' and v.name == 'compose_sdc_warp'
         for src, dst in d['connect']
-        if dst == 'sdc_warp'
+        if dst == 'sdc_warps'
     ]
     port, func_source, _ = source
     assert port == 'fieldwarps'
@@ -318,15 +352,55 @@ def test_trans_wf_topup_builds_hz_to_warp_chain():
     assert any(
         u.name == 'hz_to_warp'
         and v.name == 'compose_sdc_warp'
-        and ('out_file', 'sdc_warp') in d['connect']
+        and ('out_file', 'sdc_warps') in d['connect']
         for u, v, d in edges
     )
     # TOPUP does not feed a standalone fieldwarp into the conjugation.
     assert not any(
         u.name == 'inputnode'
         and v.name == 'compose_sdc_warp'
-        and any(dst == 'sdc_warp' for _, dst in d['connect'])
+        and any(dst == 'sdc_warps' for _, dst in d['connect'])
         for u, v, d in edges
+    )
+    assert wf.get_node('compose_sdc_refinement') is None
+
+
+def test_trans_wf_topup_drbuddi_builds_total_and_refinement():
+    """The total runs DRBUDDI's refinement, then TOPUP; the refinement is also kept."""
+    _cfg()
+    from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
+
+    wf = init_dwi_trans_wf(
+        source_file='/data/sub-01_dwi.nii.gz',
+        mem_gb=1,
+        sdc_warp_source='topup+drbuddi',
+        sdc_pe_dir='j',
+        sdc_readout_time=0.05,
+    )
+    edges = [(u.name, v.name, d['connect']) for u, v, d in wf._graph.edges(data=True)]
+
+    def ports(src, dst):
+        """(source port, destination port) pairs from ``src`` to ``dst``."""
+        return {
+            (s[0] if isinstance(s, tuple) else s, t)
+            for u, v, connect in edges
+            if (u, v) == (src, dst)
+            for s, t in connect
+        }
+
+    # ComposeSDCWarp applies its warps to a point in list order: DRBUDDI's
+    # refinement (in1) first, then the rebuilt TOPUP field (in2).
+    assert ('fieldwarps', 'in1') in ports('inputnode', 'sdc_warp_chain')
+    assert ('out_file', 'in2') in ports('hz_to_warp', 'sdc_warp_chain')
+    assert ('out', 'sdc_warps') in ports('sdc_warp_chain', 'compose_sdc_warp')
+    # The refinement is DRBUDDI's fieldwarp alone, on the same ACPC chain.
+    assert ('fieldwarps', 'sdc_warps') in ports('inputnode', 'compose_sdc_refinement')
+    assert not ports('hz_to_warp', 'compose_sdc_refinement')
+    assert ('sdc_warp_transforms', 'to_template_transforms') in ports(
+        'compose_transforms', 'compose_sdc_refinement'
+    )
+    assert ('sdc_warp_to_template', 'sdc_refinement_to_template') in ports(
+        'compose_sdc_refinement', 'outputnode'
     )
 
 
@@ -350,6 +424,68 @@ def test_derivatives_wf_writes_sdc_warp_only_with_meta():
     assert ds.inputs.meta_dict == meta
     # No Hz-era keys leak in.
     assert 'Units' not in meta
+    # The TOPUP+DRBUDDI refinement has its own datasink, only when asked for.
+    assert wf.get_node('ds_sdc_refinement_t1') is None
+
+    refinement_meta = {'EstimationMethod': 'DRBUDDI', 'Description': 'the refinement'}
+    wf = init_dwi_derivatives_wf(
+        source_file='/data/sub-01_dwi.nii.gz',
+        sdc_warp_meta=meta,
+        sdc_refinement_meta=refinement_meta,
+    )
+    ds = wf.get_node('ds_sdc_refinement_t1')
+    assert ds.inputs.desc == 'sdcrefinement'
+    assert ds.inputs.suffix == 'xfm'
+    assert ds.inputs.meta_dict == refinement_meta
+    assert wf.get_node('ds_sdc_warp_t1').inputs.desc == 'sdc'
+
+
+@pytest.mark.parametrize('sdc_method', ['topup', 'topup+drbuddi'])
+def test_finalize_writes_the_refinement_only_for_topup_drbuddi(tmp_path, monkeypatch, sdc_method):
+    """TOPUP+DRBUDDI gets the total and the refinement, each with its own figure."""
+    from qsiprep.tests.gradient_fixtures import write_dwi_with_gradients
+    from qsiprep.workflows.dwi.finalize import init_dwi_finalize_wf
+
+    for section, key, value in [
+        (config.execution, 'output_dir', str(tmp_path / 'out')),
+        (config.execution, 'sloppy', False),
+        (config.workflow, 'hmc_method', 'eddy'),
+        (config.workflow, 'sdc_method', sdc_method),
+        (config.workflow, 'output_resolution', 1.2),
+        (config.workflow, 'dwiref_definition', 'distortion-group'),
+        (config.nipype, 'omp_nthreads', 1),
+    ]:
+        monkeypatch.setattr(section, key, value)
+    unit, source = _reverse_pe_unit(tmp_path, dwi_writer=write_dwi_with_gradients)
+
+    wf = init_dwi_finalize_wf(
+        unit=unit,
+        name='dwi_finalize_wf',
+        source_file=source,
+        output_prefix='sub-01',
+        do_biascorr=False,
+        write_derivatives=True,
+    )
+    derivatives = wf.get_node('dwi_derivatives_wf')
+    total = derivatives.get_node('ds_sdc_warp_t1').inputs.meta_dict
+    refinement = derivatives.get_node('ds_sdc_refinement_t1')
+
+    if sdc_method == 'topup':
+        assert total['EstimationMethod'] == 'TOPUP'
+        assert refinement is None
+        assert wf.get_node('sdcrefinement_plot') is None
+        return
+
+    assert total['EstimationMethod'] == 'TOPUP+DRBUDDI'
+    assert 'desc-sdcrefinement' in total['Description']
+    assert refinement.inputs.meta_dict['EstimationMethod'] == 'DRBUDDI'
+    assert wf.get_node('sdcwarp_plot').inputs.title == (
+        'SDC displacement field, TOPUP+DRBUDDI (ACPC space)'
+    )
+    assert wf.get_node('sdcrefinement_plot').inputs.title == (
+        'DRBUDDI refinement of the TOPUP field (ACPC space)'
+    )
+    assert wf.get_node('ds_report_sdcrefinement').inputs.desc == 'sdcrefinement'
 
 
 _HZ, _TRT = 10.0, 0.05  # a uniform field: every voxel shifts _HZ * _TRT voxels
@@ -523,6 +659,74 @@ def test_compose_sdc_warp_point_round_trip(tmp_path):
         np.testing.assert_allclose(got, expected, atol=1e-2)
 
 
+def _write_linear_field(path, displacement_at, n=20, origin=(-9.5, -9.5, -9.5)):
+    """A displacement field whose LPS vector at LPS point ``p`` is ``displacement_at(p)``.
+
+    Linear functions are reproduced exactly by trilinear interpolation, so a
+    point test can compare ANTs against SimpleITK without interpolation error.
+    """
+    grid = np.stack(np.meshgrid(*[np.arange(n) + o for o in origin], indexing='ij'), axis=-1)
+    data = np.asarray(displacement_at(grid), dtype='float32')[:, :, :, np.newaxis, :]
+    affine = np.diag([-1.0, -1.0, 1.0, 1.0])
+    affine[:3, 3] = [-origin[0], -origin[1], origin[2]]
+    img = nb.Nifti1Image(data, affine)
+    img.header.set_intent('vector')
+    img.to_filename(str(path))
+    return str(path)
+
+
+@requires_ants
+def test_compose_sdc_warp_applies_several_warps_in_order(tmp_path):
+    """Two warps map q -> A(W2(W1(A^-1(q)))), and that order is observable.
+
+    For TOPUP+DRBUDDI, W1 is DRBUDDI's refinement and W2 TOPUP's field. Each
+    displaces along one axis by an amount that depends on the other, so the two
+    orders give different points.
+    """
+    import SimpleITK as sitk
+
+    from qsiprep.interfaces.gradients import ComposeSDCWarp
+
+    def refinement(p):
+        return np.stack([0 * p[..., 0], 1.0 + 0.1 * p[..., 0], 0 * p[..., 0]], axis=-1)
+
+    def topup(p):
+        return np.stack([0.8 + 0.1 * p[..., 1], 0 * p[..., 1], 0 * p[..., 1]], axis=-1)
+
+    w1 = _write_linear_field(tmp_path / 'refinement.nii.gz', refinement)
+    w2 = _write_linear_field(tmp_path / 'topup.nii.gz', topup)
+    coreg = _write_affine(tmp_path / 'coreg.mat', _OBLIQUE.T, [0.0, 0.0, 0.0])
+    ref = _write_ref(tmp_path / 'ref.nii.gz', _OBLIQUE)
+    (tmp_path / 'run').mkdir()
+    out = (
+        ComposeSDCWarp(sdc_warps=[w1, w2], to_template_transforms=[coreg], reference_image=ref)
+        .run(cwd=str(tmp_path / 'run'))
+        .outputs.sdc_warp_to_template
+    )
+
+    def field(path):
+        return sitk.DisplacementFieldTransform(
+            sitk.Cast(sitk.ReadImage(path), sitk.sitkVectorFloat64)
+        )
+
+    emitted, W1, W2 = field(out), field(w1), field(w2)
+    A = sitk.AffineTransform(3)  # DWI -> ACPC
+    A.SetMatrix(_OBLIQUE.ravel().tolist())
+    A_inv = A.GetInverse()
+
+    orders_differ = False
+    for acpc_point in ([0.0, 0.0, 0.0], [2.0, -3.0, 1.0], [-4.0, 1.0, 2.0]):
+        dwi_point = A_inv.TransformPoint(acpc_point)
+        expected = np.array(A.TransformPoint(W2.TransformPoint(W1.TransformPoint(dwi_point))))
+        reversed_order = np.array(
+            A.TransformPoint(W1.TransformPoint(W2.TransformPoint(dwi_point)))
+        )
+        got = np.array(emitted.TransformPoint(acpc_point))
+        np.testing.assert_allclose(got, expected, atol=1e-2)
+        orders_differ |= not np.allclose(expected, reversed_order, atol=0.05)
+    assert orders_differ
+
+
 @requires_ants
 def test_compose_sdc_warp_reproduces_pipeline_correction(tmp_path):
     """Unwarping a distorted b0 with the emitted field matches the pipeline's own
@@ -633,6 +837,40 @@ def test_sdc_warp_plot_builds_a_valid_svg(tmp_path):
     assert os.path.getsize(out) > 0
     assert '<svg' in open(out).read(4096)
 
+    # A sub-millimetre field (a DRBUDDI refinement) renders too, with its own title.
+    (tmp_path / 'small').mkdir()
+    small = _write_sdc_field(tmp_path / 'small' / 'w.nii.gz', [0.0, 0.2, 0.0], n=20, vary=0.01)
+    out = (
+        SDCWarpPlot(warp_file=small, b0_ref=str(b0), title='A refinement')
+        .run(cwd=str(tmp_path / 'small'))
+        .outputs.out_file
+    )
+    assert '<svg' in open(out).read(4096)
+
+
+@pytest.mark.parametrize(
+    ('p99', 'expected'),
+    [
+        # Large enough to fill the arrow spacing: true length, the 0.5 mm floor.
+        (6.0, (0.5, 6.0, 1.0)),
+        # Sub-millimetre: a lower floor, its own color scale, lengthened arrows.
+        (0.4, (0.04, 0.4, 16.0)),
+    ],
+)
+def test_sdc_warp_glyph_scale_adapts_to_the_field(p99, expected):
+    """Small fields get visible arrows; large ones stay at true length."""
+    from qsiprep.interfaces.reports import sdc_warp_glyph_scale
+
+    mag = np.full(1000, p99)  # every voxel at the 99th percentile
+    affine = np.diag([2.0, 2.0, 2.0, 1.0])  # step 4 -> arrows 8 mm apart
+    np.testing.assert_allclose(sdc_warp_glyph_scale(mag, affine, step=4), expected)
+
+
+def test_sdc_warp_glyph_scale_handles_a_still_field():
+    from qsiprep.interfaces.reports import sdc_warp_glyph_scale
+
+    assert sdc_warp_glyph_scale(np.zeros(100), np.eye(4), step=4) == (0.5, 1.0, 1.0)
+
 
 def test_invert_displacement_field_round_trips(tmp_path):
     """The helper produces a usable inverse of a displacement field."""
@@ -671,7 +909,7 @@ def test_compose_sdc_warp_handles_nonlinear_template_stage(tmp_path):
     os.makedirs(run_cwd)
     # ANTs order: the affine coreg, then the non-linear template warp.
     iface = ComposeSDCWarp(
-        sdc_warp=warp, to_template_transforms=[coreg, template_warp], reference_image=ref
+        sdc_warps=warp, to_template_transforms=[coreg, template_warp], reference_image=ref
     )
     out = iface.run(cwd=run_cwd).outputs.sdc_warp_to_template
     img = nb.load(out)

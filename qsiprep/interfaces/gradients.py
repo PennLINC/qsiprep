@@ -641,11 +641,12 @@ def _invert_displacement_field(warp_path, cwd):
 
 
 class ComposeSDCWarpInputSpec(BaseInterfaceInputSpec):
-    sdc_warp = File(
-        exists=True,
+    sdc_warps = InputMultiObject(
+        File(exists=True),
         mandatory=True,
-        desc='the SDC (susceptibility) displacement field for volume 0, in the corrected '
-        'DWI world frame (e.g. DRBUDDI deformation_FINV)',
+        desc='the SDC (susceptibility) displacement fields for volume 0, in the order a '
+        'corrected point passes through them on its way back to the distorted data '
+        '(e.g. DRBUDDI deformation_FINV alone, or DRBUDDI refinement then TOPUP)',
     )
     to_template_transforms = InputMultiObject(
         traits.Either(File(exists=True), traits.Enum('identity')),
@@ -682,6 +683,11 @@ class ComposeSDCWarp(SimpleInterface):
     a displacement field on the reference grid. Affine stages are inverted on the
     fly; a non-linear stage (a non-default intramodal-template warp) is inverted
     numerically first.
+
+    Several ``sdc_warps`` make ``W`` their composition, applied to a point in the
+    order given: for TOPUP+DRBUDDI, DRBUDDI's refinement carries a corrected
+    point into the TOPUP-corrected series, and TOPUP's field carries it on to
+    the distorted data.
     """
 
     input_spec = ComposeSDCWarpInputSpec
@@ -692,8 +698,9 @@ class ComposeSDCWarp(SimpleInterface):
         out_file = os.path.join(runtime.cwd, 'sdc_warp_to_template.nii.gz')
 
         # A^-1 (forward, ACPC->DWI), then W, then A (reverse of forward, inverted).
-        transforms = list(forward) + [self.inputs.sdc_warp]
-        invert_flags = [False] * len(forward) + [False]
+        sdc_warps = list(self.inputs.sdc_warps)
+        transforms = list(forward) + sdc_warps
+        invert_flags = [False] * (len(forward) + len(sdc_warps))
         for transform in reversed(forward):
             if transform.endswith(('.nii', '.nii.gz')):
                 transforms.append(_invert_displacement_field(transform, runtime.cwd))

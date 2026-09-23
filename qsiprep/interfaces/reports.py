@@ -627,11 +627,31 @@ def _glyph_slice_positions(b0, mag, slice_axis, n):
     return picks[:n]
 
 
-def _draw_glyph(ax, panel, clim, step):
+def sdc_warp_glyph_scale(mag, affine, step):
+    """How to draw a field's arrows so that small and large fields both read.
+
+    Returns ``(min_mag, vmax, arrow_scale)``. Arrows shorter than ``min_mag`` mm
+    are skipped: 0.5 mm, or a tenth of the field's 99th percentile when that is
+    smaller, so a sub-millimetre field such as a DRBUDDI refinement is not left
+    blank. ``vmax`` ends the color scale at that percentile. ``arrow_scale``
+    lengthens the arrows when the largest would otherwise reach less than 40% of
+    the spacing between them; 1 keeps true length in mm. Low-signal voxels are
+    deliberately not masked out: dropout is where the displacement matters most.
+    """
+    moving = mag[mag > 0.01]
+    if not moving.size:
+        return 0.5, 1.0, 1.0
+    p99 = float(np.percentile(moving, 99))
+    spacing = step * float(np.mean(np.linalg.norm(affine[:3, :3], axis=0)))
+    stretch = 0.8 * spacing / p99
+    return min(0.5, 0.1 * p99), p99, stretch if stretch >= 2 else 1.0
+
+
+def _draw_glyph(ax, panel, clim, step, min_mag, arrow_scale):
     """Draw one glyph panel; anterior/superior/left to screen-left/top."""
     xd, ud, yd, vd = -panel['H'], -panel['dh'], panel['V'], panel['dv']
     ax.pcolormesh(xd, yd, panel['bg'], cmap='gray', shading='nearest', rasterized=True)
-    keep = panel['m2'][::step, ::step] > 0.5
+    keep = panel['m2'][::step, ::step] > min_mag
     q = ax.quiver(
         xd[::step, ::step][keep],
         yd[::step, ::step][keep],
@@ -642,7 +662,7 @@ def _draw_glyph(ax, panel, clim, step):
         clim=clim,
         angles='xy',
         scale_units='xy',
-        scale=1.0,
+        scale=1.0 / arrow_scale,
         width=0.005,
         headwidth=4,
         pivot='tail',
@@ -677,6 +697,7 @@ class _SDCWarpPlotInputSpec(BaseInterfaceInputSpec):
     b0_ref = File(exists=True, mandatory=True, desc='ACPC b=0 reference image for the background')
     n_slices = traits.Int(3, usedefault=True, desc='slices to show per plane')
     step = traits.Int(4, usedefault=True, desc='draw an arrow every N voxels')
+    title = traits.Str('SDC displacement field (ACPC space)', usedefault=True, desc='figure title')
 
 
 class _SDCWarpPlotOutputSpec(TraitedSpec):
@@ -707,10 +728,9 @@ class SDCWarpPlot(SimpleInterface):
         _ped, slice_axes, vox_to_ras = sdc_warp_display_planes(disp_ras, affine)
 
         n = self.inputs.n_slices
-        clim = (
-            0.0,
-            max(float(np.percentile(mag[mag > 0.05], 99)) if (mag > 0.05).any() else 1.0, 1.0),
-        )
+        step = self.inputs.step
+        min_mag, vmax, arrow_scale = sdc_warp_glyph_scale(mag, affine, step)
+        clim = (0.0, vmax)
         plane_name = {0: 'sagittal', 1: 'coronal', 2: 'axial'}
 
         fig, axes = plt.subplots(
@@ -724,9 +744,15 @@ class SDCWarpPlot(SimpleInterface):
         for row, slice_axis in enumerate(slice_axes):
             for col, sl in enumerate(_glyph_slice_positions(b0, mag, slice_axis, n)):
                 panel = _glyph_slice(disp_ras, mag, b0, affine, slice_axis, sl, vox_to_ras)
-                q = _draw_glyph(axes[row][col], panel, clim, self.inputs.step)
+                q = _draw_glyph(axes[row][col], panel, clim, step, min_mag, arrow_scale)
             axes[row][0].set_ylabel(plane_name[int(vox_to_ras[slice_axis])], color='white')
-        fig.suptitle('SDC displacement field (ACPC space)', color='white')
+        title = self.inputs.title
+        if arrow_scale > 1:
+            title += (
+                f'\narrows drawn {arrow_scale:.{0 if arrow_scale >= 10 else 1}f}x longer; '
+                'color shows the true size'
+            )
+        fig.suptitle(title, color='white')
         cb = fig.colorbar(q, ax=axes, fraction=0.02, pad=0.02)
         cb.set_label('|displacement| (mm)', color='white')
         cb.ax.yaxis.set_tick_params(color='white')

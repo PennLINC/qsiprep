@@ -191,6 +191,8 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 'fieldmap_hz_resampled',
                 # The SDC displacement field on the output grid
                 'sdc_warp_to_template',
+                # TOPUP+DRBUDDI only: DRBUDDI's refinement of the TOPUP field
+                'sdc_refinement_to_template',
             ]
         ),
         name='outputnode',
@@ -302,7 +304,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             # DRBUDDI, GRE, SyN and T2Wreg all write the susceptibility warp
             # directly (fieldwarps); conjugate volume 0's onto the output grid.
             workflow.connect([
-                (inputnode, compose_sdc_warp, [(('fieldwarps', _first_warp), 'sdc_warp')]),
+                (inputnode, compose_sdc_warp, [(('fieldwarps', _first_warp), 'sdc_warps')]),
             ])  # fmt:skip
         else:
             # TOPUP only estimates an off-resonance field (eddy applies it and
@@ -315,10 +317,35 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             )
             hz_to_warp.inputs.readout_time = sdc_readout_time
             hz_to_warp.inputs.pe_dir = sdc_pe_dir
-            workflow.connect([
-                (inputnode, hz_to_warp, [('fieldmap_hz', 'in_file')]),
-                (hz_to_warp, compose_sdc_warp, [('out_file', 'sdc_warp')]),
-            ])  # fmt:skip
+            workflow.connect([(inputnode, hz_to_warp, [('fieldmap_hz', 'in_file')])])
+
+            if sdc_warp_source == 'topup':
+                workflow.connect([(hz_to_warp, compose_sdc_warp, [('out_file', 'sdc_warps')])])
+            else:
+                # TOPUP+DRBUDDI: DRBUDDI refined the series eddy had already
+                # corrected with TOPUP's field, so its fieldwarp is only the
+                # residual. The total field runs a corrected point through
+                # DRBUDDI's refinement, then TOPUP's field; the refinement is also
+                # conjugated on its own, to show where DRBUDDI changed TOPUP's answer.
+                sdc_warp_chain = pe.Node(niu.Merge(2), name='sdc_warp_chain')
+                compose_sdc_refinement = pe.Node(
+                    ComposeSDCWarp(), name='compose_sdc_refinement', mem_gb=1
+                )
+                workflow.connect([
+                    (inputnode, sdc_warp_chain, [(('fieldwarps', _first_warp), 'in1')]),
+                    (hz_to_warp, sdc_warp_chain, [('out_file', 'in2')]),
+                    (sdc_warp_chain, compose_sdc_warp, [('out', 'sdc_warps')]),
+                    (inputnode, compose_sdc_refinement, [
+                        ('output_grid', 'reference_image'),
+                        (('fieldwarps', _first_warp), 'sdc_warps'),
+                    ]),
+                    (compose_transforms, compose_sdc_refinement, [
+                        ('sdc_warp_transforms', 'to_template_transforms'),
+                    ]),
+                    (compose_sdc_refinement, outputnode, [
+                        ('sdc_warp_to_template', 'sdc_refinement_to_template'),
+                    ]),
+                ])  # fmt:skip
 
     # If concatenation is not happening here, send the still-split images to outputs
     if not concatenate:

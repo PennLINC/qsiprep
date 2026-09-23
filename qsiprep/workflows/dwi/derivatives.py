@@ -64,12 +64,13 @@ def _tsnr_meta(n_b0, median_tsnr):
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def init_dwi_derivatives_wf(source_file, sdc_warp_meta=None) -> Workflow:
+def init_dwi_derivatives_wf(source_file, sdc_warp_meta=None, sdc_refinement_meta=None) -> Workflow:
     """Set up a battery of datasinks to store derivatives in the right location.
 
     When ``sdc_warp_meta`` is given (a dict of sidecar metadata), the SDC
     (susceptibility) displacement field is also written, on the ACPC output grid,
-    as an ITK/ANTs displacement-field transform.
+    as an ITK/ANTs displacement-field transform. ``sdc_refinement_meta`` does the
+    same for DRBUDDI's refinement of the TOPUP field (TOPUP+DRBUDDI only).
     """
     output_dir = str(config.execution.output_dir)
     workflow = Workflow(name='dwi_derivatives_wf')
@@ -89,6 +90,7 @@ def init_dwi_derivatives_wf(source_file, sdc_warp_meta=None) -> Workflow:
                 'hmc_optimization_data',
                 'series_qc',
                 'sdc_warp_to_template',
+                'sdc_refinement_to_template',
             ]
         ),
         name='inputnode',
@@ -279,24 +281,34 @@ def init_dwi_derivatives_wf(source_file, sdc_warp_meta=None) -> Workflow:
     # The SDC (susceptibility) displacement field on the ACPC grid, as an ITK
     # transform. Only written when distortion correction ran; the caller signals
     # that by passing the sidecar metadata.
-    if sdc_warp_meta is not None:
-        ds_sdc_warp_t1 = pe.Node(
+    for name, field, desc, meta in (
+        ('ds_sdc_warp_t1', 'sdc_warp_to_template', 'sdc', sdc_warp_meta),
+        (
+            'ds_sdc_refinement_t1',
+            'sdc_refinement_to_template',
+            'sdcrefinement',
+            sdc_refinement_meta,
+        ),
+    ):
+        if meta is None:
+            continue
+        ds_sdc_field = pe.Node(
             DerivativesDataSink(
                 source_file=source_file,
                 base_directory=output_dir,
                 mode='image',
                 suffix='xfm',
-                desc='sdc',
+                desc=desc,
                 extension='.nii.gz',
                 compress=True,
-                meta_dict=sdc_warp_meta,
+                meta_dict=meta,
                 **{'from': 'dwiref', 'to': 'ACPC'},
             ),
-            name='ds_sdc_warp_t1',
+            name=name,
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
-        workflow.connect([(inputnode, ds_sdc_warp_t1, [('sdc_warp_to_template', 'in_file')])])
+        workflow.connect([(inputnode, ds_sdc_field, [(field, 'in_file')])])
 
     # If requested, write local bvecs
     # if config.workflow.write_local_bvecs:

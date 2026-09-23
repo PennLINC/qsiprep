@@ -171,7 +171,10 @@ def init_dwi_finalize_wf(
     # TORTOISE's T2Wreg -- exposes it as fieldwarps, so it is emitted directly.
     # TOPUP is the exception: eddy applies its field internally and leaves no
     # standalone warp, so it is rebuilt from the estimated off-resonance field
-    # (needs the readout time; without it, nothing is written).
+    # (needs the readout time; without it, nothing is written). With
+    # TOPUP+DRBUDDI, DRBUDDI's fieldwarp only refines the TOPUP-corrected series:
+    # the total is the rebuilt TOPUP field after the refinement, and the
+    # refinement is written too.
     readout_time = pe_readout_time(unit)
     warp_source, estimation_method = sdc_warp_source(unit, t2w_sdc)
 
@@ -185,12 +188,31 @@ def init_dwi_finalize_wf(
             'ACPC coordinates. It holds no DWI-to-ACPC coregistration: as an image '
             'transform it undistorts an image that is already rigidly aligned to ACPC.'
         )
+        rebuilt_topup = (
+            'the TOPUP off-resonance field, rebuilt as voxel shift = '
+            'field_Hz * TotalReadoutTime along the phase-encoding axis'
+        )
         if warp_source == 'topup':
+            description += f' Rebuilt from {rebuilt_topup}.'
+        elif warp_source == 'topup+drbuddi':
             description += (
-                ' Rebuilt from the TOPUP off-resonance field: voxel shift = '
-                'field_Hz * TotalReadoutTime along the phase-encoding axis.'
+                f" The total correction: {rebuilt_topup}, followed by DRBUDDI's refinement "
+                '(also written on its own as the desc-sdcrefinement transform).'
             )
         sdc_warp_meta = {'EstimationMethod': estimation_method, 'Description': description}
+
+    sdc_refinement_meta = None
+    if warp_source == 'topup+drbuddi':
+        sdc_refinement_meta = {
+            'EstimationMethod': 'DRBUDDI',
+            'Description': (
+                "DRBUDDI's refinement of the first DWI series after eddy had already "
+                "corrected it with TOPUP's field, as an ITK/ANTs displacement field on the "
+                'ACPC output grid with its vectors in ACPC world coordinates (LPS). It is '
+                'the part of the total correction (desc-sdc) that DRBUDDI changed: large '
+                'vectors mark where DRBUDDI disagreed with TOPUP.'
+            ),
+        }
 
     # Determine resource usage
     for scan in all_dwis:
@@ -268,6 +290,8 @@ def init_dwi_finalize_wf(
                 'fieldmap_hz_t1',
                 # The SDC displacement field on the ACPC grid
                 'sdc_warp_to_template',
+                # TOPUP+DRBUDDI only: DRBUDDI's refinement of the TOPUP field
+                'sdc_refinement_to_template',
             ]
         ),
         name='outputnode',
@@ -403,11 +427,22 @@ def init_dwi_finalize_wf(
             ]),
         ])  # fmt:skip
 
+    sdc_fields = []  # (outputnode field, report desc, figure title)
     if warp_source is not None:
+        sdc_fields.append(
+            ('sdc_warp_to_template', 'sdcwarp', f'SDC displacement field, {estimation_method}')
+        )
+    if warp_source == 'topup+drbuddi':
+        sdc_fields.append(
+            (
+                'sdc_refinement_to_template',
+                'sdcrefinement',
+                'DRBUDDI refinement of the TOPUP field',
+            )
+        )
+    for field, _, _ in sdc_fields:
         workflow.connect([
-            (transform_dwis_t1, outputnode, [
-                ('outputnode.sdc_warp_to_template', 'sdc_warp_to_template'),
-            ]),
+            (transform_dwis_t1, outputnode, [(f'outputnode.{field}', field)]),
         ])  # fmt:skip
 
     # The workflow is done if we will be concatenating images later
@@ -452,6 +487,7 @@ def init_dwi_finalize_wf(
     dwi_derivatives_wf = init_dwi_derivatives_wf(
         source_file=source_file,
         sdc_warp_meta=sdc_warp_meta,
+        sdc_refinement_meta=sdc_refinement_meta,
     )
 
     # Combine all the QC measures for a series QC
@@ -654,31 +690,35 @@ def init_dwi_finalize_wf(
             ]),
         ])  # fmt:skip
 
-    if warp_source is not None:
-        # Glyph reportlet: the SDC displacement field over the ACPC b=0, showing how
-        # the phase-encoding direction sat relative to the output and how large the
-        # deformations are (Slicer's transform-glyph view, no Slicer needed).
-        sdc_warp_plot = pe.Node(SDCWarpPlot(), name='sdc_warp_plot', mem_gb=DEFAULT_MEMORY_MIN_GB)
-        ds_report_sdcwarp = pe.Node(
+    # Glyph reportlets: each SDC displacement field over the ACPC b=0, showing how
+    # the phase-encoding direction sat relative to the output and how large the
+    # deformations are (Slicer's transform-glyph view, no Slicer needed). Each
+    # figure scales its colors to its own field, so the small DRBUDDI refinement
+    # stays visible next to the total.
+    for field, desc, title in sdc_fields:
+        plot = pe.Node(
+            SDCWarpPlot(title=f'{title} (ACPC space)'),
+            name=f'{desc}_plot',
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+        ds_report = pe.Node(
             DerivativesDataSink(
                 datatype='figures',
-                desc='sdcwarp',
+                desc=desc,
                 suffix='dwi',
                 source_file=source_file,
             ),
-            name='ds_report_sdcwarp',
+            name=f'ds_report_{desc}',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
         workflow.connect([
-            (outputnode, dwi_derivatives_wf, [
-                ('sdc_warp_to_template', 'inputnode.sdc_warp_to_template'),
-            ]),
-            (outputnode, sdc_warp_plot, [
-                ('sdc_warp_to_template', 'warp_file'),
+            (outputnode, dwi_derivatives_wf, [(field, f'inputnode.{field}')]),
+            (outputnode, plot, [
+                (field, 'warp_file'),
                 ('t1_b0_ref', 'b0_ref'),
             ]),
-            (sdc_warp_plot, ds_report_sdcwarp, [('out_file', 'in_file')]),
+            (plot, ds_report, [('out_file', 'in_file')]),
         ])  # fmt:skip
 
     return workflow

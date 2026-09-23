@@ -74,18 +74,26 @@ def sdc_warp_source(unit, t2w_sdc):
     DRBUDDI, a GRE/phasediff fieldmap, fieldmap-less SyN, or TORTOISE T2Wreg --
     and ``'topup'`` when only TOPUP ran: eddy applies its field and leaves no
     standalone warp, so it is rebuilt from the off-resonance field, which needs
-    a readout time. ``(None, None)`` when no susceptibility correction ran.
+    a readout time. ``'topup+drbuddi'`` when DRBUDDI refined a series eddy had
+    already corrected with TOPUP's field: the fieldwarp is then only DRBUDDI's
+    residual, and the total needs the rebuilt TOPUP field too. ``(None, None)``
+    when no susceptibility correction ran.
     """
     target = t2wreg_target(unit, t2w_sdc)
     topup = unit.run.stage_with('topup')
+    readout_time = pe_readout_time(unit)
     if unit.run.stage_with('drbuddi') is not None:
-        return 'fieldwarp', 'DRBUDDI'
+        if topup is None:
+            return 'fieldwarp', 'DRBUDDI'
+        if readout_time is not None:
+            return 'topup+drbuddi', 'TOPUP+DRBUDDI'
+        return None, None
     if unit.is_gre:
         return 'fieldwarp', 'GRE fieldmap'
     if unit.is_nipreps_syn:
         return 'fieldwarp', 'SyN (fieldmap-less)'
     if target is not None:
         return 'fieldwarp', 'TORTOISE T2Wreg (SynB0)' if target == 'synb0' else 'TORTOISE T2Wreg'
-    if topup is not None and pe_readout_time(unit) is not None:
+    if topup is not None and readout_time is not None:
         return 'topup', 'TOPUP (SynB0)' if topup.structural_target == 'synb0' else 'TOPUP'
     return None, None

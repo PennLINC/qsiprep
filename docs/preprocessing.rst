@@ -358,6 +358,9 @@ Transforms
         # Susceptibility distortion displacement field (see below)
         <source_entities>_from-dwiref_to-ACPC_mode-image_desc-sdc_xfm.nii.gz
         <source_entities>_from-dwiref_to-ACPC_mode-image_desc-sdc_xfm.json
+        # TOPUP+DRBUDDI only: DRBUDDI's refinement of the TOPUP field
+        <source_entities>_from-dwiref_to-ACPC_mode-image_desc-sdcrefinement_xfm.nii.gz
+        <source_entities>_from-dwiref_to-ACPC_mode-image_desc-sdcrefinement_xfm.json
 
 The ``desc-sdc`` transform is the susceptibility distortion correction (SDC) as a
 displacement field, so the correction can be inspected and compared across methods.
@@ -374,7 +377,7 @@ Slicer does.
 The field holds no DWI-to-ACPC coregistration, so applying it directly to a DWI in
 its native space does not produce the corrected ACPC image.
 Applied as an image transform, it undistorts an image that has already been rigidly
-aligned to ACPC.
+aligned to ACPC, for example with the ``desc-coreg`` transform described below.
 
 DRBUDDI, GRE fieldmaps, fieldmap-less SyN, and TORTOISE T2Wreg (including SynB0)
 write this field directly.
@@ -382,6 +385,11 @@ Eddy applies TOPUP's field internally and leaves no standalone field, so for TOP
 the displacement is rebuilt from TOPUP's off-resonance field:
 the voxel shift is the field in Hz times ``TotalReadoutTime``, along the
 phase-encoding axis.
+With TOPUP+DRBUDDI, eddy corrects the series with TOPUP's field and DRBUDDI then
+refines the result, so ``desc-sdc`` is the total of the two: TOPUP's rebuilt field
+followed by DRBUDDI's refinement.
+The refinement alone is also written, as ``desc-sdcrefinement``, and drawn in its
+own report figure; its largest vectors mark where DRBUDDI disagreed with TOPUP.
 The sidecar's ``EstimationMethod`` records which method produced the field.
 The field is written whenever distortion correction ran, except under
 ``--distortion-group-merge``, where the merged output has no single field.
