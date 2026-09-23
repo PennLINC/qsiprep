@@ -155,6 +155,7 @@ def init_fsl_hmc_wf(
                 'b0_indices',
                 'to_dwi_ref_affines',
                 'to_dwi_ref_warps',
+                'sdc_scaling_images',
                 'rpe_b0_info',
                 # From SDC
                 'fieldmap_type',
@@ -615,6 +616,7 @@ def init_fsl_hmc_wf(
             ]),
             (drbuddi_wf, outputnode, [
                 ('outputnode.sdc_warps', 'to_dwi_ref_warps'),
+                ('outputnode.sdc_scaling_images', 'sdc_scaling_images'),
                 ('outputnode.method', 'sdc_method'),
                 ('outputnode.fieldmap_type', 'fieldmap_type'),
                 ('outputnode.b0_up_image', 'b0_up_image'),

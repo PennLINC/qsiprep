@@ -40,6 +40,7 @@ def _reset_config():
             'gradient_file',
             'ignore',
             'force',
+            'force_jacobian',
         )
     }
     saved_sloppy = config.execution.sloppy
@@ -58,6 +59,7 @@ def _cfg(hmc_method, sdc_method='auto', sloppy=False):
     config.workflow.gradient_file = None
     config.workflow.ignore = []
     config.workflow.force = []
+    config.workflow.force_jacobian = False
     config.execution.sloppy = sloppy
 
 
@@ -170,22 +172,23 @@ def test_tortoise_cubic(tmp_path):
 
 
 def test_tortoise_t2wreg():
-    """M4: DIFFPREP's fieldmap-less T2Wreg stage (no PEPOLAR, no GRE/SyN, a T2w
-    and --anat-modality/--ignore t2w allowing its use) applies 'sdc' --
-    reviewer-verified correct; this pins it down with a direct test.
+    """DIFFPREP's fieldmap-less T2Wreg (EPIREG) field is applied without a
+    weight, as in TORTOISE, unless ``--force jacobian`` is given.
 
-    Also checks the ``t2w_sdc=False`` case (T2w unavailable to TORTOISE,
-    e.g. ``--ignore t2w``): the stage still exists in the plan (T2Wreg can
-    target a SyNb0 too) but ``resolve_t2wreg_target`` withholds the 't2w'
-    target, so no 'sdc' is applied.
+    With ``t2w_sdc=False`` (T2w unavailable, e.g. ``--ignore t2w``) the stage
+    has no target, so 'sdc' appears in neither list.
     """
     _cfg(hmc_method='tortoise', sdc_method='auto', sloppy=False)
     unit = make_preproc_unit([SRC], method=None, anat_files=['/data/sub-01_T2w.nii.gz'])
 
-    # Default correction_mode='quadratic' also applies 'eddy-current'; the
-    # point under test is the second entry, 'sdc'.
-    assert jacobian_provenance_for(unit, t2w_sdc=True) == (['eddy-current', 'sdc'], [], None)
+    applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=True)
+    assert (applied, unmodulated) == (['eddy-current'], ['sdc'])
+    assert 'T2Wreg' in reason
+    assert '--force jacobian' in reason
     assert jacobian_provenance_for(unit, t2w_sdc=False) == (['eddy-current'], [], None)
+
+    config.workflow.force_jacobian = True
+    assert jacobian_provenance_for(unit, t2w_sdc=True) == (['eddy-current', 'sdc'], [], None)
 
 
 @pytest.mark.parametrize(

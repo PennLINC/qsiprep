@@ -26,10 +26,11 @@ from ...interfaces.dsi_studio import DSIStudioBTable
 from ...interfaces.dwi_merge import MergeFinalConfounds, SplitResampledDWIs
 from ...interfaces.gradients import ExtractB0s
 from ...interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
+from ...interfaces.jacobian import pe_axis_from_direction
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SeriesQC
-from ...utils.jacobian_provenance import jacobian_provenance_for
+from ...utils.jacobian_provenance import jacobian_provenance_for, t2wreg_is_weighted
 from .derivatives import init_dwi_derivatives_wf
 from .gradwarp import resolve_gradwarp_plan
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
@@ -205,6 +206,8 @@ def init_dwi_finalize_wf(
                 'gradwarp_field',
                 # Only set by the TORTOISE/DIFFPREP backend.
                 'ec_jacobian_images',
+                # Only set when DRBUDDI ran: TORTOISE's LSR ratios.
+                'sdc_scaling_images',
                 'output_grid',
                 'subjects_dir',
                 'subject_id',
@@ -245,6 +248,7 @@ def init_dwi_finalize_wf(
                 # weights: forwarded from transform_dwis_t1.
                 'jacobian_weights',
                 'jacobian_weight_index',
+                'jacobian_method',
                 # Only written out if TOPUP was used
                 'fieldmap_hz_t1',
             ]
@@ -315,6 +319,8 @@ def init_dwi_finalize_wf(
         use_compression=False,
         concatenate=True,
         doing_topup=doing_topup,
+        pe_axis=pe_axis_from_direction(unit.dwi_metadata.get('PhaseEncodingDirection', 'j')),
+        weight_fieldwarps=t2wreg_is_weighted(unit, t2w_sdc),
     )
 
     # Apply denoising to the interpolated data if requested
@@ -337,6 +343,7 @@ def init_dwi_finalize_wf(
             ('fieldwarps', 'inputnode.fieldwarps'),
             ('gradwarp_field', 'inputnode.gradwarp_field'),
             ('ec_jacobian_images', 'inputnode.ec_jacobian_images'),
+            ('sdc_scaling_images', 'inputnode.sdc_scaling_images'),
             ('dwi_files', 'inputnode.dwi_files'),
             ('dwi_sampling_grid', 'inputnode.output_grid'),
             ('b0_to_dwiref_transforms',
@@ -384,6 +391,7 @@ def init_dwi_finalize_wf(
             (transform_dwis_t1, outputnode, [
                 ('outputnode.jacobian_weights', 'jacobian_weights'),
                 ('outputnode.jacobian_weight_index', 'jacobian_weight_index'),
+                ('outputnode.jacobian_method', 'jacobian_method'),
             ]),
         ])  # fmt:skip
 
@@ -649,6 +657,7 @@ def init_dwi_finalize_wf(
             (outputnode, dwi_derivatives_wf, [
                 ('jacobian_weights', 'inputnode.jacobian_weights'),
                 ('jacobian_weight_index', 'inputnode.jacobian_weight_index'),
+                ('jacobian_method', 'inputnode.jacobian_method'),
             ]),
         ])  # fmt:skip
 

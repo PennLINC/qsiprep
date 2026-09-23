@@ -1594,7 +1594,11 @@ def test_reconstructed_transform_reproduces_moteddy(tmp_path, working_dir):
 
     transformations = _one('*_moteddy_transformations.txt')
     tortoise_output = _one('*_moteddy.nii')
-    imported = _one('*_proc.nii')
+    # DIFFPREP's import step copies its input verbatim (same data, same
+    # header), so the tortoise_convert output stands in for the pruned
+    # ``_proc.nii`` without keeping a second copy of the series on disk.
+    stem = tortoise_output.name[: -len('_proc_moteddy.nii')]
+    imported = _one(f'tortoise_convert/{stem}.nii')
 
     ours = resample_with_okan_transform(
         str(imported), str(transformations), str(tmp_path / 'ours.nii.gz')
@@ -1609,46 +1613,3 @@ def test_reconstructed_transform_reproduces_moteddy(tmp_path, working_dir):
         f'r={r:.5f}. Below 0.99 means the 24-parameter convention is wrong, '
         'and the EC Jacobian must NOT ship -- fall back to documenting the gap.'
     )
-
-
-def test_diffprep_declares_the_imported_proc_image(tmp_path, monkeypatch):
-    """Undeclared files in the node directory get pruned.
-
-    ``remove_unnecessary_outputs`` is on (qsiprep/config.py:334), so nipype
-    deletes anything in the node directory that no output points at. The
-    ``_proc.nii`` the import step stages was undeclared and therefore removed,
-    which broke the EC Jacobian ship gate: it compares our reconstruction
-    against ``_moteddy.nii`` and needs the image DIFFPREP resampled.
-    """
-    from qsiprep.interfaces.tortoise import DIFFPREP
-
-    dwi, bmtxt, json_file = _stage_diffprep_outputs(tmp_path, t2wreg=False)
-    _write_dummy_nii(tmp_path / 'dwi_temp_proc' / 'dwi_proc.nii')
-    monkeypatch.chdir(tmp_path)
-
-    outputs = DIFFPREP(
-        dwi_file=str(dwi),
-        bmtxt_file=str(bmtxt),
-        json_file=str(json_file),
-        epi_mode='off',
-    )._list_outputs()
-
-    assert outputs['imported_dwi_file'].endswith('dwi_temp_proc/dwi_proc.nii')
-
-
-def test_imported_image_is_consumed_so_nipype_keeps_it():
-    """Declaring the output is not enough; something has to consume it.
-
-    Workflow._set_needed_outputs (nipype workflows.py:711) rebuilds
-    needed_outputs from each node's out-edges, and clean_working_directory
-    then deletes every file in the node directory that no *needed* output
-    points at. An output nothing connects to is pruned exactly like an
-    undeclared one, which is why declaring imported_dwi_file alone did not
-    keep _proc.nii. The edge below is what makes nipype keep the file.
-    """
-    _base_config()
-    wf = _build(_make_unit(None), t2w_sdc=False)
-
-    edge = wf._graph.get_edge_data(wf.get_node('diffprep'), wf.get_node('outputnode'))
-    assert edge is not None, 'diffprep does not reach outputnode at all'
-    assert ('imported_dwi_file', 'imported_dwi_file') in edge['connect']

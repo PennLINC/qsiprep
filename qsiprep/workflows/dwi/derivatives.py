@@ -103,6 +103,7 @@ def init_dwi_derivatives_wf(
                 # weights: see StackJacobianWeights below.
                 'jacobian_weights',
                 'jacobian_weight_index',
+                'jacobian_method',
             ]
         ),
         name='inputnode',
@@ -324,6 +325,7 @@ def init_dwi_derivatives_wf(
             (inputnode, stack_jacobian, [
                 ('jacobian_weights', 'weight_images'),
                 ('jacobian_weight_index', 'weight_index'),
+                ('jacobian_method', 'method'),
             ]),
             (stack_jacobian, ds_jacobian, [
                 ('out_file', 'in_file'),

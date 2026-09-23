@@ -722,6 +722,7 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.fieldwarps', 'inputnode.fieldwarps'),
                 ('outputnode.gradwarp_field', 'inputnode.gradwarp_field'),
                 ('outputnode.ec_jacobian_images', 'inputnode.ec_jacobian_images'),
+                ('outputnode.sdc_scaling_images', 'inputnode.sdc_scaling_images'),
                 ('outputnode.itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
                 ('outputnode.hmc_optimization_data', 'inputnode.hmc_optimization_data'),
                 ('outputnode.raw_qc_file', 'inputnode.raw_qc_file'),

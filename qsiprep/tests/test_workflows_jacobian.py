@@ -28,6 +28,9 @@ def _reset_config_impl():
         config.workflow.jacobian_weighting,
         config.workflow.output_resolution,
         config.nipype.omp_nthreads,
+        config.workflow.b0_threshold,
+        config.workflow.dwi2anat_dof,
+        config.workflow.force_jacobian,
     )
     config.workflow.jacobian_weighting = True
     config.workflow.output_resolution = 2.0
@@ -44,6 +47,9 @@ def _reset_config_impl():
         config.workflow.jacobian_weighting,
         config.workflow.output_resolution,
         config.nipype.omp_nthreads,
+        config.workflow.b0_threshold,
+        config.workflow.dwi2anat_dof,
+        config.workflow.force_jacobian,
     ) = saved
 
 
@@ -323,38 +329,23 @@ def test_sdc_unwarp_wf_has_no_dead_jacobian_node():
     assert 'out_jacobian' not in workflow.get_node('outputnode').outputs.copyable_trait_names()
 
 
-def test_sdc_scaling_images_channel_is_gone():
-    """DRBUDDI's ratio images are replaced by the analytic determinant.
-
-    The channel existed only for DRBUDDI, whose warps already arrive as
-    ``fieldwarps`` -- so ComposeJacobianWeights derives its determinant the
-    same way as every other backend's, and the bespoke plumbing is dead.
-    """
-    import subprocess
-
-    # Excludes this file itself: its grep invocation and assertion message
-    # necessarily contain the literal string being searched for, which would
-    # otherwise make this test self-matching and permanently red.
-    hits = subprocess.run(
-        [
-            'grep',
-            '-rn',
-            '--include=*.py',
-            '--exclude=test_workflows_jacobian.py',
-            'sdc_scaling_images',
-            'qsiprep/',
-        ],
-        capture_output=True,
-        text=True,
-    ).stdout
-    assert hits == '', f'sdc_scaling_images still referenced:\n{hits}'
+def test_sdc_scaling_images_reach_compose_jacobian():
+    """DRBUDDI's LSR ratio images (TORTOISE's default signal redistribution
+    for reverse phase-encoded data) feed ComposeJacobianWeights, where they
+    replace the analytic determinant."""
+    wf = _trans_wf()
+    edges = {(src, dst): dict(connect) for src, dst, connect in _edges(wf)}
+    assert ('sdc_scaling_images', 'sdc_scaling_images') in edges[
+        ('inputnode', 'compose_jacobian')
+    ].items()
+    assert ('method', 'jacobian_method') in edges[('compose_jacobian', 'outputnode')].items()
 
 
-def test_drbuddi_aggregate_has_no_scaling_output():
+def test_drbuddi_aggregate_writes_lsr_scaling_output():
     from qsiprep.interfaces.tortoise import DRBUDDIAggregateOutputs
 
     outputs = DRBUDDIAggregateOutputs().output_spec().copyable_trait_names()
-    assert 'sdc_scaling_images' not in outputs
+    assert 'sdc_scaling_images' in outputs
 
 
 def _patterns():
@@ -421,8 +412,10 @@ def test_jacobian_sidecar_index_is_zero_based_and_full_length():
         applied=['gradwarp', 'sdc'],
         unmodulated=[],
         reason=None,
+        method='Jacobian',
     )
     assert sidecar['JacobianWeightIndex'] == [0, 0, 1, 0]
+    assert sidecar['SignalRedistributionMethod'] == 'Jacobian'
     assert sidecar['AppliedCorrections'] == ['gradwarp', 'sdc']
     assert sidecar['UnmodulatedCorrections'] == []
     assert 'UnmodulatedReason' not in sidecar
@@ -436,7 +429,9 @@ def test_jacobian_sidecar_records_a_gap():
         applied=['gradwarp', 'sdc'],
         unmodulated=['eddy-current'],
         reason='TORTOISE correction_mode=cubic is not supported',
+        method='LSR',
     )
+    assert sidecar['SignalRedistributionMethod'] == 'LSR'
     assert sidecar['UnmodulatedCorrections'] == ['eddy-current']
     assert 'cubic' in sidecar['UnmodulatedReason']
 
@@ -445,7 +440,9 @@ def test_jacobian_sidecar_collapsed_case_is_written_in_full():
     """All-zeros rather than omitted, so consumers need no special case."""
     from qsiprep.interfaces.jacobian import _jacobian_sidecar
 
-    sidecar = _jacobian_sidecar(weight_index=[0] * 5, applied=['sdc'], unmodulated=[], reason=None)
+    sidecar = _jacobian_sidecar(
+        weight_index=[0] * 5, applied=['sdc'], unmodulated=[], reason=None, method='Jacobian'
+    )
     assert sidecar['JacobianWeightIndex'] == [0, 0, 0, 0, 0]
 
 
@@ -501,6 +498,7 @@ def test_stack_jacobian_receives_weights_from_inputnode(tmp_path):
     assert set(edges[('inputnode', 'stack_jacobian')]) == {
         ('jacobian_weights', 'weight_images'),
         ('jacobian_weight_index', 'weight_index'),
+        ('jacobian_method', 'method'),
     }
 
 
@@ -511,6 +509,11 @@ def _finalize_wf(tmp_path, write_derivatives=True):
     config.execution.sloppy = False
     config.workflow.sdc_method = 'topup'
     config.workflow.dwiref_construction_iters = 0
+    # Read at construction time by nodes this workflow builds; nothing else
+    # in this module sets them, so they cannot be left to test order.
+    config.workflow.b0_threshold = 100
+    config.workflow.dwi2anat_dof = 6
+    config.workflow.force_jacobian = False
     dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz')
     unit = make_preproc_unit([dwi])
     return init_dwi_finalize_wf(

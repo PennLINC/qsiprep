@@ -586,7 +586,12 @@ class workflow(_Config):
     hmc_method = None
     """Which software corrects head motion: eddy, shoreline or tortoise."""
     jacobian_weighting = True
-    """Apply Jacobian intensity modulation for the spatial distortion corrections."""
+    """Apply intensity modulation after QSIPrep's own spatial distortion corrections
+    (derived from ``--ignore jacobian`` by the parser)."""
+    force_jacobian = False
+    """``--force jacobian`` was given: Jacobian-modulate the TORTOISE T2Wreg (EPIREG)
+    field as well, which TORTOISE itself leaves unmodulated (derived from ``force`` by
+    the parser)."""
     hmc_transform = None
     """Transformation SHORELine optimizes during head motion correction: Affine or
     Rigid. Derived from ``--shoreline-config``; None unless ``hmc_method`` is

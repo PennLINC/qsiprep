@@ -484,6 +484,12 @@ class _DRBUDDIAggregateOutputsInputSpec(TORTOISEInputSpec):
 class _DRBUDDIAggregateOutputsOutputSpec(TraitedSpec):
     # Aggregated outputs for convenience
     sdc_warps = OutputMultiObject(File(exists=True))
+    sdc_scaling_images = OutputMultiObject(
+        File(exists=True),
+        desc="per-volume LSR signal-redistribution ratios, TORTOISE's default for "
+        'reverse phase-encoded data: b0_corrected_final / blip_<up|down>_b0_corrected '
+        '(FINALDATA.cxx, the LSR branch)',
+    )
     # Fieldmap outputs for the reports
     up_fa_corrected_image = File(exists=True)
     down_fa_corrected_image = File(exists=True)
@@ -525,6 +531,22 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
 
         self._results['sdc_warps'] = [
             self.inputs.deformation_finv if blip_dir == 'up' else down_warp
+            for blip_dir in self.inputs.blip_assignments
+        ]
+
+        # TORTOISE's LSR signal redistribution: the ratio of the harmonic-mean
+        # corrected b=0 to each blip's geometry-corrected b=0 is the whole
+        # intensity weight for that blip's volumes.
+        scaling_blip_up_file = op.join(runtime.cwd, 'blip_up_scale.nii.gz')
+        scaling_blip_down_file = op.join(runtime.cwd, 'blip_down_scale.nii.gz')
+        nim.math_img(
+            'a/b', a=self.inputs.undistorted_reference, b=self.inputs.blip_up_b0_corrected
+        ).to_filename(scaling_blip_up_file)
+        nim.math_img(
+            'a/b', a=self.inputs.undistorted_reference, b=self.inputs.blip_down_b0_corrected
+        ).to_filename(scaling_blip_down_file)
+        self._results['sdc_scaling_images'] = [
+            scaling_blip_up_file if blip_dir == 'up' else scaling_blip_down_file
             for blip_dir in self.inputs.blip_assignments
         ]
 
@@ -1017,14 +1039,6 @@ class _DIFFPREPOutputSpec(TraitedSpec):
         exists=True,
         desc='Per-volume 24-parameter Okan-quadratic transforms as written by DIFFPREP.',
     )
-    # Declared so nipype keeps it. remove_unnecessary_outputs is on
-    # (config.py:334) and deletes files in the node directory that no output
-    # points at, which silently removed this one. The EC Jacobian ship gate
-    # reads it to check our reconstruction against _moteddy.nii, and needs the
-    # image DIFFPREP actually resampled rather than the pre-import input.
-    imported_dwi_file = File(
-        desc='The "_proc" copy the import step staged, in TORTOISE\'s own layout.'
-    )
     # epi_mode == 'T2Wreg' only. The EPI stage's displacement field is emitted as
     # a transform rather than baked into the image, so qsiprep can compose it with
     # HMC and coregistration and resample once -- the same contract DRBUDDI has.
@@ -1119,7 +1133,6 @@ class DIFFPREP(TORTOISECommandLine):
         # in EVERY case -- including T2Wreg, see below.
         outputs['corrected_dwi_file'] = proc_base + '_moteddy.nii'
         outputs['corrected_bmtxt_file'] = proc_base + '_moteddy.bmtxt'
-        outputs['imported_dwi_file'] = proc_base + '.nii'
 
         if self.inputs.epi_mode == 'T2Wreg':
             # Deliberately NOT the ``*_TORTOISE_final.nii`` FINALDATA image:

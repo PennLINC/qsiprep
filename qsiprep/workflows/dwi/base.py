@@ -222,6 +222,8 @@ def init_dwi_preproc_wf(
                 'fieldmap_hz',
                 # Only written out by the TORTOISE/DIFFPREP backend.
                 'ec_jacobian_images',
+                # Only written out when DRBUDDI ran: TORTOISE's LSR ratios.
+                'sdc_scaling_images',
             ]
         ),
         name='outputnode',
@@ -413,6 +415,13 @@ def init_dwi_preproc_wf(
         # and eddy have no TORTOISE eddy-current Jacobian to report.
         workflow.connect([
             (hmc_wf, outputnode, [('outputnode.ec_jacobian_images', 'ec_jacobian_images')]),
+        ])  # fmt:skip
+
+    if doing_drbuddi:
+        # DRBUDDI's LSR ratios: TORTOISE's default signal redistribution for
+        # reverse phase-encoded data, which replaces the Jacobian weight.
+        workflow.connect([
+            (hmc_wf, outputnode, [('outputnode.sdc_scaling_images', 'sdc_scaling_images')]),
         ])  # fmt:skip
 
     # DRBUDDI has some extra reports that we want to save. Make sure we get them!

@@ -145,6 +145,7 @@ def init_drbuddi_wf(
                 'b0_ref',
                 'b0_mask',
                 'sdc_warps',
+                'sdc_scaling_images',
                 'report',
                 'method',
                 # From SDC
@@ -257,6 +258,7 @@ def init_drbuddi_wf(
         (gather_drbuddi_inputs, aggregate_drbuddi, [('blip_assignments', 'blip_assignments')]),
         (aggregate_drbuddi, outputnode, [
             ('sdc_warps', 'sdc_warps'),
+            ('sdc_scaling_images', 'sdc_scaling_images'),
             ('up_fa_corrected_image', 'up_fa_corrected_image'),
             ('down_fa_corrected_image', 'down_fa_corrected_image'),
             ('b0_ref', 'b0_ref'),

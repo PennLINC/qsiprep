@@ -763,25 +763,26 @@ def test_jacobian_weighting_defaults_on(tmp_path):
     assert opts.jacobian_weighting is True
 
 
-def test_no_jacobian_weighting_turns_it_off(tmp_path):
-    """--no-jacobian-weighting is the BooleanOptionalAction off-switch."""
+def test_ignore_jacobian_turns_it_off(tmp_path):
+    """--ignore jacobian is the off-switch; --force jacobian is the T2Wreg override."""
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
     bids = tmp_path / 'bids'
     bids.mkdir()
     out = tmp_path / 'out'
-    opts = parser.parse_args(
-        [
-            str(bids),
-            str(out),
-            'participant',
-            '--output-resolution',
-            '2',
-            '--no-jacobian-weighting',
-        ]
-    )
+    base = [str(bids), str(out), 'participant', '--output-resolution', '2']
+
+    opts = parser.parse_args([*base, '--ignore', 'jacobian'])
     assert opts.jacobian_weighting is False
+    assert opts.force_jacobian is False
+
+    opts = parser.parse_args([*base, '--force', 'jacobian'])
+    assert opts.jacobian_weighting is True
+    assert opts.force_jacobian is True
+
+    with pytest.raises(SystemExit):
+        parser.parse_args([*base, '--ignore', 'jacobian', '--force', 'jacobian'])
 
 
 def _cli_base(tmp_path):

@@ -38,6 +38,24 @@ _DIFFPREP_CUBIC_UNMODULATED_REASON = (
     '(cubic Okan terms) has no implemented Jacobian determinant.'
 )
 
+_T2WREG_UNMODULATED_REASON = (
+    'TORTOISE applies the fieldmap-less T2Wreg (EPIREG) field without intensity '
+    'modulation: its final registration stage is not restricted to the '
+    'phase-encoding direction, so its Jacobian is not a volume change. Pass '
+    '--force jacobian to modulate by the phase-encoding component anyway.'
+)
+
+
+def t2wreg_is_weighted(unit, t2w_sdc):
+    """Whether this unit's susceptibility field gets an intensity weight.
+
+    Only TORTOISE's T2Wreg (EPIREG) field is exempt, and ``--force jacobian``
+    lifts the exemption. Every other field (DRBUDDI, GRE, SyN) is weighted.
+    """
+    if resolve_t2wreg_target(unit, t2w_sdc) is None:
+        return True
+    return bool(config.workflow.force_jacobian)
+
 
 def _gradwarp_applied(unit):
     """True when this unit's gradwarp field reaches ComposeJacobianWeights.
@@ -163,7 +181,13 @@ def _tortoise_provenance(unit, t2w_sdc):
     elif unit.is_gre or unit.is_nipreps_syn:
         applied.append('sdc')
     elif resolve_t2wreg_target(unit, t2w_sdc) is not None:
-        applied.append('sdc')
+        if t2wreg_is_weighted(unit, t2w_sdc):
+            applied.append('sdc')
+        else:
+            unmodulated.append('sdc')
+            reason = (
+                f'{reason} {_T2WREG_UNMODULATED_REASON}' if reason else _T2WREG_UNMODULATED_REASON
+            )
 
     return applied, unmodulated, reason
 
@@ -222,7 +246,7 @@ _JACOBIAN_SENTENCE = {
     ),
     False: (
         ' This correction was applied without Jacobian intensity modulation '
-        '(--no-jacobian-weighting), so the local volume change it introduces '
+        '(--ignore jacobian), so the local volume change it introduces '
         'was not compensated for.'
     ),
 }

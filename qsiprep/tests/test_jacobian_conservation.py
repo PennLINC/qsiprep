@@ -33,18 +33,10 @@ def _compressing_field(path, shape=(24, 24, 24), amplitude=3.0):
     data = np.zeros(shape + (1, 3), dtype='float32')
     # Smooth, monotone displacement along the first axis.
     data[..., 0, 0] = amplitude * np.sin(np.pi * coords[..., 0])
-    # ITK applies a RAS->LPS conversion to x/y components of any NIfTI it
-    # recognizes as a displacement field (i.e. tagged with intent code 1007,
-    # set below) -- see ``_write_linear_field`` in test_interfaces_jacobian.py.
-    # Negating here matches that helper's convention.
+    # ITK reads a displacement field in LPS, so the x component is negated
+    # for storage -- see ``_write_linear_field`` in test_interfaces_jacobian.py.
     data[..., 0, 0] *= -1
     img = nb.Nifti1Image(data, np.eye(4))
-    # Both antsApplyTransforms (below) and jacobian_determinant read this same
-    # file; without the intent code set up front, jacobian_determinant would
-    # normalize a *separate* corrected copy internally (see its docstring),
-    # so the warp and the determinant would be computed from two files that
-    # ITK interprets differently. Setting it here keeps both consumers
-    # reading the identical, consistently-tagged file.
     img.header.set_intent(1007)
     img.to_filename(str(path))
     return str(path)
@@ -64,8 +56,6 @@ def _blob(path, shape=(24, 24, 24)):
 def test_multiplying_by_the_jacobian_conserves_total_signal(tmp_path):
     if shutil.which('antsApplyTransforms') is None:
         pytest.skip('antsApplyTransforms required for this test')
-    if shutil.which('CreateJacobianDeterminantImage') is None:
-        pytest.skip('CreateJacobianDeterminantImage required for this test')
 
     source = _blob(tmp_path / 'source.nii.gz')
     field = _compressing_field(tmp_path / 'field.nii.gz')
@@ -84,7 +74,7 @@ def test_multiplying_by_the_jacobian_conserves_total_signal(tmp_path):
     xfm.resource_monitor = False
     xfm.run()
 
-    determinant = jacobian_determinant(field, str(tmp_path / 'det.nii.gz'))
+    determinant = jacobian_determinant(field, str(tmp_path / 'det.nii.gz'), pe_axis=0)
 
     raw_total = float(np.asanyarray(nb.load(source).dataobj).sum())
     warped_data = np.asanyarray(nb.load(warped).dataobj)

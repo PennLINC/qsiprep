@@ -40,6 +40,8 @@ def init_dwi_trans_wf(
     write_reports=True,
     concatenate=True,
     doing_topup=False,
+    pe_axis=None,
+    weight_fieldwarps=True,
 ):
     """
     This workflow samples dwi images to the ``output_grid`` in a "single shot"
@@ -164,6 +166,9 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 'gradwarp_field',
                 'output_grid',
                 'ec_jacobian_images',
+                # Only set when DRBUDDI ran: TORTOISE's LSR ratios, which
+                # replace the Jacobian weight.
+                'sdc_scaling_images',
                 # Only written out if TOPUP was used
                 'fieldmap_hz',
             ]
@@ -189,6 +194,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 # per-volume index into them.
                 'jacobian_weights',
                 'jacobian_weight_index',
+                'jacobian_method',
                 # Only written out if TOPUP was used
                 'fieldmap_hz_resampled',
             ]
@@ -287,7 +293,11 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
         # out to antsApplyTransforms and CreateJacobianDeterminantImage, which
         # run single-threaded on nipype's default.
         compose_jacobian = pe.Node(
-            ComposeJacobianWeights(num_threads=config.nipype.omp_nthreads),
+            ComposeJacobianWeights(
+                num_threads=config.nipype.omp_nthreads,
+                pe_axis=pe_axis,
+                weight_fieldwarps=weight_fieldwarps,
+            ),
             name='compose_jacobian',
             n_procs=config.nipype.omp_nthreads,
         )
@@ -299,10 +309,12 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 (('gradwarp_field', _listify), 'gradwarp_field'),
                 ('fieldwarps', 'fieldwarps'),
                 ('ec_jacobian_images', 'ec_jacobian_images'),
+                ('sdc_scaling_images', 'sdc_scaling_images'),
             ]),
             (compose_jacobian, scale_dwis, [
                 ('jacobian_weight_images', 'jacobian_weight_images'),
             ]),
+            (compose_jacobian, outputnode, [('method', 'jacobian_method')]),
             (scale_dwis, outputnode, [
                 ('resampled_weight_images', 'jacobian_weights'),
                 ('weight_index', 'jacobian_weight_index'),

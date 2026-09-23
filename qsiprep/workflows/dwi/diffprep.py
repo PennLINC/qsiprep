@@ -261,6 +261,7 @@ def init_diffprep_hmc_wf(
                 'bval_files',
                 'to_dwi_ref_affines',
                 'to_dwi_ref_warps',
+                'sdc_scaling_images',
                 'fieldmap_type',
                 'b0_up_image',
                 'b0_up_corrected_image',
@@ -271,16 +272,6 @@ def init_diffprep_hmc_wf(
                 'down_fa_image',
                 'down_fa_corrected_image',
                 't2w_image',
-                # Nothing downstream reads this. It is connected so that nipype
-                # keeps the file: Workflow._set_needed_outputs rebuilds
-                # needed_outputs from each node's out-edges, and
-                # clean_working_directory then deletes every file in the node
-                # directory that no *needed* output points at. Declaring the
-                # output on the interface is not enough, only consuming it is.
-                # The EC Jacobian ship gate reads this image to check our
-                # reconstruction of the 24-parameter transform against
-                # TORTOISE's own _moteddy.nii.
-                'imported_dwi_file',
             ],
         ),
         name='outputnode',
@@ -483,12 +474,6 @@ def init_diffprep_hmc_wf(
             ])  # fmt:skip
 
         corrected_node = diffprep
-        # Single-DIFFPREP runs only. The reverse-PE path recombines two runs
-        # through ConcatenateDIFFPREPGroups, which has no imported image to
-        # offer, and the ship gate does not need one from that path.
-        workflow.connect([
-            (diffprep, outputnode, [('imported_dwi_file', 'imported_dwi_file')]),
-        ])  # fmt:skip
 
     split_outputs = pe.Node(
         DIFFPREPSplitOutputs(b0_threshold=config.workflow.b0_threshold),
@@ -541,7 +526,10 @@ def init_diffprep_hmc_wf(
     # ``jacobian_provenance.jacobian_provenance_for`` for the sidecar, rather
     # than recorded here.
     ec_jacobian = pe.Node(
-        OkanQuadraticJacobian(correction_mode=effective_correction_mode),
+        OkanQuadraticJacobian(
+            correction_mode=effective_correction_mode,
+            rot_eddy_center=diffprep_cfg['rot_eddy_center'],
+        ),
         name='ec_jacobian',
     )
 
@@ -697,6 +685,7 @@ def init_diffprep_hmc_wf(
             (extract_b0s, drbuddi_wf, [('b0_average', 'inputnode.b0_ref')]),
             (drbuddi_wf, outputnode, [
                 ('outputnode.sdc_warps', 'to_dwi_ref_warps'),
+                ('outputnode.sdc_scaling_images', 'sdc_scaling_images'),
                 ('outputnode.method', 'sdc_method'),
                 ('outputnode.fieldmap_type', 'fieldmap_type'),
                 ('outputnode.b0_up_image', 'b0_up_image'),
