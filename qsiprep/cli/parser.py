@@ -469,14 +469,13 @@ def _build_parser(**kwargs):
     )
     g_anat.add_argument(
         '--subject-anatomical-reference',
-        choices=['first-lex', 'unbiased', 'sessionwise', 'first-alphabetically'],
+        choices=['first-lex', 'unbiased', 'sessionwise'],
         default='first-lex',
         help=(
             'How to define the subject-specific anatomical space. '
             '"sessionwise" produces one anatomical space per session. The others '
             'combine anatomical data across sessions to define a single anatomical '
-            'space per subject. '
-            '"first-alphabetically" is deprecated in favor of "first-lex".'
+            'space per subject.'
         ),
     )
     g_anat.add_argument(
@@ -1101,15 +1100,6 @@ def parse_args(args=None, namespace=None):
 
     parser = _build_parser()
     opts = parser.parse_args(args, namespace)
-
-    # Warn about deprecated options
-    if opts.subject_anatomical_reference == 'first-alphabetically':
-        config.loggers.cli.warning(
-            '--subject-anatomical-reference=first-alphabetically has been deprecated '
-            'and will be removed in a later version. '
-            'Please use --subject-anatomical-reference=first-lex instead.'
-        )
-        opts.subject_anatomical_reference = 'first-lex'
 
     # Reports follow the anatomical processing level unless the user asked for a specific one
     if opts.report_output_level == 'auto':
