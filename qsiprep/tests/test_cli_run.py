@@ -257,6 +257,40 @@ def _test_processing_list(tmpdir, name, skeleton, reference, expected):
     assert config.execution.processing_list == expected, config
 
 
+def test_session_filter_without_dwi_is_rejected(tmp_path, capsys):
+    """A session filter that only matches anatomical data is an error."""
+    from qsiprep import config
+    from qsiprep.cli.parser import parse_args
+
+    bids_dir = tmp_path / 'bids'
+    anat_only_session = {
+        'session': 'anatonly',
+        'anat': [{'suffix': 'T1w', 'metadata': {'EchoTime': 1}}],
+    }
+    generate_bids_skeleton(str(bids_dir), {'01': [long['01'][0], anat_only_session]})
+
+    config.from_dict({'bids_dir': str(bids_dir)}, init=True)
+    with pytest.raises(SystemExit):
+        parse_args(
+            [
+                str(bids_dir),
+                str(tmp_path / 'out'),
+                'participant',
+                '--participant-label',
+                '01',
+                '--session-label',
+                'anatonly',
+                '--output-resolution',
+                '2',
+                '--work-dir',
+                str(tmp_path / 'work'),
+                '--skip-bids-validation',
+            ],
+        )
+
+    assert 'No DWI files found with session filter' in capsys.readouterr().err
+
+
 @pytest.mark.parametrize(
     ('name', 'skeleton', 'sessions', 'n_anats'),
     [

@@ -149,7 +149,7 @@ class BIDSDataGrabber(SimpleInterface):
 
     >>> from qsiprep.interfaces import BIDSDataGrabber
     >>> from qsiprep.utils.bids import collect_data
-    >>> bids_src = BIDSDataGrabber()
+    >>> bids_src = BIDSDataGrabber(anatomical_contrast='T1w')
     >>> bids_src.inputs.subject_data = collect_data('ds114', '01')[0]
     >>> bids_src.inputs.subject_id = 'ds114'
     >>> res = bids_src.run()
@@ -161,13 +161,11 @@ class BIDSDataGrabber(SimpleInterface):
 
     input_spec = BIDSDataGrabberInputSpec
     output_spec = BIDSDataGrabberOutputSpec
-    _require_funcs = True
 
     def __init__(self, *args, **kwargs):
         anatomical_contrast = kwargs.pop('anatomical_contrast')
         self._anatomical_contrast = anatomical_contrast
         super().__init__(*args, **kwargs)
-        self._require_funcs = True
         self._no_anat_necessary = anatomical_contrast == 'none'
 
     def _run_interface(self, runtime):
@@ -205,11 +203,6 @@ class BIDSDataGrabber(SimpleInterface):
                 )
             else:
                 raise FileNotFoundError(message)
-
-        if self._no_anat_necessary and not bids_dict['dwi']:
-            raise FileNotFoundError(
-                f'No DWI images found for subject sub-{self.inputs.subject_id}'
-            )
 
         for imtype in ['fmap', 'roi', 'dwi']:
             if not bids_dict[imtype]:

@@ -7,13 +7,13 @@ import numpy as np
 import pytest
 
 
+def _collect(template, transforms):
+    return template, transforms
+
+
 @pytest.fixture(scope='module')
 def t1w_pair(data_dir, tmp_path_factory):
-    """Two copies of one real T1w, the second shifted by a known translation.
-
-    Only the affine is shifted, so both images hold identical voxels and the
-    rigid transform between them is known exactly.
-    """
+    """One real T1w and a copy whose affine is translated by a known offset."""
     if not data_dir:
         pytest.skip('--data_dir was not provided')
 
@@ -41,26 +41,18 @@ def t1w_pair(data_dir, tmp_path_factory):
 
 
 @pytest.mark.parametrize(
-    ('num_images', 'reference', 'shifts'),
+    ('reference', 'shifts'),
     [
-        # "unbiased" recentres the average by the inverse of the mean transform,
-        # so the template sits between the inputs and both move half way.
-        (2, 'unbiased', (0.5, 0.5)),
-        # "first-lex" registers onto the first image, which therefore does not
-        # move, while the second takes up the whole offset.
-        (2, 'first-lex', (0.0, 1.0)),
-        # One image is already the reference, so there is nothing to merge.
-        (1, 'unbiased', (0.0,)),
+        # The unbiased template sits midway, so each image moves half the offset.
+        ('unbiased', (0.5, 0.5)),
+        # The first image is the template, so the second takes up the whole offset.
+        ('first-lex', (0.0, 1.0)),
     ],
 )
 def test_subject_anatomical_reference_places_the_template(
-    t1w_pair, tmp_path, num_images, reference, shifts
+    t1w_pair, tmp_path, monkeypatch, reference, shifts
 ):
-    """``--subject-anatomical-reference`` decides where the merged template lands.
-
-    Runs the merge on real anatomicals a known distance apart and reads the
-    resulting transforms to see how far each image had to move.
-    """
+    """``--subject-anatomical-reference`` decides where the merged template lands."""
     from nipype.interfaces import utility as niu
     from nipype.pipeline import engine as pe
     from scipy.io import loadmat
@@ -68,33 +60,24 @@ def test_subject_anatomical_reference_places_the_template(
     from qsiprep import config
     from qsiprep.workflows.anatomical.volume import init_anat_template_wf
 
-    images = t1w_pair[:num_images]
+    monkeypatch.setattr(config.execution, 'sloppy', False)
+    monkeypatch.setattr(config.nipype, 'omp_nthreads', 2)
+    monkeypatch.setattr(config.workflow, 'subject_anatomical_reference', reference)
 
-    config.execution.sloppy = False
-    config.execution.output_dir = str(tmp_path)
-    config.nipype.omp_nthreads = 2
-    config.workflow.anat_modality = 'T1w'
-    config.workflow.anat_biascorrect = 'none'
-    config.workflow.hmc_transform = 'Rigid'
-    config.workflow.subject_anatomical_reference = reference
-
-    workflow = pe.Workflow(name='test_wf')
-    workflow.base_dir = str(tmp_path)
-    template_wf = init_anat_template_wf(num_images=len(images), do_biascorr=False)
-    template_wf.inputs.inputnode.images = images
-    # nipype drops IdentityInterface nodes when it flattens a workflow to run it,
-    # so outputnode is not in the graph run() returns. Hand the outputs to a node
-    # that survives.
-    outputs = pe.Node(
+    workflow = pe.Workflow(name='test_wf', base_dir=str(tmp_path))
+    template_wf = init_anat_template_wf(num_images=2, do_biascorr=False)
+    template_wf.inputs.inputnode.images = t1w_pair
+    # outputnode is pruned from the executed graph, so collect its outputs downstream.
+    collect = pe.Node(
         niu.Function(
             input_names=['template', 'transforms'],
             output_names=['template', 'transforms'],
-            function='def collect(template, transforms):\n    return template, transforms\n',
+            function=_collect,
         ),
         name='collect',
     )
     workflow.connect([
-        (template_wf, outputs, [
+        (template_wf, collect, [
             ('outputnode.template', 'template'),
             ('outputnode.template_transforms', 'transforms'),
         ]),
@@ -103,30 +86,32 @@ def test_subject_anatomical_reference_places_the_template(
     graph = workflow.run(plugin='Linear')
     result = next(node for node in graph.nodes() if node.name == 'collect').result.outputs
     assert os.path.isfile(result.template)
-    assert len(result.transforms) == num_images
 
     translations = []
     for transform in result.transforms:
         # antsRegistration returns a list of transforms per image.
         path = transform[0] if isinstance(transform, list | tuple) else transform
-        if not path.endswith('.mat'):
-            # A lone image gets the shipped identity transform, not a fitted one.
-            assert 'itkIdentityTransform' in path
-            translations.append(np.zeros(3))
-            continue
         params = loadmat(path)
         key = next(k for k in params if 'AffineTransform' in k)
         translations.append(np.asarray(params[key]).ravel()[9:12])
 
-    origins = [nb.load(image).affine[:3, 3] for image in images]
-    separation = np.linalg.norm(origins[-1] - origins[0])
+    origins = [nb.load(image).affine[:3, 3] for image in t1w_pair]
+    separation = np.linalg.norm(origins[1] - origins[0])
 
-    # Registration recovers the offset to within ~0.02 mm, against a 3.7 mm gap
-    # between the two placements being told apart.
     for translation, shift in zip(translations, shifts, strict=True):
         assert np.linalg.norm(translation) == pytest.approx(shift * separation, abs=0.25)
 
     # Wherever the template is placed, the images stay the same distance apart.
-    assert np.linalg.norm(translations[-1] - translations[0]) == pytest.approx(
-        separation, abs=0.25
-    )
+    assert np.linalg.norm(translations[1] - translations[0]) == pytest.approx(separation, abs=0.25)
+
+
+def test_single_image_template_uses_identity_transform(monkeypatch):
+    """A single anatomical image is its own template, so it gets no fitted transform."""
+    from qsiprep import config
+    from qsiprep.workflows.anatomical.volume import init_anat_template_wf
+
+    monkeypatch.setattr(config.nipype, 'omp_nthreads', 1)
+
+    template_wf = init_anat_template_wf(num_images=1, do_biascorr=False)
+    transforms = template_wf.get_node('outputnode').inputs.template_transforms
+    assert [os.path.basename(t) for t in transforms] == ['itkIdentityTransform.txt']
