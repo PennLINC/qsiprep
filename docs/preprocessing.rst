@@ -372,8 +372,14 @@ refines the result, so ``desc-sdc`` is the total of the two: TOPUP's rebuilt
 displacement followed by DRBUDDI's refinement.
 The refinement alone is also written, as ``desc-sdcrefinement``, and drawn in its
 own report figure; its largest vectors mark where DRBUDDI disagreed with TOPUP.
-The sidecar's ``EstimationMethod`` records which method produced the map, and its
-``Units`` are ``mm``.
+The sidecar's ``EstimationMethod`` records which method produced the map, its
+``Units`` are ``mm``, and ``VectorConvention`` is ``LPS``.
+``TransformFile`` gives the written transform(s) that carried the correction from
+the DWI frame into ACPC, as BIDS URIs in the order they apply, following the draft
+BIDS extension for spaces and mappings (BEP014).
+Under ``--dwiref-definition subject`` with a nonlinear
+``--dwiref-construction-transform``, the per-group transform is not written, so
+``TransformFile`` is left out.
 The map is written whenever distortion correction ran, except under
 ``--distortion-group-merge``, where the merged output has no single map.
 

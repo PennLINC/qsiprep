@@ -64,6 +64,27 @@ def _tsnr_meta(n_b0, median_tsnr):
 LOGGER = logging.getLogger('nipype.workflow')
 
 
+def _sdc_sidecar(meta, output_dir, transform_files=None):
+    """An SDC displacement map's sidecar, naming the transforms that carried it into ACPC.
+
+    ``TransformFile`` follows BEP014 ("the file used to transform the source into
+    this file"): the written transform(s) that brought the DWI-space correction
+    onto the ACPC grid, as BIDS URIs into this dataset, in the order they apply.
+    One transform is a plain string. The key is left out when ``transform_files``
+    is not given, i.e. when some step of that chain is not written.
+    """
+    import os
+
+    meta = dict(meta)
+    if transform_files:
+        paths = []
+        for item in [transform_files] if isinstance(transform_files, str) else transform_files:
+            paths.extend([item] if isinstance(item, str) else item)
+        uris = [f'bids::{os.path.relpath(path, output_dir)}' for path in paths]
+        meta['TransformFile'] = uris[0] if len(uris) == 1 else uris
+    return meta
+
+
 def init_dwi_derivatives_wf(source_file, sdc_warp_meta=None, sdc_refinement_meta=None) -> Workflow:
     """Set up a battery of datasinks to store derivatives in the right location.
 
@@ -91,6 +112,7 @@ def init_dwi_derivatives_wf(source_file, sdc_warp_meta=None, sdc_refinement_meta
                 'series_qc',
                 'sdc_warp_to_template',
                 'sdc_refinement_to_template',
+                'sdc_transform_files',
             ]
         ),
         name='inputnode',
@@ -281,7 +303,9 @@ def init_dwi_derivatives_wf(source_file, sdc_warp_meta=None, sdc_refinement_meta
     # The SDC (susceptibility) displacement on the ACPC grid. It is a map of the
     # correction, not a transform to chain: the correction itself is applied in
     # DWI space, before coregistration. Only written when distortion correction
-    # ran; the caller signals that by passing the sidecar metadata.
+    # ran; the caller signals that by passing the sidecar metadata. The sidecar
+    # also names the written transforms that carried it into ACPC, when the
+    # caller connects them to inputnode.sdc_transform_files.
     for name, field, desc, meta in (
         ('ds_sdc_warp_t1', 'sdc_warp_to_template', 'sdc', sdc_warp_meta),
         (
@@ -293,6 +317,13 @@ def init_dwi_derivatives_wf(source_file, sdc_warp_meta=None, sdc_refinement_meta
     ):
         if meta is None:
             continue
+        sidecar = pe.Node(
+            niu.Function(function=_sdc_sidecar, output_names=['meta']),
+            name=f'{name}_sidecar',
+            run_without_submitting=True,
+        )
+        sidecar.inputs.meta = meta
+        sidecar.inputs.output_dir = output_dir
         ds_sdc_field = pe.Node(
             DerivativesDataSink(
                 source_file=source_file,
@@ -302,13 +333,16 @@ def init_dwi_derivatives_wf(source_file, sdc_warp_meta=None, sdc_refinement_meta
                 suffix='displacement',
                 extension='.nii.gz',
                 compress=True,
-                meta_dict=meta,
             ),
             name=name,
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
-        workflow.connect([(inputnode, ds_sdc_field, [(field, 'in_file')])])
+        workflow.connect([
+            (inputnode, sidecar, [('sdc_transform_files', 'transform_files')]),
+            (inputnode, ds_sdc_field, [(field, 'in_file')]),
+            (sidecar, ds_sdc_field, [('meta', 'meta_dict')]),
+        ])  # fmt:skip
 
     # If requested, write local bvecs
     # if config.workflow.write_local_bvecs:

@@ -206,6 +206,7 @@ def init_dwi_finalize_wf(
         sdc_warp_meta = {
             'EstimationMethod': estimation_method,
             'Units': 'mm',
+            'VectorConvention': 'LPS',
             'Description': description,
         }
 
@@ -214,6 +215,7 @@ def init_dwi_finalize_wf(
         sdc_refinement_meta = {
             'EstimationMethod': 'DRBUDDI',
             'Units': 'mm',
+            'VectorConvention': 'LPS',
             'Description': (
                 "DRBUDDI's refinement of the first DWI series after eddy had already "
                 "corrected it with TOPUP's field: the part of the total correction "
@@ -276,6 +278,9 @@ def init_dwi_finalize_wf(
                 'sdc_scaling_images',
                 # Only written out if TOPUP was used
                 'fieldmap_hz',
+                # The written transforms that carry the DWI frame into ACPC, in the
+                # order they apply; named in the SDC maps' sidecars when given
+                'sdc_transform_files',
             ]
         ),
         name='inputnode',
@@ -703,6 +708,12 @@ def init_dwi_finalize_wf(
     # deformations are (Slicer's transform-glyph view, no Slicer needed). Each
     # figure scales its colors to its own field, so the small DRBUDDI refinement
     # stays visible next to the total.
+    if sdc_fields:
+        workflow.connect([
+            (inputnode, dwi_derivatives_wf, [
+                ('sdc_transform_files', 'inputnode.sdc_transform_files'),
+            ]),
+        ])  # fmt:skip
     for field, desc, title in sdc_fields:
         plot = pe.Node(
             SDCWarpPlot(title=f'{title} (ACPC space)'),

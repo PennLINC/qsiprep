@@ -420,7 +420,14 @@ def test_derivatives_wf_writes_sdc_warp_only_with_meta():
     assert ds.inputs.space == 'ACPC'
     assert ds.inputs.desc == 'sdc'
     assert ds.inputs.suffix == 'displacement'
-    assert ds.inputs.meta_dict == meta
+    assert wf.get_node('ds_sdc_warp_t1_sidecar').inputs.meta == meta
+    edges = [(u.name, v.name, d['connect']) for u, v, d in wf._graph.edges(data=True)]
+    assert ('ds_sdc_warp_t1_sidecar', 'ds_sdc_warp_t1', [('meta', 'meta_dict')]) in edges
+    assert any(
+        (u, v) == ('inputnode', 'ds_sdc_warp_t1_sidecar')
+        and ('sdc_transform_files', 'transform_files') in c
+        for u, v, c in edges
+    )
     # The TOPUP+DRBUDDI refinement has its own datasink, only when asked for.
     assert wf.get_node('ds_sdc_refinement_t1') is None
 
@@ -433,8 +440,74 @@ def test_derivatives_wf_writes_sdc_warp_only_with_meta():
     ds = wf.get_node('ds_sdc_refinement_t1')
     assert ds.inputs.desc == 'sdcrefinement'
     assert ds.inputs.suffix == 'displacement'
-    assert ds.inputs.meta_dict == refinement_meta
+    assert wf.get_node('ds_sdc_refinement_t1_sidecar').inputs.meta == refinement_meta
     assert wf.get_node('ds_sdc_warp_t1').inputs.desc == 'sdc'
+
+
+@pytest.mark.parametrize(
+    ('transform_files', 'expected'),
+    [
+        # One written transform (a distortion-group dwiref): a plain BIDS URI.
+        (
+            '/out/sub-01/dwi/sub-01_from-distortiongroup_to-ACPC_mode-image_desc-coreg_xfm.mat',
+            'bids::sub-01/dwi/sub-01_from-distortiongroup_to-ACPC_mode-image_desc-coreg_xfm.mat',
+        ),
+        # A linear subject-level dwiref: both hops, in the order they apply, as
+        # DerivativesDataSink and Merge may hand them over (possibly nested).
+        (
+            [
+                [
+                    '/out/sub-01/dwi/sub-01_from-distortiongroup_to-subject_mode-image_desc-coreg_xfm.mat'
+                ],
+                '/out/sub-01/dwi/sub-01_from-subject_to-ACPC_mode-image_desc-coreg_xfm.mat',
+            ],
+            [
+                'bids::sub-01/dwi/sub-01_from-distortiongroup_to-subject_mode-image_desc-coreg_xfm.mat',
+                'bids::sub-01/dwi/sub-01_from-subject_to-ACPC_mode-image_desc-coreg_xfm.mat',
+            ],
+        ),
+    ],
+)
+def test_sdc_sidecar_names_the_transforms_into_acpc(transform_files, expected):
+    """BEP014's TransformFile: the written transforms that carried the map into ACPC."""
+    from qsiprep.workflows.dwi.derivatives import _sdc_sidecar
+
+    meta = {'EstimationMethod': 'DRBUDDI', 'Units': 'mm'}
+    got = _sdc_sidecar(meta, '/out', transform_files)
+    assert got['TransformFile'] == expected
+    assert got['Units'] == 'mm'
+    assert 'TransformFile' not in meta  # the input metadata is not modified
+
+
+def test_sdc_sidecar_leaves_out_an_unwritten_chain():
+    """No transform files (a nonlinear subject dwiref): no half-chain TransformFile."""
+    from qsiprep.workflows.dwi.derivatives import _sdc_sidecar
+
+    assert 'TransformFile' not in _sdc_sidecar({'Units': 'mm'}, '/out')
+
+
+def test_connect_sdc_transform_files_keeps_the_order_they_apply():
+    """The helper feeds the finalize workflow every written hop, first hop first."""
+    from nipype.interfaces import utility as niu
+    from nipype.pipeline import engine as pe
+
+    from qsiprep.workflows.base import connect_sdc_transform_files
+
+    workflow = pe.Workflow(name='subject_wf')
+    first, second = (
+        pe.Node(niu.IdentityInterface(fields=['out_file']), name=name)
+        for name in ('ds_distortiongroup_to_subject', 'ds_subject_to_acpc')
+    )
+    finalize = pe.Workflow(name='dwi_finalize_wf')
+    finalize.add_nodes([pe.Node(niu.IdentityInterface(['sdc_transform_files']), 'inputnode')])
+
+    connect_sdc_transform_files(workflow, [first, second], finalize, 'sub_01_dwi')
+
+    edges = {(u.name, v.name): d['connect'] for u, v, d in workflow._graph.edges(data=True)}
+    chain = 'sdc_transform_files_sub_01_dwi'
+    assert edges[('ds_distortiongroup_to_subject', chain)] == [('out_file', 'in1')]
+    assert edges[('ds_subject_to_acpc', chain)] == [('out_file', 'in2')]
+    assert edges[(chain, 'dwi_finalize_wf')] == [('out', 'inputnode.sdc_transform_files')]
 
 
 @pytest.mark.parametrize('sdc_method', ['topup', 'topup+drbuddi'])
@@ -464,8 +537,15 @@ def test_finalize_writes_the_refinement_only_for_topup_drbuddi(tmp_path, monkeyp
         write_derivatives=True,
     )
     derivatives = wf.get_node('dwi_derivatives_wf')
-    total = derivatives.get_node('ds_sdc_warp_t1').inputs.meta_dict
-    refinement = derivatives.get_node('ds_sdc_refinement_t1')
+    total = derivatives.get_node('ds_sdc_warp_t1_sidecar').inputs.meta
+    refinement = derivatives.get_node('ds_sdc_refinement_t1_sidecar')
+    assert total['VectorConvention'] == 'LPS'
+    # The written DWI-to-ACPC transforms reach the maps' sidecars.
+    assert any(
+        (u.name, v.name) == ('inputnode', 'dwi_derivatives_wf')
+        and ('sdc_transform_files', 'inputnode.sdc_transform_files') in d['connect']
+        for u, v, d in wf._graph.edges(data=True)
+    )
 
     if sdc_method == 'topup':
         assert total['EstimationMethod'] == 'TOPUP'
@@ -475,9 +555,10 @@ def test_finalize_writes_the_refinement_only_for_topup_drbuddi(tmp_path, monkeyp
         return
 
     assert total['EstimationMethod'] == 'TOPUP+DRBUDDI'
-    assert total['Units'] == refinement.inputs.meta_dict['Units'] == 'mm'
+    assert total['Units'] == refinement.inputs.meta['Units'] == 'mm'
+    assert refinement.inputs.meta['VectorConvention'] == 'LPS'
     assert 'desc-sdcrefinement' in total['Description']
-    assert refinement.inputs.meta_dict['EstimationMethod'] == 'DRBUDDI'
+    assert refinement.inputs.meta['EstimationMethod'] == 'DRBUDDI'
     assert wf.get_node('sdcwarp_plot').inputs.title == (
         'SDC displacement field, TOPUP+DRBUDDI (ACPC space)'
     )
