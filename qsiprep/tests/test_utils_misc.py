@@ -9,6 +9,7 @@ import pytest
 from qsiprep.cli.parser import _build_parser
 from qsiprep.utils.misc import (
     describe_dwidenoise2,
+    format_dwidenoise2_schedule,
     load_dwidenoise2_config,
     parse_denoise_method,
     safe_unit_vector,
@@ -497,3 +498,54 @@ def test_load_dwidenoise2_config_rejects_malformed_files(tmp_path, text):
 def test_load_dwidenoise2_config_rejects_missing_file(tmp_path):
     with pytest.raises(ValueError, match='does not exist'):
         load_dwidenoise2_config(str(tmp_path / 'missing.json'))
+
+
+def _schedule_table(text):
+    """Split schedule file text into rows of cells, dropping comment lines."""
+    return [line.split() for line in text.splitlines() if not line.startswith('#')]
+
+
+def test_format_dwidenoise2_schedule_single_row():
+    text = format_dwidenoise2_schedule([{'kernel': 'cuboid=1x', 'update_noise': True}])
+
+    assert text.startswith('#')
+    assert text.endswith('\n')
+    assert _schedule_table(text) == [['kernel', 'update_noise'], ['cuboid=1x', 'true']]
+
+
+def test_format_dwidenoise2_schedule_fills_omitted_cells():
+    rows = [
+        {'spatial_subsample': (4, 4, 2), 'kernel': 'aspect=2.0'},
+        {'temporal_subsample': 0.333333, 'max_partition_size': 384},
+        {'spatial_subsample': 2, 'kernel': 'rank'},
+    ]
+
+    assert _schedule_table(format_dwidenoise2_schedule(rows)) == [
+        [
+            'spatial_subsample',
+            'kernel',
+            'update_noise',
+            'temporal_subsample',
+            'max_partition_size',
+        ],
+        ['4,4,2', 'aspect=2.0', 'true', '1.0', 'none'],
+        ['2', 'aspect=2.0', 'true', '0.333333', '384'],
+        # dwidenoise2 resolves an omitted update_noise to false on the last row
+        ['2', 'rank', 'false', '1.0', 'none'],
+    ]
+
+
+def test_format_dwidenoise2_schedule_empty_rows_keep_a_header():
+    """An empty header would make dwidenoise2 reject the file."""
+    assert _schedule_table(format_dwidenoise2_schedule([{}, {}])) == [
+        ['update_noise'],
+        ['true'],
+        ['false'],
+    ]
+
+
+def test_format_dwidenoise2_schedule_accepts_list_triplets():
+    """nipype may hand the interface lists where the loader produced tuples."""
+    text = format_dwidenoise2_schedule([{'spatial_subsample': [1, 1, 2], 'update_noise': True}])
+
+    assert _schedule_table(text)[1] == ['1,1,2', 'true']

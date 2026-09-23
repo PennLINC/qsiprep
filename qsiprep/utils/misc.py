@@ -484,6 +484,55 @@ def load_dwidenoise2_config(path):
     return params
 
 
+def _format_schedule_value(value):
+    if isinstance(value, bool):
+        return 'true' if value else 'false'
+    if isinstance(value, tuple | list):
+        return ','.join(str(v) for v in value)
+    return str(value)
+
+
+def format_dwidenoise2_schedule(rows):
+    """Write schedule rows in the table format that ``dwidenoise2 -schedule`` reads.
+
+    The header lists every column any row sets, plus ``update_noise``, which is always
+    written so that the header is never empty. A cell a row omits gets dwidenoise2's
+    default. For ``update_noise`` that is the value dwidenoise2 resolves: true on every row
+    but the last, and false on the last.
+
+    Parameters
+    ----------
+    rows : list of dict
+        Schedule rows, as returned in the ``schedule`` key of
+        :func:`load_dwidenoise2_config`.
+
+    Returns
+    -------
+    str
+        The schedule file text.
+    """
+    used = {column for row in rows for column in row} | {'update_noise'}
+    columns = [column for column in _SCHEDULE_COLUMNS if column in used]
+    last = len(rows) - 1
+
+    lines = [
+        '# dwidenoise2 noise estimation schedule written by QSIPrep from --dwidenoise2-config',
+        ' '.join(columns),
+    ]
+    for i, row in enumerate(rows):
+        cells = []
+        for column in columns:
+            if column in row:
+                value = row[column]
+            elif column == 'update_noise':
+                value = i != last
+            else:
+                value = _SCHEDULE_DEFAULTS[column]
+            cells.append(_format_schedule_value(value))
+        lines.append(' '.join(cells))
+    return '\n'.join(lines) + '\n'
+
+
 # dwidenoise2's own defaults, mirrored here so the boilerplate describes what actually ran
 _DWIDENOISE2_DEFAULTS = {
     'aggregator': 'gaussian',
