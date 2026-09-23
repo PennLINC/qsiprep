@@ -1,7 +1,7 @@
 """Construction tests for Jacobian weighting inside the resampling workflow.
 
 Asserts the graph, not the numbers: that the weighting node exists, that it is
-fed from the right sources, and that ``--no-jacobian-weighting`` removes it.
+fed from the right sources, and that ``--ignore jacobian`` removes it.
 The numeric correctness of the weights lives in
 ``test_interfaces_jacobian.py`` and ``test_jacobian_conservation.py``.
 """

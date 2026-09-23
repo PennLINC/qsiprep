@@ -515,7 +515,7 @@ def init_diffprep_hmc_wf(
     # own, and the map is a required downstream ApplyTransforms input.
     calculate_cnr = pe.Node(CalculateCNR(), name='calculate_cnr', mem_gb=2)
 
-    # TORTOISE eddy-current Jacobian, for --jacobian-weighting. Built from
+    # TORTOISE eddy-current Jacobian, unless --ignore jacobian. Built from
     # effective_correction_mode (post-sloppy), not the configured
     # correction_mode: passing the configured value would attempt quadratic
     # recovery from motion-only transforms on every --sloppy run. 'cubic' is

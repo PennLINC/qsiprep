@@ -512,6 +512,10 @@ def _finalize_cfg(tmp_path):
     config.workflow.sdc_method = 'topup'
     config.workflow.output_resolution = 1.2
     config.workflow.dwiref_definition = 'distortion-group'
+    # Read when the bias-correction node is built (do_biascorr=True paths);
+    # set here so these tests do not depend on which module ran before them.
+    config.workflow.b0_threshold = 100
+    config.workflow.dwi2anat_dof = 6
     config.nipype.omp_nthreads = 1
 
 
