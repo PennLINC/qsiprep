@@ -39,7 +39,6 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from ... import config
 
 # Fieldmap workflows
-from .pepolar import init_pepolar_unwarp_wf
 from .unwarp import init_sdc_unwarp_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -156,27 +155,7 @@ co-registration with the anatomical reference.
 
     # PEPOLAR path
     if unit.is_pepolar:
-        outputnode.inputs.method = 'PEB/PEPOLAR (phase-encoding based / PE-POLARity)'
-
-        # The reverse blip is the opposite-polarity DWI series when both are
-        # present, otherwise the dedicated epi fieldmap(s).
-        epi_fmaps = list(unit.minus_files) if unit.has_bidirectional_dwi else list(unit.extra_b0)
-
-        # We have already sorted by compatible
-        sdc_unwarp_wf = init_pepolar_unwarp_wf(
-            dwi_meta=unit.dwi_metadata,
-            epi_fmaps=epi_fmaps,
-            omp_nthreads=omp_nthreads,
-            name='pepolar_unwarp_wf',
-        )
-
-        workflow.connect([
-            (inputnode, sdc_unwarp_wf, [
-                ('b0_ref', 'inputnode.in_reference'),
-                ('b0_mask', 'inputnode.in_mask'),
-                ('b0_ref_brain', 'inputnode.in_reference_brain'),
-            ]),
-        ])  # fmt:skip
+        raise ValueError('PEPOLAR SDC requested, but this path should be unreachable.')
 
     # FIELDMAP path
     if unit.is_gre:
