@@ -28,6 +28,7 @@ from nipype.interfaces.mrtrix3.base import MRTrix3Base, MRTrix3BaseInputSpec
 from nipype.utils.filemanip import fname_presuffix, which
 from niworkflows.viz.utils import compose_view, cuts_from_bbox
 
+from ..utils.misc import format_dwidenoise2_schedule
 from ..viz.utils import plot_denoise
 from .denoise import (
     SeriesPreprocReport,
@@ -37,6 +38,8 @@ from .denoise import (
 )
 
 LOGGER = logging.getLogger('nipype.interface')
+# dwidenoise2 reads its schedule from this file, which DWIDenoise2 writes in the node directory
+_DWIDENOISE2_SCHEDULE_FILE = 'schedule.txt'
 RC3_ROOT = which('average_response')  # Only exists in RC3
 if RC3_ROOT is not None:
     # Use the directory containing average_response
@@ -187,9 +190,11 @@ class DWIDenoise2InputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
     mask = File(exists=True, desc='mask image')
     # The sliding-window kernel and the subsampling factor are properties of the
     # multi-resolution schedule rather than command-line options
-    schedule = traits.Str(
+    schedule = traits.List(
+        traits.Dict,
+        minlen=1,
         argstr='-schedule %s',
-        desc='name of a bundled noise estimation schedule, or a path to a schedule file',
+        desc='rows of a noise estimation schedule, written to schedule.txt at run time',
     )
     datatype = traits.Enum(
         'float32',
@@ -414,7 +419,16 @@ class DWIDenoise2(SeriesPreprocReport, MRTrix3Base):
             # -fslgrad takes both files, so format them here rather than passing a tuple
             # to a File trait, which nipype would try to shell-quote as a single value.
             return spec.argstr % (value, self.inputs.bval_file)
+        if name == 'schedule':
+            # The command runs in the node directory, where _run_interface writes the rows
+            return spec.argstr % _DWIDENOISE2_SCHEDULE_FILE
         return super()._format_arg(name, spec, value)
+
+    def _run_interface(self, runtime):
+        if isdefined(self.inputs.schedule):
+            with open(os.path.join(runtime.cwd, _DWIDENOISE2_SCHEDULE_FILE), 'w') as fobj:
+                fobj.write(format_dwidenoise2_schedule(self.inputs.schedule))
+        return super()._run_interface(runtime)
 
     def _get_plotting_images(self):
         input_dwi = load_img(self.inputs.in_file)
