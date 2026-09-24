@@ -24,7 +24,7 @@ from ..data import load as load_data
 
 
 def get_synb0_dir():
-    """The SynB0-DISCO distribution directory (weights, atlases, model code).
+    """Return the SynB0-DISCO distribution directory (weights, atlases, model code).
 
     The qsiprep containers export ``SYNB0_ATLASES``; the distribution root is
     its parent directory. Returns ``None`` when unset (outside the containers).
@@ -36,7 +36,7 @@ def get_synb0_dir():
 
 
 def get_synb0_atlas():
-    """Path of the 2.5mm atlas defining the grid the U-Net was trained on.
+    """Return the path of the 2.5mm atlas defining the grid the U-Net was trained on.
 
     Returns ``None`` when the SynB0 distribution is not available.
     """
@@ -50,7 +50,7 @@ def get_synb0_atlas():
 
 
 def get_synb0_atlas_mask():
-    """Path of the 2.5mm atlas brain mask (``None`` outside the containers)."""
+    """Return the path of the 2.5mm atlas brain mask (``None`` outside the containers)."""
     atlases = os.environ.get('SYNB0_ATLASES')
     if not atlases:
         return None
@@ -190,7 +190,7 @@ class Synb0Inference(CommandLine):
 
 
 def _mutual_information(x, y, bins=32):
-    """Histogram-based mutual information of two intensity samples."""
+    """Compute the histogram-based mutual information of two intensity samples."""
     x = np.clip(x, *np.percentile(x, [1, 99]))
     y = np.clip(y, *np.percentile(y, [1, 99]))
     joint, _, _ = np.histogram2d(x, y, bins=bins)
@@ -202,7 +202,7 @@ def _mutual_information(x, y, bins=32):
 
 
 def _qq_correlation(x, y):
-    """Correlation of the two samples' quantile functions (1 = same shape)."""
+    """Correlate the two samples' quantile functions (1 = same shape)."""
     quantiles = np.linspace(1, 99, 99)
     return float(np.corrcoef(np.percentile(x, quantiles), np.percentile(y, quantiles))[0, 1])
 

@@ -43,7 +43,10 @@ def _names(wf):
 
 @pytest.mark.parametrize('transform', ['Rigid', 'Affine'])
 def test_linear_transforms_use_the_b0_hmc_workflow(transform):
-    """antsMultivariateTemplateConstruction2 cannot do Rigid at all."""
+    """Test that linear transforms use the b=0 HMC workflow.
+
+    antsMultivariateTemplateConstruction2 cannot do Rigid at all.
+    """
     names = _names(_build(transform))
     assert any('dwiref_linear_template' in n for n in names)
     assert not any('ants_mvtc2' in n for n in names)
@@ -57,7 +60,10 @@ def test_nonlinear_transforms_still_use_mvtc2(transform):
 
 
 def test_requested_transform_reaches_the_nonlinear_backend():
-    """The transform used to be dropped, leaving mvtc2 on its BSplineSyN default."""
+    """Test that the requested transform reaches the nonlinear backend.
+
+    The transform used to be dropped, leaving mvtc2 on its BSplineSyN default.
+    """
     wf = _build('SyN')
     node = next(n for n in wf._get_all_nodes() if n.name == 'ants_mvtc2')
     assert node.inputs.transform == 'SyN'
@@ -65,7 +71,9 @@ def test_requested_transform_reaches_the_nonlinear_backend():
 
 @pytest.mark.parametrize('transform', ['Rigid', 'Affine'])
 def test_linear_template_initializes_by_centre_of_mass(transform):
-    """Sessions can differ by centimetres of table position.
+    """Test that the linear template initializes by centre of mass.
+
+    Sessions can differ by centimetres of table position.
 
     The shoreline settings carry no initialization and only two resolution
     levels, so without a centre-of-mass start a Rigid metric can fail to recover
@@ -79,7 +87,10 @@ def test_linear_template_initializes_by_centre_of_mass(transform):
 
 
 def test_dwi_b0_alignment_does_not_initialize_by_com_by_default():
-    """The b=0 HMC callers must be unaffected: volumes there already overlap."""
+    """Test that b=0 alignment does not initialize by centre of mass by default.
+
+    The b=0 HMC callers must be unaffected: volumes there already overlap.
+    """
     from qsiprep.workflows.dwi.hmc import init_b0_hmc_wf
 
     _config()
@@ -93,7 +104,10 @@ def test_dwi_b0_alignment_does_not_initialize_by_com_by_default():
 
 
 def test_iteration_count_is_honoured():
-    """--dwiref-construction-iters was ignored; the count was always 2."""
+    """Test that the iteration count is honoured.
+
+    --dwiref-construction-iters was ignored; the count was always 2.
+    """
     wf = _build('BSplineSyN', num_iterations=5, name='iters_nonlinear')
     node = next(n for n in wf._get_all_nodes() if n.name == 'ants_mvtc2')
     assert node.inputs.iteration_limit == 5
@@ -101,7 +115,9 @@ def test_iteration_count_is_honoured():
 
 @pytest.mark.parametrize(('dof', 'expected'), [(6, 'Rigid'), (12, 'Affine')])
 def test_dwi2anat_dof_reaches_the_template_coregistration(dof, expected):
-    """The config value must drive the ANTs node, not just the mapping constant.
+    """Test that --dwi2anat-dof reaches the template coregistration.
+
+    The config value must drive the ANTs node, not just the mapping constant.
 
     Asserting ``DWI2ANAT_DOF_TO_TRANSFORM[dof] == expected`` would pass with this
     production consumer still reading the removed attribute, so set the config and

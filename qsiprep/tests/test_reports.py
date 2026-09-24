@@ -7,7 +7,7 @@ import pytest
 
 
 def test_subject_summary_counts_inputs_uniquely():
-    """A file in several outputs (virtual acquisition mode) is one input, not N."""
+    """Test that a file in several outputs (virtual acquisition mode) is one input, not N."""
     from qsiprep.interfaces.reports import SubjectSummary
 
     summary = SubjectSummary(
@@ -31,7 +31,7 @@ def test_subject_summary_counts_inputs_uniquely():
 
 
 def test_subject_summary_warns_about_the_development_branch():
-    """Put an unmissable warning in the report when unreleased MRtrix3 was used."""
+    """Test that an unmissable warning appears in the report when unreleased MRtrix3 was used."""
     from qsiprep.interfaces.reports import SubjectSummary
 
     summary = SubjectSummary(
@@ -48,7 +48,7 @@ def test_subject_summary_warns_about_the_development_branch():
 
 
 def test_subject_summary_is_quiet_under_stable_mrtrix():
-    """Show no warning banner for a released MRtrix3, which is the default."""
+    """Test that no warning banner is shown for a released MRtrix3, which is the default."""
     from qsiprep.interfaces.reports import SubjectSummary
 
     summary = SubjectSummary(
@@ -63,7 +63,7 @@ def test_subject_summary_is_quiet_under_stable_mrtrix():
 
 
 def test_about_summary_records_the_mrtrix_installation():
-    """State which MRtrix3 ran, warning or not: version and path both known."""
+    """Test that the MRtrix3 version and path are recorded, warning or not, when both are known."""
     from qsiprep.interfaces.reports import AboutSummary
 
     segment = AboutSummary(
@@ -83,7 +83,7 @@ def test_about_summary_records_the_mrtrix_installation():
 
 
 def test_about_summary_omits_an_unknown_mrtrix_path():
-    """Mark the version as unresolved, not a bare claim, when neither is declared.
+    """Test that the version is marked unresolved, not a bare claim, when neither is declared.
 
     Nothing has actually been selected in this case: whatever MRtrix3 is on PATH ran,
     which may not be the requested version. The report must not assert a version it
@@ -106,7 +106,7 @@ def test_about_summary_omits_an_unknown_mrtrix_path():
 
 
 def test_about_summary_records_a_version_with_no_declared_path():
-    """Mark the version as unresolved when it is known but no install path is declared."""
+    """Test that a known version is marked unresolved when no install path is declared."""
     from qsiprep.interfaces.reports import AboutSummary
 
     segment = AboutSummary(
@@ -126,7 +126,7 @@ def test_about_summary_records_a_version_with_no_declared_path():
 
 
 def test_about_summary_records_a_path_with_no_known_version():
-    """Report the install path without a version claim when the version is unknown."""
+    """Test that the install path is reported without a version claim for an unknown version."""
     from qsiprep.interfaces.reports import AboutSummary
 
     segment = AboutSummary(
@@ -160,7 +160,7 @@ def collect_reports(monkeypatch):
 
 
 def test_generate_reports_root_level(tmp_path, collect_reports):
-    """Subject-wise reports are written to the output directory root."""
+    """Test that subject-wise reports are written to the output directory root."""
     from qsiprep.reports.core import generate_reports
 
     errors = generate_reports(
@@ -176,7 +176,7 @@ def test_generate_reports_root_level(tmp_path, collect_reports):
 
 
 def test_generate_reports_subject_level(tmp_path, collect_reports):
-    """Subject-level reports are written into the subject directory."""
+    """Test that subject-level reports are written into the subject directory."""
     from qsiprep.reports.core import generate_reports
 
     generate_reports(
@@ -191,7 +191,7 @@ def test_generate_reports_subject_level(tmp_path, collect_reports):
 
 
 def test_generate_reports_session_level(tmp_path, collect_reports):
-    """Session-wise reports are written into the session directory."""
+    """Test that session-wise reports are written into the session directory."""
     from qsiprep.reports.core import generate_reports
 
     generate_reports(
@@ -209,7 +209,7 @@ def test_generate_reports_session_level(tmp_path, collect_reports):
 
 
 def test_generate_reports_session_level_root_output(tmp_path, collect_reports):
-    """Session-wise reports keep their session-specific names at the root level."""
+    """Test that session-wise reports keep their session-specific names at the root level."""
     from qsiprep.reports.core import generate_reports
 
     generate_reports(
@@ -224,7 +224,7 @@ def test_generate_reports_session_level_root_output(tmp_path, collect_reports):
 
 
 def test_generate_reports_session_level_without_sessions(tmp_path, collect_reports, caplog):
-    """Cross-sectional data fall back to subject-level reports with a warning."""
+    """Test that cross-sectional data fall back to subject-level reports with a warning."""
     from qsiprep.reports.core import generate_reports
 
     generate_reports(
@@ -242,7 +242,7 @@ def test_generate_reports_session_level_without_sessions(tmp_path, collect_repor
 def test_generate_reports_session_level_with_subject_wise_reports(
     tmp_path, collect_reports, caplog
 ):
-    """Reports spanning multiple sessions fall back to subject level with a warning."""
+    """Test that reports spanning multiple sessions fall back to subject level with a warning."""
     from qsiprep.reports.core import generate_reports
 
     generate_reports(
@@ -258,7 +258,7 @@ def test_generate_reports_session_level_with_subject_wise_reports(
 
 
 def test_generate_reports_session_fallback_is_not_sticky(tmp_path, collect_reports):
-    """A subject without sessions does not downgrade later subjects' reports."""
+    """Test that a subject without sessions does not downgrade later subjects' reports."""
     from qsiprep.reports.core import generate_reports
 
     generate_reports(
@@ -276,7 +276,7 @@ def test_generate_reports_session_fallback_is_not_sticky(tmp_path, collect_repor
 
 
 def test_generate_reports_strips_entity_prefixes(tmp_path, collect_reports):
-    """Subject and session labels may include their BIDS prefixes."""
+    """Test that subject and session labels may include their BIDS prefixes."""
     from qsiprep.reports.core import generate_reports
 
     generate_reports(
@@ -291,7 +291,7 @@ def test_generate_reports_strips_entity_prefixes(tmp_path, collect_reports):
 
 
 def test_generate_reports_session_level_finds_reportlets(tmp_path):
-    """A report nested in a session directory still picks up reportlets at the output root."""
+    """Test that a session-nested report still picks up reportlets at the output root."""
     from qsiprep.reports.core import generate_reports
 
     figures_dir = tmp_path / 'sub-01' / 'ses-01' / 'figures'
@@ -332,7 +332,7 @@ def test_template_to_report_entities():
 
 
 def test_anat_spatial_normalization_reportlet_allows_template_cohort(tmp_path):
-    """MNIInfant reportlets use fMRIPrep-style space/cohort entities."""
+    """Test that MNIInfant reportlets use fMRIPrep-style space/cohort entities."""
     from nireports.assembler.report import Report
 
     from qsiprep import data
@@ -384,9 +384,12 @@ def test_anat_spatial_normalization_reportlet_allows_template_cohort(tmp_path):
 
 
 def test_gradient_plot_emits_inline_scheme(tmp_path, monkeypatch):
-    """GradientPlot writes a self-contained inline sampling-scheme reportlet
+    """Test that GradientPlot writes a self-contained inline sampling-scheme reportlet.
+
+    GradientPlot writes a self-contained inline sampling-scheme reportlet
     (no iframe, so it flows in the report instead of scrolling in a fixed frame)
-    with before/after panels, colored by source file."""
+    with before/after panels, colored by source file.
+    """
     import json
     import re
 
@@ -500,7 +503,7 @@ def test_diffusion_summary_shows_hmc_transform_when_given():
 
 
 def _merged_qc_csv(path, warning='', neighbor_corr=0.99):
-    """A merged_qc.csv as DSIStudioMergeQC writes it."""
+    """Write a merged_qc.csv as DSIStudioMergeQC writes it."""
     import pandas as pd
 
     from qsiprep.interfaces.dsi_studio import QC_WARNINGS_COLUMN
@@ -537,7 +540,7 @@ def _run_series_qc(tmp_path, monkeypatch, pre_qc, t1_qc=None):
 
 
 def test_series_qc_writes_missing_values_as_bids_na(tmp_path, monkeypatch):
-    """BIDS spells a missing TSV value n/a, not an empty cell."""
+    """Test that a missing TSV value is written as n/a, as BIDS spells it, not an empty cell."""
     results = _run_series_qc(
         tmp_path,
         monkeypatch,
@@ -559,7 +562,10 @@ def test_series_qc_keeps_the_warning_column_out_of_the_table(tmp_path, monkeypat
 
 
 def test_series_qc_writes_no_report_when_qc_succeeded(tmp_path, monkeypatch):
-    """DerivativesMaybeDataSink then writes nothing, so the report is quiet."""
+    """Test that no report is written when QC succeeded.
+
+    DerivativesMaybeDataSink then writes nothing, so the report is quiet.
+    """
     results = _run_series_qc(tmp_path, monkeypatch, _merged_qc_csv(tmp_path / 'pre.csv'))
 
     assert 'qc_warnings_report' not in results
@@ -595,7 +601,9 @@ def test_series_qc_escapes_the_warning_text(tmp_path, monkeypatch):
 
 
 def test_diffusion_summary_warns_only_under_dwi_biascorrect_auto():
-    """`auto` is a heuristic over metadata, so the report says so.
+    """Test that the diffusion summary warns only under `auto` bias correction.
+
+    `auto` is a heuristic over metadata, so the report says so.
 
     How well the ImageType check generalises across vendors and sequences is not
     established, so a run that let it decide carries a warning box. An explicit
@@ -614,7 +622,10 @@ def test_diffusion_summary_warns_only_under_dwi_biascorrect_auto():
 
 
 def test_diffusion_summary_reports_the_resolved_biascorrect_outcome():
-    """Under `auto` the mode alone cannot say whether N4 ran, so state the outcome."""
+    """Test that the resolved bias-correction outcome is reported.
+
+    Under `auto` the mode alone cannot say whether N4 ran, so the outcome is stated.
+    """
     applied = _diffusion_summary(
         dwi_biascorrect='auto', dwi_biascorrect_applied=True
     )._generate_segment()

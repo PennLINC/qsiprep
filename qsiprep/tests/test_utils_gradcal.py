@@ -35,7 +35,10 @@ def _write(path, text):
 
 
 def test_normalization_comment_aborts_the_reader():
-    """The exact line from the crash: stoi succeeds, then stof is handed ' = 1.0'."""
+    """Test that the normalization comment aborts the reader.
+
+    The exact line from the crash: stoi succeeds, then stof is handed ' = 1.0'.
+    """
     status, detail = reader_verdict('#  A(1,0) = 1.0\r')
     assert status == 'abort'
     assert 'std::stof' in detail
@@ -43,14 +46,20 @@ def test_normalization_comment_aborts_the_reader():
 
 
 def test_a_line_ending_at_the_paren_aborts_on_an_empty_coefficient():
-    """``size() - posA3 - 2`` underflows, so substr clamps and stof gets ''."""
+    """Test that a line ending at the paren aborts on an empty coefficient.
+
+    ``size() - posA3 - 2`` underflows, so substr clamps and stof gets ''.
+    """
     status, detail = reader_verdict(' 2 B(1,2)')
     assert status == 'abort'
     assert "std::stof on ''" in detail
 
 
 def test_non_integer_indices_abort_on_stoi_instead():
-    """Distinguishing the two matters: the C++ ``what()`` names one or the other."""
+    """Test that non-integer indices abort on stoi instead.
+
+    Distinguishing the two matters: the C++ ``what()`` names one or the other.
+    """
     status, detail = reader_verdict(' Coil (X,Y) info')
     assert status == 'abort'
     assert 'std::stoi' in detail
@@ -61,13 +70,19 @@ def test_a_real_coefficient_line_is_a_term():
 
 
 def test_crlf_does_not_break_a_coefficient_line():
-    """getline keeps the \\r, so the axis letter stays in the coefficient
-    substring -- stof stops at the space and the line still parses."""
+    r"""Test that CRLF line endings do not break a coefficient line.
+
+    getline keeps the \r, so the axis letter stays in the coefficient
+    substring -- stof stops at the space and the line still parses.
+    """
     assert reader_verdict('  1 A( 3, 1) -0.023400 x\r') == ('term', 'x')
 
 
 def test_a_term_with_no_axis_letter_is_reported():
-    """The reader drops it silently; nothing downstream would ever say so."""
+    """Test that a term with no axis letter is reported.
+
+    The reader drops it silently; nothing downstream would ever say so.
+    """
     assert reader_verdict('  1 A( 3, 1) -0.023400') == ('term', None)
 
 
@@ -103,8 +118,11 @@ def test_sanitize_never_modifies_the_users_file(tmp_path):
 
 
 def test_sanitized_copy_keeps_the_basename(tmp_path):
-    """finalize.py records os.path.basename(coeff_file) in the graddev sidecar,
-    so the sanitized copy has to carry the original name."""
+    """Test that the sanitized copy keeps the basename.
+
+    finalize.py records os.path.basename(coeff_file) in the graddev sidecar,
+    so the sanitized copy has to carry the original name.
+    """
     src = _write(tmp_path / 'CimaX_coeff.grad', CIMAX_HEADER + CIMAX_TERMS)
     dest = tmp_path / 'work'
     dest.mkdir()
@@ -113,7 +131,10 @@ def test_sanitized_copy_keeps_the_basename(tmp_path):
 
 
 def test_a_commented_out_term_that_parses_is_dropped_too(tmp_path):
-    """A comment the reader parses is silently folded into the expansion."""
+    """Test that a commented-out term that parses is dropped too.
+
+    A comment the reader parses is silently folded into the expansion.
+    """
     src = _write(
         tmp_path / 'c.grad',
         ' 0.275 = R0\r\n# 9 A( 3, 1) 0.111 x\r\n  1 A( 3, 1) -0.023400 x\r\n',
@@ -138,7 +159,10 @@ def test_a_clean_file_is_passed_through_unchanged(tmp_path):
 
 
 def test_prose_comments_alone_do_not_trigger_a_copy(tmp_path):
-    """A comment the reader skips is harmless, so leave the file alone."""
+    """Test that prose comments alone do not trigger a copy.
+
+    A comment the reader skips is harmless, so the file is left alone.
+    """
     src = _write(tmp_path / 'c.grad', '# just prose\r\n 0.275 = R0\r\n' + CIMAX_TERMS)
     dest = tmp_path / 'work'
     dest.mkdir()
@@ -147,7 +171,10 @@ def test_prose_comments_alone_do_not_trigger_a_copy(tmp_path):
 
 
 def test_a_fatal_data_line_is_rejected_with_its_line_number(tmp_path):
-    """Dropping comments cannot fix this, so fail before the run starts."""
+    """Test that a fatal data line is rejected with its line number.
+
+    Dropping comments cannot fix this, so fail before the run starts.
+    """
     src = _write(
         tmp_path / 'c.grad',
         '# prose\r\n 0.275 = R0\r\n  1 A( 3, 1) -0.023400 x\r\n  2 B(1,2)\r\n',
@@ -171,8 +198,11 @@ def test_the_rejection_quotes_the_offending_line(tmp_path):
 
 @pytest.mark.parametrize('name', ['coeff.dat', 'coeff.gc', 'field.nii', 'field.nii.gz'])
 def test_non_siemens_inputs_are_left_alone(tmp_path, name):
-    """Only ``.grad`` reaches read_Siemens_format; the other readers differ and
-    a displacement field is never parsed at all."""
+    """Test that non-Siemens inputs are left alone.
+
+    Only ``.grad`` reaches read_Siemens_format; the other readers differ and
+    a displacement field is never parsed at all.
+    """
     src = _write(tmp_path / name, CIMAX_HEADER)
     dest = tmp_path / 'work'
     dest.mkdir()
@@ -203,7 +233,7 @@ def test_copy_without_comments_reports_how_many_it_removed(tmp_path):
 
 
 def test_parse_args_swaps_in_the_sanitized_copy(tmp_path):
-    """End-to-end: a real CLI invocation must not hand TORTOISE the crashing file."""
+    """Test end-to-end that a real CLI invocation does not hand TORTOISE the crashing file."""
     from niworkflows.utils.testing import generate_bids_skeleton
 
     from qsiprep import config

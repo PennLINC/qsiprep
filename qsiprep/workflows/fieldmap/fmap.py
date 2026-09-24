@@ -1,6 +1,6 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
+"""Workflows for directly measured B0 fieldmaps.
 
 .. _sdc_direct_b0:
 
@@ -36,8 +36,9 @@ from .utils import cleanup_edge_pipeline, demean_image
 
 
 def init_fmap_wf(name='fmap_wf'):
-    """
-    Fieldmap workflow - when we have a sequence that directly measures the fieldmap
+    """Build a workflow that prepares a directly measured fieldmap.
+
+    When we have a sequence that directly measures the fieldmap
     we just need to mask it (using the corresponding magnitude image) to remove the
     noise in the surrounding air region, and ensure that units are Hz.
 

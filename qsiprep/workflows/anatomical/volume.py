@@ -23,7 +23,8 @@
 #
 #     https://www.nipreps.org/community/licensing/
 #
-"""
+"""Anatomical reference preprocessing workflows.
+
 Anatomical reference preprocessing workflows
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -80,7 +81,7 @@ def init_anat_preproc_wf(
     t2w_do_biascorr=True,
     name='anat_preproc_wf',
 ):
-    r"""This workflow controls the anatomical preprocessing stages of qsiprep.
+    r"""Build a workflow that runs the anatomical preprocessing stages of qsiprep.
 
     This includes:
 
@@ -103,19 +104,21 @@ def init_anat_preproc_wf(
 
     Parameters
     ----------
-    num_anat_images : :obj:`int`
+    num_anat_images : int
         Number of anatomical images available in the chosen modality
-    num_additional_t2ws : :obj:`int`
+    num_additional_t2ws : int
         If anat modality is T1w and there are available T2ws that can be
         used by DRBUDDI, how many are there?
-    has_rois: :obj:`bool`
+    has_rois : bool
         Are there lesion ROI files?
-    anatomical_template : :obj:`str`
+    anatomical_template : str
         Template specification of the form <template>[+<cohort>].
-    do_biascorr : :obj:`bool`, optional
+    do_biascorr : bool, optional
         Whether to apply N4 bias correction to the T1w(?) or not. Default is True.
-    t2w_do_biascorr : :obj:`bool`, optional
+    t2w_do_biascorr : bool, optional
         Whether to apply N4 bias correction to the T2w or not. Default is True.
+    name : str, optional
+        Name of workflow (default: ``anat_preproc_wf``)
 
     Inputs
     ------
@@ -521,8 +524,11 @@ FreeSurfer version {FS_VERSION}. """
 
 
 def init_t2w_preproc_wf(num_t2ws, do_biascorr=True, name='t2w_preproc_wf'):
-    """If T1w is the anatomical contrast, you may also want to process the T2ws for
-    worlflows that can use them (ie DRBUDDI)."""
+    """Build a workflow that preprocesses additional T2w images.
+
+    If T1w is the anatomical contrast, you may also want to process the T2ws for
+    worlflows that can use them (ie DRBUDDI).
+    """
     workflow = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(fields=['t2w_images', 't1_brain']),
@@ -631,7 +637,7 @@ def _dilate_mask(in_file, iterations=8):
 
 
 def anat_biascorrect_enabled(image_files=None):
-    """Should N4 bias correction run on these anatomical images?
+    """Decide whether N4 bias correction should run on these anatomical images.
 
     ``--anat-biascorrect`` governs anatomicals only; ``--dwi-biascorrect``
     governs the DWIs and never reaches this path.
@@ -692,7 +698,8 @@ def anat_biascorrect_enabled(image_files=None):
 
 
 def init_anat_template_wf(num_images, do_biascorr=True) -> Workflow:
-    r"""
+    r"""Build a workflow that generates a canonically oriented structural template.
+
     This workflow generates a canonically oriented structural template from
     input anatomical images.
 
@@ -724,7 +731,6 @@ def init_anat_template_wf(num_images, do_biascorr=True) -> Workflow:
     out_report
         Conformation report
     """
-
     from ..dwi.hmc import init_b0_hmc_wf
 
     workflow = Workflow(name='anat_template_wf')
@@ -923,10 +929,10 @@ A {contrast}-reference map was computed after registration of
 
 
 def init_anat_normalization_wf(anatomical_template, has_rois=False) -> Workflow:
-    r"""
+    r"""Build a workflow that registers the anatomical reference to the template.
+
     This workflow performs registration from the original anatomical reference to the
     template anatomical reference.
-
 
     .. workflow::
         :graph2use: orig
@@ -937,7 +943,9 @@ def init_anat_normalization_wf(anatomical_template, has_rois=False) -> Workflow:
 
     Parameters
     ----------
-    has_rois : bool
+    anatomical_template : str
+        Name of the template the anatomical reference is registered to.
+    has_rois : bool, optional
         Whether Registration should account for regions to exclude
 
     Inputs
@@ -965,7 +973,6 @@ def init_anat_normalization_wf(anatomical_template, has_rois=False) -> Workflow:
     out_report
         Reportlet visualizing the spatial normalization
     """
-
     workflow = Workflow(name='anat_normalization_wf')
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -1120,7 +1127,7 @@ estimated via symmetric nonlinear registration (SyN) using antsRegistration (@an
 
 
 def init_dl_prep_wf(name='dl_prep_wf') -> Workflow:
-    """Prepare images for use in the FreeSurfer deep learning functions"""
+    """Prepare images for use in the FreeSurfer deep learning functions."""
     workflow = Workflow(name=name)
     inputnode = pe.Node(niu.IdentityInterface(fields=['image']), name='inputnode')
     outputnode = pe.Node(
@@ -1317,9 +1324,7 @@ def _tupleize(value):
 
 
 def init_anat_reports_wf(anatomical_template) -> Workflow:
-    """
-    Set up a battery of datasinks to store reports in the right location
-    """
+    """Set up a battery of datasinks to store reports in the right location."""
     anat_modality = config.workflow.anat_modality
 
     workflow = Workflow(name='anat_reports_wf')
@@ -1417,9 +1422,7 @@ def _template_to_report_entities(template):
 
 
 def init_anat_derivatives_wf(anatomical_template, has_t2w=False) -> Workflow:
-    """
-    Set up a battery of datasinks to store derivatives in the right location
-    """
+    """Set up a battery of datasinks to store derivatives in the right location."""
     workflow = Workflow(name='anat_derivatives_wf')
 
     inputnode = pe.Node(
@@ -1647,7 +1650,7 @@ def init_anat_derivatives_wf(anatomical_template, has_t2w=False) -> Workflow:
 
 
 def _seg2msks(in_file, newpath=None):
-    """Converts labels to masks"""
+    """Convert labels to masks."""
     import nibabel as nb
     import numpy as np
     from nipype.utils.filemanip import fname_presuffix

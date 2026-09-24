@@ -1,11 +1,6 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
-SHORELine interfaces
-~~~~~~~~~~~~~~~~~~~~~~
-
-
-"""
+"""SHORELine interfaces."""
 
 import os
 import os.path as op
@@ -42,6 +37,18 @@ def _nonoverlapping_qspace_samples(prediction_bval, prediction_bvec, all_bvals, 
     """Ensure that none of the training samples are too close to the sample to predict.
 
     Parameters
+    ----------
+    prediction_bval : float
+        The b-value of the sample to predict.
+    prediction_bvec : numpy.ndarray
+        The gradient direction of the sample to predict.
+    all_bvals : numpy.ndarray
+        The b-values of the candidate training samples.
+    all_bvecs : numpy.ndarray
+        The gradient directions of the candidate training samples, one row per sample.
+    cutoff : float
+        The minimum distance in scaled q-space (as a percentage of the maximum q-value)
+        that a training sample, or its antipode, must have from the sample to predict.
     """
     min_bval = min(all_bvals.min(), prediction_bval)
     all_qvals = np.sqrt(all_bvals - min_bval)
@@ -99,7 +106,7 @@ class ExtractDWISForModelOutputSpec(TraitedSpec):
 
 
 class ExtractDWIsForModel(SimpleInterface):
-    """Take a DWI series with interspersed b0 images and create a model-ready version"""
+    """Take a DWI series with interspersed b0 images and create a model-ready version."""
 
     input_spec = ExtractDWISForModelInputSpec
     output_spec = ExtractDWISForModelOutputSpec
@@ -147,7 +154,7 @@ class SignalPredictionOutputSpec(TraitedSpec):
 
 
 class SignalPrediction(SimpleInterface):
-    """ """
+    """Predict the DWI signal at a given q-space point from the other aligned DWIs."""
 
     input_spec = SignalPredictionInputSpec
     output_spec = SignalPredictionOutputSpec

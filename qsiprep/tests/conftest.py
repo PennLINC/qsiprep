@@ -16,13 +16,13 @@ def pytest_addoption(parser):
 # Set up the commandline options as fixtures
 @pytest.fixture(scope='session')
 def data_dir(request):
-    """Grab data directory."""
+    """Return the data directory."""
     return request.config.getoption('--data_dir')
 
 
 @pytest.fixture(scope='session')
 def working_dir(request):
-    """Grab working directory."""
+    """Create and return the working directory."""
     workdir = request.config.getoption('--working_dir')
     os.makedirs(workdir, exist_ok=True)
     return workdir
@@ -30,7 +30,7 @@ def working_dir(request):
 
 @pytest.fixture(scope='session')
 def output_dir(request):
-    """Grab output directory."""
+    """Create and return the output directory."""
     outdir = request.config.getoption('--output_dir')
     os.makedirs(outdir, exist_ok=True)
     return outdir

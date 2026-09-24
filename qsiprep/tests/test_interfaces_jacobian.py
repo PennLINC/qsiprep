@@ -53,7 +53,7 @@ DRBUDDI_AFFINE = np.array(
 
 
 def _write_field(path, shape, affine, amplitude=0.05):
-    """A small, smooth ITK displacement field on an arbitrary shape/affine."""
+    """Write a small, smooth ITK displacement field on an arbitrary shape/affine."""
     path = Path(path)
     grid = np.meshgrid(*[np.linspace(-1.0, 1.0, n) for n in shape], indexing='ij')
     data = np.zeros(shape + (1, 3), dtype='float32')
@@ -129,7 +129,7 @@ def test_weight_key_separates_different_fieldwarps():
 
 
 def test_weight_key_of_nothing_is_falsy():
-    """No gradwarp and no fieldwarp means a unity weight, not a cache entry."""
+    """Test that no gradwarp and no fieldwarp means a unity weight, not a cache entry."""
     assert not weight_key(None, None)
 
 
@@ -152,7 +152,9 @@ def test_validate_field_geometry_accepts_matching_grid(tmp_path):
 
 
 def test_validate_field_geometry_accepts_a_differently_sampled_overlapping_field(tmp_path):
-    """C1: a different lattice is not an error -- ANTs composes in physical space.
+    """Test that a differently sampled, overlapping field is accepted (C1).
+
+    A different lattice is not an error -- ANTs composes in physical space.
 
     Reproduces the real DRBUDDI shape/affine mismatch (see ``NATIVE_*`` /
     ``DRBUDDI_*`` above): before the fix, this raised on every DRBUDDI run.
@@ -165,7 +167,10 @@ def test_validate_field_geometry_accepts_a_differently_sampled_overlapping_field
 
 
 def test_validate_field_geometry_rejects_wrong_component_count(tmp_path):
-    """The one thing ANTs' physical-space composition cannot rescue."""
+    """Test that a field with the wrong component count is rejected.
+
+    This is the one thing ANTs' physical-space composition cannot rescue.
+    """
     reference = _write_map(tmp_path / 'ref.nii.gz', 1.0)
     not_a_field = _write_map(tmp_path / 'notfield.nii.gz', 1.0, shape=(8, 8, 8, 1, 2))
     with pytest.raises(ValueError, match='Displacement field'):
@@ -173,7 +178,9 @@ def test_validate_field_geometry_rejects_wrong_component_count(tmp_path):
 
 
 def test_validate_field_geometry_rejects_a_3d_scalar_image_with_a_trailing_axis_of_3(tmp_path):
-    """F3 regression: ``field.shape[-1]`` alone is not enough to detect a field.
+    """Test that a 3D scalar image with a trailing axis of 3 is rejected (F3 regression).
+
+    ``field.shape[-1]`` alone is not enough to detect a field.
 
     A plain 3D scalar image whose last spatial dimension happens to equal 3
     used to pass this guard (the previous check read ``field.shape[-1]`` as a
@@ -188,7 +195,7 @@ def test_validate_field_geometry_rejects_a_3d_scalar_image_with_a_trailing_axis_
 
 
 def test_validate_field_geometry_rejects_a_disjoint_world_frame(tmp_path):
-    """A field in a genuinely different coordinate domain still must raise."""
+    """Test that a field in a genuinely different coordinate domain still raises."""
     reference = _write_map(tmp_path / 'ref.nii.gz', 1.0, shape=(8, 8, 8))
     far_affine = np.eye(4)
     far_affine[:3, 3] = 10_000.0
@@ -198,7 +205,9 @@ def test_validate_field_geometry_rejects_a_disjoint_world_frame(tmp_path):
 
 
 def test_check_weight_map_reports_one_nonpositive_voxel_without_raising(tmp_path, caplog):
-    """One folded voxel is reported, not fatal.
+    """Test that one non-positive voxel is reported without raising.
+
+    One folded voxel is reported, not fatal.
 
     This asserted a raise until forrest_gump showed why that is wrong: a real
     GRE field drives the Jacobian to zero in EPI pile-up regions, so aborting
@@ -236,7 +245,10 @@ def test_check_weight_map_warns_on_far_from_unity_median(tmp_path, caplog):
 
 
 def test_check_weight_map_ignores_nonpositive_outside_mask(tmp_path):
-    """Determinants outside the brain are not the guard's business."""
+    """Test that non-positive determinants outside the mask are ignored.
+
+    Determinants outside the brain are not the guard's business.
+    """
     weights = _write_map(tmp_path / 'w.nii.gz', 1.0)
     data = np.asanyarray(nb.load(weights).dataobj).copy()
     data[0, 0, 0] = -1.0
@@ -249,7 +261,9 @@ def test_check_weight_map_ignores_nonpositive_outside_mask(tmp_path):
 
 
 def test_check_weight_map_rejects_an_empty_mask(tmp_path):
-    """C3: an all-zero (or fully-off-grid) resampled mask must raise, not
+    """Test that an empty resampled mask is rejected (C3).
+
+    C3: an all-zero (or fully-off-grid) resampled mask must raise, not
     silently skip the positivity/median guard.
 
     ``inside.size == 0`` previously short-circuited both checks below it via
@@ -287,7 +301,10 @@ def test_jacobian_determinant_of_translation_is_unity(tmp_path):
 
 
 def test_jacobian_determinant_of_anisotropic_scaling(tmp_path):
-    """phi(x) = diag(2, 1, 1) @ x has 1 + du_x/dx = 2 everywhere along x."""
+    """Test the determinant of an anisotropic scaling.
+
+    phi(x) = diag(2, 1, 1) @ x has 1 + du_x/dx = 2 everywhere along x.
+    """
     field = _write_linear_field(tmp_path / 'scale.nii.gz', np.diag([2.0, 1.0, 1.0]))
 
     out = jacobian_determinant(field, str(tmp_path / 'det.nii.gz'), pe_axis=0)
@@ -296,7 +313,9 @@ def test_jacobian_determinant_of_anisotropic_scaling(tmp_path):
 
 
 def test_jacobian_determinant_ignores_off_axis_components(tmp_path):
-    """TORTOISE differentiates along the phase-encoding axis only.
+    """Test that off-axis displacement components are ignored.
+
+    TORTOISE differentiates along the phase-encoding axis only.
 
     A scaling along x contributes nothing when y is the phase-encoding axis,
     which is exactly why a forced T2Wreg field's unrestricted final stage
@@ -309,7 +328,7 @@ def test_jacobian_determinant_ignores_off_axis_components(tmp_path):
 
 
 def test_jacobian_determinant_of_shear_is_unity(tmp_path):
-    """A shear of x by y moves voxels without changing volume along x."""
+    """Test that a shear of x by y moves voxels without changing volume along x."""
     shear = np.array([[1.0, 0.3, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]])
     field = _write_linear_field(tmp_path / 'shear.nii.gz', shear)
 
@@ -319,8 +338,11 @@ def test_jacobian_determinant_of_shear_is_unity(tmp_path):
 
 
 def test_jacobian_determinant_matches_the_full_determinant_for_a_pe_only_field(tmp_path):
-    """For a field that displaces along the phase axis alone the 1-D derivative
-    is the full 3x3 determinant, so nothing DRBUDDI/GRE/SyN produce changes."""
+    """Test that the 1-D derivative equals the full determinant for a PE-only field.
+
+    For a field that displaces along the phase axis alone the 1-D derivative
+    is the full 3x3 determinant, so nothing DRBUDDI/GRE/SyN produce changes.
+    """
     shape = (12, 12, 12)
     grid = np.linspace(-1.0, 1.0, shape[1])
     data = np.zeros(shape + (1, 3), dtype='float32')
@@ -338,7 +360,7 @@ def test_jacobian_determinant_matches_the_full_determinant_for_a_pe_only_field(t
 
 
 def test_jacobian_determinant_reports_a_fold_in_mask(tmp_path, caplog):
-    """A folded warp has a negative determinant; it is reported, not hidden."""
+    """Test that a folded warp's negative determinant is reported, not hidden."""
     # phi(x) = diag(-1, 1, 1) @ x is an orientation reversal along x.
     field = _write_linear_field(tmp_path / 'fold.nii.gz', np.diag([-1.0, 1.0, 1.0]))
     mask = _write_map(tmp_path / 'mask.nii.gz', 1.0)
@@ -349,7 +371,10 @@ def test_jacobian_determinant_reports_a_fold_in_mask(tmp_path, caplog):
 
 
 def test_jacobian_determinant_is_unity_at_the_phase_axis_edges(tmp_path):
-    """TORTOISE returns 1 for the first and last slice along the phase axis."""
+    """Test that the determinant is unity at the phase-axis edges.
+
+    TORTOISE returns 1 for the first and last slice along the phase axis.
+    """
     field = _write_linear_field(tmp_path / 'scale.nii.gz', np.diag([2.0, 1.0, 1.0]))
     out = jacobian_determinant(field, str(tmp_path / 'det.nii.gz'), pe_axis=0)
     det = np.asanyarray(nb.load(out).dataobj)
@@ -359,7 +384,10 @@ def test_jacobian_determinant_is_unity_at_the_phase_axis_edges(tmp_path):
 
 
 def test_validate_scalar_geometry_accepts_a_differently_sampled_overlapping_map(tmp_path):
-    """C1: same relaxation as validate_field_geometry, for the mask/EC inputs."""
+    """Test that a differently sampled, overlapping scalar map is accepted (C1).
+
+    This is the same relaxation as validate_field_geometry, for the mask/EC inputs.
+    """
     reference = _write_map(
         tmp_path / 'ref.nii.gz', 1.0, shape=DRBUDDI_SHAPE, affine=DRBUDDI_AFFINE
     )
@@ -375,7 +403,9 @@ def test_validate_scalar_geometry_rejects_a_non_3d_map(tmp_path):
 
 
 def test_validate_scalar_geometry_rejects_a_singleton_trailing_dimension(tmp_path):
-    """C4: a (X, Y, Z, 1) scalar map used to pass this guard, then blow up
+    """Test that a scalar map with a singleton trailing dimension is rejected (C4).
+
+    C4: a (X, Y, Z, 1) scalar map used to pass this guard, then blow up
     downstream -- ``check_weight_map``'s ``weights[mask]`` indexes a bare 3D
     weight array with a 4D boolean mask, raising a dimensionality error deep
     inside the guard rather than a clear message here. Nothing in this
@@ -405,7 +435,9 @@ def test_resample_like_is_a_noop_when_grids_already_match(tmp_path):
 
 
 def test_resample_like_noop_path_ignores_fill_value(tmp_path):
-    """C1: ``force_resample=True`` is only ever passed on the branch that
+    """Test that the no-op path of resample_like ignores fill_value (C1).
+
+    C1: ``force_resample=True`` is only ever passed on the branch that
     actually calls into nilearn. The matching-lattice early return is ours,
     not nilearn's, so a non-default ``fill_value`` must not disturb it --
     the common (already-matching) case must still cost no I/O and return the
@@ -429,7 +461,9 @@ def test_resample_like_resamples_onto_the_target_grid(tmp_path):
 
 
 def test_resample_like_default_fill_value_is_zero_for_masks(tmp_path):
-    """C1: the default preserves current mask behaviour -- absent outside its
+    """Test that resample_like zero-fills by default, as masks need (C1).
+
+    C1: the default preserves current mask behaviour -- absent outside its
     own FOV, i.e. zero-filled -- only a determinant factor (``multiply_maps``)
     opts into ``fill_value=1.0``.
     """
@@ -441,7 +475,9 @@ def test_resample_like_default_fill_value_is_zero_for_masks(tmp_path):
 
 
 def test_resample_like_fill_value_reaches_outside_the_source_fov(tmp_path):
-    """C1: with ``fill_value=1.0`` and the exact real-world lattice mismatch
+    """Test that fill_value reaches voxels outside the source field of view (C1).
+
+    C1: with ``fill_value=1.0`` and the exact real-world lattice mismatch
     (an axis-aligned, whole-voxel padding offset -- DRBUDDI's own padding of
     DIFFPREP's native grid), voxels outside the source's field of view come
     back as the fill value, not zero. This is the mechanism the previous fix
@@ -488,7 +524,7 @@ def _dwi_volumes(tmp_path, count):
 
 
 def test_compose_weights_with_no_fields_is_undefined(tmp_path):
-    """Nothing to modulate means no weight, not a map of ones."""
+    """Test that nothing to modulate means no weight, not a map of ones."""
     interface = ComposeJacobianWeights(
         dwi_files=_dwi_volumes(tmp_path, 3),
         b0_ref_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
@@ -500,7 +536,9 @@ def test_compose_weights_with_no_fields_is_undefined(tmp_path):
 
 
 def test_compose_weights_with_no_fields_ignores_a_mismatched_mask(tmp_path):
-    """C2: the early no-op return must come before the mask is even looked at.
+    """Test that the no-field early return ignores a mismatched mask (C2).
+
+    The early no-op return must come before the mask is even looked at.
 
     A run with nothing to modulate must not be killed by a mask/reference
     mismatch it never needed to resolve -- even a mask in a totally disjoint
@@ -531,7 +569,7 @@ def test_compose_weights_returns_one_path_per_volume(tmp_path):
 
 
 def test_compose_weights_dedups_a_single_shared_field(tmp_path):
-    """One gradwarp field for the whole run costs one determinant, not N."""
+    """Test that one gradwarp field for the whole run costs one determinant, not N."""
     interface = ComposeJacobianWeights(
         dwi_files=_dwi_volumes(tmp_path, 4),
         b0_ref_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
@@ -544,7 +582,10 @@ def test_compose_weights_dedups_a_single_shared_field(tmp_path):
 
 
 def test_compose_weights_keeps_two_blip_directions_distinct(tmp_path):
-    """DRBUDDI rpe_series has one warp per blip direction, so two maps."""
+    """Test that two blip directions keep two distinct maps.
+
+    DRBUDDI rpe_series has one warp per blip direction, so two maps.
+    """
     up = str(write_itk_field(tmp_path / 'up.nii.gz', amplitude=0.4))
     down = str(write_itk_field(tmp_path / 'down.nii.gz', amplitude=0.2))
     interface = ComposeJacobianWeights(
@@ -574,7 +615,7 @@ def test_compose_weights_broadcasts_a_single_fieldwarp(tmp_path):
 
 
 def test_compose_weights_rejects_a_disjoint_field(tmp_path):
-    """A field in a genuinely unrelated coordinate domain is still an error."""
+    """Test that a field in a genuinely unrelated coordinate domain is still an error."""
     far_affine = np.eye(4)
     far_affine[:3, 3] = 10_000.0
     interface = ComposeJacobianWeights(
@@ -589,7 +630,9 @@ def test_compose_weights_rejects_a_disjoint_field(tmp_path):
 
 
 def test_compose_weights_succeeds_on_a_native_mask_against_a_drbuddi_grid_reference(tmp_path):
-    """C1 regression: the guard used to break every DRBUDDI run.
+    """Test that a native mask against a DRBUDDI-grid reference succeeds (C1 regression).
+
+    The guard used to break every DRBUDDI run.
 
     Reproduces the real shape/affine mismatch measured on cached DRBUDDI
     outputs (see ``NATIVE_*``/``DRBUDDI_*`` above): ``b0_ref_image`` is
@@ -600,7 +643,6 @@ def test_compose_weights_succeeds_on_a_native_mask_against_a_drbuddi_grid_refere
     unconditionally. Now it must succeed and produce a sane (near-unity, in
     this near-identity synthetic case) determinant.
     """
-
     reference = _write_map(
         tmp_path / 'ref.nii.gz', 1.0, shape=DRBUDDI_SHAPE, affine=DRBUDDI_AFFINE
     )
@@ -633,7 +675,9 @@ def test_compose_weights_succeeds_on_a_native_mask_against_a_drbuddi_grid_refere
 
 
 def test_compose_weights_reconciles_ec_jacobian_lattice_against_sdc_determinant(tmp_path):
-    """F1 regression: the SDC determinant and the EC Jacobian on genuinely
+    """Test that the EC Jacobian and SDC determinant lattices are reconciled (F1 regression).
+
+    F1 regression: the SDC determinant and the EC Jacobian on genuinely
     different lattices used to crash ``multiply_maps`` with a ``nilearn``
     ``ValueError`` (mismatched shape/affine) before either factor ever
     reached ``check_weight_map``.
@@ -646,7 +690,6 @@ def test_compose_weights_reconciles_ec_jacobian_lattice_against_sdc_determinant(
     because every TORTOISE marker passes ``--sloppy``, which forces
     ``correction_mode='motion'`` (no EC Jacobian at all).
     """
-
     reference = _write_map(
         tmp_path / 'ref.nii.gz', 1.0, shape=DRBUDDI_SHAPE, affine=DRBUDDI_AFFINE
     )
@@ -711,7 +754,7 @@ def test_compose_weights_reconciles_ec_jacobian_lattice_against_sdc_determinant(
 
 
 def test_compose_weights_reconciles_ec_jacobian_lattice_with_gradwarp(tmp_path):
-    """Same F1 regression, with a gradwarp field also in the mix.
+    """Test the same F1 regression, with a gradwarp field also in the mix.
 
     Here the gradwarp+SDC composite is built directly onto ``b0_ref_image``'s
     grid (``compose_fields``' own ``reference_image``), so this exercises the
@@ -764,7 +807,9 @@ def test_compose_weights_reconciles_ec_jacobian_lattice_with_gradwarp(tmp_path):
 
 
 def test_compose_weights_transports_ec_jacobian_through_the_composed_warp(tmp_path):
-    """C1 regression: the EC Jacobian and the SDC determinant live in
+    """Test that the EC Jacobian is transported through the composed warp (C1 regression).
+
+    C1 regression: the EC Jacobian and the SDC determinant live in
     different coordinate DOMAINS, not just different lattices.
 
     ``multiply_maps`` reconciles differing *sampling grids* via
@@ -885,7 +930,7 @@ def test_compose_weights_rejects_mismatched_ec_count(tmp_path):
 
 
 def test_compose_weights_applies_ec_only(tmp_path):
-    """TORTOISE EC with no gradwarp and no SDC still produces weights."""
+    """Test that TORTOISE EC with no gradwarp and no SDC still produces weights."""
     ec = [_write_map(tmp_path / f'ec{i}.nii.gz', 1.0 + 0.1 * i) for i in range(3)]
     interface = ComposeJacobianWeights(
         dwi_files=_dwi_volumes(tmp_path, 3),
@@ -900,8 +945,11 @@ def test_compose_weights_applies_ec_only(tmp_path):
 
 
 def test_compose_weights_lsr_ratios_are_the_whole_weight(tmp_path):
-    """TORTOISE's LSR replaces the determinant: gradwarp and eddy-current
-    factors are not multiplied on top of DRBUDDI's ratio images."""
+    """Test that TORTOISE's LSR ratios are the whole weight.
+
+    TORTOISE's LSR replaces the determinant: gradwarp and eddy-current
+    factors are not multiplied on top of DRBUDDI's ratio images.
+    """
     up = _write_map(tmp_path / 'up_scale.nii.gz', 0.8)
     down = _write_map(tmp_path / 'down_scale.nii.gz', 1.25)
     interface = ComposeJacobianWeights(
@@ -934,7 +982,7 @@ def test_compose_weights_lsr_count_must_match(tmp_path):
 
 
 def test_compose_weights_unweighted_fieldwarp_yields_nothing(tmp_path):
-    """T2Wreg: the field is applied downstream but contributes no weight."""
+    """Test that a T2Wreg field is applied downstream but contributes no weight."""
     interface = ComposeJacobianWeights(
         dwi_files=_dwi_volumes(tmp_path, 2),
         b0_ref_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
@@ -1007,7 +1055,7 @@ def _write_transformations(path, rows):
 
 
 def test_okan_jacobian_of_identity_parameters_is_unity(tmp_path):
-    """Identity parameters (see _IDENTITY_ROW) mean no eddy current, det = 1."""
+    """Test that identity parameters (see _IDENTITY_ROW) mean no eddy current, det = 1."""
     transformations = _write_transformations(tmp_path / 'x.txt', [_IDENTITY_ROW] * 3)
     result = OkanQuadraticJacobian(
         transformations_file=transformations,
@@ -1023,7 +1071,9 @@ def test_okan_jacobian_of_identity_parameters_is_unity(tmp_path):
 
 
 def test_okan_jacobian_ignores_the_rigid_columns(tmp_path):
-    """Columns 0-5 are rigid motion: det R = 1, so with a constant polynomial
+    """Test that the rigid-motion columns do not change the OKAN Jacobian.
+
+    Columns 0-5 are rigid motion: det R = 1, so with a constant polynomial
     (no quadratic terms) the determinant stays 1 wherever it is evaluated.
 
     Two (identical) rows, not one: ``OutputMultiObject`` collapses a
@@ -1045,9 +1095,12 @@ def test_okan_jacobian_ignores_the_rigid_columns(tmp_path):
 
 
 def test_okan_jacobian_is_evaluated_at_the_rigidly_moved_point():
-    """TORTOISE's ComputeJacobianWithRespectToPosition differentiates the
+    """Test that the OKAN Jacobian is evaluated at the rigidly moved point.
+
+    TORTOISE's ComputeJacobianWithRespectToPosition differentiates the
     polynomial at R @ p + T, not at p. With a quadratic term the difference
-    is exactly 2 * c12 * T_y along the phase axis."""
+    is exactly 2 * c12 * T_y along the phase axis.
+    """
     from qsiprep.interfaces.jacobian import okan_quadratic_jacobian
 
     c12 = 1e-3
@@ -1062,7 +1115,7 @@ def test_okan_jacobian_is_evaluated_at_the_rigidly_moved_point():
 
 
 def test_okan_coordinate_frame_centres():
-    """The three rot_eddy_center frames from DIFFPREP::ChangeImageHeaderToDP."""
+    """Test the three rot_eddy_center frames from DIFFPREP::ChangeImageHeaderToDP."""
     from qsiprep.interfaces.jacobian import _okan_coordinate_frame
 
     affine = np.diag([-2.0, -2.0, 2.0, 1.0])
@@ -1086,7 +1139,10 @@ def test_okan_coordinate_frame_centres():
 
 
 def test_okan_jacobian_is_undefined_for_motion_only(tmp_path):
-    """--sloppy forces correction_mode=motion, where no EC component exists."""
+    """Test that the OKAN Jacobian is undefined for motion-only correction.
+
+    --sloppy forces correction_mode=motion, where no EC component exists.
+    """
     transformations = _write_transformations(tmp_path / 'x.txt', [_IDENTITY_ROW] * 2)
     result = OkanQuadraticJacobian(
         transformations_file=transformations,
@@ -1097,7 +1153,9 @@ def test_okan_jacobian_is_undefined_for_motion_only(tmp_path):
 
 
 def test_okan_jacobian_is_undefined_for_cubic_and_does_not_raise(tmp_path):
-    """Cubic is a valid existing mode, so it must degrade, not abort.
+    """Test that the OKAN Jacobian is undefined for cubic mode, without raising.
+
+    Cubic is a valid existing mode, so it must degrade, not abort.
 
     Weighting is on by default, so raising here would newly break runs that
     work today and push users to --ignore jacobian, losing gradwarp and
@@ -1129,7 +1187,7 @@ from qsiprep.interfaces.jacobian import StackJacobianWeights
 
 
 def test_stack_jacobian_weights_single_image_is_3d(tmp_path):
-    """The collapsed (all-volumes-share-one-map) case stays 3D."""
+    """Test that the collapsed (all-volumes-share-one-map) case stays 3D."""
     weight_image = _write_map(tmp_path / 'w0.nii.gz', 1.0)
     result = StackJacobianWeights(weight_images=[weight_image], weight_index=[0, 0, 0]).run(
         cwd=str(tmp_path)
@@ -1139,7 +1197,7 @@ def test_stack_jacobian_weights_single_image_is_3d(tmp_path):
 
 
 def test_stack_jacobian_weights_two_images_stack_on_last_axis(tmp_path):
-    """Multiple unique maps stack on the last axis, in first-appearance order."""
+    """Test that multiple unique maps stack on the last axis, in first-appearance order."""
     first = _write_map(tmp_path / 'w0.nii.gz', 1.0)
     second = _write_map(tmp_path / 'w1.nii.gz', 2.0)
     result = StackJacobianWeights(weight_images=[first, second], weight_index=[0, 1, 0]).run(
@@ -1154,7 +1212,9 @@ def test_stack_jacobian_weights_two_images_stack_on_last_axis(tmp_path):
 
 
 def test_stack_jacobian_weights_undefined_input_stays_undefined(tmp_path):
-    """No weights applied this run: no crash, and nothing is written.
+    """Test that an undefined input stays undefined.
+
+    No weights applied this run: no crash, and nothing is written.
 
     This is the case the brief's original ``mandatory=True`` input spec would
     have raised ``ValueError`` on -- see the task-12 report. Pinning it here
@@ -1166,7 +1226,7 @@ def test_stack_jacobian_weights_undefined_input_stays_undefined(tmp_path):
 
 
 def test_stack_jacobian_weights_meta_dict_index_matches_shape(tmp_path):
-    """The sidecar's index travels with the stacked file, unmodified.
+    """Test that the sidecar's index travels with the stacked file, unmodified.
 
     ``applied_corrections``/``unmodulated_corrections``/``unmodulated_reason``
     are build-time inputs set by the caller (see
@@ -1254,7 +1314,7 @@ def test_transport_scalar_map_forwards_num_threads(tmp_path, monkeypatch):
 
 
 def test_missing_mask_is_not_a_nipype_mandatory_error(tmp_path):
-    """Constructing and running without a mask must reach _run_interface.
+    """Test that constructing and running without a mask reaches _run_interface.
 
     A mandatory-input error is raised before the node can write its result,
     which is the failure mode that hangs MultiProc rather than reporting.
@@ -1274,7 +1334,10 @@ def test_missing_mask_is_not_a_nipype_mandatory_error(tmp_path):
 
 
 def test_missing_mask_is_tolerated_when_there_is_nothing_to_modulate(tmp_path):
-    """No gradwarp, no SDC, no EC: the mask is never needed, so do not ask."""
+    """Test that a missing mask is tolerated when there is nothing to modulate.
+
+    No gradwarp, no SDC, no EC: the mask is never needed, so do not ask.
+    """
     reference = _write_map(tmp_path / 'ref.nii.gz', 1.0)
 
     result = ComposeJacobianWeights(
@@ -1286,7 +1349,10 @@ def test_missing_mask_is_tolerated_when_there_is_nothing_to_modulate(tmp_path):
 
 
 def test_base_workflow_connects_the_dwi_mask_to_finalize():
-    """The node's mask has to come from somewhere; nothing connected it."""
+    """Test that the base workflow connects the DWI mask to finalize.
+
+    The node's mask has to come from somewhere; nothing connected it.
+    """
     import inspect
 
     from qsiprep.workflows import base
@@ -1314,7 +1380,10 @@ def _map_with_nonpositive_fraction(path, fraction, shape=(10, 10, 10)):
 
 
 def test_check_weight_map_tolerates_localised_pile_up(tmp_path, caplog):
-    """2% non-positive is what a real susceptibility field looks like."""
+    """Test that localised pile-up is tolerated.
+
+    2% non-positive is what a real susceptibility field looks like.
+    """
     from qsiprep.interfaces.jacobian import check_weight_map
 
     weights = _map_with_nonpositive_fraction(tmp_path / 'w.nii.gz', 0.02)
@@ -1324,7 +1393,10 @@ def test_check_weight_map_tolerates_localised_pile_up(tmp_path, caplog):
 
 
 def test_check_weight_map_warns_on_a_widespread_fold(tmp_path, caplog):
-    """Half the brain folded is a broken field, not pile-up: warn loudly, do not abort."""
+    """Test that a widespread fold warns loudly but does not abort.
+
+    Half the brain folded is a broken field, not pile-up.
+    """
     from qsiprep.interfaces.jacobian import check_weight_map
 
     weights = _map_with_nonpositive_fraction(tmp_path / 'w.nii.gz', 0.5)
@@ -1348,9 +1420,12 @@ def test_fold_report_is_silent_when_everything_is_positive(tmp_path, caplog):
 
 
 def test_lsr_ratio_fills_undefined_voxels_with_unity(tmp_path):
-    """TORTOISE's LSR branch fills its ratio image with 1 and overwrites only
+    """Test that the LSR ratio fills undefined voxels with unity.
+
+    TORTOISE's LSR branch fills its ratio image with 1 and overwrites only
     where the division yields a number; a zero b=0 outside the object must not
-    put inf or nan into the weight."""
+    put inf or nan into the weight.
+    """
     from qsiprep.interfaces.tortoise import lsr_ratio
 
     reference = np.full((4, 4, 4), 2.0, dtype='float32')

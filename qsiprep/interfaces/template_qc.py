@@ -39,8 +39,10 @@ class _TemplateQCOutputSpec(TraitedSpec):
 class TemplateQC(SimpleInterface):
     """Per-input agreement with the template, plus a voxelwise agreement map.
 
-    Columns
-    -------
+    Notes
+    -----
+    The output table has the following columns for each input:
+
     corr_to_template
         Correlation with the template inside the template's brain mask. The
         single most useful number: it is what identifies a session that does not

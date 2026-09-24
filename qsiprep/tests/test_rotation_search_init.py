@@ -43,7 +43,7 @@ def _node(wf, name):
 
 
 def _incoming_fields(wf, dest_name):
-    """Destination fields of every top-level connection into a named node."""
+    """Return the destination fields of every top-level connection into a named node."""
     fields = set()
     for _src, dest, meta in wf._graph.edges(data=True):
         if dest.name == dest_name:
@@ -68,7 +68,10 @@ def test_b0_to_anat_coreg_is_initialized_by_rotation_search():
 
 
 def test_direct_acpc_is_initialized_by_rotation_search():
-    """The AC-PC target is a template, so the search must also fit scale."""
+    """Test that the direct AC-PC registration is initialized by rotation search.
+
+    The AC-PC target is a template, so the search must also fit scale.
+    """
     from qsiprep.workflows.dwi.registration import init_direct_b0_acpc_wf
 
     _config()
@@ -97,7 +100,7 @@ def test_t2w_coreg_is_initialized_by_rotation_search():
 
 
 def test_sloppy_mode_narrows_the_search():
-    """CI runs get 8 candidate orientations instead of 729."""
+    """Test that sloppy (CI) runs get 8 candidate orientations instead of 729."""
     from qsiprep.workflows.dwi.registration import init_rotation_search_wf
 
     _config(sloppy=True)
@@ -112,7 +115,9 @@ def test_sloppy_mode_narrows_the_search():
 
 
 def test_grid_has_a_start_next_to_identity():
-    """With arc 0.5 the 20-degree grid straddles zero (-10, +10); 0.45 lands at -1.
+    """Test that the rotation grid has a start next to identity.
+
+    With arc 0.5 the 20-degree grid straddles zero (-10, +10); 0.45 lands at -1.
 
     Most studies roughly align head position, so the common case deserves a
     candidate next to the identity rather than 10 degrees off it.
@@ -133,7 +138,10 @@ def test_grid_has_a_start_next_to_identity():
     [('2.5.4', True), ('2.6.0', False), ('2.6.2', False), (None, False)],
 )
 def test_pre_2_6_0_ants_gets_a_warning(monkeypatch, ants_version, warns):
-    """ANTs PR #1861 fixed multi-start state leaking between candidates."""
+    """Test that ANTs older than 2.6.0 gets a warning.
+
+    ANTs PR #1861 fixed multi-start state leaking between candidates.
+    """
     from unittest import mock
 
     from nipype.interfaces.ants.base import Info
@@ -149,7 +157,10 @@ def test_pre_2_6_0_ants_gets_a_warning(monkeypatch, ants_version, warns):
 
 
 def test_search_runs_on_downsampled_images():
-    """A several-hundred-start search at full resolution would take hours."""
+    """Test that the rotation search runs on downsampled images.
+
+    A several-hundred-start search at full resolution would take hours.
+    """
     from qsiprep.workflows.dwi.registration import init_rotation_search_wf
 
     _config()
@@ -163,7 +174,9 @@ def test_search_runs_on_downsampled_images():
 
 
 def test_shared_affine_settings_keep_com_for_the_fieldmap_workflow():
-    """affine.json is also loaded by qsiprep.workflows.fieldmap.syn.
+    """Test that the shared affine settings keep COM initialization for the fieldmap workflow.
+
+    affine.json is also loaded by qsiprep.workflows.fieldmap.syn.
 
     The T2w workflow clears the center-of-mass initialization on its node
     instead of editing the file, so the file must keep the setting.
@@ -177,7 +190,10 @@ def test_shared_affine_settings_keep_com_for_the_fieldmap_workflow():
 
 
 def test_intermodal_acpc_settings_carry_no_initialization():
-    """The com key would collide (xor) with the connected initial transform."""
+    """Test that the intermodal AC-PC settings carry no initialization.
+
+    The com key would collide (xor) with the connected initial transform.
+    """
     import json
 
     from qsiprep.data import load as load_data
@@ -192,7 +208,7 @@ def _connect_fields(wf, src, dst):
 
 
 def test_drbuddi_t2w_is_prealigned_to_the_b0(tmp_path):
-    """The raw ACPC T2w must not reach DRBUDDI; the aligned copy must."""
+    """Test that the raw ACPC T2w does not reach DRBUDDI, but the aligned copy does."""
     from qsiprep.tests.test_workflows_native import _cfg, _rpe_unit
     from qsiprep.workflows.fieldmap import init_drbuddi_wf
 
@@ -218,7 +234,10 @@ def test_drbuddi_without_t2w_builds_no_alignment(tmp_path):
 
 
 def test_t2wreg_structural_is_prealigned_to_the_b0():
-    """EPIREG runs a single COM-initialized rigid with no multistart fallback."""
+    """Test that the T2Wreg structural image is pre-aligned to the b=0.
+
+    EPIREG runs a single COM-initialized rigid with no multistart fallback.
+    """
     from qsiprep.tests.test_interfaces_diffprep import _base_config, _build, _make_unit
 
     _base_config()
@@ -234,7 +253,7 @@ def test_t2wreg_structural_is_prealigned_to_the_b0():
 
 
 def test_drbuddi_callers_supply_a_b0_reference_in_the_sdc_frame(tmp_path):
-    """Every DRBUDDI caller feeds inputnode.b0_ref from a pre-SDC b=0.
+    """Test that every DRBUDDI caller feeds inputnode.b0_ref from a pre-SDC b=0.
 
     eddy: the pre-eddy b=0 reference; DIFFPREP: the corrected-series b=0
     average; SHORELine: the motion-corrected b=0 template.

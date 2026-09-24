@@ -20,7 +20,10 @@ def _config(ratio=None, omp=8):
 
 @pytest.fixture
 def diffprep_inputs(tmp_path):
-    """DIFFPREP needs its mandatory inputs to render a command line."""
+    """Provide the mandatory DIFFPREP inputs.
+
+    DIFFPREP needs its mandatory inputs to render a command line.
+    """
     dwi = tmp_path / 'dwi.nii'
     dwi.write_bytes(b'\0' * 16)
     bmtxt = tmp_path / 'dwi.bmtxt'
@@ -52,7 +55,10 @@ def test_flag_absent_when_trait_unset(diffprep_inputs):
 
 @pytest.mark.parametrize('ratio', [None, 0])
 def test_workflow_omits_it_unless_requested(ratio):
-    """None and 0 both mean 'leave TORTOISE alone'."""
+    """Test that the workflow omits the ratio unless requested.
+
+    None and 0 both mean 'leave TORTOISE alone'.
+    """
     import inspect
 
     from qsiprep.workflows.dwi import diffprep

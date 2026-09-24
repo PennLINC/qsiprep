@@ -95,8 +95,10 @@ class DSIStudioCreateSrc(DSIStudioCommandLine):
     _cmd = 'dsi_studio --action=src '
 
     def _pre_run_hook(self, runtime):
-        """As of QSIPrep > 0.17 DSI Studio changed from DIPY bvecs to FSL bvecs."""
+        """Convert DIPY-style bvals/bvecs to a DSI Studio b-table when needed.
 
+        As of QSIPrep > 0.17 DSI Studio changed from DIPY bvecs to FSL bvecs.
+        """
         # b_table files and dicom directories are ok
         if isdefined(self.inputs.input_b_table_file) or isdefined(self.inputs.input_dicom_dir):
             return runtime
@@ -447,12 +449,12 @@ def _qc_problem(lines):
 
 
 def _missing_qc(measures, prefix=''):
-    """The n/a row for a QC stage that produced no measurements."""
+    """Return the n/a row for a QC stage that produced no measurements."""
     return {prefix + name: [np.nan] for name in measures}
 
 
 def _stage_warning(upstream, qc_file):
-    """Why a QC stage has no measurements, preferring the reason DSIStudioQC gave."""
+    """Explain why a QC stage has no measurements, preferring the reason DSIStudioQC gave."""
     if isdefined(upstream) and upstream:
         return upstream
     with open(qc_file) as fobj:

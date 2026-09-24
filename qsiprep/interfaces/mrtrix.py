@@ -1,11 +1,6 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
-MRtrix3 Interfaces
-~~~~~~~~~~~~~~~~~~
-
-
-"""
+"""MRtrix3 Interfaces."""
 
 import os
 
@@ -151,9 +146,7 @@ class DWIDenoiseOutputSpec(SeriesPreprocReportOutputSpec):
 
 
 class DWIDenoise(SeriesPreprocReport, MRTrix3Base):
-    """
-    Denoise DWI data and estimate the noise level based on the optimal
-    threshold for PCA.
+    """Denoise DWI data and estimate the noise level based on the optimal threshold for PCA.
 
     DWI data denoising and noise map estimation by exploiting data redundancy
     in the PCA domain using the prior knowledge that the eigenspectrum of
@@ -390,9 +383,7 @@ class DWIDenoise2OutputSpec(SeriesPreprocReportOutputSpec):
 
 
 class DWIDenoise2(SeriesPreprocReport, MRTrix3Base):
-    """
-    Denoise DWI data and estimate the noise level based on the optimal
-    threshold for PCA.
+    """Denoise DWI data and estimate the noise level based on the optimal threshold for PCA.
 
     DWI data denoising and noise map estimation by exploiting data redundancy
     in the PCA domain using the prior knowledge that the eigenspectrum of
@@ -482,12 +473,13 @@ class DWIBiasCorrectOutputSpec(SeriesPreprocReportOutputSpec):
 
 
 class DWIBiasCorrect(SeriesPreprocReport, MRTrix3Base):
-    """
-    Perform B1 field inhomogeneity correction for a DWI volume series.
+    """Perform B1 field inhomogeneity correction for a DWI volume series.
+
     For more information, see
     <https://mrtrix.readthedocs.io/en/latest/reference/scripts/dwibiascorrect.html>
-    Example
-    -------
+
+    Examples
+    --------
     >>> import nipype.interfaces.mrtrix3 as mrt
     >>> bias_correct = mrt.DWIBiasCorrect()
     >>> bias_correct.inputs.in_file = 'dwi.mif'

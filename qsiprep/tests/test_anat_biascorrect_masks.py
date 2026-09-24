@@ -34,7 +34,7 @@ def _has(wf, fragment):
 @pytest.mark.parametrize('num_images', [1, 3])
 @pytest.mark.parametrize('do_biascorr', [True, False])
 def test_n4_is_gated_by_do_biascorr(num_images, do_biascorr):
-    """N4 appears only when asked for, for both the single- and multi-image paths."""
+    """Test that N4 appears only when requested, for both the single- and multi-image paths."""
     from qsiprep.workflows.anatomical.volume import init_anat_template_wf
 
     _config()
@@ -43,7 +43,9 @@ def test_n4_is_gated_by_do_biascorr(num_images, do_biascorr):
 
 
 def test_bias_corrected_port_is_populated_without_n4():
-    """Downstream consumers read `bias_corrected`; it must be connected either way.
+    """Test that the ``bias_corrected`` port is populated without N4.
+
+    Downstream consumers read `bias_corrected`; it must be connected either way.
 
     The port name is not a promise -- with N4 off it carries the conformed image.
     Leaving it dangling would break ACPC normalization and the skull-on
@@ -61,7 +63,7 @@ def test_bias_corrected_port_is_populated_without_n4():
 
 
 def test_merge_registration_is_masked():
-    """The multi-image merge must drive registration with a brain mask."""
+    """Test that the multi-image merge drives registration with a brain mask."""
     from qsiprep.workflows.anatomical.volume import init_anat_template_wf
 
     _config()
@@ -86,7 +88,7 @@ def test_merge_registration_is_masked():
 
 
 def test_single_image_needs_no_merge_mask():
-    """With one image there is no merge, so no mask should be built for it."""
+    """Test that no merge mask is built for a single image, as there is no merge."""
     from qsiprep.workflows.anatomical.volume import init_anat_template_wf
 
     _config()
@@ -118,7 +120,10 @@ def test_auto_reads_image_type(monkeypatch, mode, image_type, expected):
 
 
 def test_auto_runs_n4_when_only_some_images_are_normalized(monkeypatch):
-    """A mixed set still needs N4 -- it cannot be merged consistently otherwise."""
+    """Test that ``auto`` runs N4 when only some images are normalized.
+
+    A mixed set still needs N4 -- it cannot be merged consistently otherwise.
+    """
     from qsiprep.workflows.anatomical.volume import anat_biascorrect_enabled
 
     config = _config(anat_biascorrect='auto')
@@ -141,7 +146,10 @@ def test_auto_falls_back_to_n4_without_a_layout(monkeypatch):
 
 
 def test_t2w_shares_the_anatomical_template_path():
-    """T2w must inherit both fixes, since DRBUDDI/T2Wreg register to this image."""
+    """Test that T2w shares the anatomical template path.
+
+    T2w must inherit both fixes, since DRBUDDI/T2Wreg register to this image.
+    """
     from qsiprep.workflows.anatomical.volume import init_t2w_preproc_wf
 
     _config()

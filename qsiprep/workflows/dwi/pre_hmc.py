@@ -1,4 +1,5 @@
-"""
+"""Orchestrating the dwi-preprocessing workflow.
+
 Orchestrating the dwi-preprocessing workflow
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -30,7 +31,8 @@ def init_dwi_pre_hmc_wf(
     calculate_qc=True,
     name='pre_hmc_wf',
 ):
-    """
+    """Build a workflow that merges and denoises dwi scans before head motion correction.
+
     This workflow merges and denoises dwi scans. The outputs from this workflow is
     a single dwi file (optionally denoised) and corresponding bvals, bvecs.
 
@@ -53,30 +55,45 @@ def init_dwi_pre_hmc_wf(
             do_biascorr=True,
         )
 
-    **Parameters**
+    Parameters
+    ----------
+    unit : :class:`~qsiplan.adapters.PreprocUnit`
+        The DWI series to merge and denoise. When the unit has both phase encoding
+        polarities, each polarity is merged and denoised separately.
+    orientation : str
+        'LPS' or 'LAS'
+    source_file : str
+        Source file used to name the merged outputs when the unit has a single
+        phase encoding polarity.
+    do_biascorr : bool
+        Whether bias correction is applied to this output; used to write the
+        methods boilerplate.
+    calculate_qc : bool, optional
+        Whether to calculate model-free QC metrics for the merged series when the
+        unit has a single phase encoding polarity. Default is True.
+    name : str, optional
+        Name of workflow (default: ``pre_hmc_wf``)
 
-        orientation : str
-            'LPS' or 'LAS'
-
-    **Outputs**
-        dwi_file
-            a (potentially-denoised) dwi file
-        bvec_file
-            a bvec file
-        bval_file
-            a bval files
-        sidecar_file
-            a json sidecar file for the scan data
-        b0_indices
-            list of the positions of the b0 images in the dwi series
-        b0_images
-            list of paths to single-volume b0 images
-        original_files
-            list of paths to the original files that the single volumes came from
-        original_grouping
-            list of warped space group ids
-        raw_concatenated
-            4d image of the raw inputs concatenated (for QC and visualization)
+    Outputs
+    -------
+    dwi_file
+        a (potentially-denoised) dwi file
+    bvec_file
+        a bvec file
+    bval_file
+        a bval files
+    sidecar_file
+        a json sidecar file for the scan data
+    b0_indices
+        list of the positions of the b0 images in the dwi series
+    b0_images
+        list of paths to single-volume b0 images
+    original_files
+        list of paths to the original files that the single volumes came from
+    original_grouping
+        list of warped space group ids
+    raw_concatenated
+        4d image of the raw inputs concatenated (for QC and visualization)
     """
     workflow = Workflow(name=name)
     outputnode = pe.Node(

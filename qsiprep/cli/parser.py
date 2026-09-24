@@ -76,7 +76,7 @@ def _build_parser(**kwargs):
             namespace._forwarded_deprecations = [*pending, option_string]
 
     class DeprecationForwardingParser(ArgumentParser):
-        """Enables the replacements for any deprecated options that were given."""
+        """Argument parser that enables the replacements for any deprecated options given."""
 
         def parse_known_args(self, args=None, namespace=None):
             namespace, extras = super().parse_known_args(args, namespace)

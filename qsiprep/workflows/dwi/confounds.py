@@ -1,6 +1,7 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
+"""Calculate dwi confounds.
+
 Calculate dwi confounds
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -19,7 +20,8 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 def init_dwi_confs_wf():
-    """
+    """Build a workflow that calculates confounds for a dwi series.
+
     This workflow calculates confounds for a dwi series, and aggregates them
     into a :abbr:`TSV (tab-separated value)` file, for use as nuisance
     regressors in a :abbr:`GLM (general linear model)`.

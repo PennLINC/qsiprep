@@ -53,13 +53,12 @@ def test_dsdti_fmap(data_dir, output_dir, working_dir):
     be built for all sorts of fieldmap configurations.
 
     This tests the following features:
+
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
     - dwidenoise is enabled implicitly.
 
-    Inputs
-    ------
-    - DSDTI BIDS data (data/DSDTI_fmap)
+    Input data: DSDTI BIDS data (data/DSDTI_fmap).
     """
     TEST_NAME = 'dsdti_fmap'
 
@@ -94,13 +93,12 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
     be built for all sorts of fieldmap configurations.
 
     This tests the following features:
+
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
     - dwidenoise is enabled explicitly
 
-    Inputs
-    ------
-    - DSDTI BIDS data (data/DSCSDSI_fmap)
+    Input data: DSDTI BIDS data (data/DSCSDSI_fmap).
     """
     TEST_NAME = 'dscsdsi_fmap'
 
@@ -127,19 +125,18 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.cuda
 def test_cuda(data_dir, output_dir, working_dir):
-    """
+    """Run the CUDA test on reverse-PE series data.
 
     Was in CUDATest.sh.
     XXX: Not called in CircleCI.
 
     This tests the following features:
+
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
     - Denoising is skipped
 
-    Inputs
-    ------
-    - DSDTI BIDS data (data/drbuddi_rpe_series)
+    Input data: DSDTI BIDS data (data/drbuddi_rpe_series).
     """
     TEST_NAME = 'cuda'
 
@@ -171,17 +168,17 @@ def test_cuda(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.drbuddi_rpe
 def test_drbuddi_rpe(data_dir, output_dir, working_dir):
-    """
+    """Run the DRBUDDI test on a reverse-PE DWI series.
 
     Was in DRBUDDI_eddy_rpe_series.sh.
 
     This tests the following features:
+
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
     - Denoising is skipped
 
-    Inputs:
-    -------
+    Input data:
 
     - qsiprep single shell results (data/DSDTI_fmap)
     - qsiprep multi shell results (data/DSDTI_fmap)
@@ -228,6 +225,7 @@ def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
     Was in DRBUDDI_SHORELine_epi.sh.
 
     This tests the following features:
+
     - SHORELine (here, just b=0 registration) motion correction
     """
     TEST_NAME = 'drbuddi_shoreline_epi'
@@ -265,6 +263,7 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
     Was in DRBUDDI_TENSORLine_epi.sh.
 
     This tests the following features:
+
     - TENSORLine (tensor-based) motion correction
     """
     TEST_NAME = 'drbuddi_tensorline_epi'
@@ -297,19 +296,18 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.dscsdsi
 def test_dscsdsi(data_dir, output_dir, working_dir):
-    """DSCSDSI test
+    """Run the DSCSDSI test.
 
     Was in DSCSDSI.sh.
 
     This tests the following features:
+
     - The SHORELine motion correction workflow
     - Skipping B1 biascorrection
     - Using the SyN-SDC distortion correction method
     - dwidenoise is enabled implicitly
 
-    Inputs
-    ------
-    - DSCSDSI BIDS data (data/DSCSDSI_nofmap)
+    Input data: DSCSDSI BIDS data (data/DSCSDSI_nofmap).
     """
     TEST_NAME = 'dscsdsi'
 
@@ -340,18 +338,17 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.diffprep
 def test_diffprep(data_dir, output_dir, working_dir):
-    """TORTOISE DIFFPREP head-motion/eddy correction on non-shelled data.
+    """Test TORTOISE DIFFPREP head-motion/eddy correction on non-shelled data.
 
     This tests the following features:
+
     - The TORTOISE DIFFPREP HMC backend (--hmc-method tortoise) on a
       compressed-sensing DSI (non-shelled) scheme, where FSL eddy cannot run
     - The fieldmap-less path: with no fieldmap and no T2w, DIFFPREP performs
       head-motion/eddy correction only and does not error out
     - Skipping B1 biascorrection
 
-    Inputs
-    ------
-    - DSCSDSI BIDS data (data/DSCSDSI_nofmap)
+    Input data: DSCSDSI BIDS data (data/DSCSDSI_nofmap).
     """
     TEST_NAME = 'diffprep'
 
@@ -378,9 +375,10 @@ def test_diffprep(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.diffprep_drbuddi
 def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
-    """TORTOISE DIFFPREP head-motion correction followed by DRBUDDI SDC.
+    """Test TORTOISE DIFFPREP head-motion correction followed by DRBUDDI SDC.
 
     This tests the following features:
+
     - The TORTOISE DIFFPREP HMC backend combined with reverse phase-encoded
       (blip-up/blip-down) DRBUDDI susceptibility distortion correction, i.e.
       that the backend performs SDC rather than erroring when a fieldmap is
@@ -392,9 +390,7 @@ def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
     ``test_diffprep_drbuddi_rpe_series``, which exercises the per-direction
     DIFFPREP split/recombine before DRBUDDI.
 
-    Inputs
-    ------
-    - qsiprep epi fieldmap results (data/drbuddi_epi)
+    Input data: qsiprep epi fieldmap results (data/drbuddi_epi).
     """
     TEST_NAME = 'diffprep_drbuddi'
 
@@ -426,7 +422,7 @@ def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.diffprep_rpe_series
 def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
-    """TORTOISE DIFFPREP HMC on a reverse-PE *series* (rpe_series) + DRBUDDI SDC.
+    """Test TORTOISE DIFFPREP HMC on a reverse-PE *series* (rpe_series) + DRBUDDI SDC.
 
     Unlike ``test_diffprep_drbuddi`` (which uses an ``epi`` fieldmap), this feeds
     two opposing-PE DWI *series*. qsiprep merges them into one 4D file for FSL
@@ -439,9 +435,7 @@ def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
     shell synthesis is needed. A non-shelled (CS-DSI) reverse-PE-series dataset
     is still required to exercise the Tier-2 synthesis path end to end.
 
-    Inputs
-    ------
-    - qsiprep reverse-PE-series results (data/drbuddi_rpe_series)
+    Input data: qsiprep reverse-PE-series results (data/drbuddi_rpe_series).
     """
     TEST_NAME = 'diffprep_rpe_series'
 
@@ -473,7 +467,7 @@ def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.diffprep_csdsi_rpe_series
 def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
-    """TORTOISE DIFFPREP on a NON-shelled (CS-DSI) reverse-PE series + DRBUDDI.
+    """Test TORTOISE DIFFPREP on a NON-shelled (CS-DSI) reverse-PE series + DRBUDDI.
 
     Unlike ``test_diffprep_drbuddi_rpe_series`` (DTI-regime, shelled), this uses a
     downsampled CS-DSI HASC55 AP+PA acquisition. It exercises a non-shelled
@@ -487,9 +481,7 @@ def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
     The fixture also ships a T2w, so a heavier variant (drop ``--anat-modality
     none``) can additionally exercise the DRBUDDI multimodal-T2w branch.
 
-    Inputs
-    ------
-    - Downsampled CS-DSI HASC55 reverse-PE series (data/csdsi_rpe_series)
+    Input data: Downsampled CS-DSI HASC55 reverse-PE series (data/csdsi_rpe_series).
     """
     TEST_NAME = 'diffprep_csdsi_rpe_series'
 
@@ -531,18 +523,17 @@ def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.dsdti_nofmap
 def test_dsdti_nofmap(data_dir, output_dir, working_dir):
-    """DSCDTI_nofmap test.
+    """Run the DSDTI_nofmap test.
 
     Was in DSDTI_nofmap.sh.
 
     This tests the following features:
+
     - A workflow with no distortion correction followed by eddy
     - Eddy is run on a CPU
     - Denoising is skipped
 
-    Inputs
-    ------
-    - DSDTI BIDS data (data/DSDTI)
+    Input data: DSDTI BIDS data (data/DSDTI).
     """
     TEST_NAME = 'dsdti_nofmap'
 
@@ -573,18 +564,17 @@ def test_dsdti_nofmap(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.dsdti_synfmap
 def test_dsdti_synfmap(data_dir, output_dir, working_dir):
-    """DSCDTI_synfmap test
+    """Run the DSDTI_synfmap test.
 
     Was in DSDTI_synfmap.sh.
 
     This tests the following features:
+
     - A workflow with no distortion correction followed by eddy
     - Eddy is run on a CPU
     - Denoising is skipped
 
-    Inputs
-    ------
-    - DSDTI BIDS data (data/DSDTI)
+    Input data: DSDTI BIDS data (data/DSDTI).
     """
     TEST_NAME = 'dsdti_synfmap'
 
@@ -622,18 +612,17 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.dwiref
 def test_dwiref(data_dir, output_dir, working_dir):
-    """Subject-level dwiref test
+    """Run the subject-level dwiref test.
 
     A two-session dataset is used to build a subject-level dwiref.
 
     This tests the following features:
+
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
     - dwidenoise is enabled implicitly
 
-    Inputs
-    ------
-    - twoses BIDS data (data/DSDTI_fmap)
+    Input data: twoses BIDS data (data/DSDTI_fmap).
     """
     TEST_NAME = 'dwiref'
 
@@ -772,7 +761,10 @@ def test_forrest_gump_patch2self(data_dir, output_dir, working_dir):
 
 
 def test_parser_accepts_tortoise(tmp_path):
-    """``tortoise`` is the single --hmc-method value for the DIFFPREP backend."""
+    """Test that the parser accepts ``tortoise`` for --hmc-method.
+
+    ``tortoise`` is the single --hmc-method value for the DIFFPREP backend.
+    """
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -794,7 +786,10 @@ def test_parser_accepts_tortoise(tmp_path):
 
 
 def test_parser_rejects_removed_diffprep_hmc_models(tmp_path):
-    """The per-mode values were replaced by "tortoise" + --diffprep-config."""
+    """Test that the parser rejects the removed per-mode DIFFPREP --hmc-method values.
+
+    The per-mode values were replaced by "tortoise" + --diffprep-config.
+    """
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -818,8 +813,11 @@ def test_parser_rejects_removed_diffprep_hmc_models(tmp_path):
 
 @pytest.mark.parametrize('forced', ['gradwarp1D', 'gradwarp3D'])
 def test_parser_accepts_force_gradwarp_and_gradient_file(tmp_path, forced):
-    """--force gradwarp{1,3}D and --gradient-file land on the namespace under
-    those dests."""
+    """Test that the parser accepts --force gradwarp{1,3}D and --gradient-file.
+
+    --force gradwarp{1,3}D and --gradient-file land on the namespace under
+    those dests.
+    """
     from qsiprep.cli.parser import _build_parser
     from qsiprep.tests.gradient_fixtures import write_siemens_grad
 
@@ -846,7 +844,10 @@ def test_parser_accepts_force_gradwarp_and_gradient_file(tmp_path, forced):
 
 
 def test_parser_accepts_ignore_gradwarp(tmp_path):
-    """'gradwarp' extends the existing --ignore choices."""
+    """Test that --ignore accepts 'gradwarp'.
+
+    'gradwarp' extends the existing --ignore choices.
+    """
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -860,7 +861,10 @@ def test_parser_accepts_ignore_gradwarp(tmp_path):
 
 
 def test_parser_accepts_ignore_jacobian(tmp_path):
-    """'jacobian' is the --ignore off-switch for Jacobian weighting."""
+    """Test that --ignore accepts 'jacobian'.
+
+    'jacobian' is the --ignore off-switch for Jacobian weighting.
+    """
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -874,7 +878,10 @@ def test_parser_accepts_ignore_jacobian(tmp_path):
 
 
 def test_parser_accepts_force_jacobian_and_rejects_the_pair(tmp_path):
-    """--force jacobian modulates the T2Wreg field; it cannot combine with --ignore jacobian."""
+    """Test that --force jacobian is accepted, but not together with --ignore jacobian.
+
+    --force jacobian modulates the T2Wreg field; it cannot combine with --ignore jacobian.
+    """
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -889,7 +896,10 @@ def test_parser_accepts_force_jacobian_and_rejects_the_pair(tmp_path):
 
 
 def test_parser_rejects_removed_jacobian_weighting_flag(tmp_path):
-    """--no-jacobian-weighting was replaced by --ignore jacobian."""
+    """Test that the parser rejects the removed --no-jacobian-weighting flag.
+
+    --no-jacobian-weighting was replaced by --ignore jacobian.
+    """
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -910,9 +920,12 @@ def test_parser_rejects_removed_jacobian_weighting_flag(tmp_path):
 
 
 def test_repeated_force_accumulates(tmp_path):
-    """action='store' would keep only the last occurrence, so
+    """Test that repeated --force options accumulate.
+
+    action='store' would keep only the last occurrence, so
     "--force gradwarp1D --force gradwarp3D" would reach the validator as a
-    single value and silently apply 3D instead of being rejected."""
+    single value and silently apply 3D instead of being rejected.
+    """
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -936,8 +949,11 @@ def test_repeated_force_accumulates(tmp_path):
 
 
 def test_repeated_force_does_not_leak_between_parses(tmp_path):
-    """action='extend' appends to whatever is on the namespace, so a shared
-    mutable default would carry one parse's values into the next."""
+    """Test that --force values do not leak between parses.
+
+    action='extend' appends to whatever is on the namespace, so a shared
+    mutable default would carry one parse's values into the next.
+    """
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -953,7 +969,10 @@ def test_repeated_force_does_not_leak_between_parses(tmp_path):
 
 @pytest.mark.parametrize('flag', ['--force', '--ignore'])
 def test_parser_rejects_the_old_gradients_value(tmp_path, flag):
-    """The pre-rename spelling must fail loudly rather than be silently ignored."""
+    """Test that the parser rejects the old 'gradients' value.
+
+    The pre-rename spelling must fail loudly rather than be silently ignored.
+    """
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -967,7 +986,7 @@ def test_parser_rejects_the_old_gradients_value(tmp_path, flag):
 
 
 def test_parser_rejects_unknown_force_value(tmp_path):
-    """--force accepts only its documented values."""
+    """Test that --force accepts only its documented values."""
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -1003,7 +1022,10 @@ def test_validate_diffprep_config_default_is_valid():
 
 
 def test_validate_diffprep_config_rejects_bad_correction_mode(tmp_path):
-    """A typo must fail at parse time, not deep inside workflow construction."""
+    """Test that an invalid correction mode is rejected at parse time.
+
+    A typo must fail at parse time, not deep inside workflow construction.
+    """
     import json
 
     from qsiprep.utils.misc import validate_diffprep_config
@@ -1083,7 +1105,7 @@ def test_load_shoreline_config_rejects_bad_files(tmp_path, contents, match):
 
 
 def test_load_shoreline_config_names_the_file_on_decode_errors(tmp_path):
-    """A file that is not UTF-8 must still produce an error naming the file."""
+    """Test that a file that is not UTF-8 produces an error naming the file."""
     from qsiprep.utils.misc import load_shoreline_config
 
     cfg = tmp_path / 'latin1.json'
@@ -1093,7 +1115,7 @@ def test_load_shoreline_config_names_the_file_on_decode_errors(tmp_path):
 
 
 def test_load_shoreline_config_names_the_file_on_read_errors(tmp_path):
-    """An unreadable path (here a directory) must raise ValueError, not a bare OSError."""
+    """Test that an unreadable path (here a directory) raises ValueError, not a bare OSError."""
     from qsiprep.utils.misc import load_shoreline_config
 
     with pytest.raises(ValueError, match=r'SHORELine configuration file .* could not be read'):
@@ -1111,7 +1133,10 @@ def test_load_shoreline_config_model_none_ignores_iters(tmp_path):
 
 
 def test_load_shoreline_config_legacy_model_override(tmp_path):
-    """The deprecated --hmc-model alias supplies the model; the file may still set the rest."""
+    """Test that the deprecated --hmc-model alias overrides the configured model.
+
+    The deprecated --hmc-model alias supplies the model; the file may still set the rest.
+    """
     import json
 
     from qsiprep.utils.misc import load_shoreline_config
@@ -1146,8 +1171,11 @@ def test_validate_gradient_flags_force_and_ignore_conflict(tmp_path, forced):
 
 
 def test_validate_gradient_flags_rejects_both_forced_dimensionalities(tmp_path):
-    """--force takes a list of values, so argparse cannot make the two
-    dimensionalities mutually exclusive; the validator does it instead."""
+    """Test that forcing both gradwarp dimensionalities is rejected.
+
+    --force takes a list of values, so argparse cannot make the two
+    dimensionalities mutually exclusive; the validator does it instead.
+    """
     from qsiprep.tests.gradient_fixtures import write_siemens_grad
     from qsiprep.utils.misc import validate_gradient_flags
 
@@ -1158,7 +1186,10 @@ def test_validate_gradient_flags_rejects_both_forced_dimensionalities(tmp_path):
 
 @pytest.mark.parametrize('forced', ['gradwarp1D', 'gradwarp3D'])
 def test_validate_gradient_flags_accepts_a_repeated_identical_dimensionality(tmp_path, forced):
-    """ "--force gradwarp1D gradwarp1D" names one dimensionality, not two."""
+    """Test that a repeated identical gradwarp dimensionality is accepted.
+
+    "--force gradwarp1D gradwarp1D" names one dimensionality, not two.
+    """
     from qsiprep.tests.gradient_fixtures import write_siemens_grad
     from qsiprep.utils.misc import validate_gradient_flags
 
@@ -1175,15 +1206,21 @@ def test_validate_gradient_flags_force_requires_gradient_file(forced):
 
 
 def test_validate_gradient_flags_ignores_unrelated_force_values():
-    """--force sdc-anat-reference has nothing to do with --gradient-file."""
+    """Test that unrelated --force values are ignored.
+
+    --force sdc-anat-reference has nothing to do with --gradient-file.
+    """
     from qsiprep.utils.misc import validate_gradient_flags
 
     validate_gradient_flags(None, force=['sdc-anat-reference'], ignore=[])
 
 
 def test_validate_gradient_flags_rejects_unknown_extension(tmp_path):
-    """TORTOISE only warns and silently disables correction. Silently producing
-    uncorrected output is the wrong default for a batch pipeline."""
+    """Test that an unknown gradient file extension is rejected.
+
+    TORTOISE only warns and silently disables correction. Silently producing
+    uncorrected output is the wrong default for a batch pipeline.
+    """
     from qsiprep.utils.misc import validate_gradient_flags
 
     bogus = tmp_path / 'coeff.txt'
@@ -1201,7 +1238,10 @@ def test_validate_gradient_flags_accepts_every_tortoise_extension(tmp_path, exte
 
 
 def test_validate_gradient_flags_default_is_a_noop():
-    """No flags at all: the feature is off and nothing is raised."""
+    """Test that nothing is raised when no gradient flags are given.
+
+    No flags at all: the feature is off and nothing is raised.
+    """
     from qsiprep.utils.misc import validate_gradient_flags
 
     validate_gradient_flags(None, force=[], ignore=[])
@@ -1226,7 +1266,9 @@ def _check_arg_specified(argname, arglist):
 
 
 def _update_resources(parameters):
-    """We should use all the available CPUs for testing.
+    """Set the number of CPUs used for testing.
+
+    We should use all the available CPUs for testing.
 
     Sometimes a test will set a specific amount of cpus. In that
     case, the number should be kept. Otherwise, try to read the

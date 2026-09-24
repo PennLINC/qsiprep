@@ -1,11 +1,6 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
-Image tools interfaces
-~~~~~~~~~~~~~~~~~~~~~~
-
-
-"""
+"""Image tools interfaces."""
 
 import os
 from tempfile import NamedTemporaryFile
@@ -191,9 +186,9 @@ class EnhanceB0(SimpleInterface):
 
 
 def _enhance_t2_contrast(in_file, newpath=None, offset=0.5):
-    """
-    Performs a logarithmic transformation of intensity that
-    effectively splits brain and background and makes the
+    """Apply a logarithmic transformation to the image intensities.
+
+    This effectively splits brain and background and makes the
     overall distribution more Gaussian.
     """
     out_file = fname_presuffix(in_file, suffix='_t1enh', newpath=newpath)
@@ -259,7 +254,7 @@ def biascorrect(nii, copy_input_header=True, cwd=None):
 
 
 def calculate_gradmax_b0_mask(b0_nii, show_plot=False, quantile_max=0.8, pad_size=10, cwd=None):
-    """Robustly finds a brain mask from a low-res b=0 image.
+    """Robustly find a brain mask from a low-res b=0 image.
 
     The steps for finding a mask for a b=0 image
 
@@ -271,14 +266,14 @@ def calculate_gradmax_b0_mask(b0_nii, show_plot=False, quantile_max=0.8, pad_siz
       6. Try a series of orders for opening. Select the order that maximizes the gradient
          from (3) at the edge of the opened mask.
 
-    **Returns**
-
-        mask_nii: spatial image
-            binary gradient-optimizing mask
-        scaled_nii: spatial image
-            robust scaled image for brain extraction
-        gradient_nii: spatial image
-            gradient image
+    Returns
+    -------
+    mask_nii : spatial image
+        binary gradient-optimizing mask
+    scaled_nii : spatial image
+        robust scaled image for brain extraction
+    gradient_nii : spatial image
+        gradient image
     """
     total_voxels = np.prod(b0_nii.shape)
     if pad_size:
@@ -390,14 +385,11 @@ def watershed_refined_b0_mask(
 ):
     """Refine the boundary of a mask using the watershed algorithm.
 
-    **Returns**
-
-        mask_nii: spatial image
-            binary gradient-optimizing mask
-        weighting_mask: spatial image
-            smoothed mask for use with N4
+    Returns
+    -------
+    mask_nii : spatial image
+        binary gradient-optimizing mask
     """
-
     initial_mask_nii, initial_scaled_nii, _ = calculate_gradmax_b0_mask(
         b0_nii, show_plot=show_plot, quantile_max=quantile_max, cwd=cwd
     )

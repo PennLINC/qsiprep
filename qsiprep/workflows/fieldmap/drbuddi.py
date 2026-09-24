@@ -1,6 +1,7 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
+"""Susceptibility distortion correction workflows using DRBUDDI.
+
 .. _sdc_drbuddi :
 
 Correcting Susceptibility Distortion with DRBUDDI
@@ -36,7 +37,7 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 def _synth_shell_kwargs(bval, ndirs):
-    """DRBUDDI shell-synthesis kwargs, or empty when the opt-in is off.
+    """Return DRBUDDI shell-synthesis kwargs, or an empty dict when the opt-in is off.
 
     Returned as kwargs rather than passed as 0 so that a stock (unpatched)
     TORTOISE, which does not know --DRBUDDI_synth_shell_bval, is unaffected
@@ -72,9 +73,12 @@ def _negate_displacement_field(in_file):
 
 
 def seeds_from_gre(unit):
-    """Whether DRBUDDI starts from ``unit``'s GRE candidate: for any PEPOLAR unit
-    that a GRE fieldmap also lists, except when DRBUDDI only refines TOPUP's
-    correction, which a full GRE warp would duplicate."""
+    """Check whether DRBUDDI starts from ``unit``'s GRE candidate.
+
+    This is the case for any PEPOLAR unit that a GRE fieldmap also lists, except
+    when DRBUDDI only refines TOPUP's correction, which a full GRE warp would
+    duplicate.
+    """
     return (
         unit.is_pepolar
         and unit.gre_init_estimation is not None
@@ -90,10 +94,10 @@ def init_drbuddi_wf(
     synth_shell_ndirs=30,
     initialize_from_field=False,
 ):
-    """
+    """Build a workflow that corrects susceptibility distortion with DRBUDDI.
+
     This workflow implements the heuristics to choose a
     :abbr:`SDC (susceptibility distortion correction)` strategy.
-
 
     .. workflow::
         :graph2use: orig
@@ -117,15 +121,22 @@ def init_drbuddi_wf(
     ----------
     unit : :class:`~qsiplan.adapters.PreprocUnit`
         The reverse-PE DWI series (and any epi fieldmaps) to correct
-    use_cuda : :obj:`bool`
+    t2w_sdc : bool
+        Should a T2w image be included in the DRBUDDI run?
+    use_cuda : bool, optional
         Run ``DRBUDDI_cuda`` instead of ``DRBUDDI``. The GPU must be exposed to
         the container. Results differ from the CPU build, so this is not purely
         a speed knob. Callers pass ``gpu_enabled('drbuddi')``, which is driven by
         ``--gpu`` (with ``"use_cuda"`` in ``--diffprep-config`` as a legacy
         fallback).
-    t2w_sdc : bool
-        Should a T2w image be included in the DRBUDDI run?
-    initialize_from_field : bool
+    synth_shell_bval : float or None, optional
+        b-value of a single shell that TORTOISE synthesizes as DRBUDDI's
+        registration target. None or a value <= 0 disables shell synthesis
+        (the default), which keeps compatibility with an unpatched TORTOISE.
+    synth_shell_ndirs : int, optional
+        Number of directions in the synthesized shell. Only used when
+        ``synth_shell_bval`` enables shell synthesis.
+    initialize_from_field : bool, optional
         Seed DRBUDDI's diffeomorphic search from an external displacement field
         (e.g. a GRE-fieldmap-derived warp) supplied on ``inputnode.initial_field``.
         The field becomes the initial up (blip-up) transform and its negation the
@@ -165,7 +176,6 @@ def init_drbuddi_wf(
         in dwi_file
 
     """
-
     workflow = Workflow(name='drbuddi_sdc_wf')
     inputnode = pe.Node(
         niu.IdentityInterface(

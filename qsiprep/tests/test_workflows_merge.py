@@ -33,7 +33,7 @@ def _use_dwidenoise2_config(monkeypatch, tmp_path, settings):
 
 @pytest.mark.parametrize('use_phase', [False, True])
 def test_dwidenoise_workflow_uses_dwidenoise(monkeypatch, use_phase):
-    """Build a DWIDenoise node, not Patch2Self, when ``dwidenoise`` is requested."""
+    """Test that a DWIDenoise node, not Patch2Self, is built when ``dwidenoise`` is requested."""
     monkeypatch.setattr(config.workflow, 'denoise_method', 'dwidenoise')
     monkeypatch.setattr(config.workflow, 'dwidenoise_window', 5)
     monkeypatch.setattr(config.workflow, 'unringing_method', 'none')
@@ -56,7 +56,7 @@ def test_dwidenoise_workflow_uses_dwidenoise(monkeypatch, use_phase):
 
 
 def test_dwidenoise_workflow_resolves_auto_window(monkeypatch):
-    """Resolve the default ``auto`` window size into a cuboid extent for dwidenoise."""
+    """Test that the default ``auto`` window resolves into a cuboid extent for dwidenoise."""
     monkeypatch.setattr(config.workflow, 'denoise_method', 'dwidenoise')
     monkeypatch.setattr(config.workflow, 'dwidenoise_window', 'auto')
     monkeypatch.setattr(config.workflow, 'unringing_method', 'none')
@@ -78,7 +78,7 @@ def test_dwidenoise_workflow_resolves_auto_window(monkeypatch):
 
 
 def test_dwidenoise2_workflow_ignores_denoise_window(monkeypatch):
-    """Leave the kernel to dwidenoise2's schedule rather than the requested window.
+    """Test that dwidenoise2 leaves the kernel to its schedule rather than the requested window.
 
     dwidenoise2 sizes its patches per iteration from its multi-resolution schedule and
     exposes no kernel options, so ``--dwidenoise-window`` cannot apply to it.
@@ -107,7 +107,7 @@ def test_dwidenoise2_workflow_ignores_denoise_window(monkeypatch):
 
 
 def test_dwidenoise2_config_reaches_workflow(monkeypatch, tmp_path):
-    """Forward the --dwidenoise2-config settings to the workflow node."""
+    """Test that the --dwidenoise2-config settings are forwarded to the workflow node."""
     monkeypatch.setattr(config.workflow, 'denoise_method', 'dwidenoise2')
     _use_dwidenoise2_config(
         monkeypatch, tmp_path, {'demodulate': 'hann', 'decomposition': 'bdcsvd'}
@@ -137,7 +137,7 @@ def test_dwidenoise2_config_reaches_workflow(monkeypatch, tmp_path):
 
 @pytest.mark.parametrize('demodulate', ['linear', 'hann', 'apc'])
 def test_dwidenoise2_rejects_demodulation_without_phase(monkeypatch, tmp_path, demodulate):
-    """Reject phase demodulation unless phase data are available.
+    """Test that phase demodulation is rejected unless phase data are available.
 
     ``dwidenoise2`` errors out partway through a run when asked to demodulate
     magnitude-only data, so the workflow rejects the request up front instead.
@@ -394,7 +394,7 @@ def test_denoising_wf_magnitude(
     interface,
     expected_inputs,
 ):
-    """Denoise magnitude-only DWI data with each supported method."""
+    """Test denoising magnitude-only DWI data with each supported method."""
     nodes, sink_dir = _run_denoising_wf(
         monkeypatch,
         tmp_path,
@@ -443,7 +443,7 @@ def test_denoising_wf_complex(
     interface,
     expected_inputs,
 ):
-    """Denoise DWI data when phase data are available.
+    """Test denoising DWI data when phase data are available.
 
     Only the dwidenoise variants combine the magnitude and phase data into a
     complex-valued series. ``patch2self`` ignores the phase data and denoises the
@@ -513,7 +513,7 @@ def _build_denoising_wf(
 
 @pytest.mark.parametrize('denoise_method', ['dwidenoise', 'dwidenoise2'])
 def test_complex_data_stay_complex_through_mrdegibbs(monkeypatch, denoise_method):
-    """Hand mrdegibbs the complex-valued denoised data, and split to magnitude after it.
+    """Test that mrdegibbs gets complex-valued denoised data, split to magnitude after it.
 
     mrdegibbs is built on the Fourier shift theorem, so it works better on complex
     data; MRtrix3's development branch reads and writes it.
@@ -531,7 +531,7 @@ def test_complex_data_stay_complex_through_mrdegibbs(monkeypatch, denoise_method
 
 @pytest.mark.parametrize('denoise_method', ['dwidenoise', 'dwidenoise2'])
 def test_stable_mrtrix_splits_before_mrdegibbs(monkeypatch, denoise_method):
-    """Reduce to magnitude before mrdegibbs when a released MRtrix3 is selected.
+    """Test that data are reduced to magnitude before mrdegibbs under a released MRtrix3.
 
     3.0.x mrdegibbs cannot read complex data, so handing it complex input would fail
     at runtime. This is the behavior QSIPrep had before complex unringing existed.
@@ -549,7 +549,7 @@ def test_stable_mrtrix_splits_before_mrdegibbs(monkeypatch, denoise_method):
 
 
 def test_stable_mrdegibbs_says_what_dev_would_buy(monkeypatch, caplog):
-    """Tell the user that complex unringing exists, but only where it is actionable.
+    """Test that the user is told complex unringing exists, only where it is actionable.
 
     The message belongs at workflow-build time rather than parse time: use_phase is a
     per-scan property the parser cannot know. Assert visibility at the real default
@@ -571,7 +571,7 @@ def test_stable_mrdegibbs_says_what_dev_would_buy(monkeypatch, caplog):
 def test_no_advice_when_mrdegibbs_is_not_running(
     monkeypatch, caplog, unringing_method, mrtrix_version
 ):
-    """Stay quiet where the advice would not apply.
+    """Test that no advice is given where it would not apply.
 
     rpg is magnitude-only regardless of version; with none, unringing does not run at
     all; and with dev + mrdegibbs, complex data are already carried through unringing,
@@ -591,7 +591,7 @@ def test_no_advice_when_mrdegibbs_is_not_running(
 
 @pytest.mark.parametrize('denoise_method', ['dwidenoise', 'dwidenoise2'])
 def test_rpg_unringing_gets_magnitude(monkeypatch, denoise_method):
-    """Split to magnitude before rpg unringing, which is TORTOISE and magnitude-only."""
+    """Test that data are split to magnitude before rpg unringing (TORTOISE, magnitude-only)."""
     workflow = _build_denoising_wf(monkeypatch, denoise_method, 'rpg', use_phase=True)
     connections = _connections(workflow)
 
@@ -602,7 +602,7 @@ def test_rpg_unringing_gets_magnitude(monkeypatch, denoise_method):
 
 @pytest.mark.parametrize('unringing_method', ['mrdegibbs', 'rpg', 'none'])
 def test_patch2self_never_goes_complex(monkeypatch, unringing_method):
-    """Keep patch2self runs entirely in the magnitude domain, whatever the unringing."""
+    """Test that patch2self runs stay in the magnitude domain, whatever the unringing."""
     workflow = _build_denoising_wf(monkeypatch, 'patch2self', unringing_method, use_phase=True)
     node_names = {node.name for node in workflow._get_all_nodes()}
 
@@ -612,7 +612,7 @@ def test_patch2self_never_goes_complex(monkeypatch, unringing_method):
 
 @pytest.mark.parametrize('unringing_method', ['mrdegibbs', 'rpg', 'none'])
 def test_magnitude_only_input_never_goes_complex(monkeypatch, unringing_method):
-    """Keep magnitude-only runs in the magnitude domain even with a complex-capable denoiser."""
+    """Test that magnitude-only runs stay magnitude even with a complex-capable denoiser."""
     workflow = _build_denoising_wf(monkeypatch, 'dwidenoise', unringing_method, use_phase=False)
     node_names = {node.name for node in workflow._get_all_nodes()}
 
@@ -622,7 +622,7 @@ def test_magnitude_only_input_never_goes_complex(monkeypatch, unringing_method):
 
 @pytest.mark.parametrize('denoise_method', ['dwidenoise', 'dwidenoise2'])
 def test_split_follows_the_denoiser_without_unringing(monkeypatch, denoise_method):
-    """Split to magnitude right after denoising when no unringing runs."""
+    """Test that data are split to magnitude right after denoising when no unringing runs."""
     workflow = _build_denoising_wf(monkeypatch, denoise_method, 'none', use_phase=True)
     connections = _connections(workflow)
 
@@ -631,7 +631,7 @@ def test_split_follows_the_denoiser_without_unringing(monkeypatch, denoise_metho
 
 
 def test_boilerplate_describes_where_the_split_happens(monkeypatch):
-    """Say that unringing ran on complex data, and place the split after it."""
+    """Test that the boilerplate says unringing ran on complex data, with the split after it."""
     complex_degibbs = _build_denoising_wf(monkeypatch, 'dwidenoise', 'mrdegibbs', use_phase=True)
     assert 'complex-valued' in complex_degibbs.__desc__
     assert 'After denoising, the complex-valued data were split' not in complex_degibbs.__desc__
@@ -648,7 +648,9 @@ def test_boilerplate_describes_where_the_split_happens(monkeypatch):
 
 
 def test_boilerplate_says_magnitude_under_stable_mrtrix(monkeypatch):
-    """Describe what actually ran: released mrdegibbs sees magnitude data only.
+    """Test that the boilerplate describes what actually ran under a released MRtrix3.
+
+    Released mrdegibbs sees magnitude data only.
 
     The denoising step still describes combining magnitude and phase into a
     complex-valued file -- that is unaffected by --mrtrix-version, only mrdegibbs is
@@ -668,7 +670,7 @@ def test_boilerplate_says_magnitude_under_stable_mrtrix(monkeypatch):
 
 @pytest.mark.parametrize('denoise_method', ['dwidenoise', 'dwidenoise2'])
 def test_denoising_wf_complex_mrdegibbs(monkeypatch, tmp_path, nibs_dwi, denoise_method):
-    """Run mrdegibbs on complex-valued data and return magnitude.
+    """Test that mrdegibbs runs on complex-valued data and returns magnitude.
 
     This is the only test that proves the MRtrix3 in the image really accepts and
     emits complex data; the graph-shape tests only check the wiring.
@@ -694,7 +696,7 @@ def test_denoising_wf_complex_mrdegibbs(monkeypatch, tmp_path, nibs_dwi, denoise
 
 
 def test_denoising_wf_stable_mrdegibbs(monkeypatch, tmp_path, nibs_dwi):
-    """Unring magnitude data with the released mrdegibbs and keep the result real.
+    """Test that the released mrdegibbs unrings magnitude data and keeps the result real.
 
     The graph-shape tests check that the split precedes unringing; this one checks
     that the binary the reordered PATH selects actually accepts what it is given.
@@ -721,7 +723,9 @@ def test_denoising_wf_stable_mrdegibbs(monkeypatch, tmp_path, nibs_dwi):
 
 
 def test_no_bias_correction_plumbing_survives_in_the_merge_stack(monkeypatch):
-    """The pre-0.17 ("legacy") bias-correction path is gone, plumbing included.
+    """Test that no bias-correction plumbing survives in the merge stack.
+
+    The pre-0.17 ("legacy") bias-correction path is gone, plumbing included.
 
     Deleting only the ``biascorr`` node would leave ``bias_image``/``bias_images``
     output traits and ``Merge`` nodes fed with undefined values, which fails at

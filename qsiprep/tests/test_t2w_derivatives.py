@@ -57,7 +57,10 @@ def test_t2w_derivatives_are_written_when_t2ws_exist():
 
 
 def test_no_t2w_sinks_without_t2ws():
-    """Otherwise the sinks would sit with undefined inputs and fail at runtime."""
+    """Test that no T2w sinks are built without T2ws.
+
+    Otherwise the sinks would sit with undefined inputs and fail at runtime.
+    """
     names = _names(_build(0, 'no_t2w'))
     assert not any('ds_t2_preproc' in n for n in names)
     assert not any('ds_t2w_unfatsat' in n for n in names)
@@ -65,7 +68,9 @@ def test_no_t2w_sinks_without_t2ws():
 
 
 def test_t2w_sinks_use_a_t2w_source_name():
-    """DerivativesDataSink takes its suffix from source_file.
+    """Test that the T2w sinks use a T2w source name.
+
+    DerivativesDataSink takes its suffix from source_file.
 
     Reusing t1_name would emit *_T1w.nii.gz and overwrite the real T1w
     derivative, so the T2w sinks need their own name node.
@@ -80,7 +85,10 @@ def test_t2w_sinks_use_a_t2w_source_name():
     [('ds_t2_preproc', 'preproc'), ('ds_t2w_unfatsat', 'unfatsat')],
 )
 def test_t2w_sinks_are_distinct_outputs(node_name, desc):
-    """Distinct desc entities: they are different images, not two names for one."""
+    """Test that the T2w sinks have distinct desc entities.
+
+    They are different images, not two names for one.
+    """
     wf = _build(3, f'distinct_{desc}')
     node = next(n for n in wf._get_all_nodes() if n.name == node_name)
     assert node.inputs.desc == desc
@@ -88,7 +96,9 @@ def test_t2w_sinks_are_distinct_outputs(node_name, desc):
 
 
 def test_subject_dwiref_is_written_to_dwi():
-    """The b=0 average across sessions existed only inside a report figure.
+    """Test that the subject dwiref is written to dwi/.
+
+    The b=0 average across sessions existed only inside a report figure.
 
     It now lives in dwi/ with every other dwiref: `space` carries its level
     `space` alone names its level, following fMRIPrep 26.0.0's space-subject_boldref;
@@ -112,7 +122,9 @@ def test_subject_dwiref_is_written_to_dwi():
 
 
 def test_average_images_normalizes_intensities():
-    """Sessions differ in scaling, so the template average must normalize.
+    """Test that the template average normalizes intensities.
+
+    Sessions differ in scaling, so the template average must normalize.
 
     ANTs AverageImages(normalize=True) rescales each input before averaging;
     without it a brighter session dominates the template. The warp average is
@@ -130,7 +142,9 @@ def test_average_images_normalizes_intensities():
 
 
 def test_subject_dwiref_path_builds():
-    """The subject-level b=0 template goes in dwi/, with every other dwiref.
+    """Test that the subject dwiref path builds.
+
+    The subject-level b=0 template goes in dwi/, with every other dwiref.
 
     qsiprep ships its own path patterns (data/io_spec.json). Without a matching
     pattern the sink raises 'Could not build path with entities' and takes the
@@ -159,7 +173,7 @@ def test_subject_dwiref_path_builds():
 
 
 def test_existing_dwiref_and_anat_paths_still_build():
-    """Extending the anat suffix list must not disturb existing outputs."""
+    """Test that extending the anat suffix list does not disturb existing outputs."""
     import json
 
     from bids.layout.writing import build_path
@@ -202,7 +216,9 @@ def test_existing_dwiref_and_anat_paths_still_build():
 
 
 def test_dwiref_is_resampled_before_being_written():
-    """The written template must be the ACPC-resampled one.
+    """Test that the dwiref is resampled before being written.
+
+    The written template must be the ACPC-resampled one.
 
     outputnode.dwiref lives in the template's own midpoint space --
     measured ~57mm from ACPC in y on real data. Writing that tagged space-ACPC
@@ -225,7 +241,7 @@ def test_dwiref_is_resampled_before_being_written():
 
 
 def test_base_sinks_both_templates_to_their_own_spaces():
-    """Each template image goes to the path that describes the space it is in.
+    """Test that each template image goes to the path that describes the space it is in.
 
     The midpoint-space template is space-<level>; the resampled one is space-ACPC.
     The original defect was sinking the un-resampled template as space-ACPC, which

@@ -1,6 +1,7 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
+"""Resampling workflows.
+
 Resampling workflows
 ++++++++++++++++++++
 
@@ -47,7 +48,8 @@ def init_dwi_trans_wf(
     sdc_pe_dir=None,
     sdc_readout_time=None,
 ):
-    """
+    """Build a workflow that resamples dwi images to the output grid in a single shot.
+
     This workflow samples dwi images to the ``output_grid`` in a "single shot"
     from the original DWI series.
 
@@ -62,83 +64,102 @@ def init_dwi_trans_wf(
                                mem_gb=3,
                                omp_nthreads=1)
 
-    **Parameters**
+    Parameters
+    ----------
+    source_file : str
+        Source DWI file used to name the resampled b=0 reference reports.
+    mem_gb : float
+        Size of DWI file in GB
+    template : str, optional
+        Name of template targeted by ``template`` output space
+    name : str, optional
+        Name of workflow (default: ``dwi_trans_wf``)
+    use_compression : bool, optional
+        Save registered DWI series as ``.nii.gz``
+    write_local_bvecs : bool, optional
+        if true, local bvec niftis are written
+    write_reports : bool, optional
+        Whether the resampled b=0 reference workflow writes its mask report.
+    concatenate : bool, optional
+        Whether to merge the resampled volumes into a single 4D series (and
+        compute the resampled b=0 reference and QC). If False, the list of
+        resampled volumes is sent to ``outputnode.dwi_resampled``.
+    doing_topup : bool, optional
+        Whether TOPUP was used, in which case ``inputnode.fieldmap_hz`` is
+        resampled to the output grid.
+    pe_axis : int or None, optional
+        Voxel axis of the phase-encoding direction, used to compute Jacobian
+        weights whenever a displacement field is supplied.
+    weight_fieldwarps : bool, optional
+        Whether the susceptibility displacement field is included in the
+        Jacobian weights. False leaves it unmodulated.
+    sdc_warp_source : str or None, optional
+        Where the SDC displacement field written on the output grid comes from:
+        ``'fieldwarp'``, ``'topup'``, ``'gre_in_eddy'`` or ``'topup+drbuddi'``
+        (see :func:`~qsiprep.utils.sdc.sdc_warp_source`). If None, no SDC
+        displacement field is written.
+    sdc_pe_dir : str or None, optional
+        Phase-encoding direction used to rebuild the displacement field from a
+        fieldmap in Hz.
+    sdc_readout_time : float or None, optional
+        Total readout time used to rebuild the displacement field from a
+        fieldmap in Hz.
 
-        template : str
-            Name of template targeted by ``template`` output space
-        mem_gb : float
-            Size of DWI file in GB
-        omp_nthreads : int
-            Maximum number of threads an individual process may use
-        name : str
-            Name of workflow (default: ``dwi_trans_wf``)
-        use_compression : bool
-            Save registered DWI series as ``.nii.gz``
-        use_fieldwarp : bool
-            Include SDC warp in single-shot transform from DWI to MNI
-        output_resolution : float
-            Voxel size in mm for the output data
-        to_mni : bool
-            Include warps to MNI
-        write_local_bvecs : bool
-            if true, local bvec niftis are written
+    Inputs
+    ------
+    itk_b0_to_t1
+        Affine transform from ``ref_bold_brain`` to T1 space (ITK format)
+    t1_2_mni_forward_transform
+        ANTs-compatible affine-and-warp transform file
+    dwi_files
+        Individual 3D volumes, not motion corrected
+    cnr_map
+        Contrast to noise map from model-based hmc
+    fieldmap_hz
+        Fieldmap in Hz. Only written out if TOPUP was used.
+    bval_files
+        individual bval files
+    bvec_files
+        one-lined bvec files
+    b0_ref_image
+        b0 template for the dwi series
+    b0_indices
+        List of indices that contain a b0 image
+    dwi_mask
+        Skull-stripping mask of reference image
+    name_source
+        DWI series NIfTI file
+        Used to recover original information lost during processing
+    hmc_xforms
+        List of affine transforms aligning each volume to ``ref_image`` in ITK format
+    fieldwarps
+        a :abbr:`DFM (displacements field map)` in ITK format
+    gradwarp_field
+        a gradient nonlinearity displacement field in native DWI space, or
+        undefined if no gradwarp correction is being applied
+    output_grid
+        File defining the output space
+    t1_mask
+        Brain mask from the t1w
 
-    **Inputs**
-
-        itk_b0_to_t1
-            Affine transform from ``ref_bold_brain`` to T1 space (ITK format)
-        t1_2_mni_forward_transform
-            ANTs-compatible affine-and-warp transform file
-        dwi_files
-            Individual 3D volumes, not motion corrected
-        cnr_map
-            Contrast to noise map from model-based hmc
-        fieldmap_hz
-            Fieldmap in Hz. Only written out if TOPUP was used.
-        bval_files
-            individual bval files
-        bvec_files
-            one-lined bvec files
-        b0_ref_image
-            b0 template for the dwi series
-        b0_indices
-            List of indices that contain a b0 image
-        dwi_mask
-            Skull-stripping mask of reference image
-        name_source
-            DWI series NIfTI file
-            Used to recover original information lost during processing
-        hmc_xforms
-            List of affine transforms aligning each volume to ``ref_image`` in ITK format
-        fieldwarps
-            a :abbr:`DFM (displacements field map)` in ITK format
-        gradwarp_field
-            a gradient nonlinearity displacement field in native DWI space, or
-            undefined if no gradwarp correction is being applied
-        output_grid
-            File defining the output space
-        t1_mask
-            Brain mask from the t1w
-
-    **Outputs**
-
-        dwi_resampled
-            DWI series, resampled to template space. One file if ``concatenate``, otherwise a
-            list of files
-        dwi_ref_resampled
-            Reference, contrast-enhanced summary of the DWI series, resampled to template space
-        dwi_mask_resampled
-            DWI series mask in template space
-        cnr_map_resampled
-            Contrast to noise map resampled
-        bvals
-            bvals file for the DWI series
-        rotated_bvecs
-            bvecs rotated for transforms to ``output_grid``
-        local_bvecs
-            NIfTI file containing the bvec rotation matrix (due to transforms) in each voxel.
-            Includes rotations introduced by warpingdenoisin
-
+    Outputs
+    -------
+    dwi_resampled
+        DWI series, resampled to template space. One file if ``concatenate``, otherwise a
+        list of files
+    dwi_ref_resampled
+        Reference, contrast-enhanced summary of the DWI series, resampled to template space
+    dwi_mask_resampled
+        DWI series mask in template space
+    cnr_map_resampled
+        Contrast to noise map resampled
+    bvals
+        bvals file for the DWI series
+    rotated_bvecs
+        bvecs rotated for transforms to ``output_grid``
+    local_bvecs
+        NIfTI file containing the bvec rotation matrix (due to transforms) in each voxel.
+        Includes rotations introduced by warpingdenoisin
     """
     workflow = Workflow(name=name)
     output_resolution = config.workflow.output_resolution
@@ -476,7 +497,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
 
 
 def _hz_to_warp(in_file, readout_time, pe_dir, newpath=None):
-    """TOPUP off-resonance field (Hz) -> ITK displacement field along the PE axis.
+    """Convert a TOPUP off-resonance field (Hz) to an ITK displacement field along the PE axis.
 
     TOPUP shifts each voxel by ``field_Hz * TotalReadoutTime`` voxels along its
     acquisition-parameter vector, which qsiprep writes from the raw BIDS
@@ -508,7 +529,7 @@ def _hz_to_warp(in_file, readout_time, pe_dir, newpath=None):
 
 
 def _first_warp(fieldwarps):
-    """Volume 0's SDC warp: GRE hands over a single path, the others a list."""
+    """Return volume 0's SDC warp: GRE hands over a single path, the others a list."""
     return fieldwarps if isinstance(fieldwarps, str) else fieldwarps[0]
 
 

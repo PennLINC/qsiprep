@@ -15,7 +15,7 @@ def _write(path, data, affine=None):
 
 @pytest.fixture
 def series(tmp_path):
-    """8 b=0 volumes with known noise, plus diffusion-weighted volumes.
+    """Provide 8 b=0 volumes with known noise, plus diffusion-weighted volumes.
 
     The DW volumes are given a wildly different mean so that including them
     would visibly corrupt the result -- that is what the b=0 restriction exists
@@ -41,7 +41,7 @@ def series(tmp_path):
 
 
 def test_tsnr_uses_only_b0_volumes(series, tmp_path):
-    """Mean/SD should reflect the b=0 set: ~100/5 = ~20, not the DW mixture."""
+    """Test that the mean/SD reflect the b=0 set: ~100/5 = ~20, not the DW mixture."""
     from qsiprep.interfaces.tsnr import DWITSNR
 
     dwi, bval = series
@@ -64,7 +64,7 @@ def test_tsnr_map_geometry_matches_input(series, tmp_path):
 
 
 def test_single_b0_yields_empty_map_not_garbage(tmp_path):
-    """One b=0 gives no variance estimate; emit zeros rather than nonsense."""
+    """Test that a single b=0, which gives no variance estimate, yields zeros, not nonsense."""
     import nibabel as nb
 
     from qsiprep.interfaces.tsnr import DWITSNR
@@ -100,7 +100,9 @@ def test_mask_restricts_the_map(series, tmp_path):
 
 
 def test_tsnr_is_wired_into_derivatives(tmp_path):
-    """It must reach the output tree, not just exist as an interface.
+    """Test that tSNR is wired into the derivatives.
+
+    It must reach the output tree, not just exist as an interface.
 
     Checks the built graph rather than the source text, so a renamed inputnode
     field or a dropped connection fails here instead of eight hours into a run.
