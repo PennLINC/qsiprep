@@ -1,6 +1,8 @@
 """Command-line interface tests."""
 
+import json
 import os
+import shutil
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -19,6 +21,24 @@ nipype_config.enable_debug_mode()
 nipype_config.update_config({'execution': {'remove_unnecessary_outputs': False}})
 
 DEFAULT_NUM_CPUS = 4
+
+
+def _forrest_gump_dataset(data_dir, working_dir, test_name):
+    """Copy forrest_gump with ``TotalReadoutTime`` rescaled to its 5 mm DWI grid.
+
+    The DWI was downsampled from 2 mm, but the sidecar kept the 2 mm readout
+    time, which applies the GRE field 2.5x too strongly and makes eddy diverge.
+    Drop this once the dataset is replaced.
+    """
+    source = download_test_data('forrest_gump', data_dir)
+    dataset_dir = os.path.join(working_dir, f'{test_name}_bids')
+    if not os.path.isdir(dataset_dir):
+        shutil.copytree(source, dataset_dir)
+    sidecar = Path(dataset_dir) / 'sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_dwi.json'
+    metadata = json.loads(sidecar.read_text())
+    metadata['TotalReadoutTime'] = 0.0188758  # 0.0471895 * 2 mm / 5 mm
+    sidecar.write_text(json.dumps(metadata, indent=4))
+    return dataset_dir
 
 
 @pytest.mark.integration
@@ -692,7 +712,7 @@ def test_forrest_gump(data_dir, output_dir, working_dir):
     """
     TEST_NAME = 'forrest_gump'
 
-    dataset_dir = download_test_data('forrest_gump', data_dir)
+    dataset_dir = _forrest_gump_dataset(data_dir, working_dir, TEST_NAME)
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
@@ -728,7 +748,7 @@ def test_forrest_gump_patch2self(data_dir, output_dir, working_dir):
     """
     TEST_NAME = 'forrest_gump_patch2self'
 
-    dataset_dir = download_test_data('forrest_gump', data_dir)
+    dataset_dir = _forrest_gump_dataset(data_dir, working_dir, TEST_NAME)
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
