@@ -149,6 +149,7 @@ def _build_parser(**kwargs):
             # --force values land on their own boolean attributes so config
             # (and qsiplan's policy bridge) can read them by name.
             namespace.force_sdc_anat_reference = 'sdc-anat-reference' in (namespace.force or [])
+            namespace.force_nocsf_synthstrip = 'no-csf-synthstrip' in (namespace.force or [])
             if 'jacobian' in (namespace.force or []) and 'jacobian' in (namespace.ignore or []):
                 self.error('--force jacobian and --ignore jacobian are mutually exclusive')
             if namespace.force_sdc_anat_reference and namespace.sdc_anat_reference == 'none':
@@ -459,6 +460,7 @@ def _build_parser(**kwargs):
             'sdc-anat-reference',
             'jacobian',
             'gre-sdc-after-eddy',
+            'no-csf-synthstrip',
         ],
         help=(
             'Force selected corrections on, overriding what the input metadata implies '
@@ -480,7 +482,14 @@ def _build_parser(**kwargs):
             '"gre-sdc-after-eddy" applies a GRE fieldmap after eddy, as QSIPrep used to, '
             'instead of handing it to eddy (--field), for comparing the two on real data. '
             'It requires --hmc-method eddy, is deprecated, and will be removed in a '
-            'future release.'
+            'future release. '
+            '"no-csf-synthstrip" runs a second SynthStrip with --no-csf on the anatomical '
+            'reference and uses that mask, which excludes CSF and dura at the brain '
+            'border, as the moving-image mask for the nonlinear registration to the '
+            'template. It helps when the template brain mask is tighter than the '
+            'default SynthStrip mask, as in atrophied brains. The AC-PC alignment and '
+            'every saved brain mask still come from the default SynthStrip mask, so '
+            'downstream masks are unchanged.'
         ),
     )
 

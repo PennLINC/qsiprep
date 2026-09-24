@@ -580,6 +580,11 @@ class workflow(_Config):
     """``--force sdc-anat-reference`` was given: the anatomical SDC reference
     overrides the fieldmap application for every DWI series (derived from
     ``force`` by the parser)."""
+    force_nocsf_synthstrip = False
+    """``--force no-csf-synthstrip`` was given: the nonlinear registration to the
+    anatomical template uses a SynthStrip ``--no-csf`` mask as its moving-image
+    mask (derived from ``force`` by the parser). The saved brain masks and the
+    AC-PC alignment keep the default SynthStrip mask."""
     gpu = None
     """Tasks to run on the GPU (see ``qsiprep.utils.gpu``)."""
     gradient_file = None
