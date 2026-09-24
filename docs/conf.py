@@ -32,18 +32,21 @@ import qsiprep
 sys.path.append(os.path.abspath('sphinxext'))
 sys.path.insert(0, os.path.abspath('../qsiprep'))
 
+# Loads the parser defaults into qsiprep.config and writes the fake dataset
+# that the ``.. workflow::`` directives build their example workflows from.
+import qsiprep_docs  # noqa: E402, F401
 from github_link import make_linkcode_resolve
 
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
-needs_sphinx = '4.2.0'
+needs_sphinx = '7.0'
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'myst_nb',  # notebooks and markdown (replaces nbsphinx + recommonmark)
+    'myst_parser',  # changes.md
     'nipype.sphinxext.apidoc',
     'nipype.sphinxext.plot_workflow',
     'sphinx.ext.autodoc',
@@ -57,13 +60,6 @@ extensions = [
     'sphinxcontrib.bibtex',
 ]
 
-# Notebooks are MyST markdown (clean git diffs, no committed outputs) and
-# are executed during the docs build, which doubles as a regression test
-# for their demos. 'cache' skips re-execution when a notebook is unchanged.
-nb_execution_mode = 'cache'
-nb_execution_raise_on_error = True
-nb_execution_timeout = 300
-
 # Mock modules in autodoc:
 autodoc_mock_imports = [
     'matplotlib',
@@ -76,9 +72,6 @@ autodoc_mock_imports = [
 
 # NOTE: Not in qsiprep
 # autosectionlabel_prefix_document = True
-
-# Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
 
 # The suffix(es) of source filenames.
 # You can specify multiple suffixes as a list of string:
@@ -120,9 +113,7 @@ language = 'en'
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This patterns also effect to html_static_path and html_extra_path
-# notebooks/*.ipynb are local jupytext conversions of the committed MyST .md
-# notebooks (gitignored); exclude them so sphinx never prefers a stale copy.
-exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', 'notebooks/*.ipynb']
+exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 # The reST default role (used for this markup: `text`) to use for all
 # documents.
@@ -371,10 +362,15 @@ texinfo_documents = [
 # texinfo_no_detailmenu = False
 
 # The following is used by sphinx.ext.linkcode to provide links to github
-linkcode_resolve = make_linkcode_resolve(
+_linkcode_resolve = make_linkcode_resolve(
     'qsiprep',
     'https://github.com/pennlinc/qsiprep/blob/{revision}/{package}/{path}#L{lineno}',
 )
+
+
+def linkcode_resolve(domain, info):
+    return _linkcode_resolve(domain, info)
+
 
 # -----------------------------------------------------------------------------
 # intersphinx
@@ -384,10 +380,7 @@ _python_doc_base = f'https://docs.python.org/{_python_version_str}'
 intersphinx_mapping = {
     'python': (_python_doc_base, None),
     'numpy': ('https://numpy.org/doc/stable/', None),
-    'scipy': (
-        'https://docs.scipy.org/doc/scipy/reference',
-        (None, './_intersphinx/scipy-objects.inv'),
-    ),
+    'scipy': ('https://docs.scipy.org/doc/scipy/reference', None),
     'matplotlib': (
         'https://matplotlib.org/stable/',
         (None, 'https://matplotlib.org/stable/objects.inv'),
@@ -396,6 +389,7 @@ intersphinx_mapping = {
     'nibabel': ('https://nipy.org/nibabel/', None),
     'nilearn': ('http://nilearn.github.io/stable/', None),
     'nipype': ('https://nipype.readthedocs.io/en/latest/', None),
+    'qsiplan': ('https://qsiplan.readthedocs.io/en/stable/', None),
 }
 suppress_warnings = ['image.nonlocal_uri']
 
@@ -411,5 +405,3 @@ bibtex_footbibliography_header = ''
 def setup(app):
     """Add extra formatting files."""
     app.add_css_file('theme_overrides.css')
-    # We need this for the boilerplate script
-    app.add_js_file('https://cdn.rawgit.com/chrisfilo/zenodo.js/v0.1/zenodo.js')

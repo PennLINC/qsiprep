@@ -1,6 +1,44 @@
 # What's New
 
 
+## 26.1.0 (unreleased)
+
+The first release with the reorganized command line, TORTOISE DIFFPREP head
+motion correction, gradient nonlinearity correction, and scan grouping shared
+with the standalone `qsiplan` tool. Several options were renamed or removed;
+the {doc}`upgrading guide <upgrading>` maps each old option to its
+replacement and lists the behavior changes. The full list of changes is
+generated from the pull requests when the release is cut.
+
+### 🛠 Breaking Changes
+
+* Command-line options renamed or removed; see the upgrading guide.
+* Scan grouping is now performed by `qsiplan`, and inconsistent fieldmap
+  metadata stops the run with a named error instead of being worked around.
+* With `--hmc-method eddy`, GRE fieldmaps are applied inside `eddy` (#1159).
+
+### 🎉 New Features
+
+* TORTOISE DIFFPREP head motion and eddy-current correction (`--hmc-method tortoise`), DRBUDDI, T2Wreg and SynB0 distortion correction, and `--sdc-method`.
+* Gradient nonlinearity correction (`--gradient-file`) with a voxelwise gradient deviation map.
+* Jacobian intensity modulation after distortion correction, written as a derivative.
+* Susceptibility distortion displacement maps for inspection.
+* Per-task GPU selection with `--gpu`.
+* `dwidenoise2` denoising with `--dwidenoise2-config`.
+* Subject-level DWI reference with `--dwiref-definition subject`.
+* `--report-output-level`, `--anat-biascorrect`, `--mrtrix-version`.
+* GRE fieldmaps are unwrapped and applied with niimath (ROMEO) instead of FSL's PRELUDE and FUGUE, so they work without FSL (#1139).
+
+### 🗑 Deprecations
+
+* `--hmc-method shoreline` is scheduled for removal.
+* `--force gre-sdc-after-eddy` is deprecated on introduction.
+
+### 📚 Documentation
+
+* The documentation was reorganized around the user's workflow: preparing data, running, outputs, and a methods reference with one page per backend.
+
+
 ## 26.0.0 (April 20, 2026)
 
 ### 🐛 Bug Fixes
@@ -91,7 +129,7 @@ which resulted in a later crash in the merge_dwis step.
 * Replace numpy.complex with complex by @tsalo in https://github.com/PennLINC/qsiprep/pull/992
 * Swap zenodo.json with CITATION.cff in welcomebot by @tsalo in https://github.com/PennLINC/qsiprep/pull/993
 
-## New Contributors
+### New Contributors
 
 * @MegaByte made their first contribution in https://github.com/PennLINC/qsiprep/pull/984
 
@@ -147,7 +185,7 @@ which resulted in a later crash in the merge_dwis step.
 * ENH: Update eddy_params.json by @cookpa in https://github.com/PennLINC/qsiprep/pull/903
 * Fix style issues by @tsalo in https://github.com/PennLINC/qsiprep/pull/910
 
-## New Contributors
+### New Contributors
 
 * @LuciMoore made their first contribution in https://github.com/PennLINC/qsiprep/pull/896
 

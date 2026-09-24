@@ -1,7 +1,7 @@
 .. include:: links.rst
 
-QSIPrep: Preprocessing and analysis of q-space images
-=====================================================
+QSIPrep: Preprocessing of Diffusion MRI (q-space) Images
+========================================================
 
 .. image:: https://img.shields.io/badge/Source%20Code-pennlinc%2Fqsiprep-purple
   :target: https://github.com/PennLINC/qsiprep

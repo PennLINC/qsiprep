@@ -80,11 +80,12 @@ The config module is the single source of truth for runtime parameters. Never pa
 
 ### Documentation
 
-- Built with Sphinx using `sphinx_rtd_theme`.
-- Source files in `docs/`.
-- Workflow graphs are auto-rendered via `.. workflow::` directives that call `init_*_wf` functions.
-- API docs generated via `sphinxcontrib-apidoc`.
-- Bibliography managed with `sphinxcontrib-bibtex` and `boilerplate.bib`.
+- Built with Sphinx using `sphinx_rtd_theme`; Read the Docs builds from `.readthedocs.yaml`.
+- Source files in `docs/`, ordered as the user's journey: `installation`, `data` (preparing and curating input), `running` (options by decision, in parser-group order), `outputs`, `methods/` (one page per backend: what runs, in what order, which options, limitations, workflow graph), `troubleshooting`, `cli` (the argparse block), `upgrading` (migration table), `changes`, `developers` (+ `api`).
+- Keep pages at the level of what runs, which option changes it, and what is written. Method background and artifact explanations belong in the separate dMRI artifacts book.
+- Workflow graphs are rendered by `.. workflow::` directives that execute their code block. Blocks in `docs/` import `qsiprep_docs` (from `docs/sphinxext/`), which loads the parser defaults into `qsiprep.config`, writes a fake dataset, and provides `example_unit('single'|'pepolar'|'epi'|'phasediff')`. A block that raises only warns and renders no graph, so check the build log for "Exception occurred in plotting".
+- API docs generated via `sphinxcontrib-apidoc`; `qsiplan` objects resolve through intersphinx.
+- Bibliography managed with `sphinxcontrib-bibtex` and `qsiprep/data/boilerplate.bib`, shared with the methods boilerplate.
 
 ### Docker
 
@@ -202,4 +203,3 @@ This roadmap covers harmonization work across all four PennLINC BIDS Apps (qsipr
 12. ~~**Standardize Dockerfile patterns**~~ -- done: all four repos now use pixi-based multi-stage builds with `pennlinc/<pkg>-base:<YYYYMMDD>` base images.
 13. **Create a shared `pennlinc-style` package or cookiecutter template** providing `pyproject.toml` lint/test config, `.pre-commit-config.yaml`, `tox.ini`, and CI workflows.
 14. **Evaluate `nipreps-versions` calver** -- the `raw-options = { version_scheme = "nipreps-calver" }` line is commented out in all four repos. Decide whether to adopt it.
-

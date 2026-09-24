@@ -4,11 +4,12 @@
 Installation
 ############
 
-There are two easy ways to use *QSIPrep*:
-as a Python library with PyPi or as a container with Docker or Singularity/Apptainer.
-Using a local container method is highly recommended.
+There are two ways to use *QSIPrep*: as a Python package from PyPI, or as a
+container with Docker or Apptainer. Use the container unless you have a
+reason not to.
 
-Once you are ready to run *QSIPrep*, see Usage_ for details.
+Once *QSIPrep* is installed, see :doc:`data` for what it expects of the input
+and :doc:`running` for the command line.
 
 
 **************
@@ -41,41 +42,23 @@ In order to run *QSIPrep* in a Docker container, Docker must be `installed
     the memory to 6 or more GB. Too little memory assigned to Docker Desktop can result
     in a message like ``Killed.``
 
-You may invoke ``docker`` directly::
+Mount the input, output and working directories into the container and
+give the container-side paths as arguments::
 
     $ docker run -ti --rm \
-        -v /filepath/to/data/dir \
-        -v /filepath/to/output/dir \
-        -v ${FREESURFER_HOME}/license.txt:/opt/freesurfer/license.txt \
-        pennlinc/qsiprep:latest \
-        /filepath/to/data/dir /filepath/to/output/dir participant \
-        --output-resolution 2
+        -v /path/to/bids:/data:ro \
+        -v /path/to/output:/out \
+        -v /path/to/work:/work \
+        pennlinc/qsiprep:<version> \
+        /data /out participant \
+        -w /work --output-resolution 2
 
-For example: ::
+Replace ``<version>`` with a release tag. ``latest`` is the last release and
+``unstable`` the current ``main`` branch; do not use ``unstable`` for
+anything but testing. No FreeSurfer license is needed.
 
-    $ docker run -ti --rm \
-        -v $HOME/fullds005 \
-        -v $HOME/dockerout \
-        -v ${FREESURFER_HOME}/license.txt:/opt/freesurfer/license.txt \
-        pennlinc/qsiprep:latest \
-        $HOME/fullds005 $HOME/dockerout participant \
-        --ignore fieldmaps \
-        --output-resolution 2
-
-If you are running Freesurfer as part of *QSIPrep*,
-you will need to mount your Freesurfer license.txt file when invoking ``docker`` ::
-
-    $ docker run -ti --rm \
-        -v $HOME/fullds005 \
-        -v $HOME/dockerout \
-        -v ${FREESURFER_HOME}/license.txt:/opt/freesurfer/license.txt \
-        pennlinc/qsiprep:latest \
-        $HOME/fullds005 -v $HOME/dockerout participant \
-        --output-resolution 2
-
-
-See `External Dependencies`_ for more information on what is included in the Docker image
-and how it's built.
+To use the GPU, add ``--gpus all`` to ``docker run`` and ``--gpu`` with the
+tasks to accelerate to the *QSIPrep* options (see :ref:`hmc_flags`).
 
 
 *******************
@@ -89,13 +72,15 @@ The easiest way to get an Apptainer (formerly Singularity) image is to run::
 Where ``<version>`` should be replaced with the desired version of qsiprep that you want to download.
 Do not use ``latest`` or ``unstable`` unless you are performing limited testing.
 
-As with Docker, you will need to bind the Freesurfer license.txt when running Apptainer ::
+Bind the input, output and working directories::
 
     $ apptainer run --containall --writable-tmpfs \
-        -B $HOME/fullds005,$HOME/dockerout,${FREESURFER_HOME}/license.txt:/opt/freesurfer/license.txt \
+        -B /path/to/bids,/path/to/output,/path/to/work \
         qsiprep-<version>.sif \
-        $HOME/fullds005 $HOME/dockerout participant \
-        --output-resolution 2
+        /path/to/bids /path/to/output participant \
+        -w /path/to/work --output-resolution 2
+
+Add ``--nv`` to use the GPU.
 
 .. note::
     **Running QSIPrep with Apptainer on Non-Internet Nodes**
@@ -125,7 +110,7 @@ As with Docker, you will need to bind the Freesurfer license.txt when running Ap
 
     3. On nodes without internet access, bind the copied ``TEMPLATEFLOW_HOME`` directory and set the
        environment variable as described above before running QSIPrep.
-     4. It may help to run a single subject or session on its own before running many jobs that access the templates. The single run will download the necessary templates and prevent multiple jobs from attempting to download the templates simultaneously.
+    4. It may help to run a single subject or session on its own before running many jobs that access the templates. The single run will download the necessary templates and prevent multiple jobs from attempting to download the templates simultaneously.
 
 
     For additional troubleshooting, see `fmriprep docs <https://fmriprep.org/en/stable/faq.html#how-do-you-use-templateflow-in-the-absence-of-access-to-the-internet>`_
@@ -136,8 +121,12 @@ As with Docker, you will need to bind the Freesurfer license.txt when running Ap
 External Dependencies
 *********************
 
-*QSIPrep* is written using Python 3.11 (or above), and is based on nipype_.
-The external dependencies are built in the
-`qsiprep_build <https://github.com/PennLINC/qsiprep_build>`_ repository.
-There you can find the URLs used to download the dependency source code
-and the steps to compile each dependency.
+*QSIPrep* is written in Python 3.11 or later and is based on Nipype_. The
+container image bundles the non-Python tools it calls. FSL_, MRtrix3 (a
+release and the development branch), `DSI Studio`_, AFNI_, TORTOISE_
+(including CUDA builds), FreeSurfer's SynthStrip and SynthSeg, SynB0-DISCO,
+niimath and CUDA 12.2 come from the ``pennlinc/qsiprep-base`` image, whose versions
+are pinned in ``Dockerfile.base`` in the repository. ANTs_ and the Python
+environment are installed on top of it by Pixi in the main ``Dockerfile``.
+Installing these tools yourself and running *QSIPrep* from PyPI is possible
+but not supported.

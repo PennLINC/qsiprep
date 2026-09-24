@@ -246,6 +246,13 @@ def init_b0_to_anat_registration_wf(
     )
 
     workflow = Workflow(name=name)
+    workflow.__desc__ = f"""\
+The b=0 reference was registered to the anatomical reference with
+`antsRegistration` (ANTs {ants.Registration().version}) using a
+{'rigid' if transform_type == 'Rigid' else 'affine'} transform, initialized by
+a global search over rotations with `antsAI` so that large differences in head
+orientation between the dMRI and the anatomical scan are recovered.
+"""
 
     # Defines a coregistration operation
     coreg = ants.Registration()

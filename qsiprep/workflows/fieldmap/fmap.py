@@ -60,8 +60,9 @@ def init_fmap_wf(name='fmap_wf'):
     workflow.__desc__ = """\
 A deformation field to correct for susceptibility distortions was estimated
 from a directly measured field map, which was masked with a brain mask
-derived from its magnitude image, median-filtered and co-registered to the
-b=0 reference.
+derived from its magnitude image, unwrapped with the ROMEO algorithm [@romeo]
+as implemented in *niimath* [@niimath], median-filtered and co-registered to
+the b=0 reference.
 """
     inputnode = pe.Node(niu.IdentityInterface(fields=['magnitude', 'fieldmap']), name='inputnode')
     outputnode = pe.Node(
