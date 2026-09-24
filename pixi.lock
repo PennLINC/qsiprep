@@ -5770,8 +5770,8 @@ packages:
   requires_python: '>=3.11'
 - pypi: ./
   name: qsiprep
-  version: 26.1.0.dev90+g3de338b16
-  sha256: 322811f25921c698582c0a1688255777dc0b2450d1d65e4cbe927395f4ed0d33
+  version: 26.1.0.dev75+g2fbd0c432
+  sha256: 9b4d5e90cf1b9f43430c8bfae550f1668eac891418f0d22b24007dffe0712d9b
   requires_dist:
   - acres
   - coverage
@@ -5809,7 +5809,7 @@ packages:
   - doctest-ignore-unicode ; extra == 'all'
   - fuzzywuzzy ; extra == 'all'
   - lxml-html-clean ; extra == 'all'
-  - myst-nb ; extra == 'all'
+  - myst-parser ; extra == 'all'
   - pre-commit ; extra == 'all'
   - pydot>=1.2.3 ; extra == 'all'
   - pydotplus ; extra == 'all'
@@ -5821,7 +5821,7 @@ packages:
   - ruff==0.15.21 ; extra == 'all'
   - sphinx-argparse ; extra == 'all'
   - sphinx-rtd-theme ; extra == 'all'
-  - sphinx>=4.2.0 ; extra == 'all'
+  - sphinx>=7 ; extra == 'all'
   - sphinxcontrib-apidoc ; extra == 'all'
   - sphinxcontrib-bibtex ; extra == 'all'
   - pre-commit ; extra == 'dev'
@@ -5829,12 +5829,12 @@ packages:
   - dipy ; extra == 'doc'
   - doctest-ignore-unicode ; extra == 'doc'
   - lxml-html-clean ; extra == 'doc'
-  - myst-nb ; extra == 'doc'
+  - myst-parser ; extra == 'doc'
   - pydot>=1.2.3 ; extra == 'doc'
   - pydotplus ; extra == 'doc'
   - sphinx-argparse ; extra == 'doc'
   - sphinx-rtd-theme ; extra == 'doc'
-  - sphinx>=4.2.0 ; extra == 'doc'
+  - sphinx>=7 ; extra == 'doc'
   - sphinxcontrib-apidoc ; extra == 'doc'
   - sphinxcontrib-bibtex ; extra == 'doc'
   - fuzzywuzzy ; extra == 'maint'
@@ -5848,8 +5848,8 @@ packages:
   editable: true
 - pypi: ./
   name: qsiprep
-  version: 26.1.0.dev90+g3de338b16
-  sha256: 322811f25921c698582c0a1688255777dc0b2450d1d65e4cbe927395f4ed0d33
+  version: 26.1.0.dev75+g2fbd0c432
+  sha256: 9b4d5e90cf1b9f43430c8bfae550f1668eac891418f0d22b24007dffe0712d9b
   requires_dist:
   - acres
   - coverage
@@ -5887,7 +5887,7 @@ packages:
   - doctest-ignore-unicode ; extra == 'all'
   - fuzzywuzzy ; extra == 'all'
   - lxml-html-clean ; extra == 'all'
-  - myst-nb ; extra == 'all'
+  - myst-parser ; extra == 'all'
   - pre-commit ; extra == 'all'
   - pydot>=1.2.3 ; extra == 'all'
   - pydotplus ; extra == 'all'
@@ -5899,7 +5899,7 @@ packages:
   - ruff==0.15.21 ; extra == 'all'
   - sphinx-argparse ; extra == 'all'
   - sphinx-rtd-theme ; extra == 'all'
-  - sphinx>=4.2.0 ; extra == 'all'
+  - sphinx>=7 ; extra == 'all'
   - sphinxcontrib-apidoc ; extra == 'all'
   - sphinxcontrib-bibtex ; extra == 'all'
   - pre-commit ; extra == 'dev'
@@ -5907,12 +5907,12 @@ packages:
   - dipy ; extra == 'doc'
   - doctest-ignore-unicode ; extra == 'doc'
   - lxml-html-clean ; extra == 'doc'
-  - myst-nb ; extra == 'doc'
+  - myst-parser ; extra == 'doc'
   - pydot>=1.2.3 ; extra == 'doc'
   - pydotplus ; extra == 'doc'
   - sphinx-argparse ; extra == 'doc'
   - sphinx-rtd-theme ; extra == 'doc'
-  - sphinx>=4.2.0 ; extra == 'doc'
+  - sphinx>=7 ; extra == 'doc'
   - sphinxcontrib-apidoc ; extra == 'doc'
   - sphinxcontrib-bibtex ; extra == 'doc'
   - fuzzywuzzy ; extra == 'maint'
