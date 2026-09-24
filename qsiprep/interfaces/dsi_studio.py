@@ -1,6 +1,7 @@
 import logging
 import os
 import os.path as op
+import signal
 from glob import glob
 from subprocess import PIPE, Popen
 
@@ -140,6 +141,50 @@ class DSIStudioCreateSrc(DSIStudioCommandLine):
 
 class _DSIStudioQCOutputSpec(TraitedSpec):
     qc_txt = File(exists=True, desc='Text file with QC measures')
+    warning = traits.Str(
+        desc='Why DSI Studio produced no QC measurements. Undefined when it succeeded.'
+    )
+
+
+def _describe_exit(returncode):
+    """Render a subprocess status, naming the signal when there was one."""
+    if returncode is None:
+        return 'did not report an exit status'
+    if returncode < 0:
+        signum = -returncode
+        try:
+            name = signal.Signals(signum).name
+        except ValueError:
+            name = f'signal {signum}'
+        return f'was killed by {name}'
+    return f'exited with status {returncode}'
+
+
+def _qc_output_problem(returncode, qc_txt):
+    """Say why DSI Studio produced no QC measurements, or return None.
+
+    DSI Studio can fail without saying so. It exits non-zero, or crashes on a
+    signal, or returns 0 having written an empty qc.txt. None of these was
+    checked, and the only symptom used to appear much later as ``IndexError:
+    list index out of range`` in ``load_src_qc_file``. A segfault on a DWI
+    series with extreme intensity outliers is one way to get here.
+
+    QC must not fail a run, so the caller logs this reason and the QC values
+    become n/a. The reason is also carried to SeriesQC, which puts it in the
+    HTML report.
+    """
+    status = _describe_exit(returncode)
+    if returncode != 0:
+        return f'DSI Studio {status}.'
+    if not op.exists(qc_txt):
+        return f'DSI Studio {status} but wrote no QC file.'
+    if op.getsize(qc_txt) == 0:
+        return (
+            f'DSI Studio {status} but wrote an empty QC file. It does this when it '
+            'cannot process the image at all, for example when the image has extreme '
+            'intensity outliers.'
+        )
+    return None
 
 
 class DSIStudioQC(SimpleInterface):
@@ -164,7 +209,22 @@ class DSIStudioQC(SimpleInterface):
             LOGGER.info(out.decode())
         if err:
             LOGGER.critical(err.decode())
-        self._results['qc_txt'] = op.join(runtime.cwd, 'qc.txt')
+
+        qc_txt = op.join(runtime.cwd, 'qc.txt')
+        problem = _qc_output_problem(proc.returncode, qc_txt)
+        if problem is not None:
+            LOGGER.warning(
+                'No DSI Studio QC measurements for %s; QC values will be n/a. %s Command: %s',
+                src_file,
+                problem,
+                ' '.join(cmd),
+            )
+            self._results['warning'] = problem
+            if not op.exists(qc_txt):
+                # qc_txt is declared exists=True. An empty file reads as "no
+                # measurements" downstream, which is what this is.
+                open(qc_txt, 'w').close()
+        self._results['qc_txt'] = qc_txt
         return runtime
 
 
@@ -279,6 +339,8 @@ class DSIStudioGQIReconstruction(DSIStudioCommandLine):
 class _DSIStudioQCMergeInputSpec(BaseInterfaceInputSpec):
     src_qc = File(exists=True, mandatory=True)
     fib_qc = File(exists=True, mandatory=True)
+    src_qc_warning = traits.Str(desc='why DSIStudioSrcQC produced no measurements')
+    fib_qc_warning = traits.Str(desc='why DSIStudioFibQC produced no measurements')
 
 
 class _DSIStudioQCMergeOutputSpec(TraitedSpec):
@@ -291,11 +353,31 @@ class DSIStudioMergeQC(SimpleInterface):
 
     def _run_interface(self, runtime):
         output_csv = runtime.cwd + '/merged_qc.csv'
-        src_qc = load_src_qc_file(self.inputs.src_qc)
-        fib_qc = load_fib_qc_file(self.inputs.fib_qc)
-        src_qc.update(fib_qc)
-        qc_df = pd.DataFrame(src_qc)
-        qc_df.to_csv(output_csv, index=False)
+
+        src_warning = _stage_warning(self.inputs.src_qc_warning, self.inputs.src_qc)
+        fib_warning = _stage_warning(self.inputs.fib_qc_warning, self.inputs.fib_qc)
+
+        # A stage with a warning is n/a even if its file holds something: after
+        # a crash, whatever DSI Studio wrote cannot be trusted to be complete.
+        merged = (
+            _missing_qc(SRC_QC_MEASURES) if src_warning else load_src_qc_file(self.inputs.src_qc)
+        )
+        merged.update(
+            _missing_qc(FIB_QC_MEASURES) if fib_warning else load_fib_qc_file(self.inputs.fib_qc)
+        )
+
+        messages = [
+            f'{kind} QC: {warning}'
+            for kind, warning in (('SRC', src_warning), ('FIB', fib_warning))
+            if warning
+        ]
+        for message in messages:
+            LOGGER.warning('DSI Studio QC values will be n/a. %s', message)
+        # Always present, empty when QC succeeded, so the column set never
+        # varies. SeriesQC removes it from image_qc.tsv and reports it instead.
+        merged[QC_WARNINGS_COLUMN] = [' '.join(messages)]
+
+        pd.DataFrame(merged).to_csv(output_csv, index=False)
         self._results['qc_file'] = output_csv
         return runtime
 
@@ -327,9 +409,61 @@ class DSIStudioBTable(SimpleInterface):
         return runtime
 
 
+#: Column of merged_qc.csv that carries why a QC stage has no measurements.
+#: Empty when QC succeeded. SeriesQC turns it into an HTML report warning.
+QC_WARNINGS_COLUMN = 'qc_warnings'
+
+#: The measures load_src_qc_file returns, in order. A QC stage that failed
+#: returns the same keys with NaN values, so every run's image_qc.tsv has the
+#: same columns and the tables still line up across subjects.
+SRC_QC_MEASURES = (
+    'dimension_x',
+    'dimension_y',
+    'dimension_z',
+    'voxel_size_x',
+    'voxel_size_y',
+    'voxel_size_z',
+    'max_b',
+    'neighbor_corr',
+    'masked_neighbor_corr',
+    'dwi_contrast',
+    'num_bad_slices',
+    'num_directions',
+)
+FIB_QC_MEASURES = ('coherence_index',)
+
+
+def _qc_problem(lines):
+    """Say why a DSI Studio qc.txt holds no measurements, or return None.
+
+    A well-formed file has a header and one data row. Anything shorter used
+    to surface as ``IndexError: list index out of range``.
+    """
+    if len(lines) >= 2 and lines[1].strip():
+        return None
+    if not lines:
+        return 'The QC file is empty.'
+    return 'The QC file holds only a header.'
+
+
+def _missing_qc(measures, prefix=''):
+    """The n/a row for a QC stage that produced no measurements."""
+    return {prefix + name: [np.nan] for name in measures}
+
+
+def _stage_warning(upstream, qc_file):
+    """Why a QC stage has no measurements, preferring the reason DSIStudioQC gave."""
+    if isdefined(upstream) and upstream:
+        return upstream
+    with open(qc_file) as fobj:
+        return _qc_problem(fobj.readlines())
+
+
 def load_src_qc_file(fname, prefix=''):
     with open(fname) as qc_file:
         qc_data = qc_file.readlines()
+    if _qc_problem(qc_data) is not None:
+        return _missing_qc(SRC_QC_MEASURES, prefix)
     data = qc_data[1]
     parts = data.strip().split('\t')
     dwi_contrast = np.nan
@@ -341,7 +475,10 @@ def load_src_qc_file(fname, prefix=''):
     elif len(parts) == 9:
         _, dims, voxel_size, dirs, max_b, dwi_contrast, ndc, ndc_masked, bad_slices = parts
     else:
-        raise Exception('Unknown QC File format')
+        raise ValueError(
+            f'Unrecognized DSI Studio QC row in {fname}: expected 7, 8 or 9 '
+            f'tab-separated fields, got {len(parts)}: {data.strip()!r}'
+        )
 
     voxelsx, voxelsy, voxelsz = map(float, voxel_size.strip().split())
     dimx, dimy, dimz = map(float, dims.strip().split())
@@ -351,27 +488,29 @@ def load_src_qc_file(fname, prefix=''):
     n_bad_slices = float(bad_slices)
     ndc_masked = float(ndc_masked)
     dwi_contrast = float(dwi_contrast)
-    data = {
-        prefix + 'dimension_x': [dimx],
-        prefix + 'dimension_y': [dimy],
-        prefix + 'dimension_z': [dimz],
-        prefix + 'voxel_size_x': [voxelsx],
-        prefix + 'voxel_size_y': [voxelsy],
-        prefix + 'voxel_size_z': [voxelsz],
-        prefix + 'max_b': [max_b],
-        prefix + 'neighbor_corr': [dwi_corr],
-        prefix + 'masked_neighbor_corr': [ndc_masked],
-        prefix + 'dwi_contrast': [dwi_contrast],
-        prefix + 'num_bad_slices': [n_bad_slices],
-        prefix + 'num_directions': [n_dirs],
-    }
-    return data
+    values = (
+        dimx,
+        dimy,
+        dimz,
+        voxelsx,
+        voxelsy,
+        voxelsz,
+        max_b,
+        dwi_corr,
+        ndc_masked,
+        dwi_contrast,
+        n_bad_slices,
+        n_dirs,
+    )
+    return {prefix + name: [value] for name, value in zip(SRC_QC_MEASURES, values, strict=True)}
 
 
 def load_fib_qc_file(fname):
     with open(fname) as fibqc_f:
-        lines = [line.strip().split() for line in fibqc_f]
-    return {'coherence_index': [float(lines[1][-1])]}
+        lines = fibqc_f.readlines()
+    if _qc_problem(lines) is not None:
+        return _missing_qc(FIB_QC_MEASURES)
+    return {'coherence_index': [float(lines[1].strip().split()[-1])]}
 
 
 def btable_from_bvals_bvecs(bval_file, bvec_file, output_file):

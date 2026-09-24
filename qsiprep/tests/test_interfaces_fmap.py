@@ -5,6 +5,8 @@ from pathlib import Path
 
 import nibabel as nb
 import numpy as np
+import pytest
+from nipype.interfaces.base import isdefined
 
 from qsiprep.interfaces.fmap import (
     B0RPEFieldmap,
@@ -288,3 +290,225 @@ def test_field_to_rads_treats_its_input_as_hz(tmp_path):
 
     rads = nb.load(result.outputs.out_file).get_fdata()
     assert np.allclose(rads, 2 * np.pi * hz, rtol=1e-6)
+
+
+def _unit_image(path, value=1.0):
+    nb.Nifti1Image(np.full((8, 8, 8), value, dtype='float32'), np.eye(4)).to_filename(str(path))
+    return str(path)
+
+
+def test_apply_jacobian_weights_passes_through_without_weights(tmp_path):
+    """No weights means the resampled DWIs are handed on untouched."""
+    from qsiprep.interfaces.fmap import ApplyJacobianWeights
+
+    dwis = [_unit_image(tmp_path / f'd{i}.nii.gz') for i in range(3)]
+    result = ApplyJacobianWeights(
+        dwi_files=dwis,
+        reference_image=_unit_image(tmp_path / 'grid.nii.gz'),
+    ).run()
+    assert result.outputs.scaled_images == dwis
+    assert not isdefined(result.outputs.resampled_weight_images)
+
+
+def test_apply_jacobian_weights_rejects_a_count_mismatch(tmp_path):
+    from qsiprep.interfaces.fmap import ApplyJacobianWeights
+
+    with pytest.raises(Exception, match='Mismatch'):
+        ApplyJacobianWeights(
+            dwi_files=[_unit_image(tmp_path / f'd{i}.nii.gz') for i in range(3)],
+            jacobian_weight_images=[_unit_image(tmp_path / 'w.nii.gz')],
+            reference_image=_unit_image(tmp_path / 'grid.nii.gz'),
+        ).run()
+
+
+def test_apply_jacobian_weights_num_threads_defaults_to_one():
+    """The serial path (num_threads == 1) is the default, as ComposeTransforms'
+    is -- cheap, and debuggable, for the common one-or-two-map case."""
+    from qsiprep.interfaces.fmap import ApplyJacobianWeights
+
+    assert ApplyJacobianWeights().inputs.num_threads == 1
+
+
+def test_apply_jacobian_weights_dedups_in_first_appearance_order(tmp_path, monkeypatch):
+    """Ordering is explicit (first-appearance), not incidental.
+
+    ``weight_index`` indexes into ``resampled_weight_images`` by position; a
+    wrong implementation (e.g. ``sorted(set(...))``) would produce a
+    differently-ordered map list and silently mislabel volumes in the BIDS
+    sidecar. ``w_b`` is deliberately not lexicographically or hash-order
+    first, so that failure mode would show up here. The real
+    ``antsApplyTransforms`` call is monkeypatched out (no ANTs binary in this
+    environment); the substitute just copies its ``input_image`` through
+    unchanged, which is enough to exercise the dedup/order/index bookkeeping
+    around it.
+    """
+    from qsiprep.interfaces import fmap as fmap_module
+    from qsiprep.interfaces.fmap import ApplyJacobianWeights
+
+    calls = []
+
+    def _fake_resample(args):
+        weight_image, _transform_stack, _reference_image, _newpath = args
+        calls.append(weight_image)
+        return weight_image
+
+    monkeypatch.setattr(fmap_module, '_resample_jacobian_weight', _fake_resample)
+
+    dwis = [_unit_image(tmp_path / f'd{i}.nii.gz') for i in range(4)]
+    w_a = _unit_image(tmp_path / 'w_a.nii.gz', value=2.0)
+    w_b = _unit_image(tmp_path / 'w_b.nii.gz', value=3.0)
+    weights = [w_a, w_b, w_a, w_b]
+
+    result = ApplyJacobianWeights(
+        dwi_files=dwis,
+        jacobian_weight_images=weights,
+        reference_image=_unit_image(tmp_path / 'grid.nii.gz'),
+    ).run(cwd=str(tmp_path))
+
+    assert result.outputs.resampled_weight_images == [w_a, w_b]
+    assert result.outputs.weight_index == [0, 1, 0, 1]
+    # One antsApplyTransforms-equivalent call per *unique* map, not per volume.
+    assert calls == [w_a, w_b]
+
+
+def test_apply_jacobian_weights_assembles_the_transform_chain(tmp_path, monkeypatch):
+    """The (volume-independent) transform chain assembly, pinned directly.
+
+    Order matters: ApplyTransforms applies transforms last-to-first, so the
+    chain from undistorted b0-reference space to the output grid must list
+    the coregistration-to-t1 transform first and the dwiref pieces after
+    it, reversed from application order.
+    """
+    from qsiprep.interfaces import fmap as fmap_module
+    from qsiprep.interfaces.fmap import ApplyJacobianWeights
+
+    seen_transform_stacks = []
+
+    def _fake_resample(args):
+        weight_image, transform_stack, _reference_image, _newpath = args
+        seen_transform_stacks.append(transform_stack)
+        return weight_image
+
+    monkeypatch.setattr(fmap_module, '_resample_jacobian_weight', _fake_resample)
+
+    dwis = [_unit_image(tmp_path / f'd{i}.nii.gz') for i in range(2)]
+    weights = [_unit_image(tmp_path / 'w.nii.gz')] * 2
+    affine = str(tmp_path / 'to_dwiref.mat')
+    warp = str(tmp_path / 'to_dwiref_warp.nii.gz')
+    coreg = str(tmp_path / 'coreg_to_t1.mat')
+    for path in (affine, warp, coreg):
+        Path(path).write_text('placeholder')
+
+    ApplyJacobianWeights(
+        dwi_files=dwis,
+        jacobian_weight_images=weights,
+        reference_image=_unit_image(tmp_path / 'grid.nii.gz'),
+        b0_to_dwiref_transforms=[affine, warp],
+        hmcsdc_dwi_ref_to_t1w_affine=coreg,
+    ).run(cwd=str(tmp_path))
+
+    assert seen_transform_stacks == [[coreg, warp, affine]]
+
+
+def test_apply_jacobian_weights_parallel_path_uses_a_thread_per_unique_map(tmp_path, monkeypatch):
+    """Above the threshold, resampling actually runs on a thread pool.
+
+    This does not (and, without a real ``antsApplyTransforms`` binary, cannot)
+    measure a wall-clock speedup -- that would need real ANTs subprocesses.
+    What it shows instead: with ``num_threads`` above 1 and more than one
+    unique map, each substituted resampling call executes on a distinct
+    worker thread rather than all running on the calling thread, which is
+    what a ``ThreadPoolExecutor``-backed path (as opposed to a plain
+    ``for`` loop) guarantees.
+    """
+    import threading
+
+    from qsiprep.interfaces import fmap as fmap_module
+    from qsiprep.interfaces.fmap import ApplyJacobianWeights
+
+    seen_threads = []
+
+    def _fake_resample(args):
+        weight_image, _transform_stack, _reference_image, _newpath = args
+        seen_threads.append(threading.current_thread().ident)
+        return weight_image
+
+    monkeypatch.setattr(fmap_module, '_resample_jacobian_weight', _fake_resample)
+
+    dwis = [_unit_image(tmp_path / f'd{i}.nii.gz') for i in range(4)]
+    weights = [
+        _unit_image(tmp_path / 'w_a.nii.gz', value=2.0),
+        _unit_image(tmp_path / 'w_b.nii.gz', value=3.0),
+        _unit_image(tmp_path / 'w_a.nii.gz', value=2.0),
+        _unit_image(tmp_path / 'w_b.nii.gz', value=3.0),
+    ]
+
+    ApplyJacobianWeights(
+        dwi_files=dwis,
+        jacobian_weight_images=weights,
+        reference_image=_unit_image(tmp_path / 'grid.nii.gz'),
+        num_threads=4,
+    ).run(cwd=str(tmp_path))
+
+    calling_thread = threading.current_thread().ident
+    assert len(seen_threads) == 2  # one call per unique map
+    assert all(thread_id != calling_thread for thread_id in seen_threads)
+
+
+def test_apply_scaling_images_name_is_gone():
+    """The old name must not linger as an alias -- it meant something else."""
+    import qsiprep.interfaces.fmap as fmap
+
+    assert not hasattr(fmap, 'ApplyScalingImages')
+
+
+def test_nonpositive_weights_leave_the_voxel_unmodulated(tmp_path, caplog):
+    """A non-positive weight must not annihilate the voxel.
+
+    This asserted a floor of 1e-3 until forrest_gump showed what that does:
+    2.7% of in-mask voxels were multiplied by 1e-3, which is the only way
+    Jacobian weighting alters DWI intensities beyond the modulation itself.
+    Neither Lanczos undershoot nor a genuinely zero determinant measures a
+    volume change, so both leave the voxel as resampling produced it.
+
+    ApplyJacobianWeights delegates this to _floor_nonpositive_weights after
+    resampling. Exercising the full interface here would require a real
+    antsApplyTransforms binary (not available in this environment), so this
+    hits the exact function the interface calls on each resampled map.
+    """
+    from qsiprep.interfaces.fmap import UNMODULATED_WEIGHT, _floor_nonpositive_weights
+
+    data = np.ones((6, 6, 6), dtype='float32')
+    data[0, 0, 0] = -0.5  # a lone undershoot voxel
+    data[1, 1, 1] = 0.0  # exactly zero is replaced too
+    data[2, 2, 2] = 0.25  # a small POSITIVE weight is a measurement; keep it
+    weight_path = tmp_path / 'weight.nii.gz'
+    nb.Nifti1Image(data, np.eye(4)).to_filename(str(weight_path))
+
+    with caplog.at_level('WARNING'):
+        _floor_nonpositive_weights(str(weight_path))
+
+    out = nb.load(str(weight_path)).get_fdata()
+    assert out.min() > 0
+    assert np.isclose(out[0, 0, 0], UNMODULATED_WEIGHT, atol=1e-6)
+    assert np.isclose(out[1, 1, 1], UNMODULATED_WEIGHT, atol=1e-6)
+    assert np.isclose(out[2, 2, 2], 0.25, atol=1e-6)
+    untouched = np.ones_like(out, dtype=bool)
+    for index in ((0, 0, 0), (1, 1, 1), (2, 2, 2)):
+        untouched[index] = False
+    assert np.all(out[untouched] == 1.0)  # everywhere else is unchanged
+    assert any('non-positive' in message for message in caplog.messages)
+
+
+def test_floor_nonpositive_weights_is_a_noop_when_all_positive(tmp_path, caplog):
+    """A clean map is left untouched and logs nothing."""
+    from qsiprep.interfaces.fmap import _floor_nonpositive_weights
+
+    weight_path = tmp_path / 'weight.nii.gz'
+    nb.Nifti1Image(np.ones((4, 4, 4), dtype='float32'), np.eye(4)).to_filename(str(weight_path))
+
+    with caplog.at_level('WARNING'):
+        _floor_nonpositive_weights(str(weight_path))
+
+    assert np.all(nb.load(str(weight_path)).get_fdata() == 1.0)
+    assert caplog.messages == []

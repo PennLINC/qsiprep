@@ -408,6 +408,30 @@ pipeline, how it differs by head-motion/distortion-correction backend, and
 its known limitations, see :ref:`gradwarp`.
 
 
+**********************************
+Intensity modulation after SDC
+**********************************
+
+Correcting a spatial distortion moves signal between voxels, so *QSIPrep*
+also rescales the corrected image by the local volume change it introduces,
+following TORTOISE's signal redistribution: DRBUDDI's LSR ratio when a
+reverse-polarity acquisition exists, and the phase-encoding Jacobian of the
+composed gradient-nonlinearity, susceptibility and (on the TORTOISE backend)
+eddy-current fields otherwise. Pass ``--ignore jacobian`` to disable the
+modulation *QSIPrep* itself applies. It has no effect on FSL ``eddy``'s own,
+internal Jacobian modulation of eddy-current and TOPUP susceptibility
+distortion correction, which ``eddy`` always applies unless it is configured
+(via ``--eddy-config``) to use its ``lsr`` resampling method instead -- a
+case QSIPrep cannot retrofit and instead records as a gap in the output
+sidecar. The fieldmap-less TORTOISE T2Wreg correction is applied without
+modulation, as in TORTOISE; ``--force jacobian`` modulates it anyway.
+
+See :ref:`jacobian_weighting` for the full per-backend table of which
+component applies the modulation, the derivative file this writes
+(``*_desc-jacobian_dwimap.nii.gz``), when it is and is not written, and why
+dividing by it does not recover a fully unmodulated series.
+
+
 ******************
 Note on using CUDA
 ******************

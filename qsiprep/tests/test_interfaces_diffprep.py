@@ -164,17 +164,17 @@ def test_diffprep_config_use_cuda_default_and_override(tmp_path):
     """
     import json as _json
 
-    from qsiprep.workflows.dwi.diffprep import _load_diffprep_config
+    from qsiprep.utils.diffprep_config import load_diffprep_config
 
-    assert _load_diffprep_config(None)['use_cuda'] is False
+    assert load_diffprep_config(None)['use_cuda'] is False
 
     cfg = tmp_path / 'cuda_cfg.json'
     cfg.write_text(_json.dumps({'use_cuda': True}))
-    assert _load_diffprep_config(str(cfg))['use_cuda'] is True
+    assert load_diffprep_config(str(cfg))['use_cuda'] is True
 
     cfg_absent = tmp_path / 'no_cuda_key.json'
     cfg_absent.write_text(_json.dumps({'b0_id': 0}))
-    assert 'use_cuda' not in _load_diffprep_config(str(cfg_absent))
+    assert 'use_cuda' not in load_diffprep_config(str(cfg_absent))
 
 
 def test_diffprep_wf_honours_use_cuda(tmp_path):
@@ -203,9 +203,9 @@ def test_diffprep_correction_mode_defaults_to_quadratic():
     The CLI exposes one ``--hmc-method tortoise`` rather than a value per mode,
     so the config JSON is the only way to reach ``motion`` or ``cubic``.
     """
-    from qsiprep.workflows.dwi.diffprep import _load_diffprep_config
+    from qsiprep.utils.diffprep_config import load_diffprep_config
 
-    assert _load_diffprep_config(None)['correction_mode'] == 'quadratic'
+    assert load_diffprep_config(None)['correction_mode'] == 'quadratic'
 
 
 def test_diffprep_wf_honours_correction_mode(tmp_path):
@@ -1373,22 +1373,22 @@ def test_t2wreg_is_recognised_as_sdc_for_reporting():
     from qsiplan.models import CorrectionMethod
 
     from qsiprep.tests.preproc_factory import make_preproc_unit
-    from qsiprep.workflows.dwi.base import _t2wreg_target
+    from qsiprep.utils.sdc import t2wreg_target
 
     config = _base_config()
     try:
         config.workflow.hmc_method = 'tortoise'
         t2w = ['/data/sub-01_T2w.nii.gz']
         fieldmapless = make_preproc_unit(['/data/sub-01_dwi.nii.gz'], anat_files=t2w)
-        assert _t2wreg_target(fieldmapless, '/path/to/T2w.nii.gz') == 't2w'
+        assert t2wreg_target(fieldmapless, '/path/to/T2w.nii.gz') == 't2w'
 
         # No T2w -> no T2Wreg -> nothing to show.
-        assert _t2wreg_target(_make_unit(None), '') is None
+        assert t2wreg_target(_make_unit(None), '') is None
         # A measured fieldmap goes through its own SDC reports instead.
         rpe = _make_unit('rpe_series', rpe_series=['/data/sub-01_dir-PA_dwi.nii.gz'])
-        assert _t2wreg_target(rpe, '/path/to/T2w.nii.gz') is None
+        assert t2wreg_target(rpe, '/path/to/T2w.nii.gz') is None
         epi = _make_unit('epi', epi=['/data/sub-01_epi.nii.gz'])
-        assert _t2wreg_target(epi, '/path/to/T2w.nii.gz') is None
+        assert t2wreg_target(epi, '/path/to/T2w.nii.gz') is None
 
         # A SynB0 unit registers to the synthetic b=0 -- no T2w required.
         synb0 = make_preproc_unit(
@@ -1397,12 +1397,12 @@ def test_t2wreg_is_recognised_as_sdc_for_reporting():
             estimation_sources=['/data/sub-01_T1w.nii.gz'],
             anat_files=['/data/sub-01_T1w.nii.gz'],
         )
-        assert _t2wreg_target(synb0, '') == 'synb0'
+        assert t2wreg_target(synb0, '') == 'synb0'
 
         # Other methods do not run T2Wreg at all.
         config.workflow.hmc_method = 'eddy'
         fieldmapless = make_preproc_unit(['/data/sub-01_dwi.nii.gz'], anat_files=t2w)
-        assert _t2wreg_target(fieldmapless, '/path/to/T2w.nii.gz') is None
+        assert t2wreg_target(fieldmapless, '/path/to/T2w.nii.gz') is None
     finally:
         config.workflow.hmc_method = 'eddy'
 
@@ -1591,3 +1591,52 @@ def test_diffprep_cmdline_gradwarp_and_initial_field(tmp_path):
     cmd = iface.cmdline
     assert f'--grad_nonlin {field}' in cmd
     assert f'--EPIREG_initial_field {init}' in cmd
+
+
+@pytest.mark.integration
+@pytest.mark.diffprep
+def test_reconstructed_transform_reproduces_moteddy(tmp_path, working_dir):
+    """The ship gate: our reconstruction must match TORTOISE's own output.
+
+    Reproducing ``_moteddy.nii`` validates the *combined* motion+EC map, which
+    is what pins the parameter convention. Splitting the EC determinant out of
+    it is licensed separately, by DIFFPREP's motion component being rigid
+    (columns 0-5), unlike SHORELine's affine default. Both must hold.
+    """
+    from pathlib import Path
+
+    import nibabel as nb
+    import numpy as np
+
+    from qsiprep.interfaces.jacobian import resample_with_okan_transform
+
+    work = Path(working_dir)
+
+    def _one(pattern):
+        # next() on an empty rglob raises StopIteration, which pytest reports
+        # without naming the pattern that found nothing.
+        found = sorted(work.rglob(pattern))
+        assert found, f'No {pattern} under {work}; DIFFPREP did not run or its output was pruned.'
+        return found[0]
+
+    transformations = _one('*_moteddy_transformations.txt')
+    tortoise_output = _one('*_moteddy.nii')
+    # DIFFPREP's import step copies its input verbatim (same data, same
+    # header), so the tortoise_convert output stands in for the pruned
+    # ``_proc.nii`` without keeping a second copy of the series on disk.
+    stem = tortoise_output.name[: -len('_proc_moteddy.nii')]
+    imported = _one(f'tortoise_convert/{stem}.nii')
+
+    ours = resample_with_okan_transform(
+        str(imported), str(transformations), str(tmp_path / 'ours.nii.gz')
+    )
+    mine = np.asanyarray(nb.load(ours).dataobj)
+    theirs = np.asanyarray(nb.load(str(tortoise_output)).dataobj)
+
+    inside = theirs > np.percentile(theirs, 60)
+    r = np.corrcoef(mine[inside], theirs[inside])[0, 1]
+    assert r > 0.99, (
+        f'Reconstructed motion+eddy resampling vs TORTOISE _moteddy.nii: '
+        f'r={r:.5f}. Below 0.99 means the 24-parameter convention is wrong, '
+        'and the EC Jacobian must NOT ship -- fall back to documenting the gap.'
+    )

@@ -512,6 +512,10 @@ def _finalize_cfg(tmp_path):
     config.workflow.sdc_method = 'topup'
     config.workflow.output_resolution = 1.2
     config.workflow.dwiref_definition = 'distortion-group'
+    # Read when the bias-correction node is built (do_biascorr=True paths);
+    # set here so these tests do not depend on which module ran before them.
+    config.workflow.b0_threshold = 100
+    config.workflow.dwi2anat_dof = 6
     config.nipype.omp_nthreads = 1
 
 
@@ -1816,6 +1820,9 @@ def test_gre_fieldmap_goes_into_eddy(tmp_path, monkeypatch):
     assert any(n.name == 'gre_to_eddy_reg' for n in wf._get_all_nodes())
     # eddy bakes in the SDC: the field must NOT also be applied after eddy.
     assert not _connects(wf, 'sdc_wf', 'outputnode', 'outputnode.out_warp', 'to_dwi_ref_warps')
+    assert _connects(wf, 'gather_inputs', 'outputnode', 'forward_warps', 'to_dwi_ref_warps')
+    # The field eddy applied, on eddy's grid, feeds the displacement map.
+    assert _connects(wf, 'gre_field_to_eddy', 'outputnode', 'out_file', 'fieldmap_hz')
     # Movement-by-susceptibility is left to --eddy-config.
     assert not isdefined(eddy.inputs.estimate_move_by_susceptibility)
     desc = ' '.join(wf.visit_desc().split())
@@ -1841,6 +1848,36 @@ def test_eddy_config_turns_on_movement_by_susceptibility_for_a_gre_field(tmp_pat
 
     assert eddy.inputs.estimate_move_by_susceptibility is True
     assert '[@eddysus]' in wf.visit_desc()
+
+
+def test_finalize_rebuilds_the_displacement_map_from_a_gre_field_eddy_applied(tmp_path):
+    """The SDC displacement map of a GRE fieldmap eddy applied is rebuilt from the
+    field, as TOPUP's is; no TOPUP-only fieldmap derivative is added."""
+    from qsiplan.models import CorrectionMethod
+
+    from qsiprep.workflows.dwi.finalize import init_dwi_finalize_wf
+
+    _finalize_cfg(tmp_path)
+    config.workflow.hmc_method = 'eddy'
+    dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz')
+    unit = make_preproc_unit(
+        [dwi],
+        method=CorrectionMethod.PHASEDIFF,
+        estimation_sources=['/data/sub-01_phasediff.nii.gz', '/data/sub-01_magnitude1.nii.gz'],
+    )
+    wf = init_dwi_finalize_wf(
+        unit=unit,
+        name='dwi_finalize_wf',
+        source_file=dwi,
+        output_prefix='sub-01',
+        do_biascorr=False,
+        write_derivatives=False,
+    )
+
+    trans_wf = wf.get_node('transform_dwis_t1')
+    assert _connects(wf, 'inputnode', 'transform_dwis_t1', 'fieldmap_hz', 'inputnode.fieldmap_hz')
+    assert trans_wf.get_node('hz_to_warp') is not None
+    assert trans_wf.get_node('fieldmap_hz_tfm') is None
 
 
 def test_gre_field_sent_to_eddy_is_the_registered_hz_map(tmp_path, monkeypatch):
@@ -2186,3 +2223,50 @@ def test_gre_with_t2w_stays_on_the_fieldmap_path_by_default(tmp_path, monkeypatc
 
     assert wf.get_node('diffprep').inputs.epi_mode == 'off'
     assert _connects(wf, 'sdc_wf', 'outputnode', 'outputnode.out_warp', 'to_dwi_ref_warps')
+
+
+# --- Jacobian-modulation boilerplate -----------------------------------------
+
+
+def test_boilerplate_states_modulation_when_enabled():
+    from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
+
+    config.workflow.ignore = []
+    text = gradwarp_boilerplate('3D', 'metadata')
+    assert 'Jacobian' in text
+
+
+def test_boilerplate_states_the_absence_when_disabled():
+    from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
+
+    config.workflow.ignore = ['jacobian']
+    text = gradwarp_boilerplate('3D', 'metadata')
+    assert 'without Jacobian' in text or 'no Jacobian' in text
+
+
+def test_dis3d_boilerplate_makes_no_jacobian_claim():
+    """A DIS3D unit has no field, so there is nothing to have been modulated."""
+    from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
+
+    config.workflow.ignore = []
+    assert 'Jacobian' not in gradwarp_boilerplate(None)
+
+
+def test_eddy_boilerplate_flags_lsr_as_unmodulated():
+    # Lives in qsiprep/interfaces/eddy.py, not qsiprep/workflows/dwi/fsl.py --
+    # fsl.py only calls it.
+    from qsiprep.interfaces.eddy import boilerplate_from_eddy_config
+
+    text = boilerplate_from_eddy_config(
+        {'method': 'lsr', 'flm': 'quadratic', 'slm': 'linear'}, 'epi', pepolar_method='topup'
+    )
+    assert 'not Jacobian-modulated' in text
+
+
+def test_eddy_boilerplate_states_modulation_for_the_jac_default():
+    from qsiprep.interfaces.eddy import boilerplate_from_eddy_config
+
+    text = boilerplate_from_eddy_config(
+        {'method': 'jac', 'flm': 'quadratic', 'slm': 'linear'}, 'epi', pepolar_method='topup'
+    )
+    assert 'Jacobian-modulated by eddy itself' in text

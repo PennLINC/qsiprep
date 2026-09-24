@@ -15,13 +15,15 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
 from ... import config
 from ...interfaces.ants import GetImageType
-from ...interfaces.fmap import ApplyScalingImages
+from ...interfaces.fmap import ApplyJacobianWeights
 from ...interfaces.gradients import (  # LocalGradientRotation,
+    ComposeSDCWarp,
     ComposeTransforms,
     ExtractB0s,
     GradientRotation,
 )
 from ...interfaces.images import ChooseInterpolator
+from ...interfaces.jacobian import ComposeJacobianWeights
 from ...interfaces.nilearn import Merge
 from .qc import init_modelfree_qc_wf
 from .util import init_dwi_reference_wf
@@ -39,6 +41,11 @@ def init_dwi_trans_wf(
     write_reports=True,
     concatenate=True,
     doing_topup=False,
+    pe_axis=None,
+    weight_fieldwarps=True,
+    sdc_warp_source=None,
+    sdc_pe_dir=None,
+    sdc_readout_time=None,
 ):
     """
     This workflow samples dwi images to the ``output_grid`` in a "single shot"
@@ -162,6 +169,9 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 'fieldwarps',
                 'gradwarp_field',
                 'output_grid',
+                'ec_jacobian_images',
+                # Only set when DRBUDDI ran: TORTOISE's LSR ratios, which
+                # replace the Jacobian weight.
                 'sdc_scaling_images',
                 # Only written out if TOPUP was used
                 'fieldmap_hz',
@@ -183,8 +193,18 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 'local_bvecs',
                 'b0_series',
                 'resampled_qc',
+                # Only defined when Jacobian weighting applied (no --ignore jacobian)
+                # weights: the unique output-grid weight maps and the
+                # per-volume index into them.
+                'jacobian_weights',
+                'jacobian_weight_index',
+                'jacobian_method',
                 # Only written out if TOPUP was used
                 'fieldmap_hz_resampled',
+                # The SDC displacement field on the output grid
+                'sdc_warp_to_template',
+                # TOPUP+DRBUDDI only: DRBUDDI's refinement of the TOPUP field
+                'sdc_refinement_to_template',
             ]
         ),
         name='outputnode',
@@ -201,7 +221,19 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
         name='dwi_transform',
         iterfield=['input_image', 'transforms'],
     )
-    scale_dwis = pe.Node(ApplyScalingImages(), name='scale_dwis')
+    # num_threads parallelizes the per-unique-map antsApplyTransports calls
+    # inside the interface's own ThreadPoolExecutor -- see ApplyJacobianWeights'
+    # docstring. n_procs must be paired with it (as every other in-node
+    # fan-out in this repo does -- e.g. diffprep.py's synth_dwis, fsl.py's
+    # gather_inputs, hmc.py's iter_reg, anatomical/volume.py's n4_correct) so
+    # nipype's MultiProc scheduler reserves that many slots for this node
+    # instead of co-scheduling other work against a node that is itself
+    # running up to omp_nthreads concurrent antsApplyTransforms processes.
+    scale_dwis = pe.Node(
+        ApplyJacobianWeights(num_threads=config.nipype.omp_nthreads),
+        name='scale_dwis',
+        n_procs=config.nipype.omp_nthreads,
+    )
     rotate_gradients = pe.Node(GradientRotation(), name='rotate_gradients')
     cnr_image_type = pe.Node(GetImageType(), name='cnr_image_type')
     cnr_tfm = pe.Node(
@@ -223,16 +255,6 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
              'dwiref_to_t1_affine'),
             ('dwiref_to_t1_warp', 'dwiref_to_t1_warp'),
         ]),
-        (inputnode, scale_dwis, [
-            ('sdc_scaling_images', 'scaling_image_files'),
-            ('output_grid', 'reference_image'),
-            ('itk_b0_to_t1', 'hmcsdc_dwi_ref_to_t1w_affine'),
-            ('b0_to_dwiref_transforms', 'b0_to_dwiref_transforms'),
-            (('dwiref_to_t1_affine', _get_first),
-             'dwiref_to_t1_affine'),
-            ('dwiref_to_t1_warp', 'dwiref_to_t1_warp'),
-        ]),
-
         # TODO: check that the cnr_tfm is also appropriately warped for shoreline
         (compose_transforms, cnr_tfm, [(('out_warps', _get_first), 'transforms')]),
         (inputnode, rotate_gradients, [
@@ -260,7 +282,52 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
         (inputnode, get_interpolation, [('dwi_files', 'dwi_files')]),
         (get_interpolation, dwi_transform, [('interpolation_method', 'interpolation')]),
         (dwi_transform, scale_dwis, [('output_image', 'dwi_files')]),
+        (inputnode, scale_dwis, [
+            ('output_grid', 'reference_image'),
+            ('itk_b0_to_t1', 'hmcsdc_dwi_ref_to_t1w_affine'),
+            ('b0_to_dwiref_transforms', 'b0_to_dwiref_transforms'),
+            (('dwiref_to_t1_affine', _get_first), 'dwiref_to_t1_affine'),
+            ('dwiref_to_t1_warp', 'dwiref_to_t1_warp'),
+        ]),
     ])  # fmt:skip
+
+    # The weight covers gradwarp and SDC only. HMC is excluded by policy and is
+    # coordinate-safe to exclude because it is the outermost transform in the
+    # pull-back (see the design spec); coregistration and the dwiref and
+    # template warps are excluded because modulating by a spatial-normalization
+    # warp is VBM-style volume modulation, wrong for DWI signal.
+    if 'jacobian' not in (config.workflow.ignore or []):
+        # num_threads/n_procs paired as for scale_dwis above: the node shells
+        # out to antsApplyTransforms and CreateJacobianDeterminantImage, which
+        # run single-threaded on nipype's default.
+        compose_jacobian = pe.Node(
+            ComposeJacobianWeights(
+                num_threads=config.nipype.omp_nthreads,
+                pe_axis=pe_axis,
+                weight_fieldwarps=weight_fieldwarps,
+            ),
+            name='compose_jacobian',
+            n_procs=config.nipype.omp_nthreads,
+        )
+        workflow.connect([
+            (inputnode, compose_jacobian, [
+                ('dwi_files', 'dwi_files'),
+                ('b0_ref_image', 'b0_ref_image'),
+                ('dwi_mask', 'mask'),
+                (('gradwarp_field', _listify), 'gradwarp_field'),
+                ('fieldwarps', 'fieldwarps'),
+                ('ec_jacobian_images', 'ec_jacobian_images'),
+                ('sdc_scaling_images', 'sdc_scaling_images'),
+            ]),
+            (compose_jacobian, scale_dwis, [
+                ('jacobian_weight_images', 'jacobian_weight_images'),
+            ]),
+            (compose_jacobian, outputnode, [('method', 'jacobian_method')]),
+            (scale_dwis, outputnode, [
+                ('resampled_weight_images', 'jacobian_weights'),
+                ('weight_index', 'jacobian_weight_index'),
+            ]),
+        ])  # fmt:skip
 
     if doing_topup:
         fieldmap_hz_tfm = pe.Node(
@@ -276,6 +343,85 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             (compose_transforms, fieldmap_hz_tfm, [(('out_warps', _get_first), 'transforms')]),
             (fieldmap_hz_tfm, outputnode, [('output_image', 'fieldmap_hz_resampled')]),
         ])  # fmt:skip
+
+    if sdc_warp_source is not None:
+        # Re-express the SDC (susceptibility) displacement field on the output
+        # grid as a transform, so its vectors are rotated into ACPC world
+        # coordinates. It rides only the stages that carry the corrected DWI
+        # frame to the output grid (compose_transforms.sdc_warp_transforms) --
+        # see ComposeSDCWarp.
+        compose_sdc_warp = pe.Node(ComposeSDCWarp(), name='compose_sdc_warp', mem_gb=1)
+
+        def _first_sdc_warp_node():
+            # Volume 0's susceptibility warp, as a node rather than an inline
+            # connection function: the DIFFPREP T2Wreg path already reaches
+            # ``fieldwarps`` through one (``_as_transform_list`` in diffprep.py),
+            # and nipype refuses two inline functions in series across an
+            # IdentityInterface. Built only on the branches that read a
+            # standalone warp; on the TOPUP branch ``fieldwarps`` is empty.
+            node = pe.Node(
+                niu.Function(function=_first_warp, output_names=['out']),
+                name='first_sdc_warp',
+                run_without_submitting=True,
+            )
+            workflow.connect([(inputnode, node, [('fieldwarps', 'fieldwarps')])])
+            return node
+
+        workflow.connect([
+            (inputnode, compose_sdc_warp, [('output_grid', 'reference_image')]),
+            (compose_transforms, compose_sdc_warp, [
+                ('sdc_warp_transforms', 'to_template_transforms'),
+            ]),
+            (compose_sdc_warp, outputnode, [('sdc_warp_to_template', 'sdc_warp_to_template')]),
+        ])  # fmt:skip
+
+        if sdc_warp_source == 'fieldwarp':
+            # DRBUDDI, GRE, SyN and T2Wreg all write the susceptibility warp
+            # directly (fieldwarps); conjugate volume 0's onto the output grid.
+            first_sdc_warp = _first_sdc_warp_node()
+            workflow.connect([
+                (first_sdc_warp, compose_sdc_warp, [('out', 'sdc_warps')]),
+            ])  # fmt:skip
+        else:
+            # TOPUP only estimates an off-resonance field, and a GRE fieldmap handed
+            # to eddy is one too (eddy applies it and leaves no standalone warp --
+            # its fieldwarps carry eddy's *combined* motion/eddy-current/SDC
+            # correction, not a pure susceptibility warp), so the displacement
+            # field is rebuilt from the field.
+            hz_to_warp = pe.Node(
+                niu.Function(function=_hz_to_warp, output_names=['out_file']),
+                name='hz_to_warp',
+            )
+            hz_to_warp.inputs.readout_time = sdc_readout_time
+            hz_to_warp.inputs.pe_dir = sdc_pe_dir
+            workflow.connect([(inputnode, hz_to_warp, [('fieldmap_hz', 'in_file')])])
+
+            if sdc_warp_source in ('topup', 'gre_in_eddy'):
+                workflow.connect([(hz_to_warp, compose_sdc_warp, [('out_file', 'sdc_warps')])])
+            else:
+                # TOPUP+DRBUDDI: DRBUDDI refined the series eddy had already
+                # corrected with TOPUP's field, so its fieldwarp is only the
+                # residual. The total field runs a corrected point through
+                # DRBUDDI's refinement, then TOPUP's field; the refinement is also
+                # conjugated on its own, to show where DRBUDDI changed TOPUP's answer.
+                sdc_warp_chain = pe.Node(niu.Merge(2), name='sdc_warp_chain')
+                compose_sdc_refinement = pe.Node(
+                    ComposeSDCWarp(), name='compose_sdc_refinement', mem_gb=1
+                )
+                first_sdc_warp = _first_sdc_warp_node()
+                workflow.connect([
+                    (first_sdc_warp, sdc_warp_chain, [('out', 'in1')]),
+                    (hz_to_warp, sdc_warp_chain, [('out_file', 'in2')]),
+                    (sdc_warp_chain, compose_sdc_warp, [('out', 'sdc_warps')]),
+                    (inputnode, compose_sdc_refinement, [('output_grid', 'reference_image')]),
+                    (first_sdc_warp, compose_sdc_refinement, [('out', 'sdc_warps')]),
+                    (compose_transforms, compose_sdc_refinement, [
+                        ('sdc_warp_transforms', 'to_template_transforms'),
+                    ]),
+                    (compose_sdc_refinement, outputnode, [
+                        ('sdc_warp_to_template', 'sdc_refinement_to_template'),
+                    ]),
+                ])  # fmt:skip
 
     # If concatenation is not happening here, send the still-split images to outputs
     if not concatenate:
@@ -327,6 +473,43 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
     #     ])  # fmt:skip
 
     return workflow
+
+
+def _hz_to_warp(in_file, readout_time, pe_dir, newpath=None):
+    """TOPUP off-resonance field (Hz) -> ITK displacement field along the PE axis.
+
+    TOPUP shifts each voxel by ``field_Hz * TotalReadoutTime`` voxels along its
+    acquisition-parameter vector, which qsiprep writes from the raw BIDS
+    ``PhaseEncodingDirection`` in the voxel axes of the grid TOPUP ran on (LAS+,
+    not the input's own orientation). The shift is therefore taken along that
+    voxel axis of this image and carried to world space by its affine, so the
+    vector is right on any grid; ``FUGUEvsm2ANTSwarp`` instead hard-codes
+    +i=R, +j=A, +k=I, which is wrong for the i and k axes of an LAS+ grid.
+    """
+    import os
+
+    import nibabel as nb
+    import numpy as np
+    from nipype.utils.filemanip import fname_presuffix
+
+    img = nb.load(in_file)
+    axis = 'ijk'.index(pe_dir[0])
+    sign = -1.0 if pe_dir.endswith('-') else 1.0
+    shift = np.asanyarray(img.dataobj, dtype='float32') * float(readout_time) * sign
+    # One voxel step along the PE axis in world mm, RAS -> ITK's LPS.
+    step_lps = img.affine[:3, axis] * np.array([-1.0, -1.0, 1.0])
+    field = (shift[..., np.newaxis] * step_lps)[:, :, :, np.newaxis, :].astype('float32')
+
+    out = nb.Nifti1Image(field, img.affine)
+    out.header.set_intent('vector')
+    out_file = fname_presuffix(in_file, suffix='_warp', newpath=newpath or os.getcwd())
+    out.to_filename(out_file)
+    return out_file
+
+
+def _first_warp(fieldwarps):
+    """Volume 0's SDC warp: GRE hands over a single path, the others a list."""
+    return fieldwarps if isinstance(fieldwarps, str) else fieldwarps[0]
 
 
 def _first(inlist):

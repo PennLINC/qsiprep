@@ -37,23 +37,24 @@ from .epi_fmap import (
 
 LOGGER = logging.getLogger('nipype.interface')
 
-# Versioned (eddy_cuda11.0) or, from FSL 6.0.7 on, bare (eddy_cuda).
-_EDDY_CUDA_RE = re.compile(r'^eddy_cuda(?:(\d+)\.(\d+))?$')
+_EDDY_CUDA_RE = re.compile(r'^eddy_cuda(\d+)\.(\d+)$')
 
 
 def _find_eddy_cuda(default='eddy_cuda10.2'):
     """Locate the installed FSL eddy CUDA binary (e.g. ``eddy_cuda11.0``).
 
-    FSL used to ship version-specific binaries whose name encodes the CUDA
-    version (``eddy_cuda11.0``); from 6.0.7 the conda/pixi packages ship a
-    single bare ``eddy_cuda``. Older code hardcoded ``eddy_cuda10.2``. Scan the
-    directories on ``PATH`` for any of these and return the newest one, the
-    bare binary counting as newest.
+    FSL ships version-specific binaries whose name encodes the CUDA version
+    (``eddy_cuda11.0``). Older code hardcoded ``eddy_cuda10.2``, which current
+    FSL builds no longer provide. Scan the directories on ``PATH`` for any
+    ``eddy_cuda<major>.<minor>`` executable and return the newest one. Some
+    packagings (e.g. the pixi-based qsiprep image) instead ship a single,
+    *unversioned* ``eddy_cuda``; use it as a fallback when no versioned binary is
+    present, so ``--gpu eddy`` works there too.
 
     Parameters
     ----------
     default : str
-        Name returned when no ``eddy_cuda*`` binary is found, so the downstream
+        Name returned when no ``eddy_cuda`` binary is found, so the downstream
         missing-dependency check reports a recognizable command.
 
     Returns
@@ -62,6 +63,7 @@ def _find_eddy_cuda(default='eddy_cuda10.2'):
         Basename of the selected eddy CUDA binary, or ``default`` if none found.
     """
     found = {}
+    plain = None
     for directory in os.environ.get('PATH', '').split(os.pathsep):
         if not directory or not os.path.isdir(directory):
             continue
@@ -71,29 +73,34 @@ def _find_eddy_cuda(default='eddy_cuda10.2'):
             continue
         for entry in entries:
             match = _EDDY_CUDA_RE.match(entry)
-            if match is None:
+            if match is None and entry != 'eddy_cuda':
                 continue
             full_path = os.path.join(directory, entry)
             if not os.path.isfile(full_path) or not os.access(full_path, os.X_OK):
                 continue
-            if match.group(1) is None:
-                version = (float('inf'), float('inf'))
-            else:
-                version = (int(match.group(1)), int(match.group(2)))
+            if match is None:
+                # Unversioned eddy_cuda: keep the first one on PATH.
+                if plain is None:
+                    plain = entry
+                continue
+            version = (int(match.group(1)), int(match.group(2)))
             # Keep the first match on PATH for each basename.
             found.setdefault(entry, version)
 
-    if not found:
-        LOGGER.warning('No eddy_cuda* binary found on PATH; falling back to %s', default)
-        return default
+    if found:
+        # A version-suffixed binary is preferred over a plain one, newest first.
+        if len(found) > 1:
+            LOGGER.warning(
+                'Multiple eddy_cuda binaries found on PATH (%s); using the newest.',
+                ', '.join(sorted(found)),
+            )
+        return max(found, key=found.get)
 
-    if len(found) > 1:
-        LOGGER.warning(
-            'Multiple eddy_cuda binaries found on PATH (%s); using the newest.',
-            ', '.join(sorted(found)),
-        )
+    if plain is not None:
+        return plain
 
-    return max(found, key=found.get)
+    LOGGER.warning('No eddy_cuda binary found on PATH; falling back to %s', default)
+    return default
 
 
 class GatherEddyInputsInputSpec(BaseInterfaceInputSpec):
@@ -569,6 +576,27 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
     if 'topup' in pepolar_method.lower():
         desc.append(topup_boilerplate(fieldmap_type, pepolar_method))
     # DRBUDDI is described in its own workflow
+
+    # Jacobian modulation: whether eddy's own resampling Jacobian-modulated
+    # the eddy-current (and, when TOPUP ran, susceptibility) corrections it
+    # applied. This is independent of --ignore jacobian, which controls
+    # only the modulation QSIPrep itself applies -- see eddy_modulates_distortion.
+    from ..utils.eddy_config import eddy_modulates_distortion
+
+    if eddy_modulates_distortion(eddy_config):
+        desc.append(
+            'Eddy-current correction, and susceptibility distortion correction '
+            'when TOPUP was used, were Jacobian-modulated by eddy itself as part '
+            'of its `jac` resampling.'
+        )
+    else:
+        desc.append(
+            'Eddy-current correction, and susceptibility distortion correction '
+            'when TOPUP was used, were not Jacobian-modulated, because eddy was '
+            f'configured with resampling method "{ext_eddy.inputs.method}" rather '
+            'than "jac"; QSIPrep cannot retrofit this modulation once eddy has '
+            'resampled the data.'
+        )
 
     # move by susceptibility
     if (

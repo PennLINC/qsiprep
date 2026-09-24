@@ -17,9 +17,6 @@ where possible:
 This mirrors the SDC coverage of :func:`~qsiprep.workflows.dwi.fsl.init_fsl_hmc_wf`.
 """
 
-import json
-from importlib.resources import files
-
 from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
@@ -27,6 +24,7 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
 from ... import config
 from ...interfaces.gradients import ExtractB0s, SliceQC
+from ...interfaces.jacobian import OkanQuadraticJacobian
 from ...interfaces.nilearn import EnhanceB0
 from ...interfaces.shoreline import CalculateCNR
 from ...interfaces.tortoise import (
@@ -39,8 +37,8 @@ from ...interfaces.tortoise import (
     TORTOISEConvert,
     generate_diffprep_boilerplate,
 )
+from ...utils.diffprep_config import load_diffprep_config
 from ...utils.gpu import gpu_enabled
-from ...utils.resources import as_path
 from ..fieldmap.base import gre_seed_unit, init_sdc_wf
 from ..fieldmap.drbuddi import connect_gre_seed, init_drbuddi_wf, seeds_from_gre
 from ..fieldmap.synb0 import init_synb0_wf
@@ -69,28 +67,6 @@ def _as_transform_list(value):
     return [value]
 
 
-def _load_diffprep_config(config_path):
-    """Load a --diffprep-config JSON, or return defaults."""
-    if config_path is None:
-        config_path = as_path(files('qsiprep.data') / 'diffprep_params.json')
-    with open(config_path) as fobj:
-        cfg = json.load(fobj)
-    cfg.setdefault('b0_id', -1)
-    cfg.setdefault('is_human_brain', True)
-    cfg.setdefault('rot_eddy_center', 'isocenter')
-    cfg.setdefault('extra_args', [])
-    # --hmc-method exposes a single "tortoise" value, so this is the only way to
-    # reach DIFFPREP's rigid-only ('motion') or 'cubic' eddy modes.
-    cfg.setdefault('correction_mode', 'quadratic')
-    # No default for "use_cuda": its absence must stay observable so a shipped
-    # default is never mistaken for user intent (see _legacy_use_cuda below).
-    # Opt-in MAPMRI shell synthesis for DRBUDDI's registration target;
-    # None/0 = off.
-    cfg.setdefault('drbuddi_synth_shell_bval', None)
-    cfg.setdefault('drbuddi_synth_shell_ndirs', 30)
-    return cfg
-
-
 def _resolve_phase_encoding(pe_dir):
     """Validate a BIDS PhaseEncodingDirection value, falling back to 'j'."""
     if pe_dir in _VALID_PE:
@@ -112,6 +88,9 @@ def _write_sidecar_json(nii_file, phase_encoding_direction, working_dir=None):
     the basename is reused. Keeping the output in the node's directory lets the
     ``copyfile=True`` propagation to the ``diffprep`` node stage a valid sidecar
     even after the upstream node's cache is cleared.
+
+    Every import is local: nipype runs a Function node's source on its own,
+    so module-level imports are not visible here.
     """
     import json
     import os
@@ -322,6 +301,7 @@ def init_diffprep_hmc_wf(
                 'slice_quality',
                 'motion_params',
                 'ec_file',
+                'ec_jacobian_images',
                 'cnr_map',
                 'bvec_files_to_transform',
                 'dwi_files_to_transform',
@@ -382,7 +362,7 @@ def init_diffprep_hmc_wf(
     gre_drbuddi_init = seeds_from_gre(unit)
 
     # Load any user-supplied DIFFPREP config (or our defaults)
-    diffprep_cfg = _load_diffprep_config(config.workflow.diffprep_config)
+    diffprep_cfg = load_diffprep_config(config.workflow.diffprep_config)
     # "use_cuda" counts as user intent only when the user's own config file sets
     # it -- the shipped default must not "conflict" with --gpu on every run.
     _legacy_use_cuda = diffprep_cfg.get('use_cuda') if config.workflow.diffprep_config else None
@@ -618,6 +598,24 @@ def init_diffprep_hmc_wf(
     # own, and the map is a required downstream ApplyTransforms input.
     calculate_cnr = pe.Node(CalculateCNR(), name='calculate_cnr', mem_gb=2)
 
+    # TORTOISE eddy-current Jacobian, for Jacobian weighting. Built from
+    # effective_correction_mode (post-sloppy), not the configured
+    # correction_mode: passing the configured value would attempt quadratic
+    # recovery from motion-only transforms on every --sloppy run. 'cubic' is
+    # a valid, existing DIFFPREP mode that OkanQuadraticJacobian does not
+    # implement a determinant for. Whether this run's eddy-current component
+    # was applied, unmodulated (cubic), or simply did not occur (motion) is
+    # derived from ``effective_correction_mode`` by
+    # ``jacobian_provenance.jacobian_provenance_for`` for the sidecar, rather
+    # than recorded here.
+    ec_jacobian = pe.Node(
+        OkanQuadraticJacobian(
+            correction_mode=effective_correction_mode,
+            rot_eddy_center=diffprep_cfg['rot_eddy_center'],
+        ),
+        name='ec_jacobian',
+    )
+
     workflow.connect([
         (corrected_node, split_outputs, [
             ('corrected_dwi_file', 'corrected_dwi_file'),
@@ -637,6 +635,13 @@ def init_diffprep_hmc_wf(
             ('spm_motion_file', 'motion_params'),
             ('diffprep_ec_file', 'ec_file'),
         ]),
+
+        # Eddy-current Jacobian: evaluated on the DIFFPREP input grid (the
+        # grid _moteddy.nii -- and thus extract_b0s.b0_average -- is in), not
+        # the output grid.
+        (corrected_node, ec_jacobian, [('transformations_file', 'transformations_file')]),
+        (extract_b0s, ec_jacobian, [('b0_average', 'reference_image')]),
+        (ec_jacobian, outputnode, [('ec_jacobian_images', 'ec_jacobian_images')]),
 
         # Pre-SDC enhancement (report)
         (corrected_node, extract_b0s, [('corrected_dwi_file', 'dwi_series')]),
@@ -728,6 +733,11 @@ def init_diffprep_hmc_wf(
         # a single recombined series in the original merged order, so
         # GatherDRBUDDIInputs re-splits it into up/down exactly as it does for
         # the FSL backend.
+        #
+        # DRBUDDI's warp is carried as to_dwi_ref_warps and applied downstream
+        # of gradwarp/HMC, not baked into DIFFPREP's own resampling, so it
+        # reaches ComposeJacobianWeights externally (recorded by
+        # jacobian_provenance.jacobian_provenance_for, not here).
         drbuddi_wf = init_drbuddi_wf(
             unit=unit,
             t2w_sdc=t2w_sdc,
@@ -805,6 +815,10 @@ def init_diffprep_hmc_wf(
             )
         else:
             outputnode.inputs.sdc_method = 'T2Wreg (SynB0)' if synb0_target else 'T2Wreg'
+        # The EPI stage's field is carried as a warp (to_dwi_ref_warps) rather
+        # than baked in -- see the module comment above -- so it reaches
+        # ComposeJacobianWeights externally, like the DRBUDDI branch
+        # (recorded by jacobian_provenance.jacobian_provenance_for, not here).
         # b0_ref_for_coreg is already gradwarp- and SDC-corrected on this branch
         # (see apply_sdc_to_b0 above), so it needs no further correction here.
         workflow.connect([
@@ -824,6 +838,9 @@ def init_diffprep_hmc_wf(
     #    init_sdc_wf. The warp is applied downstream (to_dwi_ref_warps),
     #    decoupled from HMC.
     if unit.is_gre or unit.is_nipreps_syn:
+        # This warp is applied downstream (to_dwi_ref_warps), decoupled from
+        # HMC, so it reaches ComposeJacobianWeights externally (recorded by
+        # jacobian_provenance.jacobian_provenance_for, not here).
         b0_sdc_wf = init_sdc_wf(unit, gradwarp=has_gradwarp)
         b0_sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
 

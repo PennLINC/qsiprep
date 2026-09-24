@@ -114,6 +114,9 @@ sections:
   ordering: session,task,acquisition,ceagent,reconstruction,direction,run,echo
   reportlets:
   - bids: {datatype: figures, desc: summary, suffix: dwi}
+  # Written by SeriesQC only when DSI Studio could not compute a QC stage.
+  - bids: {datatype: figures, desc: qcwarnings, suffix: dwi}
+    subtitle: Quality control warnings
   # XXX: Appears to have no producer. Check.
   - bids: {datatype: figures, desc: validation, suffix: dwi}
   - bids: {datatype: figures, desc: denoising, suffix: dwi}
@@ -208,6 +211,31 @@ sections:
       image is the image that was used.
     static: false
     subtitle: Susceptibility distortion correction
+
+  - bids: {datatype: figures, desc: sdcwarp, suffix: dwi}
+    caption: |
+      The estimated susceptibility (EPI) distortion displacement field, shown over
+      the preprocessed <em>b</em>=0 in ACPC space on several slices in each of the
+      two planes that contain the phase-encoding direction. Each arrow shows the
+      direction of the displacement and its color the size in mm, so you can see how
+      the phase-encoding direction sat relative to the ACPC output and how large the
+      deformations were (usually largest in frontal and temporal regions). Arrows are
+      drawn to scale unless the field is small, in which case the title gives how
+      much they were lengthened. This matches how 3D Slicer draws the exported
+      displacement map.
+    static: false
+    subtitle: Susceptibility distortion displacement field
+
+  - bids: {datatype: figures, desc: sdcrefinement, suffix: dwi}
+    caption: |
+      With TOPUP+DRBUDDI, eddy first corrects the series with TOPUP's field and
+      DRBUDDI then refines the result. This is DRBUDDI's refinement alone, drawn
+      like the figure above but with its own, usually much smaller, color scale and
+      lengthened arrows.
+      Large arrows mark where DRBUDDI disagreed with TOPUP, which often happens
+      where signal piles up or drops out.
+    static: false
+    subtitle: DRBUDDI refinement of the TOPUP field
 
   - bids: {datatype: figures, desc: sdcT2w, suffix: dwi}
     caption: |

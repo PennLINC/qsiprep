@@ -15,6 +15,7 @@ from qsiprep.utils.bids import (
     find_bval,
     find_bvec,
     load_sidecar,
+    parse_bids_for_age_months,
 )
 
 # A single subject with one DWI and no metadata of its own.
@@ -374,3 +375,42 @@ def test_annex_symlinked_epi_fieldmap_finds_secret_bval(tmp_path):
 
     assert epi.is_symlink()
     assert find_bval(epi) == str(fmap_dir / 'sub-01_dir-PA_epi.bval')
+
+
+def _write_tsv(path, header, *rows):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text('\n'.join('\t'.join(row) for row in (header, *rows)) + '\n')
+
+
+@pytest.mark.parametrize(
+    ('tsv', 'header', 'row'),
+    [
+        # The index column of each file is the one the BIDS specification names.
+        (
+            'sub-01/ses-V02/sub-01_ses-V02_scans.tsv',
+            ('filename', 'age_months'),
+            ('anat/sub-01_ses-V02_T1w.nii.gz', '3'),
+        ),
+        ('sub-01/sub-01_sessions.tsv', ('session_id', 'age_months'), ('ses-V02', '3')),
+        ('participants.tsv', ('participant_id', 'age_months'), ('sub-01', '3')),
+    ],
+)
+@pytest.mark.parametrize('session_label', ['V02', 'ses-V02'])
+def test_parse_bids_for_age_months_reads_each_bids_tsv(tmp_path, tsv, header, row, session_label):
+    """Age is found in scans.tsv, sessions.tsv or participants.tsv by its spec column."""
+    _write_tsv(tmp_path / tsv, header, row)
+
+    assert parse_bids_for_age_months(tmp_path, 'sub-01', session_label) == 3
+
+
+def test_parse_bids_for_age_months_picks_this_session_from_sessions_tsv(tmp_path):
+    """Each session's row supplies that session's age."""
+    _write_tsv(
+        tmp_path / 'sub-01/sub-01_sessions.tsv',
+        ('session_id', 'age_months'),
+        ('ses-V01', '1'),
+        ('ses-V02', '6'),
+    )
+
+    assert parse_bids_for_age_months(tmp_path, '01', 'V01') == 1
+    assert parse_bids_for_age_months(tmp_path, '01', 'V02') == 6

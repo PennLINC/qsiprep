@@ -21,14 +21,18 @@ from ... import config
 from ...data import load as load_data
 from ...interfaces import DerivativesDataSink
 from ...interfaces.bias import N4WeightMask
-from ...interfaces.bids import DerivativesSidecar
+from ...interfaces.bids import DerivativesMaybeDataSink, DerivativesSidecar
 from ...interfaces.dsi_studio import DSIStudioBTable
 from ...interfaces.dwi_merge import MergeFinalConfounds, SplitResampledDWIs
 from ...interfaces.gradients import ExtractB0s
 from ...interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
+from ...interfaces.jacobian import pe_axis_from_direction
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
-from ...interfaces.reports import GradientPlot, SeriesQC
+from ...interfaces.reports import GradientPlot, SDCWarpPlot, SeriesQC
+from ...utils.eddy_config import eddy_applies_gre
+from ...utils.jacobian_provenance import jacobian_provenance_for, t2wreg_is_weighted
+from ...utils.sdc import pe_readout_time, sdc_warp_source
 from .derivatives import init_dwi_derivatives_wf
 from .gradwarp import resolve_gradwarp_plan
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
@@ -45,6 +49,7 @@ def init_dwi_finalize_wf(
     name,
     source_file,
     output_prefix,
+    t2w_sdc=False,
     do_biascorr=True,
     write_derivatives=True,
     make_dwiref=False,
@@ -96,6 +101,11 @@ def init_dwi_finalize_wf(
             Is this the final output? If so, write the final derivatives. If these
             resampled outputs will be combined with other distortion groups at the end,
             then return the resampled, non-concatenated images
+        t2w_sdc : bool
+            Whether a T2w is available for SDC (honoring --anat-modality and
+            --ignore t2w). Decides, with the plan, whether DIFFPREP's T2Wreg ran,
+            and so whether it left an SDC warp to write and whether that warp
+            is Jacobian-weighted (see ``jacobian_provenance_for``).
 
     **Inputs**
 
@@ -156,10 +166,66 @@ def init_dwi_finalize_wf(
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
 
-    # TOPUP alone exposes a field in Hz for the final resampling path. Dispatch
-    # from the compiled run, not the deprecated config spelling: those can
-    # disagree after automatic method resolution.
+    # Dispatch from the compiled run, not the deprecated config spelling: those
+    # can disagree after automatic method resolution.
     doing_topup = unit.run.stage_with('topup') is not None
+
+    # Determine information to be used for displacement map.
+    readout_time = pe_readout_time(unit)
+    warp_source, estimation_method = sdc_warp_source(
+        unit, t2w_sdc, gre_in_eddy=eddy_applies_gre(unit)
+    )
+
+    sdc_warp_meta = None
+    if warp_source is not None:
+        layout = (
+            'Stored on the ACPC output grid in the ITK displacement-field layout, with '
+            'vectors in ACPC world coordinates (LPS, mm), so 3D Slicer or ITK-SNAP can '
+            'display it. It is a map for inspection, not a transform for resampling: '
+            'it holds no DWI-to-ACPC coregistration, and qsiprep applies the correction '
+            'in DWI space.'
+        )
+        description = (
+            'Susceptibility (EPI) distortion displacement of the first DWI series. At '
+            'each point of the corrected ACPC image, the vector points to where that '
+            f'tissue appeared in the distorted data. {layout}'
+        )
+        rebuilt_topup = (
+            'the TOPUP off-resonance field, rebuilt as voxel shift = '
+            'field_Hz * TotalReadoutTime along the phase-encoding axis'
+        )
+        if warp_source == 'topup':
+            description += f' Rebuilt from {rebuilt_topup}.'
+        elif warp_source == 'gre_in_eddy':
+            description += (
+                ' Rebuilt from the GRE fieldmap eddy applied, as voxel shift = '
+                'field_Hz * TotalReadoutTime along the phase-encoding axis.'
+            )
+        elif warp_source == 'topup+drbuddi':
+            description += (
+                f" The total correction: {rebuilt_topup}, followed by DRBUDDI's refinement "
+                '(also written on its own as desc-sdcrefinement).'
+            )
+        sdc_warp_meta = {
+            'EstimationMethod': estimation_method,
+            'Units': 'mm',
+            'VectorConvention': 'LPS',
+            'Description': description,
+        }
+
+    sdc_refinement_meta = None
+    if warp_source == 'topup+drbuddi':
+        sdc_refinement_meta = {
+            'EstimationMethod': 'DRBUDDI',
+            'Units': 'mm',
+            'VectorConvention': 'LPS',
+            'Description': (
+                "DRBUDDI's refinement of the first DWI series after eddy had already "
+                "corrected it with TOPUP's field: the part of the total correction "
+                '(desc-sdc) that DRBUDDI changed. Large vectors mark where DRBUDDI '
+                f'disagreed with TOPUP. {layout}'
+            ),
+        }
 
     # Determine resource usage
     for scan in all_dwis:
@@ -196,6 +262,10 @@ def init_dwi_finalize_wf(
                 'hmc_xforms',
                 'fieldwarps',
                 'gradwarp_field',
+                # Only set by the TORTOISE/DIFFPREP backend.
+                'ec_jacobian_images',
+                # Only set when DRBUDDI ran: TORTOISE's LSR ratios.
+                'sdc_scaling_images',
                 'output_grid',
                 'subjects_dir',
                 'subject_id',
@@ -212,9 +282,10 @@ def init_dwi_finalize_wf(
                 'raw_concatenated',
                 'confounds',
                 'carpetplot_data',
-                'sdc_scaling_images',
                 # Only written out if TOPUP was used
                 'fieldmap_hz',
+                # Transforms to ACPC space, in the order they apply
+                'sdc_transform_files',
             ]
         ),
         name='inputnode',
@@ -233,8 +304,17 @@ def init_dwi_finalize_wf(
                 'gradient_table_t1',
                 'btable_t1',
                 'hmc_optimization_data',
+                # Only defined when Jacobian weighting applied (no --ignore jacobian)
+                # weights: forwarded from transform_dwis_t1.
+                'jacobian_weights',
+                'jacobian_weight_index',
+                'jacobian_method',
                 # Only written out if TOPUP was used
                 'fieldmap_hz_t1',
+                # The SDC displacement field on the ACPC grid
+                'sdc_warp_to_template',
+                # TOPUP+DRBUDDI only: DRBUDDI's refinement of the TOPUP field
+                'sdc_refinement_to_template',
             ]
         ),
         name='outputnode',
@@ -303,6 +383,11 @@ def init_dwi_finalize_wf(
         use_compression=False,
         concatenate=True,
         doing_topup=doing_topup,
+        pe_axis=pe_axis_from_direction(unit.dwi_metadata.get('PhaseEncodingDirection', 'j')),
+        weight_fieldwarps=t2wreg_is_weighted(unit, t2w_sdc),
+        sdc_warp_source=warp_source,
+        sdc_pe_dir=unit.pe_dir,
+        sdc_readout_time=readout_time,
     )
 
     # Apply denoising to the interpolated data if requested
@@ -324,6 +409,8 @@ def init_dwi_finalize_wf(
             ('hmc_xforms', 'inputnode.hmc_xforms'),
             ('fieldwarps', 'inputnode.fieldwarps'),
             ('gradwarp_field', 'inputnode.gradwarp_field'),
+            ('ec_jacobian_images', 'inputnode.ec_jacobian_images'),
+            ('sdc_scaling_images', 'inputnode.sdc_scaling_images'),
             ('dwi_files', 'inputnode.dwi_files'),
             ('dwi_sampling_grid', 'inputnode.output_grid'),
             ('b0_to_dwiref_transforms',
@@ -333,7 +420,6 @@ def init_dwi_finalize_wf(
             ('dwiref_to_t1_warp',
              'inputnode.dwiref_to_t1_warp'),
             ('itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
-            ('sdc_scaling_images', 'inputnode.sdc_scaling_images'),
         ]),
         (transform_dwis_t1, outputnode, [
             ('outputnode.bvals', 'bvals_t1'),
@@ -359,12 +445,42 @@ def init_dwi_finalize_wf(
         ]),
     ])  # fmt:skip
 
-    if doing_topup:
+    if doing_topup or warp_source == 'gre_in_eddy':
         workflow.connect([
             (inputnode, transform_dwis_t1, [('fieldmap_hz', 'inputnode.fieldmap_hz')]),
+        ])  # fmt:skip
+    if doing_topup:
+        workflow.connect([
             (transform_dwis_t1, outputnode, [
                 ('outputnode.fieldmap_hz_resampled', 'fieldmap_hz_t1'),
             ]),
+        ])  # fmt:skip
+
+    if 'jacobian' not in (config.workflow.ignore or []):
+        workflow.connect([
+            (transform_dwis_t1, outputnode, [
+                ('outputnode.jacobian_weights', 'jacobian_weights'),
+                ('outputnode.jacobian_weight_index', 'jacobian_weight_index'),
+                ('outputnode.jacobian_method', 'jacobian_method'),
+            ]),
+        ])  # fmt:skip
+
+    sdc_fields = []  # (outputnode field, report desc, figure title)
+    if warp_source is not None:
+        sdc_fields.append(
+            ('sdc_warp_to_template', 'sdcwarp', f'SDC displacement field, {estimation_method}')
+        )
+    if warp_source == 'topup+drbuddi':
+        sdc_fields.append(
+            (
+                'sdc_refinement_to_template',
+                'sdcrefinement',
+                'DRBUDDI refinement of the TOPUP field',
+            )
+        )
+    for field, _, _ in sdc_fields:
+        workflow.connect([
+            (transform_dwis_t1, outputnode, [(f'outputnode.{field}', field)]),
         ])  # fmt:skip
 
     # The workflow is done if we will be concatenating images later
@@ -406,8 +522,18 @@ def init_dwi_finalize_wf(
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
 
+    (
+        jacobian_applied_corrections,
+        jacobian_unmodulated_corrections,
+        jacobian_unmodulated_reason,
+    ) = jacobian_provenance_for(unit, t2w_sdc)
     dwi_derivatives_wf = init_dwi_derivatives_wf(
         source_file=source_file,
+        sdc_warp_meta=sdc_warp_meta,
+        sdc_refinement_meta=sdc_refinement_meta,
+        jacobian_applied_corrections=jacobian_applied_corrections,
+        jacobian_unmodulated_corrections=jacobian_unmodulated_corrections,
+        jacobian_unmodulated_reason=jacobian_unmodulated_reason,
     )
 
     # Combine all the QC measures for a series QC
@@ -422,6 +548,18 @@ def init_dwi_finalize_wf(
             base_directory=config.execution.output_dir,
         ),
         name='ds_series_qc',
+        run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB,
+    )
+    # Only written when DSI Studio could not measure a QC stage; see SeriesQC.
+    ds_report_qc_warnings = pe.Node(
+        DerivativesMaybeDataSink(
+            datatype='figures',
+            desc='qcwarnings',
+            suffix='dwi',
+            source_file=source_file,
+        ),
+        name='ds_report_qc_warnings',
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
@@ -556,6 +694,7 @@ def init_dwi_finalize_wf(
             ('outputnode.series_qc_postproc', 't1_qc_postproc'),
         ]),
         (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
+        (series_qc, ds_report_qc_warnings, [('qc_warnings_report', 'in_file')]),
         (transform_dwis_t1, series_qc, [
             ('outputnode.cnr_map_resampled', 't1_cnr_file'),
         ]),
@@ -603,11 +742,54 @@ def init_dwi_finalize_wf(
         (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')]),
     ])  # fmt:skip
 
+    if 'jacobian' not in (config.workflow.ignore or []):
+        workflow.connect([
+            (outputnode, dwi_derivatives_wf, [
+                ('jacobian_weights', 'inputnode.jacobian_weights'),
+                ('jacobian_weight_index', 'inputnode.jacobian_weight_index'),
+                ('jacobian_method', 'inputnode.jacobian_method'),
+            ]),
+        ])  # fmt:skip
+
     if doing_topup:
         workflow.connect([
             (transform_dwis_t1, series_qc, [
                 ('outputnode.fieldmap_hz_resampled', 't1_fieldmap_hz_file'),
             ]),
+        ])  # fmt:skip
+
+    if sdc_fields:
+        workflow.connect([
+            (inputnode, dwi_derivatives_wf, [
+                ('sdc_transform_files', 'inputnode.sdc_transform_files'),
+            ]),
+        ])  # fmt:skip
+
+    # Glyph reportlets to exhibit the effect of SDC in ACPC space
+    for field, desc, title in sdc_fields:
+        plot = pe.Node(
+            SDCWarpPlot(title=f'{title} (ACPC space)'),
+            name=f'{desc}_plot',
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+        ds_report = pe.Node(
+            DerivativesDataSink(
+                datatype='figures',
+                desc=desc,
+                suffix='dwi',
+                source_file=source_file,
+            ),
+            name=f'ds_report_{desc}',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+        workflow.connect([
+            (outputnode, dwi_derivatives_wf, [(field, f'inputnode.{field}')]),
+            (outputnode, plot, [
+                (field, 'warp_file'),
+                ('t1_b0_ref', 'b0_ref'),
+            ]),
+            (plot, ds_report, [('out_file', 'in_file')]),
         ])  # fmt:skip
 
     return workflow

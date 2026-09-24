@@ -13,6 +13,8 @@ sub-tinytensors/dwi/sub-tinytensors_from-ACPC_to-distortiongroup_mode-image_desc
 sub-tinytensors/dwi/sub-tinytensors_from-distortiongroup_to-ACPC_mode-image_desc-coreg_xfm.mat
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-brain_mask.nii.gz
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-image_qc.tsv
+sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-jacobian_dwimap.json
+sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-jacobian_dwimap.nii.gz
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-preproc_dwi.b
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-preproc_dwi.b_table.txt
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-preproc_dwi.bval
@@ -20,6 +22,8 @@ sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-preproc_dwi.bvec
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-preproc_dwi.json
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-preproc_dwi.nii.gz
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-preproc_dwiref.nii.gz
+sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-sdc_displacement.json
+sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-sdc_displacement.nii.gz
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_desc-slice_qc.json
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_model-eddy_stat-cnr_dwimap.json
 sub-tinytensors/dwi/sub-tinytensors_space-ACPC_model-eddy_stat-cnr_dwimap.nii.gz
