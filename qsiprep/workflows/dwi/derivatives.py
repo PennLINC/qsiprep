@@ -1,4 +1,5 @@
-"""
+"""Writing outputs from a dwi preproc workflow.
+
 Writing outputs from a dwi preproc workflow
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -29,14 +30,14 @@ _CNR_MODEL_LABELS = {'tortoise': 'MAPMRI'}
 
 
 def _cnr_model_label(hmc_method, shoreline_model=None):
-    """BIDS-safe ``model`` entity naming the signal model behind the CNR map."""
+    """Return the BIDS-safe ``model`` entity naming the signal model behind the CNR map."""
     if hmc_method == 'shoreline':
         return shoreline_model
     return _CNR_MODEL_LABELS.get(hmc_method, hmc_method)
 
 
 def _cnr_description(hmc_method):
-    """Sidecar description for the CNR map, flagging DIFFPREP's in-sample fit."""
+    """Return the sidecar description for the CNR map, flagging DIFFPREP's in-sample fit."""
     desc = 'Contrast-to-noise ratio map for the HMC step.'
     if hmc_method == 'tortoise':
         desc += (
@@ -53,7 +54,7 @@ def _cnr_description(hmc_method):
 
 
 def _tsnr_meta(n_b0, median_tsnr):
-    """Sidecar metadata for the TSNR map."""
+    """Return sidecar metadata for the TSNR map."""
     return {
         'Description': (
             'Temporal SNR (mean/SD across the b=0 volumes) of the final '

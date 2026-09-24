@@ -1,4 +1,5 @@
-"""
+"""Head motion correction.
+
 Head motion correction
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -43,56 +44,55 @@ def init_dwi_hmc_wf(
     mem_gb=3,
     name='dwi_hmc_wf',
 ):
-    """Perform head motion correction and susceptibility distortion correction.
+    """Build a workflow that performs head motion and susceptibility distortion correction.
 
     This workflow uses antsRegistration and an iteratively updated signal model to perform
     motion correction.
 
-    **Parameters**
+    The transform and signal model come from the ``hmc_transform`` and ``shoreline_model``
+    workflow settings, set by ``--shoreline-config``.
 
-        source_file: str
-            Path to one of the original dwi files (used for reportlets)
-        num_model_iterations: int
-            Number of SHORELine model-based iterations, used when the model is '3dshore' or
-            'tensor' (ignored for 'none'). Default: 2.
-        mem_gb: float
-            Estimated memory usage. Default: 3.
-        name: str
-            Name of the workflow. Default: 'dwi_hmc_wf'.
+    Parameters
+    ----------
+    source_file : str
+        Path to one of the original dwi files (used for reportlets)
+    num_model_iterations : int, optional
+        Number of SHORELine model-based iterations, used when the model is '3dshore' or
+        'tensor' (ignored for 'none'). Default: 2.
+    mem_gb : float, optional
+        Estimated memory usage. Default: 3.
+    name : str, optional
+        Name of the workflow. Default: 'dwi_hmc_wf'.
 
-        The transform and signal model come from the ``hmc_transform`` and ``shoreline_model``
-        workflow settings, set by ``--shoreline-config``.
+    Inputs
+    ------
+    dwi_files : list
+        List of single-volume files across all DWI series
+    b0_indices : list
+        Indexes into ``dwi_files`` that correspond to b=0 volumes
+    bvecs : list
+        List of paths to single-line bvec files
+    bvals : list
+        List of paths to single-line bval files
+    b0_images : list
+        List of single b=0 volumes
+    original_files : list
+        List of the files from which each DWI volume came from.
 
-    **Inputs**
-
-        dwi_files: list
-            List of single-volume files across all DWI series
-        b0_indices: list
-            Indexes into ``dwi_files`` that correspond to b=0 volumes
-        bvecs: list
-            List of paths to single-line bvec files
-        bvals: list
-            List of paths to single-line bval files
-        b0_images: list
-            List of single b=0 volumes
-        original_files: list
-            List of the files from which each DWI volume came from.
-
-    **Outputs**
-
-        final_template: str
-            Path to the mean of the coregistered b0 images
-        forward_transforms: list
-            List of ITK transforms that motion-correct the images in ``dwi_files``
-        noise_free_dwis: list
-            Model-predicted images reverse-transformed into alignment with ``dwi_files``
-        cnr_image: str
-            If shoreline_model is 'none' this is the tsnr of the b=0 images. Otherwise it is the
-            model fit divided by the model error in each voxel.
-        optimization_data: str
-            CSV file tracking the motion estimates across shoreline iterations
+    Outputs
+    -------
+    final_template : str
+        Path to the mean of the coregistered b0 images
+    forward_transforms : list
+        List of ITK transforms that motion-correct the images in ``dwi_files``
+    noise_free_dwis : list
+        Model-predicted images reverse-transformed into alignment with ``dwi_files``
+    cnr_image : str
+        If shoreline_model is 'none' this is the tsnr of the b=0 images. Otherwise it is the
+        model fit divided by the model error in each voxel.
+    optimization_data : str
+        CSV file tracking the motion estimates across shoreline iterations
     """
-
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
@@ -234,7 +234,7 @@ def init_dwi_hmc_wf(
 
 
 def _as_list(value):
-    """ANTs' fixed_image_masks is a multi-path input; wrap a single mask."""
+    """Wrap a single mask in a list; ANTs' fixed_image_masks is a multi-path input."""
     if value is None:
         return []
     return value if isinstance(value, list) else [value]
@@ -248,13 +248,16 @@ def linear_alignment_workflow(
     initialize_com=False,
     settings='shoreline',
 ):
-    """
+    """Build a workflow that linearly aligns a set of images to a template.
+
     Takes a template image and a set of input images, does
     a linear alignment to the template and updates it with the
     inverse of the average affine transform to the new template
 
-    Returns a workflow
-
+    Returns
+    -------
+    Workflow
+        The alignment workflow
     """
     iteration_wf = Workflow(name='iterative_alignment_%03d' % iternum)
     # ``template_mask`` is optional. When supplied, registration is driven by the
@@ -524,36 +527,35 @@ def init_hmc_model_iteration_wf(name='hmc_model_iter0'):
 
     Parameters
     ----------
-    name : str
+    name : str, optional
         name of the workflow
 
     Inputs
+    ------
+    original_dwi_files
+        list of 3d dwi files, no b0's
+    bvals
+        list of bval files corresponding to `original_dwi_files`
+    approx_aligned_dwi_files
+        dwi files that have been registered through a shoreline iteration
+    approx_aligned_bvecs
+        list of bvec files corresponding to `approx_aligned_dwi_files`
+    b0_indices
+        list of which indices in `dwi_files` are b0 images
+    initial_transforms
+        list of transforms from a previous registration
+    b0_mask
+        mask of containing brain voxels
+    b0_mean
+        mean of the aligned b0 images
 
-        original_dwi_files
-            list of 3d dwi files, no b0's
-        bvals
-            list of bval files corresponding to `original_dwi_files`
-        approx_aligned_dwi_files
-            dwi files that have been registered through a shoreline iteration
-        approx_aligned_bvecs
-            list of bvec files corresponding to `approx_aligned_dwi_files`
-        b0_indices
-            list of which indices in `dwi_files` are b0 images
-        initial_transforms
-            list of transforms from a previous registration
-        b0_mask
-            mask of containing brain voxels
-        b0_mean
-            mean of the aligned b0 images
-
-    **Outputs**
-
-        hmc_transforms
-            list of transforms, one per file in `dwi_files`
-        rotated_bvecs
-            rotated bvec matrix
+    Outputs
+    -------
+    hmc_transforms
+        list of transforms, one per file in `dwi_files`
+    rotated_bvecs
+        rotated bvec matrix
     """
-
     workflow = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -661,8 +663,10 @@ def init_dwi_model_hmc_wf(
 
     Parameters
     ----------
-    num_iters : int
+    num_iters : int, optional
         the number of times the model will be updated with transformed data
+    name : str, optional
+        Name of workflow (default: ``dwi_model_hmc_wf``)
 
     Inputs
     ------
@@ -685,15 +689,13 @@ def init_dwi_model_hmc_wf(
     -------
     hmc_transforms
         list of transforms, one per file in `dwi_files`
-    model_predicted_images: list
+    model_predicted_images : list
         Model-predicted images reverse-transformed into alignment with ``dwi_files``
-    cnr_image: str
+    cnr_image : str
         If shoreline_model is 'none' this is the tsnr of the b=0 images. Otherwise it is the
         model fit divided by the model error in each voxel.
-    optimization_data: str
+    optimization_data : str
         CSV file tracking the motion estimates across shoreline iterations
-
-
     """
     workflow = Workflow(name=name)
     inputnode = pe.Node(

@@ -13,14 +13,14 @@ def _make_exe(path):
 
 
 def test_find_eddy_cuda_single(tmp_path, monkeypatch):
-    """A single eddy_cuda binary on PATH is returned as-is."""
+    """Test that a single eddy_cuda binary on PATH is returned as-is."""
     _make_exe(tmp_path / 'eddy_cuda11.0')
     monkeypatch.setenv('PATH', str(tmp_path))
     assert _find_eddy_cuda() == 'eddy_cuda11.0'
 
 
 def test_find_eddy_cuda_multiple_picks_newest(tmp_path, monkeypatch):
-    """With several binaries, the newest version wins and a warning is logged."""
+    """Test that the newest of several binaries wins and a warning is logged."""
     _make_exe(tmp_path / 'eddy_cuda10.2')
     _make_exe(tmp_path / 'eddy_cuda11.0')
     monkeypatch.setenv('PATH', str(tmp_path))
@@ -33,7 +33,7 @@ def test_find_eddy_cuda_multiple_picks_newest(tmp_path, monkeypatch):
 
 
 def test_find_eddy_cuda_none_returns_default(tmp_path, monkeypatch):
-    """With no binaries on PATH, the default name is returned and a warning logged."""
+    """Test that the default name is returned, with a warning, when no binaries are on PATH."""
     monkeypatch.setenv('PATH', str(tmp_path))
 
     warnings = []
@@ -44,7 +44,7 @@ def test_find_eddy_cuda_none_returns_default(tmp_path, monkeypatch):
 
 
 def test_find_eddy_cuda_ignores_non_versioned(tmp_path, monkeypatch):
-    """The eddy wrapper and eddy_cpu are not mistaken for a CUDA binary."""
+    """Test that the eddy wrapper and eddy_cpu are not mistaken for a CUDA binary."""
     _make_exe(tmp_path / 'eddy')
     _make_exe(tmp_path / 'eddy_cpu')
     monkeypatch.setenv('PATH', str(tmp_path))
@@ -53,7 +53,7 @@ def test_find_eddy_cuda_ignores_non_versioned(tmp_path, monkeypatch):
 
 
 def test_find_eddy_cuda_plain_fallback(tmp_path, monkeypatch):
-    """An unversioned eddy_cuda is used when no versioned binary is present.
+    """Test that an unversioned eddy_cuda is used when no versioned binary is present.
 
     The pixi-based qsiprep image ships a single, unversioned ``eddy_cuda``; the
     wrapper ``eddy`` and ``eddy_cpu`` alongside it must not be picked instead.
@@ -66,7 +66,7 @@ def test_find_eddy_cuda_plain_fallback(tmp_path, monkeypatch):
 
 
 def test_find_eddy_cuda_prefers_versioned_over_plain(tmp_path, monkeypatch):
-    """A version-suffixed binary is preferred over a plain eddy_cuda."""
+    """Test that a version-suffixed binary is preferred over a plain eddy_cuda."""
     _make_exe(tmp_path / 'eddy_cuda')
     _make_exe(tmp_path / 'eddy_cuda11.0')
     monkeypatch.setenv('PATH', str(tmp_path))
@@ -74,7 +74,7 @@ def test_find_eddy_cuda_prefers_versioned_over_plain(tmp_path, monkeypatch):
 
 
 def test_extended_eddy_cmd_uses_finder(tmp_path, monkeypatch):
-    """ExtendedEddy(use_cuda=True) resolves its command via _find_eddy_cuda."""
+    """Test that ExtendedEddy(use_cuda=True) resolves its command via _find_eddy_cuda."""
     _make_exe(tmp_path / 'eddy_cuda11.0')
     monkeypatch.setenv('PATH', str(tmp_path))
     eddy = ExtendedEddy(use_cuda=True)
@@ -82,13 +82,13 @@ def test_extended_eddy_cmd_uses_finder(tmp_path, monkeypatch):
 
 
 def test_extended_eddy_cmd_cpu():
-    """ExtendedEddy(use_cuda=False) uses the CPU binary name."""
+    """Test that ExtendedEddy(use_cuda=False) uses the CPU binary name."""
     eddy = ExtendedEddy(use_cuda=False)
     assert eddy.cmd == 'eddy_cpu'
 
 
 def test_gather_eddy_inputs_exports_no_warps(tmp_path, monkeypatch):
-    """eddy bakes TOPUP's field in, so it must export no SDC warp downstream.
+    """Test that GatherEddyInputs exports no SDC warp, since eddy bakes TOPUP's field in.
 
     If ``forward_warps`` ever carried the TOPUP field, it would reach
     ``fieldwarps`` and ``ComposeJacobianWeights`` would derive a determinant

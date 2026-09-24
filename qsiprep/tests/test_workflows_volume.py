@@ -13,7 +13,7 @@ def _collect(template, transforms):
 
 @pytest.fixture(scope='module')
 def t1w_pair(data_dir, tmp_path_factory):
-    """One real T1w and a copy whose affine is translated by a known offset."""
+    """Provide one real T1w and a copy whose affine is translated by a known offset."""
     if not data_dir:
         pytest.skip('--data_dir was not provided')
 
@@ -52,7 +52,7 @@ def t1w_pair(data_dir, tmp_path_factory):
 def test_subject_anatomical_reference_places_the_template(
     t1w_pair, tmp_path, monkeypatch, reference, shifts
 ):
-    """``--subject-anatomical-reference`` decides where the merged template lands."""
+    """Test that ``--subject-anatomical-reference`` decides where the merged template lands."""
     from nipype.interfaces import utility as niu
     from nipype.pipeline import engine as pe
     from scipy.io import loadmat
@@ -106,7 +106,7 @@ def test_subject_anatomical_reference_places_the_template(
 
 
 def test_single_image_template_uses_identity_transform(monkeypatch):
-    """A single anatomical image is its own template, so it gets no fitted transform."""
+    """Test that a single anatomical image, its own template, gets no fitted transform."""
     from qsiprep import config
     from qsiprep.workflows.anatomical.volume import init_anat_template_wf
 

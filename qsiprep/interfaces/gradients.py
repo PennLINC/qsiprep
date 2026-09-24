@@ -437,7 +437,7 @@ class ComposeTransforms(SimpleInterface):
 
     @classmethod
     def _sdc_warp_stage_names(cls, included):
-        """Stages that move the SDC displacement field to the output grid.
+        """Return the stages that move the SDC displacement field to the output grid.
 
         The susceptibility warp *is* the ``fieldwarp`` stage, applied to the DWI
         after ``hmc`` and ``gradwarp`` (see :attr:`_TRANSFORM_STAGES`). It
@@ -988,25 +988,16 @@ def write_concatenated_fsl_gradients(bval_files, bvec_files, out_prefix):
 def bvec_rotation(ortho_bvecs, transforms, output_file, runtime):
     """Rotate bvecs using antsApplyTransformsToPoints and antsTransformInfo.
 
-    Parameters:
-    -----------
-
-    ortho_bvecs: np.ndarray (n, 3)
+    Parameters
+    ----------
+    ortho_bvecs : np.ndarray of shape (n, 3)
         bvecs relative to a non-oblique output volume
-
-    transforms: list
+    transforms : list
         List of transform files that will be applied to the vectors
-
-    original_images: list
-        List of images that correspond to the original bvecs. Used to
-        rotate the bvecs to world coordinates reference frame.
-
-    output_file: str
+    output_file : str
         Path to write the new bvec file
-
-    runtime: runtime object
+    runtime : runtime object
         Nipype node runtime object
-
     """
     aattp_rotated = []
     commands = []
@@ -1102,7 +1093,9 @@ def compose_affines(reference_image, affine_list, output_file):
 
 
 def create_tensor_image(mask_img, direction, prefix):
-    """set intent as NIFTI_INTENT_SYMMATRIX (1005),
+    """Create an ANTs tensor image with the tensor for ``direction`` in every mask voxel.
+
+    Set intent as NIFTI_INTENT_SYMMATRIX (1005),
     [dxx, dxy, dyy, dxz, dyz, dzz] are the components
     info from here
     https://github.com/ANTsX/ANTs/wiki/Importing-diffusion-tensor-data-from-other-software
@@ -1153,7 +1146,7 @@ def reorient_tensor_image(tensor_image, warp_file, mask_img, prefix, output_fnam
     reoriented_vectors = np.zeros((reoriented_tensors.shape[0], 3))
 
     def tensor_from_vec(vec):
-        """[dxx, dxy, dyy, dxz, dyz, dzz]."""
+        """Build a 3x3 symmetric tensor from [dxx, dxy, dyy, dxz, dyz, dzz]."""
         return np.array(
             [[vec[0], vec[1], vec[3]], [vec[1], vec[2], vec[4]], [vec[3], vec[4], vec[5]]]
         )

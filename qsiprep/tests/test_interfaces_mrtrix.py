@@ -78,7 +78,7 @@ def test_dwidenoise2(datasets, tmp_path_factory):
     ['shape', 'radius', 'extent', 'aspect_ratio', 'minvoxels', 'subsample', 'onepass'],
 )
 def test_dwidenoise2_has_no_kernel_options(tmp_path, kernel_option):
-    """The kernel and subsampling come from the schedule, not from command-line options."""
+    """Test that the kernel and subsampling come from the schedule, not command-line options."""
     in_file = tmp_path / 'dwi.nii.gz'
     in_file.touch()
 
@@ -93,7 +93,7 @@ _SCHEDULE_ROWS = [
 
 
 def test_dwidenoise2_passes_schedule(tmp_path, monkeypatch):
-    """Point -schedule at the file in the working directory without writing it."""
+    """Test that -schedule points at the file in the working directory without writing it."""
     monkeypatch.chdir(tmp_path)
     in_file = tmp_path / 'dwi.nii.gz'
     in_file.touch()
@@ -105,7 +105,7 @@ def test_dwidenoise2_passes_schedule(tmp_path, monkeypatch):
 
 
 def test_dwidenoise2_writes_schedule_at_run_time(tmp_path, monkeypatch):
-    """Write the schedule rows into the execution directory before the command runs."""
+    """Test that schedule rows are written to the execution directory before the command runs."""
     from nipype.interfaces.base import CommandLine
     from nipype.interfaces.base.support import Bunch
 
@@ -147,7 +147,7 @@ def test_dwidenoise2_without_schedule_writes_nothing(tmp_path, monkeypatch):
 
 
 def test_dwidenoise2_rejects_a_schedule_name(tmp_path):
-    """Bundled schedule names are no longer passed through."""
+    """Test that bundled schedule names are no longer passed through."""
     in_file = tmp_path / 'dwi.nii.gz'
     in_file.touch()
 
@@ -156,7 +156,7 @@ def test_dwidenoise2_rejects_a_schedule_name(tmp_path):
 
 
 def test_dwidenoise2_formats_fslgrad(tmp_path):
-    """Pass the bvec and bval files to dwidenoise2 as a single -fslgrad option."""
+    """Test that the bvec and bval files are passed to dwidenoise2 as a single -fslgrad option."""
     in_file = tmp_path / 'dwi.nii.gz'
     bvec_file = tmp_path / 'dwi.bvec'
     bval_file = tmp_path / 'dwi.bval'
@@ -177,7 +177,7 @@ def test_dwidenoise2_formats_fslgrad(tmp_path):
     [('stable', '.', '-ants_'), ('dev', '_', '-ants.')],
 )
 def test_dwibiascorrect_ants_option_spelling(tmp_path, mrtrix_version, separator, rejected):
-    """Spell the N4 options the way the selected MRtrix3 expects.
+    """Test that the N4 options are spelled the way the selected MRtrix3 expects.
 
     3.0.x uses -ants.b and rejects the underscore form; the development branch
     renamed them to -ants_b and rejects the dot form. These options are emitted on
@@ -204,7 +204,7 @@ def test_dwibiascorrect_ants_option_spelling(tmp_path, mrtrix_version, separator
 
 
 def test_dwibiascorrect_defaults_to_stable_spelling(tmp_path):
-    """A bare DWIBiasCorrect() matches the released MRtrix3, like the CLI default."""
+    """Test that a bare DWIBiasCorrect() matches the released MRtrix3, like the CLI default."""
     in_file = tmp_path / 'dwi.nii.gz'
     in_file.touch()
 
@@ -214,7 +214,7 @@ def test_dwibiascorrect_defaults_to_stable_spelling(tmp_path):
 
 
 def test_mrdegibbs_dimensionality_is_optional(tmp_path):
-    """Leave -dimensionality off unless it is set, so the default stays 2D slice-wise."""
+    """Test that -dimensionality is left off unless set, so the default stays 2D slice-wise."""
     in_file = tmp_path / 'dwi.nii.gz'
     in_file.touch()
 
@@ -223,7 +223,7 @@ def test_mrdegibbs_dimensionality_is_optional(tmp_path):
 
 
 def test_mrdegibbs_report_handles_complex_input(monkeypatch, tmp_path):
-    """Generate the unringing report from complex-valued data, using the magnitude.
+    """Test that the unringing report uses the magnitude of complex-valued data.
 
     mrdegibbs on MRtrix3's development branch emits complex data when it is given
     complex data. nibabel's get_fdata() does not raise on a complex image: it emits a
@@ -374,7 +374,7 @@ def _dwibiascorrect_option_is_accepted(tmp_path, flag):
 def test_dwibiascorrect_options_are_accepted_by_the_real_binary(
     monkeypatch, tmp_path, mrtrix_version
 ):
-    """Ask the selected dwibiascorrect whether it knows the options QSIPrep passes.
+    """Test that the selected dwibiascorrect accepts the options QSIPrep passes.
 
     This is the only test that can catch the -ants.b/-ants_b break, because it needs
     a real MRtrix3 to parse the option. A bogus-option control proves the probe can

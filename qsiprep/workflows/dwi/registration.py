@@ -38,11 +38,11 @@ def init_rotation_search_wf(transform='Rigid', name='rotation_search_wf'):
 
     Parameters
     ----------
-    transform : str
+    transform : str, optional
         'Rigid', 'Similarity' or 'Affine': the transform ``antsAI`` optimizes
         at each candidate orientation. Use 'Rigid' between images of the same
         subject and 'Similarity' against a template, where scale is unknown.
-    name : str
+    name : str, optional
         Name of workflow (default: ``rotation_search_wf``)
 
     Inputs
@@ -120,7 +120,7 @@ def init_structural_to_b0_alignment_wf(name='structural_to_b0_alignment_wf'):
 
     Parameters
     ----------
-    name : str
+    name : str, optional
         Name of workflow (default: ``structural_to_b0_alignment_wf``)
 
     Inputs
@@ -169,7 +169,8 @@ def init_structural_to_b0_alignment_wf(name='structural_to_b0_alignment_wf'):
 def init_b0_to_anat_registration_wf(
     write_report=True, transform_type='Rigid', name='b0_anat_coreg'
 ):
-    """
+    """Build a workflow that registers a reference b0 image to T1 space.
+
     Calculates the registration between a reference b0 image and T1-space
     using `antsRegistration`, initialized by an ``antsAI`` rotation search
     so that large orientation differences between the dMRI and the
@@ -186,16 +187,12 @@ def init_b0_to_anat_registration_wf(
 
     Parameters
     ----------
-    mem_gb : float
-        Size of DWI file in GB
-    omp_nthreads : int
-        Maximum number of threads an individual process may use
-    name : str
-        Name of workflow (default: ``bold_reg_wf``)
-    transform_type : str
-        Either "Rigid" or "Affine"
-    write_report : bool
+    write_report : bool, optional
         Should a reportlet be written?
+    transform_type : str, optional
+        Either "Rigid" or "Affine"
+    name : str, optional
+        Name of workflow (default: ``b0_anat_coreg``)
 
     Inputs
     ------
@@ -224,7 +221,6 @@ def init_b0_to_anat_registration_wf(
         Boolean indicating whether BBR was rejected (mri_coreg registration returned)
     report
         svg reportlet for the coregistration
-
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -313,8 +309,9 @@ def init_b0_to_anat_registration_wf(
 
 
 def init_direct_b0_acpc_wf(write_report=True, name='b0_anat_coreg'):
-    """
-    Re-orients a b=0 image directly to AC-PC. A full affine registration is run,
+    """Build a workflow that re-orients a b=0 image directly to AC-PC.
+
+    A full affine registration is run,
     but only the rigid (translation + rotation) part is included.
 
     .. workflow::
@@ -326,45 +323,38 @@ def init_direct_b0_acpc_wf(write_report=True, name='b0_anat_coreg'):
                                     omp_nthreads=1,
                                     write_report=False)
 
-    **Parameters**
-        baby_mode : bool
-            Use the infant t1w brain as the reference volume
-        mem_gb : float
-            Size of DWI file in GB
-        omp_nthreads : int
-            Maximum number of threads an individual process may use
-        name : str
-            Name of workflow (default: ``bold_reg_wf``)
-        transform_type : str
-            Either "Rigid" or "Affine"
-        write_report : bool
-            Should a reportlet be written?
+    Parameters
+    ----------
+    write_report : bool, optional
+        Should a reportlet be written?
+    name : str, optional
+        Name of workflow (default: ``b0_anat_coreg``)
 
-    **Inputs**
+    Inputs
+    ------
+    ref_b0_brain
+        Reference image to which DWI series is aligned
+        If ``fieldwarp == True``, ``ref_bold_brain`` should be unwarped
+    t1_brain
+        Standard space brain, either adult or infant template
+    t1_seg
+        Segmentation of preprocessed structural image, including
+        gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
+    subjects_dir
+        FreeSurfer SUBJECTS_DIR
+    subject_id
+        FreeSurfer subject ID
 
-        ref_b0_brain
-            Reference image to which DWI series is aligned
-            If ``fieldwarp == True``, ``ref_bold_brain`` should be unwarped
-        t1_brain
-            Standard space brain, either adult or infant template
-        t1_seg
-            Segmentation of preprocessed structural image, including
-            gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
-        subjects_dir
-            FreeSurfer SUBJECTS_DIR
-        subject_id
-            FreeSurfer subject ID
-
-    **Outputs**
-
-        itk_b0_to_t1
-            Affine transform from ``ref_bold_brain`` to T1 space (ITK format)
-        itk_t1_to_b0
-            Affine transform from T1 space to DWI space (ITK format)
-        coreg_metric
-            Mattes score from the coregistration
-        report
-            svg reportlet for the coregistration
+    Outputs
+    -------
+    itk_b0_to_t1
+        Affine transform from ``ref_bold_brain`` to T1 space (ITK format)
+    itk_t1_to_b0
+        Affine transform from T1 space to DWI space (ITK format)
+    coreg_metric
+        Mattes score from the coregistration
+    report
+        svg reportlet for the coregistration
     """
     inputnode = pe.Node(
         niu.IdentityInterface(

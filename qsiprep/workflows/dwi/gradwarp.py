@@ -60,7 +60,7 @@ def _image_type_tags(metadata):
 
 
 def _warp_dim_for(metadata):
-    """Residual spatial distortion implied by one run's ImageType.
+    """Return the residual spatial distortion implied by one run's ImageType.
 
     DIS3D wins over DIS2D when both are present: it is the more-corrected
     claim, so it leaves the smaller residual.
@@ -74,7 +74,7 @@ def _warp_dim_for(metadata):
 
 
 def _is_ge(metadata):
-    """True when the DICOM Manufacturer field names GE.
+    """Check whether the DICOM Manufacturer field names GE.
 
     Free text from DICOM: 'GE MEDICAL SYSTEMS', 'SIEMENS', 'Philips Medical
     Systems'. Drives the z-origin shift TORTOISE applies for GE coefficients.
@@ -150,7 +150,7 @@ def _guard_ge_field(plan, unit):
 
 
 def _forced_warp_dim():
-    """``(warp_dim, flag)`` pinned by ``--force``, or ``(None, None)``.
+    """Return the ``(warp_dim, flag)`` pinned by ``--force``, or ``(None, None)``.
 
     ``validate_gradient_flags`` rejects the two ``--force gradwarp{1,3}D``
     values together at parse time; the check is repeated here because
@@ -263,7 +263,7 @@ _FORCED_CORRECTION_TEXT = {
 
 
 def _resampling_sentence():
-    """How many times the data were interpolated, which depends on the backend.
+    """Describe how many times the data were interpolated, which depends on the backend.
 
     Notes
     -----
@@ -297,7 +297,7 @@ def _resampling_sentence():
 
 
 def gradwarp_boilerplate(warp_dim, basis='metadata'):
-    """Methods text for the resolved plan and the selected HMC backend.
+    """Return methods text for the resolved plan and the selected HMC backend.
 
     A ``DIS3D`` unit gets no displacement field, so it gets no resampling or
     Jacobian sentence either -- there is nothing to have been combined with
@@ -322,7 +322,7 @@ _REPORT_TEXT = {
 
 
 def describe_gradient_correction(plan):
-    """One-line description of the resolved plan, for the HTML report."""
+    """Return a one-line description of the resolved plan, for the HTML report."""
     if plan is None:
         return 'none'
     if plan.basis == 'forced':
@@ -331,7 +331,7 @@ def describe_gradient_correction(plan):
 
 
 def is_displacement_field(gradient_file):
-    """True when ``--gradient-file`` is a ready-made ITK field, not coefficients.
+    """Check whether ``--gradient-file`` is a ready-made ITK field, not coefficients.
 
     TORTOISE dispatches on the extension itself (``TORTOISE.cxx:1943-2023``),
     but the standalone ``CreateNonlinearityDisplacementMap`` does not: it *is*
@@ -469,7 +469,7 @@ def init_gradwarp_wf(unit, name='gradwarp_wf'):
 
 
 def _sdc_interpolation():
-    """Interpolator for the gradwarp resampling nodes.
+    """Return the interpolator for the gradwarp resampling nodes.
 
     Matches the adjacent per-volume ``ApplyTransforms`` in ``hmc_sdc.py``, so
     ``--sloppy`` speeds these up the same way it speeds up everything else.

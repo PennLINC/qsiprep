@@ -1,4 +1,5 @@
-"""
+"""Head motion correction.
+
 Head motion correction
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -32,35 +33,38 @@ def init_dwiref_wf(
     num_iterations=2,
     name='dwiref_wf',
 ):
-    """Create an unbiased dwiref for a subject. This aligns the b=0 references
+    """Create an unbiased dwiref for a subject.
+
+    This aligns the b=0 references
     from all the scans of a subject. Can be rigid, affine or nonlinear (BSplineSyN).
+
+    The inputnode has one ``[workflow_name]_b0_template`` input for each input image
+    (there is no input called ``inputs_list``), and the outputnode has one
+    ``[workflow_name]_transform`` output for each input image, holding the transform
+    files to the dwiref.
 
     Parameters
     ----------
-    inputs_list: list of inputs
+    inputs_list : list of str
         List if identifiers for the input b=0 images.
     t1w_source_file : str
         Generalized anatomical image path that accounts for entities in all inputs.
-    transform: 'Rigid', 'Affine', 'BSplineSyN'
+    transform : {'Rigid', 'Affine', 'BSplineSyN'}, optional
         Which transform to ultimately use. If 'BSplineSyN', first 2 iterations of Affine will
         be run.
-    num_iterations: int
-        Default: 2.
+    num_iterations : int, optional
+        Number of template-building iterations. Default: 2.
+    name : str, optional
+        Name of workflow (default: ``dwiref_wf``)
 
     Inputs
     ------
-    [workflow_name]_image...
-        One input for each input image. There is no input called inputs_list
     t1w_image
 
     Outputs
     -------
-    [workflow_name]_transform
-        transform files to the dwiref
-
     dwiref_to_t1w_transform
         Transform from the b0
-
     """
     omp_nthreads = config.nipype.omp_nthreads
     workflow = Workflow(name=name)

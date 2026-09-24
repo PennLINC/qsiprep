@@ -21,28 +21,40 @@ def _coefficient_lines(text):
 
 
 def test_siemens_grad_axis_letter_is_last_character(tmp_path):
-    """TORTOISE drops the final character when parsing the coefficient."""
+    """Test that the axis letter is the last character on the line.
+
+    TORTOISE drops the final character when parsing the coefficient.
+    """
     text = write_siemens_grad(tmp_path / 'coeff.grad').read_text()
     for line in _coefficient_lines(text):
         assert line[-1] in 'xyz', line
 
 
 def test_siemens_grad_axis_letter_appears_exactly_once(tmp_path):
-    """The axis is chosen by searching the whole line for x, then y, then z."""
+    """Test that the axis letter appears exactly once on the line.
+
+    The axis is chosen by searching the whole line for x, then y, then z.
+    """
     text = write_siemens_grad(tmp_path / 'coeff.grad').read_text()
     for line in _coefficient_lines(text):
         assert sum(line.count(axis) for axis in 'xyz') == 1, line
 
 
 def test_siemens_grad_open_paren_position(tmp_path):
-    """find_first_of("(", 3, 3) requires the paren at index >= 3, and < 10."""
+    """Test the position of the opening parenthesis.
+
+    find_first_of("(", 3, 3) requires the paren at index >= 3, and < 10.
+    """
     text = write_siemens_grad(tmp_path / 'coeff.grad').read_text()
     for line in _coefficient_lines(text):
         assert 3 <= line.index('(') < 10, line
 
 
 def test_siemens_grad_r0_occupies_columns_one_to_five(tmp_path):
-    """R0 = atof(substr(1, 5)) * 1000, so 0.250 must sit at columns 1-5."""
+    """Test that R0 occupies columns 1-5.
+
+    R0 = atof(substr(1, 5)) * 1000, so 0.250 must sit at columns 1-5.
+    """
     text = write_siemens_grad(tmp_path / 'coeff.grad', r0_m=0.250).read_text()
     r0_lines = [ln for ln in text.splitlines() if '= R0' in ln]
     assert len(r0_lines) == 1
@@ -67,13 +79,19 @@ def test_itk_field_is_five_dimensional_vector_image(tmp_path):
 
 
 def test_itk_field_is_nonzero(tmp_path):
-    """A zero field would make a warp test pass for the wrong reason."""
+    """Test that the ITK field is non-zero.
+
+    A zero field would make a warp test pass for the wrong reason.
+    """
     img = nb.load(str(write_itk_field(tmp_path / 'field.nii')))
     assert np.abs(np.asanyarray(img.dataobj)).max() > 0
 
 
 def test_itk_field_carries_the_vector_intent(tmp_path):
-    """ANTs reads a 5D field lacking NIFTI_INTENT_VECTOR as all zeros."""
+    """Test that the ITK field carries the vector intent.
+
+    ANTs reads a 5D field lacking NIFTI_INTENT_VECTOR as all zeros.
+    """
     img = nb.load(str(write_itk_field(tmp_path / 'field.nii')))
     assert img.header.get_intent()[0] == 'vector'
 

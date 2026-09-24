@@ -1,16 +1,13 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
-Interfaces to deal with the various types of fieldmap sources
+"""Interfaces to deal with the various types of fieldmap sources.
 
-    .. testsetup::
+.. testsetup::
 
-        >>> tmpdir = getfixture('tmpdir')
-        >>> tmp = tmpdir.chdir() # changing to a temporary directory
-        >>> nb.Nifti1Image(np.zeros((90, 90, 60)), None, None).to_filename(
-        ...     tmpdir.join('epi.nii.gz').strpath)
-
-
+>>> tmpdir = getfixture('tmpdir')
+>>> tmp = tmpdir.chdir() # changing to a temporary directory
+>>> nb.Nifti1Image(np.zeros((90, 90, 60)), None, None).to_filename(
+...     tmpdir.join('epi.nii.gz').strpath)
 """
 
 import json
@@ -85,22 +82,23 @@ class B0RPEFieldmapOutputSpec(TraitedSpec):
 
 
 class B0RPEFieldmap(SimpleInterface):
-    """Prepares b=0 EPI fieldmaps to be used for distortion correction.
+    """Prepare b=0 EPI fieldmaps to be used for distortion correction.
+
     Some siemens scanners are unable to make a b=0 image by itself, and will produce
     a dwi series (with bvals and bvecs). This interface removes the b>0 volumes and
-    writes the b=0 images in the resuested orientation (LAS+ for FSL, or LPS+ for
+    writes the b=0 images in the requested orientation (LAS+ for FSL, or LPS+ for
     everything else).
 
-    **Inputs**
-        b0_file: str
-            List of paths to b=0 epi fieldmaps in fmaps/ or an RPE series in dwi/
-        output_3d_images: bool
-            Write outputs as multiple 3d images
-        max_num_b0s: int
-            Include a maximum number of b=0 images in the outputs
-        orientation: str
-            Write the outputs in either 'LAS' or 'LPS' orientation
-
+    Inputs
+    ------
+    b0_file : str
+        List of paths to b=0 epi fieldmaps in fmaps/ or an RPE series in dwi/
+    output_3d_images : bool
+        Write outputs as multiple 3d images
+    max_num_b0s : int
+        Include a maximum number of b=0 images in the outputs
+    orientation : str
+        Write the outputs in either 'LAS' or 'LPS' orientation
     """
 
     input_spec = B0RPEFieldmapInputSpec
@@ -178,9 +176,7 @@ class FieldToRadSOutputSpec(TraitedSpec):
 
 
 class FieldToRadS(SimpleInterface):
-    """
-    The FieldToRadS converts from arbitrary units to rad/s
-    """
+    """Convert a fieldmap from arbitrary units to rad/s."""
 
     input_spec = FieldToRadSInputSpec
     output_spec = FieldToRadSOutputSpec
@@ -205,9 +201,7 @@ class FieldToHzOutputSpec(TraitedSpec):
 
 
 class FieldToHz(SimpleInterface):
-    """
-    The FieldToHz converts from arbitrary units to Hz
-    """
+    """Convert a fieldmap from arbitrary units to Hz."""
 
     input_spec = FieldToHzInputSpec
     output_spec = FieldToHzOutputSpec
@@ -220,7 +214,7 @@ class FieldToHz(SimpleInterface):
 
 
 def _sphere_footprint(radius_mm, zooms):
-    """Boolean spherical footprint of the given mm radius on a voxel grid.
+    """Build a boolean spherical footprint of the given mm radius on a voxel grid.
 
     A voxel is included when the physical distance from its center to the kernel
     center is within ``radius_mm`` (so anisotropic voxels give an ellipsoidal
@@ -372,7 +366,7 @@ class FieldmapToVSM(SimpleInterface):
 
 
 def _despike_2d(data, threshold, mask=None):
-    """Conditional 2D median despike of a fieldmap.
+    """Apply a conditional 2D median despike to a fieldmap.
 
     Cleans isolated spikes left by phase unwrapping before the fieldmap edge is
     tidied up. Per slice along the 3rd voxel axis, each voxel is compared to its 8
@@ -476,9 +470,7 @@ class Phasediff2FieldmapOutputSpec(TraitedSpec):
 
 
 class Phasediff2Fieldmap(SimpleInterface):
-    """
-    Convert a phase difference map into a fieldmap in Hz
-    """
+    """Convert a phase difference map into a fieldmap in Hz."""
 
     input_spec = Phasediff2FieldmapInputSpec
     output_spec = Phasediff2FieldmapOutputSpec
@@ -505,9 +497,7 @@ class Phases2FieldmapOutputSpec(TraitedSpec):
 
 
 class Phases2Fieldmap(SimpleInterface):
-    """
-    Convert a phase1, phase2 into a difference map
-    """
+    """Convert a phase1, phase2 into a difference map."""
 
     input_spec = Phases2FieldmapInputSpec
     output_spec = Phases2FieldmapOutputSpec
@@ -523,8 +513,10 @@ class Phases2Fieldmap(SimpleInterface):
 
 
 def phases2fmap(phase_files, metadatas, newpath=None):
-    """Calculates a phasediff from two phase images. Assumes monopolar
-    readout."""
+    """Calculate a phasediff from two phase images.
+
+    Assumes monopolar readout.
+    """
     from copy import deepcopy
 
     import nibabel as nb
@@ -585,10 +577,7 @@ def phases2fmap(phase_files, metadatas, newpath=None):
 
 
 def get_ees(in_meta, in_file=None):
-    """
-    Calculate the *effective echo spacing* :math:`t_\\text{ees}`
-    for an input :abbr:`EPI (echo-planar imaging)` scan.
-
+    r"""Calculate the *effective echo spacing* :math:`t_\text{ees}` for an input EPI scan.
 
     There are several procedures to calculate the effective
     echo spacing. The basic one is that an ``EffectiveEchoSpacing``
@@ -601,18 +590,18 @@ def get_ees(in_meta, in_file=None):
     >>> get_ees(meta)
     0.00059
 
-    If the *total readout time* :math:`T_\\text{ro}` (``TotalReadoutTime``
+    If the *total readout time* :math:`T_\text{ro}` (``TotalReadoutTime``
     BIDS field) is provided, then the effective echo spacing can be
-    calculated reading the number of voxels :math:`N_\\text{PE}` along the
+    calculated reading the number of voxels :math:`N_\text{PE}` along the
     readout direction and the parallel acceleration
     factor of the EPI
 
       .. math ::
 
-           =  T_\\text{ro} \\,  (N_\\text{PE} / f_\\text{acc} - 1)^{-1}
+           =  T_\text{ro} \,  (N_\text{PE} / f_\text{acc} - 1)^{-1}
 
     where :math:`N_y` is the number of pixels along the phase-encoding direction
-    :math:`y`, and :math:`f_\\text{acc}` is the parallel imaging acceleration factor
+    :math:`y`, and :math:`f_\text{acc}` is the parallel imaging acceleration factor
     (:abbr:`GRAPPA (GeneRalized Autocalibrating Partial Parallel Acquisition)`,
     :abbr:`ARC (Autocalibrating Reconstruction for Cartesian imaging)`, etc.).
 
@@ -622,9 +611,8 @@ def get_ees(in_meta, in_file=None):
     >>> get_ees(meta, in_file='epi.nii.gz')
     0.00059
 
-    Some vendors, like Philips, store different parameter names
-    (see http://dbic.dartmouth.edu/pipermail/mrusers/attachments/\
-20141112/eb1d20e6/attachment.pdf):
+    Some vendors, like Philips, store different parameter names (see
+    http://dbic.dartmouth.edu/pipermail/mrusers/attachments/20141112/eb1d20e6/attachment.pdf):
 
     >>> meta = {'WaterFatShift': 8.129,
     ...         'MagneticFieldStrength': 3,
@@ -632,9 +620,7 @@ def get_ees(in_meta, in_file=None):
     ...         'ParallelReductionFactorInPlane': 2}
     >>> get_ees(meta, in_file='epi.nii.gz')
     0.00041602630141921826
-
     """
-
     import nibabel as nb
 
     from qsiprep.interfaces.fmap import _get_pe_index
@@ -667,10 +653,7 @@ def get_ees(in_meta, in_file=None):
 
 
 def get_trt(in_meta, in_file=None):
-    """
-    Calculate the *total readout time* for an input
-    :abbr:`EPI (echo-planar imaging)` scan.
-
+    r"""Calculate the *total readout time* for an input :abbr:`EPI (echo-planar imaging)` scan.
 
     There are several procedures to calculate the total
     readout time. The basic one is that a ``TotalReadoutTime``
@@ -682,15 +665,15 @@ def get_trt(in_meta, in_file=None):
     >>> get_trt(meta)
     0.02596
 
-    If the *effective echo spacing* :math:`t_\\text{ees}`
+    If the *effective echo spacing* :math:`t_\text{ees}`
     (``EffectiveEchoSpacing`` BIDS field) is provided, then the
     total readout time can be calculated reading the number
-    of voxels along the readout direction :math:`T_\\text{ro}`
-    and the parallel acceleration factor of the EPI :math:`f_\\text{acc}`.
+    of voxels along the readout direction :math:`T_\text{ro}`
+    and the parallel acceleration factor of the EPI :math:`f_\text{acc}`.
 
       .. math ::
 
-          T_\\text{ro} = t_\\text{ees} \\, (N_\\text{PE} / f_\\text{acc} - 1)
+          T_\text{ro} = t_\text{ees} \, (N_\text{PE} / f_\text{acc} - 1)
 
     >>> meta = {'EffectiveEchoSpacing': 0.00059,
     ...         'PhaseEncodingDirection': 'j-',
@@ -706,9 +689,7 @@ def get_trt(in_meta, in_file=None):
     ...         'ParallelReductionFactorInPlane': 2}
     >>> get_trt(meta, in_file='epi.nii.gz')
     0.018721183563864822
-
     """
-
     # Use case 1: TRT is defined
     trt = in_meta.get('TotalReadoutTime', None)
     if trt is not None:
@@ -745,8 +726,7 @@ def _get_pe_index(meta):
 
 
 def _torads(in_file, fmap_range=None, newpath=None):
-    """
-    Convert a field map to rad/s units
+    """Convert a field map to rad/s units.
 
     If fmap_range is None, the range of the fieldmap
     will be automatically calculated.
@@ -772,7 +752,7 @@ def _torads(in_file, fmap_range=None, newpath=None):
 
 
 def _tohz(in_file, range_hz, newpath=None):
-    """Convert a field map to Hz units"""
+    """Convert a field map to Hz units."""
     from math import pi
 
     import nibabel as nb
@@ -789,14 +769,13 @@ def _tohz(in_file, range_hz, newpath=None):
 
 
 def phdiff2fmap(in_file, delta_te, newpath=None):
-    r"""
-    Converts the input phase-difference map into a fieldmap in Hz,
-    using the eq. (1) of :footcite:t:`hutton2002`:
+    r"""Convert the input phase-difference map into a fieldmap in Hz.
+
+    Uses eq. (1) of :footcite:t:`hutton2002`:
 
     .. math::
 
         \Delta B_0 (\text{T}^{-1}) = \frac{\Delta \Theta}{2\pi\gamma \Delta\text{TE}}
-
 
     In this case, we do not take into account the gyromagnetic ratio of the
     proton (:math:`\gamma`), since it will be applied inside TOPUP:
@@ -805,10 +784,9 @@ def phdiff2fmap(in_file, delta_te, newpath=None):
 
         \Delta B_0 (\text{Hz}) = \frac{\Delta \Theta}{2\pi \Delta\text{TE}}
 
-    **References**
-
+    References
+    ----------
     .. footbibliography::
-
     """
     import math
 
@@ -828,7 +806,7 @@ def phdiff2fmap(in_file, delta_te, newpath=None):
 
 
 def _delta_te(in_values, te1=None, te2=None):
-    """Read :math:`\\Delta_\text{TE}` from BIDS metadata dict"""
+    r"""Read :math:`\Delta_\text{TE}` from BIDS metadata dict."""
     if isinstance(in_values, float):
         te2 = in_values
         te1 = 0.0
@@ -884,21 +862,20 @@ def topup_inputs_from_4d_file(
     Here, distortion group uses the FSL definition of a phase encoding direction and
     total readout time, as specified in the datain file used by TOPUP (i.e. "0 -1 0 0.087").
 
-    **Parameters**
-
-        nii_file : Nibabel image
-            A 4D Image
-        b0_indices: array-like
-            indices into nii_file that can be used by topup
-        bids_origin_files: list
-            A list with the original bids file of each image in ``nii_file``. This is
-            necessary because merging may have happened earlier in the pipeline
-        max_per_spec: int
-            The maximum number of b=0 images to extract from a PE direction / image set
-
-
+    Parameters
+    ----------
+    nii_file : Nibabel image
+        A 4D Image
+    b0_indices : array-like
+        indices into nii_file that can be used by topup
+    bids_origin_files : list, optional
+        A list with the original bids file of each image in ``nii_file``. This is
+        necessary because merging may have happened earlier in the pipeline
+    image_source : str, optional
+        Description of where the images came from, used in the generated report text.
+    max_per_spec : int, optional
+        The maximum number of b=0 images to extract from a PE direction / image set
     """
-
     # Start with the DWI file. Determine which images are b=0
     if not len(b0_indices):
         raise RuntimeError('No b=0 images available for TOPUP.')
@@ -961,12 +938,10 @@ def add_epi_fmaps_to_dwi_b0s(epi_fmaps, b0_threshold, max_per_spec, dwi_spec_lin
     from files in the fmap/ directory can be added to those already extracted from the
     DWI series.
 
-    Examples:
-    ---------
-
+    Examples
+    --------
     >>> epi_fmaps = ["/data/sub-1/fmap/sub-1_dir-AP_epi.nii.gz",
     ...              "/data/sub-1/fmap/sub-1_dir-PA_epi.nii.gz"]
-
     """
     # Extract b=0 images as if we were only pulling images from epi fmaps.
     fmaps_4d, fmap_b0_indices, fmap_original_files = load_epi_dwi_fieldmaps(
@@ -1399,14 +1374,13 @@ def plot_pepolar(
     overlay=None,
     overlay_params=None,
 ):
-    """
-    Plot the foreground and background views.
+    """Plot the foreground and background views.
+
     Default order is: axial, coronal, sagittal
 
     Updated version from sdcflows and different from in niworkflows.viz.utils
     so that the contour lines never move. This is accomplished by making an empty
     image in the grid of the segmentation image and using this as the background.
-
     """
     plot_params = plot_params or {}
     blip_down_plot_params = blip_down_plot_params or {}
@@ -1503,14 +1477,13 @@ def plot_fa_reg(
     label=None,
     compress='auto',
 ):
-    """
-    Plot the foreground and background views.
+    """Plot the foreground and background views.
+
     Default order is: axial, coronal, sagittal
 
     Updated version from sdcflows and different from in niworkflows.viz.utils
     so that the contour lines never move. This is accomplished by making an empty
     image in the grid of the segmentation image and using this as the background.
-
     """
     plot_params = {'vmin': 0.01, 'vmax': 0.85, 'cmap': 'gray'}
     if cuts is None:

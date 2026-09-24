@@ -1,11 +1,6 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
-Interfaces for image denoising
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-
-"""
+"""Interfaces for image denoising."""
 
 import os
 
@@ -171,6 +166,9 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
         self._calculate_nmse(input_dwi, denoised_nii)
 
     def _get_plotting_images(self):
-        """Implemented in subclasses to return the original image, the denoised image,
-        and optionally an image created during the denoieing step."""
+        """Return the images to plot in the report.
+
+        Implemented in subclasses to return the original image, the denoised image,
+        and optionally an image created during the denoising step.
+        """
         raise NotImplementedError()

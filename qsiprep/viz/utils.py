@@ -54,11 +54,11 @@ def plot_denoise(
     overlay=None,
     overlay_params=None,
 ):
-    """
-    Plot the foreground and background views.
-    Default order is: axial, coronal, sagittal
+    """Plot the foreground and background views.
 
-    Updated version from sdcflows
+    Default order is: axial, coronal, sagittal.
+
+    Updated version from sdcflows.
     """
     plot_params = plot_params or {}
     highb_plot_params = highb_plot_params or {}
@@ -149,9 +149,7 @@ def plot_acpc(
     label=None,
     compress='auto',
 ):
-    """
-    Plot the results of an AC-PC transformation.
-    """
+    """Plot the results of an AC-PC transformation."""
     plot_params = plot_params or {}
 
     # Do the low-b image first
@@ -250,7 +248,7 @@ def sdc_warp_display_planes(disp_ras, affine):
 
 
 def _glyph_slice(disp_ras, mag, b0, affine, slice_axis, sl, vox_to_ras):
-    """Background, physical mesh, in-plane displacement components for one slice."""
+    """Return background, physical mesh, in-plane displacement components for one slice."""
     inplane = sorted((a for a in range(3) if a != slice_axis), key=lambda a: vox_to_ras[a])
     h_ax, v_ax = inplane  # voxel axes -> horizontal, vertical
     h_ras, v_ras = vox_to_ras[h_ax], vox_to_ras[v_ax]
@@ -279,7 +277,7 @@ def _glyph_slice(disp_ras, mag, b0, affine, slice_axis, sl, vox_to_ras):
 
 
 def _glyph_slice_positions(b0, mag, slice_axis, n):
-    """``n`` slice indices spread over the part of the brain that carries displacement."""
+    """Pick ``n`` slice indices spread over the part of the brain that carries displacement."""
     others = tuple(a for a in range(3) if a != slice_axis)
     brain = (b0 > 0.1 * b0.max()).sum(axis=others)
     valid = np.where((brain > brain.max() * 0.15) & (mag.sum(axis=others) > 0))[0]
@@ -385,11 +383,11 @@ def plot_sdc_warp(warp_file, b0_ref, out_file, n_slices=3, step=4, title=None):
         b=0 image on the same grid, drawn underneath.
     out_file : str
         Output figure path.
-    n_slices : int
+    n_slices : int, optional
         Slices per plane.
-    step : int
+    step : int, optional
         Voxels between arrows.
-    title : str, optional
+    title : str or None, optional
         Figure title.
 
     Returns

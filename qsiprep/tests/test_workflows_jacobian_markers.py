@@ -1,4 +1,4 @@
-"""Integration-marker Jacobian gating, verified by workflow construction.
+r"""Integration-marker Jacobian gating, verified by workflow construction.
 
 Task 12 updated 10 fixture ``_outputs.txt`` files by *inferring* from each
 integration test's CLI flags whether QSIPrep would write a
@@ -17,7 +17,7 @@ For every integration marker whose CLI flags could be identified in
 ``--hmc-method`` -- ``init_fsl_hmc_wf`` for ``eddy``,
 ``init_qsiprep_hmcsdc_wf`` for ``shoreline``, ``init_diffprep_hmc_wf`` for
 ``tortoise`` -- under that test's configuration, using synthetic
-``PreprocUnit``\\ s from ``qsiprep.tests.preproc_factory`` -- no BIDS layout,
+``PreprocUnit``\ s from ``qsiprep.tests.preproc_factory`` -- no BIDS layout,
 no data download, no Docker. Matching the dispatch matters: an earlier
 version of this module built ``init_fsl_hmc_wf`` (the eddy path) for
 ``maternal_brain_project``, which actually runs ``--hmc-method=shoreline`` and
@@ -188,7 +188,7 @@ def _cfg(hmc_method, sdc_method, sloppy):
 
 
 def _write_dwi(tmp_path, name, nvols=6):
-    """A tiny valid 4D DWI (+ .bval/.bvec) so merge/split nodes can build."""
+    """Write a tiny valid 4D DWI (+ .bval/.bvec) so merge/split nodes can build."""
     path = tmp_path / name
     nb.Nifti1Image(np.zeros((4, 4, 4, nvols), dtype=np.int16), np.eye(4)).to_filename(str(path))
     stem = str(path).split('.nii')[0]
@@ -205,7 +205,7 @@ def _rpe_unit(tmp_path, method):
 
 
 def _has_real_fieldwarps(wf):
-    """Whether ``outputnode.to_dwi_ref_warps`` is wired from a real warp source.
+    """Check whether ``outputnode.to_dwi_ref_warps`` is wired from a real warp source.
 
     Returns ``(is_real, source_node_name)``. ``source_node_name`` is ``None``
     if nothing at all is connected to that field.
@@ -223,7 +223,7 @@ def _has_real_fieldwarps(wf):
 
 
 def _fixture_lists_jacobian(name):
-    """None if ``<name>_outputs.txt`` doesn't exist; else whether it lists the map."""
+    """Return whether ``<name>_outputs.txt`` lists the map, or None if it doesn't exist."""
     path = Path(get_test_data_path()) / f'{name}_outputs.txt'
     if not path.exists():
         return None
@@ -231,7 +231,9 @@ def _fixture_lists_jacobian(name):
 
 
 def test_dsdti_synfmap_writes_jacobian(tmp_path):
-    """``--ignore fieldmaps --sdc-anat-reference=invt1w`` -> fieldmap-less SyN-SDC.
+    """Test that dsdti_synfmap (fieldmap-less SyN-SDC) writes the Jacobian.
+
+    ``--ignore fieldmaps --sdc-anat-reference=invt1w`` -> fieldmap-less SyN-SDC.
 
     ``sdc_method='syn'`` below is config plumbing for ``_cfg``, not a mirror of
     the real marker's CLI: ``test_dsdti_synfmap`` never passes ``--sdc-method``
@@ -261,7 +263,9 @@ def test_dsdti_synfmap_writes_jacobian(tmp_path):
 
 
 def test_forrest_gump_writes_no_jacobian(monkeypatch):
-    """``test_forrest_gump`` passes no ``--hmc-method``, so it defaults to eddy
+    """Test that forrest_gump writes no Jacobian.
+
+    ``test_forrest_gump`` passes no ``--hmc-method``, so it defaults to eddy
     with a GRE (phasediff) fieldmap -> ``init_fsl_hmc_wf``'s GRE branch, which
     hands the field to eddy (``--field``). eddy applies and Jacobian-modulates it
     internally, as it does TOPUP's field, so QSIPrep holds no weight map.
@@ -288,7 +292,9 @@ def test_forrest_gump_writes_no_jacobian(monkeypatch):
 
 
 def test_maternal_brain_project_writes_jacobian(monkeypatch):
-    """``test_maternal_brain_project`` passes ``--hmc-method=shoreline``
+    """Test that maternal_brain_project writes the Jacobian.
+
+    ``test_maternal_brain_project`` passes ``--hmc-method=shoreline``
     (``qsiprep/tests/test_cli.py:762``), which ``base.py``'s ``hmc_tool``
     dispatch (around line 267) routes to ``init_qsiprep_hmcsdc_wf`` --
     *not* ``init_fsl_hmc_wf``/``GatherEddyInputs``, which only exist on the
@@ -330,7 +336,9 @@ def test_maternal_brain_project_writes_jacobian(monkeypatch):
 
 
 def test_shoreline_no_fieldmap_has_no_real_fieldwarps(tmp_path):
-    """Pins the SHORELine backend's own provably-empty source.
+    """Test that SHORELine without a fieldmap has no real fieldwarps.
+
+    This pins the SHORELine backend's own provably-empty source.
 
     This is a live marker check. ``dwiref`` runs
     --hmc-method=shoreline over two sessions that each hold one phase-encoding
@@ -362,7 +370,9 @@ def test_shoreline_no_fieldmap_has_no_real_fieldwarps(tmp_path):
 
 @pytest.mark.parametrize('method', [CorrectionMethod.SYNB0, CorrectionMethod.T2WREG])
 def test_shoreline_fieldmapless_has_no_real_fieldwarps(method):
-    """C2 regression: SHORELine + a fieldmap-less method (SYNB0/T2Wreg) is
+    """Test that SHORELine with a fieldmap-less method has no real fieldwarps (C2).
+
+    C2 regression: SHORELine + a fieldmap-less method (SYNB0/T2Wreg) is
     still a ``unit.method is not None`` case, but ``init_sdc_wf``'s own
     ``does_sdc`` gate (``qsiprep/workflows/fieldmap/base.py:114-115``,
     ``unit.has_scanner_measured_fieldmap or unit.is_nipreps_syn``) is False
@@ -400,7 +410,7 @@ def test_shoreline_fieldmapless_has_no_real_fieldwarps(method):
 
 
 def test_drbuddi_rpe_writes_jacobian(tmp_path):
-    """``--sdc-method=drbuddi`` on a blip-up/blip-down series."""
+    """Test that ``--sdc-method=drbuddi`` on a blip-up/blip-down series writes the Jacobian."""
     _cfg(hmc_method='eddy', sdc_method='drbuddi', sloppy=True)
     from qsiprep.workflows.dwi.fsl import init_fsl_hmc_wf
 
@@ -416,7 +426,9 @@ def test_drbuddi_rpe_writes_jacobian(tmp_path):
 
 
 def test_diffprep_writes_no_jacobian(tmp_path):
-    """No fieldmap, no T2w, and ``--sloppy`` forces DIFFPREP's motion-only mode.
+    """Test that the diffprep marker writes no Jacobian.
+
+    No fieldmap, no T2w, and ``--sloppy`` forces DIFFPREP's motion-only mode.
 
     Neither factor ``ComposeJacobianWeights`` can use is real here: there is
     no SDC warp (the fieldmap-less HMC-only branch never touches
@@ -443,7 +455,7 @@ def test_diffprep_writes_no_jacobian(tmp_path):
 
 
 def test_diffprep_drbuddi_writes_jacobian(tmp_path):
-    """TORTOISE DIFFPREP + DRBUDDI on an ``epi`` fieldmap.
+    """Test that TORTOISE DIFFPREP + DRBUDDI on an ``epi`` fieldmap writes the Jacobian.
 
     The SDC warp is real even though ``--sloppy`` still disables the
     eddy-current component (``correction_mode='motion'``).
@@ -468,7 +480,7 @@ def test_diffprep_drbuddi_writes_jacobian(tmp_path):
 
 
 def test_diffprep_quadratic_records_eddy_current_applied(tmp_path):
-    """Non-``--sloppy`` TORTOISE DRBUDDI: both 'sdc' and 'eddy-current' apply.
+    """Test that non-``--sloppy`` TORTOISE DRBUDDI records both 'sdc' and 'eddy-current'.
 
     ``diffprep_cfg``'s default ``correction_mode`` is ``'quadratic'``
     (``qsiprep/workflows/dwi/diffprep.py:85``), only downgraded to
@@ -489,7 +501,9 @@ def test_diffprep_quadratic_records_eddy_current_applied(tmp_path):
 
 
 def test_dsdti_topup_only_branch_has_no_jacobian(tmp_path):
-    """Structural sanity check of the branch every other fixture excludes it for.
+    """Test that the dsdti_topup (eddy + TOPUP-only) branch has no Jacobian.
+
+    This is a structural sanity check of the branch every other fixture excludes it for.
 
     No ``dsdti_topup`` test function exists (confirmed by grepping
     ``test_cli.py`` for ``@pytest.mark.dsdti_topup``), so this does not gate
@@ -541,7 +555,9 @@ _LSR_EDDY_ARGS = {
 
 
 def test_lsr_records_susceptibility_only_when_topup_is_the_sdc_method(tmp_path):
-    """F2 regression: ``--resamp=lsr`` always leaves 'eddy-current'
+    """Test that 'lsr' records susceptibility only when TOPUP is the SDC method (F2).
+
+    F2 regression: ``--resamp=lsr`` always leaves 'eddy-current'
     unmodulated (eddy has baked its own resampling in and exports nothing to
     weight from it), but 'susceptibility' must be recorded as unmodulated
     only when TOPUP is actually this run's susceptibility source.

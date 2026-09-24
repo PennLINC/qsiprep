@@ -1,11 +1,9 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
-Handling confounds
-^^^^^^^^^^^^^^^^^^
+"""Handling confounds.
 
-    >>> import os
-    >>> import pandas as pd
+>>> import os
+>>> import pandas as pd
 
 """
 
@@ -50,10 +48,7 @@ class GatherConfoundsOutputSpec(TraitedSpec):
 
 
 class GatherConfounds(SimpleInterface):
-    """
-    Combine various sources of confounds in one TSV file
-
-    """
+    """Combine various sources of confounds in one TSV file."""
 
     input_spec = GatherConfoundsInputSpec
     output_spec = GatherConfoundsOutputSpec
@@ -78,7 +73,7 @@ class GatherConfounds(SimpleInterface):
 
 
 def _confounds_column_metadata(columns):
-    """Per-column descriptions for the confounds JSON sidecar.
+    """Build per-column descriptions for the confounds JSON sidecar.
 
     Motion columns are RAS+ (translation mm, rotation rad). The eddy-current
     columns are the raw per-volume field coefficients each backend fits; they are
@@ -128,10 +123,10 @@ def _gather_confounds(
     original_bvecs=None,
     denoising_confounds=None,
 ):
-    r"""
-    Load confounds from the filenames, concatenate together horizontally
-    and save new file.
+    r"""Load confounds from the filenames, concatenate them horizontally, and save a new file.
 
+    Examples
+    --------
     >>> from tempfile import TemporaryDirectory
     >>> tmpdir = TemporaryDirectory()
     >>> os.chdir(tmpdir.name)
@@ -152,7 +147,7 @@ def _gather_confounds(
     """
 
     def less_breakable(a_string):
-        """hardens the string to different envs (i.e. case insensitive, no whitespace, '#'"""
+        """Harden the string to different envs (i.e. case insensitive, no whitespace, '#')."""
         return ''.join(a_string.split()).strip('#')
 
     # Taken from https://stackoverflow.com/questions/1175208/

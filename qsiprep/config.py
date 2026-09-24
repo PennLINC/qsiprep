@@ -22,8 +22,7 @@
 #
 #     https://www.nipreps.org/community/licensing/
 #
-r"""
-A Python module to maintain unique, run-wide *QSIPrep* settings.
+r"""A Python module to maintain unique, run-wide *QSIPrep* settings.
 
 This module implements the memory structures to keep a consistent, singleton config.
 Settings are passed across processes via filesystem, and a copy of the settings for
@@ -85,9 +84,8 @@ The :py:mod:`config` is responsible for other conveniency actions.
   * Switching Python's :obj:`multiprocessing` to *forkserver* mode.
   * Set up a filter for warnings as early as possible.
   * Automated I/O magic operations. Some conversions need to happen in the
-    store/load processes (e.g., from/to :obj:`~pathlib.Path` \<-\> :obj:`str`,
+    store/load processes (e.g., from/to :obj:`~pathlib.Path` \<-\> ``str``,
     :py:class:`~bids.layout.BIDSLayout`, etc.)
-
 """
 
 import os
@@ -272,8 +270,7 @@ class _Config:
 
 
 class environment(_Config):
-    """
-    Read-only options regarding the platform and environment.
+    """Read-only options regarding the platform and environment.
 
     Crawls runtime descriptive settings (e.g.,
     execution environment, nipype and *QSIPrep* versions, etc.).
@@ -282,7 +279,6 @@ class environment(_Config):
     This config section is useful when reporting issues,
     and these variables are tracked whenever the user does not
     opt-out using the ``--notrack`` argument.
-
     """
 
     cpu_count = os.cpu_count()
@@ -332,7 +328,7 @@ class nipype(_Config):
     }
     """Settings for NiPype's execution plugin."""
     remove_unnecessary_outputs = True
-    """Clean up unused outputs after running"""
+    """Clean up unused outputs after running."""
     resource_monitor = False
     """Enable resource monitor."""
     stop_on_first_crash = True
@@ -393,7 +389,7 @@ class execution(_Config):
     bids_dir = None
     """An existing path to the dataset, which must be BIDS-compliant."""
     derivatives = {}
-    """Path(s) to search for pre-computed derivatives"""
+    """Path(s) to search for pre-computed derivatives."""
     bids_database_dir = None
     """Path to the directory containing SQLite database indices for the input BIDS dataset."""
     bids_description_hash = None
@@ -434,7 +430,7 @@ class execution(_Config):
     participant_label = None
     """List of participant identifiers that are to be preprocessed."""
     session_label = None
-    """List of session identifiers that are to be preprocessed"""
+    """List of session identifiers that are to be preprocessed."""
     processing_list = []
     """List of (subject_id, [session_label, ...]) to be preprocessed together."""
     skip_anat_based_spatial_normalization = False
@@ -593,7 +589,7 @@ class workflow(_Config):
     ignore = None
     """Ignore particular steps for *QSIPrep*."""
     infant = False
-    """Configure pipelines specifically for infant brains"""
+    """Configure pipelines specifically for infant brains."""
     dwiref_definition = None
     """Which dwiref coregistration targets: ``distortion-group`` or ``subject``."""
     dwiref_construction_iters = None
@@ -604,7 +600,7 @@ class workflow(_Config):
     """Which MRtrix3 installation to use: "stable" (a released version) or "dev"
     (the development branch, which is required for complex-valued ``mrdegibbs``)."""
     subject_anatomical_reference = None
-    """How should the anatomical space be defined: sessionwise, unbiased or first-lex"""
+    """How should the anatomical space be defined: sessionwise, unbiased or first-lex."""
     no_b0_harmonization = False
     """Skip re-scaling dwi scans to have matching b=0 intensities."""
     output_resolution = None
@@ -708,13 +704,11 @@ class loggers:
 
     @classmethod
     def init(cls):
-        """
-        Set the log level, initialize all loggers into :py:class:`loggers`.
+        """Set the log level, initialize all loggers into :py:class:`loggers`.
 
-            * Add new logger levels (25: IMPORTANT, and 15: VERBOSE).
-            * Add a new sub-logger (``cli``).
-            * Logger configuration.
-
+        * Add new logger levels (25: IMPORTANT, and 15: VERBOSE).
+        * Add a new sub-logger (``cli``).
+        * Logger configuration.
         """
         from nipype import config as ncfg
 
@@ -733,15 +727,15 @@ class loggers:
 
 
 class seeds(_Config):
-    """Initialize the PRNG and track random seed assignments"""
+    """Initialize the PRNG and track random seed assignments."""
 
     _random_seed = None
     master = None
-    """Master random seed to initialize the Pseudorandom Number Generator (PRNG)"""
+    """Master random seed to initialize the Pseudorandom Number Generator (PRNG)."""
     ants = None
-    """Seed used for antsRegistration, antsAI, antsMotionCorr"""
+    """Seed used for antsRegistration, antsAI, antsMotionCorr."""
     numpy = None
-    """Seed used by NumPy"""
+    """Seed used by NumPy."""
 
     @classmethod
     def init(cls):
@@ -756,14 +750,14 @@ class seeds(_Config):
 
 
 def _set_ants_seed():
-    """Fix random seed for antsRegistration, antsAI, antsMotionCorr"""
+    """Fix random seed for antsRegistration, antsAI, antsMotionCorr."""
     val = random.randint(1, 65536)
     os.environ['ANTS_RANDOM_SEED'] = str(val)
     return val
 
 
 def _set_numpy_seed():
-    """NumPy's random seed is independent from Python's `random` module"""
+    """Set NumPy's random seed, which is independent from Python's `random` module."""
     import numpy as np
 
     val = random.randint(1, 65536)
@@ -774,14 +768,14 @@ def _set_numpy_seed():
 def from_dict(settings, init=True, ignore=None):
     """Read settings from a flat dictionary.
 
-    Arguments
-    ---------
-    setting : dict
-        Settings to apply to any configuration
-    init : `bool` or :py:class:`~collections.abc.Container`
+    Parameters
+    ----------
+    settings : dict
+        Settings to apply to any configuration.
+    init : bool or :py:class:`~collections.abc.Container`, optional
         Initialize all, none, or a subset of configurations.
-    ignore : :py:class:`~collections.abc.Container`
-        Collection of keys in ``setting`` to ignore
+    ignore : :py:class:`~collections.abc.Container` or None, optional
+        Collection of keys in ``settings`` to ignore.
     """
 
     # Accept global True/False or container of configs to initialize
@@ -799,13 +793,13 @@ def from_dict(settings, init=True, ignore=None):
 def load(filename, skip=None, init=True):
     """Load settings from file.
 
-    Arguments
-    ---------
+    Parameters
+    ----------
     filename : :py:class:`os.PathLike`
         TOML file containing QSIPrep configuration.
-    skip : dict or None
-        Sets of values to ignore during load, keyed by section name
-    init : `bool` or :py:class:`~collections.abc.Container`
+    skip : dict or None, optional
+        Sets of values to ignore during load, keyed by section name.
+    init : bool or :py:class:`~collections.abc.Container`, optional
         Initialize all, none, or a subset of configurations.
     """
     from toml import loads

@@ -53,15 +53,15 @@ def read_nifti_sidecar(bids_file, sidecars=None):
 
     Parameters
     ----------
-    bids_file : :obj:`str`
+    bids_file : str
         Path to a file in a BIDS dataset.
-    sidecars : :obj:`dict`, optional
+    sidecars : dict, optional
         Mapping of file path to pre-read metadata (``PhaseEncodingDirection`` /
         ``TotalReadoutTime`` / ``SliceTiming``), used in preference to disk.
 
     Returns
     -------
-    :obj:`dict`
+    dict
         With keys ``PhaseEncodingDirection``, ``SliceTiming`` and
         ``TotalReadoutTime``. The latter two are ``None`` when unavailable.
 
@@ -104,26 +104,23 @@ acqp_lines = {
 
 
 def load_epi_dwi_fieldmaps(fmap_list, b0_threshold):
-    """Creates a 4D image of b=0s from a list of input images.
+    """Create a 4D image of b=0s from a list of input images.
 
-    Parameters:
-    -----------
-
-    fmap_list: list
+    Parameters
+    ----------
+    fmap_list : list
         List of paths to epi fieldmap images
-    b0_threshold: int
+    b0_threshold : int
         Maximum b value for an image to be considered a b=0
 
-    Returns:
-    --------
-
-    concatenated_images: spatial image
+    Returns
+    -------
+    concatenated_images : spatial image
         The b=0 volumes concatenated into a 4D image
-    b0_indices: list
+    b0_indices : list
         List of the indices in the concatenated images that contain usable images
-    original_files: list
+    original_files : list
         List of the original files where each b=0 image came from.
-
     """
     # Add in the rpe data, if it exists
     b0_indices = []
@@ -203,7 +200,7 @@ def eddy_inputs_from_dwi_files(origin_file_list, eddy_prefix, sidecars=None):
 
 
 def synb0_topup_config():
-    """The path of the TOPUP config tuned for a synthetic-b=0 input.
+    """Return the path of the TOPUP config tuned for a synthetic-b=0 input.
 
     The SynB0-DISCO distribution ships ``synb0.cnf`` at its root (``/opt/synb0``
     in the qsiprep containers). Resolved through ``SYNB0_ATLASES`` like the
@@ -244,7 +241,7 @@ def add_synthetic_b0_to_topup_inputs(
         here if its grid differs).
     cwd : str
         Directory the new files are written into.
-    smoothing_sigma_mm : float
+    smoothing_sigma_mm : float, optional
         Gaussian sigma (in mm) applied to the real b=0 volumes.
 
     Returns
@@ -305,8 +302,8 @@ def get_best_b0_topup_inputs_from(
     """Create a datain spec and a slspec from a concatenated dwi series.
 
     Create inputs for TOPUP that come from data in ``dwi/`` and epi fieldmaps in ``fmap/``.
-    The ``nii_file`` input may be the result of concatenating a number of scans with different
-    distortions present. The original source of each volume in ``nii_file`` is listed in
+    The ``dwi_file`` input may be the result of concatenating a number of scans with different
+    distortions present. The original source of each volume in ``dwi_file`` is listed in
     ``bids_origin_files``.
 
     The strategy is to select ``max_per_spec`` b=0 images from each distortion group.
@@ -318,22 +315,35 @@ def get_best_b0_topup_inputs_from(
 
     Parameters
     ----------
-    nii_file : str
+    dwi_file : str
         A 4D DWI Series
-    bval_file: str
-        indices into nii_file that can be used by topup
-    topup_prefix: str
-        file prefix for topup inputs
-    bids_origin_files: list
-        A list with the original bids file of each image in ``nii_file``. This is
+    bval_file : str or list of str
+        The b-values file (or files) for ``dwi_file``, used to find the b=0 volumes.
+    b0_threshold : int
+        Maximum b value for an image to be considered a b=0.
+    cwd : str
+        Directory the TOPUP inputs and b=0 selection files are written into.
+    bids_origin_files : list
+        A list with the original bids file of each image in ``dwi_file``. This is
         necessary because merging may have happened earlier in the pipeline
-    epi_fmaps:
+    epi_fmaps : list or None, optional
         A list of images from the fmaps/ directory.
-    max_per_spec: int
+    max_per_spec : int, optional
         The maximum number of b=0 images to extract from a PE direction / image set
-
+    topup_requested : bool, optional
+        Whether TOPUP will be run; if so, an error is raised when fewer than two
+        distortion groups are available (unless ``synb0_requested`` is set).
+    raw_image_sdc : bool, optional
+        Whether to extract the DWI b=0 volumes from the original BIDS files rather than
+        from ``dwi_file``.
+    sidecars : dict or None, optional
+        Mapping of file path to pre-read metadata, passed to :func:`read_nifti_sidecar`.
+    num_threads : int, optional
+        Number of threads used by ``SelectBestB0`` when scoring candidate b=0 images.
+    synb0_requested : bool, optional
+        Whether a synthetic distortion-free b=0 (SynB0-DISCO) will be appended
+        downstream as its own distortion group.
     """
-
     # Start with the DWI file. Determine which images are b=0 and where they came from
     dwi_b0_df = split_into_b0s_and_origins(
         b0_threshold,
@@ -499,8 +509,10 @@ def get_best_b0_topup_inputs_from(
 
 
 def relative_b0_index(b0_indices, original_files):
-    """Find the index of each b=0 image in its original imaging series
+    """Find the index of each b=0 image in its original imaging series.
 
+    Examples
+    --------
     >>> b0_indices = [0, 7, 11, 15, 17, 30, 37, 41, 45]
     >>> original_files = ["sub-1_dir-AP_dwi.nii.gz"] * 30 + ["sub-1_dir-PA_dwi.nii.gz"] * 30
     >>> print(
@@ -516,7 +528,6 @@ def relative_b0_index(b0_indices, original_files):
     ...                   "sub-1_dir-PA_dwi.nii.gz"] * 30
     >>> print(relative_b0_index(b0_indices, original_files))
     [0, 7, 11, 0, 2, 0, 7, 11, 15]
-
     """
     image_counts = defaultdict(int)
     ordered_files = []
@@ -611,7 +622,7 @@ def split_into_b0s_and_origins(
     bval_file=None,
     use_original_files=True,
 ):
-    """ """
+    """Write each b=0 volume to a 3D file and tabulate the BIDS file it came from."""
     b0_bids_files = []
     b0_nii_files = []
     full_img = load_img(img_file)

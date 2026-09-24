@@ -1,6 +1,7 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
+"""Phase Encoding POLARity (PEPOLAR) distortion correction workflows.
+
 .. _sdc_pepolar :
 
 Phase Encoding POLARity (*PEPOLAR*) techniques
@@ -25,7 +26,8 @@ from ..anatomical import init_synthstrip_wf
 
 
 def init_pepolar_unwarp_wf(dwi_meta, epi_fmaps, name='pepolar_unwarp_wf'):
-    """
+    """Build a workflow that estimates a displacements field from reverse-PE EPI files.
+
     This workflow takes in a set of EPI files with opposite phase encoding
     direction than the target file and calculates a displacements field
     (in other words, an ANTs-compatible warp file).
@@ -55,24 +57,22 @@ def init_pepolar_unwarp_wf(dwi_meta, epi_fmaps, name='pepolar_unwarp_wf'):
             dwi_meta={'PhaseEncodingDirection': 'j'},
             epi_fmaps=[('/dataset/sub-01/fmap/sub-01_epi.nii.gz', 'j-')])
 
-
     Inputs
-
-        in_reference
-            the reference image
-        in_reference_brain
-            the reference image skullstripped
-        in_mask
-            a brain mask corresponding to ``in_reference``
+    ------
+    in_reference
+        the reference image
+    in_reference_brain
+        the reference image skullstripped
+    in_mask
+        a brain mask corresponding to ``in_reference``
 
     Outputs
-
-        out_reference
-            the ``in_reference`` after unwarping
-        out_warp
-            the corresponding :abbr:`DFM (displacements field map)` compatible with
-            ANTs
-
+    -------
+    out_reference
+        the ``in_reference`` after unwarping
+    out_warp
+        the corresponding :abbr:`DFM (displacements field map)` compatible with
+        ANTs
     """
     dwi_file_pe = dwi_meta['PhaseEncodingDirection']
     omp_nthreads = config.nipype.omp_nthreads
@@ -149,7 +149,8 @@ directions, using `3dQwarp` @afni (AFNI {afni_ver}).
 
 
 def init_prepare_dwi_epi_wf(omp_nthreads, orientation='LPS', name='prepare_epi_wf'):
-    """
+    """Build a workflow that prepares a 3D b=0 reference for distortion estimation.
+
     This workflow takes in a set of dwi files with with the same phase
     encoding direction and returns a single 3D volume ready to be used in
     field distortion estimation. It removes b>0 volumes.

@@ -8,7 +8,7 @@ from qsiplan.methods import HmcMethod, SdcTool
 
 
 def t2w_sdc_enabled(selection):
-    """Whether the selected methods have a stage that can consume a T2w for SDC.
+    """Check whether the selected methods have a stage that can consume a T2w for SDC.
 
     DRBUDDI's multimodal ``--structural`` is reached whenever DRBUDDI is among
     the PEPOLAR tools; DIFFPREP's ``--epi T2Wreg`` covers the fieldmap-less
@@ -18,7 +18,7 @@ def t2w_sdc_enabled(selection):
 
 
 def t2w_available_for_sdc(subject_data, selection, anat_modality):
-    """Whether a T2w should drive susceptibility distortion correction.
+    """Check whether a T2w should drive susceptibility distortion correction.
 
     True only when the subject has a T2w, anatomical processing runs
     (``anat_modality`` != ``'none'``), and the selected methods actually have
@@ -41,6 +41,7 @@ def pe_readout_time(unit):
     Parameters
     ----------
     unit : qsiplan.adapters.PreprocUnit
+        The correction unit.
 
     Returns
     -------
@@ -63,6 +64,7 @@ def t2wreg_target(unit, t2w_sdc):
     Parameters
     ----------
     unit : qsiplan.adapters.PreprocUnit
+        The correction unit.
     t2w_sdc : bool
         Whether a T2w is available for SDC (honors --anat-modality and --ignore).
 
@@ -85,9 +87,10 @@ def sdc_warp_source(unit, t2w_sdc, gre_in_eddy=False):
     Parameters
     ----------
     unit : qsiplan.adapters.PreprocUnit
+        The correction unit.
     t2w_sdc : bool
         Whether a T2w is available for SDC.
-    gre_in_eddy : bool
+    gre_in_eddy : bool, optional
         Whether eddy applied the unit's GRE fieldmap itself
         (:func:`~qsiprep.utils.eddy_config.eddy_applies_gre`).
 

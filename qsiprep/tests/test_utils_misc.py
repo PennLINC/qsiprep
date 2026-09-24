@@ -57,7 +57,7 @@ def test_angle_between_finite_for_zero_vector():
 
 
 def test_dwidenoise2_config_keys_match_interface():
-    """Every key a --dwidenoise2-config file may set must be a trait on DWIDenoise2."""
+    """Test that every key a --dwidenoise2-config file may set is a trait on DWIDenoise2."""
     from qsiprep.interfaces.mrtrix import DWIDenoise2
     from qsiprep.utils.misc import _DWIDENOISE2_CONFIG_KEYS
 
@@ -66,7 +66,7 @@ def test_dwidenoise2_config_keys_match_interface():
 
 
 def test_describe_dwidenoise2_covers_defaults():
-    """Describe the methods that run by default, not only the requested parameters."""
+    """Test that the methods that run by default are described, not only requested parameters."""
     description = describe_dwidenoise2({}, complex_data=False)
 
     # The software, MP-PCA and the noise mapping paper are always applicable
@@ -91,7 +91,7 @@ def test_describe_dwidenoise2_covers_defaults():
 
 
 def test_describe_dwidenoise2_demodulation_is_complex_only():
-    """Only describe phase demodulation when there are phase data to demodulate."""
+    """Test that phase demodulation is described only when there are phase data to demodulate."""
     parameters = {'demodulate': 'apc'}
 
     assert '@pizzolato2020' in describe_dwidenoise2(parameters, complex_data=True)
@@ -115,7 +115,7 @@ def test_describe_dwidenoise2_demodulation_is_complex_only():
     ],
 )
 def test_describe_dwidenoise2_conditional_citations(parameters, expected, unexpected):
-    """Follow the conditions dwidenoise2 attaches to each citation in its own help."""
+    """Test that citations follow the conditions dwidenoise2 attaches to each in its own help."""
     description = describe_dwidenoise2(parameters, complex_data=True)
 
     assert expected in description
@@ -123,7 +123,7 @@ def test_describe_dwidenoise2_conditional_citations(parameters, expected, unexpe
 
 
 def test_describe_dwidenoise2_filter_follows_fixed_rank():
-    """Describe hard truncation when the rank is given rather than estimated."""
+    """Test that hard truncation is described when the rank is given rather than estimated."""
     description = describe_dwidenoise2({'fixed_rank': 12}, complex_data=True)
 
     assert 'hard truncation' in description
@@ -146,7 +146,7 @@ def test_describe_dwidenoise2_filter_follows_fixed_rank():
     ],
 )
 def test_check_denoise_window_warns_when_unused(caplog, denoise_method, window, expected):
-    """Warn when --dwidenoise-window cannot affect the selected denoising method."""
+    """Test that a warning is raised when --dwidenoise-window cannot affect the selected method."""
     from qsiprep.cli.parser import check_denoise_window
 
     with caplog.at_level(logging.WARNING, logger='cli'):
@@ -160,7 +160,7 @@ def test_check_denoise_window_warns_when_unused(caplog, denoise_method, window, 
 
 
 def test_check_denoise_window_errors_for_patch2self(caplog):
-    """patch2self never had a window, so an explicit one is reported as an error."""
+    """Test that an explicit window is an error for patch2self, which never had a window."""
     from qsiprep.cli.parser import check_denoise_window
 
     with caplog.at_level(logging.ERROR, logger='cli'):
@@ -170,7 +170,7 @@ def test_check_denoise_window_errors_for_patch2self(caplog):
 
 
 def test_denoise_window_help_mentions_dwidenoise2():
-    """Say in the help text that dwidenoise2 ignores the window."""
+    """Test that the help text says dwidenoise2 ignores the window."""
     parser = _build_parser()
     action = next(a for a in parser._actions if '--dwidenoise-window' in a.option_strings)
 
@@ -452,7 +452,10 @@ def test_format_dwidenoise2_schedule_fills_omitted_cells():
 
 
 def test_format_dwidenoise2_schedule_empty_rows_keep_a_header():
-    """An empty header would make dwidenoise2 reject the file."""
+    """Test that empty schedule rows keep a header.
+
+    An empty header would make dwidenoise2 reject the file.
+    """
     assert _schedule_table(format_dwidenoise2_schedule([{}, {}])) == [
         ['update_noise'],
         ['true'],
@@ -461,7 +464,10 @@ def test_format_dwidenoise2_schedule_empty_rows_keep_a_header():
 
 
 def test_format_dwidenoise2_schedule_accepts_list_triplets():
-    """nipype may hand the interface lists where the loader produced tuples."""
+    """Test that list triplets are accepted.
+
+    nipype may hand the interface lists where the loader produced tuples.
+    """
     text = format_dwidenoise2_schedule([{'spatial_subsample': [1, 1, 2], 'update_noise': True}])
 
     assert _schedule_table(text)[1] == ['1,1,2', 'true']
@@ -492,7 +498,7 @@ def test_describe_dwidenoise2_schedule(parameters, expected):
 
 @pytest.mark.parametrize('name', ['default', 'legacy', 'vlarge'])
 def test_describe_dwidenoise2_named_schedule(tmp_path, name):
-    """Name a bundled schedule rather than calling it custom."""
+    """Test that a bundled schedule is named rather than called custom."""
     params = load_dwidenoise2_config(_dwidenoise2_json(tmp_path, schedule=name))
 
     assert f'its bundled "{name}" schedule' in describe_dwidenoise2(params, complex_data=False)
@@ -523,7 +529,10 @@ def test_describe_dwidenoise2_noise_in(parameters, expected):
 
 @pytest.mark.parametrize('demodulate', ['linear', 'hann', 'apc'])
 def test_check_dwidenoise2_demodulation(demodulate):
-    """Reject phase demodulation of magnitude-only data, which dwidenoise2 cannot do."""
+    """Test that phase demodulation of magnitude-only data is rejected.
+
+    dwidenoise2 cannot demodulate magnitude-only data.
+    """
     with pytest.raises(ValueError, match='magnitude-only data'):
         check_dwidenoise2_demodulation({'demodulate': demodulate}, use_phase=False)
 
@@ -552,7 +561,7 @@ def test_eddy_modulates_distortion_only_for_jac():
 
 
 def test_shipped_default_config_modulates():
-    """The shipped eddy_params.json must keep jac, or the backend table lies."""
+    """Test that the shipped eddy_params.json keeps jac, or the backend table lies."""
     import json
 
     from qsiprep.data import load as load_data

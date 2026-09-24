@@ -38,7 +38,7 @@ def fake_shapes(monkeypatch):
 
 
 def test_sized_from_float32_geometry_not_input_dtype(tmp_path):
-    """uint16 input must still be budgeted as float32."""
+    """Test that uint16 input is still budgeted as float32."""
     from qsiprep.workflows.dwi.util import tortoise_convert_mem_gb
 
     shape = (128, 128, 69, 279)
@@ -52,7 +52,7 @@ def test_sized_from_float32_geometry_not_input_dtype(tmp_path):
 
 
 def test_covers_the_rss_the_kernel_actually_observed(fake_shapes):
-    """The CRASH geometry must budget at least the 1.69 GB seen at OOM."""
+    """Test that the CRASH geometry budgets at least the 1.69 GB seen at OOM."""
     from qsiprep.workflows.dwi.util import tortoise_convert_mem_gb
 
     # 128x128x69x279 uint16 -- the real acquisition, without writing 1 GB of zeros
@@ -84,7 +84,10 @@ def test_multiple_inputs_sum(fake_shapes):
 
 
 def test_unreadable_input_does_not_raise(tmp_path):
-    """Docs builds pass paths that do not exist."""
+    """Test that an unreadable input does not raise.
+
+    Docs builds pass paths that do not exist.
+    """
     from qsiprep.workflows.dwi.util import tortoise_convert_mem_gb
 
     assert tortoise_convert_mem_gb(['/nonexistent/fake.nii.gz']) > 0
