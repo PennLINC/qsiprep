@@ -176,6 +176,107 @@ data, it is recommended in the MRtrix3 documentation to apply MP-PCA before
 Gibbs unringing. B1 bias field correction and b=0 intensity harmonization
 do not have as specific requirements about their inputs so are run last.
 
+dwidenoise2 settings
+--------------------
+
+``--dwidenoise2-config`` takes a JSON file with settings for ``--denoise-method dwidenoise2``.
+Every key is optional, and unknown keys are an error.
+An omitted key takes the ``dwidenoise2`` default.
+
+Options
+```````
+
+Each of the following keys sets the ``dwidenoise2`` option of the same name,
+except ``filter_method``, which sets ``-filter``.
+
+================================  ==========================================================
+Key                               JSON value
+================================  ==========================================================
+``aggregator``                    ``"exclusive"``, ``"gaussian"``, ``"invl0"``, ``"rank"``
+                                  or ``"uniform"``
+``datatype``                      ``"float32"`` or ``"float64"``
+``debias_anchor``                 ``"sample"`` or ``"group_mean"``
+``decomposition``                 ``"bdcsvd"`` or ``"selfadjoint"``
+``demean``                        ``"none"``, ``"volume_groups"``, ``"shells"`` or ``"all"``
+``demod_axes``                    a list of non-negative integers, such as ``[0, 1]``
+``demodulate``                    ``"none"``, ``"linear"``, ``"hann"`` or ``"apc"``
+``estimator``                     ``"exp1"``, ``"exp2"``, ``"med"``, ``"mrm2023"`` or
+                                  ``"tbme2022"``
+``filter_method``                 ``"optshrink"``, ``"optthresh"`` or ``"truncate"``
+``fixed_rank``                    an integer of at least 1
+``noise_dof``                     an integer of at least 1
+``noise_in``                      a number of at least 0; noise-map files are not supported
+``preserve_noise_bias``           ``true`` or ``false``
+``vst_method``                    ``"none"``, ``"linear"``, ``"foi"``, ``"koay"`` or ``"mom"``
+``schedule``                      a list of iterations, or the name of a bundled schedule
+                                  (see below)
+================================  ==========================================================
+
+The ``dwidenoise2`` options ``-aggregator_fwhm`` and ``-rankpermm_in``
+and the diagnostic export options (such as ``-rank_output`` and ``-eigenspectra``)
+cannot be set.
+
+Phase demodulation (``demodulate`` other than ``"none"``) needs phase data,
+supplied as ``part-phase`` files alongside the magnitude data;
+setting it for magnitude-only data is an error.
+``noise_in`` only seeds the variance-stabilizing transform:
+any schedule iteration that updates the noise level re-estimates it.
+
+Schedules
+`````````
+
+``schedule`` lists the iterations of the multi-resolution noise estimation.
+Each iteration is an object whose keys are the columns of a ``dwidenoise2`` schedule file:
+
+- ``spatial_subsample``: a positive integer, or a list of three positive integers
+- ``kernel``: a string such as ``"aspect=2.0"``, ``"rmse=0.02"``, ``"rank"``, ``"radius=4"``,
+  ``"voxels=100"``, ``"cuboid=1x"`` or ``"rank_fixed"``
+- ``smooth_noise``, ``update_noise``: ``true`` or ``false``
+- ``temporal_subsample``: a number greater than 0 and at most 1
+- ``partitions``: a positive integer
+- ``max_partition_size``: a positive integer or ``"none"``
+
+An omitted column takes the ``dwidenoise2`` default.
+The last iteration is the reconstruction pass.
+
+.. code-block:: json
+
+  {
+    "estimator": "exp2",
+    "decomposition": "bdcsvd",
+    "schedule": [
+      {"spatial_subsample": 8, "kernel": "aspect=2.0", "update_noise": true},
+      {"spatial_subsample": [4, 4, 2], "kernel": "rmse=0.02", "update_noise": true},
+      {"spatial_subsample": 2, "kernel": "rank", "update_noise": false}
+    ]
+  }
+
+``schedule`` may instead name one of the schedules bundled with ``dwidenoise2``:
+``"default"``, ``"legacy"`` or ``"vlarge"``.
+``dwidenoise2`` recommends ``"vlarge"`` for series of more than 255 volumes.
+``"apriori"`` is not supported, because it needs ``-rankpermm_in``,
+and ``"fixedrank"`` is selected automatically when ``fixed_rank`` is set without a schedule.
+The bundled schedule files
+(https://github.com/tsalo/dwidenoise2/tree/cd08ec1a0f5eb1dbc9962f80c20c2bb3428c4f93/share/dwidenoise2/dwidenoise2),
+from the commit installed in the QSIPrep image, describe each column in detail.
+
+Without a ``schedule`` key, ``dwidenoise2`` uses its default schedule,
+except that it uses the single-iteration ``fixedrank`` schedule when ``fixed_rank`` is set
+and a single iteration when ``vst_method`` is ``"none"``.
+
+Checks
+``````
+
+QSIPrep checks the file when the command line is parsed,
+including the rules ``dwidenoise2`` applies to schedules
+and most of the rules it applies to combinations of options
+(for example, ``fixed_rank`` cannot be combined with ``estimator`` or ``noise_in``).
+Whether ``demodulate`` is compatible with the data is checked when the workflow is built,
+once QSIPrep knows whether phase data are available.
+At run time, QSIPrep writes the schedule to a file in the working directory,
+and copies the configuration file to ``sub-<label>/log/<run uuid>/dwidenoise2.json``
+in the output directory.
+
 
 Preprocessing HCP-style
 =======================
@@ -782,12 +883,18 @@ TORTOISE itself handles this.
 
 Susceptibility distortion correction (SDC) is estimated on gradwarp-corrected
 b=0/FA images whenever the resulting SDC warp is applied *after* gradwarp in
-the composed transform: the DRBUDDI, GRE fieldmap and SyN fieldmap-less
-branches, on every HMC backend.
-The one exception is ``eddy`` combined with ``TOPUP``: ``eddy`` resamples
-the raw data itself and applies the susceptibility field internally,
+the composed transform: the DRBUDDI, T2Wreg and SyN fieldmap-less branches,
+on every HMC backend.
+A GRE fieldmap is acquired with the same gradients as the DWI, so its content
+sits in the uncorrected frame whichever b=0 it is registered to.
+Its warp is therefore estimated on the raw b=0 and then composed with the
+gradwarp field and its inverse, which carries it exactly into the corrected
+frame.
+The exceptions are the fields ``eddy`` applies itself, from ``TOPUP`` or from a
+GRE fieldmap: ``eddy`` resamples the raw data itself and
+applies the susceptibility field internally,
 so both the field estimate and gradwarp are applied together at the very end,
-and estimating the TOPUP field on raw (rather than gradwarp-corrected) b=0 images
+and estimating the field on raw (rather than gradwarp-corrected) b=0 images
 is what keeps that single step internally consistent.
 
 The b=0 image that DWI-to-anatomical coregistration is estimated from is
@@ -839,19 +946,105 @@ since it addresses a completely separate problem
      matrix — and is recorded in the ``GradientDeviationOrientation`` key of
      the ``*_graddev.json`` sidecar.
 
-   - **TORTOISE's fieldmap-less T2Wreg path is not gradwarp-corrected.**
-     When ``--hmc-method tortoise`` is used with no fieldmap and a T2w
-     structural image is available, susceptibility distortion is estimated
-     by TORTOISE's own ``T2Wreg`` registration, running entirely inside the
-     ``TORTOISEProcess``/``DIFFPREP`` binary, so QSIPrep has no opportunity to
-     hand that binary a gradwarp-corrected image. Stock TORTOISE does not
-     gradwarp-correct it either: the code in ``EPIREG.cxx`` that is meant to do
-     so builds its filename from the ``--grad_nonlin`` argument rather than
-     from the field TORTOISE generates, and so cannot find the file (the
-     equivalent code in ``DRBUDDI.cxx`` has this fixed, with the old form left
-     commented out beside it). QSIPrep therefore matches TORTOISE's real
-     behaviour here. The coregistration reference on this branch *is*
-     gradwarp-corrected; only the susceptibility estimate is not.
+.. _jacobian_weighting:
+
+Intensity modulation after distortion correction
+------------------------------------------------
+
+Correcting a spatial distortion moves signal between voxels, so the corrected
+image must also be rescaled by the local volume change, or regions the
+acquisition compressed stay artificially bright. This is the signal
+redistribution step of the original quadratic eddy-current correction model
+:footcite:t:`rohde2004`, and *QSIPrep* follows TORTOISE's two implementations
+of it (``--output_signal_redist_method`` in TORTOISE's ``FINALDATA``):
+
+**Jacobian.** Each volume is multiplied by ``1 + d(u_PE)/d(PE)``, the
+derivative of the composed displacement along the phase-encoding axis, which
+is how TORTOISE evaluates the Jacobian of its motion, eddy-current, gradient
+nonlinearity and DRBUDDI transforms. *QSIPrep* composes the gradient
+nonlinearity field, the susceptibility field, and (on the TORTOISE backend)
+DIFFPREP's eddy-current transform, and evaluates that derivative in
+undistorted b=0-reference space. Because the eddy-current Jacobian is
+evaluated on DIFFPREP's distorted-native grid, it is transported through the
+composed gradwarp/susceptibility field before the product is taken. Head
+motion is not modulated (a rigid realignment is not a volume change), and
+neither are coregistration, the intramodal template or template-space
+normalization: modulating by a spatial-normalization warp is VBM-style
+volume modulation, which would corrupt DWI signal intensities and every model
+fitted to them. TORTOISE uses this method whenever only one phase-encoding
+polarity was acquired, and so does *QSIPrep*: for GRE and SyN fieldmaps, and
+for single-polarity DIFFPREP runs.
+
+**LSR.** When a reverse-polarity acquisition exists, TORTOISE's default is
+"least-squares restoration": DRBUDDI computes ``b0_corrected_final``, the
+harmonic mean of the two geometry-corrected b=0 images, and each blip's
+volumes are multiplied by the ratio of that reference to the blip's own
+geometry-corrected b=0. That ratio replaces the Jacobian entirely, so no
+gradient-nonlinearity or eddy-current factor is applied on top of it.
+*QSIPrep* does the same on every DRBUDDI path: SHORELine, eddy and DIFFPREP
+with DRBUDDI, and the TOPUP+DRBUDDI refinement. On ground-truth simulations
+the two methods are indistinguishable after the two blips are merged; LSR is
+kept because it is what TORTOISE applies.
+
+**T2Wreg.** DIFFPREP's fieldmap-less T2Wreg (EPIREG) field is applied
+geometrically but not modulated, as in TORTOISE: EPIREG's final registration
+stage is not restricted to the phase-encoding direction, so its Jacobian
+includes registration residuals that are not volume changes. Pass
+``--force jacobian`` to modulate anyway; the weight then uses the
+phase-encoding component of the field only.
+
+Which component performs the modulation depends on the backend:
+
+============================== ==========================================
+Correction                     Modulated by
+============================== ==========================================
+Gradient nonlinearity          *QSIPrep* (Jacobian; not under LSR)
+Susceptibility (TOPUP)         ``eddy``, internally
+Susceptibility (DRBUDDI)       *QSIPrep* (LSR)
+Susceptibility (GRE)           ``eddy`` on its path, else *QSIPrep*
+Susceptibility (SyN)           *QSIPrep* (Jacobian)
+Susceptibility (T2Wreg)        none, unless ``--force jacobian``
+Eddy current (``eddy``)        ``eddy``, internally
+Eddy current (DIFFPREP)        *QSIPrep* (Jacobian; not under LSR)
+============================== ==========================================
+
+``--ignore jacobian`` disables only the modulation *QSIPrep* itself applies,
+LSR included. It cannot disable ``eddy``'s internal modulation: ``eddy``'s
+``--resamp`` accepts only ``jac`` or ``lsr``, and ``lsr`` requires exactly two
+opposite-polarity acquisitions, so on ``--hmc-method eddy`` with TOPUP the
+eddy-current and susceptibility modulation is internal to ``eddy`` and there
+is no QSIPrep-held weight to disable. Conversely, if you supply
+``--eddy-config`` with ``"method": "lsr"``, ``eddy`` does not modulate those
+two corrections at all, and *QSIPrep* cannot retrofit it: ``eddy`` has
+already baked its resampling in. The run warns, and the gap is recorded in
+the derivative sidecar's ``UnmodulatedCorrections`` (below).
+
+The weight map *QSIPrep* itself applied is written out as
+``*_space-ACPC_desc-jacobian_dwimap.nii.gz``, with a sidecar giving
+``SignalRedistributionMethod`` (``Jacobian`` or ``LSR``),
+``JacobianWeightIndex`` (one zero-based entry per DWI volume, indexing
+volumes of the weight file), ``AppliedCorrections``, and
+``UnmodulatedCorrections`` with a reason where coverage is partial. The file
+is 3D when every volume shares one map and 4D otherwise; on a single-polarity
+DIFFPREP run every volume has its own eddy-current map, so the file is as
+large as the preprocessed series. It is written only when *QSIPrep* actually
+applied a modulation of its own: for example, on ``--hmc-method eddy`` with
+TOPUP and no gradwarp, every modulation is internal to ``eddy``, so QSIPrep
+holds no weight map at all and writes no derivative. Dividing the
+preprocessed series by the indexed weight volume reverses that multiplication
+*at the point in the pipeline where it was applied*; it does not recover a
+fully unmodulated series, because denoising and bias-field correction run
+after resampling and do not commute with it.
+
+.. note::
+   **Known limitation: no weight derivative under
+   ``--distortion-group-merge``.**
+   :func:`~qsiprep.workflows.dwi.distortion_group_merge.init_distortion_group_merge_wf`
+   builds the merged derivatives without wiring the weight fields, so
+   merged outputs get no ``*_desc-jacobian_dwimap.nii.gz`` derivative --
+   even though the underlying merged data *was* modulated during resampling,
+   like any other run. Only the published weight map is missing; the merged
+   data itself is unaffected.
 
 .. _fsl_wf:
 
@@ -869,7 +1062,12 @@ To ensure that the FSL workflow works as intended, all inputs are forced into
 to the FSL standard orientation. The head motion, eddy current, and susceptibility
 distortion corrections are applied at the end of ``eddy``, which means that
 there will be *two* total interpolations in the FSL-based *QSIPrep* workflow, as
-the final interpolation into T1w/AC-PC space is done externally in ANTs.
+the final interpolation into T1w/AC-PC space is done externally in ANTs. Eddy
+current and susceptibility (TOPUP) Jacobian modulation (see
+:ref:`jacobian_weighting`) happens inside ``eddy`` itself, at that first
+interpolation; any modulation *QSIPrep* applies (gradwarp, or DRBUDDI's LSR
+ratio) happens at the second, external interpolation, alongside the rest of
+the composed transform chain.
 
 The FSL workflow can take three different forms.
 
@@ -939,8 +1137,16 @@ dedicated fieldmaps (in the ``fmap/`` directory) or DWI series
 Fieldmap-based Distortion Correction
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-If a GRE fieldmap or SyN-based fieldmapless distortion correction
-are detected, these will be performed on the outputs of ``eddy``.
+A GRE fieldmap is handed to ``eddy`` (``--field``), which applies it within
+its own model, the way it applies a ``TOPUP`` field.
+Setting ``estimate_move_by_susceptibility`` in the ``--eddy-config`` file also
+lets ``eddy`` estimate how the field changes with head orientation
+(movement-by-susceptibility).
+The deprecated ``--force gre-sdc-after-eddy`` restores the old behaviour of applying
+the GRE fieldmap to the outputs of ``eddy``, for comparing the two on real
+data; it will be removed in a future release.
+SyN-based fieldmapless distortion correction is performed on the outputs of
+``eddy``.
 For details see :ref:`dwi_sdc`.
 
 .. workflow::
@@ -1115,6 +1321,42 @@ The are three kinds of SDC available in *QSIPrep*:
 
 *QSIPrep* determines if a fieldmap should be used based on the ``"IntendedFor"``
 fields in the JSON sidecars in the ``fmap/`` directory.
+
+
+.. _gre_init:
+
+Initializing TORTOISE registration with a GRE fieldmap
+------------------------------------------------------
+
+Registration-based correction (DRBUDDI, T2Wreg) infers the distortion by
+matching images, which is ambiguous where the field piles several voxels'
+signal into one or drops it out.
+A GRE fieldmap measures the field directly.
+When QSIPrep corrects a series some other way, a GRE fieldmap that lists the
+series starts that correction's TORTOISE registration instead of going unused.
+See :ref:`gre_init_usage` for how to curate the dataset and which options to
+use.
+
+DRBUDDI
+   QSIPrep prefers reverse phase encoding over a GRE fieldmap. When both list
+   a series, DRBUDDI starts from the GRE warp: the warp for the blip-up
+   series' phase encoding is the initial blip-up transform and its negation
+   the initial blip-down transform. This applies after every HMC method,
+   except when DRBUDDI refines a TOPUP correction
+   (``--sdc-method topup+drbuddi``).
+
+T2Wreg
+   When an anatomical reference is forced over the GRE fieldmap
+   (``--force sdc-anat-reference``), T2Wreg starts from the GRE warp.
+
+In both cases the initial warp is held fixed through the registration's
+multi-resolution pyramid, so each stage estimates a residual correction on top
+of it rather than smoothing it away.
+The methods boilerplate and the visual report's distortion-correction entry
+record the initialization.
+
+With ``--hmc-method eddy``, a GRE fieldmap goes into ``eddy`` itself
+(see :ref:`fsl_wf`).
 
 
 .. _best_b0:

@@ -188,6 +188,24 @@ def test_sdc_warp_source_emits_for_every_standalone_warp_method(tmp_path):
     assert sdc_warp_source(make_preproc_unit([dwi]), t2w_sdc=False) == (None, None)
 
 
+def test_sdc_warp_source_rebuilds_a_gre_field_eddy_applied(tmp_path):
+    """eddy leaves no standalone warp for a GRE fieldmap it applied, so the map
+    is rebuilt from the field, which needs the readout time."""
+    from qsiplan.models import CorrectionMethod
+
+    from qsiprep.tests.preproc_factory import make_preproc_unit
+    from qsiprep.utils.sdc import sdc_warp_source
+
+    dwi = _tiny_dwi(tmp_path / 'sub-01_dwi.nii.gz')
+    unit = make_preproc_unit([dwi], method=CorrectionMethod.PHASEDIFF)
+    assert sdc_warp_source(unit, t2w_sdc=False, gre_in_eddy=True) == (
+        'gre_in_eddy',
+        'GRE fieldmap',
+    )
+    no_readout = make_preproc_unit([dwi], method=CorrectionMethod.PHASEDIFF, readout_time=None)
+    assert sdc_warp_source(no_readout, t2w_sdc=False, gre_in_eddy=True) == (None, None)
+
+
 @pytest.mark.parametrize(
     ('hmc', 'method', 't2w_sdc', 'expected'),
     [
@@ -281,10 +299,19 @@ def test_trans_wf_builds_compose_sdc_warp_only_when_requested():
         and ('sdc_warp_transforms', 'to_template_transforms') in d['connect']
         for u, v, d in edges
     )
+    # Volume 0's warp arrives through a Function node, not an inline
+    # connection function: DIFFPREP's T2Wreg path already reaches
+    # ``fieldwarps`` through one, and nipype refuses two in series.
     assert any(
         u.name == 'inputnode'
+        and v.name == 'first_sdc_warp'
+        and ('fieldwarps', 'fieldwarps') in d['connect']
+        for u, v, d in edges
+    )
+    assert any(
+        u.name == 'first_sdc_warp'
         and v.name == 'compose_sdc_warp'
-        and any(dst == 'sdc_warps' for _, dst in d['connect'])
+        and ('out', 'sdc_warps') in d['connect']
         for u, v, d in edges
     )
     assert any(
@@ -298,8 +325,8 @@ def test_trans_wf_builds_compose_sdc_warp_only_when_requested():
 def test_trans_wf_takes_volume_0_warp_from_a_single_path_or_a_list():
     """GRE's init_sdc_wf hands over one warp path; the others a per-volume list.
 
-    Indexing a bare path would take its first character. The connection function
-    is rebuilt from source here exactly as nipype does at run time.
+    Indexing a bare path would take its first character. The Function node's
+    source is rebuilt here exactly as nipype does at run time.
     """
     _cfg()
     from nipype.utils.functions import create_function_from_source
@@ -309,31 +336,25 @@ def test_trans_wf_takes_volume_0_warp_from_a_single_path_or_a_list():
     wf = init_dwi_trans_wf(
         source_file='/data/sub-01_dwi.nii.gz', mem_gb=1, sdc_warp_source='fieldwarp'
     )
-    (source,) = [
-        src
-        for u, v, d in wf._graph.edges(data=True)
-        if u.name == 'inputnode' and v.name == 'compose_sdc_warp'
-        for src, dst in d['connect']
-        if dst == 'sdc_warps'
-    ]
-    port, func_source, _ = source
-    assert port == 'fieldwarps'
-    first_warp = create_function_from_source(func_source)
+    node = wf.get_node('first_sdc_warp')
+    first_warp = create_function_from_source(node.inputs.function_str)
     assert first_warp('/work/vsm2dfm/fmap_antswarp.nii.gz') == (
         '/work/vsm2dfm/fmap_antswarp.nii.gz'
     )
     assert first_warp(['/work/finv.nii.gz', '/work/minv.nii.gz']) == '/work/finv.nii.gz'
 
 
-def test_trans_wf_topup_builds_hz_to_warp_chain():
-    """TOPUP has no standalone warp, so the field is turned into one first."""
+@pytest.mark.parametrize('source', ['topup', 'gre_in_eddy'])
+def test_trans_wf_topup_builds_hz_to_warp_chain(source):
+    """A field eddy applied (TOPUP's, or a GRE fieldmap's) leaves no standalone
+    warp, so the field is turned into one first."""
     _cfg()
     from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
 
     wf = init_dwi_trans_wf(
         source_file='/data/sub-01_dwi.nii.gz',
         mem_gb=1,
-        sdc_warp_source='topup',
+        sdc_warp_source=source,
         sdc_pe_dir='j',
         sdc_readout_time=0.05,
     )
@@ -363,6 +384,9 @@ def test_trans_wf_topup_builds_hz_to_warp_chain():
         for u, v, d in edges
     )
     assert wf.get_node('compose_sdc_refinement') is None
+    # eddy hands over an empty fieldwarps list on this branch, so no node may
+    # try to index it (the dsdti_nofmap CI failure of 2026-09-23).
+    assert wf.get_node('first_sdc_warp') is None
 
 
 def test_trans_wf_topup_drbuddi_builds_total_and_refinement():
@@ -390,11 +414,12 @@ def test_trans_wf_topup_drbuddi_builds_total_and_refinement():
 
     # ComposeSDCWarp applies its warps to a point in list order: DRBUDDI's
     # refinement (in1) first, then the rebuilt TOPUP field (in2).
-    assert ('fieldwarps', 'in1') in ports('inputnode', 'sdc_warp_chain')
+    assert ('fieldwarps', 'fieldwarps') in ports('inputnode', 'first_sdc_warp')
+    assert ('out', 'in1') in ports('first_sdc_warp', 'sdc_warp_chain')
     assert ('out_file', 'in2') in ports('hz_to_warp', 'sdc_warp_chain')
     assert ('out', 'sdc_warps') in ports('sdc_warp_chain', 'compose_sdc_warp')
     # The refinement is DRBUDDI's fieldwarp alone, on the same ACPC chain.
-    assert ('fieldwarps', 'sdc_warps') in ports('inputnode', 'compose_sdc_refinement')
+    assert ('out', 'sdc_warps') in ports('first_sdc_warp', 'compose_sdc_refinement')
     assert not ports('hz_to_warp', 'compose_sdc_refinement')
     assert ('sdc_warp_transforms', 'to_template_transforms') in ports(
         'compose_transforms', 'compose_sdc_refinement'

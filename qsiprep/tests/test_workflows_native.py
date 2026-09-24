@@ -10,6 +10,7 @@ import pytest
 from qsiplan.models import CorrectionMethod
 
 from qsiprep import config
+from qsiprep.tests.gradient_fixtures import write_siemens_grad
 from qsiprep.tests.preproc_factory import make_preproc_unit
 
 SRC = '/data/sub-01_dwi.nii.gz'
@@ -340,6 +341,50 @@ def test_dwi_preproc_wf_drbuddi_without_t2w_builds(tmp_path, monkeypatch):
     assert wf.get_node('extended_pepolar_report_wf') is not None
 
 
+def test_dwi_preproc_wf_records_gradwarp_applied(tmp_path, monkeypatch):
+    """``jacobian_provenance_for`` reports 'gradwarp' for a real, unmocked unit.
+
+    ``init_dwi_preproc_wf``'s gradwarp block (``qsiprep/workflows/dwi/
+    base.py``, the ``if gradwarp_wf.plan.warp_dim is not None:`` branch) is
+    the single, backend-independent site where QSIPrep decides a gradwarp
+    field will reach ``ComposeJacobianWeights`` -- ``jacobian_provenance_for``
+    mirrors that exact condition from ``unit`` alone (no workflow
+    construction required), which this test verifies by building the real
+    workflow under the same config and unit and checking it does not diverge.
+    No fieldmap is configured here, so 'sdc' must not appear.
+    """
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    cfg = _cfg(hmc_method='eddy', sdc_method='topup', layout=_StubLayout())
+    cfg.workflow.anat_modality = 'none'
+    cfg.workflow.b0_to_anat_transform = 'Rigid'
+    cfg.workflow.hmc_transform = 'Affine'
+    cfg.workflow.diffprep_config = None
+    cfg.workflow.tortoise_gpu_cpu_ratio = None
+    cfg.workflow.gpu = None
+    cfg.workflow.impute_slice_threshold = 0
+    cfg.workflow.dwi2anat_dof = 6
+    cfg.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
+    cfg.workflow.ignore = []
+    from qsiprep.utils.jacobian_provenance import jacobian_provenance_for
+    from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
+
+    src = _write_dwi(tmp_path / 'sub-01_dwi.nii.gz')
+    unit = make_preproc_unit([src], metadata={'Manufacturer': 'SIEMENS'})
+    try:
+        # Real, unmocked construction: fails loudly if the gradwarp block
+        # above raises under this configuration.
+        init_dwi_preproc_wf(
+            unit,
+            t2w_sdc=False,
+            output_prefix='sub-01',
+            source_file=src,
+            anatomical_template='MNI152NLin2009cAsym',
+        )
+        assert jacobian_provenance_for(unit, t2w_sdc=False) == (['gradwarp'], [], None)
+    finally:
+        config.workflow.gradient_file = None
+
+
 def test_drbuddi_wf_feeds_sidecar_map_and_discriminator(tmp_path):
     """The DRBUDDI builder feeds the model's sidecar map (no silent disk fallback).
 
@@ -358,6 +403,60 @@ def test_drbuddi_wf_feeds_sidecar_map_and_discriminator(tmp_path):
         str(tmp_path / 'sub-01_dir-PA_dwi.nii.gz'),
     }
     assert gather.inputs.fieldmap_type == 'rpe_series'
+
+
+def _drbuddi_seed_targets(wf):
+    targets = set()
+    for _src, dest, data in wf._graph.edges(data=True):
+        if dest.name == 'drbuddi':
+            targets.update(field for _s, field in data.get('connect', []))
+    return targets
+
+
+def test_drbuddi_wf_seeds_up_down_from_initial_field(tmp_path):
+    """``initialize_from_field`` seeds DRBUDDI's up/down initial transforms from
+    ``inputnode.initial_field`` (up = the field, down = its negation) and holds
+    the seed fixed through the SyN pyramid."""
+    _cfg(hmc_method='tortoise', sdc_method='drbuddi')
+    from qsiprep.workflows.fieldmap import init_drbuddi_wf
+
+    wf = init_drbuddi_wf(_rpe_unit(tmp_path), t2w_sdc=False, initialize_from_field=True)
+    assert wf.get_node('negate_initial_field') is not None
+    assert wf.get_node('drbuddi').inputs.keep_initial_transform_fixed is True
+    assert {'initial_fixed_transform', 'initial_moving_transform'} <= _drbuddi_seed_targets(wf)
+
+
+def test_drbuddi_wf_unseeded_by_default(tmp_path):
+    """Without ``initialize_from_field`` nothing is added: stock DRBUDDI, no
+    negation node, no initial-transform flags (safe on an unpatched TORTOISE)."""
+    _cfg(hmc_method='tortoise', sdc_method='drbuddi')
+    from qsiprep.workflows.fieldmap import init_drbuddi_wf
+
+    wf = init_drbuddi_wf(_rpe_unit(tmp_path), t2w_sdc=False)
+    assert wf.get_node('negate_initial_field') is None
+    assert not (
+        {'initial_fixed_transform', 'initial_moving_transform'} & _drbuddi_seed_targets(wf)
+    )
+
+
+def test_negate_displacement_field_flips_sign_keeps_vector_intent(tmp_path, monkeypatch):
+    """The down-field helper negates every vector and preserves the ITK vector
+    intent (without which TORTOISE/ANTs read the field as zeros)."""
+    import nibabel as nb
+    import numpy as np
+
+    from qsiprep.workflows.fieldmap.drbuddi import _negate_displacement_field
+
+    src = tmp_path / 'up.nii.gz'
+    data = np.random.default_rng(0).standard_normal((3, 3, 3, 1, 3)).astype('float32')
+    img = nb.Nifti1Image(data, np.eye(4))
+    img.header.set_intent('vector')
+    img.to_filename(src)
+
+    monkeypatch.chdir(tmp_path)
+    out = nb.load(_negate_displacement_field(str(src)))
+    assert int(out.header['intent_code']) == 1007
+    assert np.allclose(np.asanyarray(out.dataobj), -data)
 
 
 def test_unit_sidecar_round_trips_through_derivatives_sidecar(tmp_path):
@@ -392,6 +491,54 @@ def test_unit_sidecar_round_trips_through_derivatives_sidecar(tmp_path):
     assert written['EchoTime'] == 0.1
     assert written['ScanGrouping']['method'] == 'pepolar'
     assert written['Sources'] == ['sub-01_dir-AP_dwi.nii.gz', 'sub-01_dir-PA_dwi.nii.gz']
+
+
+def test_false_sidecar_booleans_survive_into_the_derivative_sidecar(tmp_path):
+    """A ``false`` boolean in a raw sidecar must not become ``true`` downstream.
+
+    The derivative sidecar is built from qsiplan's file records, which read the
+    JSON themselves. Metadata routed through pybids < 0.16.4 round-trips
+    booleans as strings and reads ``False`` back as ``True``.
+    """
+    from bids.layout import BIDSLayout
+    from qsiplan import build_dwi_grouping
+    from qsiplan.adapters import plan_preproc_units, unit_to_sidecar
+    from qsiplan.methods import selection_for_config
+    from qsiplan.plan import compile_plan
+
+    from qsiprep.tests.utils import SHARED_DWI_GRADIENTS, build_test_dataset
+    from qsiprep.utils.bids import collect_data
+
+    root = build_test_dataset(
+        tmp_path / 'ds',
+        {
+            '01': [
+                {
+                    'dwi': [
+                        {
+                            'suffix': 'dwi',
+                            'metadata': {
+                                'PhaseEncodingDirection': 'j',
+                                'TotalReadoutTime': 0.05,
+                                'NonlinearGradientCorrection': False,
+                            },
+                        }
+                    ]
+                }
+            ]
+        },
+        extra_files=SHARED_DWI_GRADIENTS,
+        n_volumes=2,
+    )
+    layout = BIDSLayout(root, validate=False)
+    subject_data = collect_data(layout, '01', bids_validate=False)[0]
+    grouping = build_dwi_grouping(layout, subject_data, strict=False)
+    plan = compile_plan(grouping, selection_for_config('eddy', 'topup'))
+    (unit,) = plan_preproc_units(grouping, plan)
+
+    sidecar = unit_to_sidecar(unit)
+    assert sidecar['NonlinearGradientCorrection'] is False
+    assert sidecar['SourceMetadata']['sub-01_dwi.nii.gz']['NonlinearGradientCorrection'] is False
 
 
 def test_eddy_grouping_from_sidecars_needs_no_disk():

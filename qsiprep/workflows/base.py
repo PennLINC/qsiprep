@@ -33,6 +33,7 @@ qsiprep base processing workflows
 
 import dataclasses
 import os
+import shutil
 import sys
 from collections import defaultdict
 from copy import deepcopy
@@ -67,6 +68,7 @@ from ..utils.bids import (
     collect_data,
     get_source_file,
 )
+from ..utils.eddy_config import eddy_applies_gre
 from ..utils.misc import dwi_biascorrect_enabled, fix_multi_source_name
 from ..utils.plan import method_selection_from_config
 from ..utils.sdc import sdc_warp_source, t2w_available_for_sdc, t2w_sdc_enabled
@@ -125,6 +127,12 @@ def init_qsiprep_wf():
         )
         log_dir.mkdir(exist_ok=True, parents=True)
         config.to_filename(log_dir / 'qsiprep.toml')
+        # The toml only records the path, so keep the settings dwidenoise2 actually ran with
+        if (
+            config.workflow.denoise_method == 'dwidenoise2'
+            and config.workflow.dwidenoise2_config is not None
+        ):
+            shutil.copyfile(config.workflow.dwidenoise2_config, log_dir / 'dwidenoise2.json')
     return qsiprep_wf
 
 
@@ -676,14 +684,15 @@ to workflows in *QSIPrep*'s documentation]\
             name=dwi_preproc_wf.name.replace('dwi_preproc', 'dwi_finalize'),
             output_prefix=naming_name,
             source_file=source_file,
+            t2w_sdc=t2w_sdc,
             do_biascorr=do_biascorr,
             write_derivatives=write_derivatives,
             make_dwiref=make_dwiref,
-            t2w_sdc=t2w_sdc,
         )
         # The SDC displacement maps name, in their sidecars, the written transforms
         # that carried the correction from the DWI frame into ACPC.
-        names_sdc_transforms = write_derivatives and sdc_warp_source(unit, t2w_sdc)[0] is not None
+        warp_source, _ = sdc_warp_source(unit, t2w_sdc, gre_in_eddy=eddy_applies_gre(unit))
+        names_sdc_transforms = write_derivatives and warp_source is not None
 
         workflow.connect([
             (anat_preproc_wf, dwi_preproc_wf, [
@@ -718,10 +727,13 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.bval_files', 'inputnode.bval_files'),
                 ('outputnode.bvec_files', 'inputnode.bvec_files'),
                 ('outputnode.b0_ref_image', 'inputnode.b0_ref_image'),
+                ('outputnode.dwi_mask', 'inputnode.dwi_mask'),
                 ('outputnode.b0_indices', 'inputnode.b0_indices'),
                 ('outputnode.hmc_xforms', 'inputnode.hmc_xforms'),
                 ('outputnode.fieldwarps', 'inputnode.fieldwarps'),
                 ('outputnode.gradwarp_field', 'inputnode.gradwarp_field'),
+                ('outputnode.ec_jacobian_images', 'inputnode.ec_jacobian_images'),
+                ('outputnode.sdc_scaling_images', 'inputnode.sdc_scaling_images'),
                 ('outputnode.itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
                 ('outputnode.hmc_optimization_data', 'inputnode.hmc_optimization_data'),
                 ('outputnode.raw_qc_file', 'inputnode.raw_qc_file'),
@@ -729,7 +741,6 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.raw_concatenated', 'inputnode.raw_concatenated'),
                 ('outputnode.confounds', 'inputnode.confounds'),
                 ('outputnode.carpetplot_data', 'inputnode.carpetplot_data'),
-                ('outputnode.sdc_scaling_images', 'inputnode.sdc_scaling_images'),
                 ('outputnode.fieldmap_hz', 'inputnode.fieldmap_hz'),
             ]),
         ])  # fmt:skip

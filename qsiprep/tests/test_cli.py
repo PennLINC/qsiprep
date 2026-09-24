@@ -1,6 +1,8 @@
 """Command-line interface tests."""
 
+import json
 import os
+import shutil
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -19,6 +21,24 @@ nipype_config.enable_debug_mode()
 nipype_config.update_config({'execution': {'remove_unnecessary_outputs': False}})
 
 DEFAULT_NUM_CPUS = 4
+
+
+def _forrest_gump_dataset(data_dir, working_dir, test_name):
+    """Copy forrest_gump with ``TotalReadoutTime`` rescaled to its 5 mm DWI grid.
+
+    The DWI was downsampled from 2 mm, but the sidecar kept the 2 mm readout
+    time, which applies the GRE field 2.5x too strongly and makes eddy diverge.
+    Drop this once the dataset is replaced.
+    """
+    source = download_test_data('forrest_gump', data_dir)
+    dataset_dir = os.path.join(working_dir, f'{test_name}_bids')
+    if not os.path.isdir(dataset_dir):
+        shutil.copytree(source, dataset_dir)
+    sidecar = Path(dataset_dir) / 'sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_dwi.json'
+    metadata = json.loads(sidecar.read_text())
+    metadata['TotalReadoutTime'] = 0.0188758  # 0.0471895 * 2 mm / 5 mm
+    sidecar.write_text(json.dumps(metadata, indent=4))
+    return dataset_dir
 
 
 @pytest.mark.integration
@@ -692,7 +712,7 @@ def test_forrest_gump(data_dir, output_dir, working_dir):
     """
     TEST_NAME = 'forrest_gump'
 
-    dataset_dir = download_test_data('forrest_gump', data_dir)
+    dataset_dir = _forrest_gump_dataset(data_dir, working_dir, TEST_NAME)
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
@@ -728,7 +748,7 @@ def test_forrest_gump_patch2self(data_dir, output_dir, working_dir):
     """
     TEST_NAME = 'forrest_gump_patch2self'
 
-    dataset_dir = download_test_data('forrest_gump', data_dir)
+    dataset_dir = _forrest_gump_dataset(data_dir, working_dir, TEST_NAME)
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
@@ -837,6 +857,56 @@ def test_parser_accepts_ignore_gradwarp(tmp_path):
         [str(bids), str(out), 'participant', '--ignore', 'gradwarp', '--output-resolution', '2']
     )
     assert opts.ignore == ['gradwarp']
+
+
+def test_parser_accepts_ignore_jacobian(tmp_path):
+    """'jacobian' is the --ignore off-switch for Jacobian weighting."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    opts = parser.parse_args(
+        [str(bids), str(out), 'participant', '--ignore', 'jacobian', '--output-resolution', '2']
+    )
+    assert opts.ignore == ['jacobian']
+
+
+def test_parser_accepts_force_jacobian_and_rejects_the_pair(tmp_path):
+    """--force jacobian modulates the T2Wreg field; it cannot combine with --ignore jacobian."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    base = [str(bids), str(out), 'participant', '--output-resolution', '2']
+    opts = parser.parse_args([*base, '--force', 'jacobian'])
+    assert opts.force == ['jacobian']
+    with pytest.raises(SystemExit):
+        parser.parse_args([*base, '--ignore', 'jacobian', '--force', 'jacobian'])
+
+
+def test_parser_rejects_removed_jacobian_weighting_flag(tmp_path):
+    """--no-jacobian-weighting was replaced by --ignore jacobian."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                str(bids),
+                str(out),
+                'participant',
+                '--output-resolution',
+                '2',
+                '--no-jacobian-weighting',
+            ]
+        )
 
 
 def test_repeated_force_accumulates(tmp_path):

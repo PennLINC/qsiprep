@@ -562,9 +562,10 @@ class workflow(_Config):
     dwi_biascorrect = None
     """Whether to N4-correct DWIs: ``n4``, ``auto`` or ``none``."""
     denoise_method = None
-    """Image-based denoising method. Either "dwidenoise" (MRtrix), "patch2self" (DIPY)
-    or "none". DWIDenoise parameters may be appended as semicolon-delimited name:value
-    pairs."""
+    """Image-based denoising method: "dwidenoise" (MRtrix3), "dwidenoise2", "patch2self"
+    (DIPY) or "none"."""
+    dwidenoise2_config = None
+    """Configuration JSON for dwidenoise2 (``--dwidenoise2-config``)."""
     distortion_group_merge = 'concat'
     """How to combine images across distortion groups (concatenate, average or none)."""
     dwidenoise_window = None
@@ -574,7 +575,7 @@ class workflow(_Config):
     eddy_config = None
     """Configuration for running Eddy."""
     force = None
-    """Forced processing choices (see ``--force``): currently ``sdc-anat-reference``."""
+    """Forced processing choices (see ``--force``)."""
     force_sdc_anat_reference = False
     """``--force sdc-anat-reference`` was given: the anatomical SDC reference
     overrides the fieldmap application for every DWI series (derived from
@@ -685,7 +686,7 @@ class workflow(_Config):
     # what ``_paths`` names, and toml writes anything else as its repr, so an
     # unlisted Path reaches the workflow-building subprocess as the literal
     # string "PosixPath('/path')".
-    _paths = ('gradient_file', 'shoreline_config')
+    _paths = ('dwidenoise2_config', 'gradient_file', 'shoreline_config')
 
 
 class loggers:

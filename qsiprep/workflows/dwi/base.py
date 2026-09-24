@@ -18,6 +18,7 @@ from ...interfaces import DerivativesDataSink, DerivativesMaybeDataSink
 from ...interfaces.confounds import DMRISummary
 from ...interfaces.reports import DiffusionSummary
 from ...interfaces.utils import TestInput
+from ...utils.eddy_config import eddy_applies_gre
 from ...utils.misc import DWI2ANAT_DOF_TO_TRANSFORM
 from ...utils.sdc import t2wreg_target
 from ..fieldmap.pepolar import init_extended_pepolar_report_wf
@@ -219,8 +220,11 @@ def init_dwi_preproc_wf(
                 'coreg_score',
                 'raw_concatenated',
                 'carpetplot_data',
-                'sdc_scaling_images',
                 'fieldmap_hz',
+                # Only written out by the TORTOISE/DIFFPREP backend.
+                'ec_jacobian_images',
+                # Only written out when DRBUDDI ran: TORTOISE's LSR ratios.
+                'sdc_scaling_images',
             ]
         ),
         name='outputnode',
@@ -334,6 +338,11 @@ def init_dwi_preproc_wf(
         # A DIS3D unit gets no spatial correction -- applying one would
         # double-correct data the scanner already corrected.
         if gradwarp_wf.plan.warp_dim is not None:
+            # This field reaches resampling.py's ComposeJacobianWeights
+            # whenever Jacobian weighting is on (see init_dwi_trans_wf).
+            # ``jacobian_provenance.jacobian_provenance_for`` recomputes this
+            # same condition (``resolve_gradwarp_plan(unit).warp_dim is not
+            # None``) from ``unit`` alone for the sidecar.
             workflow.connect([
                 (gradwarp_wf, outputnode, [
                     ('outputnode.gradwarp_field', 'gradwarp_field'),
@@ -389,9 +398,6 @@ def init_dwi_preproc_wf(
 
         workflow.connect([
             (inputnode, fmap_unwarp_report_wf, [('t1_seg', 'inputnode.in_seg')]),
-            (hmc_wf, outputnode, [
-                ('outputnode.sdc_scaling_images', 'sdc_scaling_images'),
-            ]),
             (hmc_wf, fmap_unwarp_report_wf, [
                 ('outputnode.pre_sdc_template', 'inputnode.in_pre'),
                 ('outputnode.b0_template', 'inputnode.in_post'),
@@ -402,8 +408,22 @@ def init_dwi_preproc_wf(
             (fmap_unwarp_report_wf, ds_report_sdc, [('outputnode.report', 'in_file')]),
         ])  # fmt:skip
 
-    if doing_topup:
+    if doing_topup or eddy_applies_gre(unit):
         workflow.connect([(hmc_wf, outputnode, [('outputnode.fieldmap_hz', 'fieldmap_hz')])])
+
+    if hmc_tool == 'tortoise':
+        # Only init_diffprep_hmc_wf's outputnode has this field -- shoreline
+        # and eddy have no TORTOISE eddy-current Jacobian to report.
+        workflow.connect([
+            (hmc_wf, outputnode, [('outputnode.ec_jacobian_images', 'ec_jacobian_images')]),
+        ])  # fmt:skip
+
+    if doing_drbuddi:
+        # DRBUDDI's LSR ratios: TORTOISE's default signal redistribution for
+        # reverse phase-encoded data, which replaces the Jacobian weight.
+        workflow.connect([
+            (hmc_wf, outputnode, [('outputnode.sdc_scaling_images', 'sdc_scaling_images')]),
+        ])  # fmt:skip
 
     # DRBUDDI has some extra reports that we want to save. Make sure we get them!
     if doing_drbuddi:
@@ -614,7 +634,14 @@ def _extract_first_volume(in_file, newpath=None):
     the sampling grid, not on image content, so any single volume works;
     volume 0 is cheapest and needs no bvals/bvecs. Nipype ``Function`` nodes
     run in a fresh namespace, so imports live inside the function body.
+
+    The extract goes into ``newpath``, defaulting to the working directory:
+    with nothing between the BIDS input and this node (a single series and
+    ``--denoise-method none``), ``in_file`` is the raw BIDS file, and writing
+    next to it fails on the read-only input mount every container run uses.
     """
+    import os
+
     import nibabel as nb
     from nilearn.image import index_img
     from nipype.utils.filemanip import fname_presuffix
@@ -622,6 +649,6 @@ def _extract_first_volume(in_file, newpath=None):
     if nb.load(in_file).ndim == 3:
         return in_file
 
-    out_file = fname_presuffix(in_file, suffix='_vol0', newpath=newpath)
+    out_file = fname_presuffix(in_file, suffix='_vol0', newpath=newpath or os.getcwd())
     index_img(in_file, 0).to_filename(out_file)
     return out_file

@@ -28,7 +28,7 @@ import sys
 
 from .. import config
 from ..utils.gpu import GPU_ALIASES, GPU_TASKS
-from ..utils.misc import load_shoreline_config, parse_denoise_method
+from ..utils.misc import load_dwidenoise2_config, load_shoreline_config
 
 
 def _build_parser(**kwargs):
@@ -120,6 +120,16 @@ def _build_parser(**kwargs):
                     file=sys.stderr,
                 )
 
+            if namespace.dwidenoise2_config is not None:
+                if namespace.denoise_method != 'dwidenoise2':
+                    self.error('--dwidenoise2-config requires --denoise-method dwidenoise2')
+                # Load the file here so that a bad setting fails before any workflow is
+                # built. The workflow builder loads it again from the stored path.
+                try:
+                    load_dwidenoise2_config(namespace.dwidenoise2_config)
+                except ValueError as err:
+                    self.error(str(err))
+
             if namespace.sdc_method in (None, 'auto'):
                 namespace.sdc_method = 'topup' if namespace.hmc_method == 'eddy' else 'drbuddi'
             elif namespace.hmc_method != 'eddy' and 'topup' in namespace.sdc_method:
@@ -127,10 +137,20 @@ def _build_parser(**kwargs):
                     f'--sdc-method {namespace.sdc_method} requires --hmc-method eddy: '
                     'SHORELine and TORTOISE correct PEPOLAR units with DRBUDDI'
                 )
+            if 'gre-sdc-after-eddy' in (namespace.force or []):
+                if namespace.hmc_method != 'eddy':
+                    self.error('--force gre-sdc-after-eddy requires --hmc-method eddy')
+                print(
+                    '--force gre-sdc-after-eddy restores applying a GRE fieldmap after eddy '
+                    'for comparison, and is scheduled for removal in a future release.',
+                    file=sys.stderr,
+                )
 
             # --force values land on their own boolean attributes so config
             # (and qsiplan's policy bridge) can read them by name.
             namespace.force_sdc_anat_reference = 'sdc-anat-reference' in (namespace.force or [])
+            if 'jacobian' in (namespace.force or []) and 'jacobian' in (namespace.ignore or []):
+                self.error('--force jacobian and --ignore jacobian are mutually exclusive')
             if namespace.force_sdc_anat_reference and namespace.sdc_anat_reference == 'none':
                 self.error(
                     '--force sdc-anat-reference requires an anatomical SDC '
@@ -204,13 +224,6 @@ def _build_parser(**kwargs):
 
         return value
 
-    def _denoise_method(value, parser):
-        try:
-            parse_denoise_method(value)
-        except ValueError as exc:
-            parser.error(f'Invalid --denoise-method specification: {exc}')
-        return value
-
     def _to_gb(value):
         scale = {'G': 1, 'T': 10**3, 'M': 1e-3, 'K': 1e-6, 'B': 1e-9}
         digits = ''.join([c for c in value if c.isdigit()])
@@ -266,7 +279,6 @@ def _build_parser(**kwargs):
     IsFile = partial(_is_file, parser=parser)
     PositiveInt = partial(_min_one, parser=parser)
     IntOrAuto = partial(_int_or_auto, parser=parser)
-    DenoiseMethod = partial(_denoise_method, parser=parser)
     IterCount = partial(_iters_at_least_two, parser=parser)
     BIDSFilter = partial(_bids_filter, parser=parser)
 
@@ -396,7 +408,17 @@ def _build_parser(**kwargs):
         action='store',
         nargs='+',
         default=[],
-        choices=['fieldmaps', 'pepolar-dwis', 't2w', 'phase', 'sdc', 'shims', 'fov', 'gradwarp'],
+        choices=[
+            'fieldmaps',
+            'pepolar-dwis',
+            't2w',
+            'phase',
+            'sdc',
+            'shims',
+            'fov',
+            'gradwarp',
+            'jacobian',
+        ],
         help=(
             'Ignore selected aspects of the input dataset to disable the corresponding '
             'parts of the workflow (a space-delimited list). '
@@ -417,7 +439,12 @@ def _build_parser(**kwargs):
             '"fov" concatenates series with differently-oriented fields of view anyway, '
             'in which case distortion corrections will be misapplied. '
             '"gradwarp" disables gradient nonlinearity correction entirely, including '
-            'the voxelwise gradient deviation map.'
+            'the voxelwise gradient deviation map. '
+            '"jacobian" disables the Jacobian intensity modulation QSIPrep itself applies '
+            'for gradient-nonlinearity, susceptibility and eddy-current distortion '
+            "corrections. It does not affect FSL eddy's internal modulation, which "
+            'eddy applies whenever its resampling method is "jac" (the default; see '
+            '--eddy-config).'
         ),
     )
     g_scope.add_argument(
@@ -426,7 +453,13 @@ def _build_parser(**kwargs):
         action='extend',
         nargs='+',
         default=[],
-        choices=['gradwarp1D', 'gradwarp3D', 'sdc-anat-reference'],
+        choices=[
+            'gradwarp1D',
+            'gradwarp3D',
+            'sdc-anat-reference',
+            'jacobian',
+            'gre-sdc-after-eddy',
+        ],
         help=(
             'Force selected corrections on, overriding what the input metadata implies '
             '(a space-delimited list). '
@@ -438,7 +471,16 @@ def _build_parser(**kwargs):
             '"sdc-anat-reference" escalates --sdc-anat-reference from a fallback to an '
             'override, so that the selected anatomical reference replaces fieldmap '
             'application for every DWI series. It requires an --sdc-anat-reference '
-            'other than "none".'
+            'other than "none". '
+            '"jacobian" applies Jacobian intensity modulation to the fieldmap-less '
+            'TORTOISE T2Wreg (EPIREG) correction as well. TORTOISE leaves that field '
+            'unmodulated because its final registration stage is not restricted to '
+            'the phase-encoding direction; forcing it uses the phase-encoding '
+            'component of the field only. '
+            '"gre-sdc-after-eddy" applies a GRE fieldmap after eddy, as QSIPrep used to, '
+            'instead of handing it to eddy (--field), for comparing the two on real data. '
+            'It requires --hmc-method eddy, is deprecated, and will be removed in a '
+            'future release.'
         ),
     )
 
@@ -469,14 +511,13 @@ def _build_parser(**kwargs):
     )
     g_anat.add_argument(
         '--subject-anatomical-reference',
-        choices=['first-lex', 'unbiased', 'sessionwise', 'first-alphabetically'],
+        choices=['first-lex', 'unbiased', 'sessionwise'],
         default='first-lex',
         help=(
             'How to define the subject-specific anatomical space. '
             '"sessionwise" produces one anatomical space per session. The others '
             'combine anatomical data across sessions to define a single anatomical '
-            'space per subject. '
-            '"first-alphabetically" is deprecated in favor of "first-lex".'
+            'space per subject.'
         ),
     )
     g_anat.add_argument(
@@ -538,15 +579,12 @@ def _build_parser(**kwargs):
     g_dwi.add_argument(
         '--denoise-method',
         action='store',
-        type=DenoiseMethod,
+        choices=['dwidenoise', 'dwidenoise2', 'patch2self', 'none'],
         default='dwidenoise',
-        metavar='METHOD',
         help=(
             'Image-based denoising method: "dwidenoise" (MRtrix3), "dwidenoise2", '
             '"patch2self" (DIPY), or "none". '
-            'Parameters for dwidenoise2 may follow the method as semicolon-delimited '
-            'name:value pairs, for example '
-            '"dwidenoise2;demodulate:linear;decomposition:bdcsvd".'
+            'Settings for dwidenoise2 are given with --dwidenoise2-config.'
         ),
     )
     g_dwi.add_argument(
@@ -562,8 +600,26 @@ def _build_parser(**kwargs):
             'window size from the number of volumes, following the method described in '
             'the dwidenoise documentation. '
             'It is unused by "patch2self" and "dwidenoise2"; dwidenoise2 sizes its '
-            'patches per iteration from its multi-resolution schedule, which is '
-            'selected with "dwidenoise2;schedule:<name>" instead.'
+            'patches per iteration from its multi-resolution schedule, which can be set '
+            'with --dwidenoise2-config instead.'
+        ),
+    )
+    g_dwi.add_argument(
+        '--dwidenoise2-config',
+        action='store',
+        type=IsFile,
+        default=None,
+        metavar='FILE',
+        help=(
+            'Path to a JSON file with settings for dwidenoise2. This is valid only with '
+            '--denoise-method dwidenoise2. Every key is optional, and unknown keys are an '
+            'error. Keys other than "schedule" set the dwidenoise2 option of the same name '
+            '(for example "demodulate", "decomposition", "estimator" or "noise_in"; '
+            '"filter_method" sets -filter). "schedule" is a list of noise estimation '
+            'iterations, each a JSON object whose keys are dwidenoise2 schedule columns (for '
+            'example "spatial_subsample", "kernel" and "update_noise"), or the name of a '
+            'bundled schedule ("default", "legacy" or "vlarge"). Without a schedule, '
+            'dwidenoise2 uses its default schedule. See the documentation for every key.'
         ),
     )
     g_dwi.add_argument(
@@ -1083,7 +1139,7 @@ def check_denoise_window(denoise_method, dwidenoise_window):
         config.loggers.cli.warning(
             'The --dwidenoise-window option is not used when --denoise-method=dwidenoise2. '
             'dwidenoise2 sizes its patches per iteration from its multi-resolution schedule, '
-            'which can be selected with "dwidenoise2;schedule:<name>" instead.'
+            'which can be set with --dwidenoise2-config instead.'
         )
     elif denoise_method == 'none':
         config.loggers.cli.warning(
@@ -1101,15 +1157,6 @@ def parse_args(args=None, namespace=None):
 
     parser = _build_parser()
     opts = parser.parse_args(args, namespace)
-
-    # Warn about deprecated options
-    if opts.subject_anatomical_reference == 'first-alphabetically':
-        config.loggers.cli.warning(
-            '--subject-anatomical-reference=first-alphabetically has been deprecated '
-            'and will be removed in a later version. '
-            'Please use --subject-anatomical-reference=first-lex instead.'
-        )
-        opts.subject_anatomical_reference = 'first-lex'
 
     # Reports follow the anatomical processing level unless the user asked for a specific one
     if opts.report_output_level == 'auto':
@@ -1164,6 +1211,9 @@ def parse_args(args=None, namespace=None):
     # could leave a stale shoreline_config, hmc_transform or shoreline_iters behind.
     for key in ('shoreline_config', 'shoreline_model', 'shoreline_iters', 'hmc_transform'):
         setattr(config.workflow, key, getattr(opts, key))
+    # As for SHORELine, the command line is authoritative. from_dict skips None, so a
+    # --config-file could otherwise leave a stale dwidenoise2_config behind.
+    config.workflow.dwidenoise2_config = opts.dwidenoise2_config
 
     if not config.execution.notrack:
         import importlib.util
@@ -1210,8 +1260,7 @@ def parse_args(args=None, namespace=None):
         )
 
     # Validate the tricky options here
-    denoise_method, _ = parse_denoise_method(config.workflow.denoise_method)
-    check_denoise_window(denoise_method, config.workflow.dwidenoise_window)
+    check_denoise_window(config.workflow.denoise_method, config.workflow.dwidenoise_window)
 
     bids_dir = config.execution.bids_dir
     output_dir = config.execution.output_dir

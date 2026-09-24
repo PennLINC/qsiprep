@@ -649,6 +649,101 @@ def test_config_file_reload_uses_command_line_shoreline_config(tmp_path, restore
     assert config.workflow.hmc_transform == 'Rigid'
 
 
+def _dwidenoise2_json(tmp_path, name='dwidenoise2.json', **settings):
+    import json
+
+    path = tmp_path / name
+    path.write_text(json.dumps(settings))
+    return str(path)
+
+
+def test_dwidenoise2_config_reaches_the_namespace(minimal_args, tmp_path):
+    from pathlib import Path
+
+    cfg = _dwidenoise2_json(tmp_path, decomposition='selfadjoint')
+    opts = _parse(minimal_args, '--denoise-method', 'dwidenoise2', '--dwidenoise2-config', cfg)
+    assert opts.denoise_method == 'dwidenoise2'
+    assert opts.dwidenoise2_config == Path(cfg).absolute()
+
+
+def test_dwidenoise2_config_defaults_to_none(minimal_args):
+    assert _parse(minimal_args, '--denoise-method', 'dwidenoise2').dwidenoise2_config is None
+
+
+@pytest.mark.parametrize(
+    'method_args',
+    [[], ['--denoise-method', 'dwidenoise'], ['--denoise-method', 'patch2self']],
+)
+def test_dwidenoise2_config_requires_dwidenoise2(minimal_args, tmp_path, capsys, method_args):
+    cfg = _dwidenoise2_json(tmp_path)
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, *method_args, '--dwidenoise2-config', cfg)
+    assert '--dwidenoise2-config requires --denoise-method dwidenoise2' in (
+        capsys.readouterr().err
+    )
+
+
+def test_invalid_dwidenoise2_config_is_a_parse_error(minimal_args, tmp_path, capsys):
+    cfg = _dwidenoise2_json(tmp_path, schedule=[{'kernel': 'rank'}])
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--denoise-method', 'dwidenoise2', '--dwidenoise2-config', cfg)
+    assert 'first schedule row' in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    'spec', ['dwidenoise2;demodulate:apc', 'dwidenoise2;schedule:vlarge', 'dwidenoise;x:y']
+)
+def test_semicolon_denoise_parameters_are_rejected(minimal_args, capsys, spec):
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--denoise-method', spec)
+    assert 'invalid choice' in capsys.readouterr().err
+
+
+@pytest.fixture
+def restore_dwidenoise2_config():
+    """Yield qsiprep.config, restoring the dwidenoise2 settings that parse_args writes."""
+    from qsiprep import config
+
+    saved = (config.workflow.denoise_method, config.workflow.dwidenoise2_config)
+    yield config
+    config.workflow.denoise_method, config.workflow.dwidenoise2_config = saved
+
+
+def test_dwidenoise2_config_survives_a_config_round_trip(
+    minimal_args, tmp_path, monkeypatch, restore_dwidenoise2_config
+):
+    """A relative path is stored as an absolute path string, not "PosixPath('...')"."""
+    from pathlib import Path
+
+    import toml
+
+    config = restore_dwidenoise2_config
+    _dwidenoise2_json(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    opts = _parse(
+        minimal_args, '--denoise-method', 'dwidenoise2', '--dwidenoise2-config', 'dwidenoise2.json'
+    )
+    config.workflow.load({'dwidenoise2_config': opts.dwidenoise2_config}, init=False)
+    dumped = toml.dumps({'workflow': config.workflow.get()})
+    assert 'PosixPath(' not in dumped
+    config.workflow.dwidenoise2_config = None
+    config.workflow.load(toml.loads(dumped)['workflow'], init=False)
+    assert config.workflow.dwidenoise2_config == tmp_path / 'dwidenoise2.json'
+    assert Path(config.workflow.dwidenoise2_config).is_absolute()
+
+
+def test_config_file_reload_drops_stale_dwidenoise2_config(tmp_path, restore_dwidenoise2_config):
+    """A --config-file must not supply a dwidenoise2 config the command line did not give."""
+    old_json = _dwidenoise2_json(tmp_path, name='old.json', decomposition='selfadjoint')
+    config = _parse_with_config_file(
+        tmp_path,
+        f'[workflow]\ndenoise_method = "dwidenoise2"\ndwidenoise2_config = "{old_json}"\n',
+        '--denoise-method',
+        'dwidenoise2',
+    )
+    assert config.workflow.dwidenoise2_config is None
+
+
 def test_sdc_anat_reference_parses(minimal_args):
     assert _parse(minimal_args).sdc_anat_reference == 'none'
     opts = _parse(minimal_args, '--sdc-anat-reference', 't2w')
@@ -688,6 +783,19 @@ def test_t1w_derived_references_require_t1w_modality(minimal_args, capsys, refer
         ).sdc_anat_reference
         == 'auto'
     )
+
+
+def test_force_gre_sdc_after_eddy_is_off_and_warns_of_removal(minimal_args, capsys):
+    assert 'gre-sdc-after-eddy' not in _parse(minimal_args).force
+    capsys.readouterr()
+    assert 'gre-sdc-after-eddy' in _parse(minimal_args, '--force', 'gre-sdc-after-eddy').force
+    assert 'scheduled for removal' in capsys.readouterr().err
+
+
+def test_force_gre_sdc_after_eddy_requires_eddy(minimal_args, capsys):
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--hmc-method', 'tortoise', '--force', 'gre-sdc-after-eddy')
+    assert '--force gre-sdc-after-eddy requires --hmc-method eddy' in capsys.readouterr().err
 
 
 def test_shoreline_selection_warns_of_removal(minimal_args, capsys):

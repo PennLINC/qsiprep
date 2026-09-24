@@ -86,14 +86,73 @@ def test_dwidenoise2_has_no_kernel_options(tmp_path, kernel_option):
         mrtrix.DWIDenoise2(in_file=in_file, **{kernel_option: 1})
 
 
-def test_dwidenoise2_passes_schedule(tmp_path):
-    """Select a bundled noise estimation schedule by name."""
+_SCHEDULE_ROWS = [
+    {'spatial_subsample': 8, 'kernel': 'aspect=2.0'},
+    {'spatial_subsample': (2, 2, 1), 'kernel': 'rank', 'update_noise': False},
+]
+
+
+def test_dwidenoise2_passes_schedule(tmp_path, monkeypatch):
+    """Point -schedule at the file in the working directory without writing it."""
+    monkeypatch.chdir(tmp_path)
     in_file = tmp_path / 'dwi.nii.gz'
     in_file.touch()
 
-    interface = mrtrix.DWIDenoise2(in_file=in_file, schedule='vlarge')
+    interface = mrtrix.DWIDenoise2(in_file=in_file, schedule=_SCHEDULE_ROWS)
 
-    assert '-schedule vlarge' in interface.cmdline
+    assert '-schedule schedule.txt' in interface.cmdline
+    assert not (tmp_path / 'schedule.txt').exists()
+
+
+def test_dwidenoise2_writes_schedule_at_run_time(tmp_path, monkeypatch):
+    """Write the schedule rows into the execution directory before the command runs."""
+    from nipype.interfaces.base import CommandLine
+    from nipype.interfaces.base.support import Bunch
+
+    from qsiprep.utils.misc import format_dwidenoise2_schedule
+
+    calls = []
+
+    def fake_run(self, runtime, correct_return_codes=(0,)):
+        calls.append((tmp_path / 'node' / 'schedule.txt').read_text())
+        return runtime
+
+    monkeypatch.setattr(CommandLine, '_run_interface', fake_run)
+    node_dir = tmp_path / 'node'
+    node_dir.mkdir()
+    in_file = tmp_path / 'dwi.nii.gz'
+    in_file.touch()
+
+    interface = mrtrix.DWIDenoise2(in_file=in_file, schedule=_SCHEDULE_ROWS)
+    interface._run_interface(Bunch(cwd=str(node_dir)))
+
+    assert calls == [format_dwidenoise2_schedule(_SCHEDULE_ROWS)]
+
+
+def test_dwidenoise2_without_schedule_writes_nothing(tmp_path, monkeypatch):
+    from nipype.interfaces.base import CommandLine
+    from nipype.interfaces.base.support import Bunch
+
+    monkeypatch.setattr(
+        CommandLine, '_run_interface', lambda self, runtime, correct_return_codes=(0,): runtime
+    )
+    in_file = tmp_path / 'dwi.nii.gz'
+    in_file.touch()
+
+    interface = mrtrix.DWIDenoise2(in_file=in_file)
+    interface._run_interface(Bunch(cwd=str(tmp_path)))
+
+    assert '-schedule' not in interface.cmdline
+    assert not (tmp_path / 'schedule.txt').exists()
+
+
+def test_dwidenoise2_rejects_a_schedule_name(tmp_path):
+    """Bundled schedule names are no longer passed through."""
+    in_file = tmp_path / 'dwi.nii.gz'
+    in_file.touch()
+
+    with pytest.raises(TraitError):
+        mrtrix.DWIDenoise2(in_file=in_file, schedule='vlarge')
 
 
 def test_dwidenoise2_formats_fslgrad(tmp_path):
