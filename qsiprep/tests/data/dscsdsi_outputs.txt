@@ -24,6 +24,8 @@ sub-tester/dwi/sub-tester_acq-HASC55AP_from-ACPC_to-distortiongroup_mode-image_d
 sub-tester/dwi/sub-tester_acq-HASC55AP_from-distortiongroup_to-ACPC_mode-image_desc-coreg_xfm.mat
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-brain_mask.nii.gz
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-image_qc.tsv
+sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-jacobian_dwimap.json
+sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-jacobian_dwimap.nii.gz
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-preproc_dwi.b
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-preproc_dwi.b_table.txt
 sub-tester/dwi/sub-tester_acq-HASC55AP_space-ACPC_desc-preproc_dwi.bval

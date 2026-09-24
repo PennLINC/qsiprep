@@ -507,6 +507,10 @@ def _finalize_cfg(tmp_path):
     config.workflow.sdc_method = 'topup'
     config.workflow.output_resolution = 1.2
     config.workflow.dwiref_definition = 'distortion-group'
+    # Read when the bias-correction node is built (do_biascorr=True paths);
+    # set here so these tests do not depend on which module ran before them.
+    config.workflow.b0_threshold = 100
+    config.workflow.dwi2anat_dof = 6
     config.nipype.omp_nthreads = 1
 
 
@@ -1571,3 +1575,50 @@ def test_eddy_summary_leaves_hmc_transform_undefined(tmp_path):
     # _dwi_preproc_cfg sets this, standing in for a stale value.
     assert config.workflow.hmc_transform == 'Affine'
     assert not isdefined(wf.get_node('summary').inputs.hmc_transform)
+
+
+# --- Jacobian-modulation boilerplate -----------------------------------------
+
+
+def test_boilerplate_states_modulation_when_enabled():
+    from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
+
+    config.workflow.ignore = []
+    text = gradwarp_boilerplate('3D', 'metadata')
+    assert 'Jacobian' in text
+
+
+def test_boilerplate_states_the_absence_when_disabled():
+    from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
+
+    config.workflow.ignore = ['jacobian']
+    text = gradwarp_boilerplate('3D', 'metadata')
+    assert 'without Jacobian' in text or 'no Jacobian' in text
+
+
+def test_dis3d_boilerplate_makes_no_jacobian_claim():
+    """A DIS3D unit has no field, so there is nothing to have been modulated."""
+    from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
+
+    config.workflow.ignore = []
+    assert 'Jacobian' not in gradwarp_boilerplate(None)
+
+
+def test_eddy_boilerplate_flags_lsr_as_unmodulated():
+    # Lives in qsiprep/interfaces/eddy.py, not qsiprep/workflows/dwi/fsl.py --
+    # fsl.py only calls it.
+    from qsiprep.interfaces.eddy import boilerplate_from_eddy_config
+
+    text = boilerplate_from_eddy_config(
+        {'method': 'lsr', 'flm': 'quadratic', 'slm': 'linear'}, 'epi', pepolar_method='topup'
+    )
+    assert 'not Jacobian-modulated' in text
+
+
+def test_eddy_boilerplate_states_modulation_for_the_jac_default():
+    from qsiprep.interfaces.eddy import boilerplate_from_eddy_config
+
+    text = boilerplate_from_eddy_config(
+        {'method': 'jac', 'flm': 'quadratic', 'slm': 'linear'}, 'epi', pepolar_method='topup'
+    )
+    assert 'Jacobian-modulated by eddy itself' in text

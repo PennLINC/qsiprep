@@ -6,7 +6,6 @@ Implementing the FSL preprocessing workflow
 
 """
 
-import json
 import os
 
 from nipype.interfaces import fsl
@@ -32,6 +31,7 @@ from ...interfaces.images import ConformDwi, IntraModalMerge, SplitDWIsFSL
 from ...interfaces.nilearn import EnhanceB0
 from ...interfaces.reports import TopupSummary
 from ...interfaces.synb0 import Synb0FieldQC
+from ...utils.eddy_config import eddy_modulates_distortion, load_eddy_args
 from ...utils.gpu import gpu_enabled
 from ..fieldmap.base import init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf
@@ -155,8 +155,8 @@ def init_fsl_hmc_wf(
                 'b0_indices',
                 'to_dwi_ref_affines',
                 'to_dwi_ref_warps',
-                'rpe_b0_info',
                 'sdc_scaling_images',
+                'rpe_b0_info',
                 # From SDC
                 'fieldmap_type',
                 'fieldmap_hz',
@@ -185,8 +185,32 @@ def init_fsl_hmc_wf(
     else:
         eddy_cfg_file = config.workflow.eddy_config
 
-    with open(eddy_cfg_file) as f:
-        eddy_args = json.load(f)
+    eddy_args = load_eddy_args()
+
+    # Whether eddy is Jacobian-modulating its own resampling at all. This is
+    # known now, but whether TOPUP is the run's susceptibility source is not
+    # decided until `run_topup` below (~line 341) -- only TOPUP's field is
+    # baked into eddy's resampling and thus left unmodulated by this setting;
+    # DRBUDDI/GRE/SyN warps are applied downstream of eddy and QSIPrep
+    # Jacobian-modulates those itself regardless of eddy's resampling method.
+    # So only 'eddy-current' -- eddy's own component, never modulated under a
+    # non-'jac' method regardless of the SDC method -- is recorded here;
+    # 'susceptibility' is recorded further down, gated on `run_topup`. Both
+    # feed into the sidecar via ``jacobian_provenance.jacobian_provenance_for``,
+    # which recomputes this same fact from ``load_eddy_args()`` rather than
+    # threading it through here -- see that module for why.
+    eddy_will_modulate = eddy_modulates_distortion(eddy_args)
+    if not eddy_will_modulate:
+        config.loggers.workflow.warning(
+            'eddy is configured with method=%s, not "jac", so its own '
+            'eddy-current distortion correction will NOT be '
+            'Jacobian-modulated. QSIPrep cannot retrofit this: eddy has '
+            'already baked its resampling in and exports no field for the '
+            'eddy-current component. Whether the susceptibility component is '
+            "also affected depends on whether TOPUP is this run's SDC "
+            'method, resolved separately.',
+            eddy_args.get('method'),
+        )
 
     gather_inputs = pe.Node(
         GatherEddyInputs(
@@ -325,6 +349,15 @@ def init_fsl_hmc_wf(
     # TOPUP+eddy stage pools every blip group.
     run_topup = unit.run.stage_with('topup') is not None
     run_drbuddi = unit.run.stage_with('drbuddi') is not None
+    # Only TOPUP's susceptibility field is baked into eddy's own resampling
+    # (see the `eddy_will_modulate` block above), so 'susceptibility' is only
+    # unmodulated when TOPUP is actually this run's susceptibility source.
+    # DRBUDDI/GRE/SyN apply their warp downstream of eddy regardless of
+    # `run_topup`, and QSIPrep Jacobian-modulates that warp itself, so
+    # recording 'susceptibility' as unmodulated in that case would mislabel
+    # the sidecar. ``jacobian_provenance.jacobian_provenance_for`` mirrors
+    # this exact condition (``run_topup and not eddy_will_modulate``) from
+    # ``unit`` alone, so nothing is recorded here any more.
     if fieldmap_type == 'synb0' and not run_topup:
         # The plan gave this unit no TOPUP stage (e.g. --sdc-method drbuddi):
         # nothing on the eddy path consumes the synthetic b=0, so the series
@@ -543,6 +576,10 @@ def init_fsl_hmc_wf(
     if run_drbuddi:
         outputnode.inputs.sdc_method = 'DRBUDDI'
         config.loggers.workflow.info('Running DRBUDDI for SDC')
+        # Unlike TOPUP-only (baked into eddy's own resampling, see above),
+        # DRBUDDI's warp is carried in to_dwi_ref_warps and applied downstream
+        # of eddy, so it reaches ComposeJacobianWeights externally (recorded
+        # by jacobian_provenance.jacobian_provenance_for, not here).
 
         # Let gather_inputs know we're doing pepolar, even though it's not topup
         gather_inputs.inputs.topup_requested = True
@@ -600,6 +637,10 @@ def init_fsl_hmc_wf(
     if unit.is_gre or unit.is_nipreps_syn:
         config.loggers.workflow.info(f'Computing fieldmap directly from {fieldmap_type}')
         outputnode.inputs.sdc_method = fieldmap_type
+        # This warp is applied downstream of eddy (out_warp -> to_dwi_ref_warps),
+        # not baked into eddy's own resampling, so it reaches
+        # ComposeJacobianWeights externally (recorded by
+        # jacobian_provenance.jacobian_provenance_for, not here).
         b0_sdc_wf = init_sdc_wf(unit)
 
         # Send to SDC workflow

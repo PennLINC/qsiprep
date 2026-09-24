@@ -86,8 +86,14 @@ def init_modelfree_qc_wf(bvec_convention='DIPY', name='dwi_qc_wf'):
         (raw_src, raw_src_qc, [('output_src', 'src_file')]),
         (raw_src, raw_gqi, [('output_src', 'input_src_file')]),
         (raw_gqi, raw_fib_qc, [('output_fib', 'src_file')]),
-        (raw_fib_qc, merged_qc, [('qc_txt', 'fib_qc')]),
-        (raw_src_qc, merged_qc, [('qc_txt', 'src_qc')]),
+        (raw_fib_qc, merged_qc, [
+            ('qc_txt', 'fib_qc'),
+            ('warning', 'fib_qc_warning'),
+        ]),
+        (raw_src_qc, merged_qc, [
+            ('qc_txt', 'src_qc'),
+            ('warning', 'src_qc_warning'),
+        ]),
         (merged_qc, outputnode, [('qc_file', 'qc_summary')]),
     ])  # fmt:skip
 

@@ -73,8 +73,6 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
     out_warp
         the corresponding :abbr:`DFM (displacements field map)` compatible with
         ANTs
-    out_jacobian
-        the jacobian of the field (for drop-out alleviation)
     out_mask
         mask of the unwarped input file
     out_hz
@@ -110,7 +108,6 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
                 'out_reference_brain',
                 'out_warp',
                 'out_mask',
-                'out_jacobian',
                 'out_hz',
             ]
         ),
@@ -174,10 +171,6 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
     # Convert the VSM into a DFM (displacements field map)
     # or: FUGUE shift to ANTS warping.
     vsm2dfm = pe.Node(FUGUEvsm2ANTSwarp(), name='vsm2dfm')
-    jac_dfm = pe.Node(
-        ants.CreateJacobianDeterminantImage(imageDimension=3, outputImage='jacobian.nii.gz'),
-        name='jac_dfm',
-    )
 
     unwarp_reference = pe.Node(
         ANTSApplyTransformsRPT(
@@ -222,7 +215,6 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
         (inputnode, unwarp_reference, [('in_reference', 'reference_image')]),
         (inputnode, unwarp_reference, [('in_reference', 'input_image')]),
         (vsm2dfm, outputnode, [('out_file', 'out_warp')]),
-        (vsm2dfm, jac_dfm, [('out_file', 'deformationField')]),
         (inputnode, fieldmap_fov_mask, [('fmap_ref', 'in_file')]),
         (fieldmap_fov_mask, fmap_fov2ref_apply, [('out_file', 'input_image')]),
         (inputnode, fmap_fov2ref_apply, [('in_reference', 'reference_image')]),
@@ -233,7 +225,6 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
             ('out_file', 'out_reference'),
             ('out_file', 'out_reference_brain'),
         ]),
-        (jac_dfm, outputnode, [('jacobian_image', 'out_jacobian')]),
         (gen_vsm, vsm2dfm, [('shift_out_file', 'in_file')]),
     ])  # fmt:skip
 

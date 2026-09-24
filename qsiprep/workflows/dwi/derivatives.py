@@ -13,6 +13,8 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
 from ... import config
 from ...interfaces import DerivativesDataSink
+from ...interfaces.bids import DerivativesMaybeDataSink
+from ...interfaces.jacobian import StackJacobianWeights
 from ...interfaces.tsnr import DWITSNR
 from ...utils.sdc import sdc_displacement_sidecar
 
@@ -65,13 +67,26 @@ def _tsnr_meta(n_b0, median_tsnr):
 LOGGER = logging.getLogger('nipype.workflow')
 
 
-def init_dwi_derivatives_wf(source_file, sdc_warp_meta=None, sdc_refinement_meta=None) -> Workflow:
+def init_dwi_derivatives_wf(
+    source_file,
+    sdc_warp_meta=None,
+    sdc_refinement_meta=None,
+    jacobian_applied_corrections=(),
+    jacobian_unmodulated_corrections=(),
+    jacobian_unmodulated_reason=None,
+) -> Workflow:
     """Set up a battery of datasinks to store derivatives in the right location.
 
     When ``sdc_warp_meta`` is given (a dict of sidecar metadata), the SDC
     (susceptibility) displacement is also written as a map on the ACPC output grid,
     for inspection rather than for resampling. ``sdc_refinement_meta`` does the
     same for DRBUDDI's refinement of the TOPUP field (TOPUP+DRBUDDI only).
+
+    The three ``jacobian_*`` arguments are this run's own intensity-modulation
+    provenance -- see ``qsiprep.utils.jacobian_provenance.jacobian_provenance_for``,
+    which the caller (``init_dwi_finalize_wf``) computes from the ``unit`` it has
+    and this function does not. They are set directly as ``StackJacobianWeights``
+    node inputs, because they are per-run facts, not invocation-global ones.
     """
     output_dir = str(config.execution.output_dir)
     workflow = Workflow(name='dwi_derivatives_wf')
@@ -90,6 +105,11 @@ def init_dwi_derivatives_wf(source_file, sdc_warp_meta=None, sdc_refinement_meta
                 'btable_t1',
                 'hmc_optimization_data',
                 'series_qc',
+                # Only defined when Jacobian weighting applied (no --ignore jacobian)
+                # weights: see StackJacobianWeights below.
+                'jacobian_weights',
+                'jacobian_weight_index',
+                'jacobian_method',
                 'sdc_warp_to_template',
                 'sdc_refinement_to_template',
                 'sdc_transform_files',
@@ -279,6 +299,48 @@ def init_dwi_derivatives_wf(source_file, sdc_warp_meta=None, sdc_refinement_meta
         (inputnode, ds_gradient_table_t1, [('gradient_table_t1', 'in_file')]),
         (inputnode, ds_btable_t1, [('btable_t1', 'in_file')]),
     ])  # fmt:skip
+
+    # The Jacobian weight derivative records the weights QSIPrep applied, and
+    # nothing else. When --ignore jacobian is given, or when every applied
+    # modulation was internal to a backend (e.g. --hmc-method eddy with TOPUP
+    # and no gradwarp), ComposeJacobianWeights produces no maps, jacobian_weights
+    # stays Undefined all the way down this pipe, and DerivativesMaybeDataSink
+    # no-ops -- no file is written. A unity map is never synthesized for that
+    # case: it would assert "we modulated by 1", which is false.
+    if 'jacobian' not in (config.workflow.ignore or []):
+        stack_jacobian = pe.Node(
+            StackJacobianWeights(
+                applied_corrections=list(jacobian_applied_corrections),
+                unmodulated_corrections=list(jacobian_unmodulated_corrections),
+                unmodulated_reason=jacobian_unmodulated_reason,
+            ),
+            name='stack_jacobian',
+        )
+        ds_jacobian = pe.Node(
+            DerivativesMaybeDataSink(
+                source_file=source_file,
+                base_directory=output_dir,
+                space='ACPC',
+                desc='jacobian',
+                suffix='dwimap',
+                extension='.nii.gz',
+                compress=True,
+            ),
+            name='ds_jacobian',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+        workflow.connect([
+            (inputnode, stack_jacobian, [
+                ('jacobian_weights', 'weight_images'),
+                ('jacobian_weight_index', 'weight_index'),
+                ('jacobian_method', 'method'),
+            ]),
+            (stack_jacobian, ds_jacobian, [
+                ('out_file', 'in_file'),
+                ('meta_dict', 'meta_dict'),
+            ]),
+        ])  # fmt:skip
 
     # The SDC displacement in ACPC space. It is a map of the
     # correction, not a transform: the correction is applied separately.
