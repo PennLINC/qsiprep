@@ -33,8 +33,8 @@ from ...interfaces.reports import TopupSummary
 from ...interfaces.synb0 import Synb0FieldQC
 from ...utils.eddy_config import eddy_applies_gre, eddy_modulates_distortion, load_eddy_args
 from ...utils.gpu import gpu_enabled
-from ..fieldmap.base import init_sdc_wf
-from ..fieldmap.drbuddi import connect_gre_seed, init_drbuddi_wf, seeds_from_gre
+from ..fieldmap.base import init_gre_seed_wf, init_sdc_wf
+from ..fieldmap.drbuddi import init_drbuddi_wf, seeds_from_gre
 from ..fieldmap.synb0 import init_synb0_wf
 from .gradwarp import (
     connect_gradwarp_coreg_reference,
@@ -636,15 +636,16 @@ def init_fsl_hmc_wf(
             ]),
         ])  # fmt:skip
         if gre_seed:
-            connect_gre_seed(
-                workflow,
-                inputnode,
-                unit,
-                (extract_b0_series, 'b0_average'),
-                drbuddi_wf,
-                has_gradwarp,
-                source_file,
-            )
+            gre_seed_wf = init_gre_seed_wf(unit, has_gradwarp, source_file, use='drbuddi')
+            workflow.connect([
+                (extract_b0_series, gre_seed_wf, [('b0_average', 'inputnode.b0_template')]),
+                (inputnode, gre_seed_wf, [
+                    ('t1_brain', 'inputnode.t1_brain'),
+                    ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
+                    ('gradwarp_field', 'inputnode.gradwarp_field'),
+                ]),
+                (gre_seed_wf, drbuddi_wf, [('outputnode.out_warp', 'inputnode.initial_field')]),
+            ])  # fmt:skip
 
         return workflow
 

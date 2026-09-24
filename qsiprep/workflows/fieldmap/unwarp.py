@@ -198,8 +198,6 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
         (fmap2ref_rpt, ds_report_reg, [('out_report', 'in_file')]),
         (inputnode, fmap2ref_apply, [('fmap', 'input_image')]),
         (fmap2ref_apply, torads, [('output_image', 'in_file')]),
-        # The registered fieldmap is already in Hz; ``FieldToHz(range_hz=1)``
-        # would rescale it by 1/pi, not convert units.
         (fmap2ref_apply, outputnode, [('output_image', 'out_hz')]),
         (inputnode, get_ees, [
             ('in_reference', 'in_file'),

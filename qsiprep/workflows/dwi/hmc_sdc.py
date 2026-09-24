@@ -16,8 +16,8 @@ from ... import config
 from ...interfaces.gradients import CombineMotions, GradientRotation, SliceQC
 from ...interfaces.images import SplitDWIsBvals, TSplit
 from ...utils.gpu import gpu_enabled
-from ..fieldmap.base import init_sdc_wf
-from ..fieldmap.drbuddi import connect_gre_seed, init_drbuddi_wf, seeds_from_gre
+from ..fieldmap.base import init_gre_seed_wf, init_sdc_wf
+from ..fieldmap.drbuddi import init_drbuddi_wf, seeds_from_gre
 from .gradwarp import (
     connect_gradwarp_sdc_reference,
     connect_gradwarp_sdc_volumes,
@@ -272,15 +272,18 @@ def init_qsiprep_hmcsdc_wf(
                 (apply_hmc_transforms, drbuddi_wf, [('output_image', 'inputnode.dwi_files')]),
             ])  # fmt:skip
         if gre_seed:
-            connect_gre_seed(
-                workflow,
-                inputnode,
-                unit,
-                (dwi_hmc_wf, 'outputnode.final_template'),
-                drbuddi_wf,
-                has_gradwarp,
-                source_file,
-            )
+            gre_seed_wf = init_gre_seed_wf(unit, has_gradwarp, source_file, use='drbuddi')
+            workflow.connect([
+                (dwi_hmc_wf, gre_seed_wf, [
+                    ('outputnode.final_template', 'inputnode.b0_template'),
+                ]),
+                (inputnode, gre_seed_wf, [
+                    ('t1_brain', 'inputnode.t1_brain'),
+                    ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
+                    ('gradwarp_field', 'inputnode.gradwarp_field'),
+                ]),
+                (gre_seed_wf, drbuddi_wf, [('outputnode.out_warp', 'inputnode.initial_field')]),
+            ])  # fmt:skip
 
         return workflow
 

@@ -619,12 +619,6 @@ class workflow(_Config):
     gre_sdc_after_eddy = False
     """Deprecated. Apply a GRE fieldmap's warp after eddy instead of handing the
     field to eddy (``--field``). Only affects the eddy HMC path."""
-    gre_init_keep_fixed = True
-    """Hold a GRE fieldmap's warp that initializes T2Wreg or DRBUDDI (when the
-    fieldmap lists a series another correction won) fixed through TORTOISE's
-    multi-resolution pyramid
-    (``--DRBUDDI_keep_initial_transform_fixed``), so each stage learns a residual
-    on top of it rather than low-passing and re-estimating it."""
     separate_all_dwis = False
     """Process all dwis separately - do not attempt concatenation."""
     shoreline_config = None

@@ -158,9 +158,13 @@ lists it, QSIPrep starts the registration from the GRE-derived warp and holds
 that warp fixed through the registration's multi-resolution pyramid, so the
 registration refines the GRE estimate rather than replacing it.
 
-There is no option to turn this on. It happens whenever a GRE fieldmap
-(``phasediff``, ``phase1``/``phase2`` or ``fieldmap``, with its magnitude
-images) lists a series that a different correction wins:
+There is no option to turn this on.
+QSIPrep picks one correction for each series: it prefers reverse phase encoding
+over a GRE fieldmap, and ``--force sdc-anat-reference`` puts the anatomical
+reference ahead of both.
+A GRE fieldmap (``phasediff``, ``phase1``/``phase2`` or ``fieldmap``, with its
+magnitude images) starts the registration whenever it lists a series that
+QSIPrep corrects in one of these other ways:
 
 * **reverse phase encoding**, corrected by DRBUDDI: with ``--hmc-method
   tortoise`` or ``shoreline``, or ``--hmc-method eddy --sdc-method drbuddi``.

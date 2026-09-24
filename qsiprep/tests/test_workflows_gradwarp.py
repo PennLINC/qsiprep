@@ -1133,9 +1133,13 @@ def test_diffprep_drbuddi_seeded_by_gre_candidate(tmp_path, monkeypatch):
     assert unit.gre_init_estimation is not None
     wf = _diffprep_wf(tmp_path, unit)
 
-    assert wf.get_node('drbuddi_gre_init_b0_ref_wf') is not None
+    assert wf.get_node('drbuddi_gre_seed_wf') is not None
     assert _connects(
-        wf, 'sdc_wf', 'drbuddi_sdc_wf', 'outputnode.out_warp', 'inputnode.initial_field'
+        wf,
+        'drbuddi_gre_seed_wf',
+        'drbuddi_sdc_wf',
+        'outputnode.out_warp',
+        'inputnode.initial_field',
     )
     desc = ' '.join(wf.visit_desc().split())
     assert 'initialized with the field map-derived deformation described above' in desc
@@ -1153,7 +1157,9 @@ def test_diffprep_drbuddi_seed_is_built_for_the_up_series(tmp_path, monkeypatch,
     unit = _rpe_unit_with_gre_candidate(tmp_path, minus_first=minus_first)
     wf = _diffprep_wf(tmp_path, unit)
 
-    seed_metadata = wf.get_node('sdc_wf.sdc_unwarp_wf.inputnode').inputs.metadata
+    seed_metadata = wf.get_node(
+        'drbuddi_gre_seed_wf.sdc_wf.sdc_unwarp_wf.inputnode'
+    ).inputs.metadata
     assert seed_metadata['PhaseEncodingDirection'] == unit.pe_dir == 'j'
     assert wf.get_node('drbuddi_sdc_wf.gather_drbuddi_inputs').inputs.dwi_series_pedir == 'j'
 
@@ -1179,9 +1185,13 @@ def test_gre_seeds_drbuddi_after_shoreline_and_eddy(
     unit = _rpe_unit_with_gre_candidate(tmp_path)
     wf = (_shoreline_wf if builder == 'shoreline' else _fsl_wf)(tmp_path, unit)
 
-    assert _connects(wf, b0_node, 'drbuddi_gre_init_b0_ref_wf', b0_field, 'inputnode.b0_template')
+    assert _connects(wf, b0_node, 'drbuddi_gre_seed_wf', b0_field, 'inputnode.b0_template')
     assert _connects(
-        wf, 'sdc_wf', 'drbuddi_sdc_wf', 'outputnode.out_warp', 'inputnode.initial_field'
+        wf,
+        'drbuddi_gre_seed_wf',
+        'drbuddi_sdc_wf',
+        'outputnode.out_warp',
+        'inputnode.initial_field',
     )
     assert wf.get_node('drbuddi_sdc_wf.drbuddi').inputs.keep_initial_transform_fixed is True
     desc = ' '.join(wf.visit_desc().split())
@@ -1201,7 +1211,7 @@ def test_gre_does_not_seed_drbuddi_after_topup(tmp_path, monkeypatch):
     wf = _fsl_wf(tmp_path, unit)
 
     assert wf.get_node('drbuddi_sdc_wf') is not None
-    assert wf.get_node('drbuddi_gre_init_b0_ref_wf') is None
+    assert wf.get_node('drbuddi_gre_seed_wf') is None
     assert wf.get_node('drbuddi_sdc_wf.negate_initial_field') is None
 
 
@@ -1214,7 +1224,7 @@ def test_diffprep_drbuddi_unseeded_without_a_gre_candidate(tmp_path, monkeypatch
     unit = _rpe_unit(tmp_path)
     assert unit.gre_init_estimation is None
     wf = _diffprep_wf(tmp_path, unit)
-    assert wf.get_node('drbuddi_gre_init_b0_ref_wf') is None
+    assert wf.get_node('drbuddi_gre_seed_wf') is None
     assert wf.get_node('drbuddi_sdc_wf').get_node('negate_initial_field') is None
     assert 'initialized with the field map' not in wf.visit_desc()
 
@@ -1226,13 +1236,21 @@ def test_diffprep_drbuddi_gre_seed_transports_with_gradwarp(tmp_path, monkeypatc
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg_for_diffprep(tmp_path)  # sets gradient_file -> has_gradwarp
     wf = _diffprep_wf(tmp_path, _rpe_unit_with_gre_candidate(tmp_path))
-    assert wf.get_node('drbuddi_gre_init_b0_ref_wf') is not None
-    assert wf.get_node('sdc_wf').gradwarp_mode == 'transport'
+    assert wf.get_node('drbuddi_gre_seed_wf') is not None
+    assert wf.get_node('drbuddi_gre_seed_wf.sdc_wf').gradwarp_mode == 'transport'
     assert _connects(
-        wf, 'sdc_wf', 'drbuddi_sdc_wf', 'outputnode.out_warp', 'inputnode.initial_field'
+        wf,
+        'drbuddi_gre_seed_wf',
+        'drbuddi_sdc_wf',
+        'outputnode.out_warp',
+        'inputnode.initial_field',
     )
     # transport composes the warp with the gradwarp field inside the seed's sdc wf
-    assert _connects(wf, 'inputnode', 'sdc_wf', 'gradwarp_field', 'inputnode.gradwarp_field')
+    assert _connects(
+        wf, 'inputnode', 'drbuddi_gre_seed_wf', 'gradwarp_field', 'inputnode.gradwarp_field'
+    )
+    seed_wf = wf.get_node('drbuddi_gre_seed_wf')
+    assert _connects(seed_wf, 'inputnode', 'sdc_wf', 'gradwarp_field', 'inputnode.gradwarp_field')
 
 
 def test_diffprep_syn_branch_gradwarps_the_sdc_reference(tmp_path):
@@ -2165,16 +2183,18 @@ def test_forced_t2w_reference_is_seeded_by_the_gre_fieldmap(tmp_path, monkeypatc
 
     diffprep = wf.get_node('diffprep')
     assert diffprep.inputs.epi_mode == 'T2Wreg'
-    assert _connects(wf, 'sdc_wf', 'diffprep', 'outputnode.out_warp', 'epireg_initial_field')
+    assert _connects(
+        wf, 't2wreg_gre_seed_wf', 'diffprep', 'outputnode.out_warp', 'epireg_initial_field'
+    )
     # The seed is held fixed through the multi-resolution pyramid.
     assert diffprep.inputs.keep_initial_transform_fixed is True
     assert _connects(wf, 'inputnode', 'diffprep', 'gradwarp_field', 'grad_nonlin')
     # The seed is estimated on a pre-HMC reference, in the gradwarp-corrected frame.
-    assert wf.get_node('sdc_wf').gradwarp_mode == 'transport'
-    assert _connects(
-        wf, 'gre_init_b0_ref_wf', 'sdc_wf', 'outputnode.ref_image', 'inputnode.b0_ref'
-    )
-    assert not _connects(wf, 'sdc_wf', 'outputnode', 'outputnode.out_warp', 'to_dwi_ref_warps')
+    assert wf.get_node('t2wreg_gre_seed_wf.sdc_wf').gradwarp_mode == 'transport'
+    seed_wf = wf.get_node('t2wreg_gre_seed_wf')
+    assert _connects(seed_wf, 'b0_ref_wf', 'sdc_wf', 'outputnode.ref_image', 'inputnode.b0_ref')
+    assert _connects(wf, 't2wreg_b0s', 't2wreg_gre_seed_wf', 'b0_average', 'inputnode.b0_template')
+    assert wf.get_node('sdc_wf') is None
     assert wf.get_node('outputnode').inputs.sdc_method == 'T2Wreg (GRE-initialized)'
     desc = ' '.join(wf.visit_desc().split())
     assert "to the subject's T2-weighted image" in desc
@@ -2201,7 +2221,9 @@ def test_forced_synb0_reference_is_seeded_by_the_gre_fieldmap(tmp_path, monkeypa
     assert diffprep.inputs.epi_mode == 'T2Wreg'
     assert wf.get_node('synb0_wf') is not None
     assert wf.get_node('t2wreg_b0s') is None
-    assert _connects(wf, 'sdc_wf', 'diffprep', 'outputnode.out_warp', 'epireg_initial_field')
+    assert _connects(
+        wf, 't2wreg_gre_seed_wf', 'diffprep', 'outputnode.out_warp', 'epireg_initial_field'
+    )
     assert diffprep.inputs.keep_initial_transform_fixed is True
     assert wf.get_node('outputnode').inputs.sdc_method == 'T2Wreg (SynB0, GRE-initialized)'
 
@@ -2212,7 +2234,7 @@ def test_t2wreg_without_a_gre_candidate_is_not_seeded(tmp_path, monkeypatch):
     wf = _diffprep_t2wreg_wf(tmp_path, _plain_unit(tmp_path))
 
     assert wf.get_node('diffprep').inputs.epi_mode == 'T2Wreg'
-    assert wf.get_node('gre_init_b0_ref_wf') is None
+    assert wf.get_node('t2wreg_gre_seed_wf') is None
     assert wf.get_node('outputnode').inputs.sdc_method == 'T2Wreg'
 
 

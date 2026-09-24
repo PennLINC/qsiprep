@@ -684,10 +684,8 @@ to workflows in *QSIPrep*'s documentation]\
         )
         # The SDC displacement maps name, in their sidecars, the written transforms
         # that carried the correction from the DWI frame into ACPC.
-        names_sdc_transforms = (
-            write_derivatives
-            and sdc_warp_source(unit, t2w_sdc, gre_in_eddy=eddy_applies_gre(unit))[0] is not None
-        )
+        warp_source, _ = sdc_warp_source(unit, t2w_sdc, gre_in_eddy=eddy_applies_gre(unit))
+        names_sdc_transforms = write_derivatives and warp_source is not None
 
         workflow.connect([
             (anat_preproc_wf, dwi_preproc_wf, [

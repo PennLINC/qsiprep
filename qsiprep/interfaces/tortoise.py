@@ -937,9 +937,7 @@ def generate_diffprep_boilerplate(correction_mode, t2wreg_target=None, gradwarpe
     return desc + '\n\n'
 
 
-def generate_drbuddi_boilerplate(
-    fieldmap_type, t2w_sdc, with_topup=False, initialized=False, keep_initialization_fixed=True
-):
+def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False, initialized=False):
     """Generate boilerplate that describes how DRBUDDI is being used.
 
     ``initialized`` says DRBUDDI starts from a field-map-derived deformation,
@@ -979,13 +977,9 @@ def generate_drbuddi_boilerplate(
         desc.append(
             'The registration was initialized with the field map-derived deformation '
             'described above, as the initial transform of the images with the primary '
-            'phase-encoding direction and, negated, of the reverse phase-encoded images'
-            + (
-                '; both were held fixed through the multi-resolution pyramid so that '
-                'each stage estimated only a residual correction on top of them.'
-                if keep_initialization_fixed
-                else '.'
-            )
+            'phase-encoding direction and, negated, of the reverse phase-encoded images; '
+            'both were held fixed through the multi-resolution pyramid so that '
+            'each stage estimated only a residual correction on top of them.'
         )
 
     if t2w_sdc:

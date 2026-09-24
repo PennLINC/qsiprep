@@ -519,7 +519,7 @@ def connect_gradwarp_sdc_reference(workflow, inputnode, source, source_fields, b
     ref_field, brain_field, mask_field = source_fields
     if getattr(b0_sdc_wf, 'gradwarp_mode', 'reference') == 'transport':
         # A GRE warp is estimated on the raw reference and transported afterwards
-        # (see the note in fieldmap/base.py), so the references stay raw.
+        # (see ``_connect_transported_warp`` in fieldmap/base.py), so the references stay raw.
         workflow.connect([
             (inputnode, b0_sdc_wf, [('gradwarp_field', 'inputnode.gradwarp_field')]),
             (source, b0_sdc_wf, [

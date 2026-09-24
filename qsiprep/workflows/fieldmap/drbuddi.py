@@ -82,52 +82,6 @@ def seeds_from_gre(unit):
     )
 
 
-def connect_gre_seed(workflow, inputnode, unit, b0_source, drbuddi_wf, has_gradwarp, source_file):
-    """Build the warp of ``unit``'s GRE candidate and start ``drbuddi_wf`` from it.
-
-    ``b0_source`` is ``(node, field)`` giving the b=0 average of the volumes
-    DRBUDDI corrects, before gradient unwarping; ``inputnode`` carries
-    ``t1_brain``, ``t1_2_mni_reverse_transform`` and ``gradwarp_field``. The warp
-    is built for DRBUDDI's up series and, with gradient unwarping, transported
-    into the frame of the gradwarped up/down volumes. ``drbuddi_wf`` must have
-    been built with ``initialize_from_field=True``.
-    """
-    from ..dwi.gradwarp import connect_gradwarp_sdc_reference
-    from ..dwi.util import init_dwi_reference_wf
-    from .base import gre_seed_unit, init_sdc_wf
-
-    config.loggers.workflow.info(
-        'Initializing DRBUDDI for %s with GRE fieldmap %s.',
-        unit.output_name,
-        unit.gre_init_estimation.b0field_id,
-    )
-    src_node, src_field = b0_source
-    b0_ref_wf = init_dwi_reference_wf(
-        source_file=source_file, name='drbuddi_gre_init_b0_ref_wf', gen_report=False
-    )
-    seed_sdc_wf = init_sdc_wf(gre_seed_unit(unit), gradwarp=has_gradwarp, use='drbuddi')
-    seed_sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
-    ref_fields = ('outputnode.ref_image', 'outputnode.ref_image_brain', 'outputnode.dwi_mask')
-    workflow.connect([
-        (src_node, b0_ref_wf, [(src_field, 'inputnode.b0_template')]),
-        (inputnode, seed_sdc_wf, [
-            ('t1_brain', 'inputnode.t1_brain'),
-            ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-        ]),
-        (seed_sdc_wf, drbuddi_wf, [('outputnode.out_warp', 'inputnode.initial_field')]),
-    ])  # fmt:skip
-    if has_gradwarp:
-        connect_gradwarp_sdc_reference(workflow, inputnode, b0_ref_wf, ref_fields, seed_sdc_wf)
-    else:
-        workflow.connect([
-            (b0_ref_wf, seed_sdc_wf, [
-                (ref_fields[0], 'inputnode.b0_ref'),
-                (ref_fields[1], 'inputnode.b0_ref_brain'),
-                (ref_fields[2], 'inputnode.b0_mask'),
-            ]),
-        ])  # fmt:skip
-
-
 def init_drbuddi_wf(
     unit,
     t2w_sdc,
@@ -268,7 +222,6 @@ def init_drbuddi_wf(
         t2w_sdc=t2w_sdc,
         with_topup=unit.run.stage_with('topup') is not None,
         initialized=initialize_from_field,
-        keep_initialization_fixed=config.workflow.gre_init_keep_fixed,
     )
 
     outputnode.inputs.method = f'PEB/PEPOLAR (phase-encoding based / PE-POLARity): {fieldmap_type}'
@@ -307,7 +260,7 @@ def init_drbuddi_wf(
     )
 
     if initialize_from_field:
-        drbuddi.inputs.keep_initial_transform_fixed = config.workflow.gre_init_keep_fixed
+        drbuddi.inputs.keep_initial_transform_fixed = True
         negate_initial_field = pe.Node(
             niu.Function(
                 input_names=['in_file'],
