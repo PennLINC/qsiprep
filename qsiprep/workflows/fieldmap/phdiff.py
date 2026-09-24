@@ -1,6 +1,7 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
+"""Phase-difference B0 estimation workflows.
+
 .. _sdc_phasediff :
 
 Phase-difference B0 estimation
@@ -34,8 +35,9 @@ from .utils import cleanup_edge_pipeline, demean_image, siemens2rads
 
 
 def init_phdiff_wf(phasetype='phasediff', name='phdiff_wf'):
-    """
-    Estimates the fieldmap using a phase-difference image and one or more
+    """Build a workflow that estimates the fieldmap from phase-difference data.
+
+    The fieldmap is estimated using a phase-difference image and one or more
     magnitude images corresponding to two or more :abbr:`GRE (Gradient Echo sequence)`
     acquisitions. The `original code was taken from nipype
     <https://github.com/nipy/nipype/blob/master/nipype/workflows/dmri/fsl/artifacts.py#L514>`_.
@@ -47,14 +49,14 @@ def init_phdiff_wf(phasetype='phasediff', name='phdiff_wf'):
         from qsiprep.workflows.fieldmap.phdiff import init_phdiff_wf
         wf = init_phdiff_wf(omp_nthreads=1)
 
-
-    Outputs::
-
-      outputnode.fmap_ref - The average magnitude image, skull-stripped
-      outputnode.fmap_mask - The brain mask applied to the fieldmap
-      outputnode.fmap - The estimated fieldmap in Hz
-
-
+    Outputs
+    -------
+    fmap_ref
+        The average magnitude image, skull-stripped
+    fmap_mask
+        The brain mask applied to the fieldmap
+    fmap
+        The estimated fieldmap in Hz
     """
     omp_nthreads = config.nipype.omp_nthreads
     workflow = Workflow(name=name)

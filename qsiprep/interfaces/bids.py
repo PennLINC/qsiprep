@@ -1,8 +1,6 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
-Interfaces for handling BIDS-like neuroimaging structures
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+"""Interfaces for handling BIDS-like neuroimaging structures.
 
 Fetch some example data:
 
@@ -111,12 +109,10 @@ class BIDSInfoOutputSpec(TraitedSpec):
 
 
 class BIDSInfo(SimpleInterface):
-    """
-    Extract metadata from a BIDS-conforming filename
+    """Extract metadata from a BIDS-conforming filename.
 
     This interface uses only the basename, not the path, to determine the
     subject, session, task, run, acquisition or reconstruction.
-
     """
 
     input_spec = BIDSInfoInputSpec
@@ -144,9 +140,10 @@ class BIDSDataGrabberOutputSpec(TraitedSpec):
 
 
 class BIDSDataGrabber(SimpleInterface):
-    """
-    Collect files from a BIDS directory structure
+    """Collect files from a BIDS directory structure.
 
+    Examples
+    --------
     >>> from qsiprep.interfaces import BIDSDataGrabber
     >>> from qsiprep.utils.bids import collect_data
     >>> bids_src = BIDSDataGrabber(anatomical_contrast='T1w')

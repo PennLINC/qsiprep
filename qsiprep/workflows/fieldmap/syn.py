@@ -1,6 +1,7 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
+"""Fieldmap-less susceptibility distortion estimation workflows.
+
 .. _sdc_fieldmapless :
 
 Fieldmap-less estimation (experimental)
@@ -72,7 +73,8 @@ class ThreshAndBin(SimpleInterface):
 
 
 def init_syn_sdc_wf(bold_pe=None, atlas_threshold=2):
-    """
+    """Build a workflow that estimates a fieldmap-less SDC warp with ANTs SyN.
+
     This workflow takes a skull-stripped T1w image and reference b0 image and
     estimates a susceptibility distortion correction warp, using ANTs symmetric
     normalization (SyN) and the average fieldmap atlas described in
@@ -96,33 +98,32 @@ def init_syn_sdc_wf(bold_pe=None, atlas_threshold=2):
             bold_pe='j',
             omp_nthreads=8)
 
-    **Inputs**
+    Inputs
+    ------
+    b0_ref
+        reference image
+    template : str
+        Name of template targeted by ``template`` output space
+    t1_brain
+        skull-stripped, bias-corrected structural image
+    t1_2_mni_reverse_transform
+        inverse registration transform of T1w image to MNI template
 
-        b0_ref
-            reference image
-        template : str
-            Name of template targeted by ``template`` output space
-        t1_brain
-            skull-stripped, bias-corrected structural image
-        t1_2_mni_reverse_transform
-            inverse registration transform of T1w image to MNI template
+    Outputs
+    -------
+    out_reference
+        the ``bold_ref`` image after unwarping
+    out_reference_brain
+        the ``bold_ref_brain`` image after unwarping
+    out_warp
+        the corresponding :abbr:`DFM (displacements field map)` compatible with
+        ANTs
+    out_mask
+        mask of the unwarped input file
 
-    **Outputs**
-
-        out_reference
-            the ``bold_ref`` image after unwarping
-        out_reference_brain
-            the ``bold_ref_brain`` image after unwarping
-        out_warp
-            the corresponding :abbr:`DFM (displacements field map)` compatible with
-            ANTs
-        out_mask
-            mask of the unwarped input file
-
-    **References**
-
+    References
+    ----------
     .. footbibliography::
-
     """
     omp_nthreads = config.nipype.omp_nthreads
     if bold_pe is None or bold_pe[0] not in ['i', 'j']:

@@ -1,11 +1,6 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
-ITK files handling
-~~~~~~~~~~~~~~~~~~
-
-
-"""
+"""ITK files handling."""
 
 import glob
 import os
@@ -130,10 +125,10 @@ class DisassembleTransform(SimpleInterface):
 
 
 def _applytfms(args):
-    """
-    Applies ANTs' antsApplyTransforms to the input image.
+    """Apply ANTs' antsApplyTransforms to the input image.
+
     All inputs are zipped in one tuple to make it digestible by
-    multiprocessing's map
+    multiprocessing's map.
     """
     import nibabel as nb
     from nipype.utils.filemanip import fname_presuffix
@@ -165,9 +160,9 @@ def _applytfms(args):
 
 
 def _arrange_xfms(transforms, num_files, tmp_folder):
-    """
-    Convenience method to arrange the list of transforms that should be applied
-    to each input file. Not needed in qsiprep
+    """Arrange the list of transforms that should be applied to each input file.
+
+    Convenience method. Not needed in qsiprep.
     """
     base_xform = ['#Insight Transform File V1.0', '#Transform 0']
     # Initialize the transforms matrix
@@ -269,9 +264,10 @@ def compose_affines(reference_image, affine_list, output_file):
 
 
 def itk_affine_to_rigid(transform_file, cwd):
-    """uses c3d_affine_tool and FSL's aff2rigid to convert an itk linear
-    transform from affine to rigid"""
+    """Convert an ITK linear transform from affine to rigid.
 
+    Uses c3d_affine_tool and FSL's aff2rigid.
+    """
     rigid_mat_file = cwd + '/6DOFrigid.mat'
     translation_mat_file = cwd + '/translation.mat'
     inverse_mat_file = cwd + '/6DOFinverse.mat'

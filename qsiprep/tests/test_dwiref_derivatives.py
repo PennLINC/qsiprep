@@ -42,13 +42,19 @@ def _render(**entities):
     ],
 )
 def test_new_dwi_patterns_render(entities, expected):
-    """Before this task both return None: there is no dwi transform pattern, and
-    the dwi dwiref pattern permits no tsv."""
+    """Test that the new dwi patterns render.
+
+    Before this task both return None: there is no dwi transform pattern, and
+    the dwi dwiref pattern permits no tsv.
+    """
     assert _render(**entities) == expected
 
 
 def test_the_new_dwi_transform_pattern_does_not_shadow_the_anat_one():
-    """pybids takes the first matching pattern, so ordering matters."""
+    """Test that the new dwi transform pattern does not shadow the anat one.
+
+    pybids takes the first matching pattern, so ordering matters.
+    """
     assert (
         _render(
             datatype='anat',
@@ -61,7 +67,10 @@ def test_the_new_dwi_transform_pattern_does_not_shadow_the_anat_one():
 
 
 def test_existing_dwiref_paths_are_unchanged():
-    """The tsv addition must not disturb the NIfTI references."""
+    """Test that existing dwiref paths are unchanged.
+
+    The tsv addition must not disturb the NIfTI references.
+    """
     assert (
         _render(datatype='dwi', suffix='dwiref', extension='.nii.gz', space='ACPC', session='1')
         == 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_dwiref.nii.gz'
@@ -69,7 +78,7 @@ def test_existing_dwiref_paths_are_unchanged():
 
 
 def _units(names, dwi_dir):
-    """Stand-ins carrying only what the check reads.
+    """Return stand-ins carrying only what the check reads.
 
     The input directory matters: get_source_file places the output name in the
     first input's own directory, and the subject and session entity patterns are
@@ -99,7 +108,9 @@ def test_distinct_output_names_never_raise():
     ],
 )
 def test_plus_suffixed_output_names_always_raise(names, dwi_dir):
-    """Must hold on BOTH sides of the pybids 0.19 entity-pattern change.
+    """Test that plus-suffixed output names always raise.
+
+    Must hold on BOTH sides of the pybids 0.19 entity-pattern change.
 
     QSIPlan uniquifies same-named correction units as ``<base>+N``, an in-memory
     key rather than a BIDS entity. The subject and session patterns are
@@ -148,7 +159,9 @@ def test_plus_suffixed_output_names_always_raise(names, dwi_dir):
     ],
 )
 def test_dwiref_derivative_paths(entities, name, session):
-    """Asserted in both --subject-anatomical-reference modes.
+    """Test the dwiref derivative paths.
+
+    Asserted in both --subject-anatomical-reference modes.
 
     Subject-level products inherit ses-Y under sessionwise processing, which
     builds one workflow per session; dropping it would make two sessions collide.
@@ -161,8 +174,11 @@ def test_dwiref_derivative_paths(entities, name, session):
 
 
 def test_the_two_acpc_space_images_do_not_collide():
-    """An entity-free output group renders to bare `sub-01`, so both ACPC-space
-    images need a desc to stay apart."""
+    """Test that the two ACPC-space images do not collide.
+
+    An entity-free output group renders to bare `sub-01`, so both ACPC-space
+    images need a desc to stay apart.
+    """
     template = _render(
         datatype='dwi', suffix='dwiref', extension='.nii.gz', space='ACPC', desc='subject'
     )
@@ -203,7 +219,10 @@ def test_the_two_acpc_space_images_do_not_collide():
     ],
 )
 def test_dwiref_transform_paths(entities, expected):
-    """desc-coreg goes on the transforms, following fMRIPrep 26.0.0."""
+    """Test the dwiref transform paths.
+
+    desc-coreg goes on the transforms, following fMRIPrep 26.0.0.
+    """
     assert (
         _render(
             datatype='dwi',

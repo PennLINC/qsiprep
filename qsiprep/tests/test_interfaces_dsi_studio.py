@@ -19,7 +19,7 @@ APPTAINER_PATH = '/.singularity.d/libs'
 
 
 def test_get_dsi_studio_environment_removes_apptainer_path():
-    """Remove only the Apptainer library directory."""
+    """Test that only the Apptainer library directory is removed."""
     paths = ['/opt/freesurfer/lib', APPTAINER_PATH, '/opt/conda/lib']
     environment = {
         'LD_LIBRARY_PATH': os.pathsep.join(paths),
@@ -34,7 +34,7 @@ def test_get_dsi_studio_environment_removes_apptainer_path():
 
 
 def test_get_dsi_studio_environment_handles_edge_cases():
-    """Handle a trailing slash and a missing library path."""
+    """Test that a trailing slash and a missing library path are handled."""
     environment = {'LD_LIBRARY_PATH': APPTAINER_PATH + os.sep}
     assert _get_dsi_studio_environment(environment)['LD_LIBRARY_PATH'] == ''
     environment = {'OTHER_VARIABLE': 'value'}
@@ -46,7 +46,7 @@ def test_get_dsi_studio_environment_handles_edge_cases():
     [DSIStudioCreateSrc, DSIStudioGQIReconstruction],
 )
 def test_dsi_studio_command_line_sanitizes_environment(interface_class, monkeypatch, tmp_path):
-    """Sanitize both DSI Studio command-line actions."""
+    """Test that both DSI Studio command-line actions sanitize the environment."""
     paths = [APPTAINER_PATH, '/opt/freesurfer/lib']
     monkeypatch.setenv('LD_LIBRARY_PATH', os.pathsep.join(paths))
     captured_environment = {}
@@ -63,7 +63,7 @@ def test_dsi_studio_command_line_sanitizes_environment(interface_class, monkeypa
 
 
 def test_dsi_studio_qc_sanitizes_environment(monkeypatch, tmp_path):
-    """Sanitize the direct QC subprocess environment."""
+    """Test that the direct QC subprocess environment is sanitized."""
     paths = ['/opt/freesurfer/lib', APPTAINER_PATH]
     monkeypatch.setenv('LD_LIBRARY_PATH', os.pathsep.join(paths))
     src_file = tmp_path / 'input.src.gz'
@@ -147,14 +147,20 @@ def test_qc_warns_on_a_nonzero_exit(tmp_path, monkeypatch):
 
 
 def test_qc_warns_on_an_empty_output_despite_success(tmp_path, monkeypatch):
-    """Exit 0 plus an empty qc.txt is how DSI Studio reports giving up."""
+    """Test that QC warns on an empty output despite success.
+
+    Exit 0 plus an empty qc.txt is how DSI Studio reports giving up.
+    """
     results = _run_qc(tmp_path, monkeypatch, 0, '')
 
     assert 'empty QC file' in results['warning']
 
 
 def test_qc_creates_an_empty_file_when_none_was_written(tmp_path, monkeypatch):
-    """qc_txt is declared exists=True, so a missing file would fail the node."""
+    """Test that QC creates an empty file when none was written.
+
+    qc_txt is declared exists=True, so a missing file would fail the node.
+    """
     results = _run_qc(tmp_path, monkeypatch, 0, None)
 
     assert 'wrote no QC file' in results['warning']
@@ -183,7 +189,10 @@ def test_load_src_qc_file_parses_a_real_row(tmp_path):
 
 @pytest.mark.parametrize('contents', ['', _SRC_HEADER], ids=['empty', 'header-only'])
 def test_load_src_qc_file_returns_na_with_every_column(tmp_path, contents):
-    """Every run's image_qc.tsv must keep the same columns."""
+    """Test that load_src_qc_file returns n/a with every column.
+
+    Every run's image_qc.tsv must keep the same columns.
+    """
     qc = tmp_path / 'qc.txt'
     qc.write_text(contents)
 
@@ -194,7 +203,9 @@ def test_load_src_qc_file_returns_na_with_every_column(tmp_path, contents):
 
 
 def test_load_src_qc_file_still_rejects_an_unknown_format(tmp_path):
-    """A row DSI Studio did write, in a shape we do not know, is a version
+    """Test that load_src_qc_file still rejects an unknown format.
+
+    A row DSI Studio did write, in a shape we do not know, is a version
     mismatch rather than a failed measurement, so it is not hidden as n/a.
     """
     qc = tmp_path / 'qc.txt'
@@ -241,7 +252,10 @@ def test_merge_qc_has_an_empty_warning_column_when_qc_succeeds(tmp_path):
 
 
 def test_merge_qc_passes_the_upstream_reason_through(tmp_path):
-    """The reason DSIStudioSrcQC gave is what reaches the report."""
+    """Test that merging QC passes the upstream reason through.
+
+    The reason DSIStudioSrcQC gave is what reaches the report.
+    """
     table = _merge(
         tmp_path,
         '',
@@ -255,7 +269,10 @@ def test_merge_qc_passes_the_upstream_reason_through(tmp_path):
 
 
 def test_merge_qc_trusts_nothing_from_a_stage_that_crashed(tmp_path):
-    """After a crash, whatever DSI Studio wrote cannot be assumed complete."""
+    """Test that merging QC trusts nothing from a stage that crashed.
+
+    After a crash, whatever DSI Studio wrote cannot be assumed complete.
+    """
     table = _merge(
         tmp_path,
         _SRC_HEADER + _SRC_ROW,

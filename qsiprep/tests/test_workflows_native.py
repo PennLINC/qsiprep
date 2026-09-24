@@ -143,7 +143,7 @@ def _synb0_unit(tmp_path):
 
 
 def test_fsl_hmc_synb0_feeds_topup(tmp_path):
-    """A SynB0 unit runs TOPUP fed by the synthetic-b=0 merge node."""
+    """Test that a SynB0 unit runs TOPUP fed by the synthetic-b=0 merge node."""
     from nipype.interfaces.base import isdefined
 
     _cfg(sdc_method='topup')
@@ -174,7 +174,10 @@ def test_fsl_hmc_synb0_feeds_topup(tmp_path):
 
 
 def test_synb0_reportlet_descs_are_registered_in_the_report_spec():
-    """A desc absent from reports-spec.yml is written to disk but never shown."""
+    """Test that the SynB0 reportlet descs are registered in the report spec.
+
+    A desc absent from reports-spec.yml is written to disk but never shown.
+    """
     import yaml
 
     from qsiprep.data import load as load_data
@@ -191,8 +194,11 @@ def test_synb0_reportlet_descs_are_registered_in_the_report_spec():
 
 
 def test_fsl_hmc_synb0_without_topup_is_uncorrected(tmp_path):
-    """With no TOPUP stage in the plan (DRBUDDI-only eddy), nothing consumes
-    the synthetic b=0 and the series is processed without SDC."""
+    """Test that a SynB0 unit without a TOPUP stage is processed without SDC.
+
+    With no TOPUP stage in the plan (DRBUDDI-only eddy), nothing consumes
+    the synthetic b=0 and the series is processed without SDC.
+    """
     _cfg(sdc_method='drbuddi')
     from qsiprep.workflows.dwi.fsl import init_fsl_hmc_wf
 
@@ -203,7 +209,7 @@ def test_fsl_hmc_synb0_without_topup_is_uncorrected(tmp_path):
 
 
 def test_subject_summary_renders_native_groupings():
-    """The subject report renders the per-output grouping dict base.py builds.
+    """Test that the subject report renders the per-output grouping dict base.py builds.
 
     Regression: base.py fed SubjectSummary the grouping model instead of this
     shape, crashing the ``summary`` node on every subject.
@@ -237,7 +243,7 @@ def test_subject_summary_renders_native_groupings():
     [('j', 'Anterior-Posterior'), ('i-', 'Left-Right'), (None, 'MISSING')],
 )
 def test_diffusion_summary_renders_pe_direction(tmp_path, pe_direction, expected):
-    """DiffusionSummary tolerates a missing PE direction (base.py maps '' -> None)."""
+    """Test that DiffusionSummary tolerates a missing PE direction (base.py maps '' -> None)."""
     from qsiprep.interfaces.reports import DiffusionSummary
 
     report = tmp_path / 'validation.html'
@@ -256,7 +262,7 @@ def test_diffusion_summary_renders_pe_direction(tmp_path, pe_direction, expected
 
 
 def test_init_sdc_wf_phasediff_builds_without_a_layout(monkeypatch):
-    """The GRE path reads phase metadata off the unit, not config.execution.layout.
+    """Test that the GRE path reads phase metadata off the unit, not config.execution.layout.
 
     Regression guard for the removed layout.get_metadata re-reads: with no layout
     set, the old code raised; the model carries the metadata now.
@@ -277,7 +283,7 @@ def test_init_sdc_wf_phasediff_builds_without_a_layout(monkeypatch):
 
 
 def test_init_sdc_wf_dispatches_classic_syn():
-    """A SyN unit is not bypassed: init_sdc_wf builds the classic SyN sub-workflow."""
+    """Test that a SyN unit is not bypassed: init_sdc_wf builds the classic SyN sub-workflow."""
     _cfg(layout=None)
     from qsiprep.workflows.fieldmap import init_sdc_wf
 
@@ -293,7 +299,7 @@ def test_init_sdc_wf_dispatches_classic_syn():
 
 
 def test_init_sdc_wf_bipolar_two_phase_bypasses(monkeypatch):
-    """A two-phase GRE tagged Bipolar bypasses SDC (unsupported), off the model."""
+    """Test that a two-phase GRE tagged Bipolar bypasses SDC (unsupported), off the model."""
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')  # phdiff only checks the env is set
     _cfg(layout=None)
     from qsiprep.workflows.fieldmap import init_sdc_wf
@@ -314,7 +320,7 @@ def test_init_sdc_wf_bipolar_two_phase_bypasses(monkeypatch):
 
 
 def test_dwi_preproc_wf_drbuddi_without_t2w_builds(tmp_path, monkeypatch):
-    """The DRBUDDI extended-report block builds when no T2w is available.
+    """Test that the DRBUDDI extended-report block builds when no T2w is available.
 
     Regression: init_dwi_preproc_wf's ``else`` branch called
     init_extended_pepolar_report_wf() with no args (segment_t2w is required),
@@ -342,7 +348,7 @@ def test_dwi_preproc_wf_drbuddi_without_t2w_builds(tmp_path, monkeypatch):
 
 
 def test_dwi_preproc_wf_records_gradwarp_applied(tmp_path, monkeypatch):
-    """``jacobian_provenance_for`` reports 'gradwarp' for a real, unmocked unit.
+    """Test that ``jacobian_provenance_for`` reports 'gradwarp' for a real, unmocked unit.
 
     ``init_dwi_preproc_wf``'s gradwarp block (``qsiprep/workflows/dwi/
     base.py``, the ``if gradwarp_wf.plan.warp_dim is not None:`` branch) is
@@ -386,7 +392,7 @@ def test_dwi_preproc_wf_records_gradwarp_applied(tmp_path, monkeypatch):
 
 
 def test_drbuddi_wf_feeds_sidecar_map_and_discriminator(tmp_path):
-    """The DRBUDDI builder feeds the model's sidecar map (no silent disk fallback).
+    """Test that the DRBUDDI builder feeds the model's sidecar map (no silent disk fallback).
 
     Also checks the reverse-PE-series vs epi discriminator is derived from the
     unit rather than re-read at runtime.
@@ -414,9 +420,12 @@ def _drbuddi_seed_targets(wf):
 
 
 def test_drbuddi_wf_seeds_up_down_from_initial_field(tmp_path):
-    """``initialize_from_field`` seeds DRBUDDI's up/down initial transforms from
+    """Test that ``initialize_from_field`` seeds DRBUDDI's up/down initial transforms.
+
+    ``initialize_from_field`` seeds DRBUDDI's up/down initial transforms from
     ``inputnode.initial_field`` (up = the field, down = its negation) and holds
-    the seed fixed through the SyN pyramid."""
+    the seed fixed through the SyN pyramid.
+    """
     _cfg(hmc_method='tortoise', sdc_method='drbuddi')
     from qsiprep.workflows.fieldmap import init_drbuddi_wf
 
@@ -427,8 +436,11 @@ def test_drbuddi_wf_seeds_up_down_from_initial_field(tmp_path):
 
 
 def test_drbuddi_wf_unseeded_by_default(tmp_path):
-    """Without ``initialize_from_field`` nothing is added: stock DRBUDDI, no
-    negation node, no initial-transform flags (safe on an unpatched TORTOISE)."""
+    """Test that DRBUDDI is unseeded by default.
+
+    Without ``initialize_from_field`` nothing is added: stock DRBUDDI, no
+    negation node, no initial-transform flags (safe on an unpatched TORTOISE).
+    """
     _cfg(hmc_method='tortoise', sdc_method='drbuddi')
     from qsiprep.workflows.fieldmap import init_drbuddi_wf
 
@@ -440,8 +452,11 @@ def test_drbuddi_wf_unseeded_by_default(tmp_path):
 
 
 def test_negate_displacement_field_flips_sign_keeps_vector_intent(tmp_path, monkeypatch):
-    """The down-field helper negates every vector and preserves the ITK vector
-    intent (without which TORTOISE/ANTs read the field as zeros)."""
+    """Test that the down-field helper negates every vector and keeps the vector intent.
+
+    The down-field helper negates every vector and preserves the ITK vector
+    intent (without which TORTOISE/ANTs read the field as zeros).
+    """
     import nibabel as nb
     import numpy as np
 
@@ -460,7 +475,7 @@ def test_negate_displacement_field_flips_sign_keeps_vector_intent(tmp_path, monk
 
 
 def test_unit_sidecar_round_trips_through_derivatives_sidecar(tmp_path):
-    """finalize's sidecar node writes valid JSON from the model (no disk reads).
+    """Test that finalize's sidecar node writes valid JSON from the model (no disk reads).
 
     unit_to_sidecar runs at execution via DerivativesSidecar, which json-dumps
     with sort_keys=True -- so the payload must be JSON-serializable with string
@@ -494,7 +509,7 @@ def test_unit_sidecar_round_trips_through_derivatives_sidecar(tmp_path):
 
 
 def test_false_sidecar_booleans_survive_into_the_derivative_sidecar(tmp_path):
-    """A ``false`` boolean in a raw sidecar must not become ``true`` downstream.
+    """Test that a ``false`` boolean in a raw sidecar does not become ``true`` downstream.
 
     The derivative sidecar is built from qsiplan's file records, which read the
     JSON themselves. Metadata routed through pybids < 0.16.4 round-trips
@@ -542,7 +557,7 @@ def test_false_sidecar_booleans_survive_into_the_derivative_sidecar(tmp_path):
 
 
 def test_eddy_grouping_from_sidecars_needs_no_disk():
-    """eddy's acqp/index build from the model's sidecar map, not from disk."""
+    """Test that eddy's acqp/index build from the model's sidecar map, not from disk."""
     from qsiprep.interfaces.epi_fmap import get_distortion_grouping
 
     ap, pa = '/nope/sub-01_dir-AP_dwi.nii.gz', '/nope/sub-01_dir-PA_dwi.nii.gz'
@@ -557,7 +572,7 @@ def test_eddy_grouping_from_sidecars_needs_no_disk():
 
 
 def test_drbuddi_blip_assignments_from_sidecars_needs_no_disk():
-    """DRBUDDI's per-volume blip labels come from the sidecar map, not from disk."""
+    """Test that DRBUDDI's per-volume blip labels come from the sidecar map, not from disk."""
     from qsiprep.interfaces.tortoise import split_into_up_and_down_niis
 
     ap, pa = '/nope/sub-01_dir-AP_dwi.nii.gz', '/nope/sub-01_dir-PA_dwi.nii.gz'
@@ -590,8 +605,11 @@ def test_drbuddi_blip_assignments_from_sidecars_needs_no_disk():
 
 
 def test_unknown_hmc_method_is_rejected_at_selection_time(tmp_path):
-    """The subject workflow resolves the method selection before building
-    anything; garbage config dies there, not deep in a builder."""
+    """Test that an unknown HMC method is rejected at selection time.
+
+    The subject workflow resolves the method selection before building
+    anything; garbage config dies there, not deep in a builder.
+    """
     _cfg(hmc_method='bogus', layout=_StubLayout())
     from qsiprep.utils.plan import method_selection_from_config
 
@@ -618,7 +636,10 @@ if __name__ == '__main__':
 
 
 def test_method_axes_read_only_at_allowlisted_sites():
-    """Routing reads the compiled plan; the config method axes are display vocabulary only."""
+    """Test that the config method axes are read only at allowlisted sites.
+
+    Routing reads the compiled plan; the config method axes are display vocabulary only.
+    """
     import pathlib
     import re
 
@@ -649,7 +670,9 @@ def test_method_axes_read_only_at_allowlisted_sites():
 
 
 def test_distortion_group_merge_wf_writes_the_assembly_sidecar(tmp_path):
-    """A merged output carries the same provenance sidecar the direct path
+    """Test that the distortion-group merge writes the assembly sidecar.
+
+    A merged output carries the same provenance sidecar the direct path
     writes: ScanGrouping over every member run plus the merge strategy.
 
     Regression: the merge path skipped the sidecar entirely, so merged
@@ -708,7 +731,9 @@ def test_distortion_group_merge_wf_writes_the_assembly_sidecar(tmp_path):
 
 @pytest.mark.parametrize(('dof', 'expected'), [(6, 'Rigid'), (12, 'Affine')])
 def test_dwi2anat_dof_reaches_the_per_unit_coregistration(tmp_path, monkeypatch, dof, expected):
-    """The second production consumer of --dwi2anat-dof.
+    """Test that --dwi2anat-dof reaches the per-unit coregistration.
+
+    This is the second production consumer of --dwi2anat-dof.
 
     A test covering only the dwiref would pass with this call site
     still reading the removed config attribute.

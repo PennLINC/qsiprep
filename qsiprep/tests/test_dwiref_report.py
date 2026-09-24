@@ -32,7 +32,9 @@ def _template_wf(transform='Rigid', name='imt_report'):
 
 
 def test_white_matter_is_carried_into_template_space():
-    """Landmarks come from the anatomy, via the template->anat affine inverted.
+    """Test that white matter is carried into template space.
+
+    Landmarks come from the anatomy, via the template->anat affine inverted.
 
     The ordering works because b0_coreg_wf registers the template to the anatomy,
     so the affine exists once the template is built and before anything
@@ -57,7 +59,9 @@ def test_wm_seg_is_exposed_for_downstream_reports():
 
 
 def test_report_compares_one_image_before_and_after_its_own_transform():
-    """Both frames must be the session b=0 on the template grid.
+    """Test that the report compares one image before and after its own transform.
+
+    Both frames must be the session b=0 on the template grid.
 
     Guards the specific defect: 'after' being the template itself, which made the
     frame identical across sessions.
@@ -74,7 +78,10 @@ def test_report_compares_one_image_before_and_after_its_own_transform():
 
 
 def test_both_report_frames_land_on_the_template_grid():
-    """If the frames differ in grid, the flicker shows resampling, not registration."""
+    """Test that both report frames land on the template grid.
+
+    If the frames differ in grid, the flicker shows resampling, not registration.
+    """
     import inspect
 
     from qsiprep.workflows.dwi import finalize

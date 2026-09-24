@@ -145,7 +145,7 @@ def make_preproc_unit(
 
 
 def _run_for(grouping, unit):
-    """A ProcessingRun for a factory unit, from the config the test set up.
+    """Build a ProcessingRun for a factory unit from the config the test set up.
 
     Workflow builders dispatch on ``unit.run``'s stages; the real pipeline
     attaches runs from the subject-level compiled plan, so the factory mirrors

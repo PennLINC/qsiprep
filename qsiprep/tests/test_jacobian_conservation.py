@@ -25,7 +25,7 @@ from qsiprep.interfaces.jacobian import jacobian_determinant
 
 
 def _compressing_field(path, shape=(24, 24, 24), amplitude=3.0):
-    """A field that compresses along x, so det is well away from 1."""
+    """Write a field that compresses along x, so det is well away from 1."""
     coords = np.stack(
         np.meshgrid(*[np.linspace(0.0, 1.0, n) for n in shape], indexing='ij'),
         axis=-1,

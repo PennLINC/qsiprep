@@ -22,15 +22,13 @@
 #
 #     https://www.nipreps.org/community/licensing/
 #
-"""
-The workflow builder factory method.
+"""The workflow builder factory method.
 
 All the checks and the construction of the workflow are done
 inside this function that has pickleable inputs and output
 dictionary (``retval``) to allow isolation using a
 ``multiprocessing.Process`` that allows qsiprep to enforce
 a hard-limited memory-scope.
-
 """
 
 from qsiprep.data import load as load_data
@@ -38,7 +36,6 @@ from qsiprep.data import load as load_data
 
 def build_workflow(config_file, retval):
     """Create the Nipype Workflow that supports the whole execution graph."""
-
     from niworkflows.utils.bids import collect_participants
 
     # from niworkflows.utils.misc import check_valid_fs_license

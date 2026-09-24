@@ -35,7 +35,7 @@ def mrtrix_trees(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize('selected', ['stable', 'dev'])
 def test_workflow_init_puts_the_selected_tree_first(monkeypatch, mrtrix_trees, selected):
-    """Resolve commands from the requested MRtrix3, falling through to the other tree.
+    """Test that commands resolve from the requested MRtrix3, falling through to the other tree.
 
     The second entry is load-bearing: dwidenoise2 exists only in the development
     tree, so it must remain reachable when ``stable`` is selected.
@@ -56,7 +56,7 @@ def test_workflow_init_puts_the_selected_tree_first(monkeypatch, mrtrix_trees, s
 
 
 def test_workflow_init_is_a_noop_without_declared_trees(monkeypatch):
-    """Leave PATH alone on a bare-metal install, which has one MRtrix3 already on it."""
+    """Test that PATH is left alone on a bare-metal install, which has one MRtrix3 on it."""
     monkeypatch.delenv('MRTRIX3_STABLE_HOME', raising=False)
     monkeypatch.delenv('MRTRIX3_DEV_HOME', raising=False)
     monkeypatch.delenv('MRTRIX3_STABLE_VERSION', raising=False)
@@ -72,7 +72,7 @@ def test_workflow_init_is_a_noop_without_declared_trees(monkeypatch):
 
 
 def test_workflow_init_raises_when_the_selected_tree_is_missing(monkeypatch, tmp_path):
-    """Fail loudly rather than silently running the other version.
+    """Test that a missing selected tree fails loudly instead of using the other version.
 
     Falling back would build the complex workflow path and then hand complex data
     to a released mrdegibbs that cannot read it.
@@ -89,7 +89,7 @@ def test_workflow_init_raises_when_the_selected_tree_is_missing(monkeypatch, tmp
 
 
 def test_workflow_init_does_not_accumulate_duplicates(monkeypatch, mrtrix_trees):
-    """Keep PATH stable across reloads; the image already bakes both trees into it."""
+    """Test that PATH stays stable across reloads; the image already bakes both trees in."""
     stable, dev = mrtrix_trees
     monkeypatch.setattr(config.workflow, 'mrtrix_version', 'stable')
 
@@ -101,7 +101,7 @@ def test_workflow_init_does_not_accumulate_duplicates(monkeypatch, mrtrix_trees)
 
 
 def test_from_dict_reaches_workflow_init(monkeypatch, mrtrix_trees):
-    """Prove the public entry point actually reorders PATH, not just workflow.init().
+    """Test that the public entry point actually reorders PATH, not just workflow.init().
 
     Everything here rests on ``_Config.load`` calling ``cls.init()``, which
     ``parse_args`` reaches through ``config.from_dict``. Calling ``workflow.init()``
@@ -138,7 +138,9 @@ def _restore_config():
 
 @pytest.mark.usefixtures('_restore_config')
 def test_gradient_file_survives_the_config_round_trip(tmp_path):
-    """A Path outside ``_paths`` is dumped as its repr, not as a path.
+    """Test that --gradient-file survives the config round trip.
+
+    A Path outside ``_paths`` is dumped as its repr, not as a path.
 
     ``--gradient-file`` is parsed into a Path, so before it was listed in
     ``workflow._paths`` the subprocess that builds the workflow read back the
@@ -159,7 +161,7 @@ def test_gradient_file_survives_the_config_round_trip(tmp_path):
 
 
 def test_path_valued_options_are_declared_in_their_section(tmp_path):
-    """Every CLI option parsed into a Path is listed in its section's ``_paths``."""
+    """Test that every CLI option parsed into a Path is listed in its section's ``_paths``."""
     from qsiprep.cli.parser import _build_parser
 
     sections = (config.execution, config.workflow, config.nipype, config.seeds)

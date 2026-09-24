@@ -73,7 +73,7 @@ def test_normalize_requires_wm_voxels(tmp_path):
 
 
 def _synb0_distribution(tmp_path):
-    """A fake SynB0 layout: atlases/ with the 2.5mm grid, model weights."""
+    """Create a fake SynB0 layout: atlases/ with the 2.5mm grid, model weights."""
     synb0_dir = tmp_path / 'synb0'
     (synb0_dir / 'atlases').mkdir(parents=True)
     (synb0_dir / 'dual_channel_unet').mkdir()

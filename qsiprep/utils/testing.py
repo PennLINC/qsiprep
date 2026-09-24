@@ -1,10 +1,6 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
-Class and utilities for testing the workflows module
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-"""
+"""Class and utilities for testing the workflows module."""
 
 import json
 import logging
@@ -16,7 +12,6 @@ logging.disable(logging.INFO)  # <- do we really want to do this?
 
 def get_grouping_test_data():
     """Write a number of grouping test datasets to base_path."""
-
     dataset_desctiption = {
         'Acknowledgements': '',
         'Authors': [],

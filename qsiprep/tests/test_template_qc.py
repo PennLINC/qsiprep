@@ -14,7 +14,7 @@ def _write(path, data, affine=None):
 
 
 def _structured(shape=(28, 28, 28), shift=0):
-    """A block with internal structure, so correlation inside it is meaningful.
+    """Return a block with internal structure, so correlation inside it is meaningful.
 
     A uniform block will not do: the QC mask covers the block interior, and
     inside a flat region every image is constant-plus-noise, so correlation is
@@ -36,7 +36,7 @@ def _structured(shape=(28, 28, 28), shift=0):
 
 @pytest.fixture
 def template_set(tmp_path):
-    """Three inputs matching a template, plus one deliberate outlier."""
+    """Provide three inputs matching a template, plus one deliberate outlier."""
     rng = np.random.default_rng(0)
     base = _structured()
     template = _write(tmp_path / 'template.nii.gz', base + rng.normal(0, 1, base.shape))
@@ -86,7 +86,9 @@ def test_agreement_map_is_written_on_the_template_grid(template_set, tmp_path):
 
 
 def test_transform_columns_are_populated_for_float_matrices(tmp_path, template_set):
-    """ANTs writes AffineTransform_float_3_3 when registration runs float=True.
+    """Test that transform columns are populated for float matrices.
+
+    ANTs writes AffineTransform_float_3_3 when registration runs float=True.
 
     Hardcoding the double-precision key left these columns silently NaN.
     """
@@ -115,7 +117,7 @@ def test_transform_columns_are_populated_for_float_matrices(tmp_path, template_s
 
 
 def test_unreadable_transform_does_not_break_the_run(tmp_path, template_set):
-    """QC must never fail a run -- but it must not fail silently either."""
+    """Test that an unreadable transform does not break the run, yet does not fail silently."""
     import pandas as pd
 
     from qsiprep.interfaces.template_qc import TemplateQC

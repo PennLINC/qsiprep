@@ -217,6 +217,8 @@ extend-select = [
   "ICN",
   "PT",
   "Q",
+  "D",
+  "D212",  # Summary on the same line as the opening quotes
 ]
 ignore = [
   "S101",  # Ignore use of assert for now
@@ -236,7 +238,18 @@ ignore = [
   "UP028",  # TODO: Fix these
   "UP031",  # TODO: Fix these
   "BLE001",  # TODO: Fix these
+  "D100",  # Missing docstrings are not enforced (yet)
+  "D101",
+  "D102",
+  "D103",
+  "D104",
+  "D105",
+  "D106",
+  "D107",
 ]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
 
 [tool.ruff.lint.flake8-quotes]
 inline-quotes = "single"

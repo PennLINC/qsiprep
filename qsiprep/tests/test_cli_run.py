@@ -1,4 +1,4 @@
-"""Tests for the command line interface"""
+"""Tests for the command line interface."""
 
 import pytest
 from niworkflows.utils.testing import generate_bids_skeleton
@@ -258,7 +258,7 @@ def _test_processing_list(tmpdir, name, skeleton, reference, expected):
 
 
 def test_session_filter_without_dwi_is_rejected(tmp_path, capsys):
-    """A session filter that only matches anatomical data is an error."""
+    """Test that a session filter matching only anatomical data is an error."""
     from qsiprep import config
     from qsiprep.cli.parser import parse_args
 
@@ -269,7 +269,8 @@ def test_session_filter_without_dwi_is_rejected(tmp_path, capsys):
     }
     generate_bids_skeleton(str(bids_dir), {'01': [long['01'][0], anat_only_session]})
 
-    config.from_dict({'bids_dir': str(bids_dir)}, init=True)
+    work_dir = tmp_path / 'work'
+    config.from_dict({'bids_dir': str(bids_dir), 'work_dir': str(work_dir)}, init=True)
     with pytest.raises(SystemExit):
         parse_args(
             [
@@ -283,7 +284,7 @@ def test_session_filter_without_dwi_is_rejected(tmp_path, capsys):
                 '--output-resolution',
                 '2',
                 '--work-dir',
-                str(tmp_path / 'work'),
+                str(work_dir),
                 '--skip-bids-validation',
             ],
         )
@@ -362,7 +363,7 @@ FORWARDED_FLAGS = []
 def test_forwarded_flag_warns_and_enables_its_replacement(
     minimal_args, capsys, flag, option, value
 ):
-    """A deprecated flag warns, names its replacement, and turns it on."""
+    """Test that a deprecated flag warns, names its replacement, and turns it on."""
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -380,7 +381,10 @@ def test_forwarded_flag_warns_and_enables_its_replacement(
 
 @pytest.mark.parametrize(('flag', 'option', 'value'), FORWARDED_FLAGS)
 def test_forwarded_flag_agrees_with_an_explicit_replacement(minimal_args, flag, option, value):
-    """Asking for the same thing twice is not a conflict, in either order."""
+    """Test that a forwarded flag agrees with an explicit replacement.
+
+    Asking for the same thing twice is not a conflict, in either order.
+    """
     from qsiprep.cli.parser import _build_parser
 
     for extra_args in ([flag, option, value], [option, value, flag]):
@@ -392,7 +396,10 @@ def test_forwarded_flag_agrees_with_an_explicit_replacement(minimal_args, flag, 
 def test_forwarded_flag_conflicting_with_its_replacement_is_an_error(
     minimal_args, capsys, flag, option, value
 ):
-    """Silently picking a winner would hide half of what the user asked for."""
+    """Test that a forwarded flag conflicting with its replacement is an error.
+
+    Silently picking a winner would hide half of what the user asked for.
+    """
     from qsiprep.cli.parser import _build_parser
 
     # A value the flag does not forward to
@@ -409,7 +416,7 @@ def test_forwarded_flag_conflicting_with_its_replacement_is_an_error(
 
 @pytest.mark.parametrize(('flag', 'option', 'value'), FORWARDED_FLAGS)
 def test_replacement_option_is_not_deprecated(minimal_args, capsys, flag, option, value):
-    """The replacement option is silent and takes effect."""
+    """Test that the replacement option is silent and takes effect."""
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -420,7 +427,7 @@ def test_replacement_option_is_not_deprecated(minimal_args, capsys, flag, option
 
 
 def test_prefer_dedicated_fmaps_is_removed(minimal_args, capsys):
-    """The deprecated flag is no longer accepted by the parser."""
+    """Test that the parser no longer accepts --prefer-dedicated-fmaps."""
     from qsiprep.cli.parser import _build_parser
 
     with pytest.raises(SystemExit):
@@ -430,7 +437,10 @@ def test_prefer_dedicated_fmaps_is_removed(minimal_args, capsys):
 
 
 def test_ignore_accepts_shims_and_fov(minimal_args):
-    """The grouping honors both; they must be reachable from the CLI."""
+    """Test that --ignore accepts 'shims' and 'fov'.
+
+    The grouping honors both; they must be reachable from the CLI.
+    """
     from qsiprep.cli.parser import _build_parser
 
     opts = _build_parser().parse_args([*minimal_args, '--ignore', 'shims', 'fov'])
@@ -466,7 +476,10 @@ def test_hmc_method_shoreline_gets_model_and_drbuddi(minimal_args):
 
 
 def test_hmc_method_tortoise_auto_resolves_drbuddi(minimal_args):
-    """The legacy TOPUP default never produced a working DIFFPREP run."""
+    """Test that --hmc-method tortoise resolves the SDC method to DRBUDDI.
+
+    The legacy TOPUP default never produced a working DIFFPREP run.
+    """
     opts = _parse(minimal_args, '--hmc-method', 'tortoise')
     assert opts.sdc_method == 'drbuddi'
 
@@ -551,7 +564,10 @@ def restore_shoreline_config():
 def test_shoreline_config_survives_a_config_round_trip(
     minimal_args, tmp_path, restore_shoreline_config
 ):
-    """A Path must be written as a path string, not the literal "PosixPath('...')"."""
+    """Test that the SHORELine config survives a config round trip.
+
+    A Path must be written as a path string, not the literal "PosixPath('...')".
+    """
     from pathlib import Path
 
     import toml
@@ -599,7 +615,10 @@ def _parse_with_config_file(tmp_path, toml_text, *extra):
 
 
 def test_config_file_reload_drops_stale_shoreline_settings(tmp_path, restore_shoreline_config):
-    """An old eddy config.toml carried hmc_transform/shoreline_iters; they must not survive."""
+    """Test that reloading a config file drops stale SHORELine settings.
+
+    An old eddy config.toml carried hmc_transform/shoreline_iters; they must not survive.
+    """
     config = _parse_with_config_file(
         tmp_path,
         '[workflow]\nhmc_model = "eddy"\nhmc_transform = "Affine"\nshoreline_iters = 2\n',
@@ -712,7 +731,10 @@ def restore_dwidenoise2_config():
 def test_dwidenoise2_config_survives_a_config_round_trip(
     minimal_args, tmp_path, monkeypatch, restore_dwidenoise2_config
 ):
-    """A relative path is stored as an absolute path string, not "PosixPath('...')"."""
+    """Test that the dwidenoise2 config survives a config round trip.
+
+    A relative path is stored as an absolute path string, not "PosixPath('...')".
+    """
     from pathlib import Path
 
     import toml
@@ -733,7 +755,10 @@ def test_dwidenoise2_config_survives_a_config_round_trip(
 
 
 def test_config_file_reload_drops_stale_dwidenoise2_config(tmp_path, restore_dwidenoise2_config):
-    """A --config-file must not supply a dwidenoise2 config the command line did not give."""
+    """Test that reloading a config file drops a stale dwidenoise2 config.
+
+    A --config-file must not supply a dwidenoise2 config the command line did not give.
+    """
     old_json = _dwidenoise2_json(tmp_path, name='old.json', decomposition='selfadjoint')
     config = _parse_with_config_file(
         tmp_path,
@@ -804,7 +829,7 @@ def test_shoreline_selection_warns_of_removal(minimal_args, capsys):
 
 
 def test_parser_defaults_to_stable_mrtrix(tmp_path):
-    """Default to a released MRtrix3, so existing runs are unchanged."""
+    """Test that the parser defaults to a released MRtrix3, so existing runs are unchanged."""
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -816,7 +841,10 @@ def test_parser_defaults_to_stable_mrtrix(tmp_path):
 
 
 def test_parser_accepts_dev_mrtrix(tmp_path):
-    """``dev`` selects the development branch, which is what complex mrdegibbs needs."""
+    """Test that the parser accepts ``dev`` as the MRtrix3 version.
+
+    ``dev`` selects the development branch, which is what complex mrdegibbs needs.
+    """
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -838,7 +866,7 @@ def test_parser_accepts_dev_mrtrix(tmp_path):
 
 
 def test_parser_rejects_unknown_mrtrix_version(tmp_path):
-    """Reject version strings; the flag names installations, not releases."""
+    """Test that version strings are rejected; the flag names installations, not releases."""
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -860,7 +888,7 @@ def test_parser_rejects_unknown_mrtrix_version(tmp_path):
 
 
 def _cli_base(tmp_path):
-    """Minimal valid positional args for the parser.
+    """Return minimal valid positional args for the parser.
 
     ``bids_dir`` goes through ``_path_exists`` (``qsiprep/cli/parser.py``), which
     calls ``parser.error`` when the directory is missing -- so both directories
@@ -875,14 +903,20 @@ def _cli_base(tmp_path):
 
 
 def test_cli_base_is_itself_valid(tmp_path):
-    """Guard the guard: every option test below is meaningless if this fails."""
+    """Test that the base CLI arguments are themselves valid.
+
+    Guard the guard: every option test below is meaningless if this fails.
+    """
     from qsiprep.cli.parser import _build_parser
 
     _build_parser().parse_args(_cli_base(tmp_path))
 
 
 def test_dwi2anat_dof_replaces_b0_to_anat_transform(tmp_path):
-    """The option changed name, type and spelling of its values."""
+    """Test that --dwi2anat-dof replaces --b0-to-anat-transform.
+
+    The option changed name, type and spelling of its values.
+    """
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -902,7 +936,10 @@ def test_dwi2anat_dof_replaces_b0_to_anat_transform(tmp_path):
 
 
 def test_dwiref_construction_flags_replace_the_old_spellings(tmp_path):
-    """The old spellings are gone; the new ones parse."""
+    """Test that the dwiref construction flags replace the old spellings.
+
+    The old spellings are gone; the new ones parse.
+    """
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -951,7 +988,9 @@ def test_dwiref_construction_iters_defaults_to_two(tmp_path):
 
 @pytest.mark.parametrize('bad', ['0', '1', '-1'])
 def test_dwiref_construction_iters_rejects_values_below_two(tmp_path, bad):
-    """The nonlinear branch passes iters straight to mvtc2 with no floor of its own.
+    """Test that --dwiref-construction-iters rejects values below two.
+
+    The nonlinear branch passes iters straight to mvtc2 with no floor of its own.
 
     Only the linear branch clamps, so once iters stops being the feature toggle an
     unvalidated 0 or negative would reach antsMultivariateTemplateConstruction2.

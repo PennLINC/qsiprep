@@ -1,4 +1,5 @@
-"""
+"""Implementing the FSL preprocessing workflow.
+
 Implementing the FSL preprocessing workflow
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -56,8 +57,7 @@ def init_fsl_hmc_wf(
     slice_quality='outlier_n_sqr_stdev_map',
     name='fsl_hmc_wf',
 ):
-    """
-    This workflow controls the dwi preprocessing stages using FSL tools.
+    """Build a workflow that runs the dwi preprocessing stages using FSL tools.
 
     I couldn't get this to work reliably unless everything was oriented in LAS+ before going to
     TOPUP and eddy. For this reason, if TOPUP is going to be used (for an epi fieldmap or an
@@ -70,42 +70,42 @@ def init_fsl_hmc_wf(
 
     Finally, if SyN is chosen, it is applied to the LPS+ converted, eddy-resampled data.
 
+    Parameters
+    ----------
+    unit : :class:`~qsiplan.adapters.PreprocUnit`
+        the DWI series to correct together and the fieldmap that corrects them
+    source_file : str
+        Path to the source DWI file (used for report and derivative naming).
+    t2w_sdc : bool
+        Whether a T2w image is available for distortion correction (used for
+        DRBUDDI's multi-modal registration).
+    slice_quality : str, optional
+        Name of the eddy output that is sent to ``outputnode.slice_quality`` and
+        ``outputnode.hmc_optimization_data``. Default is
+        ``'outlier_n_sqr_stdev_map'``.
+    name : str, optional
+        Name of workflow (default: ``fsl_hmc_wf``)
 
-    **Parameters**
-
-        unit: :class:`~qsiplan.adapters.PreprocUnit`
-            the DWI series to correct together and the fieldmap that corrects them
-        impute_slice_threshold: float
-            threshold for a slice to be replaced with imputed values. Overrides the
-            parameter in ``eddy_config`` if set to a number > 0.
-        pepolar_method : str
-            Either 'DRBUDDI', 'TOPUP' or 'DRBUDDI+TOPUP'. The method for SDC when EPI
-            fieldmaps are used.
-        eddy_config: str
-            Path to a JSON file containing settings for the call to ``eddy``.
-
-
-    **Inputs**
-
-        dwi_file: str
-            DWI series. Possibly concatenated, denoised, etc
-        bvec_file: str
-            bvec file
-        bval_file: str
-            bval file
-        json_file: str
-            path to sidecar json file for dwi_file
-        b0_indices: list
-            Indexes into ``dwi_files`` that correspond to b=0 volumes
-        b0_images: list
-            List of single b=0 volumes
-        original_files: list
-            List of the files from which each DWI volume came. One per original file
-        t1_brain: str
-            Skull stripped T1w image
-        t1_mask: str
-            mask for t1_brain
-
+    Inputs
+    ------
+    dwi_file : str
+        DWI series. Possibly concatenated, denoised, etc
+    bvec_file : str
+        bvec file
+    bval_file : str
+        bval file
+    json_file : str
+        path to sidecar json file for dwi_file
+    b0_indices : list
+        Indexes into ``dwi_files`` that correspond to b=0 volumes
+    b0_images : list
+        List of single b=0 volumes
+    original_files : list
+        List of the files from which each DWI volume came. One per original file
+    t1_brain : str
+        Skull stripped T1w image
+    t1_mask : str
+        mask for t1_brain
     """
     # Check for FSL binary
     fsl_check = os.environ.get('FSL_BUILD')

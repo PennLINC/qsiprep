@@ -36,7 +36,7 @@ MULTI_PED_DWI = {
 
 
 def test_read_nifti_sidecar_reads_a_colocated_sidecar(tmp_path):
-    """Metadata beside the image is still found."""
+    """Test that metadata beside the image is still found."""
     root = build_test_dataset(
         tmp_path / 'ds',
         {
@@ -66,7 +66,7 @@ def test_read_nifti_sidecar_reads_a_colocated_sidecar(tmp_path):
 
 
 def test_read_nifti_sidecar_inherits_metadata(tmp_path):
-    """A top-level sidecar supplies metadata for an image that has none (issue #685)."""
+    """Test that a top-level sidecar supplies metadata for an image that has none (issue #685)."""
     root = build_test_dataset(
         tmp_path / 'ds',
         BARE_DWI,
@@ -82,7 +82,7 @@ def test_read_nifti_sidecar_inherits_metadata(tmp_path):
 
 
 def test_read_nifti_sidecar_merges_inherited_and_local_metadata(tmp_path):
-    """Inherited keys fill in around the image's own sidecar."""
+    """Test that inherited keys fill in around the image's own sidecar."""
     root = build_test_dataset(
         tmp_path / 'ds',
         {'01': [{'dwi': [{'suffix': 'dwi', 'metadata': {'PhaseEncodingDirection': 'j-'}}]}]},
@@ -98,7 +98,7 @@ def test_read_nifti_sidecar_merges_inherited_and_local_metadata(tmp_path):
 
 
 def test_read_nifti_sidecar_shared_by_magnitude_and_phase(tmp_path):
-    """A single sidecar covers both parts of a complex-valued acquisition."""
+    """Test that a single sidecar covers both parts of a complex-valued acquisition."""
     root = build_test_dataset(
         tmp_path / 'ds',
         COMPLEX_DWI_SKELETON,
@@ -117,7 +117,7 @@ def test_read_nifti_sidecar_shared_by_magnitude_and_phase(tmp_path):
 
 
 def test_read_nifti_sidecar_errors_when_no_metadata_applies(tmp_path):
-    """An image with no applicable sidecar raises a message naming the file."""
+    """Test that an image with no applicable sidecar raises a message naming the file."""
     root = build_test_dataset(tmp_path / 'ds', BARE_DWI)
     dwi = root / 'sub-01' / 'dwi' / 'sub-01_dwi.nii.gz'
 
@@ -126,7 +126,7 @@ def test_read_nifti_sidecar_errors_when_no_metadata_applies(tmp_path):
 
 
 def test_get_distortion_grouping_uses_inherited_metadata(tmp_path):
-    """Distortion groups are found when PE direction is only in an inherited sidecar."""
+    """Test that distortion groups are found when PE direction is only in an inherited sidecar."""
     root = build_test_dataset(
         tmp_path / 'ds',
         MULTI_PED_DWI,
@@ -152,7 +152,7 @@ def test_get_distortion_grouping_uses_inherited_metadata(tmp_path):
 
 
 def test_get_distortion_grouping_handles_complex_valued_dwi(tmp_path):
-    """Both parts of a complex-valued run land in the same distortion group (issue #990)."""
+    """Test that both parts of a complex-valued run share a distortion group (issue #990)."""
     root = build_test_dataset(
         tmp_path / 'ds',
         COMPLEX_DWI_SKELETON,
@@ -178,7 +178,7 @@ def test_get_distortion_grouping_handles_complex_valued_dwi(tmp_path):
 
 
 def test_load_epi_dwi_fieldmaps_handles_complex_valued_fieldmaps(tmp_path):
-    """A part-mag fieldmap inherits the shared, non-part-specific bval (issue #990)."""
+    """Test that a part-mag fieldmap inherits the shared, non-part-specific bval (issue #990)."""
     root = build_test_dataset(
         tmp_path / 'ds',
         COMPLEX_EPI_SKELETON,
@@ -194,7 +194,7 @@ def test_load_epi_dwi_fieldmaps_handles_complex_valued_fieldmaps(tmp_path):
 
 
 def test_load_epi_dwi_fieldmaps_uses_an_inherited_bval(tmp_path):
-    """A 'secret' bval file is honored even when it is inherited (issue #990)."""
+    """Test that a 'secret' bval file is honored even when it is inherited (issue #990)."""
     root = build_test_dataset(
         tmp_path / 'ds',
         {'01': [{'fmap': [{'dir': 'PA', 'run': '1', 'suffix': 'epi'}]}]},
@@ -210,7 +210,7 @@ def test_load_epi_dwi_fieldmaps_uses_an_inherited_bval(tmp_path):
 
 
 def test_load_epi_dwi_fieldmaps_without_a_bval_keeps_every_volume(tmp_path):
-    """A fieldmap with no applicable bval file contributes all of its volumes."""
+    """Test that a fieldmap with no applicable bval file contributes all of its volumes."""
     root = build_test_dataset(
         tmp_path / 'ds',
         {'01': [{'fmap': [{'dir': 'PA', 'suffix': 'epi'}]}]},
@@ -224,7 +224,7 @@ def test_load_epi_dwi_fieldmaps_without_a_bval_keeps_every_volume(tmp_path):
 
 
 def test_load_epi_dwi_fieldmaps_mixes_3d_and_4d_images(tmp_path):
-    """3D and 4D fieldmap files can be concatenated together, in either order."""
+    """Test that 3D and 4D fieldmap files can be concatenated together, in either order."""
     root = build_test_dataset(
         tmp_path / 'ds',
         {'01': [{'fmap': [{'dir': 'AP', 'suffix': 'epi'}, {'dir': 'PA', 'suffix': 'epi'}]}]},
@@ -251,7 +251,7 @@ def test_load_epi_dwi_fieldmaps_mixes_3d_and_4d_images(tmp_path):
 
 
 def test_load_epi_dwi_fieldmaps_thresholds_a_3d_image_bval(tmp_path):
-    """A 3D fieldmap with a one-entry bval file is kept or excluded by b0_threshold."""
+    """Test that a 3D fieldmap with a one-entry bval file is kept or excluded by b0_threshold."""
     root = build_test_dataset(
         tmp_path / 'ds',
         {

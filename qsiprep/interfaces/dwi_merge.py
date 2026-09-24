@@ -217,18 +217,18 @@ def combine_metadata(scan_list, metadata_dict, merge_method='first'):
 
     Parameters
     ----------
-    scan_list: list
+    scan_list : list
         List of BIDS inputs in the order in which they'll be concatenated
-    medadata_dict: dict
+    metadata_dict : dict
         Mapping keys (values in ``scan_list``) to BIDS metadata dictionaries
-    merge_method: str
+    merge_method : str, optional
         How to combine the metadata when multiple scans are being concatenated.
         If "first" the metadata from the first scan is selected. Someday other
         methods like "average" may be added.
 
     Returns
     -------
-    metadata: dict
+    metadata : dict
         A BIDS metadata dictionary
 
     """
@@ -463,7 +463,10 @@ def find_image_pairs(original_bvecs, bvals, assignments):
 
 
 def angle_between(v1, v2):
-    """Returns the angle in degrees between vectors 'v1' and 'v2'::
+    """Return the angle in degrees between vectors 'v1' and 'v2'.
+
+    Examples
+    --------
     >>> angle_between((1, 0, 0), (0, 1, 0))
     90.0
     >>> angle_between((1, 0, 0), (1, 0, 0))
@@ -486,7 +489,7 @@ def average_image_pairs(
     carpetplots,
     verbose=False,
 ):
-    """Create 4D series of averaged images, gradients, and confounds"""
+    """Create 4D series of averaged images, gradients, and confounds."""
     averaged_images = []
     new_bvecs = []
     confounds = pd.concat([pd.read_csv(fname, delimiter='\t') for fname in confounds_tsvs])
@@ -567,14 +570,14 @@ def average_image_pairs(
 
 
 def get_worst(values1, values2):
-    """finds the highest magnitude value per index in values1, values2"""
+    """Find the highest magnitude value per index in values1, values2."""
     values = np.column_stack([values1, values2])
     highest_index = np.argmax(np.abs(values), axis=1)
     return values[np.arange(values.shape[0]), highest_index]
 
 
 def average_carpetplots(carpet_list, image_pairs):
-    """Averages carpetplot data for display when pe pairs are averaged.
+    """Average carpetplot data for display when pe pairs are averaged.
 
     Reminder: incoming data is a dict of
     {"carpetplot": [[one image's slice scores],
@@ -693,7 +696,7 @@ def combine_bvecs(bvecs, output_file='restacked.bvec'):
 
 
 def get_nvols(img):
-    """Returns the number of volumes in a 3/4D nifti file."""
+    """Return the number of volumes in a 3/4D nifti file."""
     shape = img.shape
     if len(shape) < 4:
         return 1
@@ -705,23 +708,23 @@ def harmonize_b0s(dwi_files, bvals, b0_threshold, do_harmonization):
 
     Parameters
     ----------
-    dwi_files: list of str
+    dwi_files : list of str
         List of paths to dwi Nifti files that will be concatenated
-    bvals: list of str
+    bvals : list of str
         List of paths to bval files corresponding to the files in ``dwi_files``
-    b0_threshold: int
+    b0_threshold : int
         maximum b values for an image to be considered a b=0
-    do_harmonization: bool
+    do_harmonization : bool
         Apply a correction to each image so that their mean b=0 images are equal
 
     Returns
     -------
-    to_concat: list of NiftiImage objects
+    to_concat : list of NiftiImage objects
         List of NiftiImage objects to be concatenated. May have been harmonized.
         Same length as the input ``dwi_files``.
-    b0_means: list of floats
+    b0_means : list of float
         The mean b=0 intensity of each dwi series. Same length as the input ``dwi_files``.
-    corrections: list of floats
+    corrections : list of float
         The correction that would be applied to each image to harmonize their b=0's.
         Same length as the input ``dwi_files``.
         If ``do_harmonization`` is False, this will be a list of ones.
@@ -806,7 +809,7 @@ def create_provenance_dataframe(
 
 
 class _PhaseToRadInputSpec(BaseInterfaceInputSpec):
-    """Output spec for PhaseToRad interface.
+    """Input spec for PhaseToRad interface.
 
     STATEMENT OF CHANGES: This class is derived from sources licensed under the Apache-2.0 terms,
     and the code has been changed.

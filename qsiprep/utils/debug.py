@@ -47,14 +47,15 @@ import sys
 
 
 def is_interactive():
-    """Return True if all in/outs are tty"""
+    """Return True if all in/outs are tty."""
     # TODO: check on windows if hasattr check would work correctly and add value:
     #
     return sys.stdin.isatty() and sys.stdout.isatty() and sys.stderr.isatty()
 
 
 def setup_exceptionhook(ipython=False):
-    """Overloads default sys.excepthook with our exceptionhook handler.
+    """Overload default sys.excepthook with our exceptionhook handler.
+
     If interactive, our exceptionhook handler will invoke
     pdb.post_mortem; if not interactive, then invokes default handler.
     """

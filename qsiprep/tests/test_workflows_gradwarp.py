@@ -89,7 +89,7 @@ def test_gradwarp_wf_masks_to_through_plane_for_dis2d(tmp_path):
 
 
 def test_gradwarp_wf_builds_no_field_for_dis3d(tmp_path):
-    """A DIS3D unit builds no field at all.
+    """Test that a DIS3D unit builds no field at all.
 
     Nothing consumes one: the scanner already corrected the geometry, so no
     resampling uses the field, and finalize's grad_dev node is fed the
@@ -111,7 +111,9 @@ def test_gradwarp_wf_builds_no_field_for_dis3d(tmp_path):
 
 
 def test_gradwarp_wf_skips_make_field_for_a_displacement_field_input(tmp_path):
-    """A ``.nii`` --gradient-file is already a field.
+    """Test that make_field is skipped for a displacement-field input.
+
+    A ``.nii`` --gradient-file is already a field.
 
     ``CreateNonlinearityDisplacementMap`` is the *coefficient expander* and
     does no extension dispatch of its own (TORTOISE branches on the extension
@@ -136,7 +138,10 @@ def test_gradwarp_wf_skips_make_field_for_a_displacement_field_input(tmp_path):
 
 
 def test_gradwarp_wf_builds_make_field_for_a_coefficient_input(tmp_path):
-    """The other half of the dispatch: coefficients still need expanding."""
+    """Test that make_field is built for a coefficient input.
+
+    The other half of the dispatch: coefficients still need expanding.
+    """
     from qsiprep.workflows.dwi.gradwarp import init_gradwarp_wf
 
     config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
@@ -147,7 +152,9 @@ def test_gradwarp_wf_builds_make_field_for_a_coefficient_input(tmp_path):
 
 
 def test_gradwarp_wf_builds_the_before_after_reportlet(tmp_path):
-    """The figure is the only place the spatial correction is visible.
+    """Test that the gradwarp workflow builds the before/after reportlet.
+
+    The figure is the only place the spatial correction is visible.
 
     The field is not written out, and the gradwarp warp is composed into the
     one transform chain that produces the final series, so the preprocessed
@@ -172,7 +179,9 @@ def test_gradwarp_wf_builds_the_before_after_reportlet(tmp_path):
 
 
 def test_gradwarp_reportlet_compares_the_reference_against_itself(tmp_path):
-    """Before and after differ by the field and by nothing else.
+    """Test that the reportlet compares the reference against itself.
+
+    Before and after differ by the field and by nothing else.
 
     The corrected image is resampled onto the reference's *own* grid, so any
     displacement seen in the figure is the gradwarp correction rather than a
@@ -190,7 +199,9 @@ def test_gradwarp_reportlet_compares_the_reference_against_itself(tmp_path):
 
 
 def test_gradwarp_reportlet_shows_the_field_that_is_actually_applied(tmp_path):
-    """The transform comes from ``mask_field``, not from the raw field.
+    """Test that the reportlet shows the field that is actually applied.
+
+    The transform comes from ``mask_field``, not from the raw field.
 
     A DIS2D unit is corrected through-plane only. Picturing the unmasked 3D
     field would advertise an in-plane correction the pipeline never applies.
@@ -206,7 +217,7 @@ def test_gradwarp_reportlet_shows_the_field_that_is_actually_applied(tmp_path):
 
 
 def test_gradwarp_reportlet_is_built_for_a_supplied_displacement_field(tmp_path):
-    """A ready-made field still gets the figure; only the expander is skipped."""
+    """Test that a ready-made field still gets the figure; only the expander is skipped."""
     from qsiprep.workflows.dwi.gradwarp import init_gradwarp_wf
 
     config.workflow.gradient_file = str(write_itk_field(tmp_path / 'field.nii.gz'))
@@ -218,7 +229,7 @@ def test_gradwarp_reportlet_is_built_for_a_supplied_displacement_field(tmp_path)
 
 
 def test_gradwarp_reportlet_resampling_honours_sloppy(tmp_path):
-    """--sloppy speeds this up the way it speeds up every other resampling."""
+    """Test that the reportlet resampling honours --sloppy like every other resampling."""
     from qsiprep.workflows.dwi.gradwarp import init_gradwarp_wf
 
     config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
@@ -232,7 +243,7 @@ def test_gradwarp_reportlet_resampling_honours_sloppy(tmp_path):
 
 
 def test_dis3d_builds_no_reportlet(tmp_path):
-    """A DIS3D unit applies no spatial correction, so there is nothing to show."""
+    """Test that a DIS3D unit builds no reportlet, since there is nothing to show."""
     from qsiprep.workflows.dwi.gradwarp import init_gradwarp_wf
 
     config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
@@ -253,7 +264,7 @@ def test_dis3d_builds_no_reportlet(tmp_path):
     ],
 )
 def test_is_displacement_field_covers_every_accepted_extension(gradient_file, expected):
-    """Every extension --gradient-file accepts must land on one branch."""
+    """Test that every extension --gradient-file accepts lands on one branch."""
     from qsiprep.workflows.dwi.gradwarp import is_displacement_field
 
     assert is_displacement_field(gradient_file) is expected
@@ -301,8 +312,11 @@ def test_boilerplate_claims_single_resampling_for_transform_preserving_backends(
 
 @pytest.mark.parametrize('hmc_method', ['eddy', 'tortoise', 'shoreline'])
 def test_dis3d_boilerplate_makes_no_resampling_claim_on_any_backend(hmc_method):
-    """A DIS3D unit gets no field, so there is nothing to have been combined
-    with anything -- on any backend."""
+    """Test that the DIS3D boilerplate makes no resampling claim on any backend.
+
+    A DIS3D unit gets no field, so there is nothing to have been combined
+    with anything -- on any backend.
+    """
     from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
 
     config.workflow.hmc_method = hmc_method
@@ -313,8 +327,11 @@ def test_dis3d_boilerplate_makes_no_resampling_claim_on_any_backend(hmc_method):
 
 
 def test_forced_1d_boilerplate_does_not_attribute_the_correction_to_dis2d():
-    """--force gradwarp1D never reads ImageType, so the methods text must not
-    explain the missing in-plane component with a DIS2D tag it did not see."""
+    """Test that forced 1D boilerplate does not attribute the correction to DIS2D.
+
+    --force gradwarp1D never reads ImageType, so the methods text must not
+    explain the missing in-plane component with a DIS2D tag it did not see.
+    """
     from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
 
     config.workflow.shoreline_model = 'none'
@@ -325,7 +342,10 @@ def test_forced_1d_boilerplate_does_not_attribute_the_correction_to_dis2d():
 
 
 def test_forced_3d_boilerplate_matches_the_metadata_text():
-    """The 3D text makes no claim about ImageType, so forcing changes nothing."""
+    """Test that the forced 3D text matches the metadata text.
+
+    The 3D text makes no claim about ImageType, so forcing changes nothing.
+    """
     from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
 
     config.workflow.shoreline_model = 'none'
@@ -361,8 +381,11 @@ def test_ge_coefficients_are_refused(tmp_path):
 
 @pytest.mark.parametrize('forced', ['gradwarp3D', 'gradwarp1D'])
 def test_ge_coefficients_are_refused_when_forced(tmp_path, forced):
-    """--force gradwarp{1,3}D must not become a way around the guard: either
-    one expands the coefficients into a field that cannot be placed."""
+    """Test that GE coefficients are refused even when gradwarp is forced.
+
+    --force gradwarp{1,3}D must not become a way around the guard: either
+    one expands the coefficients into a field that cannot be placed.
+    """
     from qsiprep.workflows.dwi.gradwarp import resolve_gradwarp_plan
 
     config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
@@ -373,8 +396,11 @@ def test_ge_coefficients_are_refused_when_forced(tmp_path, forced):
 
 
 def test_ge_dis3d_still_resolves_for_grad_dev(tmp_path):
-    """No field is built for a DIS3D unit, and CreateGradientNonlinearityBMatrix
-    does its own GE recentring, so grad_dev is unaffected and must survive."""
+    """Test that a GE DIS3D unit still resolves for grad_dev.
+
+    No field is built for a DIS3D unit, and CreateGradientNonlinearityBMatrix
+    does its own GE recentring, so grad_dev is unaffected and must survive.
+    """
     from qsiprep.workflows.dwi.gradwarp import resolve_gradwarp_plan
 
     config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
@@ -387,8 +413,11 @@ def test_ge_dis3d_still_resolves_for_grad_dev(tmp_path):
 
 
 def test_ge_displacement_field_is_allowed(tmp_path):
-    """A ready-made field is used as given -- nothing is expanded, so the
-    origin-shift defect cannot apply."""
+    """Test that a GE displacement field is allowed.
+
+    A ready-made field is used as given -- nothing is expanded, so the
+    origin-shift defect cannot apply.
+    """
     from qsiprep.workflows.dwi.gradwarp import resolve_gradwarp_plan
 
     config.workflow.gradient_file = str(write_itk_field(tmp_path / 'field.nii.gz'))
@@ -419,9 +448,12 @@ def test_non_ge_coefficients_are_untouched_by_the_guard(tmp_path):
     ],
 )
 def test_gradwarp_wf_desc_matches_the_resolved_warp_dim(tmp_path, image_type, warp_dim):
-    """workflow.__desc__ must be the boilerplate for the resolved plan,
+    """Test that the workflow description matches the resolved warp dimension.
+
+    workflow.__desc__ must be the boilerplate for the resolved plan,
     not just any entry -- report text that doesn't track the plan would be a
-    methods-section error."""
+    methods-section error.
+    """
     from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate, init_gradwarp_wf
 
     config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
@@ -432,7 +464,7 @@ def test_gradwarp_wf_desc_matches_the_resolved_warp_dim(tmp_path, image_type, wa
 
 
 def test_forced_gradwarp_wf_desc_matches_the_forced_plan(tmp_path):
-    """A forced unit gets the forced text, not the ImageType-based text."""
+    """Test that a forced unit gets the forced text, not the ImageType-based text."""
     from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate, init_gradwarp_wf
 
     config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
@@ -448,7 +480,7 @@ def test_forced_gradwarp_wf_desc_matches_the_forced_plan(tmp_path):
 
 
 def _trans_wf_gradwarp_sources(wf):
-    """Names of nodes feeding compose_transforms.gradwarp, if any."""
+    """Return the names of nodes feeding compose_transforms.gradwarp, if any."""
     compose = wf.get_node('compose_transforms')
     return [
         edge[0].name
@@ -492,7 +524,9 @@ def test_listify_passes_undefined_through():
 
 
 def test_listify_rejects_a_list_input():
-    """A mis-wire that feeds ``_listify`` an already-listed value must fail loudly.
+    """Test that ``_listify`` rejects a list input.
+
+    A mis-wire that feeds ``_listify`` an already-listed value must fail loudly.
 
     ``ComposeTransforms.gradwarp`` silently drops a list whose length matches
     neither 1 nor the DWI count (unlike ``fieldwarps``, which warns), so a
@@ -610,7 +644,7 @@ def _preproc_wf(tmp_path, image_type=None):
 
 
 def test_dwi_preproc_wf_builds_gradwarp_and_feeds_pre_hmc_reference(tmp_path):
-    """A resolved plan builds gradwarp_wf and feeds it a 3D reference.
+    """Test that a resolved plan builds gradwarp_wf and feeds it a 3D reference.
 
     CreateNonlinearityDisplacementMap's underlying tool reads its reference
     image as a 3D NIfTI, not the 4D series pre_hmc_wf.outputnode.dwi_file is,
@@ -647,7 +681,7 @@ def test_dwi_preproc_wf_builds_gradwarp_and_feeds_pre_hmc_reference(tmp_path):
 
 
 def test_dwi_preproc_wf_dis3d_runs_nothing_and_wires_nothing(tmp_path):
-    """A DIS3D unit neither builds a field nor extracts a reference for one.
+    """Test that a DIS3D unit neither builds a field nor extracts a reference for one.
 
     Nothing downstream consumes either: no resampling uses the field, and
     finalize's grad_dev node takes the coefficient file. The previous wiring
@@ -670,7 +704,9 @@ def test_dwi_preproc_wf_dis3d_runs_nothing_and_wires_nothing(tmp_path):
 
 
 def test_dwi_preproc_wf_dis3d_still_emits_the_dis3d_boilerplate(tmp_path):
-    """The DIS3D methods text is not optional -- it is why the state exists.
+    """Test that the DIS3D boilerplate is still emitted.
+
+    The DIS3D methods text is not optional -- it is why the state exists.
 
     ``LiterateWorkflow.visit_desc`` walks the parent graph, so a gradwarp_wf
     that contributes no nodes still has to be *in* that graph.
@@ -683,15 +719,18 @@ def test_dwi_preproc_wf_dis3d_still_emits_the_dis3d_boilerplate(tmp_path):
 
 
 def test_dwi_preproc_wf_dis3d_report_line_survives(tmp_path):
-    """The report line is derived from ``gradwarp_wf.plan``, which must survive
-    the workflow having no nodes."""
+    """Test that the DIS3D report line survives.
+
+    The report line is derived from ``gradwarp_wf.plan``, which must survive
+    the workflow having no nodes.
+    """
     wf = _preproc_wf(tmp_path, image_type=['ORIGINAL', 'DIS3D'])
 
     assert wf.get_node('summary').inputs.gradient_correction == 'b-matrix only (ImageType: DIS3D)'
 
 
 def test_dwi_preproc_wf_extracts_a_reference_for_a_displacement_field(tmp_path):
-    """A supplied ITK field builds no expander, but still needs a reference.
+    """Test that a supplied ITK field builds no expander, but still gets a reference.
 
     Nothing expands coefficients onto a grid here, so the extracted volume has
     exactly one consumer: the before/after reportlet, which cannot show what
@@ -730,7 +769,9 @@ def test_dwi_preproc_wf_extracts_a_reference_for_a_displacement_field(tmp_path):
 
 
 def test_dwi_preproc_wf_fills_in_the_gradwarp_reportlet_datasink(tmp_path):
-    """The datasink is named ``ds_report*`` so the parent fills it in.
+    """Test that the parent workflow fills in the gradwarp reportlet datasink.
+
+    The datasink is named ``ds_report*`` so the parent fills it in.
 
     ``init_dwi_preproc_wf`` walks the whole graph setting ``source_file`` and
     ``base_directory`` on every ``ds_report*`` node, which is why the reportlet
@@ -746,7 +787,10 @@ def test_dwi_preproc_wf_fills_in_the_gradwarp_reportlet_datasink(tmp_path):
 
 
 def test_gradunwarp_reportlet_desc_is_registered_in_the_report_spec():
-    """A desc absent from reports-spec.yml is written to disk but never shown."""
+    """Test that the gradunwarp reportlet desc is registered in the report spec.
+
+    A desc absent from reports-spec.yml is written to disk but never shown.
+    """
     import yaml
 
     from qsiprep.data import load as load_data
@@ -764,7 +808,7 @@ def test_gradunwarp_reportlet_desc_is_registered_in_the_report_spec():
 
 
 def test_dwi_preproc_wf_without_gradient_file_has_no_gradwarp_wf(tmp_path):
-    """The default path (no --gradient-coils) is untouched."""
+    """Test that the default path (no --gradient-coils) has no gradwarp_wf."""
     from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
 
     _dwi_preproc_cfg(tmp_path)
@@ -784,7 +828,7 @@ def test_dwi_preproc_wf_without_gradient_file_has_no_gradwarp_wf(tmp_path):
 
 
 def test_extract_first_volume_returns_a_3d_image(tmp_path):
-    """The extraction node's function must actually produce a 3D file.
+    """Test that the extraction node's function actually produces a 3D file.
 
     CreateNonlinearityDisplacementMap's underlying tool reads its reference
     with a 3D-only reader (readImageD<ImageType3D>), so a 4D DWI series would
@@ -806,7 +850,10 @@ def test_extract_first_volume_returns_a_3d_image(tmp_path):
 
 
 def test_extract_first_volume_writes_into_the_working_directory(tmp_path, monkeypatch):
-    """A raw BIDS input lives on a read-only mount; the extract must not land beside it."""
+    """Test that the extracted volume is written into the working directory.
+
+    A raw BIDS input lives on a read-only mount; the extract must not land beside it.
+    """
     import nibabel as nb
     import numpy as np
 
@@ -839,7 +886,9 @@ def test_extract_first_volume_passes_an_already_3d_image_through(tmp_path):
 
 
 def test_single_subject_wf_wires_gradwarp_field_to_finalize():
-    """``dwi_preproc_wf`` and ``dwi_finalize_wf`` are siblings built side-by-side
+    """Test that the single-subject workflow wires gradwarp_field to finalize.
+
+    ``dwi_preproc_wf`` and ``dwi_finalize_wf`` are siblings built side-by-side
     in ``init_single_subject_wf``; ``gradwarp_field`` must cross between them the
     same way ``fieldwarps`` does, in the connect block joining the two per-unit
     workflows (too heavy to build end-to-end in a unit test -- BIDS layout,
@@ -856,13 +905,13 @@ def test_single_subject_wf_wires_gradwarp_field_to_finalize():
 
 
 def _edge_pairs(wf, src_name, dst_name):
-    """``(source_field, dest_field)`` pairs on the edge between two named nodes."""
+    """Return the ``(source_field, dest_field)`` pairs on the edge between two named nodes."""
     edge = wf._graph.get_edge_data(wf.get_node(src_name), wf.get_node(dst_name))
     return [] if edge is None else list(edge['connect'])
 
 
 def _connects(wf, src_name, dst_name, source_field, dest_field):
-    """True when ``src.source_field`` feeds ``dst.dest_field``.
+    """Return True when ``src.source_field`` feeds ``dst.dest_field``.
 
     Sources wrapped in a helper function (``(('gradwarp_field', _listify), ...)``)
     are matched on the field name alone.
@@ -927,8 +976,11 @@ def test_fsl_hmc_wf_exposes_a_gradwarp_field_input(tmp_path):
 
 
 def test_topup_branch_does_not_gradwarp_sdc_inputs(tmp_path):
-    """eddy applies the TOPUP field to raw data, so the field must be estimated
-    on raw data too -- it is baked in upstream of ``ComposeTransforms``."""
+    """Test that the TOPUP branch does not gradwarp the SDC inputs.
+
+    eddy applies the TOPUP field to raw data, so the field must be estimated
+    on raw data too -- it is baked in upstream of ``ComposeTransforms``.
+    """
     _cfg_for_fsl(tmp_path, 'topup')
     wf = _fsl_wf(tmp_path, _rpe_unit(tmp_path))
     assert wf.get_node('gradwarp_sdc_inputs') is None
@@ -938,8 +990,11 @@ def test_topup_branch_does_not_gradwarp_sdc_inputs(tmp_path):
 
 
 def test_drbuddi_branch_gradwarps_sdc_inputs(tmp_path):
-    """DRBUDDI's warp is applied downstream of gradwarp, so its inputs must be
-    corrected first -- matching ``DRBUDDI::Step0_CreateImages``."""
+    """Test that the DRBUDDI branch gradwarps the SDC inputs.
+
+    DRBUDDI's warp is applied downstream of gradwarp, so its inputs must be
+    corrected first -- matching ``DRBUDDI::Step0_CreateImages``.
+    """
     _cfg_for_fsl(tmp_path, 'drbuddi')
     wf = _fsl_wf(tmp_path, _rpe_unit(tmp_path))
 
@@ -957,7 +1012,9 @@ def test_drbuddi_branch_gradwarps_sdc_inputs(tmp_path):
 
 
 def test_drbuddi_plus_topup_still_gradwarps_the_drbuddi_inputs(tmp_path):
-    """The rule is per SDC node, not per workflow.
+    """Test that DRBUDDI plus TOPUP still gradwarps the DRBUDDI inputs.
+
+    The rule is per SDC node, not per workflow.
 
     In the mixed method eddy bakes the TOPUP field into its output, but
     DRBUDDI then runs on that output and its warp still lands in
@@ -973,7 +1030,10 @@ def test_drbuddi_plus_topup_still_gradwarps_the_drbuddi_inputs(tmp_path):
 
 
 def test_fsl_syn_branch_gradwarps_the_sdc_reference(tmp_path):
-    """SyN's warp stays in ``to_dwi_ref_warps``, so estimate it on corrected b0s."""
+    """Test that the SyN branch gradwarps the SDC reference.
+
+    SyN's warp stays in ``to_dwi_ref_warps``, so estimate it on corrected b0s.
+    """
     _cfg_for_fsl(tmp_path, 'drbuddi')
     wf = _fsl_wf(tmp_path, _syn_unit(tmp_path))
 
@@ -990,7 +1050,9 @@ def test_fsl_syn_branch_gradwarps_the_sdc_reference(tmp_path):
 
 
 def test_gradwarp_sdc_resampling_nodes_write_float(tmp_path):
-    """``gradwarp_sdc_inputs`` is a MapNode over every volume in the series.
+    """Test that the gradwarp SDC resampling nodes write float.
+
+    ``gradwarp_sdc_inputs`` is a MapNode over every volume in the series.
 
     Every adjacent resampling node in the codebase sets ``float=True``
     (``resampling.py``, ``diffprep.py``); without it these would be the only
@@ -1004,7 +1066,10 @@ def test_gradwarp_sdc_resampling_nodes_write_float(tmp_path):
 
 
 def test_gradwarp_sdc_resampling_honours_sloppy(tmp_path):
-    """Matches the adjacent per-volume ApplyTransforms in hmc_sdc.py."""
+    """Test that the gradwarp SDC resampling honours --sloppy.
+
+    This matches the adjacent per-volume ApplyTransforms in hmc_sdc.py.
+    """
     _cfg_for_fsl(tmp_path, 'drbuddi')
     config.execution.sloppy = True
     try:
@@ -1022,7 +1087,10 @@ def test_no_gradwarp_node_without_a_coefficient_file(tmp_path):
 
 
 def test_dis3d_does_not_gradwarp_sdc_inputs(tmp_path):
-    """No spatial correction means nothing to apply before SDC estimation."""
+    """Test that a DIS3D unit does not gradwarp the SDC inputs.
+
+    No spatial correction means nothing to apply before SDC estimation.
+    """
     _cfg_for_fsl(tmp_path, 'drbuddi')
     wf = _fsl_wf(tmp_path, _rpe_unit(tmp_path, ['ORIGINAL', 'DIS3D']))
     assert wf.get_node('gradwarp_sdc_inputs') is None
@@ -1070,9 +1138,12 @@ def test_diffprep_dis3d_does_not_gradwarp_sdc_inputs(tmp_path):
 
 
 def _rpe_unit_with_gre_candidate(tmp_path, minus_first=False):
-    """A PEPOLAR unit whose AP series also has a phasediff GRE fieldmap kept as a
+    """Build a PEPOLAR unit whose AP series also has a GRE fieldmap candidate.
+
+    A PEPOLAR unit whose AP series also has a phasediff GRE fieldmap kept as a
     non-applied candidate, which seeds DRBUDDI. ``minus_first`` gives the first
-    series (AP) the minus polarity, as dir-AP/dir-PA data usually has."""
+    series (AP) the minus polarity, as dir-AP/dir-PA data usually has.
+    """
     import dataclasses
 
     import nibabel as nb
@@ -1122,8 +1193,11 @@ def _rpe_unit_with_gre_candidate(tmp_path, minus_first=False):
 
 
 def test_diffprep_drbuddi_seeded_by_gre_candidate(tmp_path, monkeypatch):
-    """A PEPOLAR unit that also carries a GRE fieldmap seeds DRBUDDI's initial
-    field from a GRE warp built on the pre-SDC b=0."""
+    """Test that a GRE candidate seeds DIFFPREP's DRBUDDI.
+
+    A PEPOLAR unit that also carries a GRE fieldmap seeds DRBUDDI's initial
+    field from a GRE warp built on the pre-SDC b=0.
+    """
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg_for_diffprep(tmp_path)
     config.workflow.gradient_file = None
@@ -1147,8 +1221,11 @@ def test_diffprep_drbuddi_seeded_by_gre_candidate(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize('minus_first', [False, True])
 def test_diffprep_drbuddi_seed_is_built_for_the_up_series(tmp_path, monkeypatch, minus_first):
-    """The GRE warp is DRBUDDI's initial up field, so it must be built for the
-    up (plus) series' phase encoding even when the minus series comes first."""
+    """Test that the DRBUDDI GRE seed is built for the up series.
+
+    The GRE warp is DRBUDDI's initial up field, so it must be built for the
+    up (plus) series' phase encoding even when the minus series comes first.
+    """
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg_for_diffprep(tmp_path)
     config.workflow.gradient_file = None
@@ -1172,8 +1249,11 @@ def test_diffprep_drbuddi_seed_is_built_for_the_up_series(tmp_path, monkeypatch,
 def test_gre_seeds_drbuddi_after_shoreline_and_eddy(
     tmp_path, monkeypatch, builder, b0_node, b0_field
 ):
-    """DRBUDDI starts from the GRE candidate on every HMC path, with the warp built
-    on the b=0 average of the volumes DRBUDDI corrects."""
+    """Test that the GRE fieldmap seeds DRBUDDI after SHORELine and eddy.
+
+    DRBUDDI starts from the GRE candidate on every HMC path, with the warp built
+    on the b=0 average of the volumes DRBUDDI corrects.
+    """
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     if builder == 'shoreline':
         _cfg_for_shoreline(tmp_path)
@@ -1199,8 +1279,11 @@ def test_gre_seeds_drbuddi_after_shoreline_and_eddy(
 
 
 def test_gre_does_not_seed_drbuddi_after_topup(tmp_path, monkeypatch):
-    """After TOPUP, DRBUDDI only refines TOPUP's correction; starting it from the
-    full GRE warp would correct twice."""
+    """Test that the GRE fieldmap does not seed DRBUDDI after TOPUP.
+
+    After TOPUP, DRBUDDI only refines TOPUP's correction; starting it from the
+    full GRE warp would correct twice.
+    """
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg_for_fsl(tmp_path, 'topup+drbuddi')
     config.workflow.gradient_file = None
@@ -1214,8 +1297,11 @@ def test_gre_does_not_seed_drbuddi_after_topup(tmp_path, monkeypatch):
 
 
 def test_diffprep_drbuddi_unseeded_without_a_gre_candidate(tmp_path, monkeypatch):
-    """With no GRE fieldmap listing the series (none acquired, or --ignore
-    fieldmaps dropped fmap/), DRBUDDI starts from identity."""
+    """Test that DRBUDDI starts unseeded without a GRE candidate.
+
+    With no GRE fieldmap listing the series (none acquired, or --ignore
+    fieldmaps dropped fmap/), DRBUDDI starts from identity.
+    """
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg_for_diffprep(tmp_path)
     config.workflow.gradient_file = None
@@ -1228,9 +1314,12 @@ def test_diffprep_drbuddi_unseeded_without_a_gre_candidate(tmp_path, monkeypatch
 
 
 def test_diffprep_drbuddi_gre_seed_transports_with_gradwarp(tmp_path, monkeypatch):
-    """With a --gradient-file the DRBUDDI GRE seed is built in the gradwarp-corrected
+    """Test that the DRBUDDI GRE seed is transported with gradwarp.
+
+    With a --gradient-file the DRBUDDI GRE seed is built in the gradwarp-corrected
     frame (transport) and fed the gradwarp field, matching the corrected up/down
-    volumes -- not skipped."""
+    volumes -- not skipped.
+    """
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg_for_diffprep(tmp_path)  # sets gradient_file -> has_gradwarp
     wf = _diffprep_wf(tmp_path, _rpe_unit_with_gre_candidate(tmp_path))
@@ -1278,9 +1367,12 @@ def _plain_unit(tmp_path, image_type=None):
 
 
 def test_topup_only_branch_gradwarps_the_coregistration_reference(tmp_path):
-    """eddy has already applied TOPUP's field to this image, so gradwarp is the
+    """Test that the TOPUP-only branch gradwarps the coregistration reference.
+
+    eddy has already applied TOPUP's field to this image, so gradwarp is the
     only transform still missing before coregistration. Correcting it does not
-    touch TOPUP, whose own inputs stay raw (asserted separately above)."""
+    touch TOPUP, whose own inputs stay raw (asserted separately above).
+    """
     _cfg_for_fsl(tmp_path, 'topup')
     wf = _fsl_wf(tmp_path, _rpe_unit(tmp_path))
 
@@ -1303,7 +1395,10 @@ def test_fsl_no_fieldmap_branch_gradwarps_the_coregistration_reference(tmp_path)
 
 @pytest.mark.parametrize('unit_factory', [_rpe_unit, _plain_unit])
 def test_fsl_dis3d_leaves_the_coregistration_reference_raw(tmp_path, unit_factory):
-    """No field means nothing to apply -- the node must not be built."""
+    """Test that FSL DIS3D leaves the coregistration reference raw.
+
+    No field means nothing to apply -- the node must not be built.
+    """
     _cfg_for_fsl(tmp_path, 'topup')
     wf = _fsl_wf(tmp_path, unit_factory(tmp_path, ['ORIGINAL', 'DIS3D']))
 
@@ -1328,9 +1423,12 @@ def _diffprep_t2wreg_wf(tmp_path, unit):
 
 
 def test_diffprep_t2wreg_reference_gets_gradwarp_then_sdc(tmp_path):
-    """Both transforms go into the one resampling of the pre-SDC b=0 that this
+    """Test that the T2Wreg reference gets gradwarp, then SDC.
+
+    Both transforms go into the one resampling of the pre-SDC b=0 that this
     branch already performs, in chain order. ANTs applies a transform list
-    last-first, so the SDC warp is in1 and the gradwarp field in2."""
+    last-first, so the SDC warp is in1 and the gradwarp field in2.
+    """
     _cfg_for_diffprep(tmp_path)
     wf = _diffprep_t2wreg_wf(tmp_path, _plain_unit(tmp_path))
 
@@ -1414,7 +1512,9 @@ def test_shoreline_syn_branch_gradwarps_the_sdc_reference(tmp_path):
 
 
 def test_shoreline_without_a_fieldmap_gradwarps_the_bypass_reference(tmp_path):
-    """No fieldmap means ``init_sdc_wf`` is a pure pass-through, so there is no
+    """Test that SHORELine without a fieldmap gradwarps the bypass reference.
+
+    No fieldmap means ``init_sdc_wf`` is a pure pass-through, so there is no
     susceptibility field to estimate -- but the bypass forwards ``b0_ref``
     straight to ``outputnode.b0_template``, the DWI/T1w coregistration
     reference, and the coregistration affine is applied after gradwarp. So the
@@ -1436,8 +1536,11 @@ def test_shoreline_without_a_fieldmap_gradwarps_the_bypass_reference(tmp_path):
 
 
 def test_shoreline_dis3d_without_a_fieldmap_leaves_the_bypass_reference_raw(tmp_path):
-    """A DIS3D unit has no field to apply, so the reference stays raw and the
-    correction nodes are not built at all."""
+    """Test that a DIS3D unit without a fieldmap leaves the bypass reference raw.
+
+    A DIS3D unit has no field to apply, so the reference stays raw and the
+    correction nodes are not built at all.
+    """
     _cfg_for_shoreline(tmp_path)
     dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz')
     unit = make_preproc_unit(
@@ -1452,7 +1555,10 @@ def test_shoreline_dis3d_without_a_fieldmap_leaves_the_bypass_reference_raw(tmp_
 
 
 def test_dwi_preproc_wf_connects_gradwarp_field_to_the_hmc_workflow(tmp_path):
-    """Without this edge every ``gradwarp_sdc_inputs`` node above is dead code."""
+    """Test that the gradwarp field is connected to the HMC workflow.
+
+    Without this edge every ``gradwarp_sdc_inputs`` node above is dead code.
+    """
     wf = _preproc_wf(tmp_path)
 
     gradwarp_wf = wf.get_node('gradwarp_wf')
@@ -1463,7 +1569,10 @@ def test_dwi_preproc_wf_connects_gradwarp_field_to_the_hmc_workflow(tmp_path):
 
 
 def test_dwi_preproc_wf_dis3d_does_not_feed_gradwarp_field_to_the_hmc_workflow(tmp_path):
-    """A DIS3D unit applies no spatial correction anywhere, SDC estimation included."""
+    """Test that a DIS3D unit does not feed the gradwarp field to the HMC workflow.
+
+    A DIS3D unit applies no spatial correction anywhere, SDC estimation included.
+    """
     wf = _preproc_wf(tmp_path, image_type=['ORIGINAL', 'DIS3D'])
 
     edge = wf._graph.get_edge_data(wf.get_node('gradwarp_wf'), wf.get_node('hmc_sdc_wf'))
@@ -1474,8 +1583,11 @@ def test_dwi_preproc_wf_dis3d_does_not_feed_gradwarp_field_to_the_hmc_workflow(t
 
 
 def test_io_spec_has_a_graddev_pattern():
-    """grad_dev is neither a spatial transform nor a tissue map: it needs its
-    own suffix rather than xfm or dwimap."""
+    """Test that io_spec has a graddev pattern.
+
+    grad_dev is neither a spatial transform nor a tissue map: it needs its
+    own suffix rather than xfm or dwimap.
+    """
     import json
 
     from qsiprep.data import load as load_data
@@ -1514,7 +1626,7 @@ def test_graddev_filename_renders_with_space_entity(tmp_path):
 
 
 def _finalize_wf_with_gradients(tmp_path, image_type=None, write_derivatives=True):
-    """A finalize_wf with a resolved gradwarp plan, for the grad_dev tests."""
+    """Build a finalize_wf with a resolved gradwarp plan, for the grad_dev tests."""
     from qsiprep.workflows.dwi.finalize import init_dwi_finalize_wf
 
     _finalize_cfg(tmp_path)
@@ -1547,8 +1659,11 @@ def test_dwi_finalize_wf_builds_grad_dev_when_a_plan_resolves(tmp_path):
 
 
 def test_dwi_finalize_wf_builds_grad_dev_for_dis3d(tmp_path):
-    """No spatial correction happens for a DIS3D unit, but grad_dev is still
-    produced -- no scanner can correct the diffusion encoding itself."""
+    """Test that the finalize workflow builds grad_dev for a DIS3D unit.
+
+    No spatial correction happens for a DIS3D unit, but grad_dev is still
+    produced -- no scanner can correct the diffusion encoding itself.
+    """
     wf = _finalize_wf_with_gradients(tmp_path, image_type=['ORIGINAL', 'DIS3D'])
 
     grad_dev = wf.get_node('grad_dev')
@@ -1557,7 +1672,9 @@ def test_dwi_finalize_wf_builds_grad_dev_for_dis3d(tmp_path):
 
 
 def test_dwi_finalize_wf_grad_dev_initial_image_is_extracted_not_the_raw_4d_series(tmp_path):
-    """CreateGradientNonlinearityBMatrix's ``-i`` is read as a 3D NIfTI
+    """Test that grad_dev's initial image is extracted, not the raw 4D series.
+
+    CreateGradientNonlinearityBMatrix's ``-i`` is read as a 3D NIfTI
     (TORTOISE's ``main`` calls ``readImageD<ImageType3D>`` for both ``-f`` and
     ``-i``); ``raw_concatenated`` is the raw series in a single 4D file, so it
     must never reach ``initial_image`` directly -- it needs an extraction node
@@ -1586,8 +1703,11 @@ def test_dwi_finalize_wf_grad_dev_initial_image_is_extracted_not_the_raw_4d_seri
 
 
 def test_dwi_finalize_wf_grad_dev_final_image_is_the_final_b0_reference(tmp_path):
-    """The final b0 ref (``init_dwi_reference_wf``'s ``ref_image``) is already a
-    single volume, so ``-f`` needs no extraction -- unlike ``-i``."""
+    """Test that grad_dev's final image is the final b0 reference.
+
+    The final b0 ref (``init_dwi_reference_wf``'s ``ref_image``) is already a
+    single volume, so ``-f`` needs no extraction -- unlike ``-i``.
+    """
     wf = _finalize_wf_with_gradients(tmp_path)
 
     outputnode = wf.get_node('outputnode')
@@ -1598,7 +1718,7 @@ def test_dwi_finalize_wf_grad_dev_final_image_is_the_final_b0_reference(tmp_path
 
 
 def test_dwi_finalize_wf_grad_dev_sidecar_records_coefficient_basename_only(tmp_path):
-    """The sidecar must never leak the host path of the coefficient file."""
+    """Test that the grad_dev sidecar never leaks the host path of the coefficient file."""
     wf = _finalize_wf_with_gradients(tmp_path)
 
     ds_grad_dev = wf.get_node('ds_grad_dev')
@@ -1609,9 +1729,12 @@ def test_dwi_finalize_wf_grad_dev_sidecar_records_coefficient_basename_only(tmp_
 
 
 def test_dwi_finalize_wf_grad_dev_sidecar_records_the_orientation_approximation(tmp_path):
-    """The L matrix is oriented by a transform TORTOISE re-derives internally,
+    """Test that the grad_dev sidecar records the orientation approximation.
+
+    The L matrix is oriented by a transform TORTOISE re-derives internally,
     not by the coregistration affine qsiprep resampled the data with. A reader
-    cannot tell that from the file, so the sidecar has to say it."""
+    cannot tell that from the file, so the sidecar has to say it.
+    """
     wf = _finalize_wf_with_gradients(tmp_path)
 
     meta = wf.get_node('ds_grad_dev').inputs.meta_dict
@@ -1636,7 +1759,9 @@ def test_dwi_finalize_wf_main_sidecar_has_no_gradient_warp_dimensions_without_a_
 
 
 def test_dwi_finalize_wf_grad_dev_sidecar_records_is_ge_as_a_boolean(tmp_path):
-    """The flag resolved is whether TORTOISE's GE code path was taken.
+    """Test that the grad_dev sidecar records is_ge as a boolean.
+
+    The flag resolved is whether TORTOISE's GE code path was taken.
 
     A key named ``...Manufacturer`` implies a real DICOM Manufacturer value,
     and ``'non-GE'`` is not one. This ships into derivative sidecars that
@@ -1650,7 +1775,9 @@ def test_dwi_finalize_wf_grad_dev_sidecar_records_is_ge_as_a_boolean(tmp_path):
 
 
 def test_dwi_finalize_wf_grad_dev_initial_image_is_the_first_b0(tmp_path):
-    """``-i`` is the native-space counterpart of ``-f``, a b=0 in ACPC space.
+    """Test that grad_dev's initial image is the first b=0.
+
+    ``-i`` is the native-space counterpart of ``-f``, a b=0 in ACPC space.
 
     Volume 0 of the raw series is not guaranteed to be a b=0; if it is
     diffusion-weighted, whatever transform the tool derives between the two is
@@ -1683,7 +1810,7 @@ def test_extract_first_b0_picks_the_named_volume(tmp_path):
 
 
 def test_extract_first_b0_falls_back_to_volume_zero(tmp_path):
-    """An empty or unconnected ``b0_indices`` must not crash the node."""
+    """Test that an empty or unconnected ``b0_indices`` does not crash the node."""
     import nibabel as nb
     import numpy as np
     from nipype.interfaces.base import Undefined
@@ -1713,8 +1840,11 @@ def test_extract_first_b0_passes_an_already_3d_image_through(tmp_path):
 
 
 def test_dwi_finalize_wf_warns_when_graddev_will_not_be_written(tmp_path, caplog):
-    """--distortion-group-merge writes its outputs from a workflow with no
-    grad_dev node. Silence is the one unacceptable option."""
+    """Test that the finalize workflow warns when grad_dev will not be written.
+
+    --distortion-group-merge writes its outputs from a workflow with no
+    grad_dev node. Silence is the one unacceptable option.
+    """
     with caplog.at_level('WARNING', logger='nipype.workflow'):
         _finalize_wf_with_gradients(tmp_path, write_derivatives=False)
 
@@ -1730,7 +1860,10 @@ def test_dwi_finalize_wf_does_not_warn_when_graddev_is_written(tmp_path, caplog)
 
 
 def test_shoreline_iters_sets_the_model_iteration_count(tmp_path):
-    """Regression: --shoreline-iters never reached init_dwi_hmc_wf (always 2)."""
+    """Test that --shoreline-iters sets the model iteration count.
+
+    Regression: --shoreline-iters never reached init_dwi_hmc_wf (always 2).
+    """
     _cfg_for_shoreline(tmp_path)
     config.workflow.shoreline_iters = 3
     wf = _shoreline_wf(tmp_path, _rpe_unit(tmp_path))
@@ -1774,7 +1907,10 @@ def test_shoreline_methods_text_names_the_model_and_transform(
 
 
 def test_eddy_summary_leaves_hmc_transform_undefined(tmp_path):
-    """A stale hmc_transform (e.g. from a reloaded config) must not reach an eddy summary."""
+    """Test that a stale hmc_transform does not reach an eddy summary.
+
+    A stale hmc_transform can come, for example, from a reloaded config.
+    """
     from nipype.interfaces.base import isdefined
 
     wf = _preproc_wf(tmp_path)
@@ -1824,7 +1960,7 @@ def _incoming(wf, dst_name):
 
 
 def test_gre_fieldmap_goes_into_eddy(tmp_path, monkeypatch):
-    """The GRE fieldmap goes to eddy --field, like TOPUP's field."""
+    """Test that the GRE fieldmap goes to eddy --field, like TOPUP's field."""
     from nipype.interfaces.base import isdefined
 
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
@@ -1867,8 +2003,11 @@ def test_eddy_config_turns_on_movement_by_susceptibility_for_a_gre_field(tmp_pat
 
 
 def test_finalize_rebuilds_the_displacement_map_from_a_gre_field_eddy_applied(tmp_path):
-    """The SDC displacement map of a GRE fieldmap eddy applied is rebuilt from the
-    field, as TOPUP's is; no TOPUP-only fieldmap derivative is added."""
+    """Test that the displacement map of a GRE field eddy applied is rebuilt from the field.
+
+    The SDC displacement map of a GRE fieldmap eddy applied is rebuilt from the
+    field, as TOPUP's is; no TOPUP-only fieldmap derivative is added.
+    """
     from qsiplan.models import CorrectionMethod
 
     from qsiprep.workflows.dwi.finalize import init_dwi_finalize_wf
@@ -1897,7 +2036,7 @@ def test_finalize_rebuilds_the_displacement_map_from_a_gre_field_eddy_applied(tm
 
 
 def test_gre_field_sent_to_eddy_is_the_registered_hz_map(tmp_path, monkeypatch):
-    """eddy ``--field`` gets the registered fieldmap in Hz with no rescaling.
+    """Test that eddy ``--field`` gets the registered fieldmap in Hz with no rescaling.
 
     ``fmap2ref_apply`` already yields Hz on the reference grid, so any unit
     conversion between it and ``out_hz`` changes the correction strength.
@@ -1913,7 +2052,7 @@ def test_gre_field_sent_to_eddy_is_the_registered_hz_map(tmp_path, monkeypatch):
 
 
 def test_gre_sdc_after_eddy_applies_the_field_after_eddy(tmp_path, monkeypatch):
-    """The deprecated legacy path: the warp is applied after eddy."""
+    """Test that the deprecated legacy path applies the warp after eddy."""
     from nipype.interfaces.base import isdefined
 
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
@@ -1928,7 +2067,9 @@ def test_gre_sdc_after_eddy_applies_the_field_after_eddy(tmp_path, monkeypatch):
 
 
 def test_gre_into_eddy_with_gradwarp(tmp_path, monkeypatch):
-    """eddy applies the field in the raw, gradient-distorted frame (exactly like
+    """Test that a GRE fieldmap goes into eddy untransported when gradwarp is used.
+
+    eddy applies the field in the raw, gradient-distorted frame (exactly like
     TOPUP's field) and gradient unwarping is composed downstream; only the
     coregistration reference is gradwarp-corrected, mirroring the TOPUP-only
     branch. Nothing may transport the field.
@@ -1964,7 +2105,7 @@ def _gre_sdc_wf(gradwarp=True):
 
 
 def test_sdc_wf_without_gradwarp_uses_the_warp_as_estimated(tmp_path, monkeypatch):
-    """No gradwarp field will ever be connected, so no node may depend on one."""
+    """Test that no node depends on a gradwarp field that will never be connected."""
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     wf = _gre_sdc_wf(gradwarp=False)
     assert 'gradwarp_field' in wf.get_node('inputnode').inputs.trait_get()
@@ -2002,7 +2143,7 @@ def test_sdc_wf_transport_mode_composes_gradwarp_raw_warp_inverse(tmp_path, monk
 
 
 def test_transport_warp_cmdline_lists_the_transforms_in_stack_order(tmp_path):
-    """A Merge(3) hands ants a list; check it survives to the command line."""
+    """Test that the list a Merge(3) hands ants survives to the command line in stack order."""
     from nipype.interfaces import ants
 
     paths = {}
@@ -2069,7 +2210,7 @@ def test_gre_warp_is_transported_from_raw_references(tmp_path, monkeypatch, buil
 
 
 def test_invert_displacement_field_round_trips(tmp_path, monkeypatch):
-    """phi^-1(phi(x)) == x to well under a tenth of a voxel for a gradwarp-sized field."""
+    """Test that phi^-1(phi(x)) == x to well under 0.1 voxel for a gradwarp-sized field."""
     import nibabel as nb
     import numpy as np
     from scipy.ndimage import map_coordinates
@@ -2119,7 +2260,10 @@ def test_invert_displacement_field_round_trips(tmp_path, monkeypatch):
 
 
 def test_diffprep_t2wreg_hands_the_gradwarp_field_to_diffprep(tmp_path):
-    """The EPI stage registers a gradwarp-corrected b=0, so its warp is in the corrected frame."""
+    """Test that DIFFPREP's T2Wreg stage gets the gradwarp field.
+
+    The EPI stage registers a gradwarp-corrected b=0, so its warp is in the corrected frame.
+    """
     _cfg_for_diffprep(tmp_path)
     wf = _diffprep_t2wreg_wf(tmp_path, _plain_unit(tmp_path))
 
@@ -2136,9 +2280,12 @@ def test_diffprep_t2wreg_without_gradwarp_passes_no_field(tmp_path):
 
 
 def _forced_anat_unit_with_gre(method):
-    """What --force sdc-anat-reference leaves when a phasediff GRE fieldmap also
+    """Build the unit --force sdc-anat-reference leaves alongside a GRE fieldmap.
+
+    What --force sdc-anat-reference leaves when a phasediff GRE fieldmap also
     lists the series: the anatomical estimation is applied and the GRE fieldmap
-    stays an application candidate."""
+    stays an application candidate.
+    """
     import dataclasses
 
     from qsiplan.models import CorrectionMethod, Provenance
@@ -2169,8 +2316,11 @@ def _forced_anat_unit_with_gre(method):
 
 
 def test_forced_t2w_reference_is_seeded_by_the_gre_fieldmap(tmp_path, monkeypatch):
-    """--force sdc-anat-reference over a GRE fieldmap: T2Wreg runs against the T2w,
-    starting from the GRE warp, and the GRE warp is not also applied after HMC."""
+    """Test that a forced T2w reference is seeded by the GRE fieldmap.
+
+    --force sdc-anat-reference over a GRE fieldmap: T2Wreg runs against the T2w,
+    starting from the GRE warp, and the GRE warp is not also applied after HMC.
+    """
     from qsiplan.models import CorrectionMethod
 
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
@@ -2202,8 +2352,11 @@ def test_forced_t2w_reference_is_seeded_by_the_gre_fieldmap(tmp_path, monkeypatc
 
 
 def test_forced_synb0_reference_is_seeded_by_the_gre_fieldmap(tmp_path, monkeypatch):
-    """A forced SynB0 reference over a GRE fieldmap runs T2Wreg against the
-    synthetic b=0 through the SynB0 branch, starting from the GRE warp."""
+    """Test that a forced SynB0 reference is seeded by the GRE fieldmap.
+
+    A forced SynB0 reference over a GRE fieldmap runs T2Wreg against the
+    synthetic b=0 through the SynB0 branch, starting from the GRE warp.
+    """
     from qsiplan.models import CorrectionMethod
 
     from qsiprep.workflows.dwi.diffprep import init_diffprep_hmc_wf
@@ -2265,7 +2418,7 @@ def test_boilerplate_states_the_absence_when_disabled():
 
 
 def test_dis3d_boilerplate_makes_no_jacobian_claim():
-    """A DIS3D unit has no field, so there is nothing to have been modulated."""
+    """Test that a DIS3D unit, which has no field, makes no Jacobian-modulation claim."""
     from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
 
     config.workflow.ignore = []

@@ -33,7 +33,7 @@ def _run(interface, work_dir):
 
 
 def test_romeo_cmdline(tmp_path):
-    """romeo runs first, keeps radian phase, takes the mask via -k, output last."""
+    """Test that romeo runs first, keeps radian phase, takes the mask via -k, output last."""
     phase = _write(tmp_path / 'phase.nii.gz', np.zeros((4, 4, 4)))
     mag = _write(tmp_path / 'mag.nii.gz', np.ones((4, 4, 4)))
     mask = _write(tmp_path / 'mask.nii.gz', np.ones((4, 4, 4)))
@@ -49,7 +49,7 @@ def test_romeo_cmdline(tmp_path):
 
 
 def test_romeo_cmdline_without_mask(tmp_path):
-    """The mask is optional (romeo falls back to its robustmask default)."""
+    """Test that the mask is optional (romeo falls back to its robustmask default)."""
     phase = _write(tmp_path / 'phase.nii.gz', np.zeros((4, 4, 4)))
     mag = _write(tmp_path / 'mag.nii.gz', np.ones((4, 4, 4)))
 
@@ -60,7 +60,7 @@ def test_romeo_cmdline_without_mask(tmp_path):
 
 
 def test_fugue_cmdline(tmp_path):
-    """fugue takes <fmap> <dwell> <dir> as consecutive positionals."""
+    """Test that fugue takes <fmap> <dwell> <dir> as consecutive positionals."""
     epi = _write(tmp_path / 'epi.nii.gz', np.ones((4, 4, 4)))
     fmap = _write(tmp_path / 'fmap.nii.gz', np.zeros((4, 4, 4)))
 
@@ -71,7 +71,7 @@ def test_fugue_cmdline(tmp_path):
 
 
 def test_fieldmapprep_cmdline(tmp_path):
-    """fmapprep takes the magnitude and the echo-time difference (ms)."""
+    """Test that fmapprep takes the magnitude and the echo-time difference (ms)."""
     phase = _write(tmp_path / 'phasediff.nii.gz', np.zeros((4, 4, 4)))
     mag = _write(tmp_path / 'mag.nii.gz', np.ones((4, 4, 4)))
 
@@ -87,7 +87,7 @@ def test_fieldmapprep_cmdline(tmp_path):
 
 @needs_niimath
 def test_romeo_unwraps_phase(tmp_path):
-    """romeo recovers a smooth phase that wraps past +-pi."""
+    """Test that romeo recovers a smooth phase that wraps past +-pi."""
     shape = (32, 34, 28)
     x = np.linspace(-1, 1, shape[0])[:, None, None]
     y = np.linspace(-1, 1, shape[1])[None, :, None]
@@ -116,7 +116,7 @@ def test_romeo_unwraps_phase(tmp_path):
 
 @needs_niimath
 def test_fugue_applies_and_preserves_grid(tmp_path):
-    """fugue returns a same-grid image and actually shifts intensity."""
+    """Test that fugue returns a same-grid image and actually shifts intensity."""
     shape = (24, 28, 20)
     y = np.linspace(-1, 1, shape[1])[None, :, None]
     epi = np.broadcast_to((1000 + 400 * np.sin(6 * y)), shape).astype('float32')

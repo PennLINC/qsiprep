@@ -1,6 +1,7 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
+"""Automatic selection of the appropriate SDC method.
+
 .. _sdc_base :
 
 Automatic selection of the appropriate SDC method
@@ -51,9 +52,12 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 def gre_seed_unit(unit):
-    """``unit`` seen through its GRE candidate, led by the series ``unit.pe_dir``
+    """Return ``unit`` seen through its GRE candidate.
+
+    The returned unit is led by the series ``unit.pe_dir``
     names: init_sdc_wf builds the warp for its lead series' phase encoding, and
-    that series is TORTOISE's EPI/blip-up series (the plus series of a pair)."""
+    that series is TORTOISE's EPI/blip-up series (the plus series of a pair).
+    """
     lead = unit.plus_files[0] if unit.has_bidirectional_dwi else unit.dwi_files[0]
     return dataclasses.replace(
         unit,
@@ -63,8 +67,7 @@ def gre_seed_unit(unit):
 
 
 def init_gre_seed_wf(unit, has_gradwarp, source_file, use):
-    """Build the warp of ``unit``'s GRE candidate that a TORTOISE registration
-    starts from.
+    """Build the warp of ``unit``'s GRE candidate that a TORTOISE registration starts from.
 
     The warp is built for the unit's blip-up series (see :func:`gre_seed_unit`)
     on a b=0 reference taken before HMC and SDC. With gradient unwarping it is
@@ -145,7 +148,8 @@ def init_gre_seed_wf(unit, has_gradwarp, source_file, use):
 
 
 def init_sdc_wf(unit, gradwarp=False, use='apply'):
-    """
+    """Build a workflow that applies the SDC strategy for a scanner-measured fieldmap.
+
     This workflow implements the heuristics to choose a
     :abbr:`SDC (susceptibility distortion correction)` strategy for a
     scanner-measured fieldmap (PEPOLAR or GRE). Units with no measured
@@ -176,13 +180,13 @@ def init_sdc_wf(unit, gradwarp=False, use='apply'):
     unit : :class:`~qsiplan.adapters.PreprocUnit`
         The DWI series to correct and the fieldmap that corrects them
         (its lead series' sidecar metadata drives the PEPOLAR/SyN setup)
-    gradwarp : bool
+    gradwarp : bool, optional
         Whether the caller has a gradwarp field for this unit. A GRE fieldmap's
         warp is then estimated on raw references and transported into the
         gradwarp-corrected frame through ``inputnode.gradwarp_field``; the
         workflow's ``gradwarp_mode`` (``'transport'``, else ``'reference'``)
         tells :func:`connect_gradwarp_sdc_reference` which references to feed.
-    use : str
+    use : str, optional
         What the caller does with a GRE fieldmap's warp, for the boilerplate:
         ``apply`` (unwarp the DWI), ``eddy`` (eddy's ``--field``), or the TORTOISE
         registration it initializes, ``t2wreg`` or ``drbuddi``.
@@ -392,7 +396,7 @@ co-registration with the anatomical reference.
 
 
 def _gre_boilerplate(gradwarp, use):
-    """The sentences that follow a GRE fieldmap's estimation in the methods text."""
+    """Return the sentences that follow a GRE fieldmap's estimation in the methods text."""
     desc = []
     if gradwarp:
         desc.append(
