@@ -574,7 +574,7 @@ class workflow(_Config):
     eddy_config = None
     """Configuration for running Eddy."""
     force = None
-    """Forced processing choices (see ``--force``): currently ``sdc-anat-reference``."""
+    """Forced processing choices (see ``--force``)."""
     force_sdc_anat_reference = False
     """``--force sdc-anat-reference`` was given: the anatomical SDC reference
     overrides the fieldmap application for every DWI series (derived from
@@ -616,9 +616,6 @@ class workflow(_Config):
     sdc_method = None
     """Which tool corrects susceptibility distortion for PEPOLAR data:
     topup, drbuddi or topup+drbuddi (the parser resolves ``auto``)."""
-    gre_sdc_after_eddy = False
-    """Deprecated. Apply a GRE fieldmap's warp after eddy instead of handing the
-    field to eddy (``--field``). Only affects the eddy HMC path."""
     separate_all_dwis = False
     """Process all dwis separately - do not attempt concatenation."""
     shoreline_config = None

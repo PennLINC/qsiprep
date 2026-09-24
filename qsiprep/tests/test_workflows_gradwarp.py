@@ -26,7 +26,6 @@ def _reset_config():
     config.workflow.gradient_file = None
     config.workflow.ignore = []
     config.workflow.force = []
-    config.workflow.gre_sdc_after_eddy = False
     # Anything that runs the real parser leaves the method axes set, and a stray
     # sdc_method='topup' would silently compile a plan with no DRBUDDI stage.
     # Save them here, and restore below so this module does not pollute in turn.
@@ -48,7 +47,6 @@ def _reset_config():
     yield
     _reset_plan_logging()
     config.workflow.gradient_file = None
-    config.workflow.gre_sdc_after_eddy = False
     config.workflow.ignore = []
     config.workflow.force = []
     for key, value in axis_keys.items():
@@ -1811,7 +1809,7 @@ def _cfg_gre(after_eddy=False):
     config.workflow.denoise_method = 'dwidenoise'
     config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
     config.workflow.gradient_file = None  # no gradient unwarping
-    config.workflow.gre_sdc_after_eddy = after_eddy
+    config.workflow.force = ['gre-sdc-after-eddy'] if after_eddy else []
     config.execution.sloppy = False
     config.nipype.omp_nthreads = 1
 
@@ -2053,7 +2051,7 @@ def test_gre_warp_is_transported_from_raw_references(tmp_path, monkeypatch, buil
         )
     else:
         _cfg_for_fsl(tmp_path, 'drbuddi')
-        config.workflow.gre_sdc_after_eddy = True
+        config.workflow.force = ['gre-sdc-after-eddy']
         wf = _fsl_wf(tmp_path, _phasediff_unit())
         source, fields = (
             'b0_ref_for_coreg',

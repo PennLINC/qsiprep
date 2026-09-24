@@ -40,7 +40,6 @@ def _reset_config():
             'gradient_file',
             'ignore',
             'force',
-            'gre_sdc_after_eddy',
         )
     }
     saved_sloppy = config.execution.sloppy
@@ -59,7 +58,6 @@ def _cfg(hmc_method, sdc_method='auto', sloppy=False):
     config.workflow.gradient_file = None
     config.workflow.ignore = []
     config.workflow.force = []
-    config.workflow.gre_sdc_after_eddy = False
     config.execution.sloppy = sloppy
 
 
@@ -125,9 +123,9 @@ def test_gre():
 
 
 def test_gre_after_eddy():
-    """--gre-sdc-after-eddy applies the GRE warp downstream, where QSIPrep modulates it."""
+    """--force gre-sdc-after-eddy applies the GRE warp downstream, where QSIPrep modulates it."""
     _cfg(hmc_method='eddy', sdc_method='fieldmap')
-    config.workflow.gre_sdc_after_eddy = True
+    config.workflow.force = ['gre-sdc-after-eddy']
 
     assert jacobian_provenance_for(_gre_unit(), t2w_sdc=False) == (['sdc'], [], None)
 

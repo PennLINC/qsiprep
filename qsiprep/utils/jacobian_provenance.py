@@ -115,7 +115,7 @@ def _eddy_provenance(unit):
       regression test for exactly this combination.
     * 'sdc' is applied whenever a warp reaches ``to_dwi_ref_warps``
       externally: DRBUDDI (whether or not TOPUP also ran), SyN, or a GRE
-      fieldmap applied after ``eddy`` (``--gre-sdc-after-eddy``). TOPUP-only and
+      fieldmap applied after ``eddy`` (``--force gre-sdc-after-eddy``). TOPUP-only and
       a GRE fieldmap eddy applied never apply 'sdc' -- they are baked into
       ``eddy``.
     """

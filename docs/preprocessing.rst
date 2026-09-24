@@ -1041,7 +1041,7 @@ its own model, the way it applies a ``TOPUP`` field.
 Setting ``estimate_move_by_susceptibility`` in the ``--eddy-config`` file also
 lets ``eddy`` estimate how the field changes with head orientation
 (movement-by-susceptibility).
-The deprecated ``--gre-sdc-after-eddy`` restores the old behaviour of applying
+The deprecated ``--force gre-sdc-after-eddy`` restores the old behaviour of applying
 the GRE fieldmap to the outputs of ``eddy``, for comparing the two on real
 data; it will be removed in a future release.
 SyN-based fieldmapless distortion correction is performed on the outputs of

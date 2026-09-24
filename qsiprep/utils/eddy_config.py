@@ -39,11 +39,11 @@ def eddy_modulates_distortion(eddy_args):
 def eddy_applies_gre(unit):
     """Whether ``eddy`` applies this unit's GRE fieldmap itself (``--field``),
     the way it applies TOPUP's field, rather than the warp being applied after
-    ``eddy`` (the deprecated ``--gre-sdc-after-eddy``)."""
+    ``eddy`` (the deprecated ``--force gre-sdc-after-eddy``)."""
     return (
         unit.is_gre
         and unit.run.hmc_stage.tool == 'eddy'
-        and not config.workflow.gre_sdc_after_eddy
+        and 'gre-sdc-after-eddy' not in (config.workflow.force or [])
     )
 
 
