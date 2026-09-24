@@ -44,7 +44,6 @@ from ...interfaces.gradunwarp import InvertDisplacementField
 from ..dwi.resampling import _listify
 
 # Fieldmap workflows
-from .pepolar import init_pepolar_unwarp_wf
 from .unwarp import init_sdc_unwarp_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -148,9 +147,14 @@ def init_sdc_wf(unit, gradwarp=False, use='apply'):
     """
     This workflow implements the heuristics to choose a
     :abbr:`SDC (susceptibility distortion correction)` strategy for a
-    scanner-measured fieldmap (PEPOLAR or GRE). Units with no measured
-    fieldmap pass through unchanged; the fieldmap-less T2Wreg and SyNb0 cases
-    are handled by the TORTOISE backend, not here.
+    GRE fieldmap or the fieldmap-less SyN method. Units with no such fieldmap
+    pass through unchanged; the fieldmap-less T2Wreg and SyNb0 cases are
+    handled by the TORTOISE backend, not here.
+
+    .. note::
+        PEPOLAR fieldmaps are not supported by this workflow. They are handled
+        by the eddy (TOPUP) and TORTOISE (DRBUDDI) backends instead, and passing
+        a PEPOLAR unit raises a :class:`ValueError`.
 
     .. workflow::
         :graph2use: orig
@@ -162,12 +166,9 @@ def init_sdc_wf(unit, gradwarp=False, use='apply'):
         wf = init_sdc_wf(
             make_preproc_unit(
                 ['/data/sub-03/dwi/sub-03_dwi.nii.gz'],
-                method=CorrectionMethod.PEPOLAR,
+                method=CorrectionMethod.NIPREPS_SYN,
                 pe_dir='j',
-                estimation_sources=[
-                    '/data/sub-03/dwi/sub-03_dwi.nii.gz',
-                    '/data/sub-03/fmap/sub-03_epi.nii.gz',
-                ],
+                estimation_sources=['/data/sub-03/anat/sub-03_T1w.nii.gz'],
             ),
         )
 
@@ -175,7 +176,7 @@ def init_sdc_wf(unit, gradwarp=False, use='apply'):
     ----------
     unit : :class:`~qsiplan.adapters.PreprocUnit`
         The DWI series to correct and the fieldmap that corrects them
-        (its lead series' sidecar metadata drives the PEPOLAR/SyN setup)
+        (its lead series' sidecar metadata drives the GRE/SyN setup)
     gradwarp : bool
         Whether the caller has a gradwarp field for this unit. A GRE fieldmap's
         warp is then estimated on raw references and transported into the
@@ -219,7 +220,6 @@ def init_sdc_wf(unit, gradwarp=False, use='apply'):
     fieldmap_hz
         The fieldmap in Hz for eddy
     """
-    omp_nthreads = config.nipype.omp_nthreads
     does_sdc = unit.has_scanner_measured_fieldmap or unit.is_nipreps_syn
     workflow = Workflow(name='sdc_wf' if does_sdc else 'sdc_bypass_wf')
     inputnode = pe.Node(
@@ -266,27 +266,7 @@ co-registration with the anatomical reference.
 
     # PEPOLAR path
     if unit.is_pepolar:
-        outputnode.inputs.method = 'PEB/PEPOLAR (phase-encoding based / PE-POLARity)'
-
-        # The reverse blip is the opposite-polarity DWI series when both are
-        # present, otherwise the dedicated epi fieldmap(s).
-        epi_fmaps = list(unit.minus_files) if unit.has_bidirectional_dwi else list(unit.extra_b0)
-
-        # We have already sorted by compatible
-        sdc_unwarp_wf = init_pepolar_unwarp_wf(
-            dwi_meta=unit.dwi_metadata,
-            epi_fmaps=epi_fmaps,
-            omp_nthreads=omp_nthreads,
-            name='pepolar_unwarp_wf',
-        )
-
-        workflow.connect([
-            (inputnode, sdc_unwarp_wf, [
-                ('b0_ref', 'inputnode.in_reference'),
-                ('b0_mask', 'inputnode.in_mask'),
-                ('b0_ref_brain', 'inputnode.in_reference_brain'),
-            ]),
-        ])  # fmt:skip
+        raise ValueError('PEPOLAR SDC requested, but this path should be unreachable.')
 
     # FIELDMAP path
     if unit.is_gre:
