@@ -219,8 +219,11 @@ def init_dwi_preproc_wf(
                 'coreg_score',
                 'raw_concatenated',
                 'carpetplot_data',
-                'sdc_scaling_images',
                 'fieldmap_hz',
+                # Only written out by the TORTOISE/DIFFPREP backend.
+                'ec_jacobian_images',
+                # Only written out when DRBUDDI ran: TORTOISE's LSR ratios.
+                'sdc_scaling_images',
             ]
         ),
         name='outputnode',
@@ -334,6 +337,11 @@ def init_dwi_preproc_wf(
         # A DIS3D unit gets no spatial correction -- applying one would
         # double-correct data the scanner already corrected.
         if gradwarp_wf.plan.warp_dim is not None:
+            # This field reaches resampling.py's ComposeJacobianWeights
+            # whenever Jacobian weighting is on (see init_dwi_trans_wf).
+            # ``jacobian_provenance.jacobian_provenance_for`` recomputes this
+            # same condition (``resolve_gradwarp_plan(unit).warp_dim is not
+            # None``) from ``unit`` alone for the sidecar.
             workflow.connect([
                 (gradwarp_wf, outputnode, [
                     ('outputnode.gradwarp_field', 'gradwarp_field'),
@@ -389,9 +397,6 @@ def init_dwi_preproc_wf(
 
         workflow.connect([
             (inputnode, fmap_unwarp_report_wf, [('t1_seg', 'inputnode.in_seg')]),
-            (hmc_wf, outputnode, [
-                ('outputnode.sdc_scaling_images', 'sdc_scaling_images'),
-            ]),
             (hmc_wf, fmap_unwarp_report_wf, [
                 ('outputnode.pre_sdc_template', 'inputnode.in_pre'),
                 ('outputnode.b0_template', 'inputnode.in_post'),
@@ -404,6 +409,20 @@ def init_dwi_preproc_wf(
 
     if doing_topup:
         workflow.connect([(hmc_wf, outputnode, [('outputnode.fieldmap_hz', 'fieldmap_hz')])])
+
+    if hmc_tool == 'tortoise':
+        # Only init_diffprep_hmc_wf's outputnode has this field -- shoreline
+        # and eddy have no TORTOISE eddy-current Jacobian to report.
+        workflow.connect([
+            (hmc_wf, outputnode, [('outputnode.ec_jacobian_images', 'ec_jacobian_images')]),
+        ])  # fmt:skip
+
+    if doing_drbuddi:
+        # DRBUDDI's LSR ratios: TORTOISE's default signal redistribution for
+        # reverse phase-encoded data, which replaces the Jacobian weight.
+        workflow.connect([
+            (hmc_wf, outputnode, [('outputnode.sdc_scaling_images', 'sdc_scaling_images')]),
+        ])  # fmt:skip
 
     # DRBUDDI has some extra reports that we want to save. Make sure we get them!
     if doing_drbuddi:

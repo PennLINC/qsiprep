@@ -7,6 +7,7 @@ Interfaces to generate reportlets
 
 """
 
+import html
 import os
 import os.path as op
 import re
@@ -32,6 +33,7 @@ from nipype.interfaces.base import (
 
 from ..viz.utils import plot_sdc_warp
 from .bids import get_bids_params
+from .dsi_studio import QC_WARNINGS_COLUMN
 from .gradients import concatenate_bvals, concatenate_bvecs
 
 SUBJECT_TEMPLATE = """{mrtrix_warning}\t<ul class="elem-desc">
@@ -106,6 +108,17 @@ MRTRIX_DEV_WARNING = """\t<div class="alert alert-warning" role="alert">
 \t\tyour request via <code>--mrtrix-version dev</code>. Development-branch code has not
 \t\tbeen through a release cycle and may contain bugs. Inspect these outputs before
 \t\trelying on them.
+\t</div>
+"""
+
+QC_WARNINGS_TEMPLATE = """\t<div class="alert alert-warning" role="alert">
+\t\t<strong>DSI Studio could not compute some QC measures.</strong>
+\t\tThose values are <code>n/a</code> in this series' <code>desc-image_qc.tsv</code>.
+\t\tPreprocessing continued, but this failure can point to a problem in the data it
+\t\twas run on, such as extreme intensity values, so inspect the outputs.
+\t\t<ul>
+{items}
+\t\t</ul>
 \t</div>
 """
 
@@ -594,6 +607,11 @@ class _SeriesQCInputSpec(BaseInterfaceInputSpec):
 
 class _SeriesQCOutputSpec(TraitedSpec):
     series_qc_file = File(exists=True)
+    qc_warnings_report = File(
+        exists=True,
+        desc='HTML reportlet naming QC stages DSI Studio could not measure. '
+        'Undefined when every stage succeeded.',
+    )
 
 
 class SeriesQC(SimpleInterface):
@@ -601,11 +619,23 @@ class SeriesQC(SimpleInterface):
     output_spec = _SeriesQCOutputSpec
 
     def _run_interface(self, runtime):
-        image_qc = _load_qc_file(self.inputs.pre_qc, prefix='raw_')
-        if isdefined(self.inputs.t1_qc):
-            image_qc.update(_load_qc_file(self.inputs.t1_qc, prefix='t1_'))
-        if isdefined(self.inputs.t1_qc_postproc):
-            image_qc.update(_load_qc_file(self.inputs.t1_qc_postproc, prefix='t1post_'))
+        image_qc = {}
+        qc_warnings = []
+        for qc_file, prefix, label in (
+            (self.inputs.pre_qc, 'raw_', 'Raw data'),
+            (self.inputs.t1_qc, 't1_', 'Resampled data'),
+            (self.inputs.t1_qc_postproc, 't1post_', 'Resampled data after final denoising'),
+        ):
+            if not isdefined(qc_file):
+                continue
+            stage = _load_qc_file(qc_file, prefix=prefix)
+            # The reason travels in merged_qc.csv but is not a QC measure, so it
+            # goes to the HTML report rather than into image_qc.tsv.
+            warning = stage.pop(prefix + QC_WARNINGS_COLUMN, None)
+            if isinstance(warning, str) and warning.strip():
+                qc_warnings.append((label, warning.strip()))
+            image_qc.update(stage)
+
         motion_summary = calculate_motion_summary(self.inputs.confounds_file)
         image_qc.update(motion_summary)
 
@@ -632,8 +662,20 @@ class SeriesQC(SimpleInterface):
         bids_info = get_bids_params(output_file)
         image_qc.update(bids_info)
         output = op.join(runtime.cwd, 'dwi_qc.tsv')
-        pd.DataFrame(image_qc).to_csv(output, sep='\t', index=False)
+        # n/a is the BIDS spelling of a missing value in a TSV.
+        pd.DataFrame(image_qc).to_csv(output, sep='\t', index=False, na_rep='n/a')
         self._results['series_qc_file'] = output
+
+        if qc_warnings:
+            report = op.join(runtime.cwd, 'qc_warnings.html')
+            items = '\n'.join(
+                f'\t\t\t<li>{html.escape(label)}: {html.escape(message)}</li>'
+                for label, message in qc_warnings
+            )
+            with open(report, 'w') as fobj:
+                fobj.write(QC_WARNINGS_TEMPLATE.format(items=items))
+            self._results['qc_warnings_report'] = report
+
         return runtime
 
 

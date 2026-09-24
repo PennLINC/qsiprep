@@ -164,17 +164,17 @@ def test_diffprep_config_use_cuda_default_and_override(tmp_path):
     """
     import json as _json
 
-    from qsiprep.workflows.dwi.diffprep import _load_diffprep_config
+    from qsiprep.utils.diffprep_config import load_diffprep_config
 
-    assert _load_diffprep_config(None)['use_cuda'] is False
+    assert load_diffprep_config(None)['use_cuda'] is False
 
     cfg = tmp_path / 'cuda_cfg.json'
     cfg.write_text(_json.dumps({'use_cuda': True}))
-    assert _load_diffprep_config(str(cfg))['use_cuda'] is True
+    assert load_diffprep_config(str(cfg))['use_cuda'] is True
 
     cfg_absent = tmp_path / 'no_cuda_key.json'
     cfg_absent.write_text(_json.dumps({'b0_id': 0}))
-    assert 'use_cuda' not in _load_diffprep_config(str(cfg_absent))
+    assert 'use_cuda' not in load_diffprep_config(str(cfg_absent))
 
 
 def test_diffprep_wf_honours_use_cuda(tmp_path):
@@ -203,9 +203,9 @@ def test_diffprep_correction_mode_defaults_to_quadratic():
     The CLI exposes one ``--hmc-method tortoise`` rather than a value per mode,
     so the config JSON is the only way to reach ``motion`` or ``cubic``.
     """
-    from qsiprep.workflows.dwi.diffprep import _load_diffprep_config
+    from qsiprep.utils.diffprep_config import load_diffprep_config
 
-    assert _load_diffprep_config(None)['correction_mode'] == 'quadratic'
+    assert load_diffprep_config(None)['correction_mode'] == 'quadratic'
 
 
 def test_diffprep_wf_honours_correction_mode(tmp_path):
@@ -1564,3 +1564,52 @@ def test_diffprep_passes_ncores_to_tortoise():
     assert node.inputs.ncores == 8
     # nipype's accounting and the process's real budget must agree
     assert node.n_procs == 8
+
+
+@pytest.mark.integration
+@pytest.mark.diffprep
+def test_reconstructed_transform_reproduces_moteddy(tmp_path, working_dir):
+    """The ship gate: our reconstruction must match TORTOISE's own output.
+
+    Reproducing ``_moteddy.nii`` validates the *combined* motion+EC map, which
+    is what pins the parameter convention. Splitting the EC determinant out of
+    it is licensed separately, by DIFFPREP's motion component being rigid
+    (columns 0-5), unlike SHORELine's affine default. Both must hold.
+    """
+    from pathlib import Path
+
+    import nibabel as nb
+    import numpy as np
+
+    from qsiprep.interfaces.jacobian import resample_with_okan_transform
+
+    work = Path(working_dir)
+
+    def _one(pattern):
+        # next() on an empty rglob raises StopIteration, which pytest reports
+        # without naming the pattern that found nothing.
+        found = sorted(work.rglob(pattern))
+        assert found, f'No {pattern} under {work}; DIFFPREP did not run or its output was pruned.'
+        return found[0]
+
+    transformations = _one('*_moteddy_transformations.txt')
+    tortoise_output = _one('*_moteddy.nii')
+    # DIFFPREP's import step copies its input verbatim (same data, same
+    # header), so the tortoise_convert output stands in for the pruned
+    # ``_proc.nii`` without keeping a second copy of the series on disk.
+    stem = tortoise_output.name[: -len('_proc_moteddy.nii')]
+    imported = _one(f'tortoise_convert/{stem}.nii')
+
+    ours = resample_with_okan_transform(
+        str(imported), str(transformations), str(tmp_path / 'ours.nii.gz')
+    )
+    mine = np.asanyarray(nb.load(ours).dataobj)
+    theirs = np.asanyarray(nb.load(str(tortoise_output)).dataobj)
+
+    inside = theirs > np.percentile(theirs, 60)
+    r = np.corrcoef(mine[inside], theirs[inside])[0, 1]
+    assert r > 0.99, (
+        f'Reconstructed motion+eddy resampling vs TORTOISE _moteddy.nii: '
+        f'r={r:.5f}. Below 0.99 means the 24-parameter convention is wrong, '
+        'and the EC Jacobian must NOT ship -- fall back to documenting the gap.'
+    )

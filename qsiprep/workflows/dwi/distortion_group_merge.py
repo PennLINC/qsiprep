@@ -16,7 +16,7 @@ from qsiplan.adapters import assembly_to_sidecar
 
 from ... import config
 from ...interfaces import DerivativesDataSink
-from ...interfaces.bids import DerivativesSidecar
+from ...interfaces.bids import DerivativesMaybeDataSink, DerivativesSidecar
 from ...interfaces.dsi_studio import DSIStudioBTable
 from ...interfaces.dwi_merge import AveragePEPairs, MergeDWIs
 from ...interfaces.mrtrix import MRTrixGradientTable
@@ -217,6 +217,18 @@ def init_distortion_group_merge_wf(
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
+    # Only written when DSI Studio could not measure a QC stage; see SeriesQC.
+    ds_report_qc_warnings = pe.Node(
+        DerivativesMaybeDataSink(
+            datatype='figures',
+            desc='qcwarnings',
+            suffix='dwi',
+            source_file=source_file,
+        ),
+        name='ds_report_qc_warnings',
+        run_without_submitting=True,
+        mem_gb=DEFAULT_MEMORY_MIN_GB,
+    )
 
     # CONNECT TO DERIVATIVES
     gtab_t1 = pe.Node(MRTrixGradientTable(), name='gtab_t1')
@@ -300,6 +312,7 @@ def init_distortion_group_merge_wf(
         (inputnode, t1_dice_calc, [('t1_mask', 'inputnode.anatomical_mask')]),
         (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
         (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
+        (series_qc, ds_report_qc_warnings, [('qc_warnings_report', 'in_file')]),
         (distortion_merger, outputnode, [
             ('out_bval', 'merged_bval'),
             ('out_bvec', 'bvecs_t1'),

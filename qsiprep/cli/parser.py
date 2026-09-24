@@ -131,6 +131,8 @@ def _build_parser(**kwargs):
             # --force values land on their own boolean attributes so config
             # (and qsiplan's policy bridge) can read them by name.
             namespace.force_sdc_anat_reference = 'sdc-anat-reference' in (namespace.force or [])
+            if 'jacobian' in (namespace.force or []) and 'jacobian' in (namespace.ignore or []):
+                self.error('--force jacobian and --ignore jacobian are mutually exclusive')
             if namespace.force_sdc_anat_reference and namespace.sdc_anat_reference == 'none':
                 self.error(
                     '--force sdc-anat-reference requires an anatomical SDC '
@@ -396,7 +398,17 @@ def _build_parser(**kwargs):
         action='store',
         nargs='+',
         default=[],
-        choices=['fieldmaps', 'pepolar-dwis', 't2w', 'phase', 'sdc', 'shims', 'fov', 'gradwarp'],
+        choices=[
+            'fieldmaps',
+            'pepolar-dwis',
+            't2w',
+            'phase',
+            'sdc',
+            'shims',
+            'fov',
+            'gradwarp',
+            'jacobian',
+        ],
         help=(
             'Ignore selected aspects of the input dataset to disable the corresponding '
             'parts of the workflow (a space-delimited list). '
@@ -417,7 +429,12 @@ def _build_parser(**kwargs):
             '"fov" concatenates series with differently-oriented fields of view anyway, '
             'in which case distortion corrections will be misapplied. '
             '"gradwarp" disables gradient nonlinearity correction entirely, including '
-            'the voxelwise gradient deviation map.'
+            'the voxelwise gradient deviation map. '
+            '"jacobian" disables the Jacobian intensity modulation QSIPrep itself applies '
+            'for gradient-nonlinearity, susceptibility and eddy-current distortion '
+            "corrections. It does not affect FSL eddy's internal modulation, which "
+            'eddy applies whenever its resampling method is "jac" (the default; see '
+            '--eddy-config).'
         ),
     )
     g_scope.add_argument(
@@ -426,7 +443,7 @@ def _build_parser(**kwargs):
         action='extend',
         nargs='+',
         default=[],
-        choices=['gradwarp1D', 'gradwarp3D', 'sdc-anat-reference'],
+        choices=['gradwarp1D', 'gradwarp3D', 'sdc-anat-reference', 'jacobian'],
         help=(
             'Force selected corrections on, overriding what the input metadata implies '
             '(a space-delimited list). '
@@ -438,7 +455,12 @@ def _build_parser(**kwargs):
             '"sdc-anat-reference" escalates --sdc-anat-reference from a fallback to an '
             'override, so that the selected anatomical reference replaces fieldmap '
             'application for every DWI series. It requires an --sdc-anat-reference '
-            'other than "none".'
+            'other than "none". '
+            '"jacobian" applies Jacobian intensity modulation to the fieldmap-less '
+            'TORTOISE T2Wreg (EPIREG) correction as well. TORTOISE leaves that field '
+            'unmodulated because its final registration stage is not restricted to '
+            'the phase-encoding direction; forcing it uses the phase-encoding '
+            'component of the field only.'
         ),
     )
 

@@ -263,3 +263,32 @@ def test_denoise_window_help_mentions_dwidenoise2():
 
     assert 'dwidenoise2' in action.help
     assert 'schedule' in action.help
+
+
+def test_effective_eddy_method_defaults_to_jac():
+    from qsiprep.utils.eddy_config import effective_eddy_resampling_method
+
+    assert effective_eddy_resampling_method({}) == 'jac'
+
+
+def test_effective_eddy_method_reads_the_config():
+    from qsiprep.utils.eddy_config import effective_eddy_resampling_method
+
+    assert effective_eddy_resampling_method({'method': 'lsr'}) == 'lsr'
+
+
+def test_eddy_modulates_distortion_only_for_jac():
+    from qsiprep.utils.eddy_config import eddy_modulates_distortion
+
+    assert eddy_modulates_distortion({'method': 'jac'})
+    assert not eddy_modulates_distortion({'method': 'lsr'})
+
+
+def test_shipped_default_config_modulates():
+    """The shipped eddy_params.json must keep jac, or the backend table lies."""
+    import json
+
+    from qsiprep.data import load as load_data
+    from qsiprep.utils.eddy_config import eddy_modulates_distortion
+
+    assert eddy_modulates_distortion(json.loads(load_data('eddy_params.json').read_text()))
