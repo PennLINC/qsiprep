@@ -517,6 +517,18 @@ def connect_gradwarp_sdc_reference(workflow, inputnode, source, source_fields, b
     neighbours: sinc-interpolating a binary image would leave it non-binary.
     """
     ref_field, brain_field, mask_field = source_fields
+    if getattr(b0_sdc_wf, 'gradwarp_mode', 'reference') == 'transport':
+        # A GRE warp is estimated on the raw reference and transported afterwards
+        # (see ``_connect_transported_warp`` in fieldmap/base.py), so the references stay raw.
+        workflow.connect([
+            (inputnode, b0_sdc_wf, [('gradwarp_field', 'inputnode.gradwarp_field')]),
+            (source, b0_sdc_wf, [
+                (ref_field, 'inputnode.b0_ref'),
+                (brain_field, 'inputnode.b0_ref_brain'),
+                (mask_field, 'inputnode.b0_mask'),
+            ]),
+        ])  # fmt:skip
+        return
     smooth = _sdc_interpolation()
     for name, source_field, dest, interpolation in (
         ('gradwarp_sdc_inputs', ref_field, 'inputnode.b0_ref', smooth),

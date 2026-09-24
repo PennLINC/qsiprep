@@ -383,10 +383,11 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 (first_sdc_warp, compose_sdc_warp, [('out', 'sdc_warps')]),
             ])  # fmt:skip
         else:
-            # TOPUP only estimates an off-resonance field (eddy applies it and
-            # leaves no standalone warp -- its fieldwarps carry eddy's *combined*
-            # motion/eddy-current/SDC correction, not a pure susceptibility warp),
-            # so the displacement field is rebuilt from the field.
+            # TOPUP only estimates an off-resonance field, and a GRE fieldmap handed
+            # to eddy is one too (eddy applies it and leaves no standalone warp --
+            # its fieldwarps carry eddy's *combined* motion/eddy-current/SDC
+            # correction, not a pure susceptibility warp), so the displacement
+            # field is rebuilt from the field.
             hz_to_warp = pe.Node(
                 niu.Function(function=_hz_to_warp, output_names=['out_file']),
                 name='hz_to_warp',
@@ -395,7 +396,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             hz_to_warp.inputs.pe_dir = sdc_pe_dir
             workflow.connect([(inputnode, hz_to_warp, [('fieldmap_hz', 'in_file')])])
 
-            if sdc_warp_source == 'topup':
+            if sdc_warp_source in ('topup', 'gre_in_eddy'):
                 workflow.connect([(hz_to_warp, compose_sdc_warp, [('out_file', 'sdc_warps')])])
             else:
                 # TOPUP+DRBUDDI: DRBUDDI refined the series eddy had already

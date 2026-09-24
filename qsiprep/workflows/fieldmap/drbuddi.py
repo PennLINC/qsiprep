@@ -47,12 +47,48 @@ def _synth_shell_kwargs(bval, ndirs):
     return {'synth_shell_bval': float(bval), 'synth_shell_ndirs': int(ndirs)}
 
 
+def _negate_displacement_field(in_file):
+    """Negate every vector of an ITK displacement field.
+
+    The blip-down ("-" polarity) susceptibility distortion is the opposite of
+    blip-up, so DRBUDDI's initial down field is the negation of the up field.
+    The vectors live in the same world frame, so a plain element-wise negation
+    flips the polarity; the NIFTI_INTENT_VECTOR intent is preserved (TORTOISE
+    and ANTs read it as zeros without it).
+    """
+    import os
+
+    import nibabel as nb
+    import numpy as np
+
+    img = nb.load(in_file)
+    neg = nb.Nifti1Image(
+        (np.asanyarray(img.dataobj) * -1.0).astype('float32'), img.affine, img.header
+    )
+    neg.header.set_intent('vector')
+    out_file = os.path.abspath('initial_moving_transform.nii.gz')
+    neg.to_filename(out_file)
+    return out_file
+
+
+def seeds_from_gre(unit):
+    """Whether DRBUDDI starts from ``unit``'s GRE candidate: for any PEPOLAR unit
+    that a GRE fieldmap also lists, except when DRBUDDI only refines TOPUP's
+    correction, which a full GRE warp would duplicate."""
+    return (
+        unit.is_pepolar
+        and unit.gre_init_estimation is not None
+        and unit.run.stage_with('topup') is None
+    )
+
+
 def init_drbuddi_wf(
     unit,
     t2w_sdc,
     use_cuda=False,
     synth_shell_bval=None,
     synth_shell_ndirs=30,
+    initialize_from_field=False,
 ):
     """
     This workflow implements the heuristics to choose a
@@ -89,10 +125,18 @@ def init_drbuddi_wf(
         fallback).
     t2w_sdc : bool
         Should a T2w image be included in the DRBUDDI run?
+    initialize_from_field : bool
+        Seed DRBUDDI's diffeomorphic search from an external displacement field
+        (e.g. a GRE-fieldmap-derived warp) supplied on ``inputnode.initial_field``.
+        The field becomes the initial up (blip-up) transform and its negation the
+        initial down transform.
 
 
     Inputs
     ------
+    initial_field
+        (only when ``initialize_from_field``) an ITK displacement field in the
+        pre-SDC b=0 world frame that corrects the blip-up ("+" polarity) b=0.
     dwi_file : str
         Path to a motion/eddy corrected DWI file (in LPS+)
     bval_file : str
@@ -134,6 +178,7 @@ def init_drbuddi_wf(
                 't1_wm_seg',
                 't2w_unfatsat',
                 'b0_ref',
+                'initial_field',
             ]
         ),
         name='inputnode',
@@ -176,9 +221,12 @@ def init_drbuddi_wf(
         fieldmap_type=fieldmap_type,
         t2w_sdc=t2w_sdc,
         with_topup=unit.run.stage_with('topup') is not None,
+        initialized=initialize_from_field,
     )
 
     outputnode.inputs.method = f'PEB/PEPOLAR (phase-encoding based / PE-POLARity): {fieldmap_type}'
+    if initialize_from_field:
+        outputnode.inputs.method += ' (GRE-initialized)'
 
     gather_drbuddi_inputs = pe.Node(
         GatherDRBUDDIInputs(
@@ -210,6 +258,22 @@ def init_drbuddi_wf(
         name='drbuddi',
         n_procs=config.nipype.omp_nthreads,
     )
+
+    if initialize_from_field:
+        drbuddi.inputs.keep_initial_transform_fixed = True
+        negate_initial_field = pe.Node(
+            niu.Function(
+                input_names=['in_file'],
+                output_names=['out_file'],
+                function=_negate_displacement_field,
+            ),
+            name='negate_initial_field',
+        )
+        workflow.connect([
+            (inputnode, drbuddi, [('initial_field', 'initial_fixed_transform')]),
+            (inputnode, negate_initial_field, [('initial_field', 'in_file')]),
+            (negate_initial_field, drbuddi, [('out_file', 'initial_moving_transform')]),
+        ])  # fmt:skip
 
     aggregate_drbuddi = pe.Node(
         DRBUDDIAggregateOutputs(fieldmap_type=fieldmap_type), name='aggregate_drbuddi'

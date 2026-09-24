@@ -68,6 +68,7 @@ from ..utils.bids import (
     collect_data,
     get_source_file,
 )
+from ..utils.eddy_config import eddy_applies_gre
 from ..utils.misc import dwi_biascorrect_enabled, fix_multi_source_name
 from ..utils.plan import method_selection_from_config
 from ..utils.sdc import sdc_warp_source, t2w_available_for_sdc, t2w_sdc_enabled
@@ -690,7 +691,8 @@ to workflows in *QSIPrep*'s documentation]\
         )
         # The SDC displacement maps name, in their sidecars, the written transforms
         # that carried the correction from the DWI frame into ACPC.
-        names_sdc_transforms = write_derivatives and sdc_warp_source(unit, t2w_sdc)[0] is not None
+        warp_source, _ = sdc_warp_source(unit, t2w_sdc, gre_in_eddy=eddy_applies_gre(unit))
+        names_sdc_transforms = write_derivatives and warp_source is not None
 
         workflow.connect([
             (anat_preproc_wf, dwi_preproc_wf, [

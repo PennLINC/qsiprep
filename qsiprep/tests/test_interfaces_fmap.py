@@ -13,6 +13,7 @@ from qsiprep.interfaces.fmap import (
     CleanupEdgeFilter,
     DespikeFilter,
     FieldmapToVSM,
+    FieldToRadS,
     MedianFilter,
     _despike_2d,
     _sphere_footprint,
@@ -275,6 +276,20 @@ def test_median_and_cleanup_write_float32_from_integer_input(tmp_path):
         tmp_path / 'c',
     )
     assert nb.load(clean.outputs.out_file).get_data_dtype() == np.float32
+
+
+def test_field_to_rads_treats_its_input_as_hz(tmp_path):
+    """``FieldToRadS(fmap_range=0.5)`` is the Hz -> rad/s step before FUGUE."""
+    import numpy as np
+
+    hz = np.array([[[0.0, 10.0], [-25.0, 100.0]]], dtype='float32')
+    hz_file = tmp_path / 'fmap_hz.nii.gz'
+    nb.Nifti1Image(hz, np.eye(4)).to_filename(hz_file)
+
+    result = _run(FieldToRadS(in_file=str(hz_file), fmap_range=0.5), tmp_path / 'torads')
+
+    rads = nb.load(result.outputs.out_file).get_fdata()
+    assert np.allclose(rads, 2 * np.pi * hz, rtol=1e-6)
 
 
 def _unit_image(path, value=1.0):

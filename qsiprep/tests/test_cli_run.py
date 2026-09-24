@@ -785,6 +785,19 @@ def test_t1w_derived_references_require_t1w_modality(minimal_args, capsys, refer
     )
 
 
+def test_force_gre_sdc_after_eddy_is_off_and_warns_of_removal(minimal_args, capsys):
+    assert 'gre-sdc-after-eddy' not in _parse(minimal_args).force
+    capsys.readouterr()
+    assert 'gre-sdc-after-eddy' in _parse(minimal_args, '--force', 'gre-sdc-after-eddy').force
+    assert 'scheduled for removal' in capsys.readouterr().err
+
+
+def test_force_gre_sdc_after_eddy_requires_eddy(minimal_args, capsys):
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--hmc-method', 'tortoise', '--force', 'gre-sdc-after-eddy')
+    assert '--force gre-sdc-after-eddy requires --hmc-method eddy' in capsys.readouterr().err
+
+
 def test_shoreline_selection_warns_of_removal(minimal_args, capsys):
     _parse(minimal_args, '--hmc-method', 'shoreline')
     assert 'scheduled for removal' in capsys.readouterr().err

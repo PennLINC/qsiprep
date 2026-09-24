@@ -79,7 +79,7 @@ def t2wreg_target(unit, t2w_sdc):
     return 't2w' if t2w_sdc else None
 
 
-def sdc_warp_source(unit, t2w_sdc):
+def sdc_warp_source(unit, t2w_sdc, gre_in_eddy=False):
     """Decide where a unit's SDC displacement map comes from.
 
     Parameters
@@ -87,13 +87,17 @@ def sdc_warp_source(unit, t2w_sdc):
     unit : qsiplan.adapters.PreprocUnit
     t2w_sdc : bool
         Whether a T2w is available for SDC.
+    gre_in_eddy : bool
+        Whether eddy applied the unit's GRE fieldmap itself
+        (:func:`~qsiprep.utils.eddy_config.eddy_applies_gre`).
 
     Returns
     -------
     source : str or None
         ``'fieldwarp'`` when the method wrote a standalone warp (DRBUDDI, GRE, SyN,
         T2Wreg); ``'topup'`` when the warp is rebuilt from TOPUP's field, which
-        eddy applied internally; ``'topup+drbuddi'`` when DRBUDDI refined a
+        eddy applied internally; ``'gre_in_eddy'`` when it is rebuilt the same way
+        from a GRE fieldmap eddy applied; ``'topup+drbuddi'`` when DRBUDDI refined a
         TOPUP-corrected series, so its warp is only the residual; None without SDC.
     estimation_method : str or None
         The sidecar's ``EstimationMethod``.
@@ -108,7 +112,11 @@ def sdc_warp_source(unit, t2w_sdc):
             return 'topup+drbuddi', 'TOPUP+DRBUDDI'
         return None, None
     if unit.is_gre:
-        return 'fieldwarp', 'GRE fieldmap'
+        if not gre_in_eddy:
+            return 'fieldwarp', 'GRE fieldmap'
+        if readout_time is not None:
+            return 'gre_in_eddy', 'GRE fieldmap'
+        return None, None
     if unit.is_nipreps_syn:
         return 'fieldwarp', 'SyN (fieldmap-less)'
     if target is not None:

@@ -32,7 +32,7 @@ from niworkflows.interfaces.reportlets.registration import ANTSApplyTransformsRP
 from ... import config
 from ...data import load as load_data
 from ...interfaces import DerivativesDataSink
-from ...interfaces.fmap import FieldmapToVSM, FieldToHz, FieldToRadS
+from ...interfaces.fmap import FieldmapToVSM, FieldToRadS
 from ...interfaces.fmap import get_ees as _get_ees
 from ...interfaces.niworkflows import FUGUEvsm2ANTSwarp
 
@@ -76,7 +76,7 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
     out_mask
         mask of the unwarped input file
     out_hz
-        fieldmap in Hz that can be sent to eddy
+        the fieldmap in Hz on the ``in_reference`` grid (eddy's ``--field``)
 
     """
     omp_nthreads = config.nipype.omp_nthreads
@@ -162,9 +162,6 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
     # Fieldmap to rads and then to voxels (VSM - voxel shift map)
     torads = pe.Node(FieldToRadS(fmap_range=0.5), name='torads')
 
-    # Make one in Hz for eddy
-    tohz = pe.Node(FieldToHz(range_hz=1), name='tohz')
-
     get_ees = pe.Node(niu.Function(function=_get_ees, output_names=['ees']), name='get_ees')
 
     gen_vsm = pe.Node(FieldmapToVSM(), name='gen_vsm')
@@ -201,8 +198,7 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
         (fmap2ref_rpt, ds_report_reg, [('out_report', 'in_file')]),
         (inputnode, fmap2ref_apply, [('fmap', 'input_image')]),
         (fmap2ref_apply, torads, [('output_image', 'in_file')]),
-        (fmap2ref_apply, tohz, [('output_image', 'in_file')]),
-        (tohz, outputnode, [('out_file', 'out_hz')]),
+        (fmap2ref_apply, outputnode, [('output_image', 'out_hz')]),
         (inputnode, get_ees, [
             ('in_reference', 'in_file'),
             ('metadata', 'in_meta'),

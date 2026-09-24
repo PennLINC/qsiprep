@@ -188,6 +188,24 @@ def test_sdc_warp_source_emits_for_every_standalone_warp_method(tmp_path):
     assert sdc_warp_source(make_preproc_unit([dwi]), t2w_sdc=False) == (None, None)
 
 
+def test_sdc_warp_source_rebuilds_a_gre_field_eddy_applied(tmp_path):
+    """eddy leaves no standalone warp for a GRE fieldmap it applied, so the map
+    is rebuilt from the field, which needs the readout time."""
+    from qsiplan.models import CorrectionMethod
+
+    from qsiprep.tests.preproc_factory import make_preproc_unit
+    from qsiprep.utils.sdc import sdc_warp_source
+
+    dwi = _tiny_dwi(tmp_path / 'sub-01_dwi.nii.gz')
+    unit = make_preproc_unit([dwi], method=CorrectionMethod.PHASEDIFF)
+    assert sdc_warp_source(unit, t2w_sdc=False, gre_in_eddy=True) == (
+        'gre_in_eddy',
+        'GRE fieldmap',
+    )
+    no_readout = make_preproc_unit([dwi], method=CorrectionMethod.PHASEDIFF, readout_time=None)
+    assert sdc_warp_source(no_readout, t2w_sdc=False, gre_in_eddy=True) == (None, None)
+
+
 @pytest.mark.parametrize(
     ('hmc', 'method', 't2w_sdc', 'expected'),
     [
@@ -326,15 +344,17 @@ def test_trans_wf_takes_volume_0_warp_from_a_single_path_or_a_list():
     assert first_warp(['/work/finv.nii.gz', '/work/minv.nii.gz']) == '/work/finv.nii.gz'
 
 
-def test_trans_wf_topup_builds_hz_to_warp_chain():
-    """TOPUP has no standalone warp, so the field is turned into one first."""
+@pytest.mark.parametrize('source', ['topup', 'gre_in_eddy'])
+def test_trans_wf_topup_builds_hz_to_warp_chain(source):
+    """A field eddy applied (TOPUP's, or a GRE fieldmap's) leaves no standalone
+    warp, so the field is turned into one first."""
     _cfg()
     from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
 
     wf = init_dwi_trans_wf(
         source_file='/data/sub-01_dwi.nii.gz',
         mem_gb=1,
-        sdc_warp_source='topup',
+        sdc_warp_source=source,
         sdc_pe_dir='j',
         sdc_readout_time=0.05,
     )

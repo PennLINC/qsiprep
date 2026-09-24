@@ -405,6 +405,60 @@ def test_drbuddi_wf_feeds_sidecar_map_and_discriminator(tmp_path):
     assert gather.inputs.fieldmap_type == 'rpe_series'
 
 
+def _drbuddi_seed_targets(wf):
+    targets = set()
+    for _src, dest, data in wf._graph.edges(data=True):
+        if dest.name == 'drbuddi':
+            targets.update(field for _s, field in data.get('connect', []))
+    return targets
+
+
+def test_drbuddi_wf_seeds_up_down_from_initial_field(tmp_path):
+    """``initialize_from_field`` seeds DRBUDDI's up/down initial transforms from
+    ``inputnode.initial_field`` (up = the field, down = its negation) and holds
+    the seed fixed through the SyN pyramid."""
+    _cfg(hmc_method='tortoise', sdc_method='drbuddi')
+    from qsiprep.workflows.fieldmap import init_drbuddi_wf
+
+    wf = init_drbuddi_wf(_rpe_unit(tmp_path), t2w_sdc=False, initialize_from_field=True)
+    assert wf.get_node('negate_initial_field') is not None
+    assert wf.get_node('drbuddi').inputs.keep_initial_transform_fixed is True
+    assert {'initial_fixed_transform', 'initial_moving_transform'} <= _drbuddi_seed_targets(wf)
+
+
+def test_drbuddi_wf_unseeded_by_default(tmp_path):
+    """Without ``initialize_from_field`` nothing is added: stock DRBUDDI, no
+    negation node, no initial-transform flags (safe on an unpatched TORTOISE)."""
+    _cfg(hmc_method='tortoise', sdc_method='drbuddi')
+    from qsiprep.workflows.fieldmap import init_drbuddi_wf
+
+    wf = init_drbuddi_wf(_rpe_unit(tmp_path), t2w_sdc=False)
+    assert wf.get_node('negate_initial_field') is None
+    assert not (
+        {'initial_fixed_transform', 'initial_moving_transform'} & _drbuddi_seed_targets(wf)
+    )
+
+
+def test_negate_displacement_field_flips_sign_keeps_vector_intent(tmp_path, monkeypatch):
+    """The down-field helper negates every vector and preserves the ITK vector
+    intent (without which TORTOISE/ANTs read the field as zeros)."""
+    import nibabel as nb
+    import numpy as np
+
+    from qsiprep.workflows.fieldmap.drbuddi import _negate_displacement_field
+
+    src = tmp_path / 'up.nii.gz'
+    data = np.random.default_rng(0).standard_normal((3, 3, 3, 1, 3)).astype('float32')
+    img = nb.Nifti1Image(data, np.eye(4))
+    img.header.set_intent('vector')
+    img.to_filename(src)
+
+    monkeypatch.chdir(tmp_path)
+    out = nb.load(_negate_displacement_field(str(src)))
+    assert int(out.header['intent_code']) == 1007
+    assert np.allclose(np.asanyarray(out.dataobj), -data)
+
+
 def test_unit_sidecar_round_trips_through_derivatives_sidecar(tmp_path):
     """finalize's sidecar node writes valid JSON from the model (no disk reads).
 
@@ -437,6 +491,54 @@ def test_unit_sidecar_round_trips_through_derivatives_sidecar(tmp_path):
     assert written['EchoTime'] == 0.1
     assert written['ScanGrouping']['method'] == 'pepolar'
     assert written['Sources'] == ['sub-01_dir-AP_dwi.nii.gz', 'sub-01_dir-PA_dwi.nii.gz']
+
+
+def test_false_sidecar_booleans_survive_into_the_derivative_sidecar(tmp_path):
+    """A ``false`` boolean in a raw sidecar must not become ``true`` downstream.
+
+    The derivative sidecar is built from qsiplan's file records, which read the
+    JSON themselves. Metadata routed through pybids < 0.16.4 round-trips
+    booleans as strings and reads ``False`` back as ``True``.
+    """
+    from bids.layout import BIDSLayout
+    from qsiplan import build_dwi_grouping
+    from qsiplan.adapters import plan_preproc_units, unit_to_sidecar
+    from qsiplan.methods import selection_for_config
+    from qsiplan.plan import compile_plan
+
+    from qsiprep.tests.utils import SHARED_DWI_GRADIENTS, build_test_dataset
+    from qsiprep.utils.bids import collect_data
+
+    root = build_test_dataset(
+        tmp_path / 'ds',
+        {
+            '01': [
+                {
+                    'dwi': [
+                        {
+                            'suffix': 'dwi',
+                            'metadata': {
+                                'PhaseEncodingDirection': 'j',
+                                'TotalReadoutTime': 0.05,
+                                'NonlinearGradientCorrection': False,
+                            },
+                        }
+                    ]
+                }
+            ]
+        },
+        extra_files=SHARED_DWI_GRADIENTS,
+        n_volumes=2,
+    )
+    layout = BIDSLayout(root, validate=False)
+    subject_data = collect_data(layout, '01', bids_validate=False)[0]
+    grouping = build_dwi_grouping(layout, subject_data, strict=False)
+    plan = compile_plan(grouping, selection_for_config('eddy', 'topup'))
+    (unit,) = plan_preproc_units(grouping, plan)
+
+    sidecar = unit_to_sidecar(unit)
+    assert sidecar['NonlinearGradientCorrection'] is False
+    assert sidecar['SourceMetadata']['sub-01_dwi.nii.gz']['NonlinearGradientCorrection'] is False
 
 
 def test_eddy_grouping_from_sidecars_needs_no_disk():

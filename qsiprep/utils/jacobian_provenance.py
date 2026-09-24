@@ -25,7 +25,7 @@ in comments at each branch point instead of duplicating this reasoning.
 
 from .. import config
 from .diffprep_config import load_diffprep_config
-from .eddy_config import eddy_modulates_distortion, load_eddy_args
+from .eddy_config import eddy_applies_gre, eddy_modulates_distortion, load_eddy_args
 from .sdc import t2wreg_target
 
 #: Reason string for both eddy-current and susceptibility unmodulated entries
@@ -99,22 +99,25 @@ def _shoreline_sdc_applied(unit):
 def _eddy_provenance(unit):
     """Mirrors ``qsiprep.workflows.dwi.fsl``'s SDC/eddy-current recording.
 
-    ``eddy``'s own resampling only ever bakes in TOPUP's field (never
-    DRBUDDI's, GRE's or SyN's, which are applied downstream of ``eddy`` and
-    Jacobian-modulated by QSIPrep itself), so:
+    ``eddy``'s own resampling bakes in TOPUP's field and a GRE fieldmap handed
+    to it (:func:`~qsiprep.utils.eddy_config.eddy_applies_gre`), never DRBUDDI's
+    or SyN's, which are applied downstream of ``eddy`` and Jacobian-modulated by
+    QSIPrep itself, so:
 
     * 'eddy-current' is unmodulated whenever ``eddy`` did not run with
       ``--resamp=jac`` -- unconditionally, since eddy-current is entirely
       internal to ``eddy``.
     * 'susceptibility' is unmodulated under that same condition *only* when
-      TOPUP is actually this run's susceptibility source (``run_topup``).
+      TOPUP or a GRE fieldmap eddy applied is this run's susceptibility source.
       This is independent of whether DRBUDDI also runs afterwards (a
       TOPUP+DRBUDDI refine plan can have TOPUP's component unmodulated while
       DRBUDDI's own warp is separately, externally applied) -- see the F2
       regression test for exactly this combination.
     * 'sdc' is applied whenever a warp reaches ``to_dwi_ref_warps``
-      externally: DRBUDDI (whether or not TOPUP also ran), or a GRE/SyN
-      fieldmap. TOPUP-only never applies 'sdc' -- it is baked into ``eddy``.
+      externally: DRBUDDI (whether or not TOPUP also ran), SyN, or a GRE
+      fieldmap applied after ``eddy`` (``--force gre-sdc-after-eddy``). TOPUP-only and
+      a GRE fieldmap eddy applied never apply 'sdc' -- they are baked into
+      ``eddy``.
     """
     applied = []
     unmodulated = []
@@ -124,11 +127,12 @@ def _eddy_provenance(unit):
     eddy_will_modulate = eddy_modulates_distortion(eddy_args)
     run_topup = unit.run.stage_with('topup') is not None
     run_drbuddi = unit.run.stage_with('drbuddi') is not None
+    gre_in_eddy = eddy_applies_gre(unit)
 
     if not eddy_will_modulate:
         reason = _EDDY_UNMODULATED_REASON.format(method=eddy_args.get('method'))
         unmodulated.append('eddy-current')
-        if run_topup:
+        if run_topup or gre_in_eddy:
             unmodulated.append('susceptibility')
 
     # ``fsl.py:594`` branches on ``run_drbuddi`` alone (no ``is_pepolar``
@@ -142,7 +146,11 @@ def _eddy_provenance(unit):
     # the planner, and this conjunct can never actually diverge from the
     # builder's condition -- kept anyway as a documented, load-bearing
     # invariant check rather than trusting an external package silently.
-    if (unit.is_pepolar and run_drbuddi) or unit.is_gre or unit.is_nipreps_syn:
+    if (
+        (unit.is_pepolar and run_drbuddi)
+        or (unit.is_gre and not gre_in_eddy)
+        or unit.is_nipreps_syn
+    ):
         applied.append('sdc')
 
     return applied, unmodulated, reason

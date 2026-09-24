@@ -575,7 +575,7 @@ class workflow(_Config):
     eddy_config = None
     """Configuration for running Eddy."""
     force = None
-    """Forced processing choices (see ``--force``): currently ``sdc-anat-reference``."""
+    """Forced processing choices (see ``--force``)."""
     force_sdc_anat_reference = False
     """``--force sdc-anat-reference`` was given: the anatomical SDC reference
     overrides the fieldmap application for every DWI series (derived from

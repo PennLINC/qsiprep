@@ -106,16 +106,41 @@ def test_drbuddi():
     assert jacobian_provenance_for(unit, t2w_sdc=False) == (['sdc'], [], None)
 
 
-def test_gre():
-    _cfg(hmc_method='eddy', sdc_method='fieldmap')
-    unit = make_preproc_unit(
+def _gre_unit():
+    return make_preproc_unit(
         [SRC],
         method=CorrectionMethod.PHASEDIFF,
         estimation_sources=['/data/sub-01_phasediff.nii.gz', '/data/sub-01_magnitude1.nii.gz'],
         metadata={'EchoTime1': 0.004, 'EchoTime2': 0.006},
     )
 
-    assert jacobian_provenance_for(unit, t2w_sdc=False) == (['sdc'], [], None)
+
+def test_gre():
+    """eddy applies a GRE fieldmap itself, like TOPUP's field: nothing external."""
+    _cfg(hmc_method='eddy', sdc_method='fieldmap')
+
+    assert jacobian_provenance_for(_gre_unit(), t2w_sdc=False) == ([], [], None)
+
+
+def test_gre_after_eddy():
+    """--force gre-sdc-after-eddy applies the GRE warp downstream, where QSIPrep modulates it."""
+    _cfg(hmc_method='eddy', sdc_method='fieldmap')
+    config.workflow.force = ['gre-sdc-after-eddy']
+
+    assert jacobian_provenance_for(_gre_unit(), t2w_sdc=False) == (['sdc'], [], None)
+
+
+def test_eddy_lsr_with_gre(tmp_path):
+    """'lsr' leaves a GRE fieldmap eddy applied unmodulated, as it does TOPUP's."""
+    eddy_cfg = tmp_path / 'eddy_lsr.json'
+    eddy_cfg.write_text(json.dumps(_LSR_EDDY_ARGS))
+    _cfg(hmc_method='eddy', sdc_method='fieldmap')
+    config.workflow.eddy_config = str(eddy_cfg)
+
+    applied, unmodulated, reason = jacobian_provenance_for(_gre_unit(), t2w_sdc=False)
+    assert applied == []
+    assert unmodulated == ['eddy-current', 'susceptibility']
+    assert reason == 'FSL eddy ran with --resamp=lsr rather than jac'
 
 
 def test_syn():

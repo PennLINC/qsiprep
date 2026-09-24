@@ -1566,6 +1566,33 @@ def test_diffprep_passes_ncores_to_tortoise():
     assert node.n_procs == 8
 
 
+def test_diffprep_cmdline_gradwarp_and_initial_field(tmp_path):
+    """The gradwarp field and the T2Wreg initializer are plain TORTOISE flags."""
+    from qsiprep.interfaces.tortoise import DIFFPREP
+
+    dwi, bmtxt, json_file = _diffprep_siblings(tmp_path)
+    t2w = tmp_path / 't2w.nii'
+    _write_dummy_nii(t2w, nvols=1)
+    field = tmp_path / 'gradwarp_field_masked.nii'
+    _write_dummy_nii(field, nvols=1)
+    init = tmp_path / 'gre_warp.nii.gz'
+    _write_dummy_nii(init, nvols=1)
+
+    iface = DIFFPREP(
+        dwi_file=str(dwi),
+        bmtxt_file=str(bmtxt),
+        json_file=str(json_file),
+        correction_mode='motion',
+        epi_mode='T2Wreg',
+        structural_image=str(t2w),
+        grad_nonlin=str(field),
+        epireg_initial_field=str(init),
+    )
+    cmd = iface.cmdline
+    assert f'--grad_nonlin {field}' in cmd
+    assert f'--EPIREG_initial_field {init}' in cmd
+
+
 @pytest.mark.integration
 @pytest.mark.diffprep
 def test_reconstructed_transform_reproduces_moteddy(tmp_path, working_dir):

@@ -36,6 +36,17 @@ def eddy_modulates_distortion(eddy_args):
     return effective_eddy_resampling_method(eddy_args) == 'jac'
 
 
+def eddy_applies_gre(unit):
+    """Whether ``eddy`` applies this unit's GRE fieldmap itself (``--field``),
+    the way it applies TOPUP's field, rather than the warp being applied after
+    ``eddy`` (the deprecated ``--force gre-sdc-after-eddy``)."""
+    return (
+        unit.is_gre
+        and unit.run.hmc_stage.tool == 'eddy'
+        and 'gre-sdc-after-eddy' not in (config.workflow.force or [])
+    )
+
+
 def load_eddy_args():
     """Load the effective ``--eddy-config`` JSON, or the shipped default.
 

@@ -137,6 +137,14 @@ def _build_parser(**kwargs):
                     f'--sdc-method {namespace.sdc_method} requires --hmc-method eddy: '
                     'SHORELine and TORTOISE correct PEPOLAR units with DRBUDDI'
                 )
+            if 'gre-sdc-after-eddy' in (namespace.force or []):
+                if namespace.hmc_method != 'eddy':
+                    self.error('--force gre-sdc-after-eddy requires --hmc-method eddy')
+                print(
+                    '--force gre-sdc-after-eddy restores applying a GRE fieldmap after eddy '
+                    'for comparison, and is scheduled for removal in a future release.',
+                    file=sys.stderr,
+                )
 
             # --force values land on their own boolean attributes so config
             # (and qsiplan's policy bridge) can read them by name.
@@ -445,7 +453,13 @@ def _build_parser(**kwargs):
         action='extend',
         nargs='+',
         default=[],
-        choices=['gradwarp1D', 'gradwarp3D', 'sdc-anat-reference', 'jacobian'],
+        choices=[
+            'gradwarp1D',
+            'gradwarp3D',
+            'sdc-anat-reference',
+            'jacobian',
+            'gre-sdc-after-eddy',
+        ],
         help=(
             'Force selected corrections on, overriding what the input metadata implies '
             '(a space-delimited list). '
@@ -462,7 +476,11 @@ def _build_parser(**kwargs):
             'TORTOISE T2Wreg (EPIREG) correction as well. TORTOISE leaves that field '
             'unmodulated because its final registration stage is not restricted to '
             'the phase-encoding direction; forcing it uses the phase-encoding '
-            'component of the field only.'
+            'component of the field only. '
+            '"gre-sdc-after-eddy" applies a GRE fieldmap after eddy, as QSIPrep used to, '
+            'instead of handing it to eddy (--field), for comparing the two on real data. '
+            'It requires --hmc-method eddy, is deprecated, and will be removed in a '
+            'future release.'
         ),
     )
 

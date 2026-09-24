@@ -260,10 +260,11 @@ def test_dsdti_synfmap_writes_jacobian(tmp_path):
     assert has_real == ('sdc' in applied)
 
 
-def test_forrest_gump_writes_jacobian(monkeypatch):
+def test_forrest_gump_writes_no_jacobian(monkeypatch):
     """``test_forrest_gump`` passes no ``--hmc-method``, so it defaults to eddy
-    (``qsiprep/cli/parser.py:143-144``) with a GRE (phasediff) fieldmap and no
-    ``--sdc-method`` override -> ``init_fsl_hmc_wf``'s GRE branch.
+    with a GRE (phasediff) fieldmap -> ``init_fsl_hmc_wf``'s GRE branch, which
+    hands the field to eddy (``--field``). eddy applies and Jacobian-modulates it
+    internally, as it does TOPUP's field, so QSIPrep holds no weight map.
     """
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg(hmc_method='eddy', sdc_method='fieldmap', sloppy=True)
@@ -278,11 +279,11 @@ def test_forrest_gump_writes_jacobian(monkeypatch):
     wf = init_fsl_hmc_wf(unit, source_file=SRC, t2w_sdc=False)
 
     has_real, source = _has_real_fieldwarps(wf)
-    assert has_real, f'expected a real SDC warp source, got {source!r}'
-    assert source == 'sdc_wf'
-    assert _fixture_lists_jacobian('forrest_gump') is True
+    assert not has_real
+    assert source == 'gather_inputs'
+    assert _fixture_lists_jacobian('forrest_gump') is False
     applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)
-    assert (applied, unmodulated, reason) == (['sdc'], [], None)
+    assert (applied, unmodulated, reason) == ([], [], None)
     assert has_real == ('sdc' in applied)
 
 

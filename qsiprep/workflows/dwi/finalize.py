@@ -30,6 +30,7 @@ from ...interfaces.jacobian import pe_axis_from_direction
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SDCWarpPlot, SeriesQC
+from ...utils.eddy_config import eddy_applies_gre
 from ...utils.jacobian_provenance import jacobian_provenance_for, t2wreg_is_weighted
 from ...utils.sdc import pe_readout_time, sdc_warp_source
 from .derivatives import init_dwi_derivatives_wf
@@ -171,7 +172,9 @@ def init_dwi_finalize_wf(
 
     # Determine information to be used for displacement map.
     readout_time = pe_readout_time(unit)
-    warp_source, estimation_method = sdc_warp_source(unit, t2w_sdc)
+    warp_source, estimation_method = sdc_warp_source(
+        unit, t2w_sdc, gre_in_eddy=eddy_applies_gre(unit)
+    )
 
     sdc_warp_meta = None
     if warp_source is not None:
@@ -193,6 +196,11 @@ def init_dwi_finalize_wf(
         )
         if warp_source == 'topup':
             description += f' Rebuilt from {rebuilt_topup}.'
+        elif warp_source == 'gre_in_eddy':
+            description += (
+                ' Rebuilt from the GRE fieldmap eddy applied, as voxel shift = '
+                'field_Hz * TotalReadoutTime along the phase-encoding axis.'
+            )
         elif warp_source == 'topup+drbuddi':
             description += (
                 f" The total correction: {rebuilt_topup}, followed by DRBUDDI's refinement "
@@ -437,9 +445,12 @@ def init_dwi_finalize_wf(
         ]),
     ])  # fmt:skip
 
-    if doing_topup:
+    if doing_topup or warp_source == 'gre_in_eddy':
         workflow.connect([
             (inputnode, transform_dwis_t1, [('fieldmap_hz', 'inputnode.fieldmap_hz')]),
+        ])  # fmt:skip
+    if doing_topup:
+        workflow.connect([
             (transform_dwis_t1, outputnode, [
                 ('outputnode.fieldmap_hz_resampled', 'fieldmap_hz_t1'),
             ]),

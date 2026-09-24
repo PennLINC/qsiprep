@@ -393,6 +393,21 @@ class _DRBUDDIInputSpec(TORTOISEInputSpec):
             'Requires a patched TORTOISE that exposes --epi_working_res.'
         ),
     )
+    initial_fixed_transform = File(
+        exists=True,
+        argstr='--DRBUDDI_initial_fixed_transform %s',
+        desc='Initial displacement field for the up (blip-up) data, in the b=0 world frame',
+    )
+    initial_moving_transform = File(
+        exists=True,
+        argstr='--DRBUDDI_initial_moving_transform %s',
+        desc='Initial displacement field for the down (blip-down) data, in the b=0 world frame',
+    )
+    keep_initial_transform_fixed = traits.Bool(
+        argstr='--DRBUDDI_keep_initial_transform_fixed %d',
+        desc='Hold the initial transforms fixed through the multi-resolution pyramid, so each '
+        'stage learns a residual on top of them instead of low-passing and re-estimating them',
+    )
     disable_itk_threads = traits.Bool(True, usedefault=True, argstr='--disable_itk_threads')
     use_cuda = traits.Bool(False, usedefault=True, desc=_USE_CUDA_TRAIT_DESC)
 
@@ -880,12 +895,12 @@ def bmtxt_to_fsl(bmtxt_file, working_dir=None):
     return base + '.bvals', base + '.bvecs'
 
 
-def generate_diffprep_boilerplate(correction_mode):
+def generate_diffprep_boilerplate(correction_mode, t2wreg_target=None, gradwarped=False):
     """Methods boilerplate describing the DIFFPREP HMC backend.
 
     ``correction_mode`` comes from ``--diffprep-config`` (default
     ``quadratic``), so the transform model has to be named from it rather than
-    assumed.
+    assumed. ``t2wreg_target`` (``'t2w'`` or ``'synb0'``) adds the EPI stage.
     """
     mode_desc = {
         'motion': ('rigid head motion only', 'rigid-body transform'),
@@ -899,19 +914,35 @@ def generate_diffprep_boilerplate(correction_mode):
         ),
     }
     corrects, transform = mode_desc[correction_mode]
-    return (
+    desc = (
         '\n\nHead motion correction was performed with the TORTOISE [@tortoisev4] software '
         "package's DIFFPREP module, "
         f'in "{correction_mode}" mode (correcting {corrects}). DIFFPREP fits a '
         'SHORE/MAPMRI signal model to the data and iteratively registers each '
         f"volume to a model-predicted target using TORTOISE's {transform}. "
         'The corrected volumes and motion-rotated b-matrix were then passed to '
-        'the rest of the pipeline.\n\n'
+        'the rest of the pipeline.'
     )
+    if t2wreg_target is not None:
+        target = {
+            't2w': "the subject's T2-weighted image",
+            'synb0': 'a synthetic distortion-free b=0 image',
+        }[t2wreg_target]
+        corrected = ', corrected for gradient nonlinearity,' if gradwarped else ''
+        desc += (
+            ' Susceptibility distortion was estimated in the same TORTOISE run by its '
+            f'T2Wreg stage, which nonlinearly registered the b=0 image{corrected} to '
+            f'{target}.'
+        )
+    return desc + '\n\n'
 
 
-def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False):
-    """Generate boilerplate that describes how DRBUDDI is being used."""
+def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False, initialized=False):
+    """Generate boilerplate that describes how DRBUDDI is being used.
+
+    ``initialized`` says DRBUDDI starts from a field-map-derived deformation,
+    whose estimation is described by the workflow that precedes this one.
+    """
 
     desc = ['\n\nDRBUDDI [@drbuddi], part of the TORTOISE [@tortoisev4] software package,']
     if not with_topup:
@@ -937,10 +968,19 @@ def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False):
             'DRBUDDI used multiple motion-corrected DWI series acquired '
             'with opposite phase encoding '
             'directions. A b=0 image **and** the Fractional Anisotropy '
-            'images from both phase encoding diesctions were used together in '
+            'images from both phase encoding directions were used together in '
             'a multi-modal registration to estimate'
         )
     desc.append('the susceptibility-induced off-resonance field.')
+
+    if initialized:
+        desc.append(
+            'The registration was initialized with the field map-derived deformation '
+            'described above, as the initial transform of the images with the primary '
+            'phase-encoding direction and, negated, of the reverse phase-encoded images; '
+            'both were held fixed through the multi-resolution pyramid so that '
+            'each stage estimated only a residual correction on top of them.'
+        )
 
     if t2w_sdc:
         desc.append('A T2-weighted image was included in the multimodal registration.')
@@ -1047,6 +1087,24 @@ class _DIFFPREPInputSpec(TORTOISEInputSpec):
         exists=True,
         desc='T2w structural image for --epi T2Wreg (must NOT be a T1w). '
         'Required when epi_mode == "T2Wreg".',
+    )
+    grad_nonlin = File(
+        exists=True,
+        argstr='--grad_nonlin %s',
+        desc='Gradwarp displacement field (the TORTOISE "_inv" convention, i.e. the field '
+        'qsiprep builds), so the T2Wreg stage registers a gradwarp-corrected b=0. The '
+        'motion/eddy stage does not consume it.',
+    )
+    epireg_initial_field = File(
+        exists=True,
+        argstr='--EPIREG_initial_field %s',
+        desc='Initial EPI displacement field for T2Wreg, in the b=0 world frame (e.g. the '
+        'warp derived from a GRE fieldmap); the registration refines it.',
+    )
+    keep_initial_transform_fixed = traits.Bool(
+        argstr='--DRBUDDI_keep_initial_transform_fixed %d',
+        desc='Hold epireg_initial_field fixed through the multi-resolution pyramid, so each '
+        'stage learns a residual on top of it instead of low-passing and re-estimating it',
     )
 
 

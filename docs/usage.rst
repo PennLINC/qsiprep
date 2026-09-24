@@ -121,9 +121,15 @@ Therefore, you should use relative paths to the files, which is the older way to
 B0FieldIdentifier and B0FieldSource
 ===================================
 
-B0FieldIdentifier and B0FieldSource are two metadata fields that are used to related images to field maps for distortion correction.
-They are the preferred alternative to the IntendedFor field in BIDS, but QSIPrep does not currently support them.
-Therefore, you should use the IntendedFor field with relative paths to the files, which is the older way to do things.
+``B0FieldIdentifier`` and ``B0FieldSource`` link field maps to the images they
+correct, and are the BIDS-recommended alternative to ``IntendedFor``.
+Give every file of a field map the same ``B0FieldIdentifier`` (for a reverse
+phase-encoded pair of DWI series, that includes both series), and list it in the
+``B0FieldSource`` of each DWI series it should correct.
+A series with a ``B0FieldSource`` ignores ``IntendedFor`` links to it.
+``B0FieldSource`` may list several field maps: QSIPrep applies one of them,
+preferring reverse phase encoding, and reports the rest as also eligible.
+See :ref:`gre_init_usage` for how a GRE field map among the rest is used.
 
 
 MultipartID
@@ -134,6 +140,185 @@ If you want to group certain runs of dMRI data together, but not all runs (the d
 
 However, please note that MultipartID may interact in unexpected ways with the IntendedFor field and the QSIPrep parameters that impact grouping (e.g., ``--distortion-group-merge``).
 Therefore, we recommend that, if you use MultipartID, you check your outputs to make sure the runs are being grouped in the manner you expect.
+
+
+.. _gre_init_usage:
+
+***************************************************
+Starting registration-based SDC from a GRE fieldmap
+***************************************************
+
+TORTOISE's registration-based distortion correction (DRBUDDI and T2Wreg) infers
+the susceptibility field by matching images.
+Where the field piles signal from several voxels into one, or drops it out,
+many deformations match equally well.
+A GRE fieldmap measures the field instead.
+When a series is corrected by one of these registrations and a GRE fieldmap also
+lists it, QSIPrep starts the registration from the GRE-derived warp and holds
+that warp fixed through the registration's multi-resolution pyramid, so the
+registration refines the GRE estimate rather than replacing it.
+
+There is no option to turn this on.
+QSIPrep picks one correction for each series: it prefers reverse phase encoding
+over a GRE fieldmap, and ``--force sdc-anat-reference`` puts the anatomical
+reference ahead of both.
+A GRE fieldmap (``phasediff``, ``phase1``/``phase2`` or ``fieldmap``, with its
+magnitude images) starts the registration whenever it lists a series that
+QSIPrep corrects in one of these other ways:
+
+* **reverse phase encoding**, corrected by DRBUDDI: with ``--hmc-method
+  tortoise`` or ``shoreline``, or ``--hmc-method eddy --sdc-method drbuddi``.
+  Not with ``--sdc-method topup+drbuddi``, where DRBUDDI only refines TOPUP's
+  correction.
+* **an anatomical reference** forced with ``--force sdc-anat-reference``,
+  corrected by T2Wreg (``--hmc-method tortoise``).
+
+``--ignore fieldmaps`` (which skips ``fmap/``) and ``--ignore sdc`` turn it off.
+A GRE fieldmap that is itself the applied correction is handed to ``eddy``
+under ``--hmc-method eddy`` (see :ref:`fsl_wf`).
+
+
+DRBUDDI from a GRE fieldmap
+===========================
+
+When both a reverse phase-encoded correction and a GRE fieldmap list a series,
+QSIPrep corrects the series with DRBUDDI and starts DRBUDDI from the GRE
+fieldmap.
+
+Reverse phase-encoded DWI series
+--------------------------------
+
+For a pair of DWI series acquired with opposite phase encoding (for example
+``dir-AP`` and ``dir-PA``), the GRE fieldmap's ``IntendedFor`` is enough, as
+long as nothing in the session carries ``B0FieldIdentifier`` or
+``B0FieldSource``: QSIPrep pairs the two series itself and keeps the GRE
+fieldmap as a candidate::
+
+    sub-01/
+      fmap/
+        sub-01_phasediff.json    {"IntendedFor": ["dwi/sub-01_dir-AP_dwi.nii.gz",
+                                                  "dwi/sub-01_dir-PA_dwi.nii.gz"], ...}
+        sub-01_magnitude1.json
+        sub-01_magnitude2.json
+      dwi/
+        sub-01_dir-AP_dwi.json
+        sub-01_dir-PA_dwi.json
+
+If the session uses ``B0FieldIdentifier``/``B0FieldSource``, link the pair
+with them too.
+Both series are sources of the reverse phase-encoded estimation, and both list
+it and the GRE fieldmap::
+
+    sub-01/
+      fmap/
+        sub-01_magnitude1.json   {"B0FieldIdentifier": "gre", ...}
+        sub-01_magnitude2.json   {"B0FieldIdentifier": "gre", ...}
+        sub-01_phasediff.json    {"B0FieldIdentifier": "gre", ...}
+      dwi/
+        sub-01_dir-AP_dwi.json   {"B0FieldIdentifier": "pepolar",
+                                  "B0FieldSource": ["pepolar", "gre"], ...}
+        sub-01_dir-PA_dwi.json   {"B0FieldIdentifier": "pepolar",
+                                  "B0FieldSource": ["pepolar", "gre"], ...}
+
+Any identifiers work, and the order within ``B0FieldSource`` does not matter.
+
+A reverse phase-encoded EPI fieldmap
+------------------------------------
+
+With an ``epi`` fieldmap, ``IntendedFor`` is enough: have both the ``epi``
+fieldmap and the GRE fieldmap name the DWI series::
+
+    sub-01/
+      fmap/
+        sub-01_dir-PA_epi.json   {"IntendedFor": ["dwi/sub-01_dir-AP_dwi.nii.gz"], ...}
+        sub-01_phasediff.json    {"IntendedFor": ["dwi/sub-01_dir-AP_dwi.nii.gz"], ...}
+        sub-01_magnitude1.json
+        sub-01_magnitude2.json
+      dwi/
+        sub-01_dir-AP_dwi.json
+
+The ``B0FieldIdentifier``/``B0FieldSource`` form above works too, with the
+``epi`` fieldmap carrying ``"B0FieldIdentifier": "pepolar"``.
+
+Then run with an HMC method that corrects the pair with DRBUDDI, for example
+TORTOISE, whose default ``--sdc-method`` is DRBUDDI::
+
+    qsiprep /path/to/bids /path/to/output participant \
+        --hmc-method tortoise --output-resolution 1.5
+
+.. warning::
+   Two setups look right but leave DRBUDDI skipped or unseeded:
+
+   * **Other fieldmap links in the session.** Once any file in the session
+     carries ``B0FieldIdentifier`` or ``B0FieldSource``, or an ``epi``
+     fieldmap's ``IntendedFor`` names a series, QSIPrep stops pairing series by
+     itself. A GRE fieldmap whose ``IntendedFor`` names an AP/PA pair that is
+     not otherwise linked is then applied on its own and DRBUDDI does not run;
+     link the pair with ``B0FieldIdentifier``/``B0FieldSource`` as above.
+   * **The pair uses ``B0FieldSource``, the GRE fieldmap only ``IntendedFor``.**
+     A series with a ``B0FieldSource`` ignores ``IntendedFor`` links to it, so
+     the GRE fieldmap is not a candidate and DRBUDDI starts without it.
+     Put the GRE fieldmap's ``B0FieldIdentifier`` in the series'
+     ``B0FieldSource``.
+
+To correct both series with the GRE fieldmap itself instead, name only the GRE
+fieldmap in their ``B0FieldSource`` (or pass ``--ignore pepolar-dwis``).
+QSIPrep then processes each phase encoding in its own pipeline, with a GRE warp
+built for that encoding, and concatenates the corrected results.
+
+
+T2Wreg from a GRE fieldmap
+==========================
+
+Link the GRE fieldmap to the DWI series as usual (``IntendedFor``, or
+``B0FieldIdentifier``/``B0FieldSource``), and force an anatomical reference over
+it::
+
+    qsiprep /path/to/bids /path/to/output participant \
+        --hmc-method tortoise \
+        --sdc-anat-reference t2w --force sdc-anat-reference \
+        --output-resolution 1.5
+
+* ``t2w`` registers to the subject's T2w image, which must be in ``anat/``.
+  ``synb0`` registers to a distortion-free b=0 image synthesized from the T1w
+  instead, and needs ``--anat-modality T1w`` (the default).
+* Without ``--force sdc-anat-reference``, the anatomical reference is only a
+  fallback for series no fieldmap reaches, so the GRE fieldmap is applied on its
+  own.
+* ``--force sdc-anat-reference`` applies to every DWI series: series with no GRE
+  fieldmap run T2Wreg without an initial warp.
+  ``invt1w`` forces SyN, which takes no initial warp.
+
+
+Checking the setup
+==================
+
+Before running, `qsiplan <https://github.com/PennLINC/QSIPlan>`__ (see
+:doc:`quickstart`) shows how each series will be corrected.
+Pass it the same method flags you will give QSIPrep::
+
+    qsiplan /path/to/bids --hmc-method tortoise
+
+For the reverse phase-encoded example above, each series should be corrected by
+the reverse phase-encoded estimation, with the GRE fieldmap listed as also
+eligible::
+
+    Distortion group sub-01_dir-AP (PE j-, TRT 0.05s):
+      - sub-01_dir-AP_dwi.nii.gz
+      corrected by: pepolar [curated]
+      (also eligible: gre)
+
+For T2Wreg, add ``--sdc-anat-reference t2w --force sdc-anat-reference``; each
+series should then be corrected by ``auto+t2wreg`` with the GRE fieldmap also
+eligible.
+In both cases the GRE fieldmap is labelled "(initializes DRBUDDI/T2Wreg)", and
+its ``estimation-unused`` warning notes that it initializes those
+registrations.
+
+During the run, QSIPrep logs ``Initializing DRBUDDI for <output> with GRE
+fieldmap <id>`` (or ``T2Wreg``).
+In the HTML report, the distortion correction entry ends in
+``(GRE-initialized)``, and the methods boilerplate describes the initialization.
 
 
 ********************************
