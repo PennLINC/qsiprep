@@ -302,4 +302,5 @@ skip = '.git,*.pdf,*.svg,*.html,dataset_description.json,*.gii,*.bib,*.lock'
 # reson - Reson. abbreviation in citation
 # DNE: acronym for does not exist
 # fo: acronym for file object
-ignore-words-list = 'te,weill,reson,DNE,fo,Gage,nd,pres,fixel,assertIn'
+# vlarge: dwidenoise2 schedule
+ignore-words-list = 'te,weill,reson,DNE,fo,Gage,nd,pres,fixel,assertIn,vlarge'
