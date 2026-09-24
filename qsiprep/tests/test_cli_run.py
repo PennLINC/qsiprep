@@ -269,7 +269,8 @@ def test_session_filter_without_dwi_is_rejected(tmp_path, capsys):
     }
     generate_bids_skeleton(str(bids_dir), {'01': [long['01'][0], anat_only_session]})
 
-    config.from_dict({'bids_dir': str(bids_dir)}, init=True)
+    work_dir = tmp_path / 'work'
+    config.from_dict({'bids_dir': str(bids_dir), 'work_dir': str(work_dir)}, init=True)
     with pytest.raises(SystemExit):
         parse_args(
             [
@@ -283,7 +284,7 @@ def test_session_filter_without_dwi_is_rejected(tmp_path, capsys):
                 '--output-resolution',
                 '2',
                 '--work-dir',
-                str(tmp_path / 'work'),
+                str(work_dir),
                 '--skip-bids-validation',
             ],
         )
