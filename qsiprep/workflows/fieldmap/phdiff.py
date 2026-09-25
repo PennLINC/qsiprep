@@ -62,10 +62,10 @@ def init_phdiff_wf(phasetype='phasediff', name='phdiff_wf'):
     workflow = Workflow(name=name)
     workflow.__desc__ = """\
 A deformation field to correct for susceptibility distortions was estimated
-based on a field map that was co-registered to the b=0 reference,
-using a custom workflow of *fMRIPrep* derived from D. Greve's `epidewarp.fsl`
-[script](http://www.nmr.mgh.harvard.edu/~greve/fbirn/b0/epidewarp.fsl) and
-further improvements of HCP Pipelines [@hcppipelines].
+based on a field map that was co-registered to the b=0 reference.
+The phase image was unwrapped with the ROMEO algorithm [@romeo] as implemented
+in *niimath* [@niimath], median-filtered, and converted to a field map in Hz
+following the approach of *fMRIPrep* and the HCP Pipelines [@hcppipelines].
 """
 
     # Check for FSL binary
