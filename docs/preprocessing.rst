@@ -740,6 +740,17 @@ Processing the *Anatomical Reference* images
      anatomical reference in a multiscale, mutual-information based, nonlinear
      registration scheme.
 
+     The subject's brain mask restricts this registration. The default
+     ``SynthStrip`` mask keeps CSF and dura at the brain border, whereas the
+     template's brain mask is tight around the brain, so in atrophied brains
+     the registration can pull the dura, rather than the cortex, onto the
+     template's brain edge. ``--force no-csf-synthstrip`` runs a second
+     ``SynthStrip`` with its ``--no-csf`` model and uses that tighter mask for
+     the nonlinear registration only. The AC-PC alignment, the saved
+     ``desc-brain_mask`` images and the DWI workflows keep the default mask, so
+     the flag changes the ``from-ACPC_to-<template>`` transforms and nothing
+     downstream of the masks.
+
 
 .. _t1preproc_steps:
 
