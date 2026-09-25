@@ -75,11 +75,8 @@ def test_default_runs_one_synthstrip_and_uses_it_everywhere():
     assert list(strips) == ['synthstrip_anat_wf']
     assert strips['synthstrip_anat_wf'].inputs.no_csf is False
 
-    into_norm = _connections_into(wf, wf.get_node('anat_normalization_wf'))
-    assert into_norm['synthstrip_anat_wf'] == [
-        ('outputnode.brain_mask', 'inputnode.brain_mask'),
-        ('outputnode.brain_mask', 'inputnode.nonlinear_brain_mask'),
-    ]
+    into_buffer = _connections_into(wf, wf.get_node('normalization_mask_buffer'))
+    assert into_buffer == {'synthstrip_anat_wf': [('outputnode.brain_mask', 'brain_mask')]}
 
 
 def test_force_adds_a_nocsf_synthstrip_for_the_nonlinear_mask_only():
@@ -90,11 +87,13 @@ def test_force_adds_a_nocsf_synthstrip_for_the_nonlinear_mask_only():
 
     norm = wf.get_node('anat_normalization_wf')
     into_norm = _connections_into(wf, norm)
-    # AC-PC affine keeps the default mask; SyN gets the no-CSF mask.
+    # AC-PC affine keeps the default mask; SyN gets the no-CSF mask via the buffer.
     assert into_norm['synthstrip_anat_wf'] == [('outputnode.brain_mask', 'inputnode.brain_mask')]
-    assert into_norm['synthstrip_anat_nocsf_wf'] == [
-        ('outputnode.brain_mask', 'inputnode.nonlinear_brain_mask')
+    assert into_norm['normalization_mask_buffer'] == [
+        ('brain_mask', 'inputnode.nonlinear_brain_mask')
     ]
+    into_buffer = _connections_into(wf, wf.get_node('normalization_mask_buffer'))
+    assert into_buffer == {'synthstrip_anat_nocsf_wf': [('outputnode.brain_mask', 'brain_mask')]}
     into_acpc = _connections_into(norm, norm.get_node('acpc_reg'))
     assert ('brain_mask', 'moving_mask') in into_acpc['inputnode']
     into_syn_mask = _connections_into(norm, norm.get_node('rigid_acpc_resample_mask'))
@@ -107,7 +106,7 @@ def test_force_adds_a_nocsf_synthstrip_for_the_nonlinear_mask_only():
         assert 'synthstrip_anat_wf' in into
         assert 'synthstrip_anat_nocsf_wf' not in into
     nocsf_wf = wf.get_node('synthstrip_anat_nocsf_wf')
-    assert [n.name for n in wf._graph.successors(nocsf_wf)] == ['anat_normalization_wf']
+    assert [n.name for n in wf._graph.successors(nocsf_wf)] == ['normalization_mask_buffer']
 
 
 @pytest.mark.parametrize('force_nocsf', [False, True])

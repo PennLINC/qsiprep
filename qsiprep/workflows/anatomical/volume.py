@@ -285,24 +285,33 @@ workflow.
         name='synthstrip_anat_wf',
     )
 
-    # The mask that restricts the nonlinear registration to the template. The
-    # default SynthStrip mask keeps CSF and dura at the brain border, while
-    # template masks are tight around the brain; --force no-csf-synthstrip
-    # runs a second SynthStrip whose mask matches the template's convention.
-    # Only the registration sees it: the saved masks, the AC-PC alignment and
-    # the DWI workflows keep the default mask.
-    normalization_mask_wf = synthstrip_anat_wf
+    # The mask that restricts the nonlinear registration to the template.
+    # May be set to exclude CSF. Only used for normalization.
+    # Discarded after use.
+    normalization_mask_buffer = pe.Node(
+        niu.IdentityInterface(fields=['brain_mask']),
+        name='normalization_mask_buffer',
+    )
     if config.workflow.force_nocsf_synthstrip:
-        normalization_mask_wf = init_synthstrip_wf(
+        synthstrip_anat_nocsf_wf = init_synthstrip_wf(
             no_csf=True,
             name='synthstrip_anat_nocsf_wf',
         )
         workflow.connect([
-            (pad_anat_reference_wf, normalization_mask_wf, [
+            (pad_anat_reference_wf, synthstrip_anat_nocsf_wf, [
                 ('outputnode.padded_image', 'inputnode.padded_image'),
             ]),
-            (anat_reference_wf, normalization_mask_wf, [
+            (anat_reference_wf, synthstrip_anat_nocsf_wf, [
                 ('outputnode.template', 'inputnode.original_image'),
+            ]),
+            (synthstrip_anat_nocsf_wf, normalization_mask_buffer, [
+                ('outputnode.brain_mask', 'brain_mask'),
+            ]),
+        ])  # fmt:skip
+    else:
+        workflow.connect([
+            (synthstrip_anat_wf, normalization_mask_buffer, [
+                ('outputnode.brain_mask', 'brain_mask'),
             ]),
         ])  # fmt:skip
 
@@ -431,8 +440,8 @@ was used to restrict the nonlinear registration to the template. """
         (synthstrip_anat_wf, anat_normalization_wf, [
             ('outputnode.brain_mask', 'inputnode.brain_mask'),
         ]),
-        (normalization_mask_wf, anat_normalization_wf, [
-            ('outputnode.brain_mask', 'inputnode.nonlinear_brain_mask'),
+        (normalization_mask_buffer, anat_normalization_wf, [
+            ('brain_mask', 'inputnode.nonlinear_brain_mask'),
         ]),
         (anat_reference_wf, anat_normalization_wf, [
             ('outputnode.bias_corrected', 'inputnode.anatomical_reference'),

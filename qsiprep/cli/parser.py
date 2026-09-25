@@ -483,13 +483,10 @@ def _build_parser(**kwargs):
             'instead of handing it to eddy (--field), for comparing the two on real data. '
             'It requires --hmc-method eddy, is deprecated, and will be removed in a '
             'future release. '
-            '"no-csf-synthstrip" runs a second SynthStrip with --no-csf on the anatomical '
-            'reference and uses that mask, which excludes CSF and dura at the brain '
-            'border, as the moving-image mask for the nonlinear registration to the '
-            'template. It helps when the template brain mask is tighter than the '
-            'default SynthStrip mask, as in atrophied brains. The AC-PC alignment and '
-            'every saved brain mask still come from the default SynthStrip mask, so '
-            'downstream masks are unchanged.'
+            '"no-csf-synthstrip" restricts the nonlinear registration to the template '
+            'with a SynthStrip --no-csf brain mask, which excludes CSF and dura at the '
+            'brain border, for brains (e.g. with atrophy) where the default mask is '
+            'looser than the template mask. Saved brain masks are unaffected.'
         ),
     )
 
