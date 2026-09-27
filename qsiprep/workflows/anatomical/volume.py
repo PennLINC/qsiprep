@@ -288,6 +288,36 @@ workflow.
         name='synthstrip_anat_wf',
     )
 
+    # The mask that restricts the nonlinear registration to the template.
+    # May be set to exclude CSF. Only used for normalization.
+    # Discarded after use.
+    normalization_mask_buffer = pe.Node(
+        niu.IdentityInterface(fields=['brain_mask']),
+        name='normalization_mask_buffer',
+    )
+    if config.workflow.force_nocsf_synthstrip:
+        synthstrip_anat_nocsf_wf = init_synthstrip_wf(
+            no_csf=True,
+            name='synthstrip_anat_nocsf_wf',
+        )
+        workflow.connect([
+            (pad_anat_reference_wf, synthstrip_anat_nocsf_wf, [
+                ('outputnode.padded_image', 'inputnode.padded_image'),
+            ]),
+            (anat_reference_wf, synthstrip_anat_nocsf_wf, [
+                ('outputnode.template', 'inputnode.original_image'),
+            ]),
+            (synthstrip_anat_nocsf_wf, normalization_mask_buffer, [
+                ('outputnode.brain_mask', 'brain_mask'),
+            ]),
+        ])  # fmt:skip
+    else:
+        workflow.connect([
+            (synthstrip_anat_wf, normalization_mask_buffer, [
+                ('outputnode.brain_mask', 'brain_mask'),
+            ]),
+        ])  # fmt:skip
+
     # Segment the anatomical reference
     synthseg_anat_wf = init_synthseg_wf()
 
@@ -298,6 +328,10 @@ Brain extraction was performed on the {anat_modality} image using
 SynthStrip [@synthstrip] and automated segmentation was
 performed using SynthSeg [@synthseg1; @synthseg2] from
 FreeSurfer version {FS_VERSION}. """
+    if config.workflow.force_nocsf_synthstrip:
+        workflow.__postdesc__ += """\
+A second brain mask excluding CSF at the brain border (SynthStrip `--no-csf`)
+was used to restrict the nonlinear registration to the template. """
 
     # Perform registrations
     anat_normalization_wf = init_anat_normalization_wf(
@@ -408,6 +442,9 @@ FreeSurfer version {FS_VERSION}. """
         (inputnode, anat_normalization_wf, [('roi', 'inputnode.roi')]),
         (synthstrip_anat_wf, anat_normalization_wf, [
             ('outputnode.brain_mask', 'inputnode.brain_mask'),
+        ]),
+        (normalization_mask_buffer, anat_normalization_wf, [
+            ('brain_mask', 'inputnode.nonlinear_brain_mask'),
         ]),
         (anat_reference_wf, anat_normalization_wf, [
             ('outputnode.bias_corrected', 'inputnode.anatomical_reference'),
@@ -950,8 +987,14 @@ def init_anat_normalization_wf(anatomical_template, has_rois=False) -> Workflow:
 
     Inputs
     ------
-    in_file
-        T1-weighted structural image to skull-strip
+    anatomical_reference
+        Bias-corrected anatomical reference image (head)
+    brain_mask
+        Brain mask restricting the affine registration that the AC-PC
+        transform is extracted from
+    nonlinear_brain_mask
+        Brain mask restricting the nonlinear registration to the template.
+        The same as ``brain_mask`` unless ``--force no-csf-synthstrip`` is set.
     roi
         A mask to exclude regions during standardization (as list)
 
@@ -981,6 +1024,7 @@ def init_anat_normalization_wf(anatomical_template, has_rois=False) -> Workflow:
                 'template_mask',
                 'anatomical_reference',
                 'brain_mask',
+                'nonlinear_brain_mask',
                 'roi',
             ]
         ),
@@ -1088,7 +1132,7 @@ estimated via symmetric nonlinear registration (SyN) using antsRegistration (@an
         ]),
         (inputnode, rigid_acpc_resample_mask, [
             ('template_image', 'reference_image'),
-            ('brain_mask', 'input_image'),
+            ('nonlinear_brain_mask', 'input_image'),
         ]),
         (inputnode, rigid_acpc_resample_anat, [
             ('template_image', 'reference_image'),
@@ -1168,7 +1212,14 @@ def init_dl_prep_wf(name='dl_prep_wf') -> Workflow:
     return workflow
 
 
-def init_synthstrip_wf(do_padding=False, unfatsat=False, name='synthstrip_wf') -> Workflow:
+def init_synthstrip_wf(
+    do_padding=False, unfatsat=False, no_csf=False, name='synthstrip_wf'
+) -> Workflow:
+    """Skull strip an image with SynthStrip.
+
+    ``no_csf`` selects SynthStrip's ``--no-csf`` model, which trims CSF and dura
+    from the brain border. Ventricular CSF stays inside the mask either way.
+    """
     workflow = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(fields=['padded_image', 'original_image']),
@@ -1184,13 +1235,17 @@ def init_synthstrip_wf(do_padding=False, unfatsat=False, name='synthstrip_wf') -
             # Threads are always fixed to 1 in the run.
             # use_gpu mirrors gpu so nipype's scheduler counts this node
             # against the GPU budget (see the trait in interfaces/freesurfer.py).
-            FixHeaderSynthStrip(gpu=gpu_enabled('synthstrip'), use_gpu=gpu_enabled('synthstrip')),
+            FixHeaderSynthStrip(
+                gpu=gpu_enabled('synthstrip'),
+                use_gpu=gpu_enabled('synthstrip'),
+                no_csf=no_csf,
+            ),
             name='synthstrip',
             n_procs=config.nipype.omp_nthreads,
         )
     else:
         synthstrip = pe.Node(
-            MockSynthStrip(),
+            MockSynthStrip(no_csf=no_csf),
             name='mocksynthstrip',
         )
 
