@@ -199,7 +199,7 @@ def eddy_inputs_from_dwi_files(origin_file_list, eddy_prefix, sidecars=None):
     return acqp_file, index_file
 
 
-def synb0_topup_config(shape=None):
+def synb0_topup_config():
     """Return the path of the TOPUP config tuned for a synthetic-b=0 input.
 
     The SynB0-DISCO distribution ships ``synb0.cnf`` at its root (``/opt/synb0``
@@ -207,28 +207,9 @@ def synb0_topup_config(shape=None):
     U-Net assets, so a relocated distribution keeps working; falls back to the
     container path so graph construction never fails outside the containers
     (where TOPUP would not run anyway).
-
-    Parameters
-    ----------
-    shape : sequence of int, optional
-        Spatial shape of the TOPUP input. ``synb0.cnf`` subsamples by 2 in
-        its first levels, which TOPUP refuses on an axis with an odd number
-        of voxels ("Subsampling levels incompatible with image data"). When
-        any of the first three dimensions is odd, the packaged
-        ``synb0_1.cnf`` is returned instead: the same schedule without
-        subsampling, as ``b02b0_1.cnf`` is to FSL's ``b02b0.cnf``.
-
-    Returns
-    -------
-    str
-        Path to the config file.
     """
-    from ..data import load as load_data
     from .synb0 import get_synb0_dir
 
-    if shape is not None and any(int(dim) % 2 for dim in shape[:3]):
-        LOGGER.warning('Using slower synb0_1.cnf because an axis has an odd number of voxels')
-        return str(load_data('synb0_1.cnf'))
     return op.join(get_synb0_dir() or '/opt/synb0', 'synb0.cnf')
 
 

@@ -492,7 +492,6 @@ class DWIBiasCorrect(SeriesPreprocReport, MRTrix3Base):
     _cmd = 'dwibiascorrect'
     input_spec = DWIBiasCorrectInputSpec
     output_spec = DWIBiasCorrectOutputSpec
-    _report_labels = ('Uncorrected', 'Bias corrected')
 
     def _format_arg(self, name, spec, value):
         if name in ('ants_b', 'ants_c', 'ants_s'):

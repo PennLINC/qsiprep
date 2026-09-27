@@ -161,14 +161,12 @@ def test_fsl_hmc_synb0_feeds_topup(tmp_path):
     assert gather.inputs.synb0_requested
     assert not isdefined(gather.inputs.epi_fmaps)
 
-    # TOPUP reads the merged datain/imain and a config chosen for their
-    # dimensions at run time (synb0.cnf, or synb0_1.cnf on odd dimensions).
+    # TOPUP reads the merged datain/imain and the SynB0-tuned config.
     topup = wf.get_node('topup')
-    assert topup.inputs.config == 'b02b0.cnf'  # nipype's default, replaced at run time
+    assert topup.inputs.config.endswith('synb0.cnf')
     merge_edge = wf._graph.get_edge_data(wf.get_node('synb0_topup_inputs'), topup)
     assert ('topup_datain', 'encoding_file') in merge_edge['connect']
     assert ('topup_imain', 'in_file') in merge_edge['connect']
-    assert ('topup_config', 'config') in merge_edge['connect']
 
     # The generation QC reportlets are datasunk.
     assert wf.get_node('ds_report_synb0_acquired') is not None

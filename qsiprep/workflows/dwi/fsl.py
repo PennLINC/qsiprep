@@ -25,6 +25,7 @@ from ...interfaces.eddy import (
     Synb0TopupInputs,
     boilerplate_from_eddy_config,
 )
+from ...interfaces.epi_fmap import synb0_topup_config
 from ...interfaces.fmap import ParallelTOPUP
 from ...interfaces.gradients import ExtractB0s
 from ...interfaces.images import ConformDwi, IntraModalMerge, SplitDWIsFSL
@@ -449,8 +450,7 @@ def init_fsl_hmc_wf(
             # Generate the synthetic distortion-free b=0 from the T1w and the
             # (pre-SDC) distorted b=0 reference, then join it to TOPUP's
             # inputs as a zero-readout distortion group. The TOPUP config is
-            # the one tuned for the synthetic-b=0 pair, or its no-subsampling
-            # variant when an axis has an odd number of voxels.
+            # the one tuned for the synthetic-b=0 pair.
             synb0_b0_ref_wf = init_dwi_reference_wf(
                 gen_report=False,
                 desc='b0_for_synb0',
@@ -460,6 +460,7 @@ def init_fsl_hmc_wf(
             synb0_wf = init_synb0_wf()
             add_synb0_outputs(workflow, synb0_wf, source_file)
             synb0_topup_inputs = pe.Node(Synb0TopupInputs(), name='synb0_topup_inputs')
+            topup.inputs.config = synb0_topup_config()
 
             # Scalar QC of the SynB0-driven field (halo/displacement checks)
             synb0_field_qc = pe.Node(Synb0FieldQC(), name='synb0_field_qc')
@@ -508,7 +509,6 @@ def init_fsl_hmc_wf(
                 (synb0_topup_inputs, topup, [
                     ('topup_datain', 'encoding_file'),
                     ('topup_imain', 'in_file'),
-                    ('topup_config', 'config'),
                 ]),
             ])  # fmt:skip
         else:
