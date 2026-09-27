@@ -50,6 +50,7 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
     input_spec = SeriesPreprocReportInputSpec
     output_spce = SeriesPreprocReportOutputSpec
     _n_cuts = 7
+    _report_labels = ('Raw Image', 'Denoised')
 
     def __init__(self, **kwargs):
         """Instantiate SeriesPreprocReportlet."""
@@ -143,7 +144,7 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
                 estimate_brightness=True,
                 cuts=cuts,
                 crop_offset=crop_offset,
-                label='Raw Image',
+                label=self._report_labels[0],
                 lowb_contour=lowb_field_nii,
                 highb_contour=highb_field_nii,
                 compress=False,
@@ -155,7 +156,7 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
                 estimate_brightness=True,
                 cuts=cuts,
                 crop_offset=crop_offset,
-                label='Denoised',
+                label=self._report_labels[1],
                 lowb_contour=lowb_field_nii,
                 highb_contour=highb_field_nii,
                 compress=False,

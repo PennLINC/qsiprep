@@ -29,6 +29,7 @@ from .epi_fmap import (
     add_synthetic_b0_to_topup_inputs,
     eddy_inputs_from_dwi_files,
     get_best_b0_topup_inputs_from,
+    synb0_topup_config,
 )
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -249,6 +250,7 @@ class Synb0TopupInputsInputSpec(BaseInterfaceInputSpec):
 class Synb0TopupInputsOutputSpec(TraitedSpec):
     topup_datain = File(exists=True)
     topup_imain = File(exists=True)
+    topup_config = traits.Str(desc='TOPUP config matching the imain dimensions')
 
 
 class Synb0TopupInputs(SimpleInterface):
@@ -258,6 +260,8 @@ class Synb0TopupInputs(SimpleInterface):
     datain row, and the real b=0 volumes are slightly smoothed to match its
     smoothness (see
     :func:`~qsiprep.interfaces.epi_fmap.add_synthetic_b0_to_topup_inputs`).
+    The TOPUP config is chosen for the imain dimensions (see
+    :func:`~qsiprep.interfaces.epi_fmap.synb0_topup_config`).
     """
 
     input_spec = Synb0TopupInputsInputSpec
@@ -273,6 +277,7 @@ class Synb0TopupInputs(SimpleInterface):
         )
         self._results['topup_datain'] = datain
         self._results['topup_imain'] = imain
+        self._results['topup_config'] = synb0_topup_config(nb.load(imain).shape)
         return runtime
 
 
