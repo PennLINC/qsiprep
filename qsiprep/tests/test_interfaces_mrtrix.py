@@ -411,3 +411,17 @@ def test_dwibiascorrect_options_are_accepted_by_the_real_binary(
         tmp_path, '-ants.TOTALLYBOGUS'
     )
     assert not bogus_accepted, bogus_output
+
+
+def test_series_report_labels_match_the_operation():
+    """Test that each series reportlet names its own before/after states.
+
+    The bias correction report used to inherit the denoising labels, so its
+    flicker read "Raw Image" and "Denoised" while showing N4's effect.
+    """
+    from qsiprep.interfaces.dipy import Patch2Self
+
+    assert mrtrix.DWIDenoise._report_labels == ('Raw Image', 'Denoised')
+    assert mrtrix.DWIDenoise2._report_labels == ('Raw Image', 'Denoised')
+    assert Patch2Self._report_labels == ('Raw Image', 'Denoised')
+    assert mrtrix.DWIBiasCorrect._report_labels == ('Uncorrected', 'Bias corrected')

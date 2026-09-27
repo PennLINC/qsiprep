@@ -12,7 +12,7 @@ from packaging.version import Version
 
 from ... import config
 from ...data import load as load_data
-from ...interfaces.images import ExtractWM
+from ...interfaces.images import ExtractWM, ReferenceGridAtSpacing
 from ...interfaces.itk import ACPCReport, AffineToRigid
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -133,7 +133,18 @@ def init_structural_to_b0_alignment_wf(name='structural_to_b0_alignment_wf'):
     Outputs
     -------
     structural_aligned
-        The structural image resampled onto the b=0 reference grid
+        The structural image resampled into the b=0 reference frame, on the
+        b=0 field of view but at the structural image's own voxel size
+
+    Notes
+    -----
+    The structural keeps its own voxel size on purpose. DRBUDDI sizes its
+    working grid from the structural image's spacing, refining it by 1.3x
+    until it is finer than 1 mm: a T2w handed over at the DWI's 1.7 mm is
+    refined to 0.77 mm, which more than doubles the voxel count of a 1 mm
+    T2w and exhausts an 8 GB GPU at the full-resolution stages. Resampling
+    onto the DWI grid also discards the anatomical detail the structural
+    metric is there to provide.
     """
     workflow = Workflow(name=name)
     inputnode = pe.Node(
@@ -142,8 +153,10 @@ def init_structural_to_b0_alignment_wf(name='structural_to_b0_alignment_wf'):
     outputnode = pe.Node(niu.IdentityInterface(fields=['structural_aligned']), name='outputnode')
 
     # fixed=b0: antsAI's transform then maps b0-space points to structural
-    # space, which is exactly what resampling onto the b0 grid needs
+    # space, which is exactly what resampling into the b0 frame needs
     rotation_search_wf = init_rotation_search_wf(transform='Rigid')
+    # The b0's field of view and orientation, at the structural's voxel size
+    reference_grid = pe.Node(ReferenceGridAtSpacing(), name='reference_grid')
     resample_structural = pe.Node(
         ants.ApplyTransforms(dimension=3, interpolation='LanczosWindowedSinc'),
         name='resample_structural',
@@ -154,10 +167,12 @@ def init_structural_to_b0_alignment_wf(name='structural_to_b0_alignment_wf'):
             ('b0_ref', 'inputnode.fixed_image'),
             ('structural_image', 'inputnode.moving_image'),
         ]),
-        (inputnode, resample_structural, [
-            ('structural_image', 'input_image'),
-            ('b0_ref', 'reference_image'),
+        (inputnode, reference_grid, [
+            ('b0_ref', 'fov_image'),
+            ('structural_image', 'spacing_image'),
         ]),
+        (inputnode, resample_structural, [('structural_image', 'input_image')]),
+        (reference_grid, resample_structural, [('out_file', 'reference_image')]),
         (rotation_search_wf, resample_structural, [
             ('outputnode.initial_transform', 'transforms'),
         ]),
