@@ -37,6 +37,21 @@ field applied to the whole series (``--dwi-biascorrect``).
 The residuals of denoising and unringing are shown in the visual report, so
 you can check that they contain noise and ringing rather than anatomy.
 
+.. raw:: html
+
+    <object type="image/svg+xml" data="../_static/denoising.svg" style="width: 100%; aspect-ratio: 1108 / 939"></object>
+
+The report's denoising figure: a low-b volume before and after denoising,
+and what was removed, alternating while the pointer is over it.
+
+.. raw:: html
+
+    <object type="image/svg+xml" data="../_static/unringing.svg" style="width: 100%; aspect-ratio: 1108 / 939"></object>
+
+The unringing figure works the same way: the unrung low-b and high-b
+volumes flicker against the ringing that ``mrdegibbs`` or ``rpg``
+estimated and removed, which should look like edges, not anatomy.
+
 .. workflow::
     :graph2use: orig
     :simple_form: yes

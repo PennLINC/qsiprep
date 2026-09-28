@@ -8,7 +8,14 @@ Susceptibility distortion correction
 
 :func:`qsiprep.workflows.fieldmap.base.init_sdc_wf`
 
-.. figure:: ../_static/unwarping.svg
+.. raw:: html
+
+    <object type="image/svg+xml" data="../_static/unwarping.svg" style="width: 100%; aspect-ratio: 792 / 939"></object>
+
+Hover over the image to flicker between the distorted and the corrected b=0
+of each phase encoding direction; the contours are the subject's T2w. Both
+directions end up on the same image, which is the sign that the correction
+worked.
 
 Echo-planar images are stretched and compressed along the phase encoding
 axis where the magnetic field is inhomogeneous. Correcting this needs an
@@ -95,6 +102,15 @@ backend it can either replace TOPUP (``--sdc-method drbuddi``) or refine it
 (``--sdc-method topup+drbuddi``), in which case the refinement is written as
 a separate ``desc-sdcrefinement`` displacement map.
 
+.. raw:: html
+
+    <object type="image/svg+xml" data="../_static/sdc_fa.svg" style="width: 100%; aspect-ratio: 792 / 470"></object>
+
+The report also shows the fractional anisotropy image before and after the
+correction (hover to flicker). The FA is what DRBUDDI matched between the
+two directions, so distorted white matter should straighten out in it even
+where the b=0 is featureless.
+
 .. workflow::
     :graph2use: orig
     :simple_form: yes
@@ -172,8 +188,33 @@ generated from the T1w and the distorted b=0 with the SynB0-DISCO U-Net
 :footcite:p:`synb0disco`. The synthetic image then stands in for a reverse
 phase-encoded acquisition: with ``eddy`` it joins the TOPUP inputs as a
 volume with zero readout time, and with DIFFPREP it is the T2Wreg target.
-The report shows the acquired and synthetic b=0 side by side. Requires a
-T1w and a ``PhaseEncodingDirection`` on the DWI series.
+The report shows the acquired and synthetic b=0 as a flicker pair, and the
+correction that TOPUP or T2Wreg estimated from them. Requires a T1w and a
+``PhaseEncodingDirection`` on the DWI series.
+
+.. raw:: html
+
+    <object type="image/svg+xml" data="../_static/synb0_acquired.svg" style="width: 100%; aspect-ratio: 1108 / 470"></object>
+
+The acquired b=0 and the synthetic one the U-Net produced from it and the
+T1w (hover to flicker). Nothing has been corrected yet; this view is for
+judging whether the synthetic target is credible. The contours are the
+white matter of the T1w.
+
+.. raw:: html
+
+    <object type="image/svg+xml" data="../_static/synb0_sdc.svg" style="width: 100%; aspect-ratio: 1108 / 470"></object>
+
+The correction TOPUP estimated from that pair, before and after. This is
+the same session as the DRBUDDI example above, but with only one phase
+encoding direction and SynB0 as the reference.
+
+.. figure:: ../_static/synb0_displacement.svg
+
+    The displacement map TOPUP estimated from the acquired and synthetic
+    b=0. Compare it with the DRBUDDI map of the same session in
+    :ref:`outputs`: the field is recovered without a reverse phase-encoded
+    acquisition, with the largest displacements in the same places.
 
 
 .. _sdc_t2wreg:

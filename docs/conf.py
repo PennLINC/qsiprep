@@ -52,6 +52,7 @@ extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.coverage',
     'sphinx.ext.doctest',
+    'sphinx.ext.extlinks',
     'sphinx.ext.intersphinx',
     'sphinx.ext.linkcode',
     'sphinx.ext.mathjax',
@@ -405,3 +406,6 @@ bibtex_footbibliography_header = ''
 def setup(app):
     """Add extra formatting files."""
     app.add_css_file('theme_overrides.css')
+
+# :pr:`1234` links a pull request
+extlinks = {'pr': ('https://github.com/PennLINC/qsiprep/pull/%s', '#%s')}

@@ -93,11 +93,11 @@ model's prediction agrees with that slice.
     the traces above give the whole-brain fit and framewise displacement per
     volume.
 
-.. figure:: _static/sub-pnc_carpetplot.png
-    :scale: 40%
+.. figure:: _static/carpetplot_eddy.svg
 
     For ``eddy``, the number of outlier slices: more outliers are yellow,
-    fewer are blue.
+    fewer are blue. The traces above give the b-value and framewise
+    displacement of each volume.
 
 
 ****************
@@ -167,6 +167,13 @@ distortion correction ran and the output was not assembled by
 .. warning::
     The displacement maps are for inspection only. They are not valid
     transforms and must not be used for resampling.
+
+.. figure:: _static/sdc_displacement.svg
+
+    The report plots the displacement map as arrows over the corrected b=0,
+    colored by displacement in mm. Here DRBUDDI moved tissue by up to a
+    centimeter near the sinuses and the brain stem, along the
+    anterior-posterior phase encoding axis.
 
 The Jacobian map holds the intensity modulation *QSIPrep* itself applied,
 which is not all of it: ``eddy`` modulates its own corrections internally

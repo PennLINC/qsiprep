@@ -10,11 +10,12 @@ Contents
    installation
    data
    running
+   cli
    outputs
    methods/index
    troubleshooting
-   cli
    upgrading
    changes
    developers
+   api
    license

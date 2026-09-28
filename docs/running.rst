@@ -143,6 +143,11 @@ take space-separated lists.
      - Apply a GRE fieldmap to ``eddy``'s outputs, as *QSIPrep* did before
        26.1, instead of handing it to ``eddy``. For comparing the two on real
        data. Deprecated, and will be removed in a future release.
+   * - ``no-csf-synthstrip``
+     - Restrict the nonlinear registration to the template with a tighter
+       SynthStrip mask (its ``--no-csf`` model) that excludes CSF and dura, for
+       brains where the default mask is looser than the template's. Saved
+       brain masks and everything downstream of them are unaffected.
 
 
 *********************
@@ -169,7 +174,9 @@ never (``none``), or only when ``ImageType`` does not contain ``NORM``
 ``--skip-anat-based-spatial-normalization`` skips the nonlinear
 registration to the template, which saves about twenty minutes; the
 template-space anatomical derivatives and the ``ACPC`` to template transform
-are then not written.
+are then not written. ``--force no-csf-synthstrip`` masks that registration with a
+tighter brain mask when the default one lets the dura land on the
+template's brain edge, as in atrophied brains (see :ref:`anatomical_methods`).
 
 ``--infant`` swaps the template for the MNIInfant cohort matching the
 participant's age in months, read from ``participants.tsv`` or the
@@ -294,6 +301,34 @@ except that ``fixed_rank`` selects the single-iteration ``fixedrank``
 schedule and ``"vst_method": "none"`` a single iteration. The file is checked
 when the command line is parsed, and a copy is written to
 ``sub-<label>/log/<run uuid>/dwidenoise2.json`` in the output directory.
+
+
+.. _gradwarp_flags:
+
+Gradient nonlinearity correction
+================================
+
+``--gradient-file`` enables gradient nonlinearity correction; the accepted
+file formats are on the :ref:`data preparation <gradient_files>` page. Two
+things are corrected: the spatial displacement of voxels, and the diffusion
+encoding, which is written as a voxelwise gradient deviation map
+(``*_graddev.nii.gz``). How much spatial correction a run gets is read from
+its ``ImageType`` field:
+
+===================  =======================================================
+``ImageType`` tag    Behavior
+===================  =======================================================
+(no ``DIS`` tag)     Full 3D correction
+``DIS2D``            Through-plane correction only; the scanner already
+                     corrected in-plane distortion
+``DIS3D``            No spatial correction; the scanner already applied it
+===================  =======================================================
+
+``--force gradwarp3D`` or ``--force gradwarp1D`` overrides the tag for every
+run, and ``--ignore gradwarp`` disables both corrections. The deviation map
+is written for every run that is not ignored, ``DIS3D`` included, because
+no scanner corrects the encoding. It is not written for outputs assembled by
+``--distortion-group-merge``.
 
 
 .. _grouping_flags:
@@ -503,6 +538,22 @@ eligible`` and labeled ``(initializes DRBUDDI/T2Wreg)``. During the run,
 and the report's distortion correction entry ends in ``(GRE-initialized)``.
 
 
+.. _jacobian_flags:
+
+Intensity modulation
+====================
+
+Correcting a spatial distortion moves signal between voxels, so *QSIPrep*
+also rescales the corrected image by the local volume change, following
+TORTOISE. Which component applies it depends on the backend; the table is in
+:ref:`jacobian_methods`. ``--ignore jacobian`` disables only the modulation
+*QSIPrep* itself applies. ``eddy`` modulates its own eddy-current and
+susceptibility corrections internally whenever its resampling method is
+``jac`` (the default), and *QSIPrep* cannot undo that; with ``"method":
+"lsr"`` in ``--eddy-config`` those corrections are not modulated at all.
+``--force jacobian`` additionally modulates the T2Wreg correction.
+
+
 .. _output_resolution:
 
 ***************************
@@ -543,50 +594,6 @@ same alignment. ``--dwiref-construction-iters`` (at least 2) and
 ``--dwiref-construction-transform`` (``Rigid``, ``Affine``, ``BSplineSyN`` or
 ``SyN``) configure the template build. Which transforms are written in each
 case is described in :ref:`transforms`.
-
-
-.. _gradwarp_flags:
-
-**********************************************
-Gradient nonlinearity and intensity modulation
-**********************************************
-
-``--gradient-file`` enables gradient nonlinearity correction; the accepted
-file formats are on the :ref:`data preparation <gradient_files>` page. Two
-things are corrected: the spatial displacement of voxels, and the diffusion
-encoding, which is written as a voxelwise gradient deviation map
-(``*_graddev.nii.gz``). How much spatial correction a run gets is read from
-its ``ImageType`` field:
-
-===================  =======================================================
-``ImageType`` tag    Behavior
-===================  =======================================================
-(no ``DIS`` tag)     Full 3D correction
-``DIS2D``            Through-plane correction only; the scanner already
-                     corrected in-plane distortion
-``DIS3D``            No spatial correction; the scanner already applied it
-===================  =======================================================
-
-``--force gradwarp3D`` or ``--force gradwarp1D`` overrides the tag for every
-run, and ``--ignore gradwarp`` disables both corrections. The deviation map
-is written for every run that is not ignored, ``DIS3D`` included, because
-no scanner corrects the encoding. It is not written for outputs assembled by
-``--distortion-group-merge``.
-
-.. _jacobian_flags:
-
-Intensity modulation
-====================
-
-Correcting a spatial distortion moves signal between voxels, so *QSIPrep*
-also rescales the corrected image by the local volume change, following
-TORTOISE. Which component applies it depends on the backend; the table is in
-:ref:`jacobian_methods`. ``--ignore jacobian`` disables only the modulation
-*QSIPrep* itself applies. ``eddy`` modulates its own eddy-current and
-susceptibility corrections internally whenever its resampling method is
-``jac`` (the default), and *QSIPrep* cannot undo that; with ``"method":
-"lsr"`` in ``--eddy-config`` those corrections are not modulated at all.
-``--force jacobian`` additionally modulates the T2Wreg correction.
 
 
 ***********************

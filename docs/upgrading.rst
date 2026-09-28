@@ -24,57 +24,58 @@ Removed or renamed options
      - PR
    * - ``--session-id``
      - ``--session-label``
-     - #1136
+     - :pr:`1136`
    * - ``--dwi-only``
      - ``--anat-modality none``
-     - #1145
+     - :pr:`1145`
    * - ``--dwi-no-biascorr``, ``--b1-biascorrect-stage``
      - ``--dwi-biascorrect none`` (or ``n4``, ``auto``)
-     - #1145, #1144
+     - :pr:`1145`, :pr:`1144`
    * - ``--fs-license-file``
      - Removed. No FreeSurfer license is needed.
-     - #1145
+     - :pr:`1145`
    * - ``--dwi-denoise-window``
      - ``--dwidenoise-window``
-     - #1149
+     - :pr:`1149`
    * - ``--denoise-after-combining``
      - Removed. Series are always denoised before concatenation.
-     - #1146
+     - :pr:`1146`
    * - ``--anat-only``
      - Removed.
-     - #1151
-   * - ``--hmc-model``, ``--hmc-transform``, ``--shoreline-iters``,
-       ``--shoreline-model``
+     - :pr:`1151`
+   * - ``--hmc-model eddy``
+     - ``--hmc-method eddy``
+     - :pr:`1105`
+   * - ``--hmc-model none``, ``3dSHORE`` or ``tensor``
+     - ``--hmc-method shoreline``, with the model in ``--shoreline-config``
+     - :pr:`1105`, :pr:`1140`
+   * - ``--hmc-transform``, ``--shoreline-iters``
      - ``--shoreline-config`` (a JSON file; see :ref:`configure_shoreline`)
-     - #1140
+     - :pr:`1140`
    * - ``--pepolar-method``
      - ``--sdc-method``
-     - #1140
-   * - ``--hmc-method diffprep``
-     - ``--hmc-method tortoise``
-     - #1085
+     - :pr:`1140`
    * - ``--force-syn``, ``--use-syn-sdc``
      - ``--sdc-anat-reference invt1w``, with ``--force sdc-anat-reference``
        to override fieldmaps
-     - #1111
-   * - ``--b0-to-t1w-transform``, ``--b0-to-anat-transform``
+     - :pr:`1111`
+   * - ``--b0-to-t1w-transform``
      - ``--dwi2anat-dof 6`` (rigid) or ``12`` (affine)
-     - #1144
+     - :pr:`1144`
    * - ``--intramodal-template-iters``, ``--intramodal-template-transform``
      - ``--dwiref-definition subject`` with
        ``--dwiref-construction-iters`` and
        ``--dwiref-construction-transform``
-     - #1144
+     - :pr:`1144`
    * - ``--longitudinal``
      - ``--subject-anatomical-reference unbiased``
-     - #1126
+     - :pr:`1126`
    * - ``--subject-anatomical-reference first-alphabetically``
      - ``--subject-anatomical-reference first-lex``
-     - #1157
-   * - ``--b0-motion-corr-to``, ``--prefer-dedicated-fmaps``,
-       ``--fmap-no-demean``, ``--fmap-bspline``
+     - :pr:`1157`
+   * - ``--b0-motion-corr-to``, ``--fmap-no-demean``, ``--fmap-bspline``
      - Removed.
-     - #1124, #1125, #1130, #1131
+     - :pr:`1124`, :pr:`1130`, :pr:`1131`
 
 ***********
 New options

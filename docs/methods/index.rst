@@ -2,9 +2,9 @@
 
 .. _methods:
 
-#################
-Methods reference
-#################
+############################
+Processing pipeline details
+############################
 
 These pages describe what each part of the pipeline does, in what order, and
 which options change it. They stay at the level needed to choose options and
@@ -12,10 +12,10 @@ read the reports and the methods boilerplate. The reasoning behind each
 correction, and the artifacts they address, will be covered in
 |artifacts_book|.
 
-.. figure:: ../_static/workflow_full.png
+.. figure:: ../_static/workflow_full.svg
 
-   The preprocessing pipeline. Anatomical processing and DWI processing run
-   in parallel until coregistration.
+   The preprocessing stages. Anatomical processing runs alongside the DWI
+   stages until coregistration; each stage has a page below.
 
 *QSIPrep* builds one workflow per subject (or per session, with
 ``--subject-anatomical-reference sessionwise``). It contains one anatomical

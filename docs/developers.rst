@@ -8,7 +8,7 @@ Developers
 
 *QSIPrep* follows the `NiPreps contributing guidelines
 <https://www.nipreps.org/community/CONTRIBUTING/>`_. This page covers what
-is specific to this repository.
+is specific to this repository; the Python API is documented in :doc:`api`.
 
 
 *******************
@@ -127,12 +127,3 @@ with the ``"model"`` key of ``--shoreline-config``; qsiplan still exposes
 the flag until it grows a ``--shoreline-config`` of its own. Add a grouping
 option to qsiplan first, then expose it here.
 
-
-***
-API
-***
-
-.. toctree::
-   :maxdepth: 2
-
-   api

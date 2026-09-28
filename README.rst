@@ -43,10 +43,12 @@ The main features of this software are
   1. A BIDS-app approach to preprocessing nearly all kinds of modern diffusion MRI data.
   2. Automatically generated preprocessing pipelines that correctly group, distortion correct,
      motion correct, denoise, coregister and resample your scans, producing visual reports and
-     QC metrics.
-  3. A novel motion correction algorithm that works on DSI and random q-space sampling schemes
+     QC metrics. The plan for a dataset can be previewed before running with
+     `qsiplan <https://qsiplan.readthedocs.io>`_.
+  3. Head motion and eddy-current correction for any sampling scheme, including DSI and
+     compressed sensing, with FSL's ``eddy`` or TORTOISE DIFFPREP.
 
-.. image:: https://github.com/PennLINC/qsiprep/raw/main/docs/_static/workflow_full.png
+.. image:: https://github.com/PennLINC/qsiprep/raw/main/docs/_static/workflow_full.svg
 
 
 .. _preprocessing_def:

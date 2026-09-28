@@ -7,36 +7,8 @@ The first release with the reorganized command line, TORTOISE DIFFPREP head
 motion correction, gradient nonlinearity correction, and scan grouping shared
 with the standalone `qsiplan` tool. Several options were renamed or removed;
 the {doc}`upgrading guide <upgrading>` maps each old option to its
-replacement and lists the behavior changes. The full list of changes is
-generated from the pull requests when the release is cut.
-
-### 🛠 Breaking Changes
-
-* Command-line options renamed or removed; see the upgrading guide.
-* Scan grouping is now performed by `qsiplan`, and inconsistent fieldmap
-  metadata stops the run with a named error instead of being worked around.
-* With `--hmc-method eddy`, GRE fieldmaps are applied inside `eddy` (#1159).
-
-### 🎉 New Features
-
-* TORTOISE DIFFPREP head motion and eddy-current correction (`--hmc-method tortoise`), DRBUDDI, T2Wreg and SynB0 distortion correction, and `--sdc-method`.
-* Gradient nonlinearity correction (`--gradient-file`) with a voxelwise gradient deviation map.
-* Jacobian intensity modulation after distortion correction, written as a derivative.
-* Susceptibility distortion displacement maps for inspection.
-* Per-task GPU selection with `--gpu`.
-* `dwidenoise2` denoising with `--dwidenoise2-config`.
-* Subject-level DWI reference with `--dwiref-definition subject`.
-* `--report-output-level`, `--anat-biascorrect`, `--mrtrix-version`.
-* GRE fieldmaps are unwrapped and applied with niimath (ROMEO) instead of FSL's PRELUDE and FUGUE, so they work without FSL (#1139).
-
-### 🗑 Deprecations
-
-* `--hmc-method shoreline` is scheduled for removal.
-* `--force gre-sdc-after-eddy` is deprecated on introduction.
-
-### 📚 Documentation
-
-* The documentation was reorganized around the user's workflow: preparing data, running, outputs, and a methods reference with one page per backend.
+replacement and lists the behavior changes. The list of changes is generated
+from the pull requests when the release is cut.
 
 
 ## 26.0.0 (April 20, 2026)

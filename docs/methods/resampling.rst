@@ -117,6 +117,16 @@ DSI Studio (``.b_table.txt``) formats. B1 bias field correction runs on the
 resampled series (``--dwi-biascorrect``), followed by the quality measures
 that fill the ``t1_`` columns of the image QC table.
 
+.. raw:: html
+
+    <object type="image/svg+xml" data="../_static/biascorr.svg" style="width: 100%; aspect-ratio: 1108 / 939"></object>
+
+The report's bias field figure: a low-b and a high-b volume before and after
+the correction (hover to flicker), with the estimated field drawn as
+isolines. The field is estimated on the b=0 images and applied to every
+volume, so the high-b panel shows the same correction. In this report the
+two states are still labeled as in the denoising figure.
+
 .. workflow::
     :graph2use: orig
     :simple_form: yes

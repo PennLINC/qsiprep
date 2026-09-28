@@ -30,11 +30,14 @@ running.
   sidecar needs ``PhaseEncodingDirection`` and ``TotalReadoutTime`` for any
   kind of susceptibility distortion correction.
 ``fmap/``
-  Reverse phase-encoded ``*_epi`` images, and GRE fieldmaps
+  Reverse phase-encoded ``*_epi`` images and/or GRE fieldmaps
   (``*_phasediff`` with one or two ``*_magnitude`` images, ``*_phase1`` and
   ``*_phase2`` with magnitudes, or a Hz ``*_fieldmap`` with a magnitude).
+  Without any of these, distortion can still be corrected from a reverse
+  phase-encoded DWI series or from the anatomical image (see
+  :ref:`sdc_methods`).
 ``anat/``
-  ``*_T1w`` and ``*_T2w`` images. One contrast is the *anatomical reference*
+  ``*_T1w`` and/or ``*_T2w`` images. One contrast is the *anatomical reference*
   (``--anat-modality``); a T2w can also be a target for fieldmap-less
   distortion correction. A lesion mask, ``*_label-lesion_roi.nii.gz`` in the
   same space as the anatomical reference, is used to mask the template normalization.

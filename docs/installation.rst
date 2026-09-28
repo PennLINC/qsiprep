@@ -4,28 +4,11 @@
 Installation
 ############
 
-There are two ways to use *QSIPrep*: as a Python package from PyPI, or as a
-container with Docker or Apptainer. Use the container unless you have a
-reason not to.
+Use *QSIPrep* as a container, with Docker or Apptainer. The Python package
+on PyPI is for people who maintain their own environment.
 
 Once *QSIPrep* is installed, see :doc:`data` for what it expects of the input
 and :doc:`running` for the command line.
-
-
-**************
-Python Library
-**************
-
-To install the *QSIPrep* Python library, use pip::
-
-    $ pip install --user --upgrade qsiprep
-
-We strongly discourage installing *QSIPrep* this way,
-as *QSIPrep* relies on a number of non-Python dependencies that are difficult to install
-and configure on a local system.
-Pip will not install these dependencies for you.
-Instead, we recommend using the Docker or Singularity/Apptainer containers,
-wherein all of the necessary dependencies will come pre-installed and configured.
 
 
 .. _`Docker Container`:
@@ -116,6 +99,21 @@ Add ``--nv`` to use the GPU.
     For additional troubleshooting, see `fmriprep docs <https://fmriprep.org/en/stable/faq.html#how-do-you-use-templateflow-in-the-absence-of-access-to-the-internet>`_
     or `this thread on Neurostars <https://neurostars.org/t/issue-with-qsiprep-templateflow-on-hpc-host-with-no-internet-access/31259/10?u=pierre-nedelec>`_.
 
+
+**************
+Python Library
+**************
+
+*QSIPrep* is on PyPI, but pip only installs the Python side::
+
+    $ pip install --user --upgrade qsiprep
+
+Every tool listed under :ref:`external_dependencies` has to be installed and
+configured separately, so this route is for people who maintain their own
+environment and know why they want it. Everyone else should use a container.
+
+
+.. _external_dependencies:
 
 *********************
 External Dependencies

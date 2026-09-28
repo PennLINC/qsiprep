@@ -26,15 +26,13 @@ chosen, the steps are:
    cost of the unbiased template is small for two images and about an order
    of magnitude for three or more.
 3. **Brain extraction** with SynthStrip :footcite:p:`synthstrip`.
-
-   .. figure:: ../_static/brainextraction_t1.svg
-       :scale: 100%
-
 4. **Tissue segmentation** with SynthSeg :footcite:p:`synthseg1`, giving the
    tissue-class ``dseg`` and the regional ``desc-aseg_dseg`` derivatives.
 
    .. figure:: ../_static/segmentation.svg
-       :scale: 100%
+
+       The SynthSeg tissue classes drawn over the anatomical reference, as
+       shown in the report.
 
    If the other contrast is present too (a T2w alongside a T1w reference),
    it is registered to the reference with an affine ``antsRegistration``,
@@ -50,10 +48,23 @@ chosen, the steps are:
    The forward and inverse transforms are written with the anatomical
    derivatives. ``--skip-anat-based-spatial-normalization`` skips this step.
 
-   .. figure:: ../_static/T1MNINormalization.svg
-       :scale: 100%
+   The subject's brain mask restricts this registration. The default
+   SynthStrip mask keeps CSF and dura at the brain border, whereas the
+   template's brain mask is tight around the brain, so in atrophied brains
+   the registration can pull the dura, rather than the cortex, onto the
+   template's brain edge. ``--force no-csf-synthstrip`` runs a second
+   SynthStrip with its ``--no-csf`` model and uses that tighter mask for
+   the nonlinear registration only. The AC-PC alignment, the saved
+   ``desc-brain_mask`` images and the DWI workflows keep the default mask,
+   so the flag changes the ``from-ACPC_to-<template>`` transforms and
+   nothing downstream of the masks.
 
-       T1w to MNI normalization.
+   .. raw:: html
+
+       <object type="image/svg+xml" data="../_static/T1MNINormalization.svg" style="width: 100%; aspect-ratio: 1108 / 470"></object>
+
+   The report's normalization figure alternates between the template and the
+   normalized T1w while the pointer is over it.
 
 The preprocessed reference defines ``ACPC`` space. With several input
 images, that space is not exactly aligned with any one of them; the
