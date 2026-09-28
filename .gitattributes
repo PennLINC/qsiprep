@@ -20,3 +20,8 @@ Dockerfile*    text eol=lf
 *.nii.gz   binary
 *.gpg      binary
 graphify-out/graph.json merge=graphify
+
+# Report figures and viewer snippets embedded in the docs: large generated files
+# that GitHub should collapse in diffs.
+docs/_static/*.svg   linguist-generated=true
+docs/_static/*.html  linguist-generated=true
