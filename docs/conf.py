@@ -407,5 +407,6 @@ def setup(app):
     """Add extra formatting files."""
     app.add_css_file('theme_overrides.css')
 
+
 # :pr:`1234` links a pull request
 extlinks = {'pr': ('https://github.com/PennLINC/qsiprep/pull/%s', '#%s')}
