@@ -86,6 +86,13 @@ def test_dwidenoise2_has_no_kernel_options(tmp_path, kernel_option):
         mrtrix.DWIDenoise2(in_file=in_file, **{kernel_option: 1})
 
 
+def _write_image(path, data=None):
+    """Write a small 4D image standing in for dwidenoise2's output."""
+    if data is None:
+        data = np.ones((4, 4, 3, 5), dtype=np.float32)
+    nb.Nifti1Image(data, np.eye(4)).to_filename(str(path))
+
+
 _SCHEDULE_ROWS = [
     {'spatial_subsample': 8, 'kernel': 'aspect=2.0'},
     {'spatial_subsample': (2, 2, 1), 'kernel': 'rank', 'update_noise': False},
@@ -115,11 +122,13 @@ def test_dwidenoise2_writes_schedule_at_run_time(tmp_path, monkeypatch):
 
     def fake_run(self, runtime, correct_return_codes=(0,)):
         calls.append((tmp_path / 'node' / 'schedule.txt').read_text())
+        _write_image('dwi_denoised.nii.gz')
         return runtime
 
     monkeypatch.setattr(CommandLine, '_run_interface', fake_run)
     node_dir = tmp_path / 'node'
     node_dir.mkdir()
+    monkeypatch.chdir(node_dir)
     in_file = tmp_path / 'dwi.nii.gz'
     in_file.touch()
 
@@ -133,9 +142,12 @@ def test_dwidenoise2_without_schedule_writes_nothing(tmp_path, monkeypatch):
     from nipype.interfaces.base import CommandLine
     from nipype.interfaces.base.support import Bunch
 
-    monkeypatch.setattr(
-        CommandLine, '_run_interface', lambda self, runtime, correct_return_codes=(0,): runtime
-    )
+    def fake_run(self, runtime, correct_return_codes=(0,)):
+        _write_image('dwi_denoised.nii.gz')
+        return runtime
+
+    monkeypatch.setattr(CommandLine, '_run_interface', fake_run)
+    monkeypatch.chdir(tmp_path)
     in_file = tmp_path / 'dwi.nii.gz'
     in_file.touch()
 
@@ -425,3 +437,136 @@ def test_series_report_labels_match_the_operation():
     assert mrtrix.DWIDenoise2._report_labels == ('Raw Image', 'Denoised')
     assert Patch2Self._report_labels == ('Raw Image', 'Denoised')
     assert mrtrix.DWIBiasCorrect._report_labels == ('Uncorrected', 'Bias corrected')
+
+
+def test_dwidenoise2_passes_demean(tmp_path):
+    """Test that an explicit -demean reaches the command line."""
+    in_file = tmp_path / 'dwi.nii.gz'
+    in_file.touch()
+
+    assert '-demean all' in mrtrix.DWIDenoise2(in_file=in_file, demean='all').cmdline
+    assert '-demean' not in mrtrix.DWIDenoise2(in_file=in_file).cmdline
+
+
+def _fake_dwidenoise2(monkeypatch, *, returncode=0, stderr='', out=None, noise=None):
+    """Replace the dwidenoise2 call with one that writes the given arrays and exits.
+
+    ``out`` and ``noise`` are arrays written to dwidenoise2's output names in the current
+    directory; ``None`` writes nothing.
+    """
+    from nipype.interfaces.base import CommandLine
+
+    def fake_run(self, runtime, correct_return_codes=(0,)):
+        if out is not None:
+            _write_image('dwi_denoised.nii.gz', out)
+        if noise is not None:
+            _write_image('dwi_noise.nii.gz', noise)
+        runtime.returncode = returncode
+        runtime.stderr = stderr
+        runtime.stdout = ''
+        runtime.merged = stderr
+        return runtime
+
+    monkeypatch.setattr(CommandLine, '_run_interface', fake_run)
+
+
+def _denoise2_in(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    in_file = tmp_path / 'dwi.nii.gz'
+    _write_image(in_file)
+    return in_file
+
+
+@pytest.mark.parametrize(
+    ('returncode', 'stderr'),
+    [
+        (11, 'dwidenoise2: [SYSTEM FATAL CODE: SIGSEGV (11)] Segmentation fault'),
+        (134, 'munmap_chunk(): invalid pointer\nAborted (core dumped)'),
+        (1, 'dwidenoise2: [ERROR] Cannot demean by b-value shells'),
+    ],
+)
+def test_dwidenoise2_reports_a_failed_run(tmp_path, monkeypatch, returncode, stderr):
+    """Test that a failed dwidenoise2 surfaces as its own exit code and message.
+
+    nipype checks the exit status only after the report hook, which fails first on the
+    missing output; the run must stop before the report is attempted.
+    """
+    in_file = _denoise2_in(tmp_path, monkeypatch)
+    _fake_dwidenoise2(monkeypatch, returncode=returncode, stderr=stderr)
+
+    with pytest.raises(RuntimeError, match=f'exited with code {returncode}') as err:
+        mrtrix.DWIDenoise2(in_file=in_file).run(cwd=str(tmp_path))
+    assert stderr.splitlines()[-1] in str(err.value)
+    assert not (tmp_path / 'dwidenoise_report.svg').exists()
+
+
+def test_dwidenoise2_requires_an_output(tmp_path, monkeypatch):
+    """Test that a zero exit without a denoised image is an error."""
+    from nipype.interfaces.base.support import Bunch
+
+    in_file = _denoise2_in(tmp_path, monkeypatch)
+    _fake_dwidenoise2(monkeypatch)
+
+    with pytest.raises(RuntimeError, match='without writing'):
+        mrtrix.DWIDenoise2(in_file=in_file)._run_interface(Bunch(cwd=str(tmp_path)))
+
+
+def test_dwidenoise2_rejects_nan_slices(tmp_path, monkeypatch):
+    """Test that a NaN slice in the denoised image stops the run and names the slice.
+
+    This is what dwidenoise2 -demodulate linear wrote for 3 of 24 CS-DSI/HBCD series.
+    """
+    from nipype.interfaces.base.support import Bunch
+
+    in_file = _denoise2_in(tmp_path, monkeypatch)
+    out = np.ones((4, 4, 3, 5), dtype=np.complex64)
+    out[:, :, 2, :] = np.nan
+    _fake_dwidenoise2(monkeypatch, out=out)
+
+    with pytest.raises(RuntimeError, match=r'slice\(s\) \[2\] of 5 volume\(s\)'):
+        mrtrix.DWIDenoise2(in_file=in_file)._run_interface(Bunch(cwd=str(tmp_path)))
+
+
+def test_dwidenoise2_rejects_a_non_finite_noise_map(tmp_path, monkeypatch):
+    """Test that the noise map is held to the same standard as the denoised image."""
+    from nipype.interfaces.base.support import Bunch
+
+    in_file = _denoise2_in(tmp_path, monkeypatch)
+    noise = np.ones((2, 2, 2), dtype=np.float32)
+    noise[0, 0, 0] = np.inf
+    _fake_dwidenoise2(monkeypatch, out=np.ones((4, 4, 3, 5), dtype=np.float32), noise=noise)
+
+    with pytest.raises(RuntimeError, match='noise map'):
+        mrtrix.DWIDenoise2(in_file=in_file)._run_interface(Bunch(cwd=str(tmp_path)))
+
+
+def test_dwidenoise2_accepts_finite_outputs(tmp_path, monkeypatch):
+    """Test that finite outputs, including a coarser noise map, pass."""
+    from nipype.interfaces.base.support import Bunch
+
+    in_file = _denoise2_in(tmp_path, monkeypatch)
+    _fake_dwidenoise2(
+        monkeypatch,
+        out=np.ones((4, 4, 3, 5), dtype=np.complex64),
+        noise=np.ones((2, 2, 2), dtype=np.float32),
+    )
+
+    mrtrix.DWIDenoise2(in_file=in_file)._run_interface(Bunch(cwd=str(tmp_path)))
+
+
+@pytest.mark.parametrize(
+    ('value', 'dtype'),
+    [(np.nan, np.float32), (np.inf, np.float32), (-np.inf, np.float64), (np.nan, np.complex64)],
+)
+def test_check_finite_image(tmp_path, value, dtype):
+    """Test that NaN and infinite values are caught, in real and complex images."""
+    data = np.zeros((3, 3, 4, 2), dtype=dtype)
+    _write_image(tmp_path / 'ok.nii.gz', data)
+    mrtrix.check_finite_image(str(tmp_path / 'ok.nii.gz'), 'test image')
+
+    data[1, 1, 3, 1] = value
+    _write_image(tmp_path / 'bad.nii.gz', data)
+    with pytest.raises(
+        RuntimeError, match=r'test image .* 1 non-finite voxels, in slice\(s\) \[3\]'
+    ):
+        mrtrix.check_finite_image(str(tmp_path / 'bad.nii.gz'), 'test image')

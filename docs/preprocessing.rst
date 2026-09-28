@@ -219,6 +219,18 @@ cannot be set.
 Phase demodulation (``demodulate`` other than ``"none"``) needs phase data,
 supplied as ``part-phase`` files alongside the magnitude data;
 setting it for magnitude-only data is an error.
+
+``demean`` is always passed to ``dwidenoise2`` explicitly.
+Left to its own default, ``dwidenoise2`` demeans by b-value shell and infers the shells
+itself; on non-shelled sampling such as DSI or compressed-sensing grids it either finds none
+and pools all volumes, or finds pseudo-shells that leave some volumes unassigned and crashes.
+When ``demean`` is omitted, *QSIPrep* uses ``"all"`` for every DWI series.
+``"shells"`` can be requested, but only for series whose q-space sampling *QSIPrep*
+classifies as shelled (the same classification that decides whether ``eddy`` can be used);
+requesting it when any series being denoised is not shelled is an error.
+A ``dwidenoise2`` run that fails, or that writes NaN or infinite values, stops processing at
+the denoising step.
+
 ``noise_in`` only seeds the variance-stabilizing transform:
 any schedule iteration that updates the noise level re-estimates it.
 

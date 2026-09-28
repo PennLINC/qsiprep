@@ -361,6 +361,39 @@ class DWIDenoise2InputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
     )
 
 
+def check_finite_image(path, label):
+    """Raise if an image holds any NaN or infinite value.
+
+    dwidenoise2 can exit successfully having written whole slices of NaN (seen with
+    ``-demodulate linear``). Later steps turn them into dark or empty voxels, so the damage
+    is only visible downstream; stopping at the denoiser names the cause.
+
+    Parameters
+    ----------
+    path : str
+        Image to check. Complex-valued images are checked in both parts.
+    label : str
+        What the image is, for the error message.
+
+    Raises
+    ------
+    RuntimeError
+        If any voxel is not finite, naming the affected slices (third axis) and the number
+        of affected volumes.
+    """
+    data = np.asanyarray(nb.load(path).dataobj)
+    bad = ~np.isfinite(data)
+    if not bad.any():
+        return
+    where = np.nonzero(bad)
+    slices = np.unique(where[2]).tolist() if data.ndim > 2 else []
+    volumes = np.unique(where[3]).size if data.ndim > 3 else 1
+    raise RuntimeError(
+        f'{label} {path} has {int(bad.sum())} non-finite voxels, in slice(s) {slices} of '
+        f'{volumes} volume(s).'
+    )
+
+
 class DWIDenoise2OutputSpec(SeriesPreprocReportOutputSpec):
     noise_image = File(desc='the output noise map', exists=True)
     out_file = File(desc='the output denoised DWI image', exists=True)
@@ -419,7 +452,23 @@ class DWIDenoise2(SeriesPreprocReport, MRTrix3Base):
         if isdefined(self.inputs.schedule):
             with open(os.path.join(runtime.cwd, _DWIDENOISE2_SCHEDULE_FILE), 'w') as fobj:
                 fobj.write(format_dwidenoise2_schedule(self.inputs.schedule))
-        return super()._run_interface(runtime)
+        runtime = super()._run_interface(runtime)
+        # nipype only checks the exit status after the report hook has run, and a crashed
+        # dwidenoise2 leaves no output for the report, so the missing-file error would hide
+        # the real failure. Check it here instead.
+        returncode = getattr(runtime, 'returncode', 0)
+        if returncode:
+            stderr = [line for line in (getattr(runtime, 'stderr', '') or '').splitlines() if line]
+            raise RuntimeError(
+                f'dwidenoise2 exited with code {returncode}.\n' + '\n'.join(stderr[-5:])
+            )
+        outputs = self._list_outputs()
+        if not os.path.exists(outputs['out_file']):
+            raise RuntimeError(f'dwidenoise2 exited without writing {outputs["out_file"]}.')
+        check_finite_image(outputs['out_file'], 'dwidenoise2 output')
+        if isdefined(outputs.get('noise_image')) and os.path.exists(outputs['noise_image']):
+            check_finite_image(outputs['noise_image'], 'dwidenoise2 noise map')
+        return runtime
 
     def _get_plotting_images(self):
         input_dwi = load_img(self.inputs.in_file)

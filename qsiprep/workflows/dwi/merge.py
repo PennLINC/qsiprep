@@ -36,6 +36,7 @@ from ...utils.misc import (
     check_dwidenoise2_demodulation,
     describe_dwidenoise2,
     load_dwidenoise2_config,
+    resolve_dwidenoise2_demean,
 )
 from .qc import init_modelfree_qc_wf
 from .util import _get_wf_name
@@ -198,6 +199,8 @@ def init_merge_and_denoise_wf(
                 name=f'conform_phase{dwi_num}',
             )
 
+        # qsiplan's shelled/non-shelled call for this series, as for eddy's
+        record = unit.grouping.files.get(dwi_file)
         n_volumes = row.NumVolumes
         denoising_wfs.append(
             init_dwi_denoising_wf(
@@ -206,6 +209,7 @@ def init_merge_and_denoise_wf(
                 source_file=dwi_file,
                 n_volumes=n_volumes,
                 use_phase=use_phase,
+                shelled=record.shelled if record is not None else None,
                 name=wf_name,
             ),
         )
@@ -336,6 +340,7 @@ def init_dwi_denoising_wf(
     phase_encoding_direction,
     n_volumes,
     use_phase,
+    shelled=None,
     name='denoise_wf',
 ):
     """Build a workflow to denoise a DWI series.
@@ -356,6 +361,11 @@ def init_dwi_denoising_wf(
         True if phase data are available for the DWI scan.
         If True, and ``denoise_method`` is ``dwidenoise``, then ``dwidenoise``
         will be run on the complex-valued data.
+    shelled : bool or None, optional
+        qsiplan's classification of the series' q-space sampling. With ``dwidenoise2`` it
+        decides the ``-demean`` mode (see
+        :func:`~qsiprep.utils.misc.resolve_dwidenoise2_demean`); ``None`` (unclassified,
+        the default) is treated as non-shelled.
     name : str, optional
         name of the workflow
 
@@ -421,6 +431,10 @@ def init_dwi_denoising_wf(
         if config.workflow.dwidenoise2_config is not None:
             dwidenoise2_params = load_dwidenoise2_config(config.workflow.dwidenoise2_config)
         check_dwidenoise2_demodulation(dwidenoise2_params, use_phase)
+        # Always explicit: dwidenoise2's own shell inference segfaults on pseudo-shells
+        dwidenoise2_params['demean'] = resolve_dwidenoise2_demean(
+            dwidenoise2_params, shelled, source_file
+        )
 
     unringing_method = config.workflow.unringing_method
     do_denoise = denoise_method in ('patch2self', 'dwidenoise', 'dwidenoise2')
