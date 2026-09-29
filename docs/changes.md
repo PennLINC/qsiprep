@@ -1,14 +1,89 @@
 # What's New
 
+## 26.1.0rc1 (September 29, 2026)
 
-## 26.1.0 (unreleased)
+### 🛠 Breaking Changes
 
-The first release with the reorganized command line, TORTOISE DIFFPREP head
-motion correction, gradient nonlinearity correction, and scan grouping shared
-with the standalone `qsiplan` tool. Several options were renamed or removed;
-the {doc}`upgrading guide <upgrading>` maps each old option to its
-replacement and lists the behavior changes. The list of changes is generated
-from the pull requests when the release is cut.
+* Redo the scan grouping so it uses modern BIDS and is easier to understand by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1092
+* Rename `--session-id` to `--session-label` by @tsalo in https://github.com/PennLINC/qsiprep/pull/1136
+* Remove `--longitudinal` parameter by @tsalo in https://github.com/PennLINC/qsiprep/pull/1126
+* Remove `--prefer-dedicated-fmaps` parameter by @tsalo in https://github.com/PennLINC/qsiprep/pull/1125
+* Remove `--b0-motion-correct-to` parameter by @tsalo in https://github.com/PennLINC/qsiprep/pull/1124
+* Remove `--dwi-only`, `--dwi-no-biascorr`, and `--fs-license-file` by @tsalo in https://github.com/PennLINC/qsiprep/pull/1145
+* Rename `--dwi-denoise-window` to `--dwidenoise-window` by @tsalo in https://github.com/PennLINC/qsiprep/pull/1149
+* Remove `--denoise-after-combining` by @tsalo in https://github.com/PennLINC/qsiprep/pull/1146
+* Rename CLI parameters by @tsalo in https://github.com/PennLINC/qsiprep/pull/1144
+* Remove `--anat-only` flag by @tsalo in https://github.com/PennLINC/qsiprep/pull/1151
+* Remove `first-alphabetically` option from `--subject-anatomical-reference` by @tsalo in https://github.com/PennLINC/qsiprep/pull/1157
+* Replace dwidenoise2 parameter parsing with config file by @tsalo in https://github.com/PennLINC/qsiprep/pull/1156
+
+### 🎉 Exciting New Features
+
+* Add TORTOISE DIFFPREP as a head-motion-correction backend by @tsalo in https://github.com/PennLINC/qsiprep/pull/1066
+* Add dwidenoise2 denoising option by @tsalo in https://github.com/PennLINC/qsiprep/pull/1071
+* Add `--report-output-level` CLI argument by @tsalo in https://github.com/PennLINC/qsiprep/pull/1087
+* Add new gradient plot to htmls by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1104
+* Make MRtrix development version available with `--mrtrix-version` by @tsalo in https://github.com/PennLINC/qsiprep/pull/1110
+* Support gradient unwarping with TORTOISE by @tsalo in https://github.com/PennLINC/qsiprep/pull/1106
+* Allow users to specify 3D or 1D (through-plane) gradient distortion correction by @tsalo in https://github.com/PennLINC/qsiprep/pull/1135
+* Add white matter boundary to coregistration figure by @tsalo in https://github.com/PennLINC/qsiprep/pull/1115
+* Add SDC displacement maps and figures to derivatives by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1154
+* Apply Jacobian weighting to all spatial distortion corrections by @tsalo in https://github.com/PennLINC/qsiprep/pull/1147
+* Use GRE fieldmaps inside eddy and to initialize DRBUDDI and T2Wreg by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1159
+* Add --force no-csf-synthstrip for the template registration mask by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1162
+
+### 🐛 Bug Fixes
+
+* Replace zero-magnitude b-vectors with [1 0 0] by @tsalo in https://github.com/PennLINC/qsiprep/pull/1059
+* Monkeypatch create_cfm to use LPS lesion mask by @tsalo in https://github.com/PennLINC/qsiprep/pull/1058
+* Add flexible check for available CUDA version by @tsalo in https://github.com/PennLINC/qsiprep/pull/1057
+* Retain magnitude data for complex-valued dwidenoise reportlet by @tsalo in https://github.com/PennLINC/qsiprep/pull/1055
+* Set minimum dwi_denoise_window to 3 by @tsalo in https://github.com/PennLINC/qsiprep/pull/1064
+* Address inheritance failures by @tsalo in https://github.com/PennLINC/qsiprep/pull/1080
+* Use template shape and resolution in anatomical reportlet by @tsalo in https://github.com/PennLINC/qsiprep/pull/1098
+* Make sure motion parameters are reported in the same convention for tortoise and eddy by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1084
+* Use same cropped FOV for before and after images in reportlets by @tsalo in https://github.com/PennLINC/qsiprep/pull/1100
+* Update TORTOISE for Gibbs bugfixes by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1101
+* Enforce fixed FOV in figures with context manager by @tsalo in https://github.com/PennLINC/qsiprep/pull/1119
+* Remove `--fmap-bspline` parameter by @tsalo in https://github.com/PennLINC/qsiprep/pull/1131
+* Remove unused `--fmap-no-demean` parameter by @tsalo in https://github.com/PennLINC/qsiprep/pull/1130
+* Stop DWI summary reportlet duplication by @tsalo in https://github.com/PennLINC/qsiprep/pull/1113
+* Raise an exception if no files are found for sessions in `--session-id` by @tsalo in https://github.com/PennLINC/qsiprep/pull/1121
+* Fix eddy cuda finding by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1158
+
+### Other Changes
+
+* Streamline CircleCI by @tsalo in https://github.com/PennLINC/qsiprep/pull/1049
+* Fix CircleCI by @tsalo in https://github.com/PennLINC/qsiprep/pull/1056
+* Consistently use acres like other BIDS Apps by @tsalo in https://github.com/PennLINC/qsiprep/pull/1060
+* Document --ignore fieldmaps by @tsalo in https://github.com/PennLINC/qsiprep/pull/1065
+* Rename figures to follow fMRIPrep's convention by @tsalo in https://github.com/PennLINC/qsiprep/pull/1062
+* Configure shared libraries for DSIStudio commands at runtime by @tsalo in https://github.com/PennLINC/qsiprep/pull/1073
+* Sync CI setup across LINC BIDS Apps by @tsalo in https://github.com/PennLINC/qsiprep/pull/1075
+* Anat biascorr masks by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1078
+* Raise deprecation warnings for deprecated parameters by @tsalo in https://github.com/PennLINC/qsiprep/pull/1083
+* Replace hyperlink-based references by @tsalo in https://github.com/PennLINC/qsiprep/pull/1088
+* Update Python to 3.11 and DIPY to 1.12 by @tsalo in https://github.com/PennLINC/qsiprep/pull/1077
+* Rename "diffprep" HMC model options to "tortoise" by @tsalo in https://github.com/PennLINC/qsiprep/pull/1085
+* Clean up intramodal template workflows and add boilerplate text by @tsalo in https://github.com/PennLINC/qsiprep/pull/1095
+* Fix diffprep boilerplate text by @tsalo in https://github.com/PennLINC/qsiprep/pull/1102
+* Control threading in Gibbs by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1103
+* Introduce the "workflow compiler" by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1105
+* Use TORTOISE's best b=0 picker by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1107
+* Add synb0 and reorganize sdc cli options by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1111
+* Read the part-phase companions from qsiplan by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1116
+* Use ants Affine Initializer (antsAI) for coregistration by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1118
+* Replace FUGUE and PRELUDE with niimath by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1139
+* Clean up arguments for HMC by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1140
+* Handle git annex files correctly when imported from qsiplan by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1112
+* Reorganize CLI arguments by @tsalo in https://github.com/PennLINC/qsiprep/pull/1142
+* Set NIFTI_INTENT_VECTOR on the synthetic ITK displacement field fixture by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1153
+* Fix unit test by @tsalo in https://github.com/PennLINC/qsiprep/pull/1161
+* Use numpydoc convention for all docstrings by @tsalo in https://github.com/PennLINC/qsiprep/pull/1160
+* FIX: Keep the T2w at its own resolution for DRBUDDI; SynB0 TOPUP on odd dimensions by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1164
+* Overhaul docs for 26.1.0 by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1163
+
+**Full Changelog**: https://github.com/PennLINC/qsiprep/compare/26.0.0...26.1.0rc1
 
 
 ## 26.0.0 (April 20, 2026)
