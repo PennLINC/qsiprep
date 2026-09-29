@@ -1,6 +1,16 @@
 # What's New
 
 
+## 26.1.0 (unreleased)
+
+The first release with the reorganized command line, TORTOISE DIFFPREP head
+motion correction, gradient nonlinearity correction, and scan grouping shared
+with the standalone `qsiplan` tool. Several options were renamed or removed;
+the {doc}`upgrading guide <upgrading>` maps each old option to its
+replacement and lists the behavior changes. The list of changes is generated
+from the pull requests when the release is cut.
+
+
 ## 26.0.0 (April 20, 2026)
 
 ### 🐛 Bug Fixes
@@ -91,7 +101,7 @@ which resulted in a later crash in the merge_dwis step.
 * Replace numpy.complex with complex by @tsalo in https://github.com/PennLINC/qsiprep/pull/992
 * Swap zenodo.json with CITATION.cff in welcomebot by @tsalo in https://github.com/PennLINC/qsiprep/pull/993
 
-## New Contributors
+### New Contributors
 
 * @MegaByte made their first contribution in https://github.com/PennLINC/qsiprep/pull/984
 
@@ -147,7 +157,7 @@ which resulted in a later crash in the merge_dwis step.
 * ENH: Update eddy_params.json by @cookpa in https://github.com/PennLINC/qsiprep/pull/903
 * Fix style issues by @tsalo in https://github.com/PennLINC/qsiprep/pull/910
 
-## New Contributors
+### New Contributors
 
 * @LuciMoore made their first contribution in https://github.com/PennLINC/qsiprep/pull/896
 
