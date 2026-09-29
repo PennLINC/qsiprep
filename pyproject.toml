@@ -56,7 +56,7 @@ dynamic = ["version"]
 
 [project.urls]
 Homepage = "https://github.com/pennlinc/qsiprep"
-Documentation = "https://www.qsiprep.readthedocs.io"
+Documentation = "https://qsiprep.readthedocs.io"
 Paper = "https://doi.org/10.1038/s41592-022-01458-7"
 "Docker Images" = "https://hub.docker.com/r/pennlinc/qsiprep/tags/"
 
@@ -65,10 +65,10 @@ doc = [
     "dipy",
     "doctest-ignore-unicode",
     "lxml_html_clean",
-    "myst-nb",
+    "myst-parser",
     "pydot >= 1.2.3",
     "pydotplus",
-    "sphinx >= 4.2.0",
+    "sphinx >= 7",
     "sphinx-argparse",
     "sphinx_rtd_theme",
     "sphinxcontrib-apidoc",
