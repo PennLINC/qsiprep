@@ -35,6 +35,8 @@ from .denoise import (
 LOGGER = logging.getLogger('nipype.interface')
 # dwidenoise2 reads its schedule from this file, which DWIDenoise2 writes in the node directory
 _DWIDENOISE2_SCHEDULE_FILE = 'schedule.txt'
+# The input copy with invalid voxels filled, written uncompressed to save time
+_DWIDENOISE2_FILLED_INPUT = 'dwidenoise2_input_filled.nii'
 RC3_ROOT = which('average_response')  # Only exists in RC3
 if RC3_ROOT is not None:
     # Use the directory containing average_response
@@ -394,6 +396,63 @@ def check_finite_image(path, label):
     )
 
 
+def invalid_voxel_mask(data):
+    """Find the voxels dwidenoise2 treats as invalid.
+
+    dwidenoise2 excludes voxels that are zero in every volume or non-finite in any volume,
+    and then segfaults during noise level estimation (a background zeroed by masking or
+    defacing is enough). Zeros in only some volumes are not excluded.
+
+    Parameters
+    ----------
+    data : :class:`numpy.ndarray`
+        4D image data, real or complex.
+
+    Returns
+    -------
+    :class:`numpy.ndarray`
+        Boolean 3D mask of the invalid voxels.
+    """
+    return ~np.isfinite(data).all(axis=-1) | (data == 0).all(axis=-1)
+
+
+def fill_invalid_voxels(data, mask, seed=0):
+    """Give invalid voxels small positive values that dwidenoise2 accepts.
+
+    Each value is 0.5-1.5 thousandths of the 99th percentile of the valid data's
+    magnitude, so the filled voxels stay far below any tissue signal; complex data get a
+    random phase as well. The random generator is seeded, so a rerun fills identically.
+
+    Parameters
+    ----------
+    data : :class:`numpy.ndarray`
+        4D image data, real or complex.
+    mask : :class:`numpy.ndarray`
+        Boolean 3D mask of the voxels to fill, from :func:`invalid_voxel_mask`.
+    seed : int, optional
+        Seed of the random generator.
+
+    Returns
+    -------
+    :class:`numpy.ndarray`
+        A float (or complex) copy of ``data`` with the masked voxels filled.
+    """
+    dtype = np.complex64 if np.iscomplexobj(data) else np.float32
+    filled = data.astype(dtype, copy=True)
+    valid = np.abs(data[~mask])
+    valid = valid[np.isfinite(valid)]
+    scale = 1e-3 * float(np.percentile(valid, 99)) if valid.size else 1.0
+    if not scale > 0:
+        scale = 1.0
+    rng = np.random.default_rng(seed)
+    shape = (int(mask.sum()), data.shape[-1])
+    values = scale * (0.5 + rng.random(shape))
+    if np.iscomplexobj(data):
+        values = values * np.exp(2j * np.pi * rng.random(shape))
+    filled[mask] = values.astype(dtype)
+    return filled
+
+
 class DWIDenoise2OutputSpec(SeriesPreprocReportOutputSpec):
     noise_image = File(desc='the output noise map', exists=True)
     out_file = File(desc='the output denoised DWI image', exists=True)
@@ -446,13 +505,40 @@ class DWIDenoise2(SeriesPreprocReport, MRTrix3Base):
         if name == 'schedule':
             # The command runs in the node directory, where _run_interface writes the rows
             return spec.argstr % _DWIDENOISE2_SCHEDULE_FILE
+        if name == 'in_file' and getattr(self, '_filled_input', None):
+            # dwidenoise2 reads the copy with its invalid voxels filled (see _run_interface)
+            return spec.argstr % self._filled_input
         return super()._format_arg(name, spec, value)
 
     def _run_interface(self, runtime):
         if isdefined(self.inputs.schedule):
             with open(os.path.join(runtime.cwd, _DWIDENOISE2_SCHEDULE_FILE), 'w') as fobj:
                 fobj.write(format_dwidenoise2_schedule(self.inputs.schedule))
-        runtime = super()._run_interface(runtime)
+
+        # dwidenoise2 segfaults once it excludes invalid voxels, so it gets a copy in which
+        # they hold small values, and they are set back to zero in its output
+        self._filled_input = None
+        in_img = nb.load(self.inputs.in_file)
+        invalid = invalid_voxel_mask(np.asanyarray(in_img.dataobj))
+        if invalid.any():
+            LOGGER.warning(
+                '%s has %d voxels that are zero in every volume or not finite; they are filled '
+                'with small values for dwidenoise2 and set to zero in its output.',
+                self.inputs.in_file,
+                int(invalid.sum()),
+            )
+            filled = fill_invalid_voxels(np.asanyarray(in_img.dataobj), invalid)
+            self._filled_input = os.path.join(runtime.cwd, _DWIDENOISE2_FILLED_INPUT)
+            # The input header may be integer or scaled, which would round the fill to zero
+            header = in_img.header.copy()
+            header.set_data_dtype(filled.dtype)
+            header.set_slope_inter(1, 0)
+            nb.Nifti1Image(filled, in_img.affine, header).to_filename(self._filled_input)
+        try:
+            runtime = super()._run_interface(runtime)
+        finally:
+            if self._filled_input and os.path.exists(self._filled_input):
+                os.remove(self._filled_input)
         # nipype only checks the exit status after the report hook has run, and a crashed
         # dwidenoise2 leaves no output for the report, so the missing-file error would hide
         # the real failure. Check it here instead.
@@ -465,6 +551,13 @@ class DWIDenoise2(SeriesPreprocReport, MRTrix3Base):
         outputs = self._list_outputs()
         if not os.path.exists(outputs['out_file']):
             raise RuntimeError(f'dwidenoise2 exited without writing {outputs["out_file"]}.')
+        if invalid.any():
+            out_img = nb.load(outputs['out_file'])
+            out_data = np.asanyarray(out_img.dataobj).copy()
+            out_data[invalid] = 0
+            nb.Nifti1Image(out_data, out_img.affine, out_img.header).to_filename(
+                outputs['out_file']
+            )
         check_finite_image(outputs['out_file'], 'dwidenoise2 output')
         if isdefined(outputs.get('noise_image')) and os.path.exists(outputs['noise_image']):
             check_finite_image(outputs['noise_image'], 'dwidenoise2 noise map')

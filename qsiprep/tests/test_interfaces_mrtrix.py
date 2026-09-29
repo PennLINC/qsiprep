@@ -130,7 +130,7 @@ def test_dwidenoise2_writes_schedule_at_run_time(tmp_path, monkeypatch):
     node_dir.mkdir()
     monkeypatch.chdir(node_dir)
     in_file = tmp_path / 'dwi.nii.gz'
-    in_file.touch()
+    _write_image(in_file)
 
     interface = mrtrix.DWIDenoise2(in_file=in_file, schedule=_SCHEDULE_ROWS)
     interface._run_interface(Bunch(cwd=str(node_dir)))
@@ -149,7 +149,7 @@ def test_dwidenoise2_without_schedule_writes_nothing(tmp_path, monkeypatch):
     monkeypatch.setattr(CommandLine, '_run_interface', fake_run)
     monkeypatch.chdir(tmp_path)
     in_file = tmp_path / 'dwi.nii.gz'
-    in_file.touch()
+    _write_image(in_file)
 
     interface = mrtrix.DWIDenoise2(in_file=in_file)
     interface._run_interface(Bunch(cwd=str(tmp_path)))
@@ -570,3 +570,124 @@ def test_check_finite_image(tmp_path, value, dtype):
         RuntimeError, match=r'test image .* 1 non-finite voxels, in slice\(s\) \[3\]'
     ):
         mrtrix.check_finite_image(str(tmp_path / 'bad.nii.gz'), 'test image')
+
+
+def _dead_background(dtype=np.float32):
+    """Signal in a central block, zero in every volume elsewhere, as after masking."""
+    data = np.zeros((6, 6, 4, 5), dtype=dtype)
+    data[1:5, 1:5, 1:3, :] = np.arange(1, 6, dtype=np.float32) * 100
+    return data
+
+
+@pytest.mark.parametrize('dtype', [np.float32, np.int16, np.complex64])
+def test_invalid_voxel_mask(dtype):
+    """Test that voxels zero in every volume are invalid and partly zero ones are not."""
+    data = _dead_background(dtype)
+    data[2, 2, 1, 0] = 0  # zero in one volume only: still valid
+    mask = mrtrix.invalid_voxel_mask(data)
+
+    assert mask[0, 0, 0]
+    assert not mask[2, 2, 1]
+    assert mask.sum() == 6 * 6 * 4 - 4 * 4 * 2
+
+
+def test_invalid_voxel_mask_flags_non_finite():
+    """Test that a voxel with a non-finite value in any volume is invalid."""
+    data = _dead_background()
+    data[2, 2, 1, 3] = np.nan
+    data[3, 3, 2, 0] = np.inf
+    mask = mrtrix.invalid_voxel_mask(data)
+    assert mask[2, 2, 1]
+    assert mask[3, 3, 2]
+    assert not mask[1, 1, 1]
+
+
+@pytest.mark.parametrize('dtype', [np.float32, np.int16, np.complex64])
+def test_fill_invalid_voxels(dtype):
+    """Test that only invalid voxels change, to small non-zero values of a float type."""
+    data = _dead_background(dtype)
+    mask = mrtrix.invalid_voxel_mask(data)
+    filled = mrtrix.fill_invalid_voxels(data, mask)
+
+    assert filled.dtype == (np.complex64 if dtype is np.complex64 else np.float32)
+    np.testing.assert_array_equal(filled[~mask], data[~mask])
+    magnitude = np.abs(filled[mask])
+    assert np.all(np.isfinite(magnitude))
+    assert magnitude.min() > 0
+    # 0.5-1.5 thousandths of the 99th percentile of the valid magnitudes (500 here)
+    assert magnitude.max() <= 1.5e-3 * 500 + 1e-6
+    assert not mrtrix.invalid_voxel_mask(filled).any()
+    # Seeded, so a rerun fills identically
+    np.testing.assert_array_equal(filled, mrtrix.fill_invalid_voxels(data, mask))
+
+
+def _identity_dwidenoise2(monkeypatch, seen):
+    """Replace dwidenoise2 with a command that copies the image it is given to its output."""
+    from nipype.interfaces.base import CommandLine
+
+    def fake_run(self, runtime, correct_return_codes=(0,)):
+        given = self.cmdline.split()[-2]
+        seen['input'] = given
+        seen['data'] = np.asanyarray(nb.load(given).dataobj).copy()
+        _write_image('dwi_denoised.nii.gz', seen['data'])
+        runtime.returncode = 0
+        return runtime
+
+    monkeypatch.setattr(CommandLine, '_run_interface', fake_run)
+
+
+@pytest.mark.parametrize('dtype', [np.float32, np.int16, np.complex64])
+def test_dwidenoise2_fills_and_restores_invalid_voxels(tmp_path, monkeypatch, dtype):
+    """Test the workaround for dwidenoise2's segfault on a zeroed background.
+
+    dwidenoise2 must never see an invalid voxel, the output must be zero exactly where the
+    input was, and the filled copy must not be left behind.
+    """
+    from nipype.interfaces.base.support import Bunch
+
+    monkeypatch.chdir(tmp_path)
+    data = _dead_background(dtype)
+    in_file = tmp_path / 'dwi.nii.gz'
+    _write_image(in_file, data)
+    seen = {}
+    _identity_dwidenoise2(monkeypatch, seen)
+
+    mrtrix.DWIDenoise2(in_file=in_file)._run_interface(Bunch(cwd=str(tmp_path)))
+
+    assert seen['input'].endswith(mrtrix._DWIDENOISE2_FILLED_INPUT)
+    assert not mrtrix.invalid_voxel_mask(seen['data']).any()
+    out = np.asanyarray(nb.load(tmp_path / 'dwi_denoised.nii.gz').dataobj)
+    mask = mrtrix.invalid_voxel_mask(data)
+    assert np.all(out[mask] == 0)
+    np.testing.assert_array_equal(out[~mask], data[~mask])
+    assert not (tmp_path / mrtrix._DWIDENOISE2_FILLED_INPUT).exists()
+
+
+def test_dwidenoise2_leaves_clean_input_alone(tmp_path, monkeypatch):
+    """Test that an input without invalid voxels is passed to dwidenoise2 as it is."""
+    from nipype.interfaces.base.support import Bunch
+
+    monkeypatch.chdir(tmp_path)
+    in_file = tmp_path / 'dwi.nii.gz'
+    _write_image(in_file)
+    seen = {}
+    _identity_dwidenoise2(monkeypatch, seen)
+
+    mrtrix.DWIDenoise2(in_file=in_file)._run_interface(Bunch(cwd=str(tmp_path)))
+
+    assert seen['input'] == str(in_file)
+    assert not (tmp_path / mrtrix._DWIDENOISE2_FILLED_INPUT).exists()
+
+
+def test_dwidenoise2_removes_the_filled_copy_after_a_crash(tmp_path, monkeypatch):
+    """Test that the filled copy is removed and the crash still reported."""
+    from nipype.interfaces.base.support import Bunch
+
+    monkeypatch.chdir(tmp_path)
+    in_file = tmp_path / 'dwi.nii.gz'
+    _write_image(in_file, _dead_background())
+    _fake_dwidenoise2(monkeypatch, returncode=11, stderr='Segmentation fault')
+
+    with pytest.raises(RuntimeError, match='exited with code 11'):
+        mrtrix.DWIDenoise2(in_file=in_file)._run_interface(Bunch(cwd=str(tmp_path)))
+    assert not (tmp_path / mrtrix._DWIDENOISE2_FILLED_INPUT).exists()
