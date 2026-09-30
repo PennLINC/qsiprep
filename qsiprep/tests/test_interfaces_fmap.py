@@ -36,7 +36,7 @@ def _run(interface, work_dir):
 
 
 def test_b0rpe_fieldmap_writes_metadata_not_a_path(tmp_path):
-    """The sidecar holds the fieldmap's metadata rather than a JSON file path."""
+    """Test that the sidecar holds the fieldmap's metadata rather than a JSON file path."""
     root = build_test_dataset(
         tmp_path / 'ds',
         {'01': [{'fmap': [{'dir': 'PA', 'suffix': 'epi', 'metadata': PEPOLAR_METADATA}]}]},
@@ -50,7 +50,7 @@ def test_b0rpe_fieldmap_writes_metadata_not_a_path(tmp_path):
 
 
 def test_b0rpe_fieldmap_uses_inherited_metadata(tmp_path):
-    """Metadata reached only through inheritance still lands in the sidecar (issue #685)."""
+    """Test that metadata reached only through inheritance lands in the sidecar (issue #685)."""
     root = build_test_dataset(
         tmp_path / 'ds',
         SINGLE_EPI_SKELETON,
@@ -65,7 +65,7 @@ def test_b0rpe_fieldmap_uses_inherited_metadata(tmp_path):
 
 
 def test_b0rpe_fieldmap_handles_complex_valued_fieldmaps(tmp_path):
-    """A part-mag fieldmap inherits both its metadata and its shared bval."""
+    """Test that a part-mag fieldmap inherits both its metadata and its shared bval."""
     root = build_test_dataset(
         tmp_path / 'ds',
         COMPLEX_EPI_SKELETON,
@@ -85,7 +85,7 @@ def test_b0rpe_fieldmap_handles_complex_valued_fieldmaps(tmp_path):
 
 
 def test_b0rpe_fieldmap_merges_two_fieldmaps(tmp_path):
-    """Two consistent fieldmaps merge into one metadata object without error."""
+    """Test that two consistent fieldmaps merge into one metadata object without error."""
     root = build_test_dataset(
         tmp_path / 'ds',
         {
@@ -125,7 +125,7 @@ def _write(path, data, zooms=(2.0, 2.0, 2.0)):
 
 
 def test_sphere_footprint_geometry():
-    """A 3 mm spherical kernel on 2 mm voxels keeps center+faces+edges, not corners."""
+    """Test that a 3 mm spherical kernel on 2 mm voxels keeps center+faces+edges, not corners."""
     fp = _sphere_footprint(3.0, (2.0, 2.0, 2.0))
     assert fp.shape == (3, 3, 3)
     assert fp[1, 1, 1]  # center
@@ -137,7 +137,7 @@ def test_sphere_footprint_geometry():
 
 
 def test_median_filter_removes_isolated_spike(tmp_path):
-    """The median denoise kills a lone spike and preserves shape/affine."""
+    """Test that the median denoise kills a lone spike and preserves shape/affine."""
     data = np.zeros((9, 9, 9), dtype='float32')
     data[4, 4, 4] = 500.0  # isolated spike, outnumbered in any neighborhood
     in_file = _write(tmp_path / 'spiky.nii.gz', data)
@@ -151,7 +151,7 @@ def test_median_filter_removes_isolated_spike(tmp_path):
 
 
 def test_cleanup_edge_blends_despiked_rim_into_original_interior(tmp_path):
-    """Interior keeps the original field; the eroded rim takes the despiked values."""
+    """Test that the interior keeps the original field and the eroded rim the despiked values."""
     # A 2-voxel-thick slab so erosion leaves a clear interior and a one-voxel rim.
     mask = np.zeros((7, 7, 7), dtype='float32')
     mask[2:5, 2:5, 2:5] = 1.0
@@ -180,7 +180,9 @@ def test_cleanup_edge_blends_despiked_rim_into_original_interior(tmp_path):
 
 
 def test_fieldmap_to_vsm_uses_standard_shift_formula(tmp_path):
-    """VSM = fmap[rad/s]/(2*pi) * ees * N_pe (the standard EPI voxel-shift formula).
+    """Test that the VSM uses the standard EPI voxel-shift formula.
+
+    VSM = fmap[rad/s]/(2*pi) * ees * N_pe.
 
     The ``*N_pe`` factor is what makes the shift full-readout rather than per-line.
     """
@@ -206,7 +208,7 @@ def test_fieldmap_to_vsm_uses_standard_shift_formula(tmp_path):
 
 
 def test_despike_metric_is_relative_to_neighbor_range():
-    """A spike is flagged only when |dev|/range(neighbors) exceeds the threshold.
+    """Test that a spike is flagged only when |dev|/range(neighbors) exceeds the threshold.
 
     Same absolute deviation, different local spread: flagged in a flat neighborhood,
     left alone in a variable one.
@@ -228,7 +230,7 @@ def test_despike_metric_is_relative_to_neighbor_range():
 
 
 def test_despike_filter_replaces_spike_and_zeros_outside_mask(tmp_path):
-    """DespikeFilter replaces an isolated spike with the local value and masks output."""
+    """Test that DespikeFilter replaces an isolated spike with the local value and masks output."""
     data = np.zeros((7, 7, 3), dtype='float32')
     data += np.linspace(0, 6, 7)[:, None, None]  # gentle ramp along axis 0
     data[3, 3, 1] += 100.0  # isolated spike; true value there is 3.0
@@ -255,7 +257,7 @@ def test_despike_filter_replaces_spike_and_zeros_outside_mask(tmp_path):
 
 
 def test_median_and_cleanup_write_float32_from_integer_input(tmp_path):
-    """Filtering an int16 image yields float32, not a requantised int.
+    """Test that filtering an int16 image yields float32, not a requantised int.
 
     Passing the source header through nibabel would otherwise keep the int16
     dtype and scale the float result into it.
@@ -279,7 +281,7 @@ def test_median_and_cleanup_write_float32_from_integer_input(tmp_path):
 
 
 def test_field_to_rads_treats_its_input_as_hz(tmp_path):
-    """``FieldToRadS(fmap_range=0.5)`` is the Hz -> rad/s step before FUGUE."""
+    """Test that ``FieldToRadS(fmap_range=0.5)`` is the Hz -> rad/s step before FUGUE."""
     import numpy as np
 
     hz = np.array([[[0.0, 10.0], [-25.0, 100.0]]], dtype='float32')
@@ -298,7 +300,7 @@ def _unit_image(path, value=1.0):
 
 
 def test_apply_jacobian_weights_passes_through_without_weights(tmp_path):
-    """No weights means the resampled DWIs are handed on untouched."""
+    """Test that, without weights, the resampled DWIs are handed on untouched."""
     from qsiprep.interfaces.fmap import ApplyJacobianWeights
 
     dwis = [_unit_image(tmp_path / f'd{i}.nii.gz') for i in range(3)]
@@ -322,15 +324,20 @@ def test_apply_jacobian_weights_rejects_a_count_mismatch(tmp_path):
 
 
 def test_apply_jacobian_weights_num_threads_defaults_to_one():
-    """The serial path (num_threads == 1) is the default, as ComposeTransforms'
-    is -- cheap, and debuggable, for the common one-or-two-map case."""
+    """Test that ApplyJacobianWeights defaults to a single thread.
+
+    The serial path (num_threads == 1) is the default, as ComposeTransforms'
+    is -- cheap, and debuggable, for the common one-or-two-map case.
+    """
     from qsiprep.interfaces.fmap import ApplyJacobianWeights
 
     assert ApplyJacobianWeights().inputs.num_threads == 1
 
 
 def test_apply_jacobian_weights_dedups_in_first_appearance_order(tmp_path, monkeypatch):
-    """Ordering is explicit (first-appearance), not incidental.
+    """Test that deduplicated weight maps keep their first-appearance order.
+
+    Ordering is explicit (first-appearance), not incidental.
 
     ``weight_index`` indexes into ``resampled_weight_images`` by position; a
     wrong implementation (e.g. ``sorted(set(...))``) would produce a
@@ -372,7 +379,7 @@ def test_apply_jacobian_weights_dedups_in_first_appearance_order(tmp_path, monke
 
 
 def test_apply_jacobian_weights_assembles_the_transform_chain(tmp_path, monkeypatch):
-    """The (volume-independent) transform chain assembly, pinned directly.
+    """Test the (volume-independent) transform chain assembly directly.
 
     Order matters: ApplyTransforms applies transforms last-to-first, so the
     chain from undistorted b0-reference space to the output grid must list
@@ -411,7 +418,7 @@ def test_apply_jacobian_weights_assembles_the_transform_chain(tmp_path, monkeypa
 
 
 def test_apply_jacobian_weights_parallel_path_uses_a_thread_per_unique_map(tmp_path, monkeypatch):
-    """Above the threshold, resampling actually runs on a thread pool.
+    """Test that resampling actually runs on a thread pool above the threshold.
 
     This does not (and, without a real ``antsApplyTransforms`` binary, cannot)
     measure a wall-clock speedup -- that would need real ANTs subprocesses.
@@ -456,14 +463,16 @@ def test_apply_jacobian_weights_parallel_path_uses_a_thread_per_unique_map(tmp_p
 
 
 def test_apply_scaling_images_name_is_gone():
-    """The old name must not linger as an alias -- it meant something else."""
+    """Test that the old name does not linger as an alias, since it meant something else."""
     import qsiprep.interfaces.fmap as fmap
 
     assert not hasattr(fmap, 'ApplyScalingImages')
 
 
 def test_nonpositive_weights_leave_the_voxel_unmodulated(tmp_path, caplog):
-    """A non-positive weight must not annihilate the voxel.
+    """Test that a non-positive weight leaves the voxel unmodulated.
+
+    A non-positive weight must not annihilate the voxel.
 
     This asserted a floor of 1e-3 until forrest_gump showed what that does:
     2.7% of in-mask voxels were multiplied by 1e-3, which is the only way
@@ -501,7 +510,7 @@ def test_nonpositive_weights_leave_the_voxel_unmodulated(tmp_path, caplog):
 
 
 def test_floor_nonpositive_weights_is_a_noop_when_all_positive(tmp_path, caplog):
-    """A clean map is left untouched and logs nothing."""
+    """Test that a clean map is left untouched and logs nothing."""
     from qsiprep.interfaces.fmap import _floor_nonpositive_weights
 
     weight_path = tmp_path / 'weight.nii.gz'

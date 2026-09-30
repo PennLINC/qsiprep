@@ -1,6 +1,7 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
+"""Workflows for unwarping susceptibility distortions with a fieldmap.
+
 .. _sdc_unwarp :
 
 Unwarping
@@ -38,7 +39,8 @@ from ...interfaces.niworkflows import FUGUEvsm2ANTSwarp
 
 
 def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
-    """
+    """Build a workflow that converts a fieldmap into an ANTs-compatible warp.
+
     This workflow takes in a displacements fieldmap and calculates the corresponding
     displacements field (in other words, an ANTs-compatible warp file).
 
@@ -228,7 +230,8 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
 
 
 def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf'):
-    """
+    """Build a workflow that generates a reportlet showing the effect of fieldmap unwarping.
+
     This workflow generates and saves a reportlet showing the effect of fieldmap
     unwarping a DWI image.
 

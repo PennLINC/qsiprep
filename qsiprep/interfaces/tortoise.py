@@ -1,7 +1,4 @@
-"""
-Wrappers for the TORTOISE programs
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-"""
+"""Wrappers for the TORTOISE programs."""
 
 import logging
 import os
@@ -59,7 +56,7 @@ SLOPPY_DRBUDDI = (
 
 
 def sloppy_epi_working_res():
-    """DRBUDDI/EPIREG working-grid kwargs for ``--sloppy``, else empty.
+    """Return DRBUDDI/EPIREG working-grid kwargs for ``--sloppy``, else empty.
 
     Returned as kwargs so a stock (unpatched) TORTOISE is unaffected in normal
     runs -- the flag is only emitted when ``--sloppy`` is set.
@@ -76,7 +73,8 @@ class TORTOISEInputSpec(CommandLineInputSpec):
 
 
 class TORTOISECommandLine(CommandLine):
-    """Support for TORTOISE commands that utilize OpenMP
+    """Support for TORTOISE commands that utilize OpenMP.
+
     Sets the environment variable 'OMP_NUM_THREADS' to the number
     of threads specified by the input num_threads.
 
@@ -244,7 +242,7 @@ class GatherDRBUDDIInputs(SimpleInterface):
         return runtime
 
     def _select_blip_down_b0(self, runtime):
-        """The reverse-blip b=0: the best-scoring opposite-PE fieldmap volume.
+        """Select the reverse-blip b=0: the best-scoring opposite-PE fieldmap volume.
 
         Only candidates phase-encoded opposite to the corrected series are
         eligible -- ``epi_fmaps`` can also carry borrowed same-PE b=0s, which
@@ -438,7 +436,7 @@ class DRBUDDI(TORTOISECommandLine):
     _cuda_cmd = 'DRBUDDI_cuda'
 
     def _format_arg(self, name, spec, value):
-        """Trick to get blip_down_bmat symlinked without an arg"""
+        """Format arguments, getting the bmat files symlinked without an arg."""
         if name in ('blip_down_bmat', 'blip_up_bmat'):
             return ''
         if name == 'structural_image':
@@ -513,7 +511,7 @@ class _DRBUDDIAggregateOutputsOutputSpec(TraitedSpec):
 
 
 def lsr_ratio(reference_file, blip_b0_corrected_file):
-    """TORTOISE's LSR weight for one blip: ``b0_corrected_final / blip_b0_corrected``.
+    """Compute TORTOISE's LSR weight for one blip: ``b0_corrected_final / blip_b0_corrected``.
 
     Voxels where the ratio is not a finite number (the corrected b=0 is zero or
     the reference is) get a weight of 1, matching ``FINALDATA``'s LSR branch,
@@ -622,8 +620,13 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
 
 
 class _GibbsInputSpec(TORTOISEInputSpec, SeriesPreprocReportInputSpec):
-    """Gibbs input_nifti  output_nifti kspace_coverage(1,0.875,0.75)
-    phase_encoding_dir nsh minW(optional) maxW(optional)"""
+    """Input specification for :class:`Gibbs`.
+
+    Command-line usage::
+
+        Gibbs input_nifti  output_nifti kspace_coverage(1,0.875,0.75)
+        phase_encoding_dir nsh minW(optional) maxW(optional)
+    """
 
     in_file = traits.File(exists=True, mandatory=True, position=0, argstr='%s')
     out_file = traits.File(
@@ -797,8 +800,10 @@ def split_into_up_and_down_niis(
     assignments_only=False,
     sidecars=None,
 ):
-    """Takes the concatenated output from pre_hmc_wf and split it into "up" and "down"
-    decompressed nifti files with float32 datatypes."""
+    """Split the concatenated output from pre_hmc_wf into "up" and "down" nifti files.
+
+    The outputs are decompressed nifti files with float32 datatypes.
+    """
     group_names, group_assignments = get_distortion_grouping(original_images, sidecars)
 
     if not len(set(group_names)) == 2 and not assignments_only:
@@ -896,7 +901,7 @@ def bmtxt_to_fsl(bmtxt_file, working_dir=None):
 
 
 def generate_diffprep_boilerplate(correction_mode, t2wreg_target=None, gradwarped=False):
-    """Methods boilerplate describing the DIFFPREP HMC backend.
+    """Generate methods boilerplate describing the DIFFPREP HMC backend.
 
     ``correction_mode`` comes from ``--diffprep-config`` (default
     ``quadratic``), so the transform model has to be named from it rather than
@@ -943,7 +948,6 @@ def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False, initi
     ``initialized`` says DRBUDDI starts from a field-map-derived deformation,
     whose estimation is described by the workflow that precedes this one.
     """
-
     desc = ['\n\nDRBUDDI [@drbuddi], part of the TORTOISE [@tortoisev4] software package,']
     if not with_topup:
         # Until now there will have been no description of the SDC procedure.
@@ -1242,9 +1246,11 @@ class DIFFPREP(TORTOISECommandLine):
 
 
 def _read_okan_transformations(path):
-    """Read a ``_moteddy_transformations.txt`` file and return 24-element
-    parameter vectors. Accepts both the VNL bracketed ``[a, b, ...]`` form and
-    plain whitespace-separated rows."""
+    """Read a ``_moteddy_transformations.txt`` file into 24-element parameter vectors.
+
+    Accepts both the VNL bracketed ``[a, b, ...]`` form and
+    plain whitespace-separated rows.
+    """
     rows = []
     with open(path) as fobj:
         for line in fobj:
@@ -1274,8 +1280,9 @@ class _DIFFPREPMotionParamsOutputSpec(TraitedSpec):
 
 
 class DIFFPREPMotionParams(SimpleInterface):
-    """Extract a 6-column SPM-style motion-parameters file from DIFFPREP's
-    24-parameter transform file.
+    """Extract SPM-style motion parameters from DIFFPREP's 24-parameter transform file.
+
+    The output is a 6-column motion-parameters file.
 
     The output columns are the leading 6 parameters of TORTOISE's
     ``OkanQuadraticTransform`` in SPM realignment-parameter order
@@ -1333,11 +1340,13 @@ class _DIFFPREPSplitOutputsOutputSpec(TraitedSpec):
 
 
 class DIFFPREPSplitOutputs(SimpleInterface):
-    """Split TORTOISE's corrected 4D DWI + 6-col bmatrix into per-volume files
-    that match the qsiprep contract: per-volume dwi/bval/bvec triples plus a
+    """Split TORTOISE's corrected 4D DWI + 6-col bmatrix into per-volume files.
+
+    The outputs match the qsiprep contract: per-volume dwi/bval/bvec triples plus a
     list of identity ITK transforms (DIFFPREP has already baked the motion+eddy
     correction into the volumes, so downstream apply-transform nodes must be
-    no-ops)."""
+    no-ops).
+    """
 
     input_spec = _DIFFPREPSplitOutputsInputSpec
     output_spec = _DIFFPREPSplitOutputsOutputSpec
@@ -1475,8 +1484,9 @@ class _SplitDWIsByDistortionGroupOutputSpec(TraitedSpec):
 
 
 class SplitDWIsByDistortionGroup(SimpleInterface):
-    """Re-split an already-merged reverse-PE DWI series back into its two
-    phase-encoding groups so DIFFPREP can be run once per direction.
+    """Re-split a merged reverse-PE DWI series back into its two phase-encoding groups.
+
+    This lets DIFFPREP be run once per direction on the already-merged series.
 
     DIFFPREP models a single phase axis against a single b=0 reference for the
     whole file (``TORTOISEProcess`` runs DIFFPREP once per PE direction, see
@@ -1577,8 +1587,9 @@ class _ConcatenateDIFFPREPGroupsOutputSpec(TraitedSpec):
 
 
 class ConcatenateDIFFPREPGroups(SimpleInterface):
-    """Recombine the two per-PE-direction DIFFPREP outputs into one series in
-    the original (merged) volume order.
+    """Recombine the two per-PE-direction DIFFPREP outputs into one series.
+
+    The series is restored to the original (merged) volume order.
 
     Each group was corrected by its own DIFFPREP run, so the two corrected 4D
     files live in **different corrected spaces** -- that is expected and correct;
@@ -1674,7 +1685,8 @@ def _tortoise_heuristic_deltas(bmtxt_file):
     * 1000`` with ``G = 2 * 40 mT/m`` and ``big_delta = 3 * small_delta``, in ms).
     ``SynthesizeDWIsFromMAPMRI`` has no such fallback, so we compute the deltas
     once and pass the identical values to both tools. The b-value of each volume
-    is the trace of its 6-column b-matrix row (columns 0, 3, 5)."""
+    is the trace of its 6-column b-matrix row (columns 0, 3, 5).
+    """
     bmat = np.loadtxt(bmtxt_file)
     if bmat.ndim == 1:
         bmat = bmat[np.newaxis, :]
@@ -1704,13 +1716,15 @@ class _SynthesizeDWIsOutputSpec(TraitedSpec):
 
 
 class SynthesizeDWIs(SimpleInterface):
-    """Fit a MAPMRI model to a corrected DWI and synthesize an "ideal" volume
-    at every measured gradient, for slice-wise QC.
+    """Fit a MAPMRI model to a corrected DWI and synthesize "ideal" volumes.
+
+    An "ideal" volume is synthesized at every measured gradient, for slice-wise QC.
 
     Runs ``EstimateTensor`` -> ``EstimateMAPMRI`` -> ``SynthesizeDWIsFromMAPMRI``
     entirely within the node's working directory, copying the DWI and its
     ``.bmtxt`` sibling into ``runtime.cwd`` with a fixed stem so output
-    discovery is unambiguous."""
+    discovery is unambiguous.
+    """
 
     input_spec = _SynthesizeDWIsInputSpec
     output_spec = _SynthesizeDWIsOutputSpec

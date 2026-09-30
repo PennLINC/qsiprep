@@ -32,7 +32,7 @@ def _write(path, data, affine=None):
 
 @pytest.fixture
 def dwi_with_dropout(tmp_path):
-    """A series whose mask contains a patch of susceptibility dropout."""
+    """Create a series whose mask contains a patch of susceptibility dropout."""
     rng = np.random.default_rng(0)
     shape = (12, 12, 12)
 
@@ -90,7 +90,9 @@ def test_geometry_is_preserved(dwi_with_dropout, tmp_path):
 
 
 def test_a_mostly_dark_mask_is_passed_through_untouched(tmp_path):
-    """If most of the mask is dim, something upstream is already broken.
+    """Test that a mostly dark mask is passed through untouched.
+
+    If most of the mask is dim, something upstream is already broken.
 
     Shrinking it further would hide that, so the mask goes through unchanged and
     the caller is warned.
@@ -136,7 +138,9 @@ def test_rejects_a_series_with_no_b0(tmp_path):
 
 
 def test_biascorr_receives_the_conditioned_weights_not_the_raw_mask(tmp_path):
-    """The whole point: N4's -w must be the damped mask.
+    """Test that N4's -w is the damped mask, not the raw mask.
+
+    This is the whole point of the fix.
 
     dwi_mask_t1 must still reach downstream consumers unchanged -- the fix is
     about what N4 fits, not about shrinking the brain mask.
@@ -165,7 +169,7 @@ def test_biascorr_receives_the_conditioned_weights_not_the_raw_mask(tmp_path):
 def test_finalize_biascorr_gets_the_selected_mrtrix_version(
     tmp_path, monkeypatch, split_biascorr, mrtrix_version
 ):
-    """Give every dwibiascorrect node the option spelling its MRtrix3 accepts.
+    """Test that every dwibiascorrect node gets the option spelling its MRtrix3 accepts.
 
     dwi_biascorrect defaults to "n4", so these nodes are on the common path.
     A node left on the default spelling fails at runtime under --mrtrix-version dev.
@@ -190,7 +194,9 @@ def test_finalize_biascorr_gets_the_selected_mrtrix_version(
 
 
 def test_anatomical_n4_estimates_on_truncated_but_corrects_the_original(tmp_path):
-    """Truncation must not reach the data, only the field estimate.
+    """Test that N4 estimates on truncated data but corrects the original.
+
+    Truncation must not reach the data, only the field estimate.
 
     Clipping at the 99.9th percentile drops a real T1w's ceiling from 1404 to 457
     and flattens the top 0.4% of brain voxels. Feeding that to the merge -- and

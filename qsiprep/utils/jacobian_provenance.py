@@ -47,7 +47,7 @@ _T2WREG_UNMODULATED_REASON = (
 
 
 def t2wreg_is_weighted(unit, t2w_sdc):
-    """Whether this unit's susceptibility field gets an intensity weight.
+    """Check whether this unit's susceptibility field gets an intensity weight.
 
     Only TORTOISE's T2Wreg (EPIREG) field is exempt, and ``--force jacobian``
     lifts the exemption. Every other field (DRBUDDI, GRE, SyN) is weighted.
@@ -58,7 +58,7 @@ def t2wreg_is_weighted(unit, t2w_sdc):
 
 
 def _gradwarp_applied(unit):
-    """True when this unit's gradwarp field reaches ComposeJacobianWeights.
+    """Check whether this unit's gradwarp field reaches ComposeJacobianWeights.
 
     Mirrors ``qsiprep.workflows.dwi.base``'s gradwarp block: a spatial warp is
     built (and consumed by ``ComposeJacobianWeights``, via
@@ -75,7 +75,7 @@ def _gradwarp_applied(unit):
 
 
 def _shoreline_sdc_applied(unit):
-    """Mirrors ``qsiprep.workflows.dwi.hmc_sdc``'s SDC recording.
+    """Mirror ``qsiprep.workflows.dwi.hmc_sdc``'s SDC recording.
 
     No TOPUP-in-eddy carve-out exists for this backend: every SDC warp it
     produces (PEPOLAR -- including a TOPUP-only plan, via DRBUDDI's own
@@ -97,7 +97,7 @@ def _shoreline_sdc_applied(unit):
 
 
 def _eddy_provenance(unit):
-    """Mirrors ``qsiprep.workflows.dwi.fsl``'s SDC/eddy-current recording.
+    """Mirror ``qsiprep.workflows.dwi.fsl``'s SDC/eddy-current recording.
 
     ``eddy``'s own resampling bakes in TOPUP's field and a GRE fieldmap handed
     to it (:func:`~qsiprep.utils.eddy_config.eddy_applies_gre`), never DRBUDDI's
@@ -157,7 +157,7 @@ def _eddy_provenance(unit):
 
 
 def _tortoise_provenance(unit, t2w_sdc):
-    """Mirrors ``qsiprep.workflows.dwi.diffprep``'s SDC/eddy-current recording.
+    """Mirror ``qsiprep.workflows.dwi.diffprep``'s SDC/eddy-current recording.
 
     The eddy-current component is DIFFPREP's own Okan quadratic-transform
     Jacobian, gated on the *effective* correction mode (post ``--sloppy``
@@ -201,7 +201,7 @@ def _tortoise_provenance(unit, t2w_sdc):
 
 
 def jacobian_provenance_for(unit, t2w_sdc=False):
-    """Which corrections this unit's run Jacobian-modulated, and why not the rest.
+    """Report which corrections this unit's run Jacobian-modulated, and why not the rest.
 
     Parameters
     ----------
@@ -209,7 +209,7 @@ def jacobian_provenance_for(unit, t2w_sdc=False):
         The correction unit a single HMC+SDC run compiles, carrying the
         compiled ``run`` (stage sequence) the actual workflow builders
         dispatch on.
-    t2w_sdc : bool
+    t2w_sdc : bool, optional
         Whether a T2w is available for TORTOISE's fieldmap-less T2Wreg stage,
         honoring ``--anat-modality``/``--ignore t2w`` -- the same value
         ``init_dwi_preproc_wf``/``init_diffprep_hmc_wf`` receive. Irrelevant
@@ -217,10 +217,12 @@ def jacobian_provenance_for(unit, t2w_sdc=False):
 
     Returns
     -------
-    tuple[list[str], list[str], str | None]
-        ``(applied, unmodulated, reason)`` -- which corrections QSIPrep
-        itself Jacobian-modulated for this run, which ran without modulation,
-        and why (a single reason string, since no configuration produces two
+    applied : list of str
+        Which corrections QSIPrep itself Jacobian-modulated for this run.
+    unmodulated : list of str
+        Which corrections ran without modulation.
+    reason : str or None
+        Why (a single reason string, since no configuration produces two
         distinct unmodulated reasons for one run).
     """
     hmc_tool = unit.run.hmc_stage.tool
@@ -261,7 +263,7 @@ _JACOBIAN_SENTENCE = {
 
 
 def describe_jacobian_modulation():
-    """Methods text: whether *QSIPrep* itself Jacobian-modulated a displacement field.
+    """Return methods text on whether *QSIPrep* Jacobian-modulated a displacement field.
 
     Reads ``config.workflow.ignore`` directly (``--ignore jacobian``). This is
     display vocabulary describing what ``ComposeJacobianWeights`` did, not

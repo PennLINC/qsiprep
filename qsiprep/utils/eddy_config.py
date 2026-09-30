@@ -21,12 +21,12 @@ DEFAULT_RESAMPLING_METHOD = 'jac'
 
 
 def effective_eddy_resampling_method(eddy_args):
-    """The ``--resamp`` value ``eddy`` will actually run with."""
+    """Return the ``--resamp`` value ``eddy`` will actually run with."""
     return eddy_args.get('method') or DEFAULT_RESAMPLING_METHOD
 
 
 def eddy_modulates_distortion(eddy_args):
-    """Whether ``eddy`` Jacobian-modulates eddy-current and susceptibility.
+    """Check whether ``eddy`` Jacobian-modulates eddy-current and susceptibility.
 
     True for ``--resamp=jac``. False for ``lsr``, which is a different
     resampling model; the claim is deliberately narrow -- it says only that the
@@ -37,9 +37,12 @@ def eddy_modulates_distortion(eddy_args):
 
 
 def eddy_applies_gre(unit):
-    """Whether ``eddy`` applies this unit's GRE fieldmap itself (``--field``),
-    the way it applies TOPUP's field, rather than the warp being applied after
-    ``eddy`` (the deprecated ``--force gre-sdc-after-eddy``)."""
+    """Check whether ``eddy`` applies this unit's GRE fieldmap itself (``--field``).
+
+    That is, whether ``eddy`` applies the GRE fieldmap the way it applies TOPUP's
+    field, rather than the warp being applied after ``eddy`` (the deprecated
+    ``--force gre-sdc-after-eddy``).
+    """
     return (
         unit.is_gre
         and unit.run.hmc_stage.tool == 'eddy'

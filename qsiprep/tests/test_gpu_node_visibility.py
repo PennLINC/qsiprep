@@ -46,7 +46,10 @@ def test_is_gpu_node_tracks_use_gpu(flag):
 
 
 def test_use_gpu_is_not_passed_on_the_command_line():
-    """It exists for resource accounting only; the tool has its own flag."""
+    """Test that use_gpu is not passed on the command line.
+
+    It exists for resource accounting only; the tool has its own flag.
+    """
     from qsiprep.interfaces.freesurfer import SynthStrip
 
     spec = SynthStrip.input_spec()

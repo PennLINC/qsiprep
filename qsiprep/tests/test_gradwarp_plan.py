@@ -34,7 +34,10 @@ def _unit(image_type=None, manufacturer='SIEMENS', files=(DWI,), per_file=None):
 
 
 def test_no_gradient_file_means_no_plan():
-    """ImageType is never consulted when the feature is off."""
+    """Test that no gradient file means no plan.
+
+    ImageType is never consulted when the feature is off.
+    """
     assert resolve_gradwarp_plan(_unit(['ORIGINAL', 'PRIMARY'])) is None
 
 
@@ -63,7 +66,10 @@ def test_warp_dim_from_image_type(image_type, expected):
 
 
 def test_image_type_may_be_a_bare_string():
-    """Some converters write ImageType as a backslash-joined string."""
+    """Test that ImageType may be a bare string.
+
+    Some converters write ImageType as a backslash-joined string.
+    """
     config.workflow.gradient_file = COEFF
     plan = resolve_gradwarp_plan(_unit('ORIGINAL\\PRIMARY\\M\\DIS2D'))
     assert plan.warp_dim == '1D'
@@ -74,7 +80,10 @@ def test_image_type_may_be_a_bare_string():
     [('gradwarp3D', '3D'), ('gradwarp1D', '1D')],
 )
 def test_force_overrides_metadata(forced, expected):
-    """--force pins the warp dimensionality; ImageType is not consulted."""
+    """Test that --force overrides the metadata.
+
+    --force pins the warp dimensionality; ImageType is not consulted.
+    """
     config.workflow.gradient_file = COEFF
     config.workflow.force = [forced]
     plan = resolve_gradwarp_plan(_unit(['ORIGINAL', 'DIS3D']))
@@ -83,8 +92,11 @@ def test_force_overrides_metadata(forced, expected):
 
 
 def test_forcing_both_dimensionalities_is_rejected():
-    """validate_gradient_flags catches this at parse time, but a loaded config
-    file never passes through the CLI validator."""
+    """Test that forcing both dimensionalities is rejected.
+
+    validate_gradient_flags catches this at parse time, but a loaded config
+    file never passes through the CLI validator.
+    """
     config.workflow.gradient_file = COEFF
     config.workflow.force = ['gradwarp1D', 'gradwarp3D']
     with pytest.raises(ValueError, match='mutually exclusive'):
@@ -92,7 +104,10 @@ def test_forcing_both_dimensionalities_is_rejected():
 
 
 def test_repeating_one_dimensionality_is_not_a_contradiction():
-    """One dimensionality named twice is still one dimensionality."""
+    """Test that repeating one dimensionality is not a contradiction.
+
+    One dimensionality named twice is still one dimensionality.
+    """
     config.workflow.gradient_file = COEFF
     config.workflow.force = ['gradwarp1D', 'gradwarp1D']
     plan = resolve_gradwarp_plan(_unit())
@@ -101,7 +116,10 @@ def test_repeating_one_dimensionality_is_not_a_contradiction():
 
 
 def test_force_leaves_unrelated_force_values_alone():
-    """--force takes a list; a non-gradwarp value must not pin anything."""
+    """Test that unrelated --force values are left alone.
+
+    --force takes a list; a non-gradwarp value must not pin anything.
+    """
     config.workflow.gradient_file = COEFF
     config.workflow.force = ['sdc-anat-reference']
     plan = resolve_gradwarp_plan(_unit(['ORIGINAL', 'DIS2D']))
@@ -110,8 +128,11 @@ def test_force_leaves_unrelated_force_values_alone():
 
 
 def test_mixed_image_types_take_the_minimum_warp(caplog):
-    """A unit is concatenated before HMC and shares one field, so the members
-    must agree. Under-correcting is recoverable; double-correcting is not."""
+    """Test that mixed image types take the minimum warp.
+
+    A unit is concatenated before HMC and shares one field, so the members
+    must agree. Under-correcting is recoverable; double-correcting is not.
+    """
     config.workflow.gradient_file = COEFF
     other = '/data/sub-01_run-2_dwi.nii.gz'
     plan = resolve_gradwarp_plan(
@@ -144,7 +165,9 @@ def test_consistent_image_types_do_not_warn(caplog):
     ],
 )
 def test_is_ge_detection(manufacturer, expected):
-    """Manufacturer is free text from DICOM, so variants must be handled.
+    """Test the GE manufacturer detection.
+
+    Manufacturer is free text from DICOM, so variants must be handled.
 
     Resolved on a ``DIS3D`` unit so the detection can be observed on its own:
     a GE unit that would get a spatial field is refused outright (see
@@ -163,7 +186,9 @@ def test_plan_carries_the_coefficient_file():
 
 
 def test_resolving_the_same_unit_repeatedly_logs_once(caplog):
-    """One unit is resolved three times (base, the HMC backend, finalize).
+    """Test that resolving the same unit repeatedly logs once.
+
+    One unit is resolved three times (base, the HMC backend, finalize).
 
     Without suppression, one plan prints as three, and the mixed-``ImageType``
     warning prints as three separate problems.
@@ -178,7 +203,10 @@ def test_resolving_the_same_unit_repeatedly_logs_once(caplog):
 
 
 def test_a_different_unit_still_logs(caplog):
-    """Suppression is per rendered message, and every message names the unit."""
+    """Test that a different unit still logs.
+
+    Suppression is per rendered message, and every message names the unit.
+    """
     config.workflow.gradient_file = COEFF
     with caplog.at_level('INFO', logger='nipype.workflow'):
         resolve_gradwarp_plan(_unit())

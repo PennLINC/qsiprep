@@ -28,7 +28,10 @@ def _patterns():
 
 
 def test_existing_transform_paths_unchanged():
-    """The anatomical round trip must keep working."""
+    """Test that existing transform paths are unchanged.
+
+    The anatomical round trip must keep working.
+    """
     pats = _patterns()
     for ents, expected in (
         (
@@ -59,7 +62,10 @@ def test_existing_transform_paths_unchanged():
 
 
 def test_both_sinks_are_wired_in_base():
-    """Guard against the transforms silently going unwritten again."""
+    """Test that both transform sinks are wired in base.
+
+    Guard against the transforms silently going unwritten again.
+    """
     import inspect
 
     from qsiprep.workflows import base
@@ -71,7 +77,9 @@ def test_both_sinks_are_wired_in_base():
 
 
 def test_single_group_subject_skips_the_template_instead_of_failing():
-    """A one-session subject must not fail the run.
+    """Test that a single-group subject skips the template instead of failing.
+
+    A one-session subject must not fail the run.
 
     Cohorts routinely mix single- and multi-session subjects: in CRASH, 24 of 59
     subjects have one session. Raising here meant a single

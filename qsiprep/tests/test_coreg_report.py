@@ -33,7 +33,10 @@ def test_wm_contour_reaches_the_reportlet():
 
 
 def test_the_reportlet_flickers_the_two_coregistered_images():
-    """``warped_image`` is the b=0 ANTs already resampled onto the anatomy."""
+    """Test that the reportlet flickers the two coregistered images.
+
+    ``warped_image`` is the b=0 ANTs already resampled onto the anatomy.
+    """
     wf = _coreg_wf(name='coreg_flicker')
     assert _connect(wf, 'inputnode', 'coreg_rpt') == [('t1_brain', 'before')]
     assert _connect(wf, 'b0_to_anat', 'coreg_rpt') == [('warped_image', 'after')]
@@ -42,7 +45,9 @@ def test_the_reportlet_flickers_the_two_coregistered_images():
 
 
 def test_the_contour_is_not_resampled():
-    """Both panels and the segmentation live in the anatomical space.
+    """Test that the contour is not resampled.
+
+    Both panels and the segmentation live in the anatomical space.
 
     The reportlet warps the b=0 into the anatomy rather than the other way
     round, so ``t1_seg`` needs no transform -- unlike the SDC reportlet, which
@@ -53,7 +58,10 @@ def test_the_contour_is_not_resampled():
 
 
 def test_no_report_nodes_when_no_report_is_written():
-    """Callers that skip the reportlet (synb0) never connect ``t1_seg``."""
+    """Test that no report nodes are built when no report is written.
+
+    Callers that skip the reportlet (synb0) never connect ``t1_seg``.
+    """
     wf = _coreg_wf(write_report=False, name='coreg_no_report')
     names = [n.name for n in wf._get_all_nodes()]
     assert 'sel_wm' not in names
@@ -61,7 +69,9 @@ def test_no_report_nodes_when_no_report_is_written():
 
 
 def test_acpc_reg_does_not_render_a_discarded_reportlet():
-    """``init_direct_b0_acpc_wf`` reports through ACPCReport, not the registration.
+    """Test that the ACPC registration does not render a discarded reportlet.
+
+    ``init_direct_b0_acpc_wf`` reports through ACPCReport, not the registration.
 
     The registration node used to be an ``ANTSRegistrationRPT`` with
     ``generate_report=True``, but its ``out_report`` was never connected -- an
@@ -89,7 +99,7 @@ def test_acpc_reportlet_is_skipped_when_no_report_is_written():
 
 
 def test_fieldmap_coreg_reportlet_is_its_own_node(monkeypatch):
-    """The desc-fmapCoreg figure comes from a reportlet, not the ANTs node."""
+    """Test that the desc-fmapCoreg figure comes from a reportlet, not the ANTs node."""
     from nipype.interfaces.ants import Registration
 
     from qsiprep import config

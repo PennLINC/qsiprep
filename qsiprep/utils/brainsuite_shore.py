@@ -17,7 +17,9 @@ cvxpy, have_cvxpy, _ = optional_package('cvxpy')
 
 
 class BrainSuiteShoreModel(Cache):
-    r"""Simple Harmonic Oscillator based Reconstruction and Estimation
+    r"""BrainSuite SHORE model of the diffusion signal.
+
+    Simple Harmonic Oscillator based Reconstruction and Estimation
     (SHORE) [1]_ of the diffusion signal.
 
     The main idea is to model the diffusion signal as a linear combination of
@@ -33,17 +35,15 @@ class BrainSuiteShoreModel(Cache):
     gradient directions. Numerous continuous functions $\phi_i$ can be used to
     model $S$. This specifically comes from [1].
 
-    References
-    ----------
-
-    .. [1] Merlet S. et al., "Continuous diffusion signal, EAP and ODF
-           estimation via Compressive Sensing in diffusion MRI", Medical
-           Image Analysis, 2013.
-
     Notes
     -----
     The implementation of SHORE depends on CVXPY (http://www.cvxpy.org/).
 
+    References
+    ----------
+    .. [1] Merlet S. et al., "Continuous diffusion signal, EAP and ODF
+           estimation via Compressive Sensing in diffusion MRI", Medical
+           Image Analysis, 2013.
     """
 
     def __init__(
@@ -66,7 +66,9 @@ class BrainSuiteShoreModel(Cache):
         pos_grid=11,
         pos_radius=20e-03,
     ):
-        r"""Analytical and continuous modeling of the diffusion signal with
+        r"""Initialize the BrainSuite SHORE model.
+
+        Analytical and continuous modeling of the diffusion signal with
         respect to the SHORE basis [1,2]_.
         This implementation is a modification of SHORE presented in [1]_.
         The modification was made to obtain the same ordering of the basis
@@ -87,29 +89,43 @@ class BrainSuiteShoreModel(Cache):
         From the $c_i$ coefficients, there exists an analytical formula to
         estimate the ODF.
 
-
         Parameters
         ----------
-        gtab : GradientTable,
-            gradient directions and bvalues container class
-        radial_order : unsigned int,
-            an even integer that represent the order of the basis
-        zeta : unsigned int,
-            scale factor
-        lambdaN : float,
-            radial regularisation constant
-        lambdaL : float,
-            angular regularisation constant
-        tau : float,
-            diffusion time. By default the value that makes q equal to the
+        gtab : GradientTable
+            Gradient directions and bvalues container class.
+        regularization : {'L1', 'L2'}, optional
+            Regularization used to fit the SHORE coefficients. An L1 fit that
+            fails to converge falls back to L2.
+        radial_order : int, optional
+            An even integer that represent the order of the basis.
+        zeta : int, optional
+            Scale factor.
+        tau : float, optional
+            Diffusion time. By default the value that makes q equal to the
             square root of the b-value.
-        pos_grid : int,
+        lambdaN : float, optional
+            Radial regularisation constant (L2 method).
+        lambdaL : float, optional
+            Angular regularisation constant (L2 method).
+        regularization_weighting : str, optional
+            How the L1 penalty weight is chosen. ``'CV'`` selects it by
+            cross-validation; any other value uses ``l1_alpha``.
+        l1_positive_constraint : bool, optional
+            Whether to constrain the L1 coefficients to be positive.
+        l1_cv : int, optional
+            Number of cross-validation folds for the L1 fit.
+        l1_maxiter : int, optional
+            Maximum number of iterations for the L1 fit.
+        l1_verbose : bool, optional
+            Verbosity of the cross-validated L1 fit.
+        l1_alpha : float, optional
+            L1 penalty weight, used when ``regularization_weighting`` is not ``'CV'``.
+        pos_grid : int, optional
             Grid that define the points of the EAP in which we want to enforce
             positivity.
-        pos_radius : float,
+        pos_radius : float, optional
             Radius of the grid of the EAP in which enforce positivity in
             millimeters. By default 20e-03 mm.
-
 
         References
         ----------
@@ -141,7 +157,6 @@ class BrainSuiteShoreModel(Cache):
         asmfit = asm.fit(data)
         odf= asmfit.odf(sphere)
         """
-
         self.bvals = gtab.bvals
         self.bvecs = gtab.bvecs
         self.gtab = gtab
@@ -247,16 +262,23 @@ class BrainSuiteShoreModel(Cache):
 
 class BrainSuiteShoreFit:
     def __init__(self, model, shore_coef, regularization=0, alpha=0.0, r2=0.0, cnr=0.0):
-        """Calculates diffusion properties for a single voxel
+        """Calculate diffusion properties for a single voxel.
 
         Parameters
         ----------
-        model : object,
-            AnalyticalModel
-        shore_coef : 1d ndarray,
-            shore coefficients
+        model : object
+            AnalyticalModel.
+        shore_coef : 1d ndarray
+            Shore coefficients.
+        regularization : int, optional
+            Regularization used for fitting coefficients (1 for L1, 2 for L2).
+        alpha : float, optional
+            The alpha used for the L1 fit.
+        r2 : float, optional
+            Model r^2.
+        cnr : float, optional
+            Contrast to noise ratio.
         """
-
         self.model = model
         self._shore_coef = shore_coef
         self._alpha = alpha
@@ -268,22 +290,22 @@ class BrainSuiteShoreFit:
         self.zeta = model.zeta
 
     def pdf_grid(self, gridsize, radius_max):
-        r"""Applies the analytical FFT on $S$ to generate the diffusion
-        propagator. This is calculated on a discrete 3D grid in order to
+        r"""Apply the analytical FFT on $S$ to generate the diffusion propagator.
+
+        This is calculated on a discrete 3D grid in order to
         obtain an EAP similar to that which is obtained with DSI.
 
         Parameters
         ----------
-        gridsize : unsigned int
-            dimension of the propagator grid
+        gridsize : int
+            Dimension of the propagator grid.
         radius_max : float
-            maximal radius in which to compute the propagator
+            Maximal radius in which to compute the propagator.
 
         Returns
         -------
         eap : ndarray
-            the ensemble average propagator in the 3D grid
-
+            The ensemble average propagator in the 3D grid.
         """
         # Create the grid in which to compute the pdf
         rgrid_rtab = self.model.cache_get('pdf_grid', key=(gridsize, radius_max))
@@ -305,9 +327,10 @@ class BrainSuiteShoreFit:
         return eap
 
     def pdf(self, r_points):
-        """Diffusion propagator on a given set of real points.
-        if the array r_points is non writeable, then intermediate
-        results are cached for faster recalculation
+        """Compute the diffusion propagator on a given set of real points.
+
+        If the array r_points is non writeable, then intermediate
+        results are cached for faster recalculation.
         """
         if not r_points.flags.writeable:
             psi = self.model.cache_get('shore_matrix_pdf', key=hash(r_points.data))
@@ -323,9 +346,7 @@ class BrainSuiteShoreFit:
         return np.clip(eap, 0, eap.max())
 
     def odf_sh(self):
-        r"""Calculates the real analytical ODF in terms of Spherical
-        Harmonics.
-        """
+        r"""Calculate the real analytical ODF in terms of Spherical Harmonics."""
         # Number of Spherical Harmonics involved in the estimation
         J = (self.radial_order + 1) * (self.radial_order + 2) // 2
 
@@ -364,7 +385,7 @@ class BrainSuiteShoreFit:
         return c_sh
 
     def odf(self, sphere):
-        r"""Calculates the ODF for a given discrete sphere."""
+        r"""Calculate the ODF for a given discrete sphere."""
         upsilon = self.model.cache_get('shore_matrix_odf', key=sphere)
         if upsilon is None:
             upsilon = shore_matrix_odf(self.radial_order, self.zeta, sphere.vertices)
@@ -374,8 +395,7 @@ class BrainSuiteShoreFit:
         return odf
 
     def rtop_signal(self):
-        r"""Calculates the analytical return to origin probability (RTOP)
-        from the signal [1]_.
+        r"""Calculate the analytical return to origin probability (RTOP) from the signal [1]_.
 
         References
         ----------
@@ -396,8 +416,7 @@ class BrainSuiteShoreFit:
         return np.clip(rtop, 0, rtop.max())
 
     def rtop_pdf(self):
-        r"""Calculates the analytical return to origin probability (RTOP)
-        from the pdf [1]_.
+        r"""Calculate the analytical return to origin probability (RTOP) from the pdf [1]_.
 
         References
         ----------
@@ -418,7 +437,7 @@ class BrainSuiteShoreFit:
         return np.clip(rtop, 0, rtop.max())
 
     def msd(self):
-        r"""Calculates the analytical mean squared displacement (MSD) [1]_
+        r"""Calculate the analytical mean squared displacement (MSD) [1]_.
 
         ..math::
             :nowrap:
@@ -450,14 +469,12 @@ class BrainSuiteShoreFit:
         return np.clip(msd, 0, msd.max())
 
     def fitted_signal(self):
-        """The fitted signal."""
+        """Return the fitted signal."""
         phi = self.model.cache_get('shore_matrix', key=self.model.gtab)
         return np.dot(phi, self._shore_coef)
 
     def predict(self, gtab, S0=100.0):
-        r"""Recovers the reconstructed signal for any qvalue array or
-        gradient table.
-        """
+        r"""Recover the reconstructed signal for any qvalue array or gradient table."""
         M = brainsuite_shore_basis(self.radial_order, self.zeta, gtab, self.model.tau)
         E = S0 * np.dot(M, self._shore_coef)
         return E
@@ -494,7 +511,6 @@ def _kappa(zeta, n, ell):
 
 def brainsuite_shore_basis(radial_order, zeta, gtab, tau=1 / (4 * np.pi**2)):
     """Calculate the brainsuite shore basis functions."""
-
     # If deltas are defined, use them
     try:
         qvals = gtab.qvals
@@ -530,16 +546,16 @@ def brainsuite_shore_basis(radial_order, zeta, gtab, tau=1 / (4 * np.pi**2)):
 
 
 def brainsuite_shore_matrix_pdf(radial_order, zeta, rtab):
-    r"""Compute the SHORE propagator matrix [1]_"
+    r"""Compute the SHORE propagator matrix [1]_.
 
     Parameters
     ----------
-    radial_order : unsigned int,
-        an even integer that represent the order of the basis
-    zeta : unsigned int,
-        scale factor
+    radial_order : int
+        An even integer that represent the order of the basis.
+    zeta : int
+        Scale factor.
     rtab : array, shape (N,3)
-        real space points in which calculates the pdf
+        Real space points in which calculates the pdf.
 
     References
     ----------
@@ -547,7 +563,6 @@ def brainsuite_shore_matrix_pdf(radial_order, zeta, rtab):
     ODF estimation via Compressive Sensing in diffusion MRI", Medical
     Image Analysis, 2013.
     """
-
     r, theta, phi = cart2sphere(rtab[:, 0], rtab[:, 1], rtab[:, 2])
     theta[np.isnan(theta)] = 0
     psi = []
@@ -576,16 +591,16 @@ def _kappa_pdf(zeta, n, ell):
 
 
 def shore_matrix_odf(radial_order, zeta, sphere_vertices):
-    r"""Compute the SHORE ODF matrix [1]_"
+    r"""Compute the SHORE ODF matrix [1]_.
 
     Parameters
     ----------
-    radial_order : unsigned int,
-        an even integer that represent the order of the basis
-    zeta : unsigned int,
-        scale factor
+    radial_order : int
+        An even integer that represent the order of the basis.
+    zeta : int
+        Scale factor.
     sphere_vertices : array, shape (N,3)
-        vertices of the odf sphere
+        Vertices of the odf sphere.
 
     References
     ----------
@@ -593,7 +608,6 @@ def shore_matrix_odf(radial_order, zeta, sphere_vertices):
     ODF estimation via Compressive Sensing in diffusion MRI", Medical
     Image Analysis, 2013.
     """
-
     _, theta, phi = cart2sphere(
         sphere_vertices[:, 0], sphere_vertices[:, 1], sphere_vertices[:, 2]
     )
@@ -629,20 +643,18 @@ def create_rspace(gridsize, radius_max):
 
     Parameters
     ----------
-    gridsize : unsigned int
-        dimension of the propagator grid
+    gridsize : int
+        Dimension of the propagator grid.
     radius_max : float
-        maximal radius in which compute the propagator
+        Maximal radius in which compute the propagator.
 
     Returns
     -------
     vecs : array, shape (N,3)
-        positions of the pdf points in a 3D matrix
-
+        Positions of the pdf points in a 3D matrix.
     tab : array, shape (N,3)
-        real space points in which calculates the pdf
+        Real space points in which calculates the pdf.
     """
-
     radius = gridsize // 2
     vecs = []
     for i in range(-radius, radius + 1):

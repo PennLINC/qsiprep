@@ -77,16 +77,24 @@ def generate_reports(
 
     Parameters
     ----------
-    processing_list : :obj:`list` of :obj:`tuple`
+    processing_list : list of tuple
         (subject label, list of session labels) for each processing group.
-    subject_anatomical_reference : {"sessionwise", "unbiased", "first-lex"}
+    subject_anatomical_reference : {'sessionwise', 'unbiased', 'first-lex'}
         Determines what each report covers.
         With "sessionwise" there is one report per session,
         otherwise there is one report per subject.
-    report_output_level : {"root", "subject", "session"}
+    report_output_level : {'root', 'subject', 'session'}
         Directory level at which the reports are written.
         Session-level reports are only possible for session-wise reports,
         so subject-wise reports fall back to the subject level with a warning.
+    output_dir : str or pathlib.Path
+        QSIPrep output directory, which also holds the reportlets.
+    run_uuid : str
+        Unique identifier of this run, used in the names of error files.
+    bootstrap_file : str or pathlib.Path or None, optional
+        Report specification file. If None, the packaged ``reports-spec.yml`` is used.
+    work_dir : str or None, optional
+        Working directory. Currently unused.
     """
     bootstrap_file = data.load('reports-spec.yml') if bootstrap_file is None else bootstrap_file
 

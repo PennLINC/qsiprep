@@ -7,6 +7,16 @@ authors:
     given-names: Matthew
     affiliation: Department of Neuropsychiatry, University of Pennsylvania
     orcid: https://orcid.org/0000-0002-1931-4734
+  - family-names: Salo
+    given-names: Taylor
+    email: salot@pennmedicine.upenn.edu
+    affiliation: University of Pennsylvania
+    orcid: https://orcid.org/0000-0001-9813-3167
+  - family-names: Cook
+    given-names: Philip A.
+    email: cookpa@pennmedicine.upenn.edu
+    affiliation: University of Pennsylvania
+    orcid: 0000-0002-1985-8475
   - family-names: Camacho
     given-names: Paul B.
     affiliation: Beckman Institute for Advanced Science & Technology, University of Illinois at Urbana-Champaign, IL, USA
@@ -55,11 +65,6 @@ authors:
     given-names: Patrick
     affiliation: Johns Hopkins Bloomberg School of Public Health
     orcid: https://orcid.org/0000-0003-4141-1343
-  - family-names: Salo
-    given-names: Taylor
-    email: salot@pennmedicine.upenn.edu
-    affiliation: University of Pennsylvania
-    orcid: https://orcid.org/0000-0001-9813-3167
   - family-names: Sydnor
     given-names: Valerie Jill
     affiliation: Perelman School of Medicine, University of Pennsylvania
@@ -174,5 +179,5 @@ keywords:
   - BIDS
   - BIDS-App
 license: BSD-3-Clause
-version: 26.0.0
-date-released: '2026-04-20'
+version: 26.1.0rc1
+date-released: '2026-09-29'

@@ -757,6 +757,8 @@ def fix_multi_source_name(in_files, include_session, anatomical_contrast='T1w'):
     An ``anatomical_contrast`` of ``'none'`` means the anatomical reference is derived
     from the DWIs themselves, so the name is built from the DWI files instead.
 
+    Examples
+    --------
     >>> fix_multi_source_name(
     ...     ['/path/to/sub-045_ses-test_T1w.nii.gz', '/path/to/sub-045_ses-retest_T1w.nii.gz'],
     ...     False,
@@ -880,10 +882,10 @@ def load_shoreline_config(path=None, model=None):
 
     Parameters
     ----------
-    path : str, os.PathLike or None
+    path : str, os.PathLike or None, optional
         The SHORELine configuration JSON file. ``None`` uses the defaults in
         ``qsiprep/data/shoreline_params.json``.
-    model : str or None
+    model : str or None, optional
         A SHORELine model from the deprecated ``--hmc-model`` alias (``3dshore``,
         ``tensor`` or ``none``). It replaces the default model, and conflicts with
         a ``model`` key in the file.
@@ -956,7 +958,7 @@ def load_shoreline_config(path=None, model=None):
 
 
 def dwi_biascorrect_enabled(dwi_files=None):
-    """Should N4 bias correction run on these DWI images?
+    """Decide whether N4 bias correction should run on these DWI images.
 
     ``--dwi-biascorrect`` governs DWIs only; ``--anat-biascorrect`` governs the
     anatomicals and never reaches this path.
@@ -975,7 +977,7 @@ def dwi_biascorrect_enabled(dwi_files=None):
 
     Parameters
     ----------
-    dwi_files : list of str or None
+    dwi_files : list of str or None, optional
         Every DWI feeding one final output. Under ``--distortion-group-merge`` that
         is the union over all of the output's constituent correction units, not one
         unit's files: the constituents are concatenated, so they must share a single

@@ -39,7 +39,7 @@ def _components(path):
     [('3D', ()), ('2D', (2,)), ('1D', (0, 1))],
 )
 def test_mask_warp_dimensions(tmp_path, warp_dim, zeroed):
-    """2D zeroes the through-plane component; 1D keeps only that component."""
+    """Test that 2D zeroes the through-plane component and 1D keeps only that component."""
     from qsiprep.interfaces.gradunwarp import MaskWarpDimensions
 
     field = write_itk_field(tmp_path / 'field.nii')
@@ -55,7 +55,7 @@ def test_mask_warp_dimensions(tmp_path, warp_dim, zeroed):
 
 
 def test_mask_warp_dimensions_preserves_geometry(tmp_path):
-    """The masked field must stay on the same grid to compose correctly."""
+    """Test that the masked field stays on the same grid, so it composes correctly."""
     from qsiprep.interfaces.gradunwarp import MaskWarpDimensions
 
     field = write_itk_field(tmp_path / 'field.nii')
@@ -76,7 +76,9 @@ def test_mask_warp_dimensions_does_not_modify_input(tmp_path):
 
 
 def test_displacement_map_puts_coefficients_first(tmp_path):
-    """mk_displacement(argv[1], img, is_GE): coefficient file, then NIfTI.
+    """Test that the coefficient file is passed before the NIfTI.
+
+    mk_displacement(argv[1], img, is_GE): coefficient file, then NIfTI.
 
     A stale unbuilt copy of that source has the arguments reversed; getting
     this backwards produces a plausible-looking wrong field, not an error.
@@ -94,7 +96,7 @@ def test_displacement_map_puts_coefficients_first(tmp_path):
 
 
 def test_displacement_map_omits_is_ge_when_false(tmp_path):
-    """The wrapper omits the argument rather than passing "0" for false.
+    """Test that the wrapper omits the argument rather than passing "0" for false.
 
     The built tool reads a supplied fourth argument via ``(bool)atoi(argv[4])``,
     so passing "0" would in fact correctly read as false -- unlike the stale,
@@ -122,7 +124,7 @@ def test_displacement_map_appends_is_ge_when_true(tmp_path):
 
 
 def test_displacement_map_runs_on_synthetic_coefficients(tmp_path):
-    """End-to-end against the real binary, in CI's container."""
+    """Test the displacement map end-to-end against the real binary, in CI's container."""
     from qsiprep.interfaces.gradunwarp import CreateNonlinearityDisplacementMap
 
     _require('CreateNonlinearityDisplacementMap')
@@ -159,11 +161,14 @@ def test_bmatrix_cmdline_flags(tmp_path):
 
 
 def test_bmatrix_final_image_is_staged_with_copyfile():
-    """copyfile=True is what makes nipype's Node stage final_image into the
+    """Test that the BMatrix interface stages final_image with copyfile.
+
+    copyfile=True is what makes nipype's Node stage final_image into the
     node's working directory before running. Without it, the tool writes its
     outputs beside the *original* final_image, not beside the copy that
     _list_outputs assumes -- a bare Interface.run() never exercises staging,
-    so this has to be pinned on the trait metadata directly."""
+    so this has to be pinned on the trait metadata directly.
+    """
     from qsiprep.interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
 
     trait = CreateGradientNonlinearityBMatrix.input_spec().traits()['final_image']
@@ -171,11 +176,14 @@ def test_bmatrix_final_image_is_staged_with_copyfile():
 
 
 def test_bmatrix_list_outputs_resolves_against_cwd(tmp_path, monkeypatch):
-    """_list_outputs must derive output paths from the *staged* final_image
+    """Test that BMatrix output paths are resolved against the working directory.
+
+    _list_outputs must derive output paths from the *staged* final_image
     (i.e. from cwd), not from final_image's original directory -- under a
     real Node, copyfile=True stages the file into cwd, and this is the other
     half of that contract. Put final_image in one directory, chdir into a
-    different one, and confirm the computed outputs land in cwd."""
+    different one, and confirm the computed outputs land in cwd.
+    """
     from qsiprep.interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
 
     original_dir = tmp_path / 'original'
@@ -195,8 +203,11 @@ def test_bmatrix_list_outputs_resolves_against_cwd(tmp_path, monkeypatch):
 
 
 def test_bmatrix_is_ge_uses_a_value_not_omission(tmp_path):
-    """Unlike CreateNonlinearityDisplacementMap, this tool's getIsGE() uses
-    atoi(), so --isGE 0 correctly means false."""
+    """Test that the BMatrix interface passes --isGE as a value rather than omitting it.
+
+    Unlike CreateNonlinearityDisplacementMap, this tool's getIsGE() uses
+    atoi(), so --isGE 0 correctly means false.
+    """
     from qsiprep.interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
 
     coeff = write_siemens_grad(tmp_path / 'coeff.grad')
@@ -209,7 +220,10 @@ def test_bmatrix_is_ge_uses_a_value_not_omission(tmp_path):
 
 
 def test_bmatrix_output_suffix_depends_on_nonlinearity_type(tmp_path):
-    """Coefficients produce _graddev_c.nii; a field produces _graddev_f.nii."""
+    """Test that the output suffix depends on the nonlinearity type.
+
+    Coefficients produce _graddev_c.nii; a field produces _graddev_f.nii.
+    """
     from qsiprep.interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
 
     final = write_dwi_with_gradients(tmp_path / 'final_b0.nii.gz')
@@ -226,7 +240,7 @@ def test_bmatrix_output_suffix_depends_on_nonlinearity_type(tmp_path):
 
 
 def test_bmatrix_runs_on_synthetic_coefficients(tmp_path):
-    """End-to-end against the real binary, in CI's container."""
+    """Test the BMatrix interface end-to-end against the real binary, in CI's container."""
     from qsiprep.interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
 
     _require('CreateGradientNonlinearityBMatrix')

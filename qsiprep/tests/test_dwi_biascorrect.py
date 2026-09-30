@@ -13,7 +13,7 @@ from qsiprep.utils.misc import dwi_biascorrect_enabled
 
 
 class _FakeLayout:
-    """Stands in for the BIDSLayout, exposing only ``get_metadata``."""
+    """Stand-in for the BIDSLayout, exposing only ``get_metadata``."""
 
     def __init__(self, image_types):
         self._image_types = image_types
@@ -71,7 +71,10 @@ def _config(mode, layout=None):
 
 @pytest.mark.parametrize(('mode', 'expected'), [('n4', True), ('none', False)])
 def test_explicit_modes_never_consult_metadata(mode, expected):
-    """n4 and none are unconditional; a raising layout must not reach them."""
+    """Test that explicit modes never consult metadata.
+
+    n4 and none are unconditional; a raising layout must not reach them.
+    """
     _config(mode, _RaisingLayout(OSError('should never be read')))
     assert dwi_biascorrect_enabled(['/a_dwi.nii.gz']) is expected
 
@@ -85,7 +88,10 @@ def test_auto_skips_when_every_file_is_norm():
 
 
 def test_auto_runs_on_a_mixed_set_and_warns(caplog):
-    """A mixed set is concatenated, so it must be corrected consistently."""
+    """Test that ``auto`` runs N4 on a mixed set and warns.
+
+    A mixed set is concatenated, so it must be corrected consistently.
+    """
     _config(
         'auto',
         _FakeLayout({'/a_dwi.nii.gz': ['NORM'], '/b_dwi.nii.gz': ['ORIGINAL']}),
@@ -96,14 +102,20 @@ def test_auto_runs_on_a_mixed_set_and_warns(caplog):
 
 
 def test_auto_treats_absent_image_type_as_unnormalized():
-    """A missing ImageType key, not merely an empty list."""
+    """Test that ``auto`` treats an absent ImageType as unnormalized.
+
+    A missing ImageType key, not merely an empty list.
+    """
     _config('auto', _FakeLayout({'/a_dwi.nii.gz': None}))
     assert dwi_biascorrect_enabled(['/a_dwi.nii.gz']) is True
 
 
 @pytest.mark.parametrize('exc', [OSError('unreadable'), ValueError('bad'), KeyError('x')])
 def test_auto_treats_unreadable_metadata_as_unnormalized(exc):
-    """A layout that raises must not take down the workflow build."""
+    """Test that ``auto`` treats unreadable metadata as unnormalized.
+
+    A layout that raises must not take down the workflow build.
+    """
     _config('auto', _RaisingLayout(exc))
     assert dwi_biascorrect_enabled(['/a_dwi.nii.gz']) is True
 

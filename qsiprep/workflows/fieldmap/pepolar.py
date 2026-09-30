@@ -1,6 +1,7 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
+"""Phase Encoding POLARity (PEPOLAR) distortion correction workflows.
+
 .. _sdc_pepolar :
 
 Phase Encoding POLARity (*PEPOLAR*) techniques
@@ -23,7 +24,8 @@ from ..anatomical import init_synthstrip_wf
 
 
 def init_prepare_dwi_epi_wf(omp_nthreads, orientation='LPS', name='prepare_epi_wf'):
-    """
+    """Build a workflow that prepares a 3D b=0 reference for distortion estimation.
+
     This workflow takes in a set of dwi files with with the same phase
     encoding direction and returns a single 3D volume ready to be used in
     field distortion estimation. It removes b>0 volumes.

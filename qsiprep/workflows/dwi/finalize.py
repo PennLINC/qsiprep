@@ -1,4 +1,5 @@
-"""
+"""Final steps on the preprocessed data.
+
 Final steps on the preprocessed data
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -54,8 +55,7 @@ def init_dwi_finalize_wf(
     write_derivatives=True,
     make_dwiref=False,
 ):
-    """
-    This workflow controls the resampling parts of the dwi preprocessing workflow.
+    """Build a workflow that runs the resampling parts of the dwi preprocessing workflow.
 
     .. workflow::
         :graph2use: orig
@@ -76,89 +76,83 @@ def init_dwi_finalize_wf(
                                   source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
                                   num_dwi=1)
 
-    **Parameters**
+    Parameters
+    ----------
+    unit : :class:`~qsiplan.adapters.PreprocUnit`
+        The DWI series that were corrected together and the fieldmap that
+        corrected them.
+    name : str
+        Name of workflow
+    source_file : str
+        The file name template used for derivatives and reports.
+    output_prefix : str
+        beginning of the output file name (eg 'sub-1_buds-j')
+    t2w_sdc : bool, optional
+        Whether a T2w is available for SDC (honoring --anat-modality and
+        --ignore t2w). Decides, with the plan, whether DIFFPREP's T2Wreg ran,
+        and so whether it left an SDC warp to write and whether that warp
+        is Jacobian-weighted (see ``jacobian_provenance_for``).
+    do_biascorr : bool, optional
+        Whether to apply B1 bias field correction to the resampled DWI series.
+    write_derivatives : bool, optional
+        Is this the final output? If so, write the final derivatives. If these
+        resampled outputs will be combined with other distortion groups at the end,
+        then return the resampled, non-concatenated images
+    make_dwiref : bool, optional
+        Whether an across-session dwiref template was built, in which case a
+        reportlet of this session's b=0 aligned to the template is written.
 
-        output_prefix : str
-            beginning of the output file name (eg 'sub-1_buds-j')
-        ignore : list
-            Preprocessing steps to skip (eg "fieldmaps")
-        template : str
-            Name of template targeted by ``template`` output space
-        output_dir : str
-            Directory in which to save derivatives
-        output_resolution : float
-            Output voxel resolution in mm
-        pepolar_method : str
-            Either 'DRBUDDI', 'TOPUP' or 'TOPUP+DRBUDDI'. The method for SDC when EPI
-            fieldmaps are used.
-        omp_nthreads : int
-            Maximum number of threads an individual process may use
-        low_mem : bool
-            Write uncompressed .nii files in some cases to reduce memory usage
-        layout : BIDSLayout
-            BIDSLayout structure to enable metadata retrieval
-        write_derivatives: bool
-            Is this the final output? If so, write the final derivatives. If these
-            resampled outputs will be combined with other distortion groups at the end,
-            then return the resampled, non-concatenated images
-        t2w_sdc : bool
-            Whether a T2w is available for SDC (honoring --anat-modality and
-            --ignore t2w). Decides, with the plan, whether DIFFPREP's T2Wreg ran,
-            and so whether it left an SDC warp to write and whether that warp
-            is Jacobian-weighted (see ``jacobian_provenance_for``).
+    Inputs
+    ------
+    t1_preproc
+        Bias-corrected structural template image
+    t1_brain
+        Skull-stripped ``t1_preproc``
+    t1_mask
+        Mask of the skull-stripped template image
+    t1_output_grid
+        Image to write out DWIs aligned to t1
+    t1_seg
+        Segmentation of preprocessed structural image, including
+        gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
+    t1_2_mni_forward_transform
+        ANTs-compatible affine-and-warp transform file
+    t1_2_mni_reverse_transform
+        ANTs-compatible affine-and-warp transform file (inverse)
+    subjects_dir
+        FreeSurfer SUBJECTS_DIR
+    subject_id
+        FreeSurfer subject ID
+    dwi_sampling_grid
+        A NIfTI1 file with the grid spacing and FoV to resample the DWIs
+    b0_ref_image
+        A Nifti of the b0 reference that was used for hmc and sdc
+    dwiref
+        The dwiref image created from all b0 ref images
+    source_file
+        The file name template used for derivatives
+    raw_qc_file
+        The QC file from the DWI data before any preprocessing
+    raw_concatenated
+        The original raw images in a single 4D file
+    carpetplot_data
+        File containing carpetplot data
 
-    **Inputs**
-
-        t1_preproc
-            Bias-corrected structural template image
-        t1_brain
-            Skull-stripped ``t1_preproc``
-        t1_mask
-            Mask of the skull-stripped template image
-        t1_output_grid
-            Image to write out DWIs aligned to t1
-        t1_seg
-            Segmentation of preprocessed structural image, including
-            gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
-        t1_2_mni_forward_transform
-            ANTs-compatible affine-and-warp transform file
-        t1_2_mni_reverse_transform
-            ANTs-compatible affine-and-warp transform file (inverse)
-        subjects_dir
-            FreeSurfer SUBJECTS_DIR
-        subject_id
-            FreeSurfer subject ID
-        dwi_sampling_grid
-            A NIfTI1 file with the grid spacing and FoV to resample the DWIs
-        b0_ref_image
-            A Nifti of the b0 reference that was used for hmc and sdc
-        dwiref
-            The dwiref image created from all b0 ref images
-        source_file
-            The file name template used for derivatives
-        raw_qc_file
-            The QC file from the DWI data before any preprocessing
-        raw_concatenated
-            The original raw images in a single 4D file
-        carpetplot_data
-            File containing carpetplot data
-
-    **Outputs**
-
-        dwi_t1
-            dwi series, resampled to T1w space. If write_derivitaves, this is a
-            4d file. Otherwise it's a list of resampled images.
-        dwi_mask_t1
-            dwi series mask in T1w space
-        bvals_t1
-            bvalues of the dwi series
-        bvecs_t1
-            bvecs after aligning to the T1w and resampling
-        local_bvecs_t1
-            voxelwise bvecs accounting for local displacements
-        gradient_table_t1
-            MRTrix-style gradient table
-
+    Outputs
+    -------
+    dwi_t1
+        dwi series, resampled to T1w space. If write_derivitaves, this is a
+        4d file. Otherwise it's a list of resampled images.
+    dwi_mask_t1
+        dwi series mask in T1w space
+    bvals_t1
+        bvalues of the dwi series
+    bvecs_t1
+        bvecs after aligning to the T1w and resampling
+    local_bvecs_t1
+        voxelwise bvecs accounting for local displacements
+    gradient_table_t1
+        MRTrix-style gradient table
     """
     all_dwis = list(unit.dwi_files)
     gradwarp_plan = resolve_gradwarp_plan(unit)
@@ -839,8 +833,9 @@ def init_finalize_denoising_wf(
     do_patch2self=False,
     name='final_denoise_wf',
 ):
-    """
-    Some denoising can only happen after images have been aligned
+    """Build a workflow for the denoising steps that run after alignment.
+
+    Some denoising can only happen after images have been aligned.
     """
     inputnode = pe.Node(
         niu.IdentityInterface(

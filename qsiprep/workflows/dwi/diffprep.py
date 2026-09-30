@@ -1,4 +1,5 @@
-"""
+"""HMC + SDC backend that wraps TORTOISEV4 DIFFPREP.
+
 HMC + SDC backend that wraps TORTOISEV4 DIFFPREP
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -80,7 +81,9 @@ def _resolve_phase_encoding(pe_dir):
 
 
 def _write_sidecar_json(nii_file, phase_encoding_direction, working_dir=None):
-    """Function-node helper. Writes a BIDS-style JSON sidecar with the same
+    """Write a BIDS-style JSON sidecar that TORTOISEProcess can read.
+
+    Function-node helper. Writes a BIDS-style JSON sidecar with the same
     basename as ``nii_file`` so TORTOISEProcess can read PhaseEncodingDirection
     from it.
 
@@ -109,7 +112,7 @@ def _write_sidecar_json(nii_file, phase_encoding_direction, working_dir=None):
 
 
 def _write_pe_json_node(name):
-    """A function-node that writes a PhaseEncodingDirection sidecar for TORTOISE."""
+    """Create a function-node that writes a PhaseEncodingDirection sidecar for TORTOISE."""
     return pe.Node(
         niu.Function(
             input_names=['nii_file', 'phase_encoding_direction', 'working_dir'],
@@ -194,7 +197,9 @@ def init_diffprep_hmc_wf(
     t2w_sdc,
     name='diffprep_hmc_wf',
 ):
-    """HMC + SDC workflow that uses TORTOISEV4 DIFFPREP for motion + eddy
+    """Build an HMC + SDC workflow that uses TORTOISEV4 DIFFPREP.
+
+    HMC + SDC workflow that uses TORTOISEV4 DIFFPREP for motion + eddy
     correction, and TORTOISE-native SDC (DRBUDDI / T2Wreg) or qsiprep's own
     fieldmap machinery.
 
@@ -214,7 +219,7 @@ def init_diffprep_hmc_wf(
         Whether a T2w image is available for distortion correction (used for
         DRBUDDI's multi-modal registration and for the fieldmap-less T2Wreg
         path).
-    name : str
+    name : str, optional
         Workflow name.
     """
     workflow = Workflow(name=name)

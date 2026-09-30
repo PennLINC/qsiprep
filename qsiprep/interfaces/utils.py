@@ -1,10 +1,6 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
-Miscellaneous utilities
-^^^^^^^^^^^^^^^^^^^^^^^
-
-"""
+"""Miscellaneous utilities."""
 
 import os
 
@@ -36,8 +32,10 @@ class AddTSVHeaderOutputSpec(TraitedSpec):
 
 
 class AddTSVHeader(SimpleInterface):
-    """Add a header row to a TSV file
+    r"""Add a header row to a TSV file.
 
+    Examples
+    --------
     .. testsetup::
 
     >>> import os
@@ -150,9 +148,7 @@ def _tpm2roi(
     pthres=0.95,
     newpath=None,
 ):
-    """
-    Generate a mask from a tissue probability map
-    """
+    """Generate a mask from a tissue probability map."""
     tpm_img = nb.load(in_tpm)
     roi_mask = (tpm_img.get_fdata() >= pthres).astype(np.uint8)
 

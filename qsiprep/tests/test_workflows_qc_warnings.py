@@ -88,7 +88,9 @@ def test_finalize_sinks_the_qc_warnings_reportlet(tmp_path):
 
 
 def test_distortion_group_merge_sinks_the_qc_warnings_reportlet():
-    """Source check: building this workflow needs a newer QSIPlan than the dev
+    """Test that the distortion-group merge sinks the QC warnings reportlet.
+
+    Source check: building this workflow needs a newer QSIPlan than the dev
     environment has, and it has a SeriesQC of its own that must be wired too.
     """
     from qsiprep.workflows.dwi import distortion_group_merge
@@ -99,7 +101,10 @@ def test_distortion_group_merge_sinks_the_qc_warnings_reportlet():
 
 
 def test_report_spec_lists_the_qc_warnings_reportlet():
-    """Without a spec entry the reportlet is written but never shown."""
+    """Test that the report spec lists the QC warnings reportlet.
+
+    Without a spec entry the reportlet is written but never shown.
+    """
     import yaml
 
     spec = yaml.safe_load(load_data.readable('reports-spec.yml').read_text())

@@ -115,7 +115,7 @@ class InvertDisplacementField(SimpleInterface):
 
 
 def invert_displacement_field(data, affine, iterations=10):
-    """Fixed-point inverse of an ITK vector field on its own grid.
+    """Compute the fixed-point inverse of an ITK vector field on its own grid.
 
     ``data`` is (X, Y, Z, [1,] 3) in ITK's LPS millimetres; the result has the
     same shape and convention.
@@ -236,7 +236,7 @@ class CreateGradientNonlinearityBMatrix(CommandLine):
     _cmd = 'CreateGradientNonlinearityBMatrix'
 
     def _graddev_suffix(self):
-        """The tool names its output for how the nonlinearity was supplied."""
+        """Return the output suffix the tool uses for how the nonlinearity was supplied."""
         if '.nii' in op.basename(self.inputs.nonlinearity):
             return '_graddev_f.nii'
         return '_graddev_c.nii'

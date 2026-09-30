@@ -46,7 +46,10 @@ def test_resolve_gpu_tasks(requested, expected):
 
 
 def test_every_task_is_individually_selectable():
-    """The point of --gpu taking a list: an 8 GB card runs some tasks, not others."""
+    """Test that every task is individually selectable.
+
+    The point of --gpu taking a list: an 8 GB card runs some tasks, not others.
+    """
     for task in GPU_TASKS:
         assert resolve_gpu_tasks([task]) == {task}
 
@@ -72,7 +75,7 @@ def test_gpu_enabled_rejects_unknown_tasks(gpu_config):
 
 
 def test_absent_gpu_flag_leaves_legacy_config_files_working(gpu_config, caplog):
-    """No --gpu at all: an existing --eddy-config "use_cuda" must still apply.
+    """Test that an existing --eddy-config "use_cuda" still applies with no --gpu at all.
 
     This is the difference between ``--gpu none`` and omitting the flag. Getting
     it wrong would silently drop existing GPU runs to CPU -- and because the CUDA
@@ -89,7 +92,7 @@ def test_absent_gpu_flag_leaves_legacy_config_files_working(gpu_config, caplog):
 
 
 def test_explicit_gpu_none_overrides_the_config_file(gpu_config, caplog):
-    """``--gpu none`` is an explicit "off" that beats a legacy use_cuda=true."""
+    """Test that ``--gpu none`` is an explicit "off" that beats a legacy use_cuda=true."""
     gpu_config.workflow.gpu = ['none']
     with caplog.at_level('WARNING', logger='nipype.workflow'):
         assert gpu_enabled('eddy', config_file_value=True) is False
@@ -97,7 +100,7 @@ def test_explicit_gpu_none_overrides_the_config_file(gpu_config, caplog):
 
 
 def test_cli_overrides_the_config_file_and_warns(gpu_config, caplog):
-    """--gpu wins over legacy "use_cuda", and the disagreement is not silent."""
+    """Test that --gpu wins over legacy "use_cuda", and the disagreement is not silent."""
     gpu_config.workflow.gpu = ['eddy']
 
     # Config file says off, CLI says on -> on, with a warning.
@@ -123,7 +126,7 @@ def test_agreement_with_the_config_file_is_quiet(gpu_config, caplog):
 
 
 def test_preflight_is_a_noop_without_gpu_tasks(monkeypatch):
-    """No --gpu means no GPU probing at all, on any machine."""
+    """Test that no --gpu means no GPU probing at all, on any machine."""
     import qsiprep.utils.gpu as gpu_mod
 
     def _boom():
@@ -135,7 +138,10 @@ def test_preflight_is_a_noop_without_gpu_tasks(monkeypatch):
 
 
 def test_preflight_raises_when_no_device_is_visible(monkeypatch):
-    """The common mistake: --gpu without `docker run --gpus all`."""
+    """Test that preflight raises when no device is visible.
+
+    The common mistake: --gpu without `docker run --gpus all`.
+    """
     import qsiprep.utils.gpu as gpu_mod
 
     monkeypatch.setattr(gpu_mod, '_gpu_visible', lambda: False)
@@ -168,7 +174,10 @@ def test_preflight_passes_when_everything_is_present(monkeypatch):
 
 
 def test_gpu_visible_is_false_without_nvidia_smi(monkeypatch):
-    """Inside a container the toolkit only injects nvidia-smi when --gpus was used."""
+    """Test that no GPU is visible without nvidia-smi.
+
+    Inside a container the toolkit only injects nvidia-smi when --gpus was used.
+    """
     import qsiprep.utils.gpu as gpu_mod
 
     monkeypatch.setattr(gpu_mod.shutil, 'which', lambda _: None)
@@ -177,8 +186,11 @@ def test_gpu_visible_is_false_without_nvidia_smi(monkeypatch):
 
 
 def test_synthstrip_and_synthseg_reach_the_gpu(gpu_config):
-    """Both were previously unreachable: SynthStrip's `gpu` was never set and
-    SynthSeg's opt-OUT `cpu` was never overridden."""
+    """Test that SynthStrip and SynthSeg can reach the GPU.
+
+    Both were previously unreachable: SynthStrip's `gpu` was never set and
+    SynthSeg's opt-OUT `cpu` was never overridden.
+    """
     from qsiprep.interfaces.freesurfer import SynthSeg, SynthStrip
 
     gpu_config.workflow.gpu = ['synthstrip', 'synthseg']
@@ -191,7 +203,7 @@ def test_synthstrip_and_synthseg_reach_the_gpu(gpu_config):
 
 
 def test_diffprep_and_drbuddi_are_selected_independently(gpu_config):
-    """DIFFPREP and DRBUDDI are separate binaries, so --gpu treats them separately."""
+    """Test that DIFFPREP and DRBUDDI, being separate binaries, are selected independently."""
     from qsiprep.interfaces.tortoise import DIFFPREP, DRBUDDI
 
     gpu_config.workflow.gpu = ['drbuddi']

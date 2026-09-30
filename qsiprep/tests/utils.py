@@ -65,14 +65,14 @@ def build_test_dataset(root, skeleton, extra_files=None, n_volumes=1, affine=Non
 
     Parameters
     ----------
-    root : :obj:`str` or :obj:`pathlib.Path`
+    root : str or pathlib.Path
         Where to build the dataset. Must not already exist.
-    skeleton : :obj:`dict`
+    skeleton : dict
         A ``generate_bids_skeleton`` dataset description.
-    extra_files : :obj:`dict`, optional
-        Maps a dataset-relative path to its contents. A :obj:`dict` value is
-        written as JSON, a :obj:`str` value verbatim.
-    n_volumes : :obj:`int`, optional
+    extra_files : dict, optional
+        Maps a dataset-relative path to its contents. A ``dict`` value is
+        written as JSON, a ``str`` value verbatim.
+    n_volumes : int, optional
         Number of volumes to give each generated image. The default of 1 writes
         3D images.
     affine : :obj:`numpy.ndarray`, optional
@@ -81,7 +81,7 @@ def build_test_dataset(root, skeleton, extra_files=None, n_volumes=1, affine=Non
 
     Returns
     -------
-    :obj:`pathlib.Path`
+    pathlib.Path
         The dataset root.
     """
     root = Path(root)
@@ -112,15 +112,15 @@ def annexify(root, store=None):
 
     Parameters
     ----------
-    root : :obj:`str` or :obj:`pathlib.Path`
+    root : str or pathlib.Path
         The dataset root (as built by :func:`build_test_dataset`).
-    store : :obj:`str` or :obj:`pathlib.Path`, optional
+    store : str or pathlib.Path, optional
         Where to move the data objects. Defaults to a sibling ``<root>_annex``
         directory, which is outside the BIDS tree.
 
     Returns
     -------
-    :obj:`pathlib.Path`
+    pathlib.Path
         The dataset root.
     """
     root = Path(root)

@@ -1,4 +1,5 @@
-"""
+"""Merging Distortion Groups.
+
 Merging Distortion Groups
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -39,45 +40,55 @@ def init_distortion_group_merge_wf(
     assembly=None,
     units=(),
 ) -> Workflow:
-    """Combine the finalized DWI series of several correction units into one output.
+    r"""Combine the finalized DWI series of several correction units into one output.
 
     ``merging_strategy`` selects averaging or concatenation.
 
+    The inputnode has the following fields for each entry in ``inputs_list``:
+
+    ``[workflow_name]_image...``
+        One input for each volume in each input image.
+    ``[workflow_name]_bval...``
+        One input for each input image. path to the corresponding bval file
+    ``[workflow_name]_bvec...``
+        One input for each input image. path to the corresponding final bvec file
+    ``[workflow_name]_original_bvec...``
+        One input for each input image. Path to the original bvec file
+    ``[workflow_name]_original_image...``
+        One input for each input image. Path to the original dwi file
+    ``[workflow_name]_raw_concatenated_image``
+        One input for each input image. Path to the original images after concatenation
+    ``[workflow_name]_confounds``
+        One input for each input image. Path to the confounds files
+    ``[workflow_name]_b0_ref``
+        One input for each input image. Path to the b=0 reference image
+    ``[workflow_name]_carpetplot_data``
+        One input for each input image. Path to the hmc carpetplot data
+
     Parameters
     ----------
-    inputs_list: list of inputs
-        List if identifiers for inputs. There will be bvals, bvecs, niis and original
-        bvecs.
-    merging_strategy: str
+    merging_strategy : str
         'average': averages images that originally sampled the same q-space coordinate
         'concat': concatenates images in the 4th dimension
-    assembly: :class:`~qsiplan.plan.OutputAssembly`
+    inputs_list : list of str
+        List if identifiers for inputs. There will be bvals, bvecs, niis and original
+        bvecs.
+    source_file : str
+        Source file (relative to the ``dwi/`` directory) used to name the merged
+        derivatives and reports.
+    output_prefix : str
+        Prefix for the merged DWI series and the series QC file.
+    name : str
+        Name of workflow
+    assembly : :class:`~qsiplan.plan.OutputAssembly`, optional
         The plan assembly this workflow realizes; with ``units`` (the member
-        :class:`~qsiplan.adapters.PreprocUnit`\\ s) it drives the
+        :class:`~qsiplan.adapters.PreprocUnit`\ s) it drives the
         merged output's provenance sidecar and the gradient plot's
         phase-encoding colors.
-
-
-    Inputs
-    ------
-    [workflow_name]_image...
-        One input for each volume in each input image.
-    [workflow_name]_bval...
-        One input for each input image. path to the corresponding bval file
-    [workflow_name]_bvec...
-        One input for each input image. path to the corresponding final bvec file
-    [workflow_name]_original_bvec...
-        One input for each input image. Path to the original bvec file
-    [workflow_name]_original_image...
-        One input for each input image. Path to the original dwi file
-    [workflow_name]_raw_concatenated_image
-        One input for each input image. Path to the original images after concatenation
-    [workflow_name]_confounds
-        One input for each input image. Path to the confounds files
-    [workflow_name]_b0_ref
-        One input for each input image. Path to the b=0 reference image
-    [workflow_name]_carpetplot_data
-        One input for each input image. Path to the hmc carpetplot data
+    units : tuple of :class:`~qsiplan.adapters.PreprocUnit`, optional
+        The correction units being merged. Their phase encoding directions color
+        the gradient plot, and they are recorded in the provenance sidecar when
+        ``assembly`` is given.
 
     Outputs
     -------
@@ -94,7 +105,6 @@ def init_distortion_group_merge_wf(
     cnr_map_t1
         Contrast-to-noise map for the merged series
     """
-
     workflow = Workflow(name=name)
     source_file = 'dwi/' + source_file
     sanitized_inputs = [name.replace('-', '_') for name in inputs_list]

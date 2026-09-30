@@ -1,6 +1,7 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
+"""Synthetic distortion-free b=0 generation (SynB0-DISCO).
+
 Synthetic distortion-free b=0 generation (SynB0-DISCO)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -211,9 +212,13 @@ back onto the b=0 reference grid.
     # Reportlets. The acquired/synthetic flicker is deliberately NOT labeled
     # before/after: nothing was corrected - the reader judges whether the
     # synthesized target is trustworthy. WM contours give the undistorted
-    # anatomical truth in both states.
+    # anatomical truth in both states. ``itk_t1_to_b0`` is the coregistration
+    # affine listed for reverse use, so resampling the segmentation onto the
+    # b=0 grid applies it inverted.
     map_dseg_to_b0 = pe.Node(
-        ants.ApplyTransforms(dimension=3, interpolation='MultiLabel'),
+        ants.ApplyTransforms(
+            dimension=3, interpolation='MultiLabel', invert_transform_flags=[True]
+        ),
         name='map_dseg_to_b0',
     )
     extract_wm = pe.Node(ExtractWM(), name='extract_wm')

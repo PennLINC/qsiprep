@@ -1,4 +1,5 @@
-"""
+"""Orchestrating the dwi-preprocessing workflow.
+
 Orchestrating the dwi-preprocessing workflow
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -34,7 +35,8 @@ def init_qsiprep_hmcsdc_wf(
     t2w_sdc,
     anatomical_template,
 ):
-    """
+    """Build a workflow that runs qsiprep's head motion and distortion correction.
+
     This workflow controls the head motion correction and susceptibility distortion
     correction parts of the qsiprep workflow. These parts have been combined because they're
     also combined in the eddy pipeline.
@@ -356,7 +358,9 @@ def _list_squeeze(in_list):
     from pathlib import Path
 
     def flatten(items):
-        """Yield items from any nested iterable; see
+        """Yield items from any nested iterable.
+
+        See
         Beazley, D. and B. Jones. Recipe 4.14, Python Cookbook 3rd Ed.,
         O'Reilly Media Inc. Sebastopol, CA: 2013..
         https://stackoverflow.com/questions/952914/how-do-i-make-a-flat-list-out-of-a-list-of-lists

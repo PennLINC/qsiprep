@@ -1,6 +1,7 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
+"""Merge and denoise dwi images.
+
 Merge and denoise dwi images
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -51,7 +52,7 @@ def init_merge_and_denoise_wf(
     phase_id='same',
     name='merge_and_denoise_wf',
 ):
-    """
+    """Build a workflow that conforms, denoises and merges a set of DWI series.
 
     .. workflow::
         :graph2use: orig
@@ -73,7 +74,20 @@ def init_merge_and_denoise_wf(
         ``unit.dwi_phase_files`` (the plan), so the layout is never re-read
     raw_dwi_files : list
         list of raw (in their original BIDS directory) dwi nifti files
-
+    orientation : str
+        Orientation each image is conformed to ('LPS' or 'LAS'). Also selects the
+        bvec convention used for QC ('DIPY' for 'LPS', 'FSL' otherwise).
+    source_file : str
+        Source file whose name (without extension) is used as the prefix of the
+        merged outputs.
+    calculate_qc : bool, optional
+        Whether to calculate DSI Studio QC metrics on the merged raw data.
+        Default is False.
+    phase_id : str, optional
+        Label for the distortion group, used in the methods boilerplate.
+        Default is ``'same'``.
+    name : str, optional
+        Name of workflow (default: ``merge_and_denoise_wf``)
 
     Outputs
     -------
@@ -342,7 +356,7 @@ def init_dwi_denoising_wf(
         True if phase data are available for the DWI scan.
         If True, and ``denoise_method`` is ``dwidenoise``, then ``dwidenoise``
         will be run on the complex-valued data.
-    name : str
+    name : str, optional
         name of the workflow
 
     Inputs
@@ -369,7 +383,6 @@ def init_dwi_denoising_wf(
     confounds
         path to the confounds file
     """
-
     inputnode = pe.Node(
         niu.IdentityInterface(fields=['dwi_file', 'bval_file', 'bvec_file', 'dwi_phase_file']),
         name='inputnode',

@@ -73,7 +73,7 @@ def test_normalize_requires_wm_voxels(tmp_path):
 
 
 def _synb0_distribution(tmp_path):
-    """A fake SynB0 layout: atlases/ with the 2.5mm grid, model weights."""
+    """Create a fake SynB0 layout: atlases/ with the 2.5mm grid, model weights."""
     synb0_dir = tmp_path / 'synb0'
     (synb0_dir / 'atlases').mkdir(parents=True)
     (synb0_dir / 'dual_channel_unet').mkdir()
@@ -319,3 +319,23 @@ def test_field_qc_detects_halo(tmp_path):
     assert quiet_row['fieldmap_p95_displacement_mm_in_brain'] == pytest.approx(
         quiet_row['fieldmap_p95_abs_hz_in_brain'] * 0.05 * 2.0
     )
+
+
+def test_synb0_report_contours_apply_the_coregistration_inverted(monkeypatch):
+    """Test that the segmentation is mapped onto the b=0 grid with the inverse affine.
+
+    ``itk_t1_to_b0`` is antsRegistration's ``reverse_transforms``: the same
+    affine file as ``itk_b0_to_t1``, meant to be applied inverted. Without the
+    flag the white-matter contours of the acquired/synthetic reportlet land
+    centimeters off the brain.
+    """
+    from qsiprep import config
+    from qsiprep.workflows.fieldmap.synb0 import init_synb0_wf
+
+    config.nipype.omp_nthreads = 1
+    config.execution.sloppy = False
+    wf = init_synb0_wf(name='synb0_report_test')
+    node = wf.get_node('map_dseg_to_b0')
+    assert list(node.inputs.invert_transform_flags) == [True]
+    edge = wf._graph.get_edge_data(wf.get_node('distorted_b0_coreg_wf'), node)
+    assert ('outputnode.itk_t1_to_b0', 'transforms') in edge['connect']

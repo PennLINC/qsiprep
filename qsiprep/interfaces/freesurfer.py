@@ -1,8 +1,6 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
-FreeSurfer tools interfaces
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+"""FreeSurfer tools interfaces.
 
 Fetch some example data:
 
@@ -44,7 +42,7 @@ class FSTraitedSpecOpenMP(FSTraitedSpec):
 
 
 def freesurfer_python_command(script_name, envvar='QSIPREP_FREESURFER_PYTHON'):
-    """Command line for a FreeSurfer Python script.
+    """Build the command line for a FreeSurfer Python script.
 
     The QSIPrep containers copy FreeSurfer's bundled ``fspython`` runtime and
     point ``QSIPREP_FREESURFER_PYTHON`` at its launcher. When the variable is
@@ -63,9 +61,10 @@ def freesurfer_python_command(script_name, envvar='QSIPREP_FREESURFER_PYTHON'):
 
 
 class StructuralReference(fs.RobustTemplate):
-    """Variation on RobustTemplate that simply copies the source if a single
-    volume is provided.
+    """Variation on RobustTemplate that simply copies the source if a single volume is provided.
 
+    Examples
+    --------
     >>> from qsiprep.utils.bids import collect_data
     >>> t1w = collect_data('ds114', '01')[0]['t1w']
     >>> template = StructuralReference()

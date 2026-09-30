@@ -1,4 +1,4 @@
-"""QSIPrep data files
+"""QSIPrep data files.
 
 .. autofunction:: load
 

@@ -1,6 +1,7 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
+"""Utility workflows.
+
 Utility workflows
 ^^^^^^^^^^^^^^^^^
 
@@ -115,7 +116,7 @@ def init_dwi_reference_wf(
     dwi_file : str, optional
         A b=0 image
         Default is None.
-    name : str
+    name : str, optional
         Name of workflow (default: ``dwi_reference_wf``)
     gen_report : bool, optional
         Whether a mask report node should be appended in the end.
@@ -247,7 +248,7 @@ def _create_mem_gb(dwi_fname):
 
 
 def tortoise_convert_mem_gb(dwi_files):
-    """Peak memory for nodes that hold a whole DWI series as float32.
+    """Estimate the peak memory for nodes that hold a whole DWI series as float32.
 
     Sized from the voxel count rather than the file size: the consumers load
     with ``dtype='float32'``, so the working set is ``nvoxels * 4`` whatever the

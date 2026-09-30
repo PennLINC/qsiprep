@@ -115,7 +115,10 @@ def test_config_selection_bridge_resolves_without_error():
 
 
 def test_subject_plan_bridge_constructs_grouping_policy(monkeypatch):
-    """Regression: the subject workflow passed an undefined ``policy`` name."""
+    """Test that the subject plan bridge constructs a grouping policy.
+
+    Regression: the subject workflow passed an undefined ``policy`` name.
+    """
     from qsiprep.workflows import base
 
     grouping = object()
@@ -136,7 +139,9 @@ def test_subject_plan_bridge_constructs_grouping_policy(monkeypatch):
 
 
 def test_complex_dwi_reaches_the_plan_as_a_magnitude_companion(tmp_path):
-    """Contract across the qsiprep<->qsiplan seam for complex-valued DWI.
+    """Test that complex-valued DWI reaches the plan as a magnitude with a phase companion.
+
+    This is a contract across the qsiprep<->qsiplan seam for complex-valued DWI.
 
     Exercises the real grouping/plan (no monkeypatching): qsiprep collects both
     parts (the ``part`` pre-filter is retired), qsiplan indexes only the

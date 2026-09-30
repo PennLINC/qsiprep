@@ -41,7 +41,7 @@ def _run(interface, work_dir):
 
 
 def test_conform_dwi_uses_colocated_gradients(tmp_path):
-    """Gradients sitting beside the DWI are found."""
+    """Test that gradients sitting beside the DWI are found."""
     root = build_test_dataset(
         tmp_path / 'ds', BARE_DWI, extra_files=GRADIENTS, n_volumes=2, affine=LPS_AFFINE
     )
@@ -54,7 +54,7 @@ def test_conform_dwi_uses_colocated_gradients(tmp_path):
 
 
 def test_conform_dwi_inherits_gradients(tmp_path):
-    """A part-mag DWI inherits the gradients shared with its phase counterpart (issue #990)."""
+    """Test that a part-mag DWI inherits the gradients shared with its phase image (issue #990)."""
     root = build_test_dataset(
         tmp_path / 'ds', COMPLEX_DWI, extra_files=GRADIENTS, n_volumes=2, affine=LPS_AFFINE
     )
@@ -69,7 +69,7 @@ def test_conform_dwi_inherits_gradients(tmp_path):
 
 
 def test_conform_dwi_inherits_gradients_for_a_phase_image(tmp_path):
-    """The phase image resolves to the same shared gradients (issue #990)."""
+    """Test that the phase image resolves to the same shared gradients (issue #990)."""
     root = build_test_dataset(
         tmp_path / 'ds', COMPLEX_DWI, extra_files=GRADIENTS, n_volumes=2, affine=LPS_AFFINE
     )
@@ -84,7 +84,7 @@ def test_conform_dwi_inherits_gradients_for_a_phase_image(tmp_path):
 
 
 def test_conform_dwi_prefers_explicit_gradients(tmp_path):
-    """Explicitly supplied gradients override the ones that would be resolved."""
+    """Test that explicitly supplied gradients override the ones that would be resolved."""
     root = build_test_dataset(
         tmp_path / 'ds', BARE_DWI, extra_files=GRADIENTS, n_volumes=2, affine=LPS_AFFINE
     )
@@ -107,7 +107,7 @@ def test_conform_dwi_prefers_explicit_gradients(tmp_path):
 
 
 def test_conform_dwi_flips_inherited_bvecs_on_reorientation(tmp_path):
-    """Reorienting RAS to LPS negates the first two bvec rows of an inherited bvec."""
+    """Test that reorienting RAS to LPS negates the first two rows of an inherited bvec."""
     root = build_test_dataset(
         tmp_path / 'ds', COMPLEX_DWI, extra_files=GRADIENTS, n_volumes=2, affine=RAS_AFFINE
     )
@@ -123,7 +123,7 @@ def test_conform_dwi_flips_inherited_bvecs_on_reorientation(tmp_path):
 
 
 def test_conform_dwi_flips_bvecs_through_annex_symlinks(tmp_path):
-    """Regression: a git-annex-symlinked DWI is reoriented AND its bvec flipped.
+    """Test that a git-annex-symlinked DWI is reoriented AND its bvec flipped (regression).
 
     Before the ``.resolve()`` -> ``os.path.abspath`` fix, ``find_bvec`` followed
     the annex symlink out of the BIDS tree and returned ``None``, so ConformDwi
@@ -147,7 +147,7 @@ def test_conform_dwi_flips_bvecs_through_annex_symlinks(tmp_path):
 
 
 def test_conform_dwi_without_gradients_still_conforms_the_image(tmp_path):
-    """A phase image with no gradient table anywhere is reoriented without error."""
+    """Test that a phase image with no gradient table anywhere is reoriented without error."""
     root = build_test_dataset(tmp_path / 'ds', COMPLEX_DWI, n_volumes=2, affine=RAS_AFFINE)
     phase = root / 'sub-01' / 'dwi' / 'sub-01_part-phase_dwi.nii.gz'
 
@@ -159,7 +159,7 @@ def test_conform_dwi_without_gradients_still_conforms_the_image(tmp_path):
 
 
 def test_conform_dwi_reports_bvals_when_only_bvals_exist(tmp_path):
-    """A bval with no matching bvec is still reported (it used to be dropped)."""
+    """Test that a bval with no matching bvec is still reported (it used to be dropped)."""
     root = build_test_dataset(
         tmp_path / 'ds',
         BARE_DWI,
@@ -203,7 +203,7 @@ def _write_lps_dwi(tmp_path):
 
 @pytest.mark.skipif(shutil.which('mrinfo') is None, reason='MRtrix3 mrinfo not installed')
 def test_bvec_to_rasb_tolerates_mrinfo_stderr(tmp_path):
-    """LPS images make recent mrinfo write an advisory to stderr; that is not a failure."""
+    """Test that mrinfo's stderr advisory on LPS images is not treated as a failure."""
     img_file, bval_file, bvec_file = _write_lps_dwi(tmp_path)
     workdir = tmp_path / 'work'
     workdir.mkdir()
@@ -216,7 +216,7 @@ def test_bvec_to_rasb_tolerates_mrinfo_stderr(tmp_path):
 
 @pytest.mark.skipif(shutil.which('mrinfo') is None, reason='MRtrix3 mrinfo not installed')
 def test_bvec_to_rasb_raises_when_mrinfo_fails(tmp_path):
-    """A genuinely failing mrinfo call still raises."""
+    """Test that a genuinely failing mrinfo call still raises."""
     _, bval_file, bvec_file = _write_lps_dwi(tmp_path)
     workdir = tmp_path / 'work'
     workdir.mkdir()
@@ -226,7 +226,7 @@ def test_bvec_to_rasb_raises_when_mrinfo_fails(tmp_path):
 
 
 def test_bvec_to_rasb_ignores_stderr_when_the_command_succeeds(tmp_path, monkeypatch):
-    """A zero return code is success even when mrinfo writes an advisory to stderr.
+    """Test that a zero return code is success even when mrinfo writes an advisory to stderr.
 
     Development-branch mrinfo prints "axes realigned to approximate RAS" for any
     non-RAS image, and QSIPrep conforms everything to LPS+. This runs without the
@@ -247,7 +247,7 @@ def test_bvec_to_rasb_ignores_stderr_when_the_command_succeeds(tmp_path, monkeyp
 
 
 def test_bvec_to_rasb_raises_on_nonzero_return_code(tmp_path, monkeypatch):
-    """A non-zero return code raises, and the message keeps the command and stderr."""
+    """Test that a non-zero return code raises, keeping the command and stderr in the message."""
     _, bval_file, bvec_file = _write_lps_dwi(tmp_path)
     workdir = tmp_path / 'work'
     workdir.mkdir()
@@ -265,7 +265,7 @@ def test_bvec_to_rasb_raises_on_nonzero_return_code(tmp_path, monkeypatch):
 
 
 def test_split_merge_roundtrip_without_fsl(tmp_path):
-    """_split_4d_to_3d then _merge_3d_to_4d reproduces the 4D image and its header.
+    """Test that _split_4d_to_3d then _merge_3d_to_4d reproduces the 4D image and its header.
 
     Matches fslsplit/fslmerge fidelity: distinct qform/sform (and codes), the
     oblique orientation, the TR in pixdim[4], and xyzt units all survive the
@@ -315,7 +315,7 @@ def test_split_merge_roundtrip_without_fsl(tmp_path):
 
 
 def test_split_dwis_fsl_uses_no_fsl_binary(tmp_path):
-    """SplitDWIsFSL splits in nibabel (its node crashed CI when fslsplit vanished)."""
+    """Test that SplitDWIsFSL splits in nibabel (its node crashed CI when fslsplit vanished)."""
     from qsiprep.interfaces.images import SplitDWIsFSL
 
     n = 5

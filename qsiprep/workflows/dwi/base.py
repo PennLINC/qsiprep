@@ -1,4 +1,5 @@
-"""
+"""Orchestrating the dwi-preprocessing workflow.
+
 Orchestrating the dwi-preprocessing workflow
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -45,8 +46,7 @@ def init_dwi_preproc_wf(
     anatomical_template,
     do_biascorr=True,
 ) -> Workflow:
-    """
-    This workflow controls the dwi preprocessing stages of qsiprep.
+    """Build a workflow that runs the dwi preprocessing stages of qsiprep.
 
     .. workflow::
         :graph2use: orig
@@ -71,6 +71,13 @@ def init_dwi_preproc_wf(
         beginning of the output file name (eg 'sub-1_buds-j')
     source_file : str
         The file name template used for derivatives
+    anatomical_template : str
+        Name of the anatomical template (e.g., ``'MNI152NLin2009cAsym'``), passed to
+        the SHORELine head motion and distortion correction workflow for
+        fieldmap-less SDC.
+    do_biascorr : bool, optional
+        Whether bias correction is applied to the DWI data; used for the methods
+        boilerplate and provenance. Default is True.
 
     Inputs
     ------
@@ -138,7 +145,6 @@ def init_dwi_preproc_wf(
 
     See Also
     --------
-
     * :py:func:`~qsiprep.workflows.dwi.hmc.init_dwi_hmc_wf`
     * :py:func:`~qsiprep.workflows.dwi.registration.init_dwi_t1_trans_wf`
     * :py:func:`~qsiprep.workflows.dwi.registration.init_dwi_reg_wf`

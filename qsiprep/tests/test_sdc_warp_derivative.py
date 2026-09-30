@@ -58,9 +58,12 @@ def _write_affine(path, matrix, translation):
 
 
 def _write_sdc_field(path, displacement, n=20, origin=(-9.5, -9.5, -9.5), vary=0.01):
-    """A DWI-frame SDC displacement field: constant ``displacement`` (LPS mm) plus
+    """Write a DWI-frame SDC displacement field.
+
+    A DWI-frame SDC displacement field: constant ``displacement`` (LPS mm) plus
     a small spatially varying term, written with the NIFTI_INTENT_VECTOR code so
-    antsApplyTransforms reads it as a displacement field rather than zeros."""
+    antsApplyTransforms reads it as a displacement field rather than zeros.
+    """
     data = np.zeros((n, n, n, 1, 3), dtype='float32')
     data[..., 0, :] = displacement
     # vary the first component along i so a pure grid resample (vs a transform
@@ -77,7 +80,7 @@ def _write_sdc_field(path, displacement, n=20, origin=(-9.5, -9.5, -9.5), vary=0
 
 
 def _write_ref(path, R, n=20, origin=(-9.5, -9.5, -9.5)):
-    """An ACPC reference grid = the DWI grid rotated by ``R`` about its center."""
+    """Write an ACPC reference grid: the DWI grid rotated by ``R`` about its center."""
     import SimpleITK as sitk
 
     ref = sitk.Image((n, n, n), sitk.sitkFloat32)
@@ -120,7 +123,7 @@ def _field_components(path):
 
 
 def test_sdc_warp_stage_names_drops_dwi_native_stages():
-    """The SDC-warp sub-chain keeps only the corrected-DWI-frame -> ACPC stages."""
+    """Test that the SDC-warp sub-chain keeps only the corrected-DWI-frame -> ACPC stages."""
     from qsiprep.interfaces.gradients import ComposeTransforms
 
     stages = list(ComposeTransforms._TRANSFORM_STAGES)
@@ -136,7 +139,7 @@ def test_sdc_warp_stage_names_drops_dwi_native_stages():
 
 
 def test_compose_transforms_exposes_the_sdc_warp_subchain(tmp_path):
-    """ComposeTransforms emits the corrected-DWI-frame -> ACPC sub-chain.
+    """Test that ComposeTransforms emits the corrected-DWI-frame -> ACPC sub-chain.
 
     With only a coregistration transform present, that sub-chain is the coreg
     itself, for volume 0 -- what ComposeSDCWarp conjugates the fieldwarp with.
@@ -171,7 +174,7 @@ def _tiny_dwi(path, nvols=4):
 
 
 def test_sdc_warp_source_emits_for_every_standalone_warp_method(tmp_path):
-    """GRE and SyN write a standalone warp, so both emit the derivative."""
+    """Test that GRE and SyN both emit the derivative, since they write a standalone warp."""
     from qsiplan.models import CorrectionMethod
 
     from qsiprep.tests.preproc_factory import make_preproc_unit
@@ -189,8 +192,11 @@ def test_sdc_warp_source_emits_for_every_standalone_warp_method(tmp_path):
 
 
 def test_sdc_warp_source_rebuilds_a_gre_field_eddy_applied(tmp_path):
-    """eddy leaves no standalone warp for a GRE fieldmap it applied, so the map
-    is rebuilt from the field, which needs the readout time."""
+    """Test that the map for a GRE field eddy applied is rebuilt from the field.
+
+    eddy leaves no standalone warp for a GRE fieldmap it applied, so the map
+    is rebuilt from the field, which needs the readout time.
+    """
     from qsiplan.models import CorrectionMethod
 
     from qsiprep.tests.preproc_factory import make_preproc_unit
@@ -224,7 +230,7 @@ def test_sdc_warp_source_rebuilds_a_gre_field_eddy_applied(tmp_path):
 def test_sdc_warp_source_follows_the_t2wreg_stage(
     tmp_path, monkeypatch, hmc, method, t2w_sdc, expected
 ):
-    """The T2Wreg decision comes from the plan's stage, not the estimation method."""
+    """Test that the T2Wreg decision comes from the plan's stage, not the estimation method."""
     from qsiplan.models import CorrectionMethod
 
     from qsiprep.tests.preproc_factory import make_preproc_unit
@@ -246,7 +252,7 @@ def test_sdc_warp_source_follows_the_t2wreg_stage(
 
 
 def _reverse_pe_unit(tmp_path, dwi_writer=None):
-    """A PEPOLAR unit of an AP/PA DWI pair, planned under the configured methods."""
+    """Build a PEPOLAR unit of an AP/PA DWI pair, planned under the configured methods."""
     from qsiplan.models import CorrectionMethod
 
     from qsiprep.tests.preproc_factory import make_preproc_unit
@@ -270,7 +276,7 @@ def _reverse_pe_unit(tmp_path, dwi_writer=None):
     ],
 )
 def test_sdc_warp_source_separates_topup_drbuddi(tmp_path, monkeypatch, sdc_method, expected):
-    """DRBUDDI's fieldwarp is the whole correction alone, only a residual after TOPUP."""
+    """Test that DRBUDDI's fieldwarp is the whole correction alone, only a residual after TOPUP."""
     from qsiprep.utils.sdc import sdc_warp_source
 
     monkeypatch.setattr(config.workflow, 'hmc_method', 'eddy')
@@ -280,7 +286,7 @@ def test_sdc_warp_source_separates_topup_drbuddi(tmp_path, monkeypatch, sdc_meth
 
 
 def test_trans_wf_builds_compose_sdc_warp_only_when_requested():
-    """``sdc_warp_source`` gates the ComposeSDCWarp node and its wiring."""
+    """Test that ``sdc_warp_source`` gates the ComposeSDCWarp node and its wiring."""
     _cfg()
     from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
 
@@ -323,7 +329,9 @@ def test_trans_wf_builds_compose_sdc_warp_only_when_requested():
 
 
 def test_trans_wf_takes_volume_0_warp_from_a_single_path_or_a_list():
-    """GRE's init_sdc_wf hands over one warp path; the others a per-volume list.
+    """Test that the volume-0 warp is taken from either a single path or a list.
+
+    GRE's init_sdc_wf hands over one warp path; the others a per-volume list.
 
     Indexing a bare path would take its first character. The Function node's
     source is rebuilt here exactly as nipype does at run time.
@@ -346,8 +354,11 @@ def test_trans_wf_takes_volume_0_warp_from_a_single_path_or_a_list():
 
 @pytest.mark.parametrize('source', ['topup', 'gre_in_eddy'])
 def test_trans_wf_topup_builds_hz_to_warp_chain(source):
-    """A field eddy applied (TOPUP's, or a GRE fieldmap's) leaves no standalone
-    warp, so the field is turned into one first."""
+    """Test that the TOPUP branch builds a Hz-to-warp chain.
+
+    A field eddy applied (TOPUP's, or a GRE fieldmap's) leaves no standalone
+    warp, so the field is turned into one first.
+    """
     _cfg()
     from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
 
@@ -390,7 +401,7 @@ def test_trans_wf_topup_builds_hz_to_warp_chain(source):
 
 
 def test_trans_wf_topup_drbuddi_builds_total_and_refinement():
-    """The total runs DRBUDDI's refinement, then TOPUP; the refinement is also kept."""
+    """Test that the total runs DRBUDDI's refinement, then TOPUP, and the refinement is kept."""
     _cfg()
     from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
 
@@ -404,7 +415,7 @@ def test_trans_wf_topup_drbuddi_builds_total_and_refinement():
     edges = [(u.name, v.name, d['connect']) for u, v, d in wf._graph.edges(data=True)]
 
     def ports(src, dst):
-        """(source port, destination port) pairs from ``src`` to ``dst``."""
+        """Return (source port, destination port) pairs from ``src`` to ``dst``."""
         return {
             (s[0] if isinstance(s, tuple) else s, t)
             for u, v, connect in edges
@@ -430,7 +441,7 @@ def test_trans_wf_topup_drbuddi_builds_total_and_refinement():
 
 
 def test_derivatives_wf_writes_sdc_warp_only_with_meta():
-    """The SDC-warp datasink appears only when sidecar metadata is supplied."""
+    """Test that the SDC-warp datasink appears only when sidecar metadata is supplied."""
     _cfg()
     from qsiprep.workflows.dwi.derivatives import init_dwi_derivatives_wf
 
@@ -494,7 +505,10 @@ def test_derivatives_wf_writes_sdc_warp_only_with_meta():
     ],
 )
 def test_sdc_sidecar_names_the_transforms_into_acpc(transform_files, expected):
-    """BEP014's TransformFile: the written transforms that carried the map into ACPC."""
+    """Test that the sidecar names the written transforms that carried the map into ACPC.
+
+    This is BEP014's TransformFile.
+    """
     from qsiprep.utils.sdc import sdc_displacement_sidecar
 
     meta = {'EstimationMethod': 'DRBUDDI', 'Units': 'mm'}
@@ -505,14 +519,17 @@ def test_sdc_sidecar_names_the_transforms_into_acpc(transform_files, expected):
 
 
 def test_sdc_sidecar_leaves_out_an_unwritten_chain():
-    """No transform files (a nonlinear subject dwiref): no half-chain TransformFile."""
+    """Test that the sidecar leaves out an unwritten transform chain.
+
+    No transform files (a nonlinear subject dwiref): no half-chain TransformFile.
+    """
     from qsiprep.utils.sdc import sdc_displacement_sidecar
 
     assert 'TransformFile' not in sdc_displacement_sidecar({'Units': 'mm'}, '/out')
 
 
 def test_connect_sdc_transform_files_keeps_the_order_they_apply():
-    """The helper feeds the finalize workflow every written hop, first hop first."""
+    """Test that the helper feeds the finalize workflow every written hop, first hop first."""
     from nipype.interfaces import utility as niu
     from nipype.pipeline import engine as pe
 
@@ -537,7 +554,7 @@ def test_connect_sdc_transform_files_keeps_the_order_they_apply():
 
 @pytest.mark.parametrize('sdc_method', ['topup', 'topup+drbuddi'])
 def test_finalize_writes_the_refinement_only_for_topup_drbuddi(tmp_path, monkeypatch, sdc_method):
-    """TOPUP+DRBUDDI gets the total and the refinement, each with its own figure."""
+    """Test that TOPUP+DRBUDDI gets the total and the refinement, each with its own figure."""
     from qsiprep.tests.gradient_fixtures import write_dwi_with_gradients
     from qsiprep.workflows.dwi.finalize import init_dwi_finalize_wf
 
@@ -598,7 +615,7 @@ _LAS = np.diag([-2.0, 3.0, 4.0, 1.0])  # eddy's grid; voxel sizes i=2, j=3, k=4 
 
 
 def _topup_warp_vector(tmp_path, affine, pe_dir):
-    """The single LPS displacement ``_hz_to_warp`` writes for a uniform field."""
+    """Return the single LPS displacement ``_hz_to_warp`` writes for a uniform field."""
     from qsiprep.workflows.dwi.resampling import _hz_to_warp
 
     hz_path = str(tmp_path / 'hz.nii.gz')
@@ -625,12 +642,17 @@ def _topup_warp_vector(tmp_path, affine, pe_dir):
     ],
 )
 def test_topup_hz_to_warp_follows_the_grid_axes(tmp_path, pe_dir, expected_lps):
-    """field(Hz) * readout voxels along the PE voxel axis, in world mm via the affine."""
+    """Test that the TOPUP warp follows the grid axes.
+
+    field(Hz) * readout voxels along the PE voxel axis, in world mm via the affine.
+    """
     np.testing.assert_allclose(_topup_warp_vector(tmp_path, _LAS, pe_dir), expected_lps, atol=1e-6)
 
 
 def test_topup_hz_to_warp_matches_fugue_where_fugue_is_right(tmp_path):
-    """On LAS+ the j axis is Anterior, as ``FUGUEvsm2ANTSwarp`` hard-codes.
+    """Test that the TOPUP warp matches FUGUE where FUGUE is right.
+
+    On LAS+ the j axis is Anterior, as ``FUGUEvsm2ANTSwarp`` hard-codes.
 
     That j-axis result matched DRBUDDI's blip-up warp on real reverse-PE data
     (slope 1.02, r 0.965), so it anchors the sign. FUGUEvsm2ANTSwarp's i axis
@@ -649,7 +671,7 @@ def test_topup_hz_to_warp_matches_fugue_where_fugue_is_right(tmp_path):
 
 
 def test_topup_hz_to_warp_follows_an_oblique_grid(tmp_path):
-    """An oblique grid carries the shift along its rotated PE column, not a world axis."""
+    """Test that an oblique grid shifts along its rotated PE column, not a world axis."""
     affine = np.eye(4)
     affine[:3, :3] = _rotation('z', 30) @ np.diag([2.0, 3.0, 4.0])
     step_ras = affine[:3, 1]  # one voxel along j, in RAS mm
@@ -661,7 +683,7 @@ def test_topup_hz_to_warp_follows_an_oblique_grid(tmp_path):
     ('node', 'desc'), [('ds_sdc_warp_t1', 'sdc'), ('ds_sdc_refinement_t1', 'sdcrefinement')]
 )
 def test_sdc_displacement_datasinks_write_space_acpc_maps(tmp_path, node, desc):
-    """The workflow's own datasinks resolve to ``space-ACPC_desc-<desc>_displacement``."""
+    """Test that the workflow's datasinks resolve to ``space-ACPC_desc-<desc>_displacement``."""
     _cfg()
     from qsiprep.workflows.dwi.derivatives import init_dwi_derivatives_wf
 
@@ -695,7 +717,7 @@ _OBLIQUE = _rotation('x', 30) @ _rotation('y', 20) @ _rotation('z', 15)
 
 @requires_ants
 def test_compose_sdc_warp_is_a_valid_vector_field(tmp_path):
-    """The emitted derivative is a 5-D ITK displacement field (vector intent)."""
+    """Test that the emitted derivative is a 5-D ITK displacement field (vector intent)."""
     coreg, warp, ref, _ = _oblique_case(tmp_path, _OBLIQUE)
     out = _run_compose(coreg, warp, ref, str(tmp_path / 'run'))
     img = nb.load(out)
@@ -707,7 +729,7 @@ def test_compose_sdc_warp_is_a_valid_vector_field(tmp_path):
 
 @requires_ants
 def test_compose_sdc_warp_rotates_vectors_for_oblique_affine(tmp_path):
-    """Emitted vectors equal R.d for an oblique affine, and d when axis-aligned.
+    """Test that emitted vectors equal R.d for an oblique affine, and d when axis-aligned.
 
     A grid resample (vectors left un-rotated) would give d in both cases, so the
     oblique/axis-aligned pair proves the composition actually rotates vectors --
@@ -738,7 +760,7 @@ def test_compose_sdc_warp_rotates_vectors_for_oblique_affine(tmp_path):
 
 @requires_ants
 def test_compose_sdc_warp_point_round_trip(tmp_path):
-    """As a transform, the emitted field maps q -> A(W(A^-1(q))).
+    """Test that, as a transform, the emitted field maps q -> A(W(A^-1(q))).
 
     Sampling the composite displacement field at an ACPC landmark must send it to
     the same place as applying the SDC warp in the DWI frame and pushing forward
@@ -765,7 +787,7 @@ def test_compose_sdc_warp_point_round_trip(tmp_path):
 
 
 def _write_linear_field(path, displacement_at, n=20, origin=(-9.5, -9.5, -9.5)):
-    """A displacement field whose LPS vector at LPS point ``p`` is ``displacement_at(p)``.
+    """Write a displacement field whose LPS vector at LPS point ``p`` is ``displacement_at(p)``.
 
     Linear functions are reproduced exactly by trilinear interpolation, so a
     point test can compare ANTs against SimpleITK without interpolation error.
@@ -782,7 +804,7 @@ def _write_linear_field(path, displacement_at, n=20, origin=(-9.5, -9.5, -9.5)):
 
 @requires_ants
 def test_compose_sdc_warp_applies_several_warps_in_order(tmp_path):
-    """Two warps map q -> A(W2(W1(A^-1(q)))), and that order is observable.
+    """Test that two warps map q -> A(W2(W1(A^-1(q)))), and that order is observable.
 
     For TOPUP+DRBUDDI, W1 is DRBUDDI's refinement and W2 TOPUP's field. Each
     displaces along one axis by an amount that depends on the other, so the two
@@ -834,8 +856,11 @@ def test_compose_sdc_warp_applies_several_warps_in_order(tmp_path):
 
 @requires_ants
 def test_compose_sdc_warp_reproduces_pipeline_correction(tmp_path):
-    """Unwarping a distorted b0 with the emitted field matches the pipeline's own
-    correction from the same sdc_warp (guards direction and ordering)."""
+    """Test that the emitted field reproduces the pipeline's own correction.
+
+    Unwarping a distorted b0 with the emitted field matches the pipeline's own
+    correction from the same sdc_warp (guards direction and ordering).
+    """
     import subprocess
 
     import SimpleITK as sitk
@@ -886,7 +911,7 @@ def test_compose_sdc_warp_reproduces_pipeline_correction(tmp_path):
 
 
 def test_sdc_warp_glyph_field_shows_the_inverse(tmp_path):
-    """The glyph field is the INVERSE (point-transport) direction, not the raw field.
+    """Test that the glyph field is the INVERSE (point-transport) direction, not the raw field.
 
     Slicer displays where seed points travel, which follows the inverse of an
     image-resampling displacement field. For a uniform +d warp the inverse is -d,
@@ -909,7 +934,7 @@ def test_sdc_warp_glyph_field_shows_the_inverse(tmp_path):
 
 
 def test_sdc_warp_display_planes_contain_the_ped(tmp_path):
-    """The two display planes contain the PE axis; the perpendicular one is skipped."""
+    """Test that both display planes contain the PE axis; the perpendicular one is skipped."""
     from qsiprep.viz.utils import sdc_warp_display_planes
 
     disp = np.zeros((10, 10, 10, 3))
@@ -926,7 +951,7 @@ def test_sdc_warp_display_planes_contain_the_ped(tmp_path):
 
 
 def test_sdc_warp_plot_builds_a_valid_svg(tmp_path):
-    """The reportlet interface renders an SVG from a warp + ACPC b=0 (no ANTs)."""
+    """Test that the reportlet interface renders an SVG from a warp + ACPC b=0 (no ANTs)."""
     from qsiprep.interfaces.reports import SDCWarpPlot
 
     warp = _write_sdc_field(tmp_path / 'w.nii.gz', [0.0, 2.0, -0.5], n=20, vary=0.03)
@@ -963,7 +988,7 @@ def test_sdc_warp_plot_builds_a_valid_svg(tmp_path):
     ],
 )
 def test_sdc_warp_glyph_scale_adapts_to_the_field(p99, expected):
-    """Small fields get visible arrows; large ones stay at true length."""
+    """Test that small fields get visible arrows while large ones stay at true length."""
     from qsiprep.viz.utils import sdc_warp_glyph_scale
 
     mag = np.full(1000, p99)  # every voxel at the 99th percentile
@@ -978,7 +1003,7 @@ def test_sdc_warp_glyph_scale_handles_a_still_field():
 
 
 def test_invert_displacement_field_round_trips(tmp_path):
-    """The helper produces a usable inverse of a displacement field."""
+    """Test that the helper produces a usable inverse of a displacement field."""
     import SimpleITK as sitk
 
     from qsiprep.utils.misc import invert_displacement_field
@@ -999,8 +1024,11 @@ def test_invert_displacement_field_round_trips(tmp_path):
 
 @requires_ants
 def test_compose_sdc_warp_handles_nonlinear_template_stage(tmp_path):
-    """A non-linear stage in the to-template chain is inverted, not passed to a
-    flag: the interface still emits a valid displacement field on the ACPC grid."""
+    """Test that a non-linear to-template stage is inverted rather than passed to a flag.
+
+    A non-linear stage in the to-template chain is inverted, not passed to a
+    flag: the interface still emits a valid displacement field on the ACPC grid.
+    """
     coreg = _write_affine(tmp_path / 'coreg.mat', _OBLIQUE.T, [0.0, 0.0, 0.0])
     warp = _write_sdc_field(tmp_path / 'W.nii.gz', [0.3, 2.0, -0.5])
     template_warp = _write_sdc_field(tmp_path / 'tmpl.nii.gz', [0.1, -0.2, 0.15], vary=0.0)

@@ -23,7 +23,8 @@
 #
 #     https://www.nipreps.org/community/licensing/
 #
-"""
+"""Anatomical reference preprocessing workflows.
+
 Anatomical reference preprocessing workflows
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -80,7 +81,7 @@ def init_anat_preproc_wf(
     t2w_do_biascorr=True,
     name='anat_preproc_wf',
 ):
-    r"""This workflow controls the anatomical preprocessing stages of qsiprep.
+    r"""Build a workflow that runs the anatomical preprocessing stages of qsiprep.
 
     This includes:
 
@@ -103,19 +104,21 @@ def init_anat_preproc_wf(
 
     Parameters
     ----------
-    num_anat_images : :obj:`int`
+    num_anat_images : int
         Number of anatomical images available in the chosen modality
-    num_additional_t2ws : :obj:`int`
+    num_additional_t2ws : int
         If anat modality is T1w and there are available T2ws that can be
         used by DRBUDDI, how many are there?
-    has_rois: :obj:`bool`
+    has_rois : bool
         Are there lesion ROI files?
-    anatomical_template : :obj:`str`
+    anatomical_template : str
         Template specification of the form <template>[+<cohort>].
-    do_biascorr : :obj:`bool`, optional
+    do_biascorr : bool, optional
         Whether to apply N4 bias correction to the T1w(?) or not. Default is True.
-    t2w_do_biascorr : :obj:`bool`, optional
+    t2w_do_biascorr : bool, optional
         Whether to apply N4 bias correction to the T2w or not. Default is True.
+    name : str, optional
+        Name of workflow (default: ``anat_preproc_wf``)
 
     Inputs
     ------
@@ -285,6 +288,36 @@ workflow.
         name='synthstrip_anat_wf',
     )
 
+    # The mask that restricts the nonlinear registration to the template.
+    # May be set to exclude CSF. Only used for normalization.
+    # Discarded after use.
+    normalization_mask_buffer = pe.Node(
+        niu.IdentityInterface(fields=['brain_mask']),
+        name='normalization_mask_buffer',
+    )
+    if config.workflow.force_nocsf_synthstrip:
+        synthstrip_anat_nocsf_wf = init_synthstrip_wf(
+            no_csf=True,
+            name='synthstrip_anat_nocsf_wf',
+        )
+        workflow.connect([
+            (pad_anat_reference_wf, synthstrip_anat_nocsf_wf, [
+                ('outputnode.padded_image', 'inputnode.padded_image'),
+            ]),
+            (anat_reference_wf, synthstrip_anat_nocsf_wf, [
+                ('outputnode.template', 'inputnode.original_image'),
+            ]),
+            (synthstrip_anat_nocsf_wf, normalization_mask_buffer, [
+                ('outputnode.brain_mask', 'brain_mask'),
+            ]),
+        ])  # fmt:skip
+    else:
+        workflow.connect([
+            (synthstrip_anat_wf, normalization_mask_buffer, [
+                ('outputnode.brain_mask', 'brain_mask'),
+            ]),
+        ])  # fmt:skip
+
     # Segment the anatomical reference
     synthseg_anat_wf = init_synthseg_wf()
 
@@ -295,6 +328,10 @@ Brain extraction was performed on the {anat_modality} image using
 SynthStrip [@synthstrip] and automated segmentation was
 performed using SynthSeg [@synthseg1; @synthseg2] from
 FreeSurfer version {FS_VERSION}. """
+    if config.workflow.force_nocsf_synthstrip:
+        workflow.__postdesc__ += """\
+A second brain mask excluding CSF at the brain border (SynthStrip `--no-csf`)
+was used to restrict the nonlinear registration to the template. """
 
     # Perform registrations
     anat_normalization_wf = init_anat_normalization_wf(
@@ -405,6 +442,9 @@ FreeSurfer version {FS_VERSION}. """
         (inputnode, anat_normalization_wf, [('roi', 'inputnode.roi')]),
         (synthstrip_anat_wf, anat_normalization_wf, [
             ('outputnode.brain_mask', 'inputnode.brain_mask'),
+        ]),
+        (normalization_mask_buffer, anat_normalization_wf, [
+            ('brain_mask', 'inputnode.nonlinear_brain_mask'),
         ]),
         (anat_reference_wf, anat_normalization_wf, [
             ('outputnode.bias_corrected', 'inputnode.anatomical_reference'),
@@ -521,8 +561,11 @@ FreeSurfer version {FS_VERSION}. """
 
 
 def init_t2w_preproc_wf(num_t2ws, do_biascorr=True, name='t2w_preproc_wf'):
-    """If T1w is the anatomical contrast, you may also want to process the T2ws for
-    worlflows that can use them (ie DRBUDDI)."""
+    """Build a workflow that preprocesses additional T2w images.
+
+    If T1w is the anatomical contrast, you may also want to process the T2ws for
+    worlflows that can use them (ie DRBUDDI).
+    """
     workflow = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(fields=['t2w_images', 't1_brain']),
@@ -631,7 +674,7 @@ def _dilate_mask(in_file, iterations=8):
 
 
 def anat_biascorrect_enabled(image_files=None):
-    """Should N4 bias correction run on these anatomical images?
+    """Decide whether N4 bias correction should run on these anatomical images.
 
     ``--anat-biascorrect`` governs anatomicals only; ``--dwi-biascorrect``
     governs the DWIs and never reaches this path.
@@ -692,7 +735,8 @@ def anat_biascorrect_enabled(image_files=None):
 
 
 def init_anat_template_wf(num_images, do_biascorr=True) -> Workflow:
-    r"""
+    r"""Build a workflow that generates a canonically oriented structural template.
+
     This workflow generates a canonically oriented structural template from
     input anatomical images.
 
@@ -724,7 +768,6 @@ def init_anat_template_wf(num_images, do_biascorr=True) -> Workflow:
     out_report
         Conformation report
     """
-
     from ..dwi.hmc import init_b0_hmc_wf
 
     workflow = Workflow(name='anat_template_wf')
@@ -923,10 +966,10 @@ A {contrast}-reference map was computed after registration of
 
 
 def init_anat_normalization_wf(anatomical_template, has_rois=False) -> Workflow:
-    r"""
+    r"""Build a workflow that registers the anatomical reference to the template.
+
     This workflow performs registration from the original anatomical reference to the
     template anatomical reference.
-
 
     .. workflow::
         :graph2use: orig
@@ -937,13 +980,21 @@ def init_anat_normalization_wf(anatomical_template, has_rois=False) -> Workflow:
 
     Parameters
     ----------
-    has_rois : bool
+    anatomical_template : str
+        Name of the template the anatomical reference is registered to.
+    has_rois : bool, optional
         Whether Registration should account for regions to exclude
 
     Inputs
     ------
-    in_file
-        T1-weighted structural image to skull-strip
+    anatomical_reference
+        Bias-corrected anatomical reference image (head)
+    brain_mask
+        Brain mask restricting the affine registration that the AC-PC
+        transform is extracted from
+    nonlinear_brain_mask
+        Brain mask restricting the nonlinear registration to the template.
+        The same as ``brain_mask`` unless ``--force no-csf-synthstrip`` is set.
     roi
         A mask to exclude regions during standardization (as list)
 
@@ -965,7 +1016,6 @@ def init_anat_normalization_wf(anatomical_template, has_rois=False) -> Workflow:
     out_report
         Reportlet visualizing the spatial normalization
     """
-
     workflow = Workflow(name='anat_normalization_wf')
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -974,6 +1024,7 @@ def init_anat_normalization_wf(anatomical_template, has_rois=False) -> Workflow:
                 'template_mask',
                 'anatomical_reference',
                 'brain_mask',
+                'nonlinear_brain_mask',
                 'roi',
             ]
         ),
@@ -1081,7 +1132,7 @@ estimated via symmetric nonlinear registration (SyN) using antsRegistration (@an
         ]),
         (inputnode, rigid_acpc_resample_mask, [
             ('template_image', 'reference_image'),
-            ('brain_mask', 'input_image'),
+            ('nonlinear_brain_mask', 'input_image'),
         ]),
         (inputnode, rigid_acpc_resample_anat, [
             ('template_image', 'reference_image'),
@@ -1120,7 +1171,7 @@ estimated via symmetric nonlinear registration (SyN) using antsRegistration (@an
 
 
 def init_dl_prep_wf(name='dl_prep_wf') -> Workflow:
-    """Prepare images for use in the FreeSurfer deep learning functions"""
+    """Prepare images for use in the FreeSurfer deep learning functions."""
     workflow = Workflow(name=name)
     inputnode = pe.Node(niu.IdentityInterface(fields=['image']), name='inputnode')
     outputnode = pe.Node(
@@ -1161,7 +1212,14 @@ def init_dl_prep_wf(name='dl_prep_wf') -> Workflow:
     return workflow
 
 
-def init_synthstrip_wf(do_padding=False, unfatsat=False, name='synthstrip_wf') -> Workflow:
+def init_synthstrip_wf(
+    do_padding=False, unfatsat=False, no_csf=False, name='synthstrip_wf'
+) -> Workflow:
+    """Skull strip an image with SynthStrip.
+
+    ``no_csf`` selects SynthStrip's ``--no-csf`` model, which trims CSF and dura
+    from the brain border. Ventricular CSF stays inside the mask either way.
+    """
     workflow = Workflow(name=name)
     inputnode = pe.Node(
         niu.IdentityInterface(fields=['padded_image', 'original_image']),
@@ -1177,13 +1235,17 @@ def init_synthstrip_wf(do_padding=False, unfatsat=False, name='synthstrip_wf') -
             # Threads are always fixed to 1 in the run.
             # use_gpu mirrors gpu so nipype's scheduler counts this node
             # against the GPU budget (see the trait in interfaces/freesurfer.py).
-            FixHeaderSynthStrip(gpu=gpu_enabled('synthstrip'), use_gpu=gpu_enabled('synthstrip')),
+            FixHeaderSynthStrip(
+                gpu=gpu_enabled('synthstrip'),
+                use_gpu=gpu_enabled('synthstrip'),
+                no_csf=no_csf,
+            ),
             name='synthstrip',
             n_procs=config.nipype.omp_nthreads,
         )
     else:
         synthstrip = pe.Node(
-            MockSynthStrip(),
+            MockSynthStrip(no_csf=no_csf),
             name='mocksynthstrip',
         )
 
@@ -1317,9 +1379,7 @@ def _tupleize(value):
 
 
 def init_anat_reports_wf(anatomical_template) -> Workflow:
-    """
-    Set up a battery of datasinks to store reports in the right location
-    """
+    """Set up a battery of datasinks to store reports in the right location."""
     anat_modality = config.workflow.anat_modality
 
     workflow = Workflow(name='anat_reports_wf')
@@ -1417,9 +1477,7 @@ def _template_to_report_entities(template):
 
 
 def init_anat_derivatives_wf(anatomical_template, has_t2w=False) -> Workflow:
-    """
-    Set up a battery of datasinks to store derivatives in the right location
-    """
+    """Set up a battery of datasinks to store derivatives in the right location."""
     workflow = Workflow(name='anat_derivatives_wf')
 
     inputnode = pe.Node(
@@ -1647,7 +1705,7 @@ def init_anat_derivatives_wf(anatomical_template, has_t2w=False) -> Workflow:
 
 
 def _seg2msks(in_file, newpath=None):
-    """Converts labels to masks"""
+    """Convert labels to masks."""
     import nibabel as nb
     import numpy as np
     from nipype.utils.filemanip import fname_presuffix

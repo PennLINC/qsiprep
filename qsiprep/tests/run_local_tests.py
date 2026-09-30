@@ -7,11 +7,12 @@ import subprocess
 
 
 def _get_parser():
-    """Parse command line inputs for tests.
+    """Build the parser for the test command-line inputs.
 
     Returns
     -------
-    parser.parse_args() : argparse dict
+    parser : argparse.ArgumentParser
+        Parser for the test command-line inputs.
     """
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(

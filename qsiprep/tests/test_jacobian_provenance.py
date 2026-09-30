@@ -1,9 +1,9 @@
-"""Unit tests for ``qsiprep.utils.jacobian_provenance``.
+r"""Unit tests for ``qsiprep.utils.jacobian_provenance``.
 
 ``jacobian_provenance_for`` replaces the old ``config.record_applied``/
 ``config.record_unmodulated`` invocation-global accumulation (see git history)
 with a pure, per-unit computation. These tests build synthetic
-:class:`~qsiplan.adapters.PreprocUnit`\\ s with
+:class:`~qsiplan.adapters.PreprocUnit`\ s with
 :func:`qsiprep.tests.preproc_factory.make_preproc_unit` -- no BIDS layout, no
 disk files, no workflow construction -- and call the function directly across
 the configuration matrix that motivated the migration.
@@ -91,7 +91,7 @@ _LSR_EDDY_ARGS = {
 
 
 def test_gradwarp_only(tmp_path):
-    """Eddy backend, no fieldmap, a gradwarp coefficient file with no DIS3D tag."""
+    """Test the eddy backend with no fieldmap and a gradwarp coefficient file with no DIS3D tag."""
     _cfg(hmc_method='eddy', sdc_method='auto')
     config.workflow.gradient_file = str(tmp_path / 'coeff.grad')
     unit = make_preproc_unit([SRC], method=None, metadata={'Manufacturer': 'SIEMENS'})
@@ -116,14 +116,17 @@ def _gre_unit():
 
 
 def test_gre():
-    """eddy applies a GRE fieldmap itself, like TOPUP's field: nothing external."""
+    """Test that eddy applies a GRE fieldmap itself, like TOPUP's field: nothing external."""
     _cfg(hmc_method='eddy', sdc_method='fieldmap')
 
     assert jacobian_provenance_for(_gre_unit(), t2w_sdc=False) == ([], [], None)
 
 
 def test_gre_after_eddy():
-    """--force gre-sdc-after-eddy applies the GRE warp downstream, where QSIPrep modulates it."""
+    """Test that --force gre-sdc-after-eddy applies the GRE warp downstream.
+
+    That is where QSIPrep modulates it.
+    """
     _cfg(hmc_method='eddy', sdc_method='fieldmap')
     config.workflow.force = ['gre-sdc-after-eddy']
 
@@ -131,7 +134,7 @@ def test_gre_after_eddy():
 
 
 def test_eddy_lsr_with_gre(tmp_path):
-    """'lsr' leaves a GRE fieldmap eddy applied unmodulated, as it does TOPUP's."""
+    """Test that 'lsr' leaves a GRE fieldmap eddy applied unmodulated, as it does TOPUP's."""
     eddy_cfg = tmp_path / 'eddy_lsr.json'
     eddy_cfg.write_text(json.dumps(_LSR_EDDY_ARGS))
     _cfg(hmc_method='eddy', sdc_method='fieldmap')
@@ -151,7 +154,7 @@ def test_syn():
 
 
 def test_topup_only():
-    """TOPUP is baked into eddy's own resampling: nothing external is applied."""
+    """Test that TOPUP is baked into eddy's own resampling, so nothing external is applied."""
     _cfg(hmc_method='eddy', sdc_method='topup')
     unit = _pepolar_unit(CorrectionMethod.PEPOLAR)
 
@@ -159,7 +162,7 @@ def test_topup_only():
 
 
 def test_tortoise_quadratic():
-    """Default DIFFPREP correction_mode is 'quadratic': eddy-current applies."""
+    """Test that eddy-current applies under the default DIFFPREP correction_mode, 'quadratic'."""
     _cfg(hmc_method='tortoise', sdc_method='auto', sloppy=False)
     unit = make_preproc_unit([SRC], method=None)
 
@@ -167,7 +170,7 @@ def test_tortoise_quadratic():
 
 
 def test_tortoise_under_sloppy():
-    """--sloppy forces correction_mode='motion': no eddy-current component at all."""
+    """Test that --sloppy forces correction_mode='motion', with no eddy-current component."""
     _cfg(hmc_method='tortoise', sdc_method='auto', sloppy=True)
     unit = make_preproc_unit([SRC], method=None)
 
@@ -175,7 +178,9 @@ def test_tortoise_under_sloppy():
 
 
 def test_tortoise_cubic(tmp_path):
-    """M4: correction_mode='cubic' has no implemented determinant (only the
+    """Test that correction_mode='cubic' leaves eddy-current unmodulated (M4).
+
+    M4: correction_mode='cubic' has no implemented determinant (only the
     quadratic terms are), so the eddy-current component is unmodulated --
     reviewer-verified correct; this pins it down with a direct test.
     """
@@ -195,7 +200,9 @@ def test_tortoise_cubic(tmp_path):
 
 
 def test_tortoise_t2wreg():
-    """DIFFPREP's fieldmap-less T2Wreg (EPIREG) field is applied without a
+    """Test that DIFFPREP's T2Wreg field is applied without a weight by default.
+
+    DIFFPREP's fieldmap-less T2Wreg (EPIREG) field is applied without a
     weight, as in TORTOISE, unless ``--force jacobian`` is given.
 
     With ``t2w_sdc=False`` (T2w unavailable, e.g. ``--ignore t2w``) the stage
@@ -226,7 +233,9 @@ def test_tortoise_t2wreg():
     ],
 )
 def test_shoreline_sdc_provenance(method, expect_applied):
-    """C2: SHORELine's 'sdc' provenance mirrors ``init_sdc_wf``'s own
+    """Test that SHORELine's 'sdc' provenance mirrors ``init_sdc_wf``'s ``does_sdc`` gate.
+
+    C2: SHORELine's 'sdc' provenance mirrors ``init_sdc_wf``'s own
     ``does_sdc`` gate (``qsiprep/workflows/fieldmap/base.py:114-115``) --
     a scanner-measured fieldmap (PEPOLAR or GRE) or classic NiPreps SyN --
     not merely ``unit.method is not None``. SYNB0 and T2Wreg are fieldmap-less
@@ -250,7 +259,7 @@ def test_shoreline_sdc_provenance(method, expect_applied):
 
 
 def test_eddy_lsr_with_topup(tmp_path):
-    """F2: 'lsr' + TOPUP-only leaves both eddy-current and susceptibility unmodulated."""
+    """Test that 'lsr' + TOPUP-only leaves eddy-current and susceptibility unmodulated (F2)."""
     eddy_cfg = tmp_path / 'eddy_lsr.json'
     eddy_cfg.write_text(json.dumps(_LSR_EDDY_ARGS))
     _cfg(hmc_method='eddy', sdc_method='topup')
@@ -264,7 +273,9 @@ def test_eddy_lsr_with_topup(tmp_path):
 
 
 def test_eddy_lsr_with_drbuddi(tmp_path):
-    """F2 regression: 'lsr' + DRBUDDI records eddy-current unmodulated, but NOT
+    """Test that 'lsr' + DRBUDDI leaves only eddy-current unmodulated (F2 regression).
+
+    F2 regression: 'lsr' + DRBUDDI records eddy-current unmodulated, but NOT
     susceptibility -- DRBUDDI's warp is applied downstream of eddy and is
     Jacobian-modulated by QSIPrep itself, regardless of eddy's own resampling
     method. This is the exact case the pre-migration global-state bug got
@@ -284,7 +295,9 @@ def test_eddy_lsr_with_drbuddi(tmp_path):
 
 
 def test_two_units_in_one_invocation_get_different_provenance():
-    """The whole point of the migration: one invocation, two runs, two answers.
+    """Test that two units in one invocation get different provenance.
+
+    The whole point of the migration: one invocation, two runs, two answers.
 
     Both units are built under the *same* global config (one gradwarp
     coefficient file, one HMC/SDC selection) -- exactly the shape of a

@@ -22,7 +22,8 @@
 #
 #     https://www.nipreps.org/community/licensing/
 #
-"""
+"""QSIPrep base processing workflows.
+
 qsiprep base processing workflows
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -157,9 +158,11 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
 
     Parameters
     ----------
-    subject_id : :obj:`str`
+    subject_id : str
         Single subject label
-
+    session_ids : list of str or None
+        Session labels to process for this subject. Used to collect the data and
+        name the workflow; may be empty or None.
     """
     if subject_id == 'qsiprepXtest':
         # for documentation purposes

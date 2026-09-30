@@ -1,10 +1,6 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
-Prepare files for TOPUP and eddy
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-"""
+"""Prepare files for TOPUP and eddy."""
 
 import json
 import os
@@ -33,6 +29,7 @@ from .epi_fmap import (
     add_synthetic_b0_to_topup_inputs,
     eddy_inputs_from_dwi_files,
     get_best_b0_topup_inputs_from,
+    synb0_topup_config,
 )
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -53,7 +50,7 @@ def _find_eddy_cuda(default='eddy_cuda10.2'):
 
     Parameters
     ----------
-    default : str
+    default : str, optional
         Name returned when no ``eddy_cuda`` binary is found, so the downstream
         missing-dependency check reports a recognizable command.
 
@@ -152,15 +149,16 @@ class GatherEddyInputsOutputSpec(TraitedSpec):
 class GatherEddyInputs(SimpleInterface):
     """Manually prepare inputs for TOPUP and eddy.
 
-    **Inputs**
-        rpe_b0: str
-            path to a file (3D or 4D) containing b=0 images with the reverse PE direction
-        dwi_file: str
-            path to a 4d DWI nifti file
-        bval_file: str
-            path to the bval file
-        bvec_file: str
-            path to the bvec file
+    Inputs
+    ------
+    rpe_b0 : str
+        path to a file (3D or 4D) containing b=0 images with the reverse PE direction
+    dwi_file : str
+        path to a 4d DWI nifti file
+    bval_file : str
+        path to the bval file
+    bvec_file : str
+        path to the bvec file
     """
 
     input_spec = GatherEddyInputsInputSpec
@@ -252,6 +250,7 @@ class Synb0TopupInputsInputSpec(BaseInterfaceInputSpec):
 class Synb0TopupInputsOutputSpec(TraitedSpec):
     topup_datain = File(exists=True)
     topup_imain = File(exists=True)
+    topup_config = traits.Str(desc='TOPUP config matching the imain dimensions')
 
 
 class Synb0TopupInputs(SimpleInterface):
@@ -261,6 +260,8 @@ class Synb0TopupInputs(SimpleInterface):
     datain row, and the real b=0 volumes are slightly smoothed to match its
     smoothness (see
     :func:`~qsiprep.interfaces.epi_fmap.add_synthetic_b0_to_topup_inputs`).
+    The TOPUP config is chosen for the imain dimensions (see
+    :func:`~qsiprep.interfaces.epi_fmap.synb0_topup_config`).
     """
 
     input_spec = Synb0TopupInputsInputSpec
@@ -276,6 +277,7 @@ class Synb0TopupInputs(SimpleInterface):
         )
         self._results['topup_datain'] = datain
         self._results['topup_imain'] = imain
+        self._results['topup_config'] = synb0_topup_config(nb.load(imain).shape)
         return runtime
 
 
@@ -390,7 +392,7 @@ class ExtendedEddy(fsl.Eddy):
 
 
 def _fsl_to_ras_axis_flip(ref_file):
-    """Per-axis ±1 to convert FSL rigid params to RAS+ for ``ref_file``.
+    """Return the per-axis ±1 that converts FSL rigid params to RAS+ for ``ref_file``.
 
     FSL reports motion in its radiological voxel frame; the RAS direction of each
     axis follows the sign of the affine diagonal, with FSL flipping x for a
@@ -627,7 +629,7 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
 
 
 def topup_boilerplate(fieldmap_type, pepolar_method):
-    """Write boilerplate text based on fieldmaps"""
+    """Write boilerplate text based on fieldmaps."""
     if fieldmap_type not in ('rpe_series', 'epi', 'synb0'):
         return ''
 

@@ -1,4 +1,5 @@
-"""
+"""Implementing the FSL preprocessing workflow.
+
 Implementing the FSL preprocessing workflow
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -24,7 +25,6 @@ from ...interfaces.eddy import (
     Synb0TopupInputs,
     boilerplate_from_eddy_config,
 )
-from ...interfaces.epi_fmap import synb0_topup_config
 from ...interfaces.fmap import ParallelTOPUP
 from ...interfaces.gradients import ExtractB0s
 from ...interfaces.images import ConformDwi, IntraModalMerge, SplitDWIsFSL
@@ -56,8 +56,7 @@ def init_fsl_hmc_wf(
     slice_quality='outlier_n_sqr_stdev_map',
     name='fsl_hmc_wf',
 ):
-    """
-    This workflow controls the dwi preprocessing stages using FSL tools.
+    """Build a workflow that runs the dwi preprocessing stages using FSL tools.
 
     I couldn't get this to work reliably unless everything was oriented in LAS+ before going to
     TOPUP and eddy. For this reason, if TOPUP is going to be used (for an epi fieldmap or an
@@ -70,42 +69,42 @@ def init_fsl_hmc_wf(
 
     Finally, if SyN is chosen, it is applied to the LPS+ converted, eddy-resampled data.
 
+    Parameters
+    ----------
+    unit : :class:`~qsiplan.adapters.PreprocUnit`
+        the DWI series to correct together and the fieldmap that corrects them
+    source_file : str
+        Path to the source DWI file (used for report and derivative naming).
+    t2w_sdc : bool
+        Whether a T2w image is available for distortion correction (used for
+        DRBUDDI's multi-modal registration).
+    slice_quality : str, optional
+        Name of the eddy output that is sent to ``outputnode.slice_quality`` and
+        ``outputnode.hmc_optimization_data``. Default is
+        ``'outlier_n_sqr_stdev_map'``.
+    name : str, optional
+        Name of workflow (default: ``fsl_hmc_wf``)
 
-    **Parameters**
-
-        unit: :class:`~qsiplan.adapters.PreprocUnit`
-            the DWI series to correct together and the fieldmap that corrects them
-        impute_slice_threshold: float
-            threshold for a slice to be replaced with imputed values. Overrides the
-            parameter in ``eddy_config`` if set to a number > 0.
-        pepolar_method : str
-            Either 'DRBUDDI', 'TOPUP' or 'DRBUDDI+TOPUP'. The method for SDC when EPI
-            fieldmaps are used.
-        eddy_config: str
-            Path to a JSON file containing settings for the call to ``eddy``.
-
-
-    **Inputs**
-
-        dwi_file: str
-            DWI series. Possibly concatenated, denoised, etc
-        bvec_file: str
-            bvec file
-        bval_file: str
-            bval file
-        json_file: str
-            path to sidecar json file for dwi_file
-        b0_indices: list
-            Indexes into ``dwi_files`` that correspond to b=0 volumes
-        b0_images: list
-            List of single b=0 volumes
-        original_files: list
-            List of the files from which each DWI volume came. One per original file
-        t1_brain: str
-            Skull stripped T1w image
-        t1_mask: str
-            mask for t1_brain
-
+    Inputs
+    ------
+    dwi_file : str
+        DWI series. Possibly concatenated, denoised, etc
+    bvec_file : str
+        bvec file
+    bval_file : str
+        bval file
+    json_file : str
+        path to sidecar json file for dwi_file
+    b0_indices : list
+        Indexes into ``dwi_files`` that correspond to b=0 volumes
+    b0_images : list
+        List of single b=0 volumes
+    original_files : list
+        List of the files from which each DWI volume came. One per original file
+    t1_brain : str
+        Skull stripped T1w image
+    t1_mask : str
+        mask for t1_brain
     """
     # Check for FSL binary
     fsl_check = os.environ.get('FSL_BUILD')
@@ -450,7 +449,8 @@ def init_fsl_hmc_wf(
             # Generate the synthetic distortion-free b=0 from the T1w and the
             # (pre-SDC) distorted b=0 reference, then join it to TOPUP's
             # inputs as a zero-readout distortion group. The TOPUP config is
-            # the one tuned for the synthetic-b=0 pair.
+            # the one tuned for the synthetic-b=0 pair, or its no-subsampling
+            # variant when an axis has an odd number of voxels.
             synb0_b0_ref_wf = init_dwi_reference_wf(
                 gen_report=False,
                 desc='b0_for_synb0',
@@ -460,7 +460,6 @@ def init_fsl_hmc_wf(
             synb0_wf = init_synb0_wf()
             add_synb0_outputs(workflow, synb0_wf, source_file)
             synb0_topup_inputs = pe.Node(Synb0TopupInputs(), name='synb0_topup_inputs')
-            topup.inputs.config = synb0_topup_config()
 
             # Scalar QC of the SynB0-driven field (halo/displacement checks)
             synb0_field_qc = pe.Node(Synb0FieldQC(), name='synb0_field_qc')
@@ -509,6 +508,7 @@ def init_fsl_hmc_wf(
                 (synb0_topup_inputs, topup, [
                     ('topup_datain', 'encoding_file'),
                     ('topup_imain', 'in_file'),
+                    ('topup_config', 'config'),
                 ]),
             ])  # fmt:skip
         else:

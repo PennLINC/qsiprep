@@ -51,8 +51,11 @@ def _diffprep_siblings(tmp_path):
 
 
 def test_diffprep_cmdline_off(tmp_path):
-    """DIFFPREP with epi_mode='off' drives TORTOISEProcess from --step import
-    with all extra stages (including EPI) disabled."""
+    """Test the DIFFPREP command line with epi_mode='off'.
+
+    DIFFPREP with epi_mode='off' drives TORTOISEProcess from --step import
+    with all extra stages (including EPI) disabled.
+    """
     from qsiprep.interfaces.tortoise import DIFFPREP
 
     dwi, bmtxt, json_file = _diffprep_siblings(tmp_path)
@@ -79,7 +82,10 @@ def test_diffprep_cmdline_off(tmp_path):
 
 
 def test_diffprep_cmdline_t2wreg(tmp_path):
-    """DIFFPREP with epi_mode='T2Wreg' emits --epi T2Wreg -s <structural>."""
+    """Test the DIFFPREP command line with epi_mode='T2Wreg'.
+
+    DIFFPREP with epi_mode='T2Wreg' emits --epi T2Wreg -s <structural>.
+    """
     from qsiprep.interfaces.tortoise import DIFFPREP
 
     dwi, bmtxt, json_file = _diffprep_siblings(tmp_path)
@@ -102,7 +108,7 @@ def test_diffprep_cmdline_t2wreg(tmp_path):
 
 
 def test_diffprep_t2wreg_requires_structural(tmp_path):
-    """epi_mode='T2Wreg' without a structural image is an error."""
+    """Test that epi_mode='T2Wreg' without a structural image is an error."""
     from qsiprep.interfaces.tortoise import DIFFPREP
 
     dwi, bmtxt, json_file = _diffprep_siblings(tmp_path)
@@ -118,7 +124,9 @@ def test_diffprep_t2wreg_requires_structural(tmp_path):
 
 
 def test_tortoise_use_cuda_swaps_the_binary(tmp_path):
-    """use_cuda picks the <cmd>_cuda build, mirroring ExtendedEddy._use_cuda.
+    """Test that use_cuda swaps in the CUDA build of the binary.
+
+    use_cuda picks the <cmd>_cuda build, mirroring ExtendedEddy._use_cuda.
 
     TORTOISE ships fixed ``_cuda`` suffixes, so unlike FSL (eddy_cuda11.0) no
     PATH scan is needed. Default must stay on CPU.
@@ -138,7 +146,10 @@ def test_tortoise_use_cuda_swaps_the_binary(tmp_path):
 
 
 def test_use_cuda_is_not_passed_on_the_command_line(tmp_path):
-    """use_cuda selects the executable; it is not a TORTOISEProcess flag."""
+    """Test that use_cuda is not passed on the command line.
+
+    use_cuda selects the executable; it is not a TORTOISEProcess flag.
+    """
     from qsiprep.interfaces.tortoise import DIFFPREP
 
     dwi, bmtxt, json_file = _diffprep_siblings(tmp_path)
@@ -156,7 +167,9 @@ def test_use_cuda_is_not_passed_on_the_command_line(tmp_path):
 
 
 def test_diffprep_config_use_cuda_default_and_override(tmp_path):
-    """``use_cuda`` gets no default: only a user-set value counts as intent.
+    """Test the default and override of ``use_cuda`` in the DIFFPREP config.
+
+    ``use_cuda`` gets no default: only a user-set value counts as intent.
 
     The shipped diffprep_params.json sets it to False, a user file may set it
     either way, and a user file without the key must leave it absent so
@@ -178,7 +191,7 @@ def test_diffprep_config_use_cuda_default_and_override(tmp_path):
 
 
 def test_diffprep_wf_honours_use_cuda(tmp_path):
-    """A --diffprep-config asking for CUDA reaches the DIFFPREP node."""
+    """Test that a --diffprep-config asking for CUDA reaches the DIFFPREP node."""
     import json as _json
 
     config = _base_config()
@@ -198,7 +211,9 @@ def test_diffprep_wf_honours_use_cuda(tmp_path):
 
 
 def test_diffprep_correction_mode_defaults_to_quadratic():
-    """``correction_mode`` is a --diffprep-config key, defaulting to quadratic.
+    """Test that ``correction_mode`` defaults to quadratic.
+
+    ``correction_mode`` is a --diffprep-config key, defaulting to quadratic.
 
     The CLI exposes one ``--hmc-method tortoise`` rather than a value per mode,
     so the config JSON is the only way to reach ``motion`` or ``cubic``.
@@ -209,7 +224,7 @@ def test_diffprep_correction_mode_defaults_to_quadratic():
 
 
 def test_diffprep_wf_honours_correction_mode(tmp_path):
-    """A correction_mode in --diffprep-config reaches the DIFFPREP node."""
+    """Test that a correction_mode in --diffprep-config reaches the DIFFPREP node."""
     import json as _json
 
     config = _base_config()
@@ -229,7 +244,9 @@ def test_diffprep_wf_honours_correction_mode(tmp_path):
 
 
 def test_diffprep_boilerplate_describes_the_configured_mode(tmp_path):
-    """The methods section must describe the mode that actually ran.
+    """Test that the methods boilerplate describes the configured mode.
+
+    The methods section must describe the mode that actually ran.
 
     ``correction_mode`` is selectable through --diffprep-config, so boilerplate
     that hardcodes "quadratic eddy currents" would misreport a motion-only or
@@ -282,7 +299,7 @@ def _stage_diffprep_outputs(tmp_path, t2wreg):
 
 
 def test_diffprep_outputs_off_uses_moteddy(tmp_path, monkeypatch):
-    """epi_mode='off': both the image and the bmatrix come from motion+eddy."""
+    """Test that epi_mode='off' takes both the image and the bmatrix from motion+eddy."""
     from qsiprep.interfaces.tortoise import DIFFPREP
 
     dwi, bmtxt, json_file = _stage_diffprep_outputs(tmp_path, t2wreg=False)
@@ -300,7 +317,7 @@ def test_diffprep_outputs_off_uses_moteddy(tmp_path, monkeypatch):
 
 
 def test_diffprep_outputs_t2wreg_stays_in_native_space(tmp_path, monkeypatch):
-    """epi_mode='T2Wreg' must emit the PRE-EPI image plus the EPI warp.
+    """Test that epi_mode='T2Wreg' emits the PRE-EPI image plus the EPI warp.
 
     Passing ``-s`` makes TORTOISE run StructuralAlignment and FinalData, which
     resample the DWIs into the structural's frame -- pulling coregistration and
@@ -340,7 +357,10 @@ def test_diffprep_outputs_t2wreg_stays_in_native_space(tmp_path, monkeypatch):
 
 
 def test_diffprep_epi_off_emits_no_warp(tmp_path, monkeypatch):
-    """Without the EPI stage there is no displacement field to hand downstream."""
+    """Test that no warp is emitted without the EPI stage.
+
+    Without the EPI stage there is no displacement field to hand downstream.
+    """
     from nipype.interfaces.base import isdefined
 
     from qsiprep.interfaces.tortoise import DIFFPREP
@@ -360,7 +380,9 @@ def test_diffprep_epi_off_emits_no_warp(tmp_path, monkeypatch):
 
 
 def test_diffprep_t2wreg_missing_warp(tmp_path, monkeypatch):
-    """A T2Wreg run without its displacement field is an error, not a silent skip.
+    """Test that a missing T2Wreg displacement field is an error.
+
+    A T2Wreg run without its displacement field is an error, not a silent skip.
 
     Falling through would produce a run with no susceptibility correction at all
     while still reporting sdc_method='T2Wreg'.
@@ -385,10 +407,13 @@ def test_diffprep_t2wreg_missing_warp(tmp_path, monkeypatch):
 
 
 def test_diffprep_motion_params_basic(tmp_path):
-    """``DIFFPREPMotionParams`` slices cols 0-5 from a 24-col TORTOISE
+    """Test ``DIFFPREPMotionParams`` on a basic transformations file.
+
+    ``DIFFPREPMotionParams`` slices cols 0-5 from a 24-col TORTOISE
     transformations file, converts them from LPS to RAS+ (negating the x/y
     translation and rotation components), and writes them as a
-    whitespace-separated SPM file."""
+    whitespace-separated SPM file.
+    """
     from qsiprep.interfaces.tortoise import DIFFPREPMotionParams
 
     n_volumes = 4
@@ -410,7 +435,10 @@ def test_diffprep_motion_params_basic(tmp_path):
 
 
 def test_diffprep_motion_params_plain_whitespace(tmp_path):
-    """Some VNL serializers omit brackets and just space-separate values."""
+    """Test that motion parameters parse from plain whitespace-separated values.
+
+    Some VNL serializers omit brackets and just space-separate values.
+    """
     from qsiprep.interfaces.tortoise import DIFFPREPMotionParams
 
     full = np.arange(24, dtype=float).reshape(1, 24)
@@ -429,7 +457,7 @@ def test_diffprep_motion_params_plain_whitespace(tmp_path):
 
 
 def test_diffprep_motion_params_rejects_short_rows(tmp_path):
-    """A transforms file with fewer than 24 columns is rejected."""
+    """Test that a transforms file with fewer than 24 columns is rejected."""
     from qsiprep.interfaces.tortoise import DIFFPREPMotionParams
 
     transforms_file = tmp_path / 'short.txt'
@@ -440,7 +468,7 @@ def test_diffprep_motion_params_rejects_short_rows(tmp_path):
 
 
 def test_bmtxt_fsl_roundtrip(tmp_path):
-    """FSL gradients -> TORTOISE bmtxt -> FSL gradients must round-trip.
+    """Test that FSL gradients -> TORTOISE bmtxt -> FSL gradients round-trips.
 
     This is the assertion the DIFFPREP backend depends on: ``DIFFPREPSplitOutputs``
     recovers bvals/bvecs from TORTOISE's rotated b-matrix via
@@ -476,8 +504,11 @@ def test_bmtxt_fsl_roundtrip(tmp_path):
 
 
 def test_tortoise_convert_colocates_bmtxt(tmp_path):
-    """TORTOISEConvert renames the DWI into cwd and co-locates a same-stemmed
-    .bmtxt beside it, so TORTOISEProcess can pair them by basename."""
+    """Test that TORTOISEConvert co-locates a same-stemmed .bmtxt beside the DWI.
+
+    TORTOISEConvert renames the DWI into cwd and co-locates a same-stemmed
+    .bmtxt beside it, so TORTOISEProcess can pair them by basename.
+    """
     _require('FSLBVecsToTORTOISEBmatrix')
     from qsiprep.interfaces.tortoise import TORTOISEConvert
 
@@ -504,8 +535,11 @@ def test_tortoise_convert_colocates_bmtxt(tmp_path):
 
 
 def test_diffprep_split_outputs(tmp_path):
-    """``DIFFPREPSplitOutputs`` splits the corrected 4D DWI + bmtxt into
-    per-volume triples, finds the b=0s, and emits identity ITK affines."""
+    """Test ``DIFFPREPSplitOutputs``.
+
+    ``DIFFPREPSplitOutputs`` splits the corrected 4D DWI + bmtxt into
+    per-volume triples, finds the b=0s, and emits identity ITK affines.
+    """
     # deoblique=True routes the gradients through mrtrix's mrinfo -dwgrad.
     _require('FSLBVecsToTORTOISEBmatrix', 'TORTOISEBmatrixToFSLBVecs', 'mrinfo')
     from qsiprep.interfaces.tortoise import DIFFPREPSplitOutputs, make_bmat_file
@@ -540,7 +574,7 @@ def test_diffprep_split_outputs(tmp_path):
 
 
 def test_diffprep_split_outputs_deobliques_gradients(tmp_path):
-    """Gradients go through qsiprep's mrtrix RAS+ conversion, not raw FSL bvecs.
+    """Test that gradients go through qsiprep's mrtrix RAS+ conversion, not raw FSL bvecs.
 
     ``TORTOISEBmatrixToFSLBVecs`` emits FSL-convention (voxel-frame) bvecs, which
     depend on the image's orientation and obliquity. ``split_bvals_bvecs`` with
@@ -627,7 +661,7 @@ def _make_original_with_sidecar(tmp_path, name, pe_dir):
 
 
 def _make_4d(path, values):
-    """4D nii where volume i is a constant image of ``values[i]``."""
+    """Write a 4D nii where volume i is a constant image of ``values[i]``."""
     import nibabel as nb
 
     data = np.zeros((2, 2, 2, len(values)), dtype='float32')
@@ -637,9 +671,12 @@ def _make_4d(path, values):
 
 
 def test_split_dwis_by_distortion_group(tmp_path):
-    """SplitDWIsByDistortionGroup partitions the merged series by PE group,
+    """Test ``SplitDWIsByDistortionGroup``.
+
+    SplitDWIsByDistortionGroup partitions the merged series by PE group,
     labels the first-appearing group '+' and the second '-', and preserves
-    per-volume order within each group."""
+    per-volume order within each group.
+    """
     import nibabel as nb
 
     from qsiprep.interfaces.tortoise import SplitDWIsByDistortionGroup
@@ -683,7 +720,10 @@ def test_split_dwis_by_distortion_group(tmp_path):
 
 
 def test_split_dwis_by_distortion_group_rejects_single_group(tmp_path):
-    """A series with only one PE group is not a reverse-PE series."""
+    """Test that a series with only one PE group is rejected.
+
+    A series with only one PE group is not a reverse-PE series.
+    """
     from qsiprep.interfaces.tortoise import SplitDWIsByDistortionGroup
 
     ap = _make_original_with_sidecar(tmp_path, 'sub-01_dir-AP_dwi', 'j')
@@ -704,8 +744,11 @@ def test_split_dwis_by_distortion_group_rejects_single_group(tmp_path):
 
 
 def test_concatenate_diffprep_groups_preserves_original_order(tmp_path):
-    """ConcatenateDIFFPREPGroups reconstructs the original (merged) volume order
-    from two per-direction DIFFPREP outputs, even when groups interleave."""
+    """Test that ``ConcatenateDIFFPREPGroups`` preserves the original order.
+
+    ConcatenateDIFFPREPGroups reconstructs the original (merged) volume order
+    from two per-direction DIFFPREP outputs, even when groups interleave.
+    """
     import nibabel as nb
 
     from qsiprep.interfaces.tortoise import ConcatenateDIFFPREPGroups
@@ -756,8 +799,11 @@ def test_concatenate_diffprep_groups_preserves_original_order(tmp_path):
 
 
 def test_concatenate_diffprep_groups_rejects_count_mismatch(tmp_path):
-    """A per-group output whose volume count disagrees with the assignments is
-    a wiring bug and must fail loudly rather than silently drop volumes."""
+    """Test that ``ConcatenateDIFFPREPGroups`` rejects a volume-count mismatch.
+
+    A per-group output whose volume count disagrees with the assignments is
+    a wiring bug and must fail loudly rather than silently drop volumes.
+    """
     from qsiprep.interfaces.tortoise import ConcatenateDIFFPREPGroups
 
     g1 = tmp_path / 'g1.nii.gz'
@@ -806,9 +852,12 @@ T2W_SUBJECT = {'t2w': ['/data/sub-01_T2w.nii.gz']}
 
 
 def test_t2w_available_for_sdc_requires_anat_processing(t2w_gate_config):
-    """With --anat-modality none there is no anatomical workflow, so t2w_unfatsat
+    """Test that T2w SDC requires anatomical processing.
+
+    With --anat-modality none there is no anatomical workflow, so t2w_unfatsat
     is never produced; requesting T2w SDC then leaves the DRBUDDI structural / the
-    extended report's t2w_n4 with an empty input (the CI failure)."""
+    extended report's t2w_n4 with an empty input (the CI failure).
+    """
     from qsiplan.methods import selection_for_config
 
     from qsiprep.utils.sdc import t2w_available_for_sdc
@@ -820,7 +869,9 @@ def test_t2w_available_for_sdc_requires_anat_processing(t2w_gate_config):
 
 
 def test_t2w_available_for_sdc_requires_a_consuming_method(t2w_gate_config):
-    """t2w_unfatsat only exists when a selected method has a consuming stage.
+    """Test that T2w SDC requires a selected method with a consuming stage.
+
+    t2w_unfatsat only exists when a selected method has a consuming stage.
 
     ``additional_t2ws`` -- the only thing that makes init_anat_preproc_wf build its
     T2w branch -- was gated on the PEPOLAR tool alone. DIFFPREP's T2Wreg path
@@ -851,8 +902,11 @@ def test_t2w_available_for_sdc_requires_a_consuming_method(t2w_gate_config):
 
 
 def test_extended_pepolar_report_t2w_n4_gets_input():
-    """The node that failed in CI: with a T2w, the report's t2w_n4 must be fed
-    from inputnode.t2w_image; without one it uses the t1w-seg branch instead."""
+    """Test that the extended PEPOLAR report's t2w_n4 gets an input.
+
+    The node that failed in CI: with a T2w, the report's t2w_n4 must be fed
+    from inputnode.t2w_image; without one it uses the t1w-seg branch instead.
+    """
     _base_config()
     from qsiprep.workflows.fieldmap.pepolar import init_extended_pepolar_report_wf
 
@@ -933,7 +987,10 @@ def _build(unit, t2w_sdc, name='dp'):
 
 
 def test_init_diffprep_hmc_wf_contract_hmc_only():
-    """No fieldmap + no T2w -> HMC-only, sdc_method='None', full contract."""
+    """Test that no fieldmap and no T2w give HMC only.
+
+    No fieldmap + no T2w -> HMC-only, sdc_method='None', full contract.
+    """
     _base_config()
     wf = _build(_make_unit(None), t2w_sdc=False)
 
@@ -961,7 +1018,10 @@ def test_init_diffprep_hmc_wf_contract_hmc_only():
 
 
 def test_init_diffprep_hmc_wf_t2wreg():
-    """No fieldmap + T2w -> TORTOISE T2Wreg (sdc_method='T2Wreg')."""
+    """Test that no fieldmap plus a T2w gives TORTOISE T2Wreg.
+
+    No fieldmap + T2w -> TORTOISE T2Wreg (sdc_method='T2Wreg').
+    """
     _base_config()
     wf = _build(_make_unit(None), t2w_sdc=True)
     assert wf.get_node('diffprep').inputs.epi_mode == 'T2Wreg'
@@ -974,7 +1034,10 @@ def _connect_fields(wf, src, dst):
 
 
 def test_init_diffprep_hmc_wf_synb0_targets_the_synthetic_b0():
-    """--sdc-anat-reference synb0, no T2w -> T2Wreg registered to the synthetic b=0."""
+    """Test that --sdc-anat-reference synb0 targets the synthetic b=0.
+
+    --sdc-anat-reference synb0, no T2w -> T2Wreg registered to the synthetic b=0.
+    """
     from qsiplan.models import CorrectionMethod
 
     from qsiprep.tests.preproc_factory import make_preproc_unit
@@ -1016,7 +1079,9 @@ def test_init_diffprep_hmc_wf_synb0_targets_the_synthetic_b0():
 
 
 def test_t2wreg_sdc_travels_as_a_warp_not_baked_in():
-    """The EPI field must reach to_dwi_ref_warps so qsiprep resamples once.
+    """Test that T2Wreg SDC travels as a warp rather than being baked in.
+
+    The EPI field must reach to_dwi_ref_warps so qsiprep resamples once.
 
     Taking TORTOISE's FinalData instead would bake in its StructuralAlignment,
     performing coregistration and ACPC inside HMC. Routing the displacement field
@@ -1034,7 +1099,9 @@ def test_t2wreg_sdc_travels_as_a_warp_not_baked_in():
 
 
 def test_t2wreg_coregistration_uses_the_corrected_b0():
-    """Coregistration must see the undistorted b=0.
+    """Test that T2Wreg coregistration uses the corrected b=0.
+
+    Coregistration must see the undistorted b=0.
 
     DIFFPREP's output is pre-EPI on this path, so the warp has to be applied to
     the b=0 before it becomes the coregistration reference -- otherwise the
@@ -1057,7 +1124,10 @@ def test_t2wreg_coregistration_uses_the_corrected_b0():
 
 
 def test_non_t2wreg_coregistration_uses_the_b0_directly():
-    """Without an in-TORTOISE EPI stage there is nothing to unwarp first."""
+    """Test that non-T2Wreg coregistration uses the b=0 directly.
+
+    Without an in-TORTOISE EPI stage there is nothing to unwarp first.
+    """
     _base_config()
     wf = _build(_make_unit(None), t2w_sdc=False, name='no_t2wreg_coreg')
     assert wf.get_node('apply_sdc_to_b0') is None
@@ -1067,7 +1137,10 @@ def test_non_t2wreg_coregistration_uses_the_b0_directly():
 
 
 def test_init_diffprep_hmc_wf_fieldmapless_without_t2w():
-    """Fieldmap-less with no T2w is HMC only: no SDC node, TORTOISE's EPI stage off."""
+    """Test that fieldmap-less processing without a T2w is HMC only.
+
+    Fieldmap-less with no T2w is HMC only: no SDC node, TORTOISE's EPI stage off.
+    """
     _base_config()
     wf = _build(_make_unit(None), t2w_sdc=False)
     assert wf.get_node('diffprep').inputs.epi_mode == 'off'
@@ -1075,7 +1148,9 @@ def test_init_diffprep_hmc_wf_fieldmapless_without_t2w():
 
 
 def test_cnr_model_label_is_bids_valid():
-    """The ``model`` entity names the signal model and must be alphanumeric.
+    """Test that the CNR ``model`` label is BIDS-valid.
+
+    The ``model`` entity names the signal model and must be alphanumeric.
 
     DIFFPREP emits no CNR of its own, so the ``tortoise`` backend reports the
     MAPMRI model the CNR is actually derived from rather than its own name.
@@ -1099,7 +1174,10 @@ def test_cnr_model_label_is_bids_valid():
 
 
 def test_cnr_description_flags_in_sample_bias():
-    """The diffprep CNR is an in-sample fit; the sidecar must say so."""
+    """Test that the CNR description flags its in-sample bias.
+
+    The diffprep CNR is an in-sample fit; the sidecar must say so.
+    """
     from qsiprep.workflows.dwi.derivatives import _cnr_description
 
     baseline = _cnr_description('shoreline')
@@ -1112,7 +1190,10 @@ def test_cnr_description_flags_in_sample_bias():
 
 
 def test_init_diffprep_hmc_wf_cnr_is_computed_not_placeholder():
-    """cnr_map must come from CalculateCNR on the MAPMRI synthesis, not zeros."""
+    """Test that cnr_map is computed, not a placeholder.
+
+    cnr_map must come from CalculateCNR on the MAPMRI synthesis, not zeros.
+    """
     _base_config()
     wf = _build(_make_unit(None), t2w_sdc=False, name='dp_cnr')
 
@@ -1129,7 +1210,7 @@ def test_init_diffprep_hmc_wf_cnr_is_computed_not_placeholder():
 
 
 def test_init_diffprep_hmc_wf_honours_sloppy():
-    """--sloppy must take TORTOISE's expensive second pass out, via --niter 0.
+    """Test that --sloppy takes TORTOISE's expensive second pass out, via --niter 0.
 
     Without it a DIFFPREP node can burn >1h on CI-sized data (emitting no output
     while it does, which trips no_output_timeout).
@@ -1163,7 +1244,7 @@ def test_init_diffprep_hmc_wf_honours_sloppy():
 
 
 def test_init_diffprep_hmc_wf_rpe_series_runs_per_direction(tmp_path):
-    """rpe_series must run DIFFPREP once per phase-encoding direction.
+    """Test that rpe_series runs DIFFPREP once per phase-encoding direction.
 
     A single DIFFPREP run models one phase axis / one b=0 reference for the
     whole file, so the concatenated opposing-PE series would be silently
@@ -1206,7 +1287,7 @@ def test_init_diffprep_hmc_wf_rpe_series_runs_per_direction(tmp_path):
 
 
 def test_init_diffprep_hmc_wf_rpe_series_pe_axis(tmp_path):
-    """The split node is told the phase-encoding axis of the series.
+    """Test that the split node is told the phase-encoding axis of the series.
 
     DIFFPREP is sign-agnostic on the axis, but the split still labels the
     first-appearing group '+' and the second '-' so provenance is explicit.
@@ -1224,7 +1305,7 @@ def test_init_diffprep_hmc_wf_rpe_series_pe_axis(tmp_path):
 
 
 def test_drbuddi_never_sends_parser_disabled_flags(tmp_path):
-    """Two DRBUDDI options are disabled in TORTOISE's parser; never send them.
+    """Test that the two DRBUDDI options disabled in TORTOISE's parser are never sent.
 
     ``--DRBUDDI_start_with_diffeomorphic_for_rigid_reg`` and
     ``--DRBUDDI_disable_initial_rigid`` are both commented out of
@@ -1285,7 +1366,7 @@ def test_drbuddi_never_sends_parser_disabled_flags(tmp_path):
 
 
 def test_init_diffprep_hmc_wf_pepolar_always_uses_drbuddi(tmp_path):
-    """TORTOISE corrects PEPOLAR with DRBUDDI regardless of --sdc-method.
+    """Test that TORTOISE corrects PEPOLAR with DRBUDDI regardless of --sdc-method.
 
     The builder no longer rejects TOPUP itself; backend feasibility is owned by
     the grouping validation / config layer, not the workflow builders.
@@ -1302,7 +1383,7 @@ def test_init_diffprep_hmc_wf_pepolar_always_uses_drbuddi(tmp_path):
 
 
 def test_sloppy_epi_working_res_only_under_sloppy():
-    """The working-grid override is emitted for --sloppy and nowhere else.
+    """Test that the working-grid override is emitted for --sloppy and nowhere else.
 
     A stock (unpatched) TORTOISE rejects --epi_working_res, so a normal run must
     not emit it. 2.5mm is a deliberate speed choice for smoke tests, not a
@@ -1322,7 +1403,7 @@ def test_sloppy_epi_working_res_only_under_sloppy():
 
 
 def test_drbuddi_epi_working_res_on_the_command_line(tmp_path):
-    """The trait renders as --epi_working_res, and is absent when unset."""
+    """Test that the trait renders as --epi_working_res, and is absent when unset."""
     from qsiprep.interfaces.tortoise import DRBUDDI
 
     for name in ('up.nii', 'up.bmtxt', 'up.json', 'down.nii'):
@@ -1339,7 +1420,7 @@ def test_drbuddi_epi_working_res_on_the_command_line(tmp_path):
 
 
 def test_sloppy_reaches_the_drbuddi_node(tmp_path):
-    """--sloppy propagates all the way to the DRBUDDI node's command line."""
+    """Test that --sloppy propagates all the way to the DRBUDDI node's command line."""
     from qsiprep.interfaces.tortoise import SLOPPY_EPI_WORKING_RES
 
     # GatherDRBUDDIInputs takes epi_fmaps as a File trait, so the reverse-PE
@@ -1364,7 +1445,7 @@ def test_sloppy_reaches_the_drbuddi_node(tmp_path):
 
 
 def test_t2wreg_is_recognised_as_sdc_for_reporting():
-    """The reportlet gate must recognise T2Wreg, which carries no fieldmap.
+    """Test that the reportlet gate recognises T2Wreg, which carries no fieldmap.
 
     Before this, ``fieldmap_type is None`` fell through both gates in
     ``init_dwi_preproc_wf`` and T2Wreg silently produced no SDC figure, while the
@@ -1408,7 +1489,10 @@ def test_t2wreg_is_recognised_as_sdc_for_reporting():
 
 
 def test_t2wreg_reportlet_desc_is_registered_in_the_report_spec():
-    """A desc absent from reports-spec.yml is written to disk but never shown."""
+    """Test that the T2Wreg reportlet desc is registered in the report spec.
+
+    A desc absent from reports-spec.yml is written to disk but never shown.
+    """
     import yaml
 
     from qsiprep.data import load as load_data
@@ -1427,7 +1511,7 @@ def test_t2wreg_reportlet_desc_is_registered_in_the_report_spec():
 
 
 def test_non_shelled_rpe_series_uses_the_stock_drbuddi_path(tmp_path):
-    """Non-shelled reverse-PE series no longer auto-synthesize.
+    """Test that non-shelled reverse-PE series no longer auto-synthesize.
 
     The old behaviour routed CS-DSI data to a qsiprep-side predicted-shell
     workflow, on the theory that DRBUDDI cannot tensor-fit a usable [b0, FA] from
@@ -1455,7 +1539,7 @@ def test_non_shelled_rpe_series_uses_the_stock_drbuddi_path(tmp_path):
 
 
 def test_drbuddi_synth_shell_is_opt_in(tmp_path):
-    """The synthesis flags reach DRBUDDI only when explicitly configured.
+    """Test that the synthesis flags reach DRBUDDI only when explicitly configured.
 
     A stock (unpatched) TORTOISE rejects --DRBUDDI_synth_shell_bval, so absence
     must mean the flag is never emitted -- not emitted as 0.
@@ -1489,7 +1573,7 @@ def test_drbuddi_synth_shell_is_opt_in(tmp_path):
 
 
 def test_drbuddi_synth_shell_cmdline(tmp_path):
-    """The traits render as the TORTOISE flags."""
+    """Test that the synthesis traits render as the TORTOISE flags."""
     from qsiprep.interfaces.tortoise import DRBUDDI
 
     for name in ('up.nii', 'up.bmtxt', 'up.json', 'down.nii'):
@@ -1508,7 +1592,7 @@ def test_drbuddi_synth_shell_cmdline(tmp_path):
 
 
 def test_diffprep_node_declares_its_threads():
-    """DIFFPREP should declare its threads, consistent with the other TORTOISE nodes.
+    """Test that DIFFPREP declares its threads, consistent with the other TORTOISE nodes.
 
     Caveat, measured rather than assumed: OMP_NUM_THREADS does NOT actually bound
     TORTOISEProcess (~1893% CPU at OMP_NUM_THREADS=4 versus ~2071% unconstrained
@@ -1526,14 +1610,20 @@ def test_diffprep_node_declares_its_threads():
 
 
 def test_diffprep_interface_exports_omp_num_threads_to_the_subprocess():
-    """The env var goes on inputs.environ (passed to the child), not os.environ."""
+    """Test that OMP_NUM_THREADS is exported to the subprocess.
+
+    The env var goes on inputs.environ (passed to the child), not os.environ.
+    """
     from qsiprep.interfaces.tortoise import DIFFPREP
 
     assert DIFFPREP(num_threads=5).inputs.environ.get('OMP_NUM_THREADS') == '5'
 
 
 def test_rpe_series_diffprep_nodes_also_declare_threads(tmp_path):
-    """The per-PE-direction DIFFPREP nodes share diffprep_kwargs, so they inherit it."""
+    """Test that the per-PE-direction DIFFPREP nodes also declare threads.
+
+    The per-PE-direction DIFFPREP nodes share diffprep_kwargs, so they inherit it.
+    """
     import nibabel as nb
     import numpy as np
 
@@ -1552,7 +1642,9 @@ def test_rpe_series_diffprep_nodes_also_declare_threads(tmp_path):
 
 
 def test_diffprep_passes_ncores_to_tortoise():
-    """--ncores is the only knob that actually bounds TORTOISEProcess.
+    """Test that DIFFPREP passes --ncores to TORTOISE.
+
+    --ncores is the only knob that actually bounds TORTOISEProcess.
 
     num_threads only sets OMP_NUM_THREADS, which TORTOISE overrides via
     omp_set_num_threads().
@@ -1567,7 +1659,7 @@ def test_diffprep_passes_ncores_to_tortoise():
 
 
 def test_diffprep_cmdline_gradwarp_and_initial_field(tmp_path):
-    """The gradwarp field and the T2Wreg initializer are plain TORTOISE flags."""
+    """Test that the gradwarp field and the T2Wreg initializer are plain TORTOISE flags."""
     from qsiprep.interfaces.tortoise import DIFFPREP
 
     dwi, bmtxt, json_file = _diffprep_siblings(tmp_path)
@@ -1596,7 +1688,9 @@ def test_diffprep_cmdline_gradwarp_and_initial_field(tmp_path):
 @pytest.mark.integration
 @pytest.mark.diffprep
 def test_reconstructed_transform_reproduces_moteddy(tmp_path, working_dir):
-    """The ship gate: our reconstruction must match TORTOISE's own output.
+    """Test that the reconstructed transform reproduces TORTOISE's own output.
+
+    The ship gate: our reconstruction must match TORTOISE's own output.
 
     Reproducing ``_moteddy.nii`` validates the *combined* motion+EC map, which
     is what pins the parameter convention. Splitting the EC determinant out of

@@ -1,4 +1,5 @@
-"""
+"""Pre-processing q-space Image workflows.
+
 Pre-processing q-space Image workflows
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 .. automodule:: qsiprep.workflows.dwi.base

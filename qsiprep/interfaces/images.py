@@ -1,11 +1,6 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
-Image tools interfaces
-~~~~~~~~~~~~~~~~~~~~~~
-
-
-"""
+"""Image tools interfaces."""
 
 import glob
 import os
@@ -488,11 +483,14 @@ class ConformDwiOutputSpec(TraitedSpec):
 
 class ConformDwi(SimpleInterface):
     """Conform a series of dwi images to enable merging.
+
     Performs three basic functions:
+
     #. Orient image to requested orientation
     #. Validate the qform and sform, set qform code to 1
     #. Flip bvecs accordingly
     #. Do nothing to the bvals
+
     Note: This is not as nuanced as fmriprep's version
     """
 
@@ -601,16 +599,89 @@ class ChooseInterpolator(SimpleInterface):
         return runtime
 
 
+class _ReferenceGridAtSpacingInputSpec(BaseInterfaceInputSpec):
+    fov_image = File(
+        exists=True,
+        mandatory=True,
+        desc='image whose field of view and orientation define the grid',
+    )
+    spacing_image = File(exists=True, mandatory=True, desc='image whose voxel size the grid takes')
+
+
+class _ReferenceGridAtSpacingOutputSpec(TraitedSpec):
+    out_file = File(
+        exists=True,
+        desc='empty image on the field of view of fov_image at the spacing of spacing_image',
+    )
+
+
+class ReferenceGridAtSpacing(SimpleInterface):
+    """Build a resampling reference: one image's field of view at another image's voxel size.
+
+    The output covers the same physical extent as ``fov_image``, with its
+    orientation and its first-voxel corner, but is sampled at the voxel size
+    of ``spacing_image``. It is meant as the ``reference_image`` of a
+    resampling, so that an image can be brought into another image's frame
+    without losing its own resolution.
+    """
+
+    input_spec = _ReferenceGridAtSpacingInputSpec
+    output_spec = _ReferenceGridAtSpacingOutputSpec
+
+    def _run_interface(self, runtime):
+        fov_img = nb.load(self.inputs.fov_image)
+        zooms = np.asarray(nb.load(self.inputs.spacing_image).header.get_zooms()[:3], dtype=float)
+        grid = reference_grid_at_spacing(fov_img, zooms)
+        out_file = fname_presuffix(
+            self.inputs.fov_image, suffix='_refgrid', newpath=runtime.cwd, use_ext=True
+        )
+        grid.to_filename(out_file)
+        self._results['out_file'] = out_file
+        return runtime
+
+
+def reference_grid_at_spacing(fov_img, zooms):
+    """Return an empty image on ``fov_img``'s field of view sampled at ``zooms``.
+
+    Parameters
+    ----------
+    fov_img : :class:`nibabel.spatialimages.SpatialImage`
+        Image whose extent, orientation and corner define the grid.
+    zooms : sequence of float
+        Voxel size of the returned grid, in mm, one value per axis.
+
+    Returns
+    -------
+    :class:`nibabel.nifti1.Nifti1Image`
+        A zero-filled image. Its shape is the smallest grid at ``zooms`` that
+        covers the extent of ``fov_img``; its direction cosines and the
+        position of its first voxel corner are those of ``fov_img``.
+    """
+    zooms = np.asarray(zooms, dtype=float)
+    fov_zooms = np.asarray(fov_img.header.get_zooms()[:3], dtype=float)
+    shape = np.asarray(fov_img.shape[:3])
+    directions = fov_img.affine[:3, :3] / fov_zooms
+    new_shape = np.ceil(shape * fov_zooms / zooms - 1e-6).astype(int)
+    corner = fov_img.affine @ np.array([-0.5, -0.5, -0.5, 1.0])
+    new_affine = np.eye(4)
+    new_affine[:3, :3] = directions * zooms
+    new_affine[:3, 3] = corner[:3] + directions @ (zooms / 2.0)
+    grid = nb.Nifti1Image(np.zeros(new_shape, dtype=np.float32), new_affine)
+    grid.header.set_zooms(zooms)
+    return grid
+
+
 class ValidateImageOutputSpec(TraitedSpec):
     out_file = File(exists=True, desc='validated image')
     out_report = File(exists=True, desc='HTML segment containing warning')
 
 
 class ValidateImage(SimpleInterface):
-    """
-    Check the correctness of x-form headers (matrix and code)
+    """Check the correctness of x-form headers (matrix and code).
+
     This interface implements the `following logic
     <https://github.com/poldracklab/fmriprep/issues/873#issuecomment-349394544>`_:
+
     +-------------------+------------------+------------------+------------------\
 +------------------------------------------------+
     | valid quaternions | `qform_code > 0` | `sform_code > 0` | `qform == sform` \
@@ -736,8 +807,7 @@ class ValidateImage(SimpleInterface):
 
 
 def bvec_to_rasb(bval_file, bvec_file, img_file, workdir):
-    """Use mrinfo to convert a bvec to RAS+ world coordinate reference frame"""
-
+    """Use mrinfo to convert a bvec to RAS+ world coordinate reference frame."""
     # Make a temporary bvec file that mrtrix likes
     temp_bvec = fname_presuffix(bvec_file, suffix='_fix', newpath=workdir)
     lps_bvec = np.loadtxt(bvec_file).reshape(3, -1)
@@ -848,7 +918,8 @@ class TSplitOutputSpec(TraitedSpec):
 
 
 class TSplit(AFNICommand):
-    """Converts a 3D + time dataset into multiple 3D volumes (one volume per file).
+    """Convert a 3D + time dataset into multiple 3D volumes (one volume per file).
+
     For complete details, see the `3dTsplit4D Documentation.
     <https://afni.nimh.nih.gov/pub/dist/doc/program_help/3dTsplit4D.html>`_
     """
@@ -858,12 +929,14 @@ class TSplit(AFNICommand):
     output_spec = TSplitOutputSpec
 
     def _list_outputs(self):
-        """Create a Bunch which contains all possible files generated
-        by running the interface.  Some files are always generated, others
+        """Create a Bunch which contains all possible files generated by running the interface.
+
+        Some files are always generated, others
         depending on which ``inputs`` options are set.
+
         Returns
         -------
-        outputs : Bunch object
+        outputs : Bunch
             Bunch object containing all possible files generated by
             interface object.
             If None, file was not generated

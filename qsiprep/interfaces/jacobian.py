@@ -120,7 +120,7 @@ WORLD_OVERLAP_SLACK_MM = 1e-2
 
 
 def weight_key(gradwarp, fieldwarp):
-    """Cache key for one unique (gradwarp, fieldwarp) combination.
+    """Return the cache key for one unique (gradwarp, fieldwarp) combination.
 
     Falsy when neither field is present, which means a unity weight.
     """
@@ -128,7 +128,7 @@ def weight_key(gradwarp, fieldwarp):
 
 
 def _world_bounding_box(img):
-    """The axis-aligned world-space bounding box of ``img``'s voxel grid."""
+    """Return the axis-aligned world-space bounding box of ``img``'s voxel grid."""
     shape = img.shape[:3]
     corners = np.array(list(itertools.product(*[(0, dim - 1) for dim in shape])))
     world = nb.affines.apply_affine(img.affine, corners)
@@ -184,7 +184,7 @@ def resample_like(source_path, like_path, out_path, interpolation='nearest', fil
 
 
 def _field_components(img):
-    """The (X, Y, Z, 3) displacement array of an ITK displacement-field image."""
+    """Return the (X, Y, Z, 3) displacement array of an ITK displacement-field image."""
     shape = img.shape
     if img.ndim == 4 and shape[3] == 3:
         return np.asanyarray(img.dataobj).astype(float)
@@ -197,9 +197,9 @@ def _field_components(img):
 
 
 def validate_field_geometry(field_path, reference_path):
-    """Raise unless ``field_path`` is a plausible displacement field for
-    composition against ``reference_path``.
+    """Raise unless ``field_path`` is a plausible displacement field for ``reference_path``.
 
+    The field is checked as a candidate for composition against ``reference_path``.
     Only the layout (three vector components) and the world frame are checked.
     Direction cannot be checked from headers; it is established behaviourally
     by the conservation test and the positivity guard.
@@ -284,7 +284,7 @@ def check_weight_map(map_path, mask_path):
 
 
 def multiply_maps(paths, out_path, like_path=None):
-    """Voxelwise product of one or more scalar maps, reconciled onto one lattice.
+    """Multiply one or more scalar maps voxelwise, reconciled onto one lattice.
 
     Every factor is resampled (linearly, ``fill_value=1.0``) onto
     ``like_path``'s grid, which defaults to the first factor's, before
@@ -365,7 +365,7 @@ def transport_scalar_map(image_path, transform_path, reference_path, out_path, n
 
 
 def pe_axis_from_direction(pe_dir):
-    """The voxel axis (0, 1, 2) of a BIDS ``PhaseEncodingDirection`` value."""
+    """Return the voxel axis (0, 1, 2) of a BIDS ``PhaseEncodingDirection`` value."""
     try:
         return {'i': 0, 'j': 1, 'k': 2, 'x': 0, 'y': 1, 'z': 2}[str(pe_dir)[0]]
     except (KeyError, IndexError) as err:
@@ -373,7 +373,7 @@ def pe_axis_from_direction(pe_dir):
 
 
 def jacobian_determinant(field_path, out_path, pe_axis, mask_path=None):
-    """TORTOISE's Jacobian of a displacement field: ``1 + d(u_PE)/d(PE)``.
+    """Compute TORTOISE's Jacobian of a displacement field: ``1 + d(u_PE)/d(PE)``.
 
     ``FINALDATA::ComputeDetImgFromAllTransExceptStr`` differentiates the
     composed displacement along the phase-encoding voxel axis only, with
@@ -696,7 +696,7 @@ class ComposeJacobianWeights(SimpleInterface):
         return runtime
 
     def _run_lsr(self, runtime, num_dwis, reference):
-        """LSR: each volume's weight is its blip's DRBUDDI ratio image, and nothing else."""
+        """Weight each volume by its blip's DRBUDDI ratio image (LSR), and nothing else."""
         supplied = list(self.inputs.sdc_scaling_images)
         if len(supplied) != num_dwis:
             raise ValueError(
@@ -776,7 +776,7 @@ def _okan_phase_axis(parameters):
 
 
 def _okan_coordinate_frame(affine, shape=None, rot_eddy_center='isocenter'):
-    """TORTOISE's "DP frame" spacing and centre index for ``affine``.
+    """Return TORTOISE's "DP frame" spacing and centre index for ``affine``.
 
     Returns ``(spacing, indo)``: the per-axis voxel spacing (mm) and the
     continuous voxel index that ``DIFFPREP::ChangeImageHeaderToDP`` places at
@@ -811,7 +811,7 @@ def _okan_coordinate_frame(affine, shape=None, rot_eddy_center='isocenter'):
 
 
 def _okan_rigid(parameters):
-    """The rigid part (R, T) of one 24-parameter row, ``R = Rz . Ry . Rx``."""
+    """Return the rigid part (R, T) of one 24-parameter row, ``R = Rz . Ry . Rx``."""
     ax, ay, az = parameters[3], parameters[4], parameters[5]
     cos_x, sin_x = np.cos(ax), np.sin(ax)
     cos_y, sin_y = np.cos(ay), np.sin(ay)
@@ -823,7 +823,7 @@ def _okan_rigid(parameters):
 
 
 def okan_quadratic_jacobian(parameters, shape, affine, rot_eddy_center='isocenter'):
-    """Analytic ``det grad phi`` of DIFFPREP's eddy-current correction.
+    """Compute the analytic ``det grad phi`` of DIFFPREP's eddy-current correction.
 
     The determinant is the phase-axis polynomial's partial derivative with
     respect to its own coordinate, evaluated at the rigidly moved point
@@ -863,7 +863,7 @@ def okan_quadratic_jacobian(parameters, shape, affine, rot_eddy_center='isocente
 
 
 def _okan_transform_point(px, py, pz, parameters):
-    """Full 24-parameter forward map (rigid + quadratic + cubic), vectorized.
+    """Apply the full 24-parameter forward map (rigid + quadratic + cubic), vectorized.
 
     Implements ``OkanQuadraticTransform::TransformPoint``. ``px, py, pz`` are
     DP-frame physical coordinates. Used by ``resample_with_okan_transform``
@@ -1053,7 +1053,7 @@ class OkanQuadraticJacobian(SimpleInterface):
 
 
 def _jacobian_sidecar(weight_index, applied, unmodulated, reason, method):
-    """Sidecar for the intensity weight derivative.
+    """Build the sidecar for the intensity weight derivative.
 
     ``weight_index`` is zero-based, one entry per volume of the preprocessed
     DWI series, indexing volumes of the 4D weight file. Repeated maps appear

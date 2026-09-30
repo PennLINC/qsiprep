@@ -20,7 +20,9 @@ from qsiprep.tests.preproc_factory import make_preproc_unit
 
 
 def _reset_config_impl():
-    """The body of ``_reset_config``, factored out so it can be driven
+    """Reset the config for a test and restore it afterwards.
+
+    The body of ``_reset_config``, factored out so it can be driven
     directly by ``test_reset_config_fixture_restores_omp_nthreads`` (M6)
     without going through pytest's fixture machinery.
     """
@@ -59,7 +61,9 @@ def _reset_config():
 
 
 def test_reset_config_fixture_restores_omp_nthreads():
-    """M6 regression: the fixture used to hard-set omp_nthreads to 1 on setup
+    """Test that the config fixture restores omp_nthreads (M6 regression).
+
+    M6 regression: the fixture used to hard-set omp_nthreads to 1 on setup
     and never restore it on teardown, so a test that changed it (e.g.
     ``test_scale_dwis_num_threads_is_set_from_omp_nthreads``, which sets it
     to 4) leaked that value into whatever module ran next. Drives the
@@ -100,7 +104,7 @@ def _edges(workflow):
 
 
 def _source_name(source):
-    """The forwarded field's own name, whether plain or function-wrapped.
+    """Return the forwarded field's own name, whether plain or function-wrapped.
 
     A functor connection (e.g. ``(('gradwarp_field', _listify), 'gradwarp_field')``)
     stores the upstream field name as the first element of a tuple rather than
@@ -124,7 +128,9 @@ def test_compose_jacobian_feeds_the_weighting_node():
 
 
 def test_scale_dwis_outputs_reach_outputnode():
-    """The single-node replacement for the old dedup/resample/floor pipeline.
+    """Test that the scale_dwis outputs reach the outputnode.
+
+    This is the single-node replacement for the old dedup/resample/floor pipeline.
 
     ``scale_dwis`` (``ApplyJacobianWeights``) transports, floors and multiplies
     the weight maps itself, parallelizing the per-unique-map ``ants
@@ -145,7 +151,9 @@ def test_scale_dwis_outputs_reach_outputnode():
 
 
 def test_scale_dwis_num_threads_is_set_from_omp_nthreads():
-    """The threading knob is wired the same way as its neighbouring nodes.
+    """Test that scale_dwis num_threads is set from omp_nthreads.
+
+    The threading knob is wired the same way as its neighbouring nodes.
 
     ``ApplyJacobianWeights`` parallelizes its own per-unique-map ``ants
     ApplyTransforms`` calls with a ``num_threads`` trait, mirroring
@@ -160,7 +168,9 @@ def test_scale_dwis_num_threads_is_set_from_omp_nthreads():
 
 
 def test_scale_dwis_n_procs_matches_num_threads():
-    """I2: the Node's own ``n_procs`` must be paired with ``num_threads``.
+    """Test that the scale_dwis Node's n_procs matches num_threads (I2).
+
+    The Node's own ``n_procs`` must be paired with ``num_threads``.
 
     ``ApplyJacobianWeights`` drives a ``ThreadPoolExecutor`` of up to
     ``num_threads`` concurrent ``antsApplyTransforms`` subprocesses, but if
@@ -201,7 +211,7 @@ def test_ignore_jacobian_removes_the_node():
 
 
 def test_ignore_jacobian_leaves_weights_unconnected():
-    """With weighting off, scale_dwis must get nothing and pass data through."""
+    """Test that, with weighting off, scale_dwis gets nothing and passes data through."""
     config.workflow.ignore = ['jacobian']
     edges = _edges(_trans_wf())
     assert not any(
@@ -210,7 +220,10 @@ def test_ignore_jacobian_leaves_weights_unconnected():
 
 
 def test_hmc_xforms_never_reach_the_jacobian_node():
-    """HMC is excluded by policy; a wire here would silently modulate by it."""
+    """Test that HMC transforms never reach the Jacobian node.
+
+    HMC is excluded by policy; a wire here would silently modulate by it.
+    """
     edges = _edges(_trans_wf())
     forwarded = {
         pair for src, dst, connect in edges if dst == 'compose_jacobian' for pair in connect
@@ -229,7 +242,9 @@ def test_coreg_and_template_transforms_never_reach_the_jacobian_node():
 
 
 def test_source_name_detects_a_functor_wrapped_forbidden_field():
-    """Pin the normalization itself, not just today's wiring.
+    """Test that _source_name detects a functor-wrapped forbidden field.
+
+    Pin the normalization itself, not just today's wiring.
 
     ``gradwarp_field`` is already threaded through a functor wrapper
     (``(('gradwarp_field', _listify), 'gradwarp_field')`` in
@@ -273,7 +288,7 @@ def test_source_name_detects_a_functor_wrapped_forbidden_field():
     ],
 )
 def test_each_sdc_branch_emits_a_warp_for_weighting(method, sources, monkeypatch):
-    """Every SDC branch must reach ``to_dwi_ref_warps``.
+    """Test that every SDC branch reaches ``to_dwi_ref_warps``.
 
     ``to_dwi_ref_warps`` becomes ``fieldwarps``, which is the single input
     ComposeJacobianWeights derives the SDC determinant from. A branch that
@@ -309,7 +324,9 @@ def test_each_sdc_branch_emits_a_warp_for_weighting(method, sources, monkeypatch
 
 
 def test_sdc_unwarp_wf_has_no_dead_jacobian_node():
-    """The SDC-warp-only Jacobian is not what the weighting needs.
+    """Test that the SDC unwarp workflow has no dead Jacobian node.
+
+    The SDC-warp-only Jacobian is not what the weighting needs.
 
     It was computed and discarded for years. ComposeJacobianWeights derives the
     determinant of the *composed* gradwarp-and-SDC warp instead, so leaving
@@ -330,9 +347,12 @@ def test_sdc_unwarp_wf_has_no_dead_jacobian_node():
 
 
 def test_sdc_scaling_images_reach_compose_jacobian():
-    """DRBUDDI's LSR ratio images (TORTOISE's default signal redistribution
+    """Test that DRBUDDI's LSR ratio images reach ComposeJacobianWeights.
+
+    DRBUDDI's LSR ratio images (TORTOISE's default signal redistribution
     for reverse phase-encoded data) feed ComposeJacobianWeights, where they
-    replace the analytic determinant."""
+    replace the analytic determinant.
+    """
     wf = _trans_wf()
     edges = {(src, dst): dict(connect) for src, dst, connect in _edges(wf)}
     assert ('sdc_scaling_images', 'sdc_scaling_images') in edges[
@@ -353,7 +373,9 @@ def _patterns():
 
 
 def test_jacobian_derivative_path_renders():
-    """Assert the rendered path, not the datasink inputs.
+    """Test that the Jacobian derivative path renders.
+
+    Assert the rendered path, not the datasink inputs.
 
     Entity-level checks are blind to a pattern that silently drops an entity or
     collides with another derivative's name.
@@ -437,7 +459,10 @@ def test_jacobian_sidecar_records_a_gap():
 
 
 def test_jacobian_sidecar_collapsed_case_is_written_in_full():
-    """All-zeros rather than omitted, so consumers need no special case."""
+    """Test that the collapsed-case sidecar is written in full.
+
+    All-zeros rather than omitted, so consumers need no special case.
+    """
     from qsiprep.interfaces.jacobian import _jacobian_sidecar
 
     sidecar = _jacobian_sidecar(
@@ -482,8 +507,11 @@ def test_stack_jacobian_and_sink_absent_when_weighting_off(tmp_path):
 
 
 def test_stack_jacobian_connects_to_the_sink(tmp_path):
-    """A missing edge here is the silent-absence failure mode; a missing node
-    is not the only way to lose the file."""
+    """Test that the stacked Jacobian connects to the sink.
+
+    A missing edge here is the silent-absence failure mode; a missing node
+    is not the only way to lose the file.
+    """
     wf = _derivatives_wf(tmp_path)
     edges = _derivatives_edges(wf)
     assert set(edges[('stack_jacobian', 'ds_jacobian')]) == {
@@ -526,7 +554,9 @@ def _finalize_wf(tmp_path, write_derivatives=True):
 
 
 def test_jacobian_weights_reach_the_derivatives_workflow_through_finalize(tmp_path):
-    """The full inter-workflow chain: trans_wf -> finalize outputnode -> derivatives_wf.
+    """Test that Jacobian weights reach the derivatives workflow through finalize.
+
+    The full inter-workflow chain: trans_wf -> finalize outputnode -> derivatives_wf.
 
     This is the shape of the boundary Task 10 and Task 11 each missed once in
     ``workflows/base.py`` (a dropped edge between two outputnodes, no error,
@@ -586,7 +616,9 @@ def test_jacobian_weights_do_not_reach_finalize_when_weighting_off(tmp_path):
 
 
 def test_scale_dwis_is_a_plain_node_not_a_mapnode():
-    """No iterfield exists to collapse an empty/Undefined weight list into.
+    """Test that scale_dwis is a plain Node, not a MapNode.
+
+    No iterfield exists to collapse an empty/Undefined weight list into.
 
     This is the structural reason the zero-corrections crash from 679be72
     cannot recur: a MapNode's iterfield input collapses a defined empty list
@@ -600,7 +632,9 @@ def test_scale_dwis_is_a_plain_node_not_a_mapnode():
 
 
 def test_zero_distortion_corrections_produces_no_weights_and_does_not_raise(tmp_path):
-    """The exact regression 679be72 introduced, exercised end to end.
+    """Test that zero distortion corrections produce no weights and do not raise.
+
+    The exact regression 679be72 introduced, exercised end to end.
 
     A run with no gradwarp, no SDC warp and no EC Jacobian leaves
     ``ComposeJacobianWeights.jacobian_weight_images`` Undefined

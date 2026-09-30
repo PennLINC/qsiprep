@@ -12,7 +12,7 @@ from qsiprep.interfaces.gradients import get_fsl_motion_params, get_ras_motion_p
 
 
 def test_get_ras_motion_params_no_axis_flip(tmp_path):
-    """RAS export recovers applied motion with correct sign on a radiological grid.
+    """Test that RAS export recovers applied motion with correct sign on a radiological grid.
 
     On a grid with a negative x on the affine diagonal, the FSL/LPS conventions
     flip x; ``get_ras_motion_params`` must report the applied RAS motion with no
@@ -73,7 +73,9 @@ def test_get_fsl_motion_params_identity_transform(tmp_path):
 
 
 def test_compose_transforms_places_gradwarp_between_hmc_and_sdc():
-    """TORTOISE composes motion/eddy, then gradwarp, then SDC.
+    """Test that gradwarp is placed between hmc and SDC.
+
+    TORTOISE composes motion/eddy, then gradwarp, then SDC.
 
     transform_order is native-to-target and reversed for ANTs, so gradwarp must
     sit immediately after hmc in the list.
@@ -86,7 +88,7 @@ def test_compose_transforms_places_gradwarp_between_hmc_and_sdc():
 
 
 def test_compose_transforms_stage_names_match_the_runtime_lookup():
-    """Every stage name must have an entry in _run_interface's by_name dict.
+    """Test that every stage name has an entry in _run_interface's by_name dict.
 
     A stage present in _TRANSFORM_STAGES but missing from that dict raises
     KeyError at runtime, long after the graph is built.
@@ -101,7 +103,7 @@ def test_compose_transforms_stage_names_match_the_runtime_lookup():
 
 
 def test_compose_transforms_gradwarp_is_not_forwarded_to_apply_transforms():
-    """Every custom input must be popped before ifargs reaches ApplyTransforms."""
+    """Test that every custom input is popped before ifargs reaches ApplyTransforms."""
     from qsiprep.interfaces.gradients import ComposeTransforms
 
     assert 'gradwarp' in ComposeTransforms._popped_keys()
