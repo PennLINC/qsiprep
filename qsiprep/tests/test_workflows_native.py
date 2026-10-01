@@ -34,12 +34,11 @@ class _StubFile:
 
 
 class _StubLayout:
-    """Minimal stand-in so denoising/merge nodes can query the layout.
+    """Minimal stand-in for ``config.execution.layout``.
 
-    ``pre_hmc`` feeds ``init_merge_and_denoise_wf``, which still probes for
-    part-phase companion files through the layout (the grouping does not model
-    them); the probes here find none (the common case). Sidecar metadata must
-    come from the unit's records, never the layout - hence no ``get_metadata``.
+    Nothing in the pre-HMC builders should touch it any more (phase companions
+    come from the unit, sidecar metadata from its records), so every probe
+    finds nothing and ``get_metadata`` fails loudly.
     """
 
     def get_metadata(self, path):

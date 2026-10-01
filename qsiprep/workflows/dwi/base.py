@@ -31,6 +31,7 @@ from .diffprep import init_diffprep_hmc_wf
 from .fsl import init_fsl_hmc_wf
 from .gradwarp import describe_gradient_correction, init_gradwarp_wf
 from .hmc_sdc import init_qsiprep_hmcsdc_wf
+from .merge import SERIES_LIST_FIELDS
 from .pre_hmc import init_dwi_pre_hmc_wf
 from .registration import init_b0_to_anat_registration_wf, init_direct_b0_acpc_wf
 from .util import _create_mem_gb, _get_wf_name
@@ -81,6 +82,22 @@ def init_dwi_preproc_wf(
 
     Inputs
     ------
+    dwi_files
+        the unit's member series, conformed and denoised, one per file in
+        ``unit.dwi_files`` and in the same order (see
+        :func:`~qsiprep.workflows.dwi.merge.init_dwi_series_denoise_wf`)
+    bval_files
+        bvals of each series
+    bvec_files
+        conformed bvecs of each series
+    raw_dwi_files
+        the member series, conformed but not denoised
+    noise_images
+        noise image of each series
+    denoising_confounds
+        denoising confounds of each series
+    validation_reports
+        conformation report of each series
     t1_preproc
         Bias-corrected structural template image
     t1_brain
@@ -182,7 +199,7 @@ def init_dwi_preproc_wf(
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
-                'dwi_files',
+                *SERIES_LIST_FIELDS,
                 'subjects_dir',
                 'subject_id',
                 't1_preproc',
@@ -282,6 +299,9 @@ def init_dwi_preproc_wf(
         raise ValueError(f'Unknown HMC tool: {hmc_tool!r}')
 
     workflow.connect([
+        (inputnode, pre_hmc_wf, [
+            (field, f'inputnode.{field}') for field in SERIES_LIST_FIELDS
+        ]),
         (pre_hmc_wf, hmc_wf, [
             ('outputnode.dwi_file', 'inputnode.dwi_file'),
             ('outputnode.bval_file', 'inputnode.bval_file'),

@@ -147,7 +147,7 @@ def test_complex_dwi_reaches_the_plan_as_a_magnitude_companion(tmp_path):
     parts (the ``part`` pre-filter is retired), qsiplan indexes only the
     magnitude and carries the phase as its companion, and the unit the workflow
     consumes exposes it through ``dwi_phase_files`` -- keyed by the magnitude
-    path, the way ``init_merge_and_denoise_wf`` looks it up -- with no phase
+    path, the way ``init_series_denoise_wfs`` looks it up -- with no phase
     leaking into any series list or sidecar override.
     """
     import os.path as op
