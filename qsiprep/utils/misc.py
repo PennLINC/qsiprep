@@ -478,6 +478,49 @@ def check_dwidenoise2_demodulation(params, use_phase):
         )
 
 
+def resolve_dwidenoise2_demean(params, shelled, source_file):
+    """Choose dwidenoise2's ``-demean`` mode for one series.
+
+    Left to its default, dwidenoise2 demeans by shell whenever it has a gradient table and
+    infers the shells from the b-values itself. On non-shelled sampling (a DSI or
+    compressed-sensing grid) that inference either finds no shells, and dwidenoise2 quietly
+    demeans across all volumes, or finds pseudo-shells that leave some volumes unassigned,
+    and dwidenoise2 segfaults. Its inference can also disagree with qsiplan's on a shelled
+    scheme with stray b-values. qsiprep therefore always passes ``-demean``: ``"all"``
+    unless the configuration asks for something else, and ``"shells"`` only for a series
+    that qsiplan classifies as shelled.
+
+    Parameters
+    ----------
+    params : dict
+        DWIDenoise2 parameters, as returned by :func:`load_dwidenoise2_config`.
+    shelled : bool or None
+        qsiplan's classification of the series (``FileRecord.shelled``). ``None`` means
+        it could not be classified and is treated as non-shelled.
+    source_file : str
+        The series being denoised, named in the error message.
+
+    Returns
+    -------
+    str
+        The ``-demean`` mode: the configured one, or ``"all"`` when none is configured.
+
+    Raises
+    ------
+    ValueError
+        If the configuration asks for shell demeaning of a series that is not shelled.
+    """
+    requested = params.get('demean') or 'all'
+    if requested == 'shells' and shelled is not True:
+        sampling = 'non-shelled' if shelled is False else 'unclassified'
+        raise ValueError(
+            f'--dwidenoise2-config sets "demean" to "shells", but {source_file} has '
+            f'{sampling} q-space sampling, so there are no b-value shells to demean by. '
+            'Set "demean" to "all" or "none", or leave it unset.'
+        )
+    return requested
+
+
 def _format_schedule_value(value):
     if isinstance(value, bool):
         return 'true' if value else 'false'

@@ -568,3 +568,50 @@ def test_shipped_default_config_modulates():
     from qsiprep.utils.eddy_config import eddy_modulates_distortion
 
     assert eddy_modulates_distortion(json.loads(load_data('eddy_params.json').read_text()))
+
+
+@pytest.mark.parametrize(
+    ('shelled', 'requested', 'expected'),
+    [
+        # Unset: every series pools all volumes, never dwidenoise2's inferred shells
+        (True, None, 'all'),
+        (False, None, 'all'),
+        (None, None, 'all'),
+        # An explicit request that is valid for the sampling is passed through
+        (True, 'shells', 'shells'),
+        (True, 'all', 'all'),
+        (True, 'none', 'none'),
+        (False, 'all', 'all'),
+        (False, 'none', 'none'),
+        (None, 'none', 'none'),
+        (False, 'volume_groups', 'volume_groups'),
+    ],
+)
+def test_resolve_dwidenoise2_demean(shelled, requested, expected):
+    """Test that -demean is always explicit and shell demeaning is opt-in."""
+    from qsiprep.utils.misc import resolve_dwidenoise2_demean
+
+    params = {} if requested is None else {'demean': requested}
+    assert resolve_dwidenoise2_demean(params, shelled, 'sub-01_dwi.nii.gz') == expected
+
+
+@pytest.mark.parametrize(('shelled', 'sampling'), [(False, 'non-shelled'), (None, 'unclassified')])
+def test_resolve_dwidenoise2_demean_rejects_shells_without_shells(shelled, sampling):
+    """Test that shell demeaning is refused for a series qsiplan did not call shelled.
+
+    dwidenoise2 would infer pseudo-shells from a DSI or compressed-sensing grid: either none
+    (it then silently pools all volumes) or some with unassigned volumes (it segfaults).
+    """
+    from qsiprep.utils.misc import resolve_dwidenoise2_demean
+
+    with pytest.raises(ValueError, match=f'sub-01_acq-cs_dwi.nii.gz has {sampling}'):
+        resolve_dwidenoise2_demean({'demean': 'shells'}, shelled, 'sub-01_acq-cs_dwi.nii.gz')
+
+
+def test_resolve_dwidenoise2_demean_does_not_modify_params():
+    """Test that resolving the mode leaves the loaded configuration untouched."""
+    from qsiprep.utils.misc import resolve_dwidenoise2_demean
+
+    params = {'demodulate': 'apc'}
+    resolve_dwidenoise2_demean(params, False, 'sub-01_dwi.nii.gz')
+    assert params == {'demodulate': 'apc'}

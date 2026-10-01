@@ -273,6 +273,18 @@ Key                               JSON value
 cannot be set. ``demodulate`` other than ``"none"`` needs ``part-phase``
 data. ``noise_in`` only seeds the variance-stabilizing transform.
 
+*QSIPrep* always passes ``demean`` explicitly. Left to its default,
+``dwidenoise2`` infers b-value shells itself, and on non-shelled sampling
+(DSI and compressed-sensing grids) it either pools all volumes or crashes on
+pseudo-shells that leave volumes unassigned. When ``demean`` is omitted, every
+series uses ``"all"``; ``"shells"`` is allowed only for series *QSIPrep*
+classifies as shelled (the classification that decides whether ``eddy`` can
+be used). Voxels that are zero in every volume, such as a background zeroed
+by masking or defacing, crash ``dwidenoise2``; they are given small positive
+values for denoising and set back to zero in its output. A ``dwidenoise2`` run
+that fails, or that writes NaN or infinite values, stops processing at the
+denoising step.
+
 ``schedule`` lists the iterations of the multi-resolution noise estimation.
 Each iteration is an object whose keys are the columns of a ``dwidenoise2``
 schedule file: ``spatial_subsample`` (an integer or a list of three),

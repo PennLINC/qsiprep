@@ -750,3 +750,140 @@ def test_no_bias_correction_plumbing_survives_in_the_merge_stack(monkeypatch):
     assert not [name for name in workflow.list_node_names() if 'bias' in name]
     outputs = workflow.get_node('outputnode').outputs.copyable_trait_names()
     assert 'bias_image' not in outputs
+
+
+def _dwidenoise2_config(monkeypatch, tmp_path, settings=None):
+    monkeypatch.setattr(config.workflow, 'denoise_method', 'dwidenoise2')
+    _use_dwidenoise2_config(monkeypatch, tmp_path, settings)
+    monkeypatch.setattr(config.workflow, 'dwidenoise_window', 5)
+    monkeypatch.setattr(config.workflow, 'unringing_method', 'none')
+    monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
+    monkeypatch.setattr(config.workflow, 'b0_threshold', 100)
+    monkeypatch.setattr(config.nipype, 'omp_nthreads', 1)
+
+
+def _denoiser_for(shelled):
+    workflow = init_dwi_denoising_wf(
+        source_file='sub-01_dwi.nii.gz',
+        partial_fourier=1.0,
+        phase_encoding_direction='j',
+        n_volumes=30,
+        use_phase=True,
+        shelled=shelled,
+    )
+    return workflow, workflow.get_node('denoiser')
+
+
+@pytest.mark.parametrize('shelled', [True, False, None])
+def test_dwidenoise2_demean_is_always_explicit(monkeypatch, tmp_path, shelled):
+    """Test that the denoiser always gets -demean all unless the configuration says otherwise.
+
+    Without an explicit mode dwidenoise2 infers shells from the b-values, which on a DSI or
+    compressed-sensing grid either silently pools all volumes or segfaults, and can
+    disagree with qsiplan's classification even on a shelled scheme.
+    """
+    _dwidenoise2_config(monkeypatch, tmp_path)
+    _, denoiser = _denoiser_for(shelled)
+    assert denoiser.inputs.demean == 'all'
+
+
+@pytest.mark.parametrize('shelled', [True, False, None])
+@pytest.mark.parametrize('demean', ['all', 'none'])
+def test_dwidenoise2_demean_config_is_honoured(monkeypatch, tmp_path, shelled, demean):
+    """Test that a -demean the configuration sets is kept when it suits the series."""
+    _dwidenoise2_config(monkeypatch, tmp_path, {'demean': demean})
+    _, denoiser = _denoiser_for(shelled)
+    assert denoiser.inputs.demean == demean
+
+
+def test_dwidenoise2_shell_demean_for_shelled_series(monkeypatch, tmp_path):
+    """Test that shell demeaning can still be requested for a shelled series."""
+    _dwidenoise2_config(monkeypatch, tmp_path, {'demean': 'shells'})
+    _, denoiser = _denoiser_for(True)
+    assert denoiser.inputs.demean == 'shells'
+
+
+@pytest.mark.parametrize('shelled', [False, None])
+def test_dwidenoise2_shell_demean_needs_shells(monkeypatch, tmp_path, shelled):
+    """Test that the workflow refuses to demean by shell a series with no shells."""
+    _dwidenoise2_config(monkeypatch, tmp_path, {'demean': 'shells'})
+    with pytest.raises(ValueError, match='no b-value shells'):
+        _denoiser_for(shelled)
+
+
+def test_dwidenoise2_boilerplate_matches_the_demean(monkeypatch, tmp_path):
+    """Test that the methods text describes the demeaning actually applied.
+
+    Before the mode was explicit, the text claimed per-shell demeaning for non-shelled
+    data, where dwidenoise2 had pooled all volumes.
+    """
+    _dwidenoise2_config(monkeypatch, tmp_path)
+    pooled, _ = _denoiser_for(False)
+    assert 'mean signal across all volumes' in pooled.__desc__
+    assert 'each *b*-value shell' not in pooled.__desc__
+
+    _dwidenoise2_config(monkeypatch, tmp_path, {'demean': 'shells'})
+    by_shell, _ = _denoiser_for(True)
+    assert 'each *b*-value shell' in by_shell.__desc__
+
+
+def _write_tiny_dwi(path, nvols=6):
+    nb.Nifti1Image(np.zeros((4, 4, 4, nvols), dtype=np.int16), np.eye(4)).to_filename(str(path))
+    stem = str(path).split('.nii')[0]
+    np.savetxt(stem + '.bval', np.array([0] + [1000] * (nvols - 1))[None, :], fmt='%d')
+    np.savetxt(stem + '.bvec', np.zeros((3, nvols)), fmt='%.1f')
+    return str(path)
+
+
+def _mixed_unit(tmp_path):
+    """Build a unit holding one shelled (HBCD-like) and one non-shelled (DSI-grid) series."""
+    import dataclasses
+
+    from qsiprep.tests.preproc_factory import make_preproc_unit
+
+    shelled_dwi = _write_tiny_dwi(tmp_path / 'sub-01_acq-hbcd_dwi.nii.gz')
+    grid_dwi = _write_tiny_dwi(tmp_path / 'sub-01_acq-dsi_dwi.nii.gz')
+    unit = make_preproc_unit([shelled_dwi, grid_dwi], shelled=True)
+    unit.grouping.files[grid_dwi] = dataclasses.replace(
+        unit.grouping.files[grid_dwi], shelled=False
+    )
+    return unit, shelled_dwi, grid_dwi
+
+
+def _merge_demeans(unit, dwi_files):
+    from qsiprep.workflows.dwi.merge import init_merge_and_denoise_wf
+
+    workflow = init_merge_and_denoise_wf(
+        unit, dwi_files, orientation='LPS', source_file=dwi_files[0]
+    )
+    return {
+        name: workflow.get_node(name).inputs.demean
+        for name in workflow.list_node_names()
+        if name.endswith('.denoiser')
+    }
+
+
+def test_merge_wf_demeans_every_series_explicitly(monkeypatch, tmp_path):
+    """Test that each series of a merged output gets its own explicit -demean."""
+    _dwidenoise2_config(monkeypatch, tmp_path)
+    monkeypatch.setattr(config.workflow, 'ignore', [])
+    unit, shelled_dwi, grid_dwi = _mixed_unit(tmp_path)
+
+    demeans = _merge_demeans(unit, [shelled_dwi, grid_dwi])
+    assert len(demeans) == 2
+    assert set(demeans.values()) == {'all'}
+
+
+def test_merge_wf_checks_shell_demean_per_series(monkeypatch, tmp_path):
+    """Test that shell demeaning is checked against each series' own sampling.
+
+    Denoising runs per series before concatenation: the shelled series may be demeaned by
+    shell, but a DSI grid in the same output must be refused, and named.
+    """
+    _dwidenoise2_config(monkeypatch, tmp_path, {'demean': 'shells'})
+    monkeypatch.setattr(config.workflow, 'ignore', [])
+    unit, shelled_dwi, grid_dwi = _mixed_unit(tmp_path)
+
+    assert set(_merge_demeans(unit, [shelled_dwi]).values()) == {'shells'}
+    with pytest.raises(ValueError, match='sub-01_acq-dsi_dwi.nii.gz has non-shelled'):
+        _merge_demeans(unit, [shelled_dwi, grid_dwi])
