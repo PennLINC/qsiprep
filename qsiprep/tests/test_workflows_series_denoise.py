@@ -157,3 +157,73 @@ def test_pre_hmc_rpe_selects_each_polarity_by_position():
     for selector, merge in (('select_plus', 'merge_plus'), ('select_minus', 'merge_minus')):
         edge = wf._graph.get_edge_data(wf.get_node(selector), wf.get_node(merge))
         assert set(edge['connect']) == {(f, f'inputnode.{f}') for f in SERIES_LIST_FIELDS}
+
+    # The edges must survive flattening. Nipype empties an edge's connection
+    # list as it expands a sub-workflow, so two edges built from one list
+    # object leave the second polarity with nothing feeding it.
+    flat = wf._create_flat_graph()
+    for selector, merge in (('select_plus', 'merge_plus'), ('select_minus', 'merge_minus')):
+        (merge_inputnode,) = [
+            node for node in flat.nodes() if node.fullname.endswith(f'{merge}.inputnode')
+        ]
+        fed = {
+            (source.name, dest_field)
+            for source, _, data in flat.in_edges(merge_inputnode, data=True)
+            for _, dest_field in data['connect']
+        }
+        assert fed == {(selector, field) for field in SERIES_LIST_FIELDS}
+
+
+def test_bidirectional_pre_hmc_runs_from_raw_series_to_one_merged_file(tmp_path):
+    """Test that a reverse-PE unit executes from raw files to the merged series.
+
+    Building the graph is not enough to show the per-series results reach both
+    polarities, so this runs it: conform each series once, collect them for
+    the unit, split by polarity, merge each polarity, and concatenate the two.
+    Denoising is off and the DSI Studio QC is dropped, so only Python runs.
+    """
+    import os.path as op
+
+    import nibabel as nb
+
+    config.workflow.denoise_method = 'none'
+
+    def write_series(name):
+        path = tmp_path / name
+        data = np.random.default_rng(0).integers(50, 100, (6, 6, 6, 4)).astype(np.int16)
+        nb.Nifti1Image(data, np.eye(4)).to_filename(str(path))
+        stem = str(path).split('.nii')[0]
+        np.savetxt(stem + '.bval', np.array([[0, 1000, 1000, 1000]]), fmt='%d')
+        np.savetxt(stem + '.bvec', np.eye(3, 4, k=1), fmt='%.1f')
+        return str(path)
+
+    ap = write_series('sub-01_dir-AP_dwi.nii.gz')
+    pa = write_series('sub-01_dir-PA_dwi.nii.gz')
+    unit = make_preproc_unit(
+        [ap, pa], method=CorrectionMethod.PEPOLAR, pe_dirs={ap: 'j', pa: 'j-'}
+    )
+
+    parent = pe.Workflow(name='parent', base_dir=str(tmp_path / 'work'))
+    series_wfs = init_series_denoise_wfs([unit], orientation='LAS')
+    pre_hmc_wf = init_dwi_pre_hmc_wf(unit, orientation='LAS', source_file=ap, do_biascorr=False)
+    pre_hmc_wf.remove_nodes([node for node in pre_hmc_wf._graph.nodes() if 'qc' in node.name])
+    connect_series_to_unit(parent, series_wfs, unit, pre_hmc_wf, 'rpe')
+    parent.config['execution'] = {
+        'stop_on_first_crash': True,
+        'crashdump_dir': str(tmp_path / 'crash'),
+    }
+
+    graph = parent.run(plugin='Linear')
+
+    results = {node.fullname.split('pre_hmc_wf.')[-1]: node.result.outputs for node in graph}
+    merged = results['rpe_concat']
+    assert nb.load(merged.out_dwi).shape == (6, 6, 6, 8)
+    origins = [op.basename(path) for path in merged.original_images]
+    assert origins == ['sub-01_dir-AP_dwi.nii.gz'] * 4 + ['sub-01_dir-PA_dwi.nii.gz'] * 4
+    # Each polarity merged its own series, and only that one.
+    assert {op.basename(f) for f in results['merge_plus.merge_dwis'].original_images} == {
+        'sub-01_dir-AP_dwi.nii.gz'
+    }
+    assert {op.basename(f) for f in results['merge_minus.merge_dwis'].original_images} == {
+        'sub-01_dir-PA_dwi.nii.gz'
+    }

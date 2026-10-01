@@ -180,8 +180,16 @@ def init_dwi_pre_hmc_wf(
         select_plus.inputs.indices = [all_files.index(path) for path in plus_files]
         select_minus = select_plus.clone('select_minus')
         select_minus.inputs.indices = [all_files.index(path) for path in minus_files]
-        passthrough = [(field, field) for field in SERIES_LIST_FIELDS]
-        into_merge = [(field, f'inputnode.{field}') for field in SERIES_LIST_FIELDS]
+        # Nipype keeps the list handed to connect() as the edge's own data and
+        # empties it when it expands a sub-workflow edge, so every edge needs
+        # a list of its own: sharing one leaves the second polarity unconnected.
+        for selector, merger in ((select_plus, merge_plus), (select_minus, merge_minus)):
+            workflow.connect([
+                (inputnode, selector, [(field, field) for field in SERIES_LIST_FIELDS]),
+                (selector, merger, [
+                    (field, f'inputnode.{field}') for field in SERIES_LIST_FIELDS
+                ]),
+            ])  # fmt:skip
 
         # Combine the original images from the splits into one 4D series + bvals/bvecs
         pm_validation = pe.Node(niu.Merge(2), name='pm_validation')
@@ -203,11 +211,6 @@ def init_dwi_pre_hmc_wf(
         qc_wf = init_modelfree_qc_wf(bvec_convention='DIPY' if orientation == 'LPS' else 'FSL')
 
         workflow.connect([
-            (inputnode, select_plus, passthrough),
-            (inputnode, select_minus, passthrough),
-            (select_plus, merge_plus, into_merge),
-            (select_minus, merge_minus, into_merge),
-
             # combine PE+
             (merge_plus, pm_dwis, [('outputnode.merged_image', 'in1')]),
             (merge_plus, pm_bids_dwis, [('outputnode.original_files', 'in1')]),
