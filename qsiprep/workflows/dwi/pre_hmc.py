@@ -15,6 +15,7 @@ from ... import config
 from ...interfaces.dwi_merge import MergeDWIs
 from ...interfaces.nilearn import Merge
 from ...utils.bids import get_source_file
+from ...utils.misc import select_polarity
 
 # dwi workflows
 from .merge import SERIES_LIST_FIELDS, gen_denoising_boilerplate, init_merge_dwis_wf
@@ -169,7 +170,7 @@ def init_dwi_pre_hmc_wf(
         # by position (known at build time from unit.dwi_files).
         select_plus = pe.Node(
             niu.Function(
-                function=_select_polarity,
+                function=select_polarity,
                 input_names=['indices', *SERIES_LIST_FIELDS],
                 output_names=list(SERIES_LIST_FIELDS),
             ),
@@ -303,36 +304,3 @@ def init_dwi_pre_hmc_wf(
         ])  # fmt:skip
 
     return workflow
-
-
-def _select_polarity(
-    indices,
-    dwi_files,
-    bval_files,
-    bvec_files,
-    raw_dwi_files,
-    noise_images,
-    denoising_confounds,
-    validation_reports,
-):
-    """Pick one polarity's member series out of the unit-wide series lists.
-
-    ``indices`` are the positions of that polarity's files in ``unit.dwi_files``.
-    A list that is empty because no step produced it (noise images and
-    confounds when denoising is off) stays empty.
-    """
-
-    def _pick(items):
-        if not items:
-            return []
-        return [items[index] for index in indices]
-
-    return (
-        _pick(dwi_files),
-        _pick(bval_files),
-        _pick(bvec_files),
-        _pick(raw_dwi_files),
-        _pick(noise_images),
-        _pick(denoising_confounds),
-        _pick(validation_reports),
-    )

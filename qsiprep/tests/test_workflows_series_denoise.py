@@ -20,7 +20,7 @@ from qsiprep.workflows.dwi.merge import (
     SERIES_LIST_FIELDS,
     init_dwi_series_denoise_wf,
 )
-from qsiprep.workflows.dwi.pre_hmc import _select_polarity, init_dwi_pre_hmc_wf
+from qsiprep.workflows.dwi.pre_hmc import init_dwi_pre_hmc_wf
 
 METADATA = {'PhaseEncodingDirection': 'j', 'TotalReadoutTime': 0.05}
 
@@ -157,26 +157,3 @@ def test_pre_hmc_rpe_selects_each_polarity_by_position():
     for selector, merge in (('select_plus', 'merge_plus'), ('select_minus', 'merge_minus')):
         edge = wf._graph.get_edge_data(wf.get_node(selector), wf.get_node(merge))
         assert set(edge['connect']) == {(f, f'inputnode.{f}') for f in SERIES_LIST_FIELDS}
-
-
-def test_select_polarity_picks_by_index_and_keeps_empty_lists_empty():
-    picked = _select_polarity(
-        [0, 2],
-        dwi_files=['a', 'b', 'c'],
-        bval_files=['a.bval', 'b.bval', 'c.bval'],
-        bvec_files=['a.bvec', 'b.bvec', 'c.bvec'],
-        raw_dwi_files=['ra', 'rb', 'rc'],
-        # No denoising ran: the collectors emit empty lists, not placeholders.
-        noise_images=[],
-        denoising_confounds=[],
-        validation_reports=['va', 'vb', 'vc'],
-    )
-    assert picked == (
-        ['a', 'c'],
-        ['a.bval', 'c.bval'],
-        ['a.bvec', 'c.bvec'],
-        ['ra', 'rc'],
-        [],
-        [],
-        ['va', 'vc'],
-    )

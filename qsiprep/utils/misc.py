@@ -1123,3 +1123,49 @@ def invert_displacement_field(warp_file):
 
     field = sitk.Cast(sitk.ReadImage(warp_file), sitk.sitkVectorFloat64)
     return sitk.InvertDisplacementField(field)
+
+
+def select_polarity(
+    indices,
+    dwi_files,
+    bval_files,
+    bvec_files,
+    raw_dwi_files,
+    noise_images,
+    denoising_confounds,
+    validation_reports,
+):
+    """Pick one polarity's member series out of a unit's per-series lists.
+
+    Runs as a ``niu.Function`` node, so it must stay self-contained.
+
+    Parameters
+    ----------
+    indices : list of int
+        Positions of that polarity's files in ``unit.dwi_files``.
+    dwi_files, bval_files, bvec_files, raw_dwi_files : list
+    noise_images, denoising_confounds, validation_reports : list
+        The unit-wide lists, one entry per member series. A list that is empty
+        because no step produced it (noise images and confounds when denoising
+        is off) stays empty.
+
+    Returns
+    -------
+    tuple of list
+        The seven lists, in the same order, restricted to ``indices``.
+    """
+
+    def _pick(items):
+        if not items:
+            return []
+        return [items[index] for index in indices]
+
+    return (
+        _pick(dwi_files),
+        _pick(bval_files),
+        _pick(bvec_files),
+        _pick(raw_dwi_files),
+        _pick(noise_images),
+        _pick(denoising_confounds),
+        _pick(validation_reports),
+    )

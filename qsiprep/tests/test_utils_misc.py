@@ -13,6 +13,7 @@ from qsiprep.utils.misc import (
     format_dwidenoise2_schedule,
     load_dwidenoise2_config,
     safe_unit_vector,
+    select_polarity,
 )
 
 
@@ -568,3 +569,26 @@ def test_shipped_default_config_modulates():
     from qsiprep.utils.eddy_config import eddy_modulates_distortion
 
     assert eddy_modulates_distortion(json.loads(load_data('eddy_params.json').read_text()))
+
+
+def test_select_polarity_picks_by_index_and_keeps_empty_lists_empty():
+    picked = select_polarity(
+        [0, 2],
+        dwi_files=['a', 'b', 'c'],
+        bval_files=['a.bval', 'b.bval', 'c.bval'],
+        bvec_files=['a.bvec', 'b.bvec', 'c.bvec'],
+        raw_dwi_files=['ra', 'rb', 'rc'],
+        # No denoising ran: the collectors emit empty lists, not placeholders.
+        noise_images=[],
+        denoising_confounds=[],
+        validation_reports=['va', 'vb', 'vc'],
+    )
+    assert picked == (
+        ['a', 'c'],
+        ['a.bval', 'c.bval'],
+        ['a.bvec', 'c.bvec'],
+        ['ra', 'rc'],
+        [],
+        [],
+        ['va', 'vc'],
+    )
