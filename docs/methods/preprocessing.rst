@@ -10,7 +10,9 @@ Per-series preprocessing
 
 Each DWI series of an output is processed on its own before the series are
 concatenated and handed to the head motion backend. Denoising has
-assumptions about its input, so the order of these steps is fixed.
+assumptions about its input, so the order of these steps is fixed. A series
+that belongs to several outputs (a ``MultipartID`` list) is denoised once;
+every output that includes it reuses that result.
 
 1. **Denoising** on the raw series: MP-PCA with ``dwidenoise``
    :footcite:p:`dwidenoise1`, its successor ``dwidenoise2``

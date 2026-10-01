@@ -17,7 +17,7 @@ from ...interfaces.nilearn import Merge
 from ...utils.bids import get_source_file
 
 # dwi workflows
-from .merge import gen_denoising_boilerplate, init_merge_and_denoise_wf
+from .merge import SERIES_LIST_FIELDS, gen_denoising_boilerplate, init_merge_dwis_wf
 from .qc import init_modelfree_qc_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -31,10 +31,12 @@ def init_dwi_pre_hmc_wf(
     calculate_qc=True,
     name='pre_hmc_wf',
 ):
-    """Build a workflow that merges and denoises dwi scans before head motion correction.
+    """Build a workflow that merges denoised dwi scans before head motion correction.
 
-    This workflow merges and denoises dwi scans. The outputs from this workflow is
-    a single dwi file (optionally denoised) and corresponding bvals, bvecs.
+    The member series arrive already conformed and denoised (see
+    :func:`~qsiprep.workflows.dwi.merge.init_dwi_series_denoise_wf`), one list
+    entry per file in ``unit.dwi_files`` and in the same order. The outputs from
+    this workflow are a single dwi file and corresponding bvals, bvecs.
 
     In the general case, a single warped group will be sent to this workflow. However,
     since eddy expects a single 4D input file, two warped groups can be processed
@@ -58,10 +60,10 @@ def init_dwi_pre_hmc_wf(
     Parameters
     ----------
     unit : :class:`~qsiplan.adapters.PreprocUnit`
-        The DWI series to merge and denoise. When the unit has both phase encoding
-        polarities, each polarity is merged and denoised separately.
+        The DWI series to merge. When the unit has both phase encoding
+        polarities, each polarity is merged separately.
     orientation : str
-        'LPS' or 'LAS'
+        'LPS' or 'LAS', the orientation the series were conformed to
     source_file : str
         Source file used to name the merged outputs when the unit has a single
         phase encoding polarity.
@@ -73,6 +75,23 @@ def init_dwi_pre_hmc_wf(
         unit has a single phase encoding polarity. Default is True.
     name : str, optional
         Name of workflow (default: ``pre_hmc_wf``)
+
+    Inputs
+    ------
+    dwi_files
+        conformed, denoised series, one per file in ``unit.dwi_files``
+    bval_files
+        bvals of each series
+    bvec_files
+        conformed bvecs of each series
+    raw_dwi_files
+        conformed, not denoised series
+    noise_images
+        noise image of each series
+    denoising_confounds
+        denoising confounds of each series
+    validation_reports
+        conformation report of each series
 
     Outputs
     -------
@@ -96,6 +115,7 @@ def init_dwi_pre_hmc_wf(
         4d image of the raw inputs concatenated (for QC and visualization)
     """
     workflow = Workflow(name=name)
+    inputnode = pe.Node(niu.IdentityInterface(fields=list(SERIES_LIST_FIELDS)), name='inputnode')
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
@@ -118,11 +138,12 @@ def init_dwi_pre_hmc_wf(
     # Special case: Two reverse PE DWI series are going to get combined for eddy
     if unit.has_bidirectional_dwi:
         workflow.__desc__ = 'Images were grouped into two phase encoding polarity groups. '
+        all_files = list(unit.dwi_files)
         plus_files = list(unit.plus_files)
         minus_files = list(unit.minus_files)
         pe_axis = unit.pe_axis
         plus_source_file = get_source_file(plus_files, suffix='_PEplus')
-        merge_plus = init_merge_and_denoise_wf(
+        merge_plus = init_merge_dwis_wf(
             unit=unit,
             raw_dwi_files=plus_files,
             orientation=orientation,
@@ -132,9 +153,9 @@ def init_dwi_pre_hmc_wf(
             name='merge_plus',
         )
 
-        # Merge, denoise, split, hmc on the minus series
+        # Merge, split, hmc on the minus series
         minus_source_file = get_source_file(minus_files, suffix='_PEminus')
-        merge_minus = init_merge_and_denoise_wf(
+        merge_minus = init_merge_dwis_wf(
             unit=unit,
             raw_dwi_files=minus_files,
             orientation=orientation,
@@ -143,6 +164,23 @@ def init_dwi_pre_hmc_wf(
             calculate_qc=False,
             name='merge_minus',
         )
+
+        # The series lists cover the whole unit; each polarity takes its members
+        # by position (known at build time from unit.dwi_files).
+        select_plus = pe.Node(
+            niu.Function(
+                function=_select_polarity,
+                input_names=['indices', *SERIES_LIST_FIELDS],
+                output_names=list(SERIES_LIST_FIELDS),
+            ),
+            name='select_plus',
+            run_without_submitting=True,
+        )
+        select_plus.inputs.indices = [all_files.index(path) for path in plus_files]
+        select_minus = select_plus.clone('select_minus')
+        select_minus.inputs.indices = [all_files.index(path) for path in minus_files]
+        passthrough = [(field, field) for field in SERIES_LIST_FIELDS]
+        into_merge = [(field, f'inputnode.{field}') for field in SERIES_LIST_FIELDS]
 
         # Combine the original images from the splits into one 4D series + bvals/bvecs
         pm_validation = pe.Node(niu.Merge(2), name='pm_validation')
@@ -164,6 +202,11 @@ def init_dwi_pre_hmc_wf(
         qc_wf = init_modelfree_qc_wf(bvec_convention='DIPY' if orientation == 'LPS' else 'FSL')
 
         workflow.connect([
+            (inputnode, select_plus, passthrough),
+            (inputnode, select_minus, passthrough),
+            (select_plus, merge_plus, into_merge),
+            (select_minus, merge_minus, into_merge),
+
             # combine PE+
             (merge_plus, pm_dwis, [('outputnode.merged_image', 'in1')]),
             (merge_plus, pm_bids_dwis, [('outputnode.original_files', 'in1')]),
@@ -222,7 +265,7 @@ def init_dwi_pre_hmc_wf(
         return workflow
 
     workflow.__postdesc__ += '\n\n'
-    merge_dwis = init_merge_and_denoise_wf(
+    merge_dwis = init_merge_dwis_wf(
         unit=unit,
         raw_dwi_files=list(unit.dwi_files),
         orientation=orientation,
@@ -232,6 +275,9 @@ def init_dwi_pre_hmc_wf(
     )
 
     workflow.connect([
+        (inputnode, merge_dwis, [
+            (field, f'inputnode.{field}') for field in SERIES_LIST_FIELDS
+        ]),
         (merge_dwis, outputnode, [
             ('outputnode.merged_image', 'dwi_file'),
             ('outputnode.merged_bval', 'bval_file'),
@@ -257,3 +303,36 @@ def init_dwi_pre_hmc_wf(
         ])  # fmt:skip
 
     return workflow
+
+
+def _select_polarity(
+    indices,
+    dwi_files,
+    bval_files,
+    bvec_files,
+    raw_dwi_files,
+    noise_images,
+    denoising_confounds,
+    validation_reports,
+):
+    """Pick one polarity's member series out of the unit-wide series lists.
+
+    ``indices`` are the positions of that polarity's files in ``unit.dwi_files``.
+    A list that is empty because no step produced it (noise images and
+    confounds when denoising is off) stays empty.
+    """
+
+    def _pick(items):
+        if not items:
+            return []
+        return [items[index] for index in indices]
+
+    return (
+        _pick(dwi_files),
+        _pick(bval_files),
+        _pick(bvec_files),
+        _pick(raw_dwi_files),
+        _pick(noise_images),
+        _pick(denoising_confounds),
+        _pick(validation_reports),
+    )
