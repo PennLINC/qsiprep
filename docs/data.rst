@@ -173,9 +173,9 @@ of one acquisition. Series that share a ``MultipartID`` are concatenated into
 one output, including across phase encoding directions. Use it to combine
 some runs but not others. A series may list several ``MultipartID`` values;
 it then appears in each of those outputs (a *virtual acquisition*), denoised
-once and corrected within each output. If some series in a session carry a
-``MultipartID`` and others do not, the others are still grouped by the
-default rule, so check the grouping report before a large run.
+once and corrected within each output. A series without a ``MultipartID`` is
+never added to a curated output, so set ``MultipartID`` on every series you
+want combined and check the grouping report before a large run.
 
 ShimSetting and field of view
 =============================
