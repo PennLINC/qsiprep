@@ -119,9 +119,16 @@ to express the link.
   URIs (``bids::sub-1/ses-1/dwi/sub-1_ses-1_dwi.nii.gz``). Absolute paths are
   accepted with a warning.
 
-Without either, *QSIPrep* infers reverse phase-encoded pairs among the DWI
-series of a session. Every inferred decision is reported as such in the log
-and in the visual report, so you can see what was guessed.
+When no fieldmap of a subject is linked in either way, *QSIPrep* infers
+reverse phase-encoded pairs among the DWI series of each session. Once any
+fieldmap of the subject is linked, by ``B0FieldIdentifier``/``B0FieldSource``
+or by an EPI fieldmap's ``IntendedFor``, nothing is inferred in any of its
+sessions: a series without a link gets no fieldmap
+(``reverse-pe-not-inferred`` in the grouping report), though
+``--sdc-anat-reference`` can still correct it. A GRE fieldmap's
+``IntendedFor`` does not count as such a link. Every inferred decision is
+reported as such in the log and in the visual report, so you can see what was
+guessed.
 
 
 .. _grouping:
@@ -171,11 +178,15 @@ MultipartID
 ``MultipartID`` is a per-subject string that marks a set of DWI series as parts
 of one acquisition. Series that share a ``MultipartID`` are concatenated into
 one output, including across phase encoding directions. Use it to combine
-some runs but not others. A series may list several ``MultipartID`` values;
-it then appears in each of those outputs (a *virtual acquisition*), denoised
-once and corrected within each output. A series without a ``MultipartID`` is
-never added to a curated output, so set ``MultipartID`` on every series you
-want combined and check the grouping report before a large run.
+some runs but not others.
+
+Once any series of a subject has a ``MultipartID``, no concatenation is
+guessed for that subject. A series without one is an output of its own, even
+if it shares a phase encoding direction or a fieldmap with another series
+(``partial-multipart`` in the grouping report), so set ``MultipartID`` on
+every series you want combined. Fieldmap metadata has no such effect: a
+subject with ``B0FieldIdentifier`` or ``IntendedFor`` links but no
+``MultipartID`` is still concatenated by the default rule.
 
 ShimSetting and field of view
 =============================

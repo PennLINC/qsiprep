@@ -60,6 +60,14 @@ meaning in the :external+qsiplan:doc:`qsiplan issue-code reference
 ``unlinked-fmap``
   A fieldmap in ``fmap/`` lists no DWI series in its ``IntendedFor`` or
   ``B0FieldIdentifier``, so it is not used. See :ref:`linking_fieldmaps`.
+``partial-multipart``
+  Some series of the subject have a ``MultipartID`` and others do not, so
+  each series without one is an output of its own. Set ``MultipartID`` on
+  every series you want combined (:ref:`grouping`).
+``reverse-pe-not-inferred``
+  The subject has linked fieldmaps, so no reverse phase-encoded pairs are
+  inferred and the series named get no fieldmap. Link them too
+  (:ref:`linking_fieldmaps`).
 ``fov-grid-mismatch`` / ``fov-oblique``
   Series that would be concatenated were acquired on different grids or with
   differently rotated fields of view. Use ``--separate-all-dwis``, or
