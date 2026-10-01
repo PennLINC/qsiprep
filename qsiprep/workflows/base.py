@@ -53,6 +53,7 @@ from qsiplan import (
 )
 from qsiplan.adapters import plan_concatenation_scheme, plan_preproc_units
 from qsiplan.cli_spec import policy_from_namespace
+from qsiplan.methods import HmcMethod
 from qsiplan.plan import compile_plan
 
 from .. import config
@@ -78,6 +79,49 @@ from .dwi.base import init_dwi_preproc_wf
 from .dwi.distortion_group_merge import init_distortion_group_merge_wf
 from .dwi.dwiref import init_dwiref_wf
 from .dwi.finalize import init_dwi_finalize_wf
+from .dwi.merge import SERIES_FIELDS, init_dwi_series_denoise_wf
+
+
+def init_series_denoise_wfs(preproc_units, orientation):
+    """Build one conform+denoise workflow per distinct raw DWI series.
+
+    Denoising depends only on the series, not on the unit it is corrected in,
+    so a series listed in several units (a virtual acquisition) is denoised
+    once and the result is shared. Returns ``{path: workflow}``.
+    """
+    series_wfs = {}
+    for unit in preproc_units:
+        for dwi_file in unit.dwi_files:
+            if dwi_file in series_wfs:
+                continue
+            series_wfs[dwi_file] = init_dwi_series_denoise_wf(
+                dwi_file,
+                metadata=unit.metadata_for(dwi_file),
+                phase_file=unit.dwi_phase_files.get(dwi_file),
+                orientation=orientation,
+            )
+    return series_wfs
+
+
+def connect_series_to_unit(workflow, series_wfs, unit, dwi_preproc_wf, name):
+    """Feed a unit's denoised member series into its preprocessing workflow.
+
+    Each per-series output is collected into a list ordered like
+    ``unit.dwi_files`` and connected to the matching list field on
+    ``dwi_preproc_wf.inputnode``. ``name`` keeps the collector nodes unique
+    within ``workflow``.
+    """
+    for series_field, list_field in SERIES_FIELDS:
+        collect = pe.Node(
+            niu.Merge(len(unit.dwi_files)),
+            name=f'collect_{list_field}_{name}',
+            run_without_submitting=True,
+        )
+        for index, dwi_file in enumerate(unit.dwi_files, start=1):
+            workflow.connect(
+                series_wfs[dwi_file], f'outputnode.{series_field}', collect, f'in{index}'
+            )
+        workflow.connect(collect, 'out', dwi_preproc_wf, f'inputnode.{list_field}')
 
 
 def _build_dwi_plan(subject_data, selection):
@@ -652,6 +696,12 @@ to workflows in *QSIPrep*'s documentation]\
                 ]),
             ])  # fmt:skip
 
+    # Conform and denoise each raw series once, before the per-unit pipelines.
+    # The plan runs every unit through the same HMC tool (selection.hmc), so one
+    # orientation serves them all: eddy wants LAS, everything else LPS.
+    orientation = 'LAS' if selection.hmc is HmcMethod.EDDY else 'LPS'
+    series_wfs = init_series_denoise_wfs(preproc_units, orientation)
+
     # create a processing pipeline for the dwis in each session
     for output_fname, unit in outputs_to_files.items():
         # naming_name is this output's display name: a single-unit output uses
@@ -678,6 +728,7 @@ to workflows in *QSIPrep*'s documentation]\
             anatomical_template=anatomical_template,
             do_biascorr=do_biascorr,
         )
+        connect_series_to_unit(workflow, series_wfs, unit, dwi_preproc_wf, output_wfname)
         write_derivatives = not (
             merging_distortion_groups
             and concatenation_scheme[output_fname] in merging_group_workflows
