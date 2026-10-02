@@ -1323,16 +1323,20 @@ def test_trxscan_rpe_topup(data_dir, output_dir, working_dir):
 def test_trxscan_rpe_drbuddi(data_dir, output_dir, working_dir):
     """Score the same pair through DRBUDDI.
 
-    The bounds are loose on purpose: on main, --sloppy runs a single coarse DRBUDDI stage that
-    recovers about half the field (slope ~0.45) and leaves the coregistration several degrees
-    off; tighten them when the default-stage --sloppy lands.
+    --sloppy runs DRBUDDI's default stages on a 2.5 mm grid without the T2w (the single coarse
+    stage it used to run recovered 0.43 of the field; the T2w pulled the result 5 degrees off
+    frame). The coregistration is scored too: it used to start from the structural as DRBUDDI
+    received it, before DRBUDDI's own rigid, and was 5 degrees off on this fixture.
     """
     score = _trxscan_run(
         'trxscan_rpe_drbuddi', 'rpe', ['--sdc-method=drbuddi'], data_dir, output_dir, working_dir
     )
-    assert score['sdc']['corr'] > 0.75, score['sdc']  # right pattern and sign
-    assert 0.3 < score['sdc']['slope'] < 1.2, score['sdc']  # not a wrong readout/units
-    assert score['b0_corrected_vs_clean'] > score['b0_uncorrected_vs_clean'], score
+    assert score['sdc']['corr'] > 0.9, score['sdc']
+    assert 0.65 < score['sdc']['slope'] < 1.2, score['sdc']
+    assert score['b0_corrected_vs_clean'] > 0.85, score  # 0.88 here; 0.98 on DRBUDDI's own grid
+    assert score['b0_corrected_vs_clean'] > score['b0_uncorrected_vs_clean'] + 0.2, score
+    assert score['coreg_error']['rotation_deg'] < 1.0, score['coreg_error']
+    assert score['coreg_error']['translation_mm'] < 1.5, score['coreg_error']
 
 
 @pytest.mark.integration

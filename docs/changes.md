@@ -20,6 +20,16 @@
 * `from-ACPC_to-distortiongroup` and `from-ACPC_to-dwiref` transforms now hold the actual
   inverse of the coregistration; they used to be copies of the forward matrix.
 * The integration tests read `CIRCLE_CPUS`, the variable CI actually sets.
+* After DRBUDDI, the b0-to-T1w coregistration starts from DRBUDDI's undistorted b=0 rather
+  than from the T2w as DRBUDDI received it (``structural_used.nii`` is written before DRBUDDI's
+  own rigid registration of it): on a TRXScan fixture with a known truth that copy sat 5
+  degrees off and the DWI landed 5.3 deg / 3.8 mm off in ACPC space; from the undistorted b=0
+  the error is 0.3 deg / 0.4 mm.
+* `--sloppy` runs DRBUDDI's default stages on its 2.5 mm grid, and without the T2w, instead of
+  one coarse stage: the field recovered rises from 0.43 to 0.80 of the truth at the same wall
+  time, and the T2w (whose structural-to-b0 rigid inside TORTOISE lands 5 degrees off on the
+  fixture whether it is pre-aligned coarsely or exactly) no longer pulls the corrected b=0 off
+  frame or multiplies the run time by six.
 
 ## 26.1.0rc1 (September 29, 2026)
 

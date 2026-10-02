@@ -46,13 +46,14 @@ LOGGER = logging.getLogger('nipype.interface')
 # --sloppy working-grid resolution for DRBUDDI/EPIREG, in mm. TORTOISE's own
 # rule upsamples to <=1mm regardless of the acquisition, which dominates
 # runtime and memory; smoke tests do not need sub-voxel registration.
+#
+# This is the whole of --sloppy for DRBUDDI: its default stages run at the
+# coarse grid. The single-stage ``--DRBUDDI_stage`` that used to go with it
+# (learning_rate 0.4, cfs 4:2:1, MSJac:CC) recovered 0.43 of a known field on a
+# TRXScan reverse-PE fixture, where the default stages at 2.5 mm recover 0.80
+# with the corrected b=0 at 0.98 correlation to the artifact-free one, in
+# about the same wall time (2 min at 4 cores without a structural).
 SLOPPY_EPI_WORKING_RES = 2.5
-
-SLOPPY_DRBUDDI = (
-    '--DRBUDDI_stage '
-    r'\[learning_rate=\{0.4\},cfs=\{4:2:1\},field_smoothing=\{9:0\},'
-    r'metrics=\{MSJac:CC\},restrict_constrain=\{1:1\}\] '
-)
 
 
 def sloppy_epi_working_res():
@@ -367,7 +368,9 @@ class _DRBUDDIInputSpec(TORTOISEInputSpec):
         'Makes DRBUDDI slower but better results. Default: False',
     )
     sloppy = traits.Bool(
-        False, argstr=SLOPPY_DRBUDDI, desc='use underpowered (sloppy) registration for speed'
+        False,
+        desc='Recorded for the workflow; --sloppy reaches DRBUDDI only as the coarse '
+        'epi_working_res, the stages stay the defaults (see SLOPPY_EPI_WORKING_RES).',
     )
     # Opt-in: have TORTOISE synthesize a single tensor-fittable shell for
     # DRBUDDI's [b0, FA] registration target instead of fitting a tensor to the
@@ -532,13 +535,17 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
     output_spec = _DRBUDDIAggregateOutputsOutputSpec
 
     def _run_interface(self, runtime):
-        # If the structural image has been used, return that as the b0ref, otherwise
-        # it's the b0_corrected_final
-        self._results['b0_ref'] = (
-            self.inputs.structural_image
-            if isdefined(self.inputs.structural_image)
-            else self.inputs.undistorted_reference
-        )
+        # Always coregister from DRBUDDI's undistorted b=0, never from
+        # ``structural_used.nii``: DRBUDDI writes the structural exactly as it
+        # was handed over, BEFORE the rigid registration it runs internally to
+        # bring it onto the b=0 (the ``Rigidly registering structural image``
+        # step in its log), so that file sits wherever the coarse antsAI
+        # pre-alignment left it. On a TRXScan fixture with a known truth that was
+        # 5 degrees off: coregistering from it put the DWI 5.3 deg / 3.8 mm off in
+        # ACPC space, from ``b0_corrected_final`` 0.3 deg / 0.4 mm. The
+        # undistorted b=0 lives on the structural's grid in the b=0 frame, and it
+        # is what every corrected volume is actually aligned with.
+        self._results['b0_ref'] = self.inputs.undistorted_reference
 
         # there may be 2 transforms for the blip down data. If so, compose them
         if isdefined(self.inputs.bdown_to_bup_rigid_trans_h5):
