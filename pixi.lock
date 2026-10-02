@@ -5775,8 +5775,8 @@ packages:
   requires_python: '>=3.11'
 - pypi: ./
   name: qsiprep
-  version: 26.2.0.dev22+g4e9311b84
-  sha256: 73653e12303faa640095b650b4c38552ac2079e3fa149a66cf2f0bc2e4dcb1a5
+  version: 26.2.0.dev24+g6bd2383b7
+  sha256: a782190f345cbb5c7c4ec585b80b59e3042b12acf4a46aaf62ca6ee23bf828aa
   requires_dist:
   - acres
   - coverage
@@ -5853,8 +5853,8 @@ packages:
   editable: true
 - pypi: ./
   name: qsiprep
-  version: 26.2.0.dev22+g4e9311b84
-  sha256: 73653e12303faa640095b650b4c38552ac2079e3fa149a66cf2f0bc2e4dcb1a5
+  version: 26.2.0.dev24+g6bd2383b7
+  sha256: a782190f345cbb5c7c4ec585b80b59e3042b12acf4a46aaf62ca6ee23bf828aa
   requires_dist:
   - acres
   - coverage
