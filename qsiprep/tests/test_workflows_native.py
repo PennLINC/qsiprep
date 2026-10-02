@@ -1142,3 +1142,83 @@ def test_dwi2anat_dof_reaches_the_per_unit_coregistration(tmp_path, monkeypatch,
     )
     coreg = wf.get_node('b0_anat_coreg').get_node('b0_to_anat')
     assert coreg.inputs.transforms == [expected]
+
+
+def _merge_wf(tmp_path, resolution=None, write_shared_outputs=True, name='merge_wf'):
+    """Build a distortion-group merge workflow with a real assembly, for the sink tests."""
+    from qsiplan.plan import OutputAssembly
+
+    from qsiprep.workflows.dwi.distortion_group_merge import init_distortion_group_merge_wf
+
+    # Callers pass subdirectories so sibling workflows get separate inputs.
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    cfg = _cfg(layout=_StubLayout())
+    cfg.execution.output_dir = str(tmp_path / 'out')
+    a_file = _write_dwi(tmp_path / 'sub-01_acq-hi_dwi.nii.gz')
+    b_file = _write_dwi(tmp_path / 'sub-01_acq-lo_dwi.nii.gz')
+    unit_a = make_preproc_unit([a_file])
+    unit_b = make_preproc_unit([b_file])
+    assembly = OutputAssembly(
+        output_group='sub-01',
+        input_runs=(unit_a.output_name, unit_b.output_name),
+        strategy='concat',
+        output_name='sub-01',
+    )
+    return init_distortion_group_merge_wf(
+        merging_strategy='concat',
+        inputs_list=[unit_a.output_name, unit_b.output_name],
+        source_file='sub-01_dwi.nii.gz',
+        output_prefix='sub-01',
+        name=name,
+        assembly=assembly,
+        units=[unit_a, unit_b],
+        resolution=resolution,
+        write_shared_outputs=write_shared_outputs,
+    )
+
+
+MERGE_RES_SINKS = ('ds_series_qc', 'ds_report_qc_warnings', 'ds_merged_sidecar')
+
+
+def test_merge_wf_labels_its_sinks_with_the_resolution(tmp_path):
+    """Test that each merge workflow names its grid on every sink it owns.
+
+    Two merge workflows write to one directory, so an unlabelled sink collides.
+    """
+    from qsiprep.utils.spaces import parse_output_spaces
+
+    (spec,) = parse_output_spaces(['acpc:res-1p5mm'])
+    wf = _merge_wf(tmp_path, resolution=spec.resolution)
+    for sink_name in MERGE_RES_SINKS:
+        sink = wf.get_node(sink_name)
+        assert sink is not None, f'{sink_name} is missing'
+        assert sink.inputs.res == '1p5mm', f'{sink_name} carries no res- entity'
+    # The nested b=0 reportlet is the one an entity test forgets; it lives inside
+    # merged_b0_ref, not at the top level.
+    report_sink = wf.get_node('merged_b0_ref').get_node('ds_report_b0_mask')
+    assert report_sink is not None
+    assert report_sink.inputs.res == '1p5mm'
+    # The derivatives workflow gets the resolution too.
+    assert wf.get_node('dwi_derivatives_wf').get_node('ds_dwi_t1').inputs.res == '1p5mm'
+
+
+def test_merge_wf_without_a_resolution_writes_the_historical_names(tmp_path):
+    """Test that a single-resolution merged run keeps the names QSIRecon reads."""
+    from nipype.interfaces.base import isdefined
+
+    wf = _merge_wf(tmp_path)
+    for sink_name in MERGE_RES_SINKS:
+        assert not isdefined(wf.get_node(sink_name).inputs.res)
+    assert not isdefined(wf.get_node('merged_b0_ref').get_node('ds_report_b0_mask').inputs.res)
+
+
+def test_merge_wf_writes_shared_outputs_only_once(tmp_path):
+    """Test that only one merge workflow per output plots the sampling scheme.
+
+    bvecs do not change with the output grid, so the figure would be identical.
+    """
+    with_shared = _merge_wf(tmp_path / 'a', write_shared_outputs=True)
+    without = _merge_wf(tmp_path / 'b', write_shared_outputs=False, name='merge_wf_res2')
+    assert with_shared.get_node('ds_report_gradients') is not None
+    assert without.get_node('ds_report_gradients') is None
+    assert without.get_node('gradient_plot') is None
