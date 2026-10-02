@@ -46,14 +46,22 @@ LOGGER = logging.getLogger('nipype.interface')
 # --sloppy working-grid resolution for DRBUDDI/EPIREG, in mm. TORTOISE's own
 # rule upsamples to <=1mm regardless of the acquisition, which dominates
 # runtime and memory; smoke tests do not need sub-voxel registration.
-#
-# This is the whole of --sloppy for DRBUDDI: its default stages run at the
-# coarse grid. The single-stage ``--DRBUDDI_stage`` that used to go with it
-# (learning_rate 0.4, cfs 4:2:1, MSJac:CC) recovered 0.43 of a known field on a
-# TRXScan reverse-PE fixture, where the default stages at 2.5 mm recover 0.80
-# with the corrected b=0 at 0.98 correlation to the artifact-free one, in
-# about the same wall time (2 min at 4 cores without a structural).
 SLOPPY_EPI_WORKING_RES = 2.5
+
+# The one DRBUDDI stage --sloppy runs. Its metrics are MSJac and CC on the two
+# blips only, which is why it is kept even though DRBUDDI's default stages at
+# the same 2.5 mm grid recover 0.80 of a known field where this stage recovers
+# 0.43 (TRXScan reverse-PE fixture): the default stages also use the T2w, and on
+# that fixture TORTOISE's structural-to-b0 rigid lands 4-5 degrees off (its CC
+# optimum is pulled by non-brain tissue the simulated b0 does not have), after
+# which the structural metrics drag the corrected b0 into that frame -- below
+# the uncorrected one -- at 6x the run time. This stage ignores the structural
+# except for that rigid, so the frame survives, and the T2w path still runs.
+SLOPPY_DRBUDDI = (
+    '--DRBUDDI_stage '
+    r'\[learning_rate=\{0.4\},cfs=\{4:2:1\},field_smoothing=\{9:0\},'
+    r'metrics=\{MSJac:CC\},restrict_constrain=\{1:1\}\] '
+)
 
 
 def sloppy_epi_working_res():
@@ -368,9 +376,7 @@ class _DRBUDDIInputSpec(TORTOISEInputSpec):
         'Makes DRBUDDI slower but better results. Default: False',
     )
     sloppy = traits.Bool(
-        False,
-        desc='Recorded for the workflow; --sloppy reaches DRBUDDI only as the coarse '
-        'epi_working_res, the stages stay the defaults (see SLOPPY_EPI_WORKING_RES).',
+        False, argstr=SLOPPY_DRBUDDI, desc='use underpowered (sloppy) registration for speed'
     )
     # Opt-in: have TORTOISE synthesize a single tensor-fittable shell for
     # DRBUDDI's [b0, FA] registration target instead of fitting a tensor to the

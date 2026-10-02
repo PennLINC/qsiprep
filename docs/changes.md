@@ -25,11 +25,6 @@
   registration of it: on a TRXScan fixture with a known truth that rigid moved a T2w handed
   over 0.8 degrees off the b=0 frame to 5.3 degrees off, and the DWI landed 5.3 deg / 3.8 mm
   off in ACPC space; from the undistorted b=0 the error is 0.4 deg / 0.4 mm.
-* `--sloppy` runs DRBUDDI's default stages on its 2.5 mm grid, and without the T2w, instead of
-  one coarse stage: the field recovered rises from 0.43 to 0.80 of the truth at the same wall
-  time, and the T2w (whose structural-to-b0 rigid inside TORTOISE lands 5 degrees off on the
-  fixture whether it is pre-aligned coarsely or exactly) no longer pulls the corrected b=0 off
-  frame or multiplies the run time by six.
 
 ## 26.1.0rc1 (September 29, 2026)
 
