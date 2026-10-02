@@ -254,6 +254,12 @@ nonlinear template builds produce an affine and a warp per group, which do
 not fit a single-file transform, so with the default ``BSplineSyN`` no
 transform out of ``space-distortiongroup`` is written.
 
+A subject with a single distortion group builds no template: its group's
+reference is written as ``space-subject_dwiref``, its
+``from-distortiongroup_to-subject`` transform is an identity (written
+whatever ``--dwiref-construction-transform`` is), and there is no
+``desc-templateQC`` table.
+
 Head motion, eddy-current and susceptibility corrections are applied by
 ``eddy`` and DIFFPREP inside their own resampling and do not come out as
 reusable transforms, so *QSIPrep* does not write them.

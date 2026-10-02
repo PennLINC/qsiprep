@@ -534,20 +534,11 @@ to workflows in *QSIPrep*'s documentation]\
     }
 
     # Determine the level (distortion-group, subject) at which to generate the dwiref.
-    make_dwiref = False
-    if config.workflow.dwiref_definition == 'subject':
-        if len(outputs_to_files) < 2:
-            # Warn, but don't error, when users request dwiref method that requires more than one
-            # input file but only have one.
-            config.loggers.workflow.warning(
-                'Falling back to --dwiref-definition distortion-group for sub-%s: a '
-                'subject-level dwiref needs at least 2 DWI groups and this subject '
-                'has %d. Everything else is unaffected.',
-                subject_id,
-                len(outputs_to_files),
-            )
-        else:
-            make_dwiref = True
+    # A single distortion group still gets the subject-level outputs: init_dwiref_wf
+    # uses its reference as the dwiref, so the requested level's files always exist.
+    make_dwiref = config.workflow.dwiref_definition == 'subject' and bool(outputs_to_files)
+    # One group is its own dwiref, so there is no template to QC.
+    single_group_dwiref = len(outputs_to_files) == 1
 
     if make_dwiref:
         anat_source_file = fix_multi_source_name(
@@ -655,9 +646,13 @@ to workflows in *QSIPrep*'s documentation]\
         # TemplateQC and the per-group distortiongroup->dwiref transform export exist only
         # for linear templates: mvtc2 exposes no per-input aligned images, and its
         # per-group transform is an [affine, warp] pair that does not fit a
-        # single-file .mat sink.
-        dwiref_linear = config.workflow.dwiref_construction_transform in ('Rigid', 'Affine')
-        if dwiref_linear:
+        # single-file .mat sink. A single group builds no template, so it has no
+        # TemplateQC, but its transform is an identity affine and is written.
+        dwiref_xfm_is_affine = (
+            config.workflow.dwiref_construction_transform in ('Rigid', 'Affine')
+            or single_group_dwiref
+        )
+        if dwiref_xfm_is_affine and not single_group_dwiref:
             ds_template_qc = pe.Node(
                 DerivativesDataSink(
                     source_file=anat_source_file,
@@ -869,7 +864,7 @@ to workflows in *QSIPrep*'s documentation]\
                 ]),
             ])  # fmt:skip
 
-            if dwiref_linear:
+            if dwiref_xfm_is_affine:
                 # Per-group hop into the template space. Paired with
                 # from-subject_to-ACPC above, this closes the round trip:
                 # BIDS b=0 -> dwiref -> ACPC -> MNI, and back.
