@@ -1419,6 +1419,41 @@ def test_drbuddi_epi_working_res_on_the_command_line(tmp_path):
     assert '--epi_working_res 2.5' in DRBUDDI(epi_working_res=2.5, **kwargs).cmdline
 
 
+def test_drbuddi_structural_rigid_tolerance_on_the_command_line(tmp_path):
+    """Test that the tolerance renders as its flag (0 included), and is absent when unset."""
+    from qsiprep.interfaces.tortoise import DRBUDDI
+
+    for name in ('up.nii', 'up.bmtxt', 'up.json', 'down.nii'):
+        (tmp_path / name).write_text('')
+    kwargs = {
+        'blip_up_image': str(tmp_path / 'up.nii'),
+        'blip_up_bmat': str(tmp_path / 'up.bmtxt'),
+        'blip_up_json': str(tmp_path / 'up.json'),
+        'blip_down_image': str(tmp_path / 'down.nii'),
+        'fieldmap_type': 'rpe_series',
+    }
+    flag = '--DRBUDDI_structural_rigid_tolerance'
+    assert flag not in DRBUDDI(**kwargs).cmdline
+    assert f'{flag} 0 ' in DRBUDDI(structural_rigid_tolerance=0.0, **kwargs).cmdline + ' '
+
+
+def test_diffprep_structural_rigid_tolerance_on_the_command_line(tmp_path):
+    """Test that DIFFPREP (whose T2Wreg stage shares DRBUDDI's parser) renders the flag."""
+    from qsiprep.interfaces.tortoise import DIFFPREP
+
+    for name in ('dwi.nii', 'dwi.bmtxt', 'dwi.json'):
+        (tmp_path / name).write_text('')
+    kwargs = {
+        'dwi_file': str(tmp_path / 'dwi.nii'),
+        'bmtxt_file': str(tmp_path / 'dwi.bmtxt'),
+        'json_file': str(tmp_path / 'dwi.json'),
+        'correction_mode': 'motion',
+    }
+    flag = '--DRBUDDI_structural_rigid_tolerance'
+    assert flag not in DIFFPREP(**kwargs).cmdline
+    assert f'{flag} 0 ' in DIFFPREP(structural_rigid_tolerance=0.0, **kwargs).cmdline + ' '
+
+
 def test_sloppy_reaches_the_drbuddi_node(tmp_path):
     """Test that --sloppy propagates all the way to the DRBUDDI node's command line."""
     from qsiprep.interfaces.tortoise import SLOPPY_EPI_WORKING_RES

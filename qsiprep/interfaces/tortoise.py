@@ -415,6 +415,14 @@ class _DRBUDDIInputSpec(TORTOISEInputSpec):
         desc='Hold the initial transforms fixed through the multi-resolution pyramid, so each '
         'stage learns a residual on top of them instead of low-passing and re-estimating them',
     )
+    structural_rigid_tolerance = traits.Float(
+        argstr='--DRBUDDI_structural_rigid_tolerance %g',
+        desc='How far the CC and MI rigid registrations of the structural image to the b=0 may '
+        'disagree before TORTOISE checks which one is forward/backward consistent; below it the '
+        'MI result is used unchecked. TORTOISE hard-codes 0.005, which accepted MI results that '
+        'were off by about a degree on CS-DSI data; 0 always runs the check. Only used with a '
+        'structural image. Requires a patched TORTOISE that exposes the flag.',
+    )
     disable_itk_threads = traits.Bool(True, usedefault=True, argstr='--disable_itk_threads')
     use_cuda = traits.Bool(False, usedefault=True, desc=_USE_CUDA_TRAIT_DESC)
 
@@ -1090,6 +1098,14 @@ class _DIFFPREPInputSpec(TORTOISEInputSpec):
         desc='Additional flags appended verbatim to the TORTOISEProcess command. '
         'Use to access TORTOISE knobs not surfaced as first-class fields '
         '(e.g. ["--big_delta", "0.030"]).',
+    )
+    structural_rigid_tolerance = traits.Float(
+        argstr='--DRBUDDI_structural_rigid_tolerance %g',
+        desc='How far the CC and MI rigid registrations of the T2w to the b=0 may disagree '
+        'before TORTOISE checks which one is forward/backward consistent; below it the MI '
+        'result is used unchecked (TORTOISE hard-codes 0.005). 0 always runs the check. Used '
+        "by the T2Wreg (EPIREG) stage; TORTOISEProcess shares DRBUDDI's parser. Requires a "
+        'patched TORTOISE that exposes the flag.',
     )
     # TORTOISEProcess's parser is DRBUDDI's, so the EPIREG (T2Wreg) stage honours the same
     # working-grid flag as DRBUDDI; without it TORTOISE refines the T2w grid to <= 1 mm and a

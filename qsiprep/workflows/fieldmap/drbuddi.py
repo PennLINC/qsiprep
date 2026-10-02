@@ -340,6 +340,11 @@ def init_drbuddi_wf(
     ])  # fmt:skip
 
     if t2w_sdc:
+        # DRBUDDI registers the T2w to the b=0 with CC and MI, and below this
+        # disagreement takes MI without checking it. MI was the inconsistent one
+        # whenever that shortcut fired on CS-DSI data (sub-26170 CSA: ~1 degree
+        # pose errors between sessions, 0.07 degrees with the check forced).
+        drbuddi.inputs.structural_rigid_tolerance = 0.0
         t2w_to_b0_wf = init_structural_to_b0_alignment_wf(name='t2w_to_b0_wf')
         workflow.connect([
             (inputnode, t2w_to_b0_wf, [

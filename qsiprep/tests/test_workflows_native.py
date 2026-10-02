@@ -452,6 +452,25 @@ def test_drbuddi_wf_unseeded_by_default(tmp_path):
     )
 
 
+def test_drbuddi_wf_checks_structural_rigid_only_with_t2w(tmp_path):
+    """Test that the structural rigid tolerance is 0 with a T2w and unset without one.
+
+    With a T2w, DRBUDDI must always check its CC and MI structural registrations for
+    forward/backward consistency. Without one there is no structural step, so the flag is
+    left off and a stock TORTOISE still runs.
+    """
+    _cfg(hmc_method='tortoise', sdc_method='drbuddi')
+    from nipype.interfaces.base import isdefined
+
+    from qsiprep.workflows.fieldmap import init_drbuddi_wf
+
+    wf = init_drbuddi_wf(_rpe_unit(tmp_path), t2w_sdc=True)
+    assert wf.get_node('drbuddi').inputs.structural_rigid_tolerance == 0.0
+
+    wf = init_drbuddi_wf(_rpe_unit(tmp_path), t2w_sdc=False)
+    assert not isdefined(wf.get_node('drbuddi').inputs.structural_rigid_tolerance)
+
+
 def test_negate_displacement_field_flips_sign_keeps_vector_intent(tmp_path, monkeypatch):
     """Test that the down-field helper negates every vector and keeps the vector intent.
 

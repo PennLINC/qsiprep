@@ -378,6 +378,9 @@ def init_diffprep_hmc_wf(
         ),
         correction_mode=effective_correction_mode,
         b0_id=diffprep_cfg['b0_id'],
+        # T2Wreg registers the T2w to the b=0 the way DRBUDDI does; always run the
+        # forward/backward consistency check instead of trusting MI below 0.005
+        **({'structural_rigid_tolerance': 0.0} if use_t2wreg else {}),
         # --sloppy: the T2Wreg (EPIREG) stage on a 2.5 mm grid, as DRBUDDI already runs
         **sloppy_epi_working_res(),
         is_human_brain=diffprep_cfg['is_human_brain'],
