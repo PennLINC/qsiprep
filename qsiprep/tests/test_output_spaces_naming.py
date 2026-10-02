@@ -141,8 +141,8 @@ def test_single_acpc_anat_derivative_names(single_acpc_config):
 def test_acpc_anatomicals_write_no_res_entity(single_acpc_config):
     """Test that ACPC anatomical derivatives carry no res- entity.
 
-    They are written at the anatomical's own resolution, not on a DWI grid, so
-    they are native and, as in fMRIPrep, unlabelled.
+    They are resampled onto the AC-PC anchor template's grid, not a DWI grid,
+    so the DWI-grid res- rule does not apply to them.
     """
     from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.anatomical.volume import init_anat_derivatives_wf

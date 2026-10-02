@@ -22,8 +22,10 @@ Files follow the `BIDS Derivatives`_ naming rules. Volumetric outputs are in
 their names. Outputs on a DWI grid also carry the ``res-<label>`` of the
 ``acpc`` resolution they were resampled to (for example ``res-2mm``), even when
 only one was requested, so each resolution has its own files. Anatomical
-derivatives are written at the anatomical's own resolution and carry no
-``res-``. Below, ``<res>`` stands for that ``res-<label>`` entity.
+derivatives carry no ``res-``: the ``space-ACPC`` anatomicals are on the
+grid of the template that anchors AC-PC alignment, at TemplateFlow's default
+resolution (1 mm for ``MNI152NLin2009cAsym``), not on a DWI grid. Below,
+``<res>`` stands for that ``res-<label>`` entity.
 
 
 *****************
