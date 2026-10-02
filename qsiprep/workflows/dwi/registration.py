@@ -269,8 +269,16 @@ orientation between the dMRI and the anatomical scan are recovered.
     coreg = ants.Registration()
     coreg.inputs.metric = ['Mattes']
     coreg.inputs.transforms = [transform_type]
-    coreg.inputs.shrink_factors = [[8, 4, 2, 1]]
-    coreg.inputs.smoothing_sigmas = [[7.0, 3.0, 1.0, 0.0]]
+    # --sloppy stops before the full-resolution level: 7 s instead of 25 s at 4 threads on a
+    # TRXScan fixture, 0.25 deg / 0.26 mm from the four-level result.
+    if config.execution.sloppy:
+        coreg.inputs.shrink_factors = [[8, 4, 2]]
+        coreg.inputs.smoothing_sigmas = [[7.0, 3.0, 1.0]]
+        coreg.inputs.number_of_iterations = [[10000, 1000, 10000]]
+    else:
+        coreg.inputs.shrink_factors = [[8, 4, 2, 1]]
+        coreg.inputs.smoothing_sigmas = [[7.0, 3.0, 1.0, 0.0]]
+        coreg.inputs.number_of_iterations = [[10000, 1000, 10000, 10000]]
     coreg.inputs.sigma_units = ['vox']
     coreg.inputs.sampling_strategy = ['Random']
     coreg.inputs.sampling_percentage = [0.25]
@@ -279,7 +287,6 @@ orientation between the dMRI and the anatomical scan are recovered.
     coreg.inputs.dimension = 3
     coreg.inputs.winsorize_lower_quantile = 0.025
     coreg.inputs.winsorize_upper_quantile = 0.975
-    coreg.inputs.number_of_iterations = [[10000, 1000, 10000, 10000]]
     coreg.inputs.transform_parameters = [[0.2]]
     coreg.inputs.convergence_threshold = [1e-06]
     coreg.inputs.collapse_output_transforms = True

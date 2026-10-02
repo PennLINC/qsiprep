@@ -17,6 +17,14 @@
   90 MB on a 1 mm T2w, Dice 0.96 against SynthStrip, where BET left 18 % of the brain margin
   outside its mask on T2w. Needs a niimath built with `SKULLSTRIP=1` (component image 26.10.1).
 
+* The ACPC registration starts from a `niimath -allineate` affine (1-2 s) and the nonlinear
+  normalization from identity (its input is already ACPC-aligned), instead of the
+  full-resolution antsAI search niworkflows runs inside `RobustMNINormalization` (~47 s each,
+  same transforms to 0.2 deg). Under `--sloppy` the anatomical resamplings use Linear
+  (NearestNeighbor for labels) interpolation and the b0-to-anatomical registration stops
+  before its full-resolution level. On the TRXScan reverse-PE fixture the sloppy run went
+  from 19.6 to 10.4 min at 4 CPUs with the same truth scores.
+
 ### 🐛 Bug Fixes
 
 * Oblique anatomical images are resampled onto an axis-aligned grid instead of having their

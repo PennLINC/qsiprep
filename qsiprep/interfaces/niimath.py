@@ -309,3 +309,93 @@ class SkullStrip(CommandLine):
             )
         outputs['mask_file'] = mask_file
         return outputs
+
+
+def allineate_json_to_itk(json_file, out_file):
+    """Write niimath -allineate's ``-savemat`` affine as an ITK text transform.
+
+    The JSON holds ``fixed_to_moving``, a 4x4 world-space (RAS mm) matrix mapping fixed
+    points to moving points: exactly ITK's convention, except that ITK works in LPS. Flipping
+    the first two axes on both sides converts it. The result is a plain
+    ``AffineTransform_double_3_3`` with a zero centre, usable as antsRegistration's
+    ``initial_moving_transform``.
+    """
+    import json
+
+    with open(json_file) as f:
+        affine = json.load(f)
+    ras = np.asarray(affine['fixed_to_moving'], dtype=np.float64).reshape(4, 4)
+    flip = np.diag([-1.0, -1.0, 1.0, 1.0])
+    lps = flip @ ras @ flip
+    params = list(lps[:3, :3].ravel()) + list(lps[:3, 3])
+    with open(out_file, 'w') as f:
+        f.write(
+            '#Insight Transform File V1.0\n#Transform 0\n'
+            'Transform: AffineTransform_double_3_3\n'
+            'Parameters: ' + ' '.join(f'{v:.10g}' for v in params) + '\n'
+            'FixedParameters: 0 0 0\n'
+        )
+    return out_file
+
+
+class _AllineateInputSpec(CommandLineInputSpec):
+    in_file = File(exists=True, mandatory=True, argstr='%s', position=0, desc='moving image')
+    reference = File(
+        exists=True, mandatory=True, argstr='-allineate %s', position=1, desc='fixed image'
+    )
+    savemat = File(
+        argstr='-savemat %s',
+        position=2,
+        name_source='in_file',
+        name_template='%s_allineate.json',
+        keep_extension=False,
+        hash_files=False,
+        desc='the fitted world-space affine, as niimath writes it',
+    )
+    out_file = File(
+        argstr='%s',
+        position=-1,
+        name_source='in_file',
+        name_template='%s_allineate.nii.gz',
+        keep_extension=False,
+        hash_files=False,
+        desc='moving image resliced onto the fixed grid',
+    )
+    num_threads = traits.Int(desc='OpenMP threads')
+
+
+class _AllineateOutputSpec(TraitedSpec):
+    out_file = File(exists=True)
+    savemat = File(exists=True)
+    out_transform = File(exists=True, desc='the affine as an ITK text transform (LPS)')
+
+
+class Allineate(CommandLine):
+    """Affine registration with ``niimath -allineate`` (its default "fast" engine).
+
+    A 12-DOF multiresolution fit (8 -> 4 -> 2 mm, Hellinger + correlation ratio) adapted from
+    AFNI 3dAllineate, in 1-2 s for a 1 mm head. Used here as the initializer of the ACPC
+    registration: on a T1w rotated 25 degrees the registration started from it lands within
+    0.2 degrees of the answer antsAI's full-resolution search gave in 55 s. The rigid-only
+    ``-warp shr`` engine is not used: it is slower (36 s) and lands 4-7 degrees off on the same
+    pair.
+    """
+
+    input_spec = _AllineateInputSpec
+    output_spec = _AllineateOutputSpec
+    _cmd = 'niimath'
+
+    def _run_interface(self, runtime, correct_return_codes=(0,)):
+        if isdefined(self.inputs.num_threads):
+            self.inputs.environ.update({'OMP_NUM_THREADS': str(self.inputs.num_threads)})
+        runtime = super()._run_interface(runtime, correct_return_codes)
+        outputs = self._list_outputs()
+        allineate_json_to_itk(outputs['savemat'], outputs['out_transform'])
+        return runtime
+
+    def _list_outputs(self):
+        outputs = super()._list_outputs()
+        outputs['out_transform'] = fname_presuffix(
+            self.inputs.in_file, suffix='_allineate.txt', newpath=os.getcwd(), use_ext=False
+        )
+        return outputs

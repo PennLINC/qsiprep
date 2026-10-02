@@ -55,7 +55,7 @@ from ...interfaces.freesurfer import (
 )
 from ...interfaces.images import AnatomicalReportlet
 from ...interfaces.itk import AffineToRigid, DisassembleTransform
-from ...interfaces.niimath import SkullStrip
+from ...interfaces.niimath import Allineate, SkullStrip
 from ...interfaces.niworkflows import RobustMNINormalizationRPT
 from ...utils.gpu import gpu_enabled
 from ...utils.misc import fix_multi_source_name
@@ -63,6 +63,24 @@ from ..dwi.registration import init_rotation_search_wf
 
 ANTS_VERSION = BrainExtraction().version or '<ver>'
 FS_VERSION = '8.2.0'
+
+
+def _resample_interpolation():
+    """Interpolation for the anatomical resamplings: Lanczos, or Linear under --sloppy.
+
+    A 1 mm 193^3 resampling takes 8 s with LanczosWindowedSinc and 2 s with Linear on one
+    thread, and there are eight of them per subject.
+    """
+    return 'Linear' if config.execution.sloppy else 'LanczosWindowedSinc'
+
+
+def _label_interpolation():
+    """Interpolation for label and mask resamplings: MultiLabel, or NearestNeighbor under --sloppy.
+
+    MultiLabel smooths every label before voting and took 28 s per 1 mm volume in the sloppy
+    runs; nearest neighbour takes 2 s.
+    """
+    return 'NearestNeighbor' if config.execution.sloppy else 'MultiLabel'
 
 
 def _get_first(in_list):
@@ -341,23 +359,23 @@ was used to restrict the nonlinear registration to the template. """
 
     # Resampling
     rigid_acpc_resample_brain = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
+        ants.ApplyTransforms(input_image_type=0, interpolation=_resample_interpolation()),
         name='rigid_acpc_resample_brain',
     )
     rigid_acpc_resample_head = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
+        ants.ApplyTransforms(input_image_type=0, interpolation=_resample_interpolation()),
         name='rigid_acpc_resample_head',
     )
     rigid_acpc_resample_unfatsat = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
+        ants.ApplyTransforms(input_image_type=0, interpolation=_resample_interpolation()),
         name='rigid_acpc_resample_unfatsat',
     )
     rigid_acpc_resample_aseg = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation='MultiLabel'),
+        ants.ApplyTransforms(input_image_type=0, interpolation=_label_interpolation()),
         name='rigid_acpc_resample_aseg',
     )
     rigid_acpc_resample_mask = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation='MultiLabel'),
+        ants.ApplyTransforms(input_image_type=0, interpolation=_label_interpolation()),
         name='rigid_acpc_resample_mask',
     )
 
@@ -604,11 +622,11 @@ global search over rotations (antsAI).
 
     # Resampling
     rigid_resample_t2w = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
+        ants.ApplyTransforms(input_image_type=0, interpolation=_resample_interpolation()),
         name='rigid_resample_t2w',
     )
     rigid_resample_unfatsat = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
+        ants.ApplyTransforms(input_image_type=0, interpolation=_resample_interpolation()),
         name='rigid_resample_unfatsat',
     )
 
@@ -1064,6 +1082,12 @@ a 6-DOF transform extracted from a full Affine registration to the
         name='acpc_reg',
         n_procs=omp_nthreads,
     )
+    # Without an initial_moving_transform, RobustMNINormalization runs niworkflows'
+    # AffineInitializer (a full-resolution antsAI search) first: ~47 of the node's ~60 s.
+    # niimath's fast affine does the same job in 1-2 s (see interfaces.niimath.Allineate).
+    acpc_init = pe.Node(
+        Allineate(num_threads=omp_nthreads), name='acpc_init', n_procs=omp_nthreads
+    )
     disassemble_transform = pe.Node(
         DisassembleTransform(),
         name='disassemble_transform',
@@ -1098,12 +1122,12 @@ a 6-DOF transform extracted from a full Affine registration to the
 A full nonlinear registration to the template from AC-PC space was
 estimated via symmetric nonlinear registration (SyN) using antsRegistration (@ants). """
     rigid_acpc_resample_anat = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation='LanczosWindowedSinc'),
+        ants.ApplyTransforms(input_image_type=0, interpolation=_resample_interpolation()),
         name='rigid_acpc_resample_anat',
     )
     config.loggers.workflow.info('Running nonlinear normalization to template')
     rigid_acpc_resample_mask = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation='MultiLabel'),
+        ants.ApplyTransforms(input_image_type=0, interpolation=_label_interpolation()),
         name='rigid_acpc_resample_mask',
     )
 
@@ -1124,8 +1148,19 @@ estimated via symmetric nonlinear registration (SyN) using antsRegistration (@an
     )
     anat_nlin_normalization.inputs.template = anatomical_template
     anat_nlin_normalization.inputs.orientation = 'LPS'
+    # Its moving image is the ACPC-resampled anatomical, already on the template frame, so
+    # identity is the right start; this skips the same ~47 s AffineInitializer (identity vs
+    # antsAI start on a TRXScan fixture: 0.17 deg / 0.08 mm in the resulting affine).
+    anat_nlin_normalization.inputs.initial_moving_transform = str(
+        load_data('itkIdentityTransform.txt')
+    )
 
     workflow.connect([
+        (inputnode, acpc_init, [
+            ('template_image', 'reference'),
+            ('anatomical_reference', 'in_file'),
+        ]),
+        (acpc_init, acpc_reg, [('out_transform', 'initial_moving_transform')]),
         (inputnode, anat_nlin_normalization, [
             ('template_image', 'reference_image'),
             ('template_mask', 'reference_mask'),
@@ -1152,7 +1187,7 @@ estimated via symmetric nonlinear registration (SyN) using antsRegistration (@an
     if has_rois:
         desc += 'ROI masks of abnormal tissue were incorporated into the registration. '
         rigid_acpc_resample_roi = pe.Node(
-            ants.ApplyTransforms(input_image_type=0, interpolation='MultiLabel'),
+            ants.ApplyTransforms(input_image_type=0, interpolation=_label_interpolation()),
             name='rigid_acpc_resample_roi',
         )
         workflow.connect([
