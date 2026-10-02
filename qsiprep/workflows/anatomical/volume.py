@@ -568,9 +568,11 @@ was used to restrict the nonlinear registration to the template. """
         # are different images, so both are written.
         workflow.connect([
             (inputnode, anat_derivatives_wf, [('t2w', 'inputnode.t2w_source_files')]),
-            (t2w_preproc_wf, anat_derivatives_wf, [
-                ('outputnode.t2_preproc', 'inputnode.t2_preproc'),
-                ('outputnode.t2w_unfatsat', 'inputnode.t2w_unfatsat'),
+            # From outputnode, not t2w_preproc_wf: with --anat-modality T2w the
+            # T2w is the primary anatomical and t2w_preproc_wf does not exist.
+            (outputnode, anat_derivatives_wf, [
+                ('t2_preproc', 'inputnode.t2_preproc'),
+                ('t2w_unfatsat', 'inputnode.t2w_unfatsat'),
             ]),
         ])  # fmt:skip
 
