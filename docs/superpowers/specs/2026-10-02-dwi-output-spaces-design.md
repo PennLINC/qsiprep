@@ -275,10 +275,17 @@ voxel size, so "no `res-`" always means "native", as in fMRIPrep:
   - *moving*: the anatomical reference before AC-PC alignment (`anat_reference_wf`), whose
     voxel sizes are reoriented to the template's axes;
   - no `fov_mask`: these images include the head, so the template's whole field of view is kept.
-- **Estimation does not change.** The rigid and nonlinear registrations still use the TemplateFlow
-  image as their reference. The warp is defined in world coordinates, so only the grid the outputs
-  are resampled onto changes. The anchor grid also stays what `init_output_grid_wf` autoboxes for
-  the DWI grids, so `acpc` DWI is unaffected.
+- **Only the written copies move; the internal anatomicals stay on the anchor grid.** The ACPC
+  anatomicals `init_anat_preproc_wf` exposes (`t1_preproc`, `t1_brain`, `t1_mask`, `t1_seg`,
+  `t1_aseg`) are inputs to DWI processing: b=0→anatomical coregistration, DIFFPREP's T2Wreg and
+  DRBUDDI structurals, SynB0, the merge workflow, and reports. Moving them to another grid would
+  change those registrations numerically. So the derivatives are written from separate rigid
+  resamples of the anat-space images onto the anatomical-resolution grid, and the internal ones
+  are untouched.
+- **With that, estimation does not change.** The rigid and nonlinear registrations still use the
+  TemplateFlow image as their reference, and the warp is defined in world coordinates, so only the
+  grid the written outputs are resampled onto changes. The anchor grid also stays what
+  `init_output_grid_wf` autoboxes for the DWI grids, so `acpc` DWI is unaffected.
 - **Effect:** filenames are unchanged. For a 1 mm isotropic anatomical, so is the content. Other
   anatomicals change voxel size, possibly to anisotropic ones such as 1×1×1.2 mm. QSIRecon reads
   the ACPC anatomicals, so this belongs in the same release note as the `res-` change.
