@@ -62,7 +62,7 @@ class InvertITKAffine(SimpleInterface):
             raise ValueError(f'InvertITKAffine takes exactly one transform, got {in_files}')
         self._results['out_file'] = invert_itk_affine(
             in_files[0],
-            fname_presuffix(self.inputs.in_file, suffix='_inverse', newpath=runtime.cwd),
+            fname_presuffix(in_files[0], suffix='_inverse', newpath=runtime.cwd),
         )
         return runtime
 
