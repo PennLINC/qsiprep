@@ -489,7 +489,7 @@ def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
     # until the archive is available rather than failing the download.
     try:
         dataset_dir = download_test_data('csdsi_rpe_series', data_dir)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         pytest.skip(f'csdsi_rpe_series test data not available yet: {exc}')
 
     # XXX: Having to modify dataset_dirs is suboptimal.
@@ -1258,6 +1258,173 @@ def test_validate_gradient_flags_warns_when_ignored_gradient_file_is_unused(tmp_
     assert 'unused' in caplog.text.lower()
 
 
+# ─── TRXScan truth-scored integration tests ──────────────────────────────────
+#
+# Each runs qsiprep on a simulated fixture (qsiprep/tests/trxscan_fixtures.py) and scores the
+# output against the simulator's ground truth (qsiprep/tests/truth_scoring.py) instead of
+# comparing file-name manifests. Thresholds come from measured runs of qsiprep 26.1 on these
+# fixtures with --sloppy, with margin; a sign error, a wrong readout time or a failed
+# registration fails them by a wide gap, a few percent of accuracy does not.
+
+TRXSCAN_COMMON = [
+    '--sloppy',
+    '--denoise-method=none',
+    '--dwi-biascorrect=none',
+    '--output-resolution=3',
+]
+
+
+def _trxscan_run(test_name, fixture, extra, data_dir, output_dir, working_dir):
+    from qsiprep.tests.truth_scoring import score_run
+    from qsiprep.tests.trxscan_fixtures import fixture_dir
+
+    dataset_dir = str(fixture_dir(fixture, data_dir))
+    out_dir = os.path.join(output_dir, test_name)
+    work_dir = os.path.join(working_dir, test_name)
+    eddy_config = os.path.join(get_test_data_path(), 'eddy_config.json')
+    parameters = [
+        dataset_dir,
+        out_dir,
+        'participant',
+        f'-w={work_dir}',
+        f'--eddy-config={eddy_config}',
+    ]
+    parameters += TRXSCAN_COMMON + list(extra)
+    _run_and_generate(test_name, parameters, test_main=False, check_outputs=False)
+    return score_run(dataset_dir, out_dir)
+
+
+def _assert_topup_quality(score):
+    """Assert what a correct TOPUP + eddy + coregistration run looks like on these fixtures."""
+    assert score['sdc']['slope'] == pytest.approx(1.0, abs=0.15), score['sdc']
+    assert score['sdc']['corr'] > 0.95, score['sdc']
+    assert score['sdc']['rms_residual'] < 0.3 * score['sdc']['rms_truth'], score['sdc']
+    assert score['b0_corrected_vs_clean'] > score['b0_uncorrected_vs_clean'] + 0.1, score
+    assert score['coreg_error']['rotation_deg'] < 1.0, score['coreg_error']
+    assert score['coreg_error']['translation_mm'] < 1.5, score['coreg_error']
+
+
+@pytest.mark.integration
+@pytest.mark.trxscan_rpe_topup
+def test_trxscan_rpe_topup(data_dir, output_dir, working_dir):
+    """Score a reverse-PE pair through TOPUP and eddy against the simulator's truth.
+
+    The correction, the coregistration and the absence of spurious motion on a static object.
+    """
+    score = _trxscan_run(
+        'trxscan_rpe_topup', 'rpe', ['--sdc-method=topup'], data_dir, output_dir, working_dir
+    )
+    _assert_topup_quality(score)
+    assert score['fd_mean_mm'] < 0.1, score['fd_mean_mm']  # the object does not move
+
+
+@pytest.mark.integration
+@pytest.mark.trxscan_rpe_drbuddi
+def test_trxscan_rpe_drbuddi(data_dir, output_dir, working_dir):
+    """Score the same pair through DRBUDDI.
+
+    The bounds are loose on purpose: on main, --sloppy runs a single coarse DRBUDDI stage that
+    recovers about half the field (slope ~0.45) and leaves the coregistration several degrees
+    off; tighten them when the default-stage --sloppy lands.
+    """
+    score = _trxscan_run(
+        'trxscan_rpe_drbuddi', 'rpe', ['--sdc-method=drbuddi'], data_dir, output_dir, working_dir
+    )
+    assert score['sdc']['corr'] > 0.75, score['sdc']  # right pattern and sign
+    assert 0.3 < score['sdc']['slope'] < 1.2, score['sdc']  # not a wrong readout/units
+    assert score['b0_corrected_vs_clean'] > score['b0_uncorrected_vs_clean'], score
+
+
+@pytest.mark.integration
+@pytest.mark.trxscan_epi_topup
+def test_trxscan_epi_topup(data_dir, output_dir, working_dir):
+    """Score one series plus a reverse-PE epi fieldmap, both under one B0FieldIdentifier."""
+    score = _trxscan_run(
+        'trxscan_epi_topup', 'epi', ['--sdc-method=topup'], data_dir, output_dir, working_dir
+    )
+    _assert_topup_quality(score)
+
+
+@pytest.mark.integration
+@pytest.mark.trxscan_phasediff
+def test_trxscan_phasediff(data_dir, output_dir, working_dir):
+    """Score a GRE phasediff fieldmap with the subject moved between the DWI, T1w and fieldmap.
+
+    Asserts what holds today: the exported field has the right sign and most of the magnitude,
+    and b0->T1w coregistration recovers the recorded movement. The image is NOT asserted to
+    improve: the fieldmap-to-b0 registration leaves ~2 deg / 2.5 mm of error on this fixture
+    and the applied warp recovers under half the field (see the TRXScan report).
+    """
+    score = _trxscan_run('trxscan_phasediff', 'phasediff', [], data_dir, output_dir, working_dir)
+    assert score['sdc']['corr'] > 0.7, score['sdc']
+    assert 0.5 < score['sdc']['slope'] < 1.2, score['sdc']
+    assert score['coreg_error']['truth'] == 'movement'
+    assert score['coreg_error']['rotation_deg'] < 1.0, score['coreg_error']
+    assert score['coreg_error']['translation_mm'] < 2.0, score['coreg_error']
+
+
+@pytest.mark.integration
+@pytest.mark.trxscan_gnl
+def test_trxscan_gnl(data_dir, output_dir, working_dir):
+    """Score strong gradient nonlinearity with --gradient-file.
+
+    The geometry is restored and the written gradient deviation matches the truth.
+    """
+    from qsiprep.tests.trxscan_fixtures import fixture_dir
+
+    coeff = next(
+        Path(fixture_dir('gnl', data_dir)).glob(
+            'derivatives/trxscan/sub-*/dwi/*_desc-gnlcoeff_dwi.grad'
+        )
+    )
+    score = _trxscan_run(
+        'trxscan_gnl',
+        'gnl',
+        ['--sdc-method=topup', f'--gradient-file={coeff}'],
+        data_dir,
+        output_dir,
+        working_dir,
+    )
+    _assert_topup_quality(score)
+    assert score['gnl_graddev']['corr'] > 0.99, score['gnl_graddev']
+    assert score['gnl_graddev']['slope'] == pytest.approx(1.0, abs=0.05), score['gnl_graddev']
+    assert score['gnl_graddev']['rms_residual'] < 0.1 * score['gnl_graddev']['rms_truth_dev'], (
+        score['gnl_graddev']
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.trxscan_motion
+def test_trxscan_motion(data_dir, output_dir, working_dir):
+    """Score eddy's motion parameters against the poses the simulator applied (5 mm / 2.8 deg)."""
+    score = _trxscan_run('trxscan_motion', 'motion', [], data_dir, output_dir, working_dir)
+    for axis in ('trans_x', 'trans_y', 'trans_z', 'rot_x', 'rot_z'):
+        assert score['motion'][axis]['corr'] > 0.75, (
+            axis,
+            score['motion'][axis],
+        )  # same axis, same sign
+    for axis in ('trans_y', 'rot_x'):  # the large components
+        assert 0.4 < score['motion'][axis]['amplitude_ratio'] < 1.3, (axis, score['motion'][axis])
+
+
+@pytest.mark.integration
+@pytest.mark.trxscan_offsets
+def test_trxscan_offsets(data_dir, output_dir, working_dir):
+    """Score a subject who moved between the T1w and the DWI, and between the AP and PA series.
+
+    The coregistration must recover the recorded movement and TOPUP must still correct the pair.
+    """
+    score = _trxscan_run(
+        'trxscan_offsets', 'offsets', ['--sdc-method=topup'], data_dir, output_dir, working_dir
+    )
+    assert score['coreg_error']['truth'] == 'movement'
+    assert score['coreg_error']['rotation_deg'] < 1.5, score['coreg_error']
+    assert score['coreg_error']['translation_mm'] < 3.0, score['coreg_error']
+    assert score['sdc']['corr'] > 0.95, score['sdc']
+    assert 0.75 < score['sdc']['slope'] < 1.15, score['sdc']
+    assert score['b0_corrected_vs_clean'] > score['b0_uncorrected_vs_clean'] + 0.1, score
+
+
 def _check_arg_specified(argname, arglist):
     for arg in arglist:
         if arg.startswith(argname):
@@ -1275,7 +1442,8 @@ def _update_resources(parameters):
     env variable (specified in each job in config.yml). If
     this variable doesn't work, just set it to 4.
     """
-    nthreads = int(os.environ.get('CIRCLECPUS', DEFAULT_NUM_CPUS))
+    # CircleCI exports CIRCLE_CPUS (see .circleci/continue_config.yml); CIRCLECPUS is the old name
+    nthreads = int(os.environ.get('CIRCLE_CPUS', os.environ.get('CIRCLECPUS', DEFAULT_NUM_CPUS)))
     if not _check_arg_specified('--nthreads', parameters):
         parameters.append(f'--nthreads={nthreads}')
     if not _check_arg_specified('--omp-nthreads', parameters):

@@ -31,6 +31,70 @@ from ..viz.utils import plot_acpc
 LOGGER = logging.getLogger('nipype.interface')
 
 
+class _InvertITKAffineInputSpec(BaseInterfaceInputSpec):
+    in_file = File(exists=True, mandatory=True, desc='ITK affine/rigid transform (.mat)')
+
+
+class _InvertITKAffineOutputSpec(TraitedSpec):
+    out_file = File(exists=True, desc='the inverse transform, as AffineTransform_double_3_3')
+
+
+class InvertITKAffine(SimpleInterface):
+    """Write the inverse of an ITK ``.mat`` affine or rigid transform.
+
+    ANTs' ``reverse_transforms`` is the forward ``.mat`` with an inverse flag that the file
+    cannot carry, so a derivative written from it under a ``from-A_to-B`` name would hold the
+    ``from-B_to-A`` matrix. This computes the inverse (with ITK's fixed-centre convention
+    folded in) and writes a plain ``AffineTransform_double_3_3`` with a zero centre.
+    """
+
+    input_spec = _InvertITKAffineInputSpec
+    output_spec = _InvertITKAffineOutputSpec
+
+    def _run_interface(self, runtime):
+        self._results['out_file'] = invert_itk_affine(
+            self.inputs.in_file,
+            fname_presuffix(self.inputs.in_file, suffix='_inverse', newpath=runtime.cwd),
+        )
+        return runtime
+
+
+def _itk_mat_to_matrix(key, params, fixed):
+    p = np.asarray(params, dtype=np.float64).ravel()
+    c = np.asarray(fixed, dtype=np.float64).ravel()[:3]
+    if key.startswith('Euler3D') or p.size == 6:
+        ax, ay, az = p[:3]
+        cx, sx = np.cos(ax), np.sin(ax)
+        cy, sy = np.cos(ay), np.sin(ay)
+        cz, sz = np.cos(az), np.sin(az)
+        rx = np.array([[1, 0, 0], [0, cx, -sx], [0, sx, cx]])
+        ry = np.array([[cy, 0, sy], [0, 1, 0], [-sy, 0, cy]])
+        rz = np.array([[cz, -sz, 0], [sz, cz, 0], [0, 0, 1]])
+        mat, t = rz @ rx @ ry, p[3:6]  # ITK Euler3DTransform, ComputeZYX off
+    elif p.size == 12:
+        mat, t = p[:9].reshape(3, 3), p[9:12]
+    else:
+        raise ValueError(f'unsupported ITK transform {key!r} with {p.size} parameters')
+    out = np.eye(4)
+    out[:3, :3] = mat
+    out[:3, 3] = t + c - mat @ c
+    return out
+
+
+def invert_itk_affine(in_file, out_file):
+    """Invert an ITK ``.mat`` affine or rigid transform, writing ``AffineTransform_double_3_3``."""
+    from scipy.io import loadmat, savemat
+
+    m = loadmat(in_file)
+    key = next(k for k in m if not k.startswith('__') and k != 'fixed')
+    inv = np.linalg.inv(_itk_mat_to_matrix(key, m[key], m.get('fixed', np.zeros(3))))
+    params = np.concatenate([inv[:3, :3].ravel(), inv[:3, 3]]).reshape(-1, 1)
+    savemat(
+        out_file, {'AffineTransform_double_3_3': params, 'fixed': np.zeros((3, 1))}, format='4'
+    )
+    return out_file
+
+
 class _AffineToRigidInputSpec(BaseInterfaceInputSpec):
     affine_transform = InputMultiObject(File(exists=True, mandatory=True))
 

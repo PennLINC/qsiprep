@@ -1,5 +1,26 @@
 # What's New
 
+## Unreleased
+
+### 🎉 Exciting New Features
+
+* Truth-scored integration tests on simulated data: the `trxscan_*` CI jobs generate
+  fixtures with [TRXScan](https://github.com/PennLINC/TRXScan) (`qsiprep/tests/trxscan_fixtures.py`)
+  and score qsiprep's outputs against the simulator's ground truth
+  (`qsiprep/tests/truth_scoring.py`): susceptibility displacement, corrected images,
+  coregistration against a recorded subject movement, gradient deviation, and eddy's motion
+  parameters.
+
+### 🐛 Bug Fixes
+
+* Oblique anatomical images are resampled onto an axis-aligned grid instead of having their
+  header obliquity discarded, which had moved the anatomy in world space by the obliquity angle
+  (21 mm at the brain centre for a 5 degree tilt) and misplaced everything evaluated in scanner
+  coordinates, gradient nonlinearity correction included.
+* `from-ACPC_to-distortiongroup` and `from-ACPC_to-dwiref` transforms now hold the actual
+  inverse of the coregistration; they used to be copies of the forward matrix.
+* The integration tests read `CIRCLE_CPUS`, the variable CI actually sets.
+
 ## 26.1.0rc1 (September 29, 2026)
 
 ### 🛠 Breaking Changes
