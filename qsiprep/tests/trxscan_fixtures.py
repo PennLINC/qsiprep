@@ -10,7 +10,8 @@ checksum of ``.circleci/trxscan_fixtures.txt``, which :func:`main` writes from t
     python -m qsiprep.tests.trxscan_fixtures --generate /tmp/data/trxscan
 
 Locally, :func:`fixture_dir` generates a missing fixture on demand when ``trxscan-fixture`` is
-on PATH (``pip install trxscan==<TRXSCAN_VERSION>``).
+on PATH (``pip install "trxscan[trx]==<TRXSCAN_VERSION>"``; the ``trx`` extra reads the
+phantom tractograms).
 
 Fixtures are 3 mm, 16 directions + 2 b=0 per phase-encode polarity, from the hosted
 ``sub-60501`` phantom (400k streamlines), with the subject's T1w/T2w. Readout follows the
@@ -116,7 +117,7 @@ def fixture_dir(name, data_dir=None):
     if exe is None:
         raise FileNotFoundError(
             f'TRXScan fixture {name!r} is not in {out.parent} and trxscan-fixture is not on PATH '
-            f'(pip install trxscan=={TRXSCAN_VERSION}, or run '
+            f'(pip install "trxscan[trx]=={TRXSCAN_VERSION}", or run '
             f'python -m qsiprep.tests.trxscan_fixtures --generate {data_dir})'
         )
     return generate(name, data_dir, exe)

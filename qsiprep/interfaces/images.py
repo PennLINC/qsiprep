@@ -485,7 +485,7 @@ def deoblique_grid(img):
     zooms = np.asarray(img.header.get_zooms()[:3], dtype=np.float64)
     ornt = nb.io_orientation(affine)  # closest canonical axis and polarity per voxel axis
     signs = np.ones(3)
-    for vox_axis, (world_axis, flip) in enumerate(ornt):
+    for _vox_axis, (world_axis, flip) in enumerate(ornt):
         signs[int(world_axis)] = flip
     shape = np.asarray(img.shape[:3])
     corners = np.array(
