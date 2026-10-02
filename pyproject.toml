@@ -267,6 +267,8 @@ quote-style = "single"
 addopts = '-m "not integration"'
 markers = [
     "integration: integration tests to skip by default",
+    "dsdti_topup: unit tests",
+    "diffprep: TORTOISE DIFFPREP interface and workflow unit tests",
     "amico_noddi: test 5",
     "cuda: test 6",
     "synthstrip: test synthstrip and synthseg interfaces",
