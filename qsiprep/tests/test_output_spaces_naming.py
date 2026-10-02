@@ -608,10 +608,45 @@ def test_two_acpc_resolutions_write_distinct_figure_paths(tmp_path):
     assert_no_collisions(paths)
 
 
-def test_merged_groups_build_only_the_first_resolution(tmp_path):
-    """Nipype prunes nothing, so a subtree nothing consumes still runs in full."""
+def test_merged_groups_build_every_resolution(tmp_path):
+    """Test that a merged unit resamples every ACPC resolution.
+
+    Each resolution now feeds its own merge workflow, so none is dropped.
+    """
     wf, _ = _build_finalize(tmp_path, ['acpc:res-2mm', 'acpc:res-1p5mm'], write_derivatives=False)
     prefixes = {n.split('.')[0] for n in wf.list_node_names() if 'dwi_trans_wf' in n}
-    # Truncating before multi_acpc is computed means the survivor is named as the
-    # single resolution it now is.
-    assert prefixes == {'dwi_trans_wf'}
+    assert prefixes == {'dwi_trans_wf_res2mm', 'dwi_trans_wf_res1p5mm'}
+
+
+def test_finalize_outputnode_carries_every_acpc_resolution(tmp_path):
+    """Test that the merge fields carry one slot per ACPC resolution.
+
+    The merge path reads this outputnode, and it used to expose only index 0.
+    """
+    wf, acpc_specs = _build_finalize(
+        tmp_path, ['acpc:res-2mm', 'acpc:res-1p5mm'], write_derivatives=False
+    )
+    outputnode = wf.get_node('outputnode')
+    for field in ('dwi_t1', 'bvals_t1', 'bvecs_t1', 't1_b0_ref', 'cnr_map_t1'):
+        merge = wf.get_node(f'merge_out_{field}')
+        assert merge is not None, f'{field} is not merged across resolutions'
+        assert merge.interface._numinputs == len(acpc_specs)
+        filled = {
+            name
+            for _, _, data in wf._graph.in_edges(merge, data=True)
+            for _, name in data['connect']
+        }
+        assert filled == {f'in{i}' for i in range(1, len(acpc_specs) + 1)}, (
+            f'merge_out_{field} slots not all connected: {sorted(filled)}'
+        )
+        edge = wf._graph.get_edge_data(merge, outputnode)
+        assert edge is not None
+        assert ('out', field) in edge['connect']
+
+
+def test_single_acpc_finalize_outputnode_is_a_one_element_list(tmp_path):
+    """Test that a single resolution takes the same shape, so consumers never branch."""
+    wf, _ = _build_finalize(tmp_path, ['acpc:res-2mm'], write_derivatives=False)
+    merge = wf.get_node('merge_out_dwi_t1')
+    assert merge is not None
+    assert merge.interface._numinputs == 1

@@ -1222,3 +1222,20 @@ def test_merge_wf_writes_shared_outputs_only_once(tmp_path):
     assert with_shared.get_node('ds_report_gradients') is not None
     assert without.get_node('ds_report_gradients') is None
     assert without.get_node('gradient_plot') is None
+
+
+def test_single_subject_wf_builds_a_merge_workflow_per_resolution():
+    """Test that each ACPC spec gets its own merge workflow, fed slot i.
+
+    Textual: the integrated graph is built for real in
+    test_two_resolutions_build_two_merge_workflows.
+    """
+    import inspect
+
+    from qsiprep.workflows import base
+
+    src = inspect.getsource(base.init_single_subject_wf)
+    assert 'for index, spec in enumerate(acpc_specs)' in src
+    assert 'write_shared_outputs=(index == 0)' in src
+    assert "(('outputnode.dwi_t1', _select_grid, index), image_name)" in src
+    assert "(('outputnode.bvals_t1', _select_grid, index), bval_name)" in src

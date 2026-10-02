@@ -402,16 +402,6 @@ def init_dwi_finalize_wf(
             unit.output_name,
         )
 
-    if not write_derivatives:
-        # This unit is concatenated later by init_distortion_group_merge_wf, which
-        # writes one resolution through this workflow's single-valued outputnode.
-        # nipype prunes nothing, so building the rest would resample and denoise
-        # them in full and then discard the result. Truncating here, before
-        # multi_acpc is computed, also names the survivor as the single resolution
-        # it now is. The parser rejects this combination; the guard keeps it cheap
-        # if that check is ever relaxed.
-        acpc_specs = acpc_specs[:1]
-
     sdc_fields = []  # (outputnode field, report desc, figure title)
     if warp_source is not None:
         sdc_fields.append(
@@ -441,6 +431,18 @@ def init_dwi_finalize_wf(
     # Built once, from the first spec that reaches the derivatives section below.
     gradient_plot = None
     grad_dev_initial_ref = None
+
+    # The merge path (final_merge_wf in base.py) consumes these per resolution, so
+    # every ACPC spec reaches the outputnode as one slot of a list in acpc_specs
+    # order. A single resolution gives a one-element list, so consumers index rather
+    # than special-case.
+    merged_outputs = {
+        field: pe.Node(niu.Merge(len(acpc_specs)), name=f'merge_out_{field}')
+        for field in ('dwi_t1', 'bvals_t1', 'bvecs_t1', 't1_b0_ref', 'cnr_map_t1')
+    }
+    workflow.connect(
+        [(merge, outputnode, [('out', field)]) for field, merge in merged_outputs.items()]
+    )
 
     for index, spec in enumerate(acpc_specs):
         label = spec.resolution.label
@@ -518,22 +520,34 @@ def init_dwi_finalize_wf(
                 (inputnode, dwi_trans_wf, [('fieldmap_hz', 'inputnode.fieldmap_hz')]),
             ])  # fmt:skip
 
+        workflow.connect([
+            (dwi_trans_wf, merged_outputs['bvals_t1'], [
+                ('outputnode.bvals', f'in{index + 1}'),
+            ]),
+            (dwi_trans_wf, merged_outputs['bvecs_t1'], [
+                ('outputnode.rotated_bvecs', f'in{index + 1}'),
+            ]),
+            (dwi_trans_wf, merged_outputs['cnr_map_t1'], [
+                ('outputnode.cnr_map_resampled', f'in{index + 1}'),
+            ]),
+            (final_denoise_wf, merged_outputs['dwi_t1'], [
+                ('outputnode.dwi_t1', f'in{index + 1}'),
+            ]),
+            (final_denoise_wf, merged_outputs['t1_b0_ref'], [
+                ('outputnode.t1_b0_ref', f'in{index + 1}'),
+            ]),
+        ])  # fmt:skip
+
         if index == 0:
-            # The distortion-group merge path (final_merge_wf in base.py) has no
-            # notion of multiple output resolutions, so the first requested ACPC
-            # resolution is the one exposed through this workflow's single-valued
-            # outputnode.
+            # Nothing outside this workflow reads these per resolution: the direct
+            # path's derivatives read each resolution's own nodes, and the merge path
+            # reads only the five list-valued fields above.
             workflow.connect([
                 (dwi_trans_wf, outputnode, [
-                    ('outputnode.bvals', 'bvals_t1'),
-                    ('outputnode.rotated_bvecs', 'bvecs_t1'),
-                    ('outputnode.cnr_map_resampled', 'cnr_map_t1'),
                     ('outputnode.local_bvecs', 'local_bvecs_t1'),
                 ]),
                 (final_denoise_wf, outputnode, [
                     ('outputnode.confounds', 'confounds'),
-                    ('outputnode.dwi_t1', 'dwi_t1'),
-                    ('outputnode.t1_b0_ref', 't1_b0_ref'),
                     ('outputnode.dwi_mask_t1', 'dwi_mask_t1'),
                 ]),
                 (inputnode, outputnode, [('hmc_optimization_data', 'hmc_optimization_data')]),

@@ -78,7 +78,7 @@ from .anatomical.volume import anat_biascorrect_enabled, init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
 from .dwi.distortion_group_merge import init_distortion_group_merge_wf
 from .dwi.dwiref import init_dwiref_wf
-from .dwi.finalize import init_dwi_finalize_wf
+from .dwi.finalize import _select_grid, init_dwi_finalize_wf
 from .dwi.merge import SERIES_FIELDS, init_dwi_series_denoise_wf
 
 
@@ -520,26 +520,38 @@ to workflows in *QSIPrep*'s documentation]\
             if len(merged_to_subgroups[merged_group]) < 2:
                 continue
 
-            merging_group_workflows[merged_group] = init_distortion_group_merge_wf(
-                merging_strategy=config.workflow.distortion_group_merge,
-                source_file=merged_group + '_dwi.nii.gz',
-                inputs_list=merged_to_subgroups[merged_group],
-                output_prefix=merged_group,
-                name=merged_group.replace('-', '_') + '_final_merge_wf',
-                assembly=assembly_by_name[merged_group],
-                units=[units_by_name[key] for key in merged_to_subgroups[merged_group]],
-            )
-            workflow.connect([
-                (anat_preproc_wf, merging_group_workflows[merged_group], [
-                    ('outputnode.t1_brain', 'inputnode.t1_brain'),
-                    ('outputnode.t1_seg', 'inputnode.t1_seg'),
-                    ('outputnode.t1_mask', 'inputnode.t1_mask'),
-                    # Multiple ACPC resolutions are rejected alongside merging, so
-                    # this list has exactly one element here.
-                    (('outputnode.dwi_sampling_grids', _first_sampling_grid),
-                     'inputnode.dwi_sampling_grid'),
-                ]),
-            ])  # fmt:skip
+            merging_group_workflows[merged_group] = [
+                init_distortion_group_merge_wf(
+                    merging_strategy=config.workflow.distortion_group_merge,
+                    source_file=merged_group + '_dwi.nii.gz',
+                    inputs_list=merged_to_subgroups[merged_group],
+                    output_prefix=merged_group,
+                    name=(
+                        merged_group.replace('-', '_')
+                        + '_final_merge_wf'
+                        + (f'_res{spec.resolution.label}' if len(acpc_specs) > 1 else '')
+                    ),
+                    assembly=assembly_by_name[merged_group],
+                    units=[units_by_name[key] for key in merged_to_subgroups[merged_group]],
+                    # The res- entity only appears once more than one resolution was
+                    # requested: a single-resolution merged run must keep producing
+                    # exactly the filenames QSIRecon already reads.
+                    resolution=spec.resolution if len(acpc_specs) > 1 else None,
+                    write_shared_outputs=(index == 0),
+                )
+                for index, spec in enumerate(acpc_specs)
+            ]
+
+            for index, merge_wf in enumerate(merging_group_workflows[merged_group]):
+                workflow.connect([
+                    (anat_preproc_wf, merge_wf, [
+                        ('outputnode.t1_brain', 'inputnode.t1_brain'),
+                        ('outputnode.t1_seg', 'inputnode.t1_seg'),
+                        ('outputnode.t1_mask', 'inputnode.t1_mask'),
+                        (('outputnode.dwi_sampling_grids', _select_grid, index),
+                         'inputnode.dwi_sampling_grid'),
+                    ]),
+                ])  # fmt:skip
 
     outputs_to_files = {unit.output_name: unit for unit in preproc_units}
     summary.inputs.dwi_groupings = {
@@ -917,12 +929,12 @@ to workflows in *QSIPrep*'s documentation]\
                         output_wfname,
                     )
 
-        final_merge_wf = (
-            merging_group_workflows.get(concatenation_scheme[output_fname])
+        final_merge_wfs = (
+            merging_group_workflows.get(concatenation_scheme[output_fname], [])
             if merging_distortion_groups
-            else None
+            else []
         )
-        if final_merge_wf is not None:
+        for index, final_merge_wf in enumerate(final_merge_wfs):
             image_name = f'inputnode.{output_wfname}_image'
             bval_name = f'inputnode.{output_wfname}_bval'
             bvec_name = f'inputnode.{output_wfname}_bvec'
@@ -934,12 +946,14 @@ to workflows in *QSIPrep*'s documentation]\
             cnr_name = f'inputnode.{output_wfname}_cnr'
             carpetplot_name = f'inputnode.{output_wfname}_carpetplot_data'
             workflow.connect([
+                # Slot index of each list-valued output: the merge workflow for
+                # resolution i only ever sees images already on grid i.
                 (dwi_finalize_wf, final_merge_wf, [
-                    ('outputnode.bvals_t1', bval_name),
-                    ('outputnode.bvecs_t1', bvec_name),
-                    ('outputnode.dwi_t1', image_name),
-                    ('outputnode.t1_b0_ref', b0_ref_name),
-                    ('outputnode.cnr_map_t1', cnr_name),
+                    (('outputnode.bvals_t1', _select_grid, index), bval_name),
+                    (('outputnode.bvecs_t1', _select_grid, index), bvec_name),
+                    (('outputnode.dwi_t1', _select_grid, index), image_name),
+                    (('outputnode.t1_b0_ref', _select_grid, index), b0_ref_name),
+                    (('outputnode.cnr_map_t1', _select_grid, index), cnr_name),
                 ]),
                 (dwi_preproc_wf, final_merge_wf, [
                     ('outputnode.raw_concatenated', raw_concatenated_image_name),
