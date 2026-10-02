@@ -41,7 +41,7 @@ receive DWI.
   - the filename contract: `res-` on every non-native output, which needs QSIRecon to select
     outputs by `res-`;
   - `dwiref` under `--dwiref-definition distortion-group`, where every correction unit has its
-    own frame, so those outputs cannot be merged (D11).
+    own frame, so merging those outputs is a build-time error (D11).
 
 ## Decisions
 
@@ -51,7 +51,8 @@ receive DWI.
 | Default | `acpc:res-nativemin`, both when `--output-spaces` is omitted and when a DWI space has no `res-`. |
 | Native resolutions | `native`, `nativemin` and `nativemax` are computed from the runs that make up each output, not pooled across the subject. If an output combines runs with different native voxel sizes, either concatenated within a correction unit or merged across units, QSIPrep raises an error and asks for a physical size (e.g. `res-1p5mm`). |
 | No `acpc` requested | Allowed, with a warning that QSIRecon reads only `space-ACPC`. |
-| `anat` derivatives | Preprocessed anatomical, brain mask and segmentation in `anat` space, as for templates. |
+| Anatomical derivatives for native spaces | Whenever `anat` or `dwiref` is requested, the preprocessed anatomical, brain mask and segmentation are written **once**, in `anat` space at the anatomical's own resolution (`space-anat`, no `res-`). They are not resampled onto each DWI grid, and `dwiref` gets no anatomical derivatives of its own (D12). |
+| `dwiref` with merging | A build-time error when an output merges ≥2 units at the distortion-group level (D11). |
 | `res-` in filenames | On every output except `res-native`, as fMRIPrep does. `acpc:res-nativemin` writes `space-ACPC_res-nativemin_...`. |
 | Templates | Transforms + anatomical derivatives only; no DWI; no `:transform-only` keyword. |
 | `--dwiref-definition` | Keeps `distortion-group` / `subject`, matching fMRIPrep's `--bold-coreg-level`. Its edge-case differences from fMRIPrep are tracked in a separate issue. |
@@ -217,7 +218,12 @@ state stay correct without an oblique-frame code path:
   - At the subject level all units share one frame, so merged outputs work as for ACPC: one merge
     workflow per spec.
   - At the distortion-group level the units being merged live in *different* frames, so their
-    `dwiref` outputs cannot be concatenated (D11).
+    `dwiref` outputs cannot be concatenated. A build-time error names the output and suggests
+    `--dwiref-definition subject` (one shared frame) or `--distortion-group-merge none` (D11).
+    Outputs with a single unit are unaffected.
+- **Anatomical derivatives:** none in the dwiref frame (D12). Requesting `dwiref` writes the
+  `space-anat` anatomicals described under `anat`. Users bring them into a dwiref frame with the
+  written `from-anat_to-ACPC` and `from-ACPC_to-<level>` transforms.
 - **Single-group subjects** under `subject`: follow today's fallback, so outputs are named
   `distortiongroup`. If the separate `--dwiref-definition` issue changes the fallback, `dwiref`
   follows it automatically.
@@ -231,9 +237,11 @@ state stay correct without an oblique-frame code path:
 - **Gradient rotation:** the rigid's rotation is folded into each volume's affine by the existing
   `compose_affines` path.
 - **Anatomical derivatives:** expose the anat-space bias-corrected anatomical, brain mask and
-  segmentation on `init_anat_preproc_wf`'s outputnode. Write them through the same sinks
-  `init_anat_derivatives_wf` uses for templates, as `space-anat`, resampled onto each `anat`
-  spec's grid with the matching `res-` entity.
+  segmentation on `init_anat_preproc_wf`'s outputnode. Write them once, whenever `anat` or `dwiref`
+  is requested, as `space-anat` at the anatomical's own resolution, with no `res-` (native). This
+  matches how fMRIPrep writes T1w-space anatomicals. They are not resampled onto each `anat` DWI
+  grid: with "no `res-` for native", `anat:res-native` DWI-grid copies would collide with them by
+  name, and one anatomical-resolution set is what consumers need.
 - **Merging:** a single subject-level frame, so merged outputs work as for ACPC.
 
 ## Effect on processing
@@ -287,10 +295,18 @@ A "task" is one reviewed commit with tests. All phases go in one follow-up PR af
 | 0 | **Groundwork, no new behaviour.** `is_template`/`writes_dwi` replace `SpaceSpec.standard`. `acpc_specs` → `dwi_specs` across `finalize`, `base.py` and the merge path, keyed by (space, resolution). `space=` parameterized on every DWI sink and reportlet. `space` added to DWI figure filters in `reports-spec.yml`. Per-spec stage selection and a configurable Jacobian transport stack in `ComposeTransforms`/`ApplyJacobianWeights`, ACPC behaviour unchanged. The unused, broken to-template hook in `ComposeTransforms` removed. | 4 tasks |
 | 1 | **Defaults, naming and native resolutions.** Optional `--output-spaces` defaulting to `acpc:res-nativemin`; `nativemin` as the default `res-`; the "≥1 DWI space" rule and no-`acpc` warning; `res-` on every non-`native` output (manifests, naming tests, docs); per-output `native*` with the mismatch error and per-output grids; SynB0's side output written as `space-distortiongroup_desc-synb0_dwiref` when no `acpc` is requested (the synthetic b=0 is already on the native b=0 grid, `fieldmap/synb0.py`). | 4 tasks |
 | 2 | **`res-native` and anisotropy.** `GenerateSamplingReference` + LPS reorientation, plus the physical-size wrapper; drop the isotropy rejection; `ChooseInterpolator` pairs axes by orientation, not index; anisotropic fixture tests for every gradient writer, as a check, since grids stay axis-aligned. | 2–3 tasks |
-| 3 | **`dwiref`.** First, the per-backend frame check (eddy, DIFFPREP, SHORELine). Then the coregistration-free chains and identity path, dwiref grids from the level's reference image, the D11 merge policy, and Dice (D4). | 3–4 tasks |
-| 4 | **`anat`.** Expose anat-space anatomical/mask/segmentation; ACPC→anat stage; anat grids; `space-anat` DWI and anatomical derivatives; merging; Dice (D4). | 3 tasks |
+| 3 | **`anat`.** Expose anat-space anatomical/mask/segmentation and write them as `space-anat` (also triggered by `dwiref`); ACPC→anat stage; anat grids; `space-anat` DWI; merging; Dice (D4). | 3 tasks |
+| 4 | **`dwiref`.** First, the per-backend frame check (eddy, DIFFPREP, SHORELine). Then the coregistration-free chains and identity path, dwiref grids from the level's reference image, the D11 build-time error, Dice (D4), and the `space-anat` anatomicals from Phase 3. | 3–4 tasks |
 
-Total: about **16–18 tasks**. Phases 3 and 4 are independent of each other.
+Total: about **16–18 tasks**. `anat` now comes first, because `dwiref` writes its `space-anat`
+anatomicals.
+
+## Settled in review
+
+- **D11 — `dwiref` with `--distortion-group-merge` at the distortion-group level:** build-time
+  error.
+- **D12 — Anatomical derivatives for `dwiref`:** none in the dwiref frame. `space-anat`
+  anatomicals at the anatomical's own resolution are written instead.
 
 ## Still open
 
@@ -308,21 +324,6 @@ Total: about **16–18 tasks**. Phases 3 and 4 are independent of each other.
   release first with `res`-less single-ACPC names, ACPC filenames change twice. *Recommend moving
   just the naming rule into `output-spaces-new` before it merges*, if QSIRecon can be updated for
   the same release.
-- **D11 — `dwiref` with `--distortion-group-merge` at the distortion-group level.** The units being
-  merged each have their own frame, so their `dwiref` outputs cannot be concatenated. Options:
-  - error at build time when an output that merges ≥2 units requests `dwiref`, suggesting
-    `--dwiref-definition subject` (one shared frame) or `--distortion-group-merge none`;
-  - write those outputs per unit, unmerged, with a warning.
-
-  *Recommend the error*: per-unit files from a run that asked for merging would be surprising. At
-  the subject level, and for any output with a single unit, no conflict arises.
-- **D12 — Anatomical derivatives in `dwiref` space.** `anat` and templates get the preprocessed
-  anatomical, brain mask and segmentation. Should `dwiref` too? At the subject level that is one
-  set. At the distortion-group level it is one set per unit, each needing the inverse
-  coregistration. *Recommend no*, at least initially. The dwiref frames already have their b=0
-  reference and DWI brain mask, and the anatomical images are easy to bring in with the written
-  `from-ACPC_to-<level>` transforms.
-
 ## Relation to fMRIPrep
 
 | | fMRIPrep | This design |
