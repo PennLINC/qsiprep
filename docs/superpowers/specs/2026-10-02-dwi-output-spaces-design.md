@@ -51,9 +51,10 @@ receive DWI.
 | Default | `acpc:res-nativemin`, both when `--output-spaces` is omitted and when a DWI space has no `res-`. |
 | Native resolutions | `native`, `nativemin` and `nativemax` are computed from the runs that make up each output, not pooled across the subject. If an output combines runs with different native voxel sizes, either concatenated within a correction unit or merged across units, QSIPrep raises an error and asks for a physical size (e.g. `res-1p5mm`). |
 | No `acpc` requested | Allowed, with a warning that QSIRecon reads only `space-ACPC`. |
-| Anatomical derivatives for native spaces | Whenever `anat` or `dwiref` is requested, the preprocessed anatomical, brain mask and segmentation are written **once**, in `anat` space at the anatomical's own resolution (`space-anat`, no `res-`). They are not resampled onto each DWI grid, and `dwiref` gets no anatomical derivatives of its own (D12). |
+| Anatomical derivatives for native spaces | Whenever `anat` or `dwiref` is requested, the preprocessed anatomical, brain mask and segmentation are written **once**, in native anatomical space at the anatomical's own resolution, with **no `space-` entity** and no `res-` (e.g. `sub-01_desc-preproc_T1w.nii.gz`), matching fMRIPrep. They are not resampled onto each DWI grid, and `dwiref` gets no anatomical derivatives of its own (D12). DWI resampled to `anat` keeps `space-anat`, as fMRIPrep's BOLD in T1w space keeps `space-T1w`. |
 | `dwiref` with merging | A build-time error when an output merges ≥2 units at the distortion-group level (D11). |
-| `res-` in filenames | On every output except `res-native`, as fMRIPrep does. `acpc:res-nativemin` writes `space-ACPC_res-nativemin_...`. |
+| `res-` in filenames | On every output on a DWI grid except `res-native`, as fMRIPrep does. `acpc:res-nativemin` writes `space-ACPC_res-nativemin_...`. Already implemented on `output-spaces-new` (`0dcc27e`, D10). |
+| Mask Dice | Computed once, in ACPC, and reported for every space (D4). |
 | Templates | Transforms + anatomical derivatives only; no DWI; no `:transform-only` keyword. |
 | `--dwiref-definition` | Keeps `distortion-group` / `subject`, matching fMRIPrep's `--bold-coreg-level`. Its edge-case differences from fMRIPrep are tracked in a separate issue. |
 | Delivery | A follow-up PR after `output-spaces-new` merges. |
@@ -69,10 +70,9 @@ receive DWI.
 - **`--output-spaces` is required and must include `acpc`** (`cli/parser.py`
   `_finalize_output_spaces`; `utils/spaces.py` `parse_output_spaces`). An `acpc` entry must
   carry an explicit `res-`.
-- **`res-` is written only when there is more than one ACPC spec** (`finalize.py` `multi_acpc`;
-  `distortion_group_merge.py`, `resolution=None` for a single spec).
-  `test_output_spaces_naming.py` pins this (`test_single_acpc_dwi_paths_are_the_historical_ones`,
-  `test_single_merged_resolution_keeps_the_historical_paths`).
+- **Every ACPC output on a DWI grid carries `res-`**, even with one ACPC spec (`0dcc27e`, D10).
+  ACPC anatomicals and the dwiref template resampled into ACPC are on the anatomical's grid and
+  carry none.
 - **Native resolutions are pooled across the subject.** `VoxelSizeChooser`
   (`interfaces/anatomical.py`) takes every zoom of every raw DWI run (`dwi_files=subject_data['dwi']`)
   and returns one scalar. `init_anat_preproc_wf` builds one subject-level grid per ACPC spec
@@ -222,8 +222,8 @@ state stay correct without an oblique-frame code path:
     `--dwiref-definition subject` (one shared frame) or `--distortion-group-merge none` (D11).
     Outputs with a single unit are unaffected.
 - **Anatomical derivatives:** none in the dwiref frame (D12). Requesting `dwiref` writes the
-  `space-anat` anatomicals described under `anat`. Users bring them into a dwiref frame with the
-  written `from-anat_to-ACPC` and `from-ACPC_to-<level>` transforms.
+  native anatomical-space anatomicals described under `anat`. Users bring them into a dwiref frame
+  with the written `from-anat_to-ACPC` and `from-ACPC_to-<level>` transforms.
 - **Single-group subjects** under `subject`: follow today's fallback, so outputs are named
   `distortiongroup`. If the separate `--dwiref-definition` issue changes the fallback, `dwiref`
   follows it automatically.
@@ -238,10 +238,15 @@ state stay correct without an oblique-frame code path:
   `compose_affines` path.
 - **Anatomical derivatives:** expose the anat-space bias-corrected anatomical, brain mask and
   segmentation on `init_anat_preproc_wf`'s outputnode. Write them once, whenever `anat` or `dwiref`
-  is requested, as `space-anat` at the anatomical's own resolution, with no `res-` (native). This
-  matches how fMRIPrep writes T1w-space anatomicals. They are not resampled onto each `anat` DWI
-  grid: with "no `res-` for native", `anat:res-native` DWI-grid copies would collide with them by
-  name, and one anatomical-resolution set is what consumers need.
+  is requested, at the anatomical's own resolution with **no `space-` entity** and no `res-`:
+  `<source_entities>_desc-preproc_T1w.nii.gz`, `_desc-brain_mask.nii.gz`, `_dseg.nii.gz`. That is
+  how fMRIPrep writes its native anatomical-space derivatives. They are not resampled onto each
+  `anat` DWI grid; one anatomical-resolution set is what consumers need. No existing QSIPrep output
+  in `anat/` lacks a `space-` entity apart from transforms, so these names are free. The
+  integration manifests list only `space-ACPC`, `space-<template>` and `from-`/`to-` files there.
+- **DWI naming:** DWI resampled into this frame keeps `space-anat`, as fMRIPrep's BOLD resampled
+  to T1w keeps `space-T1w`. Only the anatomicals, which *are* the native anatomical space, go
+  without the entity.
 - **Merging:** a single subject-level frame, so merged outputs work as for ACPC.
 
 ## Effect on processing
@@ -261,10 +266,11 @@ state stay correct without an oblique-frame code path:
 
 ## Behaviour changes
 
-- **`res-` on every non-`native` output.** This reverses the branch's current rule that a single
-  ACPC spec writes no `res-`. Every existing ACPC filename gains an entity: the default output
-  becomes `space-ACPC_res-nativemin_desc-preproc_dwi`. Integration manifests,
-  `test_output_spaces_naming.py`'s historical-path pins, and `docs/outputs.rst` change.
+- **`res-` on every non-`native` output on a DWI grid.** Already on `output-spaces-new`
+  (`0dcc27e`): a single ACPC spec now writes `res-` too, so `--output-spaces acpc:res-2mm` writes
+  `space-ACPC_res-2mm_desc-preproc_dwi`. Under this design the default becomes
+  `space-ACPC_res-nativemin_desc-preproc_dwi`. ACPC anatomicals, and the dwiref template resampled
+  into ACPC, sit on the anatomical's own grid and carry no `res-`.
 - **`--output-spaces` becomes optional.** The option moves out of "Required arguments", and the
   parser help, `docs/running.rst` and `docs/upgrading.rst` change.
 - **Combining runs of different voxel sizes with a native resolution is an error**, including
@@ -293,37 +299,39 @@ A "task" is one reviewed commit with tests. All phases go in one follow-up PR af
 | Phase | Scope | Size |
 |---|---|---|
 | 0 | **Groundwork, no new behaviour.** `is_template`/`writes_dwi` replace `SpaceSpec.standard`. `acpc_specs` → `dwi_specs` across `finalize`, `base.py` and the merge path, keyed by (space, resolution). `space=` parameterized on every DWI sink and reportlet. `space` added to DWI figure filters in `reports-spec.yml`. Per-spec stage selection and a configurable Jacobian transport stack in `ComposeTransforms`/`ApplyJacobianWeights`, ACPC behaviour unchanged. The unused, broken to-template hook in `ComposeTransforms` removed. | 4 tasks |
-| 1 | **Defaults, naming and native resolutions.** Optional `--output-spaces` defaulting to `acpc:res-nativemin`; `nativemin` as the default `res-`; the "≥1 DWI space" rule and no-`acpc` warning; `res-` on every non-`native` output (manifests, naming tests, docs); per-output `native*` with the mismatch error and per-output grids; SynB0's side output written as `space-distortiongroup_desc-synb0_dwiref` when no `acpc` is requested (the synthetic b=0 is already on the native b=0 grid, `fieldmap/synb0.py`). | 4 tasks |
+| 1 | **Defaults and native resolutions.** Optional `--output-spaces` defaulting to `acpc:res-nativemin`; `nativemin` as the default `res-`; the "≥1 DWI space" rule and no-`acpc` warning; `res-native` writing no `res-` (the always-`res-` rule itself landed in `0dcc27e`); per-output `native*` with the mismatch error and per-output grids; SynB0's side output written as `space-distortiongroup_desc-synb0_dwiref` when no `acpc` is requested (the synthetic b=0 is already on the native b=0 grid, `fieldmap/synb0.py`). | 4 tasks |
 | 2 | **`res-native` and anisotropy.** `GenerateSamplingReference` + LPS reorientation, plus the physical-size wrapper; drop the isotropy rejection; `ChooseInterpolator` pairs axes by orientation, not index; anisotropic fixture tests for every gradient writer, as a check, since grids stay axis-aligned. | 2–3 tasks |
-| 3 | **`anat`.** Expose anat-space anatomical/mask/segmentation and write them as `space-anat` (also triggered by `dwiref`); ACPC→anat stage; anat grids; `space-anat` DWI; merging; Dice (D4). | 3 tasks |
-| 4 | **`dwiref`.** First, the per-backend frame check (eddy, DIFFPREP, SHORELine). Then the coregistration-free chains and identity path, dwiref grids from the level's reference image, the D11 build-time error, Dice (D4), and the `space-anat` anatomicals from Phase 3. | 3–4 tasks |
+| 3 | **`anat`.** Expose anat-space anatomical/mask/segmentation and write them with no `space-` entity (also triggered by `dwiref`); ACPC→anat stage; anat grids; `space-anat` DWI; merging; ACPC Dice reported for the space (D4). | 3 tasks |
+| 4 | **`dwiref`.** First, the per-backend frame check (eddy, DIFFPREP, SHORELine). Then the coregistration-free chains and identity path, dwiref grids from the level's reference image, the D11 build-time error, ACPC Dice reported for the space (D4), and the native anatomical-space anatomicals from Phase 3. | 3–4 tasks |
 
-Total: about **16–18 tasks**. `anat` now comes first, because `dwiref` writes its `space-anat`
-anatomicals.
+Total: about **15–17 tasks**, one fewer than before because the `res-` rule already landed.
+`anat` comes first, because `dwiref` writes its native anatomical-space anatomicals.
 
 ## Settled in review
 
 - **D11 — `dwiref` with `--distortion-group-merge` at the distortion-group level:** build-time
   error.
-- **D12 — Anatomical derivatives for `dwiref`:** none in the dwiref frame. `space-anat`
-  anatomicals at the anatomical's own resolution are written instead.
+- **D12 — Anatomical derivatives for `dwiref`:** none in the dwiref frame. Native
+  anatomical-space anatomicals, with no `space-` entity, are written instead.
+- **D4 — Mask Dice outside ACPC:** computed once in ACPC and reported for every space.
+- **D10 — When the `res-` rule ships:** moved into `output-spaces-new` before it merges (`0dcc27e`).
+  QSIRecon must select ACPC outputs by `res-` before that release.
 
 ## Still open
 
-- **D4 — Mask Dice outside ACPC.** Series QC compares the anatomical mask with the DWI mask on a
-  shared grid. For `anat` the anat-space mask will exist. For `dwiref` the anatomical mask would
-  have to be pulled back through the inverse coregistration. *Recommend computing it once in ACPC*
-  and reporting it for every space: it measures coregistration quality, which does not depend on
-  the output space, and it avoids the extra transform for `dwiref`.
-- **D9 — `res-` on template anatomical derivatives.** A bare template writes anatomical derivatives
-  on TemplateFlow's default grid (`res-1` for most templates) with no `res-` today. Should those
-  become `res-1`, or does the rule apply only to DWI-carrying spaces? *Recommend DWI spaces only*:
-  template derivatives already follow TemplateFlow's convention, where an omitted `res` means the
-  template's default.
-- **D10 — When the `res-` rule ships.** It changes ACPC filenames. If `output-spaces-new` reaches a
-  release first with `res`-less single-ACPC names, ACPC filenames change twice. *Recommend moving
-  just the naming rule into `output-spaces-new` before it merges*, if QSIRecon can be updated for
-  the same release.
+- **D9 — `res-` on template anatomical derivatives.** Per template, `init_anat_derivatives_wf`
+  (`workflows/anatomical/volume.py`) writes three images:
+  - `space-<tpl>[_cohort-<c>]_desc-preproc_<T1w|T2w>`;
+  - `space-<tpl>[_cohort-<c>]_desc-brain_mask`;
+  - `space-<tpl>[_cohort-<c>]_dseg`.
+
+  It also writes the `from-ACPC_to-<tpl>` / `from-<tpl>_to-ACPC` transforms, which never carry
+  `res-`. The images carry `res-<label>` only when a TemplateFlow label is requested
+  (`MNI152NLin6Asym:res-2`). A bare template puts them on TemplateFlow's default grid (`res-1` for
+  most templates) with no `res-`. Should a bare template's images become `res-1`, or does the rule
+  stay limited to DWI grids? *Recommend DWI grids only*: template images already follow
+  TemplateFlow's convention, where an omitted `res` means the template's default.
+
 ## Relation to fMRIPrep
 
 | | fMRIPrep | This design |
