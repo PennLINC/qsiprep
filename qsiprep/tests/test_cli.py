@@ -168,26 +168,27 @@ def test_cuda(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.drbuddi_rpe
 def test_drbuddi_rpe(data_dir, output_dir, working_dir):
-    """Run the DRBUDDI test on a reverse-PE DWI series.
+    """Run the DRBUDDI test on a reverse-PE DWI series, without anatomical processing.
 
     Was in DRBUDDI_eddy_rpe_series.sh.
 
     This tests the following features:
 
-    - Blip-up + Blip-down DWI series for TOPUP/Eddy
+    - Blip-up + Blip-down DWI series for eddy + DRBUDDI
     - Eddy is run on a CPU
     - Denoising is skipped
+    - ``--anat-modality none``
 
-    Input data:
-
-    - qsiprep single shell results (data/DSDTI_fmap)
-    - qsiprep multi shell results (data/DSDTI_fmap)
+    Input data: the TRXScan ``rpe`` fixture (3 mm, 16 directions + 2 b=0 per PE direction).
+    It replaced the 2 mm, 40-volume tinytensor pair, whose eddy run alone took 20+ minutes.
+    The same pair with anatomical processing is scored against the simulator's truth in
+    ``test_trxscan_rpe_drbuddi``.
     """
+    from qsiprep.tests.trxscan_fixtures import fixture_dir
+
     TEST_NAME = 'drbuddi_rpe'
 
-    dataset_dir = download_test_data('drbuddi_rpe_series', data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, 'tinytensor_rpe_series')
+    dataset_dir = str(fixture_dir('rpe', data_dir))
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
     test_data_path = get_test_data_path()
@@ -203,15 +204,8 @@ def test_drbuddi_rpe(data_dir, output_dir, working_dir):
         '--denoise-method=none',
         '--dwi-biascorrect=none',
         '--sdc-method=drbuddi',
-        # The dataset ships epi fieldmaps whose IntendedFor points at the DWIs,
-        # so the modern grouping would correct each DWI with its own epi fmap
-        # (two outputs). This test exercises the blip-up/blip-down DWI *series*
-        # through DRBUDDI, so ignore fmap/ and let the reverse-PE DWI pair drive
-        # SDC into a single concatenated output.
-        '--ignore',
-        'fieldmaps',
         f'--eddy-config={eddy_config}',
-        '--output-resolution=5',
+        '--output-resolution=3',
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)
@@ -435,13 +429,15 @@ def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
     shell synthesis is needed. A non-shelled (CS-DSI) reverse-PE-series dataset
     is still required to exercise the Tier-2 synthesis path end to end.
 
-    Input data: qsiprep reverse-PE-series results (data/drbuddi_rpe_series).
+    Input data: the TRXScan ``rpe`` fixture.
     """
+    from qsiprep.tests.trxscan_fixtures import fixture_dir
+
     TEST_NAME = 'diffprep_rpe_series'
 
-    dataset_dir = download_test_data('drbuddi_rpe_series', data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, 'tinytensor_rpe_series')
+    # The TRXScan rpe fixture (3 mm, 18 volumes per PE direction) replaced the 2 mm,
+    # 40-volume tinytensor pair: 43 minutes of DIFFPREP + DRBUDDI in CI.
+    dataset_dir = str(fixture_dir('rpe', data_dir))
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
@@ -456,7 +452,7 @@ def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
         '--dwi-biascorrect=none',
         '--hmc-method=tortoise',
         '--sdc-method=drbuddi',
-        '--output-resolution=5',
+        '--output-resolution=3',
     ]
 
     # No expected-output manifest yet: assert the split/recombine + DRBUDDI SDC
@@ -1274,6 +1270,18 @@ TRXSCAN_COMMON = [
 ]
 
 
+def _assert_clean_run(out_dir):
+    """Fail on what the HTML report would only show: crash files and a non-empty Errors section."""
+    crashes = sorted(Path(out_dir).glob('sub-*/log/*/crash-*.txt'))
+    assert not crashes, 'qsiprep wrote crash files: ' + ', '.join(c.name for c in crashes[:5])
+    reports = sorted(Path(out_dir).glob('sub-*.html'))
+    assert reports, f'no subject HTML report under {out_dir}'
+    for report in reports:
+        assert 'No errors to report!' in report.read_text(), (
+            f'{report.name} lists errors in its Errors section'
+        )
+
+
 def _trxscan_run(test_name, fixture, extra, data_dir, output_dir, working_dir):
     from qsiprep.tests.truth_scoring import score_run
     from qsiprep.tests.trxscan_fixtures import fixture_dir
@@ -1291,17 +1299,56 @@ def _trxscan_run(test_name, fixture, extra, data_dir, output_dir, working_dir):
     ]
     parameters += TRXSCAN_COMMON + list(extra)
     _run_and_generate(test_name, parameters, test_main=False, check_outputs=False)
-    return score_run(dataset_dir, out_dir)
+    _assert_clean_run(out_dir)
+    score = score_run(dataset_dir, out_dir)
+    # Kept with the derivatives (a CI artifact) and printed, so the numbers are findable
+    # whether or not an assertion fires.
+    with open(os.path.join(out_dir, 'truth_score.json'), 'w') as f:
+        json.dump(score, f, indent=1, default=float)
+    print('TRUTH SCORE', test_name, json.dumps(score, default=float))
+    return score
+
+
+def _expect(score, path, lo=None, hi=None, note=None):
+    """Assert ``score[path...]`` lies in ``[lo, hi]`` with a message that reads on its own.
+
+    CircleCI's Tests tab shows the assertion message and nothing else, so it names the
+    quantity, its value and the bound rather than dumping a dict.
+    """
+    value = score
+    for key in path:
+        value = value[key]
+    name = '.'.join(str(k) for k in path)
+    bounds = ' and '.join(
+        s
+        for s in (
+            f'>= {lo:.3g}' if lo is not None else '',
+            f'<= {hi:.3g}' if hi is not None else '',
+        )
+        if s
+    )
+    ok = (lo is None or value >= lo) and (hi is None or value <= hi)
+    assert ok, f'{name} = {value:.3g}, expected {bounds}' + (f' ({note})' if note else '')
 
 
 def _assert_topup_quality(score):
     """Assert what a correct TOPUP + eddy + coregistration run looks like on these fixtures."""
-    assert score['sdc']['slope'] == pytest.approx(1.0, abs=0.15), score['sdc']
-    assert score['sdc']['corr'] > 0.95, score['sdc']
-    assert score['sdc']['rms_residual'] < 0.3 * score['sdc']['rms_truth'], score['sdc']
-    assert score['b0_corrected_vs_clean'] > score['b0_uncorrected_vs_clean'] + 0.1, score
-    assert score['coreg_error']['rotation_deg'] < 1.0, score['coreg_error']
-    assert score['coreg_error']['translation_mm'] < 1.5, score['coreg_error']
+    _expect(score, ('sdc', 'slope'), 0.85, 1.15, 'estimated / true PE displacement')
+    _expect(score, ('sdc', 'corr'), lo=0.95)
+    _expect(
+        score,
+        ('sdc', 'rms_residual'),
+        hi=0.3 * score['sdc']['rms_truth'],
+        note=f'30% of the {score["sdc"]["rms_truth"]:.2f} mm rms true displacement',
+    )
+    _expect(
+        score,
+        ('b0_corrected_vs_clean',),
+        lo=score['b0_uncorrected_vs_clean'] + 0.05,
+        note=f'uncorrected b0 scores {score["b0_uncorrected_vs_clean"]:.3f}; corrected must beat it by 0.05',
+    )
+    _expect(score, ('coreg_error', 'rotation_deg'), hi=1.0)
+    _expect(score, ('coreg_error', 'translation_mm'), hi=1.5)
 
 
 @pytest.mark.integration
@@ -1315,7 +1362,7 @@ def test_trxscan_rpe_topup(data_dir, output_dir, working_dir):
         'trxscan_rpe_topup', 'rpe', ['--sdc-method=topup'], data_dir, output_dir, working_dir
     )
     _assert_topup_quality(score)
-    assert score['fd_mean_mm'] < 0.1, score['fd_mean_mm']  # the object does not move
+    _expect(score, ('fd_mean_mm',), hi=0.1, note='the object does not move')
 
 
 @pytest.mark.integration
@@ -1333,11 +1380,16 @@ def test_trxscan_rpe_drbuddi(data_dir, output_dir, working_dir):
     score = _trxscan_run(
         'trxscan_rpe_drbuddi', 'rpe', ['--sdc-method=drbuddi'], data_dir, output_dir, working_dir
     )
-    assert score['sdc']['corr'] > 0.75, score['sdc']  # right pattern and sign
-    assert 0.3 < score['sdc']['slope'] < 1.2, score['sdc']  # not a wrong readout/units
-    assert score['b0_corrected_vs_clean'] > score['b0_uncorrected_vs_clean'] + 0.1, score
-    assert score['coreg_error']['rotation_deg'] < 1.0, score['coreg_error']
-    assert score['coreg_error']['translation_mm'] < 1.5, score['coreg_error']
+    _expect(score, ('sdc', 'corr'), lo=0.75, note='right pattern and sign')
+    _expect(score, ('sdc', 'slope'), 0.3, 1.2, 'the sloppy single stage recovers ~0.43')
+    _expect(
+        score,
+        ('b0_corrected_vs_clean',),
+        lo=score['b0_uncorrected_vs_clean'] + 0.05,
+        note=f'uncorrected b0 scores {score["b0_uncorrected_vs_clean"]:.3f}',
+    )
+    _expect(score, ('coreg_error', 'rotation_deg'), hi=1.0)
+    _expect(score, ('coreg_error', 'translation_mm'), hi=1.5)
 
 
 @pytest.mark.integration
@@ -1361,11 +1413,13 @@ def test_trxscan_phasediff(data_dir, output_dir, working_dir):
     and the applied warp recovers under half the field (see the TRXScan report).
     """
     score = _trxscan_run('trxscan_phasediff', 'phasediff', [], data_dir, output_dir, working_dir)
-    assert score['sdc']['corr'] > 0.7, score['sdc']
-    assert 0.5 < score['sdc']['slope'] < 1.2, score['sdc']
-    assert score['coreg_error']['truth'] == 'movement'
-    assert score['coreg_error']['rotation_deg'] < 1.0, score['coreg_error']
-    assert score['coreg_error']['translation_mm'] < 2.0, score['coreg_error']
+    _expect(score, ('sdc', 'corr'), lo=0.7)
+    _expect(score, ('sdc', 'slope'), 0.5, 1.2)
+    assert score['coreg_error']['truth'] == 'movement', 'scored against the recorded movement'
+    _expect(
+        score, ('coreg_error', 'rotation_deg'), hi=1.0, note='vs the recorded 5.4 deg movement'
+    )
+    _expect(score, ('coreg_error', 'translation_mm'), hi=2.0)
 
 
 @pytest.mark.integration
@@ -1391,10 +1445,13 @@ def test_trxscan_gnl(data_dir, output_dir, working_dir):
         working_dir,
     )
     _assert_topup_quality(score)
-    assert score['gnl_graddev']['corr'] > 0.99, score['gnl_graddev']
-    assert score['gnl_graddev']['slope'] == pytest.approx(1.0, abs=0.05), score['gnl_graddev']
-    assert score['gnl_graddev']['rms_residual'] < 0.1 * score['gnl_graddev']['rms_truth_dev'], (
-        score['gnl_graddev']
+    _expect(score, ('gnl_graddev', 'corr'), lo=0.99)
+    _expect(score, ('gnl_graddev', 'slope'), 0.95, 1.05)
+    _expect(
+        score,
+        ('gnl_graddev', 'rms_residual'),
+        hi=0.1 * score['gnl_graddev']['rms_truth_dev'],
+        note='10% of the true gradient deviation',
     )
 
 
@@ -1406,9 +1463,9 @@ def test_trxscan_motion(data_dir, output_dir, working_dir):
     # Same axis, same sign. eddy's estimates vary with its thread count and the sloppy
     # settings: the 5 mm trans_y component scored 0.74 on CircleCI against 0.85 locally.
     for axis in ('trans_x', 'trans_y', 'trans_z', 'rot_x', 'rot_z'):
-        assert score['motion'][axis]['corr'] > 0.6, (axis, score['motion'][axis])
+        _expect(score, ('motion', axis, 'corr'), lo=0.6, note='eddy vs applied, same axis')
     for axis in ('trans_y', 'rot_x'):  # the large components
-        assert 0.4 < score['motion'][axis]['amplitude_ratio'] < 1.3, (axis, score['motion'][axis])
+        _expect(score, ('motion', axis, 'amplitude_ratio'), 0.4, 1.3, 'eddy / applied amplitude')
 
 
 @pytest.mark.integration
@@ -1421,12 +1478,17 @@ def test_trxscan_offsets(data_dir, output_dir, working_dir):
     score = _trxscan_run(
         'trxscan_offsets', 'offsets', ['--sdc-method=topup'], data_dir, output_dir, working_dir
     )
-    assert score['coreg_error']['truth'] == 'movement'
-    assert score['coreg_error']['rotation_deg'] < 1.5, score['coreg_error']
-    assert score['coreg_error']['translation_mm'] < 3.0, score['coreg_error']
-    assert score['sdc']['corr'] > 0.95, score['sdc']
-    assert 0.75 < score['sdc']['slope'] < 1.15, score['sdc']
-    assert score['b0_corrected_vs_clean'] > score['b0_uncorrected_vs_clean'] + 0.1, score
+    assert score['coreg_error']['truth'] == 'movement', 'scored against the recorded movement'
+    _expect(score, ('coreg_error', 'rotation_deg'), hi=1.5)
+    _expect(score, ('coreg_error', 'translation_mm'), hi=3.0)
+    _expect(score, ('sdc', 'corr'), lo=0.95)
+    _expect(score, ('sdc', 'slope'), 0.75, 1.15, 'TOPUP with the PA series moved')
+    _expect(
+        score,
+        ('b0_corrected_vs_clean',),
+        lo=score['b0_uncorrected_vs_clean'] + 0.05,
+        note=f'uncorrected b0 scores {score["b0_uncorrected_vs_clean"]:.3f}',
+    )
 
 
 def _check_arg_specified(argname, arglist):

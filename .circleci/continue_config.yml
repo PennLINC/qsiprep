@@ -117,7 +117,7 @@ commands:
           name: Run qsiprep (<< parameters.marker >>)
           no_output_timeout: 1h
           command: |
-            mkdir -p /tmp/out /tmp/work /tmp/coverage
+            mkdir -p /tmp/out /tmp/work /tmp/coverage /tmp/test-results
             docker run --rm=false \
               -e CIRCLE_CPUS=<< parameters.cpus >> \
               -e COVERAGE_FILE=/coverage/.coverage.<< parameters.marker >> \
@@ -126,14 +126,20 @@ commands:
               -v /tmp/out:/out \
               -v /tmp/work:/work \
               -v /tmp/coverage:/coverage \
+              -v /tmp/test-results:/test-results \
               -w /tmp/src/qsiprep \
               --entrypoint pytest \
               pennlinc/qsiprep:test \
               --strict-markers --strict-config \
               -rP -o log_cli=true -m "<< parameters.marker >>" \
+              --junitxml=/test-results/<< parameters.marker >>.xml -o junit_logging=no \
               --cov-append --cov-report term-missing --cov=qsiprep \
               --data_dir=/data --output_dir=/out --working_dir=/work \
               qsiprep
+      # CircleCI's Tests tab and Insights read these: one row per test with its
+      # assertion message, so a failed truth score reads without opening the log.
+      - store_test_results:
+          path: /tmp/test-results
       - run:
           name: Prune non-QC artifacts
           when: always
@@ -525,7 +531,7 @@ jobs:
           name: Run unit tests
           no_output_timeout: 2h
           command: |
-            mkdir -p /tmp/out /tmp/work /tmp/coverage
+            mkdir -p /tmp/out /tmp/work /tmp/coverage /tmp/test-results
             docker run --rm=false \
               -e CIRCLE_CPUS=4 \
               -e COVERAGE_FILE=/coverage/.coverage.unit_tests \
@@ -534,14 +540,18 @@ jobs:
               -v /tmp/out:/out \
               -v /tmp/work:/work \
               -v /tmp/coverage:/coverage \
+              -v /tmp/test-results:/test-results \
               -w /tmp/src/qsiprep \
               --entrypoint pytest \
               pennlinc/qsiprep:test \
               --strict-markers --strict-config \
               -n 4 -vv -o log_cli=true -m "not integration and not synthstrip" \
+              --junitxml=/test-results/unit_tests.xml -o junit_logging=no \
               --cov-append --cov-branch --cov-report term-missing --cov=qsiprep \
               --data_dir=/data --output_dir=/out --working_dir=/work \
               qsiprep
+      - store_test_results:
+          path: /tmp/test-results
       - persist_to_workspace:
           root: /tmp/coverage
           paths:
