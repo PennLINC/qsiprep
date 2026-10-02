@@ -359,7 +359,6 @@ class ComposeTransformsInputSpec(ApplyTransformsInputSpec):
         desc='list of transforms to register the b=0 to the dwiref.',
     )
     dwiref_to_t1_affine = File(exists=True, desc='affine from the dwiref to t1')
-    dwiref_to_t1_warp = File(exists=True, desc='warp from the dwiref to t1')
     hmcsdc_dwi_ref_to_t1w_affine = File(exists=True, desc='affine from dwi ref to t1w')
     t1_2_mni_forward_transform = InputMultiObject(
         File(exists=True), mandatory=False, desc='composite (h5) transform to mni'
@@ -419,7 +418,6 @@ class ComposeTransforms(SimpleInterface):
         'gradwarp',
         'b0_to_dwiref_transforms',
         'dwiref_to_t1_affine',
-        'dwiref_to_t1_warp',
         'fieldwarps',
         'hmcsdc_dwi_ref_to_t1w_affine',
         'interpolation',
@@ -503,16 +501,6 @@ class ComposeTransforms(SimpleInterface):
                 dwiref_warp = [dwiref_transforms[1]] * num_dwis
             elif len(dwiref_transforms) > 2:
                 raise Exception('Unsupported dwiref transform')
-
-        # If an dwiref to t1 affine is present, copy for each dwi
-        dwiref_to_t1_affine = self.inputs.dwiref_to_t1_affine
-        if isdefined(dwiref_to_t1_affine):
-            dwiref_to_t1_affine = [dwiref_to_t1_affine] * num_dwis
-
-        # If an dwiref to t1 warp is present, copy for each dwi
-        dwiref_to_t1_warp = self.inputs.dwiref_to_t1_warp
-        if isdefined(dwiref_to_t1_warp):
-            dwiref_to_t1_affine = [dwiref_to_t1_warp] * num_dwis
 
         by_name = {
             'hmc': hmc_affines,
