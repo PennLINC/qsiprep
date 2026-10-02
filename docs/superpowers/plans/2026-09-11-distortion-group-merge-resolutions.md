@@ -175,7 +175,7 @@ is fed.** It is safe to land on its own.
   `write_shared_outputs=False` suppresses the sampling-scheme reportlet and the hmcOptimization
   sidecar, which do not vary by resolution.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add to `qsiprep/tests/test_workflows_native.py`, beside
 `test_merged_native_resolution_reaches_the_sidecar` (which already builds a merge workflow with
@@ -258,13 +258,13 @@ def test_merge_wf_writes_shared_outputs_only_once(tmp_path):
     assert without.get_node('gradient_plot') is None
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `micromamba run -n linc311 python -m pytest qsiprep/tests/test_workflows_native.py -q -p no:cacheprovider -k "merge_wf_labels or merge_wf_without or merge_wf_writes_shared"`
 Expected: FAIL with `TypeError: init_distortion_group_merge_wf() got an unexpected keyword
 argument 'resolution'`.
 
-- [ ] **Step 3: Take the two new arguments**
+- [x] **Step 3: Take the two new arguments**
 
 ```python
 def init_distortion_group_merge_wf(
@@ -299,7 +299,7 @@ Just after `workflow = Workflow(name=name)`, derive the entities once:
     res_entities = {'res': resolution.label} if resolution is not None else {}
 ```
 
-- [ ] **Step 4: Apply the entities to every sink this workflow owns**
+- [x] **Step 4: Apply the entities to every sink this workflow owns**
 
 Add `**res_entities` to the sinks of `ds_series_qc`, `ds_report_qc_warnings` and
 `ds_merged_sidecar`, and pass the resolution through to the derivatives workflow:
@@ -331,12 +331,12 @@ them (`(outputnode, gradient_plot, ...)`, `(distortion_merger, gradient_plot, ..
 `gradient_plot.inputs.source_pe_dirs` assignment) with `if write_shared_outputs:`. Pull those
 three tuples out of the shared `workflow.connect([...])` list into their own guarded call.
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `micromamba run -n linc311 python -m pytest qsiprep/tests/test_workflows_native.py qsiprep/tests/test_output_spaces_naming.py -q -p no:cacheprovider`
 Expected: PASS, apart from failures already in `/tmp/baseline_fail.txt`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add qsiprep/workflows/dwi/distortion_group_merge.py qsiprep/tests/test_workflows_native.py
@@ -392,7 +392,7 @@ The five fields the merge path consumes — `dwi_t1`, `bvals_t1`, `bvecs_t1`, `t
   (`... in merging_group_workflows` at `base.py:734` and `:751`) still asks about the group name
   and is unchanged in meaning.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add to `qsiprep/tests/test_output_spaces_naming.py` (its `_build_finalize(tmp_path, output_spaces,
 write_derivatives=True)` returns `(wf, acpc_specs)`):
@@ -453,12 +453,12 @@ def test_single_subject_wf_builds_a_merge_workflow_per_resolution():
     assert "(('outputnode.bvals_t1', _select_grid, index), bval_name)" in src
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `micromamba run -n linc311 python -m pytest qsiprep/tests/test_output_spaces_naming.py qsiprep/tests/test_workflows_native.py -q -p no:cacheprovider -k "outputnode_carries or one_element_list or builds_a_merge_workflow_per"`
 Expected: FAIL — `merge_out_dwi_t1` does not exist, and none of the four source strings is present.
 
-- [ ] **Step 3: Drop the truncation and merge the outputs**
+- [x] **Step 3: Drop the truncation and merge the outputs**
 
 Delete this block from `init_dwi_finalize_wf` (`finalize.py:405-413`). Keep the gradwarp warning
 directly above it (`:390-403`); it is about a different gap (see Risks).
@@ -535,7 +535,7 @@ per-resolution connect followed by a reduced `index == 0` connect. Leave the `do
 Update the outputnode field comment at `:320-321` ("forwarded from the first dwi_trans_wf") only
 if it stops being true; it should not.
 
-- [ ] **Step 4: Build one merge workflow per spec**
+- [x] **Step 4: Build one merge workflow per spec**
 
 In `init_single_subject_wf`, replace the single construction and its `workflow.connect`
 (`base.py:523-543`):
@@ -581,7 +581,7 @@ Change the import at `base.py:81` to
 argument, not `[index]`: `Workflow.connect` stores everything after the function as the argument
 tuple, so a list-wrapped index arrives as a list (the bug fixed in `eca9a53`).
 
-- [ ] **Step 5: Hand each merge workflow its own slot**
+- [x] **Step 5: Hand each merge workflow its own slot**
 
 Replace the `final_merge_wf` block at the end of the per-output loop (`base.py:920-951`):
 
@@ -627,7 +627,7 @@ name reads oddly here, rename it to `_select_index` in `finalize.py` and update 
 there (`:495`, `:759`), the `base.py` import, and the two source-string assertions in Step 1 — in
 this same commit, not later.
 
-- [ ] **Step 6: Update the test that asserted the truncation**
+- [x] **Step 6: Update the test that asserted the truncation**
 
 `test_merged_groups_build_only_the_first_resolution` (`test_output_spaces_naming.py:611`)
 asserted the behaviour Step 3 removes. Rename it to
@@ -635,11 +635,11 @@ asserted the behaviour Step 3 removes. Rename it to
 `prefixes == {'dwi_trans_wf_res2mm', 'dwi_trans_wf_res1p5mm'}` with `write_derivatives=False`,
 with a docstring saying each resolution now feeds its own merge workflow.
 
-- [ ] **Step 7: Run the whole suite**
+- [x] **Step 7: Run the whole suite**
 
 Run the baseline comparison from Global Constraints. Expected: no new failures.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add qsiprep/workflows/dwi/finalize.py qsiprep/workflows/base.py \
@@ -680,7 +680,7 @@ present:
 **Files:**
 - Test only: `qsiprep/tests/test_output_spaces_naming.py`
 
-- [ ] **Step 1: Write the test**
+- [x] **Step 1: Write the test**
 
 ```python
 MERGED_DWI_BASE = {'subject': '01', 'datatype': 'dwi', 'suffix': 'dwi'}
@@ -739,13 +739,13 @@ def test_single_merged_resolution_keeps_the_historical_paths(tmp_path):
 `DWI_BASE` is not reused because it carries `'session': '1'` and the merged source file
 `sub-01_dwi.nii.gz` has none.
 
-- [ ] **Step 2: Run the tests**
+- [x] **Step 2: Run the tests**
 
 Run: `micromamba run -n linc311 python -m pytest qsiprep/tests/test_output_spaces_naming.py -q -p no:cacheprovider -k "merged_resolutions or single_merged"`
 Expected: PASS if Tasks 1 and 2 are right. A collision here means an entity is being dropped by
 the path pattern — fix `io_spec.json`, not the test.
 
-- [ ] **Step 3: Prove the guard bites**
+- [x] **Step 3: Prove the guard bites**
 
 Temporarily delete `sink_entities=res_entities` from the `merged_b0_ref` call in
 `distortion_group_merge.py`, re-run the two tests, and confirm
@@ -754,7 +754,7 @@ Restore it, then repeat with `**res_entities` removed from `ds_report_qc_warning
 that cannot fail is not a guard; the first draft of this test silently excluded exactly these
 sinks.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add qsiprep/tests/test_output_spaces_naming.py
@@ -787,7 +787,7 @@ compiling from a skeleton alone.
 **Files:**
 - Test: a new `qsiprep/tests/test_multires_merge_integration.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```python
 def test_two_resolutions_build_two_merge_workflows(tmp_path):
@@ -837,13 +837,13 @@ plan — a stub would make this test assert the fixture, not the wiring. Note th
 a qsiplan that satisfies `pyproject.toml` (`>=0.4.2`); with the 0.1.1 in `linc311` it will fail on
 the `PreprocUnit` attributes `main` started using, before reaching the code under test.
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `micromamba run -n linc311 python -m pytest -q -p no:cacheprovider qsiprep/tests/test_multires_merge_integration.py`
 Expected: FAIL before Task 2's `base.py` change is in place; PASS after. Run it against the
 commit before Task 2 first if you want to see it fail for the right reason.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add qsiprep/tests/test_multires_merge_integration.py
@@ -870,7 +870,7 @@ output the workflows could not yet produce.
 - Modify: `docs/running.rst:630-635` (the paragraph under "Multiple ``acpc`` resolutions")
 - Test: `qsiprep/tests/test_utils_spaces.py`
 
-- [ ] **Step 1: Turn the rejection test around**
+- [x] **Step 1: Turn the rejection test around**
 
 In `qsiprep/tests/test_utils_spaces.py`, replace
 `test_multi_acpc_with_distortion_group_merge_is_rejected` (`:418`) with:
@@ -894,12 +894,12 @@ def test_multi_acpc_with_distortion_group_merge_is_allowed(tmp_path):
 
 Keep `test_single_acpc_with_distortion_group_merge_is_allowed` (`:437`) as it is.
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `micromamba run -n linc311 python -m pytest qsiprep/tests/test_utils_spaces.py -q -p no:cacheprovider -k "distortion_group_merge"`
 Expected: FAIL with `SystemExit`.
 
-- [ ] **Step 3: Delete the rejection**
+- [x] **Step 3: Delete the rejection**
 
 Remove this block from `_finalize_output_spaces`:
 
@@ -917,7 +917,7 @@ Remove this block from `_finalize_output_spaces`:
         )
 ```
 
-- [ ] **Step 4: Rewrite the docs paragraph**
+- [x] **Step 4: Rewrite the docs paragraph**
 
 In `docs/running.rst`, under "Multiple ``acpc`` resolutions", replace the paragraph that begins
 "More than one ``acpc`` resolution requires ``--distortion-group-merge none``." with:
@@ -932,11 +932,11 @@ resampling passes per correction unit.
 The preceding paragraph already says a single resolution is written without a `res-` entity;
 leave it.
 
-- [ ] **Step 5: Run the whole suite**
+- [x] **Step 5: Run the whole suite**
 
 Run the baseline comparison from Global Constraints. Expected: no new failures.
 
-- [ ] **Step 6: Confirm the CLI accepts it**
+- [x] **Step 6: Confirm the CLI accepts it**
 
 This checks the parser only — Task 4 is what proves the graph builds. `bids_dir` is
 `type=PathExists`, so the positional paths must exist:
@@ -958,7 +958,7 @@ print(opts.output_spaces)
 
 Expected: `['acpc:res-nativemin', 'acpc:res-1p5mm']`, no exception.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add qsiprep/cli/parser.py qsiprep/tests/test_utils_spaces.py docs/running.rst
@@ -976,17 +976,17 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ## Final verification
 
-- [ ] **Run the whole non-integration suite**
+- [x] **Run the whole non-integration suite**
 
 Run the baseline comparison from Global Constraints. Expected: no failure outside
 `/tmp/baseline_fail.txt`.
 
-- [ ] **Confirm the single-resolution filenames are unchanged**
+- [x] **Confirm the single-resolution filenames are unchanged**
 
 Run: `micromamba run -n linc311 python -m pytest qsiprep/tests/test_output_spaces_naming.py -v -p no:cacheprovider`
 Expected: PASS. Any changed ACPC filename on either path breaks QSIRecon — stop and fix.
 
-- [ ] **Lint**
+- [x] **Lint**
 
 Run: `micromamba run -n linc311 ruff check qsiprep/ && micromamba run -n linc311 ruff format --check qsiprep/`
 Expected: clean.
@@ -1028,3 +1028,33 @@ Expected: clean.
 - **`average` is untested with multiple resolutions.** `--distortion-group-merge average` pairs
   q-space coordinates across units; that logic is resolution-independent, but only `concat` is
   exercised by the tests above. If `average` matters, add one `_merge_wf` case for it in Task 2.
+
+---
+
+## Execution notes (2026-10-02)
+
+Implemented as `4c97ad2` (Task 1), `83aca18` (Task 2), `a738ec1` (Task 3), `9e510fb` (Task 4)
+and `a734d2b` (Task 5). Where the code differs from the steps above:
+
+- **Environment.** `linc311` was moved to qsiplan 0.4.2 before Task 4, replacing an editable link
+  to an old local QSIPlan checkout. The baseline then dropped to 4 failures and 5 errors, all from
+  missing binaries (ANTs, FreeSurfer, MRtrix, trxscan) or the truncated `template_qc` fixture.
+- **Task 1 test helper.** `_merge_wf` creates `tmp_path` first: the shared-outputs test and Task 3
+  pass subdirectories (`tmp_path / 'a'`, `tmp_path / f'r{index}'`) that did not exist.
+- **Task 2 assertion style.** The `edge is not None and ...` assertion was split in two to satisfy
+  ruff's PT018.
+- **Task 3 guard check.** Done as written for both figure sinks: removing the `res-` entity from
+  `merged_b0_ref` or from `ds_report_qc_warnings` each makes
+  `test_merged_resolutions_write_distinct_paths` fail.
+- **Task 4 dataset.** The plan's "two opposing-PE runs" builds a single correction unit, so no
+  merge workflow exists. Under eddy, TOPUP pools both directions; under TORTOISE, one complete
+  blip pair stays one DRBUDDI unit. The test instead writes two AP/PA pairs with different
+  `TotalReadoutTime` (two blip groups) and a shared `MultipartID`, with `--hmc-method tortoise`.
+  qsiplan then splits them into two units merged into one output. It uses
+  `qsiprep.tests.utils.build_test_dataset` with a 20-volume b=1000 shell, not
+  `generate_bids_skeleton` alone, because the series workflows read the image headers.
+- **Task 4 slot assertion.** nipype stores a connection function's extra arguments as a tuple, so
+  the slot read back is `(0,)`/`(1,)`, not `0`/`1`. The test asserts the exact slot per unit and
+  per merge workflow, and fails against the Task 1 versions of `base.py`/`finalize.py`.
+- **Task 5.** The integration test's config workaround was removed in the same commit; it now
+  requests both resolutions through the CLI.
