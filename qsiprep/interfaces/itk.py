@@ -32,7 +32,12 @@ LOGGER = logging.getLogger('nipype.interface')
 
 
 class _InvertITKAffineInputSpec(BaseInterfaceInputSpec):
-    in_file = File(exists=True, mandatory=True, desc='ITK affine/rigid transform (.mat)')
+    in_file = InputMultiObject(
+        File(exists=True),
+        mandatory=True,
+        desc='ITK affine/rigid transform (.mat); a one-element list is accepted because '
+        "ANTs' forward_transforms arrives as a list",
+    )
 
 
 class _InvertITKAffineOutputSpec(TraitedSpec):
@@ -52,8 +57,11 @@ class InvertITKAffine(SimpleInterface):
     output_spec = _InvertITKAffineOutputSpec
 
     def _run_interface(self, runtime):
+        in_files = self.inputs.in_file
+        if len(in_files) != 1:
+            raise ValueError(f'InvertITKAffine takes exactly one transform, got {in_files}')
         self._results['out_file'] = invert_itk_affine(
-            self.inputs.in_file,
+            in_files[0],
             fname_presuffix(self.inputs.in_file, suffix='_inverse', newpath=runtime.cwd),
         )
         return runtime

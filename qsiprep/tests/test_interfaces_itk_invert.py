@@ -51,3 +51,26 @@ def test_invert_affine_with_fixed_centre(tmp_path):
         list(mat.ravel()) + [1.0, 2.0, -3.0],
         [-5.0, 8.0, 2.0],
     )
+
+
+def test_invert_accepts_a_one_element_list(tmp_path):
+    """ANTs' forward_transforms is a list; the dwiref export hands it over as one."""
+    key, params, fixed = (
+        'Euler3DTransform_double_3_3',
+        [0.1, -0.05, 0.2, 3.0, -4.0, 1.5],
+        [1.0, 2.0, 3.0],
+    )
+    in_file = tmp_path / 'fwd.mat'
+    savemat(
+        in_file,
+        {
+            key: np.asarray(params, float).reshape(-1, 1),
+            'fixed': np.asarray(fixed, float).reshape(-1, 1),
+        },
+    )
+    result = InvertITKAffine(in_file=[str(in_file)]).run(cwd=str(tmp_path))
+    out = loadmat(result.outputs.out_file)
+    inv = _itk_mat_to_matrix(
+        'AffineTransform_double_3_3', out['AffineTransform_double_3_3'], out['fixed']
+    )
+    assert np.allclose(_itk_mat_to_matrix(key, params, fixed) @ inv, np.eye(4), atol=1e-9)
