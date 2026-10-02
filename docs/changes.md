@@ -21,10 +21,10 @@
   inverse of the coregistration; they used to be copies of the forward matrix.
 * The integration tests read `CIRCLE_CPUS`, the variable CI actually sets.
 * After DRBUDDI, the b0-to-T1w coregistration starts from DRBUDDI's undistorted b=0 rather
-  than from the T2w as DRBUDDI received it (``structural_used.nii`` is written before DRBUDDI's
-  own rigid registration of it): on a TRXScan fixture with a known truth that copy sat 5
-  degrees off and the DWI landed 5.3 deg / 3.8 mm off in ACPC space; from the undistorted b=0
-  the error is 0.3 deg / 0.4 mm.
+  than from ``structural_used.nii``, the T2w resampled through DRBUDDI's own rigid
+  registration of it: on a TRXScan fixture with a known truth that rigid moved a T2w handed
+  over 0.8 degrees off the b=0 frame to 5.3 degrees off, and the DWI landed 5.3 deg / 3.8 mm
+  off in ACPC space; from the undistorted b=0 the error is 0.4 deg / 0.4 mm.
 * `--sloppy` runs DRBUDDI's default stages on its 2.5 mm grid, and without the T2w, instead of
   one coarse stage: the field recovered rises from 0.43 to 0.80 of the truth at the same wall
   time, and the T2w (whose structural-to-b0 rigid inside TORTOISE lands 5 degrees off on the

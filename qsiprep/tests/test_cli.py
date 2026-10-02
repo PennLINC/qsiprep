@@ -1325,8 +1325,8 @@ def test_trxscan_rpe_drbuddi(data_dir, output_dir, working_dir):
 
     --sloppy runs DRBUDDI's default stages on a 2.5 mm grid without the T2w (the single coarse
     stage it used to run recovered 0.43 of the field; the T2w pulled the result 5 degrees off
-    frame). The coregistration is scored too: it used to start from the structural as DRBUDDI
-    received it, before DRBUDDI's own rigid, and was 5 degrees off on this fixture.
+    frame). The coregistration is scored too: it used to start from the T2w as DRBUDDI's own
+    rigid had placed it, which was 5 degrees off on this fixture.
     """
     score = _trxscan_run(
         'trxscan_rpe_drbuddi', 'rpe', ['--sdc-method=drbuddi'], data_dir, output_dir, working_dir

@@ -536,15 +536,15 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
 
     def _run_interface(self, runtime):
         # Always coregister from DRBUDDI's undistorted b=0, never from
-        # ``structural_used.nii``: DRBUDDI writes the structural exactly as it
-        # was handed over, BEFORE the rigid registration it runs internally to
-        # bring it onto the b=0 (the ``Rigidly registering structural image``
-        # step in its log), so that file sits wherever the coarse antsAI
-        # pre-alignment left it. On a TRXScan fixture with a known truth that was
-        # 5 degrees off: coregistering from it put the DWI 5.3 deg / 3.8 mm off in
-        # ACPC space, from ``b0_corrected_final`` 0.3 deg / 0.4 mm. The
-        # undistorted b=0 lives on the structural's grid in the b=0 frame, and it
-        # is what every corrected volume is actually aligned with.
+        # ``structural_used.nii``. That file is the structural resampled through
+        # the rigid DRBUDDI estimates for it (``Rigidly registering structural
+        # image`` in its log, DRBUDDI.cxx), and that rigid is not reliable: on a
+        # TRXScan fixture with a known truth it moved a T2w handed over 0.8 deg
+        # off the b=0 frame to 5.3 deg off, the same answer from a coarse and
+        # from an exact pre-alignment. Coregistering from it put the DWI 5.3 deg
+        # / 3.8 mm off in ACPC space; from ``b0_corrected_final`` 0.4 deg /
+        # 0.4 mm. The undistorted b=0 lives on the structural's grid in the b=0
+        # frame, and it is what every corrected volume is actually aligned with.
         self._results['b0_ref'] = self.inputs.undistorted_reference
 
         # there may be 2 transforms for the blip down data. If so, compose them

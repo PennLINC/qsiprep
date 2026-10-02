@@ -730,10 +730,11 @@ to workflows in *QSIPrep*'s documentation]\
             # DRBUDDI's structural metrics only enter its default stages, and
             # they size the working grid from the structural: on a 3 mm TRXScan
             # fixture the T2w took the 2.5 mm run from 2 to 13 min and, because
-            # TORTOISE's own structural-to-b0 rigid landed 5 deg off (from either
-            # a coarse or an exact pre-alignment), pulled the corrected b=0 into
-            # that frame (0.43 correlation to the clean b=0, worse than the 0.64
-            # uncorrected). Sloppy runs correct from the two blips alone.
+            # TORTOISE's own structural-to-b0 rigid landed 5 deg off (from a
+            # coarse and from an exact 0.8 deg pre-alignment alike), pulled the
+            # corrected b=0 into that frame (0.43 correlation to the clean b=0,
+            # worse than the 0.64 uncorrected). Sloppy runs correct from the two
+            # blips alone.
             config.loggers.workflow.info(
                 'Not using the T2w for distortion correction of %s under --sloppy.', output_fname
             )
