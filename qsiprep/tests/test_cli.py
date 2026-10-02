@@ -1345,7 +1345,7 @@ def _assert_topup_quality(score):
         score,
         ('b0_corrected_vs_clean',),
         lo=score['b0_uncorrected_vs_clean'] + 0.05,
-        note=f'uncorrected b0 scores {score["b0_uncorrected_vs_clean"]:.3f}; corrected must beat it by 0.05',
+        note=f'uncorrected b0 scores {score["b0_uncorrected_vs_clean"]:.3f}; must beat it by 0.05',
     )
     _expect(score, ('coreg_error', 'rotation_deg'), hi=1.0)
     _expect(score, ('coreg_error', 'translation_mm'), hi=1.5)
