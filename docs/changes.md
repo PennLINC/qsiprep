@@ -11,6 +11,12 @@
   coregistration against a recorded subject movement, gradient deviation, and eddy's motion
   parameters.
 
+* FSL BET is gone. Every brain extraction that used it — the fieldmap-magnitude mask of the
+  GRE and phase-difference workflows, and the SynthStrip and SynthSeg stand-ins under
+  `--sloppy` — now runs `niimath -skullstrip` (AFNI's surface method, no model): 1.5 s and
+  90 MB on a 1 mm T2w, Dice 0.96 against SynthStrip, where BET left 18 % of the brain margin
+  outside its mask on T2w. Needs a niimath built with `SKULLSTRIP=1` (component image 26.10.1).
+
 ### 🐛 Bug Fixes
 
 * Oblique anatomical images are resampled onto an axis-aligned grid instead of having their

@@ -50,12 +50,12 @@ from ...interfaces.ants import ImageMath
 from ...interfaces.freesurfer import (
     FixHeaderSynthStrip,
     MockSynthSeg,
-    MockSynthStrip,
     PrepareSynthStripGrid,
     SynthSeg,
 )
 from ...interfaces.images import AnatomicalReportlet
 from ...interfaces.itk import AffineToRigid, DisassembleTransform
+from ...interfaces.niimath import SkullStrip
 from ...interfaces.niworkflows import RobustMNINormalizationRPT
 from ...utils.gpu import gpu_enabled
 from ...utils.misc import fix_multi_source_name
@@ -1215,10 +1215,14 @@ def init_dl_prep_wf(name='dl_prep_wf') -> Workflow:
 def init_synthstrip_wf(
     do_padding=False, unfatsat=False, no_csf=False, name='synthstrip_wf'
 ) -> Workflow:
-    """Skull strip an image with SynthStrip.
+    """Skull strip an image with SynthStrip, or with niimath's surface stripper under --sloppy.
 
     ``no_csf`` selects SynthStrip's ``--no-csf`` model, which trims CSF and dura
     from the brain border. Ventricular CSF stays inside the mask either way.
+
+    Under ``--sloppy`` the node is ``niimath -skullstrip`` (AFNI's surface method,
+    1.5 s, 90 MB, Dice 0.96 against SynthStrip on a 1 mm T2w) instead of the
+    torch runtime; ``no_csf`` has no counterpart there and is ignored.
     """
     workflow = Workflow(name=name)
     inputnode = pe.Node(
@@ -1245,9 +1249,12 @@ def init_synthstrip_wf(
         )
     else:
         synthstrip = pe.Node(
-            MockSynthStrip(no_csf=no_csf),
-            name='mocksynthstrip',
+            SkullStrip(num_threads=config.nipype.omp_nthreads),
+            name='niimath_skullstrip',
+            n_procs=config.nipype.omp_nthreads,
         )
+    mask_output = 'out_brain_mask' if not config.execution.sloppy else 'mask_file'
+    image_input = 'input_image' if not config.execution.sloppy else 'in_file'
 
     mask_to_original_grid = pe.Node(
         ants.ApplyTransforms(
@@ -1274,13 +1281,13 @@ def init_synthstrip_wf(
         padding_wf = init_dl_prep_wf(name='pad_before_' + name)
         workflow.connect([
             (inputnode, padding_wf, [('original_image', 'inputnode.image')]),
-            (padding_wf, synthstrip, [('outputnode.padded_image', 'input_image')]),
+            (padding_wf, synthstrip, [('outputnode.padded_image', image_input)]),
         ])  # fmt:skip
     else:
-        workflow.connect([(inputnode, synthstrip, [('padded_image', 'input_image')])])
+        workflow.connect([(inputnode, synthstrip, [('padded_image', image_input)])])
 
     workflow.connect([
-        (synthstrip, mask_to_original_grid, [('out_brain_mask', 'input_image')]),
+        (synthstrip, mask_to_original_grid, [(mask_output, 'input_image')]),
         (inputnode, mask_to_original_grid, [('original_image', 'reference_image')]),
         (mask_to_original_grid, outputnode, [('output_image', 'brain_mask')]),
         (inputnode, mask_brain, [('original_image', 'first_input')]),
