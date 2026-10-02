@@ -384,6 +384,12 @@ class ComposeTransformsOutputSpec(TraitedSpec):
         desc='ANTs-ordered transforms that move the SDC displacement field from the '
         'corrected DWI frame to the output (ACPC) grid, for volume 0',
     )
+    hmc_corrected_transforms = OutputMultiObject(
+        traits.Either(File(exists=True), traits.Enum('identity')),
+        desc='ANTs-ordered transforms that move an image already in the head-motion-'
+        'corrected DWI frame (such as the SHORELine CNR map) to the output grid, '
+        'for volume 0',
+    )
     log_cmdline = File(desc='a list of command lines used to apply transforms')
 
 
@@ -449,6 +455,18 @@ class ComposeTransforms(SimpleInterface):
         """
         drop = {'hmc', 'gradwarp', 'fieldwarp'}
         return [name for name in included if name in cls._TRANSFORM_STAGES and name not in drop]
+
+    @classmethod
+    def _hmc_corrected_stage_names(cls, included):
+        """Return the stages that move an image in the head-motion-corrected frame.
+
+        ``hmc`` is the stage nearest the raw data, so an image computed after it --
+        the SHORELine CNR map is built from the motion-corrected volumes -- needs
+        every other stage but not ``hmc``. Applying volume 0's ``hmc`` to it would
+        move it by that volume's head motion. ``included`` is the stage names
+        actually present, in :attr:`_TRANSFORM_STAGES` order.
+        """
+        return [name for name in included if name != 'hmc']
 
     def _run_interface(self, runtime):
         dwi_files = self.inputs.dwi_files
@@ -540,6 +558,15 @@ class ComposeTransforms(SimpleInterface):
         self._results['sdc_warp_transforms'] = [tlist[0] for tlist in reversed(sdc_lists)] or [
             'identity'
         ]
+        hmc_corrected_names = self._hmc_corrected_stage_names(image_transform_names)
+        hmc_corrected_lists = [
+            tlist
+            for tlist, name in zip(image_transforms, image_transform_names, strict=True)
+            if name in hmc_corrected_names
+        ]
+        self._results['hmc_corrected_transforms'] = [
+            tlist[0] for tlist in reversed(hmc_corrected_lists)
+        ] or ['identity']
 
         # If there is just a coreg transform, then we have everything
         if image_transform_names == ['b=0 to T1w']:

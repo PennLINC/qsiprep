@@ -274,8 +274,10 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             (('dwiref_to_t1_affine', _get_first),
              'dwiref_to_t1_affine'),
         ]),
-        # TODO: check that the cnr_tfm is also appropriately warped for shoreline
-        (compose_transforms, cnr_tfm, [(('out_warps', _get_first), 'transforms')]),
+        # The CNR map is computed from motion-corrected volumes (SHORELine) or is
+        # already in eddy's corrected frame, so volume 0's hmc stage must not be
+        # applied to it again.
+        (compose_transforms, cnr_tfm, [('hmc_corrected_transforms', 'transforms')]),
         (inputnode, rotate_gradients, [
             ('bvec_files', 'bvec_files'),
             ('bval_files', 'bval_files'),
