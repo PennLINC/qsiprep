@@ -78,32 +78,27 @@ Removed or renamed options
      - :pr:`1124`, :pr:`1130`, :pr:`1131`
    * - ``--output-resolution 2``
      - ``--output-spaces acpc:res-2mm MNI152NLin2009cAsym``
-       (deprecated; removed in 27.0)
      - :pr:`1127`
    * - ``--output-resolution 1.5``
      - ``--output-spaces acpc:res-1p5mm MNI152NLin2009cAsym``
-       (deprecated; removed in 27.0)
      - :pr:`1127`
    * - ``--output-resolution 2 --infant``
      - ``--infant --output-spaces acpc:res-2mm MNIInfant:cohort-auto``
      - :pr:`1127`
    * - ``--anatomical-template``
-     - List the template in ``--output-spaces`` (deprecated; removed in 27.0)
+     - List the template in ``--output-spaces``
      - :pr:`1127`
    * - ``--skip-anat-based-spatial-normalization``
      - Request no standard space, as in ``--output-spaces acpc:res-2mm``
-       (deprecated; removed in 27.0)
      - :pr:`1127`
 
-The deprecated output-space flags still work in 26.1, with a warning, but
-cannot be combined with ``--output-spaces``. Keep ``--infant`` when moving
-to ``--output-spaces``: besides adding ``MNIInfant:cohort-auto``, it narrows
-the autobox padding, forces a T2w anatomical reference and requires
-``--subject-anatomical-reference sessionwise``, so dropping it changes the
-results. ``--infant --skip-anat-based-spatial-normalization`` has no exact
-``--output-spaces`` equivalent yet, because ``--infant`` always adds the
-infant template; the deprecated flag keeps the infant AC-PC anchor while
-writing no standard space.
+Keep ``--infant`` when moving to ``--output-spaces``: besides adding
+``MNIInfant:cohort-auto``, it narrows the autobox padding, forces a T2w
+anatomical reference and requires ``--subject-anatomical-reference
+sessionwise``, so dropping it changes the results. Because ``--infant`` always
+requests an infant template, the old ``--infant
+--skip-anat-based-spatial-normalization`` combination, which wrote no
+standard space, has no equivalent.
 
 ***********
 New options

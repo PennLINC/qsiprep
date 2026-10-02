@@ -2053,7 +2053,6 @@ def _cfg_gre(after_eddy=False):
     config.workflow.eddy_config = None
     config.workflow.denoise_method = 'dwidenoise'
     config.workflow.output_spaces = ['acpc:res-2mm', 'MNI152NLin2009cAsym']
-    config.workflow.acpc_anchor = None
     config.workflow.gradient_file = None  # no gradient unwarping
     config.workflow.force = ['gre-sdc-after-eddy'] if after_eddy else []
     config.execution.sloppy = False

@@ -389,8 +389,7 @@ was used to restrict the nonlinear registration to the template. """
     # The anchor's *nonlinear* component is only ever consumed by a standard-space
     # output or by fieldmap-less SDC, which warps its atlas prior into subject space
     # through t1_2_mni_reverse_transform. With neither requested, antsRegistration
-    # would run for nothing, so skip it. (Before --output-spaces this was the job of
-    # --skip-anat-based-spatial-normalization.)
+    # would run for nothing, so skip it.
     #
     # `sdc_anat_reference` replaced the old `use_syn_sdc` flag. Any value other than
     # 'none' means an anatomical-derived fieldmap-less reference may be built, so the

@@ -668,10 +668,9 @@ participant's age at run time, as ``--infant`` does (see
 :ref:`anatomical_flags`); an explicit cohort such as ``MNIInfant:cohort-3``
 skips that lookup.
 
-``--output-resolution``, ``--anatomical-template`` and
-``--skip-anat-based-spatial-normalization`` still work, with a deprecation
-warning, until 27.0. :doc:`upgrading` lists their ``--output-spaces``
-equivalents.
+``--output-spaces`` replaces ``--output-resolution``,
+``--anatomical-template`` and ``--skip-anat-based-spatial-normalization``;
+:doc:`upgrading` lists their equivalents.
 
 Coregistration
 ==============

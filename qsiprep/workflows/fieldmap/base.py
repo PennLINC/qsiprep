@@ -124,8 +124,7 @@ def init_gre_seed_wf(unit, has_gradwarp, source_file, use):
     b0_ref_wf = init_dwi_reference_wf(source_file=source_file, name='b0_ref_wf', gen_report=False)
     sdc_wf = init_sdc_wf(gre_seed_unit(unit), gradwarp=has_gradwarp, use=use)
     sdc_wf.inputs.inputnode.template = select_acpc_anchor(
-        config.workflow.parsed_output_spaces(),
-        config.workflow.parsed_acpc_anchor(),
+        config.workflow.parsed_output_spaces()
     ).fullname
     workflow.connect([
         (inputnode, b0_ref_wf, [('b0_template', 'inputnode.b0_template')]),

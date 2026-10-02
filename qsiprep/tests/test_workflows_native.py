@@ -763,8 +763,8 @@ def test_two_resolutions_of_one_template_write_one_transform(tmp_path):
 def test_no_standard_space_skips_the_nonlinear_normalization(tmp_path):
     """Nothing consumes the nonlinear transform, so antsRegistration must not run.
 
-    This is what --skip-anat-based-spatial-normalization used to do; the flag is
-    deprecated and no longer sets anything, so the space list has to decide.
+    The space list decides: with no standard space, only the rigid AC-PC
+    registration is built.
     """
     wf = _build_anat_preproc_wf(tmp_path, ['acpc:res-2mm'])
     names = wf.list_node_names()

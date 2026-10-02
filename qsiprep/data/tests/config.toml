@@ -25,7 +25,6 @@ reports_only = false
 run_uuid = "20250113-154517_1f7046f7-c5b1-4151-84ca-755a96dfbb55"
 participant_label = [ "01",]
 processing_list = [ "01:forrestgump",]
-skip_anat_based_spatial_normalization = false
 templateflow_home = "/home/qsiprep/.cache/templateflow"
 work_dir = "/tmp/src/qsiprep/.circleci/work/forrest_gump"
 write_graph = true

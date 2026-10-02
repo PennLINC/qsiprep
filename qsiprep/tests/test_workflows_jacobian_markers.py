@@ -147,7 +147,6 @@ def _reset_config():
         'dwidenoise_window',
         'shoreline_iters',
         'output_spaces',
-        'acpc_anchor',
         'ignore',
         'diffprep_config',
         'tortoise_gpu_cpu_ratio',
@@ -184,7 +183,6 @@ def _cfg(hmc_method, sdc_method, sloppy):
     config.workflow.dwidenoise_window = 5
     config.workflow.shoreline_iters = 2
     config.workflow.output_spaces = ['acpc:res-2mm', 'MNI152NLin2009cAsym']
-    config.workflow.acpc_anchor = None
     config.workflow.ignore = []
     config.workflow.diffprep_config = None
     config.workflow.tortoise_gpu_cpu_ratio = None

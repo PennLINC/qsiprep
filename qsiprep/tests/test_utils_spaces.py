@@ -222,76 +222,36 @@ def _parse(tmp_path, *extra):
     return _build_parser().parse_args(_min_args(tmp_path, *extra))
 
 
-def test_output_resolution_forwards(tmp_path):
-    from qsiprep.cli.parser import _apply_output_space_deprecations
-
-    opts = _parse(tmp_path, '--output-resolution', '2')
-    _apply_output_space_deprecations(opts)
-    assert opts.output_spaces == ['acpc:res-2mm', 'MNI152NLin2009cAsym']
-
-
-def test_output_resolution_decimal_forwards(tmp_path):
-    from qsiprep.cli.parser import _apply_output_space_deprecations
-
-    opts = _parse(tmp_path, '--output-resolution', '1.5')
-    _apply_output_space_deprecations(opts)
-    assert opts.output_spaces[0] == 'acpc:res-1p5mm'
-
-
-def test_output_resolution_forwards_infant_template(tmp_path):
-    from qsiprep.cli.parser import _apply_output_space_deprecations
-
-    opts = _parse(tmp_path, '--output-resolution', '2', '--infant')
-    _apply_output_space_deprecations(opts)
-    assert opts.output_spaces == ['acpc:res-2mm', 'MNIInfant:cohort-auto']
-
-
-def test_skip_normalization_drops_standard_spaces(tmp_path):
-    from qsiprep.cli.parser import _apply_output_space_deprecations
-
-    opts = _parse(tmp_path, '--output-resolution', '2', '--skip-anat-based-spatial-normalization')
-    _apply_output_space_deprecations(opts)
-    assert opts.output_spaces == ['acpc:res-2mm']
-
-
-def test_old_and_new_together_is_an_error(tmp_path):
-    from qsiprep.cli.parser import _apply_output_space_deprecations
-
-    opts = _parse(tmp_path, '--output-resolution', '2', '--output-spaces', 'acpc:res-2mm')
-    with pytest.raises(SystemExit):
-        _apply_output_space_deprecations(opts)
-
-
 def test_infant_adds_the_infant_template(tmp_path):
-    from qsiprep.cli.parser import _apply_output_space_deprecations
+    from qsiprep.cli.parser import _finalize_output_spaces
 
     opts = _parse(tmp_path, '--output-spaces', 'acpc:res-2mm', '--infant')
-    _apply_output_space_deprecations(opts)
+    _finalize_output_spaces(opts)
     assert opts.output_spaces == ['acpc:res-2mm', 'MNIInfant:cohort-auto']
 
 
 def test_infant_does_not_duplicate_an_explicit_infant_template(tmp_path):
-    from qsiprep.cli.parser import _apply_output_space_deprecations
+    from qsiprep.cli.parser import _finalize_output_spaces
 
     opts = _parse(tmp_path, '--output-spaces', 'acpc:res-2mm', 'MNIInfant:cohort-3', '--infant')
-    _apply_output_space_deprecations(opts)
+    _finalize_output_spaces(opts)
     assert opts.output_spaces == ['acpc:res-2mm', 'MNIInfant:cohort-3']
 
 
 def test_missing_acpc_is_an_error(tmp_path):
-    from qsiprep.cli.parser import _apply_output_space_deprecations
+    from qsiprep.cli.parser import _finalize_output_spaces
 
     opts = _parse(tmp_path, '--output-spaces', 'MNI152NLin2009cAsym')
     with pytest.raises(SystemExit):
-        _apply_output_space_deprecations(opts)
+        _finalize_output_spaces(opts)
 
 
 def test_nothing_given_at_all_is_an_error(tmp_path):
-    from qsiprep.cli.parser import _apply_output_space_deprecations
+    from qsiprep.cli.parser import _finalize_output_spaces
 
     opts = _parse(tmp_path)
     with pytest.raises(SystemExit):
-        _apply_output_space_deprecations(opts)
+        _finalize_output_spaces(opts)
 
 
 def test_config_round_trips_output_spaces(tmp_path):
@@ -400,82 +360,6 @@ def test_resolve_output_spaces_errors_when_age_exceeds_all_cohorts(monkeypatch):
         spaces_mod.resolve_output_spaces(specs, 'bids', '01', None)
 
 
-def test_select_acpc_anchor_honours_an_explicit_anchor():
-    from qsiprep.utils.spaces import SpaceSpec, select_acpc_anchor
-
-    specs = parse_output_spaces(['acpc:res-2mm'])
-    explicit = SpaceSpec(space='MNIInfant', cohort='auto')
-    assert select_acpc_anchor(specs, explicit) is explicit
-
-
-def test_infant_anchor_survives_skipping_normalization(tmp_path):
-    """--infant --skip-anat-based-spatial-normalization must stay infant-anchored.
-
-    Forwarding appends MNIInfant:cohort-auto, the skip then strips every standard
-    space, and deriving the anchor from what is left would silently move ACPC
-    alignment, the output grid and every output onto the adult template.
-    """
-    from qsiprep.cli.parser import _apply_output_space_deprecations
-    from qsiprep.utils.spaces import parse_space_token, select_acpc_anchor
-
-    opts = _parse(
-        tmp_path,
-        '--output-resolution',
-        '2',
-        '--infant',
-        '--skip-anat-based-spatial-normalization',
-    )
-    _apply_output_space_deprecations(opts)
-
-    assert opts.output_spaces == ['acpc:res-2mm']
-    assert opts.acpc_anchor == 'MNIInfant:cohort-auto'
-    anchor = select_acpc_anchor(
-        parse_output_spaces(opts.output_spaces), parse_space_token(opts.acpc_anchor)[0]
-    )
-    assert anchor.space == 'MNIInfant'
-
-
-@pytest.mark.parametrize(
-    ('extra', 'expected'),
-    [
-        (('--output-resolution', '2'), 'MNI152NLin2009cAsym'),
-        (('--output-resolution', '2', '--infant'), 'MNIInfant:cohort-auto'),
-        (
-            ('--output-resolution', '2', '--skip-anat-based-spatial-normalization'),
-            'MNI152NLin2009cAsym',
-        ),
-        (('--output-spaces', 'acpc:res-2mm', 'MNI152NLin6Asym'), 'MNI152NLin2009cAsym'),
-        (
-            ('--output-spaces', 'acpc:res-2mm', 'UNCInfant:cohort-2'),
-            'UNCInfant:cohort-2',
-        ),
-    ],
-)
-def test_parser_records_the_anchor(tmp_path, extra, expected):
-    from qsiprep.cli.parser import _apply_output_space_deprecations
-
-    opts = _parse(tmp_path, *extra)
-    _apply_output_space_deprecations(opts)
-    assert opts.acpc_anchor == expected
-
-
-def test_config_round_trips_the_anchor(tmp_path):
-    from qsiprep import config
-
-    config.workflow.acpc_anchor = 'MNIInfant:cohort-auto'
-    out = tmp_path / 'config.toml'
-    config.to_filename(out)
-
-    config.workflow.acpc_anchor = None
-    assert config.workflow.parsed_acpc_anchor() is None
-
-    config.load(out, init=False)
-    anchor = config.workflow.parsed_acpc_anchor()
-    assert anchor.space == 'MNIInfant'
-    assert anchor.cohort == 'auto'
-    config.workflow.acpc_anchor = None
-
-
 def test_select_acpc_anchor_is_order_independent():
     from qsiprep.utils.spaces import select_acpc_anchor
 
@@ -512,40 +396,22 @@ def test_anchor_is_independent_of_token_order():
 
 def test_infant_accepts_an_explicit_infant_template(tmp_path):
     """UNCInfant is an infant anchor, so --infant must not append MNIInfant too."""
-    from qsiprep.cli.parser import _apply_output_space_deprecations
+    from qsiprep.cli.parser import _finalize_output_spaces
 
     opts = _parse(tmp_path, '--infant', '--output-spaces', 'acpc:res-2mm', 'UNCInfant:cohort-auto')
-    _apply_output_space_deprecations(opts)
+    _finalize_output_spaces(opts)
     assert not any(s.startswith('MNIInfant') for s in opts.output_spaces)
-    assert opts.acpc_anchor.startswith('UNCInfant')
-
-
-def test_legacy_infant_replaces_rather_than_augments_the_template(tmp_path):
-    """Main discarded --anatomical-template under --infant; the shim must too."""
-    from qsiprep.cli.parser import _apply_output_space_deprecations
-
-    opts = _parse(
-        tmp_path,
-        '--infant',
-        '--output-resolution',
-        '2',
-        '--anatomical-template',
-        'MNI152NLin2009cAsym',
-    )
-    _apply_output_space_deprecations(opts)
-    assert not any(s.startswith('MNI152NLin2009cAsym') for s in opts.output_spaces)
-    assert opts.output_spaces == ['acpc:res-2mm', 'MNIInfant:cohort-auto']
 
 
 def test_mm_resolution_on_a_standard_space_is_rejected(tmp_path):
     """It writes no res- entity, so it would collide with the bare template."""
     import pytest
 
-    from qsiprep.cli.parser import _apply_output_space_deprecations
+    from qsiprep.cli.parser import _finalize_output_spaces
 
     opts = _parse(tmp_path, '--output-spaces', 'acpc:res-2mm', 'MNI152NLin2009cAsym:res-2mm')
     with pytest.raises(SystemExit) as excinfo:
-        _apply_output_space_deprecations(opts)
+        _finalize_output_spaces(opts)
     assert 'MNI152NLin2009cAsym:res-2mm' in str(excinfo.value)
 
 
@@ -553,7 +419,7 @@ def test_multi_acpc_with_distortion_group_merge_is_rejected(tmp_path):
     """The merge workflow writes one resolution, so asking for two is a silent loss."""
     import pytest
 
-    from qsiprep.cli.parser import _apply_output_space_deprecations
+    from qsiprep.cli.parser import _finalize_output_spaces
 
     opts = _parse(
         tmp_path,
@@ -564,13 +430,13 @@ def test_multi_acpc_with_distortion_group_merge_is_rejected(tmp_path):
         'concat',
     )
     with pytest.raises(SystemExit) as excinfo:
-        _apply_output_space_deprecations(opts)
+        _finalize_output_spaces(opts)
     assert '--distortion-group-merge' in str(excinfo.value)
 
 
 def test_single_acpc_with_distortion_group_merge_is_allowed(tmp_path):
     """One resolution merges fine; only the fan-out has nowhere to go."""
-    from qsiprep.cli.parser import _apply_output_space_deprecations
+    from qsiprep.cli.parser import _finalize_output_spaces
 
     opts = _parse(
         tmp_path,
@@ -579,5 +445,19 @@ def test_single_acpc_with_distortion_group_merge_is_allowed(tmp_path):
         '--distortion-group-merge',
         'concat',
     )
-    _apply_output_space_deprecations(opts)
+    _finalize_output_spaces(opts)
     assert opts.output_spaces == ['acpc:res-nativemin']
+
+
+@pytest.mark.parametrize(
+    'flag',
+    [
+        ('--output-resolution', '2'),
+        ('--anatomical-template', 'MNI152NLin2009cAsym'),
+        ('--skip-anat-based-spatial-normalization',),
+    ],
+)
+def test_removed_output_space_flags_are_rejected(tmp_path, flag):
+    """Test that the flags --output-spaces replaced are gone, not silently ignored."""
+    with pytest.raises(SystemExit):
+        _parse(tmp_path, '--output-spaces', 'acpc:res-2mm', *flag)

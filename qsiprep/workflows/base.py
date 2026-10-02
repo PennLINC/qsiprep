@@ -254,10 +254,9 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
     from ..utils.spaces import resolve_output_spaces, select_acpc_anchor
 
     output_spaces = config.workflow.parsed_output_spaces()
-    # The anchor can be a template that is not in output_spaces at all (the
-    # deprecated --infant --skip-anat-based-spatial-normalization combination), so
-    # resolve its cohort alongside the requested spaces rather than after them.
-    acpc_anchor = select_acpc_anchor(output_spaces, config.workflow.parsed_acpc_anchor())
+    # The anchor is not always listed (MNI152NLin2009cAsym anchors an acpc-only
+    # request), so resolve its cohort alongside the requested spaces.
+    acpc_anchor = select_acpc_anchor(output_spaces)
     to_resolve = [*output_spaces, acpc_anchor]
     if any(spec.needs_cohort_resolution for spec in to_resolve):
         if session_ids and len(session_ids) > 1:

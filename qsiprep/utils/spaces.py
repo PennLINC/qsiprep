@@ -294,23 +294,13 @@ def _age_in_months(bids_dir, subject_id, session_id):
     return parse_bids_for_age_months(bids_dir, subject_id, session_id)
 
 
-def select_acpc_anchor(specs, explicit=None) -> SpaceSpec:
+def select_acpc_anchor(specs) -> SpaceSpec:
     """Pick the template that anchors ACPC alignment and the output grid.
 
-    Normally derived rather than user-selectable: an infant template among the
-    requested spaces anchors ACPC, otherwise MNI152NLin2009cAsym does. Independent
-    of the order spaces were listed in.
-
-    ``explicit`` overrides that derivation. It exists because the anchor cannot
-    always be recovered from the space list: ``--infant`` used to imply an infant
-    anchor via the ``MNIInfant:cohort-auto`` it appends, but
-    ``--skip-anat-based-spatial-normalization`` then strips every standard space,
-    which would silently move an infant's ACPC alignment -- and every anatomical
-    and DWI output with it -- onto the adult template. The CLI records the anchor
-    it meant before anything mutates the list.
+    Derived rather than user-selectable: an infant template among the requested
+    spaces anchors ACPC, otherwise MNI152NLin2009cAsym does. Independent of the
+    order spaces were listed in.
     """
-    if explicit is not None:
-        return explicit
     for name in INFANT_ANCHORS:
         for spec in specs:
             if spec.space == name:

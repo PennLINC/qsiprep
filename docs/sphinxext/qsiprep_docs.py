@@ -62,7 +62,6 @@ def configure(**overrides):
     }
     config.from_dict(defaults, init=False)
     config.workflow.output_spaces = list(OUTPUT_SPACE_TOKENS)
-    config.workflow.acpc_anchor = None
     config.nipype.omp_nthreads = 1
     config.execution.sloppy = False
     config.execution.output_dir = _ROOT

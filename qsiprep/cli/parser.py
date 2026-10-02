@@ -46,20 +46,7 @@ def _build_parser(**kwargs):
     from pathlib import Path
 
     # Deprecated options: {option string: (version it is removed in, what happens instead)}
-    deprecations = {
-        '--output-resolution': (
-            '27.0.0',
-            'Please use `--output-spaces acpc:res-<size>mm` instead.',
-        ),
-        '--anatomical-template': (
-            '27.0.0',
-            'Please list the template in `--output-spaces` instead.',
-        ),
-        '--skip-anat-based-spatial-normalization': (
-            '27.0.0',
-            'Requesting no standard space in `--output-spaces` now skips normalization.',
-        ),
-    }
+    deprecations = {}
 
     # Deprecated flags that enable their replacement automatically:
     # {option string: (replacement option, its namespace attribute, the value it is set to)}
@@ -71,28 +58,6 @@ def _build_parser(**kwargs):
             f'{option_string} has been deprecated and will be removed in {removed_in}. {detail}',
             file=sys.stderr,
         )
-
-    class DeprecatedAction(Action):
-        """Warn that a deprecated option is ignored, and keep it out of the namespace.
-
-        Declared with ``default=SUPPRESS`` so the dest never reaches the config object.
-        """
-
-        def __init__(self, option_strings, dest, nargs=0, **kwargs):
-            super().__init__(option_strings, dest, nargs=nargs, **kwargs)
-
-        def __call__(self, parser, namespace, values, option_string=None):
-            option_string = option_string or self.option_strings[0]
-            _warn_deprecated(option_string)
-            seen = getattr(namespace, '_deprecated_seen', [])
-            namespace._deprecated_seen = [*seen, option_string]
-
-    class DeprecatedStoreAction(Action):
-        """Warn about a deprecated option, then store its value like ``store`` would."""
-
-        def __call__(self, parser, namespace, values, option_string=None):
-            _warn_deprecated(option_string or self.option_strings[0])
-            setattr(namespace, self.dest, values)
 
     class DeprecatedForwardAction(Action):
         """Warn about a deprecated flag, and record that its replacement must be enabled.
@@ -389,17 +354,6 @@ def _build_parser(**kwargs):
             '"MNIInfant:cohort-auto".'
         ),
     )
-    g_required.add_argument(
-        '--output-resolution',
-        action=DeprecatedStoreAction,
-        default=SUPPRESS,
-        type=float,
-        metavar='MM',
-        help=(
-            'DEPRECATED: use `--output-spaces acpc:res-<size>mm` instead. '
-            'A value of 2 becomes `acpc:res-2mm`.'
-        ),
-    )
 
     g_bids = parser.add_argument_group(
         'Input data and BIDS filtering',
@@ -618,22 +572,6 @@ def _build_parser(**kwargs):
             '"none" never runs it. '
             '"auto" skips it when the BIDS ImageType metadata contains "NORM", which is '
             'how Siemens and others flag console-applied normalization.'
-        ),
-    )
-    g_anat.add_argument(
-        '--anatomical-template',
-        action=DeprecatedStoreAction,
-        default=SUPPRESS,
-        choices=['MNI152NLin2009cAsym'],
-        help='DEPRECATED: list the template in `--output-spaces` instead.',
-    )
-    g_anat.add_argument(
-        '--skip-anat-based-spatial-normalization',
-        action=DeprecatedAction,
-        default=SUPPRESS,
-        help=(
-            'DEPRECATED: requesting no standard space in `--output-spaces` skips '
-            'normalization. This flag now drops any standard spaces from the list.'
         ),
     )
 
@@ -1226,65 +1164,25 @@ def check_denoise_window(denoise_method, dwidenoise_window):
         )
 
 
-def _format_mm(value):
-    """Render a float as a res- label: 2.0 -> '2mm', 1.5 -> '1p5mm'."""
-    text = f'{float(value):g}'
-    return f'{text.replace(".", "p")}mm'
-
-
-def _apply_output_space_deprecations(opts, parser=None):
-    """Fold the deprecated output-space flags into ``opts.output_spaces``.
+def _finalize_output_spaces(opts, parser=None):
+    """Validate ``opts.output_spaces`` and store it in canonical form.
 
     Runs after the whole command line has been read, so the result does not depend
     on the order options were given in.
     """
-    from qsiprep.utils.spaces import (
-        INFANT_ANCHORS,
-        OutputSpacesError,
-        parse_output_spaces,
-        select_acpc_anchor,
-    )
+    from qsiprep.utils.spaces import INFANT_ANCHORS, OutputSpacesError, parse_output_spaces
 
     def fail(message):
         if parser is not None:
             parser.error(message)
         raise SystemExit(message)
 
-    deprecated_seen = list(getattr(opts, '_deprecated_seen', []))
-    skip_normalization = '--skip-anat-based-spatial-normalization' in deprecated_seen
-    legacy_resolution = getattr(opts, 'output_resolution', None)
-    legacy_template = getattr(opts, 'anatomical_template', None)
     given = list(opts.output_spaces or [])
-
-    legacy_used = [
-        name
-        for name, used in (
-            ('--output-resolution', legacy_resolution is not None),
-            ('--anatomical-template', legacy_template is not None),
-            ('--skip-anat-based-spatial-normalization', skip_normalization),
-        )
-        if used
-    ]
-    if given and legacy_used:
-        fail(
-            f'{", ".join(legacy_used)} cannot be combined with --output-spaces. '
-            'Use --output-spaces alone.'
-        )
-
-    # The infant template stands in for MNI152NLin2009cAsym, not alongside it.
-    default_template = 'MNIInfant:cohort-auto' if opts.infant else 'MNI152NLin2009cAsym'
-
     if not given:
-        if legacy_resolution is None:
-            fail(
-                '--output-spaces is required and must include at least one "acpc" space, '
-                'for example: --output-spaces acpc:res-2mm MNI152NLin2009cAsym'
-            )
-        given = [f'acpc:res-{_format_mm(legacy_resolution)}']
-        # --infant replaced the template outright on the legacy path, so an explicit
-        # --anatomical-template does not survive it. Keeping both would add an adult
-        # SyN and adult-space anatomicals to a run that never had them.
-        given.append(default_template if opts.infant else (legacy_template or default_template))
+        fail(
+            '--output-spaces is required and must include at least one "acpc" space, '
+            'for example: --output-spaces acpc:res-2mm MNI152NLin2009cAsym'
+        )
 
     # Any infant template already anchors AC-PC (see INFANT_ANCHORS); only add the
     # default one when the request names none.
@@ -1324,22 +1222,7 @@ def _apply_output_space_deprecations(opts, parser=None):
             '--distortion-group-merge none.'
         )
 
-    # Record the anchor now, from the full list. --skip-anat-based-spatial-
-    # normalization strips every standard space below, and deriving the anchor
-    # afterwards would hand an infant subject the adult template -- silently
-    # changing ACPC alignment, the output grid, and every anatomical and DWI
-    # output. The deprecated flags must not change results.
-    opts.acpc_anchor = str(select_acpc_anchor(specs))
-
-    if skip_normalization:
-        specs = [spec for spec in specs if not spec.standard]
-
     opts.output_spaces = [str(spec) for spec in specs]
-
-    for attr in ('output_resolution', 'anatomical_template', '_deprecated_seen'):
-        if hasattr(opts, attr):
-            delattr(opts, attr)
-
     return opts
 
 
@@ -1358,7 +1241,7 @@ def parse_args(args=None, namespace=None):
             'session' if opts.subject_anatomical_reference == 'sessionwise' else 'root'
         )
 
-    _apply_output_space_deprecations(opts, parser)
+    _finalize_output_spaces(opts, parser)
 
     if opts.infant:
         config.loggers.cli.info(
