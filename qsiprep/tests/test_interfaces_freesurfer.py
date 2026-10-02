@@ -65,7 +65,10 @@ def test_synthstrip_interface(datasets, tmp_path_factory):
 
 
 def test_synthseg_tensorflow_environ():
-    """mri_synthseg needs Keras 2, and oneDNN pushes its peak memory past 15GB."""
+    """Test that SynthSeg runs with Keras 2 and without oneDNN.
+
+    mri_synthseg needs Keras 2, and oneDNN pushes its peak memory past 15GB.
+    """
     interface = freesurfer.SynthSeg()
     assert interface.inputs.environ['TF_USE_LEGACY_KERAS'] == '1'
     assert interface.inputs.environ['TF_ENABLE_ONEDNN_OPTS'] == '0'

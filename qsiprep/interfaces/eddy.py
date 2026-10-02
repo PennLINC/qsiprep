@@ -1,10 +1,6 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
-Prepare files for TOPUP and eddy
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-"""
+"""Prepare files for TOPUP and eddy."""
 
 import json
 import os
@@ -33,6 +29,7 @@ from .epi_fmap import (
     add_synthetic_b0_to_topup_inputs,
     eddy_inputs_from_dwi_files,
     get_best_b0_topup_inputs_from,
+    synb0_topup_config,
 )
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -46,12 +43,15 @@ def _find_eddy_cuda(default='eddy_cuda10.2'):
     FSL ships version-specific binaries whose name encodes the CUDA version
     (``eddy_cuda11.0``). Older code hardcoded ``eddy_cuda10.2``, which current
     FSL builds no longer provide. Scan the directories on ``PATH`` for any
-    ``eddy_cuda<major>.<minor>`` executable and return the newest one.
+    ``eddy_cuda<major>.<minor>`` executable and return the newest one. Some
+    packagings (e.g. the pixi-based qsiprep image) instead ship a single,
+    *unversioned* ``eddy_cuda``; use it as a fallback when no versioned binary is
+    present, so ``--gpu eddy`` works there too.
 
     Parameters
     ----------
-    default : str
-        Name returned when no ``eddy_cuda*`` binary is found, so the downstream
+    default : str, optional
+        Name returned when no ``eddy_cuda`` binary is found, so the downstream
         missing-dependency check reports a recognizable command.
 
     Returns
@@ -60,6 +60,7 @@ def _find_eddy_cuda(default='eddy_cuda10.2'):
         Basename of the selected eddy CUDA binary, or ``default`` if none found.
     """
     found = {}
+    plain = None
     for directory in os.environ.get('PATH', '').split(os.pathsep):
         if not directory or not os.path.isdir(directory):
             continue
@@ -69,26 +70,34 @@ def _find_eddy_cuda(default='eddy_cuda10.2'):
             continue
         for entry in entries:
             match = _EDDY_CUDA_RE.match(entry)
-            if match is None:
+            if match is None and entry != 'eddy_cuda':
                 continue
             full_path = os.path.join(directory, entry)
             if not os.path.isfile(full_path) or not os.access(full_path, os.X_OK):
+                continue
+            if match is None:
+                # Unversioned eddy_cuda: keep the first one on PATH.
+                if plain is None:
+                    plain = entry
                 continue
             version = (int(match.group(1)), int(match.group(2)))
             # Keep the first match on PATH for each basename.
             found.setdefault(entry, version)
 
-    if not found:
-        LOGGER.warning('No eddy_cuda* binary found on PATH; falling back to %s', default)
-        return default
+    if found:
+        # A version-suffixed binary is preferred over a plain one, newest first.
+        if len(found) > 1:
+            LOGGER.warning(
+                'Multiple eddy_cuda binaries found on PATH (%s); using the newest.',
+                ', '.join(sorted(found)),
+            )
+        return max(found, key=found.get)
 
-    if len(found) > 1:
-        LOGGER.warning(
-            'Multiple eddy_cuda binaries found on PATH (%s); using the newest.',
-            ', '.join(sorted(found)),
-        )
+    if plain is not None:
+        return plain
 
-    return max(found, key=found.get)
+    LOGGER.warning('No eddy_cuda binary found on PATH; falling back to %s', default)
+    return default
 
 
 class GatherEddyInputsInputSpec(BaseInterfaceInputSpec):
@@ -140,15 +149,16 @@ class GatherEddyInputsOutputSpec(TraitedSpec):
 class GatherEddyInputs(SimpleInterface):
     """Manually prepare inputs for TOPUP and eddy.
 
-    **Inputs**
-        rpe_b0: str
-            path to a file (3D or 4D) containing b=0 images with the reverse PE direction
-        dwi_file: str
-            path to a 4d DWI nifti file
-        bval_file: str
-            path to the bval file
-        bvec_file: str
-            path to the bvec file
+    Inputs
+    ------
+    rpe_b0 : str
+        path to a file (3D or 4D) containing b=0 images with the reverse PE direction
+    dwi_file : str
+        path to a 4d DWI nifti file
+    bval_file : str
+        path to the bval file
+    bvec_file : str
+        path to the bvec file
     """
 
     input_spec = GatherEddyInputsInputSpec
@@ -240,6 +250,7 @@ class Synb0TopupInputsInputSpec(BaseInterfaceInputSpec):
 class Synb0TopupInputsOutputSpec(TraitedSpec):
     topup_datain = File(exists=True)
     topup_imain = File(exists=True)
+    topup_config = traits.Str(desc='TOPUP config matching the imain dimensions')
 
 
 class Synb0TopupInputs(SimpleInterface):
@@ -249,6 +260,8 @@ class Synb0TopupInputs(SimpleInterface):
     datain row, and the real b=0 volumes are slightly smoothed to match its
     smoothness (see
     :func:`~qsiprep.interfaces.epi_fmap.add_synthetic_b0_to_topup_inputs`).
+    The TOPUP config is chosen for the imain dimensions (see
+    :func:`~qsiprep.interfaces.epi_fmap.synb0_topup_config`).
     """
 
     input_spec = Synb0TopupInputsInputSpec
@@ -264,6 +277,7 @@ class Synb0TopupInputs(SimpleInterface):
         )
         self._results['topup_datain'] = datain
         self._results['topup_imain'] = imain
+        self._results['topup_config'] = synb0_topup_config(nb.load(imain).shape)
         return runtime
 
 
@@ -378,7 +392,7 @@ class ExtendedEddy(fsl.Eddy):
 
 
 def _fsl_to_ras_axis_flip(ref_file):
-    """Per-axis ±1 to convert FSL rigid params to RAS+ for ``ref_file``.
+    """Return the per-axis ±1 that converts FSL rigid params to RAS+ for ``ref_file``.
 
     FSL reports motion in its radiological voxel frame; the RAS direction of each
     axis follows the sign of the affine diagonal, with FSL flipping x for a
@@ -565,15 +579,34 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
         desc.append(topup_boilerplate(fieldmap_type, pepolar_method))
     # DRBUDDI is described in its own workflow
 
+    # Jacobian modulation: whether eddy's own resampling Jacobian-modulated
+    # the eddy-current (and, when TOPUP ran, susceptibility) corrections it
+    # applied. This is independent of --ignore jacobian, which controls
+    # only the modulation QSIPrep itself applies -- see eddy_modulates_distortion.
+    from ..utils.eddy_config import eddy_modulates_distortion
+
+    if eddy_modulates_distortion(eddy_config):
+        desc.append(
+            'Eddy-current correction, and susceptibility distortion correction '
+            'when TOPUP was used, were Jacobian-modulated by eddy itself as part '
+            'of its `jac` resampling.'
+        )
+    else:
+        desc.append(
+            'Eddy-current correction, and susceptibility distortion correction '
+            'when TOPUP was used, were not Jacobian-modulated, because eddy was '
+            f'configured with resampling method "{ext_eddy.inputs.method}" rather '
+            'than "jac"; QSIPrep cannot retrofit this modulation once eddy has '
+            'resampled the data.'
+        )
+
     # move by susceptibility
     if (
         isdefined(ext_eddy.inputs.estimate_move_by_susceptibility)
         and ext_eddy.inputs.estimate_move_by_susceptibility
     ):
         mbs_niter = ext_eddy.inputs.mbs_niter if isdefined(ext_eddy.inputs.mbs_niter) else 10
-        mbs_lambda = (
-            ext_eddy.inputs.mbs_mbs_lambda if isdefined(ext_eddy.inputs.mbs_lambda) else 10
-        )
+        mbs_lambda = ext_eddy.inputs.mbs_lambda if isdefined(ext_eddy.inputs.mbs_lambda) else 10
         mbs_ksp = ext_eddy.inputs.mbs_ksp if isdefined(ext_eddy.inputs.mbs_ksp) else 10
         desc.append(
             'Dynamic susceptibility distortion correction was '
@@ -596,7 +629,7 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
 
 
 def topup_boilerplate(fieldmap_type, pepolar_method):
-    """Write boilerplate text based on fieldmaps"""
+    """Write boilerplate text based on fieldmaps."""
     if fieldmap_type not in ('rpe_series', 'epi', 'synb0'):
         return ''
 

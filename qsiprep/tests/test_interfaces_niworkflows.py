@@ -10,13 +10,16 @@ from qsiprep.interfaces.niworkflows import _create_cfm
 
 
 def test_create_cfm_patch_installed():
-    """qsiprep replaces the buggy upstream create_cfm at import time."""
+    """Test that qsiprep replaces the buggy upstream create_cfm at import time."""
     assert niw_norm.create_cfm is _create_cfm
 
 
 def test_create_cfm_lesion_orientation(tmp_path):
-    """A lesion stored in RAS is excluded at the correct world location even
-    when in_file is stored in LPS (regression test for issue #1023)."""
+    """Test that a RAS lesion is excluded at the correct place for an LPS image.
+
+    A lesion stored in RAS is excluded at the correct world location even
+    when in_file is stored in LPS (regression test for issue #1023).
+    """
     shape = (4, 5, 6)
     ras_affine = np.eye(4)
 

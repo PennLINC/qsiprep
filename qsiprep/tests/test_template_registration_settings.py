@@ -2,7 +2,7 @@
 
 The SHORELine settings are tuned for within-scan b=0 motion correction: noisy,
 2 mm, contrast that varies between volumes. Template creation -- the anatomical
-merge and the intramodal b=0 template -- runs on high-SNR images that share
+merge and the b=0 dwiref -- runs on high-SNR images that share
 contrast, and inherited those settings by accident.
 
 The measured difference is the convergence threshold. At 1e-08 with a window of
@@ -31,7 +31,10 @@ def _cfg(family, precision, transform):
 @pytest.mark.parametrize('precision', PRECISIONS)
 @pytest.mark.parametrize('transform', TRANSFORMS)
 def test_every_variant_exists(precision, transform):
-    """The filename is built from precision and transform, so all four must exist."""
+    """Test that every variant exists.
+
+    The filename is built from precision and transform, so all four must exist.
+    """
     cfg = _cfg('unbiased_template', precision, transform)
     assert cfg['transforms'][0] == 'Rigid'
     if transform == 'Affine':
@@ -48,7 +51,9 @@ def test_convergence_threshold_can_actually_fire(precision, transform):
 @pytest.mark.parametrize('precision', PRECISIONS)
 @pytest.mark.parametrize('transform', TRANSFORMS)
 def test_per_stage_lists_match_the_stage_count(precision, transform):
-    """A list longer than `transforms` describes stages that never run.
+    """Test that per-stage lists match the stage count.
+
+    A list longer than `transforms` describes stages that never run.
 
     nipype silently truncates to the number of transforms, so the extra entries
     were dead -- the shipped shoreline_*_Rigid.json still carries some.
@@ -78,7 +83,9 @@ def test_per_stage_lists_match_the_stage_count(precision, transform):
 @pytest.mark.parametrize('precision', PRECISIONS)
 @pytest.mark.parametrize('transform', TRANSFORMS)
 def test_only_the_threshold_differs_from_shoreline(precision, transform):
-    """Guard the scope of the change.
+    """Test that only the threshold differs from SHORELine.
+
+    Guard the scope of the change.
 
     Only the convergence threshold was validated against the baseline. If a
     future edit changes sampling, bins or the resolution schedule, that needs its
@@ -98,7 +105,7 @@ def test_only_the_threshold_differs_from_shoreline(precision, transform):
 
 
 def test_shoreline_is_untouched():
-    """Within-scan b=0 HMC must keep its own settings."""
+    """Test that within-scan b=0 HMC keeps its own settings."""
     cfg = _cfg('shoreline', 'precise', 'Rigid')
     assert cfg['convergence_threshold'][0] == 1e-08
 
@@ -113,14 +120,14 @@ def _config(**overrides):
     config.workflow.b0_threshold = 100
     config.workflow.hmc_transform = 'Rigid'
     config.workflow.hmc_method = 'tortoise'
-    config.workflow.b0_to_anat_transform = 'Rigid'
+    config.workflow.dwi2anat_dof = 6
     for key, value in overrides.items():
         setattr(config.workflow, key, value)
     return config
 
 
 def _thresholds(wf):
-    """Convergence thresholds on every antsRegistration node in a built workflow.
+    """Return the convergence thresholds on every antsRegistration node in a built workflow.
 
     Asserting on the loaded value rather than the filename: `from_file` is
     consumed at construction and not retained on the inputs, and the threshold is
@@ -147,11 +154,11 @@ def test_anat_merge_uses_the_template_settings(tmp_path):
     assert all(v == [1e-06] for v in thr.values()), thr
 
 
-def test_intramodal_b0_template_uses_the_template_settings(tmp_path):
-    from qsiprep.workflows.dwi.intramodal_template import init_intramodal_template_wf
+def test_b0_dwiref_uses_the_template_settings(tmp_path):
+    from qsiprep.workflows.dwi.dwiref import init_dwiref_wf
 
     _config().execution.output_dir = str(tmp_path)
-    wf = init_intramodal_template_wf(
+    wf = init_dwiref_wf(
         inputs_list=['scan1', 'scan2'],
         t1w_source_file='/data/sub-01/anat/sub-01_T1w.nii.gz',
         transform='Rigid',
@@ -162,17 +169,19 @@ def test_intramodal_b0_template_uses_the_template_settings(tmp_path):
     assert all(v == [1e-06] for v in thr.values()), thr
 
 
-def test_nonlinear_intramodal_template_does_not_use_these_settings(tmp_path):
-    """BSplineSyN is built by antsMultivariateTemplateConstruction2.
+def test_nonlinear_dwiref_does_not_use_these_settings(tmp_path):
+    """Test that the nonlinear dwiref does not use these settings.
+
+    BSplineSyN is built by antsMultivariateTemplateConstruction2.
 
     That path never goes through init_b0_hmc_wf, so it carries its own
     registration parameters inside the ANTs script and this change does not reach
     it. Documented here so the boundary is not mistaken for a gap.
     """
-    from qsiprep.workflows.dwi.intramodal_template import init_intramodal_template_wf
+    from qsiprep.workflows.dwi.dwiref import init_dwiref_wf
 
     _config().execution.output_dir = str(tmp_path)
-    wf = init_intramodal_template_wf(
+    wf = init_dwiref_wf(
         inputs_list=['scan1', 'scan2'],
         t1w_source_file='/data/sub-01/anat/sub-01_T1w.nii.gz',
         transform='BSplineSyN',
@@ -184,7 +193,7 @@ def test_nonlinear_intramodal_template_does_not_use_these_settings(tmp_path):
 
 
 def test_within_scan_hmc_still_uses_shoreline(tmp_path):
-    """The default family must not have moved underneath SHORELine."""
+    """Test that the default family has not moved underneath SHORELine."""
     from qsiprep.workflows.dwi.hmc import init_b0_hmc_wf
 
     _config().execution.output_dir = str(tmp_path)
@@ -197,9 +206,12 @@ def test_within_scan_hmc_still_uses_shoreline(tmp_path):
 
 
 def test_init_b0_hmc_wf_has_no_spatial_bias_correct():
-    """init_qsiprep_intramodal_template_wf passes spatial_bias_correct= to
+    """Test that init_b0_hmc_wf has no spatial_bias_correct parameter.
+
+    init_dwiref_wf passes spatial_bias_correct= to
     init_b0_hmc_wf, which does not accept it; it would raise TypeError if it
-    ever ran and is left unwired deliberately."""
+    ever ran and is left unwired deliberately.
+    """
     import inspect
 
     from qsiprep.workflows.dwi.hmc import init_b0_hmc_wf
@@ -208,7 +220,10 @@ def test_init_b0_hmc_wf_has_no_spatial_bias_correct():
 
 
 def test_iterative_b0_description_names_the_transform(tmp_path):
-    """The methods text named hmc_model ("tortoise registrations") instead of the transform."""
+    """Test that the iterative b=0 description names the transform.
+
+    The methods text named hmc_model ("tortoise registrations") instead of the transform.
+    """
     from qsiprep.workflows.dwi.hmc import init_b0_hmc_wf
 
     _config().execution.output_dir = str(tmp_path)

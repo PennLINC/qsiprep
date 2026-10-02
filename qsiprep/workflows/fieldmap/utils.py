@@ -1,7 +1,4 @@
-"""
-Functions copied from nipype
-
-"""
+"""Functions copied from nipype."""
 
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
@@ -10,9 +7,7 @@ from ...interfaces.fmap import CleanupEdgeFilter, DespikeFilter
 
 
 def siemens2rads(in_file, out_file=None):
-    """
-    Converts input phase difference map to rads
-    """
+    """Convert input phase difference map to rads."""
     import math
     import os.path as op
 
@@ -47,9 +42,7 @@ def siemens2rads(in_file, out_file=None):
 
 
 def demean_image(in_file, in_mask=None, out_file=None):
-    """
-    Demean image data inside mask
-    """
+    """Demean image data inside mask."""
     import os.path as op
 
     import nibabel as nb
@@ -77,9 +70,9 @@ def demean_image(in_file, in_mask=None, out_file=None):
 
 
 def cleanup_edge_pipeline(name='Cleanup'):
-    """
-    Perform some de-spiking filtering to clean up the edge of the fieldmap
-    (copied from fsl_prepare_fieldmap)
+    """Perform some de-spiking filtering to clean up the edge of the fieldmap.
+
+    Copied from fsl_prepare_fieldmap.
     """
     inputnode = pe.Node(niu.IdentityInterface(fields=['in_file', 'in_mask']), name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(fields=['out_file']), name='outputnode')

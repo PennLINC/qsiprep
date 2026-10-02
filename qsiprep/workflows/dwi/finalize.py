@@ -1,4 +1,5 @@
-"""
+"""Final steps on the preprocessed data.
+
 Final steps on the preprocessed data
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -21,14 +22,18 @@ from ... import config
 from ...data import load as load_data
 from ...interfaces import DerivativesDataSink
 from ...interfaces.bias import N4WeightMask
-from ...interfaces.bids import DerivativesSidecar
+from ...interfaces.bids import DerivativesMaybeDataSink, DerivativesSidecar
 from ...interfaces.dsi_studio import DSIStudioBTable
 from ...interfaces.dwi_merge import MergeFinalConfounds, SplitResampledDWIs
 from ...interfaces.gradients import ExtractB0s
 from ...interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
+from ...interfaces.jacobian import pe_axis_from_direction
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
-from ...interfaces.reports import GradientPlot, SeriesQC
+from ...interfaces.reports import GradientPlot, SDCWarpPlot, SeriesQC
+from ...utils.eddy_config import eddy_applies_gre
+from ...utils.jacobian_provenance import jacobian_provenance_for, t2wreg_is_weighted
+from ...utils.sdc import pe_readout_time, sdc_warp_source
 from .derivatives import init_dwi_derivatives_wf
 from .gradwarp import resolve_gradwarp_plan
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
@@ -59,11 +64,12 @@ def init_dwi_finalize_wf(
     source_file,
     output_prefix,
     acpc_specs,
+    t2w_sdc=False,
+    do_biascorr=True,
     write_derivatives=True,
-    make_intramodal_template=False,
+    make_dwiref=False,
 ):
-    """
-    This workflow controls the resampling parts of the dwi preprocessing workflow.
+    """Build a workflow that runs the resampling parts of the dwi preprocessing workflow.
 
     .. workflow::
         :graph2use: orig
@@ -78,93 +84,94 @@ def init_dwi_finalize_wf(
                                   b0_threshold=100,
                                   low_mem=False,
                                   output_prefix='',
-                                  make_intramodal_template=False,
+                                  make_dwiref=False,
                                   write_local_bvecs=False,
                                   do_biascorr=True,
                                   source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
                                   num_dwi=1)
 
-    **Parameters**
+    Parameters
+    ----------
+    unit : :class:`~qsiplan.adapters.PreprocUnit`
+        The DWI series that were corrected together and the fieldmap that
+        corrected them.
+    name : str
+        Name of workflow
+    source_file : str
+        The file name template used for derivatives and reports.
+    output_prefix : str
+        beginning of the output file name (eg 'sub-1_buds-j')
+    acpc_specs : list of :class:`~qsiprep.utils.spaces.SpaceSpec`
+        The requested ACPC output resolutions. One ``init_dwi_trans_wf`` and one
+        group of derivatives sinks is built per spec. The ``res-`` entity is only
+        written on the derivatives when more than one is requested.
+    t2w_sdc : bool, optional
+        Whether a T2w is available for SDC (honoring --anat-modality and
+        --ignore t2w). Decides, with the plan, whether DIFFPREP's T2Wreg ran,
+        and so whether it left an SDC warp to write and whether that warp
+        is Jacobian-weighted (see ``jacobian_provenance_for``).
+    do_biascorr : bool, optional
+        Whether to apply B1 bias field correction to the resampled DWI series.
+    write_derivatives : bool, optional
+        Is this the final output? If so, write the final derivatives. If these
+        resampled outputs will be combined with other distortion groups at the end,
+        then return the resampled, non-concatenated images
+    make_dwiref : bool, optional
+        Whether an across-session dwiref template was built, in which case a
+        reportlet of this session's b=0 aligned to the template is written.
 
-        output_prefix : str
-            beginning of the output file name (eg 'sub-1_buds-j')
-        acpc_specs : list of SpaceSpec
-            The requested ACPC output resolutions. One ``init_dwi_trans_wf`` and one
-            group of derivatives sinks is built per spec. The ``res-`` entity is only
-            written on the derivatives when more than one is requested.
-        ignore : list
-            Preprocessing steps to skip (eg "fieldmaps")
-        template : str
-            Name of template targeted by ``template`` output space
-        output_dir : str
-            Directory in which to save derivatives
-        pepolar_method : str
-            Either 'DRBUDDI', 'TOPUP' or 'TOPUP+DRBUDDI'. The method for SDC when EPI
-            fieldmaps are used.
-        omp_nthreads : int
-            Maximum number of threads an individual process may use
-        low_mem : bool
-            Write uncompressed .nii files in some cases to reduce memory usage
-        layout : BIDSLayout
-            BIDSLayout structure to enable metadata retrieval
-        write_derivatives: bool
-            Is this the final output? If so, write the final derivatives. If these
-            resampled outputs will be combined with other distortion groups at the end,
-            then return the resampled, non-concatenated images
+    Inputs
+    ------
+    t1_preproc
+        Bias-corrected structural template image
+    t1_brain
+        Skull-stripped ``t1_preproc``
+    t1_mask
+        Mask of the skull-stripped template image
+    t1_output_grid
+        Image to write out DWIs aligned to t1
+    t1_seg
+        Segmentation of preprocessed structural image, including
+        gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
+    t1_2_mni_forward_transform
+        ANTs-compatible affine-and-warp transform file
+    t1_2_mni_reverse_transform
+        ANTs-compatible affine-and-warp transform file (inverse)
+    subjects_dir
+        FreeSurfer SUBJECTS_DIR
+    subject_id
+        FreeSurfer subject ID
+    dwi_sampling_grids
+        A list of NIfTI1 files with the grid spacing and FoV to resample the DWIs
+        to, one per requested ACPC resolution, in ``acpc_specs`` order.
+    b0_ref_image
+        A Nifti of the b0 reference that was used for hmc and sdc
+    dwiref
+        The dwiref image created from all b0 ref images
+    source_file
+        The file name template used for derivatives
+    raw_qc_file
+        The QC file from the DWI data before any preprocessing
+    raw_concatenated
+        The original raw images in a single 4D file
+    carpetplot_data
+        File containing carpetplot data
 
-    **Inputs**
-
-        t1_preproc
-            Bias-corrected structural template image
-        t1_brain
-            Skull-stripped ``t1_preproc``
-        t1_mask
-            Mask of the skull-stripped template image
-        t1_output_grid
-            Image to write out DWIs aligned to t1
-        t1_seg
-            Segmentation of preprocessed structural image, including
-            gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
-        t1_2_mni_forward_transform
-            ANTs-compatible affine-and-warp transform file
-        t1_2_mni_reverse_transform
-            ANTs-compatible affine-and-warp transform file (inverse)
-        subjects_dir
-            FreeSurfer SUBJECTS_DIR
-        subject_id
-            FreeSurfer subject ID
-        dwi_sampling_grids
-            A list of NIfTI1 files with the grid spacing and FoV to resample the DWIs
-            to, one per requested ACPC resolution, in ``acpc_specs`` order.
-        b0_ref_image
-            A Nifti of the b0 reference that was used for hmc and sdc
-        intramodal_template
-            The intramodal template image created from all b0 ref images
-        source_file
-            The file name template used for derivatives
-        raw_qc_file
-            The QC file from the DWI data before any preprocessing
-        raw_concatenated
-            The original raw images in a single 4D file
-        carpetplot_data
-            File containing carpetplot data
-
-    **Outputs**
-
-        dwi_t1
-            dwi series, resampled to T1w space. If write_derivitaves, this is a
-            4d file. Otherwise it's a list of resampled images.
-        dwi_mask_t1
-            dwi series mask in T1w space
-        bvals_t1
-            bvalues of the dwi series
-        bvecs_t1
-            bvecs after aligning to the T1w and resampling
-        local_bvecs_t1
-            voxelwise bvecs accounting for local displacements
-        gradient_table_t1
-            MRTrix-style gradient table
-
+    Outputs
+    -------
+    dwi_t1
+        dwi series, resampled to T1w space. If write_derivitaves, this is a
+        4d file. Otherwise it's a list of resampled images.
+    dwi_mask_t1
+        dwi series mask in T1w space
+    bvals_t1
+        bvalues of the dwi series
+    bvecs_t1
+        bvecs after aligning to the T1w and resampling
+    local_bvecs_t1
+        voxelwise bvecs accounting for local displacements
+    gradient_table_t1
+        MRTrix-style gradient table
     """
     all_dwis = list(unit.dwi_files)
     gradwarp_plan = resolve_gradwarp_plan(unit)
@@ -172,10 +179,66 @@ def init_dwi_finalize_wf(
     mem_gb = {'filesize': 1, 'resampled': 1, 'largemem': 1}
     dwi_nvols = 10
 
-    # TOPUP alone exposes a field in Hz for the final resampling path. Dispatch
-    # from the compiled run, not the deprecated config spelling: those can
-    # disagree after automatic method resolution.
+    # Dispatch from the compiled run, not the deprecated config spelling: those
+    # can disagree after automatic method resolution.
     doing_topup = unit.run.stage_with('topup') is not None
+
+    # Determine information to be used for displacement map.
+    readout_time = pe_readout_time(unit)
+    warp_source, estimation_method = sdc_warp_source(
+        unit, t2w_sdc, gre_in_eddy=eddy_applies_gre(unit)
+    )
+
+    sdc_warp_meta = None
+    if warp_source is not None:
+        layout = (
+            'Stored on the ACPC output grid in the ITK displacement-field layout, with '
+            'vectors in ACPC world coordinates (LPS, mm), so 3D Slicer or ITK-SNAP can '
+            'display it. It is a map for inspection, not a transform for resampling: '
+            'it holds no DWI-to-ACPC coregistration, and qsiprep applies the correction '
+            'in DWI space.'
+        )
+        description = (
+            'Susceptibility (EPI) distortion displacement of the first DWI series. At '
+            'each point of the corrected ACPC image, the vector points to where that '
+            f'tissue appeared in the distorted data. {layout}'
+        )
+        rebuilt_topup = (
+            'the TOPUP off-resonance field, rebuilt as voxel shift = '
+            'field_Hz * TotalReadoutTime along the phase-encoding axis'
+        )
+        if warp_source == 'topup':
+            description += f' Rebuilt from {rebuilt_topup}.'
+        elif warp_source == 'gre_in_eddy':
+            description += (
+                ' Rebuilt from the GRE fieldmap eddy applied, as voxel shift = '
+                'field_Hz * TotalReadoutTime along the phase-encoding axis.'
+            )
+        elif warp_source == 'topup+drbuddi':
+            description += (
+                f" The total correction: {rebuilt_topup}, followed by DRBUDDI's refinement "
+                '(also written on its own as desc-sdcrefinement).'
+            )
+        sdc_warp_meta = {
+            'EstimationMethod': estimation_method,
+            'Units': 'mm',
+            'VectorConvention': 'LPS',
+            'Description': description,
+        }
+
+    sdc_refinement_meta = None
+    if warp_source == 'topup+drbuddi':
+        sdc_refinement_meta = {
+            'EstimationMethod': 'DRBUDDI',
+            'Units': 'mm',
+            'VectorConvention': 'LPS',
+            'Description': (
+                "DRBUDDI's refinement of the first DWI series after eddy had already "
+                "corrected it with TOPUP's field: the part of the total correction "
+                '(desc-sdc) that DRBUDDI changed. Large vectors mark where DRBUDDI '
+                f'disagreed with TOPUP. {layout}'
+            ),
+        }
 
     # Determine resource usage
     for scan in all_dwis:
@@ -194,9 +257,9 @@ def init_dwi_finalize_wf(
         niu.IdentityInterface(
             fields=[
                 'itk_b0_to_t1',
-                'b0_to_intramodal_template_transforms',
-                'intramodal_template_to_t1_affine',
-                'intramodal_template_to_t1_warp',
+                'b0_to_dwiref_transforms',
+                'dwiref_to_t1_affine',
+                'dwiref_to_t1_warp',
                 't1_2_mni_forward_transform',
                 'hmc_optimization_data',
                 'dwi_files',
@@ -204,14 +267,18 @@ def init_dwi_finalize_wf(
                 'bval_files',
                 'bvec_files',
                 'b0_ref_image',
-                'intramodal_template',
-                'intramodal_template_wm_seg',
+                'dwiref',
+                'dwiref_wm_seg',
                 'b0_indices',
                 'dwi_mask',
                 'original_files',
                 'hmc_xforms',
                 'fieldwarps',
                 'gradwarp_field',
+                # Only set by the TORTOISE/DIFFPREP backend.
+                'ec_jacobian_images',
+                # Only set when DRBUDDI ran: TORTOISE's LSR ratios.
+                'sdc_scaling_images',
                 'output_grid',
                 'subjects_dir',
                 'subject_id',
@@ -228,9 +295,10 @@ def init_dwi_finalize_wf(
                 'raw_concatenated',
                 'confounds',
                 'carpetplot_data',
-                'sdc_scaling_images',
                 # Only written out if TOPUP was used
                 'fieldmap_hz',
+                # Transforms to ACPC space, in the order they apply
+                'sdc_transform_files',
             ]
         ),
         name='inputnode',
@@ -249,16 +317,25 @@ def init_dwi_finalize_wf(
                 'gradient_table_t1',
                 'btable_t1',
                 'hmc_optimization_data',
+                # Only defined when Jacobian weighting applied (no --ignore jacobian)
+                # weights: forwarded from the first dwi_trans_wf.
+                'jacobian_weights',
+                'jacobian_weight_index',
+                'jacobian_method',
                 # Only written out if TOPUP was used
                 'fieldmap_hz_t1',
+                # The SDC displacement field on the ACPC grid
+                'sdc_warp_to_template',
+                # TOPUP+DRBUDDI only: DRBUDDI's refinement of the TOPUP field
+                'sdc_refinement_to_template',
             ]
         ),
         name='outputnode',
     )
-    # ``make_intramodal_template`` (not just the config setting) gates this
-    # block: with a single DWI group the template is skipped upstream and the
-    # intramodal inputs are never connected, so these nodes must not exist.
-    if config.workflow.intramodal_template_iters > 0 and make_intramodal_template:
+    # ``make_dwiref`` is the RESOLVED level, not the requested one:
+    # with a single DWI group the template is skipped upstream and the dwiref
+    # inputs are never connected, so these nodes must not exist.
+    if make_dwiref:
         # The reportlet shows one image -- this session's b=0 -- on the template
         # grid before and after its own transform, with white-matter contours
         # from the anatomy held fixed as landmarks.
@@ -280,15 +357,15 @@ def init_dwi_finalize_wf(
             ),
             name='b0_to_im_template',
         )
-        ds_report_intramodal = pe.Node(
+        ds_report_dwiref_coreg = pe.Node(
             DerivativesDataSink(
                 datatype='figures',
-                desc='intramodalcoreg',
+                desc='dwirefcoreg',
                 suffix='dwi',
                 source_file=source_file,
                 base_directory=config.execution.output_dir,
             ),
-            name='ds_report_intramodal',
+            name='ds_report_dwiref_coreg',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
@@ -297,17 +374,17 @@ def init_dwi_finalize_wf(
             # between them is the transform being assessed.
             (inputnode, b0_to_template_grid, [
                 ('b0_ref_image', 'input_image'),
-                ('intramodal_template', 'reference_image'),
+                ('dwiref', 'reference_image'),
             ]),
             (inputnode, b0_aligned_to_template, [
                 ('b0_ref_image', 'input_image'),
-                ('intramodal_template', 'reference_image'),
-                ('b0_to_intramodal_template_transforms', 'transforms'),
+                ('dwiref', 'reference_image'),
+                ('b0_to_dwiref_transforms', 'transforms'),
             ]),
             (b0_to_template_grid, b0_to_im_template, [('output_image', 'before')]),
             (b0_aligned_to_template, b0_to_im_template, [('output_image', 'after')]),
-            (inputnode, b0_to_im_template, [('intramodal_template_wm_seg', 'wm_seg')]),
-            (b0_to_im_template, ds_report_intramodal, [('out_report', 'in_file')]),
+            (inputnode, b0_to_im_template, [('dwiref_wm_seg', 'wm_seg')]),
+            (b0_to_im_template, ds_report_dwiref_coreg, [('out_report', 'in_file')]),
         ])  # fmt:skip
 
     if not write_derivatives and gradwarp_plan is not None:
@@ -334,6 +411,26 @@ def init_dwi_finalize_wf(
         # it now is. The parser rejects this combination; the guard keeps it cheap
         # if that check is ever relaxed.
         acpc_specs = acpc_specs[:1]
+
+    sdc_fields = []  # (outputnode field, report desc, figure title)
+    if warp_source is not None:
+        sdc_fields.append(
+            ('sdc_warp_to_template', 'sdcwarp', f'SDC displacement field, {estimation_method}')
+        )
+    if warp_source == 'topup+drbuddi':
+        sdc_fields.append(
+            (
+                'sdc_refinement_to_template',
+                'sdcrefinement',
+                'DRBUDDI refinement of the TOPUP field',
+            )
+        )
+
+    (
+        jacobian_applied_corrections,
+        jacobian_unmodulated_corrections,
+        jacobian_unmodulated_reason,
+    ) = jacobian_provenance_for(unit, t2w_sdc)
 
     # Fan out the resampling: one dwi_trans_wf (and, when write_derivatives, one
     # group of derivatives sinks) per requested ACPC resolution. The res- entity
@@ -364,12 +461,17 @@ def init_dwi_finalize_wf(
             use_compression=False,
             concatenate=True,
             doing_topup=doing_topup,
+            pe_axis=pe_axis_from_direction(unit.dwi_metadata.get('PhaseEncodingDirection', 'j')),
+            weight_fieldwarps=t2wreg_is_weighted(unit, t2w_sdc),
+            sdc_warp_source=warp_source,
+            sdc_pe_dir=unit.pe_dir,
+            sdc_readout_time=readout_time,
         )
 
         # Apply denoising to the interpolated data if requested
         final_denoise_wf = init_finalize_denoising_wf(
             source_file=source_file,
-            do_biascorr=config.workflow.b1_biascorrect_stage == 'final',
+            do_biascorr=do_biascorr,
             num_dwi_acquisitions=len(all_dwis),
             sink_entities=res_entities,
             name=f'final_denoise_wf{suffix}',
@@ -387,16 +489,17 @@ def init_dwi_finalize_wf(
                 ('hmc_xforms', 'inputnode.hmc_xforms'),
                 ('fieldwarps', 'inputnode.fieldwarps'),
                 ('gradwarp_field', 'inputnode.gradwarp_field'),
+                ('ec_jacobian_images', 'inputnode.ec_jacobian_images'),
+                ('sdc_scaling_images', 'inputnode.sdc_scaling_images'),
                 ('dwi_files', 'inputnode.dwi_files'),
                 (('dwi_sampling_grids', _select_grid, index), 'inputnode.output_grid'),
-                ('b0_to_intramodal_template_transforms',
-                 'inputnode.b0_to_intramodal_template_transforms'),
-                ('intramodal_template_to_t1_affine',
-                 'inputnode.intramodal_template_to_t1_affine'),
-                ('intramodal_template_to_t1_warp',
-                 'inputnode.intramodal_template_to_t1_warp'),
+                ('b0_to_dwiref_transforms',
+                 'inputnode.b0_to_dwiref_transforms'),
+                ('dwiref_to_t1_affine',
+                 'inputnode.dwiref_to_t1_affine'),
+                ('dwiref_to_t1_warp',
+                 'inputnode.dwiref_to_t1_warp'),
                 ('itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
-                ('sdc_scaling_images', 'inputnode.sdc_scaling_images'),
             ]),
             (inputnode, final_denoise_wf, [('confounds', 'inputnode.confounds')]),
             (dwi_trans_wf, final_denoise_wf, [
@@ -410,7 +513,7 @@ def init_dwi_finalize_wf(
             ]),
         ])  # fmt:skip
 
-        if doing_topup:
+        if doing_topup or warp_source == 'gre_in_eddy':
             workflow.connect([
                 (inputnode, dwi_trans_wf, [('fieldmap_hz', 'inputnode.fieldmap_hz')]),
             ])  # fmt:skip
@@ -440,6 +543,18 @@ def init_dwi_finalize_wf(
                     (dwi_trans_wf, outputnode, [
                         ('outputnode.fieldmap_hz_resampled', 'fieldmap_hz_t1'),
                     ]),
+                ])  # fmt:skip
+            if 'jacobian' not in (config.workflow.ignore or []):
+                workflow.connect([
+                    (dwi_trans_wf, outputnode, [
+                        ('outputnode.jacobian_weights', 'jacobian_weights'),
+                        ('outputnode.jacobian_weight_index', 'jacobian_weight_index'),
+                        ('outputnode.jacobian_method', 'jacobian_method'),
+                    ]),
+                ])  # fmt:skip
+            for field, _, _ in sdc_fields:
+                workflow.connect([
+                    (dwi_trans_wf, outputnode, [(f'outputnode.{field}', field)]),
                 ])  # fmt:skip
 
         # The workflow is done with this resolution if we will be concatenating
@@ -485,6 +600,33 @@ def init_dwi_finalize_wf(
                 (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')]),
             ])  # fmt:skip
 
+            # Glyph reportlets to exhibit the effect of SDC in ACPC space. The
+            # displacement is the same field on every grid, so like the
+            # sampling-scheme report these are built once, from the primary
+            # resolution.
+            for field, desc, title in sdc_fields:
+                plot = pe.Node(
+                    SDCWarpPlot(title=f'{title} (ACPC space)'),
+                    name=f'{desc}_plot',
+                    mem_gb=DEFAULT_MEMORY_MIN_GB,
+                )
+                ds_report = pe.Node(
+                    DerivativesDataSink(
+                        datatype='figures',
+                        desc=desc,
+                        suffix='dwi',
+                        source_file=source_file,
+                    ),
+                    name=f'ds_report_{desc}',
+                    run_without_submitting=True,
+                    mem_gb=DEFAULT_MEMORY_MIN_GB,
+                )
+                workflow.connect([
+                    (dwi_trans_wf, plot, [(f'outputnode.{field}', 'warp_file')]),
+                    (final_denoise_wf, plot, [('outputnode.t1_b0_ref', 'b0_ref')]),
+                    (plot, ds_report, [('out_file', 'in_file')]),
+                ])  # fmt:skip
+
         dwi_derivatives_wf = init_dwi_derivatives_wf(
             source_file=source_file,
             resolution=resolution_for_derivatives,
@@ -494,6 +636,11 @@ def init_dwi_finalize_wf(
             # writes it.
             write_hmc_optimization=(index == 0),
             name=f'dwi_derivatives_wf{suffix}',
+            sdc_warp_meta=sdc_warp_meta,
+            sdc_refinement_meta=sdc_refinement_meta,
+            jacobian_applied_corrections=jacobian_applied_corrections,
+            jacobian_unmodulated_corrections=jacobian_unmodulated_corrections,
+            jacobian_unmodulated_reason=jacobian_unmodulated_reason,
         )
         workflow.connect([
             (inputnode, dwi_derivatives_wf, [
@@ -515,6 +662,28 @@ def init_dwi_finalize_wf(
             (btab_t1, dwi_derivatives_wf, [('btable_file', 'inputnode.btable_t1')]),
         ])  # fmt:skip
 
+        if 'jacobian' not in (config.workflow.ignore or []):
+            workflow.connect([
+                (dwi_trans_wf, dwi_derivatives_wf, [
+                    ('outputnode.jacobian_weights', 'inputnode.jacobian_weights'),
+                    ('outputnode.jacobian_weight_index', 'inputnode.jacobian_weight_index'),
+                    ('outputnode.jacobian_method', 'inputnode.jacobian_method'),
+                ]),
+            ])  # fmt:skip
+
+        if sdc_fields:
+            workflow.connect([
+                (inputnode, dwi_derivatives_wf, [
+                    ('sdc_transform_files', 'inputnode.sdc_transform_files'),
+                ]),
+            ])  # fmt:skip
+        for field, _, _ in sdc_fields:
+            workflow.connect([
+                (dwi_trans_wf, dwi_derivatives_wf, [
+                    (f'outputnode.{field}', f'inputnode.{field}'),
+                ]),
+            ])  # fmt:skip
+
         # Combine all the QC measures for a series QC
         series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name=f'series_qc{suffix}')
         ds_series_qc = pe.Node(
@@ -528,6 +697,19 @@ def init_dwi_finalize_wf(
                 **res_entities,
             ),
             name=f'ds_series_qc{suffix}',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+        # Only written when DSI Studio could not measure a QC stage; see SeriesQC.
+        ds_report_qc_warnings = pe.Node(
+            DerivativesMaybeDataSink(
+                datatype='figures',
+                desc='qcwarnings',
+                suffix='dwi',
+                source_file=source_file,
+                **res_entities,
+            ),
+            name=f'ds_report_qc_warnings{suffix}',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
@@ -694,6 +876,7 @@ def init_dwi_finalize_wf(
                 ('outputnode.series_qc_postproc', 't1_qc_postproc'),
             ]),
             (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
+            (series_qc, ds_report_qc_warnings, [('qc_warnings_report', 'in_file')]),
             (dwi_trans_wf, series_qc, [
                 ('outputnode.cnr_map_resampled', 't1_cnr_file'),
             ]),
@@ -778,8 +961,9 @@ def init_finalize_denoising_wf(
     sink_entities=None,
     name='final_denoise_wf',
 ):
-    """
-    Some denoising can only happen after images have been aligned
+    """Build a workflow for the denoising steps that run after alignment.
+
+    Some denoising can only happen after images have been aligned.
     """
     inputnode = pe.Node(
         niu.IdentityInterface(

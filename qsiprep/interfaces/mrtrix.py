@@ -1,11 +1,6 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
-MRtrix3 Interfaces
-~~~~~~~~~~~~~~~~~~
-
-
-"""
+"""MRtrix3 Interfaces."""
 
 import os
 
@@ -28,6 +23,7 @@ from nipype.interfaces.mrtrix3.base import MRTrix3Base, MRTrix3BaseInputSpec
 from nipype.utils.filemanip import fname_presuffix, which
 from niworkflows.viz.utils import compose_view, cuts_from_bbox
 
+from ..utils.misc import format_dwidenoise2_schedule
 from ..viz.utils import plot_denoise
 from .denoise import (
     SeriesPreprocReport,
@@ -37,6 +33,8 @@ from .denoise import (
 )
 
 LOGGER = logging.getLogger('nipype.interface')
+# dwidenoise2 reads its schedule from this file, which DWIDenoise2 writes in the node directory
+_DWIDENOISE2_SCHEDULE_FILE = 'schedule.txt'
 RC3_ROOT = which('average_response')  # Only exists in RC3
 if RC3_ROOT is not None:
     # Use the directory containing average_response
@@ -148,9 +146,7 @@ class DWIDenoiseOutputSpec(SeriesPreprocReportOutputSpec):
 
 
 class DWIDenoise(SeriesPreprocReport, MRTrix3Base):
-    """
-    Denoise DWI data and estimate the noise level based on the optimal
-    threshold for PCA.
+    """Denoise DWI data and estimate the noise level based on the optimal threshold for PCA.
 
     DWI data denoising and noise map estimation by exploiting data redundancy
     in the PCA domain using the prior knowledge that the eigenspectrum of
@@ -187,9 +183,11 @@ class DWIDenoise2InputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
     mask = File(exists=True, desc='mask image')
     # The sliding-window kernel and the subsampling factor are properties of the
     # multi-resolution schedule rather than command-line options
-    schedule = traits.Str(
+    schedule = traits.List(
+        traits.Dict,
+        minlen=1,
         argstr='-schedule %s',
-        desc='name of a bundled noise estimation schedule, or a path to a schedule file',
+        desc='rows of a noise estimation schedule, written to schedule.txt at run time',
     )
     datatype = traits.Enum(
         'float32',
@@ -385,9 +383,7 @@ class DWIDenoise2OutputSpec(SeriesPreprocReportOutputSpec):
 
 
 class DWIDenoise2(SeriesPreprocReport, MRTrix3Base):
-    """
-    Denoise DWI data and estimate the noise level based on the optimal
-    threshold for PCA.
+    """Denoise DWI data and estimate the noise level based on the optimal threshold for PCA.
 
     DWI data denoising and noise map estimation by exploiting data redundancy
     in the PCA domain using the prior knowledge that the eigenspectrum of
@@ -414,7 +410,16 @@ class DWIDenoise2(SeriesPreprocReport, MRTrix3Base):
             # -fslgrad takes both files, so format them here rather than passing a tuple
             # to a File trait, which nipype would try to shell-quote as a single value.
             return spec.argstr % (value, self.inputs.bval_file)
+        if name == 'schedule':
+            # The command runs in the node directory, where _run_interface writes the rows
+            return spec.argstr % _DWIDENOISE2_SCHEDULE_FILE
         return super()._format_arg(name, spec, value)
+
+    def _run_interface(self, runtime):
+        if isdefined(self.inputs.schedule):
+            with open(os.path.join(runtime.cwd, _DWIDENOISE2_SCHEDULE_FILE), 'w') as fobj:
+                fobj.write(format_dwidenoise2_schedule(self.inputs.schedule))
+        return super()._run_interface(runtime)
 
     def _get_plotting_images(self):
         input_dwi = load_img(self.inputs.in_file)
@@ -468,12 +473,13 @@ class DWIBiasCorrectOutputSpec(SeriesPreprocReportOutputSpec):
 
 
 class DWIBiasCorrect(SeriesPreprocReport, MRTrix3Base):
-    """
-    Perform B1 field inhomogeneity correction for a DWI volume series.
+    """Perform B1 field inhomogeneity correction for a DWI volume series.
+
     For more information, see
     <https://mrtrix.readthedocs.io/en/latest/reference/scripts/dwibiascorrect.html>
-    Example
-    -------
+
+    Examples
+    --------
     >>> import nipype.interfaces.mrtrix3 as mrt
     >>> bias_correct = mrt.DWIBiasCorrect()
     >>> bias_correct.inputs.in_file = 'dwi.mif'
@@ -486,6 +492,7 @@ class DWIBiasCorrect(SeriesPreprocReport, MRTrix3Base):
     _cmd = 'dwibiascorrect'
     input_spec = DWIBiasCorrectInputSpec
     output_spec = DWIBiasCorrectOutputSpec
+    _report_labels = ('Uncorrected', 'Bias corrected')
 
     def _format_arg(self, name, spec, value):
         if name in ('ants_b', 'ants_c', 'ants_s'):

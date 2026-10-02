@@ -45,7 +45,12 @@ EXPECTED_DWI_ENTITIES = {
         'suffix': 'dwi',
         'extension': '.bvec',
     },
-    'ds_t1_b0_ref': {'space': 'ACPC', 'suffix': 'dwiref', 'extension': '.nii.gz'},
+    'ds_t1_b0_ref': {
+        'space': 'ACPC',
+        'desc': 'preproc',
+        'suffix': 'dwiref',
+        'extension': '.nii.gz',
+    },
     'ds_dwi_mask_t1': {
         'space': 'ACPC',
         'desc': 'brain',
@@ -266,8 +271,11 @@ def test_each_trans_wf_is_handed_its_own_output_grid(tmp_path):
 
 
 def test_grid_metadata_reads_its_own_output_grid(tmp_path):
-    """The sidecar's Resolution key comes from this node, so a mis-indexed grid
-    would report one resolution's voxel size on another's derivatives."""
+    """Test that each grid_metadata node reads its own output grid.
+
+    The sidecar's Resolution key comes from this node, so a mis-indexed grid
+    would report one resolution's voxel size on another's derivatives.
+    """
     wf, _ = _build_finalize(tmp_path, ['acpc:res-2mm', 'acpc:res-1p5mm'])
     selected = _grid_selections(wf, 'grid_file')
     assert selected == {
@@ -392,7 +400,7 @@ HISTORICAL_DWI_ACPC_PATHS = {
     'ds_bvecs_t1': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_desc-preproc_dwi.bvec',
     'ds_gradient_table_t1': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_desc-preproc_dwi.b',
     'ds_btable_t1': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_desc-preproc_dwi.b_table.txt',
-    'ds_t1_b0_ref': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_dwiref.nii.gz',
+    'ds_t1_b0_ref': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_desc-preproc_dwiref.nii.gz',
     'ds_dwi_mask_t1': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_desc-brain_mask.nii.gz',
     'ds_cnr_map_t1': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_model-MAPMRI_dwimap.nii.gz',
     'ds_tsnr': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_dwimap.nii.gz',
@@ -474,8 +482,11 @@ def test_single_acpc_dwi_paths_are_the_historical_ones(dwi_config):
 
 
 def test_two_acpc_resolutions_write_distinct_paths(tmp_path):
-    """Two resolutions, two files. Without a res- entity in the patterns, the
-    second resampling pass simply overwrites the first."""
+    """Test that two ACPC resolutions write two files.
+
+    Without a res- entity in the patterns, the second resampling pass simply
+    overwrites the first.
+    """
     wf, _ = _build_finalize(tmp_path, ['acpc:res-2mm', 'acpc:res-1p5mm'])
     paths = render_datasink_paths(collect_datasink_entities(wf, full_names=True), DWI_BASE)
 

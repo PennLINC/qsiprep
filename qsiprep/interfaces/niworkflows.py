@@ -1,11 +1,6 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
-Image tools interfaces
-~~~~~~~~~~~~~~~~~~~~~~
-
-
-"""
+"""Image tools interfaces."""
 
 from mimetypes import guess_type
 
@@ -90,9 +85,7 @@ _niw_norm.create_cfm = _create_cfm
 
 
 class dMRIPlot:
-    """
-    Generates the dMRI Summary Plot
-    """
+    """Generate the dMRI Summary Plot."""
 
     def __init__(
         self,
@@ -122,7 +115,7 @@ class dMRIPlot:
         self.confounds = confounds
 
     def plot(self, figure=None):
-        """Main plotter"""
+        """Draw the main dMRI summary plot."""
         sns.set_style('whitegrid')
         sns.set_context('paper', font_scale=0.8)
 
@@ -165,31 +158,35 @@ def plot_sliceqc(
     lut=None,
     tr=None,
 ):
-    """
-    Plot an image representation of voxel intensities across time also know
+    """Plot an image representation of voxel intensities across time.
+
+    This is also known
     as the "carpet plot" or "Power plot". See Jonathan Power Neuroimage
     2017 Jul 1; 154:150-158.
 
     Parameters
     ----------
-        slice_data: 2d array
-            errors in each slice for each volume
-        nperslice: 1d array
-            number of voxels included in each slice
-        axes : matplotlib axes, optional
-            The axes used to display the plot. If None, the complete
-            figure is used.
-        title : string, optional
-            The title displayed on the figure.
-        output_file : string, or None, optional
-            The name of an image file to export the plot to. Valid extensions
-            are .png, .pdf, .svg. If output_file is not None, the plot
-            is saved to a file, and the display is closed.
-        tr : float , optional
-            Specify the TR, if specified it uses this value. If left as None,
-            # Frames is plotted instead of time.
+    slice_data : numpy.ndarray
+        2D array of errors in each slice for each volume
+    nperslice : numpy.ndarray
+        1D array of the number of voxels included in each slice
+    size : tuple of int, optional
+        Figure size. Currently unused.
+    subplot : matplotlib.gridspec.SubplotSpec or None, optional
+        The subplot used to display the plot. If None, a new single-cell
+        GridSpec is created.
+    title : str, optional
+        The title displayed on the figure.
+    output_file : str or None, optional
+        The name of an image file to export the plot to. Valid extensions
+        are .png, .pdf, .svg. If output_file is not None, the plot
+        is saved to a file, and the display is closed.
+    lut : object, optional
+        Lookup table. Currently unused.
+    tr : float, optional
+        Specify the TR, if specified it uses this value. If left as None,
+        # Frames is plotted instead of time.
     """
-
     # Define TR and number of frames
     notr = False
     if tr is None:
@@ -564,10 +561,10 @@ def _mat2itk(args):
 
 
 def _applytfms(args):
-    """
-    Applies ANTs' antsApplyTransforms to the input image.
+    """Apply ANTs' antsApplyTransforms to the input image.
+
     All inputs are zipped in one tuple to make it digestible by
-    multiprocessing's map
+    multiprocessing's map.
     """
     import nibabel as nb
     from nipype.utils.filemanip import fname_presuffix
@@ -599,10 +596,7 @@ def _applytfms(args):
 
 
 def _arrange_xfms(transforms, num_files, tmp_folder):
-    """
-    Convenience method to arrange the list of transforms that should be applied
-    to each input file
-    """
+    """Arrange the list of transforms that should be applied to each input file."""
     base_xform = ['#Insight Transform File V1.0', '#Transform 0']
     # Initialize the transforms matrix
     xfms_T = []

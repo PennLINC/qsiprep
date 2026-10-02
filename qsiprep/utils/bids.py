@@ -22,9 +22,7 @@
 #
 #     https://www.nipreps.org/community/licensing/
 #
-"""
-Utilities to handle BIDS inputs
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+"""Utilities to handle BIDS inputs.
 
 Fetch some test data
 
@@ -32,7 +30,6 @@ Fetch some test data
     >>> from niworkflows import data
     >>> data_root = data.get_bids_examples(variant='BIDS-examples-1-enh-ds054')
     >>> os.chdir(data_root)
-
 """
 
 import json
@@ -47,6 +44,7 @@ import numpy as np
 import pandas as pd
 from bids import BIDSLayout
 from bids.layout import Query
+from nipype.utils.filemanip import split_filename
 
 from .. import config
 
@@ -104,7 +102,7 @@ class BIDSWarning(RuntimeWarning):
 
 
 def _norm(path):
-    """Absolute, lexically-normalized path that does *not* follow symlinks.
+    """Return an absolute, lexically-normalized path that does *not* follow symlinks.
 
     ``Path.resolve()`` follows symlinks, which moves a git-annex/datalad data
     file (a symlink into ``.git/annex/objects``) out of its BIDS directory, so
@@ -121,12 +119,12 @@ def find_bids_root(path):
 
     Parameters
     ----------
-    path : :obj:`str` or :obj:`pathlib.Path`
+    path : str or pathlib.Path
         A file inside a BIDS dataset.
 
     Returns
     -------
-    :obj:`pathlib.Path` or None
+    pathlib.Path or None
         The closest ancestor directory holding a ``dataset_description.json``,
         or ``None`` if ``path`` is not inside a BIDS dataset.
     """
@@ -142,16 +140,16 @@ def _parse_bids_name(path):
 
     Parameters
     ----------
-    path : :obj:`str` or :obj:`pathlib.Path`
+    path : str or pathlib.Path
         A BIDS-style filename. It need not exist.
 
     Returns
     -------
-    entities : :obj:`dict`
+    entities : dict
         Mapping of entity key to entity value, e.g. ``{'sub': '01', 'part': 'mag'}``.
-    suffix : :obj:`str` or None
+    suffix : str or None
         The BIDS suffix, e.g. ``'dwi'``. ``None`` if the name carries no suffix.
-    extension : :obj:`str`
+    extension : str
         Everything from the first period of the filename onward, e.g. ``'.nii.gz'``.
     """
     name = Path(path).name
@@ -202,14 +200,14 @@ def find_associated_files(path, extension):
 
     Parameters
     ----------
-    path : :obj:`str` or :obj:`pathlib.Path`
+    path : str or pathlib.Path
         The data file whose associated files are wanted.
-    extension : :obj:`str`
+    extension : str
         The extension to look for, including the leading period, e.g. ``'.json'``.
 
     Returns
     -------
-    :obj:`list` of :obj:`pathlib.Path`
+    list of pathlib.Path
         Applicable files ordered from the dataset root down to ``path``'s own
         directory, so the last element is the most specific one.
 
@@ -258,12 +256,12 @@ def load_sidecar(path):
 
     Parameters
     ----------
-    path : :obj:`str` or :obj:`pathlib.Path`
+    path : str or pathlib.Path
         The data file whose metadata is wanted.
 
     Returns
     -------
-    :obj:`dict`
+    dict
         The merged metadata. Empty if no sidecar applies.
     """
     metadata = {}
@@ -278,12 +276,12 @@ def find_bval(path):
 
     Parameters
     ----------
-    path : :obj:`str` or :obj:`pathlib.Path`
+    path : str or pathlib.Path
         The data file whose b-values are wanted.
 
     Returns
     -------
-    :obj:`str` or None
+    str or None
         Path to the most specific applicable ``.bval`` file, or ``None`` if
         there is not one.
     """
@@ -297,12 +295,12 @@ def find_bvec(path):
 
     Parameters
     ----------
-    path : :obj:`str` or :obj:`pathlib.Path`
+    path : str or pathlib.Path
         The data file whose b-vectors are wanted.
 
     Returns
     -------
-    :obj:`str` or None
+    str or None
         Path to the most specific applicable ``.bvec`` file, or ``None`` if
         there is not one.
     """
@@ -311,13 +309,103 @@ def find_bvec(path):
     return str(bvec_files[-1]) if bvec_files else None
 
 
-def collect_participants(bids_dir, participant_label=None, strict=False, bids_validate=True):
+def _get_concatenated_bids_name(all_dwis):
+    """Build a display name for a list of dwi files, for reportlet source files.
+
+    Output naming proper lives in :func:`qsiplan.models.derive_output_name`;
+    this common-prefix fallback only names reportlet source files when the
+    caller has no output prefix (:func:`get_source_file`).
     """
-    List the participants under the BIDS root and checks that participants
+    # If a single file, use its name, otherwise use the common prefix
+    if len(all_dwis) > 1:
+        no_runs = []
+        for dwi in all_dwis:
+            no_runs.append(
+                '_'.join([part for part in dwi.split('_') if not part.startswith('run')])
+            )
+
+        input_fname = os.path.commonprefix(no_runs)
+        fname = split_filename(input_fname)[1]
+        parts = fname.split('_')
+        full_parts = [part for part in parts if not part.endswith('-')]
+        fname = '_'.join(full_parts)
+
+    else:
+        input_fname = all_dwis[0]
+        fname = split_filename(input_fname)[1]
+
+    if fname.endswith('_dwi'):
+        fname = fname[:-4]
+
+    return fname.replace('.', '').replace(' ', '')
+
+
+def get_source_file(dwi_files, output_prefix=None, suffix=''):
+    """Build the source file name the reportlets need.
+
+    The reportlets need a source file. This file might not exist in the input data.
+    """
+    if output_prefix is None:
+        output_prefix = _get_concatenated_bids_name(dwi_files)
+    return str(Path(dwi_files[0]).parent / output_prefix) + suffix + '.nii.gz'
+
+
+def check_output_names_are_bids_unique(preproc_units):
+    """Fail when two units' derivatives would render to the same BIDS path.
+
+    QSIPlan uniquifies same-named correction units with a ``+N`` suffix
+    (``_unique_id``), which is an in-memory key rather than a BIDS entity, so
+    ``sub-01`` and ``sub-01+2`` can parse identically and every per-unit
+    derivative of the second silently overwrites the first.
+
+    The path checked is the one the datasinks use, built with
+    :func:`get_source_file`. That matters: the subject and session entity
+    patterns are path-anchored, so parsing a synthetic probe directory gives a
+    different, and under pybids >= 0.19 wrongly permissive, answer.
+
+    Parameters
+    ----------
+    preproc_units : list of :class:`qsiplan.adapters.PreprocUnit`
+        Every correction unit for one subject.
+
+    Raises
+    ------
+    RuntimeError
+        If two units' output names parse to the same entity set.
+
+    Notes
+    -----
+    No rule about ``+`` is encoded. The installed pybids is asked what it actually
+    does, so this stays correct across the 0.19 entity-pattern change and also
+    catches collisions that have nothing to do with ``+``.
+    """
+    from bids.layout import parse_file_entities
+
+    seen = {}
+    for unit in preproc_units:
+        source_file = get_source_file(list(unit.dwi_files), unit.output_name, suffix='_dwi')
+        key = tuple(sorted(parse_file_entities(source_file).items()))
+        if key in seen:
+            raise RuntimeError(
+                f'Output names {seen[key]!r} and {unit.output_name!r} render to the '
+                f'same BIDS name ({key}), so their derivatives would overwrite each '
+                'other. This is usually QSIPlan\'s "+N" uniquifier reaching a '
+                'filename, where its distinguishing character is not a BIDS entity. '
+                'Please report the dataset.'
+            )
+        seen[key] = unit.output_name
+
+
+def collect_participants(bids_dir, participant_label=None, strict=False, bids_validate=True):
+    """List the participants under the BIDS root and check the requested ones exist.
+
+    List the participants under the BIDS root and check that participants
     designated with the participant_label argument exist in that folder.
 
     Returns the list of participants to be finally processed.
 
+    Examples
+    --------
     Requesting all subjects in a BIDS directory root:
 
     >>> collect_participants('ds114')
@@ -343,8 +431,6 @@ def collect_participants(bids_dir, participant_label=None, strict=False, bids_va
     Traceback (most recent call last):
     qsiprep.utils.bids.BIDSError:
     ...
-
-
     """
     if isinstance(bids_dir, BIDSLayout):
         layout = bids_dir
@@ -695,7 +781,8 @@ def parse_bids_for_age_months(
     subject_id: str,
     session_label: str | None = None,
 ) -> int | None:
-    """
+    """Query the BIDS metadata files for participant age, in chronological months.
+
     Given a BIDS root, query the BIDS metadata files for participant age, and return in
     chronological months.
 
@@ -729,7 +816,6 @@ def parse_bids_for_age_months(
     about our expectations at
 
         https://www.nipreps.org/community/licensing/
-
     """
     if subject_id.startswith('sub-'):
         subject_id = subject_id[4:]
@@ -760,7 +846,7 @@ def parse_bids_for_age_months(
 
     sessions_tsv = subject_level / f'{subject}_sessions.tsv'
     if sessions_tsv.exists() and session_label is not None:
-        age = _get_age_from_tsv(sessions_tsv, index_column='session_label', index_value=session)
+        age = _get_age_from_tsv(sessions_tsv, index_column='session_id', index_value=session)
 
     if age is not None:
         return age
@@ -806,7 +892,6 @@ def _get_age_from_tsv(
     about our expectations at
 
         https://www.nipreps.org/community/licensing/
-
     """
     df = pd.read_csv(str(bids_tsv), sep='\t')
     age_col = None
@@ -877,7 +962,6 @@ def _get_age_units(bids_json: Path) -> ty.Literal['weeks', 'months', 'years', Fa
     about our expectations at
 
         https://www.nipreps.org/community/licensing/
-
     """
     try:
         data = json.loads(bids_json.read_text())
@@ -896,17 +980,6 @@ def _get_age_units(bids_json: Path) -> ty.Literal['weeks', 'months', 'years', Fa
 
 def age_to_months(age: int | float, units: ty.Literal['weeks', 'months', 'years']) -> int:
     """Convert a given age, in either "weeks", "months", or "years", into months.
-
-    >>> age_to_months(1, "years")
-    12
-    >>> age_to_months(0.5, "years")
-    6
-    >>> age_to_months(2, "weeks")
-    0
-    >>> age_to_months(3, "weeks")
-    1
-    >>> age_to_months(8, "months")
-    8
 
     Notes
     -----
@@ -934,6 +1007,18 @@ def age_to_months(age: int | float, units: ty.Literal['weeks', 'months', 'years'
 
         https://www.nipreps.org/community/licensing/
 
+    Examples
+    --------
+    >>> age_to_months(1, "years")
+    12
+    >>> age_to_months(0.5, "years")
+    6
+    >>> age_to_months(2, "weeks")
+    0
+    >>> age_to_months(3, "weeks")
+    1
+    >>> age_to_months(8, "months")
+    8
     """
     WEEKS_TO_MONTH = 0.230137
     YEARS_TO_MONTH = 12
@@ -980,7 +1065,6 @@ def cohort_by_months(template, months):
     about our expectations at
 
         https://www.nipreps.org/community/licensing/
-
     """
     ages = COHORT_KEY.get(template)
     if ages is None:

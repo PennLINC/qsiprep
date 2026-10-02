@@ -108,7 +108,10 @@ def test_topup_inputs_ranked_by_tortoise_scores(topup_inputs, tmp_path, monkeypa
 
 
 def test_borrowed_b0s_never_evict_natives(topup_inputs, tmp_path, monkeypatch):
-    """A same-PE borrowed b=0 may only fill slots natives can't."""
+    """Test that borrowed b=0s never evict native ones.
+
+    A same-PE borrowed b=0 may only fill slots natives can't.
+    """
     rng = np.random.default_rng(3)
     donor = _write_nii(tmp_path / 'sub-02_dir-AP_epi.nii.gz', [rng.uniform(100, 200, size=SHAPE)])
     sidecars = dict(topup_inputs['sidecars'])
@@ -176,7 +179,10 @@ def test_borrowed_b0s_never_evict_natives(topup_inputs, tmp_path, monkeypatch):
 
 
 def test_synb0_relaxes_the_distortion_group_gate(topup_inputs, tmp_path, monkeypatch):
-    """One measured group fails plain TOPUP but passes when SynB0 joins later."""
+    """Test that SynB0 relaxes the distortion-group gate.
+
+    One measured group fails plain TOPUP but passes when SynB0 joins later.
+    """
 
     def fake_report(b0_files, prefix, num_threads=1):
         n = len(b0_files)

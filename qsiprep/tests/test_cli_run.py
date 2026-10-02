@@ -1,4 +1,4 @@
-"""Tests for the command line interface"""
+"""Tests for the command line interface."""
 
 import pytest
 from niworkflows.utils.testing import generate_bids_skeleton
@@ -259,47 +259,39 @@ def _test_processing_list(tmpdir, name, skeleton, reference, expected):
     assert config.execution.processing_list == expected, config
 
 
-def test_anat_only_session_discovery_uses_anatomical_modality(tmp_path):
-    """Anatomical-only runs can select sessions without DWI data."""
+def test_session_filter_without_dwi_is_rejected(tmp_path, capsys):
+    """Test that a session filter matching only anatomical data is an error."""
     from qsiprep import config
     from qsiprep.cli.parser import parse_args
 
     bids_dir = tmp_path / 'bids'
-    generate_bids_skeleton(
-        str(bids_dir),
-        {
-            '01': [
-                {
-                    'session': 'anatonly',
-                    'anat': [{'suffix': 'T1w', 'metadata': {'EchoTime': 1}}],
-                }
-            ]
-        },
-    )
+    anat_only_session = {
+        'session': 'anatonly',
+        'anat': [{'suffix': 'T1w', 'metadata': {'EchoTime': 1}}],
+    }
+    generate_bids_skeleton(str(bids_dir), {'01': [long['01'][0], anat_only_session]})
 
     work_dir = tmp_path / 'work'
     config.from_dict({'bids_dir': str(bids_dir), 'work_dir': str(work_dir)}, init=True)
-    parse_args(
-        [
-            str(bids_dir),
-            str(tmp_path / 'out'),
-            'participant',
-            '--participant-label',
-            '01',
-            '--session-label',
-            'anatonly',
-            '--anat-only',
-            '--subject-anatomical-reference',
-            'sessionwise',
-            '--output-resolution',
-            '2',
-            '--work-dir',
-            str(work_dir),
-            '--skip-bids-validation',
-        ],
-    )
+    with pytest.raises(SystemExit):
+        parse_args(
+            [
+                str(bids_dir),
+                str(tmp_path / 'out'),
+                'participant',
+                '--participant-label',
+                '01',
+                '--session-label',
+                'anatonly',
+                '--output-spaces',
+                'acpc:res-2mm',
+                '--work-dir',
+                str(work_dir),
+                '--skip-bids-validation',
+            ],
+        )
 
-    assert config.execution.processing_list == [['01', ['anatonly']]]
+    assert 'No DWI files found with session filter' in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(
@@ -373,17 +365,14 @@ def _dest(option):
 
 
 # (deprecated flag, the option it enables, the value that option is set to)
-FORWARDED_FLAGS = [
-    ('--dwi-only', '--anat-modality', 'none'),
-    ('--dwi-no-biascorr', '--b1-biascorrect-stage', 'none'),
-]
+FORWARDED_FLAGS = []
 
 
 @pytest.mark.parametrize(('flag', 'option', 'value'), FORWARDED_FLAGS)
 def test_forwarded_flag_warns_and_enables_its_replacement(
     minimal_args, capsys, flag, option, value
 ):
-    """A deprecated flag warns, names its replacement, and turns it on."""
+    """Test that a deprecated flag warns, names its replacement, and turns it on."""
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -401,7 +390,10 @@ def test_forwarded_flag_warns_and_enables_its_replacement(
 
 @pytest.mark.parametrize(('flag', 'option', 'value'), FORWARDED_FLAGS)
 def test_forwarded_flag_agrees_with_an_explicit_replacement(minimal_args, flag, option, value):
-    """Asking for the same thing twice is not a conflict, in either order."""
+    """Test that a forwarded flag agrees with an explicit replacement.
+
+    Asking for the same thing twice is not a conflict, in either order.
+    """
     from qsiprep.cli.parser import _build_parser
 
     for extra_args in ([flag, option, value], [option, value, flag]):
@@ -413,14 +405,16 @@ def test_forwarded_flag_agrees_with_an_explicit_replacement(minimal_args, flag, 
 def test_forwarded_flag_conflicting_with_its_replacement_is_an_error(
     minimal_args, capsys, flag, option, value
 ):
-    """Silently picking a winner would hide half of what the user asked for."""
+    """Test that a forwarded flag conflicting with its replacement is an error.
+
+    Silently picking a winner would hide half of what the user asked for.
+    """
     from qsiprep.cli.parser import _build_parser
 
     # A value the flag does not forward to
     other = {
         'anat_modality': 'T2w',
         'subject_anatomical_reference': 'sessionwise',
-        'b1_biascorrect_stage': 'legacy',
     }[_dest(option)]
 
     for extra_args in ([flag, option, other], [option, other, flag]):
@@ -431,7 +425,7 @@ def test_forwarded_flag_conflicting_with_its_replacement_is_an_error(
 
 @pytest.mark.parametrize(('flag', 'option', 'value'), FORWARDED_FLAGS)
 def test_replacement_option_is_not_deprecated(minimal_args, capsys, flag, option, value):
-    """The replacement option is silent and takes effect."""
+    """Test that the replacement option is silent and takes effect."""
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -442,7 +436,7 @@ def test_replacement_option_is_not_deprecated(minimal_args, capsys, flag, option
 
 
 def test_prefer_dedicated_fmaps_is_removed(minimal_args, capsys):
-    """The deprecated flag is no longer accepted by the parser."""
+    """Test that the parser no longer accepts --prefer-dedicated-fmaps."""
     from qsiprep.cli.parser import _build_parser
 
     with pytest.raises(SystemExit):
@@ -451,50 +445,11 @@ def test_prefer_dedicated_fmaps_is_removed(minimal_args, capsys):
     assert 'unrecognized arguments: --prefer-dedicated-fmaps' in capsys.readouterr().err
 
 
-@pytest.mark.parametrize('value', ['Rigid', 'Affine'])
-def test_b0_to_t1w_transform_forwards_its_value(minimal_args, capsys, value):
-    """The renamed option keeps working, and sets the new one."""
-    from qsiprep.cli.parser import _build_parser
-
-    opts = _build_parser().parse_args([*minimal_args, '--b0-to-t1w-transform', value])
-
-    warning = capsys.readouterr().err
-    assert '--b0-to-t1w-transform' in warning
-    assert '--b0-to-anat-transform' in warning
-    assert opts.b0_to_anat_transform == value
-    assert not hasattr(opts, 'b0_to_t1w_transform')
-
-
-@pytest.mark.parametrize('value', ['Rigid', 'Affine'])
-def test_b0_to_anat_transform_is_not_deprecated(minimal_args, capsys, value):
-    from qsiprep.cli.parser import _build_parser
-
-    opts = _build_parser().parse_args([*minimal_args, '--b0-to-anat-transform', value])
-
-    assert capsys.readouterr().err == ''
-    assert opts.b0_to_anat_transform == value
-
-
-def test_b0_to_anat_transform_defaults_to_rigid(minimal_args):
-    from qsiprep.cli.parser import _build_parser
-
-    opts = _build_parser().parse_args(minimal_args)
-    assert opts.b0_to_anat_transform == 'Rigid'
-
-
-def test_b0_transform_options_are_mutually_exclusive(minimal_args, capsys):
-    """Both name the same setting, so giving both is ambiguous."""
-    from qsiprep.cli.parser import _build_parser
-
-    with pytest.raises(SystemExit):
-        _build_parser().parse_args(
-            [*minimal_args, '--b0-to-anat-transform', 'Rigid', '--b0-to-t1w-transform', 'Affine']
-        )
-    assert 'not allowed with' in capsys.readouterr().err
-
-
 def test_ignore_accepts_shims_and_fov(minimal_args):
-    """The grouping honors both; they must be reachable from the CLI."""
+    """Test that --ignore accepts 'shims' and 'fov'.
+
+    The grouping honors both; they must be reachable from the CLI.
+    """
     from qsiprep.cli.parser import _build_parser
 
     opts = _build_parser().parse_args([*minimal_args, '--ignore', 'shims', 'fov'])
@@ -530,7 +485,10 @@ def test_hmc_method_shoreline_gets_model_and_drbuddi(minimal_args):
 
 
 def test_hmc_method_tortoise_auto_resolves_drbuddi(minimal_args):
-    """The legacy TOPUP default never produced a working DIFFPREP run."""
+    """Test that --hmc-method tortoise resolves the SDC method to DRBUDDI.
+
+    The legacy TOPUP default never produced a working DIFFPREP run.
+    """
     opts = _parse(minimal_args, '--hmc-method', 'tortoise')
     assert opts.sdc_method == 'drbuddi'
 
@@ -615,7 +573,10 @@ def restore_shoreline_config():
 def test_shoreline_config_survives_a_config_round_trip(
     minimal_args, tmp_path, restore_shoreline_config
 ):
-    """A Path must be written as a path string, not the literal "PosixPath('...')"."""
+    """Test that the SHORELine config survives a config round trip.
+
+    A Path must be written as a path string, not the literal "PosixPath('...')".
+    """
     from pathlib import Path
 
     import toml
@@ -649,8 +610,8 @@ def _parse_with_config_file(tmp_path, toml_text, *extra):
             'participant',
             '--participant-label',
             '01',
-            '--output-resolution',
-            '2',
+            '--output-spaces',
+            'acpc:res-2mm',
             '--work-dir',
             str(work_dir),
             '--skip-bids-validation',
@@ -663,7 +624,10 @@ def _parse_with_config_file(tmp_path, toml_text, *extra):
 
 
 def test_config_file_reload_drops_stale_shoreline_settings(tmp_path, restore_shoreline_config):
-    """An old eddy config.toml carried hmc_transform/shoreline_iters; they must not survive."""
+    """Test that reloading a config file drops stale SHORELine settings.
+
+    An old eddy config.toml carried hmc_transform/shoreline_iters; they must not survive.
+    """
     config = _parse_with_config_file(
         tmp_path,
         '[workflow]\nhmc_model = "eddy"\nhmc_transform = "Affine"\nshoreline_iters = 2\n',
@@ -713,6 +677,107 @@ def test_config_file_reload_uses_command_line_shoreline_config(tmp_path, restore
     assert config.workflow.hmc_transform == 'Rigid'
 
 
+def _dwidenoise2_json(tmp_path, name='dwidenoise2.json', **settings):
+    import json
+
+    path = tmp_path / name
+    path.write_text(json.dumps(settings))
+    return str(path)
+
+
+def test_dwidenoise2_config_reaches_the_namespace(minimal_args, tmp_path):
+    from pathlib import Path
+
+    cfg = _dwidenoise2_json(tmp_path, decomposition='selfadjoint')
+    opts = _parse(minimal_args, '--denoise-method', 'dwidenoise2', '--dwidenoise2-config', cfg)
+    assert opts.denoise_method == 'dwidenoise2'
+    assert opts.dwidenoise2_config == Path(cfg).absolute()
+
+
+def test_dwidenoise2_config_defaults_to_none(minimal_args):
+    assert _parse(minimal_args, '--denoise-method', 'dwidenoise2').dwidenoise2_config is None
+
+
+@pytest.mark.parametrize(
+    'method_args',
+    [[], ['--denoise-method', 'dwidenoise'], ['--denoise-method', 'patch2self']],
+)
+def test_dwidenoise2_config_requires_dwidenoise2(minimal_args, tmp_path, capsys, method_args):
+    cfg = _dwidenoise2_json(tmp_path)
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, *method_args, '--dwidenoise2-config', cfg)
+    assert '--dwidenoise2-config requires --denoise-method dwidenoise2' in (
+        capsys.readouterr().err
+    )
+
+
+def test_invalid_dwidenoise2_config_is_a_parse_error(minimal_args, tmp_path, capsys):
+    cfg = _dwidenoise2_json(tmp_path, schedule=[{'kernel': 'rank'}])
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--denoise-method', 'dwidenoise2', '--dwidenoise2-config', cfg)
+    assert 'first schedule row' in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    'spec', ['dwidenoise2;demodulate:apc', 'dwidenoise2;schedule:vlarge', 'dwidenoise;x:y']
+)
+def test_semicolon_denoise_parameters_are_rejected(minimal_args, capsys, spec):
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--denoise-method', spec)
+    assert 'invalid choice' in capsys.readouterr().err
+
+
+@pytest.fixture
+def restore_dwidenoise2_config():
+    """Yield qsiprep.config, restoring the dwidenoise2 settings that parse_args writes."""
+    from qsiprep import config
+
+    saved = (config.workflow.denoise_method, config.workflow.dwidenoise2_config)
+    yield config
+    config.workflow.denoise_method, config.workflow.dwidenoise2_config = saved
+
+
+def test_dwidenoise2_config_survives_a_config_round_trip(
+    minimal_args, tmp_path, monkeypatch, restore_dwidenoise2_config
+):
+    """Test that the dwidenoise2 config survives a config round trip.
+
+    A relative path is stored as an absolute path string, not "PosixPath('...')".
+    """
+    from pathlib import Path
+
+    import toml
+
+    config = restore_dwidenoise2_config
+    _dwidenoise2_json(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    opts = _parse(
+        minimal_args, '--denoise-method', 'dwidenoise2', '--dwidenoise2-config', 'dwidenoise2.json'
+    )
+    config.workflow.load({'dwidenoise2_config': opts.dwidenoise2_config}, init=False)
+    dumped = toml.dumps({'workflow': config.workflow.get()})
+    assert 'PosixPath(' not in dumped
+    config.workflow.dwidenoise2_config = None
+    config.workflow.load(toml.loads(dumped)['workflow'], init=False)
+    assert config.workflow.dwidenoise2_config == tmp_path / 'dwidenoise2.json'
+    assert Path(config.workflow.dwidenoise2_config).is_absolute()
+
+
+def test_config_file_reload_drops_stale_dwidenoise2_config(tmp_path, restore_dwidenoise2_config):
+    """Test that reloading a config file drops a stale dwidenoise2 config.
+
+    A --config-file must not supply a dwidenoise2 config the command line did not give.
+    """
+    old_json = _dwidenoise2_json(tmp_path, name='old.json', decomposition='selfadjoint')
+    config = _parse_with_config_file(
+        tmp_path,
+        f'[workflow]\ndenoise_method = "dwidenoise2"\ndwidenoise2_config = "{old_json}"\n',
+        '--denoise-method',
+        'dwidenoise2',
+    )
+    assert config.workflow.dwidenoise2_config is None
+
+
 def test_sdc_anat_reference_parses(minimal_args):
     assert _parse(minimal_args).sdc_anat_reference == 'none'
     opts = _parse(minimal_args, '--sdc-anat-reference', 't2w')
@@ -754,6 +819,194 @@ def test_t1w_derived_references_require_t1w_modality(minimal_args, capsys, refer
     )
 
 
+def test_force_gre_sdc_after_eddy_is_off_and_warns_of_removal(minimal_args, capsys):
+    assert 'gre-sdc-after-eddy' not in _parse(minimal_args).force
+    capsys.readouterr()
+    assert 'gre-sdc-after-eddy' in _parse(minimal_args, '--force', 'gre-sdc-after-eddy').force
+    assert 'scheduled for removal' in capsys.readouterr().err
+
+
+def test_force_gre_sdc_after_eddy_requires_eddy(minimal_args, capsys):
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--hmc-method', 'tortoise', '--force', 'gre-sdc-after-eddy')
+    assert '--force gre-sdc-after-eddy requires --hmc-method eddy' in capsys.readouterr().err
+
+
 def test_shoreline_selection_warns_of_removal(minimal_args, capsys):
     _parse(minimal_args, '--hmc-method', 'shoreline')
     assert 'scheduled for removal' in capsys.readouterr().err
+
+
+def test_parser_defaults_to_stable_mrtrix(tmp_path):
+    """Test that the parser defaults to a released MRtrix3, so existing runs are unchanged."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    opts = parser.parse_args(
+        [str(bids), str(out), 'participant', '--output-spaces', 'acpc:res-2mm']
+    )
+    assert opts.mrtrix_version == 'stable'
+
+
+def test_parser_accepts_dev_mrtrix(tmp_path):
+    """Test that the parser accepts ``dev`` as the MRtrix3 version.
+
+    ``dev`` selects the development branch, which is what complex mrdegibbs needs.
+    """
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    opts = parser.parse_args(
+        [
+            str(bids),
+            str(out),
+            'participant',
+            '--mrtrix-version',
+            'dev',
+            '--output-spaces',
+            'acpc:res-2mm',
+        ]
+    )
+    assert opts.mrtrix_version == 'dev'
+
+
+def test_parser_rejects_unknown_mrtrix_version(tmp_path):
+    """Test that version strings are rejected; the flag names installations, not releases."""
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                str(bids),
+                str(out),
+                'participant',
+                '--mrtrix-version',
+                '3.0.8',
+                '--output-spaces',
+                'acpc:res-2mm',
+            ]
+        )
+
+
+def _cli_base(tmp_path):
+    """Return minimal valid positional args for the parser.
+
+    ``bids_dir`` goes through ``_path_exists`` (``qsiprep/cli/parser.py``), which
+    calls ``parser.error`` when the directory is missing -- so both directories
+    must exist, or a test asserting ``SystemExit`` passes because the path was
+    invalid rather than because the option under test was removed.
+    """
+    bids_dir = tmp_path / 'bids'
+    bids_dir.mkdir()
+    out_dir = tmp_path / 'out'
+    out_dir.mkdir()
+    return [str(bids_dir), str(out_dir), 'participant', '--output-spaces', 'acpc:res-2mm']
+
+
+def test_cli_base_is_itself_valid(tmp_path):
+    """Test that the base CLI arguments are themselves valid.
+
+    Guard the guard: every option test below is meaningless if this fails.
+    """
+    from qsiprep.cli.parser import _build_parser
+
+    _build_parser().parse_args(_cli_base(tmp_path))
+
+
+def test_dwi2anat_dof_replaces_b0_to_anat_transform(tmp_path):
+    """Test that --dwi2anat-dof replaces --b0-to-anat-transform.
+
+    The option changed name, type and spelling of its values.
+    """
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    base = _cli_base(tmp_path)
+
+    assert parser.parse_args([*base, '--dwi2anat-dof', '12']).dwi2anat_dof == 12
+    assert parser.parse_args(base).dwi2anat_dof == 6
+
+    # 9 is deliberately not offered: antsRegistration has no 9-DOF transform.
+    for bad in (
+        ['--dwi2anat-dof', '9'],
+        ['--b0-to-anat-transform', 'Rigid'],
+        ['--b0-to-t1w-transform', 'Rigid'],
+    ):
+        with pytest.raises(SystemExit):
+            parser.parse_args([*base, *bad])
+
+
+def test_dwiref_construction_flags_replace_the_old_spellings(tmp_path):
+    """Test that the dwiref construction flags replace the old spellings.
+
+    The old spellings are gone; the new ones parse.
+    """
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    base = _cli_base(tmp_path)
+
+    args = parser.parse_args(
+        [*base, '--dwiref-construction-iters', '3', '--dwiref-construction-transform', 'Affine']
+    )
+    assert args.dwiref_construction_iters == 3
+    assert args.dwiref_construction_transform == 'Affine'
+
+    defaults = parser.parse_args(base)
+    # iters is a pure parameter now, defaulting to the value that reproduces the
+    # previous behaviour; --dwiref-definition is what toggles the feature.
+    assert defaults.dwiref_construction_iters == 2
+    assert defaults.dwiref_construction_transform == 'BSplineSyN'
+
+    for removed in (
+        ['--intramodal-template-iters', '2'],
+        ['--intramodal-template-transform', 'Affine'],
+    ):
+        with pytest.raises(SystemExit):
+            parser.parse_args([*base, *removed])
+
+
+def test_dwiref_definition_parses(tmp_path):
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    base = _cli_base(tmp_path)
+
+    assert parser.parse_args(base).dwiref_definition == 'distortion-group'
+    subject = parser.parse_args([*base, '--dwiref-definition', 'subject'])
+    assert subject.dwiref_definition == 'subject'
+
+    # `session` is the deferred remainder of #1114.
+    with pytest.raises(SystemExit):
+        parser.parse_args([*base, '--dwiref-definition', 'session'])
+
+
+def test_dwiref_construction_iters_defaults_to_two(tmp_path):
+    from qsiprep.cli.parser import _build_parser
+
+    assert _build_parser().parse_args(_cli_base(tmp_path)).dwiref_construction_iters == 2
+
+
+@pytest.mark.parametrize('bad', ['0', '1', '-1'])
+def test_dwiref_construction_iters_rejects_values_below_two(tmp_path, bad):
+    """Test that --dwiref-construction-iters rejects values below two.
+
+    The nonlinear branch passes iters straight to mvtc2 with no floor of its own.
+
+    Only the linear branch clamps, so once iters stops being the feature toggle an
+    unvalidated 0 or negative would reach antsMultivariateTemplateConstruction2.
+    """
+    from qsiprep.cli.parser import _build_parser
+
+    with pytest.raises(SystemExit):
+        _build_parser().parse_args([*_cli_base(tmp_path), '--dwiref-construction-iters', bad])

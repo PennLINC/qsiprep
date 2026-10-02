@@ -21,6 +21,7 @@ from niworkflows.interfaces.reportlets.registration import SimpleBeforeAfterRPT
 from ... import config
 from ...interfaces import DerivativesDataSink
 from ...interfaces.gradunwarp import CreateNonlinearityDisplacementMap, MaskWarpDimensions
+from ...utils.jacobian_provenance import describe_jacobian_modulation
 from .resampling import _listify
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -59,7 +60,7 @@ def _image_type_tags(metadata):
 
 
 def _warp_dim_for(metadata):
-    """Residual spatial distortion implied by one run's ImageType.
+    """Return the residual spatial distortion implied by one run's ImageType.
 
     DIS3D wins over DIS2D when both are present: it is the more-corrected
     claim, so it leaves the smaller residual.
@@ -73,7 +74,7 @@ def _warp_dim_for(metadata):
 
 
 def _is_ge(metadata):
-    """True when the DICOM Manufacturer field names GE.
+    """Check whether the DICOM Manufacturer field names GE.
 
     Free text from DICOM: 'GE MEDICAL SYSTEMS', 'SIEMENS', 'Philips Medical
     Systems'. Drives the z-origin shift TORTOISE applies for GE coefficients.
@@ -149,7 +150,7 @@ def _guard_ge_field(plan, unit):
 
 
 def _forced_warp_dim():
-    """``(warp_dim, flag)`` pinned by ``--force``, or ``(None, None)``.
+    """Return the ``(warp_dim, flag)`` pinned by ``--force``, or ``(None, None)``.
 
     ``validate_gradient_flags`` rejects the two ``--force gradwarp{1,3}D``
     values together at parse time; the check is repeated here because
@@ -262,7 +263,7 @@ _FORCED_CORRECTION_TEXT = {
 
 
 def _resampling_sentence():
-    """How many times the data were interpolated, which depends on the backend.
+    """Describe how many times the data were interpolated, which depends on the backend.
 
     Notes
     -----
@@ -289,13 +290,19 @@ def _resampling_sentence():
     )
 
 
-def gradwarp_boilerplate(warp_dim, basis='metadata'):
-    """Methods text for the resolved plan and the selected HMC backend.
+#: Whether *QSIPrep* itself Jacobian-modulated the gradwarp field, keyed by
+#: whether ``jacobian`` is in ``config.workflow.ignore``. A ``DIS3D`` unit builds no field
+#: (see :func:`gradwarp_boilerplate`), so there is nothing to modulate and
+#: this text is never reached for it.
 
-    A ``DIS3D`` unit gets no displacement field, so it gets no resampling
-    sentence either -- there is nothing to have been combined with anything.
-    A forced plan cannot attribute the correction it applied to the scanner
-    tags, since it did not read them.
+
+def gradwarp_boilerplate(warp_dim, basis='metadata'):
+    """Return methods text for the resolved plan and the selected HMC backend.
+
+    A ``DIS3D`` unit gets no displacement field, so it gets no resampling or
+    Jacobian sentence either -- there is nothing to have been combined with
+    anything, or modulated. A forced plan cannot attribute the correction it
+    applied to the scanner tags, since it did not read them.
     """
     if warp_dim is None:
         return _CORRECTION_TEXT[None]
@@ -303,7 +310,7 @@ def gradwarp_boilerplate(warp_dim, basis='metadata'):
         text = _FORCED_CORRECTION_TEXT.get(warp_dim, _CORRECTION_TEXT[warp_dim])
     else:
         text = _CORRECTION_TEXT[warp_dim]
-    return text + _resampling_sentence()
+    return text + _resampling_sentence() + describe_jacobian_modulation()
 
 
 #: Report phrasing for each resolved state.
@@ -315,7 +322,7 @@ _REPORT_TEXT = {
 
 
 def describe_gradient_correction(plan):
-    """One-line description of the resolved plan, for the HTML report."""
+    """Return a one-line description of the resolved plan, for the HTML report."""
     if plan is None:
         return 'none'
     if plan.basis == 'forced':
@@ -324,7 +331,7 @@ def describe_gradient_correction(plan):
 
 
 def is_displacement_field(gradient_file):
-    """True when ``--gradient-file`` is a ready-made ITK field, not coefficients.
+    """Check whether ``--gradient-file`` is a ready-made ITK field, not coefficients.
 
     TORTOISE dispatches on the extension itself (``TORTOISE.cxx:1943-2023``),
     but the standalone ``CreateNonlinearityDisplacementMap`` does not: it *is*
@@ -462,7 +469,7 @@ def init_gradwarp_wf(unit, name='gradwarp_wf'):
 
 
 def _sdc_interpolation():
-    """Interpolator for the gradwarp resampling nodes.
+    """Return the interpolator for the gradwarp resampling nodes.
 
     Matches the adjacent per-volume ``ApplyTransforms`` in ``hmc_sdc.py``, so
     ``--sloppy`` speeds these up the same way it speeds up everything else.
@@ -510,6 +517,18 @@ def connect_gradwarp_sdc_reference(workflow, inputnode, source, source_fields, b
     neighbours: sinc-interpolating a binary image would leave it non-binary.
     """
     ref_field, brain_field, mask_field = source_fields
+    if getattr(b0_sdc_wf, 'gradwarp_mode', 'reference') == 'transport':
+        # A GRE warp is estimated on the raw reference and transported afterwards
+        # (see ``_connect_transported_warp`` in fieldmap/base.py), so the references stay raw.
+        workflow.connect([
+            (inputnode, b0_sdc_wf, [('gradwarp_field', 'inputnode.gradwarp_field')]),
+            (source, b0_sdc_wf, [
+                (ref_field, 'inputnode.b0_ref'),
+                (brain_field, 'inputnode.b0_ref_brain'),
+                (mask_field, 'inputnode.b0_mask'),
+            ]),
+        ])  # fmt:skip
+        return
     smooth = _sdc_interpolation()
     for name, source_field, dest, interpolation in (
         ('gradwarp_sdc_inputs', ref_field, 'inputnode.b0_ref', smooth),

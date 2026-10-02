@@ -20,7 +20,7 @@
 #
 #     https://www.nipreps.org/community/licensing/
 #
-"""Stripped out routines for Sentry"""
+"""Stripped out routines for Sentry."""
 
 import os
 import re
@@ -66,7 +66,6 @@ USELESS_OPTS = [
     'bids_database_dir',
     'bids_filter_file',
     'use_plugin',
-    'fs_license_file',
     'work_dir',
 ]
 
@@ -198,11 +197,11 @@ def before_send(event, hints):
 
 
 def _chunks(string, length=CHUNK_SIZE):
-    """
-    Split a string into smaller chunks.
+    """Split a string into smaller chunks.
 
+    Examples
+    --------
     >>> list(_chunks('some longer string.', length=3))
     ['som', 'e l', 'ong', 'er ', 'str', 'ing', '.']
-
     """
     return [string[i : i + length] for i in range(0, len(string), length)]

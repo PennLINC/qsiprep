@@ -1,11 +1,6 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
-Image tools interfaces
-~~~~~~~~~~~~~~~~~~~~~~
-
-
-"""
+"""Image tools interfaces."""
 
 import contextlib
 import os
@@ -215,7 +210,7 @@ class _GetTemplateOutputSpec(BaseInterfaceInputSpec):
 
 
 def _templateflow_lock():
-    """A cross-process lock over the shared TemplateFlow cache.
+    """Return a cross-process lock over the shared TemplateFlow cache.
 
     TemplateFlow streams a download straight into its final cache path
     (``client._s3_get`` opens it ``'wb'`` and writes as the response arrives, with

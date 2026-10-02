@@ -12,7 +12,7 @@ from packaging.version import Version
 
 from ... import config
 from ...data import load as load_data
-from ...interfaces.images import ExtractWM
+from ...interfaces.images import ExtractWM, ReferenceGridAtSpacing
 from ...interfaces.itk import ACPCReport, AffineToRigid
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -38,11 +38,11 @@ def init_rotation_search_wf(transform='Rigid', name='rotation_search_wf'):
 
     Parameters
     ----------
-    transform : str
+    transform : str, optional
         'Rigid', 'Similarity' or 'Affine': the transform ``antsAI`` optimizes
         at each candidate orientation. Use 'Rigid' between images of the same
         subject and 'Similarity' against a template, where scale is unknown.
-    name : str
+    name : str, optional
         Name of workflow (default: ``rotation_search_wf``)
 
     Inputs
@@ -120,7 +120,7 @@ def init_structural_to_b0_alignment_wf(name='structural_to_b0_alignment_wf'):
 
     Parameters
     ----------
-    name : str
+    name : str, optional
         Name of workflow (default: ``structural_to_b0_alignment_wf``)
 
     Inputs
@@ -133,7 +133,18 @@ def init_structural_to_b0_alignment_wf(name='structural_to_b0_alignment_wf'):
     Outputs
     -------
     structural_aligned
-        The structural image resampled onto the b=0 reference grid
+        The structural image resampled into the b=0 reference frame, on the
+        b=0 field of view but at the structural image's own voxel size
+
+    Notes
+    -----
+    The structural keeps its own voxel size on purpose. DRBUDDI sizes its
+    working grid from the structural image's spacing, refining it by 1.3x
+    until it is finer than 1 mm: a T2w handed over at the DWI's 1.7 mm is
+    refined to 0.77 mm, which more than doubles the voxel count of a 1 mm
+    T2w and exhausts an 8 GB GPU at the full-resolution stages. Resampling
+    onto the DWI grid also discards the anatomical detail the structural
+    metric is there to provide.
     """
     workflow = Workflow(name=name)
     inputnode = pe.Node(
@@ -142,8 +153,10 @@ def init_structural_to_b0_alignment_wf(name='structural_to_b0_alignment_wf'):
     outputnode = pe.Node(niu.IdentityInterface(fields=['structural_aligned']), name='outputnode')
 
     # fixed=b0: antsAI's transform then maps b0-space points to structural
-    # space, which is exactly what resampling onto the b0 grid needs
+    # space, which is exactly what resampling into the b0 frame needs
     rotation_search_wf = init_rotation_search_wf(transform='Rigid')
+    # The b0's field of view and orientation, at the structural's voxel size
+    reference_grid = pe.Node(ReferenceGridAtSpacing(), name='reference_grid')
     resample_structural = pe.Node(
         ants.ApplyTransforms(dimension=3, interpolation='LanczosWindowedSinc'),
         name='resample_structural',
@@ -154,10 +167,12 @@ def init_structural_to_b0_alignment_wf(name='structural_to_b0_alignment_wf'):
             ('b0_ref', 'inputnode.fixed_image'),
             ('structural_image', 'inputnode.moving_image'),
         ]),
-        (inputnode, resample_structural, [
-            ('structural_image', 'input_image'),
-            ('b0_ref', 'reference_image'),
+        (inputnode, reference_grid, [
+            ('b0_ref', 'fov_image'),
+            ('structural_image', 'spacing_image'),
         ]),
+        (inputnode, resample_structural, [('structural_image', 'input_image')]),
+        (reference_grid, resample_structural, [('out_file', 'reference_image')]),
         (rotation_search_wf, resample_structural, [
             ('outputnode.initial_transform', 'transforms'),
         ]),
@@ -169,7 +184,8 @@ def init_structural_to_b0_alignment_wf(name='structural_to_b0_alignment_wf'):
 def init_b0_to_anat_registration_wf(
     write_report=True, transform_type='Rigid', name='b0_anat_coreg'
 ):
-    """
+    """Build a workflow that registers a reference b0 image to T1 space.
+
     Calculates the registration between a reference b0 image and T1-space
     using `antsRegistration`, initialized by an ``antsAI`` rotation search
     so that large orientation differences between the dMRI and the
@@ -186,16 +202,12 @@ def init_b0_to_anat_registration_wf(
 
     Parameters
     ----------
-    mem_gb : float
-        Size of DWI file in GB
-    omp_nthreads : int
-        Maximum number of threads an individual process may use
-    name : str
-        Name of workflow (default: ``bold_reg_wf``)
-    transform_type : str
-        Either "Rigid" or "Affine"
-    write_report : bool
+    write_report : bool, optional
         Should a reportlet be written?
+    transform_type : str, optional
+        Either "Rigid" or "Affine"
+    name : str, optional
+        Name of workflow (default: ``b0_anat_coreg``)
 
     Inputs
     ------
@@ -224,7 +236,6 @@ def init_b0_to_anat_registration_wf(
         Boolean indicating whether BBR was rejected (mri_coreg registration returned)
     report
         svg reportlet for the coregistration
-
     """
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -246,6 +257,13 @@ def init_b0_to_anat_registration_wf(
     )
 
     workflow = Workflow(name=name)
+    workflow.__desc__ = f"""\
+The b=0 reference was registered to the anatomical reference with
+`antsRegistration` (ANTs {ants.Registration().version}) using a
+{'rigid' if transform_type == 'Rigid' else 'affine'} transform, initialized by
+a global search over rotations with `antsAI` so that large differences in head
+orientation between the dMRI and the anatomical scan are recovered.
+"""
 
     # Defines a coregistration operation
     coreg = ants.Registration()
@@ -313,8 +331,9 @@ def init_b0_to_anat_registration_wf(
 
 
 def init_direct_b0_acpc_wf(write_report=True, name='b0_anat_coreg'):
-    """
-    Re-orients a b=0 image directly to AC-PC. A full affine registration is run,
+    """Build a workflow that re-orients a b=0 image directly to AC-PC.
+
+    A full affine registration is run,
     but only the rigid (translation + rotation) part is included.
 
     .. workflow::
@@ -326,45 +345,38 @@ def init_direct_b0_acpc_wf(write_report=True, name='b0_anat_coreg'):
                                     omp_nthreads=1,
                                     write_report=False)
 
-    **Parameters**
-        baby_mode : bool
-            Use the infant t1w brain as the reference volume
-        mem_gb : float
-            Size of DWI file in GB
-        omp_nthreads : int
-            Maximum number of threads an individual process may use
-        name : str
-            Name of workflow (default: ``bold_reg_wf``)
-        transform_type : str
-            Either "Rigid" or "Affine"
-        write_report : bool
-            Should a reportlet be written?
+    Parameters
+    ----------
+    write_report : bool, optional
+        Should a reportlet be written?
+    name : str, optional
+        Name of workflow (default: ``b0_anat_coreg``)
 
-    **Inputs**
+    Inputs
+    ------
+    ref_b0_brain
+        Reference image to which DWI series is aligned
+        If ``fieldwarp == True``, ``ref_bold_brain`` should be unwarped
+    t1_brain
+        Standard space brain, either adult or infant template
+    t1_seg
+        Segmentation of preprocessed structural image, including
+        gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
+    subjects_dir
+        FreeSurfer SUBJECTS_DIR
+    subject_id
+        FreeSurfer subject ID
 
-        ref_b0_brain
-            Reference image to which DWI series is aligned
-            If ``fieldwarp == True``, ``ref_bold_brain`` should be unwarped
-        t1_brain
-            Standard space brain, either adult or infant template
-        t1_seg
-            Segmentation of preprocessed structural image, including
-            gray-matter (GM), white-matter (WM) and cerebrospinal fluid (CSF)
-        subjects_dir
-            FreeSurfer SUBJECTS_DIR
-        subject_id
-            FreeSurfer subject ID
-
-    **Outputs**
-
-        itk_b0_to_t1
-            Affine transform from ``ref_bold_brain`` to T1 space (ITK format)
-        itk_t1_to_b0
-            Affine transform from T1 space to DWI space (ITK format)
-        coreg_metric
-            Mattes score from the coregistration
-        report
-            svg reportlet for the coregistration
+    Outputs
+    -------
+    itk_b0_to_t1
+        Affine transform from ``ref_bold_brain`` to T1 space (ITK format)
+    itk_t1_to_b0
+        Affine transform from T1 space to DWI space (ITK format)
+    coreg_metric
+        Mattes score from the coregistration
+    report
+        svg reportlet for the coregistration
     """
     inputnode = pe.Node(
         niu.IdentityInterface(

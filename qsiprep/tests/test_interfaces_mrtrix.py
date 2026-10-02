@@ -78,7 +78,7 @@ def test_dwidenoise2(datasets, tmp_path_factory):
     ['shape', 'radius', 'extent', 'aspect_ratio', 'minvoxels', 'subsample', 'onepass'],
 )
 def test_dwidenoise2_has_no_kernel_options(tmp_path, kernel_option):
-    """The kernel and subsampling come from the schedule, not from command-line options."""
+    """Test that the kernel and subsampling come from the schedule, not command-line options."""
     in_file = tmp_path / 'dwi.nii.gz'
     in_file.touch()
 
@@ -86,18 +86,77 @@ def test_dwidenoise2_has_no_kernel_options(tmp_path, kernel_option):
         mrtrix.DWIDenoise2(in_file=in_file, **{kernel_option: 1})
 
 
-def test_dwidenoise2_passes_schedule(tmp_path):
-    """Select a bundled noise estimation schedule by name."""
+_SCHEDULE_ROWS = [
+    {'spatial_subsample': 8, 'kernel': 'aspect=2.0'},
+    {'spatial_subsample': (2, 2, 1), 'kernel': 'rank', 'update_noise': False},
+]
+
+
+def test_dwidenoise2_passes_schedule(tmp_path, monkeypatch):
+    """Test that -schedule points at the file in the working directory without writing it."""
+    monkeypatch.chdir(tmp_path)
     in_file = tmp_path / 'dwi.nii.gz'
     in_file.touch()
 
-    interface = mrtrix.DWIDenoise2(in_file=in_file, schedule='vlarge')
+    interface = mrtrix.DWIDenoise2(in_file=in_file, schedule=_SCHEDULE_ROWS)
 
-    assert '-schedule vlarge' in interface.cmdline
+    assert '-schedule schedule.txt' in interface.cmdline
+    assert not (tmp_path / 'schedule.txt').exists()
+
+
+def test_dwidenoise2_writes_schedule_at_run_time(tmp_path, monkeypatch):
+    """Test that schedule rows are written to the execution directory before the command runs."""
+    from nipype.interfaces.base import CommandLine
+    from nipype.interfaces.base.support import Bunch
+
+    from qsiprep.utils.misc import format_dwidenoise2_schedule
+
+    calls = []
+
+    def fake_run(self, runtime, correct_return_codes=(0,)):
+        calls.append((tmp_path / 'node' / 'schedule.txt').read_text())
+        return runtime
+
+    monkeypatch.setattr(CommandLine, '_run_interface', fake_run)
+    node_dir = tmp_path / 'node'
+    node_dir.mkdir()
+    in_file = tmp_path / 'dwi.nii.gz'
+    in_file.touch()
+
+    interface = mrtrix.DWIDenoise2(in_file=in_file, schedule=_SCHEDULE_ROWS)
+    interface._run_interface(Bunch(cwd=str(node_dir)))
+
+    assert calls == [format_dwidenoise2_schedule(_SCHEDULE_ROWS)]
+
+
+def test_dwidenoise2_without_schedule_writes_nothing(tmp_path, monkeypatch):
+    from nipype.interfaces.base import CommandLine
+    from nipype.interfaces.base.support import Bunch
+
+    monkeypatch.setattr(
+        CommandLine, '_run_interface', lambda self, runtime, correct_return_codes=(0,): runtime
+    )
+    in_file = tmp_path / 'dwi.nii.gz'
+    in_file.touch()
+
+    interface = mrtrix.DWIDenoise2(in_file=in_file)
+    interface._run_interface(Bunch(cwd=str(tmp_path)))
+
+    assert '-schedule' not in interface.cmdline
+    assert not (tmp_path / 'schedule.txt').exists()
+
+
+def test_dwidenoise2_rejects_a_schedule_name(tmp_path):
+    """Test that bundled schedule names are no longer passed through."""
+    in_file = tmp_path / 'dwi.nii.gz'
+    in_file.touch()
+
+    with pytest.raises(TraitError):
+        mrtrix.DWIDenoise2(in_file=in_file, schedule='vlarge')
 
 
 def test_dwidenoise2_formats_fslgrad(tmp_path):
-    """Pass the bvec and bval files to dwidenoise2 as a single -fslgrad option."""
+    """Test that the bvec and bval files are passed to dwidenoise2 as a single -fslgrad option."""
     in_file = tmp_path / 'dwi.nii.gz'
     bvec_file = tmp_path / 'dwi.bvec'
     bval_file = tmp_path / 'dwi.bval'
@@ -118,7 +177,7 @@ def test_dwidenoise2_formats_fslgrad(tmp_path):
     [('stable', '.', '-ants_'), ('dev', '_', '-ants.')],
 )
 def test_dwibiascorrect_ants_option_spelling(tmp_path, mrtrix_version, separator, rejected):
-    """Spell the N4 options the way the selected MRtrix3 expects.
+    """Test that the N4 options are spelled the way the selected MRtrix3 expects.
 
     3.0.x uses -ants.b and rejects the underscore form; the development branch
     renamed them to -ants_b and rejects the dot form. These options are emitted on
@@ -145,7 +204,7 @@ def test_dwibiascorrect_ants_option_spelling(tmp_path, mrtrix_version, separator
 
 
 def test_dwibiascorrect_defaults_to_stable_spelling(tmp_path):
-    """A bare DWIBiasCorrect() matches the released MRtrix3, like the CLI default."""
+    """Test that a bare DWIBiasCorrect() matches the released MRtrix3, like the CLI default."""
     in_file = tmp_path / 'dwi.nii.gz'
     in_file.touch()
 
@@ -155,7 +214,7 @@ def test_dwibiascorrect_defaults_to_stable_spelling(tmp_path):
 
 
 def test_mrdegibbs_dimensionality_is_optional(tmp_path):
-    """Leave -dimensionality off unless it is set, so the default stays 2D slice-wise."""
+    """Test that -dimensionality is left off unless set, so the default stays 2D slice-wise."""
     in_file = tmp_path / 'dwi.nii.gz'
     in_file.touch()
 
@@ -164,7 +223,7 @@ def test_mrdegibbs_dimensionality_is_optional(tmp_path):
 
 
 def test_mrdegibbs_report_handles_complex_input(monkeypatch, tmp_path):
-    """Generate the unringing report from complex-valued data, using the magnitude.
+    """Test that the unringing report uses the magnitude of complex-valued data.
 
     mrdegibbs on MRtrix3's development branch emits complex data when it is given
     complex data. nibabel's get_fdata() does not raise on a complex image: it emits a
@@ -315,7 +374,7 @@ def _dwibiascorrect_option_is_accepted(tmp_path, flag):
 def test_dwibiascorrect_options_are_accepted_by_the_real_binary(
     monkeypatch, tmp_path, mrtrix_version
 ):
-    """Ask the selected dwibiascorrect whether it knows the options QSIPrep passes.
+    """Test that the selected dwibiascorrect accepts the options QSIPrep passes.
 
     This is the only test that can catch the -ants.b/-ants_b break, because it needs
     a real MRtrix3 to parse the option. A bogus-option control proves the probe can
@@ -352,3 +411,17 @@ def test_dwibiascorrect_options_are_accepted_by_the_real_binary(
         tmp_path, '-ants.TOTALLYBOGUS'
     )
     assert not bogus_accepted, bogus_output
+
+
+def test_series_report_labels_match_the_operation():
+    """Test that each series reportlet names its own before/after states.
+
+    The bias correction report used to inherit the denoising labels, so its
+    flicker read "Raw Image" and "Denoised" while showing N4's effect.
+    """
+    from qsiprep.interfaces.dipy import Patch2Self
+
+    assert mrtrix.DWIDenoise._report_labels == ('Raw Image', 'Denoised')
+    assert mrtrix.DWIDenoise2._report_labels == ('Raw Image', 'Denoised')
+    assert Patch2Self._report_labels == ('Raw Image', 'Denoised')
+    assert mrtrix.DWIBiasCorrect._report_labels == ('Uncorrected', 'Bias corrected')

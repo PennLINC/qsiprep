@@ -521,7 +521,7 @@ def test_infant_accepts_an_explicit_infant_template(tmp_path):
 
 
 def test_legacy_infant_replaces_rather_than_augments_the_template(tmp_path):
-    """main discarded --anatomical-template under --infant; the shim must too."""
+    """Main discarded --anatomical-template under --infant; the shim must too."""
     from qsiprep.cli.parser import _apply_output_space_deprecations
 
     opts = _parse(

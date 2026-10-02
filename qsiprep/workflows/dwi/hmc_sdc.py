@@ -1,4 +1,5 @@
-"""
+"""Orchestrating the dwi-preprocessing workflow.
+
 Orchestrating the dwi-preprocessing workflow
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -16,8 +17,8 @@ from ... import config
 from ...interfaces.gradients import CombineMotions, GradientRotation, SliceQC
 from ...interfaces.images import SplitDWIsBvals, TSplit
 from ...utils.gpu import gpu_enabled
-from ..fieldmap.base import init_sdc_wf
-from ..fieldmap.drbuddi import init_drbuddi_wf
+from ..fieldmap.base import init_gre_seed_wf, init_sdc_wf
+from ..fieldmap.drbuddi import init_drbuddi_wf, seeds_from_gre
 from .gradwarp import (
     connect_gradwarp_sdc_reference,
     connect_gradwarp_sdc_volumes,
@@ -34,7 +35,8 @@ def init_qsiprep_hmcsdc_wf(
     t2w_sdc,
     acpc_anchor,
 ):
-    """
+    """Build a workflow that runs qsiprep's head motion and distortion correction.
+
     This workflow controls the head motion correction and susceptibility distortion
     correction parts of the qsiprep workflow. These parts have been combined because they're
     also combined in the eddy pipeline.
@@ -198,10 +200,17 @@ def init_qsiprep_hmcsdc_wf(
     ])  # fmt:skip
 
     if unit.is_pepolar:
+        # No TOPUP-in-eddy carve-out for this backend (see the note above
+        # has_gradwarp): every SDC warp SHORELine produces, including
+        # DRBUDDI's, is carried as to_dwi_ref_warps and reaches
+        # ComposeJacobianWeights externally (recorded by
+        # jacobian_provenance.jacobian_provenance_for, not here).
+        gre_seed = seeds_from_gre(unit)
         drbuddi_wf = init_drbuddi_wf(
             unit=unit,
             t2w_sdc=t2w_sdc,
             use_cuda=gpu_enabled('drbuddi'),
+            initialize_from_field=gre_seed,
         )
 
         # apply the head motion correction transforms
@@ -265,6 +274,19 @@ def init_qsiprep_hmcsdc_wf(
             workflow.connect([
                 (apply_hmc_transforms, drbuddi_wf, [('output_image', 'inputnode.dwi_files')]),
             ])  # fmt:skip
+        if gre_seed:
+            gre_seed_wf = init_gre_seed_wf(unit, has_gradwarp, source_file, use='drbuddi')
+            workflow.connect([
+                (dwi_hmc_wf, gre_seed_wf, [
+                    ('outputnode.final_template', 'inputnode.b0_template'),
+                ]),
+                (inputnode, gre_seed_wf, [
+                    ('t1_brain', 'inputnode.t1_brain'),
+                    ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
+                    ('gradwarp_field', 'inputnode.gradwarp_field'),
+                ]),
+                (gre_seed_wf, drbuddi_wf, [('outputnode.out_warp', 'inputnode.initial_field')]),
+            ])  # fmt:skip
 
         return workflow
 
@@ -279,9 +301,12 @@ def init_qsiprep_hmcsdc_wf(
             unit.method,
             source_file,
         )
+        # init_sdc_wf's out_warp reaches ComposeJacobianWeights externally
+        # (see the has_gradwarp note above: no TOPUP-in-eddy carve-out here).
+        # Recorded by jacobian_provenance.jacobian_provenance_for, not here.
 
     # Perform SDC if possible. This will pass-through if no sdc is to be done
-    b0_sdc_wf = init_sdc_wf(unit)
+    b0_sdc_wf = init_sdc_wf(unit, gradwarp=has_gradwarp)
     b0_sdc_wf.inputs.inputnode.template = acpc_anchor.fullname
 
     # init_sdc_wf builds a pure pass-through ('sdc_bypass_wf') when there is no
@@ -334,7 +359,9 @@ def _list_squeeze(in_list):
     from pathlib import Path
 
     def flatten(items):
-        """Yield items from any nested iterable; see
+        """Yield items from any nested iterable.
+
+        See
         Beazley, D. and B. Jones. Recipe 4.14, Python Cookbook 3rd Ed.,
         O'Reilly Media Inc. Sebastopol, CA: 2013..
         https://stackoverflow.com/questions/952914/how-do-i-make-a-flat-list-out-of-a-list-of-lists

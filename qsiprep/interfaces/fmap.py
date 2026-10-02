@@ -1,16 +1,13 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
-Interfaces to deal with the various types of fieldmap sources
+"""Interfaces to deal with the various types of fieldmap sources.
 
-    .. testsetup::
+.. testsetup::
 
-        >>> tmpdir = getfixture('tmpdir')
-        >>> tmp = tmpdir.chdir() # changing to a temporary directory
-        >>> nb.Nifti1Image(np.zeros((90, 90, 60)), None, None).to_filename(
-        ...     tmpdir.join('epi.nii.gz').strpath)
-
-
+>>> tmpdir = getfixture('tmpdir')
+>>> tmp = tmpdir.chdir() # changing to a temporary directory
+>>> nb.Nifti1Image(np.zeros((90, 90, 60)), None, None).to_filename(
+...     tmpdir.join('epi.nii.gz').strpath)
 """
 
 import json
@@ -56,6 +53,7 @@ from .epi_fmap import (
     read_nifti_sidecar,
 )
 from .images import to_lps
+from .jacobian import UNMODULATED_WEIGHT
 from .reports import topup_selection_to_report
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -84,22 +82,23 @@ class B0RPEFieldmapOutputSpec(TraitedSpec):
 
 
 class B0RPEFieldmap(SimpleInterface):
-    """Prepares b=0 EPI fieldmaps to be used for distortion correction.
+    """Prepare b=0 EPI fieldmaps to be used for distortion correction.
+
     Some siemens scanners are unable to make a b=0 image by itself, and will produce
     a dwi series (with bvals and bvecs). This interface removes the b>0 volumes and
-    writes the b=0 images in the resuested orientation (LAS+ for FSL, or LPS+ for
+    writes the b=0 images in the requested orientation (LAS+ for FSL, or LPS+ for
     everything else).
 
-    **Inputs**
-        b0_file: str
-            List of paths to b=0 epi fieldmaps in fmaps/ or an RPE series in dwi/
-        output_3d_images: bool
-            Write outputs as multiple 3d images
-        max_num_b0s: int
-            Include a maximum number of b=0 images in the outputs
-        orientation: str
-            Write the outputs in either 'LAS' or 'LPS' orientation
-
+    Inputs
+    ------
+    b0_file : str
+        List of paths to b=0 epi fieldmaps in fmaps/ or an RPE series in dwi/
+    output_3d_images : bool
+        Write outputs as multiple 3d images
+    max_num_b0s : int
+        Include a maximum number of b=0 images in the outputs
+    orientation : str
+        Write the outputs in either 'LAS' or 'LPS' orientation
     """
 
     input_spec = B0RPEFieldmapInputSpec
@@ -177,9 +176,7 @@ class FieldToRadSOutputSpec(TraitedSpec):
 
 
 class FieldToRadS(SimpleInterface):
-    """
-    The FieldToRadS converts from arbitrary units to rad/s
-    """
+    """Convert a fieldmap from arbitrary units to rad/s."""
 
     input_spec = FieldToRadSInputSpec
     output_spec = FieldToRadSOutputSpec
@@ -204,9 +201,7 @@ class FieldToHzOutputSpec(TraitedSpec):
 
 
 class FieldToHz(SimpleInterface):
-    """
-    The FieldToHz converts from arbitrary units to Hz
-    """
+    """Convert a fieldmap from arbitrary units to Hz."""
 
     input_spec = FieldToHzInputSpec
     output_spec = FieldToHzOutputSpec
@@ -219,7 +214,7 @@ class FieldToHz(SimpleInterface):
 
 
 def _sphere_footprint(radius_mm, zooms):
-    """Boolean spherical footprint of the given mm radius on a voxel grid.
+    """Build a boolean spherical footprint of the given mm radius on a voxel grid.
 
     A voxel is included when the physical distance from its center to the kernel
     center is within ``radius_mm`` (so anisotropic voxels give an ellipsoidal
@@ -371,7 +366,7 @@ class FieldmapToVSM(SimpleInterface):
 
 
 def _despike_2d(data, threshold, mask=None):
-    """Conditional 2D median despike of a fieldmap.
+    """Apply a conditional 2D median despike to a fieldmap.
 
     Cleans isolated spikes left by phase unwrapping before the fieldmap edge is
     tidied up. Per slice along the 3rd voxel axis, each voxel is compared to its 8
@@ -475,9 +470,7 @@ class Phasediff2FieldmapOutputSpec(TraitedSpec):
 
 
 class Phasediff2Fieldmap(SimpleInterface):
-    """
-    Convert a phase difference map into a fieldmap in Hz
-    """
+    """Convert a phase difference map into a fieldmap in Hz."""
 
     input_spec = Phasediff2FieldmapInputSpec
     output_spec = Phasediff2FieldmapOutputSpec
@@ -504,9 +497,7 @@ class Phases2FieldmapOutputSpec(TraitedSpec):
 
 
 class Phases2Fieldmap(SimpleInterface):
-    """
-    Convert a phase1, phase2 into a difference map
-    """
+    """Convert a phase1, phase2 into a difference map."""
 
     input_spec = Phases2FieldmapInputSpec
     output_spec = Phases2FieldmapOutputSpec
@@ -522,8 +513,10 @@ class Phases2Fieldmap(SimpleInterface):
 
 
 def phases2fmap(phase_files, metadatas, newpath=None):
-    """Calculates a phasediff from two phase images. Assumes monopolar
-    readout."""
+    """Calculate a phasediff from two phase images.
+
+    Assumes monopolar readout.
+    """
     from copy import deepcopy
 
     import nibabel as nb
@@ -584,10 +577,7 @@ def phases2fmap(phase_files, metadatas, newpath=None):
 
 
 def get_ees(in_meta, in_file=None):
-    """
-    Calculate the *effective echo spacing* :math:`t_\\text{ees}`
-    for an input :abbr:`EPI (echo-planar imaging)` scan.
-
+    r"""Calculate the *effective echo spacing* :math:`t_\text{ees}` for an input EPI scan.
 
     There are several procedures to calculate the effective
     echo spacing. The basic one is that an ``EffectiveEchoSpacing``
@@ -600,18 +590,18 @@ def get_ees(in_meta, in_file=None):
     >>> get_ees(meta)
     0.00059
 
-    If the *total readout time* :math:`T_\\text{ro}` (``TotalReadoutTime``
+    If the *total readout time* :math:`T_\text{ro}` (``TotalReadoutTime``
     BIDS field) is provided, then the effective echo spacing can be
-    calculated reading the number of voxels :math:`N_\\text{PE}` along the
+    calculated reading the number of voxels :math:`N_\text{PE}` along the
     readout direction and the parallel acceleration
     factor of the EPI
 
       .. math ::
 
-           =  T_\\text{ro} \\,  (N_\\text{PE} / f_\\text{acc} - 1)^{-1}
+           =  T_\text{ro} \,  (N_\text{PE} / f_\text{acc} - 1)^{-1}
 
     where :math:`N_y` is the number of pixels along the phase-encoding direction
-    :math:`y`, and :math:`f_\\text{acc}` is the parallel imaging acceleration factor
+    :math:`y`, and :math:`f_\text{acc}` is the parallel imaging acceleration factor
     (:abbr:`GRAPPA (GeneRalized Autocalibrating Partial Parallel Acquisition)`,
     :abbr:`ARC (Autocalibrating Reconstruction for Cartesian imaging)`, etc.).
 
@@ -621,9 +611,8 @@ def get_ees(in_meta, in_file=None):
     >>> get_ees(meta, in_file='epi.nii.gz')
     0.00059
 
-    Some vendors, like Philips, store different parameter names
-    (see http://dbic.dartmouth.edu/pipermail/mrusers/attachments/\
-20141112/eb1d20e6/attachment.pdf):
+    Some vendors, like Philips, store different parameter names (see
+    http://dbic.dartmouth.edu/pipermail/mrusers/attachments/20141112/eb1d20e6/attachment.pdf):
 
     >>> meta = {'WaterFatShift': 8.129,
     ...         'MagneticFieldStrength': 3,
@@ -631,9 +620,7 @@ def get_ees(in_meta, in_file=None):
     ...         'ParallelReductionFactorInPlane': 2}
     >>> get_ees(meta, in_file='epi.nii.gz')
     0.00041602630141921826
-
     """
-
     import nibabel as nb
 
     from qsiprep.interfaces.fmap import _get_pe_index
@@ -666,10 +653,7 @@ def get_ees(in_meta, in_file=None):
 
 
 def get_trt(in_meta, in_file=None):
-    """
-    Calculate the *total readout time* for an input
-    :abbr:`EPI (echo-planar imaging)` scan.
-
+    r"""Calculate the *total readout time* for an input :abbr:`EPI (echo-planar imaging)` scan.
 
     There are several procedures to calculate the total
     readout time. The basic one is that a ``TotalReadoutTime``
@@ -681,15 +665,15 @@ def get_trt(in_meta, in_file=None):
     >>> get_trt(meta)
     0.02596
 
-    If the *effective echo spacing* :math:`t_\\text{ees}`
+    If the *effective echo spacing* :math:`t_\text{ees}`
     (``EffectiveEchoSpacing`` BIDS field) is provided, then the
     total readout time can be calculated reading the number
-    of voxels along the readout direction :math:`T_\\text{ro}`
-    and the parallel acceleration factor of the EPI :math:`f_\\text{acc}`.
+    of voxels along the readout direction :math:`T_\text{ro}`
+    and the parallel acceleration factor of the EPI :math:`f_\text{acc}`.
 
       .. math ::
 
-          T_\\text{ro} = t_\\text{ees} \\, (N_\\text{PE} / f_\\text{acc} - 1)
+          T_\text{ro} = t_\text{ees} \, (N_\text{PE} / f_\text{acc} - 1)
 
     >>> meta = {'EffectiveEchoSpacing': 0.00059,
     ...         'PhaseEncodingDirection': 'j-',
@@ -705,9 +689,7 @@ def get_trt(in_meta, in_file=None):
     ...         'ParallelReductionFactorInPlane': 2}
     >>> get_trt(meta, in_file='epi.nii.gz')
     0.018721183563864822
-
     """
-
     # Use case 1: TRT is defined
     trt = in_meta.get('TotalReadoutTime', None)
     if trt is not None:
@@ -744,8 +726,7 @@ def _get_pe_index(meta):
 
 
 def _torads(in_file, fmap_range=None, newpath=None):
-    """
-    Convert a field map to rad/s units
+    """Convert a field map to rad/s units.
 
     If fmap_range is None, the range of the fieldmap
     will be automatically calculated.
@@ -771,7 +752,7 @@ def _torads(in_file, fmap_range=None, newpath=None):
 
 
 def _tohz(in_file, range_hz, newpath=None):
-    """Convert a field map to Hz units"""
+    """Convert a field map to Hz units."""
     from math import pi
 
     import nibabel as nb
@@ -788,14 +769,13 @@ def _tohz(in_file, range_hz, newpath=None):
 
 
 def phdiff2fmap(in_file, delta_te, newpath=None):
-    r"""
-    Converts the input phase-difference map into a fieldmap in Hz,
-    using the eq. (1) of :footcite:t:`hutton2002`:
+    r"""Convert the input phase-difference map into a fieldmap in Hz.
+
+    Uses eq. (1) of :footcite:t:`hutton2002`:
 
     .. math::
 
         \Delta B_0 (\text{T}^{-1}) = \frac{\Delta \Theta}{2\pi\gamma \Delta\text{TE}}
-
 
     In this case, we do not take into account the gyromagnetic ratio of the
     proton (:math:`\gamma`), since it will be applied inside TOPUP:
@@ -804,10 +784,9 @@ def phdiff2fmap(in_file, delta_te, newpath=None):
 
         \Delta B_0 (\text{Hz}) = \frac{\Delta \Theta}{2\pi \Delta\text{TE}}
 
-    **References**
-
+    References
+    ----------
     .. footbibliography::
-
     """
     import math
 
@@ -827,7 +806,7 @@ def phdiff2fmap(in_file, delta_te, newpath=None):
 
 
 def _delta_te(in_values, te1=None, te2=None):
-    """Read :math:`\\Delta_\text{TE}` from BIDS metadata dict"""
+    r"""Read :math:`\Delta_\text{TE}` from BIDS metadata dict."""
     if isinstance(in_values, float):
         te2 = in_values
         te1 = 0.0
@@ -883,21 +862,20 @@ def topup_inputs_from_4d_file(
     Here, distortion group uses the FSL definition of a phase encoding direction and
     total readout time, as specified in the datain file used by TOPUP (i.e. "0 -1 0 0.087").
 
-    **Parameters**
-
-        nii_file : Nibabel image
-            A 4D Image
-        b0_indices: array-like
-            indices into nii_file that can be used by topup
-        bids_origin_files: list
-            A list with the original bids file of each image in ``nii_file``. This is
-            necessary because merging may have happened earlier in the pipeline
-        max_per_spec: int
-            The maximum number of b=0 images to extract from a PE direction / image set
-
-
+    Parameters
+    ----------
+    nii_file : Nibabel image
+        A 4D Image
+    b0_indices : array-like
+        indices into nii_file that can be used by topup
+    bids_origin_files : list, optional
+        A list with the original bids file of each image in ``nii_file``. This is
+        necessary because merging may have happened earlier in the pipeline
+    image_source : str, optional
+        Description of where the images came from, used in the generated report text.
+    max_per_spec : int, optional
+        The maximum number of b=0 images to extract from a PE direction / image set
     """
-
     # Start with the DWI file. Determine which images are b=0
     if not len(b0_indices):
         raise RuntimeError('No b=0 images available for TOPUP.')
@@ -960,12 +938,10 @@ def add_epi_fmaps_to_dwi_b0s(epi_fmaps, b0_threshold, max_per_spec, dwi_spec_lin
     from files in the fmap/ directory can be added to those already extracted from the
     DWI series.
 
-    Examples:
-    ---------
-
+    Examples
+    --------
     >>> epi_fmaps = ["/data/sub-1/fmap/sub-1_dir-AP_epi.nii.gz",
     ...              "/data/sub-1/fmap/sub-1_dir-PA_epi.nii.gz"]
-
     """
     # Extract b=0 images as if we were only pulling images from epi fmaps.
     fmaps_4d, fmap_b0_indices, fmap_original_files = load_epi_dwi_fieldmaps(
@@ -1014,12 +990,49 @@ def add_epi_fmaps_to_dwi_b0s(epi_fmaps, b0_threshold, max_per_spec, dwi_spec_lin
     return topup_imain, topup_spec_lines, new_report
 
 
-class _ApplyScalingImagesInputSpec(ApplyTransformsInputSpec):
+def _floor_nonpositive_weights(weight_image_path):
+    """Floor any non-positive voxel of a resampled weight map in place.
+
+    ComposeJacobianWeights' positivity guard only inspects the native-space
+    map inside the brain mask, before this resampling runs. It cannot see what
+    LanczosWindowedSinc produces on the output grid, so a non-positive voxel
+    here may be sinc ringing near a sharp edge, or it may be a genuine fold
+    where susceptibility piles EPI signal up. Neither is a measurement of a
+    volume change, so both become UNMODULATED_WEIGHT and the voxel keeps the
+    intensity resampling gave it. We report what was measured instead of
+    asserting which cause it was.
+    """
+    img = nb.load(weight_image_path)
+    data = np.asanyarray(img.dataobj)
+    nonpositive = int((data <= 0).sum())
+    if nonpositive:
+        LOGGER.warning(
+            'Resampled weight map %s has %d non-positive voxels '
+            '(minimum %.4f); leaving those voxels unmodulated (weight %g). '
+            'Small-magnitude '
+            'undershoot near sharp edges is expected from '
+            'LanczosWindowedSinc ringing. A large or spatially '
+            'coherent negative region instead suggests the composed '
+            'warp folds outside the brain mask, where '
+            'ComposeJacobianWeights does not check it.',
+            weight_image_path,
+            nonpositive,
+            float(data.min()),
+            UNMODULATED_WEIGHT,
+        )
+        nb.Nifti1Image(
+            np.where(data > 0, data, UNMODULATED_WEIGHT).astype('float32'),
+            img.affine,
+            img.header,
+        ).to_filename(weight_image_path)
+
+
+class _ApplyJacobianWeightsInputSpec(ApplyTransformsInputSpec):
     input_image = traits.File(mandatory=False)
-    scaling_image_files = InputMultiObject(
+    jacobian_weight_images = InputMultiObject(
         File(exists=True),
         mandatory=False,
-        desc='list of sdc scaling image files in undistorted b0ref space',
+        desc='per-volume Jacobian weight maps, in undistorted b0ref space',
     )
     dwi_files = InputMultiObject(
         File(exists=True),
@@ -1029,110 +1042,197 @@ class _ApplyScalingImagesInputSpec(ApplyTransformsInputSpec):
     reference_image = File(exists=True, mandatory=True, desc='output grid')
 
     # Transforms to apply
-    b0_to_intramodal_template_transforms = InputMultiObject(
+    b0_to_dwiref_transforms = InputMultiObject(
         File(exists=True),
-        mandtory=False,
-        desc='list of transforms to register the b=0 to the intramodal template.',
+        mandatory=False,
+        desc='list of transforms to register the b=0 to the dwiref.',
     )
-    intramodal_template_to_t1_affine = File(
-        exists=True, mandatory=False, desc='affine from the intramodal template to t1'
+    dwiref_to_t1_affine = File(exists=True, mandatory=False, desc='affine from the dwiref to t1')
+    dwiref_to_t1_warp = File(exists=True, mandatory=False, desc='warp from the dwiref to t1')
+    hmcsdc_dwi_ref_to_t1w_affine = File(
+        exists=True, mandatory=False, desc='affine from dwi ref to t1w'
     )
-    intramodal_template_to_t1_warp = File(
-        exists=True, desc='warp from the intramodal template to t1'
-    )
-    hmcsdc_dwi_ref_to_t1w_affine = File(exists=True, desc='affine from dwi ref to t1w')
 
     save_cmd = traits.Bool(
         True, usedefault=True, desc='write a log of command lines that were applied'
     )
     copy_dtype = traits.Bool(False, usedefault=True, desc='copy dtype from inputs to outputs')
+    # Mirrors gradients.py's ComposeTransforms, which faces the identical
+    # one-antsApplyTransforms-call-per-volume problem for the full transform
+    # chain and solves it the same way: a plain Node with its own thread pool
+    # rather than a MapNode. See ``_run_interface`` for the num_threads == 1
+    # serial fallback and why it is kept.
     num_threads = traits.Int(1, usedefault=True, nohash=True, desc='number of parallel processes')
     transforms = File(mandatory=False)
 
 
-class _ApplyScalingImagesOutputSpec(TraitedSpec):
-    scaled_images = OutputMultiObject(File(exists=True), desc='Scaled dwi files')
+class _ApplyJacobianWeightsOutputSpec(TraitedSpec):
+    scaled_images = OutputMultiObject(File(exists=True), desc='Weighted dwi files')
+    resampled_weight_images = OutputMultiObject(
+        File(exists=True),
+        desc='the unique weight maps, resampled to the output grid, in '
+        'first-appearance order; indexed by the derivative sidecar',
+    )
+    weight_index = traits.List(
+        traits.Int(),
+        desc='for each DWI volume, its index into resampled_weight_images',
+    )
 
 
-class ApplyScalingImages(SimpleInterface):
-    input_spec = _ApplyScalingImagesInputSpec
-    output_spec = _ApplyScalingImagesOutputSpec
+def _resample_jacobian_weight(args):
+    """Resample one unique Jacobian weight map onto the output grid.
+
+    A module-level worker, mirroring ``gradients.py``'s ``_compose_tfms``, so
+    the identical call used by the serial for-loop below can also be handed
+    to a ``ThreadPoolExecutor`` unchanged.
+    """
+    weight_image, transform_stack, reference_image, newpath = args
+    resampled_weight_image = fname_presuffix(weight_image, suffix='_resampled', newpath=newpath)
+    xfm = ants.ApplyTransforms(
+        input_image=weight_image,
+        transforms=transform_stack,
+        reference_image=reference_image,
+        output_image=resampled_weight_image,
+        interpolation='LanczosWindowedSinc',
+        dimension=3,
+    )
+    xfm.terminal_output = 'allatonce'
+    xfm.resource_monitor = False
+    xfm_runtime = xfm.run().runtime
+    LOGGER.info(xfm_runtime.cmdline)
+    return resampled_weight_image
+
+
+class ApplyJacobianWeights(SimpleInterface):
+    """Transport Jacobian weight maps to the output grid and multiply them in.
+
+    The maps arrive in undistorted b=0-reference space. Resampling them through
+    the dwiref and coregistration transforms is what evaluates the gradwarp
+    and SDC determinants at the coordinates the full composite evaluates them
+    at -- see the design spec's coordinate-safety section.
+
+    Each unique map costs one ``antsApplyTransforms`` subprocess call. That was
+    free when there were at most two unique maps (DRBUDDI's blip-up/blip-down
+    pair); it stops being free once every DWI volume can carry a distinct
+    eddy-current Jacobian (TORTOISE, quadratic correction mode), collapsing the
+    dedup cache to one unique map per volume. Rather than fanning this out to a
+    ``MapNode`` (which cannot accept an empty iterfield -- see below), this
+    interface parallelizes its own loop with a ``ThreadPoolExecutor``, exactly
+    as ``ComposeTransforms`` (``gradients.py``) already does for the analogous
+    per-volume ``antsApplyTransforms`` calls in the main resampling chain.
+
+    Because this stays a plain ``Node`` -- no iterfield to collapse -- a run
+    with no distortion correction at all (no gradwarp, no SDC, no eddy-current
+    Jacobian) is handled by the same early return as before: ``jacobian_weight_
+    images`` is Undefined, so nothing is resampled and the DWIs pass through
+    unmodified. A ``MapNode``-based split cannot make that guarantee: Nipype
+    collapses a defined empty list back to Undefined on a MapNode's own
+    iterfield trait, so ``MapNode._check_iterfield`` raises at run time for
+    exactly this (mainstream: ``--hmc-method eddy`` with TOPUP and no gradwarp)
+    configuration.
+    """
+
+    input_spec = _ApplyJacobianWeightsInputSpec
+    output_spec = _ApplyJacobianWeightsOutputSpec
 
     def _run_interface(self, runtime):
-        if not isdefined(self.inputs.scaling_image_files):
-            LOGGER.info('Not applying scaling to resampled DWIs')
+        if not isdefined(self.inputs.jacobian_weight_images):
+            LOGGER.info('Not applying Jacobian weights to resampled DWIs')
             self._results['scaled_images'] = self.inputs.dwi_files
             return runtime
-        LOGGER.info('Applying scaling to resampled dwis')
+        LOGGER.info('Applying Jacobian weights to resampled dwis')
 
-        if not len(self.inputs.scaling_image_files) == len(self.inputs.dwi_files):
-            raise Exception('Mismatch between scaling images and dwis')
+        if not len(self.inputs.jacobian_weight_images) == len(self.inputs.dwi_files):
+            raise Exception('Mismatch between Jacobian weight images and dwis')
 
-        # The affine transform to the t1 can come from hmcsdc or the intramodal template
+        # The affine transform to the t1 can come from hmcsdc or the dwiref
         coreg_to_t1 = traits.Undefined
-        if isdefined(self.inputs.intramodal_template_to_t1_affine):
+        if isdefined(self.inputs.dwiref_to_t1_affine):
             if isdefined(self.inputs.hmcsdc_dwi_ref_to_t1w_affine):
-                LOGGER.warning('Two b0 to t1 transforms are provided: using intramodal')
-            coreg_to_t1 = self.inputs.intramodal_template_to_t1_affine
+                LOGGER.warning('Two b0 to t1 transforms are provided: using the dwiref')
+            coreg_to_t1 = self.inputs.dwiref_to_t1_affine
         else:
             coreg_to_t1 = self.inputs.hmcsdc_dwi_ref_to_t1w_affine
 
-        # Handle transforms to intramodal transforms
-        intramodal_transforms = self.inputs.b0_to_intramodal_template_transforms
-        intramodal_affine = traits.Undefined
-        intramodal_warp = traits.Undefined
-        if isdefined(intramodal_transforms):
-            intramodal_affine = intramodal_transforms[0]
-            if len(intramodal_transforms) == 2:
-                intramodal_warp = intramodal_transforms[1]
-            elif len(intramodal_transforms) > 2:
-                raise Exception('Unsupported intramodal template transform')
+        # Handle transforms to dwiref transforms
+        dwiref_transforms = self.inputs.b0_to_dwiref_transforms
+        dwiref_affine = traits.Undefined
+        dwiref_warp = traits.Undefined
+        if isdefined(dwiref_transforms):
+            dwiref_affine = dwiref_transforms[0]
+            if len(dwiref_transforms) == 2:
+                dwiref_warp = dwiref_transforms[1]
+            elif len(dwiref_transforms) > 2:
+                raise Exception('Unsupported dwiref transform')
 
         # Find the chain of transforms from undistorted b=0 reference to the output space
         transform_stack = [
             transform
-            for transform in [intramodal_affine, intramodal_warp, coreg_to_t1]
+            for transform in [dwiref_affine, dwiref_warp, coreg_to_t1]
             if isdefined(transform)
         ][::-1]
 
-        # There are a few unique scaling images. Find them
-        scaling_images_to_dwis = defaultdict(list)
-        for dwi_image, scaling_image in zip(
-            self.inputs.dwi_files, self.inputs.scaling_image_files, strict=False
+        # There are a few unique weight images. Find them, in first-appearance
+        # order (dict preserves insertion order) -- weight_index below indexes
+        # into this order, so it must not be incidental (e.g. set iteration).
+        weights_to_dwis = defaultdict(list)
+        for dwi_image, weight_image in zip(
+            self.inputs.dwi_files, self.inputs.jacobian_weight_images, strict=False
         ):
-            scaling_images_to_dwis[scaling_image].append(dwi_image)
+            weights_to_dwis[weight_image].append(dwi_image)
+        unique_weight_images = list(weights_to_dwis.keys())
 
-        # Apply the transform, link the resampled scaling image to resampled dwis
-        dwi_files_to_scalings = {}
-        for scaling_image in scaling_images_to_dwis:
-            resampled_scaling_image = fname_presuffix(
-                scaling_image, suffix='_resampled', newpath=runtime.cwd
-            )
-            xfm = ants.ApplyTransforms(
-                input_image=scaling_image,
-                transforms=transform_stack,
-                reference_image=self.inputs.reference_image,
-                output_image=resampled_scaling_image,
-                interpolation='LanczosWindowedSinc',
-                dimension=3,
-            )
-            xfm.terminal_output = 'allatonce'
-            xfm.resource_monitor = False
-            runtime = xfm.run().runtime
-            LOGGER.info(runtime.cmdline)
-            for dwi_file in scaling_images_to_dwis[scaling_image]:
-                dwi_files_to_scalings[dwi_file] = resampled_scaling_image
+        num_threads = self.inputs.num_threads
+        if num_threads < 1:
+            num_threads = None
+
+        worker_args = [
+            (weight_image, transform_stack, self.inputs.reference_image, runtime.cwd)
+            for weight_image in unique_weight_images
+        ]
+
+        # As in ComposeTransforms: serial below the threshold keeps debugging
+        # simple and avoids pool overhead for the common one-or-two-map case.
+        if num_threads == 1:
+            resampled_unique = [_resample_jacobian_weight(args) for args in worker_args]
+        else:
+            from concurrent.futures import ThreadPoolExecutor
+
+            with ThreadPoolExecutor(max_workers=num_threads) as pool:
+                resampled_unique = list(pool.map(_resample_jacobian_weight, worker_args))
+
+        # The pre-transport guard cannot see post-resampling values -- see
+        # _floor_nonpositive_weights.
+        for resampled_weight_image in resampled_unique:
+            _floor_nonpositive_weights(resampled_weight_image)
+
+        # Link the resampled weight map to resampled dwis
+        index_of_weight = {
+            weight_image: index for index, weight_image in enumerate(unique_weight_images)
+        }
+        dwi_files_to_weights = {}
+        for weight_image, resampled_weight_image in zip(
+            unique_weight_images, resampled_unique, strict=True
+        ):
+            for dwi_file in weights_to_dwis[weight_image]:
+                dwi_files_to_weights[dwi_file] = resampled_weight_image
 
         # Do the math
         scaled_dwi_images = []
         for dwi_file in self.inputs.dwi_files:
             scaled_dwi_file = fname_presuffix(dwi_file, newpath=runtime.cwd, suffix='_scaled')
-            image.math_img('a*b', a=dwi_file, b=dwi_files_to_scalings[dwi_file]).to_filename(
+            image.math_img('a*b', a=dwi_file, b=dwi_files_to_weights[dwi_file]).to_filename(
                 scaled_dwi_file
             )
-
             scaled_dwi_images.append(scaled_dwi_file)
+
         self._results['scaled_images'] = scaled_dwi_images
+        self._results['resampled_weight_images'] = resampled_unique
+        # The per-volume lookup, as indices into resampled_unique -- the only
+        # thing that carries the volume-to-map mapping into the BIDS sidecar.
+        self._results['weight_index'] = [
+            index_of_weight[weight_image] for weight_image in self.inputs.jacobian_weight_images
+        ]
 
         return runtime
 
@@ -1274,14 +1374,13 @@ def plot_pepolar(
     overlay=None,
     overlay_params=None,
 ):
-    """
-    Plot the foreground and background views.
+    """Plot the foreground and background views.
+
     Default order is: axial, coronal, sagittal
 
     Updated version from sdcflows and different from in niworkflows.viz.utils
     so that the contour lines never move. This is accomplished by making an empty
     image in the grid of the segmentation image and using this as the background.
-
     """
     plot_params = plot_params or {}
     blip_down_plot_params = blip_down_plot_params or {}
@@ -1378,14 +1477,13 @@ def plot_fa_reg(
     label=None,
     compress='auto',
 ):
-    """
-    Plot the foreground and background views.
+    """Plot the foreground and background views.
+
     Default order is: axial, coronal, sagittal
 
     Updated version from sdcflows and different from in niworkflows.viz.utils
     so that the contour lines never move. This is accomplished by making an empty
     image in the grid of the segmentation image and using this as the background.
-
     """
     plot_params = {'vmin': 0.01, 'vmax': 0.85, 'cmap': 'gray'}
     if cuts is None:

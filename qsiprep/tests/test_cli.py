@@ -1,13 +1,12 @@
 """Command-line interface tests."""
 
+import json
 import os
 import shutil
 import sys
 from pathlib import Path
 from unittest.mock import patch
 
-import nibabel as nb
-import numpy as np
 import pytest
 from nipype import config as nipype_config
 
@@ -24,6 +23,24 @@ nipype_config.update_config({'execution': {'remove_unnecessary_outputs': False}}
 DEFAULT_NUM_CPUS = 4
 
 
+def _forrest_gump_dataset(data_dir, working_dir, test_name):
+    """Copy forrest_gump with ``TotalReadoutTime`` rescaled to its 5 mm DWI grid.
+
+    The DWI was downsampled from 2 mm, but the sidecar kept the 2 mm readout
+    time, which applies the GRE field 2.5x too strongly and makes eddy diverge.
+    Drop this once the dataset is replaced.
+    """
+    source = download_test_data('forrest_gump', data_dir)
+    dataset_dir = os.path.join(working_dir, f'{test_name}_bids')
+    if not os.path.isdir(dataset_dir):
+        shutil.copytree(source, dataset_dir)
+    sidecar = Path(dataset_dir) / 'sub-01/ses-forrestgump/dwi/sub-01_ses-forrestgump_dwi.json'
+    metadata = json.loads(sidecar.read_text())
+    metadata['TotalReadoutTime'] = 0.0188758  # 0.0471895 * 2 mm / 5 mm
+    sidecar.write_text(json.dumps(metadata, indent=4))
+    return dataset_dir
+
+
 @pytest.mark.integration
 @pytest.mark.dsdti_fmap
 def test_dsdti_fmap(data_dir, output_dir, working_dir):
@@ -36,13 +53,12 @@ def test_dsdti_fmap(data_dir, output_dir, working_dir):
     be built for all sorts of fieldmap configurations.
 
     This tests the following features:
+
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
     - dwidenoise is enabled implicitly.
 
-    Inputs
-    ------
-    - DSDTI BIDS data (data/DSDTI_fmap)
+    Input data: DSDTI BIDS data (data/DSDTI_fmap).
     """
     TEST_NAME = 'dsdti_fmap'
 
@@ -78,13 +94,12 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
     be built for all sorts of fieldmap configurations.
 
     This tests the following features:
+
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
     - dwidenoise is enabled explicitly
 
-    Inputs
-    ------
-    - DSDTI BIDS data (data/DSCSDSI_fmap)
+    Input data: DSDTI BIDS data (data/DSCSDSI_fmap).
     """
     TEST_NAME = 'dscsdsi_fmap'
 
@@ -112,19 +127,18 @@ def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.cuda
 def test_cuda(data_dir, output_dir, working_dir):
-    """
+    """Run the CUDA test on reverse-PE series data.
 
     Was in CUDATest.sh.
     XXX: Not called in CircleCI.
 
     This tests the following features:
+
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
     - Denoising is skipped
 
-    Inputs
-    ------
-    - DSDTI BIDS data (data/drbuddi_rpe_series)
+    Input data: DSDTI BIDS data (data/drbuddi_rpe_series).
     """
     TEST_NAME = 'cuda'
 
@@ -144,7 +158,7 @@ def test_cuda(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--sdc-method=drbuddi',
         f'--eddy-config={eddy_config}',
         '--output-spaces=acpc:res-5mm',
@@ -157,17 +171,17 @@ def test_cuda(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.drbuddi_rpe
 def test_drbuddi_rpe(data_dir, output_dir, working_dir):
-    """
+    """Run the DRBUDDI test on a reverse-PE DWI series.
 
     Was in DRBUDDI_eddy_rpe_series.sh.
 
     This tests the following features:
+
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
     - Denoising is skipped
 
-    Inputs:
-    -------
+    Input data:
 
     - qsiprep single shell results (data/DSDTI_fmap)
     - qsiprep multi shell results (data/DSDTI_fmap)
@@ -190,7 +204,7 @@ def test_drbuddi_rpe(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--sdc-method=drbuddi',
         # The dataset ships epi fieldmaps whose IntendedFor points at the DWIs,
         # so the modern grouping would correct each DWI with its own epi fmap
@@ -215,6 +229,7 @@ def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
     Was in DRBUDDI_SHORELine_epi.sh.
 
     This tests the following features:
+
     - SHORELine (here, just b=0 registration) motion correction
     """
     TEST_NAME = 'drbuddi_shoreline_epi'
@@ -234,7 +249,7 @@ def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=shoreline',
         f'--shoreline-config={shoreline_config}',
         '--sdc-method=drbuddi',
@@ -253,6 +268,7 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
     Was in DRBUDDI_TENSORLine_epi.sh.
 
     This tests the following features:
+
     - TENSORLine (tensor-based) motion correction
     """
     TEST_NAME = 'drbuddi_tensorline_epi'
@@ -272,7 +288,7 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=shoreline',
         f'--shoreline-config={shoreline_config}',
         '--sdc-method=drbuddi',
@@ -286,21 +302,18 @@ def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.dscsdsi
 def test_dscsdsi(data_dir, output_dir, working_dir):
-    """DSCSDSI test
+    """Run the DSCSDSI test.
 
     Was in DSCSDSI.sh.
 
     This tests the following features:
-    - Whether the --anat-only workflow is successful
-    - Whether the regular qsiprep workflow can resume using the working directory from --anat-only
+
     - The SHORELine motion correction workflow
     - Skipping B1 biascorrection
     - Using the SyN-SDC distortion correction method
     - dwidenoise is enabled implicitly
 
-    Inputs
-    ------
-    - DSCSDSI BIDS data (data/DSCSDSI_nofmap)
+    Input data: DSCSDSI BIDS data (data/DSCSDSI_nofmap).
     """
     TEST_NAME = 'dscsdsi'
 
@@ -319,7 +332,7 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
         '--sloppy',
         '--write-graph',
         '--sdc-anat-reference=invt1w',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=shoreline',
         f'--shoreline-config={shoreline_config}',
         '--output-spaces=acpc:res-5mm',
@@ -332,18 +345,17 @@ def test_dscsdsi(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.diffprep
 def test_diffprep(data_dir, output_dir, working_dir):
-    """TORTOISE DIFFPREP head-motion/eddy correction on non-shelled data.
+    """Test TORTOISE DIFFPREP head-motion/eddy correction on non-shelled data.
 
     This tests the following features:
+
     - The TORTOISE DIFFPREP HMC backend (--hmc-method tortoise) on a
       compressed-sensing DSI (non-shelled) scheme, where FSL eddy cannot run
     - The fieldmap-less path: with no fieldmap and no T2w, DIFFPREP performs
       head-motion/eddy correction only and does not error out
     - Skipping B1 biascorrection
 
-    Inputs
-    ------
-    - DSCSDSI BIDS data (data/DSCSDSI_nofmap)
+    Input data: DSCSDSI BIDS data (data/DSCSDSI_nofmap).
     """
     TEST_NAME = 'diffprep'
 
@@ -359,7 +371,7 @@ def test_diffprep(data_dir, output_dir, working_dir):
         'participant',
         f'-w={work_dir}',
         '--sloppy',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=tortoise',
         '--output-spaces=acpc:res-5mm',
         '--output-spaces=MNI152NLin2009cAsym',
@@ -371,9 +383,10 @@ def test_diffprep(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.diffprep_drbuddi
 def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
-    """TORTOISE DIFFPREP head-motion correction followed by DRBUDDI SDC.
+    """Test TORTOISE DIFFPREP head-motion correction followed by DRBUDDI SDC.
 
     This tests the following features:
+
     - The TORTOISE DIFFPREP HMC backend combined with reverse phase-encoded
       (blip-up/blip-down) DRBUDDI susceptibility distortion correction, i.e.
       that the backend performs SDC rather than erroring when a fieldmap is
@@ -385,9 +398,7 @@ def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
     ``test_diffprep_drbuddi_rpe_series``, which exercises the per-direction
     DIFFPREP split/recombine before DRBUDDI.
 
-    Inputs
-    ------
-    - qsiprep epi fieldmap results (data/drbuddi_epi)
+    Input data: qsiprep epi fieldmap results (data/drbuddi_epi).
     """
     TEST_NAME = 'diffprep_drbuddi'
 
@@ -405,7 +416,7 @@ def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=tortoise',
         '--sdc-method=drbuddi',
         '--output-spaces=acpc:res-2mm',
@@ -420,7 +431,7 @@ def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.diffprep_rpe_series
 def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
-    """TORTOISE DIFFPREP HMC on a reverse-PE *series* (rpe_series) + DRBUDDI SDC.
+    """Test TORTOISE DIFFPREP HMC on a reverse-PE *series* (rpe_series) + DRBUDDI SDC.
 
     Unlike ``test_diffprep_drbuddi`` (which uses an ``epi`` fieldmap), this feeds
     two opposing-PE DWI *series*. qsiprep merges them into one 4D file for FSL
@@ -433,9 +444,7 @@ def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
     shell synthesis is needed. A non-shelled (CS-DSI) reverse-PE-series dataset
     is still required to exercise the Tier-2 synthesis path end to end.
 
-    Inputs
-    ------
-    - qsiprep reverse-PE-series results (data/drbuddi_rpe_series)
+    Input data: qsiprep reverse-PE-series results (data/drbuddi_rpe_series).
     """
     TEST_NAME = 'diffprep_rpe_series'
 
@@ -453,7 +462,7 @@ def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=tortoise',
         '--sdc-method=drbuddi',
         '--output-spaces=acpc:res-5mm',
@@ -468,7 +477,7 @@ def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.diffprep_csdsi_rpe_series
 def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
-    """TORTOISE DIFFPREP on a NON-shelled (CS-DSI) reverse-PE series + DRBUDDI.
+    """Test TORTOISE DIFFPREP on a NON-shelled (CS-DSI) reverse-PE series + DRBUDDI.
 
     Unlike ``test_diffprep_drbuddi_rpe_series`` (DTI-regime, shelled), this uses a
     downsampled CS-DSI HASC55 AP+PA acquisition. It exercises a non-shelled
@@ -482,9 +491,7 @@ def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
     The fixture also ships a T2w, so a heavier variant (drop ``--anat-modality
     none``) can additionally exercise the DRBUDDI multimodal-T2w branch.
 
-    Inputs
-    ------
-    - Downsampled CS-DSI HASC55 reverse-PE series (data/csdsi_rpe_series)
+    Input data: Downsampled CS-DSI HASC55 reverse-PE series (data/csdsi_rpe_series).
     """
     TEST_NAME = 'diffprep_csdsi_rpe_series'
 
@@ -512,7 +519,7 @@ def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
         '--sloppy',
         '--anat-modality=none',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=tortoise',
         '--sdc-method=drbuddi',
         '--output-spaces=acpc:res-5mm',
@@ -527,18 +534,17 @@ def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.dsdti_nofmap
 def test_dsdti_nofmap(data_dir, output_dir, working_dir):
-    """DSCDTI_nofmap test.
+    """Run the DSDTI_nofmap test.
 
     Was in DSDTI_nofmap.sh.
 
     This tests the following features:
+
     - A workflow with no distortion correction followed by eddy
     - Eddy is run on a CPU
     - Denoising is skipped
 
-    Inputs
-    ------
-    - DSDTI BIDS data (data/DSDTI)
+    Input data: DSDTI BIDS data (data/DSDTI).
     """
     TEST_NAME = 'dsdti_nofmap'
 
@@ -559,7 +565,7 @@ def test_dsdti_nofmap(data_dir, output_dir, working_dir):
         f'--eddy-config={eddy_config}',
         '--denoise-method=none',
         '--unringing-method=rpg',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--output-spaces=acpc:res-5mm',
         '--output-spaces=MNI152NLin2009cAsym',
     ]
@@ -570,18 +576,17 @@ def test_dsdti_nofmap(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.dsdti_synfmap
 def test_dsdti_synfmap(data_dir, output_dir, working_dir):
-    """DSCDTI_synfmap test
+    """Run the DSDTI_synfmap test.
 
     Was in DSDTI_synfmap.sh.
 
     This tests the following features:
+
     - A workflow with no distortion correction followed by eddy
     - Eddy is run on a CPU
     - Denoising is skipped
 
-    Inputs
-    ------
-    - DSDTI BIDS data (data/DSDTI)
+    Input data: DSDTI BIDS data (data/DSDTI).
     """
     TEST_NAME = 'dsdti_synfmap'
 
@@ -609,7 +614,7 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
         '--ignore',
         'fieldmaps',
         '--sdc-anat-reference=invt1w',
-        '--b1-biascorrect-stage=final',
+        '--dwi-biascorrect=n4',
         '--output-spaces=acpc:res-5mm',
         '--output-spaces=MNI152NLin2009cAsym',
     ]
@@ -618,22 +623,21 @@ def test_dsdti_synfmap(data_dir, output_dir, working_dir):
 
 
 @pytest.mark.integration
-@pytest.mark.intramodal_template
-def test_intramodal_template(data_dir, output_dir, working_dir):
-    """IntramodalTemplate test
+@pytest.mark.dwiref
+def test_dwiref(data_dir, output_dir, working_dir):
+    """Run the subject-level dwiref test.
 
-    A two-session dataset is used to create an intramodal template.
+    A two-session dataset is used to build a subject-level dwiref.
 
     This tests the following features:
+
     - Blip-up + Blip-down DWI series for TOPUP/Eddy
     - Eddy is run on a CPU
     - dwidenoise is enabled implicitly
 
-    Inputs
-    ------
-    - twoses BIDS data (data/DSDTI_fmap)
+    Input data: twoses BIDS data (data/DSDTI_fmap).
     """
-    TEST_NAME = 'intramodal_template'
+    TEST_NAME = 'dwiref'
 
     dataset_dir = download_test_data('twoses', data_dir)
     # XXX: Having to modify dataset_dirs is suboptimal.
@@ -648,101 +652,17 @@ def test_intramodal_template(data_dir, output_dir, working_dir):
         'participant',
         f'-w={work_dir}',
         '--sloppy',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--hmc-method=shoreline',
         f'--shoreline-config={shoreline_config}',
         '--output-spaces=acpc:res-5mm',
         '--output-spaces=MNI152NLin2009cAsym',
-        '--intramodal-template-transform=BSplineSyN',
-        '--intramodal-template-iters=2',
+        '--dwiref-definition=subject',
+        '--dwiref-construction-transform=BSplineSyN',
+        '--dwiref-construction-iters=2',
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)
-
-
-@pytest.mark.integration
-@pytest.mark.multi_t1w
-def test_multi_t1w(data_dir, output_dir, working_dir):
-    """MultiT1w test
-
-    This tests the following features:
-    - freesurfer's robust template
-    - Explicitly testing --subject-anatomical-reference unbiased
-
-    Inputs
-    ------
-    - DSDTI BIDS data (data/DSDTI)
-    """
-    TEST_NAME = 'multi_t1w'
-    UNBIASED_TEST_NAME = 'multi_t1w_unbiased'
-
-    dataset_dir = download_test_data('DSDTI', data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, 'DSDTI')
-    work_dir = os.path.join(working_dir, TEST_NAME)
-    writable_bids_dir = os.path.join(work_dir, 'DSDTI')
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    unbiased_out_dir = os.path.join(output_dir, UNBIASED_TEST_NAME)
-    unbiased_work_dir = os.path.join(working_dir, UNBIASED_TEST_NAME)
-
-    if os.path.isdir(writable_bids_dir):
-        shutil.rmtree(writable_bids_dir)
-    shutil.copytree(dataset_dir, writable_bids_dir)
-
-    # CRITICAL: delete the fieldmap data.
-    fmap_dir = Path(writable_bids_dir) / 'sub-PNC' / 'fmap'
-    if fmap_dir.exists():
-        shutil.rmtree(fmap_dir)
-
-    anat_dir = Path(writable_bids_dir) / 'sub-PNC' / 'anat'
-    source_t1w = anat_dir / 'sub-PNC_T1w.nii.gz'
-    shifted_t1w = anat_dir / 'sub-PNC_run-02_T1w.nii.gz'
-    source_json = anat_dir / 'sub-PNC_T1w.json'
-    shifted_json = anat_dir / 'sub-PNC_run-02_T1w.json'
-
-    # Generate a second, translated T1w to test robust template construction.
-    source_img = nb.load(str(source_t1w))
-    shifted_affine = source_img.affine.copy()
-    shifted_affine[:3, 3] = shifted_affine[:3, 3] + np.array([2.0, 4.0, 1.0])
-    shifted_img = source_img.__class__(
-        np.asanyarray(source_img.dataobj), shifted_affine, source_img.header
-    )
-    nb.save(shifted_img, shifted_t1w)
-    shutil.copy2(source_json, shifted_json)
-
-    test_data_path = get_test_data_path()
-    eddy_config = os.path.join(test_data_path, 'eddy_config.json')
-
-    parameters = [
-        writable_bids_dir,
-        out_dir,
-        'participant',
-        f'-w={work_dir}',
-        f'--eddy-config={eddy_config}',
-        '--denoise-method=none',
-        '--sloppy',
-        '--output-spaces=acpc:res-5mm',
-        '--output-spaces=MNI152NLin2009cAsym',
-        '--anat-only',
-    ]
-    _run_and_generate(TEST_NAME, parameters, test_main=False, check_outputs=False)
-
-    unbiased_parameters = [
-        writable_bids_dir,
-        unbiased_out_dir,
-        'participant',
-        f'-w={unbiased_work_dir}',
-        f'--eddy-config={eddy_config}',
-        '--denoise-method=none',
-        '--sloppy',
-        '--output-spaces=acpc:res-5mm',
-        '--output-spaces=MNI152NLin2009cAsym',
-        '--anat-only',
-        '--subject-anatomical-reference=unbiased',
-    ]
-    _run_and_generate(
-        UNBIASED_TEST_NAME, unbiased_parameters, test_main=False, check_outputs=False
-    )
 
 
 @pytest.mark.integration
@@ -772,7 +692,7 @@ def test_maternal_brain_project(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--sloppy',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--write-graph',
         '--hmc-method=shoreline',
         '--output-spaces=acpc:res-5mm',
@@ -796,7 +716,7 @@ def test_forrest_gump(data_dir, output_dir, working_dir):
     """
     TEST_NAME = 'forrest_gump'
 
-    dataset_dir = download_test_data('forrest_gump', data_dir)
+    dataset_dir = _forrest_gump_dataset(data_dir, working_dir, TEST_NAME)
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
@@ -810,7 +730,7 @@ def test_forrest_gump(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--sloppy',
         '--denoise-method=none',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--write-graph',
         '--output-spaces=acpc:res-5mm',
         '--output-spaces=MNI152NLin2009cAsym',
@@ -833,7 +753,7 @@ def test_forrest_gump_patch2self(data_dir, output_dir, working_dir):
     """
     TEST_NAME = 'forrest_gump_patch2self'
 
-    dataset_dir = download_test_data('forrest_gump', data_dir)
+    dataset_dir = _forrest_gump_dataset(data_dir, working_dir, TEST_NAME)
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
 
@@ -847,7 +767,7 @@ def test_forrest_gump_patch2self(data_dir, output_dir, working_dir):
         f'-w={work_dir}',
         '--sloppy',
         '--denoise-method=patch2self',
-        '--b1-biascorrect-stage=none',
+        '--dwi-biascorrect=none',
         '--write-graph',
         '--output-spaces=acpc:res-5mm',
         '--output-spaces=MNI152NLin2009cAsym',
@@ -858,7 +778,10 @@ def test_forrest_gump_patch2self(data_dir, output_dir, working_dir):
 
 
 def test_parser_accepts_tortoise(tmp_path):
-    """``tortoise`` is the single --hmc-method value for the DIFFPREP backend."""
+    """Test that the parser accepts ``tortoise`` for --hmc-method.
+
+    ``tortoise`` is the single --hmc-method value for the DIFFPREP backend.
+    """
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -881,7 +804,10 @@ def test_parser_accepts_tortoise(tmp_path):
 
 
 def test_parser_rejects_removed_diffprep_hmc_models(tmp_path):
-    """The per-mode values were replaced by "tortoise" + --diffprep-config."""
+    """Test that the parser rejects the removed per-mode DIFFPREP --hmc-method values.
+
+    The per-mode values were replaced by "tortoise" + --diffprep-config.
+    """
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -906,8 +832,11 @@ def test_parser_rejects_removed_diffprep_hmc_models(tmp_path):
 
 @pytest.mark.parametrize('forced', ['gradwarp1D', 'gradwarp3D'])
 def test_parser_accepts_force_gradwarp_and_gradient_file(tmp_path, forced):
-    """--force gradwarp{1,3}D and --gradient-file land on the namespace under
-    those dests."""
+    """Test that the parser accepts --force gradwarp{1,3}D and --gradient-file.
+
+    --force gradwarp{1,3}D and --gradient-file land on the namespace under
+    those dests.
+    """
     from qsiprep.cli.parser import _build_parser
     from qsiprep.tests.gradient_fixtures import write_siemens_grad
 
@@ -925,8 +854,8 @@ def test_parser_accepts_force_gradwarp_and_gradient_file(tmp_path, forced):
             forced,
             '--gradient-file',
             str(coeff),
-            '--output-resolution',
-            '2',
+            '--output-spaces',
+            'acpc:res-2mm',
         ]
     )
     assert opts.force == [forced]
@@ -934,7 +863,10 @@ def test_parser_accepts_force_gradwarp_and_gradient_file(tmp_path, forced):
 
 
 def test_parser_accepts_ignore_gradwarp(tmp_path):
-    """'gradwarp' extends the existing --ignore choices."""
+    """Test that --ignore accepts 'gradwarp'.
+
+    'gradwarp' extends the existing --ignore choices.
+    """
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -942,15 +874,93 @@ def test_parser_accepts_ignore_gradwarp(tmp_path):
     bids.mkdir()
     out = tmp_path / 'out'
     opts = parser.parse_args(
-        [str(bids), str(out), 'participant', '--ignore', 'gradwarp', '--output-resolution', '2']
+        [
+            str(bids),
+            str(out),
+            'participant',
+            '--ignore',
+            'gradwarp',
+            '--output-spaces',
+            'acpc:res-2mm',
+        ]
     )
     assert opts.ignore == ['gradwarp']
 
 
+def test_parser_accepts_ignore_jacobian(tmp_path):
+    """Test that --ignore accepts 'jacobian'.
+
+    'jacobian' is the --ignore off-switch for Jacobian weighting.
+    """
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    opts = parser.parse_args(
+        [
+            str(bids),
+            str(out),
+            'participant',
+            '--ignore',
+            'jacobian',
+            '--output-spaces',
+            'acpc:res-2mm',
+        ]
+    )
+    assert opts.ignore == ['jacobian']
+
+
+def test_parser_accepts_force_jacobian_and_rejects_the_pair(tmp_path):
+    """Test that --force jacobian is accepted, but not together with --ignore jacobian.
+
+    --force jacobian modulates the T2Wreg field; it cannot combine with --ignore jacobian.
+    """
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    base = [str(bids), str(out), 'participant', '--output-spaces', 'acpc:res-2mm']
+    opts = parser.parse_args([*base, '--force', 'jacobian'])
+    assert opts.force == ['jacobian']
+    with pytest.raises(SystemExit):
+        parser.parse_args([*base, '--ignore', 'jacobian', '--force', 'jacobian'])
+
+
+def test_parser_rejects_removed_jacobian_weighting_flag(tmp_path):
+    """Test that the parser rejects the removed --no-jacobian-weighting flag.
+
+    --no-jacobian-weighting was replaced by --ignore jacobian.
+    """
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    bids = tmp_path / 'bids'
+    bids.mkdir()
+    out = tmp_path / 'out'
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            [
+                str(bids),
+                str(out),
+                'participant',
+                '--output-spaces',
+                'acpc:res-2mm',
+                '--no-jacobian-weighting',
+            ]
+        )
+
+
 def test_repeated_force_accumulates(tmp_path):
-    """action='store' would keep only the last occurrence, so
+    """Test that repeated --force options accumulate.
+
+    action='store' would keep only the last occurrence, so
     "--force gradwarp1D --force gradwarp3D" would reach the validator as a
-    single value and silently apply 3D instead of being rejected."""
+    single value and silently apply 3D instead of being rejected.
+    """
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -966,23 +976,26 @@ def test_repeated_force_accumulates(tmp_path):
             'gradwarp1D',
             '--force',
             'gradwarp3D',
-            '--output-resolution',
-            '2',
+            '--output-spaces',
+            'acpc:res-2mm',
         ]
     )
     assert opts.force == ['gradwarp1D', 'gradwarp3D']
 
 
 def test_repeated_force_does_not_leak_between_parses(tmp_path):
-    """action='extend' appends to whatever is on the namespace, so a shared
-    mutable default would carry one parse's values into the next."""
+    """Test that --force values do not leak between parses.
+
+    action='extend' appends to whatever is on the namespace, so a shared
+    mutable default would carry one parse's values into the next.
+    """
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
     bids = tmp_path / 'bids'
     bids.mkdir()
     out = tmp_path / 'out'
-    base = [str(bids), str(out), 'participant', '--output-resolution', '2']
+    base = [str(bids), str(out), 'participant', '--output-spaces', 'acpc:res-2mm']
 
     assert parser.parse_args([*base, '--force', 'gradwarp1D']).force == ['gradwarp1D']
     assert parser.parse_args([*base, '--force', 'gradwarp3D']).force == ['gradwarp3D']
@@ -991,7 +1004,10 @@ def test_repeated_force_does_not_leak_between_parses(tmp_path):
 
 @pytest.mark.parametrize('flag', ['--force', '--ignore'])
 def test_parser_rejects_the_old_gradients_value(tmp_path, flag):
-    """The pre-rename spelling must fail loudly rather than be silently ignored."""
+    """Test that the parser rejects the old 'gradients' value.
+
+    The pre-rename spelling must fail loudly rather than be silently ignored.
+    """
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -1000,12 +1016,20 @@ def test_parser_rejects_the_old_gradients_value(tmp_path, flag):
     out = tmp_path / 'out'
     with pytest.raises(SystemExit):
         parser.parse_args(
-            [str(bids), str(out), 'participant', flag, 'gradients', '--output-resolution', '2']
+            [
+                str(bids),
+                str(out),
+                'participant',
+                flag,
+                'gradients',
+                '--output-spaces',
+                'acpc:res-2mm',
+            ]
         )
 
 
 def test_parser_rejects_unknown_force_value(tmp_path):
-    """--force accepts only its documented values."""
+    """Test that --force accepts only its documented values."""
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -1020,8 +1044,8 @@ def test_parser_rejects_unknown_force_value(tmp_path):
                 'participant',
                 '--force',
                 'bogus',
-                '--output-resolution',
-                '2',
+                '--output-spaces',
+                'acpc:res-2mm',
             ]
         )
 
@@ -1041,7 +1065,10 @@ def test_validate_diffprep_config_default_is_valid():
 
 
 def test_validate_diffprep_config_rejects_bad_correction_mode(tmp_path):
-    """A typo must fail at parse time, not deep inside workflow construction."""
+    """Test that an invalid correction mode is rejected at parse time.
+
+    A typo must fail at parse time, not deep inside workflow construction.
+    """
     import json
 
     from qsiprep.utils.misc import validate_diffprep_config
@@ -1121,7 +1148,7 @@ def test_load_shoreline_config_rejects_bad_files(tmp_path, contents, match):
 
 
 def test_load_shoreline_config_names_the_file_on_decode_errors(tmp_path):
-    """A file that is not UTF-8 must still produce an error naming the file."""
+    """Test that a file that is not UTF-8 produces an error naming the file."""
     from qsiprep.utils.misc import load_shoreline_config
 
     cfg = tmp_path / 'latin1.json'
@@ -1131,7 +1158,7 @@ def test_load_shoreline_config_names_the_file_on_decode_errors(tmp_path):
 
 
 def test_load_shoreline_config_names_the_file_on_read_errors(tmp_path):
-    """An unreadable path (here a directory) must raise ValueError, not a bare OSError."""
+    """Test that an unreadable path (here a directory) raises ValueError, not a bare OSError."""
     from qsiprep.utils.misc import load_shoreline_config
 
     with pytest.raises(ValueError, match=r'SHORELine configuration file .* could not be read'):
@@ -1149,7 +1176,10 @@ def test_load_shoreline_config_model_none_ignores_iters(tmp_path):
 
 
 def test_load_shoreline_config_legacy_model_override(tmp_path):
-    """The deprecated --hmc-model alias supplies the model; the file may still set the rest."""
+    """Test that the deprecated --hmc-model alias overrides the configured model.
+
+    The deprecated --hmc-model alias supplies the model; the file may still set the rest.
+    """
     import json
 
     from qsiprep.utils.misc import load_shoreline_config
@@ -1184,8 +1214,11 @@ def test_validate_gradient_flags_force_and_ignore_conflict(tmp_path, forced):
 
 
 def test_validate_gradient_flags_rejects_both_forced_dimensionalities(tmp_path):
-    """--force takes a list of values, so argparse cannot make the two
-    dimensionalities mutually exclusive; the validator does it instead."""
+    """Test that forcing both gradwarp dimensionalities is rejected.
+
+    --force takes a list of values, so argparse cannot make the two
+    dimensionalities mutually exclusive; the validator does it instead.
+    """
     from qsiprep.tests.gradient_fixtures import write_siemens_grad
     from qsiprep.utils.misc import validate_gradient_flags
 
@@ -1196,7 +1229,10 @@ def test_validate_gradient_flags_rejects_both_forced_dimensionalities(tmp_path):
 
 @pytest.mark.parametrize('forced', ['gradwarp1D', 'gradwarp3D'])
 def test_validate_gradient_flags_accepts_a_repeated_identical_dimensionality(tmp_path, forced):
-    """ "--force gradwarp1D gradwarp1D" names one dimensionality, not two."""
+    """Test that a repeated identical gradwarp dimensionality is accepted.
+
+    "--force gradwarp1D gradwarp1D" names one dimensionality, not two.
+    """
     from qsiprep.tests.gradient_fixtures import write_siemens_grad
     from qsiprep.utils.misc import validate_gradient_flags
 
@@ -1213,15 +1249,21 @@ def test_validate_gradient_flags_force_requires_gradient_file(forced):
 
 
 def test_validate_gradient_flags_ignores_unrelated_force_values():
-    """--force sdc-anat-reference has nothing to do with --gradient-file."""
+    """Test that unrelated --force values are ignored.
+
+    --force sdc-anat-reference has nothing to do with --gradient-file.
+    """
     from qsiprep.utils.misc import validate_gradient_flags
 
     validate_gradient_flags(None, force=['sdc-anat-reference'], ignore=[])
 
 
 def test_validate_gradient_flags_rejects_unknown_extension(tmp_path):
-    """TORTOISE only warns and silently disables correction. Silently producing
-    uncorrected output is the wrong default for a batch pipeline."""
+    """Test that an unknown gradient file extension is rejected.
+
+    TORTOISE only warns and silently disables correction. Silently producing
+    uncorrected output is the wrong default for a batch pipeline.
+    """
     from qsiprep.utils.misc import validate_gradient_flags
 
     bogus = tmp_path / 'coeff.txt'
@@ -1239,7 +1281,10 @@ def test_validate_gradient_flags_accepts_every_tortoise_extension(tmp_path, exte
 
 
 def test_validate_gradient_flags_default_is_a_noop():
-    """No flags at all: the feature is off and nothing is raised."""
+    """Test that nothing is raised when no gradient flags are given.
+
+    No flags at all: the feature is off and nothing is raised.
+    """
     from qsiprep.utils.misc import validate_gradient_flags
 
     validate_gradient_flags(None, force=[], ignore=[])
@@ -1264,7 +1309,9 @@ def _check_arg_specified(argname, arglist):
 
 
 def _update_resources(parameters):
-    """We should use all the available CPUs for testing.
+    """Set the number of CPUs used for testing.
+
+    We should use all the available CPUs for testing.
 
     Sometimes a test will set a specific amount of cpus. In that
     case, the number should be kept. Otherwise, try to read the
@@ -1355,59 +1402,3 @@ def _run_and_generate(test_name, parameters, test_main=False, check_outputs=True
             optional_outputs_list = None
 
         check_generated_files(config.execution.output_dir, output_list_file, optional_outputs_list)
-
-
-def test_parser_defaults_to_stable_mrtrix(tmp_path):
-    """Default to a released MRtrix3, so existing runs are unchanged."""
-    from qsiprep.cli.parser import _build_parser
-
-    parser = _build_parser()
-    bids = tmp_path / 'bids'
-    bids.mkdir()
-    out = tmp_path / 'out'
-    opts = parser.parse_args([str(bids), str(out), 'participant', '--output-resolution', '2'])
-    assert opts.mrtrix_version == 'stable'
-
-
-def test_parser_accepts_dev_mrtrix(tmp_path):
-    """``dev`` selects the development branch, which is what complex mrdegibbs needs."""
-    from qsiprep.cli.parser import _build_parser
-
-    parser = _build_parser()
-    bids = tmp_path / 'bids'
-    bids.mkdir()
-    out = tmp_path / 'out'
-    opts = parser.parse_args(
-        [
-            str(bids),
-            str(out),
-            'participant',
-            '--mrtrix-version',
-            'dev',
-            '--output-resolution',
-            '2',
-        ]
-    )
-    assert opts.mrtrix_version == 'dev'
-
-
-def test_parser_rejects_unknown_mrtrix_version(tmp_path):
-    """Reject version strings; the flag names installations, not releases."""
-    from qsiprep.cli.parser import _build_parser
-
-    parser = _build_parser()
-    bids = tmp_path / 'bids'
-    bids.mkdir()
-    out = tmp_path / 'out'
-    with pytest.raises(SystemExit):
-        parser.parse_args(
-            [
-                str(bids),
-                str(out),
-                'participant',
-                '--mrtrix-version',
-                '3.0.8',
-                '--output-resolution',
-                '2',
-            ]
-        )

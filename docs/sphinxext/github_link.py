@@ -1,4 +1,5 @@
-"""
+"""Resolve links from the API documentation to source code on GitHub.
+
 This vendored script comes from scikit-learn:
 https://github.com/scikit-learn/scikit-learn/blob/master/doc/sphinxext/github_link.py
 """
@@ -23,11 +24,14 @@ def _get_git_revision():
 
 
 def _linkcode_resolve(domain, info, package, url_fmt, revision):
-    """Determine a link to online source for a class/method/function
+    """Determine a link to online source for a class/method/function.
 
-    This is called by sphinx.ext.linkcode
+    This is called by sphinx.ext.linkcode.
 
-    An example with a long-untouched module that everyone has
+    Examples
+    --------
+    An example with a long-untouched module that everyone has:
+
     >>> _linkcode_resolve('py', {'module': 'tty',
     ...                          'fullname': 'setraw'},
     ...                   package='tty',
@@ -36,7 +40,6 @@ def _linkcode_resolve(domain, info, package, url_fmt, revision):
     ...                   revision='xxxx')
     'http://hg.python.org/cpython/file/xxxx/Lib/tty/tty.py#L18'
     """
-
     if revision is None:
         return
     if domain not in ('py', 'pyx'):
@@ -79,15 +82,22 @@ def _linkcode_resolve(domain, info, package, url_fmt, revision):
 
 
 def make_linkcode_resolve(package, url_fmt):
-    """Returns a linkcode_resolve function for the given URL format
+    """Return a linkcode_resolve function for the given URL format.
 
-    revision is a git commit reference (hash or name)
+    The git revision (hash or name) is determined from the current checkout.
 
-    package is the name of the root module of the package
+    Parameters
+    ----------
+    package : str
+        The name of the root module of the package.
+    url_fmt : str
+        URL template, along the lines of
+        ``'https://github.com/USER/PROJECT/blob/{revision}/{package}/{path}#L{lineno}'``.
 
-    url_fmt is along the lines of ('https://github.com/USER/PROJECT/'
-                                   'blob/{revision}/{package}/'
-                                   '{path}#L{lineno}')
+    Returns
+    -------
+    callable
+        A ``linkcode_resolve`` function for ``sphinx.ext.linkcode``.
     """
     revision = _get_git_revision()
     return partial(_linkcode_resolve, revision=revision, package=package, url_fmt=url_fmt)

@@ -34,10 +34,10 @@ sections:
     static: false
     subtitle: Spatial normalization of the anatomical reference
 
-  - bids: {datatype: figures, desc: intramodalcoreg, suffix: [T1w, T2w]}
-    caption: Coregistration of the intramodal DWI template to the anatomical reference image.
+  - bids: {datatype: figures, desc: dwirefcoreg, suffix: [T1w, T2w]}
+    caption: Coregistration of the subject-level dwiref template to the anatomical reference image.
     static: false
-    subtitle: Coregistration of the intramodal to anatomical templates
+    subtitle: Coregistration of the subject-level dwiref to anatomical
 
 - name: <em>B<sub>0</sub></em> field mapping
   ordering: session,acquisition,run,fmapid
@@ -114,6 +114,9 @@ sections:
   ordering: session,task,acquisition,ceagent,reconstruction,direction,run,echo
   reportlets:
   - bids: {datatype: figures, desc: summary, suffix: dwi}
+  # Written by SeriesQC only when DSI Studio could not compute a QC stage.
+  - bids: {datatype: figures, desc: qcwarnings, suffix: dwi}
+    subtitle: Quality control warnings
   # XXX: Appears to have no producer. Check.
   - bids: {datatype: figures, desc: validation, suffix: dwi}
   - bids: {datatype: figures, desc: denoising, suffix: dwi}
@@ -127,12 +130,6 @@ sections:
       "Effect of removing Gibbs ringing on a low and high-<em>b</em> image."
     static: false
     subtitle: Gibbs Ringing Removal
-
-  - bids: {datatype: figures, desc: biascorr, suffix: dwi}
-    caption: |
-      "Effect of correcting <em>B<sub>1</sub></em> bias on a low and high-<em>b</em> image."
-    static: false
-    subtitle: <em>B<sub>1</sub></em> Bias Correction
 
   - bids: {datatype: figures, desc: gradunwarp, suffix: dwi}
     caption: |
@@ -215,6 +212,31 @@ sections:
     static: false
     subtitle: Susceptibility distortion correction
 
+  - bids: {datatype: figures, desc: sdcwarp, suffix: dwi}
+    caption: |
+      The estimated susceptibility (EPI) distortion displacement field, shown over
+      the preprocessed <em>b</em>=0 in ACPC space on several slices in each of the
+      two planes that contain the phase-encoding direction. Each arrow shows the
+      direction of the displacement and its color the size in mm, so you can see how
+      the phase-encoding direction sat relative to the ACPC output and how large the
+      deformations were (usually largest in frontal and temporal regions). Arrows are
+      drawn to scale unless the field is small, in which case the title gives how
+      much they were lengthened. This matches how 3D Slicer draws the exported
+      displacement map.
+    static: false
+    subtitle: Susceptibility distortion displacement field
+
+  - bids: {datatype: figures, desc: sdcrefinement, suffix: dwi}
+    caption: |
+      With TOPUP+DRBUDDI, eddy first corrects the series with TOPUP's field and
+      DRBUDDI then refines the result. This is DRBUDDI's refinement alone, drawn
+      like the figure above but with its own, usually much smaller, color scale and
+      lengthened arrows.
+      Large arrows mark where DRBUDDI disagreed with TOPUP, which often happens
+      where signal piles up or drops out.
+    static: false
+    subtitle: DRBUDDI refinement of the TOPUP field
+
   - bids: {datatype: figures, desc: sdcT2w, suffix: dwi}
     caption: |
       Results of performing susceptibility distortion correction (SDC) using
@@ -279,11 +301,11 @@ sections:
     static: false
     subtitle: Reorientation of DWI reference image to AC-PC
 
-  - bids: {datatype: figures, desc: intramodalcoreg, suffix: dwi}
+  - bids: {datatype: figures, desc: dwirefcoreg, suffix: dwi}
     caption: |
-      b=0 reference image warped to the across-scan/session intramodal template.
+      Distortion-group b=0 reference warped to the subject-level dwiref template.
     static: false
-    subtitle: Alignment of dMRI to intramodal template
+    subtitle: Alignment of dMRI to the subject-level dwiref
 
   - bids: {datatype: figures, desc: biascorrpost.*, suffix: dwi, regex_search: True}
     caption: |

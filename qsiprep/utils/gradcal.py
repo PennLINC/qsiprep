@@ -35,7 +35,7 @@ _WHITESPACE = ' \t\n\r\f\v'
 
 
 def _stof(text):
-    """``std::stof``: read a leading float, ignore trailing junk, throw if none.
+    """Emulate ``std::stof``: read a leading float, ignore trailing junk, throw if none.
 
     Only whether this raises is meaningful here; the returned value is not used
     and exponent suffixes are deliberately not consumed, since a string with a
@@ -55,7 +55,7 @@ def _stof(text):
 
 
 def _stoi(text):
-    """``std::stoi``: read a leading integer, ignore trailing junk, throw if none."""
+    """Emulate ``std::stoi``: read a leading integer, ignore trailing junk, throw if none."""
     stripped = text.lstrip(_WHITESPACE)
     index = 0
     if index < len(stripped) and stripped[index] in '+-':
@@ -70,7 +70,7 @@ def _stoi(text):
 
 
 def _substr(text, pos, count):
-    """``std::string::substr``, including the ``size_t`` wrap on a negative count.
+    """Emulate ``std::string::substr``, including the ``size_t`` wrap on a negative count.
 
     A line ending at ``)`` makes the reader's ``size() - posA3 - 2`` underflow;
     the resulting enormous count simply clamps to the end of the string, which
@@ -82,24 +82,26 @@ def _substr(text, pos, count):
 
 
 def is_comment(line):
-    """Whether the line is a comment. The reader itself does not know about these."""
+    """Check whether the line is a comment.
+
+    The reader itself does not know about these.
+    """
     return line.lstrip().startswith('#')
 
 
 def reader_verdict(line):
-    """What ``read_Siemens_format`` would do with one line.
+    """Predict what ``read_Siemens_format`` would do with one line.
 
-    Returns ``(status, detail)`` where status is one of:
-
-    ``'skip'``
-        The line does not look like a coefficient; the reader ignores it.
-    ``'term'``
-        The reader reads a coefficient off it. ``detail`` is the axis letter,
-        or ``None`` when no ``x``/``y``/``z`` appears anywhere on the line and
-        the term is therefore dropped without warning.
-    ``'abort'``
-        The reader throws and the process dies. ``detail`` says which call and
-        on what text.
+    Returns
+    -------
+    status : {'skip', 'term', 'abort'}
+        ``'skip'``: the line does not look like a coefficient; the reader ignores it.
+        ``'term'``: the reader reads a coefficient off it.
+        ``'abort'``: the reader throws and the process dies.
+    detail : str or None
+        For ``'term'``, the axis letter, or ``None`` when no ``x``/``y``/``z`` appears
+        anywhere on the line and the term is therefore dropped without warning.
+        For ``'abort'``, which call failed and on what text.
     """
     # find_first_of("(", 3, 3) -- the first "(" at index >= 3. The count of 3
     # reads past the one-character literal, but no std::string content matches
@@ -134,7 +136,7 @@ def reader_verdict(line):
 
 
 def _lines(path):
-    """Split like ``std::getline(f, s, '\\n')``, which keeps a trailing ``\\r``."""
+    r"""Split like ``std::getline(f, s, '\n')``, which keeps a trailing ``\r``."""
     raw = Path(path).read_bytes().decode('latin-1')
     lines = raw.split('\n')
     if lines and lines[-1] == '':

@@ -22,8 +22,7 @@
 #
 #     https://www.nipreps.org/community/licensing/
 #
-r"""
-A Python module to maintain unique, run-wide *QSIPrep* settings.
+r"""A Python module to maintain unique, run-wide *QSIPrep* settings.
 
 This module implements the memory structures to keep a consistent, singleton config.
 Settings are passed across processes via filesystem, and a copy of the settings for
@@ -85,9 +84,8 @@ The :py:mod:`config` is responsible for other conveniency actions.
   * Switching Python's :obj:`multiprocessing` to *forkserver* mode.
   * Set up a filter for warnings as early as possible.
   * Automated I/O magic operations. Some conversions need to happen in the
-    store/load processes (e.g., from/to :obj:`~pathlib.Path` \<-\> :obj:`str`,
+    store/load processes (e.g., from/to :obj:`~pathlib.Path` \<-\> ``str``,
     :py:class:`~bids.layout.BIDSLayout`, etc.)
-
 """
 
 import os
@@ -167,13 +165,6 @@ if os.getenv('IS_DOCKER_8395080871'):
     if _cgroup.exists() and 'docker' in _cgroup.read_text():
         _exec_env = 'docker'
     del _cgroup
-
-_fs_license = os.getenv('FS_LICENSE')
-if not _fs_license and os.getenv('FREESURFER_HOME'):
-    _fs_home = os.getenv('FREESURFER_HOME')
-    if _fs_home and (Path(_fs_home) / 'license.txt').is_file():
-        _fs_license = str(Path(_fs_home) / 'license.txt')
-    del _fs_home
 
 _templateflow_home = Path(
     os.getenv('TEMPLATEFLOW_HOME', os.path.join(os.getenv('HOME'), '.cache', 'templateflow'))
@@ -273,17 +264,15 @@ class _Config:
 
 
 class environment(_Config):
-    """
-    Read-only options regarding the platform and environment.
+    """Read-only options regarding the platform and environment.
 
-    Crawls runtime descriptive settings (e.g., default FreeSurfer license,
+    Crawls runtime descriptive settings (e.g.,
     execution environment, nipype and *QSIPrep* versions, etc.).
     The ``environment`` section is not loaded in from file,
     only written out when settings are exported.
     This config section is useful when reporting issues,
     and these variables are tracked whenever the user does not
     opt-out using the ``--notrack`` argument.
-
     """
 
     cpu_count = os.cpu_count()
@@ -333,7 +322,7 @@ class nipype(_Config):
     }
     """Settings for NiPype's execution plugin."""
     remove_unnecessary_outputs = True
-    """Clean up unused outputs after running"""
+    """Clean up unused outputs after running."""
     resource_monitor = False
     """Enable resource monitor."""
     stop_on_first_crash = True
@@ -394,7 +383,7 @@ class execution(_Config):
     bids_dir = None
     """An existing path to the dataset, which must be BIDS-compliant."""
     derivatives = {}
-    """Path(s) to search for pre-computed derivatives"""
+    """Path(s) to search for pre-computed derivatives."""
     bids_database_dir = None
     """Path to the directory containing SQLite database indices for the input BIDS dataset."""
     bids_description_hash = None
@@ -432,7 +421,7 @@ class execution(_Config):
     participant_label = None
     """List of participant identifiers that are to be preprocessed."""
     session_label = None
-    """List of session identifiers that are to be preprocessed"""
+    """List of session identifiers that are to be preprocessed."""
     processing_list = []
     """List of (subject_id, [session_label, ...]) to be preprocessed together."""
     templateflow_home = _templateflow_home
@@ -531,7 +520,6 @@ class execution(_Config):
 
 
 # These variables are not necessary anymore
-del _fs_license
 del _exec_env
 del _nipype_ver
 del _templateflow_home
@@ -548,38 +536,38 @@ class workflow(_Config):
     """Modality to use as the anatomical reference. Images of this
     contrast will be skull stripped and segmented for use in the
     visual reports. If --infant, T2w is forced."""
-    anat_only = False
-    """Execute the anatomical preprocessing only."""
     b0_threshold = None
     """Any value in the .bval file less than this will be considered a b=0 image."""
-    b0_to_anat_transform = None
-    """Transformation model for b=0-to-anatomical coregistration. Either 'Rigid' or
-    'Affine'."""
+    dwi2anat_dof = None
+    """Degrees of freedom for DWI-to-anatomical coregistration: 6 or 12."""
     anat_biascorrect = None
     """Whether to N4-correct anatomicals: ``n4``, ``auto`` or ``none``."""
-    b1_biascorrect_stage = None
-    """The stage of processing at which to apply B1 bias correction. Either "final" (after
-    resampling), "none" (skipped entirely) or "legacy" (before concatenation)."""
-    denoise_after_combining = False
-    """Run ``dwidenoise`` after combining dwis, but before motion correction."""
+    dwi_biascorrect = None
+    """Whether to N4-correct DWIs: ``n4``, ``auto`` or ``none``."""
     denoise_method = None
-    """Image-based denoising method. Either "dwidenoise" (MRtrix), "patch2self" (DIPY)
-    or "none". DWIDenoise parameters may be appended as semicolon-delimited name:value
-    pairs."""
+    """Image-based denoising method: "dwidenoise" (MRtrix3), "dwidenoise2", "patch2self"
+    (DIPY) or "none"."""
+    dwidenoise2_config = None
+    """Configuration JSON for dwidenoise2 (``--dwidenoise2-config``)."""
     distortion_group_merge = 'concat'
     """How to combine images across distortion groups (concatenate, average or none)."""
-    dwi_denoise_window = None
+    dwidenoise_window = None
     """Window size in voxels for image-based denoising, integer or "auto"."""
     diffprep_config = None
     """Configuration JSON for running TORTOISE DIFFPREP."""
     eddy_config = None
     """Configuration for running Eddy."""
     force = None
-    """Forced processing choices (see ``--force``): currently ``sdc-anat-reference``."""
+    """Forced processing choices (see ``--force``)."""
     force_sdc_anat_reference = False
     """``--force sdc-anat-reference`` was given: the anatomical SDC reference
     overrides the fieldmap application for every DWI series (derived from
     ``force`` by the parser)."""
+    force_nocsf_synthstrip = False
+    """``--force no-csf-synthstrip`` was given: the nonlinear registration to the
+    anatomical template uses a SynthStrip ``--no-csf`` mask as its moving-image
+    mask (derived from ``force`` by the parser). The saved brain masks and the
+    AC-PC alignment keep the default SynthStrip mask."""
     gpu = None
     """Tasks to run on the GPU (see ``qsiprep.utils.gpu``)."""
     gradient_file = None
@@ -593,16 +581,18 @@ class workflow(_Config):
     ignore = None
     """Ignore particular steps for *QSIPrep*."""
     infant = False
-    """Configure pipelines specifically for infant brains"""
-    intramodal_template_iters = None
-    """Number of iterations for intramodal template construction."""
-    intramodal_template_transform = None
-    """Transformation used for building the intramodal template."""
+    """Configure pipelines specifically for infant brains."""
+    dwiref_definition = None
+    """Which dwiref coregistration targets: ``distortion-group`` or ``subject``."""
+    dwiref_construction_iters = None
+    """Number of iterations for dwiref template construction."""
+    dwiref_construction_transform = None
+    """Transformation used for building the dwiref template."""
     mrtrix_version = 'stable'
     """Which MRtrix3 installation to use: "stable" (a released version) or "dev"
     (the development branch, which is required for complex-valued ``mrdegibbs``)."""
     subject_anatomical_reference = None
-    """How should the anatomical space be defined: sessionwise, unbiased or first-lex"""
+    """How should the anatomical space be defined: sessionwise, unbiased or first-lex."""
     no_b0_harmonization = False
     """Skip re-scaling dwi scans to have matching b=0 intensities."""
     output_spaces = None
@@ -698,7 +688,7 @@ class workflow(_Config):
 
     @classmethod
     def parsed_acpc_anchor(cls):
-        """The recorded AC-PC anchor as a :class:`~qsiprep.utils.spaces.SpaceSpec`.
+        """Return the recorded AC-PC anchor as a :class:`~qsiprep.utils.spaces.SpaceSpec`.
 
         ``None`` when nothing was recorded, leaving the anchor to be derived from
         the requested spaces.
@@ -713,7 +703,7 @@ class workflow(_Config):
     # what ``_paths`` names, and toml writes anything else as its repr, so an
     # unlisted Path reaches the workflow-building subprocess as the literal
     # string "PosixPath('/path')".
-    _paths = ('gradient_file', 'shoreline_config')
+    _paths = ('dwidenoise2_config', 'gradient_file', 'shoreline_config')
 
 
 class loggers:
@@ -735,13 +725,11 @@ class loggers:
 
     @classmethod
     def init(cls):
-        """
-        Set the log level, initialize all loggers into :py:class:`loggers`.
+        """Set the log level, initialize all loggers into :py:class:`loggers`.
 
-            * Add new logger levels (25: IMPORTANT, and 15: VERBOSE).
-            * Add a new sub-logger (``cli``).
-            * Logger configuration.
-
+        * Add new logger levels (25: IMPORTANT, and 15: VERBOSE).
+        * Add a new sub-logger (``cli``).
+        * Logger configuration.
         """
         from nipype import config as ncfg
 
@@ -760,15 +748,15 @@ class loggers:
 
 
 class seeds(_Config):
-    """Initialize the PRNG and track random seed assignments"""
+    """Initialize the PRNG and track random seed assignments."""
 
     _random_seed = None
     master = None
-    """Master random seed to initialize the Pseudorandom Number Generator (PRNG)"""
+    """Master random seed to initialize the Pseudorandom Number Generator (PRNG)."""
     ants = None
-    """Seed used for antsRegistration, antsAI, antsMotionCorr"""
+    """Seed used for antsRegistration, antsAI, antsMotionCorr."""
     numpy = None
-    """Seed used by NumPy"""
+    """Seed used by NumPy."""
 
     @classmethod
     def init(cls):
@@ -783,14 +771,14 @@ class seeds(_Config):
 
 
 def _set_ants_seed():
-    """Fix random seed for antsRegistration, antsAI, antsMotionCorr"""
+    """Fix random seed for antsRegistration, antsAI, antsMotionCorr."""
     val = random.randint(1, 65536)
     os.environ['ANTS_RANDOM_SEED'] = str(val)
     return val
 
 
 def _set_numpy_seed():
-    """NumPy's random seed is independent from Python's `random` module"""
+    """Set NumPy's random seed, which is independent from Python's `random` module."""
     import numpy as np
 
     val = random.randint(1, 65536)
@@ -801,14 +789,14 @@ def _set_numpy_seed():
 def from_dict(settings, init=True, ignore=None):
     """Read settings from a flat dictionary.
 
-    Arguments
-    ---------
-    setting : dict
-        Settings to apply to any configuration
-    init : `bool` or :py:class:`~collections.abc.Container`
+    Parameters
+    ----------
+    settings : dict
+        Settings to apply to any configuration.
+    init : bool or :py:class:`~collections.abc.Container`, optional
         Initialize all, none, or a subset of configurations.
-    ignore : :py:class:`~collections.abc.Container`
-        Collection of keys in ``setting`` to ignore
+    ignore : :py:class:`~collections.abc.Container` or None, optional
+        Collection of keys in ``settings`` to ignore.
     """
 
     # Accept global True/False or container of configs to initialize
@@ -826,13 +814,13 @@ def from_dict(settings, init=True, ignore=None):
 def load(filename, skip=None, init=True):
     """Load settings from file.
 
-    Arguments
-    ---------
+    Parameters
+    ----------
     filename : :py:class:`os.PathLike`
         TOML file containing QSIPrep configuration.
-    skip : dict or None
-        Sets of values to ignore during load, keyed by section name
-    init : `bool` or :py:class:`~collections.abc.Container`
+    skip : dict or None, optional
+        Sets of values to ignore during load, keyed by section name.
+    init : bool or :py:class:`~collections.abc.Container`, optional
         Initialize all, none, or a subset of configurations.
     """
     from toml import loads

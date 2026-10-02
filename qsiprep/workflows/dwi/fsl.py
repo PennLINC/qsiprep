@@ -1,4 +1,5 @@
-"""
+"""Implementing the FSL preprocessing workflow.
+
 Implementing the FSL preprocessing workflow
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -6,7 +7,6 @@ Implementing the FSL preprocessing workflow
 
 """
 
-import json
 import os
 
 from nipype.interfaces import fsl
@@ -25,16 +25,16 @@ from ...interfaces.eddy import (
     Synb0TopupInputs,
     boilerplate_from_eddy_config,
 )
-from ...interfaces.epi_fmap import synb0_topup_config
 from ...interfaces.fmap import ParallelTOPUP
 from ...interfaces.gradients import ExtractB0s
 from ...interfaces.images import ConformDwi, IntraModalMerge, SplitDWIsFSL
 from ...interfaces.nilearn import EnhanceB0
 from ...interfaces.reports import TopupSummary
 from ...interfaces.synb0 import Synb0FieldQC
+from ...utils.eddy_config import eddy_applies_gre, eddy_modulates_distortion, load_eddy_args
 from ...utils.gpu import gpu_enabled
-from ..fieldmap.base import init_sdc_wf
-from ..fieldmap.drbuddi import init_drbuddi_wf
+from ..fieldmap.base import init_gre_seed_wf, init_sdc_wf
+from ..fieldmap.drbuddi import init_drbuddi_wf, seeds_from_gre
 from ..fieldmap.synb0 import init_synb0_wf
 from .gradwarp import (
     connect_gradwarp_coreg_reference,
@@ -56,8 +56,7 @@ def init_fsl_hmc_wf(
     slice_quality='outlier_n_sqr_stdev_map',
     name='fsl_hmc_wf',
 ):
-    """
-    This workflow controls the dwi preprocessing stages using FSL tools.
+    """Build a workflow that runs the dwi preprocessing stages using FSL tools.
 
     I couldn't get this to work reliably unless everything was oriented in LAS+ before going to
     TOPUP and eddy. For this reason, if TOPUP is going to be used (for an epi fieldmap or an
@@ -70,42 +69,42 @@ def init_fsl_hmc_wf(
 
     Finally, if SyN is chosen, it is applied to the LPS+ converted, eddy-resampled data.
 
+    Parameters
+    ----------
+    unit : :class:`~qsiplan.adapters.PreprocUnit`
+        the DWI series to correct together and the fieldmap that corrects them
+    source_file : str
+        Path to the source DWI file (used for report and derivative naming).
+    t2w_sdc : bool
+        Whether a T2w image is available for distortion correction (used for
+        DRBUDDI's multi-modal registration).
+    slice_quality : str, optional
+        Name of the eddy output that is sent to ``outputnode.slice_quality`` and
+        ``outputnode.hmc_optimization_data``. Default is
+        ``'outlier_n_sqr_stdev_map'``.
+    name : str, optional
+        Name of workflow (default: ``fsl_hmc_wf``)
 
-    **Parameters**
-
-        unit: :class:`~qsiplan.adapters.PreprocUnit`
-            the DWI series to correct together and the fieldmap that corrects them
-        impute_slice_threshold: float
-            threshold for a slice to be replaced with imputed values. Overrides the
-            parameter in ``eddy_config`` if set to a number > 0.
-        pepolar_method : str
-            Either 'DRBUDDI', 'TOPUP' or 'DRBUDDI+TOPUP'. The method for SDC when EPI
-            fieldmaps are used.
-        eddy_config: str
-            Path to a JSON file containing settings for the call to ``eddy``.
-
-
-    **Inputs**
-
-        dwi_file: str
-            DWI series. Possibly concatenated, denoised, etc
-        bvec_file: str
-            bvec file
-        bval_file: str
-            bval file
-        json_file: str
-            path to sidecar json file for dwi_file
-        b0_indices: list
-            Indexes into ``dwi_files`` that correspond to b=0 volumes
-        b0_images: list
-            List of single b=0 volumes
-        original_files: list
-            List of the files from which each DWI volume came. One per original file
-        t1_brain: str
-            Skull stripped T1w image
-        t1_mask: str
-            mask for t1_brain
-
+    Inputs
+    ------
+    dwi_file : str
+        DWI series. Possibly concatenated, denoised, etc
+    bvec_file : str
+        bvec file
+    bval_file : str
+        bval file
+    json_file : str
+        path to sidecar json file for dwi_file
+    b0_indices : list
+        Indexes into ``dwi_files`` that correspond to b=0 volumes
+    b0_images : list
+        List of single b=0 volumes
+    original_files : list
+        List of the files from which each DWI volume came. One per original file
+    t1_brain : str
+        Skull stripped T1w image
+    t1_mask : str
+        mask for t1_brain
     """
     # Check for FSL binary
     fsl_check = os.environ.get('FSL_BUILD')
@@ -155,8 +154,8 @@ def init_fsl_hmc_wf(
                 'b0_indices',
                 'to_dwi_ref_affines',
                 'to_dwi_ref_warps',
-                'rpe_b0_info',
                 'sdc_scaling_images',
+                'rpe_b0_info',
                 # From SDC
                 'fieldmap_type',
                 'fieldmap_hz',
@@ -185,8 +184,32 @@ def init_fsl_hmc_wf(
     else:
         eddy_cfg_file = config.workflow.eddy_config
 
-    with open(eddy_cfg_file) as f:
-        eddy_args = json.load(f)
+    eddy_args = load_eddy_args()
+
+    # Whether eddy is Jacobian-modulating its own resampling at all. This is
+    # known now, but whether TOPUP or a GRE fieldmap is the run's
+    # susceptibility source is not decided until further down -- only a field
+    # eddy applies itself (TOPUP's, or a GRE fieldmap's) is baked into eddy's
+    # resampling and thus left unmodulated by this setting; DRBUDDI/SyN warps
+    # are applied downstream of eddy and QSIPrep Jacobian-modulates those itself
+    # regardless of eddy's resampling method. So only 'eddy-current' -- eddy's
+    # own component, never modulated under a non-'jac' method regardless of the
+    # SDC method -- is recorded here; 'susceptibility' is gated further down. Both
+    # feed into the sidecar via ``jacobian_provenance.jacobian_provenance_for``,
+    # which recomputes this same fact from ``load_eddy_args()`` rather than
+    # threading it through here -- see that module for why.
+    eddy_will_modulate = eddy_modulates_distortion(eddy_args)
+    if not eddy_will_modulate:
+        config.loggers.workflow.warning(
+            'eddy is configured with method=%s, not "jac", so its own '
+            'eddy-current distortion correction will NOT be '
+            'Jacobian-modulated. QSIPrep cannot retrofit this: eddy has '
+            'already baked its resampling in and exports no field for the '
+            'eddy-current component. Whether the susceptibility component is '
+            "also affected depends on whether TOPUP is this run's SDC "
+            'method, resolved separately.',
+            eddy_args.get('method'),
+        )
 
     gather_inputs = pe.Node(
         GatherEddyInputs(
@@ -216,6 +239,9 @@ def init_fsl_hmc_wf(
     else:
         eddy_args['num_threads'] = omp_nthreads
         config.loggers.workflow.info('Using %d threads in eddy', eddy_args['num_threads'])
+    # A GRE fieldmap goes into eddy (--field) the way TOPUP's field does, so
+    # movement-by-susceptibility follows --eddy-config for both.
+    gre_to_eddy = eddy_applies_gre(unit)
     pre_eddy_b0_ref_wf = init_dwi_reference_wf(
         source_file=source_file,
         name='pre_eddy_b0_ref_wf',
@@ -325,6 +351,14 @@ def init_fsl_hmc_wf(
     # TOPUP+eddy stage pools every blip group.
     run_topup = unit.run.stage_with('topup') is not None
     run_drbuddi = unit.run.stage_with('drbuddi') is not None
+    # Only a field eddy applies itself (TOPUP's, or a GRE fieldmap's) is baked
+    # into eddy's own resampling (see the `eddy_will_modulate` block above), so
+    # 'susceptibility' is only unmodulated when one of those is this run's
+    # susceptibility source. DRBUDDI/SyN apply their warp downstream of eddy,
+    # and QSIPrep Jacobian-modulates that warp itself, so recording
+    # 'susceptibility' as unmodulated in that case would mislabel the sidecar.
+    # ``jacobian_provenance.jacobian_provenance_for`` mirrors this condition
+    # from ``unit`` alone, so nothing is recorded here.
     if fieldmap_type == 'synb0' and not run_topup:
         # The plan gave this unit no TOPUP stage (e.g. --sdc-method drbuddi):
         # nothing on the eddy path consumes the synthetic b=0, so the series
@@ -415,7 +449,8 @@ def init_fsl_hmc_wf(
             # Generate the synthetic distortion-free b=0 from the T1w and the
             # (pre-SDC) distorted b=0 reference, then join it to TOPUP's
             # inputs as a zero-readout distortion group. The TOPUP config is
-            # the one tuned for the synthetic-b=0 pair.
+            # the one tuned for the synthetic-b=0 pair, or its no-subsampling
+            # variant when an axis has an odd number of voxels.
             synb0_b0_ref_wf = init_dwi_reference_wf(
                 gen_report=False,
                 desc='b0_for_synb0',
@@ -425,7 +460,6 @@ def init_fsl_hmc_wf(
             synb0_wf = init_synb0_wf()
             add_synb0_outputs(workflow, synb0_wf, source_file)
             synb0_topup_inputs = pe.Node(Synb0TopupInputs(), name='synb0_topup_inputs')
-            topup.inputs.config = synb0_topup_config()
 
             # Scalar QC of the SynB0-driven field (halo/displacement checks)
             synb0_field_qc = pe.Node(Synb0FieldQC(), name='synb0_field_qc')
@@ -474,6 +508,7 @@ def init_fsl_hmc_wf(
                 (synb0_topup_inputs, topup, [
                     ('topup_datain', 'encoding_file'),
                     ('topup_imain', 'in_file'),
+                    ('topup_config', 'config'),
                 ]),
             ])  # fmt:skip
         else:
@@ -543,16 +578,22 @@ def init_fsl_hmc_wf(
     if run_drbuddi:
         outputnode.inputs.sdc_method = 'DRBUDDI'
         config.loggers.workflow.info('Running DRBUDDI for SDC')
+        # Unlike TOPUP-only (baked into eddy's own resampling, see above),
+        # DRBUDDI's warp is carried in to_dwi_ref_warps and applied downstream
+        # of eddy, so it reaches ComposeJacobianWeights externally (recorded
+        # by jacobian_provenance.jacobian_provenance_for, not here).
 
         # Let gather_inputs know we're doing pepolar, even though it's not topup
         gather_inputs.inputs.topup_requested = True
         if unit.extra_b0:
             gather_inputs.inputs.epi_fmaps = list(unit.extra_b0)
 
+        gre_seed = seeds_from_gre(unit)
         drbuddi_wf = init_drbuddi_wf(
             unit=unit,
             t2w_sdc=t2w_sdc,
             use_cuda=gpu_enabled('drbuddi'),
+            initialize_from_field=gre_seed,
         )
 
         if has_gradwarp:
@@ -594,44 +635,114 @@ def init_fsl_hmc_wf(
                 ('outputnode.b0_ref', 'b0_template'),
             ]),
         ])  # fmt:skip
+        if gre_seed:
+            gre_seed_wf = init_gre_seed_wf(unit, has_gradwarp, source_file, use='drbuddi')
+            workflow.connect([
+                (extract_b0_series, gre_seed_wf, [('b0_average', 'inputnode.b0_template')]),
+                (inputnode, gre_seed_wf, [
+                    ('t1_brain', 'inputnode.t1_brain'),
+                    ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
+                    ('gradwarp_field', 'inputnode.gradwarp_field'),
+                ]),
+                (gre_seed_wf, drbuddi_wf, [('outputnode.out_warp', 'inputnode.initial_field')]),
+            ])  # fmt:skip
 
         return workflow
 
     if unit.is_gre or unit.is_nipreps_syn:
         config.loggers.workflow.info(f'Computing fieldmap directly from {fieldmap_type}')
         outputnode.inputs.sdc_method = fieldmap_type
-        b0_sdc_wf = init_sdc_wf(unit)
 
-        # Send to SDC workflow
-        if has_gradwarp:
-            connect_gradwarp_sdc_reference(
-                workflow,
-                inputnode,
-                b0_ref_for_coreg,
-                ('outputnode.ref_image', 'outputnode.ref_image_brain', 'outputnode.dwi_mask'),
-                b0_sdc_wf,
+        # A GRE fieldmap handed to eddy must be estimated on a PRE-eddy reference
+        # (b0_ref_for_coreg is built from eddy's own output). It is fed in the raw,
+        # gradient-distorted frame like TOPUP's field, so gradient unwarping
+        # (applied downstream) composes with it and needs no gradwarp mode here.
+        b0_sdc_wf = init_sdc_wf(
+            unit,
+            gradwarp=has_gradwarp and not gre_to_eddy,
+            use='eddy' if gre_to_eddy else 'apply',
+        )
+
+        if gre_to_eddy:
+            # Register the field's reference to eddy's first volume for --field_mat.
+            gre_to_eddy_reg = pe.Node(
+                fsl.FLIRT(dof=6, output_type='NIFTI_GZ'), name='gre_to_eddy_reg'
             )
-        else:
+            gre_field_to_eddy = pe.Node(
+                fsl.ApplyXFM(apply_xfm=True, interp='nearestneighbour', output_type='NIFTI_GZ'),
+                name='gre_field_to_eddy',
+            )
             workflow.connect([
-                (b0_ref_for_coreg, b0_sdc_wf, [
+                # Estimate the fieldmap on the pre-eddy b=0 reference (the same
+                # distorted reference the non-TOPUP path already builds for eddy's
+                # mask), rather than the post-eddy b0_ref_for_coreg.
+                (pre_eddy_b0_ref_wf, b0_sdc_wf, [
                     ('outputnode.ref_image', 'inputnode.b0_ref'),
                     ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
                     ('outputnode.dwi_mask', 'inputnode.b0_mask'),
                 ]),
+                (inputnode, b0_sdc_wf, [
+                    ('t1_brain', 'inputnode.t1_brain'),
+                    ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
+                ]),
+                # Hand eddy the fieldmap in Hz (its --field convention matches
+                # FUGUE, so no sign flip) plus the field->eddy rigid transform.
+                (b0_sdc_wf, gre_to_eddy_reg, [('outputnode.b0_ref', 'in_file')]),
+                (gather_inputs, gre_to_eddy_reg, [('eddy_first', 'reference')]),
+                (b0_sdc_wf, eddy, [('outputnode.fieldmap_hz', 'field')]),
+                (gre_to_eddy_reg, eddy, [('out_matrix_file', 'field_mat')]),
+                # eddy now bakes in the SDC in the raw frame -- out_warp is
+                # deliberately NOT applied downstream (that would double-correct).
+                (gather_inputs, outputnode, [('forward_warps', 'to_dwi_ref_warps')]),
+                (b0_sdc_wf, outputnode, [('outputnode.method', 'sdc_method')]),
+                # The field eddy applied, on eddy's grid, for the displacement map.
+                (b0_sdc_wf, gre_field_to_eddy, [('outputnode.fieldmap_hz', 'in_file')]),
+                (gre_to_eddy_reg, gre_field_to_eddy, [('out_matrix_file', 'in_matrix_file')]),
+                (gather_inputs, gre_field_to_eddy, [('eddy_first', 'reference')]),
+                (gre_field_to_eddy, outputnode, [('out_file', 'fieldmap_hz')]),
             ])  # fmt:skip
+            # The coregistration reference still needs gradient unwarping; the
+            # DWI receives it from the composed gradwarp field, exactly as the
+            # TOPUP-only branch handles its eddy-baked field.
+            if has_gradwarp:
+                connect_gradwarp_coreg_reference(
+                    workflow, inputnode, b0_ref_for_coreg, 'outputnode.ref_image', outputnode
+                )
+            else:
+                workflow.connect([
+                    (b0_ref_for_coreg, outputnode, [('outputnode.ref_image', 'b0_template')]),
+                ])  # fmt:skip
+        else:
+            # Send to SDC workflow (applied after eddy).
+            if has_gradwarp:
+                connect_gradwarp_sdc_reference(
+                    workflow,
+                    inputnode,
+                    b0_ref_for_coreg,
+                    ('outputnode.ref_image', 'outputnode.ref_image_brain', 'outputnode.dwi_mask'),
+                    b0_sdc_wf,
+                )
+            else:
+                workflow.connect([
+                    (b0_ref_for_coreg, b0_sdc_wf, [
+                        ('outputnode.ref_image', 'inputnode.b0_ref'),
+                        ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
+                        ('outputnode.dwi_mask', 'inputnode.b0_mask'),
+                    ]),
+                ])  # fmt:skip
 
-        workflow.connect([
-            (inputnode, b0_sdc_wf, [
-                ('t1_brain', 'inputnode.t1_brain'),
-                ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-            ]),
-            # These deformations will be applied later, use the unwarped image now
-            (b0_sdc_wf, outputnode, [
-                ('outputnode.out_warp', 'to_dwi_ref_warps'),
-                ('outputnode.method', 'sdc_method'),
-                ('outputnode.b0_ref', 'b0_template'),
-            ]),
-        ])  # fmt:skip
+            workflow.connect([
+                (inputnode, b0_sdc_wf, [
+                    ('t1_brain', 'inputnode.t1_brain'),
+                    ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
+                ]),
+                # These deformations will be applied later, use the unwarped image now
+                (b0_sdc_wf, outputnode, [
+                    ('outputnode.out_warp', 'to_dwi_ref_warps'),
+                    ('outputnode.method', 'sdc_method'),
+                    ('outputnode.b0_ref', 'b0_template'),
+                ]),
+            ])  # fmt:skip
 
     if not fieldmap_type:
         outputnode.inputs.sdc_method = 'None'

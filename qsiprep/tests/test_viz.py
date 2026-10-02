@@ -27,7 +27,7 @@ def _grid_img(data, resolution, origin=None):
 
 @pytest.fixture
 def fov_mismatch():
-    """A segmentation plus "before"/"after" images sampled on different grids.
+    """Provide a segmentation plus "before"/"after" images sampled on different grids.
 
     This mimics DRBUDDI, which writes its corrected images onto a finer grid with
     a larger field of view than the images it was given.
@@ -63,7 +63,7 @@ def _capture_axis_limits(monkeypatch, module):
 
 
 def test_plot_pepolar_fov_is_independent_of_the_plotted_image(monkeypatch, fov_mismatch):
-    """The before and after panels share a field of view despite differing grids."""
+    """Test that the before and after panels share a field of view despite differing grids."""
     seg, before, after = fov_mismatch
     from nilearn.image import crop_img
 
@@ -90,7 +90,7 @@ def test_plot_pepolar_fov_is_independent_of_the_plotted_image(monkeypatch, fov_m
 
 
 def test_plot_fa_reg_fov_is_independent_of_the_plotted_image(monkeypatch, fov_mismatch):
-    """The FA before and after panels share a field of view despite differing grids."""
+    """Test that the FA before and after panels share a field of view despite differing grids."""
     seg, before, after = fov_mismatch
     from nilearn.image import crop_img
 
@@ -114,7 +114,7 @@ def test_plot_fa_reg_fov_is_independent_of_the_plotted_image(monkeypatch, fov_mi
 
 
 def test_plot_denoise_honors_the_crop(monkeypatch, fov_mismatch):
-    """Contours drawn from an uncropped image do not undo the requested crop."""
+    """Test that contours drawn from an uncropped image do not undo the requested crop."""
     seg, _, _ = fov_mismatch
     from nilearn.image import crop_img
 

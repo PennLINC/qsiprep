@@ -1,6 +1,7 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
+"""Workflows for unwarping susceptibility distortions with a fieldmap.
+
 .. _sdc_unwarp :
 
 Unwarping
@@ -32,13 +33,14 @@ from niworkflows.interfaces.reportlets.registration import ANTSApplyTransformsRP
 from ... import config
 from ...data import load as load_data
 from ...interfaces import DerivativesDataSink
-from ...interfaces.fmap import FieldmapToVSM, FieldToHz, FieldToRadS
+from ...interfaces.fmap import FieldmapToVSM, FieldToRadS
 from ...interfaces.fmap import get_ees as _get_ees
 from ...interfaces.niworkflows import FUGUEvsm2ANTSwarp
 
 
 def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
-    """
+    """Build a workflow that converts a fieldmap into an ANTs-compatible warp.
+
     This workflow takes in a displacements fieldmap and calculates the corresponding
     displacements field (in other words, an ANTs-compatible warp file).
 
@@ -73,12 +75,10 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
     out_warp
         the corresponding :abbr:`DFM (displacements field map)` compatible with
         ANTs
-    out_jacobian
-        the jacobian of the field (for drop-out alleviation)
     out_mask
         mask of the unwarped input file
     out_hz
-        fieldmap in Hz that can be sent to eddy
+        the fieldmap in Hz on the ``in_reference`` grid (eddy's ``--field``)
 
     """
     omp_nthreads = config.nipype.omp_nthreads
@@ -110,7 +110,6 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
                 'out_reference_brain',
                 'out_warp',
                 'out_mask',
-                'out_jacobian',
                 'out_hz',
             ]
         ),
@@ -165,19 +164,12 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
     # Fieldmap to rads and then to voxels (VSM - voxel shift map)
     torads = pe.Node(FieldToRadS(fmap_range=0.5), name='torads')
 
-    # Make one in Hz for eddy
-    tohz = pe.Node(FieldToHz(range_hz=1), name='tohz')
-
     get_ees = pe.Node(niu.Function(function=_get_ees, output_names=['ees']), name='get_ees')
 
     gen_vsm = pe.Node(FieldmapToVSM(), name='gen_vsm')
     # Convert the VSM into a DFM (displacements field map)
     # or: FUGUE shift to ANTS warping.
     vsm2dfm = pe.Node(FUGUEvsm2ANTSwarp(), name='vsm2dfm')
-    jac_dfm = pe.Node(
-        ants.CreateJacobianDeterminantImage(imageDimension=3, outputImage='jacobian.nii.gz'),
-        name='jac_dfm',
-    )
 
     unwarp_reference = pe.Node(
         ANTSApplyTransformsRPT(
@@ -208,8 +200,7 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
         (fmap2ref_rpt, ds_report_reg, [('out_report', 'in_file')]),
         (inputnode, fmap2ref_apply, [('fmap', 'input_image')]),
         (fmap2ref_apply, torads, [('output_image', 'in_file')]),
-        (fmap2ref_apply, tohz, [('output_image', 'in_file')]),
-        (tohz, outputnode, [('out_file', 'out_hz')]),
+        (fmap2ref_apply, outputnode, [('output_image', 'out_hz')]),
         (inputnode, get_ees, [
             ('in_reference', 'in_file'),
             ('metadata', 'in_meta'),
@@ -222,7 +213,6 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
         (inputnode, unwarp_reference, [('in_reference', 'reference_image')]),
         (inputnode, unwarp_reference, [('in_reference', 'input_image')]),
         (vsm2dfm, outputnode, [('out_file', 'out_warp')]),
-        (vsm2dfm, jac_dfm, [('out_file', 'deformationField')]),
         (inputnode, fieldmap_fov_mask, [('fmap_ref', 'in_file')]),
         (fieldmap_fov_mask, fmap_fov2ref_apply, [('out_file', 'input_image')]),
         (inputnode, fmap_fov2ref_apply, [('in_reference', 'reference_image')]),
@@ -233,7 +223,6 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
             ('out_file', 'out_reference'),
             ('out_file', 'out_reference_brain'),
         ]),
-        (jac_dfm, outputnode, [('jacobian_image', 'out_jacobian')]),
         (gen_vsm, vsm2dfm, [('shift_out_file', 'in_file')]),
     ])  # fmt:skip
 
@@ -241,7 +230,8 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
 
 
 def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf'):
-    """
+    """Build a workflow that generates a reportlet showing the effect of fieldmap unwarping.
+
     This workflow generates and saves a reportlet showing the effect of fieldmap
     unwarping a DWI image.
 

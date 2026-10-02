@@ -1,12 +1,8 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
-Interfaces to generate reportlets
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+"""Interfaces to generate reportlets."""
 
-
-"""
-
+import html
 import os
 import os.path as op
 import re
@@ -30,7 +26,9 @@ from nipype.interfaces.base import (
     traits,
 )
 
+from ..viz.utils import plot_sdc_warp
 from .bids import get_bids_params
+from .dsi_studio import QC_WARNINGS_COLUMN
 from .gradients import concatenate_bvals, concatenate_bvecs
 
 SUBJECT_TEMPLATE = """{mrtrix_warning}\t<ul class="elem-desc">
@@ -53,11 +51,12 @@ SUBJECT_SESSION_ANAT_TEMPLATE = """\t<ul class="elem-desc">
 \t</ul>
 """
 
-DIFFUSION_TEMPLATE = """\t\t<h3 class="elem-title">Summary</h3>
+DIFFUSION_TEMPLATE = """{dwi_biascorrect_warning}\t\t<h3 class="elem-title">Summary</h3>
 \t\t<ul class="elem-desc">
 \t\t\t<li>Phase-encoding (PE) direction: {pedir}</li>
 \t\t\t<li>Susceptibility distortion correction: {sdc}</li>
-\t\t\t<li>Coregistration Transform: {coregistration}</li>
+\t\t\t<li>Coregistration DOF: {coregistration}</li>
+\t\t\t<li>DWI bias correction: {dwi_biascorrect}</li>
 \t\t\t<li>Denoising Method: {denoise_method}</li>
 \t\t\t<li>Denoising Window: {denoise_window}</li>
 {hmc_transform_line}\t\t\t<li>HMC Model: {hmc_model}</li>
@@ -89,12 +88,32 @@ GROUPING_TEMPLATE = """\t<ul>
 </ul>
 """
 
+DWI_BIASCORRECT_AUTO_WARNING = """\t\t<div class="alert alert-warning" role="alert">
+\t\t\t<strong>Automatic bias-correction decision.</strong>
+\t\t\tThis run used <code>--dwi-biascorrect auto</code>, which decides whether to run
+\t\t\tN4 from the BIDS <code>ImageType</code> metadata. How well that check generalizes
+\t\t\tacross vendors and sequences is not established. Confirm the decision below
+\t\t\tmatches your expectation for this data.
+\t\t</div>
+"""
+
 MRTRIX_DEV_WARNING = """\t<div class="alert alert-warning" role="alert">
 \t\t<strong>Development-branch MRtrix3.</strong>
 \t\tThis run used the MRtrix3 development branch rather than a released version, at
 \t\tyour request via <code>--mrtrix-version dev</code>. Development-branch code has not
 \t\tbeen through a release cycle and may contain bugs. Inspect these outputs before
 \t\trelying on them.
+\t</div>
+"""
+
+QC_WARNINGS_TEMPLATE = """\t<div class="alert alert-warning" role="alert">
+\t\t<strong>DSI Studio could not compute some QC measures.</strong>
+\t\tThose values are <code>n/a</code> in this series' <code>desc-image_qc.tsv</code>.
+\t\tPreprocessing continued, but this failure can point to a problem in the data it
+\t\twas run on, such as extreme intensity values, so inspect the outputs.
+\t\t<ul>
+{items}
+\t\t</ul>
 \t</div>
 """
 
@@ -231,9 +250,11 @@ class DiffusionSummaryInputSpec(BaseInterfaceInputSpec):
     impute_slice_threshold = traits.CFloat(desc='threshold for imputing a slice')
     hmc_transform = traits.Str(desc='transform optimized during HMC (SHORELine runs only)')
     hmc_model = traits.Str(desc='model used for hmc')
-    b0_to_anat_transform = traits.Enum('Rigid', 'Affine', desc='Transform type for coregistration')
+    dwi2anat_dof = traits.Enum(6, 12, desc='Degrees of freedom for coregistration')
+    dwi_biascorrect = traits.Enum('n4', 'auto', 'none', desc='--dwi-biascorrect mode requested')
+    dwi_biascorrect_applied = traits.Bool(desc='whether N4 actually ran for this output')
     denoise_method = traits.Str(desc='method used for image denoising')
-    dwi_denoise_window = traits.Either(
+    dwidenoise_window = traits.Either(
         traits.Int(), traits.Str(), desc='window size for dwidenoise'
     )
     gradient_correction = traits.Str(
@@ -270,14 +291,27 @@ class DiffusionSummary(SummaryInterface):
         if isdefined(self.inputs.hmc_transform):
             hmc_transform_line = f'\t\t\t<li>HMC Transform: {self.inputs.hmc_transform}</li>\n'
 
+        biascorrect = ''
+        biascorrect_warning = ''
+        if isdefined(self.inputs.dwi_biascorrect):
+            biascorrect = self.inputs.dwi_biascorrect
+            if biascorrect == 'auto':
+                biascorrect_warning = DWI_BIASCORRECT_AUTO_WARNING
+            if isdefined(self.inputs.dwi_biascorrect_applied):
+                # Under `auto` the mode alone does not say whether N4 ran.
+                outcome = 'applied' if self.inputs.dwi_biascorrect_applied else 'skipped'
+                biascorrect = f'{biascorrect} ({outcome})'
+
         return DIFFUSION_TEMPLATE.format(
+            dwi_biascorrect=biascorrect,
+            dwi_biascorrect_warning=biascorrect_warning,
             pedir=pedir,
             sdc=self.inputs.distortion_correction,
-            coregistration=self.inputs.b0_to_anat_transform,
+            coregistration=self.inputs.dwi2anat_dof,
             hmc_transform_line=hmc_transform_line,
             hmc_model=self.inputs.hmc_model,
             denoise_method=self.inputs.denoise_method,
-            denoise_window=self.inputs.dwi_denoise_window,
+            denoise_window=self.inputs.dwidenoise_window,
             gradient_correction=self.inputs.gradient_correction,
             output_spaces='ACPC',
             confounds=re.sub(r'[\t ]+', ', ', conflist),
@@ -432,6 +466,8 @@ def topup_selection_to_report(
 ):
     """Write a description of how the images were selected for TOPUP.
 
+    Examples
+    --------
     >>> selected_indices = [0, 15, 30, 45]
     >>> original_files = ["sub-1_dir-AP_dwi.nii.gz"] * 30 + ["sub-1_dir-PA_dwi.nii.gz"] * 30
     >>> spec_lookup = {"sub-1_dir-AP_dwi.nii.gz": "0 1 0 0.087",
@@ -523,6 +559,41 @@ from sub-1_dir-PA_dwi.nii.gz.
     return ''.join(desc)
 
 
+class _SDCWarpPlotInputSpec(BaseInterfaceInputSpec):
+    warp_file = File(exists=True, mandatory=True, desc='SDC displacement field on the ACPC grid')
+    b0_ref = File(exists=True, mandatory=True, desc='ACPC b=0 reference image for the background')
+    n_slices = traits.Int(3, usedefault=True, desc='slices to show per plane')
+    step = traits.Int(4, usedefault=True, desc='draw an arrow every N voxels')
+    title = traits.Str('SDC displacement field (ACPC space)', usedefault=True, desc='figure title')
+
+
+class _SDCWarpPlotOutputSpec(TraitedSpec):
+    out_file = File(exists=True, desc='SVG glyph figure of the SDC displacement field')
+
+
+class SDCWarpPlot(SimpleInterface):
+    """Quiver of the SDC displacement field over the ACPC b=0, like Slicer's glyphs.
+
+    Shows how the phase-encoding direction sat relative to the ACPC output and how
+    large the susceptibility displacements are (see
+    :func:`qsiprep.viz.utils.plot_sdc_warp`).
+    """
+
+    input_spec = _SDCWarpPlotInputSpec
+    output_spec = _SDCWarpPlotOutputSpec
+
+    def _run_interface(self, runtime):
+        self._results['out_file'] = plot_sdc_warp(
+            self.inputs.warp_file,
+            self.inputs.b0_ref,
+            os.path.join(runtime.cwd, 'sdc_warp_glyph.svg'),
+            n_slices=self.inputs.n_slices,
+            step=self.inputs.step,
+            title=self.inputs.title,
+        )
+        return runtime
+
+
 class _SeriesQCInputSpec(BaseInterfaceInputSpec):
     pre_qc = File(exists=True, desc='qc file from the raw data', mandatory=True)
     t1_qc = File(exists=True, desc='qc file from preprocessed image in t1 space')
@@ -539,6 +610,11 @@ class _SeriesQCInputSpec(BaseInterfaceInputSpec):
 
 class _SeriesQCOutputSpec(TraitedSpec):
     series_qc_file = File(exists=True)
+    qc_warnings_report = File(
+        exists=True,
+        desc='HTML reportlet naming QC stages DSI Studio could not measure. '
+        'Undefined when every stage succeeded.',
+    )
 
 
 class SeriesQC(SimpleInterface):
@@ -546,11 +622,23 @@ class SeriesQC(SimpleInterface):
     output_spec = _SeriesQCOutputSpec
 
     def _run_interface(self, runtime):
-        image_qc = _load_qc_file(self.inputs.pre_qc, prefix='raw_')
-        if isdefined(self.inputs.t1_qc):
-            image_qc.update(_load_qc_file(self.inputs.t1_qc, prefix='t1_'))
-        if isdefined(self.inputs.t1_qc_postproc):
-            image_qc.update(_load_qc_file(self.inputs.t1_qc_postproc, prefix='t1post_'))
+        image_qc = {}
+        qc_warnings = []
+        for qc_file, prefix, label in (
+            (self.inputs.pre_qc, 'raw_', 'Raw data'),
+            (self.inputs.t1_qc, 't1_', 'Resampled data'),
+            (self.inputs.t1_qc_postproc, 't1post_', 'Resampled data after final denoising'),
+        ):
+            if not isdefined(qc_file):
+                continue
+            stage = _load_qc_file(qc_file, prefix=prefix)
+            # The reason travels in merged_qc.csv but is not a QC measure, so it
+            # goes to the HTML report rather than into image_qc.tsv.
+            warning = stage.pop(prefix + QC_WARNINGS_COLUMN, None)
+            if isinstance(warning, str) and warning.strip():
+                qc_warnings.append((label, warning.strip()))
+            image_qc.update(stage)
+
         motion_summary = calculate_motion_summary(self.inputs.confounds_file)
         image_qc.update(motion_summary)
 
@@ -577,8 +665,20 @@ class SeriesQC(SimpleInterface):
         bids_info = get_bids_params(output_file)
         image_qc.update(bids_info)
         output = op.join(runtime.cwd, 'dwi_qc.tsv')
-        pd.DataFrame(image_qc).to_csv(output, sep='\t', index=False)
+        # n/a is the BIDS spelling of a missing value in a TSV.
+        pd.DataFrame(image_qc).to_csv(output, sep='\t', index=False, na_rep='n/a')
         self._results['series_qc_file'] = output
+
+        if qc_warnings:
+            report = op.join(runtime.cwd, 'qc_warnings.html')
+            items = '\n'.join(
+                f'\t\t\t<li>{html.escape(label)}: {html.escape(message)}</li>'
+                for label, message in qc_warnings
+            )
+            with open(report, 'w') as fobj:
+                fobj.write(QC_WARNINGS_TEMPLATE.format(items=items))
+            self._results['qc_warnings_report'] = report
+
         return runtime
 
 

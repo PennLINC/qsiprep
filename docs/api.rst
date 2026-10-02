@@ -1,8 +1,8 @@
 .. include:: links.rst
 
-################
-Developers - API
-################
+###
+API
+###
 
 *****************************
 Internal configuration system
@@ -16,26 +16,8 @@ Internal configuration system
 Library API
 ***********
 
-Preprocessing Workflows
-=======================
-
 .. toctree::
-   :glob:
+   :maxdepth: 2
 
-   api/qsiprep.workflows.base
-   api/qsiprep.workflows.anatomical
-   api/qsiprep.workflows.dwi
-   api/qsiprep.workflows.fieldmap
-
-
-Other Utilities
-===============
-
-.. toctree::
-   :glob:
-
-   api/qsiprep.interfaces
-   api/qsiprep.utils
-   api/qsiprep.report
-   api/qsiprep.viz
-   api/qsiprep.qc
+   api/qsiprep.workflows
+   api/qsiprep

@@ -67,10 +67,10 @@ def load_and_reorient(filename):
 
 
 def make_a_square(data_mat, include_last_dim=True):
-    """Applies zero padding to make a 2d matrix a square.
+    """Apply zero padding to make a 2d matrix a square.
 
-    Examples:
-    ---------
+    Examples
+    --------
     >>> too_long = np.arange(4 * 7).reshape((4, 7))
     >>> long_squared = make_a_square(too_long)
     >>> long_squared.shape
@@ -183,18 +183,23 @@ def square_and_normalize_slice(slice2d):
 def embed_tiles_in_json_sprite(tile_list, as_bytes=True, out_file=None):
     """Make a big rectangle containing the images for a brainsprite.
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
+    tile_list : list
+        List of 2d square numpy arrays to stick in a mosaic
+    as_bytes : bool, optional
+        If True, render the mosaic to a figure and return it under the ``img`` key
+        (base64-encoded PNG data, or the path to ``out_file`` if one is given)
+        instead of returning the array under the ``mosaic`` key.
+    out_file : str or None, optional
+        Path to which the rendered mosaic is saved when ``as_bytes`` is True.
 
-        tile_list : list
-          List of 2d square numpy arrays to stick in a mosaic
-
-    Returns:
-    --------
-
-        mosaic : np.ndarray
-            Mosaic of tile images
-
+    Returns
+    -------
+    dict
+        Mosaic of tile images (``mosaic`` or ``img``), along with the number of
+        tile rows (``N``) and columns (``M``), the tile size (``pix``), and the
+        number of tiles (``num_slices``).
     """
     # Tiles are squares
     tile_size = tile_list[0].shape[0]

@@ -55,7 +55,12 @@ def write_itk_field(path, shape=(8, 8, 8), amplitude=0.5):
     data = np.zeros(shape + (1, 3), dtype='float32')
     for component in range(3):
         data[..., 0, component] = amplitude * grid[component] ** 2
-    nb.Nifti1Image(data, np.eye(4)).to_filename(str(path))
+    img = nb.Nifti1Image(data, np.eye(4))
+    # Without NIFTI_INTENT_VECTOR, ANTs reads this 5D file as an all-zero
+    # displacement field rather than the field written here. SimpleITK stamps
+    # this automatically when it writes a vector image; nibabel does not.
+    img.header.set_intent('vector')
+    img.to_filename(str(path))
     return path
 
 

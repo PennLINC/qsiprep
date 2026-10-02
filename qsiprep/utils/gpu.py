@@ -51,19 +51,20 @@ def resolve_gpu_tasks(requested):
 
 
 def gpu_enabled(task, config_file_value=None):
-    """Whether ``task`` should run on the GPU.
+    """Decide whether ``task`` should run on the GPU.
 
     Parameters
     ----------
-    task : :obj:`str`
+    task : str
         One of :data:`GPU_TASKS`.
-    config_file_value : :obj:`bool` or ``None``
+    config_file_value : bool or None, optional
         The legacy per-tool setting -- ``"use_cuda"`` in ``--eddy-config`` or
         ``--diffprep-config``.
 
     Returns
     -------
-    :obj:`bool`
+    bool
+        Whether ``task`` should run on the GPU.
 
     Notes
     -----
@@ -97,7 +98,7 @@ def gpu_enabled(task, config_file_value=None):
 
 
 def _gpu_visible():
-    """Is a CUDA device actually reachable from this process?
+    """Check whether a CUDA device is actually reachable from this process.
 
     Inside a container the NVIDIA toolkit injects ``nvidia-smi`` only when the
     GPU was requested (``docker --gpus all`` / ``apptainer --nv``), so its
@@ -120,7 +121,7 @@ def _gpu_visible():
 
 
 def _missing_binary(task):
-    """Executable required by ``task`` that is not on ``PATH``, or ``None``."""
+    """Return the executable required by ``task`` that is not on ``PATH``, or ``None``."""
     if task == 'eddy':
         from ..interfaces.eddy import _find_eddy_cuda
 

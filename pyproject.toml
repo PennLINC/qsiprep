@@ -34,7 +34,7 @@ dependencies = [
     "psutil <= 5.9.8",
     "pybids >= 0.15.0, < 0.16.0",
     "pyyaml",
-    "qsiplan >= 0.4.0, < 0.5",
+    "qsiplan >= 0.4.2, < 0.5",
     "scikit-image",
     "scikit-learn <= 1.4.0",
     "seaborn",
@@ -56,7 +56,7 @@ dynamic = ["version"]
 
 [project.urls]
 Homepage = "https://github.com/pennlinc/qsiprep"
-Documentation = "https://www.qsiprep.readthedocs.io"
+Documentation = "https://qsiprep.readthedocs.io"
 Paper = "https://doi.org/10.1038/s41592-022-01458-7"
 "Docker Images" = "https://hub.docker.com/r/pennlinc/qsiprep/tags/"
 
@@ -65,10 +65,10 @@ doc = [
     "dipy",
     "doctest-ignore-unicode",
     "lxml_html_clean",
-    "myst-nb",
+    "myst-parser",
     "pydot >= 1.2.3",
     "pydotplus",
-    "sphinx >= 4.2.0",
+    "sphinx >= 7",
     "sphinx-argparse",
     "sphinx_rtd_theme",
     "sphinxcontrib-apidoc",
@@ -217,6 +217,8 @@ extend-select = [
   "ICN",
   "PT",
   "Q",
+  "D",
+  "D212",  # Summary on the same line as the opening quotes
 ]
 ignore = [
   "S101",  # Ignore use of assert for now
@@ -236,7 +238,18 @@ ignore = [
   "UP028",  # TODO: Fix these
   "UP031",  # TODO: Fix these
   "BLE001",  # TODO: Fix these
+  "D100",  # Missing docstrings are not enforced (yet)
+  "D101",
+  "D102",
+  "D103",
+  "D104",
+  "D105",
+  "D106",
+  "D107",
 ]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
 
 [tool.ruff.lint.flake8-quotes]
 inline-quotes = "single"
@@ -269,8 +282,7 @@ markers = [
     "dsdti_nofmap: test 13",
     "dsdti_synfmap: test 14",
     "dsdti_topup: test 15",
-    "intramodal_template: IntramodalTemplate integration test",
-    "multi_t1w: MultiT1w integration test",
+    "dwiref: subject-level dwiref integration test",
     "maternal_brain_project: multi-shell with GRE field map",
     "forrest_gump: single-shell with GRE field map",
     "forrest_gump_patch2self: single-shell with GRE field map and patch2self",
@@ -303,4 +315,5 @@ skip = '.git,*.pdf,*.svg,*.html,dataset_description.json,*.gii,*.bib,*.lock'
 # reson - Reson. abbreviation in citation
 # DNE: acronym for does not exist
 # fo: acronym for file object
-ignore-words-list = 'te,weill,reson,DNE,fo,Gage,nd,pres,fixel,assertIn'
+# vlarge: dwidenoise2 schedule
+ignore-words-list = 'te,weill,reson,DNE,fo,Gage,nd,pres,fixel,assertIn,vlarge'

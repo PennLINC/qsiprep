@@ -1,6 +1,7 @@
 # emacs: -*- mode: python; py-indent-offset: 4; indent-tabs-mode: nil -*-
 # vi: set ft=python sts=4 ts=4 sw=4 et:
-"""
+"""Utility workflows.
+
 Utility workflows
 ^^^^^^^^^^^^^^^^^
 
@@ -25,14 +26,13 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 
 
 def init_modelfree_qc_wf(bvec_convention='DIPY', name='dwi_qc_wf'):
-    """
-    This workflow runs DSI Studio's QC metrics
+    """Build a workflow that runs DSI Studio's QC metrics.
 
     Parameters
     ----------
-    bvec_convention : "DIPY", "FSL" or "auto"
+    bvec_convention : {'DIPY', 'FSL', 'auto'}, optional
         What kind of bvecs
-    name : str
+    name : str, optional
         Name of workflow (default: ``dwi_qc_wf``)
 
     Inputs
@@ -46,10 +46,8 @@ def init_modelfree_qc_wf(bvec_convention='DIPY', name='dwi_qc_wf'):
 
     Outputs
     -------
-    qc file
+    qc_summary
         DSI Studio's src QC metrics for the input data
-
-
     """
     omp_nthreads = config.nipype.omp_nthreads
     workflow = Workflow(name=name)
@@ -86,8 +84,14 @@ def init_modelfree_qc_wf(bvec_convention='DIPY', name='dwi_qc_wf'):
         (raw_src, raw_src_qc, [('output_src', 'src_file')]),
         (raw_src, raw_gqi, [('output_src', 'input_src_file')]),
         (raw_gqi, raw_fib_qc, [('output_fib', 'src_file')]),
-        (raw_fib_qc, merged_qc, [('qc_txt', 'fib_qc')]),
-        (raw_src_qc, merged_qc, [('qc_txt', 'src_qc')]),
+        (raw_fib_qc, merged_qc, [
+            ('qc_txt', 'fib_qc'),
+            ('warning', 'fib_qc_warning'),
+        ]),
+        (raw_src_qc, merged_qc, [
+            ('qc_txt', 'src_qc'),
+            ('warning', 'src_qc_warning'),
+        ]),
         (merged_qc, outputnode, [('qc_file', 'qc_summary')]),
     ])  # fmt:skip
 
@@ -97,15 +101,17 @@ def init_modelfree_qc_wf(bvec_convention='DIPY', name='dwi_qc_wf'):
 def init_mask_overlap_wf(name='mask_overlap_wf'):
     """Check the Dice overlap of a b=0 mask and a T1-based mask for QC.
 
-    **Inputs**
-        anatomical_mask
-            Path to a high-resolution brain mask from a T1w image
-        dwi_mask
-            Path to a mask based on diffusion-weighted images
+    Inputs
+    ------
+    anatomical_mask
+        Path to a high-resolution brain mask from a T1w image
+    dwi_mask
+        Path to a mask based on diffusion-weighted images
 
-    **Outputs**
-        dice_score
-            float value of the dice overlap of the masks
+    Outputs
+    -------
+    dice_score
+        float value of the dice overlap of the masks
     """
     inputnode = pe.Node(
         niu.IdentityInterface(fields=['anatomical_mask', 'dwi_mask']), name='inputnode'

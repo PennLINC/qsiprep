@@ -36,7 +36,7 @@ MULTI_PED_DWI = {
 
 
 def test_read_nifti_sidecar_reads_a_colocated_sidecar(tmp_path):
-    """Metadata beside the image is still found."""
+    """Test that metadata beside the image is still found."""
     root = build_test_dataset(
         tmp_path / 'ds',
         {
@@ -66,7 +66,7 @@ def test_read_nifti_sidecar_reads_a_colocated_sidecar(tmp_path):
 
 
 def test_read_nifti_sidecar_inherits_metadata(tmp_path):
-    """A top-level sidecar supplies metadata for an image that has none (issue #685)."""
+    """Test that a top-level sidecar supplies metadata for an image that has none (issue #685)."""
     root = build_test_dataset(
         tmp_path / 'ds',
         BARE_DWI,
@@ -82,7 +82,7 @@ def test_read_nifti_sidecar_inherits_metadata(tmp_path):
 
 
 def test_read_nifti_sidecar_merges_inherited_and_local_metadata(tmp_path):
-    """Inherited keys fill in around the image's own sidecar."""
+    """Test that inherited keys fill in around the image's own sidecar."""
     root = build_test_dataset(
         tmp_path / 'ds',
         {'01': [{'dwi': [{'suffix': 'dwi', 'metadata': {'PhaseEncodingDirection': 'j-'}}]}]},
@@ -98,7 +98,7 @@ def test_read_nifti_sidecar_merges_inherited_and_local_metadata(tmp_path):
 
 
 def test_read_nifti_sidecar_shared_by_magnitude_and_phase(tmp_path):
-    """A single sidecar covers both parts of a complex-valued acquisition."""
+    """Test that a single sidecar covers both parts of a complex-valued acquisition."""
     root = build_test_dataset(
         tmp_path / 'ds',
         COMPLEX_DWI_SKELETON,
@@ -117,7 +117,7 @@ def test_read_nifti_sidecar_shared_by_magnitude_and_phase(tmp_path):
 
 
 def test_read_nifti_sidecar_errors_when_no_metadata_applies(tmp_path):
-    """An image with no applicable sidecar raises a message naming the file."""
+    """Test that an image with no applicable sidecar raises a message naming the file."""
     root = build_test_dataset(tmp_path / 'ds', BARE_DWI)
     dwi = root / 'sub-01' / 'dwi' / 'sub-01_dwi.nii.gz'
 
@@ -126,7 +126,7 @@ def test_read_nifti_sidecar_errors_when_no_metadata_applies(tmp_path):
 
 
 def test_get_distortion_grouping_uses_inherited_metadata(tmp_path):
-    """Distortion groups are found when PE direction is only in an inherited sidecar."""
+    """Test that distortion groups are found when PE direction is only in an inherited sidecar."""
     root = build_test_dataset(
         tmp_path / 'ds',
         MULTI_PED_DWI,
@@ -152,7 +152,7 @@ def test_get_distortion_grouping_uses_inherited_metadata(tmp_path):
 
 
 def test_get_distortion_grouping_handles_complex_valued_dwi(tmp_path):
-    """Both parts of a complex-valued run land in the same distortion group (issue #990)."""
+    """Test that both parts of a complex-valued run share a distortion group (issue #990)."""
     root = build_test_dataset(
         tmp_path / 'ds',
         COMPLEX_DWI_SKELETON,
@@ -178,7 +178,7 @@ def test_get_distortion_grouping_handles_complex_valued_dwi(tmp_path):
 
 
 def test_load_epi_dwi_fieldmaps_handles_complex_valued_fieldmaps(tmp_path):
-    """A part-mag fieldmap inherits the shared, non-part-specific bval (issue #990)."""
+    """Test that a part-mag fieldmap inherits the shared, non-part-specific bval (issue #990)."""
     root = build_test_dataset(
         tmp_path / 'ds',
         COMPLEX_EPI_SKELETON,
@@ -194,7 +194,7 @@ def test_load_epi_dwi_fieldmaps_handles_complex_valued_fieldmaps(tmp_path):
 
 
 def test_load_epi_dwi_fieldmaps_uses_an_inherited_bval(tmp_path):
-    """A 'secret' bval file is honored even when it is inherited (issue #990)."""
+    """Test that a 'secret' bval file is honored even when it is inherited (issue #990)."""
     root = build_test_dataset(
         tmp_path / 'ds',
         {'01': [{'fmap': [{'dir': 'PA', 'run': '1', 'suffix': 'epi'}]}]},
@@ -210,7 +210,7 @@ def test_load_epi_dwi_fieldmaps_uses_an_inherited_bval(tmp_path):
 
 
 def test_load_epi_dwi_fieldmaps_without_a_bval_keeps_every_volume(tmp_path):
-    """A fieldmap with no applicable bval file contributes all of its volumes."""
+    """Test that a fieldmap with no applicable bval file contributes all of its volumes."""
     root = build_test_dataset(
         tmp_path / 'ds',
         {'01': [{'fmap': [{'dir': 'PA', 'suffix': 'epi'}]}]},
@@ -224,7 +224,7 @@ def test_load_epi_dwi_fieldmaps_without_a_bval_keeps_every_volume(tmp_path):
 
 
 def test_load_epi_dwi_fieldmaps_mixes_3d_and_4d_images(tmp_path):
-    """3D and 4D fieldmap files can be concatenated together, in either order."""
+    """Test that 3D and 4D fieldmap files can be concatenated together, in either order."""
     root = build_test_dataset(
         tmp_path / 'ds',
         {'01': [{'fmap': [{'dir': 'AP', 'suffix': 'epi'}, {'dir': 'PA', 'suffix': 'epi'}]}]},
@@ -251,7 +251,7 @@ def test_load_epi_dwi_fieldmaps_mixes_3d_and_4d_images(tmp_path):
 
 
 def test_load_epi_dwi_fieldmaps_thresholds_a_3d_image_bval(tmp_path):
-    """A 3D fieldmap with a one-entry bval file is kept or excluded by b0_threshold."""
+    """Test that a 3D fieldmap with a one-entry bval file is kept or excluded by b0_threshold."""
     root = build_test_dataset(
         tmp_path / 'ds',
         {
@@ -355,3 +355,45 @@ def test_synb0_topup_config_resolves_the_distribution(monkeypatch, tmp_path):
     assert synb0_topup_config() == '/opt/synb0/synb0.cnf'
     monkeypatch.setenv('SYNB0_ATLASES', str(tmp_path / 'dist' / 'atlases'))
     assert synb0_topup_config() == str(tmp_path / 'dist' / 'synb0.cnf')
+
+
+def test_synb0_topup_config_drops_subsampling_on_odd_dimensions(monkeypatch):
+    """Test that an odd axis selects the packaged no-subsampling config.
+
+    synb0.cnf subsamples by 2 in its first levels, which TOPUP refuses on an
+    odd axis ("Subsampling levels incompatible with image data").
+    """
+    monkeypatch.delenv('SYNB0_ATLASES', raising=False)
+    assert synb0_topup_config((140, 140, 86, 3)) == '/opt/synb0/synb0.cnf'
+    odd = synb0_topup_config((140, 140, 87, 3))
+    assert odd.endswith('synb0_1.cnf')
+    with open(odd) as f:
+        lines = f.read().splitlines()
+    assert '--subsamp=1,1,1,1,1,1,1' in lines
+    # The rest of the schedule is the SynB0 one, not FSL's b02b0_1.cnf
+    assert '--warpres=20,16,14,12,10,6,4' in lines
+
+
+def test_synb0_topup_inputs_reports_the_config(tmp_path, monkeypatch):
+    from qsiprep.interfaces.eddy import Synb0TopupInputs
+
+    monkeypatch.delenv('SYNB0_ATLASES', raising=False)
+    imain, datain, synth_file, _, _ = _write_synb0_topup_inputs(tmp_path)
+    cwd = tmp_path / 'even'
+    cwd.mkdir()
+    result = Synb0TopupInputs(topup_datain=datain, topup_imain=imain, synthetic_b0=synth_file).run(
+        cwd=str(cwd)
+    )
+    assert result.outputs.topup_config == '/opt/synb0/synb0.cnf'
+
+    # Crop one slice off so the third axis is odd
+    img = nb.load(imain)
+    odd_imain = str(tmp_path / 'topup_imain_odd.nii.gz')
+    nb.Nifti1Image(np.asarray(img.dataobj)[:, :, :5], img.affine).to_filename(odd_imain)
+    cwd = tmp_path / 'odd'
+    cwd.mkdir()
+    result = Synb0TopupInputs(
+        topup_datain=datain, topup_imain=odd_imain, synthetic_b0=synth_file
+    ).run(cwd=str(cwd))
+    assert result.outputs.topup_config.endswith('synb0_1.cnf')
+    assert nb.load(result.outputs.topup_imain).shape == (8, 8, 5, 3)
