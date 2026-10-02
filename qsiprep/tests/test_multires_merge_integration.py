@@ -94,6 +94,7 @@ def test_two_resolutions_build_two_merge_workflows(tmp_path):
             '01',
             '--output-spaces',
             'acpc:res-2mm',
+            'acpc:res-1p5mm',
             '--distortion-group-merge',
             'concat',
             '--hmc-method',
@@ -103,10 +104,6 @@ def test_two_resolutions_build_two_merge_workflows(tmp_path):
             '--skip-bids-validation',
         ]
     )
-    # Set after parsing: until multiple resolutions are allowed with merging at the
-    # CLI, the workflows are exercised by setting the config directly.
-    config.workflow.output_spaces = ['acpc:res-2mm', 'acpc:res-1p5mm']
-
     wf = init_single_subject_wf('01', [])
 
     merge_wfs = sorted(

@@ -627,12 +627,10 @@ full resampling pass. The ``res-`` entity is added to the DWI derivatives only
 when more than one ``acpc`` resolution is requested, so a single resolution
 keeps the filenames `QSIRecon`_ expects.
 
-More than one ``acpc`` resolution requires ``--distortion-group-merge none``.
-That option defaults to ``concat``, and the merge workflow writes one set of
-derivatives with no ``res-`` entity, so every resolution after the first would
-be resampled and then discarded. Such a request is rejected rather than
-producing fewer outputs than were asked for. A single ``acpc`` resolution,
-including ``res-nativemin`` and ``res-nativemax``, merges normally.
+Multiple ``acpc`` resolutions work with ``--distortion-group-merge``. Each
+resolution is merged separately and written with its own ``res-`` entity, so
+*N* resolutions cost *N* merges, each with its own QC, on top of the *N*
+resampling passes per correction unit.
 
 Standard spaces
 ===============

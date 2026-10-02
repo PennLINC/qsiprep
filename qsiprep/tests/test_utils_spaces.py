@@ -415,10 +415,8 @@ def test_mm_resolution_on_a_standard_space_is_rejected(tmp_path):
     assert 'MNI152NLin2009cAsym:res-2mm' in str(excinfo.value)
 
 
-def test_multi_acpc_with_distortion_group_merge_is_rejected(tmp_path):
-    """The merge workflow writes one resolution, so asking for two is a silent loss."""
-    import pytest
-
+def test_multi_acpc_with_distortion_group_merge_is_allowed(tmp_path):
+    """Test that each requested resolution gets its own merged output."""
     from qsiprep.cli.parser import _finalize_output_spaces
 
     opts = _parse(
@@ -429,9 +427,8 @@ def test_multi_acpc_with_distortion_group_merge_is_rejected(tmp_path):
         '--distortion-group-merge',
         'concat',
     )
-    with pytest.raises(SystemExit) as excinfo:
-        _finalize_output_spaces(opts)
-    assert '--distortion-group-merge' in str(excinfo.value)
+    _finalize_output_spaces(opts)
+    assert opts.output_spaces == ['acpc:res-2mm', 'acpc:res-1p5mm']
 
 
 def test_single_acpc_with_distortion_group_merge_is_allowed(tmp_path):
