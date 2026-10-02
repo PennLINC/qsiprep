@@ -650,3 +650,54 @@ def test_single_acpc_finalize_outputnode_is_a_one_element_list(tmp_path):
     merge = wf.get_node('merge_out_dwi_t1')
     assert merge is not None
     assert merge.interface._numinputs == 1
+
+
+MERGED_DWI_BASE = {'subject': '01', 'datatype': 'dwi', 'suffix': 'dwi'}
+
+
+def test_merged_resolutions_write_distinct_paths(tmp_path):
+    """Test that two merged outputs in one directory do not share a filename."""
+    from qsiprep.tests.test_workflows_native import _merge_wf
+    from qsiprep.utils.spaces import parse_output_spaces
+
+    specs = parse_output_spaces(['acpc:res-2mm', 'acpc:res-1p5mm'])
+    found = {}
+    for index, spec in enumerate(specs):
+        wf = _merge_wf(
+            tmp_path / f'r{index}',
+            resolution=spec.resolution,
+            write_shared_outputs=(index == 0),
+            name=f'merge_wf_res{spec.resolution.label}',
+        )
+        collected = {
+            **collect_datasink_entities(wf, full_names=True),
+            **collect_figure_entities(wf),
+        }
+        for node_name, entities in collected.items():
+            found[f'{spec.resolution.label}.{node_name}'] = entities
+
+    # A sink that stops being emitted must fail here, not vanish quietly.
+    short_names = {key.split('.')[-1] for key in found}
+    expected = {'ds_series_qc', 'ds_report_qc_warnings', 'ds_merged_sidecar', 'ds_report_b0_mask'}
+    assert expected <= short_names, f'sink inventory shrank: {sorted(short_names)}'
+
+    # include_figures also lets through the space-less ds_series_qc.
+    paths = render_datasink_paths(found, MERGED_DWI_BASE, include_figures=True)
+    assert_no_collisions(paths)
+
+
+def test_single_merged_resolution_keeps_the_historical_paths(tmp_path):
+    """Test that a one-resolution merged run writes no res- entity.
+
+    QSIRecon reads these paths.
+    """
+    from qsiprep.tests.test_workflows_native import _merge_wf
+
+    wf = _merge_wf(tmp_path)
+    found = {
+        **collect_datasink_entities(wf, full_names=True),
+        **collect_figure_entities(wf),
+    }
+    paths = render_datasink_paths(found, MERGED_DWI_BASE, include_figures=True)
+    assert paths
+    assert all('_res-' not in path for path in paths.values()), paths
