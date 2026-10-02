@@ -20,6 +20,7 @@ from nireports.interfaces.reporting.base import (
 )
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
+from ... import config
 from ...interfaces import DerivativesDataSink
 from ..anatomical import init_synthstrip_wf
 
@@ -57,10 +58,15 @@ def add_synb0_outputs(workflow, synb0_wf, source_file):
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
+    # synthetic_b0_acpc is resampled onto the first ACPC grid, so it carries
+    # that resolution's res- entity like every other output on a DWI grid.
+    acpc_specs = [s for s in config.workflow.parsed_output_spaces() if not s.standard]
+    res_entities = {'res': acpc_specs[0].resolution.label} if acpc_specs else {}
     ds_synb0_dwiref = pe.Node(
         DerivativesDataSink(
             source_file=source_file,
             space='ACPC',
+            **res_entities,
             desc='synb0',
             suffix='dwiref',
             extension='.nii.gz',

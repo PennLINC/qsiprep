@@ -92,15 +92,13 @@ def init_dwi_derivatives_wf(
     and this function does not. They are set directly as ``StackJacobianWeights``
     node inputs, because they are per-run facts, not invocation-global ones.
 
-    QSIRecon's primary input is the preprocessed ACPC-space DWI this workflow
-    writes, so the single-argument call form (``resolution=None``) must keep
-    producing exactly the filenames it always has: no ``res-`` entity.
-
     Parameters
     ----------
     resolution : Resolution or None
-        Set only when more than one ACPC resolution was requested. Adds a
-        ``res-<label>`` entity to every ACPC DWI sink below.
+        The ACPC resolution these derivatives are on. Adds a ``res-<label>`` entity
+        to every ACPC DWI sink below, as the pipeline always does. ``None`` writes
+        no ``res-`` entity and is kept only for callers that build this workflow
+        on its own.
     write_hmc_optimization : bool
         The hmcOptimization sidecar is produced before resampling and does not vary
         by output resolution. When ``init_dwi_derivatives_wf`` is instantiated once

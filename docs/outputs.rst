@@ -19,9 +19,11 @@ Outputs
 
 Files follow the `BIDS Derivatives`_ naming rules. Volumetric outputs are in
 ``ACPC`` space (see :ref:`output_spaces_ref`) and carry ``space-ACPC`` in
-their names. When ``--output-spaces`` lists more than one ``acpc``
-resolution, the DWI derivatives also carry ``res-<label>`` (for example
-``res-2mm``); with a single ``acpc`` resolution they do not.
+their names. Outputs on a DWI grid also carry the ``res-<label>`` of the
+``acpc`` resolution they were resampled to (for example ``res-2mm``), even when
+only one was requested, so each resolution has its own files. Anatomical
+derivatives are written at the anatomical's own resolution and carry no
+``res-``. Below, ``<res>`` stands for that ``res-<label>`` entity.
 
 
 *****************
@@ -109,24 +111,24 @@ Preprocessed DWI
 Per output, in ``dwi/``::
 
   # The preprocessed DWI series, its gradient tables, and its brain mask
-  <source_entities>_space-ACPC_desc-preproc_dwi.nii.gz
-  <source_entities>_space-ACPC_desc-preproc_dwi.json
-  <source_entities>_space-ACPC_desc-preproc_dwi.bval       # FSL format
-  <source_entities>_space-ACPC_desc-preproc_dwi.bvec
-  <source_entities>_space-ACPC_desc-preproc_dwi.b          # MRtrix3 format
-  <source_entities>_space-ACPC_desc-preproc_dwi.b_table.txt  # DSI Studio format
-  <source_entities>_space-ACPC_desc-brain_mask.nii.gz
+  <source_entities>_space-ACPC_<res>_desc-preproc_dwi.nii.gz
+  <source_entities>_space-ACPC_<res>_desc-preproc_dwi.json
+  <source_entities>_space-ACPC_<res>_desc-preproc_dwi.bval       # FSL format
+  <source_entities>_space-ACPC_<res>_desc-preproc_dwi.bvec
+  <source_entities>_space-ACPC_<res>_desc-preproc_dwi.b          # MRtrix3 format
+  <source_entities>_space-ACPC_<res>_desc-preproc_dwi.b_table.txt  # DSI Studio format
+  <source_entities>_space-ACPC_<res>_desc-brain_mask.nii.gz
 
   # The b=0 reference of the preprocessed series
-  <source_entities>_space-ACPC_desc-preproc_dwiref.nii.gz
+  <source_entities>_space-ACPC_<res>_desc-preproc_dwiref.nii.gz
 
   # Per-volume confounds and QC (below)
   <source_entities>_desc-confounds_timeseries.tsv
-  <source_entities>_space-ACPC_desc-image_qc.tsv
-  <source_entities>_space-ACPC_desc-slice_qc.json
+  <source_entities>_space-ACPC_<res>_desc-image_qc.tsv
+  <source_entities>_space-ACPC_<res>_desc-slice_qc.json
 
   # Contrast-to-noise ratio of the head motion model, per shell
-  <source_entities>_space-ACPC_model-<label>_stat-cnr_dwimap.nii.gz
+  <source_entities>_space-ACPC_<res>_model-<label>_stat-cnr_dwimap.nii.gz
 
 The ``.bval``/``.bvec`` pair is read correctly by FSL, DSI Studio and DIPY
 but not by MRtrix3, which mis-reads FSL-style vectors; use the ``.b`` file
@@ -142,18 +144,18 @@ Fieldmap and modulation maps
 Present when the corresponding correction ran::
 
   # The susceptibility distortion correction, as a displacement map
-  <source_entities>_space-ACPC_desc-sdc_displacement.nii.gz
-  <source_entities>_space-ACPC_desc-sdc_displacement.json
+  <source_entities>_space-ACPC_<res>_desc-sdc_displacement.nii.gz
+  <source_entities>_space-ACPC_<res>_desc-sdc_displacement.json
   # TOPUP followed by DRBUDDI only: DRBUDDI's refinement of the TOPUP field
-  <source_entities>_space-ACPC_desc-sdcrefinement_displacement.nii.gz
+  <source_entities>_space-ACPC_<res>_desc-sdcrefinement_displacement.nii.gz
 
   # The Jacobian weights QSIPrep applied (see below)
-  <source_entities>_space-ACPC_desc-jacobian_dwimap.nii.gz
-  <source_entities>_space-ACPC_desc-jacobian_dwimap.json
+  <source_entities>_space-ACPC_<res>_desc-jacobian_dwimap.nii.gz
+  <source_entities>_space-ACPC_<res>_desc-jacobian_dwimap.json
 
   # The voxelwise gradient deviation, with --gradient-file
-  <source_entities>_space-ACPC_graddev.nii.gz
-  <source_entities>_space-ACPC_graddev.json
+  <source_entities>_space-ACPC_<res>_graddev.nii.gz
+  <source_entities>_space-ACPC_<res>_graddev.json
 
 The displacement map shows the susceptibility correction on the output grid
 so it can be inspected and compared across methods and runs. At each voxel
@@ -297,7 +299,7 @@ describes each column.
 Quality control data
 ********************
 
-``<source_entities>_space-ACPC_desc-image_qc.tsv`` has one row per output
+``<source_entities>_space-ACPC_<res>_desc-image_qc.tsv`` has one row per output
 image and is meant for comparing subjects before deciding whom to include in
 a group analysis. Columns prefixed ``raw_`` are DSI Studio's quality
 measures :footcite:p:`yeh2019` computed on the data before preprocessing,

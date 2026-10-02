@@ -138,7 +138,12 @@ def test_single_acpc_anat_derivative_names(single_acpc_config):
             )
 
 
-def test_single_acpc_writes_no_res_entity(single_acpc_config):
+def test_acpc_anatomicals_write_no_res_entity(single_acpc_config):
+    """Test that ACPC anatomical derivatives carry no res- entity.
+
+    They are written at the anatomical's own resolution, not on a DWI grid, so
+    they are native and, as in fMRIPrep, unlabelled.
+    """
     from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.anatomical.volume import init_anat_derivatives_wf
 
@@ -149,7 +154,7 @@ def test_single_acpc_writes_no_res_entity(single_acpc_config):
     acpc_nodes = {n: e for n, e in found.items() if e.get('space') == 'ACPC'}
     assert acpc_nodes, 'expected some ACPC-space derivatives'
     for node_name, entities in acpc_nodes.items():
-        assert 'res' not in entities, f'{node_name} gained a res- entity on a single-acpc run'
+        assert 'res' not in entities, f'{node_name} gained a res- entity'
 
 
 @pytest.fixture
@@ -160,17 +165,24 @@ def dwi_config():
     return config
 
 
-def test_single_acpc_dwi_derivative_names(dwi_config):
-    """QSIRecon's primary input is the preprocessed DWI -- this must never rename it.
+def _single_acpc_resolution():
+    from qsiprep.utils.spaces import parse_output_spaces
 
-    Unlike the anatomical tests above, ``init_dwi_derivatives_wf`` still takes only
-    ``source_file`` today, and Task 12's added resolution parameter must default to
-    keeping this one-argument call form working. So this test is NOT xfail: it must
-    pass now and keep passing.
+    return parse_output_spaces(['acpc:res-2mm'])[0].resolution
+
+
+def test_single_acpc_dwi_derivative_names(dwi_config):
+    """Test the entities of QSIRecon's primary input, the preprocessed ACPC DWI.
+
+    Every output on a DWI grid carries its res- entity, even with a single ACPC
+    resolution, so QSIRecon can select a resolution by name.
     """
     from qsiprep.workflows.dwi.derivatives import init_dwi_derivatives_wf
 
-    wf = init_dwi_derivatives_wf(source_file='/data/sub-01/ses-1/dwi/sub-01_ses-1_dwi.nii.gz')
+    wf = init_dwi_derivatives_wf(
+        source_file='/data/sub-01/ses-1/dwi/sub-01_ses-1_dwi.nii.gz',
+        resolution=_single_acpc_resolution(),
+    )
     found = collect_datasink_entities(wf)
 
     assert found, 'expected some DerivativesDataSink nodes in the dwi derivatives workflow'
@@ -184,7 +196,50 @@ def test_single_acpc_dwi_derivative_names(dwi_config):
     acpc_nodes = {n: e for n, e in found.items() if e.get('space') == 'ACPC'}
     assert acpc_nodes, 'expected some ACPC-space dwi derivatives'
     for node_name, entities in acpc_nodes.items():
-        assert 'res' not in entities, f'{node_name} gained a res- entity on a single-acpc run'
+        assert entities.get('res') == '2mm', f'{node_name} has no res-2mm entity'
+
+
+def test_single_acpc_finalize_writes_res_on_every_dwi_grid_output(tmp_path):
+    """Test that a single ACPC resolution labels every ACPC output of finalize."""
+    wf, _ = _build_finalize(tmp_path, ['acpc:res-2mm'])
+    found = collect_datasink_entities(wf, full_names=True)
+    acpc_sinks = {n: e for n, e in found.items() if e.get('space') == 'ACPC'}
+    assert acpc_sinks
+    unlabelled = sorted(n for n, e in acpc_sinks.items() if e.get('res') != '2mm')
+    assert not unlabelled, f'ACPC outputs without res-2mm: {unlabelled}'
+
+
+def test_synb0_dwiref_carries_the_first_acpc_resolution():
+    """Test that SynB0's ACPC side output is labelled with its grid's resolution.
+
+    It is resampled onto the first ACPC grid, so it is a DWI-grid output.
+    """
+    from nipype.interfaces import utility as niu
+    from nipype.pipeline import engine as pe
+    from niworkflows.engine.workflows import LiterateWorkflow as Workflow
+
+    from qsiprep.workflows.dwi.util import add_synb0_outputs
+
+    config.workflow.output_spaces = ['acpc:res-1p5mm', 'acpc:res-2mm']
+    synb0_wf = Workflow(name='synb0_wf')
+    synb0_wf.add_nodes(
+        [
+            pe.Node(
+                niu.IdentityInterface(
+                    fields=[
+                        'acquired_synthetic_report',
+                        'unet_input_report',
+                        'synthetic_b0_acpc',
+                        'qc_file',
+                    ]
+                ),
+                name='outputnode',
+            )
+        ]
+    )
+    workflow = Workflow(name='parent_wf')
+    add_synb0_outputs(workflow, synb0_wf, '/data/sub-01/dwi/sub-01_dwi.nii.gz')
+    assert workflow.get_node('ds_synb0_dwiref').inputs.res == '1p5mm'
 
 
 def _write_dwi(path, nvols=6):
@@ -300,7 +355,7 @@ def test_two_acpc_resolutions_write_a_res_entity(tmp_path):
 def test_single_native_acpc_records_its_resolution(tmp_path):
     """res-nativemax is resolved from the DWI headers at run time.
 
-    A single-spec run writes no res- entity, so the JSON sidecar is the only
+    Its res- entity is symbolic (res-nativemax), so the JSON sidecar is the only
     place it says what nativemax turned out to be. It must be written anyway.
     """
     wf, _ = _build_finalize(tmp_path, ['acpc:res-nativemax'])
@@ -394,16 +449,26 @@ HISTORICAL_ANAT_ACPC_PATHS = {
     'ds_t1_aseg': 'sub-01/anat/sub-01_space-ACPC_desc-aseg_dseg.nii.gz',
 }
 
-HISTORICAL_DWI_ACPC_PATHS = {
-    'ds_dwi_t1': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_desc-preproc_dwi.nii.gz',
-    'ds_bvals_t1': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_desc-preproc_dwi.bval',
-    'ds_bvecs_t1': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_desc-preproc_dwi.bvec',
-    'ds_gradient_table_t1': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_desc-preproc_dwi.b',
-    'ds_btable_t1': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_desc-preproc_dwi.b_table.txt',
-    'ds_t1_b0_ref': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_desc-preproc_dwiref.nii.gz',
-    'ds_dwi_mask_t1': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_desc-brain_mask.nii.gz',
-    'ds_cnr_map_t1': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_model-MAPMRI_dwimap.nii.gz',
-    'ds_tsnr': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_dwimap.nii.gz',
+# What a single acpc:res-2mm run writes. QSIRecon selects among ACPC resolutions
+# by the res- entity.
+SINGLE_ACPC_DWI_PATHS = {
+    'ds_dwi_t1': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_desc-preproc_dwi.nii.gz',
+    'ds_bvals_t1': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_desc-preproc_dwi.bval',
+    'ds_bvecs_t1': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_desc-preproc_dwi.bvec',
+    'ds_gradient_table_t1': (
+        'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_desc-preproc_dwi.b'
+    ),
+    'ds_btable_t1': (
+        'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_desc-preproc_dwi.b_table.txt'
+    ),
+    'ds_t1_b0_ref': (
+        'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_desc-preproc_dwiref.nii.gz'
+    ),
+    'ds_dwi_mask_t1': ('sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_desc-brain_mask.nii.gz'),
+    'ds_cnr_map_t1': (
+        'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_model-MAPMRI_dwimap.nii.gz'
+    ),
+    'ds_tsnr': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_dwimap.nii.gz',
 }
 
 
@@ -467,18 +532,21 @@ def test_single_acpc_anat_paths_are_the_historical_ones(single_acpc_config):
     assert all('_res-' not in p for p in acpc.values())
 
 
-def test_single_acpc_dwi_paths_are_the_historical_ones(dwi_config):
+def test_single_acpc_dwi_paths(dwi_config):
     from qsiprep.workflows.dwi.derivatives import init_dwi_derivatives_wf
 
-    wf = init_dwi_derivatives_wf(source_file='/data/sub-01/ses-1/dwi/sub-01_ses-1_dwi.nii.gz')
+    wf = init_dwi_derivatives_wf(
+        source_file='/data/sub-01/ses-1/dwi/sub-01_ses-1_dwi.nii.gz',
+        resolution=_single_acpc_resolution(),
+    )
     paths = render_datasink_paths(collect_datasink_entities(wf, full_names=True), DWI_BASE)
 
     assert_no_collisions(paths)
-    for node_name, expected in HISTORICAL_DWI_ACPC_PATHS.items():
+    for node_name, expected in SINGLE_ACPC_DWI_PATHS.items():
         assert paths.get(node_name) == expected, (
             f'{node_name} writes {paths.get(node_name)!r}, expected {expected!r}'
         )
-    assert all('_res-' not in p for p in paths.values())
+    assert all('_res-2mm' in p for p in paths.values())
 
 
 def test_two_acpc_resolutions_write_distinct_paths(tmp_path):
@@ -686,18 +754,21 @@ def test_merged_resolutions_write_distinct_paths(tmp_path):
     assert_no_collisions(paths)
 
 
-def test_single_merged_resolution_keeps_the_historical_paths(tmp_path):
-    """Test that a one-resolution merged run writes no res- entity.
+def test_single_merged_resolution_writes_its_res_entity(tmp_path):
+    """Test that a one-resolution merged run labels its outputs with res-.
 
-    QSIRecon reads these paths.
+    base.py always hands the merge workflow its resolution, as finalize does for
+    unmerged outputs. Only the sampling-scheme figure, which does not depend on
+    the grid, goes unlabelled.
     """
     from qsiprep.tests.test_workflows_native import _merge_wf
 
-    wf = _merge_wf(tmp_path)
+    wf = _merge_wf(tmp_path, resolution=_single_acpc_resolution())
     found = {
         **collect_datasink_entities(wf, full_names=True),
         **collect_figure_entities(wf),
     }
     paths = render_datasink_paths(found, MERGED_DWI_BASE, include_figures=True)
-    assert paths
-    assert all('_res-' not in path for path in paths.values()), paths
+    grid_paths = {n: p for n, p in paths.items() if not n.endswith('ds_report_gradients')}
+    assert grid_paths
+    assert all('_res-2mm' in path for path in grid_paths.values()), grid_paths

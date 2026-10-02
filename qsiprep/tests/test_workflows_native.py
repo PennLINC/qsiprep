@@ -1202,8 +1202,12 @@ def test_merge_wf_labels_its_sinks_with_the_resolution(tmp_path):
     assert wf.get_node('dwi_derivatives_wf').get_node('ds_dwi_t1').inputs.res == '1p5mm'
 
 
-def test_merge_wf_without_a_resolution_writes_the_historical_names(tmp_path):
-    """Test that a single-resolution merged run keeps the names QSIRecon reads."""
+def test_merge_wf_without_a_resolution_writes_no_res_entity(tmp_path):
+    """Test that resolution=None leaves res- off the merge workflow's sinks.
+
+    base.py always passes a resolution; None remains for building the workflow on
+    its own.
+    """
     from nipype.interfaces.base import isdefined
 
     wf = _merge_wf(tmp_path)
@@ -1237,5 +1241,7 @@ def test_single_subject_wf_builds_a_merge_workflow_per_resolution():
     src = inspect.getsource(base.init_single_subject_wf)
     assert 'for index, spec in enumerate(acpc_specs)' in src
     assert 'write_shared_outputs=(index == 0)' in src
+    # Every merged output carries its res- entity, even with one resolution.
+    assert 'resolution=spec.resolution,' in src
     assert "(('outputnode.dwi_t1', _select_grid, index), image_name)" in src
     assert "(('outputnode.bvals_t1', _select_grid, index), bval_name)" in src

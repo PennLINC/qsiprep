@@ -37,7 +37,7 @@ entry: ``acpc:res-1p7mm`` makes the preprocessed DWI 1.7 mm isotropic, and
 anatomical derivatives in it (see :ref:`output_spaces_ref`). With these
 options the three runs are denoised separately, concatenated, motion and
 distortion corrected as one series with ``eddy`` and TOPUP, and written to
-``/path/to/output/sub-1/ses-1/dwi/sub-1_ses-1_acq-multishell_space-ACPC_desc-preproc_dwi.nii.gz``.
+``/path/to/output/sub-1/ses-1/dwi/sub-1_ses-1_acq-multishell_space-ACPC_res-1p7mm_desc-preproc_dwi.nii.gz``.
 
 How to run the container versions of this command is on the
 :doc:`installation` page.
@@ -623,9 +623,9 @@ Multiple ``acpc`` resolutions
 
 Listing ``acpc`` more than once (``acpc:res-2mm acpc:res-1p5mm``) resamples and
 writes the preprocessed DWI once per resolution, each costing roughly another
-full resampling pass. The ``res-`` entity is added to the DWI derivatives only
-when more than one ``acpc`` resolution is requested, so a single resolution
-keeps the filenames `QSIRecon`_ expects.
+full resampling pass. Every DWI derivative carries the ``res-`` entity of its
+resolution, even when only one is requested, as in fMRIPrep, and `QSIRecon`_
+selects which resolution to reconstruct by that entity.
 
 Multiple ``acpc`` resolutions work with ``--distortion-group-merge``. Each
 resolution is merged separately and written with its own ``res-`` entity, so

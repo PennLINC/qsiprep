@@ -533,10 +533,8 @@ to workflows in *QSIPrep*'s documentation]\
                     ),
                     assembly=assembly_by_name[merged_group],
                     units=[units_by_name[key] for key in merged_to_subgroups[merged_group]],
-                    # The res- entity only appears once more than one resolution was
-                    # requested: a single-resolution merged run must keep producing
-                    # exactly the filenames QSIRecon already reads.
-                    resolution=spec.resolution if len(acpc_specs) > 1 else None,
+                    # Every merged output carries its res- entity, like the direct path.
+                    resolution=spec.resolution,
                     write_shared_outputs=(index == 0),
                 )
                 for index, spec in enumerate(acpc_specs)
