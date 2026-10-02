@@ -21,8 +21,7 @@
   normalization from identity (its input is already ACPC-aligned), instead of the
   full-resolution antsAI search niworkflows runs inside `RobustMNINormalization` (~47 s each,
   same transforms to 0.2 deg). Under `--sloppy` the anatomical resamplings use Linear
-  (NearestNeighbor for labels) interpolation and the b0-to-anatomical registration stops
-  before its full-resolution level. On the TRXScan reverse-PE fixture the sloppy run went
+  (NearestNeighbor for labels) interpolation. On the TRXScan reverse-PE fixture the sloppy run went
   from 19.6 to 10.4 min at 4 CPUs with the same truth scores.
 
 * The integration matrix is the truth-scored TRXScan runs only. The sixteen end-to-end

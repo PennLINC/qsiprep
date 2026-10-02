@@ -772,9 +772,7 @@ def test_trxscan_gnl(data_dir, output_dir, working_dir):
         output_dir,
         working_dir,
     )
-    # The 2.5 mm median warp leaves the sloppy three-level b0-to-anat coregistration at
-    # ~1.2 deg here (0.1 deg with the full-resolution level); the test is about the graddev.
-    _assert_topup_quality(score, coreg_deg=1.5)
+    _assert_topup_quality(score)
     _expect(score, ('gnl_graddev', 'corr'), lo=0.99)
     _expect(score, ('gnl_graddev', 'slope'), 0.95, 1.05)
     _expect(
