@@ -617,7 +617,10 @@ def _trxscan_run(test_name, fixture, extra, data_dir, output_dir, working_dir):
     dataset_dir = str(fixture_dir(fixture, data_dir))
     out_dir = os.path.join(output_dir, test_name)
     work_dir = os.path.join(working_dir, test_name)
-    eddy_config = os.path.join(get_test_data_path(), 'eddy_config.json')
+    # eddy with a fixed seed (--initrand), 1000 hyperparameter voxels and 3 iterations: the
+    # 100-voxel, 2-iteration config the old smoke runs used picks its voxels at random, and
+    # on one CI run that halved every motion estimate (correlations 0.95 -> 0.4).
+    eddy_config = os.path.join(get_test_data_path(), 'eddy_config_trxscan.json')
     parameters = [
         dataset_dir,
         out_dir,
