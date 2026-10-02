@@ -379,19 +379,6 @@ jobs:
             set -a
             . /tmp/src/qsiprep/.circleci/data_versions.txt
             set +a
-            echo "export HBCD_URL=$HBCD_URL" >> "$BASH_ENV"
-            echo "export DSCSDSI_URL=$DSCSDSI_URL" >> "$BASH_ENV"
-            echo "export DSCSDSI_BUDS_URL=$DSCSDSI_BUDS_URL" >> "$BASH_ENV"
-            echo "export DSDTI_URL=$DSDTI_URL" >> "$BASH_ENV"
-            echo "export TWOSES_URL=$TWOSES_URL" >> "$BASH_ENV"
-            echo "export MULTISHELL_OUTPUT_URL=$MULTISHELL_OUTPUT_URL" >> "$BASH_ENV"
-            echo "export SINGLESHELL_OUTPUT_URL=$SINGLESHELL_OUTPUT_URL" >> "$BASH_ENV"
-            echo "export DRBUDDI_RPE_SERIES_URL=$DRBUDDI_RPE_SERIES_URL" >> "$BASH_ENV"
-            echo "export CSDSI_RPE_SERIES_URL=$CSDSI_RPE_SERIES_URL" >> "$BASH_ENV"
-            echo "export DRBUDDI_EPI_URL=$DRBUDDI_EPI_URL" >> "$BASH_ENV"
-            echo "export DSDTI_FMAP_URL=$DSDTI_FMAP_URL" >> "$BASH_ENV"
-            echo "export DSCSDSI_FMAP_URL=$DSCSDSI_FMAP_URL" >> "$BASH_ENV"
-            echo "export MATERNAL_BRAIN_PROJECT_URL=$MATERNAL_BRAIN_PROJECT_URL" >> "$BASH_ENV"
             echo "export FORREST_GUMP_URL=$FORREST_GUMP_URL" >> "$BASH_ENV"
             echo "export NIBS_URL=$NIBS_URL" >> "$BASH_ENV"
       - run:
@@ -421,19 +408,6 @@ jobs:
               fi
               echo "Downloaded ${dset}"
             }
-            download_one HBCD "$HBCD_URL"
-            download_one DSCSDSI "$DSCSDSI_URL"
-            download_one DSCSDSI_BUDS "$DSCSDSI_BUDS_URL"
-            download_one DSDTI "$DSDTI_URL"
-            download_one twoses "$TWOSES_URL"
-            download_one multishell_output "$MULTISHELL_OUTPUT_URL"
-            download_one singleshell_output "$SINGLESHELL_OUTPUT_URL"
-            download_one drbuddi_rpe_series "$DRBUDDI_RPE_SERIES_URL"
-            download_one csdsi_rpe_series "$CSDSI_RPE_SERIES_URL"
-            download_one drbuddi_epi "$DRBUDDI_EPI_URL"
-            download_one DSDTI_fmap "$DSDTI_FMAP_URL"
-            download_one DSCSDSI_fmap "$DSCSDSI_FMAP_URL"
-            download_one maternal_brain_project "$MATERNAL_BRAIN_PROJECT_URL"
             download_one forrest_gump "$FORREST_GUMP_URL"
             download_one nibs "$NIBS_URL"
       - save_cache:
@@ -623,21 +597,6 @@ workflows:
           matrix:
             parameters:
               marker:
-                - dscsdsi
-                - dsdti_nofmap
-                - dsdti_synfmap
-                - drbuddi_tensorline_epi
-                - drbuddi_shoreline_epi
-                - drbuddi_rpe
-                - diffprep
-                - diffprep_drbuddi
-                - diffprep_rpe_series
-                - diffprep_csdsi_rpe_series
-                - maternal_brain_project
-                - forrest_gump
-                - forrest_gump_patch2self
-                - synthstrip
-                - dwiref
                 - trxscan_rpe_topup
                 - trxscan_rpe_drbuddi
                 - trxscan_epi_topup
@@ -645,6 +604,8 @@ workflows:
                 - trxscan_gnl
                 - trxscan_motion
                 - trxscan_offsets
+                - trxscan_diffprep
+                - trxscan_t2wreg
           requires: [image_prep, get_data, gen_trxscan_fixtures]
           filters: *default_filters
 
@@ -652,25 +613,11 @@ workflows:
           requires:
             - image_prep
             - get_data
+            - gen_trxscan_fixtures
           filters: *default_filters
 
       - merge_coverage:
           requires:
-            - dscsdsi
-            - dsdti_nofmap
-            - dsdti_synfmap
-            - drbuddi_tensorline_epi
-            - drbuddi_shoreline_epi
-            - drbuddi_rpe
-            - diffprep
-            - diffprep_drbuddi
-            - diffprep_rpe_series
-            - diffprep_csdsi_rpe_series
-            - maternal_brain_project
-            - forrest_gump
-            - forrest_gump_patch2self
-            - synthstrip
-            - dwiref
             - trxscan_rpe_topup
             - trxscan_rpe_drbuddi
             - trxscan_epi_topup
@@ -678,6 +625,8 @@ workflows:
             - trxscan_gnl
             - trxscan_motion
             - trxscan_offsets
+            - trxscan_diffprep
+            - trxscan_t2wreg
             - unit_tests
           filters: *default_filters
 

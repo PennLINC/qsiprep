@@ -57,6 +57,8 @@ RECIPES = {
     # the subject's measured head motion trace scaled x5 (5 mm / 2.8 deg range); the per-volume
     # poses are recorded in the derivatives
     'motion': ('motion', {'voxel': 3, 'subject': 'motion', 'noise': 1e-4, 'mb': 1, 'scale': 5}),
+    # one series, no fieldmap, the subject's T2w: DIFFPREP's T2Wreg EPI correction
+    't2wreg': ('rpe_series', {'voxel': 3, 'subject': 't2wreg', 'noise': 1e-4, 'pe': ['AP']}),
     # subject moved between the T1w and the DWI, and again between the AP and PA series
     'offsets': (
         'rpe_series',

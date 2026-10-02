@@ -1091,6 +1091,14 @@ class _DIFFPREPInputSpec(TORTOISEInputSpec):
         'Use to access TORTOISE knobs not surfaced as first-class fields '
         '(e.g. ["--big_delta", "0.030"]).',
     )
+    # TORTOISEProcess's parser is DRBUDDI's, so the EPIREG (T2Wreg) stage honours the same
+    # working-grid flag as DRBUDDI; without it TORTOISE refines the T2w grid to <= 1 mm and a
+    # sloppy T2Wreg run spends over an hour at ~65 s per iteration on a 1 mm T2w.
+    epi_working_res = traits.Float(
+        argstr='--epi_working_res %g',
+        desc='Resolution (mm) of the EPIREG registration grid (see DRBUDDI). '
+        'Requires a patched TORTOISE that exposes --epi_working_res.',
+    )
     disable_itk_threads = traits.Bool(True, usedefault=True, argstr='--disable_itk_threads')
     use_cuda = traits.Bool(False, usedefault=True, desc=_USE_CUDA_TRAIT_DESC)
     epi_mode = traits.Enum(

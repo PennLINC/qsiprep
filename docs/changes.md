@@ -25,6 +25,17 @@
   before its full-resolution level. On the TRXScan reverse-PE fixture the sloppy run went
   from 19.6 to 10.4 min at 4 CPUs with the same truth scores.
 
+* The integration matrix is the truth-scored TRXScan runs only. The sixteen end-to-end
+  runs on Box-hosted data (tinytensor, DSDTI, DSCSDSI, forrest_gump, maternal_brain_project,
+  twoses, csdsi) only checked that files were written; the two reverse-PE ones took 45-50
+  minutes each. DIFFPREP and its T2Wreg EPI correction gained truth-scored runs of their own
+  (`trxscan_diffprep`, `trxscan_t2wreg`). The T2Wreg run records a known defect as an
+  expected failure: TORTOISE places the T2w about 4 degrees off the b0 on the fixture, so the
+  corrected image scores below the uncorrected one.
+* Under `--sloppy`, DIFFPREP's T2Wreg (EPIREG) stage runs on the 2.5 mm grid DRBUDDI already
+  uses; the interface never passed `--epi_working_res`, and the stage took over an hour on a
+  1 mm T2w.
+
 ### 🐛 Bug Fixes
 
 * Oblique anatomical images are resampled onto an axis-aligned grid instead of having their
