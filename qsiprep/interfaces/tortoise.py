@@ -48,6 +48,15 @@ LOGGER = logging.getLogger('nipype.interface')
 # runtime and memory; smoke tests do not need sub-voxel registration.
 SLOPPY_EPI_WORKING_RES = 2.5
 
+# The one DRBUDDI stage --sloppy runs. Its metrics are MSJac and CC on the two
+# blips only, which is why it is kept even though DRBUDDI's default stages at
+# the same 2.5 mm grid recover 0.80 of a known field where this stage recovers
+# 0.43 (TRXScan reverse-PE fixture): the default stages also use the T2w, and on
+# that fixture TORTOISE's structural-to-b0 rigid lands 4-5 degrees off (its CC
+# optimum is pulled by non-brain tissue the simulated b0 does not have), after
+# which the structural metrics drag the corrected b0 into that frame -- below
+# the uncorrected one -- at 6x the run time. This stage ignores the structural
+# except for that rigid, so the frame survives, and the T2w path still runs.
 SLOPPY_DRBUDDI = (
     '--DRBUDDI_stage '
     r'\[learning_rate=\{0.4\},cfs=\{4:2:1\},field_smoothing=\{9:0\},'
@@ -532,13 +541,17 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
     output_spec = _DRBUDDIAggregateOutputsOutputSpec
 
     def _run_interface(self, runtime):
-        # If the structural image has been used, return that as the b0ref, otherwise
-        # it's the b0_corrected_final
-        self._results['b0_ref'] = (
-            self.inputs.structural_image
-            if isdefined(self.inputs.structural_image)
-            else self.inputs.undistorted_reference
-        )
+        # Always coregister from DRBUDDI's undistorted b=0, never from
+        # ``structural_used.nii``. That file is the structural resampled through
+        # the rigid DRBUDDI estimates for it (``Rigidly registering structural
+        # image`` in its log, DRBUDDI.cxx), and that rigid is not reliable: on a
+        # TRXScan fixture with a known truth it moved a T2w handed over 0.8 deg
+        # off the b=0 frame to 5.3 deg off, the same answer from a coarse and
+        # from an exact pre-alignment. Coregistering from it put the DWI 5.3 deg
+        # / 3.8 mm off in ACPC space; from ``b0_corrected_final`` 0.4 deg /
+        # 0.4 mm. The undistorted b=0 lives on the structural's grid in the b=0
+        # frame, and it is what every corrected volume is actually aligned with.
+        self._results['b0_ref'] = self.inputs.undistorted_reference
 
         # there may be 2 transforms for the blip down data. If so, compose them
         if isdefined(self.inputs.bdown_to_bup_rigid_trans_h5):
@@ -1077,6 +1090,14 @@ class _DIFFPREPInputSpec(TORTOISEInputSpec):
         desc='Additional flags appended verbatim to the TORTOISEProcess command. '
         'Use to access TORTOISE knobs not surfaced as first-class fields '
         '(e.g. ["--big_delta", "0.030"]).',
+    )
+    # TORTOISEProcess's parser is DRBUDDI's, so the EPIREG (T2Wreg) stage honours the same
+    # working-grid flag as DRBUDDI; without it TORTOISE refines the T2w grid to <= 1 mm and a
+    # sloppy T2Wreg run spends over an hour at ~65 s per iteration on a 1 mm T2w.
+    epi_working_res = traits.Float(
+        argstr='--epi_working_res %g',
+        desc='Resolution (mm) of the EPIREG registration grid (see DRBUDDI). '
+        'Requires a patched TORTOISE that exposes --epi_working_res.',
     )
     disable_itk_threads = traits.Bool(True, usedefault=True, argstr='--disable_itk_threads')
     use_cuda = traits.Bool(False, usedefault=True, desc=_USE_CUDA_TRAIT_DESC)

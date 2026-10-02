@@ -1,5 +1,55 @@
 # What's New
 
+## Unreleased
+
+### 🎉 Exciting New Features
+
+* Truth-scored integration tests on simulated data: the `trxscan_*` CI jobs generate
+  fixtures with [TRXScan](https://github.com/PennLINC/TRXScan) (`qsiprep/tests/trxscan_fixtures.py`)
+  and score qsiprep's outputs against the simulator's ground truth
+  (`qsiprep/tests/truth_scoring.py`): susceptibility displacement, corrected images,
+  coregistration against a recorded subject movement, gradient deviation, and eddy's motion
+  parameters.
+
+* FSL BET is gone. Every brain extraction that used it — the fieldmap-magnitude mask of the
+  GRE and phase-difference workflows, and the SynthStrip and SynthSeg stand-ins under
+  `--sloppy` — now runs `niimath -skullstrip` (AFNI's surface method, no model): 1.5 s and
+  90 MB on a 1 mm T2w, Dice 0.96 against SynthStrip, where BET left 18 % of the brain margin
+  outside its mask on T2w. Needs a niimath built with `SKULLSTRIP=1` (component image 26.10.1).
+
+* The ACPC registration starts from a `niimath -allineate` affine (1-2 s) and the nonlinear
+  normalization from identity (its input is already ACPC-aligned), instead of the
+  full-resolution antsAI search niworkflows runs inside `RobustMNINormalization` (~47 s each,
+  same transforms to 0.2 deg). Under `--sloppy` the anatomical resamplings use Linear
+  (NearestNeighbor for labels) interpolation. On the TRXScan reverse-PE fixture the sloppy run went
+  from 19.6 to 10.4 min at 4 CPUs with the same truth scores.
+
+* The integration matrix is the truth-scored TRXScan runs only. The sixteen end-to-end
+  runs on Box-hosted data (tinytensor, DSDTI, DSCSDSI, forrest_gump, maternal_brain_project,
+  twoses, csdsi) only checked that files were written; the two reverse-PE ones took 45-50
+  minutes each. DIFFPREP and its T2Wreg EPI correction gained truth-scored runs of their own
+  (`trxscan_diffprep`, `trxscan_t2wreg`). The T2Wreg run records a known defect as an
+  expected failure: TORTOISE places the T2w about 4 degrees off the b0 on the fixture, so the
+  corrected image scores below the uncorrected one.
+* Under `--sloppy`, DIFFPREP's T2Wreg (EPIREG) stage runs on the 2.5 mm grid DRBUDDI already
+  uses; the interface never passed `--epi_working_res`, and the stage took over an hour on a
+  1 mm T2w.
+
+### 🐛 Bug Fixes
+
+* Oblique anatomical images are resampled onto an axis-aligned grid instead of having their
+  header obliquity discarded, which had moved the anatomy in world space by the obliquity angle
+  (21 mm at the brain centre for a 5 degree tilt) and misplaced everything evaluated in scanner
+  coordinates, gradient nonlinearity correction included.
+* `from-ACPC_to-distortiongroup` and `from-ACPC_to-dwiref` transforms now hold the actual
+  inverse of the coregistration; they used to be copies of the forward matrix.
+* The integration tests read `CIRCLE_CPUS`, the variable CI actually sets.
+* After DRBUDDI, the b0-to-T1w coregistration starts from DRBUDDI's undistorted b=0 rather
+  than from ``structural_used.nii``, the T2w resampled through DRBUDDI's own rigid
+  registration of it: on a TRXScan fixture with a known truth that rigid moved a T2w handed
+  over 0.8 degrees off the b=0 frame to 5.3 degrees off, and the DWI landed 5.3 deg / 3.8 mm
+  off in ACPC space; from the undistorted b=0 the error is 0.4 deg / 0.4 mm.
+
 ## 26.1.0rc1 (September 29, 2026)
 
 ### 🛠 Breaking Changes

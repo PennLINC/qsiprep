@@ -97,6 +97,9 @@ commands:
       - restore_cache:
           keys:
             - data-v2-{{ checksum ".circleci/data_versions.txt" }}
+      - restore_cache:
+          keys:
+            - trxscan-v1-{{ checksum ".circleci/trxscan_fixtures.txt" }}
       - run: *docker_auth
       - run: *setup_docker_registry
       - run: *pull_test_image
@@ -114,7 +117,7 @@ commands:
           name: Run qsiprep (<< parameters.marker >>)
           no_output_timeout: 1h
           command: |
-            mkdir -p /tmp/out /tmp/work /tmp/coverage
+            mkdir -p /tmp/out /tmp/work /tmp/coverage /tmp/test-results
             docker run --rm=false \
               -e CIRCLE_CPUS=<< parameters.cpus >> \
               -e COVERAGE_FILE=/coverage/.coverage.<< parameters.marker >> \
@@ -123,14 +126,20 @@ commands:
               -v /tmp/out:/out \
               -v /tmp/work:/work \
               -v /tmp/coverage:/coverage \
+              -v /tmp/test-results:/test-results \
               -w /tmp/src/qsiprep \
               --entrypoint pytest \
               pennlinc/qsiprep:test \
               --strict-markers --strict-config \
               -rP -o log_cli=true -m "<< parameters.marker >>" \
+              --junitxml=/test-results/<< parameters.marker >>.xml -o junit_logging=no \
               --cov-append --cov-report term-missing --cov=qsiprep \
               --data_dir=/data --output_dir=/out --working_dir=/work \
               qsiprep
+      # CircleCI's Tests tab and Insights read these: one row per test with its
+      # assertion message, so a failed truth score reads without opening the log.
+      - store_test_results:
+          path: /tmp/test-results
       - run:
           name: Prune non-QC artifacts
           when: always
@@ -370,19 +379,6 @@ jobs:
             set -a
             . /tmp/src/qsiprep/.circleci/data_versions.txt
             set +a
-            echo "export HBCD_URL=$HBCD_URL" >> "$BASH_ENV"
-            echo "export DSCSDSI_URL=$DSCSDSI_URL" >> "$BASH_ENV"
-            echo "export DSCSDSI_BUDS_URL=$DSCSDSI_BUDS_URL" >> "$BASH_ENV"
-            echo "export DSDTI_URL=$DSDTI_URL" >> "$BASH_ENV"
-            echo "export TWOSES_URL=$TWOSES_URL" >> "$BASH_ENV"
-            echo "export MULTISHELL_OUTPUT_URL=$MULTISHELL_OUTPUT_URL" >> "$BASH_ENV"
-            echo "export SINGLESHELL_OUTPUT_URL=$SINGLESHELL_OUTPUT_URL" >> "$BASH_ENV"
-            echo "export DRBUDDI_RPE_SERIES_URL=$DRBUDDI_RPE_SERIES_URL" >> "$BASH_ENV"
-            echo "export CSDSI_RPE_SERIES_URL=$CSDSI_RPE_SERIES_URL" >> "$BASH_ENV"
-            echo "export DRBUDDI_EPI_URL=$DRBUDDI_EPI_URL" >> "$BASH_ENV"
-            echo "export DSDTI_FMAP_URL=$DSDTI_FMAP_URL" >> "$BASH_ENV"
-            echo "export DSCSDSI_FMAP_URL=$DSCSDSI_FMAP_URL" >> "$BASH_ENV"
-            echo "export MATERNAL_BRAIN_PROJECT_URL=$MATERNAL_BRAIN_PROJECT_URL" >> "$BASH_ENV"
             echo "export FORREST_GUMP_URL=$FORREST_GUMP_URL" >> "$BASH_ENV"
             echo "export NIBS_URL=$NIBS_URL" >> "$BASH_ENV"
       - run:
@@ -412,25 +408,49 @@ jobs:
               fi
               echo "Downloaded ${dset}"
             }
-            download_one HBCD "$HBCD_URL"
-            download_one DSCSDSI "$DSCSDSI_URL"
-            download_one DSCSDSI_BUDS "$DSCSDSI_BUDS_URL"
-            download_one DSDTI "$DSDTI_URL"
-            download_one twoses "$TWOSES_URL"
-            download_one multishell_output "$MULTISHELL_OUTPUT_URL"
-            download_one singleshell_output "$SINGLESHELL_OUTPUT_URL"
-            download_one drbuddi_rpe_series "$DRBUDDI_RPE_SERIES_URL"
-            download_one csdsi_rpe_series "$CSDSI_RPE_SERIES_URL"
-            download_one drbuddi_epi "$DRBUDDI_EPI_URL"
-            download_one DSDTI_fmap "$DSDTI_FMAP_URL"
-            download_one DSCSDSI_fmap "$DSCSDSI_FMAP_URL"
-            download_one maternal_brain_project "$MATERNAL_BRAIN_PROJECT_URL"
             download_one forrest_gump "$FORREST_GUMP_URL"
             download_one nibs "$NIBS_URL"
       - save_cache:
           key: data-v2-{{ checksum ".circleci/data_versions.txt" }}
           paths:
             - /tmp/data
+
+  gen_trxscan_fixtures:
+    # Simulated fixtures with ground truth (qsiprep/tests/trxscan_fixtures.py), generated
+    # with the pinned trxscan release into /tmp/data/trxscan and cached on the spec file,
+    # which pins the trxscan version and every recipe's arguments. Needs a few GB of RAM
+    # per recipe and no Docker, so a docker executor with a python image is enough.
+    docker:
+      - image: cimg/python:3.12
+    resource_class: large
+    working_directory: /tmp/src/qsiprep
+    steps:
+      - checkout:
+          path: /tmp/src/qsiprep
+      - restore_cache:
+          keys:
+            - trxscan-v1-{{ checksum ".circleci/trxscan_fixtures.txt" }}
+      - run:
+          name: Generate TRXScan fixtures
+          no_output_timeout: 30m
+          command: |
+            if [[ -f /tmp/data/trxscan/.complete ]]; then
+              echo "TRXScan fixtures were cached"
+              exit 0
+            fi
+            rm -rf /tmp/data/trxscan
+            python3 -m venv /tmp/trxscan-venv
+            . /tmp/trxscan-venv/bin/activate
+            TRXSCAN_VERSION=$(sed -n 's/^TRXSCAN_VERSION=//p' .circleci/trxscan_fixtures.txt)
+            pip install -q "trxscan[trx]==${TRXSCAN_VERSION}"
+            trxscan-fetch sub-60501
+            python -m qsiprep.tests.trxscan_fixtures --spec | diff - .circleci/trxscan_fixtures.txt
+            python -m qsiprep.tests.trxscan_fixtures --generate /tmp/data
+            touch /tmp/data/trxscan/.complete
+      - save_cache:
+          key: trxscan-v1-{{ checksum ".circleci/trxscan_fixtures.txt" }}
+          paths:
+            - /tmp/data/trxscan
 
   integration_test:
     parameters:
@@ -485,7 +505,7 @@ jobs:
           name: Run unit tests
           no_output_timeout: 2h
           command: |
-            mkdir -p /tmp/out /tmp/work /tmp/coverage
+            mkdir -p /tmp/out /tmp/work /tmp/coverage /tmp/test-results
             docker run --rm=false \
               -e CIRCLE_CPUS=4 \
               -e COVERAGE_FILE=/coverage/.coverage.unit_tests \
@@ -494,14 +514,18 @@ jobs:
               -v /tmp/out:/out \
               -v /tmp/work:/work \
               -v /tmp/coverage:/coverage \
+              -v /tmp/test-results:/test-results \
               -w /tmp/src/qsiprep \
               --entrypoint pytest \
               pennlinc/qsiprep:test \
               --strict-markers --strict-config \
               -n 4 -vv -o log_cli=true -m "not integration and not synthstrip" \
+              --junitxml=/test-results/unit_tests.xml -o junit_logging=no \
               --cov-append --cov-branch --cov-report term-missing --cov=qsiprep \
               --data_dir=/data --output_dir=/out --working_dir=/work \
               qsiprep
+      - store_test_results:
+          path: /tmp/test-results
       - persist_to_workspace:
           root: /tmp/coverage
           paths:
@@ -565,52 +589,44 @@ workflows:
       - get_data:
           filters: *default_filters
 
+      - gen_trxscan_fixtures:
+          filters: *default_filters
+
       - integration_test:
           name: << matrix.marker >>
           matrix:
             parameters:
               marker:
-                - dscsdsi
-                - dsdti_nofmap
-                - dsdti_synfmap
-                - drbuddi_tensorline_epi
-                - drbuddi_shoreline_epi
-                - drbuddi_rpe
-                - diffprep
-                - diffprep_drbuddi
-                - diffprep_rpe_series
-                - diffprep_csdsi_rpe_series
-                - maternal_brain_project
-                - forrest_gump
-                - forrest_gump_patch2self
-                - synthstrip
-                - dwiref
-          requires: [image_prep, get_data]
+                - trxscan_rpe_topup
+                - trxscan_rpe_drbuddi
+                - trxscan_epi_topup
+                - trxscan_phasediff
+                - trxscan_gnl
+                - trxscan_motion
+                - trxscan_offsets
+                - trxscan_diffprep
+                - trxscan_t2wreg
+          requires: [image_prep, get_data, gen_trxscan_fixtures]
           filters: *default_filters
 
       - unit_tests:
           requires:
             - image_prep
             - get_data
+            - gen_trxscan_fixtures
           filters: *default_filters
 
       - merge_coverage:
           requires:
-            - dscsdsi
-            - dsdti_nofmap
-            - dsdti_synfmap
-            - drbuddi_tensorline_epi
-            - drbuddi_shoreline_epi
-            - drbuddi_rpe
-            - diffprep
-            - diffprep_drbuddi
-            - diffprep_rpe_series
-            - diffprep_csdsi_rpe_series
-            - maternal_brain_project
-            - forrest_gump
-            - forrest_gump_patch2self
-            - synthstrip
-            - dwiref
+            - trxscan_rpe_topup
+            - trxscan_rpe_drbuddi
+            - trxscan_epi_topup
+            - trxscan_phasediff
+            - trxscan_gnl
+            - trxscan_motion
+            - trxscan_offsets
+            - trxscan_diffprep
+            - trxscan_t2wreg
             - unit_tests
           filters: *default_filters
 
