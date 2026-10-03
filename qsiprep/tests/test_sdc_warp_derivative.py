@@ -32,8 +32,15 @@ def _cfg():
     config.nipype.omp_nthreads = 1
     config.execution.sloppy = True
     config.execution.output_dir = '/tmp/qsiprep_sdc_warp_test_out'
-    config.workflow.output_resolution = 2.0
+    config.workflow.output_spaces = ['acpc:res-2mm']
     return config
+
+
+def _acpc_resolution():
+    """Return the ACPC output resolution these construction tests resample to."""
+    from qsiprep.utils.spaces import parse_output_spaces
+
+    return parse_output_spaces(['acpc:res-2mm'])[0].resolution
 
 
 def _rotation(axis, degrees):
@@ -290,11 +297,16 @@ def test_trans_wf_builds_compose_sdc_warp_only_when_requested():
     _cfg()
     from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
 
-    without = init_dwi_trans_wf(source_file='/data/sub-01_dwi.nii.gz', mem_gb=1)
+    without = init_dwi_trans_wf(
+        source_file='/data/sub-01_dwi.nii.gz', mem_gb=1, resolution=_acpc_resolution()
+    )
     assert without.get_node('compose_sdc_warp') is None
 
     wf = init_dwi_trans_wf(
-        source_file='/data/sub-01_dwi.nii.gz', mem_gb=1, sdc_warp_source='fieldwarp'
+        source_file='/data/sub-01_dwi.nii.gz',
+        mem_gb=1,
+        resolution=_acpc_resolution(),
+        sdc_warp_source='fieldwarp',
     )
     assert wf.get_node('compose_sdc_warp') is not None
     edges = wf._graph.edges(data=True)
@@ -342,7 +354,10 @@ def test_trans_wf_takes_volume_0_warp_from_a_single_path_or_a_list():
     from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
 
     wf = init_dwi_trans_wf(
-        source_file='/data/sub-01_dwi.nii.gz', mem_gb=1, sdc_warp_source='fieldwarp'
+        source_file='/data/sub-01_dwi.nii.gz',
+        mem_gb=1,
+        resolution=_acpc_resolution(),
+        sdc_warp_source='fieldwarp',
     )
     node = wf.get_node('first_sdc_warp')
     first_warp = create_function_from_source(node.inputs.function_str)
@@ -365,6 +380,7 @@ def test_trans_wf_topup_builds_hz_to_warp_chain(source):
     wf = init_dwi_trans_wf(
         source_file='/data/sub-01_dwi.nii.gz',
         mem_gb=1,
+        resolution=_acpc_resolution(),
         sdc_warp_source=source,
         sdc_pe_dir='j',
         sdc_readout_time=0.05,
@@ -408,6 +424,7 @@ def test_trans_wf_topup_drbuddi_builds_total_and_refinement():
     wf = init_dwi_trans_wf(
         source_file='/data/sub-01_dwi.nii.gz',
         mem_gb=1,
+        resolution=_acpc_resolution(),
         sdc_warp_source='topup+drbuddi',
         sdc_pe_dir='j',
         sdc_readout_time=0.05,
@@ -556,6 +573,7 @@ def test_connect_sdc_transform_files_keeps_the_order_they_apply():
 def test_finalize_writes_the_refinement_only_for_topup_drbuddi(tmp_path, monkeypatch, sdc_method):
     """Test that TOPUP+DRBUDDI gets the total and the refinement, each with its own figure."""
     from qsiprep.tests.gradient_fixtures import write_dwi_with_gradients
+    from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.dwi.finalize import init_dwi_finalize_wf
 
     for section, key, value in [
@@ -563,7 +581,7 @@ def test_finalize_writes_the_refinement_only_for_topup_drbuddi(tmp_path, monkeyp
         (config.execution, 'sloppy', False),
         (config.workflow, 'hmc_method', 'eddy'),
         (config.workflow, 'sdc_method', sdc_method),
-        (config.workflow, 'output_resolution', 1.2),
+        (config.workflow, 'output_spaces', ['acpc:res-1p2mm']),
         (config.workflow, 'dwiref_definition', 'distortion-group'),
         (config.nipype, 'omp_nthreads', 1),
     ]:
@@ -575,6 +593,7 @@ def test_finalize_writes_the_refinement_only_for_topup_drbuddi(tmp_path, monkeyp
         name='dwi_finalize_wf',
         source_file=source,
         output_prefix='sub-01',
+        acpc_specs=parse_output_spaces(config.workflow.output_spaces),
         do_biascorr=False,
         write_derivatives=True,
     )

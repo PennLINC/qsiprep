@@ -56,7 +56,7 @@ The DWI workflow for one output, with no fieldmap:
     :graph2use: orig
     :simple_form: yes
 
-    from qsiprep_docs import example_unit, AP, ANATOMICAL_TEMPLATE
+    from qsiprep_docs import example_unit, AP, ACPC_ANCHOR
     from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
 
     wf = init_dwi_preproc_wf(
@@ -64,7 +64,7 @@ The DWI workflow for one output, with no fieldmap:
         t2w_sdc=False,
         output_prefix='',
         source_file=AP,
-        anatomical_template=ANATOMICAL_TEMPLATE,
+        acpc_anchor=ACPC_ANCHOR,
     )
 
 The node names in these graphs are the ones that appear in the log

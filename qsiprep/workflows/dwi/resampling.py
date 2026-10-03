@@ -35,11 +35,11 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 def init_dwi_trans_wf(
     source_file,
     mem_gb,
+    resolution,
     template='ACPC',
     name='dwi_trans_wf',
     use_compression=True,
     write_local_bvecs=False,
-    write_reports=True,
     concatenate=True,
     doing_topup=False,
     pe_axis=None,
@@ -60,7 +60,8 @@ def init_dwi_trans_wf(
         from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
         wf = init_dwi_trans_wf(source_file='sub-1_dwi.nii.gz',
                                template='MNI152NLin2009cAsym',
-                               output_resolution=1.2,
+                               resolution=Resolution(kind='mm', label='1p2mm',
+                                                      zooms=(1.2, 1.2, 1.2)),
                                mem_gb=3,
                                omp_nthreads=1)
 
@@ -70,6 +71,8 @@ def init_dwi_trans_wf(
         Source DWI file used to name the resampled b=0 reference reports.
     mem_gb : float
         Size of DWI file in GB
+    resolution : :class:`~qsiprep.utils.spaces.Resolution`
+        The requested output resolution, used to describe the output voxel size
     template : str, optional
         Name of template targeted by ``template`` output space
     name : str, optional
@@ -78,8 +81,6 @@ def init_dwi_trans_wf(
         Save registered DWI series as ``.nii.gz``
     write_local_bvecs : bool, optional
         if true, local bvec niftis are written
-    write_reports : bool, optional
-        Whether the resampled b=0 reference workflow writes its mask report.
     concatenate : bool, optional
         Whether to merge the resampled volumes into a single 4D series (and
         compute the resampled b=0 reference and QC). If False, the list of
@@ -162,11 +163,15 @@ def init_dwi_trans_wf(
         Includes rotations introduced by warpingdenoisin
     """
     workflow = Workflow(name=name)
-    output_resolution = config.workflow.output_resolution
-    workflow.__desc__ = """\
-The DWI time-series were resampled to {tpl},
-generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels.
-""".format(tpl=template, vox=str(output_resolution).rstrip('0').rstrip('.'))
+    if resolution.kind == 'native':
+        vox_desc = f'{resolution.strategy}imum native voxel size'
+    else:
+        vox_desc = f'{resolution.label.replace("p", ".").replace("mm", "")}mm isotropic voxels'
+
+    workflow.__desc__ = f"""\
+The DWI time-series were resampled to {template},
+generating a *preprocessed DWI run in {template} space* with {vox_desc}.
+"""
 
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -234,7 +239,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
     # get composite warps and composed affines for warping and rotating
     compose_transforms = pe.Node(ComposeTransforms(), name='compose_transforms')
     get_interpolation = pe.Node(
-        ChooseInterpolator(sloppy=config.execution.sloppy, output_resolution=output_resolution),
+        ChooseInterpolator(sloppy=config.execution.sloppy),
         name='get_interpolation',
     )
     dwi_transform = pe.MapNode(
@@ -300,7 +305,10 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             ('dwi_files', 'input_image'),
             ('output_grid', 'reference_image'),
         ]),
-        (inputnode, get_interpolation, [('dwi_files', 'dwi_files')]),
+        (inputnode, get_interpolation, [
+            ('dwi_files', 'dwi_files'),
+            ('output_grid', 'output_grid'),
+        ]),
         (get_interpolation, dwi_transform, [('interpolation_method', 'interpolation')]),
         (dwi_transform, scale_dwis, [('output_image', 'dwi_files')]),
         (inputnode, scale_dwis, [
@@ -452,7 +460,9 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
     merge = pe.Node(Merge(compress=use_compression), name='merge', mem_gb=mem_gb * 3)
     extract_b0_series = pe.Node(ExtractB0s(), name='extract_b0_series')
     final_b0_ref = init_dwi_reference_wf(
-        gen_report=write_reports,
+        # The denoising workflow writes this reportlet from the final image; a
+        # second copy here has always raced it for the same filename.
+        gen_report=False,
         desc='resampled',
         name='final_b0_ref',
         source_file=source_file,

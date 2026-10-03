@@ -170,6 +170,22 @@ def _build_parser(**kwargs):
 
             return namespace, extras
 
+    class OutputSpacesAction(Action):
+        """Parse and validate --output-spaces at parse time, storing canonical tokens."""
+
+        def __call__(self, parser, namespace, values, option_string=None):
+            from qsiprep.utils.spaces import OutputSpacesError, parse_space_token
+
+            specs = []
+            for token in values:
+                try:
+                    specs.extend(parse_space_token(token))
+                except OutputSpacesError as exc:
+                    parser.error(str(exc))
+
+            existing = getattr(namespace, self.dest, None) or []
+            setattr(namespace, self.dest, [*existing, *[str(s) for s in specs]])
+
     def _path_exists(path, parser):
         """Ensure a given path exists."""
         if path is None or not Path(path).exists():
@@ -287,7 +303,7 @@ def _build_parser(**kwargs):
         'Required arguments',
         description=(
             'Every QSIPrep run needs these four. The three positional arguments follow the BIDS '
-            'App convention; --output-resolution has no default and must be given explicitly.'
+            'App convention; --output-spaces has no default and must be given explicitly.'
         ),
     )
     g_required.add_argument(
@@ -311,15 +327,31 @@ def _build_parser(**kwargs):
         help='Processing stage to run. Only "participant" is supported by QSIPrep.',
     )
     g_required.add_argument(
-        '--output-resolution',
-        action='store',
-        required=True,
-        type=float,
-        metavar='MM',
+        '--output-spaces',
+        nargs='+',
+        action=OutputSpacesAction,
+        default=None,
+        metavar='SPACE',
         help=(
-            'The isotropic voxel size in mm that the data will be resampled to after '
-            'preprocessing. If this is smaller than the original voxel size, the data are '
-            'upsampled using BSpline interpolation.'
+            'Standard and non-standard spaces to write outputs to, space delimited. '
+            'At least one "acpc" space is required, because QSIPrep writes preprocessed '
+            'DWI in ACPC space only -- for example "acpc:res-2mm". '
+            'On "acpc", the resolution is an isotropic physical size with an "mm" '
+            'suffix ("res-2mm", "res-1p5mm"), or "res-nativemin"/"res-nativemax", which '
+            'take the smallest or largest voxel dimension of the input DWI runs (a '
+            '3x4x5 mm input gives 3x3x3 mm for nativemin and 5x5x5 mm for nativemax). '
+            'Anisotropic sizes are rejected on "acpc". '
+            'On a standard space, the resolution is a TemplateFlow resolution label '
+            '("res-1", "res-2"), which selects the grid the template is fetched on; a '
+            'template may be listed at several labels ("MNI152NLin2009cAsym:res-1:res-2"). '
+            'Physical "mm" sizes are NOT implemented for standard spaces -- QSIPrep does '
+            'not resample standard-space output to an arbitrary voxel size, so such a '
+            'token has no effect. '
+            'Listing "acpc" more than once writes the preprocessed DWI at each '
+            'resolution. Standard spaces produce transforms and anatomical derivatives; '
+            'DWI is never resampled into them. Templates with cohorts accept '
+            '"cohort-auto" to pick one from the participant\'s age, as in '
+            '"MNIInfant:cohort-auto".'
         ),
     )
 
@@ -510,9 +542,9 @@ def _build_parser(**kwargs):
         '--infant',
         action='store_true',
         help=(
-            'Configure the pipelines to process infant brains. This changes the '
-            'anatomical template to MNIInfant, and the appropriate MNIInfant cohort is '
-            "selected from the participant's age."
+            'Configure the pipelines to process infant brains. This appends '
+            '`MNIInfant:cohort-auto` to `--output-spaces` (unless an MNIInfant entry is '
+            "already present), and the cohort is selected from the participant's age."
         ),
     )
     g_anat.add_argument(
@@ -540,27 +572,6 @@ def _build_parser(**kwargs):
             '"none" never runs it. '
             '"auto" skips it when the BIDS ImageType metadata contains "NORM", which is '
             'how Siemens and others flag console-applied normalization.'
-        ),
-    )
-    g_anat.add_argument(
-        '--anatomical-template',
-        required=False,
-        action='store',
-        choices=['MNI152NLin2009cAsym'],
-        default='MNI152NLin2009cAsym',
-        help=(
-            'The standard-space template that anatomical images are normalized to. '
-            'MNI152NLin2009cAsym is currently the only supported value. --infant overrides '
-            'this with the appropriate MNIInfant cohort.'
-        ),
-    )
-    g_anat.add_argument(
-        '--skip-anat-based-spatial-normalization',
-        action='store_true',
-        default=False,
-        help=(
-            'Skip the anatomical-based normalization to template space. The '
-            'normalization runs otherwise.'
         ),
     )
 
@@ -1153,13 +1164,61 @@ def check_denoise_window(denoise_method, dwidenoise_window):
         )
 
 
+def _finalize_output_spaces(opts, parser=None):
+    """Validate ``opts.output_spaces`` and store it in canonical form.
+
+    Runs after the whole command line has been read, so the result does not depend
+    on the order options were given in.
+    """
+    from qsiprep.utils.spaces import INFANT_ANCHORS, OutputSpacesError, parse_output_spaces
+
+    def fail(message):
+        if parser is not None:
+            parser.error(message)
+        raise SystemExit(message)
+
+    given = list(opts.output_spaces or [])
+    if not given:
+        fail(
+            '--output-spaces is required and must include at least one "acpc" space, '
+            'for example: --output-spaces acpc:res-2mm MNI152NLin2009cAsym'
+        )
+
+    # Any infant template already anchors AC-PC (see INFANT_ANCHORS); only add the
+    # default one when the request names none.
+    if opts.infant and not any(s.split(':')[0] in INFANT_ANCHORS for s in given):
+        given.append('MNIInfant:cohort-auto')
+
+    try:
+        specs = parse_output_spaces(given)
+    except OutputSpacesError as exc:
+        fail(str(exc))
+
+    # A physical size on a standard space parses but does nothing: nothing resamples
+    # to it and no res- entity is written, so it lands on exactly the filenames the
+    # bare template writes. Reject it rather than silently overwriting them.
+    unimplemented = [
+        str(spec)
+        for spec in specs
+        if spec.standard and spec.resolution is not None and spec.resolution.kind == 'mm'
+    ]
+    if unimplemented:
+        fail(
+            f'Physical sizes on standard spaces are not implemented: '
+            f'{", ".join(unimplemented)}. QSIPrep writes standard-space anatomicals on '
+            "the template's own grid, so use a TemplateFlow res- label (for example "
+            'MNI152NLin2009cAsym:res-2) or drop the resolution.'
+        )
+
+    opts.output_spaces = [str(spec) for spec in specs]
+    return opts
+
+
 def parse_args(args=None, namespace=None):
     """Parse args and run further checks on the command line."""
     import logging
 
     from bids.layout import Query
-
-    # from niworkflows.utils.spaces import Reference, SpatialReferences
 
     parser = _build_parser()
     opts = parser.parse_args(args, namespace)
@@ -1170,14 +1229,13 @@ def parse_args(args=None, namespace=None):
             'session' if opts.subject_anatomical_reference == 'sessionwise' else 'root'
         )
 
-    # Change anatomical_template based on infant parameter
-    opts.anatomical_template = 'MNI152NLin2009cAsym'
+    _finalize_output_spaces(opts, parser)
+
     if opts.infant:
         config.loggers.cli.info(
             'Infant processing mode enabled. '
-            "Inferring the subject's age and selecting the appropriate MNIInfant cohort."
+            "Inferring the subject's age and selecting the appropriate template cohort."
         )
-        opts.anatomical_template = 'MNIInfant'
         if opts.subject_anatomical_reference != 'sessionwise':
             config.loggers.cli.error(
                 'Infant processing requires --subject-anatomical-reference sessionwise'
@@ -1232,12 +1290,6 @@ def parse_args(args=None, namespace=None):
                 'Telemetry system to collect crashes and errors is enabled '
                 '- thanks for your feedback! Use option ``--notrack`` to opt out.'
             )
-
-    # Initialize --output-spaces if not defined
-    # if config.execution.output_spaces is None:
-    #     config.execution.output_spaces = SpatialReferences(
-    #         [Reference("MNI152NLin2009cAsym", {"res": "native"})]
-    #     )
 
     # Retrieve logging level
     build_log = config.loggers.cli

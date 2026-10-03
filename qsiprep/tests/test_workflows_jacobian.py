@@ -28,14 +28,14 @@ def _reset_config_impl():
     """
     saved = (
         config.workflow.ignore,
-        config.workflow.output_resolution,
+        config.workflow.output_spaces,
         config.nipype.omp_nthreads,
         config.workflow.b0_threshold,
         config.workflow.dwi2anat_dof,
         config.workflow.force,
     )
     config.workflow.ignore = []
-    config.workflow.output_resolution = 2.0
+    config.workflow.output_spaces = ['acpc:res-2mm']
     # config.nipype.init() normally resolves this; it is not run in these bare
     # construction tests, so init_modelfree_qc_wf's DSIStudioGQIReconstruction
     # node (which requires an int thread_count) fails to build without it.
@@ -47,7 +47,7 @@ def _reset_config_impl():
     yield
     (
         config.workflow.ignore,
-        config.workflow.output_resolution,
+        config.workflow.output_spaces,
         config.nipype.omp_nthreads,
         config.workflow.b0_threshold,
         config.workflow.dwi2anat_dof,
@@ -85,10 +85,26 @@ def test_reset_config_fixture_restores_omp_nthreads():
     assert config.nipype.omp_nthreads == 99
 
 
+def _acpc_resolution():
+    """Return the ACPC output resolution these construction tests resample to."""
+    from qsiprep.utils.spaces import parse_output_spaces
+
+    return parse_output_spaces(['acpc:res-2mm'])[0].resolution
+
+
+def _acpc_specs():
+    from qsiprep.utils.spaces import parse_output_spaces
+
+    specs = parse_output_spaces(config.workflow.output_spaces)
+    return [spec for spec in specs if not spec.standard]
+
+
 def _trans_wf():
     from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
 
-    return init_dwi_trans_wf(source_file='/data/sub-1_dwi.nii.gz', mem_gb=1)
+    return init_dwi_trans_wf(
+        source_file='/data/sub-1_dwi.nii.gz', mem_gb=1, resolution=_acpc_resolution()
+    )
 
 
 def _edges(workflow):
@@ -549,6 +565,7 @@ def _finalize_wf(tmp_path, write_derivatives=True):
         name='dwi_finalize_wf',
         source_file=dwi,
         output_prefix='sub-01',
+        acpc_specs=_acpc_specs(),
         write_derivatives=write_derivatives,
     )
 
@@ -556,7 +573,9 @@ def _finalize_wf(tmp_path, write_derivatives=True):
 def test_jacobian_weights_reach_the_derivatives_workflow_through_finalize(tmp_path):
     """Test that Jacobian weights reach the derivatives workflow through finalize.
 
-    The full inter-workflow chain: trans_wf -> finalize outputnode -> derivatives_wf.
+    The full inter-workflow chain: trans_wf -> finalize outputnode, and
+    trans_wf -> derivatives_wf. Each ACPC resolution's derivatives read their
+    own trans_wf; the outputnode carries only the first resolution.
 
     This is the shape of the boundary Task 10 and Task 11 each missed once in
     ``workflows/base.py`` (a dropped edge between two outputnodes, no error,
@@ -565,7 +584,7 @@ def test_jacobian_weights_reach_the_derivatives_workflow_through_finalize(tmp_pa
     channel, so this is the boundary that matters for it, not ``base.py``.
     """
     wf = _finalize_wf(tmp_path)
-    trans_wf = wf.get_node('transform_dwis_t1')
+    trans_wf = wf.get_node('dwi_trans_wf')
     outputnode = wf.get_node('outputnode')
     deriv_wf = wf.get_node('dwi_derivatives_wf')
     assert deriv_wf.get_node('stack_jacobian') is not None
@@ -578,19 +597,22 @@ def test_jacobian_weights_reach_the_derivatives_workflow_through_finalize(tmp_pa
         'jacobian_weight_index',
     ) in trans_to_out['connect']
 
-    out_to_deriv = wf._graph.get_edge_data(outputnode, deriv_wf)
-    assert out_to_deriv is not None
-    assert ('jacobian_weights', 'inputnode.jacobian_weights') in out_to_deriv['connect']
+    trans_to_deriv = wf._graph.get_edge_data(trans_wf, deriv_wf)
+    assert trans_to_deriv is not None
     assert (
-        'jacobian_weight_index',
+        'outputnode.jacobian_weights',
+        'inputnode.jacobian_weights',
+    ) in trans_to_deriv['connect']
+    assert (
+        'outputnode.jacobian_weight_index',
         'inputnode.jacobian_weight_index',
-    ) in out_to_deriv['connect']
+    ) in trans_to_deriv['connect']
 
 
 def test_jacobian_weights_do_not_reach_finalize_when_weighting_off(tmp_path):
     config.workflow.ignore = ['jacobian']
     wf = _finalize_wf(tmp_path)
-    trans_wf = wf.get_node('transform_dwis_t1')
+    trans_wf = wf.get_node('dwi_trans_wf')
     outputnode = wf.get_node('outputnode')
     deriv_wf = wf.get_node('dwi_derivatives_wf')
     assert deriv_wf.get_node('stack_jacobian') is None

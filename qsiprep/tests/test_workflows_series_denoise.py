@@ -53,7 +53,7 @@ def _cfg():
     config.workflow.dwidenoise_window = 5
     config.workflow.unringing_method = 'none'
     config.workflow.ignore = []
-    config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
+    config.workflow.output_spaces = ['acpc:res-2mm', 'MNI152NLin2009cAsym']
 
 
 def test_series_denoise_wf_conforms_then_denoises(tmp_path):

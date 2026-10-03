@@ -202,8 +202,9 @@ def test_report_output_level(tmpdir, reference, requested, expected):
             reference,
             '--report-output-level',
             requested,
-            '--output-resolution',
-            '2',
+            '--output-spaces',
+            'acpc:res-2mm',
+            'MNI152NLin2009cAsym',
             '--work-dir',
             str(work_dir),
             '--skip-bids-validation',
@@ -249,8 +250,9 @@ def _test_processing_list(tmpdir, name, skeleton, reference, expected):
             '01',
             '--subject-anatomical-reference',
             reference,
-            '--output-resolution',
-            '2',
+            '--output-spaces',
+            'acpc:res-2mm',
+            'MNI152NLin2009cAsym',
             '--skip-bids-validation',
         ],
     )
@@ -281,8 +283,8 @@ def test_session_filter_without_dwi_is_rejected(tmp_path, capsys):
                 '01',
                 '--session-label',
                 'anatonly',
-                '--output-resolution',
-                '2',
+                '--output-spaces',
+                'acpc:res-2mm',
                 '--work-dir',
                 str(work_dir),
                 '--skip-bids-validation',
@@ -347,7 +349,14 @@ def minimal_args(tmp_path):
     """Return the arguments every qsiprep call needs, for parser-level tests."""
     bids_dir = tmp_path / 'bids'
     bids_dir.mkdir()
-    return [str(bids_dir), str(tmp_path / 'out'), 'participant', '--output-resolution', '2']
+    return [
+        str(bids_dir),
+        str(tmp_path / 'out'),
+        'participant',
+        '--output-spaces',
+        'acpc:res-2mm',
+        'MNI152NLin2009cAsym',
+    ]
 
 
 def _dest(option):
@@ -601,8 +610,8 @@ def _parse_with_config_file(tmp_path, toml_text, *extra):
             'participant',
             '--participant-label',
             '01',
-            '--output-resolution',
-            '2',
+            '--output-spaces',
+            'acpc:res-2mm',
             '--work-dir',
             str(work_dir),
             '--skip-bids-validation',
@@ -836,7 +845,9 @@ def test_parser_defaults_to_stable_mrtrix(tmp_path):
     bids = tmp_path / 'bids'
     bids.mkdir()
     out = tmp_path / 'out'
-    opts = parser.parse_args([str(bids), str(out), 'participant', '--output-resolution', '2'])
+    opts = parser.parse_args(
+        [str(bids), str(out), 'participant', '--output-spaces', 'acpc:res-2mm']
+    )
     assert opts.mrtrix_version == 'stable'
 
 
@@ -858,8 +869,8 @@ def test_parser_accepts_dev_mrtrix(tmp_path):
             'participant',
             '--mrtrix-version',
             'dev',
-            '--output-resolution',
-            '2',
+            '--output-spaces',
+            'acpc:res-2mm',
         ]
     )
     assert opts.mrtrix_version == 'dev'
@@ -881,8 +892,8 @@ def test_parser_rejects_unknown_mrtrix_version(tmp_path):
                 'participant',
                 '--mrtrix-version',
                 '3.0.8',
-                '--output-resolution',
-                '2',
+                '--output-spaces',
+                'acpc:res-2mm',
             ]
         )
 
@@ -899,7 +910,7 @@ def _cli_base(tmp_path):
     bids_dir.mkdir()
     out_dir = tmp_path / 'out'
     out_dir.mkdir()
-    return [str(bids_dir), str(out_dir), 'participant', '--output-resolution', '2.0']
+    return [str(bids_dir), str(out_dir), 'participant', '--output-spaces', 'acpc:res-2mm']
 
 
 def test_cli_base_is_itself_valid(tmp_path):

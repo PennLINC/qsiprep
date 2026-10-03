@@ -79,7 +79,7 @@ from .anatomical.volume import anat_biascorrect_enabled, init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
 from .dwi.distortion_group_merge import init_distortion_group_merge_wf
 from .dwi.dwiref import init_dwiref_wf
-from .dwi.finalize import init_dwi_finalize_wf
+from .dwi.finalize import _select_grid, init_dwi_finalize_wf
 from .dwi.merge import SERIES_FIELDS, init_dwi_series_denoise_wf
 
 
@@ -123,6 +123,17 @@ def connect_series_to_unit(workflow, series_wfs, unit, dwi_preproc_wf, name):
                 series_wfs[dwi_file], f'outputnode.{series_field}', collect, f'in{index}'
             )
         workflow.connect(collect, 'out', dwi_preproc_wf, f'inputnode.{list_field}')
+
+
+def _first_sampling_grid(grids):
+    """Pick the reference grid for HMC/SDC out of the per-resolution list.
+
+    ``--output-spaces`` can request several ACPC resolutions, so the anatomical
+    workflow emits a list. Head motion correction needs one reference geometry,
+    and the first requested resolution is it -- matching the single grid this
+    fed before the fan-out existed.
+    """
+    return grids[0] if isinstance(grids, (list, tuple)) else grids
 
 
 def _build_dwi_plan(subject_data, selection):
@@ -241,26 +252,26 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
             '--anat-modality none'
         )
 
-    anatomical_template = config.workflow.anatomical_template
-    if config.workflow.infant:
-        from ..utils.bids import cohort_by_months, parse_bids_for_age_months
+    from ..utils.spaces import resolve_output_spaces, select_acpc_anchor
 
+    output_spaces = config.workflow.parsed_output_spaces()
+    # The anchor is not always listed (MNI152NLin2009cAsym anchors an acpc-only
+    # request), so resolve its cohort alongside the requested spaces.
+    acpc_anchor = select_acpc_anchor(output_spaces)
+    to_resolve = [*output_spaces, acpc_anchor]
+    if any(spec.needs_cohort_resolution for spec in to_resolve):
         if session_ids and len(session_ids) > 1:
-            raise RuntimeError('Infant template is only available for single session processing.')
-
-        # Calculate the age and age-specific spaces
-        session_label = None if not session_ids else session_ids[0]
-        age = parse_bids_for_age_months(
-            config.execution.bids_dir,
-            subject_id,
-            session_label,
-        )
-        if age is None:
-            ses_str = f'_ses-{session_label}' if session_label else ''
-            raise RuntimeError(f'Could not find age for sub-{subject_id}{ses_str}')
-
-        cohort = cohort_by_months(anatomical_template, age)
-        anatomical_template = f'{anatomical_template}+{cohort}'
+            raise RuntimeError(
+                'Automatic cohort selection is only available for single session processing.'
+            )
+    *output_spaces, acpc_anchor = resolve_output_spaces(
+        to_resolve,
+        config.execution.bids_dir,
+        subject_id,
+        None if not session_ids else session_ids[0],
+    )
+    acpc_specs = [s for s in output_spaces if not s.standard]
+    standard_specs = [s for s in output_spaces if s.standard]
 
     # The methods this run selected: the axis every routing decision reads.
     selection = method_selection_from_config()
@@ -315,7 +326,7 @@ to workflows in *QSIPrep*'s documentation]\
 
     summary = pe.Node(
         SubjectSummary(
-            template=anatomical_template,
+            templates=[s.fullname for s in standard_specs],
             mrtrix_version=config.workflow.mrtrix_version,
         ),
         name='summary',
@@ -376,7 +387,10 @@ to workflows in *QSIPrep*'s documentation]\
         num_anat_images=num_anat_images,
         num_additional_t2ws=additional_t2ws,
         has_rois=bool(subject_data['roi']),
-        anatomical_template=anatomical_template,
+        output_spaces=output_spaces,
+        acpc_anchor=acpc_anchor,
+        acpc_specs=acpc_specs,
+        dwi_files=subject_data['dwi'],
         do_biascorr=anat_biascorrect_enabled(subject_data.get(info_modality)),
         t2w_do_biascorr=anat_biascorrect_enabled(subject_data.get('t2w')),
     )
@@ -507,22 +521,36 @@ to workflows in *QSIPrep*'s documentation]\
             if len(merged_to_subgroups[merged_group]) < 2:
                 continue
 
-            merging_group_workflows[merged_group] = init_distortion_group_merge_wf(
-                merging_strategy=config.workflow.distortion_group_merge,
-                source_file=merged_group + '_dwi.nii.gz',
-                inputs_list=merged_to_subgroups[merged_group],
-                output_prefix=merged_group,
-                name=merged_group.replace('-', '_') + '_final_merge_wf',
-                assembly=assembly_by_name[merged_group],
-                units=[units_by_name[key] for key in merged_to_subgroups[merged_group]],
-            )
-            workflow.connect([
-                (anat_preproc_wf, merging_group_workflows[merged_group], [
-                    ('outputnode.t1_brain', 'inputnode.t1_brain'),
-                    ('outputnode.t1_seg', 'inputnode.t1_seg'),
-                    ('outputnode.t1_mask', 'inputnode.t1_mask'),
-                ]),
-            ])  # fmt:skip
+            merging_group_workflows[merged_group] = [
+                init_distortion_group_merge_wf(
+                    merging_strategy=config.workflow.distortion_group_merge,
+                    source_file=merged_group + '_dwi.nii.gz',
+                    inputs_list=merged_to_subgroups[merged_group],
+                    output_prefix=merged_group,
+                    name=(
+                        merged_group.replace('-', '_')
+                        + '_final_merge_wf'
+                        + (f'_res{spec.resolution.label}' if len(acpc_specs) > 1 else '')
+                    ),
+                    assembly=assembly_by_name[merged_group],
+                    units=[units_by_name[key] for key in merged_to_subgroups[merged_group]],
+                    # Every merged output carries its res- entity, like the direct path.
+                    resolution=spec.resolution,
+                    write_shared_outputs=(index == 0),
+                )
+                for index, spec in enumerate(acpc_specs)
+            ]
+
+            for index, merge_wf in enumerate(merging_group_workflows[merged_group]):
+                workflow.connect([
+                    (anat_preproc_wf, merge_wf, [
+                        ('outputnode.t1_brain', 'inputnode.t1_brain'),
+                        ('outputnode.t1_seg', 'inputnode.t1_seg'),
+                        ('outputnode.t1_mask', 'inputnode.t1_mask'),
+                        (('outputnode.dwi_sampling_grids', _select_grid, index),
+                         'inputnode.dwi_sampling_grid'),
+                    ]),
+                ])  # fmt:skip
 
     outputs_to_files = {unit.output_name: unit for unit in preproc_units}
     summary.inputs.dwi_groupings = {
@@ -574,7 +602,6 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
                 ('outputnode.t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
                 ('outputnode.t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-                ('outputnode.dwi_sampling_grid', 'inputnode.dwi_sampling_grid'),
             ]),
         ])  # fmt:skip
 
@@ -732,7 +759,7 @@ to workflows in *QSIPrep*'s documentation]\
             output_prefix=naming_name,
             source_file=source_file,
             t2w_sdc=t2w_sdc,
-            anatomical_template=anatomical_template,
+            acpc_anchor=acpc_anchor,
             do_biascorr=do_biascorr,
         )
         connect_series_to_unit(workflow, series_wfs, unit, dwi_preproc_wf, output_wfname)
@@ -745,6 +772,7 @@ to workflows in *QSIPrep*'s documentation]\
             name=dwi_preproc_wf.name.replace('dwi_preproc', 'dwi_finalize'),
             output_prefix=naming_name,
             source_file=source_file,
+            acpc_specs=acpc_specs,
             t2w_sdc=t2w_sdc,
             do_biascorr=do_biascorr,
             write_derivatives=write_derivatives,
@@ -765,11 +793,12 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
                 ('outputnode.t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
                 ('outputnode.t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-                ('outputnode.dwi_sampling_grid', 'inputnode.dwi_sampling_grid'),
                 ('outputnode.t2w_unfatsat', 'inputnode.t2w_unfatsat'),
                 ('outputnode.to_template_affine_transform',
                  'inputnode.to_template_affine_transform'),
                 ('outputnode.acpc_inv_transform', 'inputnode.acpc_inv_transform'),
+                (('outputnode.dwi_sampling_grids', _first_sampling_grid),
+                 'inputnode.dwi_sampling_grid'),
             ]),
             (anat_preproc_wf, dwi_finalize_wf, [
                 ('outputnode.t1_preproc', 'inputnode.t1_preproc'),
@@ -780,7 +809,7 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
                 ('outputnode.t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
                 ('outputnode.t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-                ('outputnode.dwi_sampling_grid', 'inputnode.dwi_sampling_grid'),
+                ('outputnode.dwi_sampling_grids', 'inputnode.dwi_sampling_grids'),
             ]),
             (dwi_preproc_wf, dwi_finalize_wf, [
                 ('outputnode.dwi_files', 'inputnode.dwi_files'),
@@ -918,12 +947,12 @@ to workflows in *QSIPrep*'s documentation]\
                         output_wfname,
                     )
 
-        final_merge_wf = (
-            merging_group_workflows.get(concatenation_scheme[output_fname])
+        final_merge_wfs = (
+            merging_group_workflows.get(concatenation_scheme[output_fname], [])
             if merging_distortion_groups
-            else None
+            else []
         )
-        if final_merge_wf is not None:
+        for index, final_merge_wf in enumerate(final_merge_wfs):
             image_name = f'inputnode.{output_wfname}_image'
             bval_name = f'inputnode.{output_wfname}_bval'
             bvec_name = f'inputnode.{output_wfname}_bvec'
@@ -935,12 +964,14 @@ to workflows in *QSIPrep*'s documentation]\
             cnr_name = f'inputnode.{output_wfname}_cnr'
             carpetplot_name = f'inputnode.{output_wfname}_carpetplot_data'
             workflow.connect([
+                # Slot index of each list-valued output: the merge workflow for
+                # resolution i only ever sees images already on grid i.
                 (dwi_finalize_wf, final_merge_wf, [
-                    ('outputnode.bvals_t1', bval_name),
-                    ('outputnode.bvecs_t1', bvec_name),
-                    ('outputnode.dwi_t1', image_name),
-                    ('outputnode.t1_b0_ref', b0_ref_name),
-                    ('outputnode.cnr_map_t1', cnr_name),
+                    (('outputnode.bvals_t1', _select_grid, index), bval_name),
+                    (('outputnode.bvecs_t1', _select_grid, index), bvec_name),
+                    (('outputnode.dwi_t1', _select_grid, index), image_name),
+                    (('outputnode.t1_b0_ref', _select_grid, index), b0_ref_name),
+                    (('outputnode.cnr_map_t1', _select_grid, index), cnr_name),
                 ]),
                 (dwi_preproc_wf, final_merge_wf, [
                     ('outputnode.raw_concatenated', raw_concatenated_image_name),

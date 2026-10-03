@@ -89,7 +89,6 @@ def init_dwiref_wf(
                 't1_aparc',
                 't1_tpms',
                 't1_2_mni_forward_transform',
-                'dwi_sampling_grid',
                 't1_2_mni_reverse_transform',
             ]
         ),

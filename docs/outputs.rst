@@ -18,8 +18,14 @@ Outputs
    motion and image quality.
 
 Files follow the `BIDS Derivatives`_ naming rules. Volumetric outputs are in
-``ACPC`` space (see :ref:`output_resolution`) and carry ``space-ACPC`` in
-their names.
+``ACPC`` space (see :ref:`output_spaces_ref`) and carry ``space-ACPC`` in
+their names. Outputs on a DWI grid also carry the ``res-<label>`` of the
+``acpc`` resolution they were resampled to (for example ``res-2mm``), even when
+only one was requested, so each resolution has its own files. Anatomical
+derivatives carry no ``res-``: the ``space-ACPC`` anatomicals are on the
+grid of the template that anchors AC-PC alignment, at TemplateFlow's default
+resolution (1 mm for ``MNI152NLin2009cAsym``), not on a DWI grid. Below,
+``<res>`` stands for that ``res-<label>`` entity.
 
 
 *****************
@@ -107,24 +113,24 @@ Preprocessed DWI
 Per output, in ``dwi/``::
 
   # The preprocessed DWI series, its gradient tables, and its brain mask
-  <source_entities>_space-ACPC_desc-preproc_dwi.nii.gz
-  <source_entities>_space-ACPC_desc-preproc_dwi.json
-  <source_entities>_space-ACPC_desc-preproc_dwi.bval       # FSL format
-  <source_entities>_space-ACPC_desc-preproc_dwi.bvec
-  <source_entities>_space-ACPC_desc-preproc_dwi.b          # MRtrix3 format
-  <source_entities>_space-ACPC_desc-preproc_dwi.b_table.txt  # DSI Studio format
-  <source_entities>_space-ACPC_desc-brain_mask.nii.gz
+  <source_entities>_space-ACPC_<res>_desc-preproc_dwi.nii.gz
+  <source_entities>_space-ACPC_<res>_desc-preproc_dwi.json
+  <source_entities>_space-ACPC_<res>_desc-preproc_dwi.bval       # FSL format
+  <source_entities>_space-ACPC_<res>_desc-preproc_dwi.bvec
+  <source_entities>_space-ACPC_<res>_desc-preproc_dwi.b          # MRtrix3 format
+  <source_entities>_space-ACPC_<res>_desc-preproc_dwi.b_table.txt  # DSI Studio format
+  <source_entities>_space-ACPC_<res>_desc-brain_mask.nii.gz
 
   # The b=0 reference of the preprocessed series
-  <source_entities>_space-ACPC_desc-preproc_dwiref.nii.gz
+  <source_entities>_space-ACPC_<res>_desc-preproc_dwiref.nii.gz
 
   # Per-volume confounds and QC (below)
   <source_entities>_desc-confounds_timeseries.tsv
-  <source_entities>_space-ACPC_desc-image_qc.tsv
-  <source_entities>_space-ACPC_desc-slice_qc.json
+  <source_entities>_space-ACPC_<res>_desc-image_qc.tsv
+  <source_entities>_space-ACPC_<res>_desc-slice_qc.json
 
   # Contrast-to-noise ratio of the head motion model, per shell
-  <source_entities>_space-ACPC_model-<label>_stat-cnr_dwimap.nii.gz
+  <source_entities>_space-ACPC_<res>_model-<label>_stat-cnr_dwimap.nii.gz
 
 The ``.bval``/``.bvec`` pair is read correctly by FSL, DSI Studio and DIPY
 but not by MRtrix3, which mis-reads FSL-style vectors; use the ``.b`` file
@@ -140,18 +146,18 @@ Fieldmap and modulation maps
 Present when the corresponding correction ran::
 
   # The susceptibility distortion correction, as a displacement map
-  <source_entities>_space-ACPC_desc-sdc_displacement.nii.gz
-  <source_entities>_space-ACPC_desc-sdc_displacement.json
+  <source_entities>_space-ACPC_<res>_desc-sdc_displacement.nii.gz
+  <source_entities>_space-ACPC_<res>_desc-sdc_displacement.json
   # TOPUP followed by DRBUDDI only: DRBUDDI's refinement of the TOPUP field
-  <source_entities>_space-ACPC_desc-sdcrefinement_displacement.nii.gz
+  <source_entities>_space-ACPC_<res>_desc-sdcrefinement_displacement.nii.gz
 
   # The Jacobian weights QSIPrep applied (see below)
-  <source_entities>_space-ACPC_desc-jacobian_dwimap.nii.gz
-  <source_entities>_space-ACPC_desc-jacobian_dwimap.json
+  <source_entities>_space-ACPC_<res>_desc-jacobian_dwimap.nii.gz
+  <source_entities>_space-ACPC_<res>_desc-jacobian_dwimap.json
 
   # The voxelwise gradient deviation, with --gradient-file
-  <source_entities>_space-ACPC_graddev.nii.gz
-  <source_entities>_space-ACPC_graddev.json
+  <source_entities>_space-ACPC_<res>_graddev.nii.gz
+  <source_entities>_space-ACPC_<res>_graddev.json
 
 The displacement map shows the susceptibility correction on the output grid
 so it can be inspected and compared across methods and runs. At each voxel
@@ -210,9 +216,11 @@ in LPS+ orientation and AC-PC aligned::
   <source_entities>_space-ACPC_desc-aseg_dseg.nii.gz      # SynthSeg regions
   <source_entities>_space-ACPC_desc-unfatsat_T2w.nii.gz   # when a T2w is present
 
-With ``--anat-modality T2w`` the reference is ``desc-preproc_T2w``. The same
-files are written in ``space-MNI152NLin2009cAsym`` unless
-``--skip-anat-based-spatial-normalization`` is given.
+With ``--anat-modality T2w`` the reference is ``desc-preproc_T2w``. The
+preprocessed reference, brain mask and ``dseg`` are also written in every
+standard space listed in ``--output-spaces``, as ``space-<template>``, with
+``cohort-<label>`` for templates with cohorts and ``res-<label>`` when a
+TemplateFlow resolution was requested.
 
 
 .. _transforms:
@@ -225,8 +233,8 @@ Anatomical, in ``anat/``::
 
   sub-<label>_from-anat_to-ACPC_mode-image_xfm.mat
   sub-<label>_from-ACPC_to-anat_mode-image_xfm.mat
-  sub-<label>_from-ACPC_to-MNI152NLin2009cAsym_mode-image_xfm.h5
-  sub-<label>_from-MNI152NLin2009cAsym_to-ACPC_mode-image_xfm.h5
+  sub-<label>_from-ACPC_to-<template>_mode-image_xfm.h5   # per standard space
+  sub-<label>_from-<template>_to-ACPC_mode-image_xfm.h5
   sub-<label>[_ses-<label>]_from-orig_to-anat_mode-image_xfm.txt   # per input image
 
 DWI, in ``dwi/``. The coregistration target is named after
@@ -293,7 +301,7 @@ describes each column.
 Quality control data
 ********************
 
-``<source_entities>_space-ACPC_desc-image_qc.tsv`` has one row per output
+``<source_entities>_space-ACPC_<res>_desc-image_qc.tsv`` has one row per output
 image and is meant for comparing subjects before deciding whom to include in
 a group analysis. Columns prefixed ``raw_`` are DSI Studio's quality
 measures :footcite:p:`yeh2019` computed on the data before preprocessing,

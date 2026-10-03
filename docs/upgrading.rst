@@ -76,11 +76,38 @@ Removed or renamed options
    * - ``--b0-motion-corr-to``, ``--fmap-no-demean``, ``--fmap-bspline``
      - Removed.
      - :pr:`1124`, :pr:`1130`, :pr:`1131`
+   * - ``--output-resolution 2``
+     - ``--output-spaces acpc:res-2mm MNI152NLin2009cAsym``
+     - :pr:`1127`
+   * - ``--output-resolution 1.5``
+     - ``--output-spaces acpc:res-1p5mm MNI152NLin2009cAsym``
+     - :pr:`1127`
+   * - ``--output-resolution 2 --infant``
+     - ``--infant --output-spaces acpc:res-2mm MNIInfant:cohort-auto``
+     - :pr:`1127`
+   * - ``--anatomical-template``
+     - List the template in ``--output-spaces``
+     - :pr:`1127`
+   * - ``--skip-anat-based-spatial-normalization``
+     - Request no standard space, as in ``--output-spaces acpc:res-2mm``
+     - :pr:`1127`
+
+Keep ``--infant`` when moving to ``--output-spaces``: besides adding
+``MNIInfant:cohort-auto``, it narrows the autobox padding, forces a T2w
+anatomical reference and requires ``--subject-anatomical-reference
+sessionwise``, so dropping it changes the results. Because ``--infant`` always
+requests an infant template, the old ``--infant
+--skip-anat-based-spatial-normalization`` combination, which wrote no
+standard space, has no equivalent.
 
 ***********
 New options
 ***********
 
+* ``--output-spaces``: one or more ``acpc`` resolutions for the preprocessed
+  DWI, including ``res-nativemin``/``res-nativemax``, and any number of
+  TemplateFlow standard spaces for the transforms and anatomical derivatives,
+  with ``cohort-auto`` age-based cohort selection (:ref:`output_spaces_ref`).
 * ``--hmc-method tortoise`` and ``--diffprep-config``: TORTOISE DIFFPREP
   head motion and eddy-current correction (:doc:`methods/hmc_tortoise`).
 * ``--sdc-method``: ``topup``, ``drbuddi`` or ``topup+drbuddi`` for reverse

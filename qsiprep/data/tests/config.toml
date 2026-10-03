@@ -25,14 +25,12 @@ reports_only = false
 run_uuid = "20250113-154517_1f7046f7-c5b1-4151-84ca-755a96dfbb55"
 participant_label = [ "01",]
 processing_list = [ "01:forrestgump",]
-skip_anat_based_spatial_normalization = false
 templateflow_home = "/home/qsiprep/.cache/templateflow"
 work_dir = "/tmp/src/qsiprep/.circleci/work/forrest_gump"
 write_graph = true
 
 [workflow]
 anat_modality = "T1w"
-anatomical_template = "MNI152NLin2009cAsym"
 b0_threshold = 100
 denoise_method = "none"
 distortion_group_merge = "none"
@@ -48,11 +46,10 @@ dwiref_definition = "distortion-group"
 dwiref_construction_transform = "BSplineSyN"
 subject_anatomical_reference = "first-lex"
 no_b0_harmonization = false
-output_resolution = 5.0
+output_spaces = [ "acpc:res-5mm", "MNI152NLin2009cAsym",]
 sdc_method = "topup"
 separate_all_dwis = false
 use_syn_sdc = false
-spaces = "MNI152NLin2009cAsym"
 
 [nipype]
 crashfile_format = "txt"

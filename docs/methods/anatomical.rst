@@ -46,7 +46,9 @@ chosen, the steps are:
 6. **Spatial normalization.** ``antsRegistration`` registers the reference to
    the template in a multi-scale, mutual-information based, nonlinear scheme.
    The forward and inverse transforms are written with the anatomical
-   derivatives. ``--skip-anat-based-spatial-normalization`` skips this step.
+   derivatives. It runs once per standard space in ``--output-spaces``,
+   starting from the ``ACPC``-aligned reference, and is skipped when no
+   standard space is requested.
 
    The subject's brain mask restricts this registration. The default
    SynthStrip mask keeps CSF and dura at the brain border, whereas the
@@ -74,14 +76,16 @@ images, that space is not exactly aligned with any one of them; the
     :graph2use: orig
     :simple_form: yes
 
-    from qsiprep_docs import ANATOMICAL_TEMPLATE
+    from qsiprep_docs import ACPC_ANCHOR, OUTPUT_SPACES
     from qsiprep.workflows.anatomical.volume import init_anat_preproc_wf
 
     wf = init_anat_preproc_wf(
         num_anat_images=1,
         num_additional_t2ws=0,
         has_rois=False,
-        anatomical_template=ANATOMICAL_TEMPLATE,
+        output_spaces=OUTPUT_SPACES,
+        acpc_anchor=ACPC_ANCHOR,
+        acpc_specs=[spec for spec in OUTPUT_SPACES if not spec.standard],
     )
 
 

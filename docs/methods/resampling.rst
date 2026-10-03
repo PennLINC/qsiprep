@@ -106,7 +106,8 @@ Resampling
 Every transform that applies to a volume is composed into one: head motion
 (when carried rather than applied by the backend), gradient nonlinearity,
 susceptibility distortion, and coregistration. Each volume is resampled once
-with that transform onto the ``ACPC`` grid at ``--output-resolution``, with
+with that transform onto the ``ACPC`` grid of each ``acpc`` resolution in
+``--output-spaces``, with
 Lanczos windowed sinc interpolation :footcite:p:`lanczos`, or linear
 interpolation when upsampling by more than 10%. The Jacobian weights
 (:ref:`jacobian_methods`) are applied at the same step.
@@ -131,10 +132,10 @@ two states are still labeled as in the denoising figure.
     :graph2use: orig
     :simple_form: yes
 
-    from qsiprep_docs import AP
+    from qsiprep_docs import AP, OUTPUT_SPACES
     from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
 
-    wf = init_dwi_trans_wf(source_file=AP, mem_gb=3)
+    wf = init_dwi_trans_wf(source_file=AP, mem_gb=3, resolution=OUTPUT_SPACES[0].resolution)
 
 
 .. _distortion_group_merge:

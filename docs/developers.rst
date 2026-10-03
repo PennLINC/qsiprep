@@ -25,12 +25,12 @@ way to put your copy first::
         -v $HOME/projects/qsiprep:/src/qsiprep:ro \
         -e PYTHONPATH=/src/qsiprep \
         -v /path/to/bids:/data:ro -v /path/to/out:/out \
-        pennlinc/qsiprep:unstable /data /out participant --output-resolution 2
+        pennlinc/qsiprep:unstable /data /out participant --output-spaces acpc:res-2mm MNI152NLin2009cAsym
 
 With Apptainer::
 
     PYTHONPATH=$HOME/projects/qsiprep apptainer run qsiprep.sif \
-        /path/to/bids /path/to/out participant --output-resolution 2
+        /path/to/bids /path/to/out participant --output-spaces acpc:res-2mm MNI152NLin2009cAsym
 
 To rebuild the image, run ``docker build --target qsiprep -t qsiprep .`` in
 the repository (``--target test`` builds the image the integration tests
@@ -90,7 +90,7 @@ A few conventions:
 
 * Headings use ``#`` with overline for page titles, ``*`` with overline for
   chapters, then ``=``, ``-`` and ``^``.
-* Options are written in double backticks (``--output-resolution``). Cite
+* Options are written in double backticks (``--output-spaces``). Cite
   papers with ``:footcite:p:`` and a ``.. footbibliography::`` at the end
   of the page; the entries live in ``qsiprep/data/boilerplate.bib``, shared
   with the methods boilerplate.

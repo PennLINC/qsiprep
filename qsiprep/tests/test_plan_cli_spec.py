@@ -56,7 +56,7 @@ def test_planned_options_are_the_only_gaps():
 def _parse_minimal(tmp_path, *extra):
     bids_dir = tmp_path / 'bids'
     bids_dir.mkdir(exist_ok=True)
-    base = [str(bids_dir), str(tmp_path / 'out'), 'participant', '--output-resolution', '2']
+    base = [str(bids_dir), str(tmp_path / 'out'), 'participant', '--output-spaces', 'acpc:res-2mm']
     return _build_parser().parse_args([*base, *extra])
 
 

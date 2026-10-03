@@ -22,7 +22,7 @@ from qsiprep.tests.preproc_factory import make_preproc_unit
 def _reset_config():
     saved = (
         config.workflow.ignore,
-        config.workflow.output_resolution,
+        config.workflow.output_spaces,
         config.workflow.sdc_method,
         config.workflow.dwiref_construction_iters,
         config.execution.output_dir,
@@ -30,14 +30,14 @@ def _reset_config():
         config.nipype.omp_nthreads,
     )
     config.workflow.ignore = []
-    config.workflow.output_resolution = 2.0
+    config.workflow.output_spaces = ['acpc:res-2mm']
     # config.nipype.init() is not run in construction tests, and
     # DSIStudioGQIReconstruction needs an int thread_count to build.
     config.nipype.omp_nthreads = 1
     yield
     (
         config.workflow.ignore,
-        config.workflow.output_resolution,
+        config.workflow.output_spaces,
         config.workflow.sdc_method,
         config.workflow.dwiref_construction_iters,
         config.execution.output_dir,
@@ -63,6 +63,7 @@ def test_qc_workflow_carries_both_warnings_to_the_merge():
 
 def test_finalize_sinks_the_qc_warnings_reportlet(tmp_path):
     from qsiprep.interfaces.bids import DerivativesMaybeDataSink
+    from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.dwi.finalize import init_dwi_finalize_wf
 
     config.execution.output_dir = str(tmp_path)
@@ -75,6 +76,7 @@ def test_finalize_sinks_the_qc_warnings_reportlet(tmp_path):
         name='dwi_finalize_wf',
         source_file=dwi,
         output_prefix='sub-01',
+        acpc_specs=parse_output_spaces(config.workflow.output_spaces),
     )
 
     assert ('qc_warnings_report', 'in_file') in _edge(wf, 'series_qc', 'ds_report_qc_warnings')

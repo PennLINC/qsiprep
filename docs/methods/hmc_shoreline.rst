@@ -41,7 +41,7 @@ is shown in the carpet plot.
     :graph2use: colored
     :simple_form: yes
 
-    from qsiprep_docs import example_unit, configure, AP, ANATOMICAL_TEMPLATE
+    from qsiprep_docs import example_unit, configure, AP, ACPC_ANCHOR
     from qsiprep.workflows.dwi.hmc_sdc import init_qsiprep_hmcsdc_wf
 
     configure(workflow__hmc_method='shoreline', workflow__sdc_method='drbuddi')
@@ -49,7 +49,7 @@ is shown in the carpet plot.
         example_unit('pepolar'),
         source_file=AP,
         t2w_sdc=False,
-        anatomical_template=ANATOMICAL_TEMPLATE,
+        acpc_anchor=ACPC_ANCHOR,
     )
 
 .. _configure_shoreline:

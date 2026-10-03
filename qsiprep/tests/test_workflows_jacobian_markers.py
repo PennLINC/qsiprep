@@ -88,6 +88,7 @@ from qsiplan.models import CorrectionMethod
 from qsiprep import config
 from qsiprep.tests.preproc_factory import make_preproc_unit
 from qsiprep.utils.jacobian_provenance import jacobian_provenance_for
+from qsiprep.utils.spaces import SpaceSpec
 
 SRC = '/data/sub-01_dwi.nii.gz'
 
@@ -143,7 +144,7 @@ def _reset_config():
         'denoise_method',
         'dwidenoise_window',
         'shoreline_iters',
-        'anatomical_template',
+        'output_spaces',
         'ignore',
         'diffprep_config',
         'tortoise_gpu_cpu_ratio',
@@ -179,7 +180,7 @@ def _cfg(hmc_method, sdc_method, sloppy):
     config.workflow.denoise_method = 'dwidenoise'
     config.workflow.dwidenoise_window = 5
     config.workflow.shoreline_iters = 2
-    config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
+    config.workflow.output_spaces = ['acpc:res-2mm', 'MNI152NLin2009cAsym']
     config.workflow.ignore = []
     config.workflow.diffprep_config = None
     config.workflow.tortoise_gpu_cpu_ratio = None
@@ -309,7 +310,7 @@ def test_maternal_brain_project_writes_jacobian(monkeypatch):
         unit,
         source_file=SRC,
         t2w_sdc=False,
-        anatomical_template=config.workflow.anatomical_template,
+        acpc_anchor=SpaceSpec(space='MNI152NLin2009cAsym'),
     )
 
     has_real, source = _has_real_fieldwarps(wf)
@@ -343,7 +344,7 @@ def test_shoreline_no_fieldmap_has_no_real_fieldwarps(tmp_path):
         unit,
         source_file=SRC,
         t2w_sdc=False,
-        anatomical_template=config.workflow.anatomical_template,
+        acpc_anchor=SpaceSpec(space='MNI152NLin2009cAsym'),
     )
 
     has_real, source = _has_real_fieldwarps(wf)
@@ -385,7 +386,7 @@ def test_shoreline_fieldmapless_has_no_real_fieldwarps(method):
         unit,
         source_file=SRC,
         t2w_sdc=False,
-        anatomical_template=config.workflow.anatomical_template,
+        acpc_anchor=SpaceSpec(space='MNI152NLin2009cAsym'),
     )
 
     has_real, source = _has_real_fieldwarps(wf)

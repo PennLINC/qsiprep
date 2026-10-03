@@ -800,8 +800,12 @@ def init_diffprep_hmc_wf(
         # This warp is applied downstream (to_dwi_ref_warps), decoupled from
         # HMC, so it reaches ComposeJacobianWeights externally (recorded by
         # jacobian_provenance.jacobian_provenance_for, not here).
+        from ...utils.spaces import select_acpc_anchor
+
         b0_sdc_wf = init_sdc_wf(unit, gradwarp=has_gradwarp)
-        b0_sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
+        b0_sdc_wf.inputs.inputnode.template = select_acpc_anchor(
+            config.workflow.parsed_output_spaces()
+        ).fullname
 
         if has_gradwarp:
             connect_gradwarp_sdc_reference(

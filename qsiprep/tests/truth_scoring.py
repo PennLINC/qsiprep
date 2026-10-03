@@ -201,7 +201,7 @@ def score_run(bids_root, output_dir, series=None):
     ref = nb.load(
         _find(
             [sub_dir, sub_dir.parent / 'anat'],
-            '*_space-ACPC_desc-preproc_dwiref.nii.gz',
+            '*_space-ACPC*_desc-preproc_dwiref.nii.gz',
             f'dir-{series}',
         )
     )
@@ -210,7 +210,7 @@ def score_run(bids_root, output_dir, series=None):
             nb.load(
                 _find(
                     [sub_dir, sub_dir.parent / 'anat'],
-                    '*_space-ACPC_desc-brain_mask.nii.gz',
+                    '*_space-ACPC*_desc-brain_mask.nii.gz',
                     f'dir-{series}',
                 )
             ).dataobj
@@ -253,7 +253,7 @@ def score_run(bids_root, output_dir, series=None):
         }
 
     # susceptibility displacement: qsiprep's export (ACPC, LPS vectors) vs truth (raw frame, RAS)
-    est_p = _find([sub_dir], '*_space-ACPC_desc-sdc_displacement.nii.gz', f'dir-{series}')
+    est_p = _find([sub_dir], '*_space-ACPC*_desc-sdc_displacement.nii.gz', f'dir-{series}')
     disp_p = truth_dir / f'{stem}_desc-displacement_dwi.nii.gz'
     if est_p is not None and disp_p.exists():
         est = np.asarray(nb.load(est_p).dataobj, dtype=np.float64).reshape(-1, 3)

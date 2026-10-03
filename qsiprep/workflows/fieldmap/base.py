@@ -102,6 +102,7 @@ def init_gre_seed_wf(unit, has_gradwarp, source_file, use):
     out_warp
         The GRE-derived warp, as an ITK displacement field
     """
+    from ...utils.spaces import select_acpc_anchor
     from ..dwi.gradwarp import connect_gradwarp_sdc_reference
     from ..dwi.util import init_dwi_reference_wf
 
@@ -122,7 +123,9 @@ def init_gre_seed_wf(unit, has_gradwarp, source_file, use):
 
     b0_ref_wf = init_dwi_reference_wf(source_file=source_file, name='b0_ref_wf', gen_report=False)
     sdc_wf = init_sdc_wf(gre_seed_unit(unit), gradwarp=has_gradwarp, use=use)
-    sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
+    sdc_wf.inputs.inputnode.template = select_acpc_anchor(
+        config.workflow.parsed_output_spaces()
+    ).fullname
     workflow.connect([
         (inputnode, b0_ref_wf, [('b0_template', 'inputnode.b0_template')]),
         (inputnode, sdc_wf, [

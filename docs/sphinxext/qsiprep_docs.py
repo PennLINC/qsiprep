@@ -34,6 +34,7 @@ import numpy as np
 
 from qsiprep import config
 from qsiprep.cli.parser import _build_parser
+from qsiprep.utils.spaces import parse_output_spaces, select_acpc_anchor
 
 _ROOT = tempfile.mkdtemp(prefix='qsiprep_docs_')
 atexit.register(shutil.rmtree, _ROOT, True)
@@ -43,7 +44,9 @@ atexit.register(shutil.rmtree, _ROOT, True)
 os.environ.setdefault('FSLDIR', _ROOT)
 os.environ.setdefault('FSLOUTPUTTYPE', 'NIFTI_GZ')
 
-ANATOMICAL_TEMPLATE = 'MNI152NLin2009cAsym'
+OUTPUT_SPACE_TOKENS = ['acpc:res-2mm', 'MNI152NLin2009cAsym']
+OUTPUT_SPACES = parse_output_spaces(OUTPUT_SPACE_TOKENS)
+ACPC_ANCHOR = select_acpc_anchor(OUTPUT_SPACES)
 
 
 def configure(**overrides):
@@ -58,8 +61,7 @@ def configure(**overrides):
         if action.default is not argparse.SUPPRESS and action.dest not in ('help', 'version')
     }
     config.from_dict(defaults, init=False)
-    config.workflow.output_resolution = 2.0
-    config.workflow.anatomical_template = ANATOMICAL_TEMPLATE
+    config.workflow.output_spaces = list(OUTPUT_SPACE_TOKENS)
     config.nipype.omp_nthreads = 1
     config.execution.sloppy = False
     config.execution.output_dir = _ROOT
