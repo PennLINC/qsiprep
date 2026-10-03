@@ -869,7 +869,9 @@ def _build_parser(**kwargs):
             'reference to the anatomical. "subject" builds a single midpoint template '
             "from every group's reference, registers that once, and has every group "
             'inherit the result, which makes preprocessed data directly comparable '
-            'across groups.'
+            'across groups. A subject with a single distortion group uses that '
+            "group's reference as the subject dwiref, with an identity transform. "
+            '"subject" cannot be combined with --subject-anatomical-reference sessionwise.'
         ),
     )
     g_coreg.add_argument(
@@ -1163,6 +1165,17 @@ def parse_args(args=None, namespace=None):
 
     parser = _build_parser()
     opts = parser.parse_args(args, namespace)
+
+    # A sessionwise workflow sees one session, so its "subject" dwiref could not
+    # span the subject's sessions and would be misnamed. fMRIPrep rejects the
+    # equivalent --bold-coreg-level subject the same way.
+    if opts.dwiref_definition == 'subject' and opts.subject_anatomical_reference == 'sessionwise':
+        parser.error(
+            '--dwiref-definition subject is incompatible with '
+            '--subject-anatomical-reference sessionwise: a sessionwise workflow processes '
+            'a single session, so a subject-level dwiref cannot span sessions. '
+            'Use --dwiref-definition distortion-group instead.'
+        )
 
     # Reports follow the anatomical processing level unless the user asked for a specific one
     if opts.report_output_level == 'auto':

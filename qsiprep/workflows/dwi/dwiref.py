@@ -43,6 +43,9 @@ def init_dwiref_wf(
     ``[workflow_name]_transform`` output for each input image, holding the transform
     files to the dwiref.
 
+    With a single input no template is built: that b=0 reference is the dwiref,
+    and its transform to the dwiref is an identity affine.
+
     Parameters
     ----------
     inputs_list : list of str
@@ -112,6 +115,76 @@ def init_dwiref_wf(
         name='outputnode',
     )
 
+    if len(input_names) == 1:
+        # One distortion group is its own template: building one would only
+        # resample the b=0 (and mvtc2 needs at least two inputs anyway). The
+        # subject-level outputs are still produced so that their presence does
+        # not depend on how many groups a subject has, as fMRIPrep does for a
+        # single-run --bold-coreg-level subject.
+        workflow.__desc__ = (
+            'The subject had a single DWI distortion group, so its b=0 reference was used '
+            'as the subject-level reference, with an identity transform, and was '
+            'coregistered to the anatomical reference. '
+        )
+        identity_xfm = pe.Node(
+            niu.Function(function=_write_identity_affine, input_names=[]),
+            name='identity_xfm',
+        )
+        workflow.connect([
+            (inputnode, outputnode, [(input_names[0], 'dwiref')]),
+            (identity_xfm, outputnode, [('out', output_names[0])]),
+        ])  # fmt:skip
+        template_node, template_field = inputnode, input_names[0]
+    else:
+        template_node, template_field = _init_template_construction(
+            workflow,
+            inputnode,
+            outputnode,
+            inputs_list,
+            input_names,
+            output_names,
+            transform,
+            num_iterations,
+            omp_nthreads,
+        )
+        workflow.__desc__ += (
+            'This template was coregistered to the anatomical reference a single time, and '
+            'every DWI run inherited that shared template-to-anatomical transform. '
+        )
+
+    _connect_template_coregistration(
+        workflow, inputnode, outputnode, template_node, template_field, t1w_source_file
+    )
+
+    return workflow
+
+
+def _write_identity_affine():
+    """Write an identity ITK affine, in the binary .mat format antsRegistration writes."""
+    import os
+
+    import SimpleITK as sitk
+
+    out_file = os.path.abspath('identity0GenericAffine.mat')
+    sitk.WriteTransform(sitk.AffineTransform(3), out_file)
+    return out_file
+
+
+def _init_template_construction(
+    workflow,
+    inputnode,
+    outputnode,
+    inputs_list,
+    input_names,
+    output_names,
+    transform,
+    num_iterations,
+    omp_nthreads,
+):
+    """Build the midpoint template from two or more b=0 references.
+
+    Returns the node and field that hold the template.
+    """
     merge_inputs = pe.Node(niu.Merge(len(input_names)), name='merge_inputs')
     for input_num, input_name in enumerate(input_names):
         workflow.connect([(inputnode, merge_inputs, [(input_name, f'in{input_num + 1}')])])
@@ -209,11 +282,13 @@ def init_dwiref_wf(
 
         template_node, template_field = ants_mvtc2, 'templates'
 
-    workflow.__desc__ += (
-        'This template was coregistered to the anatomical reference a single time, and every DWI '
-        'run inherited that shared template-to-anatomical transform. '
-    )
+    return template_node, template_field
 
+
+def _connect_template_coregistration(
+    workflow, inputnode, outputnode, template_node, template_field, t1w_source_file
+):
+    """Register the template to the anatomical once and derive its ACPC products."""
     # calculate dwi registration to T1w
     b0_coreg_wf = init_b0_to_anat_registration_wf(
         write_report=True,
@@ -283,5 +358,3 @@ def init_dwiref_wf(
         (seg_to_template, template_wm, [('output_image', 'in_seg')]),
         (template_wm, outputnode, [('out', 'dwiref_wm_seg')]),
     ])  # fmt:skip
-
-    return workflow
