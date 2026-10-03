@@ -116,8 +116,13 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
         name='outputnode',
     )
 
-    # Register the reference of the fieldmap to the reference
-    # of the target image (the one that shall be corrected)
+    # Register the reference of the fieldmap to the reference of the target image (the one
+    # that shall be corrected). Whole-head images with the brain masks as *metric* masks and no
+    # histogram matching: on the TRXScan phasediff fixture (truth = the fieldmap's offset, a
+    # realistic magnitude with scalp, receive bias and ringing) the cropped images with
+    # histogram matching landed 4.6 deg off; matching off alone 2.6 deg; the masks 0.5-0.8 deg.
+    # The biased, flat-brain magnitude and the EPI b0 have unrelated histograms, and matching
+    # them hands the mutual information a wrong intensity correspondence.
     ants_settings = str(load_data('fmap-any_registration.json'))
     if config.execution.sloppy:
         ants_settings = str(load_data('fmap-any_registration_testing.json'))
@@ -194,7 +199,11 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
         (inputnode, fmap2ref_apply, [('in_reference', 'reference_image')]),
         (fmap2ref_reg, fmap2ref_apply, [('composite_transform', 'transforms')]),
         (fmap2ref_apply, ds_report_reg_vsm, [('out_report', 'in_file')]),
-        (inputnode, fmap2ref_reg, [('in_reference_brain', 'fixed_image')]),
+        (inputnode, fmap2ref_reg, [
+            ('in_reference', 'fixed_image'),
+            ('in_mask', 'fixed_image_masks'),
+            ('fmap_mask', 'moving_image_masks'),
+        ]),
         (fmap2ref_reg, fmap2ref_rpt, [('warped_image', 'before')]),
         (inputnode, fmap2ref_rpt, [('in_reference_brain', 'after')]),
         (fmap2ref_rpt, ds_report_reg, [('out_report', 'in_file')]),
