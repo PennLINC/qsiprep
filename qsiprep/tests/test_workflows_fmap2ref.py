@@ -1,5 +1,4 @@
-"""The fieldmap-to-EPI registration: whole-head images, brain masks as metric masks, no
-histogram matching, rigid.
+"""The fieldmap-to-EPI registration: whole-head images, masked metric, no matching, rigid.
 
 On the TRXScan phasediff fixture (truth = the simulated fieldmap offset; a realistic
 magnitude with scalp, receive bias and Gibbs ringing) the brain-cropped images with histogram
