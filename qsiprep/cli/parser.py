@@ -585,11 +585,12 @@ def _build_parser(**kwargs):
     g_dwi.add_argument(
         '--denoise-method',
         action='store',
-        choices=['dwidenoise', 'dwidenoise2', 'patch2self', 'none'],
+        choices=['dwidenoise', 'dwidenoise2', 'patch2self', 'svht', 'none'],
         default='dwidenoise',
         help=(
             'Image-based denoising method: "dwidenoise" (MRtrix3), "dwidenoise2", '
-            '"patch2self" (DIPY), or "none". '
+            '"patch2self" (DIPY), "svht" (svht_denoise), or "none". '
+            'dwidenoise and dwidenoise2 are restricted to non-commercial use; svht is not. '
             'Settings for dwidenoise2 are given with --dwidenoise2-config.'
         ),
     )
@@ -602,9 +603,10 @@ def _build_parser(**kwargs):
         help=(
             'Window size in voxels for image-based denoising: either an odd positive '
             'integer or "auto". '
-            'This applies to the "dwidenoise" method only, where "auto" calculates a '
+            'This applies to the "dwidenoise" and "svht" methods, where "auto" calculates a '
             'window size from the number of volumes, following the method described in '
-            'the dwidenoise documentation. '
+            'the dwidenoise documentation. svht uses spherical patches holding at least '
+            'N^3 voxels, and requires N^3 to exceed the number of volumes. '
             'It is unused by "patch2self" and "dwidenoise2"; dwidenoise2 sizes its '
             'patches per iteration from its multi-resolution schedule, which can be set '
             'with --dwidenoise2-config instead.'
@@ -632,13 +634,16 @@ def _build_parser(**kwargs):
         '--unringing-method',
         action='store',
         default='none',
-        choices=['none', 'mrdegibbs', 'rpg'],
+        choices=['none', 'mrdegibbs', 'rpg', 'svht'],
         help=(
             'Method for Gibbs-ringing removal. '
             '"none" takes no action. '
             '"mrdegibbs" uses mrdegibbs from MRtrix3. '
             '"rpg" uses the TORTOISE method, which is suggested for partial Fourier '
-            'acquisitions.'
+            'acquisitions. '
+            '"svht" uses svht_denoise, which matches mrdegibbs on full k-space data and '
+            'also removes partial Fourier ringing for 7/8 and 6/8 acquisitions phase-encoded '
+            'along j, read from the PartialFourier metadata field.'
         ),
     )
     g_dwi.add_argument(

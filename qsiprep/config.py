@@ -559,7 +559,7 @@ class workflow(_Config):
     """Whether to N4-correct DWIs: ``n4``, ``auto`` or ``none``."""
     denoise_method = None
     """Image-based denoising method: "dwidenoise" (MRtrix3), "dwidenoise2", "patch2self"
-    (DIPY) or "none"."""
+    (DIPY), "svht" (svht_denoise) or "none"."""
     dwidenoise2_config = None
     """Configuration JSON for dwidenoise2 (``--dwidenoise2-config``)."""
     distortion_group_merge = 'concat'
@@ -632,7 +632,7 @@ class workflow(_Config):
     tortoise_gpu_cpu_ratio = None
     """Volumes the GPU takes per DIFFPREP pass; None leaves TORTOISE's default."""
     unringing_method = None
-    """Method for Gibbs-ringing removal. Either "none", "mrdegibbs" or "rpg"."""
+    """Method for Gibbs-ringing removal. Either "none", "mrdegibbs", "rpg" or "svht"."""
 
     @classmethod
     def init(cls):

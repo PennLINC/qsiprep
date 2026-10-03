@@ -209,8 +209,9 @@ intensity harmonization.
      - Ringing at sharp edges
      - Smooth intensity non-uniformity
    * - Tools
-     - ``dwidenoise`` (MRtrix3), ``dwidenoise2``, ``patch2self`` (DIPY)
-     - ``mrdegibbs`` (MRtrix3), ``rpg`` (TORTOISE)
+     - ``dwidenoise`` (MRtrix3), ``dwidenoise2``, ``patch2self`` (DIPY),
+       ``svht`` (``svht_denoise``)
+     - ``mrdegibbs`` (MRtrix3), ``rpg`` (TORTOISE), ``svht`` (``svht_denoise``)
      - ``N4BiasFieldCorrection`` on the b=0 images, applied to the series
    * - Default
      - ``dwidenoise``
@@ -221,11 +222,16 @@ intensity harmonization.
      - ``--unringing-method``
      - ``--dwi-biascorrect``
 
-``--dwidenoise-window`` sets the ``dwidenoise`` patch size in voxels, an odd
-integer or ``auto`` (the default, derived from the number of volumes).
-``dwidenoise2`` sizes its patches from its own schedule, set with
-``--dwidenoise2-config`` (see below). ``rpg`` unringing is the method for
+``--dwidenoise-window`` sets the ``dwidenoise`` and ``svht`` patch size in
+voxels, an odd integer or ``auto`` (the default, derived from the number of
+volumes). ``dwidenoise2`` sizes its patches from its own schedule, set with
+``--dwidenoise2-config`` (see below). ``dwidenoise`` and ``dwidenoise2`` are
+licensed for non-commercial use only; ``svht`` is not restricted, and runs
+with its defaults. ``rpg`` unringing is the method for
 partial Fourier acquisitions; ``mrdegibbs`` assumes full Fourier sampling.
+``svht`` unringing reads ``PartialFourier`` from the sidecar: it handles full
+Fourier sampling and 7/8 or 6/8 partial Fourier along the ``j`` axis, and
+stops with an error for any other partial Fourier acquisition.
 ``--dwi-biascorrect auto`` skips bias correction when every DWI's
 ``ImageType`` contains ``NORM``, and ``none`` skips it always. We recommend
 ``none`` for prescan-normalized data. ``--no-b0-harmonization`` skips the
@@ -236,8 +242,9 @@ With ``part-phase`` data, ``dwidenoise`` and ``dwidenoise2`` denoise the
 complex signal. Whether the complex data are carried into unringing depends
 on ``--mrtrix-version``: only the ``dev`` branch of MRtrix3 has a
 complex-valued ``mrdegibbs``; with ``stable`` the data are reduced to
-magnitude after denoising. ``--ignore phase`` drops the phase images
-altogether.
+magnitude after denoising. ``svht`` denoising rotates the magnitude and phase
+onto the real axis instead, and keeps the magnitude of the result.
+``--ignore phase`` drops the phase images altogether.
 
 dwidenoise2 settings
 ====================
