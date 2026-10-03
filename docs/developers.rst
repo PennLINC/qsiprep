@@ -136,4 +136,3 @@ list. The one exemption is ``--shoreline-model``, which *QSIPrep* replaced
 with the ``"model"`` key of ``--shoreline-config``; qsiplan still exposes
 the flag until it grows a ``--shoreline-config`` of its own. Add a grouping
 option to qsiplan first, then expose it here.
-
