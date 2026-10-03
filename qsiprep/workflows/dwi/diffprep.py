@@ -37,6 +37,7 @@ from ...interfaces.tortoise import (
     SynthesizeDWIs,
     TORTOISEConvert,
     generate_diffprep_boilerplate,
+    sloppy_epi_working_res,
 )
 from ...utils.diffprep_config import load_diffprep_config
 from ...utils.gpu import gpu_enabled
@@ -377,6 +378,8 @@ def init_diffprep_hmc_wf(
         ),
         correction_mode=effective_correction_mode,
         b0_id=diffprep_cfg['b0_id'],
+        # --sloppy: the T2Wreg (EPIREG) stage on a 2.5 mm grid, as DRBUDDI already runs
+        **sloppy_epi_working_res(),
         is_human_brain=diffprep_cfg['is_human_brain'],
         rot_eddy_center=diffprep_cfg['rot_eddy_center'],
         extra_args=diffprep_cfg['extra_args'],

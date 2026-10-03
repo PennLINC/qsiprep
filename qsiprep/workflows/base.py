@@ -65,6 +65,7 @@ from ..interfaces import (
     InteractiveReport,
     SubjectSummary,
 )
+from ..interfaces.itk import InvertITKAffine
 from ..utils.bids import (
     check_output_names_are_bids_unique,
     collect_data,
@@ -675,8 +676,14 @@ to workflows in *QSIPrep*'s documentation]\
             name='ds_acpc_to_dwiref',
             run_without_submitting=True,
         )
+        # ANTs' reverse transform is the forward .mat with an inverse flag the file cannot
+        # carry: write the actual inverse under the from-ACPC name
+        invert_acpc_to_dwiref = pe.Node(
+            InvertITKAffine(), name='invert_acpc_to_dwiref', run_without_submitting=True
+        )
         workflow.connect([
-            (dwiref_wf, ds_acpc_to_dwiref, [('outputnode.t1_to_dwiref_affine', 'in_file')]),
+            (dwiref_wf, invert_acpc_to_dwiref, [('outputnode.t1_to_dwiref_affine', 'in_file')]),
+            (invert_acpc_to_dwiref, ds_acpc_to_dwiref, [('out_file', 'in_file')]),
         ])  # fmt:skip
 
         # TemplateQC and the per-group distortiongroup->dwiref transform export exist only
@@ -875,7 +882,20 @@ to workflows in *QSIPrep*'s documentation]\
                     name=f'ds_{src}_to_{dst}_{output_wfname}',
                     run_without_submitting=True,
                 )
-                workflow.connect([(dwi_preproc_wf, ds_coreg_xfm, [(field, 'in_file')])])
+                if dst == 'ACPC':
+                    workflow.connect([(dwi_preproc_wf, ds_coreg_xfm, [(field, 'in_file')])])
+                else:
+                    # the reverse transform ANTs hands back is the forward .mat (see
+                    # InvertITKAffine): write the true inverse under the from-ACPC name
+                    invert_xfm = pe.Node(
+                        InvertITKAffine(),
+                        name=f'invert_{src}_to_{dst}_{output_wfname}',
+                        run_without_submitting=True,
+                    )
+                    workflow.connect([
+                        (dwi_preproc_wf, invert_xfm, [(field, 'in_file')]),
+                        (invert_xfm, ds_coreg_xfm, [('out_file', 'in_file')]),
+                    ])  # fmt:skip
                 if names_sdc_transforms and dst == 'ACPC':
                     connect_sdc_transform_files(
                         workflow, [ds_coreg_xfm], dwi_finalize_wf, output_wfname
