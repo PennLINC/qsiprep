@@ -269,8 +269,13 @@ orientation between the dMRI and the anatomical scan are recovered.
     coreg = ants.Registration()
     coreg.inputs.metric = ['Mattes']
     coreg.inputs.transforms = [transform_type]
+    # All four levels in every mode. Stopping before the full-resolution level under --sloppy
+    # saved 18 s but made the truth-scored coregistration drift: 0.1 deg with four levels on the
+    # gradient-nonlinearity fixture, 1.15, 1.43 and 1.75 deg on three consecutive CI runs with
+    # three (Random sampling at 2x shrink is what the last level pins down).
     coreg.inputs.shrink_factors = [[8, 4, 2, 1]]
     coreg.inputs.smoothing_sigmas = [[7.0, 3.0, 1.0, 0.0]]
+    coreg.inputs.number_of_iterations = [[10000, 1000, 10000, 10000]]
     coreg.inputs.sigma_units = ['vox']
     coreg.inputs.sampling_strategy = ['Random']
     coreg.inputs.sampling_percentage = [0.25]
@@ -279,7 +284,6 @@ orientation between the dMRI and the anatomical scan are recovered.
     coreg.inputs.dimension = 3
     coreg.inputs.winsorize_lower_quantile = 0.025
     coreg.inputs.winsorize_upper_quantile = 0.975
-    coreg.inputs.number_of_iterations = [[10000, 1000, 10000, 10000]]
     coreg.inputs.transform_parameters = [[0.2]]
     coreg.inputs.convergence_threshold = [1e-06]
     coreg.inputs.collapse_output_transforms = True

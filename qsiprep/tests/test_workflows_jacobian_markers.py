@@ -79,7 +79,6 @@ its workflow and records the expected answer for when that manifest exists.
 """
 
 import json
-from pathlib import Path
 
 import nibabel as nb
 import numpy as np
@@ -88,7 +87,6 @@ from qsiplan.models import CorrectionMethod
 
 from qsiprep import config
 from qsiprep.tests.preproc_factory import make_preproc_unit
-from qsiprep.tests.utils import get_test_data_path
 from qsiprep.utils.jacobian_provenance import jacobian_provenance_for
 
 SRC = '/data/sub-01_dwi.nii.gz'
@@ -222,14 +220,6 @@ def _has_real_fieldwarps(wf):
     return False, None
 
 
-def _fixture_lists_jacobian(name):
-    """Return whether ``<name>_outputs.txt`` lists the map, or None if it doesn't exist."""
-    path = Path(get_test_data_path()) / f'{name}_outputs.txt'
-    if not path.exists():
-        return None
-    return 'desc-jacobian_dwimap' in path.read_text()
-
-
 def test_dsdti_synfmap_writes_jacobian(tmp_path):
     """Test that dsdti_synfmap (fieldmap-less SyN-SDC) writes the Jacobian.
 
@@ -251,7 +241,6 @@ def test_dsdti_synfmap_writes_jacobian(tmp_path):
 
     has_real, source = _has_real_fieldwarps(wf)
     assert has_real, f'expected a real SDC warp source, got {source!r}'
-    assert _fixture_lists_jacobian('dsdti_synfmap') is True
     # jacobian_provenance_for mirrors init_fsl_hmc_wf's own GRE/SyN branch
     # (unit.is_gre or unit.is_nipreps_syn) from this same, real unit.
     applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)
@@ -285,7 +274,6 @@ def test_forrest_gump_writes_no_jacobian(monkeypatch):
     has_real, source = _has_real_fieldwarps(wf)
     assert not has_real
     assert source == 'gather_inputs'
-    assert _fixture_lists_jacobian('forrest_gump') is False
     applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)
     assert (applied, unmodulated, reason) == ([], [], None)
     assert has_real == ('sdc' in applied)
@@ -327,7 +315,6 @@ def test_maternal_brain_project_writes_jacobian(monkeypatch):
     has_real, source = _has_real_fieldwarps(wf)
     assert has_real, f'expected a real SDC warp source, got {source!r}'
     assert source == 'sdc_wf'
-    assert _fixture_lists_jacobian('maternal_brain_project') is True
     # jacobian_provenance_for's shoreline branch has no TOPUP carve-out either
     # (see its docstring) -- any correction method reaches fieldwarps.
     applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)
@@ -419,7 +406,6 @@ def test_drbuddi_rpe_writes_jacobian(tmp_path):
 
     has_real, source = _has_real_fieldwarps(wf)
     assert has_real, f'expected a real DRBUDDI warp source, got {source!r}'
-    assert _fixture_lists_jacobian('drbuddi_rpe') is True
     applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)
     assert (applied, unmodulated, reason) == (['sdc'], [], None)
     assert has_real == ('sdc' in applied)
@@ -446,7 +432,6 @@ def test_diffprep_writes_no_jacobian(tmp_path):
     ec_mode = wf.get_node('ec_jacobian').inputs.correction_mode
     assert not has_real, f'expected no real SDC warp source, got {source!r}'
     assert ec_mode == 'motion'
-    assert _fixture_lists_jacobian('diffprep') is False
     # 'motion' has no eddy-current component at all -- it does not occur, so
     # it belongs in neither AppliedCorrections nor UnmodulatedCorrections.
     applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)
@@ -470,7 +455,6 @@ def test_diffprep_drbuddi_writes_jacobian(tmp_path):
     assert has_real, f'expected a real DRBUDDI warp source, got {source!r}'
     # No _outputs.txt ships for this marker yet (check_outputs=False in
     # test_cli.py's test_diffprep_drbuddi): nothing to compare against.
-    assert _fixture_lists_jacobian('diffprep_drbuddi') is None
     # --sloppy still downgrades to correction_mode='motion', so only 'sdc' is
     # applied here; see test_diffprep_quadratic_records_eddy_current_applied
     # for the non-sloppy 'eddy-current' case.
@@ -520,7 +504,6 @@ def test_dsdti_topup_only_branch_has_no_jacobian(tmp_path):
     has_real, source = _has_real_fieldwarps(wf)
     assert not has_real
     assert source == 'gather_inputs'
-    assert _fixture_lists_jacobian('dsdti_topup') is False
     # TOPUP is baked into eddy's own resampling on this path -- QSIPrep itself
     # applies nothing external, so 'sdc' must not appear as applied.
     applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)

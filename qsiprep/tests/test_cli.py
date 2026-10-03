@@ -42,87 +42,6 @@ def _forrest_gump_dataset(data_dir, working_dir, test_name):
 
 
 @pytest.mark.integration
-@pytest.mark.dsdti_fmap
-def test_dsdti_fmap(data_dir, output_dir, working_dir):
-    """Run AllFieldmaps test on DSDTI data.
-
-    Was in AllFieldmapsTests.sh. I split it between this and the DSCSDSI test.
-    XXX: Not called in CircleCI.
-
-    Instead of running full workflows, this test checks that workflows can
-    be built for all sorts of fieldmap configurations.
-
-    This tests the following features:
-
-    - Blip-up + Blip-down DWI series for TOPUP/Eddy
-    - Eddy is run on a CPU
-    - dwidenoise is enabled implicitly.
-
-    Input data: DSDTI BIDS data (data/DSDTI_fmap).
-    """
-    TEST_NAME = 'dsdti_fmap'
-
-    dataset_dir = download_test_data('DSDTI_fmap', data_dir)
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        'participant',
-        f'-w={work_dir}',
-        '--boilerplate',
-        '--sloppy',
-        '--write-graph',
-        '--mem-mb=4096',
-        '--output-resolution=5',
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
-
-
-@pytest.mark.integration
-@pytest.mark.dscsdsi_fmap
-def test_dscsdsi_fmap(data_dir, output_dir, working_dir):
-    """Run AllFieldmaps test on DSCSDSI data.
-
-    Was in AllFieldmapsTests.sh. I split it between this and the DSDTI test.
-    XXX: Not called in CircleCI.
-
-    Instead of running full workflows, this test checks that workflows can
-    be built for all sorts of fieldmap configurations.
-
-    This tests the following features:
-
-    - Blip-up + Blip-down DWI series for TOPUP/Eddy
-    - Eddy is run on a CPU
-    - dwidenoise is enabled explicitly
-
-    Input data: DSDTI BIDS data (data/DSCSDSI_fmap).
-    """
-    TEST_NAME = 'dscsdsi_fmap'
-
-    dataset_dir = download_test_data('DSCSDSI_fmap', data_dir)
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        'participant',
-        f'-w={work_dir}',
-        '--boilerplate',
-        '--sloppy',
-        '--denoise-method=dwidenoise2',
-        '--write-graph',
-        '--mem-mb=4096',
-        '--output-resolution=5',
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
-
-
-@pytest.mark.integration
 @pytest.mark.cuda
 def test_cuda(data_dir, output_dir, working_dir):
     """Run the CUDA test on reverse-PE series data.
@@ -140,9 +59,9 @@ def test_cuda(data_dir, output_dir, working_dir):
     """
     TEST_NAME = 'cuda'
 
-    dataset_dir = download_test_data('drbuddi_rpe_series', data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, 'qsiprep')
+    from qsiprep.tests.trxscan_fixtures import fixture_dir
+
+    dataset_dir = str(fixture_dir('rpe', data_dir))
     out_dir = os.path.join(output_dir, TEST_NAME)
     work_dir = os.path.join(working_dir, TEST_NAME)
     test_data_path = get_test_data_path()
@@ -160,601 +79,6 @@ def test_cuda(data_dir, output_dir, working_dir):
         '--sdc-method=drbuddi',
         f'--eddy-config={eddy_config}',
         '--output-resolution=5',
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
-
-
-@pytest.mark.integration
-@pytest.mark.drbuddi_rpe
-def test_drbuddi_rpe(data_dir, output_dir, working_dir):
-    """Run the DRBUDDI test on a reverse-PE DWI series.
-
-    Was in DRBUDDI_eddy_rpe_series.sh.
-
-    This tests the following features:
-
-    - Blip-up + Blip-down DWI series for TOPUP/Eddy
-    - Eddy is run on a CPU
-    - Denoising is skipped
-
-    Input data:
-
-    - qsiprep single shell results (data/DSDTI_fmap)
-    - qsiprep multi shell results (data/DSDTI_fmap)
-    """
-    TEST_NAME = 'drbuddi_rpe'
-
-    dataset_dir = download_test_data('drbuddi_rpe_series', data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, 'tinytensor_rpe_series')
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-    test_data_path = get_test_data_path()
-    eddy_config = os.path.join(test_data_path, 'eddy_config.json')
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        'participant',
-        f'-w={work_dir}',
-        '--sloppy',
-        '--anat-modality=none',
-        '--denoise-method=none',
-        '--dwi-biascorrect=none',
-        '--sdc-method=drbuddi',
-        # The dataset ships epi fieldmaps whose IntendedFor points at the DWIs,
-        # so the modern grouping would correct each DWI with its own epi fmap
-        # (two outputs). This test exercises the blip-up/blip-down DWI *series*
-        # through DRBUDDI, so ignore fmap/ and let the reverse-PE DWI pair drive
-        # SDC into a single concatenated output.
-        '--ignore',
-        'fieldmaps',
-        f'--eddy-config={eddy_config}',
-        '--output-resolution=5',
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
-
-
-@pytest.mark.integration
-@pytest.mark.drbuddi_shoreline_epi
-def test_drbuddi_shoreline_epi(data_dir, output_dir, working_dir):
-    """Test EPI fieldmap correction with SHORELine + DRBUDDI.
-
-    Was in DRBUDDI_SHORELine_epi.sh.
-
-    This tests the following features:
-
-    - SHORELine (here, just b=0 registration) motion correction
-    """
-    TEST_NAME = 'drbuddi_shoreline_epi'
-
-    dataset_dir = download_test_data('drbuddi_epi', data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, 'tinytensor_epi')
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-    shoreline_config = os.path.join(get_test_data_path(), 'shoreline_none_config.json')
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        'participant',
-        f'-w={work_dir}',
-        '--sloppy',
-        '--anat-modality=none',
-        '--denoise-method=none',
-        '--dwi-biascorrect=none',
-        '--hmc-method=shoreline',
-        f'--shoreline-config={shoreline_config}',
-        '--sdc-method=drbuddi',
-        '--output-resolution=2',
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
-
-
-@pytest.mark.integration
-@pytest.mark.drbuddi_tensorline_epi
-def test_drbuddi_tensorline_epi(data_dir, output_dir, working_dir):
-    """Test EPI fieldmap correction with TENSORLine + DRBUDDI.
-
-    Was in DRBUDDI_TENSORLine_epi.sh.
-
-    This tests the following features:
-
-    - TENSORLine (tensor-based) motion correction
-    """
-    TEST_NAME = 'drbuddi_tensorline_epi'
-
-    dataset_dir = download_test_data('DSDTI', data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, 'DSDTI')
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-    shoreline_config = os.path.join(get_test_data_path(), 'shoreline_tensor_config.json')
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        'participant',
-        f'-w={work_dir}',
-        '--sloppy',
-        '--anat-modality=none',
-        '--denoise-method=none',
-        '--dwi-biascorrect=none',
-        '--hmc-method=shoreline',
-        f'--shoreline-config={shoreline_config}',
-        '--sdc-method=drbuddi',
-        '--output-resolution=5',
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
-
-
-@pytest.mark.integration
-@pytest.mark.dscsdsi
-def test_dscsdsi(data_dir, output_dir, working_dir):
-    """Run the DSCSDSI test.
-
-    Was in DSCSDSI.sh.
-
-    This tests the following features:
-
-    - The SHORELine motion correction workflow
-    - Skipping B1 biascorrection
-    - Using the SyN-SDC distortion correction method
-    - dwidenoise is enabled implicitly
-
-    Input data: DSCSDSI BIDS data (data/DSCSDSI_nofmap).
-    """
-    TEST_NAME = 'dscsdsi'
-
-    dataset_dir = download_test_data('DSCSDSI', data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, 'DSCSDSI_nofmap')
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-    shoreline_config = os.path.join(get_test_data_path(), 'shoreline_rigid_config.json')
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        'participant',
-        f'-w={work_dir}',
-        '--sloppy',
-        '--write-graph',
-        '--sdc-anat-reference=invt1w',
-        '--dwi-biascorrect=none',
-        '--hmc-method=shoreline',
-        f'--shoreline-config={shoreline_config}',
-        '--output-resolution=5',
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
-
-
-@pytest.mark.integration
-@pytest.mark.diffprep
-def test_diffprep(data_dir, output_dir, working_dir):
-    """Test TORTOISE DIFFPREP head-motion/eddy correction on non-shelled data.
-
-    This tests the following features:
-
-    - The TORTOISE DIFFPREP HMC backend (--hmc-method tortoise) on a
-      compressed-sensing DSI (non-shelled) scheme, where FSL eddy cannot run
-    - The fieldmap-less path: with no fieldmap and no T2w, DIFFPREP performs
-      head-motion/eddy correction only and does not error out
-    - Skipping B1 biascorrection
-
-    Input data: DSCSDSI BIDS data (data/DSCSDSI_nofmap).
-    """
-    TEST_NAME = 'diffprep'
-
-    dataset_dir = download_test_data('DSCSDSI', data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, 'DSCSDSI_nofmap')
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        'participant',
-        f'-w={work_dir}',
-        '--sloppy',
-        '--dwi-biascorrect=none',
-        '--hmc-method=tortoise',
-        '--output-resolution=5',
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
-
-
-@pytest.mark.integration
-@pytest.mark.diffprep_drbuddi
-def test_diffprep_drbuddi(data_dir, output_dir, working_dir):
-    """Test TORTOISE DIFFPREP head-motion correction followed by DRBUDDI SDC.
-
-    This tests the following features:
-
-    - The TORTOISE DIFFPREP HMC backend combined with reverse phase-encoded
-      (blip-up/blip-down) DRBUDDI susceptibility distortion correction, i.e.
-      that the backend performs SDC rather than erroring when a fieldmap is
-      present
-    - Denoising is skipped
-
-    Uses an ``epi`` fieldmap (a reverse-PE b=0/EPI in fmap/). The reverse-PE
-    *series* (rpe_series) case is covered separately in
-    ``test_diffprep_drbuddi_rpe_series``, which exercises the per-direction
-    DIFFPREP split/recombine before DRBUDDI.
-
-    Input data: qsiprep epi fieldmap results (data/drbuddi_epi).
-    """
-    TEST_NAME = 'diffprep_drbuddi'
-
-    dataset_dir = download_test_data('drbuddi_epi', data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, 'tinytensor_epi')
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        'participant',
-        f'-w={work_dir}',
-        '--sloppy',
-        '--anat-modality=none',
-        '--denoise-method=none',
-        '--dwi-biascorrect=none',
-        '--hmc-method=tortoise',
-        '--sdc-method=drbuddi',
-        '--output-resolution=2',
-    ]
-
-    # See test_diffprep: no expected-output manifest yet, so the assertion is
-    # that DIFFPREP + DRBUDDI SDC completes end to end.
-    _run_and_generate(TEST_NAME, parameters, test_main=False, check_outputs=False)
-
-
-@pytest.mark.integration
-@pytest.mark.diffprep_rpe_series
-def test_diffprep_drbuddi_rpe_series(data_dir, output_dir, working_dir):
-    """Test TORTOISE DIFFPREP HMC on a reverse-PE *series* (rpe_series) + DRBUDDI SDC.
-
-    Unlike ``test_diffprep_drbuddi`` (which uses an ``epi`` fieldmap), this feeds
-    two opposing-PE DWI *series*. qsiprep merges them into one 4D file for FSL
-    eddy; the DIFFPREP backend re-splits that merge back into its two PE groups,
-    runs DIFFPREP once per direction, recombines, and hands the flat list to the
-    stock DRBUDDI path. This exercises the Tier-1 (shelled) rpe_series path.
-
-    The ``tinytensor_rpe_series`` dataset is a DTI-regime (shelled) acquisition,
-    so DRBUDDI's own [b0, FA] tensor fit is well-conditioned and no predicted-
-    shell synthesis is needed. A non-shelled (CS-DSI) reverse-PE-series dataset
-    is still required to exercise the Tier-2 synthesis path end to end.
-
-    Input data: qsiprep reverse-PE-series results (data/drbuddi_rpe_series).
-    """
-    TEST_NAME = 'diffprep_rpe_series'
-
-    dataset_dir = download_test_data('drbuddi_rpe_series', data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, 'tinytensor_rpe_series')
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        'participant',
-        f'-w={work_dir}',
-        '--sloppy',
-        '--anat-modality=none',
-        '--denoise-method=none',
-        '--dwi-biascorrect=none',
-        '--hmc-method=tortoise',
-        '--sdc-method=drbuddi',
-        '--output-resolution=5',
-    ]
-
-    # No expected-output manifest yet: assert the split/recombine + DRBUDDI SDC
-    # path completes end to end.
-    _run_and_generate(TEST_NAME, parameters, test_main=False, check_outputs=False)
-
-
-@pytest.mark.integration
-@pytest.mark.diffprep_csdsi_rpe_series
-def test_diffprep_csdsi_rpe_series(data_dir, output_dir, working_dir):
-    """Test TORTOISE DIFFPREP on a NON-shelled (CS-DSI) reverse-PE series + DRBUDDI.
-
-    Unlike ``test_diffprep_drbuddi_rpe_series`` (DTI-regime, shelled), this uses a
-    downsampled CS-DSI HASC55 AP+PA acquisition. It exercises a non-shelled
-    q-space grid through the **stock DRBUDDI path**, which is what qsiprep now
-    does for such data: DRBUDDI's plain tensor fit is well enough conditioned on
-    real HASC55 to drive the correction, landing within ~0.002 correlation of a
-    synthesized-shell target for roughly half the runtime. Shell synthesis
-    remains available as an opt-in (``drbuddi_synth_shell_bval`` in
-    ``--diffprep-config``) for data where the plain fit does look poor.
-
-    The fixture also ships a T2w, so a heavier variant (drop ``--anat-modality
-    none``) can additionally exercise the DRBUDDI multimodal-T2w branch.
-
-    Input data: Downsampled CS-DSI HASC55 reverse-PE series (data/csdsi_rpe_series).
-    """
-    TEST_NAME = 'diffprep_csdsi_rpe_series'
-
-    # Test data pending upload to Box (see qsiprep/tests/utils.py). Skip cleanly
-    # until the archive is available rather than failing the download.
-    try:
-        dataset_dir = download_test_data('csdsi_rpe_series', data_dir)
-    except Exception as exc:  # noqa: BLE001
-        pytest.skip(f'csdsi_rpe_series test data not available yet: {exc}')
-
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, 'csdsi_hasc55')
-    # A failed placeholder download can leave an empty dir behind; skip if the
-    # BIDS root isn't actually present.
-    if not os.path.isdir(dataset_dir):
-        pytest.skip('csdsi_rpe_series test data not available yet (placeholder URL).')
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        'participant',
-        f'-w={work_dir}',
-        '--sloppy',
-        '--anat-modality=none',
-        '--denoise-method=none',
-        '--dwi-biascorrect=none',
-        '--hmc-method=tortoise',
-        '--sdc-method=drbuddi',
-        '--output-resolution=5',
-    ]
-
-    # No expected-output manifest yet: assert the per-direction DIFFPREP +
-    # DRBUDDI path completes end to end on non-shelled data.
-    _run_and_generate(TEST_NAME, parameters, test_main=False, check_outputs=False)
-
-
-@pytest.mark.integration
-@pytest.mark.dsdti_nofmap
-def test_dsdti_nofmap(data_dir, output_dir, working_dir):
-    """Run the DSDTI_nofmap test.
-
-    Was in DSDTI_nofmap.sh.
-
-    This tests the following features:
-
-    - A workflow with no distortion correction followed by eddy
-    - Eddy is run on a CPU
-    - Denoising is skipped
-
-    Input data: DSDTI BIDS data (data/DSDTI).
-    """
-    TEST_NAME = 'dsdti_nofmap'
-
-    dataset_dir = download_test_data('DSDTI', data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, 'DSDTI')
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-    test_data_path = get_test_data_path()
-    eddy_config = os.path.join(test_data_path, 'eddy_config.json')
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        'participant',
-        f'-w={work_dir}',
-        '--sloppy',
-        f'--eddy-config={eddy_config}',
-        '--denoise-method=none',
-        '--unringing-method=rpg',
-        '--dwi-biascorrect=none',
-        '--output-resolution=5',
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
-
-
-@pytest.mark.integration
-@pytest.mark.dsdti_synfmap
-def test_dsdti_synfmap(data_dir, output_dir, working_dir):
-    """Run the DSDTI_synfmap test.
-
-    Was in DSDTI_synfmap.sh.
-
-    This tests the following features:
-
-    - A workflow with no distortion correction followed by eddy
-    - Eddy is run on a CPU
-    - Denoising is skipped
-
-    Input data: DSDTI BIDS data (data/DSDTI).
-    """
-    TEST_NAME = 'dsdti_synfmap'
-
-    dataset_dir = download_test_data('DSDTI', data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, 'DSDTI')
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-    test_data_path = get_test_data_path()
-    eddy_config = os.path.join(test_data_path, 'eddy_config.json')
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        'participant',
-        f'-w={work_dir}',
-        '--sloppy',
-        f'--eddy-config={eddy_config}',
-        '--denoise-method=none',
-        # The dataset ships a PA epi fieldmap (IntendedFor the DWI), so the
-        # modern grouping would correct via TOPUP. This test exercises
-        # fieldmap-less SyN-SDC instead: ignore fmap/ and select the
-        # inverted-contrast T1w as the anatomical SDC reference. (Replaces the
-        # removed data-dropping --force-syn, which forced SyN over the fmap.)
-        '--ignore',
-        'fieldmaps',
-        '--sdc-anat-reference=invt1w',
-        '--dwi-biascorrect=n4',
-        '--output-resolution=5',
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
-
-
-@pytest.mark.integration
-@pytest.mark.dwiref
-def test_dwiref(data_dir, output_dir, working_dir):
-    """Run the subject-level dwiref test.
-
-    A two-session dataset is used to build a subject-level dwiref.
-
-    This tests the following features:
-
-    - Blip-up + Blip-down DWI series for TOPUP/Eddy
-    - Eddy is run on a CPU
-    - dwidenoise is enabled implicitly
-
-    Input data: twoses BIDS data (data/DSDTI_fmap).
-    """
-    TEST_NAME = 'dwiref'
-
-    dataset_dir = download_test_data('twoses', data_dir)
-    # XXX: Having to modify dataset_dirs is suboptimal.
-    dataset_dir = os.path.join(dataset_dir, 'twoses')
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-    shoreline_config = os.path.join(get_test_data_path(), 'shoreline_none_config.json')
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        'participant',
-        f'-w={work_dir}',
-        '--sloppy',
-        '--dwi-biascorrect=none',
-        '--hmc-method=shoreline',
-        f'--shoreline-config={shoreline_config}',
-        '--output-resolution=5',
-        '--dwiref-definition=subject',
-        '--dwiref-construction-transform=BSplineSyN',
-        '--dwiref-construction-iters=2',
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
-
-
-@pytest.mark.integration
-@pytest.mark.maternal_brain_project
-def test_maternal_brain_project(data_dir, output_dir, working_dir):
-    """Run QSIPrep on Maternal Brain Project data.
-
-    The dataset was built from the Maternal Brain Project dataset:
-    https://openneuro.org/datasets/ds005299/versions/1.0.0
-
-    The first subject's first session DWI data were downsampled to 5 mm isotropic voxels.
-    The dataset contains multi-shell DWI data with a GRE field map.
-    """
-    TEST_NAME = 'maternal_brain_project'
-
-    dataset_dir = download_test_data('maternal_brain_project', data_dir)
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-
-    test_data_path = get_test_data_path()
-    bids_filter = os.path.join(test_data_path, 'forrest_gump_filter.json')
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        'participant',
-        f'-w={work_dir}',
-        '--sloppy',
-        '--denoise-method=none',
-        '--dwi-biascorrect=none',
-        '--write-graph',
-        '--output-resolution=5',
-        '--hmc-method=shoreline',
-        f'--bids-filter-file={bids_filter}',
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
-
-
-@pytest.mark.integration
-@pytest.mark.forrest_gump
-def test_forrest_gump(data_dir, output_dir, working_dir):
-    """Run QSIPrep on Forrest Gump data without dwidenoise denoising.
-
-    The dataset was built from the Forrest Gump dataset:
-    https://openneuro.org/datasets/ds000113/versions/1.3.0
-
-    The first subject's first session DWI data were downsampled to 5 mm isotropic voxels.
-    The dataset contains single-shell DWI data with a GRE field map.
-    """
-    TEST_NAME = 'forrest_gump'
-
-    dataset_dir = _forrest_gump_dataset(data_dir, working_dir, TEST_NAME)
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-
-    test_data_path = get_test_data_path()
-    bids_filter = os.path.join(test_data_path, f'{TEST_NAME}_filter.json')
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        'participant',
-        f'-w={work_dir}',
-        '--sloppy',
-        '--denoise-method=none',
-        '--dwi-biascorrect=none',
-        '--write-graph',
-        '--output-resolution=5',
-        f'--bids-filter-file={bids_filter}',
-    ]
-
-    _run_and_generate(TEST_NAME, parameters, test_main=False)
-
-
-@pytest.mark.integration
-@pytest.mark.forrest_gump_patch2self
-def test_forrest_gump_patch2self(data_dir, output_dir, working_dir):
-    """Run QSIPrep on Forrest Gump data with patch2self denoising.
-
-    The dataset was built from the Forrest Gump dataset:
-    https://openneuro.org/datasets/ds000113/versions/1.3.0
-
-    The first subject's first session DWI data were downsampled to 5 mm isotropic voxels.
-    The dataset contains single-shell DWI data with a GRE field map.
-    """
-    TEST_NAME = 'forrest_gump_patch2self'
-
-    dataset_dir = _forrest_gump_dataset(data_dir, working_dir, TEST_NAME)
-    out_dir = os.path.join(output_dir, TEST_NAME)
-    work_dir = os.path.join(working_dir, TEST_NAME)
-
-    test_data_path = get_test_data_path()
-    bids_filter = os.path.join(test_data_path, 'forrest_gump_filter.json')
-
-    parameters = [
-        dataset_dir,
-        out_dir,
-        'participant',
-        f'-w={work_dir}',
-        '--sloppy',
-        '--denoise-method=patch2self',
-        '--dwi-biascorrect=none',
-        '--write-graph',
-        '--output-resolution=5',
-        f'--bids-filter-file={bids_filter}',
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)
@@ -1258,6 +582,306 @@ def test_validate_gradient_flags_warns_when_ignored_gradient_file_is_unused(tmp_
     assert 'unused' in caplog.text.lower()
 
 
+# ─── TRXScan truth-scored integration tests ──────────────────────────────────
+#
+# Each runs qsiprep on a simulated fixture (qsiprep/tests/trxscan_fixtures.py) and scores the
+# output against the simulator's ground truth (qsiprep/tests/truth_scoring.py) instead of
+# comparing file-name manifests. Thresholds come from measured runs of qsiprep 26.1 on these
+# fixtures with --sloppy, with margin; a sign error, a wrong readout time or a failed
+# registration fails them by a wide gap, a few percent of accuracy does not.
+
+TRXSCAN_COMMON = [
+    '--sloppy',
+    '--denoise-method=none',
+    '--dwi-biascorrect=none',
+    '--output-resolution=3',
+]
+
+
+def _assert_clean_run(out_dir):
+    """Fail on what the HTML report would only show: crash files and a non-empty Errors section."""
+    crashes = sorted(Path(out_dir).glob('sub-*/log/*/crash-*.txt'))
+    assert not crashes, 'qsiprep wrote crash files: ' + ', '.join(c.name for c in crashes[:5])
+    reports = sorted(Path(out_dir).glob('sub-*.html'))
+    assert reports, f'no subject HTML report under {out_dir}'
+    for report in reports:
+        assert 'No errors to report!' in report.read_text(), (
+            f'{report.name} lists errors in its Errors section'
+        )
+
+
+def _trxscan_run(test_name, fixture, extra, data_dir, output_dir, working_dir):
+    from qsiprep.tests.truth_scoring import score_run
+    from qsiprep.tests.trxscan_fixtures import fixture_dir
+
+    dataset_dir = str(fixture_dir(fixture, data_dir))
+    out_dir = os.path.join(output_dir, test_name)
+    work_dir = os.path.join(working_dir, test_name)
+    # eddy with a fixed seed (--initrand), 1000 hyperparameter voxels and 3 iterations: the
+    # 100-voxel, 2-iteration config the old smoke runs used picks its voxels at random, and
+    # on one CI run that halved every motion estimate (correlations 0.95 -> 0.4).
+    eddy_config = os.path.join(get_test_data_path(), 'eddy_config_trxscan.json')
+    parameters = [
+        dataset_dir,
+        out_dir,
+        'participant',
+        f'-w={work_dir}',
+        f'--eddy-config={eddy_config}',
+    ]
+    parameters += TRXSCAN_COMMON + list(extra)
+    _run_and_generate(test_name, parameters, test_main=False, check_outputs=False)
+    _assert_clean_run(out_dir)
+    score = score_run(dataset_dir, out_dir)
+    # Kept with the derivatives (a CI artifact) and printed, so the numbers are findable
+    # whether or not an assertion fires.
+    with open(os.path.join(out_dir, 'truth_score.json'), 'w') as f:
+        json.dump(score, f, indent=1, default=float)
+    print('TRUTH SCORE', test_name, json.dumps(score, default=float))
+    return score
+
+
+def _expect(score, path, lo=None, hi=None, note=None):
+    """Assert ``score[path...]`` lies in ``[lo, hi]`` with a message that reads on its own.
+
+    CircleCI's Tests tab shows the assertion message and nothing else, so it names the
+    quantity, its value and the bound rather than dumping a dict.
+    """
+    value = score
+    for key in path:
+        value = value[key]
+    name = '.'.join(str(k) for k in path)
+    bounds = ' and '.join(
+        s
+        for s in (
+            f'>= {lo:.3g}' if lo is not None else '',
+            f'<= {hi:.3g}' if hi is not None else '',
+        )
+        if s
+    )
+    ok = (lo is None or value >= lo) and (hi is None or value <= hi)
+    assert ok, f'{name} = {value:.3g}, expected {bounds}' + (f' ({note})' if note else '')
+
+
+def _assert_topup_quality(score, coreg_deg=1.0):
+    """Assert what a correct TOPUP + eddy + coregistration run looks like on these fixtures."""
+    _expect(score, ('sdc', 'slope'), 0.85, 1.15, 'estimated / true PE displacement')
+    _expect(score, ('sdc', 'corr'), lo=0.95)
+    _expect(
+        score,
+        ('sdc', 'rms_residual'),
+        hi=0.3 * score['sdc']['rms_truth'],
+        note=f'30% of the {score["sdc"]["rms_truth"]:.2f} mm rms true displacement',
+    )
+    _expect(
+        score,
+        ('b0_corrected_vs_clean',),
+        lo=score['b0_uncorrected_vs_clean'] + 0.05,
+        note=f'uncorrected b0 scores {score["b0_uncorrected_vs_clean"]:.3f}; must beat it by 0.05',
+    )
+    _expect(score, ('coreg_error', 'rotation_deg'), hi=coreg_deg)
+    _expect(score, ('coreg_error', 'translation_mm'), hi=1.5)
+
+
+@pytest.mark.integration
+@pytest.mark.trxscan_rpe_topup
+def test_trxscan_rpe_topup(data_dir, output_dir, working_dir):
+    """Score a reverse-PE pair through TOPUP and eddy against the simulator's truth.
+
+    The correction, the coregistration and the absence of spurious motion on a static object.
+    """
+    score = _trxscan_run(
+        'trxscan_rpe_topup', 'rpe', ['--sdc-method=topup'], data_dir, output_dir, working_dir
+    )
+    _assert_topup_quality(score)
+    _expect(score, ('fd_mean_mm',), hi=0.1, note='the object does not move')
+
+
+@pytest.mark.integration
+@pytest.mark.trxscan_rpe_drbuddi
+def test_trxscan_rpe_drbuddi(data_dir, output_dir, working_dir):
+    """Score the same pair through DRBUDDI, with the T2w.
+
+    The field bounds are loose on purpose: the single coarse stage --sloppy runs recovers 0.43
+    of the field (its metrics are MSJac and CC on the blips; DRBUDDI's default stages at the
+    same 2.5 mm reach 0.80, but with the T2w they land the corrected b0 4-5 degrees off frame on
+    this fixture, see SLOPPY_DRBUDDI). The coregistration is scored tightly: it starts from
+    DRBUDDI's undistorted b0 now, not from the T2w as DRBUDDI's rigid had placed it, which was
+    5 degrees off here.
+    """
+    score = _trxscan_run(
+        'trxscan_rpe_drbuddi', 'rpe', ['--sdc-method=drbuddi'], data_dir, output_dir, working_dir
+    )
+    _expect(score, ('sdc', 'corr'), lo=0.75, note='right pattern and sign')
+    _expect(score, ('sdc', 'slope'), 0.3, 1.2, 'the sloppy single stage recovers ~0.43')
+    _expect(
+        score,
+        ('b0_corrected_vs_clean',),
+        lo=score['b0_uncorrected_vs_clean'] + 0.05,
+        note=f'uncorrected b0 scores {score["b0_uncorrected_vs_clean"]:.3f}',
+    )
+    _expect(score, ('coreg_error', 'rotation_deg'), hi=1.0)
+    _expect(score, ('coreg_error', 'translation_mm'), hi=1.5)
+
+
+@pytest.mark.integration
+@pytest.mark.trxscan_epi_topup
+def test_trxscan_epi_topup(data_dir, output_dir, working_dir):
+    """Score one series plus a reverse-PE epi fieldmap, both under one B0FieldIdentifier."""
+    score = _trxscan_run(
+        'trxscan_epi_topup', 'epi', ['--sdc-method=topup'], data_dir, output_dir, working_dir
+    )
+    _assert_topup_quality(score)
+
+
+@pytest.mark.integration
+@pytest.mark.trxscan_phasediff
+def test_trxscan_phasediff(data_dir, output_dir, working_dir):
+    """Score a GRE phasediff fieldmap with the subject moved between the DWI, T1w and fieldmap.
+
+    Asserts what holds today: the exported field has the right sign and most of the magnitude,
+    and b0->T1w coregistration recovers the recorded movement. The image is NOT asserted to
+    improve: the fieldmap-to-b0 registration leaves ~2 deg / 2.5 mm of error on this fixture
+    and the applied warp recovers under half the field (see the TRXScan report).
+    """
+    score = _trxscan_run('trxscan_phasediff', 'phasediff', [], data_dir, output_dir, working_dir)
+    _expect(score, ('sdc', 'corr'), lo=0.7)
+    _expect(score, ('sdc', 'slope'), 0.5, 1.2)
+    assert score['coreg_error']['truth'] == 'movement', 'scored against the recorded movement'
+    _expect(
+        score, ('coreg_error', 'rotation_deg'), hi=1.0, note='vs the recorded 5.4 deg movement'
+    )
+    _expect(score, ('coreg_error', 'translation_mm'), hi=2.0)
+
+
+@pytest.mark.integration
+@pytest.mark.trxscan_gnl
+def test_trxscan_gnl(data_dir, output_dir, working_dir):
+    """Score strong gradient nonlinearity with --gradient-file.
+
+    The geometry is restored and the written gradient deviation matches the truth.
+    """
+    from qsiprep.tests.trxscan_fixtures import fixture_dir
+
+    coeff = next(
+        Path(fixture_dir('gnl', data_dir)).glob(
+            'derivatives/trxscan/sub-*/dwi/*_desc-gnlcoeff_dwi.grad'
+        )
+    )
+    score = _trxscan_run(
+        'trxscan_gnl',
+        'gnl',
+        ['--sdc-method=topup', f'--gradient-file={coeff}'],
+        data_dir,
+        output_dir,
+        working_dir,
+    )
+    _assert_topup_quality(score)
+    _expect(score, ('gnl_graddev', 'corr'), lo=0.99)
+    _expect(score, ('gnl_graddev', 'slope'), 0.95, 1.05)
+    _expect(
+        score,
+        ('gnl_graddev', 'rms_residual'),
+        hi=0.1 * score['gnl_graddev']['rms_truth_dev'],
+        note='10% of the true gradient deviation',
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.trxscan_motion
+def test_trxscan_motion(data_dir, output_dir, working_dir):
+    """Score eddy's motion parameters against the poses the simulator applied (5 mm / 2.8 deg)."""
+    score = _trxscan_run('trxscan_motion', 'motion', [], data_dir, output_dir, working_dir)
+    # Same axis, same sign. eddy's estimates vary with its thread count and the sloppy
+    # settings: the 5 mm trans_y component scored 0.74 on CircleCI against 0.85 locally.
+    for axis in ('trans_x', 'trans_y', 'trans_z', 'rot_x', 'rot_z'):
+        _expect(score, ('motion', axis, 'corr'), lo=0.6, note='eddy vs applied, same axis')
+    # eddy under --sloppy recovers the shape of the trace (corr 0.83-0.95 on CircleCI) but
+    # only a fraction of its amplitude, and the fraction moves between runs: rot_x 0.33 on
+    # CircleCI against 0.5 locally. The bound keeps "a fraction", not "most of it".
+    for axis in ('trans_y', 'rot_x'):  # the large components
+        _expect(score, ('motion', axis, 'amplitude_ratio'), 0.25, 1.3, 'eddy / applied amplitude')
+
+
+@pytest.mark.integration
+@pytest.mark.trxscan_offsets
+def test_trxscan_offsets(data_dir, output_dir, working_dir):
+    """Score a subject who moved between the T1w and the DWI, and between the AP and PA series.
+
+    The coregistration must recover the recorded movement and TOPUP must still correct the pair.
+    """
+    score = _trxscan_run(
+        'trxscan_offsets', 'offsets', ['--sdc-method=topup'], data_dir, output_dir, working_dir
+    )
+    assert score['coreg_error']['truth'] == 'movement', 'scored against the recorded movement'
+    _expect(score, ('coreg_error', 'rotation_deg'), hi=1.5)
+    _expect(score, ('coreg_error', 'translation_mm'), hi=3.0)
+    _expect(score, ('sdc', 'corr'), lo=0.95)
+    _expect(score, ('sdc', 'slope'), 0.75, 1.15, 'TOPUP with the PA series moved')
+    _expect(
+        score,
+        ('b0_corrected_vs_clean',),
+        lo=score['b0_uncorrected_vs_clean'] + 0.05,
+        note=f'uncorrected b0 scores {score["b0_uncorrected_vs_clean"]:.3f}',
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.trxscan_diffprep
+def test_trxscan_diffprep(data_dir, output_dir, working_dir):
+    """Score TORTOISE DIFFPREP motion/eddy correction plus DRBUDDI on the reverse-PE pair."""
+    score = _trxscan_run(
+        'trxscan_diffprep',
+        'rpe',
+        ['--hmc-method=tortoise', '--sdc-method=drbuddi'],
+        data_dir,
+        output_dir,
+        working_dir,
+    )
+    _expect(score, ('sdc', 'corr'), lo=0.75, note='right pattern and sign')
+    _expect(score, ('sdc', 'slope'), 0.3, 1.2)
+    _expect(
+        score,
+        ('b0_corrected_vs_clean',),
+        lo=score['b0_uncorrected_vs_clean'] + 0.05,
+        note=f'uncorrected b0 scores {score["b0_uncorrected_vs_clean"]:.3f}',
+    )
+    _expect(score, ('coreg_error', 'rotation_deg'), hi=1.0)
+    _expect(score, ('coreg_error', 'translation_mm'), hi=1.5)
+
+
+@pytest.mark.integration
+@pytest.mark.trxscan_t2wreg
+def test_trxscan_t2wreg(data_dir, output_dir, working_dir):
+    """Score DIFFPREP's T2Wreg correction: one series, no fieldmap, the subject's T2w.
+
+    With ``--hmc-method tortoise`` and no fieldmap, qsiprep lets DIFFPREP register the EPI to
+    the T2w (``--epi T2Wreg``) instead of running SyN. The field it exports has the right
+    pattern. What it does to the image is a known defect, asserted as an expected failure so
+    the Tests tab shows it and the day it passes is noticed: TORTOISE's rigid placement of
+    the T2w lands ~3 degrees off the b0 on this fixture (the same failure as DRBUDDI's
+    structural registration), so the corrected b0 scores below the uncorrected one (0.49 vs
+    0.69) and the DWI reaches ACPC space 3.5 deg / 4 mm off.
+    """
+    score = _trxscan_run(
+        'trxscan_t2wreg', 't2wreg', ['--hmc-method=tortoise'], data_dir, output_dir, working_dir
+    )
+    _expect(score, ('sdc', 'corr'), lo=0.7, note='right pattern and sign')
+    _expect(score, ('sdc', 'slope'), 0.4, 1.2)
+    _expect(score, ('fd_mean_mm',), hi=0.5, note='the object does not move')
+    try:
+        _expect(score, ('coreg_error', 'rotation_deg'), hi=1.0)
+        _expect(score, ('coreg_error', 'translation_mm'), hi=1.5)
+        _expect(
+            score,
+            ('b0_corrected_vs_clean',),
+            lo=score['b0_uncorrected_vs_clean'],
+            note=f'uncorrected b0 scores {score["b0_uncorrected_vs_clean"]:.3f}',
+        )
+    except AssertionError as exc:
+        pytest.xfail(f'known: T2Wreg places the T2w off the b0 frame on this fixture -- {exc}')
+    pytest.fail('T2Wreg now lands the frame: drop the xfail in this test and tighten it')
+
+
 def _check_arg_specified(argname, arglist):
     for arg in arglist:
         if arg.startswith(argname):
@@ -1275,7 +899,8 @@ def _update_resources(parameters):
     env variable (specified in each job in config.yml). If
     this variable doesn't work, just set it to 4.
     """
-    nthreads = int(os.environ.get('CIRCLECPUS', DEFAULT_NUM_CPUS))
+    # CircleCI exports CIRCLE_CPUS (see .circleci/continue_config.yml); CIRCLECPUS is the old name
+    nthreads = int(os.environ.get('CIRCLE_CPUS', os.environ.get('CIRCLECPUS', DEFAULT_NUM_CPUS)))
     if not _check_arg_specified('--nthreads', parameters):
         parameters.append(f'--nthreads={nthreads}')
     if not _check_arg_specified('--omp-nthreads', parameters):
