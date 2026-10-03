@@ -26,12 +26,12 @@ from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from niworkflows.interfaces.images import IntraModalMerge
 from niworkflows.interfaces.nibabel import ApplyMask
-from niworkflows.interfaces.reportlets.masks import BETRPT
+from niworkflows.interfaces.reportlets.masks import SimpleShowMaskRPT
 
 from ... import config
 from ...interfaces import DerivativesDataSink, FieldToHz, FieldToRadS
 from ...interfaces.fmap import MedianFilter
-from ...interfaces.niimath import RomeoUnwrap
+from ...interfaces.niimath import RomeoUnwrap, SkullStrip
 from .utils import cleanup_edge_pipeline, demean_image
 
 
@@ -81,7 +81,9 @@ the b=0 reference.
         name='n4_correct',
         n_procs=config.nipype.omp_nthreads,
     )
-    bet = pe.Node(BETRPT(generate_report=True, frac=0.6, mask=True), name='bet')
+    # niimath's surface stripper on the N4-corrected magnitude (replaces FSL BET)
+    skullstrip = pe.Node(SkullStrip(), name='skullstrip')
+    skullstrip_rpt = pe.Node(SimpleShowMaskRPT(), name='skullstrip_rpt')
 
     ds_report_fmap_mask = pe.Node(
         DerivativesDataSink(datatype='figures', desc='brainmask', suffix='fieldmap'),
@@ -93,13 +95,15 @@ the b=0 reference.
         (inputnode, magmrg, [('magnitude', 'in_files')]),
         (inputnode, fmapmrg, [('fieldmap', 'in_files')]),
         (magmrg, n4_correct, [('out_file', 'input_image')]),
-        (n4_correct, bet, [('output_image', 'in_file')]),
-        (bet, outputnode, [
+        (n4_correct, skullstrip, [('output_image', 'in_file')]),
+        (n4_correct, skullstrip_rpt, [('output_image', 'background_file')]),
+        (skullstrip, skullstrip_rpt, [('mask_file', 'mask_file')]),
+        (skullstrip, outputnode, [
             ('mask_file', 'fmap_mask'),
             ('out_file', 'fmap_ref'),
         ]),
         (inputnode, ds_report_fmap_mask, [('fieldmap', 'source_file')]),
-        (bet, ds_report_fmap_mask, [('out_report', 'in_file')]),
+        (skullstrip_rpt, ds_report_fmap_mask, [('out_report', 'in_file')]),
     ])  # fmt:skip
 
     torads = pe.Node(FieldToRadS(), name='torads')
@@ -113,7 +117,7 @@ the b=0 reference.
     applymsk = pe.Node(ApplyMask(), name='applymsk')
 
     workflow.connect([
-        (bet, prelude, [
+        (skullstrip, prelude, [
             ('mask_file', 'mask_file'),
             ('out_file', 'magnitude_file'),
         ]),
@@ -124,9 +128,9 @@ the b=0 reference.
         (tohz, denoise, [('out_file', 'in_file')]),
         (denoise, demean, [('out_file', 'in_file')]),
         (demean, cleanup_wf, [('out', 'inputnode.in_file')]),
-        (bet, cleanup_wf, [('mask_file', 'inputnode.in_mask')]),
+        (skullstrip, cleanup_wf, [('mask_file', 'inputnode.in_mask')]),
         (cleanup_wf, applymsk, [('outputnode.out_file', 'in_file')]),
-        (bet, applymsk, [('mask_file', 'in_mask')]),
+        (skullstrip, applymsk, [('mask_file', 'in_mask')]),
         (applymsk, outputnode, [('out_file', 'fmap')]),
     ])  # fmt:skip
 
