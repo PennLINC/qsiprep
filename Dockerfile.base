@@ -9,7 +9,7 @@ ARG TAG_TORTOISE=26.9.5
 ARG TAG_TORTOISECUDA=26.9.5
 ARG TAG_SYNB0=26.1.2
 ARG TAG_TRXSCAN=26.8.3
-ARG TAG_NIIMATH=26.9.4
+ARG TAG_NIIMATH=26.10.2
 
 FROM pennlinc/qsiprep-freesurfer:${TAG_FREESURFER} AS build_freesurfer
 FROM pennlinc/qsiprep-mrtrix3:${TAG_MRTRIX3} AS build_mrtrix3
@@ -123,6 +123,7 @@ COPY --from=build_trxscan /opt/trxscan /opt/trxscan
 ENV PATH="$PATH:/opt/trxscan/bin"
 
 ## niimath (fslmaths-compatible; -romeo/-fmapprep/-fugue for FSL-free GRE SDC)
+## and svht_denoise (--denoise-method svht, --unringing-method svht)
 COPY --from=build_niimath /opt/niimath /opt/niimath
 ENV PATH="$PATH:/opt/niimath/bin"
 

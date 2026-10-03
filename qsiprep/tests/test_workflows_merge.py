@@ -15,8 +15,9 @@ from nipype.pipeline import engine as pe
 from qsiprep import config
 from qsiprep.interfaces import mrtrix
 from qsiprep.interfaces.dipy import Patch2Self
+from qsiprep.interfaces.svht import SVHTDeGibbs, SVHTDenoise
 from qsiprep.tests.utils import field_of_view
-from qsiprep.workflows.dwi.merge import init_dwi_denoising_wf
+from qsiprep.workflows.dwi.merge import _svht_partial_fourier, init_dwi_denoising_wf
 
 
 def _use_dwidenoise2_config(monkeypatch, tmp_path, settings):
@@ -382,6 +383,8 @@ _LEGACY_SCHEDULE_ROW = {
             id='dwidenoise2_inline_schedule',
         ),
         pytest.param('patch2self', None, 'auto', Patch2Self, {}, id='patch2self'),
+        pytest.param('svht', None, 'auto', SVHTDenoise, {}, id='svht_auto'),
+        pytest.param('svht', None, 7, SVHTDenoise, {'extent': 7}, id='svht_window7'),
     ],
 )
 def test_denoising_wf_magnitude(
@@ -432,6 +435,7 @@ def test_denoising_wf_magnitude(
             id='dwidenoise2_demodulate',
         ),
         pytest.param('patch2self', None, Patch2Self, {}, id='patch2self_ignores_phase'),
+        pytest.param('svht', None, SVHTDenoise, {'phase_units': 'radians'}, id='svht'),
     ],
 )
 def test_denoising_wf_complex(
@@ -464,10 +468,14 @@ def test_denoising_wf_complex(
 
     uses_complex = denoise_method.startswith('dwidenoise')
     assert ('combine_complex' in nodes) is uses_complex
-    assert ('split_complex' in nodes) is uses_complex
+    # svht_denoise reads the phase itself, and its signed output is reduced to magnitude
+    assert ('split_complex' in nodes) is (uses_complex or denoise_method == 'svht')
     if uses_complex:
         complex_img = nb.load(nodes['combine_complex'].result.outputs.out_file)
         assert np.issubdtype(complex_img.header.get_data_dtype(), np.complexfloating)
+    if denoise_method == 'svht':
+        assert denoiser.inputs.phase_file == nodes['phase_to_radians'].result.outputs.phase_file
+        assert np.all(nb.load(_sink_output(sink_dir, 'dwi_file')).get_fdata() >= 0)
 
     _assert_denoiser_is_not_masked(nodes)
     _assert_denoising_outputs(nodes, sink_dir, nibs_dwi['dwi_file'])
@@ -487,6 +495,8 @@ def _build_denoising_wf(
     unringing_method,
     use_phase,
     mrtrix_version='dev',
+    partial_fourier=1.0,
+    phase_encoding_direction='j',
 ):
     """Build (without running) a denoising workflow with the given configuration.
 
@@ -504,8 +514,8 @@ def _build_denoising_wf(
 
     return init_dwi_denoising_wf(
         source_file='sub-01_dwi.nii.gz',
-        partial_fourier=1.0,
-        phase_encoding_direction='j',
+        partial_fourier=partial_fourier,
+        phase_encoding_direction=phase_encoding_direction,
         n_volumes=30,
         use_phase=use_phase,
     )
@@ -628,6 +638,124 @@ def test_split_follows_the_denoiser_without_unringing(monkeypatch, denoise_metho
 
     assert connections[('denoiser', 'split_complex')] == {('out_file', 'complex_file')}
     assert connections[('split_complex', 'outputnode')] == {('out_file', 'dwi_file')}
+
+
+def test_svht_magnitude_stays_magnitude(monkeypatch):
+    """Test that svht denoising of magnitude-only data needs no phase or split nodes."""
+    workflow = _build_denoising_wf(monkeypatch, 'svht', 'none', use_phase=False)
+    node_names = {node.name for node in workflow._get_all_nodes()}
+    denoiser = workflow.get_node('denoiser')
+
+    assert isinstance(denoiser.interface, SVHTDenoise)
+    # The window is the --dwidenoise-window value that _build_denoising_wf sets
+    assert denoiser.inputs.extent == 5
+    assert not isdefined(denoiser.inputs.phase_file)
+    assert not isdefined(denoiser.inputs.phase_units)
+    assert node_names.isdisjoint({'phase_to_radians', 'combine_complex', 'split_complex'})
+    assert 'variance-stabilized' in workflow.__desc__
+    assert '[@svht_denoise]' in workflow.__desc__
+
+
+def test_svht_auto_window_is_left_to_svht(monkeypatch):
+    """Test that the auto window leaves svht_denoise to size its own patches."""
+    monkeypatch.setattr(config.workflow, 'dwidenoise_window', 'auto')
+    monkeypatch.setattr(config.workflow, 'denoise_method', 'svht')
+    monkeypatch.setattr(config.workflow, 'unringing_method', 'none')
+    monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
+    monkeypatch.setattr(config.nipype, 'omp_nthreads', 1)
+
+    workflow = init_dwi_denoising_wf(
+        source_file='sub-01_dwi.nii.gz',
+        partial_fourier=1.0,
+        phase_encoding_direction='j',
+        n_volumes=30,
+        use_phase=False,
+    )
+
+    assert not isdefined(workflow.get_node('denoiser').inputs.extent)
+
+
+@pytest.mark.parametrize('unringing_method', ['none', 'mrdegibbs', 'rpg', 'svht'])
+def test_svht_reads_the_phase_and_splits_after_denoising(monkeypatch, unringing_method):
+    """Test that svht_denoise gets the magnitude and phase as separate inputs.
+
+    Its output is the signed real-axis rotation, which is reduced to magnitude right
+    after denoising, whatever the unringing method.
+    """
+    workflow = _build_denoising_wf(monkeypatch, 'svht', unringing_method, use_phase=True)
+    connections = _connections(workflow)
+    node_names = {node.name for node in workflow._get_all_nodes()}
+
+    assert 'combine_complex' not in node_names
+    assert connections[('inputnode', 'denoiser')] == {('dwi_file', 'in_file')}
+    assert connections[('phase_to_radians', 'denoiser')] == {('phase_file', 'phase_file')}
+    assert workflow.get_node('denoiser').inputs.phase_units == 'radians'
+    assert connections[('denoiser', 'split_complex')] == {('out_file', 'complex_file')}
+    next_node = 'outputnode' if unringing_method == 'none' else 'degibbser'
+    assert ('split_complex', next_node) in connections
+    assert 'rotated onto the real axis' in workflow.__desc__
+    assert 'variance-stabilized' not in workflow.__desc__
+
+
+@pytest.mark.parametrize('denoise_method', ['dwidenoise', 'svht', 'none'])
+def test_svht_unringing_gets_magnitude(monkeypatch, denoise_method):
+    """Test that svht unringing, which assumes magnitude data, never sees complex data."""
+    workflow = _build_denoising_wf(monkeypatch, denoise_method, 'svht', use_phase=True)
+    connections = _connections(workflow)
+    degibbser = workflow.get_node('degibbser')
+
+    assert isinstance(degibbser.interface, SVHTDeGibbs)
+    assert degibbser.inputs.degibbs == 'o'
+    assert not isdefined(degibbser.inputs.partial_fourier)
+    assert connections[('degibbser', 'outputnode')] == {('out_file', 'dwi_file')}
+    if denoise_method == 'none':
+        assert connections[('inputnode', 'degibbser')] == {('dwi_file', 'in_file')}
+    else:
+        assert connections[('split_complex', 'degibbser')] == {('out_file', 'in_file')}
+
+
+@pytest.mark.parametrize(
+    ('partial_fourier', 'expected'),
+    [(1.0, None), (None, None), (float('nan'), None), (0.875, 0.875), (0.75, 0.75)],
+)
+def test_svht_unringing_partial_fourier(monkeypatch, partial_fourier, expected):
+    """Test that the PartialFourier metadata selects the svht -pF factor."""
+    workflow = _build_denoising_wf(
+        monkeypatch, 'none', 'svht', use_phase=False, partial_fourier=partial_fourier
+    )
+    degibbser = workflow.get_node('degibbser')
+
+    if expected is None:
+        assert not isdefined(degibbser.inputs.partial_fourier)
+        assert 'partial Fourier' not in workflow.__desc__
+    else:
+        assert degibbser.inputs.partial_fourier == expected
+        assert '[@pfgibbs]' in workflow.__desc__
+
+
+def test_svht_partial_fourier_tolerates_rounding():
+    """Test that factors written to fewer decimal places still match."""
+    assert _svht_partial_fourier(0.88, 'j') == 0.875
+    assert _svht_partial_fourier(0.995, 'j') is None
+
+
+@pytest.mark.parametrize(
+    ('partial_fourier', 'phase_encoding_direction', 'match'),
+    [(0.625, 'j', 'PartialFourier of 0.625'), (0.875, 'i', 'phase-encoded along i')],
+)
+def test_svht_unringing_rejects_unsupported_partial_fourier(
+    monkeypatch, partial_fourier, phase_encoding_direction, match
+):
+    """Test that partial Fourier ringing svht cannot remove is an error, not ignored."""
+    with pytest.raises(ValueError, match=match):
+        _build_denoising_wf(
+            monkeypatch,
+            'none',
+            'svht',
+            use_phase=False,
+            partial_fourier=partial_fourier,
+            phase_encoding_direction=phase_encoding_direction,
+        )
 
 
 def test_boilerplate_describes_where_the_split_happens(monkeypatch):

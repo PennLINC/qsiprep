@@ -689,9 +689,20 @@ def test_dwidenoise2_config_defaults_to_none(minimal_args):
     assert _parse(minimal_args, '--denoise-method', 'dwidenoise2').dwidenoise2_config is None
 
 
+def test_svht_methods_are_accepted(minimal_args):
+    opts = _parse(minimal_args, '--denoise-method', 'svht', '--unringing-method', 'svht')
+    assert opts.denoise_method == 'svht'
+    assert opts.unringing_method == 'svht'
+
+
 @pytest.mark.parametrize(
     'method_args',
-    [[], ['--denoise-method', 'dwidenoise'], ['--denoise-method', 'patch2self']],
+    [
+        [],
+        ['--denoise-method', 'dwidenoise'],
+        ['--denoise-method', 'patch2self'],
+        ['--denoise-method', 'svht'],
+    ],
 )
 def test_dwidenoise2_config_requires_dwidenoise2(minimal_args, tmp_path, capsys, method_args):
     cfg = _dwidenoise2_json(tmp_path)

@@ -30,6 +30,7 @@ from ...interfaces.mrtrix import (
     PolarToComplex,
 )
 from ...interfaces.nilearn import Merge
+from ...interfaces.svht import SVHTDeGibbs, SVHTDenoise
 from ...interfaces.tortoise import Gibbs
 from ...utils.bids import IMPORTANT_DWI_FIELDS, update_metadata_from_nifti_header
 from ...utils.misc import (
@@ -354,9 +355,11 @@ class _ImageChain:
     Whether that image is complex-valued is not a property of the chain position but of
     which steps have run: ``dwidenoise`` handed complex data emits complex data, and so
     does ``mrdegibbs`` on MRtrix3's development branch, while ``dwibiascorrect`` and
-    TORTOISE's ``rpg`` are magnitude-only. Tracking the domain alongside the current
-    image lets :func:`to_magnitude` insert the split at the last step that can still
-    consume complex data, instead of always splitting right after denoising.
+    TORTOISE's ``rpg`` are magnitude-only. ``svht_denoise`` handed phase data emits the
+    signed real-axis rotation, which is not magnitude either and is flagged the same
+    way. Tracking the domain alongside the current image lets :func:`to_magnitude`
+    insert the split at the last step that can still consume complex data, instead of
+    always splitting right after denoising.
     """
 
     def __init__(self, workflow, node, field, omp_nthreads):
@@ -418,8 +421,10 @@ def init_dwi_denoising_wf(
         and the 'auto' option is selected.
     use_phase : bool
         True if phase data are available for the DWI scan.
-        If True, and ``denoise_method`` is ``dwidenoise``, then ``dwidenoise``
-        will be run on the complex-valued data.
+        If True, and ``denoise_method`` is ``dwidenoise`` or ``dwidenoise2``, then
+        the denoiser will be run on the complex-valued data. If ``denoise_method``
+        is ``svht``, then ``svht_denoise`` will rotate the magnitude and phase data
+        onto the real axis before denoising.
     name : str, optional
         name of the workflow
 
@@ -487,12 +492,14 @@ def init_dwi_denoising_wf(
         check_dwidenoise2_demodulation(dwidenoise2_params, use_phase)
 
     unringing_method = config.workflow.unringing_method
-    do_denoise = denoise_method in ('patch2self', 'dwidenoise', 'dwidenoise2')
-    do_unringing = config.workflow.unringing_method in ('mrdegibbs', 'rpg')
+    do_denoise = denoise_method in ('patch2self', 'dwidenoise', 'dwidenoise2', 'svht')
+    do_unringing = config.workflow.unringing_method in ('mrdegibbs', 'rpg', 'svht')
     harmonize_b0s = not config.workflow.no_b0_harmonization
 
-    # Only the dwidenoise variants denoise complex data; the rest use magnitude alone.
+    # Only the dwidenoise variants denoise complex data; the rest use magnitude alone,
+    # except svht_denoise, which reads the phase itself and denoises the real-axis rotation.
     denoise_complex = do_denoise and denoise_method.startswith('dwidenoise') and use_phase
+    denoise_real_axis = denoise_method == 'svht' and use_phase
     # Only the development-branch mrdegibbs reads and writes complex data.
     unring_complex = (
         denoise_complex
@@ -569,6 +576,21 @@ def init_dwi_denoising_wf(
                 name='denoiser',
                 n_procs=omp_nthreads,
             )
+        elif denoise_method == 'svht':
+            # svht_denoise sizes its patches like dwidenoise, from the volume count
+            dwidenoise_window = config.workflow.dwidenoise_window
+            svht_kwargs = {}
+            if dwidenoise_window != 'auto':
+                svht_kwargs['extent'] = dwidenoise_window
+            if denoise_real_axis:
+                # PhaseToRad (below) supplies the phase in radians
+                svht_kwargs['phase_units'] = 'radians'
+
+            denoiser = pe.Node(
+                SVHTDenoise(nthreads=omp_nthreads, **svht_kwargs),
+                name='denoiser',
+                n_procs=omp_nthreads,
+            )
         else:
             denoiser = pe.Node(
                 Patch2Self(),
@@ -603,6 +625,26 @@ def init_dwi_denoising_wf(
                 desc += f'DWI data were {mppca_desc}'
 
             last_step = 'After MP-PCA, '
+        elif denoise_method == 'svht':
+            svht_desc = (
+                'denoised by local PCA with optimal singular value shrinkage, as implemented '
+                'in `svht_denoise` [@svht_denoise]. Each component of overlapping spherical '
+                'patches was shrunk by the Frobenius-optimal rule [@gavish2017], against a '
+                'noise level estimated with the median estimator of @gavish2014, and the '
+                'patch estimates were averaged where they overlapped [@manjon2013]. '
+            )
+            if denoise_real_axis:
+                desc += (
+                    'Magnitude and phase DWI data were rotated onto the real axis [@nordic], '
+                    f'so that the noise remained zero-mean Gaussian, then {svht_desc}'
+                    'The absolute value of the denoised data was retained. '
+                )
+            else:
+                desc += (
+                    'DWI data were variance-stabilized to remove the Rician noise floor '
+                    f'[@foi2011], then {svht_desc}'
+                )
+            last_step = 'After denoising, '
         else:
             desc += (
                 "DWI data were denoised using DiPy's Patch2Self algorithm [@dipy; @patch2self] "
@@ -620,26 +662,34 @@ def init_dwi_denoising_wf(
 
         # The complex-valued path only changes what feeds the denoiser; the denoiser
         # wiring itself is the same either way.
-        if denoise_complex:
+        if denoise_complex or denoise_real_axis:
             phase_to_radians = pe.Node(
                 PhaseToRad(),
                 name='phase_to_radians',
                 n_procs=omp_nthreads,
             )
+            workflow.connect([
+                (inputnode, phase_to_radians, [('dwi_phase_file', 'phase_file')]),
+            ])  # fmt:skip
+        if denoise_complex:
             combine_complex = pe.Node(
                 PolarToComplex(),
                 name='combine_complex',
                 n_procs=omp_nthreads,
             )
             workflow.connect([
-                (inputnode, phase_to_radians, [('dwi_phase_file', 'phase_file')]),
                 (phase_to_radians, combine_complex, [('phase_file', 'phase_file')]),
             ])  # fmt:skip
             chain.feed(combine_complex, 'mag_file')
             chain.advance(combine_complex, 'out_file', is_complex=True)
+        elif denoise_real_axis:
+            # svht_denoise takes the magnitude and phase separately
+            workflow.connect([
+                (phase_to_radians, denoiser, [('phase_file', 'phase_file')]),
+            ])  # fmt:skip
 
         chain.feed(denoiser, 'in_file')
-        chain.advance(denoiser, 'out_file', is_complex=denoise_complex)
+        chain.advance(denoiser, 'out_file', is_complex=denoise_complex or denoise_real_axis)
         # Hold the complex data if unringing can use them; otherwise split here
         if not unring_complex:
             chain.to_magnitude()
@@ -686,6 +736,26 @@ def init_dwi_denoising_wf(
                 name='degibbser',
                 n_procs=omp_nthreads,
             )
+        elif unringing_method == 'svht':
+            svht_pf = _svht_partial_fourier(partial_fourier, phase_encoding_direction)
+            svht_kwargs = {}
+            pf_desc = ''
+            if svht_pf is not None:
+                svht_kwargs['partial_fourier'] = svht_pf
+                pf_desc = (
+                    f', together with the ringing induced by the partial Fourier ({svht_pf}) '
+                    'acquisition [@pfgibbs]'
+                )
+            desc += (
+                f'{last_step}Gibbs ringing was removed from the magnitude data by local '
+                f'subvoxel shifts [@mrdegibbs]{pf_desc}, as implemented in `svht_denoise` '
+                '[@svht_denoise]. '
+            )
+            degibbser = pe.Node(
+                SVHTDeGibbs(nthreads=omp_nthreads, **svht_kwargs),
+                name='degibbser',
+                n_procs=omp_nthreads,
+            )
 
         last_step = 'After unringing, '
 
@@ -726,6 +796,40 @@ def init_dwi_denoising_wf(
     workflow.__desc__ = desc
 
     return workflow
+
+
+# The partial Fourier factors svht_denoise implements; it refuses any other
+_SVHT_PARTIAL_FOURIER = (0.875, 0.75)
+
+
+def _svht_partial_fourier(partial_fourier, phase_encoding_direction):
+    """Resolve the ``-pF`` factor for ``svht_denoise`` unringing.
+
+    Returns ``None`` for full k-space, including when the factor is not recorded.
+    ``svht_denoise`` implements only 7/8 and 6/8, and only along the second voxel
+    axis, so anything else raises rather than silently leaving the ringing in place.
+    """
+    if partial_fourier is None or pd.isna(partial_fourier) or partial_fourier > 0.99:
+        return None
+
+    for factor in _SVHT_PARTIAL_FOURIER:
+        if abs(partial_fourier - factor) < 0.01:
+            break
+    else:
+        raise ValueError(
+            '--unringing-method svht supports partial Fourier factors of 7/8 (0.875) and '
+            f'6/8 (0.75), but this series has a PartialFourier of {partial_fourier}. '
+            'Use --unringing-method rpg instead.'
+        )
+
+    if phase_encoding_direction not in ('j', 'j-'):
+        raise ValueError(
+            '--unringing-method svht corrects partial Fourier ringing only along the j '
+            f'axis, but this series is phase-encoded along {phase_encoding_direction}. '
+            'Use --unringing-method rpg instead.'
+        )
+
+    return factor
 
 
 def _as_list(item):
