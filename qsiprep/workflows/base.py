@@ -934,6 +934,7 @@ to workflows in *QSIPrep*'s documentation]\
             b0_ref_name = f'inputnode.{output_wfname}_b0_ref'
             cnr_name = f'inputnode.{output_wfname}_cnr'
             carpetplot_name = f'inputnode.{output_wfname}_carpetplot_data'
+            hmc_optimization_name = f'inputnode.{output_wfname}_hmc_optimization_data'
             workflow.connect([
                 (dwi_finalize_wf, final_merge_wf, [
                     ('outputnode.bvals_t1', bval_name),
@@ -948,6 +949,10 @@ to workflows in *QSIPrep*'s documentation]\
                     ('outputnode.original_files', original_bids_name),
                     ('outputnode.carpetplot_data', carpetplot_name),
                     ('outputnode.confounds', confounds_name),
+                    # From the preproc, not the finalize, workflow: finalize only
+                    # forwards hmc_optimization_data when it writes derivatives,
+                    # which under a merge it does not.
+                    ('outputnode.hmc_optimization_data', hmc_optimization_name),
                 ]),
             ])  # fmt:skip
 
