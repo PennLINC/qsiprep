@@ -359,6 +359,67 @@ class IterationSummary(SummaryInterface):
         return runtime
 
 
+class MergeIterationSummariesInputSpec(BaseInterfaceInputSpec):
+    iteration_summary_files = InputMultiObject(
+        File(exists=True),
+        mandatory=True,
+        desc='one IterationSummary CSV per correction unit of a merged output',
+    )
+    input_names = traits.List(
+        traits.Str(),
+        desc=(
+            'name of the correction unit each file came from, in order; '
+            'becomes the ``input_name`` column of the merged file'
+        ),
+    )
+
+
+class MergeIterationSummariesOutputSpec(TraitedSpec):
+    iteration_summary_file = File(exists=True, desc='the concatenated per-unit summaries')
+
+
+class MergeIterationSummaries(SimpleInterface):
+    """Concatenate the SHORELine iteration summaries of a merged output's units.
+
+    Under ``--distortion-group-merge`` several correction units are
+    motion-corrected separately and then combined into one output series. Each
+    unit's :class:`IterationSummary` records how its own motion estimates
+    evolved over the SHORELine iterations; the merged output gets one
+    ``hmcOptimization`` derivative, so the per-unit tables are stacked with an
+    ``input_name`` column saying which unit each row describes. Row order
+    follows the order of the inputs, which is the order the units are merged
+    in. Nothing is averaged or re-indexed: the ``iter_num``/``iter_name``
+    columns stay per unit.
+    """
+
+    input_spec = MergeIterationSummariesInputSpec
+    output_spec = MergeIterationSummariesOutputSpec
+
+    def _run_interface(self, runtime):
+        summary_files = self.inputs.iteration_summary_files
+        if isdefined(self.inputs.input_names):
+            names = list(self.inputs.input_names)
+            if len(names) != len(summary_files):
+                raise ValueError(
+                    f'{len(names)} input_names were given for '
+                    f'{len(summary_files)} iteration_summary_files'
+                )
+        else:
+            names = [str(num) for num in range(len(summary_files))]
+
+        frames = []
+        for name, fname in zip(names, summary_files, strict=True):
+            df = pd.read_csv(fname)
+            df.insert(0, 'input_name', name)
+            frames.append(df)
+        combined = pd.concat(frames, axis=0, ignore_index=True)
+
+        out_file = op.join(runtime.cwd, 'merged_iteration_summary.csv')
+        combined.to_csv(out_file, index=False)
+        self._results['iteration_summary_file'] = out_file
+        return runtime
+
+
 class SHORELineReportInputSpec(BaseInterfaceInputSpec):
     iteration_summary = File(exists=True)
     registered_images = InputMultiObject(File(exists=True))

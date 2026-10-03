@@ -63,6 +63,11 @@
   registration of it: on a TRXScan fixture with a known truth that rigid moved a T2w handed
   over 0.8 degrees off the b=0 frame to 5.3 degrees off, and the DWI landed 5.3 deg / 3.8 mm
   off in ACPC space; from the undistorted b=0 the error is 0.4 deg / 0.4 mm.
+* `--distortion-group-merge` with `--hmc-method shoreline` (3dSHORE, more than one iteration)
+  no longer crashes at the merged output's `hmcOptimization` datasink
+  (`DerivativesDataSink requires a value for input 'in_file'`): the merge workflow now stacks
+  the member units' SHORELine iteration summaries (an `input_name` column names the unit) and
+  writes that table, which the per-unit path never wrote under a merge.
 
 ## 26.1.0rc1 (September 29, 2026)
 
