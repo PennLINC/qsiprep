@@ -94,3 +94,19 @@ def test_single_group_subject_skips_the_template_instead_of_failing():
     assert 'Falling back to --dwiref-definition distortion-group' in src
     # and the flag must still be honoured when there ARE enough groups
     assert 'make_dwiref = True' in src
+
+
+def test_dwiref_to_t1_has_no_warp_input():
+    """Test that the dwiref -> T1 transform is accepted only as an affine.
+
+    The registration is linear (--dwi2anat-dof 6 or 12). A warp input used to
+    be declared on every workflow and interface along the way, never produced,
+    and ComposeTransforms copied it into a variable nothing read -- so a warp
+    connected there would have been dropped without a word.
+    """
+    from qsiprep.interfaces.fmap import ApplyJacobianWeights
+    from qsiprep.interfaces.gradients import ComposeTransforms
+
+    for interface in (ComposeTransforms, ApplyJacobianWeights):
+        assert 'dwiref_to_t1_warp' not in interface.input_spec().trait_names()
+        assert 'dwiref_to_t1_affine' in interface.input_spec().trait_names()

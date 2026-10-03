@@ -165,6 +165,56 @@ def test_compose_transforms_exposes_the_sdc_warp_subchain(tmp_path):
     assert got == [coreg]
 
 
+def test_hmc_corrected_stage_names_drop_only_hmc():
+    """Test that an image already in the motion-corrected frame skips only hmc.
+
+    The SHORELine CNR map is computed from motion-corrected volumes, so it needs
+    gradwarp, SDC and coregistration but not volume 0's head-motion transform.
+    """
+    from qsiprep.interfaces.gradients import ComposeTransforms
+
+    stages = list(ComposeTransforms._TRANSFORM_STAGES)
+    assert ComposeTransforms._hmc_corrected_stage_names(stages) == stages[1:]
+    assert ComposeTransforms._hmc_corrected_stage_names(['hmc']) == []
+
+
+def test_compose_transforms_exposes_the_hmc_corrected_subchain(tmp_path):
+    """Test that ComposeTransforms emits the motion-corrected-frame -> output sub-chain."""
+    import SimpleITK as sitk
+
+    from qsiprep.interfaces.gradients import ComposeTransforms
+
+    dwi = str(tmp_path / 'sub-01_dwi.nii.gz')
+    nb.Nifti1Image(np.zeros((4, 4, 4), dtype='float32'), np.eye(4)).to_filename(dwi)
+    ref = str(tmp_path / 'ref.nii.gz')
+    nb.Nifti1Image(np.zeros((4, 4, 4), dtype='float32'), np.eye(4)).to_filename(ref)
+    coreg = str(tmp_path / 'coreg.mat')
+    sitk.WriteTransform(sitk.AffineTransform(3), coreg)
+
+    result = ComposeTransforms(
+        dwi_files=[dwi], reference_image=ref, hmcsdc_dwi_ref_to_t1w_affine=coreg
+    ).run(cwd=str(tmp_path))
+    got = result.outputs.hmc_corrected_transforms
+    got = got if isinstance(got, list) else [got]
+    assert got == [coreg]
+
+
+def test_cnr_map_is_not_moved_by_volume_zero_head_motion():
+    """Test that the CNR map is resampled without volume 0's hmc transform.
+
+    Regression: cnr_tfm took volume 0's full composite. SHORELine's CNR map is
+    built from motion-corrected volumes, so that moved it by volume 0's head
+    motion.
+    """
+    _cfg()
+    from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
+
+    wf = init_dwi_trans_wf(source_file='/data/sub-01_dwi.nii.gz', mem_gb=1)
+    edge = wf._graph.get_edge_data(wf.get_node('compose_transforms'), wf.get_node('cnr_tfm'))
+    assert edge is not None
+    assert edge['connect'] == [('hmc_corrected_transforms', 'transforms')]
+
+
 def _tiny_dwi(path, nvols=4):
     nb.Nifti1Image(np.zeros((4, 4, 4, nvols), dtype='int16'), np.eye(4)).to_filename(str(path))
     stem = str(path).split('.nii')[0]

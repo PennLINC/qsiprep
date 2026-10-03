@@ -105,7 +105,6 @@ def init_dwiref_wf(
                 'template_qc_file',
                 'template_agreement_map',
                 'dwiref_to_t1_affine',
-                'dwiref_to_t1_warp',
                 't1_to_dwiref_affine',
             ]
         ),
