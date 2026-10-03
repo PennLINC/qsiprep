@@ -14,7 +14,8 @@ import pytest
 def _config(force_nocsf):
     from qsiprep import config
 
-    config.execution.sloppy = True
+    # Not sloppy: --sloppy swaps SynthStrip for niimath -skullstrip, which has no no-csf model.
+    config.execution.sloppy = False
     config.execution.output_dir = Path('/tmp/qsiprep_test_out')
     config.execution.skip_anat_based_spatial_normalization = False
     config.nipype.omp_nthreads = 1
@@ -50,10 +51,8 @@ def _connections_into(wf, dest):
 
 
 def _synthstrip_nodes(wf):
-    """Map enclosing synthstrip workflow name -> its (mock) SynthStrip node."""
-    return {
-        n.fullname.split('.')[-2]: n for n in wf._get_all_nodes() if n.name == 'mocksynthstrip'
-    }
+    """Map enclosing synthstrip workflow name -> its SynthStrip node."""
+    return {n.fullname.split('.')[-2]: n for n in wf._get_all_nodes() if n.name == 'synthstrip'}
 
 
 def test_parser_sets_force_nocsf_synthstrip(tmp_path):
