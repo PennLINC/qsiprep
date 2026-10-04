@@ -105,6 +105,7 @@ def test_transform_columns_are_populated_for_float_matrices(tmp_path, template_s
         sio.savemat(
             str(path),
             {'AffineTransform_float_3_3': params.reshape(-1, 1), 'fixed': np.zeros((3, 1))},
+            format='4',  # the MATLAB v4 container ITK and ANTs write and read
         )
         mats.append(str(path))
 

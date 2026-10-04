@@ -9,6 +9,7 @@ import subprocess
 import nibabel as nb
 import nilearn.image as nim
 import numpy as np
+import SimpleITK as sitk
 from nipype.interfaces import ants
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
@@ -1372,14 +1373,6 @@ class DIFFPREPSplitOutputs(SimpleInterface):
     input_spec = _DIFFPREPSplitOutputsInputSpec
     output_spec = _DIFFPREPSplitOutputsOutputSpec
 
-    _identity_itk = (
-        '#Insight Transform File V1.0\n'
-        '#Transform 0\n'
-        'Transform: MatrixOffsetTransformBase_double_3_3\n'
-        'Parameters: 1 0 0 0 1 0 0 0 1 0 0 0\n'
-        'FixedParameters: 0 0 0\n'
-    )
-
     def _run_interface(self, runtime):
         dwi_img = nb.load(self.inputs.corrected_dwi_file)
         nvols = 1 if dwi_img.ndim < 4 else dwi_img.shape[3]
@@ -1426,8 +1419,7 @@ class DIFFPREPSplitOutputs(SimpleInterface):
         forward_transforms = []
         for vol_idx in range(nvols):
             xfm_path = op.join(runtime.cwd, f'diffprep_identity_{vol_idx:04d}.txt')
-            with open(xfm_path, 'w') as fobj:
-                fobj.write(self._identity_itk)
+            sitk.WriteTransform(sitk.AffineTransform(3), xfm_path)
             forward_transforms.append(xfm_path)
 
         self._results['dwi_files'] = per_vol_dwis

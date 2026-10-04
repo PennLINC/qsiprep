@@ -67,8 +67,9 @@ class TemplateQC(SimpleInterface):
         import os
 
         import nibabel as nb
-        from scipy import io as sio
         from scipy import ndimage
+
+        from .itk import linear_transform
 
         template_img = nb.load(self.inputs.template)
         template = np.asanyarray(template_img.dataobj, dtype='float32')
@@ -101,21 +102,13 @@ class TemplateQC(SimpleInterface):
             translation = rotation = float('nan')
             if i < len(transforms):
                 try:
-                    mat = sio.loadmat(transforms[i])
-                    # ITK writes AffineTransform_<float|double>_3_3 depending on
-                    # the precision the registration ran at -- do not hardcode it.
-                    key = next(
-                        k
-                        for k in mat
-                        if k.startswith('AffineTransform') or k.startswith('MatrixOffset')
-                    )
-                    params = np.asarray(mat[key]).ravel()
-                    rot = params[:9].reshape(3, 3)
-                    translation = float(np.linalg.norm(params[9:12]))
+                    xfm = linear_transform(transforms[i])
+                    translation = float(np.linalg.norm(xfm.GetTranslation()))
+                    rot = np.array(xfm.GetMatrix()).reshape(3, 3)
                     # rotation angle of the matrix, in degrees
                     cos = (np.trace(rot) - 1.0) / 2.0
                     rotation = float(np.degrees(np.arccos(np.clip(cos, -1.0, 1.0))))
-                except (KeyError, StopIteration, ValueError, IndexError) as exc:
+                except (RuntimeError, KeyError, StopIteration, ValueError, IndexError) as exc:
                     # QC must never break a run, but a silent NaN column is
                     # useless -- say why it is empty.
                     from nipype import logging

@@ -20,6 +20,7 @@ import shutil
 import nibabel as nb
 import numpy as np
 import pytest
+import SimpleITK as sitk
 from nipype.interfaces import ants
 
 # Deliberately non-commuting, and discriminating in a way that survives the
@@ -31,19 +32,15 @@ from nipype.interfaces import ants
 #
 # The predictions differ in *magnitude* (10 vs 20), so a sign flip cannot turn
 # one into the other.
-_SCALE_2X = 'Parameters: 2 0 0 0 2 0 0 0 2 0 0 0'
-_TRANSLATE_10 = 'Parameters: 1 0 0 0 1 0 0 0 1 10 0 0'
+_SCALE_2X = np.diag([2.0, 2.0, 2.0, 1.0])
+_TRANSLATE_10 = np.array([[1, 0, 0, 10], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]], dtype=float)
 
 
-def _write_itk_affine(path, parameters_line):
-    """Write a 3D ITK affine transform in the text format ANTs reads."""
-    path.write_text(
-        '#Insight Transform File V1.0\n'
-        '#Transform 0\n'
-        'Transform: MatrixOffsetTransformBase_double_3_3\n'
-        f'{parameters_line}\n'
-        'FixedParameters: 0 0 0\n'
-    )
+def _write_itk_affine(path, matrix):
+    """Write a 3D ITK affine transform (zero centre) through SimpleITK."""
+    from qsiprep.interfaces.itk import affine_from_matrix
+
+    sitk.WriteTransform(affine_from_matrix(matrix), str(path))
     return str(path)
 
 

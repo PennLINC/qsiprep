@@ -274,19 +274,23 @@ class CleanupEdgeFilterOutputSpec(TraitedSpec):
 
 
 class CleanupEdgeFilter(SimpleInterface):
-    """Blend despiked edge voxels into the original fieldmap interior.
+    """Blend despiked edge voxels into the original fieldmap interior and extrapolate beyond it.
 
     Tidies the fieldmap edge in nibabel/scipy: the brain mask is eroded with an
     in-plane 3x3 kernel, the eroded interior keeps the original field, and the
     one-voxel rim between the mask and its erosion is filled with the despiked
-    values. Needs no external tools.
+    values. Outside the mask every voxel takes the value of its nearest in-mask
+    voxel, the role FUGUE's ``--unmaskfmap`` played: the distorted EPI brain reaches
+    beyond the undistorted fieldmap brain by up to the displacement, right where the
+    field is strongest, and a field that is zero there leaves that tissue
+    uncorrected. Needs no external tools.
     """
 
     input_spec = CleanupEdgeFilterInputSpec
     output_spec = CleanupEdgeFilterOutputSpec
 
     def _run_interface(self, runtime):
-        from scipy.ndimage import grey_erosion
+        from scipy.ndimage import distance_transform_edt, grey_erosion
 
         fmap_img = nb.load(self.inputs.in_file)
         original = fmap_img.get_fdata(dtype=np.float32)
@@ -297,6 +301,15 @@ class CleanupEdgeFilter(SimpleInterface):
         interior = eroded > 0
         edge = (mask - eroded) >= 0.5  # one-voxel rim = mask minus its erosion
         cleaned = original * interior + despiked * edge
+        covered = interior | edge
+        if covered.any() and not covered.all():
+            nearest = distance_transform_edt(
+                ~covered,
+                sampling=fmap_img.header.get_zooms()[:3],
+                return_distances=False,
+                return_indices=True,
+            )
+            cleaned = cleaned[tuple(nearest)]
 
         out_file = fname_presuffix(self.inputs.in_file, suffix='_edgeclean', newpath=runtime.cwd)
         # Store as float32 so an integer input is not requantised via the source header.

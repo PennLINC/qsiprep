@@ -133,9 +133,16 @@ GRE fieldmaps
 A phase-difference or two-phase fieldmap is unwrapped with ROMEO
 :footcite:p:`romeo` as implemented in niimath :footcite:p:`niimath`, and
 converted to a field in Hz :footcite:p:`jezzard1995`; a Hz fieldmap is
-masked and median-filtered. The magnitude image is registered to the b=0
-reference, and the field is turned into a displacement along the phase
-encoding axis using the series' ``TotalReadoutTime`` and applied with ANTs.
+masked, median-filtered and extrapolated beyond the brain mask (the distorted
+EPI brain reaches past the undistorted fieldmap brain, where the field is
+strongest). The magnitude image is rigidly registered to the
+b=0 reference in two passes: the first against the distorted reference, the
+second against the reference unwarped with the field the first pass brought
+in, since a rigid fit to a distorted image is pulled along the phase encoding
+axis. The field is resampled through the second transform, turned into a
+displacement along the phase encoding axis using the series'
+``TotalReadoutTime`` and applied with ANTs
+(:func:`qsiprep.workflows.fieldmap.unwarp.init_sdc_unwarp_wf`).
 Since 26.1 none of this needs FSL, so GRE fieldmaps work in the FSL-free
 image as well.
 

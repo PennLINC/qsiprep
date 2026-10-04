@@ -1,76 +1,65 @@
 """InvertITKAffine writes the true inverse of ANTs' rigid and affine .mat transforms."""
 
 import numpy as np
-from scipy.io import loadmat, savemat
+import SimpleITK as sitk
 
-from qsiprep.interfaces.itk import InvertITKAffine, _itk_mat_to_matrix
-
-
-def _euler(ax, ay, az):
-    cx, sx, cy, sy, cz, sz = np.cos(ax), np.sin(ax), np.cos(ay), np.sin(ay), np.cos(az), np.sin(az)
-    rz = np.array([[cz, -sz, 0], [sz, cz, 0], [0, 0, 1]])
-    rx = np.array([[1, 0, 0], [0, cx, -sx], [0, sx, cx]])
-    ry = np.array([[cy, 0, sy], [0, 1, 0], [-sy, 0, cy]])
-    return rz @ rx @ ry
+from qsiprep.interfaces.itk import InvertITKAffine, linear_transform, linear_transform_matrix
 
 
-def _check(tmp_path, key, params, fixed):
-    in_file = tmp_path / 'fwd.mat'
-    savemat(
-        in_file,
-        {
-            key: np.asarray(params, float).reshape(-1, 1),
-            'fixed': np.asarray(fixed, float).reshape(-1, 1),
-        },
-    )
-    result = InvertITKAffine(in_file=str(in_file)).run(cwd=str(tmp_path))
-    out = loadmat(result.outputs.out_file)
-    inv = _itk_mat_to_matrix(
-        'AffineTransform_double_3_3', out['AffineTransform_double_3_3'], out['fixed']
-    )
-    fwd = _itk_mat_to_matrix(key, params, fixed)
+def _write_euler(path, rotation, translation, center):
+    xfm = sitk.Euler3DTransform()
+    xfm.SetCenter(center)
+    xfm.SetRotation(*rotation)
+    xfm.SetTranslation(translation)
+    sitk.WriteTransform(xfm, str(path))
+    return str(path)
+
+
+def _write_affine(path, matrix, translation, center):
+    xfm = sitk.AffineTransform(3)
+    xfm.SetCenter(center)
+    xfm.SetMatrix(np.asarray(matrix, float).ravel().tolist())
+    xfm.SetTranslation(translation)
+    sitk.WriteTransform(xfm, str(path))
+    return str(path)
+
+
+def _check(tmp_path, in_file):
+    result = InvertITKAffine(in_file=in_file).run(cwd=str(tmp_path))
+    fwd = linear_transform_matrix(in_file)
+    inv = linear_transform_matrix(result.outputs.out_file)
     assert np.allclose(fwd @ inv, np.eye(4), atol=1e-9)
-    p = np.array([12.0, -30.0, 7.0, 1.0])  # a point mapped forward then back comes home
-    assert np.allclose(inv @ (fwd @ p), p)
+    # a point mapped forward by ITK and back by ITK comes home
+    p = (12.0, -30.0, 7.0)
+    back = sitk.ReadTransform(result.outputs.out_file).TransformPoint(
+        sitk.ReadTransform(in_file).TransformPoint(p)
+    )
+    assert np.allclose(back, p, atol=1e-9)
+    # the output is a plain affine with a zero centre
+    assert np.allclose(linear_transform(result.outputs.out_file).GetCenter(), 0.0)
 
 
 def test_invert_rigid_with_fixed_centre(tmp_path):
     _check(
         tmp_path,
-        'Euler3DTransform_double_3_3',
-        [0.1, -0.05, 0.2, 3.0, -4.0, 1.5],
-        [10.0, -20.0, 5.0],
+        _write_euler(
+            tmp_path / 'fwd.mat', (0.1, -0.05, 0.2), (3.0, -4.0, 1.5), (10.0, -20.0, 5.0)
+        ),
     )
 
 
 def test_invert_affine_with_fixed_centre(tmp_path):
-    mat = _euler(0.02, 0.1, -0.07) @ np.diag([1.05, 0.98, 1.0])
-    _check(
-        tmp_path,
-        'AffineTransform_double_3_3',
-        list(mat.ravel()) + [1.0, 2.0, -3.0],
-        [-5.0, 8.0, 2.0],
-    )
+    rot = sitk.Euler3DTransform()
+    rot.SetRotation(0.02, 0.1, -0.07)
+    mat = np.array(rot.GetMatrix()).reshape(3, 3) @ np.diag([1.05, 0.98, 1.0])
+    _check(tmp_path, _write_affine(tmp_path / 'fwd.mat', mat, (1.0, 2.0, -3.0), (-5.0, 8.0, 2.0)))
 
 
 def test_invert_accepts_a_one_element_list(tmp_path):
     """ANTs' forward_transforms is a list; the dwiref export hands it over as one."""
-    key, params, fixed = (
-        'Euler3DTransform_double_3_3',
-        [0.1, -0.05, 0.2, 3.0, -4.0, 1.5],
-        [1.0, 2.0, 3.0],
+    in_file = _write_euler(
+        tmp_path / 'fwd.mat', (0.1, -0.05, 0.2), (3.0, -4.0, 1.5), (1.0, 2.0, 3.0)
     )
-    in_file = tmp_path / 'fwd.mat'
-    savemat(
-        in_file,
-        {
-            key: np.asarray(params, float).reshape(-1, 1),
-            'fixed': np.asarray(fixed, float).reshape(-1, 1),
-        },
-    )
-    result = InvertITKAffine(in_file=[str(in_file)]).run(cwd=str(tmp_path))
-    out = loadmat(result.outputs.out_file)
-    inv = _itk_mat_to_matrix(
-        'AffineTransform_double_3_3', out['AffineTransform_double_3_3'], out['fixed']
-    )
-    assert np.allclose(_itk_mat_to_matrix(key, params, fixed) @ inv, np.eye(4), atol=1e-9)
+    result = InvertITKAffine(in_file=[in_file]).run(cwd=str(tmp_path))
+    fwd, inv = linear_transform_matrix(in_file), linear_transform_matrix(result.outputs.out_file)
+    assert np.allclose(fwd @ inv, np.eye(4), atol=1e-9)
