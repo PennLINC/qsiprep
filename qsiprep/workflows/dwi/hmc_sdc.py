@@ -216,9 +216,7 @@ def init_qsiprep_hmcsdc_wf(
         apply_hmc_transforms = pe.MapNode(
             ants.ApplyTransforms(
                 dimension=3,
-                interpolation=(
-                    'LanczosWindowedSinc' if not config.execution.sloppy else 'NearestNeighbor'
-                ),
+                interpolation=('LanczosWindowedSinc' if not config.execution.sloppy else 'Linear'),
             ),
             iterfield=['input_image', 'reference_image', 'transforms'],
             name='uncorrect_model_images',

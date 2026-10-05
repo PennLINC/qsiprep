@@ -86,6 +86,9 @@ def run_tests(test_regex, test_mark):
         text=True,
     ).stdout.strip()
     run_str = 'docker run --rm -ti '
+    # QSIPREP_TEST_GPU=1 puts eddy, DIFFPREP and DRBUDDI on the GPU (see test_cli._trxscan_run)
+    if os.environ.get('QSIPREP_TEST_GPU'):
+        run_str += '--gpus all -e QSIPREP_TEST_GPU=1 '
     run_str += f'-v {local_qsiprep}:{mounted_code} '
     run_str += '--entrypoint pytest '
     run_str += 'pennlinc/qsiprep:unstable '

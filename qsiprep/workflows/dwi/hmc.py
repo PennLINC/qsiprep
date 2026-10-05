@@ -185,9 +185,7 @@ def init_dwi_hmc_wf(
     uncorrect_model_images = pe.MapNode(
         ants.ApplyTransforms(
             invert_transform_flags=[True],
-            interpolation=(
-                'LanczosWindowedSinc' if not config.execution.sloppy else 'NearestNeighbor'
-            ),
+            interpolation=('LanczosWindowedSinc' if not config.execution.sloppy else 'Linear'),
         ),
         iterfield=['input_image', 'reference_image', 'transforms'],
         name='uncorrect_model_images',

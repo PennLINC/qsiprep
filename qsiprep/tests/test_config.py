@@ -209,6 +209,9 @@ def test_layout_follows_the_dataset_within_one_process(tmp_path):
     config.execution.work_dir = tmp_path / 'work'
     config.execution.bids_database_dir = None
     config.execution._layout = None
+    # a derived database indexes only the requested participants; an earlier test's label
+    # would hide sub-02
+    config.execution.participant_label = None
 
     config.execution.bids_dir = first
     config.execution.init()

@@ -239,7 +239,7 @@ def test_gradwarp_reportlet_resampling_honours_sloppy(tmp_path):
     finally:
         config.execution.sloppy = False
 
-    assert wf.get_node('corrected_ref').inputs.interpolation == 'NearestNeighbor'
+    assert wf.get_node('corrected_ref').inputs.interpolation == 'Linear'
 
 
 def test_dis3d_builds_no_reportlet(tmp_path):
@@ -1074,7 +1074,7 @@ def test_gradwarp_sdc_resampling_honours_sloppy(tmp_path):
     config.execution.sloppy = True
     try:
         wf = _fsl_wf(tmp_path, _syn_unit(tmp_path))
-        assert wf.get_node('gradwarp_sdc_inputs').inputs.interpolation == 'NearestNeighbor'
+        assert wf.get_node('gradwarp_sdc_inputs').inputs.interpolation == 'Linear'
     finally:
         config.execution.sloppy = False
 
@@ -2054,9 +2054,10 @@ def test_gre_field_sent_to_eddy_is_the_registered_hz_map(tmp_path, monkeypatch):
     wf = _fsl_wf(tmp_path, _phasediff_unit())
     unwarp = wf.get_node('sdc_wf.sdc_unwarp_wf')
 
-    assert _connects(unwarp, 'fmap_apply_wf', 'outputnode', 'outputnode.out_hz', 'out_hz')
-    apply_wf = unwarp.get_node('fmap_apply_wf')
-    assert _connects(apply_wf, 'fmap2ref_apply', 'outputnode', 'output_image', 'out_hz')
+    assert _connects(unwarp, 'choose_pass', 'outputnode', 'out_hz', 'out_hz')
+    for name in ('fmap_apply_pass1_wf', 'fmap_apply_pass2_wf'):
+        apply_wf = unwarp.get_node(name)
+        assert _connects(apply_wf, 'fmap2ref_apply', 'outputnode', 'output_image', 'out_hz')
     assert 'tohz' not in {node.name for node in unwarp._get_all_nodes()}
     assert _connects(wf, 'sdc_wf', 'eddy', 'outputnode.fieldmap_hz', 'field')
 
@@ -2353,6 +2354,14 @@ def test_forced_t2w_reference_is_seeded_by_the_gre_fieldmap(tmp_path, monkeypatc
     assert _connects(seed_wf, 'b0_ref_wf', 'sdc_wf', 'outputnode.ref_image', 'inputnode.b0_ref')
     assert _connects(wf, 't2wreg_b0s', 't2wreg_gre_seed_wf', 'b0_average', 'inputnode.b0_template')
     assert wf.get_node('sdc_wf') is None
+    # The T2w is aligned to the b=0 unwarped by the seed, not to the distorted average
+    assert _connects(
+        wf, 't2wreg_gre_seed_wf', 't2w_to_b0_wf', 'outputnode.b0_ref', 'inputnode.b0_ref'
+    )
+    assert _connects(
+        wf, 't2wreg_gre_seed_wf', 't2w_to_b0_wf', 'outputnode.b0_mask', 'inputnode.b0_mask'
+    )
+    assert not _connects(wf, 't2wreg_b0s', 't2w_to_b0_wf', 'b0_average', 'inputnode.b0_ref')
     assert wf.get_node('outputnode').inputs.sdc_method == 'T2Wreg (GRE-initialized)'
     desc = ' '.join(wf.visit_desc().split())
     assert "to the subject's T2-weighted image" in desc

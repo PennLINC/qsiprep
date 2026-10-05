@@ -378,8 +378,13 @@ def init_diffprep_hmc_wf(
         ),
         correction_mode=effective_correction_mode,
         b0_id=diffprep_cfg['b0_id'],
-        # --sloppy: the T2Wreg (EPIREG) stage on a 2.5 mm grid, as DRBUDDI already runs
+        # --sloppy: the T2Wreg (EPIREG) stage on the sloppy working grid, with the
+        # matching short stage schedule.
         **sloppy_epi_working_res(),
+        **({'sloppy': True} if use_t2wreg and config.execution.sloppy else {}),
+        # Both T2Wreg targets (the aligned T2w, the synthetic b=0) are already in the
+        # b=0 frame; EPIREG's own rigid registration would only move them off it.
+        **({'disable_initial_rigid': True} if use_t2wreg else {}),
         is_human_brain=diffprep_cfg['is_human_brain'],
         rot_eddy_center=diffprep_cfg['rot_eddy_center'],
         extra_args=diffprep_cfg['extra_args'],
@@ -473,9 +478,11 @@ def init_diffprep_hmc_wf(
             ])  # fmt:skip
             pre_hmc_b0s = raw_b0s
         elif use_t2wreg:
-            # EPIREG's internal rigid registration is center-of-mass
-            # initialized, so hand it a T2w already rotated into the b=0
-            # frame (antsAI rotation search against the raw b=0 average).
+            # EPIREG's internal rigid registration is center-of-mass initialized and
+            # does not refine a coarse start, so hand it a T2w already registered into
+            # the b=0 frame. The target is the raw b=0 average, or, with a GRE seed, the
+            # b=0 unwarped by it: a rigid fit to a distorted b=0 is pulled along the
+            # phase-encoding axis.
             t2wreg_b0s = pe.Node(
                 ExtractB0s(b0_threshold=config.workflow.b0_threshold), name='t2wreg_b0s'
             )
@@ -485,12 +492,15 @@ def init_diffprep_hmc_wf(
                     ('dwi_file', 'dwi_series'),
                     ('bval_file', 'bval_file'),
                 ]),
-                (t2wreg_b0s, t2w_to_b0_wf, [('b0_average', 'inputnode.b0_ref')]),
                 (inputnode, t2w_to_b0_wf, [('t2w_unfatsat', 'inputnode.structural_image')]),
                 (t2w_to_b0_wf, diffprep, [
                     ('outputnode.structural_aligned', 'structural_image'),
                 ]),
             ])  # fmt:skip
+            if not gre_t2wreg_init:
+                workflow.connect([
+                    (t2wreg_b0s, t2w_to_b0_wf, [('b0_average', 'inputnode.b0_ref')]),
+                ])  # fmt:skip
             pre_hmc_b0s = t2wreg_b0s
 
         if gre_t2wreg_init:
@@ -507,6 +517,13 @@ def init_diffprep_hmc_wf(
                 ]),
                 (gre_seed_wf, diffprep, [('outputnode.out_warp', 'epireg_initial_field')]),
             ])  # fmt:skip
+            if not synb0_target:
+                workflow.connect([
+                    (gre_seed_wf, t2w_to_b0_wf, [
+                        ('outputnode.b0_ref', 'inputnode.b0_ref'),
+                        ('outputnode.b0_mask', 'inputnode.b0_mask'),
+                    ]),
+                ])  # fmt:skip
 
         if use_t2wreg and has_gradwarp:
             # The EPI stage registers a gradwarp-corrected b=0 (TORTOISE with the EPIREG

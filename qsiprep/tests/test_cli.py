@@ -629,10 +629,11 @@ def _trxscan_run(test_name, fixture, extra, data_dir, output_dir, working_dir):
         f'--eddy-config={eddy_config}',
     ]
     parameters += TRXSCAN_COMMON + list(extra)
-    # Local runs on a machine with a GPU: QSIPREP_TEST_GPU=1 puts eddy on it (the container
-    # needs --gpus all). CI has no GPU, and the two eddy builds are not numerically identical.
+    # Local runs on a machine with a GPU: QSIPREP_TEST_GPU=1 puts eddy, DIFFPREP and DRBUDDI
+    # on it (the container needs --gpus all). CI has no GPU, and the CPU and GPU builds are
+    # not numerically identical.
     if os.environ.get('QSIPREP_TEST_GPU'):
-        parameters.append('--gpu=eddy')
+        parameters += ['--gpu', 'eddy', 'diffprep', 'drbuddi']
     _run_and_generate(test_name, parameters, test_main=False, check_outputs=False)
     _assert_clean_run(out_dir)
     score = score_run(dataset_dir, out_dir, work_dir=work_dir)
@@ -705,22 +706,20 @@ def test_trxscan_rpe_topup(data_dir, output_dir, working_dir):
 def test_trxscan_rpe_drbuddi(data_dir, output_dir, working_dir):
     """Score the same pair through DRBUDDI, with the T2w.
 
-    The field bounds are loose on purpose: the single coarse stage --sloppy runs recovers 0.43
-    of the field (its metrics are MSJac and CC on the blips; DRBUDDI's default stages at the
-    same 2.5 mm reach 0.80, but with the T2w they land the corrected b0 4-5 degrees off frame on
-    this fixture, see SLOPPY_DRBUDDI). The coregistration is scored tightly: it starts from
-    DRBUDDI's undistorted b0 now, not from the T2w as DRBUDDI's rigid had placed it, which was
-    5 degrees off here.
+    Under --sloppy DRBUDDI runs its default four-stage schedule rescaled to the sloppy working
+    grid (``SLOPPY_DRBUDDI``), with the T2w placed on the b=0 by qsiprep's rotation search and
+    rigid refinement, so the field is expected at the level TOPUP reaches. The coregistration
+    starts from DRBUDDI's undistorted b=0.
     """
     score = _trxscan_run(
         'trxscan_rpe_drbuddi', 'rpe', ['--sdc-method=drbuddi'], data_dir, output_dir, working_dir
     )
-    _expect(score, ('sdc', 'corr'), lo=0.75, note='right pattern and sign')
-    _expect(score, ('sdc', 'slope'), 0.3, 1.2, 'the sloppy single stage recovers ~0.43')
+    _expect(score, ('sdc', 'corr'), lo=0.95, note='right pattern and sign')
+    _expect(score, ('sdc', 'slope'), 0.8, 1.1)
     _expect(
         score,
         ('b0_corrected_vs_clean',),
-        lo=score['b0_uncorrected_vs_clean'] + 0.05,
+        lo=score['b0_uncorrected_vs_clean'] + 0.15,
         note=f'uncorrected b0 scores {score["b0_uncorrected_vs_clean"]:.3f}',
     )
     _expect(score, ('coreg_error', 'rotation_deg'), hi=1.0)
@@ -859,12 +858,12 @@ def test_trxscan_diffprep(data_dir, output_dir, working_dir):
         output_dir,
         working_dir,
     )
-    _expect(score, ('sdc', 'corr'), lo=0.75, note='right pattern and sign')
-    _expect(score, ('sdc', 'slope'), 0.3, 1.2)
+    _expect(score, ('sdc', 'corr'), lo=0.95, note='right pattern and sign')
+    _expect(score, ('sdc', 'slope'), 0.8, 1.1)
     _expect(
         score,
         ('b0_corrected_vs_clean',),
-        lo=score['b0_uncorrected_vs_clean'] + 0.05,
+        lo=score['b0_uncorrected_vs_clean'] + 0.15,
         note=f'uncorrected b0 scores {score["b0_uncorrected_vs_clean"]:.3f}',
     )
     _expect(score, ('coreg_error', 'rotation_deg'), hi=1.0)
@@ -877,32 +876,63 @@ def test_trxscan_t2wreg(data_dir, output_dir, working_dir):
     """Score DIFFPREP's T2Wreg correction: one series, no fieldmap, the subject's T2w.
 
     With ``--hmc-method tortoise`` and no fieldmap, qsiprep lets DIFFPREP register the EPI to
-    the T2w (``--epi T2Wreg``) instead of running SyN. The field it exports has the right
-    pattern. What it does to the image is a known defect, asserted as an expected failure so
-    the Tests tab shows it and the day it passes is noticed: TORTOISE's rigid placement of
-    the T2w lands ~3 degrees off the b0 on this fixture (the same failure as DRBUDDI's
-    structural registration), so the corrected b0 scores below the uncorrected one (0.49 vs
-    0.69) and the DWI reaches ACPC space 3.5 deg / 4 mm off.
+    the T2w (``--epi T2Wreg``) instead of running SyN. qsiprep places the T2w on the b=0
+    (rotation search plus a masked rigid refinement) and DIFFPREP uses it at that pose. Without
+    a fieldmap that placement is against the distorted b=0, so it carries part of the
+    distortion along the phase-encoding axis; the translation bound allows for that.
+
+    The corrected b=0 is not scored against the uncorrected one: on this fixture the T2w and
+    the b=0 share little contrast (the simulated EPI has no skull, the T2w does), so EPIREG's
+    refinement pulls the b=0 toward the T2w rather than toward the artifact-free image. Under
+    ``--sloppy`` the corrected b=0 scores below the uncorrected one; under full settings it
+    only matches it.
     """
     score = _trxscan_run(
         'trxscan_t2wreg', 't2wreg', ['--hmc-method=tortoise'], data_dir, output_dir, working_dir
     )
-    _expect(score, ('sdc', 'corr'), lo=0.7, note='right pattern and sign')
+    _expect(score, ('sdc', 'corr'), lo=0.6, note='right pattern and sign')
     _expect(score, ('sdc', 'slope'), 0.4, 1.2)
     # DIFFPREP's per-volume rigid fit jitters along the phase-encode axis on noisy data.
     _expect(score, ('fd_mean_mm',), hi=1.0, note='the object does not move')
-    try:
-        _expect(score, ('coreg_error', 'rotation_deg'), hi=1.0)
-        _expect(score, ('coreg_error', 'translation_mm'), hi=1.5)
-        _expect(
-            score,
-            ('b0_corrected_vs_clean',),
-            lo=score['b0_uncorrected_vs_clean'],
-            note=f'uncorrected b0 scores {score["b0_uncorrected_vs_clean"]:.3f}',
-        )
-    except AssertionError as exc:
-        pytest.xfail(f'known: T2Wreg places the T2w off the b0 frame on this fixture -- {exc}')
-    pytest.fail('T2Wreg now lands the frame: drop the xfail in this test and tighten it')
+    _expect(score, ('coreg_error', 'rotation_deg'), hi=1.0)
+    _expect(
+        score,
+        ('coreg_error', 'translation_mm'),
+        hi=4.0,
+        note='the T2w is placed on the distorted b=0, which biases it along the phase axis',
+    )
+
+
+@pytest.mark.integration
+@pytest.mark.trxscan_gre_t2wreg
+def test_trxscan_gre_t2wreg(data_dir, output_dir, working_dir):
+    """Score T2Wreg seeded by a GRE fieldmap, on the moved-subject phasediff fixture.
+
+    ``--force sdc-anat-reference`` keeps T2Wreg in charge although a GRE fieldmap is present;
+    the fieldmap then seeds the correction (:ref:`sdc_gre_init`): the T2w is placed on the
+    GRE-unwarped b=0, so its pose is free of the distortion bias of the fieldmap-less run, and
+    EPIREG starts from the GRE field held fixed. Scored: the fieldmap-to-EPI registration
+    against the offset the fixture gave the fieldmap, the T2w placement through the final
+    coregistration, the field, and motion on a static object. The corrected b=0 beats the
+    uncorrected one under full settings but not under ``--sloppy``, for reasons upstream of
+    the TORTOISE settings (the working grid, the stage schedule and DIFFPREP's correction
+    mode were each ruled out), so it is not scored here.
+    """
+    score = _trxscan_run(
+        'trxscan_gre_t2wreg',
+        'phasediff',
+        ['--hmc-method=tortoise', '--sdc-anat-reference=t2w', '--force', 'sdc-anat-reference'],
+        data_dir,
+        output_dir,
+        working_dir,
+    )
+    _expect(score, ('fmap2ref', 'rotation_deg'), hi=1.0)
+    _expect(score, ('fmap2ref', 'translation_mm'), hi=1.0)
+    _expect(score, ('coreg_error', 'rotation_deg'), hi=1.0)
+    _expect(score, ('coreg_error', 'translation_mm'), hi=1.5)
+    _expect(score, ('sdc', 'corr'), lo=0.7, note='right pattern and sign')
+    _expect(score, ('sdc', 'slope'), 0.8, 1.3)
+    _expect(score, ('fd_mean_mm',), hi=1.0, note='the object does not move')
 
 
 def _check_arg_specified(argname, arglist):

@@ -117,8 +117,6 @@ def test_fieldmap_coreg_reportlet_is_its_own_node(monkeypatch):
     assert _connect(wf, 'inputnode', 'fmap_ref2ref') == [('fmap_ref', 'input_image')]
     assert _connect(wf, 'guard_refinement', 'fmap_ref2ref') == [('out_transform', 'transforms')]
     assert _connect(wf, 'mask_unwarped_ref', 'fmap2ref_rpt') == [('out_file', 'after')]
-    assert _connect(wf, 'fmap_apply_wf', 'mask_unwarped_ref') == [
-        ('outputnode.out_reference', 'in_file')
-    ]
+    assert _connect(wf, 'choose_pass', 'mask_unwarped_ref') == [('out_reference', 'in_file')]
     assert _connect(wf, 'inputnode', 'mask_unwarped_ref') == [('in_mask', 'in_mask')]
     assert _connect(wf, 'fmap2ref_rpt', 'ds_report_reg') == [('out_report', 'in_file')]

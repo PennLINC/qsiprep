@@ -48,9 +48,9 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
     The fieldmap's magnitude image is registered to the EPI reference twice. The first
     pass registers it to the distorted reference; the field it brings in unwarps the
     reference, and the second pass registers the magnitude to that unwarped reference,
-    starting from the first transform. The field is then resampled through the second
-    transform, unless that refinement ran away from its start (then through the first).
-    See :func:`init_fmap_apply_wf` for the field-to-warp conversion.
+    starting from the first transform. Each pass is scored by the registration metric on
+    its own unwarped reference and the better one is used. See
+    :func:`init_fmap_apply_wf` for the field-to-warp conversion.
 
     It also calculates a new mask for the input dataset that takes into account the distortions.
     The mask is restricted to the field of view of the fieldmap since outside of it corrections
@@ -135,9 +135,11 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
     if config.execution.sloppy:
         ants_settings = str(load_data('fmap-any_registration_testing.json'))
     fmap2ref_reg = pe.Node(
-        ants.Registration(from_file=ants_settings), name='fmap2ref_reg', n_procs=omp_nthreads
+        ants.Registration(from_file=ants_settings, output_warped_image=True),
+        name='fmap2ref_reg',
+        n_procs=omp_nthreads,
     )
-    fmap_apply_pass1_wf = init_fmap_apply_wf(name='fmap_apply_pass1_wf')
+    fmap_apply_pass1_wf = init_fmap_apply_wf(name='fmap_apply_pass1_wf', generate_report=True)
 
     # A rigid fit of an undistorted magnitude to a distorted b=0 splits the difference between
     # the stretched and the compressed side: a shift along the phase-encoding axis. The second
@@ -145,15 +147,46 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
     # transform. The EPI mask is reused as is; dilating it to cover tissue the unwarping moved
     # made the fit worse.
     fmap2ref_reg2 = pe.Node(
-        ants.Registration(from_file=ants_settings),
+        ants.Registration(from_file=ants_settings, output_warped_image=True),
         name='fmap2ref_reg2',
         n_procs=omp_nthreads,
     )
-    # The refinement corrects a shift of the order of the distortion, so a second pass that
-    # lands far from the first has run away (random metric sampling occasionally does) and
-    # the first transform is kept instead.
+    fmap_apply_pass2_wf = init_fmap_apply_wf(name='fmap_apply_pass2_wf', generate_report=True)
+
+    # Either pass can fail (random metric sampling): the first can land far off and the second
+    # recover, or the second can run away from a good first. Each is scored by the registration
+    # metric on its own target, the reference unwarped with the field in that pose, and the
+    # better one is used downstream.
+    similarity = {
+        'dimension': 3,
+        'metric': 'MI',
+        'metric_weight': 1.0,
+        'radius_or_number_of_bins': 32,
+        'sampling_strategy': 'Regular',
+        'sampling_percentage': 1.0,
+    }
+    sim_pass1 = pe.Node(ants.MeasureImageSimilarity(**similarity), name='sim_pass1')
+    sim_pass2 = pe.Node(ants.MeasureImageSimilarity(**similarity), name='sim_pass2')
     guard_refinement = pe.Node(GuardRefinedTransform(), name='guard_refinement')
-    fmap_apply_wf = init_fmap_apply_wf(name='fmap_apply_wf', generate_report=True)
+    choose_pass = pe.Node(
+        niu.Function(
+            function=_choose_pass,
+            input_names=[
+                'accepted',
+                'hz1',
+                'hz2',
+                'warp1',
+                'warp2',
+                'reference1',
+                'reference2',
+                'report1',
+                'report2',
+            ],
+            output_names=['out_hz', 'out_warp', 'out_reference', 'out_report'],
+        ),
+        name='choose_pass',
+        run_without_submitting=True,
+    )
 
     # Flicker the unwarped EPI reference (brain-masked, so the cuts sit on the brain) against
     # the fieldmap reference resampled onto it through the final transform.
@@ -215,36 +248,58 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
         ]),
         (fmap_apply_pass1_wf, fmap2ref_reg2, [('outputnode.out_reference', 'fixed_image')]),
         (fmap2ref_reg, fmap2ref_reg2, [('composite_transform', 'initial_moving_transform')]),
-        (fmap2ref_reg, guard_refinement, [('composite_transform', 'initial_transform')]),
-        (fmap2ref_reg2, guard_refinement, [('composite_transform', 'refined_transform')]),
-        (inputnode, guard_refinement, [('in_reference', 'reference_image')]),
-        (inputnode, fmap_apply_wf, [
+        (inputnode, fmap_apply_pass2_wf, [
             ('in_reference', 'inputnode.in_reference'),
             ('metadata', 'inputnode.metadata'),
             ('fmap', 'inputnode.fmap'),
         ]),
-        (guard_refinement, fmap_apply_wf, [('out_transform', 'inputnode.transforms')]),
-        (fmap_apply_wf, outputnode, [
-            ('outputnode.out_hz', 'out_hz'),
-            ('outputnode.out_warp', 'out_warp'),
+        (fmap2ref_reg2, fmap_apply_pass2_wf, [('composite_transform', 'inputnode.transforms')]),
+        # which pass to use
+        (fmap_apply_pass1_wf, sim_pass1, [('outputnode.out_reference', 'fixed_image')]),
+        (fmap2ref_reg, sim_pass1, [('warped_image', 'moving_image')]),
+        (inputnode, sim_pass1, [('in_mask', 'fixed_image_mask')]),
+        (fmap_apply_pass2_wf, sim_pass2, [('outputnode.out_reference', 'fixed_image')]),
+        (fmap2ref_reg2, sim_pass2, [('warped_image', 'moving_image')]),
+        (inputnode, sim_pass2, [('in_mask', 'fixed_image_mask')]),
+        (fmap2ref_reg, guard_refinement, [('composite_transform', 'initial_transform')]),
+        (fmap2ref_reg2, guard_refinement, [('composite_transform', 'refined_transform')]),
+        (sim_pass1, guard_refinement, [('similarity', 'initial_similarity')]),
+        (sim_pass2, guard_refinement, [('similarity', 'refined_similarity')]),
+        (inputnode, guard_refinement, [('in_reference', 'reference_image')]),
+        (guard_refinement, choose_pass, [('accepted', 'accepted')]),
+        (fmap_apply_pass1_wf, choose_pass, [
+            ('outputnode.out_hz', 'hz1'),
+            ('outputnode.out_warp', 'warp1'),
+            ('outputnode.out_reference', 'reference1'),
+            ('outputnode.out_report', 'report1'),
+        ]),
+        (fmap_apply_pass2_wf, choose_pass, [
+            ('outputnode.out_hz', 'hz2'),
+            ('outputnode.out_warp', 'warp2'),
+            ('outputnode.out_reference', 'reference2'),
+            ('outputnode.out_report', 'report2'),
+        ]),
+        (choose_pass, outputnode, [
+            ('out_hz', 'out_hz'),
+            ('out_warp', 'out_warp'),
         ]),
         # reports
         (inputnode, fmap_ref2ref, [('fmap_ref', 'input_image')]),
-        (fmap_apply_wf, fmap_ref2ref, [('outputnode.out_reference', 'reference_image')]),
+        (choose_pass, fmap_ref2ref, [('out_reference', 'reference_image')]),
         (guard_refinement, fmap_ref2ref, [('out_transform', 'transforms')]),
-        (fmap_apply_wf, mask_unwarped_ref, [('outputnode.out_reference', 'in_file')]),
+        (choose_pass, mask_unwarped_ref, [('out_reference', 'in_file')]),
         (inputnode, mask_unwarped_ref, [('in_mask', 'in_mask')]),
         (fmap_ref2ref, fmap2ref_rpt, [('output_image', 'before')]),
         (mask_unwarped_ref, fmap2ref_rpt, [('out_file', 'after')]),
         (fmap2ref_rpt, ds_report_reg, [('out_report', 'in_file')]),
-        (fmap_apply_wf, ds_report_reg_vsm, [('outputnode.out_report', 'in_file')]),
+        (choose_pass, ds_report_reg_vsm, [('out_report', 'in_file')]),
         # crop the unwarped reference to the fieldmap's field of view
         (inputnode, fieldmap_fov_mask, [('fmap_ref', 'in_file')]),
         (fieldmap_fov_mask, fmap_fov2ref_apply, [('out_file', 'input_image')]),
         (inputnode, fmap_fov2ref_apply, [('in_reference', 'reference_image')]),
         (guard_refinement, fmap_fov2ref_apply, [('out_transform', 'transforms')]),
         (fmap_fov2ref_apply, apply_fov_mask, [('output_image', 'in_mask')]),
-        (fmap_apply_wf, apply_fov_mask, [('outputnode.out_reference', 'in_file')]),
+        (choose_pass, apply_fov_mask, [('out_reference', 'in_file')]),
         (apply_fov_mask, outputnode, [
             ('out_file', 'out_reference'),
             ('out_file', 'out_reference_brain'),
@@ -444,3 +499,10 @@ def init_fmap_unwarp_report_wf(name='fmap_unwarp_report_wf'):
 
 def _get_pedir_bids(in_dict):
     return in_dict['PhaseEncodingDirection']
+
+
+def _choose_pass(accepted, hz1, hz2, warp1, warp2, reference1, reference2, report1, report2):
+    """Return the second pass's outputs when it was accepted, the first pass's otherwise."""
+    if accepted:
+        return hz2, warp2, reference2, report2
+    return hz1, warp1, reference1, report1

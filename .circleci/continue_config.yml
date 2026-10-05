@@ -606,6 +606,7 @@ workflows:
                 - trxscan_offsets
                 - trxscan_diffprep
                 - trxscan_t2wreg
+                - trxscan_gre_t2wreg
           requires: [image_prep, get_data, gen_trxscan_fixtures]
           filters: *default_filters
 
@@ -627,6 +628,7 @@ workflows:
             - trxscan_offsets
             - trxscan_diffprep
             - trxscan_t2wreg
+            - trxscan_gre_t2wreg
             - unit_tests
           filters: *default_filters
 

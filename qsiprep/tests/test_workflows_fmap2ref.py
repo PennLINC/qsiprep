@@ -71,37 +71,45 @@ def test_second_pass_registers_to_the_unwarped_reference(unwarp_wf):
     assert second.metric == first.metric
 
 
-def test_first_field_only_feeds_the_second_registration(unwarp_wf):
-    """The first pass's field unwarps the reference for pass 2 and nothing else."""
+def test_each_pass_applies_its_own_transform(unwarp_wf):
     pass1 = _sources(unwarp_wf, 'fmap_apply_pass1_wf')
     assert pass1['inputnode.transforms'] == ('fmap2ref_reg', 'composite_transform')
-    pass1_node = unwarp_wf.get_node('fmap_apply_pass1_wf')
-    consumers = {v.name for u, v in unwarp_wf._graph.out_edges(pass1_node)}
-    assert consumers == {'fmap2ref_reg2'}
+    pass2 = _sources(unwarp_wf, 'fmap_apply_pass2_wf')
+    assert pass2['inputnode.transforms'] == ('fmap2ref_reg2', 'composite_transform')
+    assert pass2['inputnode.fmap'] == ('inputnode', 'fmap')
 
 
-def test_refinement_is_guarded_against_running_away(unwarp_wf):
+def test_passes_are_scored_on_their_own_unwarped_reference(unwarp_wf):
+    """Each pass's metric compares its warped magnitude with the reference it unwarped."""
     from qsiprep.interfaces.itk import GuardRefinedTransform
 
+    for n, reg, apply_wf in (
+        (1, 'fmap2ref_reg', 'fmap_apply_pass1_wf'),
+        (2, 'fmap2ref_reg2', 'fmap_apply_pass2_wf'),
+    ):
+        sim = _sources(unwarp_wf, f'sim_pass{n}')
+        assert sim['fixed_image'] == (apply_wf, 'outputnode.out_reference')
+        assert sim['moving_image'] == (reg, 'warped_image')
+        assert sim['fixed_image_mask'] == ('inputnode', 'in_mask')
     assert type(unwarp_wf.get_node('guard_refinement').interface) is GuardRefinedTransform
     guard = _sources(unwarp_wf, 'guard_refinement')
     assert guard['initial_transform'] == ('fmap2ref_reg', 'composite_transform')
     assert guard['refined_transform'] == ('fmap2ref_reg2', 'composite_transform')
-    assert guard['reference_image'] == ('inputnode', 'in_reference')
+    assert guard['initial_similarity'] == ('sim_pass1', 'similarity')
+    assert guard['refined_similarity'] == ('sim_pass2', 'similarity')
 
 
-def test_outputs_come_from_the_guarded_second_transform(unwarp_wf):
-    final = _sources(unwarp_wf, 'fmap_apply_wf')
-    assert final['inputnode.transforms'] == ('guard_refinement', 'out_transform')
-    assert final['inputnode.fmap'] == ('inputnode', 'fmap')
+def test_outputs_come_from_the_chosen_pass(unwarp_wf):
+    choose = _sources(unwarp_wf, 'choose_pass')
+    assert choose['accepted'] == ('guard_refinement', 'accepted')
+    assert choose['hz1'] == ('fmap_apply_pass1_wf', 'outputnode.out_hz')
+    assert choose['hz2'] == ('fmap_apply_pass2_wf', 'outputnode.out_hz')
+    assert choose['warp2'] == ('fmap_apply_pass2_wf', 'outputnode.out_warp')
     out = _sources(unwarp_wf, 'outputnode')
-    assert out['out_hz'] == ('fmap_apply_wf', 'outputnode.out_hz')
-    assert out['out_warp'] == ('fmap_apply_wf', 'outputnode.out_warp')
+    assert out['out_hz'] == ('choose_pass', 'out_hz')
+    assert out['out_warp'] == ('choose_pass', 'out_warp')
     assert out['out_reference'] == ('apply_fov_mask', 'out_file')
-    assert _sources(unwarp_wf, 'apply_fov_mask')['in_file'] == (
-        'fmap_apply_wf',
-        'outputnode.out_reference',
-    )
+    assert _sources(unwarp_wf, 'apply_fov_mask')['in_file'] == ('choose_pass', 'out_reference')
     assert _sources(unwarp_wf, 'fmap_fov2ref_apply')['transforms'] == (
         'guard_refinement',
         'out_transform',

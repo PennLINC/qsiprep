@@ -91,9 +91,10 @@ motion correction. With reverse phase-encoded DWI *series* it uses the b=0
 image and the fractional anisotropy image of each direction together, in a
 multi-modal registration; with a lone reverse b=0 (an ``epi`` fieldmap) it
 registers the b=0 images. A T2w image is added to the registration when one
-is available and ``t2w`` is not ignored; it is first rotated into the b=0
-frame by an ``antsAI`` rotation search (see :ref:`b0_reg`), because
-DRBUDDI's own rigid initialization cannot recover large rotations. Intensities are then adjusted with
+is available and ``t2w`` is not ignored; it is first placed in the b=0
+frame by an ``antsAI`` rotation search followed by a masked rigid
+``antsRegistration`` (see :ref:`b0_reg`), because DRBUDDI's own rigid
+initialization cannot recover large rotations. Intensities are then adjusted with
 TORTOISE's least-squares restoration (see :ref:`jacobian_methods`).
 
 DRBUDDI runs after ``eddy``, DIFFPREP or SHORELine, and processes exactly one
@@ -232,10 +233,15 @@ T2Wreg
 
 TORTOISE's T2Wreg (``--epi T2Wreg`` in DIFFPREP) nonlinearly registers the
 b=0 to the subject's T2w image, or to the synthetic b=0 above, in the same
-run as head motion correction. The T2w is rotated into the b=0 frame by an
-``antsAI`` rotation search first, for the same reason as with DRBUDDI. It is only available with
-``--hmc-method tortoise``. Its correction is applied without Jacobian
-modulation, as in TORTOISE; ``--force jacobian`` modulates it anyway.
+run as head motion correction. The T2w is placed in the b=0 frame first, as
+with DRBUDDI: an ``antsAI`` rotation search, then a masked rigid
+``antsRegistration`` to the b=0 (to the GRE-unwarped b=0 when a GRE fieldmap
+seeds the correction, :ref:`sdc_gre_init`). T2Wreg then uses the T2w at that
+pose (``--DRBUDDI_disable_initial_rigid``) rather than re-registering it,
+since its own rigid registration to the distorted b=0 is biased by the
+distortion. It is only available with ``--hmc-method tortoise``. Its
+correction is applied without Jacobian modulation, as in TORTOISE;
+``--force jacobian`` modulates it anyway.
 
 
 .. _sdc_syn:

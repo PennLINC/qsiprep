@@ -105,6 +105,34 @@ def test_diffprep_cmdline_t2wreg(tmp_path):
     assert '--epi T2Wreg' in cmd
     assert f'-s {t2w}' in cmd
     assert '--epi off' not in cmd
+    assert '--DRBUDDI_disable_initial_rigid' not in cmd
+    assert '--DRBUDDI_stage' not in cmd
+
+
+def test_diffprep_t2wreg_structural_as_given_and_sloppy_stages(tmp_path):
+    """Test the T2Wreg flags qsiprep adds when it has pre-aligned the structural.
+
+    ``disable_initial_rigid`` keeps EPIREG from re-registering a structural that
+    is already on the b=0; ``sloppy`` swaps EPIREG's built-in stage schedule
+    for the short one. Both ride on DRBUDDI's parser, which TORTOISEProcess shares.
+    """
+    from qsiprep.interfaces.tortoise import DIFFPREP
+
+    dwi, bmtxt, json_file = _diffprep_siblings(tmp_path)
+    t2w = tmp_path / 't2w.nii'
+    _write_dummy_nii(t2w, nvols=1)
+    kwargs = {
+        'dwi_file': str(dwi),
+        'bmtxt_file': str(bmtxt),
+        'json_file': str(json_file),
+        'correction_mode': 'motion',
+        'epi_mode': 'T2Wreg',
+        'structural_image': str(t2w),
+    }
+    cmd = DIFFPREP(disable_initial_rigid=True, sloppy=True, **kwargs).cmdline
+    assert '--DRBUDDI_disable_initial_rigid 1' in cmd
+    assert cmd.count('--DRBUDDI_stage') == 6
+    assert '--epi T2Wreg' in cmd
 
 
 def test_diffprep_t2wreg_requires_structural(tmp_path):
@@ -1022,10 +1050,25 @@ def test_init_diffprep_hmc_wf_t2wreg():
 
     No fieldmap + T2w -> TORTOISE T2Wreg (sdc_method='T2Wreg').
     """
-    _base_config()
+    config = _base_config()
     wf = _build(_make_unit(None), t2w_sdc=True)
-    assert wf.get_node('diffprep').inputs.epi_mode == 'T2Wreg'
+    diffprep = wf.get_node('diffprep')
+    assert diffprep.inputs.epi_mode == 'T2Wreg'
     assert wf.get_node('outputnode').inputs.sdc_method == 'T2Wreg'
+    # the T2w arrives registered to the b=0, so EPIREG uses it at that pose
+    assert diffprep.inputs.disable_initial_rigid is True
+    assert not isdefined(diffprep.inputs.sloppy)
+
+    try:
+        config.execution.sloppy = True
+        sloppy_t2wreg = _build(_make_unit(None), t2w_sdc=True, name='sloppy_t2wreg')
+        assert sloppy_t2wreg.get_node('diffprep').inputs.sloppy is True
+        # the short EPIREG schedule is for T2Wreg only
+        sloppy_hmc = _build(_make_unit(None), t2w_sdc=False, name='sloppy_hmc')
+        assert not isdefined(sloppy_hmc.get_node('diffprep').inputs.sloppy)
+        assert not isdefined(sloppy_hmc.get_node('diffprep').inputs.disable_initial_rigid)
+    finally:
+        config.execution.sloppy = False
 
 
 def _connect_fields(wf, src, dst):
@@ -1304,21 +1347,14 @@ def test_init_diffprep_hmc_wf_rpe_series_pe_axis(tmp_path):
     assert split.inputs.pe_axis == 'j'
 
 
-def test_drbuddi_never_sends_parser_disabled_flags(tmp_path):
-    """Test that the two DRBUDDI options disabled in TORTOISE's parser are never sent.
+def test_drbuddi_keeps_its_up_down_rigid(tmp_path):
+    """Test that the workflow never disables DRBUDDI's blip-down to blip-up registration.
 
-    ``--DRBUDDI_start_with_diffeomorphic_for_rigid_reg`` and
-    ``--DRBUDDI_disable_initial_rigid`` are both commented out of
-    DRBUDDI_parserBase.cxx, along with their getters, so neither can change the
-    registration. Worse, DRBUDDI rejects an unrecognised parameter by printing
-    "Unknown command line parameter" and then exiting 0 -- nipype records that
-    as success and the run dies afterwards collecting the
-    bdown_to_bup_rigidtrans.hdf5 that was never written.
-
-    ``sloppy`` must therefore cheapen DRBUDDI through --DRBUDDI_stage alone.
-    (``--DRBUDDI_disable_initial_rigid`` would also suppress
-    ``bdown_to_bup_rigid_trans_h5``, which DRBUDDIAggregateOutputs dereferences
-    unguarded on the rpe_series FA branch.)
+    ``--DRBUDDI_disable_initial_rigid`` skips the rigid + diffeomorphic + rigid
+    registration of the blip-down b=0 to the blip-up b=0. qsiprep motion-corrects
+    each phase-encoding series on its own, so the two b=0s reach DRBUDDI in
+    different frames and that registration has to stay on, sloppy or not.
+    ``sloppy`` cheapens DRBUDDI through --DRBUDDI_stage alone.
     """
     from qsiprep.interfaces.tortoise import DRBUDDI
 
@@ -1335,21 +1371,14 @@ def test_drbuddi_never_sends_parser_disabled_flags(tmp_path):
         'blip_down_image': str(down),
         'blip_up_json': str(up_json),
     }
-    disabled = (
-        '--DRBUDDI_start_with_diffeomorphic_for_rigid_reg',
-        '--DRBUDDI_disable_initial_rigid',
-    )
-
     for sloppy in (True, False):
         cmd = DRBUDDI(sloppy=sloppy, **common).cmdline
-        for flag in disabled:
-            assert flag not in cmd, f'{flag} is rejected by DRBUDDI (sloppy={sloppy})'
+        assert '--DRBUDDI_disable_initial_rigid' not in cmd
+        assert '--DRBUDDI_start_with_diffeomorphic_for_rigid_reg' not in cmd
 
-    # sloppy still has to do its job, just through the stage schedule
-    assert '--DRBUDDI_stage' in DRBUDDI(sloppy=True, **common).cmdline
+    assert DRBUDDI(sloppy=True, **common).cmdline.count('--DRBUDDI_stage') == 4
     assert '--DRBUDDI_stage' not in DRBUDDI(sloppy=False, **common).cmdline
 
-    # ...and the workflow must not set either trait, under sloppy or not
     rpe = tmp_path / 'sub-01_dir-PA_dwi.nii.gz'
     _write_dummy_nii(rpe)
     groups = _make_unit('rpe_series', rpe_series=[str(rpe)])
@@ -1357,12 +1386,55 @@ def test_drbuddi_never_sends_parser_disabled_flags(tmp_path):
     try:
         for sloppy in (True, False):
             config.execution.sloppy = sloppy
-            wf = _build(groups, t2w_sdc=False, name=f'no_disabled_flags_{sloppy}')
+            wf = _build(groups, t2w_sdc=False, name=f'up_down_rigid_{sloppy}')
             node = wf.get_node('drbuddi_sdc_wf.drbuddi')
             assert not isdefined(node.inputs.start_with_diffeomorphic_for_rigid_reg)
             assert not isdefined(node.inputs.disable_initial_rigid)
     finally:
         config.execution.sloppy = False
+
+
+def test_sloppy_stage_schedules_are_the_defaults_on_the_sloppy_grid():
+    """Test that the sloppy schedules rescale TORTOISE's voxel-unit sizes to the sloppy grid.
+
+    TORTOISE's smoothing sigmas and pyramid factors are in voxels of its ~1 mm
+    working grid. On the coarser sloppy grid the same numbers would smooth and
+    downsample 2.5 times as much in millimetres, so the sloppy schedules divide
+    them by the grid spacing and only cut the iteration counts.
+    """
+    import re
+
+    from qsiprep.interfaces.tortoise import (
+        SLOPPY_DRBUDDI,
+        SLOPPY_EPI_WORKING_RES,
+        SLOPPY_EPIREG,
+    )
+
+    def stages(schedule):
+        return re.findall(
+            r'cfs=\\\{(\d+):(\d+):([\d.]+)\\\},field_smoothing=\\\{([\d.]+):([\d.]+)\\\}',
+            schedule,
+        )
+
+    epireg = stages(SLOPPY_EPIREG)
+    assert len(epireg) == 6 == SLOPPY_EPIREG.count('--DRBUDDI_stage')
+    # EPIREG's built-in schedule: 200 iterations, update sigma 9 voxels, pyramid 8..1
+    niter, factor, smoothing, update, total = epireg[0]
+    assert int(niter) < 200
+    assert int(factor) == round(8 / SLOPPY_EPI_WORKING_RES)
+    assert float(update) == round(9 / SLOPPY_EPI_WORKING_RES, 2)
+    assert float(total) == round(0.25 / SLOPPY_EPI_WORKING_RES, 2)
+    assert all(int(f) >= 1 for _, f, _, _, _ in epireg)
+
+    drbuddi = stages(SLOPPY_DRBUDDI)
+    assert len(drbuddi) == 4 == SLOPPY_DRBUDDI.count('--DRBUDDI_stage')
+    niter, factor, smoothing, update, total = drbuddi[0]
+    assert int(niter) < 500
+    assert int(factor) == round(6 / SLOPPY_EPI_WORKING_RES)
+    assert float(update) == round(9 / SLOPPY_EPI_WORKING_RES, 2)
+    # the structural joins through its own metric, as in DRBUDDI's defaults
+    assert SLOPPY_DRBUDDI.count('CCJacS') == 3
+    assert SLOPPY_DRBUDDI.count('CCSK') == 1
 
 
 def test_init_diffprep_hmc_wf_pepolar_always_uses_drbuddi(tmp_path):

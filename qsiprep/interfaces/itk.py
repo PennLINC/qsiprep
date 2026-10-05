@@ -177,16 +177,18 @@ class _GuardRefinedTransformInputSpec(BaseInterfaceInputSpec):
         exists=True, mandatory=True, desc='the linear transform the refinement started from'
     )
     refined_transform = File(exists=True, mandatory=True, desc='the refined linear transform')
+    initial_similarity = traits.Float(
+        mandatory=True,
+        desc='registration metric value of the initial transform on its own target '
+        '(ANTs convention: lower is better)',
+    )
+    refined_similarity = traits.Float(
+        mandatory=True, desc='registration metric value of the refined transform on its own target'
+    )
     reference_image = File(
         exists=True,
         mandatory=True,
-        desc='image whose field-of-view centre the shift is measured at',
-    )
-    max_shift_mm = traits.Float(
-        10.0, usedefault=True, desc='largest move of the FOV centre a refinement may make'
-    )
-    max_rotation_deg = traits.Float(
-        10.0, usedefault=True, desc='largest rotation a refinement may add'
+        desc='image whose field-of-view centre the reported shift is measured at',
     )
 
 
@@ -198,14 +200,13 @@ class _GuardRefinedTransformOutputSpec(TraitedSpec):
 
 
 class GuardRefinedTransform(SimpleInterface):
-    """Keep a refined linear transform only if it stayed near the transform it started from.
+    """Keep a refined linear transform only if it matches its target at least as well.
 
     A registration that refines an earlier result (a second pass against a better target,
-    initialised from the first pass) should move by at most the effect it corrects. With
-    random metric sampling the optimiser occasionally runs away instead, and a transform tens
-    of millimetres off would silently ruin everything downstream, so a refinement that moves
-    the reference's FOV centre by more than ``max_shift_mm`` or rotates by more than
-    ``max_rotation_deg`` is dropped in favour of the initial transform, with a warning.
+    initialised from the first pass) can run away under random metric sampling, and the first
+    pass can fail outright while the second recovers. Neither transform is a safe prior for the
+    other, so each is judged by the registration metric on its own target and the better one
+    is kept. The shift and rotation between the two are reported for QC.
     """
 
     input_spec = _GuardRefinedTransformInputSpec
@@ -221,22 +222,20 @@ class GuardRefinedTransform(SimpleInterface):
         rot = linear_transform_matrix(refined)[:3, :3] @ np.linalg.inv(
             linear_transform_matrix(initial)[:3, :3]
         )
-        angle = float(np.degrees(np.arccos(np.clip((np.trace(rot) - 1) / 2, -1, 1))))
         self._results['shift_mm'] = float(np.linalg.norm(shift))
-        self._results['rotation_deg'] = angle
-        accepted = (
-            self._results['shift_mm'] <= self.inputs.max_shift_mm
-            and angle <= self.inputs.max_rotation_deg
+        self._results['rotation_deg'] = float(
+            np.degrees(np.arccos(np.clip((np.trace(rot) - 1) / 2, -1, 1)))
         )
+        accepted = self.inputs.refined_similarity <= self.inputs.initial_similarity
         self._results['accepted'] = accepted
         if not accepted:
             LOGGER.warning(
-                'The refined transform moved %.1f mm / %.1f deg away from the transform it '
-                'started from (limits %.1f mm / %.1f deg); keeping the initial transform.',
+                'The refined fieldmap registration matched its target worse than the initial '
+                'one (%.4f vs %.4f, %.1f mm / %.1f deg apart); keeping the initial transform.',
+                self.inputs.refined_similarity,
+                self.inputs.initial_similarity,
                 self._results['shift_mm'],
-                angle,
-                self.inputs.max_shift_mm,
-                self.inputs.max_rotation_deg,
+                self._results['rotation_deg'],
             )
         source = self.inputs.refined_transform if accepted else self.inputs.initial_transform
         out_file = fname_presuffix(source, newpath=runtime.cwd, prefix='guarded_')

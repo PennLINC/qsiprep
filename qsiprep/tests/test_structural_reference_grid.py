@@ -88,3 +88,38 @@ def test_structural_alignment_resamples_onto_grid_at_structural_spacing():
         and any(dest_field == 'reference_image' for _, dest_field in meta['connect'])
     }
     assert reference_sources == {'reference_grid'}
+
+
+def test_structural_alignment_refines_the_rotation_search_with_a_masked_rigid():
+    """The rotation search gives the capture range; a rigid registration from it, the accuracy."""
+    from nipype.interfaces.ants import Registration
+
+    from qsiprep import config
+    from qsiprep.workflows.dwi.registration import init_structural_to_b0_alignment_wf
+
+    config.nipype.omp_nthreads = 1
+    wf = init_structural_to_b0_alignment_wf(name='t2w_to_b0_test')
+    refine = wf.get_node('refine_alignment')
+    assert type(refine.interface) is Registration
+    sources = {
+        dest_field: (src.name, src_field)
+        for src, dest, meta in wf._graph.edges(data=True)
+        if dest.name == 'refine_alignment'
+        for src_field, dest_field in meta['connect']
+    }
+    assert sources['initial_moving_transform'] == (
+        'rotation_search_wf',
+        'outputnode.initial_transform',
+    )
+    assert sources['fixed_image'] == ('inputnode', 'b0_ref')
+    assert sources['moving_image'] == ('inputnode', 'structural_image')
+    assert sources['fixed_image_masks'] == ('inputnode', 'b0_mask')
+    assert 'Affine' not in refine.inputs.transforms
+    transform_sources = {
+        (src.name, src_field)
+        for src, dest, meta in wf._graph.edges(data=True)
+        if dest.name == 'resample_structural'
+        for src_field, dest_field in meta['connect']
+        if dest_field == 'transforms'
+    }
+    assert transform_sources == {('refine_alignment', 'composite_transform')}

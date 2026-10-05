@@ -178,7 +178,7 @@ These should be addressed incrementally. When fixing code that triggers these ru
 
 ### Truth-Scored Tests (TRXScan Fixtures)
 
-The integration matrix is nine `trxscan_*` markers in `qsiprep/tests/test_cli.py`. Each one
+The integration matrix is ten `trxscan_*` markers in `qsiprep/tests/test_cli.py`. Each one
 preprocesses a small dataset simulated by [TRXScan](https://github.com/PennLINC/TRXScan) and
 scores the derivatives against the simulator's ground truth. There are no smoke tests on real
 data; a code path is covered by a unit test or a workflow-construction test, and gets a
