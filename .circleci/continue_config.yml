@@ -442,7 +442,7 @@ jobs:
             python3 -m venv /tmp/trxscan-venv
             . /tmp/trxscan-venv/bin/activate
             TRXSCAN_VERSION=$(sed -n 's/^TRXSCAN_VERSION=//p' .circleci/trxscan_fixtures.txt)
-            pip install -q "trxscan[trx]==${TRXSCAN_VERSION}"
+            pip install -q --timeout 120 --retries 5 "trxscan[trx]==${TRXSCAN_VERSION}"
             trxscan-fetch sub-60501
             python -m qsiprep.tests.trxscan_fixtures --spec | diff - .circleci/trxscan_fixtures.txt
             python -m qsiprep.tests.trxscan_fixtures --generate /tmp/data

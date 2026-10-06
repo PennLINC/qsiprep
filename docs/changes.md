@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### 🐛 Bug Fixes
+
+* `--anat-modality T2w` with a T2w-based distortion correction crashed at workflow build
+  (the T2w derivatives were wired from a node that only exists next to a T1w).
+
+* The GRE fieldmap-to-EPI registration (`fmap2ref`) now registers whole-head images with the
+  b0 and fieldmap brain masks as metric masks, without histogram matching, and rigidly
+  (the production settings used an Affine stage that absorbed the EPI distortion as a 6-12 %
+  scale plus a 4-5 degree tilt). On a TRXScan phasediff fixture with a realistic magnitude
+  (scalp, receive bias, Gibbs ringing) the registration error against the simulated
+  fieldmap offset drops from 4.9 to 0.2 degrees, the field correlation with the truth rises
+  from 0.925 to 0.955, and eddy's spurious motion on a static object from 0.33 to 0.002 mm.
+  Under `--sloppy` the registration is one three-level rigid with random sampling.
+
 ### 🎉 Exciting New Features
 
 * Truth-scored integration tests on simulated data: the `trxscan_*` CI jobs generate

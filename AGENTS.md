@@ -176,6 +176,54 @@ QSIPrep currently uses ruff ~= 0.4.3 (older than xcp_d/aslprep). There are 13 su
 
 These should be addressed incrementally. When fixing code that triggers these rules, remove the corresponding ignore entry.
 
+### Truth-Scored Tests (TRXScan Fixtures)
+
+The integration matrix is nine `trxscan_*` markers in `qsiprep/tests/test_cli.py`. Each one
+preprocesses a small dataset simulated by [TRXScan](https://github.com/PennLINC/TRXScan) and
+scores the derivatives against the simulator's ground truth. There are no smoke tests on real
+data; a code path is covered by a unit test or a workflow-construction test, and gets a
+truth-scored run only when it changes what the pipeline estimates.
+
+**Fixtures.** `qsiprep/tests/trxscan_fixtures.py` holds `RECIPES` (one `trxscan-fixture`
+invocation each: `rpe`, `epi`, `phasediff`, `gnl`, `motion`, `t2wreg`, `offsets`) and
+`TRXSCAN_VERSION`. `.circleci/trxscan_fixtures.txt` is generated from them with
+`python -m qsiprep.tests.trxscan_fixtures --spec > .circleci/trxscan_fixtures.txt`; CI diffs
+the two and uses the file's checksum as the fixture cache key, so a version bump or a recipe
+change must regenerate it. Fixtures are 3 mm, 16 directions + 2 b=0 per polarity, from the
+`sub-60501` phantom (deidentified T1w/T2w included, fetched by `trxscan-fetch sub-60501`);
+`derivatives/trxscan/` next to each fixture holds the truths: `desc-displacement` (the
+susceptibility displacement, RAS mm), `desc-cleanb0`, `desc-fieldmap`, the applied subject
+movements as ITK text transforms (`from-T1w_to-dwi`, `from-fmap_to-dwi`, `..._desc-truth_xfm.txt`),
+and for `gnl` the gradient deviation map. Locally, `fixture_dir()` generates a missing fixture
+when `trxscan-fixture` is on PATH (`pip install "trxscan[trx]==<TRXSCAN_VERSION>"`).
+
+**Running one.** From `qsiprep/tests`: `python run_local_tests.py -m trxscan_phasediff`
+(Docker, 10-25 minutes, 4 CPUs). The scores land in `truth_score.json` next to the derivatives
+(`qsiprep/tests/truth_scoring.py::score_run`: `sdc` slope/corr/rms residual against the
+displacement truth, `b0_corrected_vs_clean` and `b0_uncorrected_vs_clean`, `coreg_error`
+against the recorded movement, `fd_mean_mm` on a static object, `graddev` for GNL). Assertions
+go through `_expect(score, path, lo, hi, note)`, whose message names the quantity, its value
+and the bound, because CircleCI's Tests tab shows that message and nothing else; `_assert_clean_run`
+fails a run that wrote crash files or whose report lists errors. Eddy runs with
+`tests/data/eddy_config_trxscan.json` (seeded) so repeats are bit-identical.
+
+**Debugging a registration or correction step.** The work directory keeps every node's
+`command.txt` and outputs. The fast loop is to replay the node's own command in the container
+with one setting changed and score the result against the truth transform, about a minute per
+variant instead of a ten-minute run; only the winner goes back through the full test. ANTs
+transforms: `ConvertTransformFile 3 transformComposite.h5 out.txt`, then compose with the
+truth (`truth_scoring.read_itk_transform`, `rigid_error`). Registrations between a fieldmap
+image and the EPI reference are scored against `from-fmap_to-dwi_..._desc-truth_xfm.txt`, the
+rigid the recipe applied to the fieldmap.
+
+**Known fixture limits.** The simulated EPI has no skull, so any step that registers a real
+T2w to the b=0 (DRBUDDI's structural rigid, T2Wreg) is harder on the fixture than on real
+data; the T2w SDC paths are therefore tested with blip-only metrics under `--sloppy`. The GRE
+magnitude is realistic from TRXScan 0.2.1 (proton density, receive bias, Gibbs ringing, scalp
+and neck from the T1w); before that it was a flat head that registered to the truth whatever
+the settings and hid the `fmap2ref` defects fixed in #1179. When a result looks too good on a
+fixture, check what the fixture leaves out before trusting it.
+
 ---
 
 ## Cross-Project Development Roadmap
