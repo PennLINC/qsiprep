@@ -603,13 +603,13 @@ def _build_parser(**kwargs):
         help=(
             'Window size in voxels for image-based denoising: either an odd positive '
             'integer or "auto". '
-            'This applies to the "dwidenoise" and "svht" methods, where "auto" calculates a '
+            'This applies to the "dwidenoise" method only, where "auto" calculates a '
             'window size from the number of volumes, following the method described in '
-            'the dwidenoise documentation. svht uses spherical patches holding at least '
-            'N^3 voxels, and requires N^3 to exceed the number of volumes. '
-            'It is unused by "patch2self" and "dwidenoise2"; dwidenoise2 sizes its '
-            'patches per iteration from its multi-resolution schedule, which can be set '
-            'with --denoise-config instead.'
+            'the dwidenoise documentation. '
+            'It is unused by "patch2self", "dwidenoise2" and "svht"; dwidenoise2 sizes its '
+            'patches per iteration from its multi-resolution schedule, and svht takes its '
+            'patch size from "extent", both of which can be set with --denoise-config '
+            'instead.'
         ),
     )
     g_dwi.add_argument(
@@ -630,8 +630,8 @@ def _build_parser(**kwargs):
             'name of a bundled schedule ("default", "legacy" or "vlarge"). Without a '
             'schedule, dwidenoise2 uses its default schedule. '
             'For svht, the keys are "demean" ("shells", the default, or "none"), '
-            '"filter_method", "aggregator", "aggregator_fwhm", "shape", "stride", "vst", '
-            '"noise_dof" and "preserve_noise_bias". '
+            '"extent" (the patch size), "filter_method", "aggregator", "aggregator_fwhm", '
+            '"shape", "stride", "vst", "noise_dof" and "preserve_noise_bias". '
             'See the documentation for every key.'
         ),
     )
@@ -1156,6 +1156,11 @@ def check_denoise_window(denoise_method, dwidenoise_window):
             'The --dwidenoise-window option is not used when --denoise-method=dwidenoise2. '
             'dwidenoise2 sizes its patches per iteration from its multi-resolution schedule, '
             'which can be set with --denoise-config instead.'
+        )
+    elif denoise_method == 'svht':
+        config.loggers.cli.warning(
+            'The --dwidenoise-window option is not used when --denoise-method=svht. '
+            'Set the svht patch size with "extent" in --denoise-config instead.'
         )
     elif denoise_method == 'none':
         config.loggers.cli.warning(

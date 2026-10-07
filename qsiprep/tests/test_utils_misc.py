@@ -143,6 +143,9 @@ def test_describe_dwidenoise2_filter_follows_fixed_rank():
         # dwidenoise2 has no kernel options at all, so a requested window silently does nothing
         ('dwidenoise2', 5, 'not used when --denoise-method=dwidenoise2'),
         ('none', 5, 'not used when --denoise-method=none'),
+        # svht takes its patch size from "extent" in --denoise-config
+        ('svht', 5, '"extent" in --denoise-config'),
+        ('svht', 'auto', None),
         # dwidenoise is the only method that takes a window
         ('dwidenoise', 5, None),
         # 'auto' is the default, so an unused value is not a sign of a misunderstanding
@@ -574,6 +577,7 @@ def test_load_svht_config_full(tmp_path):
         aggregator_fwhm=1.5,
         shape='cube',
         stride=1,
+        extent=7,
         vst=True,
         noise_dof=4,
         preserve_noise_bias=True,
@@ -586,6 +590,7 @@ def test_load_svht_config_full(tmp_path):
         'aggregator_fwhm': 1.5,
         'shape': 'cube',
         'stride': 1,
+        'extent': 7,
         'vst': True,
         'noise_dof': 4,
         'preserve_noise_bias': True,
@@ -597,7 +602,9 @@ def test_load_svht_config_full(tmp_path):
     ('settings', 'message'),
     [
         ({'decomposition': 'bdcsvd'}, 'unknown key'),
-        ({'extent': 7}, 'unknown key'),
+        ({'extent': 4}, 'must be an odd positive integer'),
+        ({'extent': 0}, 'must be an odd positive integer'),
+        ({'extent': 5.0}, 'must be an odd positive integer'),
         ({'demean': 'volume_groups'}, 'must be one of none, shells'),
         ({'demean': True}, 'must be one of none, shells'),
         ({'aggregator': 'invl0'}, 'must be one of'),

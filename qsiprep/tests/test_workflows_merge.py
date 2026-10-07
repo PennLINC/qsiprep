@@ -382,7 +382,7 @@ _LEGACY_SCHEDULE_ROW = {
         ),
         pytest.param('patch2self', None, 'auto', Patch2Self, {}, id='patch2self'),
         pytest.param('svht', None, 'auto', SVHTDenoise, {}, id='svht_auto'),
-        pytest.param('svht', None, 7, SVHTDenoise, {'extent': 7}, id='svht_window7'),
+        pytest.param('svht', {'extent': 7}, 'auto', SVHTDenoise, {'extent': 7}, id='svht_extent7'),
     ],
 )
 def test_denoising_wf_magnitude(
@@ -645,8 +645,8 @@ def test_svht_magnitude_stays_magnitude(monkeypatch):
     denoiser = workflow.get_node('denoiser')
 
     assert isinstance(denoiser.interface, SVHTDenoise)
-    # The window is the --dwidenoise-window value that _build_denoising_wf sets
-    assert denoiser.inputs.extent == 5
+    # _build_denoising_wf sets --dwidenoise-window 5, which is for dwidenoise alone
+    assert not isdefined(denoiser.inputs.extent)
     assert not isdefined(denoiser.inputs.phase_file)
     assert not isdefined(denoiser.inputs.phase_units)
     assert node_names.isdisjoint({'phase_to_radians', 'combine_complex', 'split_complex'})
@@ -679,6 +679,19 @@ def test_svht_config_reaches_workflow(monkeypatch, tmp_path):
     assert ('bval_file', 'bval_file') not in _connections(workflow)[('inputnode', 'denoiser')]
     assert 'shell' not in workflow.__desc__
     assert 'cubic patches' in workflow.__desc__
+
+
+def test_svht_extent_comes_from_the_config(monkeypatch, tmp_path):
+    """Test that the svht patch size is set in --denoise-config and checked per series."""
+    _use_denoise_config(monkeypatch, tmp_path, {'extent': 7})
+    workflow = _build_denoising_wf(monkeypatch, 'svht', 'none', use_phase=False)
+    assert workflow.get_node('denoiser').inputs.extent == 7
+    assert 'holding at least 343 voxels' in workflow.__desc__
+
+    # 3**3 does not exceed the 30 volumes _build_denoising_wf declares
+    _use_denoise_config(monkeypatch, tmp_path, {'extent': 3})
+    with pytest.raises(ValueError, match='too small for a series of 30 volumes'):
+        _build_denoising_wf(monkeypatch, 'svht', 'none', use_phase=False)
 
 
 def test_svht_rejects_vst_settings_with_phase(monkeypatch, tmp_path):

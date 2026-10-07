@@ -494,6 +494,7 @@ _SVHT_ENUM_PARAMETERS = {
 }
 _SVHT_CONFIG_KEYS = frozenset(_SVHT_ENUM_PARAMETERS) | {
     'aggregator_fwhm',
+    'extent',
     'noise_dof',
     'preserve_noise_bias',
     'stride',
@@ -554,6 +555,11 @@ def load_svht_config(path):
         elif name == 'stride':
             if not _is_int(value) or value not in (1, 2):
                 raise ValueError(f'{source} sets {name}={value!r}; must be 1 or 2.')
+        elif name == 'extent':
+            if not _is_int(value) or value < 1 or value % 2 == 0:
+                raise ValueError(
+                    f'{source} sets {name}={value!r}; must be an odd positive integer.'
+                )
         elif name == 'aggregator_fwhm':
             if not _is_number(value) or value <= 0:
                 raise ValueError(f'{source} sets {name}={value!r}; must be a number > 0.')
@@ -603,6 +609,28 @@ def check_svht_phase(params, use_phase):
             f'svht_denoise cannot apply {" and ".join(vst_options)} to phase data, which are '
             'rotated onto the real axis and are already Gaussian. Remove them from '
             '--denoise-config or use --ignore phase.'
+        )
+
+
+def check_svht_extent(params, n_volumes):
+    """Reject an svht_denoise patch size too small for the series being denoised.
+
+    svht_denoise needs ``extent**3`` to exceed the number of volumes. The volume count is
+    known only per series, so this is checked while the workflow is built.
+
+    Parameters
+    ----------
+    params : dict
+        SVHTDenoise parameters, as returned by :func:`load_svht_config`.
+    n_volumes : int
+        The number of volumes in the series being denoised.
+    """
+    extent = params.get('extent')
+    if extent is not None and extent**3 <= n_volumes:
+        raise ValueError(
+            f'svht_denoise needs "extent" cubed to exceed the number of volumes, but the '
+            f'"extent" of {extent} in --denoise-config is too small for a series of '
+            f'{n_volumes} volumes.'
         )
 
 
@@ -674,6 +702,14 @@ def describe_svht(parameters, real_axis):
         Boilerplate text with inline ``[@citation]`` keys.
     """
     shape = 'cubic' if parameters.get('shape') == 'cube' else 'spherical'
+    extent = parameters.get('extent')
+    if extent is None:
+        # svht_denoise's default, the smallest odd k with k**3 above the volume count
+        size = 'sized automatically from the number of volumes'
+    elif shape == 'cubic':
+        size = f'of {extent}x{extent}x{extent} voxels'
+    else:
+        size = f'holding at least {extent**3} voxels'
     filter_desc = _SVHT_FILTERS[parameters.get('filter_method', 'optshrink')]
     aggregator_desc = _SVHT_AGGREGATORS[parameters.get('aggregator', 'gaussian')]
 
@@ -694,8 +730,8 @@ def describe_svht(parameters, real_axis):
         sentences = ['DWI data were denoised']
     sentences[0] += (
         ' by local PCA with optimal singular value shrinkage, as implemented in '
-        f'`svht_denoise` [@svht_denoise]. Overlapping {shape} patches were decomposed by '
-        f'singular value decomposition, {filter_desc}, and {aggregator_desc}.'
+        f'`svht_denoise` [@svht_denoise]. Overlapping {shape} patches, {size}, were '
+        f'decomposed by singular value decomposition, {filter_desc}, and {aggregator_desc}.'
     )
     if parameters.get('demean'):
         sentences.append(

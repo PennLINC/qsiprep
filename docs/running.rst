@@ -222,10 +222,10 @@ intensity harmonization.
      - ``--unringing-method``
      - ``--dwi-biascorrect``
 
-``--dwidenoise-window`` sets the ``dwidenoise`` and ``svht`` patch size in
-voxels, an odd integer or ``auto`` (the default, derived from the number of
-volumes). ``dwidenoise2`` sizes its patches from its own schedule, set with
-``--denoise-config`` (see below). ``dwidenoise`` and ``dwidenoise2`` are
+``--dwidenoise-window`` sets the ``dwidenoise`` patch size in voxels, an odd
+integer or ``auto`` (the default, derived from the number of volumes).
+``dwidenoise2`` sizes its patches from its own schedule, and ``svht`` from
+``extent``; both are set with ``--denoise-config`` (see below). ``dwidenoise`` and ``dwidenoise2`` are
 licensed for non-commercial use only; ``svht`` is not restricted. Its
 settings are also given with ``--denoise-config``. ``rpg`` unringing is the method for
 partial Fourier acquisitions; ``mrdegibbs`` assumes full Fourier sampling.
@@ -326,6 +326,8 @@ Each key sets the ``svht_denoise`` option of the same name, except
 Key                               JSON value
 ================================  ==========================================================
 ``demean``                        ``"shells"`` (the default) or ``"none"``
+``extent``                        an odd positive integer whose cube exceeds the number of
+                                  volumes; omitted, ``svht_denoise`` picks the smallest
 ``filter_method``                 ``"optshrink"``, ``"optthresh"`` or ``"truncate"``
 ``aggregator``                    ``"gaussian"``, ``"uniform"`` or ``"exclusive"``
 ``aggregator_fwhm``               a number greater than 0; needs the ``"gaussian"``
@@ -341,8 +343,10 @@ Key                               JSON value
 with its default of demeaning each *b*-value shell, so ``svht`` is run the same
 way: the series' b-values are passed with ``-bval``, unless ``demean`` is
 ``"none"``. Demeaning is skipped for a series where it would leave
-``svht_denoise`` fewer than three volumes to estimate the noise from. The
-patch size is set with ``--dwidenoise-window``, not in the file.
+``svht_denoise`` fewer than three volumes to estimate the noise from.
+``extent`` is the side of a cubic patch; a spherical patch holds at least
+``extent`` cubed voxels. It is checked against each series' volume count when
+the workflow is built. ``--dwidenoise-window`` does not apply to ``svht``.
 ``vst``, ``noise_dof`` and ``preserve_noise_bias`` describe the
 variance-stabilizing transform of magnitude data, so they are an error for a
 series with ``part-phase`` data, which ``svht_denoise`` rotates onto the real

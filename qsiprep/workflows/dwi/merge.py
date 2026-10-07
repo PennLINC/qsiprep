@@ -36,6 +36,7 @@ from ...utils.bids import IMPORTANT_DWI_FIELDS, update_metadata_from_nifti_heade
 from ...utils.misc import (
     SVHT_DEFAULTS,
     check_dwidenoise2_demodulation,
+    check_svht_extent,
     check_svht_phase,
     describe_dwidenoise2,
     describe_svht,
@@ -499,6 +500,7 @@ def init_dwi_denoising_wf(
         if config.workflow.denoise_config is not None:
             svht_params.update(load_svht_config(config.workflow.denoise_config))
         check_svht_phase(svht_params, use_phase)
+        check_svht_extent(svht_params, n_volumes)
 
     unringing_method = config.workflow.unringing_method
     do_denoise = denoise_method in ('patch2self', 'dwidenoise', 'dwidenoise2', 'svht')
@@ -586,11 +588,9 @@ def init_dwi_denoising_wf(
                 n_procs=omp_nthreads,
             )
         elif denoise_method == 'svht':
-            # svht_denoise sizes its patches like dwidenoise, from the volume count
-            dwidenoise_window = config.workflow.dwidenoise_window
+            # svht_denoise sizes its patches from the volume count unless --denoise-config
+            # sets "extent"; --dwidenoise-window is for dwidenoise alone
             svht_kwargs = dict(svht_params)
-            if dwidenoise_window != 'auto':
-                svht_kwargs['extent'] = dwidenoise_window
             if denoise_real_axis:
                 # PhaseToRad (below) supplies the phase in radians
                 svht_kwargs['phase_units'] = 'radians'
