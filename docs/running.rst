@@ -225,9 +225,9 @@ intensity harmonization.
 ``--dwidenoise-window`` sets the ``dwidenoise`` and ``svht`` patch size in
 voxels, an odd integer or ``auto`` (the default, derived from the number of
 volumes). ``dwidenoise2`` sizes its patches from its own schedule, set with
-``--dwidenoise2-config`` (see below). ``dwidenoise`` and ``dwidenoise2`` are
-licensed for non-commercial use only; ``svht`` is not restricted, and runs
-with its defaults. ``rpg`` unringing is the method for
+``--denoise-config`` (see below). ``dwidenoise`` and ``dwidenoise2`` are
+licensed for non-commercial use only; ``svht`` is not restricted. Its
+settings are also given with ``--denoise-config``. ``rpg`` unringing is the method for
 partial Fourier acquisitions; ``mrdegibbs`` assumes full Fourier sampling.
 ``svht`` unringing reads ``PartialFourier`` from the sidecar: it handles full
 Fourier sampling and 7/8 or 6/8 partial Fourier along the ``j`` axis, and
@@ -246,12 +246,21 @@ magnitude after denoising. ``svht`` denoising rotates the magnitude and phase
 onto the real axis instead, and keeps the magnitude of the result.
 ``--ignore phase`` drops the phase images altogether.
 
-dwidenoise2 settings
-====================
+Denoising settings
+==================
 
-``--dwidenoise2-config`` takes a JSON file with settings for
-``--denoise-method dwidenoise2``. Every key is optional and unknown keys are
-an error. Each key sets the ``dwidenoise2`` option of the same name, except
+``--denoise-config`` takes a JSON file with settings for the denoiser that
+``--denoise-method`` selects, which must be ``dwidenoise2`` or ``svht``. The
+keys the file may set depend on that method. Every key is optional and
+unknown keys are an error. Settings the two tools share use the same key and
+spelling. The file is checked when the command line is parsed, and a copy is
+written to ``sub-<label>/log/<run uuid>/<method>.json`` in the output
+directory.
+
+dwidenoise2
+-----------
+
+Each key sets the ``dwidenoise2`` option of the same name, except
 ``filter_method``, which sets ``-filter``, and ``schedule``.
 
 ================================  ==========================================================
@@ -305,9 +314,47 @@ reconstruction pass.
 ``"legacy"`` or ``"vlarge"`` (recommended by ``dwidenoise2`` for more than
 255 volumes). Without a ``schedule`` key, ``dwidenoise2`` uses its default,
 except that ``fixed_rank`` selects the single-iteration ``fixedrank``
-schedule and ``"vst_method": "none"`` a single iteration. The file is checked
-when the command line is parsed, and a copy is written to
-``sub-<label>/log/<run uuid>/dwidenoise2.json`` in the output directory.
+schedule and ``"vst_method": "none"`` a single iteration.
+
+svht
+----
+
+Each key sets the ``svht_denoise`` option of the same name, except
+``filter_method``, which sets ``-filter``, and ``demean``.
+
+================================  ==========================================================
+Key                               JSON value
+================================  ==========================================================
+``demean``                        ``"shells"`` (the default) or ``"none"``
+``filter_method``                 ``"optshrink"``, ``"optthresh"`` or ``"truncate"``
+``aggregator``                    ``"gaussian"``, ``"uniform"`` or ``"exclusive"``
+``aggregator_fwhm``               a number greater than 0; needs the ``"gaussian"``
+                                  aggregator
+``shape``                         ``"sphere"`` or ``"cube"``
+``stride``                        ``1`` or ``2``; ``"exclusive"`` needs ``1``
+``vst``                           ``true`` or ``false``
+``noise_dof``                     an integer from 1 to 64
+``preserve_noise_bias``           ``true`` or ``false``
+================================  ==========================================================
+
+``svht_denoise`` does not demean by default, but *QSIPrep* runs ``dwidenoise2``
+with its default of demeaning each *b*-value shell, so ``svht`` is run the same
+way: the series' b-values are passed with ``-bval``, unless ``demean`` is
+``"none"``. Demeaning is skipped for a series where it would leave
+``svht_denoise`` fewer than three volumes to estimate the noise from. The
+patch size is set with ``--dwidenoise-window``, not in the file.
+``vst``, ``noise_dof`` and ``preserve_noise_bias`` describe the
+variance-stabilizing transform of magnitude data, so they are an error for a
+series with ``part-phase`` data, which ``svht_denoise`` rotates onto the real
+axis instead.
+
+.. code-block:: json
+
+  {
+    "filter_method": "optthresh",
+    "shape": "cube",
+    "noise_dof": 4
+  }
 
 
 .. _gradwarp_flags:

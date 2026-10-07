@@ -20,16 +20,16 @@ from qsiprep.tests.utils import field_of_view
 from qsiprep.workflows.dwi.merge import _svht_partial_fourier, init_dwi_denoising_wf
 
 
-def _use_dwidenoise2_config(monkeypatch, tmp_path, settings):
-    """Point config.workflow.dwidenoise2_config at a JSON file holding ``settings``.
+def _use_denoise_config(monkeypatch, tmp_path, settings):
+    """Point config.workflow.denoise_config at a JSON file holding ``settings``.
 
     ``None`` clears the setting.
     """
     path = None
     if settings is not None:
-        path = tmp_path / 'dwidenoise2.json'
+        path = tmp_path / 'denoise_config.json'
         path.write_text(json.dumps(settings))
-    monkeypatch.setattr(config.workflow, 'dwidenoise2_config', path)
+    monkeypatch.setattr(config.workflow, 'denoise_config', path)
 
 
 @pytest.mark.parametrize('use_phase', [False, True])
@@ -85,7 +85,7 @@ def test_dwidenoise2_workflow_ignores_denoise_window(monkeypatch):
     exposes no kernel options, so ``--dwidenoise-window`` cannot apply to it.
     """
     monkeypatch.setattr(config.workflow, 'denoise_method', 'dwidenoise2')
-    monkeypatch.setattr(config.workflow, 'dwidenoise2_config', None)
+    monkeypatch.setattr(config.workflow, 'denoise_config', None)
     monkeypatch.setattr(config.workflow, 'dwidenoise_window', 5)
     monkeypatch.setattr(config.workflow, 'unringing_method', 'none')
     monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
@@ -108,11 +108,9 @@ def test_dwidenoise2_workflow_ignores_denoise_window(monkeypatch):
 
 
 def test_dwidenoise2_config_reaches_workflow(monkeypatch, tmp_path):
-    """Test that the --dwidenoise2-config settings are forwarded to the workflow node."""
+    """Test that the --denoise-config settings are forwarded to the workflow node."""
     monkeypatch.setattr(config.workflow, 'denoise_method', 'dwidenoise2')
-    _use_dwidenoise2_config(
-        monkeypatch, tmp_path, {'demodulate': 'hann', 'decomposition': 'bdcsvd'}
-    )
+    _use_denoise_config(monkeypatch, tmp_path, {'demodulate': 'hann', 'decomposition': 'bdcsvd'})
     monkeypatch.setattr(config.workflow, 'dwidenoise_window', 5)
     monkeypatch.setattr(config.workflow, 'unringing_method', 'none')
     monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
@@ -144,7 +142,7 @@ def test_dwidenoise2_rejects_demodulation_without_phase(monkeypatch, tmp_path, d
     magnitude-only data, so the workflow rejects the request up front instead.
     """
     monkeypatch.setattr(config.workflow, 'denoise_method', 'dwidenoise2')
-    _use_dwidenoise2_config(monkeypatch, tmp_path, {'demodulate': demodulate})
+    _use_denoise_config(monkeypatch, tmp_path, {'demodulate': demodulate})
     monkeypatch.setattr(config.workflow, 'dwidenoise_window', 5)
     monkeypatch.setattr(config.workflow, 'unringing_method', 'none')
     monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
@@ -172,7 +170,7 @@ def test_dwidenoise2_config_schedule_reaches_workflow(monkeypatch, tmp_path):
         {'spatial_subsample': [1, 1, 1], 'kernel': 'rank'},
     ]
     monkeypatch.setattr(config.workflow, 'denoise_method', 'dwidenoise2')
-    _use_dwidenoise2_config(monkeypatch, tmp_path, {'schedule': rows})
+    _use_denoise_config(monkeypatch, tmp_path, {'schedule': rows})
     monkeypatch.setattr(config.workflow, 'dwidenoise_window', 'auto')
     monkeypatch.setattr(config.workflow, 'unringing_method', 'none')
     monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
@@ -218,7 +216,7 @@ def _run_denoising_wf(
         Directory holding the files that reached the workflow's ``outputnode``.
     """
     monkeypatch.setattr(config.workflow, 'denoise_method', denoise_method)
-    _use_dwidenoise2_config(monkeypatch, tmp_path, dwidenoise2_settings)
+    _use_denoise_config(monkeypatch, tmp_path, dwidenoise2_settings)
     monkeypatch.setattr(config.workflow, 'dwidenoise_window', dwidenoise_window)
     monkeypatch.setattr(config.workflow, 'unringing_method', unringing_method)
     monkeypatch.setattr(config.workflow, 'no_b0_harmonization', True)
@@ -656,6 +654,45 @@ def test_svht_magnitude_stays_magnitude(monkeypatch):
     assert '[@svht_denoise]' in workflow.__desc__
 
 
+def test_svht_demeans_shells_by_default(monkeypatch):
+    """Test that svht_denoise demeans each shell, as QSIPrep's dwidenoise2 runs do."""
+    workflow = _build_denoising_wf(monkeypatch, 'svht', 'none', use_phase=False)
+    connections = _connections(workflow)
+
+    assert workflow.get_node('denoiser').inputs.demean is True
+    assert ('bval_file', 'bval_file') in connections[('inputnode', 'denoiser')]
+    assert 'each *b*-value shell' in workflow.__desc__
+
+
+def test_svht_config_reaches_workflow(monkeypatch, tmp_path):
+    """Test that the svht --denoise-config settings reach the node and the boilerplate."""
+    _use_denoise_config(
+        monkeypatch, tmp_path, {'demean': 'none', 'shape': 'cube', 'filter_method': 'truncate'}
+    )
+    workflow = _build_denoising_wf(monkeypatch, 'svht', 'none', use_phase=False)
+    denoiser = workflow.get_node('denoiser')
+
+    assert denoiser.inputs.demean is False
+    assert denoiser.inputs.shape == 'cube'
+    assert denoiser.inputs.filter_method == 'truncate'
+    # Without demeaning, svht_denoise has no use for the b-values
+    assert ('bval_file', 'bval_file') not in _connections(workflow)[('inputnode', 'denoiser')]
+    assert 'shell' not in workflow.__desc__
+    assert 'cubic patches' in workflow.__desc__
+
+
+def test_svht_rejects_vst_settings_with_phase(monkeypatch, tmp_path):
+    """Test that a VST setting is rejected for a series whose phase data are used."""
+    _use_denoise_config(monkeypatch, tmp_path, {'noise_dof': 4})
+
+    with pytest.raises(ValueError, match='rotated onto the real axis'):
+        _build_denoising_wf(monkeypatch, 'svht', 'none', use_phase=True)
+
+    # The same file is fine for magnitude-only data
+    workflow = _build_denoising_wf(monkeypatch, 'svht', 'none', use_phase=False)
+    assert workflow.get_node('denoiser').inputs.noise_dof == 4
+
+
 def test_svht_auto_window_is_left_to_svht(monkeypatch):
     """Test that the auto window leaves svht_denoise to size its own patches."""
     monkeypatch.setattr(config.workflow, 'dwidenoise_window', 'auto')
@@ -687,7 +724,10 @@ def test_svht_reads_the_phase_and_splits_after_denoising(monkeypatch, unringing_
     node_names = {node.name for node in workflow._get_all_nodes()}
 
     assert 'combine_complex' not in node_names
-    assert connections[('inputnode', 'denoiser')] == {('dwi_file', 'in_file')}
+    assert connections[('inputnode', 'denoiser')] == {
+        ('dwi_file', 'in_file'),
+        ('bval_file', 'bval_file'),
+    }
     assert connections[('phase_to_radians', 'denoiser')] == {('phase_file', 'phase_file')}
     assert workflow.get_node('denoiser').inputs.phase_units == 'radians'
     assert connections[('denoiser', 'split_complex')] == {('out_file', 'complex_file')}

@@ -680,13 +680,13 @@ def test_dwidenoise2_config_reaches_the_namespace(minimal_args, tmp_path):
     from pathlib import Path
 
     cfg = _dwidenoise2_json(tmp_path, decomposition='selfadjoint')
-    opts = _parse(minimal_args, '--denoise-method', 'dwidenoise2', '--dwidenoise2-config', cfg)
+    opts = _parse(minimal_args, '--denoise-method', 'dwidenoise2', '--denoise-config', cfg)
     assert opts.denoise_method == 'dwidenoise2'
-    assert opts.dwidenoise2_config == Path(cfg).absolute()
+    assert opts.denoise_config == Path(cfg).absolute()
 
 
 def test_dwidenoise2_config_defaults_to_none(minimal_args):
-    assert _parse(minimal_args, '--denoise-method', 'dwidenoise2').dwidenoise2_config is None
+    assert _parse(minimal_args, '--denoise-method', 'dwidenoise2').denoise_config is None
 
 
 def test_svht_methods_are_accepted(minimal_args):
@@ -701,22 +701,47 @@ def test_svht_methods_are_accepted(minimal_args):
         [],
         ['--denoise-method', 'dwidenoise'],
         ['--denoise-method', 'patch2self'],
-        ['--denoise-method', 'svht'],
+        ['--denoise-method', 'none'],
     ],
 )
-def test_dwidenoise2_config_requires_dwidenoise2(minimal_args, tmp_path, capsys, method_args):
+def test_denoise_config_requires_a_configurable_method(
+    minimal_args, tmp_path, capsys, method_args
+):
     cfg = _dwidenoise2_json(tmp_path)
     with pytest.raises(SystemExit):
-        _parse(minimal_args, *method_args, '--dwidenoise2-config', cfg)
-    assert '--dwidenoise2-config requires --denoise-method dwidenoise2' in (
+        _parse(minimal_args, *method_args, '--denoise-config', cfg)
+    assert '--denoise-config requires --denoise-method dwidenoise2 or svht' in (
         capsys.readouterr().err
     )
+
+
+def test_svht_config_reaches_the_namespace(minimal_args, tmp_path):
+    from pathlib import Path
+
+    cfg = _dwidenoise2_json(tmp_path, name='svht.json', demean='none', shape='cube')
+    opts = _parse(minimal_args, '--denoise-method', 'svht', '--denoise-config', cfg)
+    assert opts.denoise_config == Path(cfg).absolute()
+
+
+def test_denoise_config_is_checked_against_the_method(minimal_args, tmp_path, capsys):
+    """Test that a file is read with the keys of the selected method, not the other one."""
+    cfg = _dwidenoise2_json(tmp_path, decomposition='selfadjoint')
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--denoise-method', 'svht', '--denoise-config', cfg)
+    assert 'svht configuration file' in capsys.readouterr().err
+
+
+def test_old_dwidenoise2_config_flag_is_removed(minimal_args, tmp_path, capsys):
+    cfg = _dwidenoise2_json(tmp_path)
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--denoise-method', 'dwidenoise2', '--dwidenoise2-config', cfg)
+    assert 'unrecognized arguments' in capsys.readouterr().err
 
 
 def test_invalid_dwidenoise2_config_is_a_parse_error(minimal_args, tmp_path, capsys):
     cfg = _dwidenoise2_json(tmp_path, schedule=[{'kernel': 'rank'}])
     with pytest.raises(SystemExit):
-        _parse(minimal_args, '--denoise-method', 'dwidenoise2', '--dwidenoise2-config', cfg)
+        _parse(minimal_args, '--denoise-method', 'dwidenoise2', '--denoise-config', cfg)
     assert 'first schedule row' in capsys.readouterr().err
 
 
@@ -734,9 +759,9 @@ def restore_dwidenoise2_config():
     """Yield qsiprep.config, restoring the dwidenoise2 settings that parse_args writes."""
     from qsiprep import config
 
-    saved = (config.workflow.denoise_method, config.workflow.dwidenoise2_config)
+    saved = (config.workflow.denoise_method, config.workflow.denoise_config)
     yield config
-    config.workflow.denoise_method, config.workflow.dwidenoise2_config = saved
+    config.workflow.denoise_method, config.workflow.denoise_config = saved
 
 
 def test_dwidenoise2_config_survives_a_config_round_trip(
@@ -754,15 +779,15 @@ def test_dwidenoise2_config_survives_a_config_round_trip(
     _dwidenoise2_json(tmp_path)
     monkeypatch.chdir(tmp_path)
     opts = _parse(
-        minimal_args, '--denoise-method', 'dwidenoise2', '--dwidenoise2-config', 'dwidenoise2.json'
+        minimal_args, '--denoise-method', 'dwidenoise2', '--denoise-config', 'dwidenoise2.json'
     )
-    config.workflow.load({'dwidenoise2_config': opts.dwidenoise2_config}, init=False)
+    config.workflow.load({'denoise_config': opts.denoise_config}, init=False)
     dumped = toml.dumps({'workflow': config.workflow.get()})
     assert 'PosixPath(' not in dumped
-    config.workflow.dwidenoise2_config = None
+    config.workflow.denoise_config = None
     config.workflow.load(toml.loads(dumped)['workflow'], init=False)
-    assert config.workflow.dwidenoise2_config == tmp_path / 'dwidenoise2.json'
-    assert Path(config.workflow.dwidenoise2_config).is_absolute()
+    assert config.workflow.denoise_config == tmp_path / 'dwidenoise2.json'
+    assert Path(config.workflow.denoise_config).is_absolute()
 
 
 def test_config_file_reload_drops_stale_dwidenoise2_config(tmp_path, restore_dwidenoise2_config):
@@ -773,11 +798,11 @@ def test_config_file_reload_drops_stale_dwidenoise2_config(tmp_path, restore_dwi
     old_json = _dwidenoise2_json(tmp_path, name='old.json', decomposition='selfadjoint')
     config = _parse_with_config_file(
         tmp_path,
-        f'[workflow]\ndenoise_method = "dwidenoise2"\ndwidenoise2_config = "{old_json}"\n',
+        f'[workflow]\ndenoise_method = "dwidenoise2"\ndenoise_config = "{old_json}"\n',
         '--denoise-method',
         'dwidenoise2',
     )
-    assert config.workflow.dwidenoise2_config is None
+    assert config.workflow.denoise_config is None
 
 
 def test_sdc_anat_reference_parses(minimal_args):

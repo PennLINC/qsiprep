@@ -93,7 +93,8 @@ New options
   distortion correction (:ref:`jacobian_flags`).
 * ``--gpu`` and ``--tortoise-gpu-cpu-ratio``: per-task GPU selection,
   replacing ``use_cuda`` in the configuration files.
-* ``--denoise-method dwidenoise2`` and ``--dwidenoise2-config``.
+* ``--denoise-method dwidenoise2``, ``--denoise-method svht``,
+  ``--unringing-method svht`` and ``--denoise-config``.
 * ``--mrtrix-version``: use the MRtrix3 development branch.
 * ``--anat-biascorrect``, ``--report-output-level``, ``--ignore t2w``,
   ``--ignore phase``, ``--ignore shims``, ``--ignore fov``.

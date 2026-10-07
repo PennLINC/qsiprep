@@ -34,9 +34,13 @@ from ...interfaces.svht import SVHTDeGibbs, SVHTDenoise
 from ...interfaces.tortoise import Gibbs
 from ...utils.bids import IMPORTANT_DWI_FIELDS, update_metadata_from_nifti_header
 from ...utils.misc import (
+    SVHT_DEFAULTS,
     check_dwidenoise2_demodulation,
+    check_svht_phase,
     describe_dwidenoise2,
+    describe_svht,
     load_dwidenoise2_config,
+    load_svht_config,
 )
 from .qc import init_modelfree_qc_wf
 from .util import _get_wf_name
@@ -487,9 +491,14 @@ def init_dwi_denoising_wf(
     denoise_method = config.workflow.denoise_method
     dwidenoise2_params = {}
     if denoise_method == 'dwidenoise2':
-        if config.workflow.dwidenoise2_config is not None:
-            dwidenoise2_params = load_dwidenoise2_config(config.workflow.dwidenoise2_config)
+        if config.workflow.denoise_config is not None:
+            dwidenoise2_params = load_dwidenoise2_config(config.workflow.denoise_config)
         check_dwidenoise2_demodulation(dwidenoise2_params, use_phase)
+    svht_params = dict(SVHT_DEFAULTS)
+    if denoise_method == 'svht':
+        if config.workflow.denoise_config is not None:
+            svht_params.update(load_svht_config(config.workflow.denoise_config))
+        check_svht_phase(svht_params, use_phase)
 
     unringing_method = config.workflow.unringing_method
     do_denoise = denoise_method in ('patch2self', 'dwidenoise', 'dwidenoise2', 'svht')
@@ -579,7 +588,7 @@ def init_dwi_denoising_wf(
         elif denoise_method == 'svht':
             # svht_denoise sizes its patches like dwidenoise, from the volume count
             dwidenoise_window = config.workflow.dwidenoise_window
-            svht_kwargs = {}
+            svht_kwargs = dict(svht_params)
             if dwidenoise_window != 'auto':
                 svht_kwargs['extent'] = dwidenoise_window
             if denoise_real_axis:
@@ -591,6 +600,9 @@ def init_dwi_denoising_wf(
                 name='denoiser',
                 n_procs=omp_nthreads,
             )
+            if svht_params['demean']:
+                # The shells to demean are read from the b-values
+                workflow.connect([(inputnode, denoiser, [('bval_file', 'bval_file')])])
         else:
             denoiser = pe.Node(
                 Patch2Self(),
@@ -626,24 +638,7 @@ def init_dwi_denoising_wf(
 
             last_step = 'After MP-PCA, '
         elif denoise_method == 'svht':
-            svht_desc = (
-                'denoised by local PCA with optimal singular value shrinkage, as implemented '
-                'in `svht_denoise` [@svht_denoise]. Each component of overlapping spherical '
-                'patches was shrunk by the Frobenius-optimal rule [@gavish2017], against a '
-                'noise level estimated with the median estimator of @gavish2014, and the '
-                'patch estimates were averaged where they overlapped [@manjon2013]. '
-            )
-            if denoise_real_axis:
-                desc += (
-                    'Magnitude and phase DWI data were rotated onto the real axis [@nordic], '
-                    f'so that the noise remained zero-mean Gaussian, then {svht_desc}'
-                    'The absolute value of the denoised data was retained. '
-                )
-            else:
-                desc += (
-                    'DWI data were variance-stabilized to remove the Rician noise floor '
-                    f'[@foi2011], then {svht_desc}'
-                )
+            desc += describe_svht(svht_params, real_axis=denoise_real_axis)
             last_step = 'After denoising, '
         else:
             desc += (

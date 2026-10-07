@@ -9,9 +9,13 @@ import pytest
 from qsiprep.cli.parser import _build_parser
 from qsiprep.utils.misc import (
     check_dwidenoise2_demodulation,
+    check_svht_phase,
     describe_dwidenoise2,
+    describe_svht,
     format_dwidenoise2_schedule,
+    load_denoise_config,
     load_dwidenoise2_config,
+    load_svht_config,
     safe_unit_vector,
     select_polarity,
 )
@@ -58,7 +62,7 @@ def test_angle_between_finite_for_zero_vector():
 
 
 def test_dwidenoise2_config_keys_match_interface():
-    """Test that every key a --dwidenoise2-config file may set is a trait on DWIDenoise2."""
+    """Test that every key a --denoise-config file may set is a trait on DWIDenoise2."""
     from qsiprep.interfaces.mrtrix import DWIDenoise2
     from qsiprep.utils.misc import _DWIDENOISE2_CONFIG_KEYS
 
@@ -176,11 +180,11 @@ def test_denoise_window_help_mentions_dwidenoise2():
     action = next(a for a in parser._actions if '--dwidenoise-window' in a.option_strings)
 
     assert 'dwidenoise2' in action.help
-    assert '--dwidenoise2-config' in action.help
+    assert '--denoise-config' in action.help
 
 
 def _dwidenoise2_json(tmp_path, text=None, **settings):
-    """Write a --dwidenoise2-config file and return its path."""
+    """Write a --denoise-config file and return its path."""
     path = tmp_path / 'dwidenoise2.json'
     path.write_text(json.dumps(settings) if text is None else text)
     return str(path)
@@ -481,12 +485,11 @@ def test_format_dwidenoise2_schedule_accepts_list_triplets():
         (
             {'schedule': [{'update_noise': True}]},
             'in a single pass over the data following a custom 1-iteration schedule provided '
-            'with `--dwidenoise2-config`',
+            'with `--denoise-config`',
         ),
         (
             {'schedule': [{}, {}, {'kernel': 'rank'}]},
-            'iterations following a custom 3-iteration schedule provided with '
-            '`--dwidenoise2-config`',
+            'iterations following a custom 3-iteration schedule provided with `--denoise-config`',
         ),
         # Without a schedule, dwidenoise2 reduces to one pass in these cases
         ({'fixed_rank': 5}, 'single pass over the data following its bundled "fixedrank"'),
@@ -540,6 +543,142 @@ def test_check_dwidenoise2_demodulation(demodulate):
     check_dwidenoise2_demodulation({'demodulate': demodulate}, use_phase=True)
     check_dwidenoise2_demodulation({'demodulate': 'none'}, use_phase=False)
     check_dwidenoise2_demodulation({}, use_phase=False)
+
+
+def test_svht_config_keys_match_interface():
+    """Test that every key an svht --denoise-config file may set is a trait on SVHTDenoise."""
+    from qsiprep.interfaces.svht import SVHTDenoise
+    from qsiprep.utils.misc import _SVHT_CONFIG_KEYS, SVHT_DEFAULTS
+
+    trait_names = set(SVHTDenoise.input_spec().trait_names())
+    assert sorted((_SVHT_CONFIG_KEYS | set(SVHT_DEFAULTS)) - trait_names) == []
+
+
+def _svht_json(tmp_path, text=None, **settings):
+    """Write an svht --denoise-config file and return its path."""
+    path = tmp_path / 'svht.json'
+    path.write_text(json.dumps(settings) if text is None else text)
+    return str(path)
+
+
+def test_load_svht_config_accepts_empty_file(tmp_path):
+    assert load_svht_config(_svht_json(tmp_path)) == {}
+
+
+def test_load_svht_config_full(tmp_path):
+    path = _svht_json(
+        tmp_path,
+        demean='none',
+        filter_method='optthresh',
+        aggregator='gaussian',
+        aggregator_fwhm=1.5,
+        shape='cube',
+        stride=1,
+        vst=True,
+        noise_dof=4,
+        preserve_noise_bias=True,
+    )
+    assert load_svht_config(path) == {
+        # "none" and "shells" become the interface's boolean
+        'demean': False,
+        'filter_method': 'optthresh',
+        'aggregator': 'gaussian',
+        'aggregator_fwhm': 1.5,
+        'shape': 'cube',
+        'stride': 1,
+        'vst': True,
+        'noise_dof': 4,
+        'preserve_noise_bias': True,
+    }
+    assert load_svht_config(_svht_json(tmp_path, demean='shells')) == {'demean': True}
+
+
+@pytest.mark.parametrize(
+    ('settings', 'message'),
+    [
+        ({'decomposition': 'bdcsvd'}, 'unknown key'),
+        ({'extent': 7}, 'unknown key'),
+        ({'demean': 'volume_groups'}, 'must be one of none, shells'),
+        ({'demean': True}, 'must be one of none, shells'),
+        ({'aggregator': 'invl0'}, 'must be one of'),
+        ({'filter_method': 'svht'}, 'must be one of'),
+        ({'shape': 'ball'}, 'must be one of'),
+        ({'stride': 3}, 'must be 1 or 2'),
+        ({'stride': True}, 'must be 1 or 2'),
+        ({'noise_dof': 0}, 'from 1 to 64'),
+        ({'noise_dof': 65}, 'from 1 to 64'),
+        ({'aggregator_fwhm': 0}, 'must be a number > 0'),
+        ({'vst': 'y'}, 'must be true or false'),
+        ({'aggregator': 'uniform', 'aggregator_fwhm': 2}, 'needs "aggregator" "gaussian"'),
+        ({'aggregator': 'exclusive', 'stride': 2}, 'needs a patch centered on every voxel'),
+        ({'vst': False, 'noise_dof': 2}, 'with "vst" false'),
+        ({'vst': False, 'preserve_noise_bias': True}, 'with "vst" false'),
+    ],
+)
+def test_load_svht_config_rejects(tmp_path, settings, message):
+    with pytest.raises(ValueError, match=message):
+        load_svht_config(_svht_json(tmp_path, **settings))
+
+
+def test_load_svht_config_rejects_malformed_files(tmp_path):
+    with pytest.raises(ValueError, match='svht configuration file .* is not valid JSON'):
+        load_svht_config(_svht_json(tmp_path, text='{'))
+
+
+def test_load_denoise_config_reads_the_selected_method(tmp_path):
+    path = _svht_json(tmp_path, aggregator='uniform')
+    assert load_denoise_config(path, 'svht') == {'aggregator': 'uniform'}
+    # dwidenoise2 accepts the same key, and validates it against its own choices
+    assert load_denoise_config(path, 'dwidenoise2') == {'aggregator': 'uniform'}
+    with pytest.raises(ValueError, match='only dwidenoise2 and svht read it'):
+        load_denoise_config(path, 'dwidenoise')
+
+
+@pytest.mark.parametrize(
+    'params', [{'vst': True}, {'noise_dof': 2}, {'preserve_noise_bias': True}]
+)
+def test_check_svht_phase(params):
+    """Test that settings describing the magnitude VST are rejected with phase data."""
+    with pytest.raises(ValueError, match='rotated onto the real axis'):
+        check_svht_phase(params, use_phase=True)
+
+    check_svht_phase(params, use_phase=False)
+    check_svht_phase({'vst': False, 'demean': True}, use_phase=True)
+
+
+def test_describe_svht_defaults():
+    from qsiprep.utils.misc import SVHT_DEFAULTS
+
+    description = describe_svht(dict(SVHT_DEFAULTS), real_axis=False)
+    for citation in ('@svht_denoise', '@gavish2017', '@gavish2014', '@manjon2013', '@foi2011'):
+        assert citation in description
+    assert 'spherical patches' in description
+    assert 'each *b*-value shell' in description
+    assert 'exact-unbiased' in description
+
+    real = describe_svht(dict(SVHT_DEFAULTS), real_axis=True)
+    assert '@nordic' in real
+    assert '@foi2011' not in real
+    assert 'absolute value' in real
+
+
+def test_describe_svht_reflects_the_config():
+    description = describe_svht(
+        {
+            'demean': False,
+            'shape': 'cube',
+            'filter_method': 'optthresh',
+            'aggregator': 'exclusive',
+            'vst': False,
+        },
+        real_axis=False,
+    )
+    assert 'cubic patches' in description
+    assert 'hard threshold' in description
+    assert 'patch centered on it' in description
+    assert 'shell' not in description
+    assert '@foi2011' not in description
+    assert '@manjon2013' not in description
 
 
 def test_effective_eddy_method_defaults_to_jac():

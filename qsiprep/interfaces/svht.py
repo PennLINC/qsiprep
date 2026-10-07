@@ -11,6 +11,7 @@ Gibbs ringing by local subvoxel shifts, with partial Fourier support. Unlike
 import nibabel as nb
 import numpy as np
 from nilearn.image import load_img
+from nipype import logging
 from nipype.interfaces.base import (
     CommandLine,
     CommandLineInputSpec,
@@ -25,6 +26,29 @@ from .denoise import (
     SeriesPreprocReportOutputSpec,
 )
 from .mrtrix import MRDeGibbs
+
+LOGGER = logging.getLogger('nipype.interface')
+
+# svht_denoise estimates the noise level from the volumes left after demeaning, and
+# refuses to write a noise map from fewer than this
+_MIN_NOISE_COLUMNS = 3
+
+
+def _count_demeaned_shells(bvals):
+    """Count the shells ``svht_denoise -demean y`` removes a mean from.
+
+    Shells are clustered as svht_denoise (and MRtrix3) do: b <= 10 is b=0, and sorted
+    neighbours less than 80 s/mm^2 apart share a shell. A shell of one volume is not
+    demeaned.
+    """
+    bvals = np.sort(np.asarray(bvals, dtype=float))
+    b0 = bvals <= 10
+    sizes = [int(b0.sum())]
+    weighted = bvals[~b0]
+    if weighted.size:
+        breaks = np.flatnonzero(np.diff(weighted) >= 80) + 1
+        sizes += [len(shell) for shell in np.split(weighted, breaks)]
+    return sum(size > 1 for size in sizes)
 
 
 class _SVHTDenoiseInputSpec(CommandLineInputSpec, SeriesPreprocReportInputSpec):
@@ -74,6 +98,52 @@ class _SVHTDenoiseInputSpec(CommandLineInputSpec, SeriesPreprocReportInputSpec):
             'Defaults to the smallest such value.'
         ),
     )
+    demean = traits.Bool(
+        argstr='-demean %s',
+        desc=(
+            'remove the mean of each b-value shell before PCA and restore it after. '
+            'True needs bval_file.'
+        ),
+    )
+    bval_file = File(
+        exists=True,
+        argstr='-bval %s',
+        desc='FSL b-values, which define the shells for demean. Only valid with demean.',
+    )
+    filter_method = traits.Enum(
+        'optshrink',
+        'optthresh',
+        'truncate',
+        argstr='-filter %s',
+        desc='how components are kept',
+    )
+    shape = traits.Enum('sphere', 'cube', argstr='-shape %s', desc='patch shape')
+    aggregator = traits.Enum(
+        'gaussian',
+        'uniform',
+        'exclusive',
+        argstr='-aggregator %s',
+        desc='how overlapping patch estimates make the output',
+    )
+    aggregator_fwhm = traits.Float(
+        argstr='-aggregator_fwhm %g',
+        desc='Gaussian aggregator width, in units of the patch-centre spacing',
+    )
+    stride = traits.Enum(1, 2, argstr='-stride %d', desc='patch-centre spacing in voxels')
+    vst = traits.Bool(
+        argstr='-vst %s',
+        desc='variance-stabilize magnitude data before denoising',
+    )
+    noise_dof = traits.Range(
+        low=1,
+        high=64,
+        argstr='-noise_dof %d',
+        desc='receive channels behind each magnitude (sum of squares)',
+    )
+    preserve_noise_bias = traits.Bool(
+        argstr='-preserve_noise_bias',
+        desc='invert the variance-stabilizing transform algebraically, keeping the noise floor',
+    )
     nthreads = traits.Int(argstr='-nthreads %d', nohash=True, desc='number of threads')
     mask = File(desc='mask image for the visual report')
     out_report = File(
@@ -97,6 +167,40 @@ class SVHTDenoise(SeriesPreprocReport, CommandLine):
     _cmd = 'svht_denoise'
     input_spec = _SVHTDenoiseInputSpec
     output_spec = _SVHTDenoiseOutputSpec
+
+    def _demean_is_possible(self):
+        """Whether demeaning by shell leaves svht_denoise enough data to estimate the noise.
+
+        Each shell svht_denoise demeans costs a column of the noise estimate, and it needs
+        at least 3 to write a noise map. A short series can fall below that only because of
+        demeaning, so demeaning is skipped there rather than failing a run that would
+        succeed without it.
+        """
+        if not (self.inputs.demean and isdefined(self.inputs.bval_file)):
+            return True
+        bvals = np.loadtxt(self.inputs.bval_file, ndmin=1)
+        return bvals.size - _count_demeaned_shells(bvals) >= _MIN_NOISE_COLUMNS
+
+    def _run_interface(self, runtime):
+        if not self._demean_is_possible():
+            LOGGER.warning(
+                'Not demeaning %s by shell: it would leave svht_denoise fewer than %d '
+                'volumes to estimate the noise level from.',
+                self.inputs.in_file,
+                _MIN_NOISE_COLUMNS,
+            )
+        return super()._run_interface(runtime)
+
+    def _format_arg(self, name, spec, value):
+        if name in ('demean', 'bval_file') and not self._demean_is_possible():
+            return ''
+        if name in ('demean', 'vst'):
+            # svht_denoise spells its switches y/n
+            return spec.argstr % ('y' if value else 'n')
+        if name == 'preserve_noise_bias':
+            # A bare flag: present when true, absent when false
+            return spec.argstr if value else ''
+        return super()._format_arg(name, spec, value)
 
     def _get_plotting_images(self):
         input_dwi = load_img(self.inputs.in_file)
