@@ -82,8 +82,11 @@ sessions; no rotation search is run at this step. That template is registered to
 anatomical once, and every group inherits the result, so preprocessed data
 from different groups (for example different sessions) are directly
 comparable. The agreement between each group's reference and the template
-is written as a QC table and shown in the report. Which transforms are
-written in each case is listed in :ref:`transforms`.
+is written as a QC table and shown in the report. With a single distortion
+group no template is built: that group's reference is the subject reference,
+reached by an identity transform, and it is registered to the anatomical in
+the same way. Which transforms are written in each case is listed in
+:ref:`transforms`.
 
 .. workflow::
     :graph2use: orig

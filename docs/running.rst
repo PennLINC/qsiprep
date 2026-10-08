@@ -592,8 +592,13 @@ from every group's reference, registers that once, and has every group
 inherit the result, so that data from different groups end up on exactly the
 same alignment. ``--dwiref-construction-iters`` (at least 2) and
 ``--dwiref-construction-transform`` (``Rigid``, ``Affine``, ``BSplineSyN`` or
-``SyN``) configure the template build. Which transforms are written in each
-case is described in :ref:`transforms`.
+``SyN``) configure the template build. A subject with a single distortion
+group gets the same ``subject`` outputs: no template is built, and that
+group's reference becomes the subject reference, with an identity transform.
+``subject`` cannot be combined with ``--subject-anatomical-reference
+sessionwise``, which processes each session on its own and so cannot build a
+reference that spans the subject's sessions. Which transforms are written in
+each case is described in :ref:`transforms`.
 
 
 ***********************
