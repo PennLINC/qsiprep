@@ -1016,6 +1016,29 @@ def test_dwiref_definition_parses(tmp_path):
         parser.parse_args([*base, '--dwiref-definition', 'session'])
 
 
+def test_subject_dwiref_is_rejected_with_sessionwise_anatomy(tmp_path, capsys):
+    """Test that a subject dwiref cannot be combined with sessionwise processing.
+
+    A sessionwise workflow sees one session, so its "subject" dwiref would be a
+    per-session reference under a subject-level name.
+    """
+    from qsiprep.cli.parser import parse_args
+
+    with pytest.raises(SystemExit):
+        parse_args(
+            [
+                *_cli_base(tmp_path),
+                '--dwiref-definition',
+                'subject',
+                '--subject-anatomical-reference',
+                'sessionwise',
+            ]
+        )
+    assert 'incompatible with --subject-anatomical-reference sessionwise' in (
+        capsys.readouterr().err
+    )
+
+
 def test_dwiref_construction_iters_defaults_to_two(tmp_path):
     from qsiprep.cli.parser import _build_parser
 
