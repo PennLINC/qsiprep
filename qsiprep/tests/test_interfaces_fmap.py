@@ -176,7 +176,33 @@ def test_cleanup_edge_blends_despiked_rim_into_original_interior(tmp_path):
 
     assert np.all(out[interior] == 10.0)  # original field kept inside
     assert np.all(out[edge] == 99.0)  # rim replaced by despiked values
-    assert np.all(out[~(interior | edge)] == 0.0)  # nothing outside mask ∪ rim
+    # outside the mask: the nearest in-mask value, never zero
+    assert np.all(np.isin(out[~(interior | edge)], (10.0, 99.0)))
+
+
+def test_cleanup_edge_extrapolates_the_nearest_value_outside_the_mask(tmp_path):
+    """Test that a voxel beyond the mask carries the field of its nearest in-mask voxel."""
+    mask = np.zeros((9, 9, 9), dtype='float32')
+    mask[1:6, 1:6, 1:6] = 1.0
+    # a field that ramps along x so the nearest value is unambiguous
+    x = np.arange(9, dtype='float32')[:, None, None]
+    original = np.broadcast_to(x, (9, 9, 9)).copy() * np.where(mask > 0, 1.0, np.nan)
+    original = np.nan_to_num(original, nan=-1000.0)  # garbage outside must not leak in
+
+    result = _run(
+        CleanupEdgeFilter(
+            in_file=_write(tmp_path / 'fmap.nii.gz', original),
+            despiked_file=_write(tmp_path / 'despiked.nii.gz', original),
+            in_mask=_write(tmp_path / 'mask.nii.gz', mask),
+        ),
+        tmp_path / 'w',
+    )
+    out = nb.load(result.outputs.out_file).get_fdata()
+
+    assert out[8, 3, 3] == 5.0  # beyond the x-edge of the mask: the mask's last x value
+    assert out[3, 8, 3] == 3.0  # beyond the y-edge: the same x, ramp value preserved
+    assert out[8, 8, 8] == 5.0  # the corner: nearest in-mask voxel is the mask's corner
+    assert not np.any(out == -1000.0)
 
 
 def test_fieldmap_to_vsm_uses_standard_shift_formula(tmp_path):

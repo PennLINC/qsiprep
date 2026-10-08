@@ -110,10 +110,13 @@ def test_fieldmap_coreg_reportlet_is_its_own_node(monkeypatch):
     config.execution.sloppy = False
     wf = init_sdc_unwarp_wf(name='sdc_unwarp_report')
 
-    assert type(wf.get_node('fmap2ref_reg').interface) is Registration
-    # The fieldmap reference resampled onto the EPI reference, flickered
-    # against it -- the same pair the RPT interface used to plot internally.
-    assert _connect(wf, 'fmap2ref_reg', 'fmap2ref_rpt') == [('warped_image', 'before')]
-    assert _connect(wf, 'inputnode', 'fmap2ref_rpt') == [('in_reference_brain', 'after')]
+    assert type(wf.get_node('fmap2ref_reg2').interface) is Registration
+    # The fieldmap reference resampled onto the unwarped EPI reference through
+    # the final (guarded) transform, flickered against that reference (brain-masked).
+    assert _connect(wf, 'fmap_ref2ref', 'fmap2ref_rpt') == [('output_image', 'before')]
+    assert _connect(wf, 'inputnode', 'fmap_ref2ref') == [('fmap_ref', 'input_image')]
+    assert _connect(wf, 'guard_refinement', 'fmap_ref2ref') == [('out_transform', 'transforms')]
+    assert _connect(wf, 'mask_unwarped_ref', 'fmap2ref_rpt') == [('out_file', 'after')]
+    assert _connect(wf, 'choose_pass', 'mask_unwarped_ref') == [('out_reference', 'in_file')]
+    assert _connect(wf, 'inputnode', 'mask_unwarped_ref') == [('in_mask', 'in_mask')]
     assert _connect(wf, 'fmap2ref_rpt', 'ds_report_reg') == [('out_report', 'in_file')]
-    assert wf.get_node('fmap2ref_reg').inputs.output_warped_image

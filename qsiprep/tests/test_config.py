@@ -185,3 +185,41 @@ def test_path_valued_options_are_declared_in_their_section(tmp_path):
 #: ``qsiprep/tests/test_jacobian_provenance.py`` for its coverage, including
 #: the two-different-units-in-one-invocation case these tests could not
 #: express.
+
+
+@pytest.mark.usefixtures('_restore_config')
+def test_layout_follows_the_dataset_within_one_process(tmp_path):
+    """Test that a second dataset in the same process gets its own layout and database.
+
+    The config is a process-wide singleton, so the layout has to follow ``bids_dir`` rather
+    than being built once per process.
+    """
+    import json
+
+    def dataset(name, subject):
+        root = tmp_path / name
+        (root / f'sub-{subject}' / 'dwi').mkdir(parents=True)
+        (root / 'dataset_description.json').write_text(
+            json.dumps({'Name': name, 'BIDSVersion': '1.8.0'})
+        )
+        (root / f'sub-{subject}' / 'dwi' / f'sub-{subject}_dwi.nii.gz').touch()
+        return root
+
+    first, second = dataset('first', '01'), dataset('second', '02')
+    config.execution.work_dir = tmp_path / 'work'
+    config.execution.bids_database_dir = None
+    config.execution._layout = None
+    # a derived database indexes only the requested participants; an earlier test's label
+    # would hide sub-02
+    config.execution.participant_label = None
+
+    config.execution.bids_dir = first
+    config.execution.init()
+    assert config.execution.layout.get_subjects() == ['01']
+
+    config.execution.bids_dir = second
+    config.execution.init()  # the derived database (per run id) is reset for the new dataset
+    assert config.execution.layout.get_subjects() == ['02']
+
+    config.execution.init()  # the same dataset again keeps its layout
+    assert config.execution.layout.get_subjects() == ['02']

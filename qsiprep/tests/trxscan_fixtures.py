@@ -16,6 +16,9 @@ phantom tractograms).
 Fixtures are 3 mm, 16 directions + 2 b=0 per phase-encode polarity, from the hosted
 ``sub-60501`` phantom (400k streamlines), with the subject's T1w/T2w. Readout follows the
 matrix (56 ms); susceptibility distortion rms 4.6 mm. Every DWI is magnitude-only.
+
+Noise is :data:`NOISE`, a realistic level: eddy's Gaussian-process noise-variance
+hyperparameters degenerate on noiseless data and its motion estimates become erratic.
 """
 
 from __future__ import annotations
@@ -29,12 +32,16 @@ from pathlib import Path
 #: The TRXScan release the fixtures are generated with. Bumping it invalidates the CI cache.
 TRXSCAN_VERSION = '0.2.1'
 
+#: TRXScan's k-space noise variance for every fixture (SNR scales as 1/sqrt(noise)); at 3 mm
+#: this is a b=0 SNR of about 19, a realistic, slightly noisy acquisition.
+NOISE = 8
+
 #: fixture name -> (recipe, {parameter: value}); values are JSON-encoded for ``--set``.
 RECIPES = {
     # blip-up/blip-down pair: TOPUP / DRBUDDI reverse-series SDC, eddy, coregistration
-    'rpe': ('rpe_series', {'voxel': 3, 'subject': 'rpe', 'noise': 1e-4}),
+    'rpe': ('rpe_series', {'voxel': 3, 'subject': 'rpe', 'noise': NOISE}),
     # one series + a reverse-PE epi fieldmap under one B0FieldIdentifier
-    'epi': ('epi_fieldmap', {'voxel': 3, 'subject': 'epi', 'noise': 1e-4}),
+    'epi': ('epi_fieldmap', {'voxel': 3, 'subject': 'epi', 'noise': NOISE}),
     # one series + a synthetic dual-echo GRE phasediff fieldmap; the T1w and the fieldmap were
     # acquired after the subject moved (recorded truth transforms), so fmap->b0 and b0->T1w
     # registration are scored against a real movement
@@ -43,7 +50,7 @@ RECIPES = {
         {
             'voxel': 3,
             'subject': 'pdiff',
-            'noise': 1e-4,
+            'noise': NOISE,
             'anat_offset': [3, -4, 2, 5, -3, 4],
             'fmap_offset': [-2, 3, 1, -4, 2, 3],
         },
@@ -52,20 +59,20 @@ RECIPES = {
     # deviation, 2.5 mm median warp); the coefficient file is in the derivatives
     'gnl': (
         'rpe_series',
-        {'voxel': 3, 'subject': 'gnl', 'noise': 1e-4, 'gnl': 'connectom-300', 'gnl_scale': 3},
+        {'voxel': 3, 'subject': 'gnl', 'noise': NOISE, 'gnl': 'connectom-300', 'gnl_scale': 3},
     ),
     # the subject's measured head motion trace scaled x5 (5 mm / 2.8 deg range); the per-volume
     # poses are recorded in the derivatives
-    'motion': ('motion', {'voxel': 3, 'subject': 'motion', 'noise': 1e-4, 'mb': 1, 'scale': 5}),
+    'motion': ('motion', {'voxel': 3, 'subject': 'motion', 'noise': NOISE, 'mb': 1, 'scale': 5}),
     # one series, no fieldmap, the subject's T2w: DIFFPREP's T2Wreg EPI correction
-    't2wreg': ('rpe_series', {'voxel': 3, 'subject': 't2wreg', 'noise': 1e-4, 'pe': ['AP']}),
+    't2wreg': ('rpe_series', {'voxel': 3, 'subject': 't2wreg', 'noise': NOISE, 'pe': ['AP']}),
     # subject moved between the T1w and the DWI, and again between the AP and PA series
     'offsets': (
         'rpe_series',
         {
             'voxel': 3,
             'subject': 'rpeoff',
-            'noise': 1e-4,
+            'noise': NOISE,
             'anat_offset': [3, -4, 2, 5, -3, 4],
             'pa_offset': [2, -3, 1, -3, 4, 2],
         },

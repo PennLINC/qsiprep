@@ -16,6 +16,18 @@
   from 0.925 to 0.955, and eddy's spurious motion on a static object from 0.33 to 0.002 mm.
   Under `--sloppy` the registration is one three-level rigid with random sampling.
 
+* T2Wreg used the T2w where TORTOISE's own rigid registration to the distorted b=0 put it, and
+  that registration started from the `antsAI` rotation search alone, which can land several
+  degrees off. The T2w (or synthetic b=0) is now refined with a masked rigid `antsRegistration`
+  against the b=0 — the GRE-unwarped b=0 when a GRE fieldmap seeds the correction — and
+  DIFFPREP is told to use it at that pose (`--DRBUDDI_disable_initial_rigid`, re-enabled in
+  the TORTOISE build qsiprep ships). DRBUDDI's T2w starts from the same refined placement.
+
+* `--sloppy` TORTOISE runs used stage schedules whose smoothing sigmas and pyramid factors
+  are in voxels of TORTOISE's ~1 mm grid, so on the coarser sloppy grid they smoothed the
+  field 2.5 times too much and recovered about half of it. The sloppy DRBUDDI and T2Wreg
+  schedules are now TORTOISE's defaults rescaled to the sloppy grid with fewer iterations.
+
 ### 🎉 Exciting New Features
 
 * Truth-scored integration tests on simulated data: the `trxscan_*` CI jobs generate
@@ -38,13 +50,17 @@
   (NearestNeighbor for labels) interpolation. On the TRXScan reverse-PE fixture the sloppy run went
   from 19.6 to 10.4 min at 4 CPUs with the same truth scores.
 
+* Under `--sloppy` the DWI resamplings (the final output grid, the gradwarp and SDC inputs,
+  SHORELine's model images) use Linear instead of NearestNeighbor interpolation. Linear costs
+  the same, and nearest-neighbour resampling of the final b=0 cost it 0.13 to 0.15 of its
+  correlation with the truth in the TRXScan tests, understating every correction's gain.
+
 * The integration matrix is the truth-scored TRXScan runs only. The sixteen end-to-end
   runs on Box-hosted data (tinytensor, DSDTI, DSCSDSI, forrest_gump, maternal_brain_project,
   twoses, csdsi) only checked that files were written; the two reverse-PE ones took 45-50
   minutes each. DIFFPREP and its T2Wreg EPI correction gained truth-scored runs of their own
-  (`trxscan_diffprep`, `trxscan_t2wreg`). The T2Wreg run records a known defect as an
-  expected failure: TORTOISE places the T2w about 4 degrees off the b0 on the fixture, so the
-  corrected image scores below the uncorrected one.
+  (`trxscan_diffprep`, `trxscan_t2wreg`), and T2Wreg seeded by a GRE fieldmap has one
+  (`trxscan_gre_t2wreg`), which also scores the fieldmap-to-EPI registration.
 * Under `--sloppy`, DIFFPREP's T2Wreg (EPIREG) stage runs on the 2.5 mm grid DRBUDDI already
   uses; the interface never passed `--epi_working_res`, and the stage took over an hour on a
   1 mm T2w.

@@ -474,7 +474,7 @@ def _sdc_interpolation():
     Matches the adjacent per-volume ``ApplyTransforms`` in ``hmc_sdc.py``, so
     ``--sloppy`` speeds these up the same way it speeds up everything else.
     """
-    return 'NearestNeighbor' if config.execution.sloppy else 'LanczosWindowedSinc'
+    return 'Linear' if config.execution.sloppy else 'LanczosWindowedSinc'
 
 
 def connect_gradwarp_sdc_volumes(workflow, inputnode, source, source_field, drbuddi_wf):

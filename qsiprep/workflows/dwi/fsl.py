@@ -687,7 +687,12 @@ def init_fsl_hmc_wf(
                 ]),
                 # Hand eddy the fieldmap in Hz (its --field convention matches
                 # FUGUE, so no sign flip) plus the field->eddy rigid transform.
-                (b0_sdc_wf, gre_to_eddy_reg, [('outputnode.b0_ref', 'in_file')]),
+                # The field sits on the pre-eddy reference's grid, so that distorted
+                # reference is what gets registered to eddy's (distorted) first volume,
+                # as the TOPUP branch does with topup_first. A rigid fit between the
+                # unwarped reference and a distorted volume would absorb part of the
+                # distortion into --field_mat.
+                (pre_eddy_b0_ref_wf, gre_to_eddy_reg, [('outputnode.ref_image', 'in_file')]),
                 (gather_inputs, gre_to_eddy_reg, [('eddy_first', 'reference')]),
                 (b0_sdc_wf, eddy, [('outputnode.fieldmap_hz', 'field')]),
                 (gre_to_eddy_reg, eddy, [('out_matrix_file', 'field_mat')]),

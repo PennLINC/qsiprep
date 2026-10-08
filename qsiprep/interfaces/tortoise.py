@@ -9,6 +9,7 @@ import subprocess
 import nibabel as nb
 import nilearn.image as nim
 import numpy as np
+import SimpleITK as sitk
 from nipype.interfaces import ants
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
@@ -48,19 +49,95 @@ LOGGER = logging.getLogger('nipype.interface')
 # runtime and memory; smoke tests do not need sub-voxel registration.
 SLOPPY_EPI_WORKING_RES = 2.5
 
-# The one DRBUDDI stage --sloppy runs. Its metrics are MSJac and CC on the two
-# blips only, which is why it is kept even though DRBUDDI's default stages at
-# the same 2.5 mm grid recover 0.80 of a known field where this stage recovers
-# 0.43 (TRXScan reverse-PE fixture): the default stages also use the T2w, and on
-# that fixture TORTOISE's structural-to-b0 rigid lands 4-5 degrees off (its CC
-# optimum is pulled by non-brain tissue the simulated b0 does not have), after
-# which the structural metrics drag the corrected b0 into that frame -- below
-# the uncorrected one -- at 6x the run time. This stage ignores the structural
-# except for that rigid, so the frame survives, and the T2w path still runs.
-SLOPPY_DRBUDDI = (
-    '--DRBUDDI_stage '
-    r'\[learning_rate=\{0.4\},cfs=\{4:2:1\},field_smoothing=\{9:0\},'
-    r'metrics=\{MSJac:CC\},restrict_constrain=\{1:1\}\] '
+# TORTOISE's stage schedules are written for its default ~1 mm working grid, and
+# their smoothing sigmas and pyramid factors are in voxels of that grid. The
+# sloppy schedules below keep the same physical sizes on the coarser grid, so
+# they are the defaults divided by SLOPPY_EPI_WORKING_RES, with far fewer
+# iterations per stage.
+_SLOPPY_GRID_SCALE = 1.0 / SLOPPY_EPI_WORKING_RES
+
+
+def _drbuddi_stage(
+    learning_rate,
+    niter,
+    downsample,
+    smoothing,
+    update_sigma,
+    total_sigma,
+    metrics,
+    restrict,
+    constrain,
+):
+    """Render one ``--DRBUDDI_stage`` argument.
+
+    Parameters
+    ----------
+    learning_rate : float
+        Gradient step size.
+    niter : int
+        Iterations in this stage.
+    downsample : int
+        Pyramid factor relative to the working grid.
+    smoothing : float
+        Image smoothing sigma in voxels.
+    update_sigma, total_sigma : float
+        Update- and total-field smoothing sigmas in voxels.
+    metrics : list of str
+        Metric names as TORTOISE spells them (``MSJac``, ``CC``, ``CCSK{str_id=0}`` ...).
+    restrict, constrain : bool
+        Restrict the field to the phase-encoding axis; enforce up/down symmetry.
+
+    Returns
+    -------
+    str
+        The flag and its bracketed value, escaped for the shell nipype runs it through.
+    """
+    body = (
+        f'learning_rate={{{learning_rate:g}}},'
+        f'cfs={{{niter}:{downsample}:{smoothing:g}}},'
+        f'field_smoothing={{{update_sigma:g}:{total_sigma:g}}},'
+        f'metrics={{{":".join(metrics)}}},'
+        f'restrict_constrain={{{int(restrict)}:{int(constrain)}}}'
+    )
+    escaped = body.replace('{', r'\{').replace('}', r'\}')
+    return rf'--DRBUDDI_stage \[{escaped}\]'
+
+
+def _scaled(sigma):
+    return round(sigma * _SLOPPY_GRID_SCALE, 2)
+
+
+def _scaled_factor(factor):
+    return max(1, round(factor * _SLOPPY_GRID_SCALE))
+
+
+# The DRBUDDI schedule --sloppy runs: DRBUDDI's four-stage default for the
+# b=0 + FA + structural case, on the sloppy grid.
+SLOPPY_DRBUDDI = ' '.join(
+    _drbuddi_stage(lr, niter, _scaled_factor(f), _scaled(s), _scaled(u), 0, metrics, True, True)
+    for (lr, niter, f, s, u, metrics) in (
+        (0.25, 60, 6, 4, 9, ['MSJac', 'CC', 'CCJacS{str_id=0}']),
+        (0.2, 60, 4, 3, 8, ['MSJac', 'CC', 'CCJacS{str_id=0}']),
+        (0.25, 40, 2, 2, 7, ['MSJac', 'CC', 'CCJacS{str_id=0}']),
+        (0.15, 5, 1, 1, 7, ['MSJac', 'CC', 'CCSK{str_id=0}']),
+    )
+)
+
+# The EPIREG (T2Wreg) schedule --sloppy runs: EPIREG's built-in six-stage CC
+# schedule, on the sloppy grid. The last built-in stage lifts the
+# phase-encoding restriction, which these keep.
+SLOPPY_EPIREG = ' '.join(
+    _drbuddi_stage(
+        lr, niter, _scaled_factor(f), _scaled(s), _scaled(9), _scaled(0.25), ['CC'], r, False
+    )
+    for (lr, niter, f, s, r) in (
+        (0.25, 60, 8, 3, True),
+        (0.4, 60, 6, 2, True),
+        (0.5, 60, 4, 2, True),
+        (0.75, 40, 2, 1, True),
+        (1.25, 40, 1, 0, True),
+        (0.75, 10, 1, 0, False),
+    )
 )
 
 
@@ -354,10 +431,9 @@ class _DRBUDDIInputSpec(TORTOISEInputSpec):
     disable_initial_rigid = traits.Bool(
         False,
         argstr='--DRBUDDI_disable_initial_rigid %d',
-        desc='DRBUDDI performs an initial registration between the up and down data.'
-        'This registration starts with rigid, followed by a quick diffeomorphic '
-        'and finalized by another rigid. This parameter, when set to 1 disables '
-        'all these registrations. Default: False',
+        desc='Use the blip-down b=0 as given: skip the rigid + diffeomorphic + rigid '
+        "registration to the blip-up b=0 that precedes DRBUDDI's diffeomorphic stages. "
+        'The structural images are still rigidly registered. Default: False',
     )
     start_with_diffeomorphic_for_rigid_reg = traits.Bool(
         False,
@@ -466,9 +542,8 @@ class DRBUDDI(TORTOISECommandLine):
         outputs['deformation_finv'] = op.abspath('deformation_FINV.nii.gz')
         outputs['deformation_minv'] = op.abspath('deformation_MINV.nii.gz')
 
-        # There will be an hdf5 transform file if there is an initial rigid
-        if not self.inputs.disable_initial_rigid:
-            outputs['bdown_to_bup_rigid_trans_h5'] = op.abspath('bdown_to_bup_rigidtrans.hdf5')
+        # Written even under --DRBUDDI_disable_initial_rigid (as the identity)
+        outputs['bdown_to_bup_rigid_trans_h5'] = op.abspath('bdown_to_bup_rigidtrans.hdf5')
 
         # There will be FA images created if two DWI series were used as inputs
         if self.inputs.fieldmap_type == 'rpe_series':
@@ -1091,13 +1166,25 @@ class _DIFFPREPInputSpec(TORTOISEInputSpec):
         'Use to access TORTOISE knobs not surfaced as first-class fields '
         '(e.g. ["--big_delta", "0.030"]).',
     )
-    # TORTOISEProcess's parser is DRBUDDI's, so the EPIREG (T2Wreg) stage honours the same
-    # working-grid flag as DRBUDDI; without it TORTOISE refines the T2w grid to <= 1 mm and a
-    # sloppy T2Wreg run spends over an hour at ~65 s per iteration on a 1 mm T2w.
+    # TORTOISEProcess's parser is DRBUDDI's, so the EPIREG (T2Wreg) stage takes the same
+    # working-grid, stage and initial-rigid flags as DRBUDDI.
     epi_working_res = traits.Float(
         argstr='--epi_working_res %g',
         desc='Resolution (mm) of the EPIREG registration grid (see DRBUDDI). '
         'Requires a patched TORTOISE that exposes --epi_working_res.',
+    )
+    sloppy = traits.Bool(
+        False,
+        argstr=SLOPPY_EPIREG,
+        desc='Replace the built-in EPIREG (T2Wreg) stage schedule with a short one on the '
+        'sloppy working grid. Only meaningful with epi_mode="T2Wreg".',
+    )
+    disable_initial_rigid = traits.Bool(
+        False,
+        argstr='--DRBUDDI_disable_initial_rigid %d',
+        desc='Use the structural image at the pose it is given in: skip the rigid '
+        'registration of the structural to the b=0 that precedes the T2Wreg diffeomorphic '
+        'stages. Set when qsiprep has already registered the structural to the b=0.',
     )
     disable_itk_threads = traits.Bool(True, usedefault=True, argstr='--disable_itk_threads')
     use_cuda = traits.Bool(False, usedefault=True, desc=_USE_CUDA_TRAIT_DESC)
@@ -1372,14 +1459,6 @@ class DIFFPREPSplitOutputs(SimpleInterface):
     input_spec = _DIFFPREPSplitOutputsInputSpec
     output_spec = _DIFFPREPSplitOutputsOutputSpec
 
-    _identity_itk = (
-        '#Insight Transform File V1.0\n'
-        '#Transform 0\n'
-        'Transform: MatrixOffsetTransformBase_double_3_3\n'
-        'Parameters: 1 0 0 0 1 0 0 0 1 0 0 0\n'
-        'FixedParameters: 0 0 0\n'
-    )
-
     def _run_interface(self, runtime):
         dwi_img = nb.load(self.inputs.corrected_dwi_file)
         nvols = 1 if dwi_img.ndim < 4 else dwi_img.shape[3]
@@ -1426,8 +1505,7 @@ class DIFFPREPSplitOutputs(SimpleInterface):
         forward_transforms = []
         for vol_idx in range(nvols):
             xfm_path = op.join(runtime.cwd, f'diffprep_identity_{vol_idx:04d}.txt')
-            with open(xfm_path, 'w') as fobj:
-                fobj.write(self._identity_itk)
+            sitk.WriteTransform(sitk.AffineTransform(3), xfm_path)
             forward_transforms.append(xfm_path)
 
         self._results['dwi_files'] = per_vol_dwis

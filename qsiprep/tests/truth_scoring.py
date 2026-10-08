@@ -8,8 +8,8 @@ head poses applied per volume (``desc-motion_timeseries.tsv``) and, when the fix
 subject between scans, the true rigid transforms (``*_desc-truth_xfm.txt``).
 
 This module maps that truth into qsiprep's ACPC output space with qsiprep's own transforms and
-compares. It needs only numpy, scipy and nibabel (h5py for ``.h5`` composite transforms), so
-it runs inside the test image without TRXScan installed.
+compares. It needs only numpy, scipy, nibabel and SimpleITK (which reads every ITK transform
+format and composes transforms), so it runs inside the test image without TRXScan installed.
 
 Conventions: ITK transform files map output (fixed) points to input (moving) points in LPS;
 ``from-distortiongroup_to-ACPC`` therefore maps ACPC points to the raw DWI frame.
@@ -23,81 +23,74 @@ from pathlib import Path
 
 import nibabel as nb
 import numpy as np
-from scipy.io import loadmat
 from scipy.ndimage import map_coordinates
 
 LPS = np.diag([-1.0, -1.0, 1.0])
+
+#: the node whose output transform resamples a GRE fieldmap onto the b=0 reference
+#: (:func:`qsiprep.workflows.fieldmap.unwarp.init_sdc_unwarp_wf`), as ``<node>/<glob>``
+FMAP2REF_XFM = 'guard_refinement/guarded_*.h5'
 
 
 # ─── transforms ─────────────────────────────────────────────────────────────
 
 
-def _euler_zxy(ax, ay, az):
-    """ITK ``Euler3DTransform`` with ``ComputeZYX`` off: ``R = Rz Rx Ry``."""
-    cx, sx, cy, sy, cz, sz = np.cos(ax), np.sin(ax), np.cos(ay), np.sin(ay), np.cos(az), np.sin(az)
-    rx = np.array([[1, 0, 0], [0, cx, -sx], [0, sx, cx]])
-    ry = np.array([[cy, 0, sy], [0, 1, 0], [-sy, 0, cy]])
-    rz = np.array([[cz, -sz, 0], [sz, cz, 0], [0, 0, 1]])
-    return rz @ rx @ ry
+def _as_transform(xfm):
+    """Return ``xfm`` as a ``SimpleITK.Transform``.
+
+    Parameters
+    ----------
+    xfm : str or :obj:`os.PathLike` or array-like or :class:`SimpleITK.Transform`
+        A transform file, a 4x4 LPS point map, or a transform already.
+
+    Returns
+    -------
+    :class:`SimpleITK.Transform`
+    """
+    import SimpleITK as sitk
+
+    if isinstance(xfm, sitk.Transform):
+        return xfm
+    if isinstance(xfm, str | Path):
+        return sitk.ReadTransform(str(xfm))
+    mat = np.asarray(xfm, dtype=np.float64)
+    out = sitk.AffineTransform(3)
+    out.SetMatrix(mat[:3, :3].ravel().tolist())
+    out.SetTranslation(mat[:3, 3].tolist())
+    return out
 
 
-def _itk_matrix(name, params, fixed):
-    p = np.asarray(params, dtype=np.float64).ravel()
-    c = np.asarray(fixed, dtype=np.float64).ravel()[:3]
-    if name.startswith('Euler3D') or p.size == 6:
-        mat, t = _euler_zxy(*p[:3]), p[3:6]
-    elif p.size == 12:
-        mat, t = p[:9].reshape(3, 3), p[9:12]
-    elif p.size == 3:
-        mat, t = np.eye(3), p[:3]
-    else:
-        raise ValueError(f'unsupported ITK transform {name!r} with {p.size} parameters')
+def _point_map(xfm):
+    """Return the 4x4 LPS point map of a linear ``SimpleITK.Transform``.
+
+    Read off where the transform sends the origin and the unit vectors, so Euler, affine,
+    translation and composite transforms (and their centres of rotation) all go through ITK.
+    """
+    origin = np.array(xfm.TransformPoint((0.0, 0.0, 0.0)))
     out = np.eye(4)
-    out[:3, :3] = mat
-    out[:3, 3] = t + c - mat @ c
+    out[:3, 3] = origin
+    for axis in range(3):
+        unit = [0.0, 0.0, 0.0]
+        unit[axis] = 1.0
+        out[:3, axis] = np.array(xfm.TransformPoint(unit)) - origin
     return out
 
 
 def read_itk_transform(path):
     """Read an ITK ``.txt``, ``.mat`` or ``.h5`` transform as a 4x4 LPS point map.
 
-    The map takes output (fixed) points to input (moving) points, ITK's resampling convention.
-    """
-    path = Path(path)
-    if path.suffix == '.txt':
-        lines = path.read_text().splitlines()
-        kinds = [ln.split(':', 1)[1].strip() for ln in lines if ln.startswith('Transform:')]
-        params = [
-            np.array(ln.split(':', 1)[1].split(), float)
-            for ln in lines
-            if ln.startswith('Parameters:')
-        ]
-        fixed = [
-            np.array(ln.split(':', 1)[1].split(), float)
-            for ln in lines
-            if ln.startswith('FixedParameters:')
-        ]
-        out = np.eye(4)
-        for k, p, f in zip(kinds, params, fixed, strict=True):
-            out = out @ _itk_matrix(k, p, f)
-        return out
-    if path.suffix == '.mat':
-        m = loadmat(str(path))
-        key = next(k for k in m if not k.startswith('__') and k != 'fixed')
-        return _itk_matrix(key, m[key], m.get('fixed', np.zeros(3)))
-    if path.suffix == '.h5':
-        import h5py
+    Parameters
+    ----------
+    path : str or :obj:`os.PathLike`
+        The transform file.
 
-        out = np.eye(4)
-        with h5py.File(path) as h:
-            for g in sorted(k for k in h['TransformGroup'] if k != '0'):
-                grp = h['TransformGroup'][g]
-                kind = grp['TransformType'][()][0].decode()
-                out = out @ _itk_matrix(
-                    kind, grp['TransformParameters'][()], grp['TransformFixedParameters'][()]
-                )
-        return out
-    raise ValueError(f'unknown ITK transform format {path.suffix!r}')
+    Returns
+    -------
+    :obj:`numpy.ndarray`
+        4x4 matrix taking output (fixed) points to input (moving) points, ITK's resampling
+        convention.
+    """
+    return _point_map(_as_transform(path))
 
 
 def world_to_lps_map(T_ras):
@@ -107,15 +100,31 @@ def world_to_lps_map(T_ras):
 
 
 def rigid_error(estimate, truth, center=(0.0, 0.0, 0.0)):
-    """Compute the rotation (deg) of ``estimate @ inv(truth)`` and the shift (mm) of ``center``."""
-    e, t = np.asarray(estimate, dtype=np.float64), np.asarray(truth, dtype=np.float64)
-    d = e[:3, :3] @ np.linalg.inv(t[:3, :3])
-    ang = float(np.degrees(np.arccos(np.clip((np.trace(d) - 1) / 2, -1, 1))))
-    c = np.append(np.asarray(center, dtype=np.float64), 1.0)
-    return {
-        'rotation_deg': ang,
-        'translation_mm': float(np.linalg.norm((e @ c)[:3] - (t @ c)[:3])),
-    }
+    """Compare two transforms.
+
+    Parameters
+    ----------
+    estimate, truth : str or :obj:`os.PathLike` or array-like or :class:`SimpleITK.Transform`
+        Transform files, 4x4 LPS point maps or transforms.
+    center : sequence of float
+        The LPS point (mm) at which the two maps are compared.
+
+    Returns
+    -------
+    dict
+        ``rotation_deg``, the rotation of the residual ``estimate o truth^-1``, and
+        ``translation_mm``, how far apart the two transforms send ``center``.
+    """
+    import SimpleITK as sitk
+
+    est, tru = _as_transform(estimate), _as_transform(truth)
+    # a CompositeTransform applies the last-added transform first: truth^-1, then estimate
+    residual = sitk.CompositeTransform([est, tru.GetInverse()])
+    rot = _point_map(residual)[:3, :3]
+    ang = float(np.degrees(np.arccos(np.clip((np.trace(rot) - 1) / 2, -1, 1))))
+    c = tuple(float(v) for v in center)
+    shift = np.array(est.TransformPoint(c)) - np.array(tru.TransformPoint(c))
+    return {'rotation_deg': ang, 'translation_mm': float(np.linalg.norm(shift))}
 
 
 # ─── helpers ────────────────────────────────────────────────────────────────
@@ -161,7 +170,7 @@ def _find(folders, pattern, prefer=None):
 # ─── scoring ────────────────────────────────────────────────────────────────
 
 
-def score_run(bids_root, output_dir, series=None):
+def score_run(bids_root, output_dir, series=None, work_dir=None):
     """Score one qsiprep output against its TRXScan truth.
 
     Parameters
@@ -173,6 +182,9 @@ def score_run(bids_root, output_dir, series=None):
     series : str, optional
         The ``dir-`` label of the series whose truth to use (default: the series qsiprep took
         as its reference, the first in the confounds).
+    work_dir : path, optional
+        qsiprep's working directory. The fieldmap-to-b=0 registration is not a derivative, so
+        with a GRE fieldmap its final transform is read from here.
 
     Returns
     -------
@@ -180,7 +192,8 @@ def score_run(bids_root, output_dir, series=None):
         ``coreg_error`` (vs identity or the fixture's recorded movement), ``sdc`` (estimated
         vs true displacement along the phase-encode axis: corr, slope, rms residual and the
         uncorrected rms), ``b0_corrected_vs_clean`` / ``b0_uncorrected_vs_clean``,
-        ``fd_mean_mm``, and when present ``gnl_graddev`` and ``motion``.
+        ``fd_mean_mm``, and when present ``fmap2ref`` (the GRE fieldmap-to-b=0 rigid vs the
+        recorded fieldmap offset), ``gnl_graddev`` and ``motion``.
     """
     bids, out = Path(bids_root), Path(output_dir)
     sub_dir = next(out.glob('sub-*/dwi'))
@@ -276,6 +289,18 @@ def score_run(bids_root, output_dir, series=None):
     raw_img = nb.load(next((r for r in raws if f'dir-{series}' in r.name), raws[0]))
     raw_b0 = nb.Nifti1Image(np.asarray(raw_img.dataobj)[..., 0], raw_img.affine)
     report['b0_uncorrected_vs_clean'] = _corr(_sample(raw_b0, q_ras)[m], clean[m])
+
+    # the GRE fieldmap's registration to the b=0 vs the offset the fixture gave the fieldmap:
+    # both map b=0-frame points to fieldmap-frame points (fixed = EPI, moving = fieldmap)
+    fmap_truth = _find(
+        [bids / 'derivatives' / 'trxscan' / sub], '**/fmap/*from-fmap_to-dwi*desc-truth_xfm.txt'
+    )
+    fmap_xfm = _find([work_dir], f'**/sdc_unwarp_wf/{FMAP2REF_XFM}') if work_dir else None
+    if fmap_truth is not None and fmap_xfm is not None:
+        raw_centre = LPS @ (
+            raw_img.affine[:3, :3] @ (np.array(raw_img.shape[:3]) / 2) + raw_img.affine[:3, 3]
+        )
+        report['fmap2ref'] = rigid_error(fmap_xfm, fmap_truth, raw_centre)
 
     # motion: framewise displacement on a static object, or the parameters vs the applied poses
     conf = next((c for c in conf_files if f'dir-{series}' in c.name), conf_files[0])

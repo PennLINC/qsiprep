@@ -112,11 +112,11 @@ def init_structural_to_b0_alignment_wf(name='structural_to_b0_alignment_wf'):
     TORTOISE rigidly registers its structural input to the b=0 internally
     (DRBUDDI, and EPIREG for DIFFPREP's ``--epi T2Wreg`` mode), but only from
     a center-of-mass initialization, which cannot recover a large rotation
-    between the anatomical and the dMRI acquisition. Resampling the
-    structural into the b=0 frame first, through an ``antsAI`` rotation
-    search, hands TORTOISE a target already within its capture range. The
-    search transform is deliberately coarse: TORTOISE's own rigid
-    registration provides the fine alignment.
+    between the anatomical and the dMRI acquisition, and it does not refine a
+    coarse start all the way. An ``antsAI`` rotation search provides the
+    capture range and a masked rigid ``antsRegistration`` started from it
+    provides the accuracy; TORTOISE receives the structural resampled into
+    the b=0 frame through that transform.
 
     Parameters
     ----------
@@ -129,6 +129,8 @@ def init_structural_to_b0_alignment_wf(name='structural_to_b0_alignment_wf'):
         Anatomical image (e.g. the unfatsat T2w), in any orientation
     b0_ref
         b=0 reference image in the frame the distortion correction runs in
+    b0_mask
+        Brain mask of ``b0_ref``, the fixed-image mask of the rigid registration (optional)
 
     Outputs
     -------
@@ -148,13 +150,23 @@ def init_structural_to_b0_alignment_wf(name='structural_to_b0_alignment_wf'):
     """
     workflow = Workflow(name=name)
     inputnode = pe.Node(
-        niu.IdentityInterface(fields=['structural_image', 'b0_ref']), name='inputnode'
+        niu.IdentityInterface(fields=['structural_image', 'b0_ref', 'b0_mask']), name='inputnode'
     )
     outputnode = pe.Node(niu.IdentityInterface(fields=['structural_aligned']), name='outputnode')
 
     # fixed=b0: antsAI's transform then maps b0-space points to structural
     # space, which is exactly what resampling into the b0 frame needs
     rotation_search_wf = init_rotation_search_wf(transform='Rigid')
+    ants_settings = load_data(
+        'fmap-any_registration_testing.json'
+        if config.execution.sloppy
+        else 'fmap-any_registration.json'
+    )
+    refine_alignment = pe.Node(
+        ants.Registration(from_file=str(ants_settings)),
+        name='refine_alignment',
+        n_procs=config.nipype.omp_nthreads,
+    )
     # The b0's field of view and orientation, at the structural's voxel size
     reference_grid = pe.Node(ReferenceGridAtSpacing(), name='reference_grid')
     resample_structural = pe.Node(
@@ -171,11 +183,17 @@ def init_structural_to_b0_alignment_wf(name='structural_to_b0_alignment_wf'):
             ('b0_ref', 'fov_image'),
             ('structural_image', 'spacing_image'),
         ]),
+        (inputnode, refine_alignment, [
+            ('b0_ref', 'fixed_image'),
+            ('structural_image', 'moving_image'),
+            ('b0_mask', 'fixed_image_masks'),
+        ]),
+        (rotation_search_wf, refine_alignment, [
+            ('outputnode.initial_transform', 'initial_moving_transform'),
+        ]),
         (inputnode, resample_structural, [('structural_image', 'input_image')]),
         (reference_grid, resample_structural, [('out_file', 'reference_image')]),
-        (rotation_search_wf, resample_structural, [
-            ('outputnode.initial_transform', 'transforms'),
-        ]),
+        (refine_alignment, resample_structural, [('composite_transform', 'transforms')]),
         (resample_structural, outputnode, [('output_image', 'structural_aligned')]),
     ])  # fmt:skip
     return workflow

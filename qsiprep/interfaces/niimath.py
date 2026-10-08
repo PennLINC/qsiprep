@@ -327,14 +327,11 @@ def allineate_json_to_itk(json_file, out_file):
     ras = np.asarray(affine['fixed_to_moving'], dtype=np.float64).reshape(4, 4)
     flip = np.diag([-1.0, -1.0, 1.0, 1.0])
     lps = flip @ ras @ flip
-    params = list(lps[:3, :3].ravel()) + list(lps[:3, 3])
-    with open(out_file, 'w') as f:
-        f.write(
-            '#Insight Transform File V1.0\n#Transform 0\n'
-            'Transform: AffineTransform_double_3_3\n'
-            'Parameters: ' + ' '.join(f'{v:.10g}' for v in params) + '\n'
-            'FixedParameters: 0 0 0\n'
-        )
+    import SimpleITK as sitk
+
+    from .itk import affine_from_matrix
+
+    sitk.WriteTransform(affine_from_matrix(lps), out_file)
     return out_file
 
 

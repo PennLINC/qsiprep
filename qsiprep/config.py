@@ -445,6 +445,7 @@ class execution(_Config):
     """A dictionary of dataset links to be used to track Sources in sidecars."""
 
     _layout = None
+    _derived_database_dir = False
 
     _paths = (
         'bids_dir',
@@ -462,12 +463,23 @@ class execution(_Config):
     @classmethod
     def init(cls):
         """Create a new BIDS Layout accessible with :attr:`~execution.layout`."""
+        if (
+            cls._layout is not None
+            and Path(cls._layout.root).resolve() != Path(cls.bids_dir).resolve()
+        ):
+            # The config is a process-wide singleton: a second dataset in the same process
+            # (several integration tests in one pytest run) must not keep the first one's
+            # layout, nor the database that layout derived for itself.
+            cls._layout = None
+            if cls._derived_database_dir:
+                cls.bids_database_dir = None
         if cls._layout is None:
             import re
 
             from bids.layout import BIDSLayout
             from bids.layout.index import BIDSLayoutIndexer
 
+            cls._derived_database_dir = cls.bids_database_dir is None
             _db_path = cls.bids_database_dir or (cls.work_dir / cls.run_uuid / 'bids_db')
             _db_path.mkdir(exist_ok=True, parents=True)
 

@@ -281,6 +281,7 @@ markers = [
     "trxscan_offsets: TRXScan truth-scored: subject moved between T1w, AP and PA scans",
     "trxscan_diffprep: TRXScan truth-scored: DIFFPREP motion/eddy correction + DRBUDDI on the reverse-PE pair",
     "trxscan_t2wreg: TRXScan truth-scored: DIFFPREP T2Wreg EPI correction, no fieldmap",
+    "trxscan_gre_t2wreg: TRXScan truth-scored: DIFFPREP T2Wreg seeded by a GRE fieldmap, with the subject moved",
 ]
 env = [
     "RUNNING_PYTEST = 1",

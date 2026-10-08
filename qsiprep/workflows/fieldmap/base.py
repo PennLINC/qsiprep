@@ -101,6 +101,10 @@ def init_gre_seed_wf(unit, has_gradwarp, source_file, use):
     -------
     out_warp
         The GRE-derived warp, as an ITK displacement field
+    b0_ref
+        The b=0 reference unwarped with that warp
+    b0_mask
+        Brain mask of the b=0 reference
     """
     from ..dwi.gradwarp import connect_gradwarp_sdc_reference
     from ..dwi.util import init_dwi_reference_wf
@@ -118,7 +122,9 @@ def init_gre_seed_wf(unit, has_gradwarp, source_file, use):
         ),
         name='inputnode',
     )
-    outputnode = pe.Node(niu.IdentityInterface(fields=['out_warp']), name='outputnode')
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=['out_warp', 'b0_ref', 'b0_mask']), name='outputnode'
+    )
 
     b0_ref_wf = init_dwi_reference_wf(source_file=source_file, name='b0_ref_wf', gen_report=False)
     sdc_wf = init_sdc_wf(gre_seed_unit(unit), gradwarp=has_gradwarp, use=use)
@@ -129,7 +135,11 @@ def init_gre_seed_wf(unit, has_gradwarp, source_file, use):
             ('t1_brain', 'inputnode.t1_brain'),
             ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
         ]),
-        (sdc_wf, outputnode, [('outputnode.out_warp', 'out_warp')]),
+        (sdc_wf, outputnode, [
+            ('outputnode.out_warp', 'out_warp'),
+            ('outputnode.b0_ref', 'b0_ref'),
+        ]),
+        (b0_ref_wf, outputnode, [('outputnode.dwi_mask', 'b0_mask')]),
     ])  # fmt:skip
 
     ref_fields = ('outputnode.ref_image', 'outputnode.ref_image_brain', 'outputnode.dwi_mask')
@@ -437,7 +447,7 @@ def _connect_transported_warp(workflow, inputnode, sdc_unwarp_wf, outputnode):
     )
     # The unwarped reference is still in the raw frame; the coregistration
     # reference must be gradwarp-corrected like every other branch's.
-    smooth = 'NearestNeighbor' if config.execution.sloppy else 'LanczosWindowedSinc'
+    smooth = 'Linear' if config.execution.sloppy else 'LanczosWindowedSinc'
     gradwarp_unwarped_ref = pe.Node(
         ants.ApplyTransforms(dimension=3, interpolation=smooth, float=True),
         name='gradwarp_unwarped_ref',

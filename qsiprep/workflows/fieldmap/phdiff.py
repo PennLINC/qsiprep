@@ -62,9 +62,13 @@ def init_phdiff_wf(phasetype='phasediff', name='phdiff_wf'):
     workflow = Workflow(name=name)
     workflow.__desc__ = """\
 A deformation field to correct for susceptibility distortions was estimated
-based on a field map that was co-registered to the b=0 reference.
+based on a field map that was co-registered to the b=0 reference. The field
+map's magnitude image was rigidly registered to the b=0 reference twice: the
+second registration targeted the reference unwarped with the field from the
+first, so that the distortion itself did not bias the alignment.
 The phase image was unwrapped with the ROMEO algorithm [@romeo] as implemented
-in *niimath* [@niimath], median-filtered, and converted to a field map in Hz
+in *niimath* [@niimath], median-filtered, extrapolated beyond the brain mask so
+that the distorted EPI brain is covered, and converted to a field map in Hz
 following the approach of *fMRIPrep* and the HCP Pipelines [@hcppipelines].
 """
 

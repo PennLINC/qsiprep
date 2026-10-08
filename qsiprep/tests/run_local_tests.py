@@ -69,9 +69,26 @@ def run_tests(test_regex, test_mark):
     """Run the tests."""
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     local_qsiprep = os.path.join(repo_root, 'qsiprep')
-    mounted_site_packages = '/app/.pixi/envs/qsiprep/lib/python3.10/site-packages'
-    mounted_code = f'{mounted_site_packages}/qsiprep'
+    # Where the image installed qsiprep: the python minor version moves with the base image.
+    mounted_code = subprocess.run(
+        [
+            'docker',
+            'run',
+            '--rm',
+            '--entrypoint',
+            'python',
+            'pennlinc/qsiprep:unstable',
+            '-c',
+            'import os, qsiprep; print(os.path.dirname(qsiprep.__file__))',
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
     run_str = 'docker run --rm -ti '
+    # QSIPREP_TEST_GPU=1 puts eddy, DIFFPREP and DRBUDDI on the GPU (see test_cli._trxscan_run)
+    if os.environ.get('QSIPREP_TEST_GPU'):
+        run_str += '--gpus all -e QSIPREP_TEST_GPU=1 '
     run_str += f'-v {local_qsiprep}:{mounted_code} '
     run_str += '--entrypoint pytest '
     run_str += 'pennlinc/qsiprep:unstable '
