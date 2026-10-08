@@ -559,9 +559,9 @@ class workflow(_Config):
     """Whether to N4-correct DWIs: ``n4``, ``auto`` or ``none``."""
     denoise_method = None
     """Image-based denoising method: "dwidenoise" (MRtrix3), "dwidenoise2", "patch2self"
-    (DIPY) or "none"."""
-    dwidenoise2_config = None
-    """Configuration JSON for dwidenoise2 (``--dwidenoise2-config``)."""
+    (DIPY), "svht" (svht_denoise) or "none"."""
+    denoise_config = None
+    """Configuration JSON for dwidenoise2 or svht_denoise (``--denoise-config``)."""
     distortion_group_merge = 'concat'
     """How to combine images across distortion groups (concatenate, average or none)."""
     dwidenoise_window = None
@@ -632,7 +632,7 @@ class workflow(_Config):
     tortoise_gpu_cpu_ratio = None
     """Volumes the GPU takes per DIFFPREP pass; None leaves TORTOISE's default."""
     unringing_method = None
-    """Method for Gibbs-ringing removal. Either "none", "mrdegibbs" or "rpg"."""
+    """Method for Gibbs-ringing removal. Either "none", "mrdegibbs", "rpg" or "svht"."""
 
     @classmethod
     def init(cls):
@@ -687,7 +687,7 @@ class workflow(_Config):
     # what ``_paths`` names, and toml writes anything else as its repr, so an
     # unlisted Path reaches the workflow-building subprocess as the literal
     # string "PosixPath('/path')".
-    _paths = ('dwidenoise2_config', 'gradient_file', 'shoreline_config')
+    _paths = ('denoise_config', 'gradient_file', 'shoreline_config')
 
 
 class loggers:

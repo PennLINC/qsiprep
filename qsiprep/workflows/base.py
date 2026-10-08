@@ -173,12 +173,13 @@ def init_qsiprep_wf():
         )
         log_dir.mkdir(exist_ok=True, parents=True)
         config.to_filename(log_dir / 'qsiprep.toml')
-        # The toml only records the path, so keep the settings dwidenoise2 actually ran with
-        if (
-            config.workflow.denoise_method == 'dwidenoise2'
-            and config.workflow.dwidenoise2_config is not None
-        ):
-            shutil.copyfile(config.workflow.dwidenoise2_config, log_dir / 'dwidenoise2.json')
+        # The toml only records the path, so keep the settings the denoiser actually ran with.
+        # The parser only accepts --denoise-config for a method that reads it.
+        if config.workflow.denoise_config is not None:
+            shutil.copyfile(
+                config.workflow.denoise_config,
+                log_dir / f'{config.workflow.denoise_method}.json',
+            )
     return qsiprep_wf
 
 

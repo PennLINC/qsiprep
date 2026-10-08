@@ -16,13 +16,17 @@ every output that includes it reuses that result.
 
 1. **Denoising** on the raw series: MP-PCA with ``dwidenoise``
    :footcite:p:`dwidenoise1`, its successor ``dwidenoise2``
-   :footcite:p:`dwidenoise2`, or ``patch2self`` :footcite:p:`patch2self`
-   (``--denoise-method``). With ``part-phase`` data, ``dwidenoise`` and
-   ``dwidenoise2`` denoise the complex signal :footcite:p:`cordero2019complex`,
-   which removes the noise floor.
+   :footcite:p:`dwidenoise2`, ``patch2self`` :footcite:p:`patch2self`, or
+   ``svht_denoise`` :footcite:p:`svht_denoise`, which shrinks the singular
+   values of local patches :footcite:p:`gavish2017` (``--denoise-method``).
+   With ``part-phase`` data, ``dwidenoise`` and ``dwidenoise2`` denoise the
+   complex signal :footcite:p:`cordero2019complex`, and ``svht_denoise``
+   denoises its rotation onto the real axis :footcite:p:`nordic`; either
+   removes the noise floor.
 2. **Gibbs unringing**, off by default: ``mrdegibbs`` :footcite:p:`mrdegibbs`
-   for full Fourier acquisitions, or TORTOISE's ``rpg`` :footcite:p:`pfgibbs`
-   for partial Fourier. Complex-valued ``mrdegibbs`` needs
+   for full Fourier acquisitions, TORTOISE's ``rpg`` :footcite:p:`pfgibbs`
+   for partial Fourier, or ``svht_denoise``, which covers full Fourier and
+   7/8 or 6/8 partial Fourier along ``j``. Complex-valued ``mrdegibbs`` needs
    ``--mrtrix-version dev``; otherwise the data are reduced to magnitude
    after denoising.
 3. **Concatenation** of the series, with their gradient tables, into one
