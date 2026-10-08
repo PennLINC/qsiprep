@@ -28,7 +28,7 @@ import sys
 
 from .. import config
 from ..utils.gpu import GPU_ALIASES, GPU_TASKS
-from ..utils.misc import load_dwidenoise2_config, load_shoreline_config
+from ..utils.misc import load_denoise_config, load_shoreline_config
 
 
 def _build_parser(**kwargs):
@@ -120,13 +120,13 @@ def _build_parser(**kwargs):
                     file=sys.stderr,
                 )
 
-            if namespace.dwidenoise2_config is not None:
-                if namespace.denoise_method != 'dwidenoise2':
-                    self.error('--dwidenoise2-config requires --denoise-method dwidenoise2')
+            if namespace.denoise_config is not None:
+                if namespace.denoise_method not in ('dwidenoise2', 'svht'):
+                    self.error('--denoise-config requires --denoise-method dwidenoise2 or svht')
                 # Load the file here so that a bad setting fails before any workflow is
                 # built. The workflow builder loads it again from the stored path.
                 try:
-                    load_dwidenoise2_config(namespace.dwidenoise2_config)
+                    load_denoise_config(namespace.denoise_config, namespace.denoise_method)
                 except ValueError as err:
                     self.error(str(err))
 
@@ -585,12 +585,13 @@ def _build_parser(**kwargs):
     g_dwi.add_argument(
         '--denoise-method',
         action='store',
-        choices=['dwidenoise', 'dwidenoise2', 'patch2self', 'none'],
+        choices=['dwidenoise', 'dwidenoise2', 'patch2self', 'svht', 'none'],
         default='dwidenoise',
         help=(
             'Image-based denoising method: "dwidenoise" (MRtrix3), "dwidenoise2", '
-            '"patch2self" (DIPY), or "none". '
-            'Settings for dwidenoise2 are given with --dwidenoise2-config.'
+            '"patch2self" (DIPY), "svht" (svht_denoise), or "none". '
+            'dwidenoise and dwidenoise2 are restricted to non-commercial use; svht is not. '
+            'Settings for dwidenoise2 and svht are given with --denoise-config.'
         ),
     )
     g_dwi.add_argument(
@@ -605,40 +606,50 @@ def _build_parser(**kwargs):
             'This applies to the "dwidenoise" method only, where "auto" calculates a '
             'window size from the number of volumes, following the method described in '
             'the dwidenoise documentation. '
-            'It is unused by "patch2self" and "dwidenoise2"; dwidenoise2 sizes its '
-            'patches per iteration from its multi-resolution schedule, which can be set '
-            'with --dwidenoise2-config instead.'
+            'It is unused by "patch2self", "dwidenoise2" and "svht"; dwidenoise2 sizes its '
+            'patches per iteration from its multi-resolution schedule, and svht takes its '
+            'patch size from "extent", both of which can be set with --denoise-config '
+            'instead.'
         ),
     )
     g_dwi.add_argument(
-        '--dwidenoise2-config',
+        '--denoise-config',
         action='store',
         type=IsFile,
         default=None,
         metavar='FILE',
         help=(
-            'Path to a JSON file with settings for dwidenoise2. This is valid only with '
-            '--denoise-method dwidenoise2. Every key is optional, and unknown keys are an '
-            'error. Keys other than "schedule" set the dwidenoise2 option of the same name '
-            '(for example "demodulate", "decomposition", "estimator" or "noise_in"; '
-            '"filter_method" sets -filter). "schedule" is a list of noise estimation '
-            'iterations, each a JSON object whose keys are dwidenoise2 schedule columns (for '
-            'example "spatial_subsample", "kernel" and "update_noise"), or the name of a '
-            'bundled schedule ("default", "legacy" or "vlarge"). Without a schedule, '
-            'dwidenoise2 uses its default schedule. See the documentation for every key.'
+            'Path to a JSON file with settings for the denoiser selected by --denoise-method, '
+            'which must be dwidenoise2 or svht. Every key is optional, and unknown keys are '
+            'an error. '
+            'For dwidenoise2, keys other than "schedule" set the dwidenoise2 option of the '
+            'same name (for example "demodulate", "decomposition", "estimator" or '
+            '"noise_in"; "filter_method" sets -filter). "schedule" is a list of noise '
+            'estimation iterations, each a JSON object whose keys are dwidenoise2 schedule '
+            'columns (for example "spatial_subsample", "kernel" and "update_noise"), or the '
+            'name of a bundled schedule ("default", "legacy" or "vlarge"). Without a '
+            'schedule, dwidenoise2 uses its default schedule. '
+            'For svht, the keys are "demean" ("none", the default, or "shells", which is '
+            'recommended only for shelled schemes), '
+            '"extent" (the patch size), "filter_method", "aggregator", "aggregator_fwhm", '
+            '"shape", "stride", "vst", "noise_dof" and "preserve_noise_bias". '
+            'See the documentation for every key.'
         ),
     )
     g_dwi.add_argument(
         '--unringing-method',
         action='store',
         default='none',
-        choices=['none', 'mrdegibbs', 'rpg'],
+        choices=['none', 'mrdegibbs', 'rpg', 'svht'],
         help=(
             'Method for Gibbs-ringing removal. '
             '"none" takes no action. '
             '"mrdegibbs" uses mrdegibbs from MRtrix3. '
             '"rpg" uses the TORTOISE method, which is suggested for partial Fourier '
-            'acquisitions.'
+            'acquisitions. '
+            '"svht" uses svht_denoise, which matches mrdegibbs on full k-space data and '
+            'also removes partial Fourier ringing for 7/8 and 6/8 acquisitions phase-encoded '
+            'along j, read from the PartialFourier metadata field.'
         ),
     )
     g_dwi.add_argument(
@@ -1147,7 +1158,12 @@ def check_denoise_window(denoise_method, dwidenoise_window):
         config.loggers.cli.warning(
             'The --dwidenoise-window option is not used when --denoise-method=dwidenoise2. '
             'dwidenoise2 sizes its patches per iteration from its multi-resolution schedule, '
-            'which can be set with --dwidenoise2-config instead.'
+            'which can be set with --denoise-config instead.'
+        )
+    elif denoise_method == 'svht':
+        config.loggers.cli.warning(
+            'The --dwidenoise-window option is not used when --denoise-method=svht. '
+            'Set the svht patch size with "extent" in --denoise-config instead.'
         )
     elif denoise_method == 'none':
         config.loggers.cli.warning(
@@ -1231,8 +1247,8 @@ def parse_args(args=None, namespace=None):
     for key in ('shoreline_config', 'shoreline_model', 'shoreline_iters', 'hmc_transform'):
         setattr(config.workflow, key, getattr(opts, key))
     # As for SHORELine, the command line is authoritative. from_dict skips None, so a
-    # --config-file could otherwise leave a stale dwidenoise2_config behind.
-    config.workflow.dwidenoise2_config = opts.dwidenoise2_config
+    # --config-file could otherwise leave a stale denoise_config behind.
+    config.workflow.denoise_config = opts.denoise_config
 
     if not config.execution.notrack:
         import importlib.util
