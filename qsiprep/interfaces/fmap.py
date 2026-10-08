@@ -1048,7 +1048,6 @@ class _ApplyJacobianWeightsInputSpec(ApplyTransformsInputSpec):
         desc='list of transforms to register the b=0 to the dwiref.',
     )
     dwiref_to_t1_affine = File(exists=True, mandatory=False, desc='affine from the dwiref to t1')
-    dwiref_to_t1_warp = File(exists=True, mandatory=False, desc='warp from the dwiref to t1')
     hmcsdc_dwi_ref_to_t1w_affine = File(
         exists=True, mandatory=False, desc='affine from dwi ref to t1w'
     )

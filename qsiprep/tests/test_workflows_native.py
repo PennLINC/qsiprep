@@ -755,3 +755,47 @@ def test_dwi2anat_dof_reaches_the_per_unit_coregistration(tmp_path, monkeypatch,
     )
     coreg = wf.get_node('b0_anat_coreg').get_node('b0_to_anat')
     assert coreg.inputs.transforms == [expected]
+
+
+def test_merged_series_qc_names_its_space(tmp_path):
+    """Test that the merged series QC is written as space-ACPC, like the direct path.
+
+    Regression: the merge workflow's sink had no space entity, so merged outputs
+    wrote desc-image_qc.tsv where unmerged ones write space-ACPC_desc-image_qc.tsv.
+    """
+    import json
+
+    from bids.layout.writing import build_path
+
+    from qsiprep.data import load as load_data
+    from qsiprep.workflows.dwi.distortion_group_merge import init_distortion_group_merge_wf
+
+    cfg = _cfg(layout=_StubLayout())
+    cfg.execution.output_dir = str(tmp_path / 'out')
+    a_file = _write_dwi(tmp_path / 'sub-01_acq-hi_dwi.nii.gz')
+    b_file = _write_dwi(tmp_path / 'sub-01_acq-lo_dwi.nii.gz')
+    unit_a = make_preproc_unit([a_file])
+    unit_b = make_preproc_unit([b_file])
+    wf = init_distortion_group_merge_wf(
+        merging_strategy='concat',
+        inputs_list=[unit_a.output_name, unit_b.output_name],
+        source_file='sub-01_dwi.nii.gz',
+        output_prefix='sub-01',
+        name='merge_wf',
+    )
+    sink = wf.get_node('ds_series_qc')
+    assert sink.inputs.space == 'ACPC'
+
+    patterns = json.loads(load_data('io_spec.json').read_text())['default_path_patterns']
+    path = build_path(
+        {
+            'subject': '01',
+            'datatype': 'dwi',
+            'space': sink.inputs.space,
+            'desc': sink.inputs.desc,
+            'suffix': sink.inputs.suffix,
+            'extension': sink.inputs.extension,
+        },
+        patterns,
+    )
+    assert path == 'sub-01/dwi/sub-01_space-ACPC_desc-image_qc.tsv'

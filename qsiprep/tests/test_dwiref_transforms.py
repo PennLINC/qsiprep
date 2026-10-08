@@ -92,3 +92,19 @@ def test_single_group_subject_still_gets_a_subject_dwiref():
     src = inspect.getsource(base.init_single_subject_wf)
     assert "raise Exception('Cannot make an intramodal with less than 2 groups.')" not in src
     assert 'Falling back to --dwiref-definition distortion-group' not in src
+
+
+def test_dwiref_to_t1_has_no_warp_input():
+    """Test that the dwiref -> T1 transform is accepted only as an affine.
+
+    The registration is linear (--dwi2anat-dof 6 or 12). A warp input used to
+    be declared on every workflow and interface along the way, never produced,
+    and ComposeTransforms copied it into a variable nothing read -- so a warp
+    connected there would have been dropped without a word.
+    """
+    from qsiprep.interfaces.fmap import ApplyJacobianWeights
+    from qsiprep.interfaces.gradients import ComposeTransforms
+
+    for interface in (ComposeTransforms, ApplyJacobianWeights):
+        assert 'dwiref_to_t1_warp' not in interface.input_spec().trait_names()
+        assert 'dwiref_to_t1_affine' in interface.input_spec().trait_names()
