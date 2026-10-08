@@ -325,7 +325,8 @@ Each key sets the ``svht_denoise`` option of the same name, except
 ================================  ==========================================================
 Key                               JSON value
 ================================  ==========================================================
-``demean``                        ``"shells"`` (the default) or ``"none"``
+``demean``                        ``"none"`` (the default) or ``"shells"``; ``"shells"``
+                                  is recommended only for shelled schemes
 ``extent``                        an odd positive integer whose cube exceeds the number of
                                   volumes; omitted, ``svht_denoise`` picks the smallest
 ``filter_method``                 ``"optshrink"``, ``"optthresh"`` or ``"truncate"``
@@ -339,11 +340,19 @@ Key                               JSON value
 ``preserve_noise_bias``           ``true`` or ``false``
 ================================  ==========================================================
 
-``svht_denoise`` does not demean by default, but *QSIPrep* runs ``dwidenoise2``
-with its default of demeaning each *b*-value shell, so ``svht`` is run the same
-way: the series' b-values are passed with ``-bval``, unless ``demean`` is
-``"none"``. Demeaning is skipped for a series where it would leave
-``svht_denoise`` fewer than three volumes to estimate the noise from.
+Keys the file omits keep the ``svht_denoise`` defaults.
+
+``"demean": "shells"`` removes the mean of each *b*-value shell before PCA and
+restores it afterwards, and passes the series' b-values to ``svht_denoise``
+with ``-bval``. **Use it only for shelled schemes** (single- or multi-shell
+acquisitions). ``svht_denoise`` groups b-values into shells by clustering, with
+neighbours less than 80 s/mm² apart sharing a shell. On a non-shelled scheme
+(DSI, CS-DSI), that turns nearly every distinct b-value into its own shell of a
+few volumes. Each such mean is restored without being denoised, so much of
+the signal, and its noise, bypasses the denoiser. Even with ``"shells"``,
+demeaning is skipped for a series where it would leave ``svht_denoise`` fewer
+than three volumes to estimate the noise from.
+
 ``extent`` is the side of a cubic patch; a spherical patch holds at least
 ``extent`` cubed voxels. It is checked against each series' volume count when
 the workflow is built. ``--dwidenoise-window`` does not apply to ``svht``.

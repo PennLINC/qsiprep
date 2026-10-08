@@ -551,10 +551,10 @@ def test_check_dwidenoise2_demodulation(demodulate):
 def test_svht_config_keys_match_interface():
     """Test that every key an svht --denoise-config file may set is a trait on SVHTDenoise."""
     from qsiprep.interfaces.svht import SVHTDenoise
-    from qsiprep.utils.misc import _SVHT_CONFIG_KEYS, SVHT_DEFAULTS
+    from qsiprep.utils.misc import _SVHT_CONFIG_KEYS
 
     trait_names = set(SVHTDenoise.input_spec().trait_names())
-    assert sorted((_SVHT_CONFIG_KEYS | set(SVHT_DEFAULTS)) - trait_names) == []
+    assert sorted(_SVHT_CONFIG_KEYS - trait_names) == []
 
 
 def _svht_json(tmp_path, text=None, **settings):
@@ -654,16 +654,16 @@ def test_check_svht_phase(params):
 
 
 def test_describe_svht_defaults():
-    from qsiprep.utils.misc import SVHT_DEFAULTS
-
-    description = describe_svht(dict(SVHT_DEFAULTS), real_axis=False)
+    description = describe_svht({}, real_axis=False)
     for citation in ('@svht_denoise', '@gavish2017', '@gavish2014', '@manjon2013', '@foi2011'):
         assert citation in description
     assert 'spherical patches' in description
-    assert 'each *b*-value shell' in description
+    # Demeaning by shell is opt-in
+    assert 'shell' not in description
     assert 'exact-unbiased' in description
+    assert 'each *b*-value shell' in describe_svht({'demean': True}, real_axis=False)
 
-    real = describe_svht(dict(SVHT_DEFAULTS), real_axis=True)
+    real = describe_svht({}, real_axis=True)
     assert '@nordic' in real
     assert '@foi2011' not in real
     assert 'absolute value' in real

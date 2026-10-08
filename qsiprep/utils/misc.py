@@ -500,13 +500,12 @@ _SVHT_CONFIG_KEYS = frozenset(_SVHT_ENUM_PARAMETERS) | {
     'stride',
     'vst',
 }
-"""Keys a ``--denoise-config`` file may set for ``--denoise-method svht``."""
+"""Keys a ``--denoise-config`` file may set for ``--denoise-method svht``.
 
-SVHT_DEFAULTS = {'demean': True}
-"""Settings QSIPrep applies to svht_denoise unless ``--denoise-config`` overrides them.
-
-svht_denoise does not demean by default, but QSIPrep runs dwidenoise2 with its default of
-demeaning each shell, so svht_denoise is run the same way.
+Any key a file omits is left at svht_denoise's own default. That includes ``demean``:
+demeaning by shell is off unless the file sets ``"shells"``, because svht_denoise's
+clustering turns each distinct b-value of a non-shelled scheme (DSI, CS-DSI) into its own
+small "shell", whose mean then bypasses the denoiser.
 """
 
 
@@ -691,8 +690,7 @@ def describe_svht(parameters, real_axis):
     Parameters
     ----------
     parameters : dict
-        SVHTDenoise parameters in effect: :data:`SVHT_DEFAULTS` updated with the values
-        returned by :func:`load_svht_config`.
+        SVHTDenoise parameters, as returned by :func:`load_svht_config`.
     real_axis : bool
         Whether the magnitude and phase data were rotated onto the real axis.
 

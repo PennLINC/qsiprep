@@ -654,13 +654,23 @@ def test_svht_magnitude_stays_magnitude(monkeypatch):
     assert '[@svht_denoise]' in workflow.__desc__
 
 
-def test_svht_demeans_shells_by_default(monkeypatch):
-    """Test that svht_denoise demeans each shell, as QSIPrep's dwidenoise2 runs do."""
+def test_svht_does_not_demean_by_default(monkeypatch):
+    """Test that demeaning by shell, harmful on non-shelled schemes, is not on by default."""
     workflow = _build_denoising_wf(monkeypatch, 'svht', 'none', use_phase=False)
-    connections = _connections(workflow)
+    denoiser = workflow.get_node('denoiser')
+
+    assert not isdefined(denoiser.inputs.demean)
+    assert _connections(workflow)[('inputnode', 'denoiser')] == {('dwi_file', 'in_file')}
+    assert 'shell' not in workflow.__desc__
+
+
+def test_svht_demeans_shells_when_requested(monkeypatch, tmp_path):
+    """Test that "demean": "shells" passes the b-values that define the shells."""
+    _use_denoise_config(monkeypatch, tmp_path, {'demean': 'shells'})
+    workflow = _build_denoising_wf(monkeypatch, 'svht', 'none', use_phase=False)
 
     assert workflow.get_node('denoiser').inputs.demean is True
-    assert ('bval_file', 'bval_file') in connections[('inputnode', 'denoiser')]
+    assert ('bval_file', 'bval_file') in _connections(workflow)[('inputnode', 'denoiser')]
     assert 'each *b*-value shell' in workflow.__desc__
 
 
@@ -737,10 +747,7 @@ def test_svht_reads_the_phase_and_splits_after_denoising(monkeypatch, unringing_
     node_names = {node.name for node in workflow._get_all_nodes()}
 
     assert 'combine_complex' not in node_names
-    assert connections[('inputnode', 'denoiser')] == {
-        ('dwi_file', 'in_file'),
-        ('bval_file', 'bval_file'),
-    }
+    assert connections[('inputnode', 'denoiser')] == {('dwi_file', 'in_file')}
     assert connections[('phase_to_radians', 'denoiser')] == {('phase_file', 'phase_file')}
     assert workflow.get_node('denoiser').inputs.phase_units == 'radians'
     assert connections[('denoiser', 'split_complex')] == {('out_file', 'complex_file')}

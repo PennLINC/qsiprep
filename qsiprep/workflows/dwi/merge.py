@@ -34,7 +34,6 @@ from ...interfaces.svht import SVHTDeGibbs, SVHTDenoise
 from ...interfaces.tortoise import Gibbs
 from ...utils.bids import IMPORTANT_DWI_FIELDS, update_metadata_from_nifti_header
 from ...utils.misc import (
-    SVHT_DEFAULTS,
     check_dwidenoise2_demodulation,
     check_svht_extent,
     check_svht_phase,
@@ -495,7 +494,7 @@ def init_dwi_denoising_wf(
         if config.workflow.denoise_config is not None:
             dwidenoise2_params = load_dwidenoise2_config(config.workflow.denoise_config)
         check_dwidenoise2_demodulation(dwidenoise2_params, use_phase)
-    svht_params = dict(SVHT_DEFAULTS)
+    svht_params = {}
     if denoise_method == 'svht':
         if config.workflow.denoise_config is not None:
             svht_params.update(load_svht_config(config.workflow.denoise_config))
@@ -600,8 +599,8 @@ def init_dwi_denoising_wf(
                 name='denoiser',
                 n_procs=omp_nthreads,
             )
-            if svht_params['demean']:
-                # The shells to demean are read from the b-values
+            if svht_params.get('demean', False):
+                # Opt-in demeaning reads the shells from the b-values
                 workflow.connect([(inputnode, denoiser, [('bval_file', 'bval_file')])])
         else:
             denoiser = pe.Node(
