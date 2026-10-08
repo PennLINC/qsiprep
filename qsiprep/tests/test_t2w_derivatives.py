@@ -33,10 +33,11 @@ def _config():
     return config
 
 
-def _build(num_additional_t2ws, name):
+def _build(num_additional_t2ws, name, anat_modality='T1w'):
     from qsiprep.workflows.anatomical.volume import init_anat_preproc_wf
 
-    _config()
+    config = _config()
+    config.workflow.anat_modality = anat_modality
     return init_anat_preproc_wf(
         num_anat_images=2,
         num_additional_t2ws=num_additional_t2ws,
@@ -257,3 +258,18 @@ def test_base_sinks_both_templates_to_their_own_spaces():
     assert "('outputnode.dwiref_acpc', 'in_file')" in src
     assert "('outputnode.dwiref', 'in_file')" in src
     assert "name='ds_dwiref_acpc'" in src
+
+
+def test_t2w_as_the_anatomical_modality_still_builds_the_sinks():
+    """Test that ``--anat-modality T2w`` with T2w SDC builds and writes the T2w products.
+
+    With T2w as the primary anatomical the T2w branch is the ACPC-resampled head and
+    unfatsat, not ``t2w_preproc_wf`` (which only exists next to a T1w). Connecting the
+    derivatives to that absent node crashed workflow construction with an
+    UnboundLocalError, so the T2w-only path has to be built from ``outputnode``.
+    """
+    wf = _build(1, 't2w_primary', anat_modality='T2w')
+    names = _names(wf)
+    assert not any('t2w_preproc_wf' in n for n in names)
+    assert any('ds_t2_preproc' in n for n in names)
+    assert any('ds_t2w_unfatsat' in n for n in names)

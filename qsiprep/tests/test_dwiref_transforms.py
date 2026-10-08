@@ -76,14 +76,14 @@ def test_both_sinks_are_wired_in_base():
     assert "'outputnode.dwiref_to_t1_affine', 'in_file'" in src
 
 
-def test_single_group_subject_skips_the_template_instead_of_failing():
-    """Test that a single-group subject skips the template instead of failing.
+def test_single_group_subject_still_gets_a_subject_dwiref():
+    """Test that a single-group subject gets the subject-level outputs.
 
-    A one-session subject must not fail the run.
-
-    Cohorts routinely mix single- and multi-session subjects: in CRASH, 24 of 59
-    subjects have one session. Raising here meant a single
-    --dwiref-construction-iters flag failed 41% of the dataset outright.
+    A one-session subject must not fail the run, and it must not silently drop
+    to the distortion-group level either: cohorts routinely mix single- and
+    multi-session subjects (in CRASH, 24 of 59 have one session), and the
+    requested level's files have to exist for every one of them, as fMRIPrep
+    does for a single-run --bold-coreg-level subject.
     """
     import inspect
 
@@ -91,9 +91,7 @@ def test_single_group_subject_skips_the_template_instead_of_failing():
 
     src = inspect.getsource(base.init_single_subject_wf)
     assert "raise Exception('Cannot make an intramodal with less than 2 groups.')" not in src
-    assert 'Falling back to --dwiref-definition distortion-group' in src
-    # and the flag must still be honoured when there ARE enough groups
-    assert 'make_dwiref = True' in src
+    assert 'Falling back to --dwiref-definition distortion-group' not in src
 
 
 def test_dwiref_to_t1_has_no_warp_input():

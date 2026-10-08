@@ -27,7 +27,7 @@ import sys
 from pathlib import Path
 
 #: The TRXScan release the fixtures are generated with. Bumping it invalidates the CI cache.
-TRXSCAN_VERSION = '0.2.0'
+TRXSCAN_VERSION = '0.2.1'
 
 #: fixture name -> (recipe, {parameter: value}); values are JSON-encoded for ``--set``.
 RECIPES = {

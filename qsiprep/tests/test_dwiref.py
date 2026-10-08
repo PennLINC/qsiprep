@@ -130,3 +130,51 @@ def test_dwi2anat_dof_reaches_the_template_coregistration(dof, expected):
     wf = _build('Affine', name=f'imt_dof{dof}', dwi2anat_dof=dof)
     coreg = wf.get_node('b0_anat_coreg').get_node('b0_to_anat')
     assert coreg.inputs.transforms == [expected]
+
+
+@pytest.mark.parametrize('transform', ['Rigid', 'BSplineSyN'])
+def test_single_input_skips_template_construction(transform):
+    """Test that a single distortion group is its own dwiref.
+
+    mvtc2 needs at least two inputs, and a one-image template would only resample
+    the b=0, so the reference passes straight through, as fMRIPrep's single-run
+    subject boldref does.
+    """
+    from qsiprep.workflows.dwi.dwiref import init_dwiref_wf
+
+    _config()
+    wf = init_dwiref_wf(
+        inputs_list=['group_a'],
+        t1w_source_file='/data/sub-01_T1w.nii.gz',
+        transform=transform,
+        name=f'imt_single_{transform}',
+    )
+    names = _names(wf)
+    assert not any('ants_mvtc2' in n or 'dwiref_linear_template' in n for n in names)
+    assert not any('template_qc' in n for n in names)
+
+    # The reference is the dwiref, and coregistration still runs on it.
+    edge = wf._graph.get_edge_data(wf.get_node('inputnode'), wf.get_node('outputnode'))
+    assert ('group_a_b0_template', 'dwiref') in edge['connect']
+    assert any('b0_anat_coreg' in n for n in names)
+
+
+def test_single_input_transform_is_a_binary_identity_affine(tmp_path, monkeypatch):
+    """Test that the single-group transform is an identity in ITK's .mat format.
+
+    It is written under the same .mat name as antsRegistration's affines, so it
+    must be one, not ITK's text format renamed.
+    """
+    import numpy as np
+    import SimpleITK as sitk
+
+    from qsiprep.workflows.dwi.dwiref import _write_identity_affine
+
+    monkeypatch.chdir(tmp_path)
+    out_file = _write_identity_affine()
+
+    assert out_file.endswith('.mat')
+    with open(out_file, 'rb') as fobj:
+        assert not fobj.read().startswith(b'#Insight Transform File')
+    transform = sitk.ReadTransform(out_file)
+    np.testing.assert_allclose(transform.GetParameters(), [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0])
