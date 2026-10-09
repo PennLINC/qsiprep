@@ -5788,7 +5788,7 @@ packages:
   requires_python: '>=3.11'
 - pypi: ./
   name: qsiprep
-  version: 26.2.0.dev15+g44739edad
+  version: 26.2.0.dev16+g933a39788
   sha256: 49f73a87051e186ef921123e57512c55b5d257e5bf4e6fd94cbc214d376279b2
   requires_dist:
   - acres
@@ -5867,7 +5867,7 @@ packages:
   editable: true
 - pypi: ./
   name: qsiprep
-  version: 26.2.0.dev15+g44739edad
+  version: 26.2.0.dev16+g933a39788
   sha256: 49f73a87051e186ef921123e57512c55b5d257e5bf4e6fd94cbc214d376279b2
   requires_dist:
   - acres
