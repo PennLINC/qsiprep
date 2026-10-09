@@ -307,6 +307,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/12/d5/27742bf24dde737fe05e6fba615d9aa1bf95f4dda258a45cf97eb403366e/ci_info-0.4.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/98/78/01c019cdb5d6498122777c1a43056ebb3ebfeef2076d9d026bfe15583b2b/click-8.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/76/53/c16972708cbb79f2942922571a687c52bd109a7bd51175aeb7558dff2236/coverage-7.13.4-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/ed/ef/21a2fd382244a0e8c33ab96f90ddd7ae979b755b7a2e50879e91325a346d/cs_dmri-0.2.0-cp39-abi3-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/f7/e6/efe534ef0952b531b630780e19cabd416e2032697019d5295defc6ef9bd9/deepdiff-8.6.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0b/e4/838f5bec586e412001593b751ff56a1744ba1cbf0c6bd066f8f4429b2a55/dipy-1.12.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/a2/55/8f8cab2afd404cf578136ef2cc5dfb50baa1761b68c9da1fb1e4eed343c9/docopt-0.6.2.tar.gz
@@ -702,6 +703,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/12/d5/27742bf24dde737fe05e6fba615d9aa1bf95f4dda258a45cf97eb403366e/ci_info-0.4.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/98/78/01c019cdb5d6498122777c1a43056ebb3ebfeef2076d9d026bfe15583b2b/click-8.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/76/53/c16972708cbb79f2942922571a687c52bd109a7bd51175aeb7558dff2236/coverage-7.13.4-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/ed/ef/21a2fd382244a0e8c33ab96f90ddd7ae979b755b7a2e50879e91325a346d/cs_dmri-0.2.0-cp39-abi3-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/f7/e6/efe534ef0952b531b630780e19cabd416e2032697019d5295defc6ef9bd9/deepdiff-8.6.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0b/e4/838f5bec586e412001593b751ff56a1744ba1cbf0c6bd066f8f4429b2a55/dipy-1.12.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/a2/55/8f8cab2afd404cf578136ef2cc5dfb50baa1761b68c9da1fb1e4eed343c9/docopt-0.6.2.tar.gz
@@ -1073,6 +1075,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/12/d5/27742bf24dde737fe05e6fba615d9aa1bf95f4dda258a45cf97eb403366e/ci_info-0.4.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/98/78/01c019cdb5d6498122777c1a43056ebb3ebfeef2076d9d026bfe15583b2b/click-8.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/76/53/c16972708cbb79f2942922571a687c52bd109a7bd51175aeb7558dff2236/coverage-7.13.4-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/ed/ef/21a2fd382244a0e8c33ab96f90ddd7ae979b755b7a2e50879e91325a346d/cs_dmri-0.2.0-cp39-abi3-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/f7/e6/efe534ef0952b531b630780e19cabd416e2032697019d5295defc6ef9bd9/deepdiff-8.6.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0b/e4/838f5bec586e412001593b751ff56a1744ba1cbf0c6bd066f8f4429b2a55/dipy-1.12.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/a2/55/8f8cab2afd404cf578136ef2cc5dfb50baa1761b68c9da1fb1e4eed343c9/docopt-0.6.2.tar.gz
@@ -1569,6 +1572,16 @@ packages:
   requires_dist:
   - tomli ; python_full_version <= '3.11' and extra == 'toml'
   requires_python: '>=3.10'
+- pypi: https://files.pythonhosted.org/packages/ed/ef/21a2fd382244a0e8c33ab96f90ddd7ae979b755b7a2e50879e91325a346d/cs_dmri-0.2.0-cp39-abi3-manylinux_2_28_x86_64.whl
+  name: cs-dmri
+  version: 0.2.0
+  sha256: 9562665e1993092dcb7ed92ee019723b9493110de9b98c928866380fac5a8ec4
+  requires_dist:
+  - numpy>=1.24
+  - nibabel>=5
+  - dipy>=1.10 ; extra == 'dipy'
+  - pytest ; extra == 'test'
+  requires_python: '>=3.9'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/curl-8.22.0-ha042cf0_0.conda
   sha256: 1a35faf4bf079c4438c52c9795b95d6c97c1b60e0bb51802cf48e2b7352b57e5
   md5: 399a7c0b7ca511de34c5ee5762cee149
@@ -5775,11 +5788,12 @@ packages:
   requires_python: '>=3.11'
 - pypi: ./
   name: qsiprep
-  version: 26.2.0.dev24+g6bd2383b7
-  sha256: a782190f345cbb5c7c4ec585b80b59e3042b12acf4a46aaf62ca6ee23bf828aa
+  version: 26.2.0.dev15+g44739edad
+  sha256: 49f73a87051e186ef921123e57512c55b5d257e5bf4e6fd94cbc214d376279b2
   requires_dist:
   - acres
   - coverage
+  - cs-dmri>=0.2.0,<0.3
   - dipy>=1.12.0,<1.13.0
   - importlib-resources ; python_full_version < '3.12'
   - indexed-gzip<=1.8.7
@@ -5853,11 +5867,12 @@ packages:
   editable: true
 - pypi: ./
   name: qsiprep
-  version: 26.2.0.dev24+g6bd2383b7
-  sha256: a782190f345cbb5c7c4ec585b80b59e3042b12acf4a46aaf62ca6ee23bf828aa
+  version: 26.2.0.dev15+g44739edad
+  sha256: 49f73a87051e186ef921123e57512c55b5d257e5bf4e6fd94cbc214d376279b2
   requires_dist:
   - acres
   - coverage
+  - cs-dmri>=0.2.0,<0.3
   - dipy>=1.12.0,<1.13.0
   - importlib-resources ; python_full_version < '3.12'
   - indexed-gzip<=1.8.7
