@@ -301,10 +301,44 @@ Quality control data
 
 ``<source_entities>_space-ACPC_desc-image_qc.tsv`` has one row per output
 image and is meant for comparing subjects before deciding whom to include in
-a group analysis. Columns prefixed ``raw_`` are DSI Studio's quality
-measures :footcite:p:`yeh2019` computed on the data before preprocessing,
-and ``t1_`` columns the same measures on the preprocessed data. Motion
-summaries follow: ``mean_fd`` and ``max_fd``, ``max_translation`` and
+a group analysis. Columns prefixed ``raw_`` are computed on the data before
+preprocessing, and ``t1_`` columns on the preprocessed data. Each stage has
+DSI Studio's quality measures :footcite:p:`yeh2019` and the following measures
+from `cs_dmri <https://cs-dmri.readthedocs.io>`_:
+
+``ndc``, ``ndc_masked``
+    Neighboring DWI correlation over all voxels and inside the brain mask:
+    the correlation of each diffusion-weighted volume with its nearest
+    neighbor in q-space, averaged over all of them. Unlike DSI Studio's
+    ``neighbor_corr``, it does not depend on the order of the volumes.
+``dwi_contrast_ratio``, ``dwi_contrast_ratio_masked``
+    The mean correlation of each diffusion-weighted volume with its nearest
+    q-space neighbor over its mean correlation with the volume whose
+    q-vector is closest to perpendicular to its own.
+``n_outlier_slices``
+    The number of slices whose in-plane smoothed intensity departs from the
+    average of the two adjacent slices of the same volume by more than 2.5
+    times the difference between those two slices.
+``fixel_coherence``
+    The FA-weighted fraction of anisotropic voxels whose principal diffusion
+    direction lies within 15° of that of the neighboring voxel it points to.
+``fixel_chain_length``
+    The FA-weighted mean length, in mm, of the chains formed by linking each
+    principal diffusion direction to its best continuation in the neighboring
+    voxels. Noise, misregistration and a wrong gradient table shorten chains.
+``gradient_table_ratio``
+    The longest fiber-chain length obtained with any of the 24 axis
+    permutations and flips of the gradient table, over that obtained with the
+    table as used. It is 1 when the table as used is the most consistent with
+    the anatomy; larger values suggest a permuted or flipped gradient table.
+``n_dwi_volumes``, ``n_b0_volumes``
+    The numbers of diffusion-weighted and b=0 volumes.
+
+The brain mask is a SynthStrip mask of the mean b=0 image for the raw data
+and the preprocessed DWI brain mask afterwards. Full definitions are in the
+cs_dmri documentation.
+
+The motion summaries are ``mean_fd`` and ``max_fd``, ``max_translation`` and
 ``max_rotation``, and their frame-to-frame maxima ``max_rel_translation``
 and ``max_rel_rotation``. ``t1_dice_distance`` is the Dice distance between
 the DWI brain mask and the anatomical brain mask.

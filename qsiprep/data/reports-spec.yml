@@ -114,7 +114,7 @@ sections:
   ordering: session,task,acquisition,ceagent,reconstruction,direction,run,echo
   reportlets:
   - bids: {datatype: figures, desc: summary, suffix: dwi}
-  # Written by SeriesQC only when DSI Studio could not compute a QC stage.
+  # Written by SeriesQC only when DSI Studio or cs_dmri could not compute a QC stage.
   - bids: {datatype: figures, desc: qcwarnings, suffix: dwi}
     subtitle: Quality control warnings
   # XXX: Appears to have no producer. Check.

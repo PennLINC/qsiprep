@@ -483,6 +483,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             ('bvecs', 'inputnode.bvec_file'),
         ]),
         (merge, calculate_qc, [('out_file', 'inputnode.dwi_file')]),
+        (final_b0_ref, calculate_qc, [('outputnode.dwi_mask', 'inputnode.mask_file')]),
         (calculate_qc, outputnode, [('outputnode.qc_summary', 'resampled_qc')]),
     ])  # fmt:skip
     # if write_local_bvecs:
