@@ -77,7 +77,7 @@ class CsDmriQC(SimpleInterface):
                 'cs_dmri QC values will be n/a for %s. %s', self.inputs.dwi_file, problem
             )
             self._results['warning'] = problem
-            row = {name: np.nan for name in cs.qc.columns()}
+            row = dict.fromkeys(cs.qc.columns(), np.nan)
         pd.DataFrame({key: [value] for key, value in row.items()}).to_csv(qc_file, index=False)
         self._results['qc_file'] = qc_file
         return runtime

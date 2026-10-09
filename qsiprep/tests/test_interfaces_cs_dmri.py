@@ -143,7 +143,7 @@ def test_merge_reports_a_cs_dmri_failure(tmp_path):
     table = _merge(
         tmp_path,
         _SRC_QC,
-        {name: np.nan for name in _CS_ROW},
+        dict.fromkeys(_CS_ROW, np.nan),
         cs_dmri_qc_warning='cs_dmri QC failed: ValueError: bad bvecs',
     )
 
