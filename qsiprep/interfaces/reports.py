@@ -107,7 +107,7 @@ MRTRIX_DEV_WARNING = """\t<div class="alert alert-warning" role="alert">
 """
 
 QC_WARNINGS_TEMPLATE = """\t<div class="alert alert-warning" role="alert">
-\t\t<strong>DSI Studio could not compute some QC measures.</strong>
+\t\t<strong>Some QC measures could not be computed.</strong>
 \t\tThose values are <code>n/a</code> in this series' <code>desc-image_qc.tsv</code>.
 \t\tPreprocessing continued, but this failure can point to a problem in the data it
 \t\twas run on, such as extreme intensity values, so inspect the outputs.
@@ -606,7 +606,7 @@ class _SeriesQCOutputSpec(TraitedSpec):
     series_qc_file = File(exists=True)
     qc_warnings_report = File(
         exists=True,
-        desc='HTML reportlet naming QC stages DSI Studio could not measure. '
+        desc='HTML reportlet naming QC stages DSI Studio or cs_dmri could not measure. '
         'Undefined when every stage succeeded.',
     )
 

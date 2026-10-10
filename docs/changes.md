@@ -18,6 +18,16 @@
 
 ### 🎉 Exciting New Features
 
+* `desc-image_qc.tsv` gains image-quality measures from
+  [cs_dmri](https://cs-dmri.readthedocs.io) beside DSI Studio's, for both the raw and the
+  preprocessed data: `ndc`, `ndc_masked`, `dwi_contrast_ratio`, `dwi_contrast_ratio_masked`,
+  `n_outlier_slices`, `fixel_coherence`, `fixel_chain_length`, `gradient_table_ratio`,
+  `n_dwi_volumes` and `n_b0_volumes`. A `gradient_table_ratio` above 1 flags a gradient
+  table that a permutation or flip of its axes would make more consistent. The masked
+  measures use a SynthStrip mask of the mean b=0 image for the raw data and the preprocessed
+  brain mask afterwards. DSI Studio's columns are unchanged. The raw-data QC also no longer
+  runs twice for series without reverse phase-encoding data.
+
 * Truth-scored integration tests on simulated data: the `trxscan_*` CI jobs generate
   fixtures with [TRXScan](https://github.com/PennLINC/TRXScan) (`qsiprep/tests/trxscan_fixtures.py`)
   and score qsiprep's outputs against the simulator's ground truth

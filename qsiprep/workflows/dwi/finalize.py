@@ -545,7 +545,7 @@ def init_dwi_finalize_wf(
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
-    # Only written when DSI Studio could not measure a QC stage; see SeriesQC.
+    # Only written when DSI Studio or cs_dmri could not measure a QC stage; see SeriesQC.
     ds_report_qc_warnings = pe.Node(
         DerivativesMaybeDataSink(
             datatype='figures',
@@ -1053,6 +1053,7 @@ def init_finalize_denoising_wf(
             ('dwi_t1_bvec', 'inputnode.bvec_file'),
         ]),
         (p2s_buffernode, calculate_qc, [('dwi_t1', 'inputnode.dwi_file')]),
+        (final_b0_ref, calculate_qc, [('outputnode.dwi_mask', 'inputnode.mask_file')]),
         (calculate_qc, outputnode, [('outputnode.qc_summary', 'series_qc_postproc')]),
 
         # Update confounds with new nmse's

@@ -339,6 +339,7 @@ def init_merge_dwis_wf(
     if calculate_qc:
         qc_wf = init_modelfree_qc_wf(
             bvec_convention='DIPY' if orientation == 'LPS' else 'FSL',
+            skull_strip=True,
         )
         workflow.connect([
             (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_summary')]),

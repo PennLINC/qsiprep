@@ -610,6 +610,45 @@ def _assert_clean_run(out_dir):
         )
 
 
+def _assert_gradient_tables_consistent(out_dir):
+    """Assert that every QC stage found its gradient table the most coherent one.
+
+    cs_dmri's ``gradient_table_ratio`` compares fiber-chain lengths across the 24 axis
+    permutations and flips of the bvecs and is 1 when the table as used wins. The phantom's
+    fiber field is anatomically structured, so any other value means a bvec was misread
+    (raw stage) or misrotated or misreoriented by preprocessing (later stages).
+    """
+    import pandas as pd
+
+    tables = sorted(Path(out_dir).glob('sub-*/**/dwi/*desc-image_qc.tsv'))
+    assert tables, f'no desc-image_qc.tsv under {out_dir}'
+    for table in tables:
+        row = pd.read_csv(table, sep='\t', na_values='n/a').iloc[0]
+        columns = [c for c in row.index if c.endswith('gradient_table_ratio')]
+        assert columns, f'{table.name} has no gradient_table_ratio column'
+        for column in columns:
+            value = row[column]
+            assert pd.notna(value), f'{column} is n/a in {table.name}: cs_dmri QC did not run'
+            assert value <= 1 + 1e-9, (
+                f'{column} = {value:.3g} in {table.name}, expected 1: another axis permutation '
+                'or flip of the bvecs gives a more coherent fiber field'
+            )
+
+
+def test_gradient_table_check_reads_every_stage(tmp_path):
+    dwi = tmp_path / 'sub-01' / 'dwi'
+    dwi.mkdir(parents=True)
+    table = dwi / 'sub-01_space-ACPC_desc-image_qc.tsv'
+    table.write_text('raw_gradient_table_ratio\tt1_gradient_table_ratio\n1.0\t1.0\n')
+    _assert_gradient_tables_consistent(tmp_path)
+    table.write_text('raw_gradient_table_ratio\tt1_gradient_table_ratio\n1.0\t1.38\n')
+    with pytest.raises(AssertionError, match='t1_gradient_table_ratio = 1.38'):
+        _assert_gradient_tables_consistent(tmp_path)
+    table.write_text('raw_gradient_table_ratio\tt1_gradient_table_ratio\nn/a\t1.0\n')
+    with pytest.raises(AssertionError, match='raw_gradient_table_ratio is n/a'):
+        _assert_gradient_tables_consistent(tmp_path)
+
+
 def _trxscan_run(test_name, fixture, extra, data_dir, output_dir, working_dir):
     from qsiprep.tests.truth_scoring import score_run
     from qsiprep.tests.trxscan_fixtures import fixture_dir
@@ -631,6 +670,7 @@ def _trxscan_run(test_name, fixture, extra, data_dir, output_dir, working_dir):
     parameters += TRXSCAN_COMMON + list(extra)
     _run_and_generate(test_name, parameters, test_main=False, check_outputs=False)
     _assert_clean_run(out_dir)
+    _assert_gradient_tables_consistent(out_dir)
     score = score_run(dataset_dir, out_dir)
     # Kept with the derivatives (a CI artifact) and printed, so the numbers are findable
     # whether or not an assertion fires.
