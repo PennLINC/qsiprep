@@ -626,9 +626,9 @@ class workflow(_Config):
     """Skip re-scaling dwi scans to have matching b=0 intensities."""
     output_resolution = None
     """Isotropic voxel size for outputs."""
-    sdc_anat_reference = 'synb0'
+    sdc_anat_reference = 'none'
     """Which anatomical-derived image the fieldmap-less correction uses:
-    ``synb0`` (default), ``invt1w``, ``t2w`` or ``none`` (fieldmap-less SDC off)."""
+    ``none`` (default, fieldmap-less SDC off), ``synb0``, ``invt1w`` or ``t2w``."""
     sdc_fieldmapless_method = 'topup'
     """Which correction handles DWI series no fieldmap reaches: ``topup`` (SynB0 +
     TOPUP, the default), ``syn`` or ``unpile``."""

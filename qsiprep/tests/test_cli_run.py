@@ -807,7 +807,7 @@ def test_config_file_reload_drops_stale_dwidenoise2_config(tmp_path, restore_dwi
 
 def test_sdc_anat_reference_parses(minimal_args):
     opts = _parse(minimal_args)
-    assert opts.sdc_anat_reference == 'synb0'
+    assert opts.sdc_anat_reference == 'none'
     assert opts.sdc_fieldmapless_method == 'topup'
     opts = _parse(
         minimal_args,
@@ -895,7 +895,7 @@ def test_force_one_pass_sdc_parses(minimal_args):
 
 def test_force_sdc_anat_reference_parses(minimal_args):
     assert _parse(minimal_args).force == []
-    opts = _parse(minimal_args, '--force', 'sdc-anat-reference')
+    opts = _parse(minimal_args, '--sdc-anat-reference', 'synb0', '--force', 'sdc-anat-reference')
     assert opts.force == ['sdc-anat-reference']
     assert opts.force_sdc_anat_reference is True
 
@@ -906,17 +906,14 @@ def test_force_sdc_anat_reference_requires_a_reference(minimal_args, capsys):
     assert 'requires an anatomical SDC reference' in capsys.readouterr().err
 
 
-@pytest.mark.parametrize(
-    ('method', 'reference'), [(None, None), ('topup', 'synb0'), ('syn', 'invt1w')]
-)
+@pytest.mark.parametrize(('method', 'reference'), [('topup', 'synb0'), ('syn', 'invt1w')])
 @pytest.mark.parametrize('modality', ['T2w', 'none'])
 def test_t1w_derived_references_require_t1w_modality(
     minimal_args, capsys, method, reference, modality
 ):
-    """The default SynB0 reference needs the T1w; the error names the way out."""
+    """A T1w-derived reference needs the T1w; the error names the way out."""
     args = ['--anat-modality', modality]
-    if method is not None:
-        args += ['--sdc-fieldmapless-method', method, '--sdc-anat-reference', reference]
+    args += ['--sdc-fieldmapless-method', method, '--sdc-anat-reference', reference]
     with pytest.raises(SystemExit):
         _parse(minimal_args, *args)
     err = capsys.readouterr().err

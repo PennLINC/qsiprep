@@ -62,7 +62,7 @@ def _parse_minimal(tmp_path, *extra):
 
 def test_sdc_anat_reference_flag_reaches_the_grouping_policy(tmp_path):
     policy = cli_spec.policy_from_namespace(_parse_minimal(tmp_path))
-    assert (policy.fieldmapless_method, policy.sdc_anat_reference) == ('topup', 'synb0')
+    assert (policy.fieldmapless_method, policy.sdc_anat_reference) == ('topup', 'none')
     namespace = _parse_minimal(
         tmp_path, '--sdc-fieldmapless-method', 'syn', '--sdc-anat-reference', 'invt1w'
     )
@@ -248,7 +248,6 @@ def test_series_without_a_multipartid_is_its_own_preproc_unit(tmp_path):
     skeleton = {
         '01': [
             {
-                'anat': [{'suffix': 'T1w'}],
                 'dwi': [
                     {'run': '1', 'suffix': 'dwi', 'metadata': combined},
                     {'run': '2', 'suffix': 'dwi', 'metadata': combined},

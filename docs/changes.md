@@ -29,12 +29,13 @@
 
 ### 🎉 Exciting New Features
 
-* SynB0 + TOPUP is the default correction for DWI series that no fieldmap reaches, with
-  every head motion method; after DIFFPREP and SHORELine, TOPUP runs on the motion-corrected
-  b=0 and a synthetic b=0 generated from it, in FSL's LAS+ orientation.
+* SynB0 + TOPUP corrects DWI series that no fieldmap reaches, with every head motion
+  method, when `--sdc-anat-reference synb0` asks for it; after DIFFPREP and SHORELine, TOPUP
+  runs on the motion-corrected b=0 and a synthetic b=0 generated from it, in FSL's LAS+
+  orientation. Fieldmap-less correction stays off by default, as in every earlier release.
   `--sdc-fieldmapless-method {topup,syn,unpile}` picks the method and `--sdc-anat-reference
-  {synb0,invt1w,t2w,none}` its image (SyN can now register to the synthetic b=0); `auto` is
-  gone and a T2w no longer selects a correction by itself.
+  {synb0,invt1w,t2w,none}` its image (SyN can now register to the synthetic b=0);
+  `--use-syn-sdc` and `auto` are gone, and a T2w no longer selects a correction by itself.
   After TORTOISE and SHORELine a second SynB0 pass runs by default, generating the synthetic
   b=0 again from the b=0 the first field unwarped; `--force one-pass-sdc` skips it, and the
   second GRE registration pass with it.

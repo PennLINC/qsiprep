@@ -23,10 +23,10 @@ estimate of the field, which can come from a fieldmap, from images acquired
 with opposite phase encoding, or from an undistorted image made from the
 anatomy. *QSIPrep* decides which one a series gets from the metadata (see
 :ref:`linking_fieldmaps`), prefers reverse phase encoding over a GRE fieldmap
-when both are linked, and corrects a series no fieldmap reaches with a
-fieldmap-less method: SynB0 + TOPUP by default (``--sdc-fieldmapless-method``,
-``--sdc-anat-reference``; ``--force sdc-anat-reference`` uses it for every
-series). The tool that applies the estimate depends on the head motion
+when both are linked, and leaves a series no fieldmap reaches uncorrected
+unless ``--sdc-anat-reference`` names an image, which turns on a
+fieldmap-less method: SynB0 + TOPUP unless ``--sdc-fieldmapless-method``
+says otherwise (``--force sdc-anat-reference`` uses it for every series). The tool that applies the estimate depends on the head motion
 backend:
 
 .. list-table::
@@ -200,7 +200,8 @@ SynB0
 :func:`qsiprep.workflows.fieldmap.synb0.init_synb0_wf`,
 :func:`qsiprep.workflows.fieldmap.synb0.init_synb0_topup_wf`
 
-The default fieldmap-less correction. A synthetic distortion-free b=0 image is
+The default fieldmap-less method once ``--sdc-anat-reference synb0`` turns the
+correction on. A synthetic distortion-free b=0 image is
 generated from the T1w and the distorted b=0 with the SynB0-DISCO U-Net
 :footcite:p:`synb0disco` and stands in for a reverse phase-encoded
 acquisition: TOPUP pairs it, as a volume with zero readout time, with the

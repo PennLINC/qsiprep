@@ -831,7 +831,8 @@ def _build_parser(**kwargs):
         default='topup',
         choices=list(FIELDMAPLESS_METHOD_CHOICES),
         help=(
-            'Which correction handles DWI series that no fieldmap reaches. '
+            'Which correction handles DWI series that no fieldmap reaches, once '
+            '--sdc-anat-reference names an image. '
             '"topup" (the default) synthesizes an undistorted b=0 from the T1w with '
             'SynB0-DISCO and pairs it with the acquired b=0 in TOPUP: before eddy with '
             '--hmc-method eddy, after head motion correction with --hmc-method tortoise '
@@ -850,17 +851,17 @@ def _build_parser(**kwargs):
     g_sdc.add_argument(
         '--sdc-anat-reference',
         action='store',
-        default='synb0',
+        default='none',
         choices=list(ANAT_REFERENCE_CHOICES),
         help=(
             'Which anatomical-derived image the fieldmap-less correction '
             '(--sdc-fieldmapless-method) uses. '
-            '"synb0" (the default) generates a synthetic distortion-free b=0 from the '
-            'T1w with the SynB0-DISCO U-Net. '
+            '"none" (the default) leaves DWI series that no fieldmap reaches '
+            'uncorrected. '
+            '"synb0" generates a synthetic distortion-free b=0 from the T1w with the '
+            'SynB0-DISCO U-Net. '
             '"invt1w" uses the inverted-contrast T1w (with "syn" only). '
             '"t2w" uses the real T2w (with "unpile" only). '
-            '"none" disables fieldmap-less SDC: DWI series no fieldmap reaches are '
-            'left uncorrected. '
             'synb0 and invt1w require --anat-modality T1w.'
         ),
     )

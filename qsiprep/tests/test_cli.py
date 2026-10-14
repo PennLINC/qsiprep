@@ -991,9 +991,10 @@ def test_trxscan_gre_unpile(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.trxscan_synb0
 def test_trxscan_synb0(data_dir, output_dir, working_dir):
-    """Score the default fieldmap-less correction, SynB0 + TOPUP after DIFFPREP.
+    """Score the SynB0 + TOPUP fieldmap-less correction after DIFFPREP.
 
-    One phase encoding, no fieldmap, ``--hmc-method tortoise`` and no SDC options. The U-Net
+    One phase encoding, no fieldmap, ``--hmc-method tortoise`` and ``--sdc-anat-reference
+    synb0`` (the default method once a reference is named). The U-Net
     copies part of the b=0's distortion into the synthetic b=0, so TOPUP recovers only part of
     the field (about half on this fixture): the slope bound is "a real fraction with the right
     sign", not "all of it".
@@ -1001,7 +1002,7 @@ def test_trxscan_synb0(data_dir, output_dir, working_dir):
     score = _trxscan_run(
         'trxscan_synb0',
         'fieldmapless',
-        ['--hmc-method=tortoise'],
+        ['--hmc-method=tortoise', '--sdc-anat-reference=synb0'],
         data_dir,
         output_dir,
         working_dir,

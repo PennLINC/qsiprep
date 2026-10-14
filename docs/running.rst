@@ -511,8 +511,10 @@ Susceptibility distortion correction
 Which correction a series gets is decided from the data: a fieldmap linked to
 the series is used if there is one, and reverse phase encoding is preferred
 over a GRE fieldmap when both are linked. A series that no fieldmap reaches
-gets a fieldmap-less correction, SynB0 + TOPUP by default. The options below
-change the tools.
+is left uncorrected unless ``--sdc-anat-reference`` names an image, which
+turns on the fieldmap-less correction, SynB0 + TOPUP unless
+``--sdc-fieldmapless-method`` says otherwise. The options below change the
+tools.
 
 ``--sdc-method``
   The tool for reverse phase-encoded (PEPOLAR) data. ``auto`` (the default)
@@ -528,11 +530,10 @@ change the tools.
   the motion-corrected b=0 to the ``--sdc-anat-reference`` image with a model
   of the EPI readout (:ref:`sdc_unpile`), after any head motion method.
 ``--sdc-anat-reference``
-  The image the fieldmap-less correction uses. ``synb0`` (the default) is the
-  synthetic b=0, and works with every method; ``invt1w`` is the
-  inverted-contrast T1w, for ``syn``; ``t2w`` is the T2w, for ``unpile``.
-  ``none`` turns the fieldmap-less correction off and leaves those series
-  uncorrected. Any other pairing with ``--sdc-fieldmapless-method`` is an
+  The image the fieldmap-less correction uses. ``none`` (the default) leaves
+  series that no fieldmap reaches uncorrected. ``synb0`` is the synthetic
+  b=0, and works with every method; ``invt1w`` is the inverted-contrast T1w,
+  for ``syn``; ``t2w`` is the T2w, for ``unpile``. Any other pairing with ``--sdc-fieldmapless-method`` is an
   error. ``synb0`` and ``invt1w`` need ``--anat-modality T1w``. A series that
   the selected correction cannot handle (no T1w, or no
   ``PhaseEncodingDirection`` or ``TotalReadoutTime``) is an error; pass
@@ -558,7 +559,7 @@ What runs for each kind of data:
      - Inside ``eddy``
      - Applied after DIFFPREP
      - Applied after SHORELine
-   * - T1w (the default, ``topup`` with ``synb0``)
+   * - T1w, ``--sdc-anat-reference synb0`` (``topup``, the default method)
      - Synthetic b=0 joins the TOPUP inputs before ``eddy``
      - TOPUP after DIFFPREP, from the motion-corrected b=0 and a synthetic b=0
        generated from it

@@ -118,14 +118,16 @@ Behavior changes
   is passed to ``eddy`` and applied inside its model rather than to its
   outputs. ``--force gre-sdc-after-eddy`` restores the old behavior for
   comparison and is deprecated.
-* **Series with no fieldmap are corrected by default.** SynB0 + TOPUP runs for
-  every head motion method (before ``eddy``; after DIFFPREP or SHORELine). It
-  needs a T1w and ``PhaseEncodingDirection``/``TotalReadoutTime`` on the DWI;
-  without them the run stops with an error, and ``--sdc-anat-reference none``
-  restores the old behavior of leaving such series uncorrected. A T2w no
-  longer selects a correction by itself; ``--sdc-fieldmapless-method unpile
-  --sdc-anat-reference t2w`` fits the field against the T2w with unpile,
-  which is experimental, after any head motion method (:ref:`sdc_unpile`).
+* **Fieldmap-less correction is still off by default, but the flags changed.**
+  ``--use-syn-sdc`` is gone; ``--sdc-anat-reference synb0`` turns the
+  correction on, and ``--sdc-fieldmapless-method`` picks it: SynB0 + TOPUP
+  (the default, with every head motion method: before ``eddy``, after
+  DIFFPREP or SHORELine), ``syn`` for the old SyN registration, or
+  ``unpile``, which is experimental, against the synthetic b=0 or the T2w
+  (``--sdc-anat-reference t2w``, :ref:`sdc_unpile`). Once requested, a
+  series the correction cannot handle (no T1w, no ``PhaseEncodingDirection``
+  or ``TotalReadoutTime``) stops the run with an error. A T2w no longer
+  selects a correction by itself.
 * **A GRE fieldmap initializes DRBUDDI, and is unpile's prior,** when a
   series is also corrected by reverse phase encoding or by a forced
   fieldmap-less correction (:ref:`sdc_gre_init`).

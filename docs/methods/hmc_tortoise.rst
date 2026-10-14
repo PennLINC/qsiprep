@@ -59,7 +59,8 @@ per phase encoding direction from the model.
 **GRE fieldmap.** The fieldmap is applied to DIFFPREP's output by *QSIPrep*'s
 fieldmap workflow (see :ref:`sdc_gre`).
 
-**SynB0 + TOPUP** (the default with no fieldmap). A synthetic b=0 is generated
+**SynB0 + TOPUP** (with ``--sdc-anat-reference synb0``, the default fieldmap-less
+method). A synthetic b=0 is generated
 from DIFFPREP's motion-corrected b=0 average and the T1w, TOPUP pairs the two,
 and the field is applied at the final resampling (:ref:`sdc_synb0`).
 By default the synthetic b=0 is then generated again from the b=0 the first field
