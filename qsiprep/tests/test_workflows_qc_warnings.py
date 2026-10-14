@@ -111,3 +111,37 @@ def test_report_spec_lists_the_qc_warnings_reportlet():
     diffusion = next(section for section in spec['sections'] if section['name'] == 'Diffusion')
     bids = [reportlet['bids'] for reportlet in diffusion['reportlets']]
     assert {'datatype': 'figures', 'desc': 'qcwarnings', 'suffix': 'dwi'} in bids
+
+
+def test_qc_workflow_merges_cs_dmri_measures():
+    from qsiprep.workflows.dwi.qc import init_modelfree_qc_wf
+
+    wf = init_modelfree_qc_wf()
+
+    edge = _edge(wf, 'cs_dmri_qc', 'merged_qc')
+    assert ('qc_file', 'cs_dmri_qc') in edge
+    assert ('warning', 'cs_dmri_qc_warning') in edge
+    assert ('mask_file', 'mask_file') in _edge(wf, 'inputnode', 'cs_dmri_qc')
+
+
+def test_qc_workflow_skull_strips_for_cs_dmri_when_asked():
+    from qsiprep.workflows.dwi.qc import init_modelfree_qc_wf
+
+    config.execution.sloppy = True
+    wf = init_modelfree_qc_wf(bvec_convention='auto', skull_strip=True)
+
+    assert wf.get_node('cs_dmri_qc').inputs.bvec_convention == 'FSL'
+    assert ('outputnode.brain_mask', 'mask_file') in _edge(wf, 'qc_synthstrip_wf', 'cs_dmri_qc')
+    assert ('mask_file', 'mask_file') not in (
+        wf._graph.get_edge_data(wf.get_node('inputnode'), wf.get_node('cs_dmri_qc'))['connect']
+    )
+
+
+def test_resampled_qc_uses_the_resampled_brain_mask():
+    """Source check: the processed-data QC stages pass their SynthStrip mask."""
+    from qsiprep.workflows.dwi import distortion_group_merge, finalize, resampling
+
+    line = "[('outputnode.dwi_mask', 'inputnode.mask_file')]"
+    assert f'(final_b0_ref, calculate_qc, {line})' in inspect.getsource(finalize)
+    assert f'(final_b0_ref, calculate_qc, {line})' in inspect.getsource(resampling)
+    assert f'(b0_ref_wf, processed_qc_wf, {line})' in inspect.getsource(distortion_group_merge)

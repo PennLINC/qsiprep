@@ -208,7 +208,7 @@ Complex-valued data
 If you acquire complex-valued data, split it into BIDS ``part-mag`` and
 ``part-phase`` files. *QSIPrep* pairs each ``part-phase`` image with its
 magnitude and denoises them as complex data (with ``--denoise-method
-dwidenoise`` or ``dwidenoise2``), before series are concatenated. Every
+dwidenoise``, ``dwidenoise2`` or ``svht``), before series are concatenated. Every
 later step runs on the magnitude. ``part-real`` and ``part-imag`` files are
 ignored with a warning, so convert them to magnitude and phase first.
 

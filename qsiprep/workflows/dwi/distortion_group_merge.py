@@ -208,7 +208,7 @@ def init_distortion_group_merge_wf(
     ])  # fmt:skip
 
     # Calculate QC on the merged raw and processed data
-    raw_qc_wf = init_modelfree_qc_wf(bvec_convention='auto', name='raw_qc_wf')
+    raw_qc_wf = init_modelfree_qc_wf(bvec_convention='auto', skull_strip=True, name='raw_qc_wf')
     processed_qc_wf = init_modelfree_qc_wf(
         bvec_convention='DIPY',  # Always LPS+ when resampled
         name='processed_qc_wf',
@@ -227,7 +227,7 @@ def init_distortion_group_merge_wf(
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
-    # Only written when DSI Studio could not measure a QC stage; see SeriesQC.
+    # Only written when DSI Studio or cs_dmri could not measure a QC stage; see SeriesQC.
     ds_report_qc_warnings = pe.Node(
         DerivativesMaybeDataSink(
             datatype='figures',
@@ -318,6 +318,7 @@ def init_distortion_group_merge_wf(
         (distortion_merger, series_qc, [('merged_denoising_confounds', 'confounds_file')]),
         (raw_qc_wf, series_qc, [('outputnode.qc_summary', 'pre_qc')]),
         (processed_qc_wf, series_qc, [('outputnode.qc_summary', 't1_qc')]),
+        (b0_ref_wf, processed_qc_wf, [('outputnode.dwi_mask', 'inputnode.mask_file')]),
         (b0_ref_wf, t1_dice_calc, [('outputnode.dwi_mask', 'inputnode.dwi_mask')]),
         (inputnode, t1_dice_calc, [('t1_mask', 'inputnode.anatomical_mask')]),
         (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
