@@ -109,9 +109,8 @@ def test_shared_helpers_read_a_qsiprep_namespace():
 
 
 def test_config_selection_bridge_resolves_without_error():
-    # Regression: the config-to-selection bridge used to pass use_syn=/
-    # force_t2wreg= kwargs that qsiplan's selection_for_config dropped, raising
-    # TypeError. It now resolves cleanly to a MethodSelection.
+    # The config-to-selection bridge must only pass keywords that qsiplan's
+    # selection_for_config accepts.
     from qsiprep import config
     from qsiprep.utils.plan import method_selection_from_config
 
@@ -249,6 +248,7 @@ def test_series_without_a_multipartid_is_its_own_preproc_unit(tmp_path):
     skeleton = {
         '01': [
             {
+                'anat': [{'suffix': 'T1w'}],
                 'dwi': [
                     {'run': '1', 'suffix': 'dwi', 'metadata': combined},
                     {'run': '2', 'suffix': 'dwi', 'metadata': combined},

@@ -123,10 +123,9 @@ Behavior changes
   needs a T1w and ``PhaseEncodingDirection``/``TotalReadoutTime`` on the DWI;
   without them the run stops with an error, and ``--sdc-anat-reference none``
   restores the old behavior of leaving such series uncorrected. A T2w no
-  longer brings in TORTOISE's T2Wreg with ``--hmc-method tortoise``: T2Wreg is
-  gone, and ``--sdc-fieldmapless-method unpile --sdc-anat-reference t2w``
-  fits the field against the T2w with unpile instead, after any head motion
-  method (:ref:`sdc_unpile`).
+  longer selects a correction by itself; ``--sdc-fieldmapless-method unpile
+  --sdc-anat-reference t2w`` fits the field against the T2w with unpile,
+  which is experimental, after any head motion method (:ref:`sdc_unpile`).
 * **A GRE fieldmap initializes DRBUDDI, and is unpile's prior,** when a
   series is also corrected by reverse phase encoding or by a forced
   fieldmap-less correction (:ref:`sdc_gre_init`).

@@ -925,9 +925,8 @@ def test_trxscan_unpile(data_dir, output_dir, working_dir):
     the motion-corrected b=0 (rotation search plus a masked rigid), and unpile fits the field
     and a rigid refinement of the T2w position together, on a 2 mm grid so that the T2w keeps
     its detail. The fixture simulates the non-brain head, so the T2w has scalp and eyes to
-    match against as on real data. Unlike its predecessor (TORTOISE's T2Wreg, whose final
-    unrestricted stage pulled the b=0 toward the T2w rather than toward the artifact-free
-    image), the corrected b=0 is required to beat the acquired one against the clean b=0.
+    match against as on real data. The corrected b=0 is required to beat the acquired one
+    against the clean b=0.
     """
     score = _trxscan_run(
         'trxscan_unpile',

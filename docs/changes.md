@@ -39,16 +39,14 @@
   b=0 again from the b=0 the first field unwarped; `--force one-pass-sdc` skips it, and the
   second GRE registration pass with it.
 
-* [unpile](https://unpile.readthedocs.io) replaces TORTOISE's T2Wreg as the fieldmap-less
-  correction against an anatomical image, with every head motion method:
-  `--sdc-fieldmapless-method unpile` fits the susceptibility field by matching the
-  motion-corrected b=0 to the subject's T2w (`--sdc-anat-reference t2w`, with a rigid
-  refinement of the T2w position fitted jointly, on a grid at two thirds of the EPI voxel) or
-  to the synthetic b=0 (`synb0`, two passes like SynB0 + TOPUP) with a model of the EPI
-  readout, and the field is applied at the final resampling, Jacobian-modulated. A GRE
-  fieldmap that also lists the series is the prior of the fit and is refined rather than
-  replaced. T2Wreg, the TORTOISE EPI stage it replaces, is gone, together with
-  `--force jacobian` (its field was the only unmodulated one) and the `sdcT2w` reportlet.
+* [unpile](https://unpile.readthedocs.io), an experimental fieldmap-less correction against
+  an anatomical image, with every head motion method: `--sdc-fieldmapless-method unpile`
+  fits the susceptibility field by matching the motion-corrected b=0 to the subject's T2w
+  (`--sdc-anat-reference t2w`, with a rigid refinement of the T2w position fitted jointly,
+  on a grid at two thirds of the EPI voxel) or to the synthetic b=0 (`synb0`, two passes
+  like SynB0 + TOPUP) with a model of the EPI readout, and the field is applied at the final
+  resampling, Jacobian-modulated. A GRE fieldmap that also lists the series is the prior of
+  the fit and is refined rather than replaced.
 
 * `desc-image_qc.tsv` gains image-quality measures from
   [cs_dmri](https://cs-dmri.readthedocs.io) beside DSI Studio's, for both the raw and the

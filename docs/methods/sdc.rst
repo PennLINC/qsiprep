@@ -259,7 +259,8 @@ unpile
 :func:`qsiprep.workflows.fieldmap.unpile.init_unpile_sdc_wf`
 
 Selected with ``--sdc-fieldmapless-method unpile``, with every head motion
-method. `unpile <https://unpile.readthedocs.io>`__ :footcite:p:`unpile`
+method. unpile is experimental: inspect its correction in the report before
+relying on it. `unpile <https://unpile.readthedocs.io>`__ :footcite:p:`unpile`
 estimates the field from the motion-corrected b=0 and an undistorted
 reference with a model of the EPI readout: the reference is displaced along
 the phase-encoding axis the way the readout displaces it, signal pile-up
