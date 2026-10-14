@@ -1,31 +1,13 @@
 # What's New
 
-## Unreleased
+## 26.1.0 (October 14, 2026)
 
-### 🐛 Bug Fixes
-
-* `--anat-modality T2w` with a T2w-based distortion correction crashed at workflow build
-  (the T2w derivatives were wired from a node that only exists next to a T1w).
-
-* The GRE fieldmap-to-EPI registration (`fmap2ref`) now registers whole-head images with the
-  b0 and fieldmap brain masks as metric masks, without histogram matching, and rigidly
-  (the production settings used an Affine stage that absorbed the EPI distortion as a 6-12 %
-  scale plus a 4-5 degree tilt). On a TRXScan phasediff fixture with a realistic magnitude
-  (scalp, receive bias, Gibbs ringing) the registration error against the simulated
-  fieldmap offset drops from 4.9 to 0.2 degrees, the field correlation with the truth rises
-  from 0.925 to 0.955, and eddy's spurious motion on a static object from 0.33 to 0.002 mm.
-  Under `--sloppy` the registration is one three-level rigid with random sampling.
-
-* DRBUDDI's T2w was placed where TORTOISE's own rigid registration to the distorted b=0 put
-  it, and that registration started from the `antsAI` rotation search alone, which can land
-  several degrees off. The T2w is now refined with a masked rigid `antsRegistration` against
-  the b=0 and DIFFPREP is told to use it at that pose (`--DRBUDDI_disable_initial_rigid`,
-  re-enabled in the TORTOISE build qsiprep ships).
-
-* `--sloppy` TORTOISE runs used stage schedules whose smoothing sigmas and pyramid factors
-  are in voxels of TORTOISE's ~1 mm grid, so on the coarser sloppy grid they smoothed the
-  field 2.5 times too much and recovered about half of it. The sloppy DRBUDDI schedule is
-  now TORTOISE's default rescaled to the sloppy grid with fewer iterations.
+26.1.0 is the final release after 26.1.0rc1, whose changes are listed below it. Many command-line
+options were renamed or removed since 26.0.0, and `--distortion-group-merge` now defaults to
+`concat`: read {doc}`upgrading` before reusing a 26.0 command line.
+Three options that 26.1.0rc1 accepted are gone: `--dwidenoise2-config` is now
+`--denoise-config`, `--sdc-anat-reference auto` was removed (name the reference explicitly), and
+`--force jacobian` was removed along with the TORTOISE T2Wreg correction it applied to.
 
 ### 🎉 Exciting New Features
 
@@ -64,7 +46,7 @@
   fixtures with [TRXScan](https://github.com/PennLINC/TRXScan) (`qsiprep/tests/trxscan_fixtures.py`)
   and score qsiprep's outputs against the simulator's ground truth
   (`qsiprep/tests/truth_scoring.py`): susceptibility displacement, corrected images,
-  coregistration against a recorded subject movement, gradient deviation, and eddy's motion
+  coregistration against a recorded subject movement, and eddy's motion
   parameters.
 
 * FSL BET is gone. Every brain extraction that used it — the fieldmap-magnitude mask of the
@@ -73,16 +55,16 @@
   90 MB on a 1 mm T2w, Dice 0.96 against SynthStrip, where BET left 18 % of the brain margin
   outside its mask on T2w. Needs a niimath built with `SKULLSTRIP=1` (component image 26.10.1).
 
-* The ACPC registration starts from a `niimath -allineate` affine (1-2 s) and the nonlinear
-  normalization from identity (its input is already ACPC-aligned), instead of the
-  full-resolution antsAI search niworkflows runs inside `RobustMNINormalization` (~47 s each,
-  same transforms to 0.2 deg). Under `--sloppy` the anatomical resamplings use Linear
-  (NearestNeighbor for labels) interpolation. On the TRXScan reverse-PE fixture the sloppy run went
-  from 19.6 to 10.4 min at 4 CPUs with the same truth scores.
+* The nonlinear normalization starts from identity, since its input is already ACPC-aligned,
+  instead of the full-resolution antsAI search niworkflows runs inside `RobustMNINormalization`
+  (~47 s, same transform to 0.2 deg). The ACPC registration keeps the antsAI search, which a
+  strongly tilted head needs, except under `--sloppy`, where it starts from a `niimath
+  -allineate` affine (1-2 s). Under `--sloppy` the anatomical resamplings also use Linear
+  (NearestNeighbor for labels) interpolation.
 
 * Under `--sloppy` the DWI resamplings (the final output grid, the gradwarp and SDC inputs,
   SHORELine's model images) use Linear instead of NearestNeighbor interpolation. Linear costs
-  the same, and nearest-neighbour resampling of the final b=0 cost it 0.13 to 0.15 of its
+  the same, and nearest-neighbor resampling of the final b=0 cost it 0.13 to 0.15 of its
   correlation with the truth in the TRXScan tests, understating every correction's gain.
 
 * The integration matrix is the truth-scored TRXScan runs only. The sixteen end-to-end
@@ -96,9 +78,31 @@
 
 ### 🐛 Bug Fixes
 
+* `--anat-modality T2w` with a T2w-based distortion correction crashed at workflow build
+  (the T2w derivatives were wired from a node that only exists next to a T1w).
+
+* The GRE fieldmap-to-EPI registration (`fmap2ref`) now registers whole-head images with the
+  b0 and fieldmap brain masks as metric masks, without histogram matching, and rigidly
+  (the production settings used an Affine stage that absorbed the EPI distortion as a 6-12 %
+  scale plus a 4-5 degree tilt). On a TRXScan phasediff fixture with a realistic magnitude
+  (scalp, receive bias, Gibbs ringing) the registration error against the simulated
+  fieldmap offset drops from 4.9 to 0.2 degrees, the field correlation with the truth rises
+  from 0.925 to 0.955, and eddy's spurious motion on a static object from 0.33 to 0.002 mm.
+  Under `--sloppy` the registration is one three-level rigid with random sampling.
+
+* DRBUDDI's T2w was placed where TORTOISE's own rigid registration to the distorted b=0 put
+  it, and that registration started from the `antsAI` rotation search alone, which can land
+  several degrees off. The T2w is now registered rigidly to the b=0 with `antsRegistration`
+  before it is handed to DRBUDDI, so TORTOISE's own rigid starts from that pose.
+
+* `--sloppy` TORTOISE runs used stage schedules whose smoothing sigmas and pyramid factors
+  are in voxels of TORTOISE's ~1 mm grid, so on the coarser sloppy grid they smoothed the
+  field 2.5 times too much and recovered about half of it. The sloppy DRBUDDI schedule is
+  now TORTOISE's default rescaled to the sloppy grid with fewer iterations.
+
 * Oblique anatomical images are resampled onto an axis-aligned grid instead of having their
   header obliquity discarded, which had moved the anatomy in world space by the obliquity angle
-  (21 mm at the brain centre for a 5 degree tilt) and misplaced everything evaluated in scanner
+  (21 mm at the brain center for a 5 degree tilt) and misplaced everything evaluated in scanner
   coordinates, gradient nonlinearity correction included.
 * `from-ACPC_to-distortiongroup` and `from-ACPC_to-dwiref` transforms now hold the actual
   inverse of the coregistration; they used to be copies of the forward matrix.
@@ -108,6 +112,33 @@
   registration of it: on a TRXScan fixture with a known truth that rigid moved a T2w handed
   over 0.8 degrees off the b=0 frame to 5.3 degrees off, and the DWI landed 5.3 deg / 3.8 mm
   off in ACPC space; from the undistorted b=0 the error is 0.4 deg / 0.4 mm.
+
+### Pull requests since 26.1.0rc1
+
+#### 🎉 Exciting New Features
+
+* Two-pass GRE registration, unpile as an experimental fieldmap-less correction, SynB0 second pass on every head motion method by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1182
+* Add cs_dmri image-quality measures to desc-image_qc.tsv by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1183
+* Add svht option for unringing and denoising by @tsalo in https://github.com/PennLINC/qsiprep/pull/1178
+* Bring --dwiref-definition more in line with fMRIPrep's --bold-coreg-level by @tsalo in https://github.com/PennLINC/qsiprep/pull/1176
+
+#### 🐛 Bug Fixes
+
+* Address issues found via ground-truth testing by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1179
+* Fix transform and merge QC bugs by @tsalo in https://github.com/PennLINC/qsiprep/pull/1174
+* Update dwidenoise2 version with zero-variance voxel bugfix by @tsalo in https://github.com/PennLINC/qsiprep/pull/1167
+
+#### Other Changes
+
+* Denoise each raw DWI series once, at the subject level by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1169
+* Use trxscan data for ground truth CI testing by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1173
+* Update instructions for ground truth testing by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1180
+* Bump qsiplan 0.4.2: curation disables inference by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1171
+* Remove unreachable init_pepolar_unwarp_wf by @tsalo in https://github.com/PennLINC/qsiprep/pull/1155
+* Revert cbrt change in dwidenoise2 by @tsalo in https://github.com/PennLINC/qsiprep/pull/1168
+* Revert changes to dwidenoise2 by @tsalo in https://github.com/PennLINC/qsiprep/pull/1170
+
+**Full Changelog**: https://github.com/PennLINC/qsiprep/compare/26.0.0...26.1.0
 
 ## 26.1.0rc1 (September 29, 2026)
 

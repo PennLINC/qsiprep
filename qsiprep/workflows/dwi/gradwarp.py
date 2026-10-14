@@ -11,6 +11,7 @@ one value per volume and cannot express a spatially varying encoding.
 """
 
 import dataclasses
+import os
 
 from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
@@ -42,7 +43,7 @@ class GradwarpPlan:
 
     ``warp_dim`` is ``'3D'`` (full spatial correction), ``'1D'`` (through-plane
     only, for scanner-corrected DIS2D data or ``--force gradwarp1D``), or
-    ``None`` (no spatial correction; the grad_dev map is still produced).
+    ``None`` (no spatial correction).
     """
 
     coeff_file: str
@@ -243,11 +244,14 @@ _CORRECTION_TEXT = {
     ),
     None: (
         'The scanner had already applied full three-dimensional gradwarp '
-        'correction (DIS3D), so no further spatial correction was performed. '
-        'A voxelwise gradient deviation map was computed with TORTOISE V4 to '
-        'account for the spatially varying diffusion encoding.'
+        'correction (DIS3D), so no further spatial correction was performed.'
     ),
 }
+
+_GRADDEV_TEXT = (
+    ' A voxelwise gradient deviation map was computed with TORTOISE V4 to '
+    'account for the spatially varying diffusion encoding.'
+)
 
 
 #: The same, for a warp dimensionality pinned with ``--force``. Only ``1D``
@@ -296,6 +300,11 @@ def _resampling_sentence():
 #: this text is never reached for it.
 
 
+def _write_graddev():
+    """Return whether the voxelwise gradient deviation map is computed and written."""
+    return os.getenv('QSIPREP_WRITE_GRADDEV') == '1'
+
+
 def gradwarp_boilerplate(warp_dim, basis='metadata'):
     """Return methods text for the resolved plan and the selected HMC backend.
 
@@ -305,7 +314,7 @@ def gradwarp_boilerplate(warp_dim, basis='metadata'):
     applied to the scanner tags, since it did not read them.
     """
     if warp_dim is None:
-        return _CORRECTION_TEXT[None]
+        return _CORRECTION_TEXT[None] + (_GRADDEV_TEXT if _write_graddev() else '')
     if basis == 'forced':
         text = _FORCED_CORRECTION_TEXT.get(warp_dim, _CORRECTION_TEXT[warp_dim])
     else:

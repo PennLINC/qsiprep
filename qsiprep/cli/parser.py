@@ -449,8 +449,7 @@ def _build_parser(**kwargs):
             '"shims" treats all ShimSetting values as compatible when grouping series. '
             '"fov" concatenates series with differently-oriented fields of view anyway, '
             'in which case distortion corrections will be misapplied. '
-            '"gradwarp" disables gradient nonlinearity correction entirely, including '
-            'the voxelwise gradient deviation map. '
+            '"gradwarp" disables gradient nonlinearity correction entirely. '
             '"jacobian" disables the Jacobian intensity modulation QSIPrep itself applies '
             'for gradient-nonlinearity, susceptibility and eddy-current distortion '
             "corrections. It does not affect FSL eddy's internal modulation, which "
@@ -887,8 +886,7 @@ def _build_parser(**kwargs):
             'field (.nii/.nii.gz). It applies to every DWI run in the dataset. Whether '
             'the spatial correction is applied to a given run, and in which dimensions, '
             "is decided from that run's ImageType field unless --force gradwarp1D, "
-            '--force gradwarp3D or --ignore gradwarp says otherwise. The voxelwise '
-            'gradient deviation map is written whenever this is given.'
+            '--force gradwarp3D or --ignore gradwarp says otherwise.'
         ),
     )
 

@@ -103,19 +103,10 @@ The b=0 image that coregistration is estimated from is gradient-corrected on
 every backend, because the coregistration is applied after the gradient
 correction.
 
-The voxelwise gradient deviation map (see :ref:`outputs`) is computed
-separately, with ``CreateGradientNonlinearityBMatrix``, and does not depend
-on whether spatial correction was applied.
-
 Known limitations:
 
 * GE coefficient files are not accepted for spatial correction (see
   :ref:`gradient_files`).
-* No gradient deviation map is written for outputs assembled by
-  ``--distortion-group-merge``; the spatial correction is still applied.
-* The deviation map is oriented by a rigid registration TORTOISE estimates
-  itself, not by the coregistration *QSIPrep* applied. The two are close but
-  not identical, and this is recorded in the sidecar.
 
 
 **********

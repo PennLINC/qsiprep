@@ -40,6 +40,8 @@ chosen, the steps are:
    additional derivative.
 
 5. **AC-PC alignment.** The reference is rigidly registered to the template,
+   starting from an ``antsAI`` rotation search so that a strongly tilted head
+   is still found (from a ``niimath -allineate`` affine under ``--sloppy``),
    and the rigid transform defines ``ACPC`` space: the origin at the anterior
    commissure and the axes aligned with the template's, but with the
    subject's own brain shape and size. All outputs are written in this space.
