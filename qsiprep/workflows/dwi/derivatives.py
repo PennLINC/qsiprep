@@ -68,6 +68,25 @@ def _tsnr_meta(n_b0, median_tsnr):
 LOGGER = logging.getLogger('nipype.workflow')
 
 
+def writes_hmc_optimization():
+    """Whether this run writes the ``hmcOptimization`` derivative.
+
+    SHORELine's ``IterationSummary`` (``init_dwi_model_hmc_wf``) only exists
+    with a 3dSHORE signal model and more than one iteration, so the
+    ``hmc_optimization_data`` the HMC backends expose is a CSV worth writing
+    only then (eddy's is its outlier map, written elsewhere). Both consumers of
+    that field -- the per-run ``init_dwi_derivatives_wf`` and the
+    distortion-group merge, which has to concatenate the per-unit files before
+    sinking them -- share this one decision so neither builds a
+    ``ds_optimization`` sink the other cannot feed.
+    """
+    return (
+        config.workflow.hmc_method == 'shoreline'
+        and config.workflow.shoreline_model == '3dshore'
+        and config.workflow.shoreline_iters > 1
+    )
+
+
 def init_dwi_derivatives_wf(
     source_file,
     sdc_warp_meta=None,
@@ -119,11 +138,7 @@ def init_dwi_derivatives_wf(
         name='inputnode',
     )
 
-    if (
-        config.workflow.hmc_method == 'shoreline'
-        and config.workflow.shoreline_model == '3dshore'
-        and config.workflow.shoreline_iters > 1
-    ):
+    if writes_hmc_optimization():
         ds_optimization = pe.Node(
             DerivativesDataSink(
                 source_file=source_file,
