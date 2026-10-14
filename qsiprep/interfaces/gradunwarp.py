@@ -252,22 +252,6 @@ class CreateGradientNonlinearityBMatrix(CommandLine):
         }
 
 
-#: Percentiles reported for each in-brain distribution.
-_QC_PERCENTILES = (5, 25, 50, 75, 95, 99)
-
-
-def _distribution_row(measure, values):
-    row = {'measure': measure, 'n_voxels': int(values.size)}
-    if values.size == 0:
-        return row
-    row['mean'] = float(np.mean(values))
-    row['std'] = float(np.std(values))
-    for pct, value in zip(_QC_PERCENTILES, np.percentile(values, _QC_PERCENTILES), strict=True):
-        row[f'p{pct:02d}'] = float(value)
-    row['max'] = float(np.max(values))
-    return row
-
-
 def _mask_on_grid(mask_file, shape, affine):
     """Return a boolean brain mask resampled (nearest neighbor) onto a 3D grid."""
     from nibabel.processing import resample_from_to
@@ -296,54 +280,49 @@ def graddev_rotation_degrees(tensors):
     return np.degrees(np.arccos(np.clip(cos_angle, -1.0, 1.0)))
 
 
-class _GradDevQCInputSpec(BaseInterfaceInputSpec):
-    grad_dev = File(exists=True, mandatory=True, desc='9-component gradient deviation tensor map')
-    grad_dev_mask = File(exists=True, mandatory=True, desc='brain mask in the space of grad_dev')
-    gradwarp_field = File(
-        exists=True, desc='applied gradwarp displacement field (ITK, mm), if any'
-    )
-    gradwarp_mask = File(exists=True, desc='brain mask in the space of gradwarp_field')
+def _summary(prefix, values):
+    if values.size == 0:
+        return {}
+    return {
+        f'{prefix}_median': [float(np.median(values))],
+        f'{prefix}_p95': [float(np.percentile(values, 95))],
+        f'{prefix}_maximum': [float(np.max(values))],
+    }
 
 
-class _GradDevQCOutputSpec(TraitedSpec):
-    out_file = File(exists=True, desc='in-brain distribution of each measure')
+def gradient_nonlinearity_qc(grad_dev, grad_dev_mask, gradwarp_field=None, gradwarp_mask=None):
+    """Summarize gradient nonlinearity inside the brain, as ``image_qc.tsv`` columns.
 
+    Parameters
+    ----------
+    grad_dev : str
+        The 9-component gradient deviation tensor map.
+    grad_dev_mask : str
+        A brain mask in the space of ``grad_dev``.
+    gradwarp_field : str or None, optional
+        The applied gradwarp displacement field (ITK, mm).
+    gradwarp_mask : str or None, optional
+        A brain mask in the space of ``gradwarp_field``.
 
-class GradDevQC(SimpleInterface):
-    """Summarize gradient nonlinearity inside the brain.
-
-    Writes one row per measure: ``displacement_mm``, the magnitude of the applied
-    gradwarp displacement, and ``rotation_deg``, the rotation angle of the gradient
-    deviation tensor.
+    Returns
+    -------
+    dict
+        The median, 95th percentile and maximum of the applied displacement length
+        (``gradwarp_displacement_mm_*``, only with a field) and of the rotation angle
+        of the deviation tensor (``graddev_rotation_deg_*``).
     """
+    values = {}
+    if gradwarp_field and gradwarp_mask:
+        field_img = nb.load(gradwarp_field)
+        vectors = np.asanyarray(field_img.dataobj, dtype=np.float64)
+        vectors = vectors.reshape(field_img.shape[:3] + (-1,))
+        mask = _mask_on_grid(gradwarp_mask, field_img.shape[:3], field_img.affine)
+        values.update(_summary('gradwarp_displacement_mm', np.linalg.norm(vectors[mask], axis=-1)))
 
-    input_spec = _GradDevQCInputSpec
-    output_spec = _GradDevQCOutputSpec
-
-    def _run_interface(self, runtime):
-        import pandas as pd
-
-        rows = []
-        field = self.inputs.gradwarp_field
-        if field and self.inputs.gradwarp_mask:
-            field_img = nb.load(field)
-            vectors = np.asanyarray(field_img.dataobj, dtype=np.float64)
-            vectors = vectors.reshape(field_img.shape[:3] + (-1,))
-            mask = _mask_on_grid(self.inputs.gradwarp_mask, field_img.shape[:3], field_img.affine)
-            rows.append(
-                _distribution_row('displacement_mm', np.linalg.norm(vectors[mask], axis=-1))
-            )
-
-        graddev_img = nb.load(self.inputs.grad_dev)
-        tensors = np.asanyarray(graddev_img.dataobj, dtype=np.float64)
-        mask = _mask_on_grid(self.inputs.grad_dev_mask, tensors.shape[:3], graddev_img.affine)
-        rows.append(
-            _distribution_row(
-                'rotation_deg', graddev_rotation_degrees(tensors[mask].reshape(-1, 3, 3))
-            )
-        )
-
-        out_file = op.abspath('graddev_qc.tsv')
-        pd.DataFrame(rows).to_csv(out_file, sep='\t', index=False, float_format='%.6g')
-        self._results['out_file'] = out_file
-        return runtime
+    graddev_img = nb.load(grad_dev)
+    tensors = np.asanyarray(graddev_img.dataobj, dtype=np.float64)
+    mask = _mask_on_grid(grad_dev_mask, tensors.shape[:3], graddev_img.affine)
+    values.update(
+        _summary('graddev_rotation_deg', graddev_rotation_degrees(tensors[mask].reshape(-1, 3, 3)))
+    )
+    return values

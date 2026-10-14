@@ -1638,25 +1638,6 @@ def test_graddev_filename_renders_with_space_entity(tmp_path):
     assert out.endswith('sub-01_space-ACPC_graddev.nii.gz')
 
 
-def test_graddev_qc_filename_renders(tmp_path):
-    from qsiprep.interfaces import DerivativesDataSink
-
-    payload = tmp_path / 'graddev_qc.tsv'
-    payload.write_text('measure\tn_voxels\n')
-    sink = DerivativesDataSink(
-        base_directory=str(tmp_path / 'out'),
-        source_file='/data/sub-01/dwi/sub-01_dir-AP_dwi.nii.gz',
-        desc='graddev',
-        suffix='qc',
-        extension='.tsv',
-        in_file=str(payload),
-    ).run()
-
-    out = sink.outputs.out_file
-    out = out[0] if isinstance(out, list) else out
-    assert out.endswith('sub-01/dwi/sub-01_dir-AP_desc-graddev_qc.tsv')
-
-
 def _finalize_wf_with_gradients(tmp_path, image_type=None, write_derivatives=True):
     """Build a finalize_wf with a resolved gradwarp plan, for the grad_dev tests."""
     from qsiprep.workflows.dwi.finalize import init_dwi_finalize_wf
@@ -1688,14 +1669,12 @@ def test_dwi_finalize_wf_builds_grad_dev_when_a_plan_resolves(tmp_path):
 
     assert wf.get_node('grad_dev') is not None
     assert wf.get_node('ds_grad_dev') is not None
-    qc = wf.get_node('graddev_qc')
-    assert ('grad_dev', 'grad_dev') in wf._graph.get_edge_data(wf.get_node('grad_dev'), qc)[
-        'connect'
-    ]
+    qc = wf.get_node('series_qc')
+    from_grad_dev = wf._graph.get_edge_data(wf.get_node('grad_dev'), qc)['connect']
+    assert ('grad_dev', 'grad_dev_file') in from_grad_dev
     from_inputnode = wf._graph.get_edge_data(wf.get_node('inputnode'), qc)['connect']
     assert ('gradwarp_field', 'gradwarp_field') in from_inputnode
-    assert ('dwi_mask', 'gradwarp_mask') in from_inputnode
-    assert wf.get_node('ds_graddev_qc') is not None
+    assert ('dwi_mask', 'gradwarp_mask_file') in from_inputnode
 
 
 def test_dwi_finalize_wf_builds_grad_dev_for_dis3d(tmp_path):
@@ -1709,9 +1688,11 @@ def test_dwi_finalize_wf_builds_grad_dev_for_dis3d(tmp_path):
     grad_dev = wf.get_node('grad_dev')
     assert grad_dev is not None
     assert wf.get_node('ds_grad_dev') is not None
-    # No applied field for DIS3D, so the QC table has only the rotation row.
-    qc = wf.get_node('graddev_qc')
-    assert wf._graph.get_edge_data(wf.get_node('inputnode'), qc) is None
+    # No applied field for DIS3D, so image_qc.tsv gets only the rotation columns.
+    qc = wf.get_node('series_qc')
+    assert ('grad_dev', 'grad_dev_file') in wf._graph.get_edge_data(grad_dev, qc)['connect']
+    from_inputnode = wf._graph.get_edge_data(wf.get_node('inputnode'), qc)['connect']
+    assert not any(field == 'gradwarp_field' for field, _ in from_inputnode)
 
 
 def test_dwi_finalize_wf_grad_dev_initial_image_is_extracted_not_the_raw_4d_series(tmp_path):

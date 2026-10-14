@@ -152,7 +152,6 @@ Present when the corresponding correction ran::
   # The voxelwise gradient deviation, with --gradient-file
   <source_entities>_space-ACPC_graddev.nii.gz
   <source_entities>_space-ACPC_graddev.json
-  <source_entities>_desc-graddev_qc.tsv
 
 The displacement map shows the susceptibility correction on the output grid
 so it can be inspected and compared across methods and runs. At each voxel
@@ -195,22 +194,8 @@ example DSI Studio) can use it directly. Its orientation into ``ACPC`` space
 comes from a rigid registration TORTOISE estimates itself, recorded in the
 sidecar as ``GradientDeviationOrientation``, which is close to but not the
 same as the coregistration *QSIPrep* applied to the data. It is not written
-for outputs assembled by ``--distortion-group-merge``.
-
-``desc-graddev_qc.tsv`` summarizes the gradient nonlinearity inside the
-brain, one row per measure, with the number of voxels, the mean, the
-standard deviation, the 5th, 25th, 50th, 75th, 95th and 99th percentiles and
-the maximum:
-
-``displacement_mm``
-  The length of the gradient nonlinearity displacement *QSIPrep* applied, in
-  the brain mask of the corrected b=0 image. With ``DIS2D`` data or ``--force
-  gradwarp1D`` only the through-plane component is applied, so only it is
-  counted. ``DIS3D`` data get no spatial correction and no row.
-``rotation_deg``
-  The rotation angle of the gradient deviation matrix, in the ``ACPC`` brain
-  mask: the rotation left after the matrix's scaling and shear are removed,
-  which is how far the diffusion encoding is turned at that voxel.
+for outputs assembled by ``--distortion-group-merge``. Its in-brain
+summary is in ``desc-image_qc.tsv`` (:ref:`qc_data`).
 
 
 **********************
@@ -358,6 +343,21 @@ The motion summaries are ``mean_fd`` and ``max_fd``, ``max_translation`` and
 ``max_rotation``, and their frame-to-frame maxima ``max_rel_translation``
 and ``max_rel_rotation``. ``t1_dice_distance`` is the Dice distance between
 the DWI brain mask and the anatomical brain mask.
+
+With ``--gradient-file``, the median, 95th percentile and maximum inside the
+brain (suffixes ``_median``, ``_p95`` and ``_maximum``) of two more measures
+are added:
+
+``gradwarp_displacement_mm``
+    The length of the gradient nonlinearity displacement *QSIPrep* applied,
+    in the brain mask of the corrected b=0 image. With ``DIS2D`` data or
+    ``--force gradwarp1D`` only the through-plane component is applied, so
+    only it is counted; ``DIS3D`` data get no spatial correction and no
+    columns.
+``graddev_rotation_deg``
+    The rotation angle of the gradient deviation matrix, in the ``ACPC``
+    brain mask: the rotation left after the matrix's scaling and shear are
+    removed, which is how far the diffusion encoding is turned at that voxel.
 
 
 .. _boilerplate:

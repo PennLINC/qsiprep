@@ -26,7 +26,7 @@ from ...interfaces.bids import DerivativesMaybeDataSink, DerivativesSidecar
 from ...interfaces.dsi_studio import DSIStudioBTable
 from ...interfaces.dwi_merge import MergeFinalConfounds, SplitResampledDWIs
 from ...interfaces.gradients import ExtractB0s
-from ...interfaces.gradunwarp import CreateGradientNonlinearityBMatrix, GradDevQC
+from ...interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
 from ...interfaces.jacobian import pe_axis_from_direction
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
@@ -670,30 +670,13 @@ def init_dwi_finalize_wf(
             (grad_dev, ds_grad_dev, [('grad_dev', 'in_file')]),
         ])  # fmt:skip
 
-        graddev_qc = pe.Node(GradDevQC(), name='graddev_qc')
-        ds_graddev_qc = pe.Node(
-            DerivativesDataSink(
-                source_file=source_file,
-                base_directory=config.execution.output_dir,
-                desc='graddev',
-                suffix='qc',
-                extension='.tsv',
-            ),
-            name='ds_graddev_qc',
-            run_without_submitting=True,
-            mem_gb=DEFAULT_MEMORY_MIN_GB,
-        )
-        workflow.connect([
-            (grad_dev, graddev_qc, [('grad_dev', 'grad_dev')]),
-            (outputnode, graddev_qc, [('dwi_mask_t1', 'grad_dev_mask')]),
-            (graddev_qc, ds_graddev_qc, [('out_file', 'in_file')]),
-        ])  # fmt:skip
-        # A DIS3D unit has no applied field, so its table has no displacement row.
+        workflow.connect([(grad_dev, series_qc, [('grad_dev', 'grad_dev_file')])])  # fmt:skip
+        # A DIS3D unit has no applied field, so it gets no displacement columns.
         if gradwarp_plan.warp_dim is not None:
             workflow.connect([
-                (inputnode, graddev_qc, [
+                (inputnode, series_qc, [
                     ('gradwarp_field', 'gradwarp_field'),
-                    ('dwi_mask', 'gradwarp_mask'),
+                    ('dwi_mask', 'gradwarp_mask_file'),
                 ]),
             ])  # fmt:skip
 

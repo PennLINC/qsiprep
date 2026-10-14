@@ -32,10 +32,10 @@ Three options that 26.1.0rc1 accepted are gone: `--dwidenoise2-config` is now
   resampling, Jacobian-modulated. A GRE fieldmap that also lists the series is the prior of
   the fit and is refined rather than replaced.
 
-* With `--gradient-file`, `desc-graddev_qc.tsv` gives the in-brain distribution of the applied
-  gradient nonlinearity displacement (`displacement_mm`) and of the rotation of the diffusion
-  encoding from the gradient deviation map (`rotation_deg`): mean, standard deviation,
-  percentiles and maximum.
+* With `--gradient-file`, `desc-image_qc.tsv` gains the in-brain median, 95th percentile and
+  maximum of the applied gradient nonlinearity displacement (`gradwarp_displacement_mm_*`) and
+  of the rotation of the diffusion encoding from the gradient deviation map
+  (`graddev_rotation_deg_*`).
 
 * `desc-image_qc.tsv` gains image-quality measures from
   [cs_dmri](https://cs-dmri.readthedocs.io) beside DSI Studio's, for both the raw and the
