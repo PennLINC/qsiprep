@@ -9,7 +9,7 @@ Implementing the FSL preprocessing workflow
 
 import os
 
-from nipype.interfaces import fsl
+from nipype.interfaces import ants, fsl
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
@@ -25,7 +25,7 @@ from ...interfaces.eddy import (
     Synb0TopupInputs,
     boilerplate_from_eddy_config,
 )
-from ...interfaces.fmap import ParallelTOPUP
+from ...interfaces.fmap import ModulateByWarpJacobian, ParallelTOPUP, TopupFieldToWarp
 from ...interfaces.gradients import ExtractB0s
 from ...interfaces.images import ConformDwi, IntraModalMerge, SplitDWIsFSL
 from ...interfaces.nilearn import EnhanceB0
@@ -33,7 +33,7 @@ from ...interfaces.reports import TopupSummary
 from ...interfaces.synb0 import Synb0FieldQC
 from ...utils.eddy_config import eddy_applies_gre, eddy_modulates_distortion, load_eddy_args
 from ...utils.gpu import gpu_enabled
-from ..fieldmap.base import init_gre_seed_wf, init_sdc_wf
+from ..fieldmap.base import SDC_ANAT_CONNECTIONS, init_gre_seed_wf, init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf, seeds_from_gre
 from ..fieldmap.synb0 import init_synb0_wf
 from .gradwarp import (
@@ -342,6 +342,8 @@ def init_fsl_hmc_wf(
         fieldmap_type = unit.gre_suffix
     elif unit.is_nipreps_syn:
         fieldmap_type = 'syn'
+    elif unit.is_unpile:
+        fieldmap_type = 'unpile'
     elif unit.method is CorrectionMethod.SYNB0:
         fieldmap_type = 'synb0'
     else:
@@ -360,9 +362,8 @@ def init_fsl_hmc_wf(
     # ``jacobian_provenance.jacobian_provenance_for`` mirrors this condition
     # from ``unit`` alone, so nothing is recorded here.
     if fieldmap_type == 'synb0' and not run_topup:
-        # The plan gave this unit no TOPUP stage (e.g. --sdc-method drbuddi):
-        # nothing on the eddy path consumes the synthetic b=0, so the series
-        # stays uncorrected.
+        # The plan gave this unit no TOPUP stage: nothing on the eddy path
+        # consumes the synthetic b=0, so the series stays uncorrected.
         fieldmap_type = ''
     workflow.__desc__ = boilerplate_from_eddy_config(
         eddy_args,
@@ -458,7 +459,6 @@ def init_fsl_hmc_wf(
                 source_file=source_file,
             )
             synb0_wf = init_synb0_wf()
-            add_synb0_outputs(workflow, synb0_wf, source_file)
             synb0_topup_inputs = pe.Node(Synb0TopupInputs(), name='synb0_topup_inputs')
 
             # Scalar QC of the SynB0-driven field (halo/displacement checks)
@@ -474,13 +474,6 @@ def init_fsl_hmc_wf(
                 run_without_submitting=True,
                 mem_gb=DEFAULT_MEMORY_MIN_GB,
             )
-            workflow.connect([
-                (topup, synb0_field_qc, [('out_field', 'fieldmap')]),
-                (synb0_b0_ref_wf, synb0_field_qc, [('outputnode.dwi_mask', 'mask')]),
-                (synb0_topup_inputs, synb0_field_qc, [('topup_datain', 'datain')]),
-                (synb0_field_qc, ds_synb0_field_qc, [('qc_file', 'in_file')]),
-            ])  # fmt:skip
-
             workflow.connect([
                 (gather_inputs, synb0_b0_ref_wf, [
                     ('pre_topup_image', 'inputnode.b0_template'),
@@ -510,6 +503,95 @@ def init_fsl_hmc_wf(
                     ('topup_imain', 'in_file'),
                     ('topup_config', 'config'),
                 ]),
+            ])  # fmt:skip
+            if config.workflow.two_pass_sdc:
+                # The U-Net copies part of the b=0's distortion into the synthetic
+                # b=0, so TOPUP underestimates the field. The b=0 is unwarped with
+                # the first field (Jacobian-modulated), a new synthetic b=0 is
+                # generated from it, and TOPUP runs again on the original inputs
+                # paired with the new synthetic one; eddy consumes the second field.
+                field_to_warp_pass1 = pe.Node(TopupFieldToWarp(), name='synb0_field_to_warp')
+                unwarp_b0_pass1 = pe.Node(
+                    ants.ApplyTransforms(
+                        dimension=3, interpolation='LanczosWindowedSinc', float=True
+                    ),
+                    name='synb0_unwarp_b0',
+                )
+                modulate_pass1 = pe.Node(ModulateByWarpJacobian(), name='synb0_modulate_b0')
+                synb0_b0_ref_wf_pass2 = init_dwi_reference_wf(
+                    gen_report=False,
+                    desc='b0_for_synb0',
+                    name='synb0_b0_ref_wf_pass2',
+                    source_file=source_file,
+                )
+                synb0_wf_pass2 = init_synb0_wf(name='synb0_wf_pass2')
+                synb0_topup_inputs_pass2 = pe.Node(
+                    Synb0TopupInputs(), name='synb0_topup_inputs_pass2'
+                )
+                topup_pass2 = pe.Node(
+                    ParallelTOPUP(out_field='fieldmap_HZ.nii.gz', scale=1, nthreads=omp_nthreads),
+                    name='topup_pass2',
+                    n_procs=omp_nthreads,
+                )
+                workflow.connect([
+                    (topup, field_to_warp_pass1, [('out_field', 'fieldmap')]),
+                    (synb0_topup_inputs, field_to_warp_pass1, [('topup_datain', 'datain')]),
+                    (gather_inputs, field_to_warp_pass1, [('pre_topup_image', 'reference')]),
+                    (gather_inputs, unwarp_b0_pass1, [
+                        ('pre_topup_image', 'input_image'),
+                        ('pre_topup_image', 'reference_image'),
+                    ]),
+                    (field_to_warp_pass1, unwarp_b0_pass1, [('out_warp', 'transforms')]),
+                    (unwarp_b0_pass1, modulate_pass1, [('output_image', 'in_file')]),
+                    (field_to_warp_pass1, modulate_pass1, [
+                        ('out_warp', 'warp'),
+                        ('pe_axis', 'pe_axis'),
+                    ]),
+                    (modulate_pass1, synb0_b0_ref_wf_pass2, [
+                        ('out_file', 'inputnode.b0_template'),
+                    ]),
+                    (inputnode, synb0_wf_pass2, [
+                        ('t1_preproc', 'inputnode.t1_preproc'),
+                        ('t1_brain', 'inputnode.t1_brain'),
+                        ('t1_seg', 'inputnode.t1_seg'),
+                        ('to_template_affine_transform',
+                         'inputnode.to_template_affine_transform'),
+                        ('acpc_inv_transform', 'inputnode.acpc_inv_transform'),
+                        ('dwi_sampling_grid', 'inputnode.output_grid'),
+                    ]),
+                    (synb0_b0_ref_wf_pass2, synb0_wf_pass2, [
+                        ('outputnode.ref_image', 'inputnode.b0_ref'),
+                        ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
+                    ]),
+                    (gather_inputs, synb0_topup_inputs_pass2, [
+                        ('topup_datain', 'topup_datain'),
+                        ('topup_imain', 'topup_imain'),
+                    ]),
+                    (synb0_wf_pass2, synb0_topup_inputs_pass2, [
+                        ('outputnode.synthetic_b0', 'synthetic_b0'),
+                    ]),
+                    (synb0_topup_inputs_pass2, topup_pass2, [
+                        ('topup_datain', 'encoding_file'),
+                        ('topup_imain', 'in_file'),
+                        ('topup_config', 'config'),
+                    ]),
+                ])  # fmt:skip
+                topup = topup_pass2
+                synb0_wf = synb0_wf_pass2
+                synb0_b0_ref_wf = synb0_b0_ref_wf_pass2
+                synb0_topup_inputs = synb0_topup_inputs_pass2
+                workflow.__desc__ += (
+                    ' The b=0 was then unwarped with that field (Jacobian-modulated), a new '
+                    'synthetic b=0 was generated from it, and TOPUP was run again on the '
+                    'acquired b=0 images paired with the new synthetic b=0.'
+                )
+            # The derivatives and the field QC describe the last pass.
+            add_synb0_outputs(workflow, synb0_wf, source_file)
+            workflow.connect([
+                (topup, synb0_field_qc, [('out_field', 'fieldmap')]),
+                (synb0_b0_ref_wf, synb0_field_qc, [('outputnode.dwi_mask', 'mask')]),
+                (synb0_topup_inputs, synb0_field_qc, [('topup_datain', 'datain')]),
+                (synb0_field_qc, ds_synb0_field_qc, [('qc_file', 'in_file')]),
             ])  # fmt:skip
         else:
             workflow.connect([
@@ -649,7 +731,7 @@ def init_fsl_hmc_wf(
 
         return workflow
 
-    if unit.is_gre or unit.is_nipreps_syn:
+    if unit.is_gre or unit.is_nipreps_syn or unit.is_unpile:
         config.loggers.workflow.info(f'Computing fieldmap directly from {fieldmap_type}')
         outputnode.inputs.sdc_method = fieldmap_type
 
@@ -661,6 +743,7 @@ def init_fsl_hmc_wf(
             unit,
             gradwarp=has_gradwarp and not gre_to_eddy,
             use='eddy' if gre_to_eddy else 'apply',
+            source_file=source_file,
         )
 
         if gre_to_eddy:
@@ -681,13 +764,15 @@ def init_fsl_hmc_wf(
                     ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
                     ('outputnode.dwi_mask', 'inputnode.b0_mask'),
                 ]),
-                (inputnode, b0_sdc_wf, [
-                    ('t1_brain', 'inputnode.t1_brain'),
-                    ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-                ]),
+                (inputnode, b0_sdc_wf, SDC_ANAT_CONNECTIONS),
                 # Hand eddy the fieldmap in Hz (its --field convention matches
                 # FUGUE, so no sign flip) plus the field->eddy rigid transform.
-                (b0_sdc_wf, gre_to_eddy_reg, [('outputnode.b0_ref', 'in_file')]),
+                # The field sits on the pre-eddy reference's grid, so that distorted
+                # reference is what gets registered to eddy's (distorted) first volume,
+                # as the TOPUP branch does with topup_first. A rigid fit between the
+                # unwarped reference and a distorted volume would absorb part of the
+                # distortion into --field_mat.
+                (pre_eddy_b0_ref_wf, gre_to_eddy_reg, [('outputnode.ref_image', 'in_file')]),
                 (gather_inputs, gre_to_eddy_reg, [('eddy_first', 'reference')]),
                 (b0_sdc_wf, eddy, [('outputnode.fieldmap_hz', 'field')]),
                 (gre_to_eddy_reg, eddy, [('out_matrix_file', 'field_mat')]),
@@ -732,10 +817,7 @@ def init_fsl_hmc_wf(
                 ])  # fmt:skip
 
             workflow.connect([
-                (inputnode, b0_sdc_wf, [
-                    ('t1_brain', 'inputnode.t1_brain'),
-                    ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-                ]),
+                (inputnode, b0_sdc_wf, SDC_ANAT_CONNECTIONS),
                 # These deformations will be applied later, use the unwarped image now
                 (b0_sdc_wf, outputnode, [
                     ('outputnode.out_warp', 'to_dwi_ref_warps'),

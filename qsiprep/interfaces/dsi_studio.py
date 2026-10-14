@@ -343,6 +343,8 @@ class _DSIStudioQCMergeInputSpec(BaseInterfaceInputSpec):
     fib_qc = File(exists=True, mandatory=True)
     src_qc_warning = traits.Str(desc='why DSIStudioSrcQC produced no measurements')
     fib_qc_warning = traits.Str(desc='why DSIStudioFibQC produced no measurements')
+    cs_dmri_qc = File(exists=True, desc="cs_dmri's one-row QC table (CsDmriQC)")
+    cs_dmri_qc_warning = traits.Str(desc='why CsDmriQC produced no measurements')
 
 
 class _DSIStudioQCMergeOutputSpec(TraitedSpec):
@@ -375,6 +377,11 @@ class DSIStudioMergeQC(SimpleInterface):
         ]
         for message in messages:
             LOGGER.warning('DSI Studio QC values will be n/a. %s', message)
+
+        if isdefined(self.inputs.cs_dmri_qc):
+            _add_cs_dmri_qc(merged, self.inputs.cs_dmri_qc)
+            if isdefined(self.inputs.cs_dmri_qc_warning) and self.inputs.cs_dmri_qc_warning:
+                messages.append(self.inputs.cs_dmri_qc_warning)
         # Always present, empty when QC succeeded, so the column set never
         # varies. SeriesQC removes it from image_qc.tsv and reports it instead.
         merged[QC_WARNINGS_COLUMN] = [' '.join(messages)]
@@ -433,6 +440,20 @@ SRC_QC_MEASURES = (
     'num_directions',
 )
 FIB_QC_MEASURES = ('coherence_index',)
+
+
+def _add_cs_dmri_qc(merged, cs_dmri_qc):
+    """Append cs_dmri's measures to a merged DSI Studio QC row.
+
+    Both report the image dimensions, voxel size and maximum b-value under the
+    same names. DSI Studio's values are kept; cs_dmri's fill them only where
+    DSI Studio produced none.
+    """
+    row = pd.read_csv(cs_dmri_qc).to_dict(orient='records')[0]
+    for name, value in row.items():
+        if name in merged and not pd.isna(merged[name][0]):
+            continue
+        merged[name] = [value]
 
 
 def _qc_problem(lines):

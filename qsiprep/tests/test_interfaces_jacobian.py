@@ -317,9 +317,7 @@ def test_jacobian_determinant_ignores_off_axis_components(tmp_path):
 
     TORTOISE differentiates along the phase-encoding axis only.
 
-    A scaling along x contributes nothing when y is the phase-encoding axis,
-    which is exactly why a forced T2Wreg field's unrestricted final stage
-    cannot leak into the weight.
+    A scaling along x contributes nothing when y is the phase-encoding axis.
     """
     field = _write_linear_field(tmp_path / 'scale.nii.gz', np.diag([2.0, 1.0, 1.0]))
 
@@ -979,36 +977,6 @@ def test_compose_weights_lsr_count_must_match(tmp_path):
     )
     with pytest.raises(ValueError, match='LSR scaling images'):
         interface.run(cwd=str(tmp_path))
-
-
-def test_compose_weights_unweighted_fieldwarp_yields_nothing(tmp_path):
-    """Test that a T2Wreg field is applied downstream but contributes no weight."""
-    interface = ComposeJacobianWeights(
-        dwi_files=_dwi_volumes(tmp_path, 2),
-        b0_ref_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
-        mask=_write_map(tmp_path / 'mask.nii.gz', 1.0),
-        pe_axis=0,
-        fieldwarps=[_write_linear_field(tmp_path / 'f.nii.gz', np.diag([1.5, 1.0, 1.0]))],
-        weight_fieldwarps=False,
-    )
-    result = interface.run(cwd=str(tmp_path))
-    assert not isdefined(result.outputs.jacobian_weight_images)
-
-
-def test_compose_weights_unweighted_fieldwarp_keeps_the_gradwarp_factor(tmp_path):
-    interface = ComposeJacobianWeights(
-        dwi_files=_dwi_volumes(tmp_path, 2),
-        b0_ref_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
-        mask=_write_map(tmp_path / 'mask.nii.gz', 1.0),
-        pe_axis=0,
-        gradwarp_field=[_write_linear_field(tmp_path / 'g.nii.gz', np.diag([2.0, 1.0, 1.0]))],
-        fieldwarps=[_write_linear_field(tmp_path / 'f.nii.gz', np.diag([1.5, 1.0, 1.0]))],
-        weight_fieldwarps=False,
-    )
-    result = interface.run(cwd=str(tmp_path))
-    assert result.outputs.method == 'Jacobian'
-    interior = np.asanyarray(nb.load(result.outputs.jacobian_weight_images[0]).dataobj)[2:-2]
-    np.testing.assert_allclose(interior, 2.0, atol=1e-5)
 
 
 def test_compose_weights_reports_the_jacobian_method(tmp_path):

@@ -564,7 +564,7 @@ was used to restrict the nonlinear registration to the template. """
 
     if num_additional_t2ws > 0:
         # t2_preproc is the merged (unbiased) T2w template in ACPC; t2w_unfatsat
-        # is the image TORTOISE T2Wreg and DRBUDDI actually register to. They
+        # is the image DRBUDDI and unpile actually register to. They
         # are different images, so both are written.
         workflow.connect([
             (inputnode, anat_derivatives_wf, [('t2w', 'inputnode.t2w_source_files')]),
@@ -1539,8 +1539,8 @@ def init_anat_derivatives_wf(anatomical_template, has_t2w=False) -> Workflow:
                 't1_2_mni',
                 't1_aseg',
                 # t2_preproc is the merged T2w template in ACPC; t2w_unfatsat
-                # is the fat-suppressed variant that drives TORTOISE T2Wreg and
-                # DRBUDDI. Separate images -- see init_t2w_preproc_wf.
+                # is the fat-suppressed variant that drives DRBUDDI and unpile.
+                # Separate images -- see init_t2w_preproc_wf.
                 't2w_source_files',
                 't2_preproc',
                 't2w_unfatsat',

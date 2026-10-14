@@ -173,12 +173,13 @@ def init_qsiprep_wf():
         )
         log_dir.mkdir(exist_ok=True, parents=True)
         config.to_filename(log_dir / 'qsiprep.toml')
-        # The toml only records the path, so keep the settings dwidenoise2 actually ran with
-        if (
-            config.workflow.denoise_method == 'dwidenoise2'
-            and config.workflow.dwidenoise2_config is not None
-        ):
-            shutil.copyfile(config.workflow.dwidenoise2_config, log_dir / 'dwidenoise2.json')
+        # The toml only records the path, so keep the settings the denoiser actually ran with.
+        # The parser only accepts --denoise-config for a method that reads it.
+        if config.workflow.denoise_config is not None:
+            shutil.copyfile(
+                config.workflow.denoise_config,
+                log_dir / f'{config.workflow.denoise_method}.json',
+            )
     return qsiprep_wf
 
 
@@ -262,15 +263,17 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
         cohort = cohort_by_months(anatomical_template, age)
         anatomical_template = f'{anatomical_template}+{cohort}'
 
-    # The methods this run selected: the axis every routing decision reads.
+    # The methods this run selected: the axis every routing decision reads, and
+    # the grouping policy, which names the fieldmap-less correction.
     selection = method_selection_from_config()
+    policy = policy_from_namespace(config.workflow)
 
     # The anatomical workflow only builds its T2w branch -- and therefore only
     # produces ``t2w_unfatsat`` -- when asked for additional T2ws. Keep this in
     # sync with utils.sdc.t2w_available_for_sdc, which decides whether the consumers of
     # that output get switched on.
     additional_t2ws = 0
-    if t2w_sdc_enabled(selection) and subject_data['t2w']:
+    if t2w_sdc_enabled(selection, policy) and subject_data['t2w']:
         additional_t2ws = len(subject_data['t2w'])
 
     # Inspect the dwi data and provide advice on pipeline choices
@@ -535,20 +538,11 @@ to workflows in *QSIPrep*'s documentation]\
     }
 
     # Determine the level (distortion-group, subject) at which to generate the dwiref.
-    make_dwiref = False
-    if config.workflow.dwiref_definition == 'subject':
-        if len(outputs_to_files) < 2:
-            # Warn, but don't error, when users request dwiref method that requires more than one
-            # input file but only have one.
-            config.loggers.workflow.warning(
-                'Falling back to --dwiref-definition distortion-group for sub-%s: a '
-                'subject-level dwiref needs at least 2 DWI groups and this subject '
-                'has %d. Everything else is unaffected.',
-                subject_id,
-                len(outputs_to_files),
-            )
-        else:
-            make_dwiref = True
+    # A single distortion group still gets the subject-level outputs: init_dwiref_wf
+    # uses its reference as the dwiref, so the requested level's files always exist.
+    make_dwiref = config.workflow.dwiref_definition == 'subject' and bool(outputs_to_files)
+    # One group is its own dwiref, so there is no template to QC.
+    single_group_dwiref = len(outputs_to_files) == 1
 
     if make_dwiref:
         anat_source_file = fix_multi_source_name(
@@ -662,9 +656,13 @@ to workflows in *QSIPrep*'s documentation]\
         # TemplateQC and the per-group distortiongroup->dwiref transform export exist only
         # for linear templates: mvtc2 exposes no per-input aligned images, and its
         # per-group transform is an [affine, warp] pair that does not fit a
-        # single-file .mat sink.
-        dwiref_linear = config.workflow.dwiref_construction_transform in ('Rigid', 'Affine')
-        if dwiref_linear:
+        # single-file .mat sink. A single group builds no template, so it has no
+        # TemplateQC, but its transform is an identity affine and is written.
+        dwiref_xfm_is_affine = (
+            config.workflow.dwiref_construction_transform in ('Rigid', 'Affine')
+            or single_group_dwiref
+        )
+        if dwiref_xfm_is_affine and not single_group_dwiref:
             ds_template_qc = pe.Node(
                 DerivativesDataSink(
                     source_file=anat_source_file,
@@ -725,7 +723,9 @@ to workflows in *QSIPrep*'s documentation]\
         naming_name = output_fname if merged_here else final_output_name
         source_file = get_source_file(list(unit.dwi_files), naming_name, suffix='_dwi')
         output_wfname = output_fname.replace('-', '_')
-        t2w_sdc = t2w_available_for_sdc(subject_data, selection, config.workflow.anat_modality)
+        t2w_sdc = t2w_available_for_sdc(
+            subject_data, selection, policy, config.workflow.anat_modality
+        )
         do_biascorr = biascorr_by_output[final_output_name]
         dwi_preproc_wf = init_dwi_preproc_wf(
             unit=unit,
@@ -752,7 +752,7 @@ to workflows in *QSIPrep*'s documentation]\
         )
         # The SDC displacement maps name, in their sidecars, the written transforms
         # that carried the correction from the DWI frame into ACPC.
-        warp_source, _ = sdc_warp_source(unit, t2w_sdc, gre_in_eddy=eddy_applies_gre(unit))
+        warp_source, _ = sdc_warp_source(unit, gre_in_eddy=eddy_applies_gre(unit))
         names_sdc_transforms = write_derivatives and warp_source is not None
 
         workflow.connect([
@@ -883,13 +883,12 @@ to workflows in *QSIPrep*'s documentation]\
                 (dwiref_wf, dwi_finalize_wf, [
                     (output_name, 'inputnode.b0_to_dwiref_transforms'),
                     ('outputnode.dwiref_to_t1_affine', 'inputnode.dwiref_to_t1_affine'),
-                    ('outputnode.dwiref_to_t1_warp', 'inputnode.dwiref_to_t1_warp'),
                     ('outputnode.dwiref', 'inputnode.dwiref'),
                     ('outputnode.dwiref_wm_seg', 'inputnode.dwiref_wm_seg'),
                 ]),
             ])  # fmt:skip
 
-            if dwiref_linear:
+            if dwiref_xfm_is_affine:
                 # Per-group hop into the template space. Paired with
                 # from-subject_to-ACPC above, this closes the round trip:
                 # BIDS b=0 -> dwiref -> ACPC -> MNI, and back.

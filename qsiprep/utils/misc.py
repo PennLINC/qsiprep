@@ -31,7 +31,7 @@ _DWIDENOISE2_CONFIG_KEYS = frozenset(_DWIDENOISE_ENUM_PARAMETERS) | {
     'preserve_noise_bias',
     'schedule',
 }
-"""Keys a ``--dwidenoise2-config`` file may set."""
+"""Keys a ``--denoise-config`` file may set."""
 
 # Schedule columns in the order they are written, as defined in dwidenoise2's
 # cpp/core/denoise/schedule.cpp. update_noise has no fixed default: dwidenoise2 resolves an
@@ -367,8 +367,36 @@ def _check_dwidenoise2_combinations(params, source):
             )
 
 
+def _read_denoise_config(path, source, valid_keys):
+    """Read a ``--denoise-config`` file as a JSON object whose keys are all in ``valid_keys``."""
+    import json
+    import os
+
+    if not os.path.exists(path):
+        raise ValueError(f'{source} does not exist.')
+    try:
+        with open(path, encoding='utf-8') as f:
+            cfg = json.load(f, object_pairs_hook=_reject_duplicate_keys)
+    except _DuplicateKeyError as err:
+        raise ValueError(f'{source} {err}.') from err
+    except OSError as err:
+        raise ValueError(f'{source} could not be read: {err}') from err
+    except (json.JSONDecodeError, UnicodeDecodeError) as err:
+        raise ValueError(f'{source} is not valid JSON: {err}') from err
+    if not isinstance(cfg, dict):
+        raise ValueError(f'{source} must contain a JSON object.')
+
+    unknown = sorted(set(cfg) - valid_keys)
+    if unknown:
+        raise ValueError(
+            f'{source} has unknown key(s) {", ".join(unknown)}; '
+            f'valid keys are {", ".join(sorted(valid_keys))}.'
+        )
+    return cfg
+
+
 def load_dwidenoise2_config(path):
-    """Load and check a ``--dwidenoise2-config`` JSON file.
+    """Load and check a ``--denoise-config`` JSON file for dwidenoise2.
 
     Parameters
     ----------
@@ -390,30 +418,8 @@ def load_dwidenoise2_config(path):
         an unknown key or an invalid value, or breaks one of the schedule rules that
         dwidenoise2 enforces.
     """
-    import json
-    import os
-
     source = f'dwidenoise2 configuration file {path}'
-    if not os.path.exists(path):
-        raise ValueError(f'{source} does not exist.')
-    try:
-        with open(path, encoding='utf-8') as f:
-            cfg = json.load(f, object_pairs_hook=_reject_duplicate_keys)
-    except _DuplicateKeyError as err:
-        raise ValueError(f'{source} {err}.') from err
-    except OSError as err:
-        raise ValueError(f'{source} could not be read: {err}') from err
-    except (json.JSONDecodeError, UnicodeDecodeError) as err:
-        raise ValueError(f'{source} is not valid JSON: {err}') from err
-    if not isinstance(cfg, dict):
-        raise ValueError(f'{source} must contain a JSON object.')
-
-    unknown = sorted(set(cfg) - _DWIDENOISE2_CONFIG_KEYS)
-    if unknown:
-        raise ValueError(
-            f'{source} has unknown key(s) {", ".join(unknown)}; '
-            f'valid keys are {", ".join(sorted(_DWIDENOISE2_CONFIG_KEYS))}.'
-        )
+    cfg = _read_denoise_config(path, source, _DWIDENOISE2_CONFIG_KEYS)
 
     params = {}
     for name, value in cfg.items():
@@ -474,8 +480,271 @@ def check_dwidenoise2_demodulation(params, use_phase):
         raise ValueError(
             f'dwidenoise2 cannot apply {demodulation!r} phase demodulation to '
             'magnitude-only data. Provide phase data or set "demodulate" to "none" in '
-            '--dwidenoise2-config.'
+            '--denoise-config.'
         )
+
+
+# svht_denoise settings a --denoise-config file may set. Settings that svht_denoise shares
+# with dwidenoise2 use the dwidenoise2 key and spelling, so one file reads the same for both.
+_SVHT_ENUM_PARAMETERS = {
+    'aggregator': ('exclusive', 'gaussian', 'uniform'),
+    'demean': ('none', 'shells'),
+    'filter_method': ('optshrink', 'optthresh', 'truncate'),
+    'shape': ('cube', 'sphere'),
+}
+_SVHT_CONFIG_KEYS = frozenset(_SVHT_ENUM_PARAMETERS) | {
+    'aggregator_fwhm',
+    'extent',
+    'noise_dof',
+    'preserve_noise_bias',
+    'stride',
+    'vst',
+}
+"""Keys a ``--denoise-config`` file may set for ``--denoise-method svht``.
+
+Any key a file omits is left at svht_denoise's own default. That includes ``demean``:
+demeaning by shell is off unless the file sets ``"shells"``, because svht_denoise's
+clustering turns each distinct b-value of a non-shelled scheme (DSI, CS-DSI) into its own
+small "shell", whose mean then bypasses the denoiser.
+"""
+
+
+def load_svht_config(path):
+    """Load and check a ``--denoise-config`` JSON file for svht_denoise.
+
+    Parameters
+    ----------
+    path : str or os.PathLike
+        The configuration file.
+
+    Returns
+    -------
+    dict
+        SVHTDenoise input values. ``demean`` is converted to a boolean, and the other
+        values are passed through as the file gives them.
+
+    Raises
+    ------
+    ValueError
+        If the file does not exist, cannot be read, is not a JSON object, repeats a key,
+        has an unknown key or an invalid value, or combines settings that svht_denoise
+        refuses.
+    """
+    source = f'svht configuration file {path}'
+    cfg = _read_denoise_config(path, source, _SVHT_CONFIG_KEYS)
+
+    params = {}
+    for name, value in cfg.items():
+        if name in _SVHT_ENUM_PARAMETERS:
+            choices = _SVHT_ENUM_PARAMETERS[name]
+            if not isinstance(value, str) or value not in choices:
+                raise ValueError(
+                    f'{source} sets {name}={value!r}; must be one of {", ".join(choices)}.'
+                )
+            if name == 'demean':
+                value = value == 'shells'
+        elif name in ('preserve_noise_bias', 'vst'):
+            if not isinstance(value, bool):
+                raise ValueError(f'{source} sets {name}={value!r}; must be true or false.')
+        elif name == 'noise_dof':
+            if not _is_int(value) or not 1 <= value <= 64:
+                raise ValueError(
+                    f'{source} sets {name}={value!r}; must be an integer from 1 to 64.'
+                )
+        elif name == 'stride':
+            if not _is_int(value) or value not in (1, 2):
+                raise ValueError(f'{source} sets {name}={value!r}; must be 1 or 2.')
+        elif name == 'extent':
+            if not _is_int(value) or value < 1 or value % 2 == 0:
+                raise ValueError(
+                    f'{source} sets {name}={value!r}; must be an odd positive integer.'
+                )
+        elif name == 'aggregator_fwhm':
+            if not _is_number(value) or value <= 0:
+                raise ValueError(f'{source} sets {name}={value!r}; must be a number > 0.')
+        params[name] = value
+
+    # The combinations svht_denoise refuses before reading any data
+    aggregator = params.get('aggregator', 'gaussian')
+    if 'aggregator_fwhm' in params and aggregator != 'gaussian':
+        raise ValueError(f'{source} sets "aggregator_fwhm", which needs "aggregator" "gaussian".')
+    if params.get('stride') == 2 and aggregator == 'exclusive':
+        raise ValueError(
+            f'{source} sets "stride" 2 with "aggregator" "exclusive", which needs a patch '
+            'centered on every voxel.'
+        )
+    vst_options = sorted({'noise_dof', 'preserve_noise_bias'} & set(params))
+    if vst_options and params.get('vst') is False:
+        raise ValueError(
+            f'{source} sets {" and ".join(vst_options)}, which describe the '
+            'variance-stabilizing transform, with "vst" false.'
+        )
+    return params
+
+
+def check_svht_phase(params, use_phase):
+    """Reject svht_denoise settings that cannot apply to data rotated onto the real axis.
+
+    With phase data, svht_denoise rotates the complex series onto the real axis, where the
+    noise is already Gaussian, so it refuses the variance-stabilizing transform and the
+    settings that describe it. Whether phase data are available is known only per series,
+    so this is checked while the workflow is built.
+
+    Parameters
+    ----------
+    params : dict
+        SVHTDenoise parameters, as returned by :func:`load_svht_config`.
+    use_phase : bool
+        Whether phase data are available for the series being denoised.
+    """
+    if not use_phase:
+        return
+
+    vst_options = sorted({'noise_dof', 'preserve_noise_bias'} & set(params))
+    if params.get('vst'):
+        vst_options.insert(0, 'vst')
+    if vst_options:
+        raise ValueError(
+            f'svht_denoise cannot apply {" and ".join(vst_options)} to phase data, which are '
+            'rotated onto the real axis and are already Gaussian. Remove them from '
+            '--denoise-config or use --ignore phase.'
+        )
+
+
+def check_svht_extent(params, n_volumes):
+    """Reject an svht_denoise patch size too small for the series being denoised.
+
+    svht_denoise needs ``extent**3`` to exceed the number of volumes. The volume count is
+    known only per series, so this is checked while the workflow is built.
+
+    Parameters
+    ----------
+    params : dict
+        SVHTDenoise parameters, as returned by :func:`load_svht_config`.
+    n_volumes : int
+        The number of volumes in the series being denoised.
+    """
+    extent = params.get('extent')
+    if extent is not None and extent**3 <= n_volumes:
+        raise ValueError(
+            f'svht_denoise needs "extent" cubed to exceed the number of volumes, but the '
+            f'"extent" of {extent} in --denoise-config is too small for a series of '
+            f'{n_volumes} volumes.'
+        )
+
+
+def load_denoise_config(path, denoise_method):
+    """Load a ``--denoise-config`` JSON file for ``denoise_method``.
+
+    Parameters
+    ----------
+    path : str or os.PathLike
+        The configuration file.
+    denoise_method : str
+        The ``--denoise-method``, which determines what the file may set: ``dwidenoise2``
+        or ``svht``.
+
+    Returns
+    -------
+    dict
+        The denoising interface's input values.
+    """
+    if denoise_method == 'dwidenoise2':
+        return load_dwidenoise2_config(path)
+    if denoise_method == 'svht':
+        return load_svht_config(path)
+    raise ValueError(
+        f'--denoise-config is not used by --denoise-method {denoise_method}; only '
+        'dwidenoise2 and svht read it.'
+    )
+
+
+_SVHT_FILTERS = {
+    'optshrink': (
+        'each component was shrunk by the Frobenius-optimal rule [@gavish2017], against a '
+        'noise level estimated with the median estimator of @gavish2014'
+    ),
+    'optthresh': (
+        'components were kept by the optimal hard threshold for an unknown noise level '
+        '[@gavish2014]'
+    ),
+    'truncate': (
+        'components were truncated at the edge of the noise bulk, against a noise level '
+        'estimated with the median estimator of @gavish2014'
+    ),
+}
+
+_SVHT_AGGREGATORS = {
+    'gaussian': (
+        'the patch estimates were averaged where they overlapped, weighted by a Gaussian '
+        'function of the distance to each patch center [@manjon2013]'
+    ),
+    'uniform': 'the patch estimates were averaged where they overlapped [@manjon2013]',
+    'exclusive': 'each voxel was reconstructed solely from the patch centered on it',
+}
+
+
+def describe_svht(parameters, real_axis):
+    """Describe an ``svht_denoise`` call for the methods boilerplate.
+
+    Parameters
+    ----------
+    parameters : dict
+        SVHTDenoise parameters, as returned by :func:`load_svht_config`.
+    real_axis : bool
+        Whether the magnitude and phase data were rotated onto the real axis.
+
+    Returns
+    -------
+    str
+        Boilerplate text with inline ``[@citation]`` keys.
+    """
+    shape = 'cubic' if parameters.get('shape') == 'cube' else 'spherical'
+    extent = parameters.get('extent')
+    if extent is None:
+        # svht_denoise's default, the smallest odd k with k**3 above the volume count
+        size = 'sized automatically from the number of volumes'
+    elif shape == 'cubic':
+        size = f'of {extent}x{extent}x{extent} voxels'
+    else:
+        size = f'holding at least {extent**3} voxels'
+    filter_desc = _SVHT_FILTERS[parameters.get('filter_method', 'optshrink')]
+    aggregator_desc = _SVHT_AGGREGATORS[parameters.get('aggregator', 'gaussian')]
+
+    if real_axis:
+        sentences = [
+            'Magnitude and phase DWI data were rotated onto the real axis [@nordic], so that '
+            'the noise remained zero-mean Gaussian, then denoised'
+        ]
+    elif parameters.get('vst', True):
+        vst = (
+            'DWI data were variance-stabilized to render the noise approximately Gaussian '
+            '[@foi2011]'
+        )
+        if 'noise_dof' in parameters:
+            vst += f', assuming {parameters["noise_dof"]} receive channels'
+        sentences = [f'{vst}, then denoised']
+    else:
+        sentences = ['DWI data were denoised']
+    sentences[0] += (
+        ' by local PCA with optimal singular value shrinkage, as implemented in '
+        f'`svht_denoise` [@svht_denoise]. Overlapping {shape} patches, {size}, were '
+        f'decomposed by singular value decomposition, {filter_desc}, and {aggregator_desc}.'
+    )
+    if parameters.get('demean'):
+        sentences.append(
+            'Prior to PCA, the mean signal of each *b*-value shell was removed, and it was '
+            'restored after denoising.'
+        )
+    if real_axis:
+        sentences.append('The absolute value of the denoised data was retained.')
+    elif parameters.get('vst', True) and not parameters.get('preserve_noise_bias', False):
+        sentences.append(
+            'The variance-stabilizing transform was inverted at the exact-unbiased operating '
+            'point, removing the noise-floor bias from the denoised magnitude data.'
+        )
+
+    return ' '.join(sentences) + ' '
 
 
 def _format_schedule_value(value):
@@ -510,7 +779,7 @@ def format_dwidenoise2_schedule(rows):
     last = len(rows) - 1
 
     lines = [
-        '# dwidenoise2 noise estimation schedule written by QSIPrep from --dwidenoise2-config',
+        '# dwidenoise2 noise estimation schedule written by QSIPrep from --denoise-config',
         ' '.join(columns),
     ]
     for i, row in enumerate(rows):
@@ -613,7 +882,7 @@ def describe_dwidenoise2(parameters, complex_data):
             schedule_desc = f'its bundled "{name}" schedule'
         else:
             schedule_desc = (
-                f'a custom {n_iterations}-iteration schedule provided with `--dwidenoise2-config`'
+                f'a custom {n_iterations}-iteration schedule provided with `--denoise-config`'
             )
     elif 'fixed_rank' in used:
         # dwidenoise2 then loads its bundled single-row "fixedrank" schedule

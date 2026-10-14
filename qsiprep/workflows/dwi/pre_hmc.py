@@ -208,7 +208,9 @@ def init_dwi_pre_hmc_wf(
             name='rpe_concat',
         )
         raw_rpe_concat = pe.Node(Merge(is_dwi=True), name='raw_rpe_concat')
-        qc_wf = init_modelfree_qc_wf(bvec_convention='DIPY' if orientation == 'LPS' else 'FSL')
+        qc_wf = init_modelfree_qc_wf(
+            bvec_convention='DIPY' if orientation == 'LPS' else 'FSL', skull_strip=True
+        )
 
         workflow.connect([
             # combine PE+
@@ -273,7 +275,8 @@ def init_dwi_pre_hmc_wf(
         unit=unit,
         raw_dwi_files=list(unit.dwi_files),
         orientation=orientation,
-        calculate_qc=True,
+        # The raw QC below covers this series; merge's own would go unused.
+        calculate_qc=False,
         phase_id=unit.pe_dir,
         source_file=source_file,
     )
@@ -296,7 +299,9 @@ def init_dwi_pre_hmc_wf(
     ])  # fmt:skip
 
     if calculate_qc:
-        qc_wf = init_modelfree_qc_wf(bvec_convention='DIPY' if orientation == 'LPS' else 'FSL')
+        qc_wf = init_modelfree_qc_wf(
+            bvec_convention='DIPY' if orientation == 'LPS' else 'FSL', skull_strip=True
+        )
         workflow.connect([
             (merge_dwis, qc_wf, [
                 ('outputnode.merged_raw_image', 'inputnode.dwi_file'),

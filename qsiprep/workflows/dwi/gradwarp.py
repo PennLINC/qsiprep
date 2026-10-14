@@ -452,11 +452,11 @@ def init_gradwarp_wf(unit, name='gradwarp_wf'):
 # --- Gradwarp-correcting the inputs to susceptibility estimation -------------
 #
 # TORTOISE resamples the b=0/FA images through the gradwarp field *before* it
-# estimates the susceptibility field (``DRBUDDI::Step0_CreateImages``,
-# ``EPIREG.cxx``). QSIPrep matches that exactly where the resulting SDC warp is
+# estimates the susceptibility field (``DRBUDDI::Step0_CreateImages``).
+# QSIPrep matches that exactly where the resulting SDC warp is
 # applied *downstream* of gradwarp in the composed transform chain:
 #
-# * DRBUDDI, GRE/phase fieldmaps and SyN keep their warp in
+# * DRBUDDI, GRE/phase fieldmaps, SyN and unpile keep their warp in
 #   ``to_dwi_ref_warps``, which ``ComposeTransforms`` applies after gradwarp --
 #   so their estimation inputs must be gradwarp-corrected.
 # * FSL ``eddy`` consumes TOPUP's field via ``--field`` and resamples the raw
@@ -474,7 +474,7 @@ def _sdc_interpolation():
     Matches the adjacent per-volume ``ApplyTransforms`` in ``hmc_sdc.py``, so
     ``--sloppy`` speeds these up the same way it speeds up everything else.
     """
-    return 'NearestNeighbor' if config.execution.sloppy else 'LanczosWindowedSinc'
+    return 'Linear' if config.execution.sloppy else 'LanczosWindowedSinc'
 
 
 def connect_gradwarp_sdc_volumes(workflow, inputnode, source, source_field, drbuddi_wf):
@@ -575,8 +575,8 @@ def connect_gradwarp_coreg_reference(
 ):
     """Gradwarp the b=0 that DWI/T1w coregistration is estimated from.
 
-    For branches whose reference carries no SDC warp either. DIFFPREP's T2Wreg
-    branch needs both and folds them into its existing ``apply_sdc_to_b0``
+    For branches whose reference carries no SDC warp either. DIFFPREP's SynB0 +
+    TOPUP branch needs both and folds them into its existing ``apply_sdc_to_b0``
     node instead, so that the mask ``b0_ref_for_coreg`` derives stays in the
     same geometry as the reference.
     """

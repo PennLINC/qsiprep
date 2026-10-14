@@ -67,40 +67,181 @@ class InvertITKAffine(SimpleInterface):
         return runtime
 
 
-def _itk_mat_to_matrix(key, params, fixed):
-    p = np.asarray(params, dtype=np.float64).ravel()
-    c = np.asarray(fixed, dtype=np.float64).ravel()[:3]
-    if key.startswith('Euler3D') or p.size == 6:
-        ax, ay, az = p[:3]
-        cx, sx = np.cos(ax), np.sin(ax)
-        cy, sy = np.cos(ay), np.sin(ay)
-        cz, sz = np.cos(az), np.sin(az)
-        rx = np.array([[1, 0, 0], [0, cx, -sx], [0, sx, cx]])
-        ry = np.array([[cy, 0, sy], [0, 1, 0], [-sy, 0, cy]])
-        rz = np.array([[cz, -sz, 0], [sz, cz, 0], [0, 0, 1]])
-        mat, t = rz @ rx @ ry, p[3:6]  # ITK Euler3DTransform, ComputeZYX off
-    elif p.size == 12:
-        mat, t = p[:9].reshape(3, 3), p[9:12]
-    else:
-        raise ValueError(f'unsupported ITK transform {key!r} with {p.size} parameters')
+def linear_transform_matrix(transform):
+    """Return the 4x4 LPS point map (fixed -> moving) of a linear ITK transform.
+
+    The map is read off where the transform sends the origin and the unit vectors, so
+    Euler, affine, translation and composite transforms, their centres of rotation and
+    the composite application order all come from ITK rather than from a re-implementation.
+
+    Parameters
+    ----------
+    transform : str or :obj:`os.PathLike` or :class:`SimpleITK.Transform`
+        A transform file (``.txt``, ``.mat`` or ``.h5``) or an in-memory transform.
+
+    Returns
+    -------
+    :obj:`numpy.ndarray`
+        4x4 homogeneous matrix mapping fixed-image points to moving-image points, in LPS mm.
+    """
+    if not isinstance(transform, sitk.Transform):
+        transform = sitk.ReadTransform(str(transform))
+    origin = np.array(transform.TransformPoint((0.0, 0.0, 0.0)))
     out = np.eye(4)
-    out[:3, :3] = mat
-    out[:3, 3] = t + c - mat @ c
+    out[:3, 3] = origin
+    for axis in range(3):
+        unit = [0.0, 0.0, 0.0]
+        unit[axis] = 1.0
+        out[:3, axis] = np.array(transform.TransformPoint(unit)) - origin
+    return out
+
+
+def linear_transform(transform):
+    """Return a linear ITK transform as its typed ``SimpleITK`` object.
+
+    The result answers ``GetMatrix()``, ``GetTranslation()`` and ``GetCenter()`` (and
+    ``GetAngleX()`` etc. for a rigid), so callers never index into ``GetParameters()``.
+
+    Parameters
+    ----------
+    transform : str or :obj:`os.PathLike` or :class:`SimpleITK.Transform`
+        A transform file or an in-memory transform. A one-member composite (ANTs' ``.h5``
+        output) is unwrapped.
+
+    Returns
+    -------
+    :class:`SimpleITK.Transform`
+        The downcast transform (``Euler3DTransform``, ``AffineTransform``, ...).
+
+    Raises
+    ------
+    ValueError
+        If the transform is a composite with several members, which has no single
+        translation; use :func:`linear_transform_matrix` for the combined map.
+    """
+    if not isinstance(transform, sitk.Transform):
+        transform = sitk.ReadTransform(str(transform))
+    transform = transform.Downcast()
+    if isinstance(transform, sitk.CompositeTransform):
+        if transform.GetNumberOfTransforms() != 1:
+            raise ValueError(
+                f'{transform.GetNumberOfTransforms()} transforms in the composite; '
+                'use linear_transform_matrix for the combined map'
+            )
+        transform = transform.GetNthTransform(0).Downcast()
+    return transform
+
+
+def affine_from_matrix(matrix):
+    """Build a zero-centre ``SimpleITK.AffineTransform`` from a 4x4 LPS point map.
+
+    Parameters
+    ----------
+    matrix : array-like
+        4x4 homogeneous matrix mapping fixed-image points to moving-image points, in LPS mm.
+
+    Returns
+    -------
+    :class:`SimpleITK.AffineTransform`
+        The same map, with the centre of rotation at the origin.
+    """
+    matrix = np.asarray(matrix, dtype=np.float64)
+    out = sitk.AffineTransform(3)
+    out.SetMatrix(matrix[:3, :3].ravel().tolist())
+    out.SetTranslation(matrix[:3, 3].tolist())
     return out
 
 
 def invert_itk_affine(in_file, out_file):
-    """Invert an ITK ``.mat`` affine or rigid transform, writing ``AffineTransform_double_3_3``."""
-    from scipy.io import loadmat, savemat
+    """Invert an ITK ``.mat`` affine or rigid transform, writing ``AffineTransform_double_3_3``.
 
-    m = loadmat(in_file)
-    key = next(k for k in m if not k.startswith('__') and k != 'fixed')
-    inv = np.linalg.inv(_itk_mat_to_matrix(key, m[key], m.get('fixed', np.zeros(3))))
-    params = np.concatenate([inv[:3, :3].ravel(), inv[:3, 3]]).reshape(-1, 1)
-    savemat(
-        out_file, {'AffineTransform_double_3_3': params, 'fixed': np.zeros((3, 1))}, format='4'
-    )
+    Parameters
+    ----------
+    in_file : str
+        The transform to invert.
+    out_file : str
+        Where to write the inverse, as a zero-centre affine.
+
+    Returns
+    -------
+    str
+        ``out_file``.
+    """
+    inverse = np.linalg.inv(linear_transform_matrix(in_file))
+    sitk.WriteTransform(affine_from_matrix(inverse), out_file)
     return out_file
+
+
+class _GuardRefinedTransformInputSpec(BaseInterfaceInputSpec):
+    initial_transform = File(
+        exists=True, mandatory=True, desc='the linear transform the refinement started from'
+    )
+    refined_transform = File(exists=True, mandatory=True, desc='the refined linear transform')
+    initial_similarity = traits.Float(
+        mandatory=True,
+        desc='registration metric value of the initial transform on its own target '
+        '(ANTs convention: lower is better)',
+    )
+    refined_similarity = traits.Float(
+        mandatory=True, desc='registration metric value of the refined transform on its own target'
+    )
+    reference_image = File(
+        exists=True,
+        mandatory=True,
+        desc='image whose field-of-view centre the reported shift is measured at',
+    )
+
+
+class _GuardRefinedTransformOutputSpec(TraitedSpec):
+    out_transform = File(exists=True, desc='the refined transform, or the initial one if rejected')
+    accepted = traits.Bool(desc='whether the refinement was kept')
+    shift_mm = traits.Float(desc='how far the refinement moved the FOV centre')
+    rotation_deg = traits.Float(desc='the rotation the refinement added')
+
+
+class GuardRefinedTransform(SimpleInterface):
+    """Keep a refined linear transform only if it matches its target at least as well.
+
+    A registration that refines an earlier result (a second pass against a better target,
+    initialised from the first pass) can run away under random metric sampling, and the first
+    pass can fail outright while the second recovers. Neither transform is a safe prior for the
+    other, so each is judged by the registration metric on its own target and the better one
+    is kept. The shift and rotation between the two are reported for QC.
+    """
+
+    input_spec = _GuardRefinedTransformInputSpec
+    output_spec = _GuardRefinedTransformOutputSpec
+
+    def _run_interface(self, runtime):
+        initial = sitk.ReadTransform(self.inputs.initial_transform)
+        refined = sitk.ReadTransform(self.inputs.refined_transform)
+        img = nb.load(self.inputs.reference_image)
+        centre_ras = img.affine[:3, :3] @ (np.array(img.shape[:3]) / 2.0) + img.affine[:3, 3]
+        centre = tuple(float(v) for v in np.diag([-1.0, -1.0, 1.0]) @ centre_ras)  # LPS
+        shift = np.array(refined.TransformPoint(centre)) - np.array(initial.TransformPoint(centre))
+        rot = linear_transform_matrix(refined)[:3, :3] @ np.linalg.inv(
+            linear_transform_matrix(initial)[:3, :3]
+        )
+        self._results['shift_mm'] = float(np.linalg.norm(shift))
+        self._results['rotation_deg'] = float(
+            np.degrees(np.arccos(np.clip((np.trace(rot) - 1) / 2, -1, 1)))
+        )
+        accepted = self.inputs.refined_similarity <= self.inputs.initial_similarity
+        self._results['accepted'] = accepted
+        if not accepted:
+            LOGGER.warning(
+                'The refined fieldmap registration matched its target worse than the initial '
+                'one (%.4f vs %.4f, %.1f mm / %.1f deg apart); keeping the initial transform.',
+                self.inputs.refined_similarity,
+                self.inputs.initial_similarity,
+                self._results['shift_mm'],
+                self._results['rotation_deg'],
+            )
+        source = self.inputs.refined_transform if accepted else self.inputs.initial_transform
+        out_file = fname_presuffix(source, newpath=runtime.cwd, prefix='guarded_')
+        sitk.WriteTransform(sitk.ReadTransform(source), out_file)
+        self._results['out_transform'] = out_file
+        return runtime
 
 
 class _AffineToRigidInputSpec(BaseInterfaceInputSpec):
@@ -343,10 +484,7 @@ def itk_affine_to_rigid(transform_file, cwd):
     rigid_mat_file = cwd + '/6DOFrigid.mat'
     translation_mat_file = cwd + '/translation.mat'
     inverse_mat_file = cwd + '/6DOFinverse.mat'
-    raw_transform = sitk.ReadTransform(transform_file)
-    aff_transform = sitk.AffineTransform(3)
-    aff_transform.SetFixedParameters(raw_transform.GetFixedParameters())
-    aff_transform.SetParameters(raw_transform.GetParameters())
+    aff_transform = linear_transform(transform_file)
 
     full_matrix = np.eye(4)
     full_matrix[:3, :3] = np.array(aff_transform.GetMatrix()).reshape((3, 3), order='C')

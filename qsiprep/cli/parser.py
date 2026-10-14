@@ -26,9 +26,15 @@
 
 import sys
 
+from qsiplan import (
+    ANAT_REFERENCE_CHOICES,
+    FIELDMAPLESS_METHOD_CHOICES,
+    fieldmapless_combination_error,
+)
+
 from .. import config
 from ..utils.gpu import GPU_ALIASES, GPU_TASKS
-from ..utils.misc import load_dwidenoise2_config, load_shoreline_config
+from ..utils.misc import load_denoise_config, load_shoreline_config
 
 
 def _build_parser(**kwargs):
@@ -120,13 +126,13 @@ def _build_parser(**kwargs):
                     file=sys.stderr,
                 )
 
-            if namespace.dwidenoise2_config is not None:
-                if namespace.denoise_method != 'dwidenoise2':
-                    self.error('--dwidenoise2-config requires --denoise-method dwidenoise2')
+            if namespace.denoise_config is not None:
+                if namespace.denoise_method not in ('dwidenoise2', 'svht'):
+                    self.error('--denoise-config requires --denoise-method dwidenoise2 or svht')
                 # Load the file here so that a bad setting fails before any workflow is
                 # built. The workflow builder loads it again from the stored path.
                 try:
-                    load_dwidenoise2_config(namespace.dwidenoise2_config)
+                    load_denoise_config(namespace.denoise_config, namespace.denoise_method)
                 except ValueError as err:
                     self.error(str(err))
 
@@ -150,14 +156,17 @@ def _build_parser(**kwargs):
             # (and qsiplan's policy bridge) can read them by name.
             namespace.force_sdc_anat_reference = 'sdc-anat-reference' in (namespace.force or [])
             namespace.force_nocsf_synthstrip = 'no-csf-synthstrip' in (namespace.force or [])
-            if 'jacobian' in (namespace.force or []) and 'jacobian' in (namespace.ignore or []):
-                self.error('--force jacobian and --ignore jacobian are mutually exclusive')
+            namespace.two_pass_sdc = 'one-pass-sdc' not in (namespace.force or [])
             if namespace.force_sdc_anat_reference and namespace.sdc_anat_reference == 'none':
                 self.error(
                     '--force sdc-anat-reference requires an anatomical SDC '
-                    'reference to force: pass --sdc-anat-reference '
-                    '{synb0,t2w,invt1w,auto}'
+                    'reference to force: pass --sdc-anat-reference {synb0,invt1w,t2w}'
                 )
+            invalid = fieldmapless_combination_error(
+                namespace.sdc_fieldmapless_method, namespace.sdc_anat_reference
+            )
+            if invalid:
+                self.error(invalid)
             if (
                 namespace.sdc_anat_reference in ('synb0', 'invt1w')
                 and namespace.anat_modality != 'T1w'
@@ -165,7 +174,8 @@ def _build_parser(**kwargs):
                 self.error(
                     f'--sdc-anat-reference {namespace.sdc_anat_reference} requires '
                     '--anat-modality T1w: the reference image is derived from the '
-                    'preprocessed T1w'
+                    'preprocessed T1w. Pass --sdc-anat-reference none to leave DWI '
+                    'series without a fieldmap uncorrected.'
                 )
 
             return namespace, extras
@@ -458,7 +468,7 @@ def _build_parser(**kwargs):
             'gradwarp1D',
             'gradwarp3D',
             'sdc-anat-reference',
-            'jacobian',
+            'one-pass-sdc',
             'gre-sdc-after-eddy',
             'no-csf-synthstrip',
         ],
@@ -474,11 +484,12 @@ def _build_parser(**kwargs):
             'override, so that the selected anatomical reference replaces fieldmap '
             'application for every DWI series. It requires an --sdc-anat-reference '
             'other than "none". '
-            '"jacobian" applies Jacobian intensity modulation to the fieldmap-less '
-            'TORTOISE T2Wreg (EPIREG) correction as well. TORTOISE leaves that field '
-            'unmodulated because its final registration stage is not restricted to '
-            'the phase-encoding direction; forcing it uses the phase-encoding '
-            'component of the field only. '
+            '"one-pass-sdc" drops the second pass of the registration-based '
+            'susceptibility distortion corrections: SynB0 + TOPUP otherwise synthesizes '
+            'the SynB0 again from the b=0 unwarped by the first field and runs TOPUP '
+            'again, with every head motion method, and a GRE fieldmap is otherwise '
+            'registered to the b=0 a second time, against the b=0 its first-pass field '
+            'unwarped. '
             '"gre-sdc-after-eddy" applies a GRE fieldmap after eddy, as QSIPrep used to, '
             'instead of handing it to eddy (--field), for comparing the two on real data. '
             'It requires --hmc-method eddy, is deprecated, and will be removed in a '
@@ -585,12 +596,13 @@ def _build_parser(**kwargs):
     g_dwi.add_argument(
         '--denoise-method',
         action='store',
-        choices=['dwidenoise', 'dwidenoise2', 'patch2self', 'none'],
+        choices=['dwidenoise', 'dwidenoise2', 'patch2self', 'svht', 'none'],
         default='dwidenoise',
         help=(
             'Image-based denoising method: "dwidenoise" (MRtrix3), "dwidenoise2", '
-            '"patch2self" (DIPY), or "none". '
-            'Settings for dwidenoise2 are given with --dwidenoise2-config.'
+            '"patch2self" (DIPY), "svht" (svht_denoise), or "none". '
+            'dwidenoise and dwidenoise2 are restricted to non-commercial use; svht is not. '
+            'Settings for dwidenoise2 and svht are given with --denoise-config.'
         ),
     )
     g_dwi.add_argument(
@@ -605,40 +617,50 @@ def _build_parser(**kwargs):
             'This applies to the "dwidenoise" method only, where "auto" calculates a '
             'window size from the number of volumes, following the method described in '
             'the dwidenoise documentation. '
-            'It is unused by "patch2self" and "dwidenoise2"; dwidenoise2 sizes its '
-            'patches per iteration from its multi-resolution schedule, which can be set '
-            'with --dwidenoise2-config instead.'
+            'It is unused by "patch2self", "dwidenoise2" and "svht"; dwidenoise2 sizes its '
+            'patches per iteration from its multi-resolution schedule, and svht takes its '
+            'patch size from "extent", both of which can be set with --denoise-config '
+            'instead.'
         ),
     )
     g_dwi.add_argument(
-        '--dwidenoise2-config',
+        '--denoise-config',
         action='store',
         type=IsFile,
         default=None,
         metavar='FILE',
         help=(
-            'Path to a JSON file with settings for dwidenoise2. This is valid only with '
-            '--denoise-method dwidenoise2. Every key is optional, and unknown keys are an '
-            'error. Keys other than "schedule" set the dwidenoise2 option of the same name '
-            '(for example "demodulate", "decomposition", "estimator" or "noise_in"; '
-            '"filter_method" sets -filter). "schedule" is a list of noise estimation '
-            'iterations, each a JSON object whose keys are dwidenoise2 schedule columns (for '
-            'example "spatial_subsample", "kernel" and "update_noise"), or the name of a '
-            'bundled schedule ("default", "legacy" or "vlarge"). Without a schedule, '
-            'dwidenoise2 uses its default schedule. See the documentation for every key.'
+            'Path to a JSON file with settings for the denoiser selected by --denoise-method, '
+            'which must be dwidenoise2 or svht. Every key is optional, and unknown keys are '
+            'an error. '
+            'For dwidenoise2, keys other than "schedule" set the dwidenoise2 option of the '
+            'same name (for example "demodulate", "decomposition", "estimator" or '
+            '"noise_in"; "filter_method" sets -filter). "schedule" is a list of noise '
+            'estimation iterations, each a JSON object whose keys are dwidenoise2 schedule '
+            'columns (for example "spatial_subsample", "kernel" and "update_noise"), or the '
+            'name of a bundled schedule ("default", "legacy" or "vlarge"). Without a '
+            'schedule, dwidenoise2 uses its default schedule. '
+            'For svht, the keys are "demean" ("none", the default, or "shells", which is '
+            'recommended only for shelled schemes), '
+            '"extent" (the patch size), "filter_method", "aggregator", "aggregator_fwhm", '
+            '"shape", "stride", "vst", "noise_dof" and "preserve_noise_bias". '
+            'See the documentation for every key.'
         ),
     )
     g_dwi.add_argument(
         '--unringing-method',
         action='store',
         default='none',
-        choices=['none', 'mrdegibbs', 'rpg'],
+        choices=['none', 'mrdegibbs', 'rpg', 'svht'],
         help=(
             'Method for Gibbs-ringing removal. '
             '"none" takes no action. '
             '"mrdegibbs" uses mrdegibbs from MRtrix3. '
             '"rpg" uses the TORTOISE method, which is suggested for partial Fourier '
-            'acquisitions.'
+            'acquisitions. '
+            '"svht" uses svht_denoise, which matches mrdegibbs on full k-space data and '
+            'also removes partial Fourier ringing for 7/8 and 6/8 acquisitions phase-encoded '
+            'along j, read from the PartialFourier metadata field.'
         ),
     )
     g_dwi.add_argument(
@@ -799,32 +821,48 @@ def _build_parser(**kwargs):
             '"topup+drbuddi" runs TOPUP followed by DRBUDDI refinement, and requires '
             '--hmc-method eddy. '
             '"auto" selects TOPUP for eddy and DRBUDDI otherwise. '
-            'Non-PEPOLAR corrections (GRE fieldmaps, SyN, T2w registration) are chosen '
-            'by the input data and their own flags, not by this one.'
+            'Non-PEPOLAR corrections (GRE fieldmaps and the fieldmap-less correction) '
+            'are chosen by the input data and their own flags, not by this one.'
+        ),
+    )
+    g_sdc.add_argument(
+        '--sdc-fieldmapless-method',
+        action='store',
+        default='topup',
+        choices=list(FIELDMAPLESS_METHOD_CHOICES),
+        help=(
+            'Which correction handles DWI series that no fieldmap reaches, once '
+            '--sdc-anat-reference names an image. '
+            '"topup" (the default) synthesizes an undistorted b=0 from the T1w with '
+            'SynB0-DISCO and pairs it with the acquired b=0 in TOPUP: before eddy with '
+            '--hmc-method eddy, after head motion correction with --hmc-method tortoise '
+            'or shoreline. '
+            '"syn" estimates the field with a restricted ANTs SyN registration to the '
+            '--sdc-anat-reference image ("synb0" or "invt1w"). '
+            '"unpile" (experimental) fits the field with a model of the EPI readout by '
+            'matching the motion-corrected b=0 to the --sdc-anat-reference image ("synb0" '
+            'or "t2w"), after any head motion method; a GRE fieldmap that also lists the '
+            'series is refined rather than replaced. '
+            'A DWI series this correction cannot handle (no T1w, or no '
+            'PhaseEncodingDirection or TotalReadoutTime) is an error; pass '
+            '--sdc-anat-reference none to leave such series uncorrected.'
         ),
     )
     g_sdc.add_argument(
         '--sdc-anat-reference',
         action='store',
         default='none',
-        choices=['none', 'auto', 'synb0', 't2w', 'invt1w'],
+        choices=list(ANAT_REFERENCE_CHOICES),
         help=(
-            'Which anatomical-derived image serves as the reference for fieldmap-less '
-            'susceptibility distortion correction, applied as a fallback to DWI series '
-            'that no fieldmap reaches. '
+            'Which anatomical-derived image the fieldmap-less correction '
+            '(--sdc-fieldmapless-method) uses. '
+            '"none" (the default) leaves DWI series that no fieldmap reaches '
+            'uncorrected. '
             '"synb0" generates a synthetic distortion-free b=0 from the T1w with the '
             'SynB0-DISCO U-Net. '
-            '"t2w" uses the real T2w (TORTOISE T2Wreg). '
-            '"invt1w" uses the inverted-contrast T1w (nipreps-style SyN prior). '
-            '"auto" picks synb0 when the subject has a T1w, else t2w when it has a T2w, '
-            'else nothing; "invt1w" is never picked automatically. '
-            '"none" disables anatomical SDC entirely. '
-            'The engine consuming the reference is governed by --sdc-method and '
-            '--hmc-method and validated by the plan compiler. With --hmc-method eddy, '
-            'for example, a synthetic b=0 enters TOPUP as a zero-readout-time volume, '
-            'while with --hmc-method tortoise it is the DIFFPREP registration target. '
-            'synb0 and invt1w require a T1w image and a PhaseEncodingDirection on the '
-            'DWI series.'
+            '"invt1w" uses the inverted-contrast T1w (with "syn" only). '
+            '"t2w" uses the real T2w (with "unpile" only). '
+            'synb0 and invt1w require --anat-modality T1w.'
         ),
     )
 
@@ -869,7 +907,9 @@ def _build_parser(**kwargs):
             'reference to the anatomical. "subject" builds a single midpoint template '
             "from every group's reference, registers that once, and has every group "
             'inherit the result, which makes preprocessed data directly comparable '
-            'across groups.'
+            'across groups. A subject with a single distortion group uses that '
+            "group's reference as the subject dwiref, with an identity transform. "
+            '"subject" cannot be combined with --subject-anatomical-reference sessionwise.'
         ),
     )
     g_coreg.add_argument(
@@ -1145,7 +1185,12 @@ def check_denoise_window(denoise_method, dwidenoise_window):
         config.loggers.cli.warning(
             'The --dwidenoise-window option is not used when --denoise-method=dwidenoise2. '
             'dwidenoise2 sizes its patches per iteration from its multi-resolution schedule, '
-            'which can be set with --dwidenoise2-config instead.'
+            'which can be set with --denoise-config instead.'
+        )
+    elif denoise_method == 'svht':
+        config.loggers.cli.warning(
+            'The --dwidenoise-window option is not used when --denoise-method=svht. '
+            'Set the svht patch size with "extent" in --denoise-config instead.'
         )
     elif denoise_method == 'none':
         config.loggers.cli.warning(
@@ -1163,6 +1208,17 @@ def parse_args(args=None, namespace=None):
 
     parser = _build_parser()
     opts = parser.parse_args(args, namespace)
+
+    # A sessionwise workflow sees one session, so its "subject" dwiref could not
+    # span the subject's sessions and would be misnamed. fMRIPrep rejects the
+    # equivalent --bold-coreg-level subject the same way.
+    if opts.dwiref_definition == 'subject' and opts.subject_anatomical_reference == 'sessionwise':
+        parser.error(
+            '--dwiref-definition subject is incompatible with '
+            '--subject-anatomical-reference sessionwise: a sessionwise workflow processes '
+            'a single session, so a subject-level dwiref cannot span sessions. '
+            'Use --dwiref-definition distortion-group instead.'
+        )
 
     # Reports follow the anatomical processing level unless the user asked for a specific one
     if opts.report_output_level == 'auto':
@@ -1218,8 +1274,8 @@ def parse_args(args=None, namespace=None):
     for key in ('shoreline_config', 'shoreline_model', 'shoreline_iters', 'hmc_transform'):
         setattr(config.workflow, key, getattr(opts, key))
     # As for SHORELine, the command line is authoritative. from_dict skips None, so a
-    # --config-file could otherwise leave a stale dwidenoise2_config behind.
-    config.workflow.dwidenoise2_config = opts.dwidenoise2_config
+    # --config-file could otherwise leave a stale denoise_config behind.
+    config.workflow.denoise_config = opts.denoise_config
 
     if not config.execution.notrack:
         import importlib.util

@@ -16,9 +16,9 @@ deliberately untouched: their inputs share an orientation by construction, and
 center-of-mass initialization.
 
 The structural image handed to TORTOISE gets the same protection one layer
-down: DRBUDDI and DIFFPREP's ``--epi T2Wreg`` (EPIREG) rigidly register their
+down: DRBUDDI rigidly registers its
 structural input to the b=0 internally, but only from a center-of-mass
-initialization (EPIREG has no multistart fallback at all), so the T2w is
+initialization, so the T2w is
 pre-aligned into the b=0 frame with the antsAI search before TORTOISE sees it.
 The synb0 structural target needs none of this: the synthetic b=0 is produced
 on the native b=0 grid already.
@@ -233,23 +233,30 @@ def test_drbuddi_without_t2w_builds_no_alignment(tmp_path):
     assert wf.get_node('t2w_to_b0_wf') is None
 
 
-def test_t2wreg_structural_is_prealigned_to_the_b0():
-    """Test that the T2Wreg structural image is pre-aligned to the b=0.
+def test_unpile_t2w_reference_is_prealigned_to_the_b0():
+    """Test that unpile's T2w reference is pre-aligned to the b=0.
 
-    EPIREG runs a single COM-initialized rigid with no multistart fallback.
+    unpile refines a rigid pose jointly with the field, within the capture range
+    of the start it is given; the rotation search provides that start.
     """
     from qsiprep.tests.test_interfaces_diffprep import _base_config, _build, _make_unit
 
     _base_config()
-    wf = _build(_make_unit(None), t2w_sdc=True, name='dp_t2w_prealign')
+    wf = _build(_make_unit('unpile'), t2w_sdc=True, name='dp_t2w_prealign')
 
-    assert wf.get_node('t2w_to_b0_wf') is not None
-    assert ('outputnode.structural_aligned', 'structural_image') in _connect_fields(
-        wf, 't2w_to_b0_wf', 'diffprep'
+    unpile_wf = wf.get_node('sdc_wf.unpile_sdc_wf')
+    assert unpile_wf is not None
+    assert unpile_wf.get_node('t2w_to_b0_wf') is not None
+    assert ('outputnode.structural_aligned', 'reference') in _connect_fields(
+        unpile_wf, 't2w_to_b0_wf', 'prepare_unpile'
     )
-    assert ('t2w_unfatsat', 'structural_image') not in _connect_fields(wf, 'inputnode', 'diffprep')
-    # The alignment target is the raw distorted b=0 average of this run
-    assert ('b0_average', 'inputnode.b0_ref') in _connect_fields(wf, 't2wreg_b0s', 't2w_to_b0_wf')
+    # The alignment target is the motion-corrected b=0 reference of this run
+    assert ('b0_ref', 'inputnode.b0_ref') in _connect_fields(
+        unpile_wf, 'inputnode', 't2w_to_b0_wf'
+    )
+    assert ('b0_mask', 'inputnode.b0_mask') in _connect_fields(
+        unpile_wf, 'inputnode', 't2w_to_b0_wf'
+    )
 
 
 def test_drbuddi_callers_supply_a_b0_reference_in_the_sdc_frame(tmp_path):
