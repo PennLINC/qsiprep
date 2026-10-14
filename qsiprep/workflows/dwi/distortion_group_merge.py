@@ -217,6 +217,8 @@ def init_distortion_group_merge_wf(
     series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name='series_qc')
     ds_series_qc = pe.Node(
         DerivativesDataSink(
+            # The QC describes the ACPC-space merged series, as in finalize.py.
+            space='ACPC',
             desc='image',
             suffix='qc',
             extension='tsv',
