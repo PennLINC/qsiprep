@@ -1638,9 +1638,23 @@ def test_graddev_filename_renders_with_space_entity(tmp_path):
     assert out.endswith('sub-01_space-ACPC_graddev.nii.gz')
 
 
-@pytest.fixture
-def graddev_on(monkeypatch):
-    monkeypatch.setenv('QSIPREP_WRITE_GRADDEV', '1')
+def test_graddev_qc_filename_renders(tmp_path):
+    from qsiprep.interfaces import DerivativesDataSink
+
+    payload = tmp_path / 'graddev_qc.tsv'
+    payload.write_text('measure\tn_voxels\n')
+    sink = DerivativesDataSink(
+        base_directory=str(tmp_path / 'out'),
+        source_file='/data/sub-01/dwi/sub-01_dir-AP_dwi.nii.gz',
+        desc='graddev',
+        suffix='qc',
+        extension='.tsv',
+        in_file=str(payload),
+    ).run()
+
+    out = sink.outputs.out_file
+    out = out[0] if isinstance(out, list) else out
+    assert out.endswith('sub-01/dwi/sub-01_dir-AP_desc-graddev_qc.tsv')
 
 
 def _finalize_wf_with_gradients(tmp_path, image_type=None, write_derivatives=True):
@@ -1669,14 +1683,22 @@ def test_dwi_finalize_wf_has_no_grad_dev_without_a_coefficient_file(tmp_path):
     assert wf.get_node('ds_grad_dev') is None
 
 
-def test_dwi_finalize_wf_builds_grad_dev_when_a_plan_resolves(tmp_path, graddev_on):
+def test_dwi_finalize_wf_builds_grad_dev_when_a_plan_resolves(tmp_path):
     wf = _finalize_wf_with_gradients(tmp_path)
 
     assert wf.get_node('grad_dev') is not None
     assert wf.get_node('ds_grad_dev') is not None
+    qc = wf.get_node('graddev_qc')
+    assert ('grad_dev', 'grad_dev') in wf._graph.get_edge_data(wf.get_node('grad_dev'), qc)[
+        'connect'
+    ]
+    from_inputnode = wf._graph.get_edge_data(wf.get_node('inputnode'), qc)['connect']
+    assert ('gradwarp_field', 'gradwarp_field') in from_inputnode
+    assert ('dwi_mask', 'gradwarp_mask') in from_inputnode
+    assert wf.get_node('ds_graddev_qc') is not None
 
 
-def test_dwi_finalize_wf_builds_grad_dev_for_dis3d(tmp_path, graddev_on):
+def test_dwi_finalize_wf_builds_grad_dev_for_dis3d(tmp_path):
     """Test that the finalize workflow builds grad_dev for a DIS3D unit.
 
     No spatial correction happens for a DIS3D unit, but grad_dev is still
@@ -1687,11 +1709,12 @@ def test_dwi_finalize_wf_builds_grad_dev_for_dis3d(tmp_path, graddev_on):
     grad_dev = wf.get_node('grad_dev')
     assert grad_dev is not None
     assert wf.get_node('ds_grad_dev') is not None
+    # No applied field for DIS3D, so the QC table has only the rotation row.
+    qc = wf.get_node('graddev_qc')
+    assert wf._graph.get_edge_data(wf.get_node('inputnode'), qc) is None
 
 
-def test_dwi_finalize_wf_grad_dev_initial_image_is_extracted_not_the_raw_4d_series(
-    tmp_path, graddev_on
-):
+def test_dwi_finalize_wf_grad_dev_initial_image_is_extracted_not_the_raw_4d_series(tmp_path):
     """Test that grad_dev's initial image is extracted, not the raw 4D series.
 
     CreateGradientNonlinearityBMatrix's ``-i`` is read as a 3D NIfTI
@@ -1722,7 +1745,7 @@ def test_dwi_finalize_wf_grad_dev_initial_image_is_extracted_not_the_raw_4d_seri
     assert ('out_file', 'initial_image') in out_edge['connect']
 
 
-def test_dwi_finalize_wf_grad_dev_final_image_is_the_final_b0_reference(tmp_path, graddev_on):
+def test_dwi_finalize_wf_grad_dev_final_image_is_the_final_b0_reference(tmp_path):
     """Test that grad_dev's final image is the final b0 reference.
 
     The final b0 ref (``init_dwi_reference_wf``'s ``ref_image``) is already a
@@ -1737,7 +1760,7 @@ def test_dwi_finalize_wf_grad_dev_final_image_is_the_final_b0_reference(tmp_path
     assert ('t1_b0_ref', 'final_image') in edge['connect']
 
 
-def test_dwi_finalize_wf_grad_dev_sidecar_records_coefficient_basename_only(tmp_path, graddev_on):
+def test_dwi_finalize_wf_grad_dev_sidecar_records_coefficient_basename_only(tmp_path):
     """Test that the grad_dev sidecar never leaks the host path of the coefficient file."""
     wf = _finalize_wf_with_gradients(tmp_path)
 
@@ -1748,9 +1771,7 @@ def test_dwi_finalize_wf_grad_dev_sidecar_records_coefficient_basename_only(tmp_
     assert str(tmp_path) not in meta['GradientCoefficientFile']
 
 
-def test_dwi_finalize_wf_grad_dev_sidecar_records_the_orientation_approximation(
-    tmp_path, graddev_on
-):
+def test_dwi_finalize_wf_grad_dev_sidecar_records_the_orientation_approximation(tmp_path):
     """Test that the grad_dev sidecar records the orientation approximation.
 
     The L matrix is oriented by a transform TORTOISE re-derives internally,
@@ -1766,7 +1787,7 @@ def test_dwi_finalize_wf_grad_dev_sidecar_records_the_orientation_approximation(
     assert 'not by the coregistration transform' in note
 
 
-def test_dwi_finalize_wf_adds_gradient_warp_dimensions_to_the_main_sidecar(tmp_path, graddev_on):
+def test_dwi_finalize_wf_adds_gradient_warp_dimensions_to_the_main_sidecar(tmp_path):
     wf = _finalize_wf_with_gradients(tmp_path, image_type=['ORIGINAL', 'DIS3D'])
 
     merged_sidecar = wf.get_node('merged_sidecar')
@@ -1780,7 +1801,7 @@ def test_dwi_finalize_wf_main_sidecar_has_no_gradient_warp_dimensions_without_a_
     assert 'GradientWarpDimensions' not in merged_sidecar.inputs.sidecar_data
 
 
-def test_dwi_finalize_wf_grad_dev_sidecar_records_is_ge_as_a_boolean(tmp_path, graddev_on):
+def test_dwi_finalize_wf_grad_dev_sidecar_records_is_ge_as_a_boolean(tmp_path):
     """Test that the grad_dev sidecar records is_ge as a boolean.
 
     The flag resolved is whether TORTOISE's GE code path was taken.
@@ -1796,7 +1817,7 @@ def test_dwi_finalize_wf_grad_dev_sidecar_records_is_ge_as_a_boolean(tmp_path, g
     assert 'GradientCoefficientManufacturer' not in meta
 
 
-def test_dwi_finalize_wf_grad_dev_initial_image_is_the_first_b0(tmp_path, graddev_on):
+def test_dwi_finalize_wf_grad_dev_initial_image_is_the_first_b0(tmp_path):
     """Test that grad_dev's initial image is the first b=0.
 
     ``-i`` is the native-space counterpart of ``-f``, a b=0 in ACPC space.
@@ -1861,7 +1882,7 @@ def test_extract_first_b0_passes_an_already_3d_image_through(tmp_path):
     assert _extract_first_b0(str(path), [2]) == str(path)
 
 
-def test_dwi_finalize_wf_warns_when_graddev_will_not_be_written(tmp_path, caplog, graddev_on):
+def test_dwi_finalize_wf_warns_when_graddev_will_not_be_written(tmp_path, caplog):
     """Test that the finalize workflow warns when grad_dev will not be written.
 
     --distortion-group-merge writes its outputs from a workflow with no
@@ -1874,7 +1895,7 @@ def test_dwi_finalize_wf_warns_when_graddev_will_not_be_written(tmp_path, caplog
     assert 'distortion-group-merge' in caplog.text
 
 
-def test_dwi_finalize_wf_does_not_warn_when_graddev_is_written(tmp_path, caplog, graddev_on):
+def test_dwi_finalize_wf_does_not_warn_when_graddev_is_written(tmp_path, caplog):
     with caplog.at_level('WARNING', logger='nipype.workflow'):
         _finalize_wf_with_gradients(tmp_path, write_derivatives=True)
 
@@ -2475,23 +2496,3 @@ def test_eddy_boilerplate_states_modulation_for_the_jac_default():
         {'method': 'jac', 'flm': 'quadratic', 'slm': 'linear'}, 'epi', pepolar_method='topup'
     )
     assert 'Jacobian-modulated by eddy itself' in text
-
-
-def test_dwi_finalize_wf_does_not_write_grad_dev_by_default(tmp_path, monkeypatch, caplog):
-    monkeypatch.delenv('QSIPREP_WRITE_GRADDEV', raising=False)
-    wf = _finalize_wf_with_gradients(tmp_path)
-    assert wf.get_node('grad_dev') is None
-    assert wf.get_node('ds_grad_dev') is None
-
-    with caplog.at_level('WARNING', logger='nipype.workflow'):
-        _finalize_wf_with_gradients(tmp_path, write_derivatives=False)
-    assert 'graddev' not in caplog.text
-
-
-def test_dis3d_boilerplate_mentions_grad_dev_only_when_written(monkeypatch):
-    from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
-
-    monkeypatch.delenv('QSIPREP_WRITE_GRADDEV', raising=False)
-    assert 'deviation' not in gradwarp_boilerplate(None)
-    monkeypatch.setenv('QSIPREP_WRITE_GRADDEV', '1')
-    assert 'deviation' in gradwarp_boilerplate(None)

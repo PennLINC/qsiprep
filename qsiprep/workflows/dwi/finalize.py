@@ -26,7 +26,7 @@ from ...interfaces.bids import DerivativesMaybeDataSink, DerivativesSidecar
 from ...interfaces.dsi_studio import DSIStudioBTable
 from ...interfaces.dwi_merge import MergeFinalConfounds, SplitResampledDWIs
 from ...interfaces.gradients import ExtractB0s
-from ...interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
+from ...interfaces.gradunwarp import CreateGradientNonlinearityBMatrix, GradDevQC
 from ...interfaces.jacobian import pe_axis_from_direction
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
@@ -35,7 +35,7 @@ from ...utils.eddy_config import eddy_applies_gre
 from ...utils.jacobian_provenance import jacobian_provenance_for
 from ...utils.sdc import eddy_applies_topup, pe_readout_time, sdc_warp_source
 from .derivatives import init_dwi_derivatives_wf
-from .gradwarp import _write_graddev, resolve_gradwarp_plan
+from .gradwarp import resolve_gradwarp_plan
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
 from .resampling import init_dwi_trans_wf
 
@@ -472,7 +472,7 @@ def init_dwi_finalize_wf(
 
     # The workflow is done if we will be concatenating images later
     if not write_derivatives:
-        if gradwarp_plan is not None and _write_graddev():
+        if gradwarp_plan is not None:
             # write_derivatives is False only under --distortion-group-merge:
             # init_distortion_group_merge_wf writes the derivatives for this
             # output instead, and it has no grad_dev node. Say so rather than
@@ -595,7 +595,7 @@ def init_dwi_finalize_wf(
     # volume and has nowhere to put spatially varying information. So this is
     # produced whenever a gradwarp plan resolves, even for a DIS3D unit that
     # gets no spatial correction at all.
-    if gradwarp_plan is not None and _write_graddev():
+    if gradwarp_plan is not None:
         # CreateGradientNonlinearityBMatrix reads both -f and -i as 3D NIfTIs
         # (TORTOISE's main() calls readImageD<ImageType3D> for both). t1_b0_ref
         # is already a single reference volume (init_dwi_reference_wf's
@@ -669,6 +669,33 @@ def init_dwi_finalize_wf(
             (outputnode, grad_dev, [('t1_b0_ref', 'final_image')]),
             (grad_dev, ds_grad_dev, [('grad_dev', 'in_file')]),
         ])  # fmt:skip
+
+        graddev_qc = pe.Node(GradDevQC(), name='graddev_qc')
+        ds_graddev_qc = pe.Node(
+            DerivativesDataSink(
+                source_file=source_file,
+                base_directory=config.execution.output_dir,
+                desc='graddev',
+                suffix='qc',
+                extension='.tsv',
+            ),
+            name='ds_graddev_qc',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+        workflow.connect([
+            (grad_dev, graddev_qc, [('grad_dev', 'grad_dev')]),
+            (outputnode, graddev_qc, [('dwi_mask_t1', 'grad_dev_mask')]),
+            (graddev_qc, ds_graddev_qc, [('out_file', 'in_file')]),
+        ])  # fmt:skip
+        # A DIS3D unit has no applied field, so its table has no displacement row.
+        if gradwarp_plan.warp_dim is not None:
+            workflow.connect([
+                (inputnode, graddev_qc, [
+                    ('gradwarp_field', 'gradwarp_field'),
+                    ('dwi_mask', 'gradwarp_mask'),
+                ]),
+            ])  # fmt:skip
 
     workflow.connect([
         (inputnode, series_qc, [

@@ -238,7 +238,7 @@ read from its ``ImageType`` field; see :ref:`gradwarp_flags`.
    applies a z-origin shift to GE displacement fields that the standalone tool
    *QSIPrep* calls does not, so *QSIPrep* raises an error rather than place the
    field wrongly. Pass an ITK displacement field instead, or ``--ignore
-   gradwarp``.
+   gradwarp``. The gradient deviation map is unaffected.
 
 
 .. _preview_grouping:

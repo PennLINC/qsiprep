@@ -807,14 +807,12 @@ def test_trxscan_phasediff(data_dir, output_dir, working_dir):
 
 @pytest.mark.integration
 @pytest.mark.trxscan_gnl
-def test_trxscan_gnl(data_dir, output_dir, working_dir, monkeypatch):
+def test_trxscan_gnl(data_dir, output_dir, working_dir):
     """Score strong gradient nonlinearity with --gradient-file.
 
     The geometry is restored and the written gradient deviation matches the truth.
     """
     from qsiprep.tests.trxscan_fixtures import fixture_dir
-
-    monkeypatch.setenv('QSIPREP_WRITE_GRADDEV', '1')
 
     coeff = next(
         Path(fixture_dir('gnl', data_dir)).glob(

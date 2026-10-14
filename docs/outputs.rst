@@ -149,6 +149,11 @@ Present when the corresponding correction ran::
   <source_entities>_space-ACPC_desc-jacobian_dwimap.nii.gz
   <source_entities>_space-ACPC_desc-jacobian_dwimap.json
 
+  # The voxelwise gradient deviation, with --gradient-file
+  <source_entities>_space-ACPC_graddev.nii.gz
+  <source_entities>_space-ACPC_graddev.json
+  <source_entities>_desc-graddev_qc.tsv
+
 The displacement map shows the susceptibility correction on the output grid
 so it can be inspected and compared across methods and runs. At each voxel
 of the corrected image the vector points to where that tissue was in the
@@ -181,6 +186,31 @@ preprocessed series by the indexed weight reverses the multiplication at the
 point where it was applied, not the whole preprocessing, because bias
 correction runs after it. See :ref:`jacobian_methods` for which component
 modulates what.
+
+The gradient deviation map holds, as nine volumes in row-major order, the
+3x3 matrix ``L`` such that the gradient actually applied at a voxel is
+``L @ g`` for the nominal vector ``g``. It changes both direction and
+b-value, and downstream tools that accept a gradient deviation file (for
+example DSI Studio) can use it directly. Its orientation into ``ACPC`` space
+comes from a rigid registration TORTOISE estimates itself, recorded in the
+sidecar as ``GradientDeviationOrientation``, which is close to but not the
+same as the coregistration *QSIPrep* applied to the data. It is not written
+for outputs assembled by ``--distortion-group-merge``.
+
+``desc-graddev_qc.tsv`` summarizes the gradient nonlinearity inside the
+brain, one row per measure, with the number of voxels, the mean, the
+standard deviation, the 5th, 25th, 50th, 75th, 95th and 99th percentiles and
+the maximum:
+
+``displacement_mm``
+  The length of the gradient nonlinearity displacement *QSIPrep* applied, in
+  the brain mask of the corrected b=0 image. With ``DIS2D`` data or ``--force
+  gradwarp1D`` only the through-plane component is applied, so only it is
+  counted. ``DIS3D`` data get no spatial correction and no row.
+``rotation_deg``
+  The rotation angle of the gradient deviation matrix, in the ``ACPC`` brain
+  mask: the rotation left after the matrix's scaling and shear are removed,
+  which is how far the diffusion encoding is turned at that voxel.
 
 
 **********************

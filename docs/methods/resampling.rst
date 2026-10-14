@@ -153,7 +153,8 @@ resampled results are combined according to ``--distortion-group-merge``:
 concatenated along the fourth dimension (``concat``), averaged over images
 that sampled the same q-space coordinate (``average``), or left as separate
 outputs (``none``). The merged output gets its own report figures, QC table
-and sidecar. The Jacobian derivative is not written for merged outputs.
+and sidecar. The Jacobian and gradient deviation derivatives are not written
+for merged outputs.
 
 
 **********

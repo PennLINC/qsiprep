@@ -32,6 +32,11 @@ Three options that 26.1.0rc1 accepted are gone: `--dwidenoise2-config` is now
   resampling, Jacobian-modulated. A GRE fieldmap that also lists the series is the prior of
   the fit and is refined rather than replaced.
 
+* With `--gradient-file`, `desc-graddev_qc.tsv` gives the in-brain distribution of the applied
+  gradient nonlinearity displacement (`displacement_mm`) and of the rotation of the diffusion
+  encoding from the gradient deviation map (`rotation_deg`): mean, standard deviation,
+  percentiles and maximum.
+
 * `desc-image_qc.tsv` gains image-quality measures from
   [cs_dmri](https://cs-dmri.readthedocs.io) beside DSI Studio's, for both the raw and the
   preprocessed data: `ndc`, `ndc_masked`, `dwi_contrast_ratio`, `dwi_contrast_ratio_masked`,
@@ -46,7 +51,7 @@ Three options that 26.1.0rc1 accepted are gone: `--dwidenoise2-config` is now
   fixtures with [TRXScan](https://github.com/PennLINC/TRXScan) (`qsiprep/tests/trxscan_fixtures.py`)
   and score qsiprep's outputs against the simulator's ground truth
   (`qsiprep/tests/truth_scoring.py`): susceptibility displacement, corrected images,
-  coregistration against a recorded subject movement, and eddy's motion
+  coregistration against a recorded subject movement, gradient deviation, and eddy's motion
   parameters.
 
 * FSL BET is gone. Every brain extraction that used it — the fieldmap-magnitude mask of the

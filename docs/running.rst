@@ -117,7 +117,8 @@ take space-separated lists.
      - Concatenate series with differently oriented fields of view anyway.
        The distortion correction is then misapplied to some of them.
    * - ``gradwarp``
-     - No gradient nonlinearity correction.
+     - No gradient nonlinearity correction, including the gradient deviation
+       map.
    * - ``jacobian``
      - No Jacobian intensity modulation by *QSIPrep* itself. ``eddy``'s
        internal modulation is unaffected (see :ref:`jacobian_flags`).
@@ -377,10 +378,12 @@ axis instead.
 Gradient nonlinearity correction
 ================================
 
-``--gradient-file`` enables gradient nonlinearity correction, which undoes
-the spatial displacement of voxels; the accepted file formats are on the
-:ref:`data preparation <gradient_files>` page. How much correction a run
-gets is read from its ``ImageType`` field:
+``--gradient-file`` enables gradient nonlinearity correction; the accepted
+file formats are on the :ref:`data preparation <gradient_files>` page. Two
+things are corrected: the spatial displacement of voxels, and the diffusion
+encoding, which is written as a voxelwise gradient deviation map
+(``*_graddev.nii.gz``). How much spatial correction a run gets is read from
+its ``ImageType`` field:
 
 ===================  =======================================================
 ``ImageType`` tag    Behavior
@@ -392,7 +395,10 @@ gets is read from its ``ImageType`` field:
 ===================  =======================================================
 
 ``--force gradwarp3D`` or ``--force gradwarp1D`` overrides the tag for every
-run, and ``--ignore gradwarp`` disables the correction.
+run, and ``--ignore gradwarp`` disables both corrections. The deviation map
+is written for every run that is not ignored, ``DIS3D`` included, because
+no scanner corrects the encoding. It is not written for outputs assembled by
+``--distortion-group-merge``.
 
 
 .. _grouping_flags:
