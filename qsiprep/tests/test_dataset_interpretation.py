@@ -128,12 +128,20 @@ def test_phasediff_fixture_is_a_gre_estimation(data_dir):
 
 @pytest.mark.parametrize(('hmc', 'sdc'), [('eddy', 'topup'), ('tortoise', 'drbuddi')])
 def test_fieldmapless_fixture_takes_unpile_when_asked(data_dir, hmc, sdc):
-    """Test the fieldmap-less single series: SynB0 by default, unpile on request."""
+    """Test the fieldmap-less single series: uncorrected by default, SynB0 or unpile on request."""
     dataset, subject = _fixture(data_dir, 'fieldmapless')
     grouping, plan, units, concat, text = _plan(dataset, subject, hmc=hmc, sdc=sdc)
     assert not grouping.errors
     (unit,) = units
     assert [os.path.basename(f) for f in unit.dwi_files] == [f'sub-{subject}_dir-AP_dwi.nii.gz']
+    assert unit.estimation is None
+    assert 'no-sdc' in {issue.code for issue in plan.issues}
+
+    grouping, plan, units, concat, text = _plan(
+        dataset, subject, hmc=hmc, sdc=sdc, sdc_anat_reference='synb0'
+    )
+    assert not grouping.errors
+    (unit,) = units
     assert unit.estimation.method.value == 'synb0'
 
     grouping, plan, units, concat, text = _plan(
