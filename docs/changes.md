@@ -36,9 +36,10 @@
   `--sdc-fieldmapless-method {topup,syn,unpile}` picks the method and `--sdc-anat-reference
   {synb0,invt1w,t2w,none}` its image (SyN can now register to the synthetic b=0);
   `--use-syn-sdc` and `auto` are gone, and a T2w no longer selects a correction by itself.
-  After TORTOISE and SHORELine a second SynB0 pass runs by default, generating the synthetic
-  b=0 again from the b=0 the first field unwarped; `--force one-pass-sdc` skips it, and the
-  second GRE registration pass with it.
+  A second SynB0 pass runs by default with every head motion method, generating the
+  synthetic b=0 again from the b=0 the first field unwarped and running TOPUP again (before
+  `eddy`, from the best-scoring b=0 TOPUP received); `--force one-pass-sdc` skips it, and
+  the second GRE registration pass with it.
 
 * [unpile](https://unpile.readthedocs.io), an experimental fieldmap-less correction against
   an anatomical image, with every head motion method: `--sdc-fieldmapless-method unpile`

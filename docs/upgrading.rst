@@ -89,8 +89,8 @@ New options
   ``--sdc-anat-reference`` (``synb0``, ``invt1w``, ``t2w``, ``none``): the
   correction for series no fieldmap reaches, and ``--force
   sdc-anat-reference`` to use it for every series (:ref:`sdc_flags`).
-* ``--force one-pass-sdc``: drops the second pass of SynB0 + TOPUP after
-  TORTOISE or SHORELine and of GRE fieldmap registration.
+* ``--force one-pass-sdc``: drops the second pass of SynB0 + TOPUP (with
+  every head motion method) and of GRE fieldmap registration.
 * ``--gradient-file``, ``--force gradwarp1D``/``gradwarp3D``, ``--ignore
   gradwarp``: gradient nonlinearity correction (:ref:`gradwarp_flags`).
 * ``--ignore jacobian``: intensity modulation after distortion correction

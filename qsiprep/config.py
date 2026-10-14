@@ -589,7 +589,7 @@ class workflow(_Config):
     overrides the fieldmap application for every DWI series (derived from
     ``force`` by the parser)."""
     two_pass_sdc = True
-    """SynB0 + TOPUP after TORTOISE/SHORELine HMC runs a second SynB0 pass, and GRE
+    """SynB0 + TOPUP runs a second SynB0 pass with every head motion method, and GRE
     fieldmaps get a second registration pass; ``--force one-pass-sdc`` turns both off
     (derived from ``force`` by the parser)."""
     force_nocsf_synthstrip = False

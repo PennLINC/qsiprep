@@ -9,7 +9,7 @@ Implementing the FSL preprocessing workflow
 
 import os
 
-from nipype.interfaces import fsl
+from nipype.interfaces import ants, fsl
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
@@ -25,7 +25,7 @@ from ...interfaces.eddy import (
     Synb0TopupInputs,
     boilerplate_from_eddy_config,
 )
-from ...interfaces.fmap import ParallelTOPUP
+from ...interfaces.fmap import ModulateByWarpJacobian, ParallelTOPUP, TopupFieldToWarp
 from ...interfaces.gradients import ExtractB0s
 from ...interfaces.images import ConformDwi, IntraModalMerge, SplitDWIsFSL
 from ...interfaces.nilearn import EnhanceB0
@@ -459,7 +459,6 @@ def init_fsl_hmc_wf(
                 source_file=source_file,
             )
             synb0_wf = init_synb0_wf()
-            add_synb0_outputs(workflow, synb0_wf, source_file)
             synb0_topup_inputs = pe.Node(Synb0TopupInputs(), name='synb0_topup_inputs')
 
             # Scalar QC of the SynB0-driven field (halo/displacement checks)
@@ -475,13 +474,6 @@ def init_fsl_hmc_wf(
                 run_without_submitting=True,
                 mem_gb=DEFAULT_MEMORY_MIN_GB,
             )
-            workflow.connect([
-                (topup, synb0_field_qc, [('out_field', 'fieldmap')]),
-                (synb0_b0_ref_wf, synb0_field_qc, [('outputnode.dwi_mask', 'mask')]),
-                (synb0_topup_inputs, synb0_field_qc, [('topup_datain', 'datain')]),
-                (synb0_field_qc, ds_synb0_field_qc, [('qc_file', 'in_file')]),
-            ])  # fmt:skip
-
             workflow.connect([
                 (gather_inputs, synb0_b0_ref_wf, [
                     ('pre_topup_image', 'inputnode.b0_template'),
@@ -511,6 +503,95 @@ def init_fsl_hmc_wf(
                     ('topup_imain', 'in_file'),
                     ('topup_config', 'config'),
                 ]),
+            ])  # fmt:skip
+            if config.workflow.two_pass_sdc:
+                # The U-Net copies part of the b=0's distortion into the synthetic
+                # b=0, so TOPUP underestimates the field. The b=0 is unwarped with
+                # the first field (Jacobian-modulated), a new synthetic b=0 is
+                # generated from it, and TOPUP runs again on the original inputs
+                # paired with the new synthetic one; eddy consumes the second field.
+                field_to_warp_pass1 = pe.Node(TopupFieldToWarp(), name='synb0_field_to_warp')
+                unwarp_b0_pass1 = pe.Node(
+                    ants.ApplyTransforms(
+                        dimension=3, interpolation='LanczosWindowedSinc', float=True
+                    ),
+                    name='synb0_unwarp_b0',
+                )
+                modulate_pass1 = pe.Node(ModulateByWarpJacobian(), name='synb0_modulate_b0')
+                synb0_b0_ref_wf_pass2 = init_dwi_reference_wf(
+                    gen_report=False,
+                    desc='b0_for_synb0',
+                    name='synb0_b0_ref_wf_pass2',
+                    source_file=source_file,
+                )
+                synb0_wf_pass2 = init_synb0_wf(name='synb0_wf_pass2')
+                synb0_topup_inputs_pass2 = pe.Node(
+                    Synb0TopupInputs(), name='synb0_topup_inputs_pass2'
+                )
+                topup_pass2 = pe.Node(
+                    ParallelTOPUP(out_field='fieldmap_HZ.nii.gz', scale=1, nthreads=omp_nthreads),
+                    name='topup_pass2',
+                    n_procs=omp_nthreads,
+                )
+                workflow.connect([
+                    (topup, field_to_warp_pass1, [('out_field', 'fieldmap')]),
+                    (synb0_topup_inputs, field_to_warp_pass1, [('topup_datain', 'datain')]),
+                    (gather_inputs, field_to_warp_pass1, [('pre_topup_image', 'reference')]),
+                    (gather_inputs, unwarp_b0_pass1, [
+                        ('pre_topup_image', 'input_image'),
+                        ('pre_topup_image', 'reference_image'),
+                    ]),
+                    (field_to_warp_pass1, unwarp_b0_pass1, [('out_warp', 'transforms')]),
+                    (unwarp_b0_pass1, modulate_pass1, [('output_image', 'in_file')]),
+                    (field_to_warp_pass1, modulate_pass1, [
+                        ('out_warp', 'warp'),
+                        ('pe_axis', 'pe_axis'),
+                    ]),
+                    (modulate_pass1, synb0_b0_ref_wf_pass2, [
+                        ('out_file', 'inputnode.b0_template'),
+                    ]),
+                    (inputnode, synb0_wf_pass2, [
+                        ('t1_preproc', 'inputnode.t1_preproc'),
+                        ('t1_brain', 'inputnode.t1_brain'),
+                        ('t1_seg', 'inputnode.t1_seg'),
+                        ('to_template_affine_transform',
+                         'inputnode.to_template_affine_transform'),
+                        ('acpc_inv_transform', 'inputnode.acpc_inv_transform'),
+                        ('dwi_sampling_grid', 'inputnode.output_grid'),
+                    ]),
+                    (synb0_b0_ref_wf_pass2, synb0_wf_pass2, [
+                        ('outputnode.ref_image', 'inputnode.b0_ref'),
+                        ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
+                    ]),
+                    (gather_inputs, synb0_topup_inputs_pass2, [
+                        ('topup_datain', 'topup_datain'),
+                        ('topup_imain', 'topup_imain'),
+                    ]),
+                    (synb0_wf_pass2, synb0_topup_inputs_pass2, [
+                        ('outputnode.synthetic_b0', 'synthetic_b0'),
+                    ]),
+                    (synb0_topup_inputs_pass2, topup_pass2, [
+                        ('topup_datain', 'encoding_file'),
+                        ('topup_imain', 'in_file'),
+                        ('topup_config', 'config'),
+                    ]),
+                ])  # fmt:skip
+                topup = topup_pass2
+                synb0_wf = synb0_wf_pass2
+                synb0_b0_ref_wf = synb0_b0_ref_wf_pass2
+                synb0_topup_inputs = synb0_topup_inputs_pass2
+                workflow.__desc__ += (
+                    ' The b=0 was then unwarped with that field (Jacobian-modulated), a new '
+                    'synthetic b=0 was generated from it, and TOPUP was run again on the '
+                    'acquired b=0 images paired with the new synthetic b=0.'
+                )
+            # The derivatives and the field QC describe the last pass.
+            add_synb0_outputs(workflow, synb0_wf, source_file)
+            workflow.connect([
+                (topup, synb0_field_qc, [('out_field', 'fieldmap')]),
+                (synb0_b0_ref_wf, synb0_field_qc, [('outputnode.dwi_mask', 'mask')]),
+                (synb0_topup_inputs, synb0_field_qc, [('topup_datain', 'datain')]),
+                (synb0_field_qc, ds_synb0_field_qc, [('qc_file', 'in_file')]),
             ])  # fmt:skip
         else:
             workflow.connect([

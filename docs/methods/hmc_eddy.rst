@@ -90,8 +90,11 @@ comparison, and is deprecated.
 
 **SynB0.** With ``--sdc-anat-reference synb0``, the synthetic distortion-free
 b=0 (see :ref:`sdc_synb0`) joins the TOPUP inputs as a volume with zero
-readout time, and ``eddy`` uses the resulting field like any other. This
-needs ``topup`` in ``--sdc-method``.
+readout time, and ``eddy`` uses the resulting field like any other. By default
+the best-scoring b=0 is then unwarped with that field, a new synthetic b=0 is
+generated from it, and TOPUP runs again before ``eddy``; ``--force
+one-pass-sdc`` skips this second pass. This needs ``topup`` in
+``--sdc-method``.
 
 **SyN.** With ``--sdc-anat-reference invt1w``, the SyN correction is
 estimated and applied on ``eddy``'s outputs.

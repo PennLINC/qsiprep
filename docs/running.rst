@@ -133,11 +133,11 @@ take space-separated lists.
      - Use the fieldmap-less correction for every DWI series, instead of only
        for series no fieldmap reaches.
    * - ``one-pass-sdc``
-     - Drop the second pass that SynB0 + TOPUP after TORTOISE or SHORELine (a
-       new synthetic b=0 from the b=0 the first field unwarped) and GRE fieldmap
-       registration (the magnitude registered again to the b=0 the first field
-       unwarped, keeping the better-scoring pass) run by default. Faster, less
-       accurate.
+     - Drop the second pass that SynB0 + TOPUP (a new synthetic b=0 from the
+       b=0 the first field unwarped, then TOPUP again, with every head motion
+       method) and GRE fieldmap registration (the magnitude registered again to
+       the b=0 the first field unwarped, keeping the better-scoring pass) run by
+       default. Faster, less accurate.
    * - ``gradwarp3D`` / ``gradwarp1D``
      - Apply the full 3D, or only the through-plane, gradient nonlinearity
        correction to every run regardless of ``ImageType``. Mutually

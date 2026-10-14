@@ -174,6 +174,51 @@ def test_fsl_hmc_synb0_feeds_topup(tmp_path):
     assert wf.get_node('ds_report_synb0_unet') is not None
 
 
+def test_fsl_hmc_synb0_second_pass_feeds_eddy(tmp_path):
+    """Test that the SynB0 second pass regenerates the synthetic b=0 and feeds eddy."""
+    _cfg(sdc_method='topup')
+    from qsiprep.workflows.dwi.fsl import init_fsl_hmc_wf
+
+    saved = config.workflow.two_pass_sdc
+    try:
+        config.workflow.two_pass_sdc = True
+        wf = init_fsl_hmc_wf(_synb0_unit(tmp_path), source_file=SRC, t2w_sdc=False)
+        for name in (
+            'synb0_field_to_warp',
+            'synb0_unwarp_b0',
+            'synb0_modulate_b0',
+            'synb0_b0_ref_wf_pass2',
+            'synb0_wf_pass2',
+            'synb0_topup_inputs_pass2',
+            'topup_pass2',
+        ):
+            assert wf.get_node(name) is not None, name
+        eddy = wf.get_node('eddy')
+        assert wf._graph.get_edge_data(wf.get_node('topup'), eddy) is None
+        edge = wf._graph.get_edge_data(wf.get_node('topup_pass2'), eddy)
+        assert ('out_field', 'field') in edge['connect']
+        # The second synthesis starts from the first pass's unwarped, modulated b=0...
+        edge = wf._graph.get_edge_data(
+            wf.get_node('synb0_modulate_b0'), wf.get_node('synb0_b0_ref_wf_pass2')
+        )
+        assert ('out_file', 'inputnode.b0_template') in edge['connect']
+        # ...while the second TOPUP still pairs the acquired b=0 images with it.
+        edge = wf._graph.get_edge_data(
+            wf.get_node('gather_inputs'), wf.get_node('synb0_topup_inputs_pass2')
+        )
+        assert ('topup_imain', 'topup_imain') in edge['connect']
+        assert 'TOPUP was run again' in wf.__desc__
+
+        config.workflow.two_pass_sdc = False
+        wf = init_fsl_hmc_wf(_synb0_unit(tmp_path), source_file=SRC, t2w_sdc=False)
+        assert wf.get_node('topup_pass2') is None
+        edge = wf._graph.get_edge_data(wf.get_node('topup'), wf.get_node('eddy'))
+        assert ('out_field', 'field') in edge['connect']
+        assert 'TOPUP was run again' not in wf.__desc__
+    finally:
+        config.workflow.two_pass_sdc = saved
+
+
 def test_synb0_reportlet_descs_are_registered_in_the_report_spec():
     """Test that the SynB0 reportlet descs are registered in the report spec.
 

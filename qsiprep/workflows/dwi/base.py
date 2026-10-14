@@ -13,6 +13,7 @@ from nipype.interfaces import utility as niu
 from nipype.interfaces.base import isdefined
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
+from qsiplan.models import CorrectionMethod
 
 from ... import config
 from ...interfaces import DerivativesDataSink, DerivativesMaybeDataSink
@@ -408,15 +409,14 @@ def init_dwi_preproc_wf(
     doing_drbuddi = unit.run.stage_with('drbuddi') is not None
     doing_unpile = unit.run.stage_with('unpile') is not None
     if not config.workflow.two_pass_sdc and not (
-        (doing_topup and not eddy_applies_topup(unit))
+        (doing_topup and (not eddy_applies_topup(unit) or unit.method is CorrectionMethod.SYNB0))
         or unit.is_gre
         or unit.gre_init_estimation is not None
         or (doing_unpile and unit.run.stage_with('unpile').structural_target == 'synb0')
     ):
         config.loggers.workflow.warning(
-            '--force one-pass-sdc changes nothing for %s: it applies to SynB0 + TOPUP '
-            'after TORTOISE or SHORELine head motion correction, to unpile against a '
-            'SynB0, and to GRE fieldmap registration.',
+            '--force one-pass-sdc changes nothing for %s: it applies to SynB0 + TOPUP, '
+            'to unpile against a SynB0, and to GRE fieldmap registration.',
             source_file,
         )
     if unit.is_gre or unit.is_nipreps_syn or doing_topup or doing_unpile:

@@ -213,12 +213,14 @@ orientation, and its field becomes a displacement along the phase encoding
 axis that is applied at the final resampling.
 
 The U-Net carries part of the distortion of the b=0 it is given into the
-synthetic image, so the field TOPUP finds is weaker than the true one. After
-DIFFPREP or SHORELine a second pass unwarps the b=0 with the first field (with
+synthetic image, so the field TOPUP finds is weaker than the true one. A second
+pass, with every head motion method, unwarps the b=0 with the first field (with
 Jacobian modulation), generates a new synthetic b=0 from it, and runs TOPUP
-again on the original b=0 and the new synthetic one. On four real subjects this
-pass lowered the error against a reverse phase-encoded reference in every one;
-``--force one-pass-sdc`` skips it.
+again on the original b=0 and the new synthetic one; before ``eddy`` the b=0 is
+the best-scoring one TOPUP received. On four real subjects this pass lowered the
+error against a reverse phase-encoded reference in every one, and on the
+simulated fixture with ``eddy`` it raised the recovered fraction of the field
+from 0.36 to 0.63; ``--force one-pass-sdc`` skips it.
 
 The report shows the acquired and synthetic b=0 as a flicker pair, and the
 correction TOPUP estimated from them. Requires a T1w (``--anat-modality
