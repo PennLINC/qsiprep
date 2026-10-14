@@ -2,7 +2,7 @@
 
 ## 26.1.0 (October 14, 2026)
 
-26.1.0 is the final release after 26.1.0rc1, whose changes are listed below it. Many command-line
+26.1.0 is the official release after 26.1.0rc1. Many command-line
 options were renamed or removed since 26.0.0, and `--distortion-group-merge` now defaults to
 `concat`: read {doc}`upgrading` before reusing a 26.0 command line.
 Three options that 26.1.0rc1 accepted are gone: `--dwidenoise2-config` is now
