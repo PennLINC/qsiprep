@@ -93,7 +93,11 @@ Three options that 26.1.0rc1 accepted are gone: `--dwidenoise2-config` is now
   (scalp, receive bias, Gibbs ringing) the registration error against the simulated
   fieldmap offset drops from 4.9 to 0.2 degrees, the field correlation with the truth rises
   from 0.925 to 0.955, and eddy's spurious motion on a static object from 0.33 to 0.002 mm.
-  Under `--sloppy` the registration is one three-level rigid with random sampling.
+  Under `--sloppy` the registration is a translation stage followed by a rigid one, both on a
+  regular sampling grid. A single rigid stage on randomly sampled points landed several
+  degrees off, and occasionally more than 30, in a few percent of repeated runs, because
+  multithreaded ANTs does not repeat a random sample even with a fixed seed. The same
+  settings serve the `--sloppy` T2w-to-b=0 registration of unpile and DRBUDDI.
 
 * DRBUDDI's T2w was placed where TORTOISE's own rigid registration to the distorted b=0 put
   it, and that registration started from the `antsAI` rotation search alone, which can land
