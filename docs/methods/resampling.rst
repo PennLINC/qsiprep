@@ -53,7 +53,7 @@ orientations (three Euler angles at 20 degree spacing, up to 81 degrees per
 axis) on 4 mm resamples of the two images, refines each briefly, and hands
 the best one to ``antsRegistration`` as the starting transform. The same
 search initializes the T2w-to-T1w registration in the anatomical workflow
-and the alignment of a T2w into the b=0 frame before DRBUDDI and T2Wreg.
+and the alignment of a T2w into the b=0 frame before DRBUDDI and unpile.
 
 With ``--anat-modality none`` the reference is registered to the template
 instead, with a similarity transform in the rotation search since the scale

@@ -588,6 +588,10 @@ class workflow(_Config):
     """``--force sdc-anat-reference`` was given: the anatomical SDC reference
     overrides the fieldmap application for every DWI series (derived from
     ``force`` by the parser)."""
+    two_pass_sdc = True
+    """SynB0 + TOPUP after TORTOISE/SHORELine HMC runs a second SynB0 pass, and GRE
+    fieldmaps get a second registration pass; ``--force one-pass-sdc`` turns both off
+    (derived from ``force`` by the parser)."""
     force_nocsf_synthstrip = False
     """``--force no-csf-synthstrip`` was given: the nonlinear registration to the
     anatomical template uses a SynthStrip ``--no-csf`` mask as its moving-image
@@ -622,11 +626,12 @@ class workflow(_Config):
     """Skip re-scaling dwi scans to have matching b=0 intensities."""
     output_resolution = None
     """Isotropic voxel size for outputs."""
-    sdc_anat_reference = 'none'
-    """Which anatomical-derived image serves as the reference for fieldmap-less
-    susceptibility distortion correction, as a fallback for DWI series no
-    fieldmap reaches: ``none`` (default), ``auto``, ``synb0``, ``t2w`` or
-    ``invt1w``."""
+    sdc_anat_reference = 'synb0'
+    """Which anatomical-derived image the fieldmap-less correction uses:
+    ``synb0`` (default), ``invt1w``, ``t2w`` or ``none`` (fieldmap-less SDC off)."""
+    sdc_fieldmapless_method = 'topup'
+    """Which correction handles DWI series no fieldmap reaches: ``topup`` (SynB0 +
+    TOPUP, the default), ``syn`` or ``unpile``."""
     sdc_method = None
     """Which tool corrects susceptibility distortion for PEPOLAR data:
     topup, drbuddi or topup+drbuddi (the parser resolves ``auto``)."""

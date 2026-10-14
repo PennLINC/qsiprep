@@ -178,14 +178,14 @@ These should be addressed incrementally. When fixing code that triggers these ru
 
 ### Truth-Scored Tests (TRXScan Fixtures)
 
-The integration matrix is ten `trxscan_*` markers in `qsiprep/tests/test_cli.py`. Each one
+The integration matrix is eleven `trxscan_*` markers in `qsiprep/tests/test_cli.py`. Each one
 preprocesses a small dataset simulated by [TRXScan](https://github.com/PennLINC/TRXScan) and
 scores the derivatives against the simulator's ground truth. There are no smoke tests on real
 data; a code path is covered by a unit test or a workflow-construction test, and gets a
 truth-scored run only when it changes what the pipeline estimates.
 
 **Fixtures.** `qsiprep/tests/trxscan_fixtures.py` holds `RECIPES` (one `trxscan-fixture`
-invocation each: `rpe`, `epi`, `phasediff`, `gnl`, `motion`, `t2wreg`, `offsets`) and
+invocation each: `rpe`, `epi`, `phasediff`, `gnl`, `motion`, `fieldmapless`, `offsets`) and
 `TRXSCAN_VERSION`. `.circleci/trxscan_fixtures.txt` is generated from them with
 `python -m qsiprep.tests.trxscan_fixtures --spec > .circleci/trxscan_fixtures.txt`; CI diffs
 the two and uses the file's checksum as the fixture cache key, so a version bump or a recipe
@@ -216,9 +216,10 @@ truth (`truth_scoring.read_itk_transform`, `rigid_error`). Registrations between
 image and the EPI reference are scored against `from-fmap_to-dwi_..._desc-truth_xfm.txt`, the
 rigid the recipe applied to the fieldmap.
 
-**Known fixture limits.** The simulated EPI has no skull, so any step that registers a real
-T2w to the b=0 (DRBUDDI's structural rigid, T2Wreg) is harder on the fixture than on real
-data; the T2w SDC paths are therefore tested with blip-only metrics under `--sloppy`. The GRE
+**Known fixture limits.** The simulated EPI has no skull unless the recipe asks for the head
+(`head=True`, TRXScan 0.3.0; the `fieldmapless` fixture does), so a step that registers a real
+T2w to a skull-free b=0 (DRBUDDI's structural rigid) is harder on those fixtures than on real
+data; the DRBUDDI T2w path is therefore tested with blip-only metrics under `--sloppy`. The GRE
 magnitude is realistic from TRXScan 0.2.1 (proton density, receive bias, Gibbs ringing, scalp
 and neck from the T1w); before that it was a flat head that registered to the truth whatever
 the settings and hid the `fmap2ref` defects fixed in #1179. When a result looks too good on a

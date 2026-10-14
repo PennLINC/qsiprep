@@ -106,6 +106,7 @@ def test_fieldmap_coreg_reportlet_is_its_own_node(monkeypatch):
     from qsiprep.workflows.fieldmap.unwarp import init_sdc_unwarp_wf
 
     monkeypatch.setenv('FSLDIR', '/opt/fsl')
+    monkeypatch.setattr(config.workflow, 'two_pass_sdc', True)
     config.nipype.omp_nthreads = 1
     config.execution.sloppy = False
     wf = init_sdc_unwarp_wf(name='sdc_unwarp_report')

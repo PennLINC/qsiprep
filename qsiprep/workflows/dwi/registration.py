@@ -15,6 +15,9 @@ from ...data import load as load_data
 from ...interfaces.images import ExtractWM, ReferenceGridAtSpacing
 from ...interfaces.itk import ACPCReport, AffineToRigid
 
+# Slack added around a brain mask before it restricts a structural -> b=0 rigid
+FIXED_MASK_MARGIN_MM = 10.0
+
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
@@ -106,22 +109,25 @@ def init_rotation_search_wf(transform='Rigid', name='rotation_search_wf'):
     return workflow
 
 
-def init_structural_to_b0_alignment_wf(name='structural_to_b0_alignment_wf'):
+def init_structural_to_b0_alignment_wf(name='structural_to_b0_alignment_wf', masked=False):
     """Pre-align a structural image into the frame of a distorted b=0 reference.
 
-    TORTOISE rigidly registers its structural input to the b=0 internally
-    (DRBUDDI, and EPIREG for DIFFPREP's ``--epi T2Wreg`` mode), but only from
-    a center-of-mass initialization, which cannot recover a large rotation
-    between the anatomical and the dMRI acquisition, and it does not refine a
-    coarse start all the way. An ``antsAI`` rotation search provides the
-    capture range and a masked rigid ``antsRegistration`` started from it
-    provides the accuracy; TORTOISE receives the structural resampled into
-    the b=0 frame through that transform.
+    DRBUDDI rigidly registers its structural input to the b=0 internally, but
+    only from a center-of-mass initialization, which cannot recover a large
+    rotation between the anatomical and the dMRI acquisition, and it does not
+    refine a coarse start all the way; unpile refines a rigid pose of its T2w
+    reference jointly with the field, within the capture range of its start. An
+    ``antsAI`` rotation search provides the capture range and a rigid
+    ``antsRegistration`` started from it provides the accuracy; both receive
+    the structural resampled into the b=0 frame through that transform.
 
     Parameters
     ----------
     name : str, optional
         Name of workflow (default: ``structural_to_b0_alignment_wf``)
+    masked : bool, optional
+        Restrict the rigid registration to ``b0_mask``, dilated by
+        ``FIXED_MASK_MARGIN_MM`` (default: False, no mask)
 
     Inputs
     ------
@@ -130,7 +136,7 @@ def init_structural_to_b0_alignment_wf(name='structural_to_b0_alignment_wf'):
     b0_ref
         b=0 reference image in the frame the distortion correction runs in
     b0_mask
-        Brain mask of ``b0_ref``, the fixed-image mask of the rigid registration (optional)
+        Brain mask of ``b0_ref`` (used only when ``masked``)
 
     Outputs
     -------
@@ -174,6 +180,20 @@ def init_structural_to_b0_alignment_wf(name='structural_to_b0_alignment_wf'):
         name='resample_structural',
     )
 
+    if masked:
+        # A mask clipped to the brain blinds the metric to the skull and scalp, so the
+        # full-head structural can slide along the phase-encoding axis while the in-brain
+        # histogram still matches; the margin keeps the head boundary in the metric.
+        dilate_mask = pe.Node(
+            niu.Function(function=_dilate_mask_mm, output_names=['out_file']),
+            name='dilate_mask',
+        )
+        dilate_mask.inputs.margin_mm = FIXED_MASK_MARGIN_MM
+        workflow.connect([
+            (inputnode, dilate_mask, [('b0_mask', 'in_file')]),
+            (dilate_mask, refine_alignment, [('out_file', 'fixed_image_masks')]),
+        ])  # fmt:skip
+
     workflow.connect([
         (inputnode, rotation_search_wf, [
             ('b0_ref', 'inputnode.fixed_image'),
@@ -186,7 +206,6 @@ def init_structural_to_b0_alignment_wf(name='structural_to_b0_alignment_wf'):
         (inputnode, refine_alignment, [
             ('b0_ref', 'fixed_image'),
             ('structural_image', 'moving_image'),
-            ('b0_mask', 'fixed_image_masks'),
         ]),
         (rotation_search_wf, refine_alignment, [
             ('outputnode.initial_transform', 'initial_moving_transform'),
@@ -484,3 +503,21 @@ def init_direct_b0_acpc_wf(write_report=True, name='b0_anat_coreg'):
 
 def _format_masks(mask_file):
     return ['NULL', mask_file]
+
+
+def _dilate_mask_mm(in_file, margin_mm):
+    """Dilate a binary mask by about ``margin_mm`` millimetres on its own grid."""
+    from pathlib import Path
+
+    import nibabel as nb
+    import numpy as np
+    from scipy import ndimage
+
+    img = nb.load(in_file)
+    iterations = max(1, int(np.ceil(margin_mm / min(img.header.get_zooms()[:3]))))
+    dilated = ndimage.binary_dilation(np.asanyarray(img.dataobj) > 0, iterations=iterations)
+    out_file = str(Path.cwd() / 'dilated_mask.nii.gz')
+    out = nb.Nifti1Image(dilated.astype('uint8'), img.affine, img.header)
+    out.set_data_dtype('uint8')
+    out.to_filename(out_file)
+    return out_file

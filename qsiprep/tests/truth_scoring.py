@@ -27,9 +27,10 @@ from scipy.ndimage import map_coordinates
 
 LPS = np.diag([-1.0, -1.0, 1.0])
 
-#: the node whose output transform resamples a GRE fieldmap onto the b=0 reference
-#: (:func:`qsiprep.workflows.fieldmap.unwarp.init_sdc_unwarp_wf`), as ``<node>/<glob>``
-FMAP2REF_XFM = 'guard_refinement/guarded_*.h5'
+#: the nodes whose output transform resamples a GRE fieldmap onto the b=0 reference
+#: (:func:`qsiprep.workflows.fieldmap.unwarp.init_sdc_unwarp_wf`), as ``<node>/<glob>``:
+#: the guarded pick of the two passes, else the single registration (``--force one-pass-sdc``)
+FMAP2REF_XFMS = ('guard_refinement/guarded_*.h5', 'fmap2ref_reg/*Composite.h5')
 
 
 # ─── transforms ─────────────────────────────────────────────────────────────
@@ -117,13 +118,13 @@ def rigid_error(estimate, truth, center=(0.0, 0.0, 0.0)):
     """
     import SimpleITK as sitk
 
-    est, tru = _as_transform(estimate), _as_transform(truth)
+    est, ref = _as_transform(estimate), _as_transform(truth)
     # a CompositeTransform applies the last-added transform first: truth^-1, then estimate
-    residual = sitk.CompositeTransform([est, tru.GetInverse()])
+    residual = sitk.CompositeTransform([est, ref.GetInverse()])
     rot = _point_map(residual)[:3, :3]
     ang = float(np.degrees(np.arccos(np.clip((np.trace(rot) - 1) / 2, -1, 1))))
     c = tuple(float(v) for v in center)
-    shift = np.array(est.TransformPoint(c)) - np.array(tru.TransformPoint(c))
+    shift = np.array(est.TransformPoint(c)) - np.array(ref.TransformPoint(c))
     return {'rotation_deg': ang, 'translation_mm': float(np.linalg.norm(shift))}
 
 
@@ -295,7 +296,11 @@ def score_run(bids_root, output_dir, series=None, work_dir=None):
     fmap_truth = _find(
         [bids / 'derivatives' / 'trxscan' / sub], '**/fmap/*from-fmap_to-dwi*desc-truth_xfm.txt'
     )
-    fmap_xfm = _find([work_dir], f'**/sdc_unwarp_wf/{FMAP2REF_XFM}') if work_dir else None
+    fmap_xfm = None
+    for pattern in FMAP2REF_XFMS if work_dir else ():
+        fmap_xfm = _find([work_dir], f'**/sdc_unwarp_wf/{pattern}')
+        if fmap_xfm is not None:
+            break
     if fmap_truth is not None and fmap_xfm is not None:
         raw_centre = LPS @ (
             raw_img.affine[:3, :3] @ (np.array(raw_img.shape[:3]) / 2) + raw_img.affine[:3, 3]

@@ -4,20 +4,22 @@ Pure functions over the method selection and collected subject data - no
 config reads - shared by workflow construction and its tests.
 """
 
-from qsiplan.methods import HmcMethod, SdcTool
+from qsiplan.methods import SdcTool
 
 
-def t2w_sdc_enabled(selection):
+def t2w_sdc_enabled(selection, policy):
     """Check whether the selected methods have a stage that can consume a T2w for SDC.
 
     DRBUDDI's multimodal ``--structural`` is reached whenever DRBUDDI is among
-    the PEPOLAR tools; DIFFPREP's ``--epi T2Wreg`` covers the fieldmap-less
-    case and is not gated on the PEPOLAR tool choice.
+    the PEPOLAR tools, with any head motion method; the fieldmap-less unpile fit
+    takes the T2w when ``--sdc-anat-reference t2w`` selects it.
     """
-    return SdcTool.DRBUDDI in selection.pepolar_tools or selection.hmc is HmcMethod.TORTOISE
+    return SdcTool.DRBUDDI in selection.pepolar_tools or (
+        policy.fieldmapless_method == 'unpile' and policy.sdc_anat_reference == 't2w'
+    )
 
 
-def t2w_available_for_sdc(subject_data, selection, anat_modality):
+def t2w_available_for_sdc(subject_data, selection, policy, anat_modality):
     """Check whether a T2w should drive susceptibility distortion correction.
 
     True only when the subject has a T2w, anatomical processing runs
@@ -29,7 +31,11 @@ def t2w_available_for_sdc(subject_data, selection, anat_modality):
     sync with this). Requesting T2w-based SDC without it leaves those nodes
     with an empty input.
     """
-    return bool(subject_data.get('t2w')) and anat_modality != 'none' and t2w_sdc_enabled(selection)
+    return (
+        bool(subject_data.get('t2w'))
+        and anat_modality != 'none'
+        and t2w_sdc_enabled(selection, policy)
+    )
 
 
 def pe_readout_time(unit):
@@ -55,41 +61,32 @@ def pe_readout_time(unit):
     return float(trt) if trt is not None else None
 
 
-def t2wreg_target(unit, t2w_sdc):
-    """Get the structural target of DIFFPREP's T2Wreg stage.
+def eddy_applies_topup(unit):
+    """Whether eddy applies a TOPUP field in its own resampling.
 
-    Mirrors ``use_t2wreg`` in :mod:`qsiprep.workflows.dwi.diffprep`. SynB0 units
-    carry the T2Wreg stage without being T2WREG estimations, so the stage decides.
+    Under eddy, TOPUP's field is baked into eddy's output. After DIFFPREP,
+    TOPUP (SynB0) produces a warp that is composed into the final resampling
+    like DRBUDDI's.
 
     Parameters
     ----------
     unit : qsiplan.adapters.PreprocUnit
         The correction unit.
-    t2w_sdc : bool
-        Whether a T2w is available for SDC (honors --anat-modality and --ignore).
 
     Returns
     -------
-    str or None
-        ``'synb0'`` or ``'t2w'``, or None when T2Wreg does not run.
+    bool
     """
-    stage = unit.run.stage_with('t2wreg')
-    if stage is None:
-        return None
-    if stage.structural_target == 'synb0':
-        return 'synb0'
-    return 't2w' if t2w_sdc else None
+    return unit.run.stage_with('topup') is not None and unit.run.hmc_stage.tool == 'eddy'
 
 
-def sdc_warp_source(unit, t2w_sdc, gre_in_eddy=False):
+def sdc_warp_source(unit, gre_in_eddy=False):
     """Decide where a unit's SDC displacement map comes from.
 
     Parameters
     ----------
     unit : qsiplan.adapters.PreprocUnit
         The correction unit.
-    t2w_sdc : bool
-        Whether a T2w is available for SDC.
     gre_in_eddy : bool, optional
         Whether eddy applied the unit's GRE fieldmap itself
         (:func:`~qsiprep.utils.eddy_config.eddy_applies_gre`).
@@ -98,14 +95,13 @@ def sdc_warp_source(unit, t2w_sdc, gre_in_eddy=False):
     -------
     source : str or None
         ``'fieldwarp'`` when the method wrote a standalone warp (DRBUDDI, GRE, SyN,
-        T2Wreg); ``'topup'`` when the warp is rebuilt from TOPUP's field, which
+        unpile); ``'topup'`` when the warp is rebuilt from TOPUP's field, which
         eddy applied internally; ``'gre_in_eddy'`` when it is rebuilt the same way
         from a GRE fieldmap eddy applied; ``'topup+drbuddi'`` when DRBUDDI refined a
         TOPUP-corrected series, so its warp is only the residual; None without SDC.
     estimation_method : str or None
         The sidecar's ``EstimationMethod``.
     """
-    target = t2wreg_target(unit, t2w_sdc)
     topup = unit.run.stage_with('topup')
     readout_time = pe_readout_time(unit)
     if unit.run.stage_with('drbuddi') is not None:
@@ -120,10 +116,20 @@ def sdc_warp_source(unit, t2w_sdc, gre_in_eddy=False):
         if readout_time is not None:
             return 'gre_in_eddy', 'GRE fieldmap'
         return None, None
-    if unit.is_nipreps_syn:
-        return 'fieldwarp', 'SyN (fieldmap-less)'
-    if target is not None:
-        return 'fieldwarp', 'TORTOISE T2Wreg (SynB0)' if target == 'synb0' else 'TORTOISE T2Wreg'
+    syn = unit.run.stage_with('syn')
+    if syn is not None:
+        return (
+            'fieldwarp',
+            'SyN (SynB0)' if syn.structural_target == 'synb0' else 'SyN (fieldmap-less)',
+        )
+    unpile = unit.run.stage_with('unpile')
+    if unpile is not None:
+        return (
+            'fieldwarp',
+            'unpile (SynB0)' if unpile.structural_target == 'synb0' else 'unpile (T2w)',
+        )
+    if topup is not None and not eddy_applies_topup(unit):
+        return 'fieldwarp', 'TOPUP (SynB0)'
     if topup is not None and readout_time is not None:
         return 'topup', 'TOPUP (SynB0)' if topup.structural_target == 'synb0' else 'TOPUP'
     return None, None

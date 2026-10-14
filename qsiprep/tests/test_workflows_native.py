@@ -194,19 +194,19 @@ def test_synb0_reportlet_descs_are_registered_in_the_report_spec():
     assert {'synb0acquired', 'synb0unet'} <= descs
 
 
-def test_fsl_hmc_synb0_without_topup_is_uncorrected(tmp_path):
-    """Test that a SynB0 unit without a TOPUP stage is processed without SDC.
+def test_fsl_hmc_synb0_runs_topup_whatever_the_pepolar_tool(tmp_path):
+    """Test that SynB0 under eddy runs TOPUP even with --sdc-method drbuddi.
 
-    With no TOPUP stage in the plan (DRBUDDI-only eddy), nothing consumes
-    the synthetic b=0 and the series is processed without SDC.
+    --sdc-method picks the PEPOLAR tools; the fieldmap-less SynB0 + TOPUP
+    correction does not depend on it.
     """
     _cfg(sdc_method='drbuddi')
     from qsiprep.workflows.dwi.fsl import init_fsl_hmc_wf
 
     wf = init_fsl_hmc_wf(_synb0_unit(tmp_path), source_file=SRC, t2w_sdc=False)
-    assert wf.get_node('topup') is None
-    assert wf.get_node('synb0_wf') is None
-    assert wf.get_node('outputnode').inputs.sdc_method == 'None'
+    assert wf.get_node('topup') is not None
+    assert wf.get_node('synb0_wf') is not None
+    assert wf.get_node('outputnode').inputs.sdc_method == 'TOPUP (SynB0)'
 
 
 def test_subject_summary_renders_native_groupings():
@@ -387,7 +387,7 @@ def test_dwi_preproc_wf_records_gradwarp_applied(tmp_path, monkeypatch):
             source_file=src,
             anatomical_template='MNI152NLin2009cAsym',
         )
-        assert jacobian_provenance_for(unit, t2w_sdc=False) == (['gradwarp'], [], None)
+        assert jacobian_provenance_for(unit) == (['gradwarp'], [], None)
     finally:
         config.workflow.gradient_file = None
 

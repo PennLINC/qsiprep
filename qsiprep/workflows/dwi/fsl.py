@@ -33,7 +33,7 @@ from ...interfaces.reports import TopupSummary
 from ...interfaces.synb0 import Synb0FieldQC
 from ...utils.eddy_config import eddy_applies_gre, eddy_modulates_distortion, load_eddy_args
 from ...utils.gpu import gpu_enabled
-from ..fieldmap.base import init_gre_seed_wf, init_sdc_wf
+from ..fieldmap.base import SDC_ANAT_CONNECTIONS, init_gre_seed_wf, init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf, seeds_from_gre
 from ..fieldmap.synb0 import init_synb0_wf
 from .gradwarp import (
@@ -342,6 +342,8 @@ def init_fsl_hmc_wf(
         fieldmap_type = unit.gre_suffix
     elif unit.is_nipreps_syn:
         fieldmap_type = 'syn'
+    elif unit.is_unpile:
+        fieldmap_type = 'unpile'
     elif unit.method is CorrectionMethod.SYNB0:
         fieldmap_type = 'synb0'
     else:
@@ -360,9 +362,8 @@ def init_fsl_hmc_wf(
     # ``jacobian_provenance.jacobian_provenance_for`` mirrors this condition
     # from ``unit`` alone, so nothing is recorded here.
     if fieldmap_type == 'synb0' and not run_topup:
-        # The plan gave this unit no TOPUP stage (e.g. --sdc-method drbuddi):
-        # nothing on the eddy path consumes the synthetic b=0, so the series
-        # stays uncorrected.
+        # The plan gave this unit no TOPUP stage: nothing on the eddy path
+        # consumes the synthetic b=0, so the series stays uncorrected.
         fieldmap_type = ''
     workflow.__desc__ = boilerplate_from_eddy_config(
         eddy_args,
@@ -649,7 +650,7 @@ def init_fsl_hmc_wf(
 
         return workflow
 
-    if unit.is_gre or unit.is_nipreps_syn:
+    if unit.is_gre or unit.is_nipreps_syn or unit.is_unpile:
         config.loggers.workflow.info(f'Computing fieldmap directly from {fieldmap_type}')
         outputnode.inputs.sdc_method = fieldmap_type
 
@@ -661,6 +662,7 @@ def init_fsl_hmc_wf(
             unit,
             gradwarp=has_gradwarp and not gre_to_eddy,
             use='eddy' if gre_to_eddy else 'apply',
+            source_file=source_file,
         )
 
         if gre_to_eddy:
@@ -681,10 +683,7 @@ def init_fsl_hmc_wf(
                     ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
                     ('outputnode.dwi_mask', 'inputnode.b0_mask'),
                 ]),
-                (inputnode, b0_sdc_wf, [
-                    ('t1_brain', 'inputnode.t1_brain'),
-                    ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-                ]),
+                (inputnode, b0_sdc_wf, SDC_ANAT_CONNECTIONS),
                 # Hand eddy the fieldmap in Hz (its --field convention matches
                 # FUGUE, so no sign flip) plus the field->eddy rigid transform.
                 # The field sits on the pre-eddy reference's grid, so that distorted
@@ -737,10 +736,7 @@ def init_fsl_hmc_wf(
                 ])  # fmt:skip
 
             workflow.connect([
-                (inputnode, b0_sdc_wf, [
-                    ('t1_brain', 'inputnode.t1_brain'),
-                    ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-                ]),
+                (inputnode, b0_sdc_wf, SDC_ANAT_CONNECTIONS),
                 # These deformations will be applied later, use the unwarped image now
                 (b0_sdc_wf, outputnode, [
                     ('outputnode.out_warp', 'to_dwi_ref_warps'),

@@ -7,8 +7,9 @@ as metric masks 0.5-0.8 deg. The production settings' Affine stage absorbed the 
 as a 6-12 % scale plus a 4-5 deg tilt, so it is Rigid now.
 
 What a rigid cannot absorb it splits: registering the undistorted magnitude to the distorted
-b=0 leaves a shift along the phase-encoding axis. The second pass registers to the reference
-unwarped with the first pass's field, and the field is applied through it.
+b=0 leaves a shift along the phase-encoding axis. A second pass (the default; ``--force
+one-pass-sdc`` drops it) registers to the reference unwarped with the first pass's field,
+and the better-scoring pass's transform carries the field.
 """
 
 import json
@@ -32,19 +33,32 @@ def _sources(wf, node_name):
     return out
 
 
-@pytest.fixture
-def unwarp_wf(monkeypatch):
+def _build(monkeypatch, two_pass):
     from qsiprep import config
     from qsiprep.workflows.fieldmap.unwarp import init_sdc_unwarp_wf
 
     monkeypatch.setenv('FSLDIR', '/opt/fsl')
+    monkeypatch.setattr(config.workflow, 'two_pass_sdc', two_pass)
     config.nipype.omp_nthreads = 1
     config.execution.sloppy = False
     return init_sdc_unwarp_wf(name='unwarp')
 
 
-def test_fmap2ref_registers_to_the_whole_head_reference(unwarp_wf):
-    conns = _sources(unwarp_wf, 'fmap2ref_reg')
+@pytest.fixture
+def unwarp_wf(monkeypatch):
+    """Build the default two-pass registration."""
+    return _build(monkeypatch, two_pass=True)
+
+
+@pytest.fixture
+def single_pass_wf(monkeypatch):
+    """Build the single registration of ``--force one-pass-sdc``."""
+    return _build(monkeypatch, two_pass=False)
+
+
+@pytest.mark.parametrize('wf_name', ['unwarp_wf', 'single_pass_wf'])
+def test_fmap2ref_registers_to_the_whole_head_reference(request, wf_name):
+    conns = _sources(request.getfixturevalue(wf_name), 'fmap2ref_reg')
     assert conns['fixed_image'] == ('inputnode', 'in_reference')
     assert conns['fixed_image_masks'] == ('inputnode', 'in_mask')
     assert conns['moving_image_masks'] == ('inputnode', 'fmap_mask')
@@ -113,6 +127,30 @@ def test_outputs_come_from_the_chosen_pass(unwarp_wf):
     assert _sources(unwarp_wf, 'fmap_fov2ref_apply')['transforms'] == (
         'guard_refinement',
         'out_transform',
+    )
+
+
+def test_single_pass_outputs_come_from_the_first_registration(single_pass_wf):
+    names = set(single_pass_wf.list_node_names())
+    assert not {'fmap2ref_reg2', 'choose_pass', 'guard_refinement', 'sim_pass1'} & {
+        name.split('.')[0] for name in names
+    }
+    out = _sources(single_pass_wf, 'outputnode')
+    assert out['out_hz'] == ('fmap_apply_pass1_wf', 'outputnode.out_hz')
+    assert out['out_warp'] == ('fmap_apply_pass1_wf', 'outputnode.out_warp')
+    assert out['out_reference'] == ('apply_fov_mask', 'out_file')
+    assert _sources(single_pass_wf, 'apply_fov_mask')['in_file'] == (
+        'fmap_apply_pass1_wf',
+        'outputnode.out_reference',
+    )
+    for node in ('fmap_fov2ref_apply', 'fmap_ref2ref'):
+        assert _sources(single_pass_wf, node)['transforms'] == (
+            'fmap2ref_reg',
+            'composite_transform',
+        )
+    assert _sources(single_pass_wf, 'ds_report_vsm')['in_file'] == (
+        'fmap_apply_pass1_wf',
+        'outputnode.out_report',
     )
 
 

@@ -21,7 +21,7 @@ from ...interfaces.reports import DiffusionSummary
 from ...interfaces.utils import TestInput
 from ...utils.eddy_config import eddy_applies_gre
 from ...utils.misc import DWI2ANAT_DOF_TO_TRANSFORM
-from ...utils.sdc import t2wreg_target
+from ...utils.sdc import eddy_applies_topup
 from ..fieldmap.pepolar import init_extended_pepolar_report_wf
 
 # dwi workflows
@@ -284,10 +284,9 @@ def init_dwi_preproc_wf(
 
     elif hmc_tool == 'tortoise':
         # TORTOISE DIFFPREP performs its own SDC internally (DRBUDDI for reverse-PE,
-        # TORTOISE T2Wreg for the fieldmap-less-with-T2w case, or qsiprep's
-        # init_sdc_wf for GRE/phase/SyN) -- exactly as init_fsl_hmc_wf owns
-        # its SDC. So no fieldmap guard here; the branching lives inside
-        # init_diffprep_hmc_wf.
+        # SynB0 + TOPUP after DIFFPREP, or qsiprep's init_sdc_wf for
+        # GRE/phase/SyN/unpile) -- exactly as init_fsl_hmc_wf owns its SDC. So no
+        # fieldmap guard here; the branching lives inside init_diffprep_hmc_wf.
         hmc_wf = init_diffprep_hmc_wf(
             unit=unit,
             source_file=source_file,
@@ -407,13 +406,25 @@ def init_dwi_preproc_wf(
     # considerably more detailed reports.
     doing_topup = unit.run.stage_with('topup') is not None
     doing_drbuddi = unit.run.stage_with('drbuddi') is not None
-    t2wreg_to = t2wreg_target(unit, t2w_sdc)
-    if unit.is_gre or unit.is_nipreps_syn or doing_topup or t2wreg_to:
+    doing_unpile = unit.run.stage_with('unpile') is not None
+    if not config.workflow.two_pass_sdc and not (
+        (doing_topup and not eddy_applies_topup(unit))
+        or unit.is_gre
+        or unit.gre_init_estimation is not None
+        or (doing_unpile and unit.run.stage_with('unpile').structural_target == 'synb0')
+    ):
+        config.loggers.workflow.warning(
+            '--force one-pass-sdc changes nothing for %s: it applies to SynB0 + TOPUP '
+            'after TORTOISE or SHORELine head motion correction, to unpile against a '
+            'SynB0, and to GRE fieldmap registration.',
+            source_file,
+        )
+    if unit.is_gre or unit.is_nipreps_syn or doing_topup or doing_unpile:
         fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
         ds_report_sdc = pe.Node(
             DerivativesDataSink(
                 datatype='figures',
-                desc='sdcT2w' if t2wreg_to == 't2w' else 'sdc',
+                desc='sdc',
                 suffix='dwi',
                 source_file=source_file,
             ),
@@ -434,7 +445,7 @@ def init_dwi_preproc_wf(
             (fmap_unwarp_report_wf, ds_report_sdc, [('outputnode.report', 'in_file')]),
         ])  # fmt:skip
 
-    if doing_topup or eddy_applies_gre(unit):
+    if eddy_applies_topup(unit) or eddy_applies_gre(unit):
         workflow.connect([(hmc_wf, outputnode, [('outputnode.fieldmap_hz', 'fieldmap_hz')])])
 
     if hmc_tool == 'tortoise':

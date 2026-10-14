@@ -262,15 +262,17 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
         cohort = cohort_by_months(anatomical_template, age)
         anatomical_template = f'{anatomical_template}+{cohort}'
 
-    # The methods this run selected: the axis every routing decision reads.
+    # The methods this run selected: the axis every routing decision reads, and
+    # the grouping policy, which names the fieldmap-less correction.
     selection = method_selection_from_config()
+    policy = policy_from_namespace(config.workflow)
 
     # The anatomical workflow only builds its T2w branch -- and therefore only
     # produces ``t2w_unfatsat`` -- when asked for additional T2ws. Keep this in
     # sync with utils.sdc.t2w_available_for_sdc, which decides whether the consumers of
     # that output get switched on.
     additional_t2ws = 0
-    if t2w_sdc_enabled(selection) and subject_data['t2w']:
+    if t2w_sdc_enabled(selection, policy) and subject_data['t2w']:
         additional_t2ws = len(subject_data['t2w'])
 
     # Inspect the dwi data and provide advice on pipeline choices
@@ -725,7 +727,9 @@ to workflows in *QSIPrep*'s documentation]\
         naming_name = output_fname if merged_here else final_output_name
         source_file = get_source_file(list(unit.dwi_files), naming_name, suffix='_dwi')
         output_wfname = output_fname.replace('-', '_')
-        t2w_sdc = t2w_available_for_sdc(subject_data, selection, config.workflow.anat_modality)
+        t2w_sdc = t2w_available_for_sdc(
+            subject_data, selection, policy, config.workflow.anat_modality
+        )
         do_biascorr = biascorr_by_output[final_output_name]
         dwi_preproc_wf = init_dwi_preproc_wf(
             unit=unit,
@@ -752,7 +756,7 @@ to workflows in *QSIPrep*'s documentation]\
         )
         # The SDC displacement maps name, in their sidecars, the written transforms
         # that carried the correction from the DWI frame into ACPC.
-        warp_source, _ = sdc_warp_source(unit, t2w_sdc, gre_in_eddy=eddy_applies_gre(unit))
+        warp_source, _ = sdc_warp_source(unit, gre_in_eddy=eddy_applies_gre(unit))
         names_sdc_transforms = write_derivatives and warp_source is not None
 
         workflow.connect([

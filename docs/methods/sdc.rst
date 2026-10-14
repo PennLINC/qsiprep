@@ -20,12 +20,14 @@ worked.
 Echo-planar images are stretched and compressed along the phase encoding
 axis where the magnetic field is inhomogeneous. Correcting this needs an
 estimate of the field, which can come from a fieldmap, from images acquired
-with opposite phase encoding, or from registration to an undistorted
-anatomical image. *QSIPrep* decides which one a series gets from the
-metadata (see :ref:`linking_fieldmaps`), prefers reverse phase encoding over
-a GRE fieldmap when both are linked, and uses an anatomical reference only
-as a fallback unless ``--force sdc-anat-reference`` is given. The tool that
-applies the estimate depends on the head motion backend:
+with opposite phase encoding, or from an undistorted image made from the
+anatomy. *QSIPrep* decides which one a series gets from the metadata (see
+:ref:`linking_fieldmaps`), prefers reverse phase encoding over a GRE fieldmap
+when both are linked, and corrects a series no fieldmap reaches with a
+fieldmap-less method: SynB0 + TOPUP by default (``--sdc-fieldmapless-method``,
+``--sdc-anat-reference``; ``--force sdc-anat-reference`` uses it for every
+series). The tool that applies the estimate depends on the head motion
+backend:
 
 .. list-table::
    :header-rows: 1
@@ -43,18 +45,18 @@ applies the estimate depends on the head motion backend:
      - Inside ``eddy``
      - Applied after DIFFPREP
      - Applied after SHORELine
-   * - Synthetic b=0 (``synb0``)
+   * - Synthetic b=0 (default: ``topup`` with ``synb0``)
      - TOPUP, inside ``eddy``
-     - T2Wreg
-     - Not available
-   * - T2w (``t2w``)
-     - Not available
-     - T2Wreg
-     - Not available
-   * - Inverted T1w (``invt1w``)
+     - TOPUP after DIFFPREP
+     - TOPUP after SHORELine
+   * - Synthetic b=0 or inverted T1w (``syn``)
      - SyN
      - SyN
      - SyN
+   * - Synthetic b=0 or T2w (``unpile``)
+     - unpile after ``eddy``
+     - unpile after DIFFPREP
+     - unpile after SHORELine
 
 The correction that ran is named in the visual report, in the methods
 boilerplate, and in the ``EstimationMethod`` of the displacement map
@@ -136,13 +138,13 @@ A phase-difference or two-phase fieldmap is unwrapped with ROMEO
 converted to a field in Hz :footcite:p:`jezzard1995`; a Hz fieldmap is
 masked, median-filtered and extrapolated beyond the brain mask (the distorted
 EPI brain reaches past the undistorted fieldmap brain, where the field is
-strongest). The magnitude image is rigidly registered to the
-b=0 reference in two passes: the first against the distorted reference, the
-second against the reference unwarped with the field the first pass brought
-in, since a rigid fit to a distorted image is pulled along the phase encoding
-axis. The field is resampled through the second transform, turned into a
-displacement along the phase encoding axis using the series'
-``TotalReadoutTime`` and applied with ANTs
+strongest). The magnitude image is rigidly registered to the distorted b=0
+reference. A rigid fit to a distorted image is pulled along the phase encoding
+axis, so a second registration follows against the reference unwarped with the
+field the first brought in, and whichever pass scores better on its own unwarped
+reference is kept (``--force one-pass-sdc`` skips the second pass). The field is resampled
+through the transform, turned into a displacement along the phase encoding
+axis using the series' ``TotalReadoutTime`` and applied with ANTs
 (:func:`qsiprep.workflows.fieldmap.unwarp.init_sdc_unwarp_wf`).
 Since 26.1 none of this needs FSL, so GRE fieldmaps work in the FSL-free
 image as well.
@@ -163,24 +165,30 @@ reference is computed for coregistration.
 
 .. _sdc_gre_init:
 
-Initializing DRBUDDI and T2Wreg from a GRE fieldmap
-===================================================
+Starting DRBUDDI and unpile from a GRE fieldmap
+===============================================
 
 Registration-based correction infers the field by matching images, which is
 ambiguous where the field piles several voxels' signal into one or drops it
 out. A GRE fieldmap measures the field directly. So when a series is
-corrected by DRBUDDI or T2Wreg and a GRE fieldmap also lists it, the
-GRE-derived warp is the registration's starting point: for DRBUDDI, the
-initial transform of the primary direction and, negated, of the reverse
-direction; for T2Wreg, the initial transform. The initial warp is held fixed
-through the registration's multi-resolution pyramid, so each stage estimates
-a residual correction on top of it rather than smoothing it away.
+corrected by DRBUDDI and a GRE fieldmap also lists it, the GRE-derived warp
+is the registration's starting point: the initial transform of the primary
+direction and, negated, of the reverse direction, held fixed through the
+registration's multi-resolution pyramid so that each stage estimates a
+residual correction on top of it rather than smoothing it away. When the
+series is corrected by unpile against the T2w (:ref:`sdc_unpile`), the GRE
+field in Hz is the prior of the fit: unpile keeps it and refines its position
+against the b=0. Its shim-polynomial and residual terms are not used: on the
+simulated fieldmap fixture each lowered the amplitude of a well-registered
+field. Against the synthetic b=0 the fieldmap is applied as given, since the
+synthetic image carries part of the distortion and refining against it pulls
+the field toward that bias.
 
 This happens whenever the linkage is present, on every backend that runs
-DRBUDDI (except when DRBUDDI only refines TOPUP) and on T2Wreg when the
-anatomical reference is forced. How to set up the sidecars is in
+DRBUDDI (except when DRBUDDI only refines TOPUP) and on unpile when it is
+forced over the GRE fieldmap. How to set up the sidecars is in
 :ref:`gre_init_flags`. The report's distortion correction entry ends in
-``(GRE-initialized)`` and the boilerplate describes the initialization.
+``(GRE-initialized)`` or ``(GRE-refined)`` and the boilerplate describes it.
 
 
 .. _sdc_synb0:
@@ -189,16 +197,33 @@ anatomical reference is forced. How to set up the sidecars is in
 SynB0
 *****
 
-:func:`qsiprep.workflows.fieldmap.synb0.init_synb0_wf`
+:func:`qsiprep.workflows.fieldmap.synb0.init_synb0_wf`,
+:func:`qsiprep.workflows.fieldmap.synb0.init_synb0_topup_wf`
 
-With ``--sdc-anat-reference synb0``, a synthetic distortion-free b=0 image is
+The default fieldmap-less correction. A synthetic distortion-free b=0 image is
 generated from the T1w and the distorted b=0 with the SynB0-DISCO U-Net
-:footcite:p:`synb0disco`. The synthetic image then stands in for a reverse
-phase-encoded acquisition: with ``eddy`` it joins the TOPUP inputs as a
-volume with zero readout time, and with DIFFPREP it is the T2Wreg target.
+:footcite:p:`synb0disco` and stands in for a reverse phase-encoded
+acquisition: TOPUP pairs it, as a volume with zero readout time, with the
+acquired b=0. With ``eddy`` it joins the TOPUP inputs before ``eddy``. With
+DIFFPREP and SHORELine, TOPUP runs after head motion correction, on the
+motion-corrected b=0 average and a synthetic b=0 generated from that same
+image, so the two share their noise and contrast. TOPUP runs in FSL's LAS+
+orientation, and its field becomes a displacement along the phase encoding
+axis that is applied at the final resampling.
+
+The U-Net carries part of the distortion of the b=0 it is given into the
+synthetic image, so the field TOPUP finds is weaker than the true one. After
+DIFFPREP or SHORELine a second pass unwarps the b=0 with the first field (with
+Jacobian modulation), generates a new synthetic b=0 from it, and runs TOPUP
+again on the original b=0 and the new synthetic one. On four real subjects this
+pass lowered the error against a reverse phase-encoded reference in every one;
+``--force one-pass-sdc`` skips it.
+
 The report shows the acquired and synthetic b=0 as a flicker pair, and the
-correction that TOPUP or T2Wreg estimated from them. Requires a T1w and a
-``PhaseEncodingDirection`` on the DWI series.
+correction TOPUP estimated from them. Requires a T1w (``--anat-modality
+T1w``) and a ``PhaseEncodingDirection`` and ``TotalReadoutTime`` on the DWI
+series; a series without them is an error unless ``--sdc-anat-reference
+none`` is given.
 
 .. raw:: html
 
@@ -225,23 +250,49 @@ encoding direction and SynB0 as the reference.
     acquisition, with the largest displacements in the same places.
 
 
-.. _sdc_t2wreg:
+.. _sdc_unpile:
 
 ******
-T2Wreg
+unpile
 ******
 
-TORTOISE's T2Wreg (``--epi T2Wreg`` in DIFFPREP) nonlinearly registers the
-b=0 to the subject's T2w image, or to the synthetic b=0 above, in the same
-run as head motion correction. The T2w is placed in the b=0 frame first, as
-with DRBUDDI: an ``antsAI`` rotation search, then a masked rigid
-``antsRegistration`` to the b=0 (to the GRE-unwarped b=0 when a GRE fieldmap
-seeds the correction, :ref:`sdc_gre_init`). T2Wreg then uses the T2w at that
-pose (``--DRBUDDI_disable_initial_rigid``) rather than re-registering it,
-since its own rigid registration to the distorted b=0 is biased by the
-distortion. It is only available with ``--hmc-method tortoise``. Its
-correction is applied without Jacobian modulation, as in TORTOISE;
-``--force jacobian`` modulates it anyway.
+:func:`qsiprep.workflows.fieldmap.unpile.init_unpile_sdc_wf`
+
+Selected with ``--sdc-fieldmapless-method unpile``, with every head motion
+method. `unpile <https://unpile.readthedocs.io>`__ :footcite:p:`unpile`
+estimates the field from the motion-corrected b=0 and an undistorted
+reference with a model of the EPI readout: the reference is displaced along
+the phase-encoding axis the way the readout displaces it, signal pile-up
+included, and the field that makes it match the b=0 is fitted on a
+coarse-to-fine B-spline grid with a bending-energy penalty. The reference is
+the synthetic b=0 above (``--sdc-anat-reference synb0``), compared by the sum
+of squared differences with a fitted gain, or the subject's T2w (``t2w``),
+compared by local normalized cross-correlation. The field is converted to a
+displacement field, Jacobian-modulated like the other corrections, and
+applied in the final resampling.
+
+With the T2w, the image is placed in the b=0 frame first, as for DRBUDDI: an
+``antsAI`` rotation search, then a masked rigid ``antsRegistration`` to the
+b=0. unpile then fits a rigid refinement of that position together with the
+field, so a placement biased by the distortion is corrected rather than
+inherited. The fit runs on a grid at about two thirds of the EPI voxel (no
+finer than 1.5 mm), which keeps the detail of the T2w that the metric needs;
+the field is brought back onto the EPI grid afterwards. With the synthetic
+b=0, a second pass regenerates the synthetic image from the b=0 the first
+field unwarped, as SynB0 + TOPUP does; ``--force one-pass-sdc`` skips it. A
+GRE fieldmap that also lists the series is the prior of the fit
+(:ref:`sdc_gre_init`). The fit's settings and scores are written as the
+``desc-unpile_qc.json`` derivative, and the fitted position of the T2w as an
+ITK transform in the working directory.
+
+.. workflow::
+    :graph2use: orig
+    :simple_form: yes
+
+    from qsiprep_docs import example_unit
+    from qsiprep.workflows.fieldmap.unpile import init_unpile_sdc_wf
+
+    wf = init_unpile_sdc_wf(example_unit('single'), target='synb0')
 
 
 .. _sdc_syn:
@@ -252,12 +303,13 @@ SyN
 
 :func:`qsiprep.workflows.fieldmap.syn.init_syn_sdc_wf`
 
-With ``--sdc-anat-reference invt1w``, the fieldmap-less method from
+With ``--sdc-fieldmapless-method syn``, the fieldmap-less method from
 fMRIPrep :footcite:p:`fieldmapless1,fieldmapless2` registers the b=0 to
-the T1w with its intensity inverted, with the deformation constrained to the
-phase encoding axis and regularized by an average fieldmap template
-:footcite:p:`fieldmapless3`. It runs after any head motion backend and is
-never selected by ``auto``.
+the T1w with its intensity inverted (``--sdc-anat-reference invt1w``) or to
+the synthetic b=0 above (``synb0``, no inversion needed), with the
+deformation constrained to the phase encoding axis and regularized by an
+average fieldmap template :footcite:p:`fieldmapless3`. It runs after any
+head motion backend.
 
 
 .. _jacobian_methods:
@@ -272,7 +324,8 @@ the acquisition compressed stay too bright :footcite:p:`rohde2004`.
 *QSIPrep* follows TORTOISE's two implementations. **Jacobian**: each volume
 is multiplied by the derivative of the composed displacement along the phase
 encoding axis, used when only one phase encoding polarity was acquired (GRE
-and SyN fieldmaps, and single-polarity DIFFPREP runs). **LSR**: when both
+and SyN fieldmaps, unpile, SynB0 + TOPUP after DIFFPREP or SHORELine, and
+single-polarity DIFFPREP runs). **LSR**: when both
 polarities exist, DRBUDDI computes the harmonic mean of the two corrected
 b=0 images and each direction's volumes are scaled by the ratio of that
 reference to their own corrected b=0; this replaces the Jacobian entirely.
@@ -284,11 +337,11 @@ would corrupt the signal.
 Correction                     Modulated by
 ============================== ==========================================
 Gradient nonlinearity          *QSIPrep* (Jacobian; not under LSR)
-Susceptibility (TOPUP)         ``eddy``, internally
+Susceptibility (TOPUP)         ``eddy`` before ``eddy``, else *QSIPrep*
 Susceptibility (DRBUDDI)       *QSIPrep* (LSR)
 Susceptibility (GRE)           ``eddy`` on its path, else *QSIPrep*
 Susceptibility (SyN)           *QSIPrep* (Jacobian)
-Susceptibility (T2Wreg)        none, unless ``--force jacobian``
+Susceptibility (unpile)        *QSIPrep* (Jacobian)
 Eddy current (``eddy``)        ``eddy``, internally
 Eddy current (DIFFPREP)        *QSIPrep* (Jacobian; not under LSR)
 ============================== ==========================================

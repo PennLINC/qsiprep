@@ -16,19 +16,39 @@
   from 0.925 to 0.955, and eddy's spurious motion on a static object from 0.33 to 0.002 mm.
   Under `--sloppy` the registration is one three-level rigid with random sampling.
 
-* T2Wreg used the T2w where TORTOISE's own rigid registration to the distorted b=0 put it, and
-  that registration started from the `antsAI` rotation search alone, which can land several
-  degrees off. The T2w (or synthetic b=0) is now refined with a masked rigid `antsRegistration`
-  against the b=0 — the GRE-unwarped b=0 when a GRE fieldmap seeds the correction — and
-  DIFFPREP is told to use it at that pose (`--DRBUDDI_disable_initial_rigid`, re-enabled in
-  the TORTOISE build qsiprep ships). DRBUDDI's T2w starts from the same refined placement.
+* DRBUDDI's T2w was placed where TORTOISE's own rigid registration to the distorted b=0 put
+  it, and that registration started from the `antsAI` rotation search alone, which can land
+  several degrees off. The T2w is now refined with a masked rigid `antsRegistration` against
+  the b=0 and DIFFPREP is told to use it at that pose (`--DRBUDDI_disable_initial_rigid`,
+  re-enabled in the TORTOISE build qsiprep ships).
 
 * `--sloppy` TORTOISE runs used stage schedules whose smoothing sigmas and pyramid factors
   are in voxels of TORTOISE's ~1 mm grid, so on the coarser sloppy grid they smoothed the
-  field 2.5 times too much and recovered about half of it. The sloppy DRBUDDI and T2Wreg
-  schedules are now TORTOISE's defaults rescaled to the sloppy grid with fewer iterations.
+  field 2.5 times too much and recovered about half of it. The sloppy DRBUDDI schedule is
+  now TORTOISE's default rescaled to the sloppy grid with fewer iterations.
 
 ### 🎉 Exciting New Features
+
+* SynB0 + TOPUP is the default correction for DWI series that no fieldmap reaches, with
+  every head motion method; after DIFFPREP and SHORELine, TOPUP runs on the motion-corrected
+  b=0 and a synthetic b=0 generated from it, in FSL's LAS+ orientation.
+  `--sdc-fieldmapless-method {topup,syn,unpile}` picks the method and `--sdc-anat-reference
+  {synb0,invt1w,t2w,none}` its image (SyN can now register to the synthetic b=0); `auto` is
+  gone and a T2w no longer selects a correction by itself.
+  After TORTOISE and SHORELine a second SynB0 pass runs by default, generating the synthetic
+  b=0 again from the b=0 the first field unwarped; `--force one-pass-sdc` skips it, and the
+  second GRE registration pass with it.
+
+* [unpile](https://unpile.readthedocs.io) replaces TORTOISE's T2Wreg as the fieldmap-less
+  correction against an anatomical image, with every head motion method:
+  `--sdc-fieldmapless-method unpile` fits the susceptibility field by matching the
+  motion-corrected b=0 to the subject's T2w (`--sdc-anat-reference t2w`, with a rigid
+  refinement of the T2w position fitted jointly, on a grid at two thirds of the EPI voxel) or
+  to the synthetic b=0 (`synb0`, two passes like SynB0 + TOPUP) with a model of the EPI
+  readout, and the field is applied at the final resampling, Jacobian-modulated. A GRE
+  fieldmap that also lists the series is the prior of the fit and is refined rather than
+  replaced. T2Wreg, the TORTOISE EPI stage it replaces, is gone, together with
+  `--force jacobian` (its field was the only unmodulated one) and the `sdcT2w` reportlet.
 
 * Truth-scored integration tests on simulated data: the `trxscan_*` CI jobs generate
   fixtures with [TRXScan](https://github.com/PennLINC/TRXScan) (`qsiprep/tests/trxscan_fixtures.py`)
@@ -58,12 +78,11 @@
 * The integration matrix is the truth-scored TRXScan runs only. The sixteen end-to-end
   runs on Box-hosted data (tinytensor, DSDTI, DSCSDSI, forrest_gump, maternal_brain_project,
   twoses, csdsi) only checked that files were written; the two reverse-PE ones took 45-50
-  minutes each. DIFFPREP and its T2Wreg EPI correction gained truth-scored runs of their own
-  (`trxscan_diffprep`, `trxscan_t2wreg`), and T2Wreg seeded by a GRE fieldmap has one
-  (`trxscan_gre_t2wreg`), which also scores the fieldmap-to-EPI registration.
-* Under `--sloppy`, DIFFPREP's T2Wreg (EPIREG) stage runs on the 2.5 mm grid DRBUDDI already
-  uses; the interface never passed `--epi_working_res`, and the stage took over an hour on a
-  1 mm T2w.
+  minutes each. DIFFPREP gained a truth-scored run of its own (`trxscan_diffprep`), unpile
+  against the T2w has one (`trxscan_unpile`), and unpile refining a GRE fieldmap has one
+  (`trxscan_gre_unpile`), which also scores the fieldmap-to-EPI registration. The
+  fieldmap-less fixture now simulates the non-brain head (TRXScan 0.3.0), so the T2w has the
+  scalp and eyes to match against.
 
 ### 🐛 Bug Fixes
 

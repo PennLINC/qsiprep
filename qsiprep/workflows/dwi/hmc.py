@@ -193,7 +193,7 @@ def init_dwi_hmc_wf(
     workflow.__postdesc__ = (
         'Model-generated images were transformed into alignment with each '
         'b>0 image. Both slicewise and whole-brain QC measures (cross '
-        'correlation and R^2) were calculated.'
+        'correlation and R^2) were calculated.\n'
     )
     workflow.connect([
         (b0_hmc_wf, dwi_model_hmc_wf, [

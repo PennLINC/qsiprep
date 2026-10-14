@@ -96,8 +96,8 @@ FAQ
 
 **My GRE fieldmap shows up as "also eligible" and is not applied.**
   The series is also linked to a reverse phase-encoded correction, which
-  *QSIPrep* prefers. The GRE fieldmap is not wasted: it initializes DRBUDDI
-  or T2Wreg (:ref:`sdc_gre_init`). To apply the GRE fieldmap itself, list
+  *QSIPrep* prefers. The GRE fieldmap is not wasted: it initializes DRBUDDI,
+  or is unpile's prior (:ref:`sdc_gre_init`). To apply the GRE fieldmap itself, list
   only it in the series' ``B0FieldSource`` or pass ``--ignore pepolar-dwis``.
 
 **SHORELine printed a removal notice.**

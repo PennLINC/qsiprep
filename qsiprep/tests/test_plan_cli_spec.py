@@ -61,20 +61,30 @@ def _parse_minimal(tmp_path, *extra):
 
 
 def test_sdc_anat_reference_flag_reaches_the_grouping_policy(tmp_path):
-    assert _parse_minimal(tmp_path).sdc_anat_reference == 'none'
-    namespace = _parse_minimal(tmp_path, '--sdc-anat-reference', 'synb0')
-    assert namespace.sdc_anat_reference == 'synb0'
+    policy = cli_spec.policy_from_namespace(_parse_minimal(tmp_path))
+    assert (policy.fieldmapless_method, policy.sdc_anat_reference) == ('topup', 'synb0')
+    namespace = _parse_minimal(
+        tmp_path, '--sdc-fieldmapless-method', 'syn', '--sdc-anat-reference', 'invt1w'
+    )
     policy = cli_spec.policy_from_namespace(namespace)
-    assert policy.sdc_anat_reference == 'synb0'
+    assert (policy.fieldmapless_method, policy.sdc_anat_reference) == ('syn', 'invt1w')
     assert policy.force_sdc_anat_reference is False
 
 
 def test_force_sdc_anat_reference_reaches_the_grouping_policy(tmp_path):
     namespace = _parse_minimal(
-        tmp_path, '--sdc-anat-reference', 't2w', '--force', 'sdc-anat-reference'
+        tmp_path,
+        '--hmc-method',
+        'tortoise',
+        '--sdc-fieldmapless-method',
+        'unpile',
+        '--sdc-anat-reference',
+        't2w',
+        '--force',
+        'sdc-anat-reference',
     )
     policy = cli_spec.policy_from_namespace(namespace)
-    assert policy.sdc_anat_reference == 't2w'
+    assert (policy.fieldmapless_method, policy.sdc_anat_reference) == ('unpile', 't2w')
     assert policy.force_sdc_anat_reference is True
 
 

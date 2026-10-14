@@ -30,7 +30,7 @@ import sys
 from pathlib import Path
 
 #: The TRXScan release the fixtures are generated with. Bumping it invalidates the CI cache.
-TRXSCAN_VERSION = '0.2.1'
+TRXSCAN_VERSION = '0.3.0'
 
 #: TRXScan's k-space noise variance for every fixture (SNR scales as 1/sqrt(noise)); at 3 mm
 #: this is a b=0 SNR of about 19, a realistic, slightly noisy acquisition.
@@ -64,8 +64,13 @@ RECIPES = {
     # the subject's measured head motion trace scaled x5 (5 mm / 2.8 deg range); the per-volume
     # poses are recorded in the derivatives
     'motion': ('motion', {'voxel': 3, 'subject': 'motion', 'noise': NOISE, 'mb': 1, 'scale': 5}),
-    # one series, no fieldmap, the subject's T2w: DIFFPREP's T2Wreg EPI correction
-    't2wreg': ('rpe_series', {'voxel': 3, 'subject': 't2wreg', 'noise': NOISE, 'pe': ['AP']}),
+    # one series, no fieldmap, the subject's T1w/T2w: the fieldmap-less corrections (SynB0 +
+    # TOPUP, unpile). The non-brain head is simulated so that the T2w has the scalp and
+    # eyes to match against, as on real data
+    'fieldmapless': (
+        'rpe_series',
+        {'voxel': 3, 'subject': 'fmless', 'noise': NOISE, 'pe': ['AP'], 'head': True},
+    ),
     # subject moved between the T1w and the DWI, and again between the AP and PA series
     'offsets': (
         'rpe_series',

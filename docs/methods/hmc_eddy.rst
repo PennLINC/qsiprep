@@ -96,8 +96,9 @@ needs ``topup`` in ``--sdc-method``.
 **SyN.** With ``--sdc-anat-reference invt1w``, the SyN correction is
 estimated and applied on ``eddy``'s outputs.
 
-``--sdc-anat-reference t2w`` has no effect with ``eddy``; T2Wreg is a
-TORTOISE tool.
+**unpile.** With ``--sdc-fieldmapless-method unpile``, the field is fitted
+on ``eddy``'s output against the T2w or the synthetic b=0 and applied at the
+final resampling (:ref:`sdc_unpile`).
 
 .. _configure_eddy:
 

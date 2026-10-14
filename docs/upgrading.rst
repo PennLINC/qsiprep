@@ -56,8 +56,8 @@ Removed or renamed options
      - ``--sdc-method``
      - :pr:`1140`
    * - ``--force-syn``, ``--use-syn-sdc``
-     - ``--sdc-anat-reference invt1w``, with ``--force sdc-anat-reference``
-       to override fieldmaps
+     - ``--sdc-fieldmapless-method syn --sdc-anat-reference invt1w``, with
+       ``--force sdc-anat-reference`` to override fieldmaps
      - :pr:`1111`
    * - ``--b0-to-t1w-transform``
      - ``--dwi2anat-dof 6`` (rigid) or ``12`` (affine)
@@ -85,12 +85,16 @@ New options
   head motion and eddy-current correction (:doc:`methods/hmc_tortoise`).
 * ``--sdc-method``: ``topup``, ``drbuddi`` or ``topup+drbuddi`` for reverse
   phase-encoded data (:doc:`methods/sdc`).
-* ``--sdc-anat-reference``: ``synb0``, ``t2w``, ``invt1w`` or ``auto``
-  fieldmap-less correction as a fallback, and ``--force sdc-anat-reference``.
+* ``--sdc-fieldmapless-method`` (``topup``, ``syn``, ``unpile``) and
+  ``--sdc-anat-reference`` (``synb0``, ``invt1w``, ``t2w``, ``none``): the
+  correction for series no fieldmap reaches, and ``--force
+  sdc-anat-reference`` to use it for every series (:ref:`sdc_flags`).
+* ``--force one-pass-sdc``: drops the second pass of SynB0 + TOPUP after
+  TORTOISE or SHORELine and of GRE fieldmap registration.
 * ``--gradient-file``, ``--force gradwarp1D``/``gradwarp3D``, ``--ignore
   gradwarp``: gradient nonlinearity correction (:ref:`gradwarp_flags`).
-* ``--ignore jacobian``, ``--force jacobian``: intensity modulation after
-  distortion correction (:ref:`jacobian_flags`).
+* ``--ignore jacobian``: intensity modulation after distortion correction
+  (:ref:`jacobian_flags`).
 * ``--gpu`` and ``--tortoise-gpu-cpu-ratio``: per-task GPU selection,
   replacing ``use_cuda`` in the configuration files.
 * ``--denoise-method dwidenoise2`` and ``--dwidenoise2-config``.
@@ -113,8 +117,19 @@ Behavior changes
   is passed to ``eddy`` and applied inside its model rather than to its
   outputs. ``--force gre-sdc-after-eddy`` restores the old behavior for
   comparison and is deprecated.
-* **A GRE fieldmap initializes DRBUDDI and T2Wreg** when a series is also
-  corrected by reverse phase encoding (:ref:`sdc_gre_init`).
+* **Series with no fieldmap are corrected by default.** SynB0 + TOPUP runs for
+  every head motion method (before ``eddy``; after DIFFPREP or SHORELine). It
+  needs a T1w and ``PhaseEncodingDirection``/``TotalReadoutTime`` on the DWI;
+  without them the run stops with an error, and ``--sdc-anat-reference none``
+  restores the old behavior of leaving such series uncorrected. A T2w no
+  longer brings in TORTOISE's T2Wreg with ``--hmc-method tortoise``: T2Wreg is
+  gone, and ``--sdc-fieldmapless-method unpile --sdc-anat-reference t2w``
+  fits the field against the T2w with unpile instead, after any head motion
+  method (:ref:`sdc_unpile`).
+* **A GRE fieldmap initializes DRBUDDI, and is unpile's prior,** when a
+  series is also corrected by reverse phase encoding or by a forced
+  fieldmap-less correction (:ref:`sdc_gre_init`).
+
 * **Intensity modulation** after distortion correction is now applied by
   *QSIPrep* for the corrections it resamples itself, and written as a
   derivative.

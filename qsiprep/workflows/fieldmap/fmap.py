@@ -31,6 +31,7 @@ from ... import config
 from ...interfaces import DerivativesDataSink, FieldToHz, FieldToRadS
 from ...interfaces.fmap import MedianFilter
 from ...interfaces.niimath import RomeoUnwrap, SkullStrip
+from .unwarp import GRE_SECOND_PASS_DESC
 from .utils import cleanup_edge_pipeline, demean_image
 
 
@@ -57,15 +58,14 @@ def init_fmap_wf(name='fmap_wf'):
             please download the qsiprep container with FSL installed."""
         )
     workflow = Workflow(name=name)
-    workflow.__desc__ = """\
+    second_pass = GRE_SECOND_PASS_DESC if config.workflow.two_pass_sdc else ''
+    workflow.__desc__ = f"""\
 A deformation field to correct for susceptibility distortions was estimated
 from a directly measured field map, which was masked with a brain mask
 derived from its magnitude image, unwrapped with the ROMEO algorithm [@romeo]
 as implemented in *niimath* [@niimath], median-filtered and co-registered to
 the b=0 reference. The magnitude image was rigidly registered to the b=0
-reference twice: the second registration targeted the reference unwarped with
-the field from the first, so that the distortion itself did not bias the
-alignment.
+reference.{second_pass}
 """
     inputnode = pe.Node(niu.IdentityInterface(fields=['magnitude', 'fieldmap']), name='inputnode')
     outputnode = pe.Node(

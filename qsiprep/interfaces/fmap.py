@@ -67,6 +67,201 @@ class ParallelTOPUP(TOPUP):
     input_spec = _ParallelTOPUPInputSpec
 
 
+_LAS_ORNT = nb.orientations.axcodes2ornt(('L', 'A', 'S'))
+
+
+def _reorient(img, target_ornt):
+    current = nb.orientations.io_orientation(img.affine)
+    return img.as_reoriented(nb.orientations.ornt_transform(current, target_ornt))
+
+
+def pe_step_world(raw_file, pe_dir):
+    """World (RAS, mm) vector of one voxel step along ``pe_dir``.
+
+    BIDS ``PhaseEncodingDirection`` refers to the voxel axes of the file as
+    acquired, so the vector is taken from that file's header: it stays right
+    after the data are conformed to another orientation.
+    """
+    affine = nb.load(raw_file).affine
+    sign = -1.0 if pe_dir.endswith('-') else 1.0
+    return sign * affine[:3, 'ijk'.index(pe_dir[0])]
+
+
+class _PostHmcTopupInputsInputSpec(BaseInterfaceInputSpec):
+    b0_file = File(exists=True, mandatory=True, desc='motion-corrected, distorted b=0 average')
+    raw_dwi_file = File(
+        mandatory=True, desc='the DWI file as acquired, whose axes pe_dir refers to'
+    )
+    pe_dir = traits.Enum(
+        'i', 'i-', 'j', 'j-', 'k', 'k-', mandatory=True, desc='BIDS PhaseEncodingDirection'
+    )
+    readout_time = traits.Float(mandatory=True, desc='BIDS TotalReadoutTime (s)')
+
+
+class _PostHmcTopupInputsOutputSpec(TraitedSpec):
+    topup_imain = File(exists=True, desc='the b=0 as a one-volume LAS+ series')
+    topup_datain = File(exists=True, desc='its datain row, in the LAS+ voxel axes')
+
+
+class PostHmcTopupInputs(SimpleInterface):
+    """Write a motion-corrected b=0 as TOPUP input in FSL's LAS+ orientation.
+
+    FSL flips the first voxel axis of images stored with a positive-determinant
+    affine, so the datain vector of an LPS image is ambiguous for left-right
+    encodings; in LAS+ the voxel axes are FSL's own.
+    """
+
+    input_spec = _PostHmcTopupInputsInputSpec
+    output_spec = _PostHmcTopupInputsOutputSpec
+
+    def _run_interface(self, runtime):
+        img = nb.load(self.inputs.b0_file)
+        if img.ndim > 3:
+            img = image.mean_img(img)
+        las = _reorient(img, _LAS_ORNT)
+
+        step = np.linalg.solve(
+            las.affine[:3, :3], pe_step_world(self.inputs.raw_dwi_file, self.inputs.pe_dir)
+        )
+        axis = int(np.argmax(np.abs(step)))
+        if abs(step[axis]) < 0.99 * np.linalg.norm(step):
+            raise ValueError(
+                f'The phase-encoding direction of {self.inputs.raw_dwi_file} is not along a '
+                f'voxel axis of {self.inputs.b0_file}.'
+            )
+        vector = np.zeros(3, dtype=int)
+        vector[axis] = int(np.sign(step[axis]))
+
+        imain = fname_presuffix(
+            self.inputs.b0_file, suffix='_las', newpath=runtime.cwd, use_ext=False
+        )
+        imain += '.nii.gz'
+        data = las.get_fdata(dtype=np.float32)[..., np.newaxis]
+        header = las.header.copy()
+        header.set_data_dtype(np.float32)
+        nb.Nifti1Image(data, las.affine, header).to_filename(imain)
+
+        datain = op.join(runtime.cwd, 'topup_datain.txt')
+        with open(datain, 'w') as fobj:
+            fobj.write(' '.join(str(v) for v in vector) + f' {self.inputs.readout_time:.6f}\n')
+
+        self._results['topup_imain'] = imain
+        self._results['topup_datain'] = datain
+        return runtime
+
+
+class _TopupFieldToWarpInputSpec(BaseInterfaceInputSpec):
+    fieldmap = File(exists=True, mandatory=True, desc='TOPUP off-resonance field (Hz)')
+    datain = File(exists=True, mandatory=True, desc='the datain TOPUP ran with')
+    reference = File(
+        exists=True,
+        mandatory=True,
+        desc='image on the grid the warp is written on; the same voxels as the '
+        'fieldmap in any axis order',
+    )
+
+
+class _TopupFieldToWarpOutputSpec(TraitedSpec):
+    out_warp = File(exists=True, desc='ITK displacement field (LPS mm) on the reference grid')
+    out_hz = File(exists=True, desc='the field (Hz) on the reference grid')
+    pe_axis = traits.Int(desc="the reference grid's voxel axis the field displaces along")
+
+
+class TopupFieldToWarp(SimpleInterface):
+    """Convert a TOPUP field to an ITK displacement field on another orientation of its grid.
+
+    A voxel moves ``field_Hz * TotalReadoutTime`` voxels along the first datain
+    row's vector, which is in the voxel axes of the grid TOPUP ran on; that step
+    is taken to world space there, then the field is reoriented onto the
+    reference grid. The sign convention is the one ``_hz_to_warp`` uses for
+    eddy's TOPUP field.
+    """
+
+    input_spec = _TopupFieldToWarpInputSpec
+    output_spec = _TopupFieldToWarpOutputSpec
+
+    def _run_interface(self, runtime):
+        field_img = nb.load(self.inputs.fieldmap)
+        if field_img.ndim > 3:
+            field_img = image.index_img(field_img, 0)
+        reference = nb.load(self.inputs.reference)
+
+        row = np.loadtxt(self.inputs.datain, ndmin=2)[0]
+        step_ras = field_img.affine[:3, :3] @ row[:3]
+        readout_time = float(row[3])
+
+        on_ref = _reorient(field_img, nb.orientations.io_orientation(reference.affine))
+        if on_ref.shape[:3] != reference.shape[:3] or not np.allclose(
+            on_ref.affine, reference.affine, atol=1e-3
+        ):
+            raise ValueError(
+                f'{self.inputs.fieldmap} is not on the grid of {self.inputs.reference}.'
+            )
+        hz = on_ref.get_fdata(dtype=np.float32)
+
+        step_lps = step_ras * np.array([-1.0, -1.0, 1.0])
+        field = hz[..., np.newaxis] * readout_time * step_lps
+        warp = nb.Nifti1Image(field[:, :, :, np.newaxis, :].astype(np.float32), reference.affine)
+        warp.header.set_intent('vector')
+        out_warp = fname_presuffix(
+            self.inputs.fieldmap, suffix='_warp', newpath=runtime.cwd, use_ext=False
+        )
+        out_warp += '.nii.gz'
+        warp.to_filename(out_warp)
+
+        out_hz = fname_presuffix(
+            self.inputs.fieldmap, suffix='_ref', newpath=runtime.cwd, use_ext=False
+        )
+        out_hz += '.nii.gz'
+        nb.Nifti1Image(hz, reference.affine).to_filename(out_hz)
+
+        directions = reference.affine[:3, :3] / np.linalg.norm(reference.affine[:3, :3], axis=0)
+        self._results['out_warp'] = out_warp
+        self._results['out_hz'] = out_hz
+        self._results['pe_axis'] = int(np.argmax(np.abs(directions.T @ step_ras)))
+        return runtime
+
+
+class _ModulateByWarpJacobianInputSpec(BaseInterfaceInputSpec):
+    in_file = File(exists=True, mandatory=True, desc='image already resampled through the warp')
+    warp = File(exists=True, mandatory=True, desc='ITK displacement field on the same grid')
+    pe_axis = traits.Int(mandatory=True, desc='voxel axis the warp displaces along')
+
+
+class _ModulateByWarpJacobianOutputSpec(TraitedSpec):
+    out_file = File(exists=True, desc='in_file multiplied by the Jacobian of the warp')
+
+
+class ModulateByWarpJacobian(SimpleInterface):
+    """Multiply an unwarped image by the Jacobian determinant of the warp that unwarped it.
+
+    Uses :func:`~qsiprep.interfaces.jacobian.jacobian_determinant`, the
+    phase-encoding Jacobian TORTOISE applies.
+    """
+
+    input_spec = _ModulateByWarpJacobianInputSpec
+    output_spec = _ModulateByWarpJacobianOutputSpec
+
+    def _run_interface(self, runtime):
+        from .jacobian import jacobian_determinant
+
+        det_file = jacobian_determinant(
+            self.inputs.warp, op.join(runtime.cwd, 'jacobian.nii.gz'), self.inputs.pe_axis
+        )
+        img = nb.load(self.inputs.in_file)
+        det = nb.load(det_file)
+        if det.shape[:3] != img.shape[:3] or not np.allclose(det.affine, img.affine, atol=1e-3):
+            raise ValueError(f'{self.inputs.warp} is not on the grid of {self.inputs.in_file}.')
+        data = img.get_fdata(dtype=np.float32) * det.get_fdata(dtype=np.float32)
+        out_file = fname_presuffix(
+            self.inputs.in_file, suffix='_jac', newpath=runtime.cwd, use_ext=False
+        )
+        out_file += '.nii.gz'
+        nb.Nifti1Image(data, img.affine, img.header).to_filename(out_file)
+        self._results['out_file'] = out_file
+        return runtime
+
+
 class B0RPEFieldmapInputSpec(BaseInterfaceInputSpec):
     b0_file = InputMultiObject(File(exists=True))
     output_3d_images = traits.Bool(False, usedefault=True)

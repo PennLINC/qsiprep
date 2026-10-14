@@ -113,7 +113,8 @@ def test_structural_alignment_refines_the_rotation_search_with_a_masked_rigid():
     )
     assert sources['fixed_image'] == ('inputnode', 'b0_ref')
     assert sources['moving_image'] == ('inputnode', 'structural_image')
-    assert sources['fixed_image_masks'] == ('inputnode', 'b0_mask')
+    # Unmasked unless a caller supplies a b=0 brain mask
+    assert 'fixed_image_masks' not in sources
     assert 'Affine' not in refine.inputs.transforms
     transform_sources = {
         (src.name, src_field)
@@ -123,3 +124,50 @@ def test_structural_alignment_refines_the_rotation_search_with_a_masked_rigid():
         if dest_field == 'transforms'
     }
     assert transform_sources == {('refine_alignment', 'composite_transform')}
+
+
+def test_structural_alignment_dilates_a_supplied_brain_mask():
+    """Test that a brain mask restricts the rigid only after dilation.
+
+    The head boundary has to stay in the metric.
+    """
+    from qsiprep import config
+    from qsiprep.workflows.dwi.registration import (
+        FIXED_MASK_MARGIN_MM,
+        init_structural_to_b0_alignment_wf,
+    )
+
+    config.nipype.omp_nthreads = 1
+    wf = init_structural_to_b0_alignment_wf(name='t2w_to_b0_test', masked=True)
+    edges = {
+        (src.name, src_field, dest.name, dest_field)
+        for src, dest, meta in wf._graph.edges(data=True)
+        for src_field, dest_field in meta['connect']
+    }
+    assert ('inputnode', 'b0_mask', 'dilate_mask', 'in_file') in edges
+    assert ('dilate_mask', 'out_file', 'refine_alignment', 'fixed_image_masks') in edges
+    assert not any(
+        e[2:] == ('refine_alignment', 'fixed_image_masks') and e[0] == 'inputnode' for e in edges
+    )
+    assert wf.get_node('dilate_mask').inputs.margin_mm == FIXED_MASK_MARGIN_MM
+
+
+def test_dilate_mask_mm_uses_millimetres_on_the_coarsest_needed_axis(tmp_path, monkeypatch):
+    """The margin is in millimetres: a 10 mm margin on a 2 mm grid grows the mask by 5 voxels."""
+    import nibabel as nb
+    import numpy as np
+
+    from qsiprep.workflows.dwi.registration import _dilate_mask_mm
+
+    monkeypatch.chdir(tmp_path)
+    data = np.zeros((41, 41, 41), dtype='uint8')
+    data[20, 20, 20] = 1
+    for zooms, expected in (((2.0, 2.0, 2.0), 5), ((1.0, 1.0, 2.5), 10)):
+        img = nb.Nifti1Image(data, np.diag([*zooms, 1.0]))
+        img.header.set_zooms(zooms)
+        in_file = tmp_path / f'mask_{zooms[0]}.nii.gz'
+        img.to_filename(in_file)
+        out = np.asanyarray(nb.load(_dilate_mask_mm(str(in_file), 10.0)).dataobj) > 0
+        # binary_dilation's default cross structure reaches `iterations` voxels along each axis
+        assert out[20 + expected, 20, 20]
+        assert not out[20 + expected + 1, 20, 20]

@@ -34,7 +34,8 @@ dependencies = [
     "psutil <= 5.9.8",
     "pybids >= 0.15.0, < 0.16.0",
     "pyyaml",
-    "qsiplan >= 0.4.2, < 0.5",
+    "qsiplan >= 0.5.0, < 0.6",
+    "unpile >= 0.2.0, < 0.3",
     "scikit-image",
     "scikit-learn <= 1.4.0",
     "seaborn",
@@ -280,8 +281,9 @@ markers = [
     "trxscan_motion: TRXScan truth-scored: eddy motion parameters against applied poses",
     "trxscan_offsets: TRXScan truth-scored: subject moved between T1w, AP and PA scans",
     "trxscan_diffprep: TRXScan truth-scored: DIFFPREP motion/eddy correction + DRBUDDI on the reverse-PE pair",
-    "trxscan_t2wreg: TRXScan truth-scored: DIFFPREP T2Wreg EPI correction, no fieldmap",
-    "trxscan_gre_t2wreg: TRXScan truth-scored: DIFFPREP T2Wreg seeded by a GRE fieldmap, with the subject moved",
+    "trxscan_synb0: TRXScan truth-scored: default SynB0 + TOPUP after DIFFPREP, no fieldmap",
+    "trxscan_unpile: TRXScan truth-scored: unpile against the T2w after eddy, no fieldmap",
+    "trxscan_gre_unpile: TRXScan truth-scored: unpile refining a GRE fieldmap against the T2w, with the subject moved",
 ]
 env = [
     "RUNNING_PYTEST = 1",

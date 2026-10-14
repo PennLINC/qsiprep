@@ -96,14 +96,14 @@ def test_gradwarp_only(tmp_path):
     config.workflow.gradient_file = str(tmp_path / 'coeff.grad')
     unit = make_preproc_unit([SRC], method=None, metadata={'Manufacturer': 'SIEMENS'})
 
-    assert jacobian_provenance_for(unit, t2w_sdc=False) == (['gradwarp'], [], None)
+    assert jacobian_provenance_for(unit) == (['gradwarp'], [], None)
 
 
 def test_drbuddi():
     _cfg(hmc_method='eddy', sdc_method='drbuddi')
     unit = _pepolar_unit(CorrectionMethod.PEPOLAR)
 
-    assert jacobian_provenance_for(unit, t2w_sdc=False) == (['sdc'], [], None)
+    assert jacobian_provenance_for(unit) == (['sdc'], [], None)
 
 
 def _gre_unit():
@@ -119,7 +119,7 @@ def test_gre():
     """Test that eddy applies a GRE fieldmap itself, like TOPUP's field: nothing external."""
     _cfg(hmc_method='eddy', sdc_method='fieldmap')
 
-    assert jacobian_provenance_for(_gre_unit(), t2w_sdc=False) == ([], [], None)
+    assert jacobian_provenance_for(_gre_unit()) == ([], [], None)
 
 
 def test_gre_after_eddy():
@@ -130,7 +130,7 @@ def test_gre_after_eddy():
     _cfg(hmc_method='eddy', sdc_method='fieldmap')
     config.workflow.force = ['gre-sdc-after-eddy']
 
-    assert jacobian_provenance_for(_gre_unit(), t2w_sdc=False) == (['sdc'], [], None)
+    assert jacobian_provenance_for(_gre_unit()) == (['sdc'], [], None)
 
 
 def test_eddy_lsr_with_gre(tmp_path):
@@ -140,7 +140,7 @@ def test_eddy_lsr_with_gre(tmp_path):
     _cfg(hmc_method='eddy', sdc_method='fieldmap')
     config.workflow.eddy_config = str(eddy_cfg)
 
-    applied, unmodulated, reason = jacobian_provenance_for(_gre_unit(), t2w_sdc=False)
+    applied, unmodulated, reason = jacobian_provenance_for(_gre_unit())
     assert applied == []
     assert unmodulated == ['eddy-current', 'susceptibility']
     assert reason == 'FSL eddy ran with --resamp=lsr rather than jac'
@@ -150,7 +150,7 @@ def test_syn():
     _cfg(hmc_method='eddy', sdc_method='syn')
     unit = make_preproc_unit([SRC], method=CorrectionMethod.NIPREPS_SYN)
 
-    assert jacobian_provenance_for(unit, t2w_sdc=False) == (['sdc'], [], None)
+    assert jacobian_provenance_for(unit) == (['sdc'], [], None)
 
 
 def test_topup_only():
@@ -158,7 +158,7 @@ def test_topup_only():
     _cfg(hmc_method='eddy', sdc_method='topup')
     unit = _pepolar_unit(CorrectionMethod.PEPOLAR)
 
-    assert jacobian_provenance_for(unit, t2w_sdc=False) == ([], [], None)
+    assert jacobian_provenance_for(unit) == ([], [], None)
 
 
 def test_tortoise_quadratic():
@@ -166,7 +166,7 @@ def test_tortoise_quadratic():
     _cfg(hmc_method='tortoise', sdc_method='auto', sloppy=False)
     unit = make_preproc_unit([SRC], method=None)
 
-    assert jacobian_provenance_for(unit, t2w_sdc=False) == (['eddy-current'], [], None)
+    assert jacobian_provenance_for(unit) == (['eddy-current'], [], None)
 
 
 def test_tortoise_under_sloppy():
@@ -174,7 +174,7 @@ def test_tortoise_under_sloppy():
     _cfg(hmc_method='tortoise', sdc_method='auto', sloppy=True)
     unit = make_preproc_unit([SRC], method=None)
 
-    assert jacobian_provenance_for(unit, t2w_sdc=False) == ([], [], None)
+    assert jacobian_provenance_for(unit) == ([], [], None)
 
 
 def test_tortoise_cubic(tmp_path):
@@ -190,7 +190,7 @@ def test_tortoise_cubic(tmp_path):
     config.workflow.diffprep_config = str(diffprep_cfg)
     unit = make_preproc_unit([SRC], method=None)
 
-    applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)
+    applied, unmodulated, reason = jacobian_provenance_for(unit)
     assert applied == []
     assert unmodulated == ['eddy-current']
     assert reason == (
@@ -199,26 +199,19 @@ def test_tortoise_cubic(tmp_path):
     )
 
 
-def test_tortoise_t2wreg():
-    """Test that DIFFPREP's T2Wreg field is applied without a weight by default.
+def test_tortoise_unpile():
+    """Test that the unpile field after DIFFPREP is applied with a weight.
 
-    DIFFPREP's fieldmap-less T2Wreg (EPIREG) field is applied without a
-    weight, as in TORTOISE, unless ``--force jacobian`` is given.
-
-    With ``t2w_sdc=False`` (T2w unavailable, e.g. ``--ignore t2w``) the stage
-    has no target, so 'sdc' appears in neither list.
+    unpile's warp is applied downstream of DIFFPREP like SyN's, so QSIPrep
+    Jacobian-modulates it; the unpile warp itself carries no Jacobian.
     """
     _cfg(hmc_method='tortoise', sdc_method='auto', sloppy=False)
-    unit = make_preproc_unit([SRC], method=None, anat_files=['/data/sub-01_T2w.nii.gz'])
+    t2w = ['/data/sub-01_T2w.nii.gz']
+    unit = make_preproc_unit(
+        [SRC], method=CorrectionMethod.UNPILE, estimation_sources=t2w, anat_files=t2w
+    )
 
-    applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=True)
-    assert (applied, unmodulated) == (['eddy-current'], ['sdc'])
-    assert 'T2Wreg' in reason
-    assert '--force jacobian' in reason
-    assert jacobian_provenance_for(unit, t2w_sdc=False) == (['eddy-current'], [], None)
-
-    config.workflow.force = ['jacobian']
-    assert jacobian_provenance_for(unit, t2w_sdc=True) == (['eddy-current', 'sdc'], [], None)
+    assert jacobian_provenance_for(unit) == (['eddy-current', 'sdc'], [], None)
 
 
 @pytest.mark.parametrize(
@@ -227,24 +220,16 @@ def test_tortoise_t2wreg():
         (CorrectionMethod.PEPOLAR, True),
         (CorrectionMethod.PHASEDIFF, True),
         (CorrectionMethod.NIPREPS_SYN, True),
-        (CorrectionMethod.SYNB0, False),
-        (CorrectionMethod.T2WREG, False),
+        (CorrectionMethod.SYNB0, True),
+        (CorrectionMethod.UNPILE, True),
         (None, False),
     ],
 )
 def test_shoreline_sdc_provenance(method, expect_applied):
-    """Test that SHORELine's 'sdc' provenance mirrors ``init_sdc_wf``'s ``does_sdc`` gate.
+    """Test that SHORELine's 'sdc' provenance follows the warps it actually builds.
 
-    C2: SHORELine's 'sdc' provenance mirrors ``init_sdc_wf``'s own
-    ``does_sdc`` gate (``qsiprep/workflows/fieldmap/base.py:114-115``) --
-    a scanner-measured fieldmap (PEPOLAR or GRE) or classic NiPreps SyN --
-    not merely ``unit.method is not None``. SYNB0 and T2Wreg are fieldmap-less
-    methods only the TORTOISE backend ever applies (see ``init_sdc_wf``'s own
-    docstring); on SHORELine they build the ``sdc_bypass_wf`` no-op, same as
-    no method at all, so both must NOT be recorded as 'sdc' applied even
-    though ``unit.method`` is non-``None`` for both. Before this fix,
-    ``_shoreline_sdc_applied`` returned True for any non-``None`` method and
-    over-reported 'sdc' for both.
+    A scanner-measured fieldmap (PEPOLAR or GRE), SyN, unpile, and SynB0 +
+    TOPUP after SHORELine each produce a warp that is weighted.
     """
     _cfg(hmc_method='shoreline', sdc_method='auto')
     if method in (CorrectionMethod.PEPOLAR,):
@@ -252,7 +237,7 @@ def test_shoreline_sdc_provenance(method, expect_applied):
     else:
         unit = make_preproc_unit([SRC], method=method)
 
-    applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)
+    applied, unmodulated, reason = jacobian_provenance_for(unit)
     assert ('sdc' in applied) is expect_applied
     assert unmodulated == []
     assert reason is None
@@ -266,7 +251,7 @@ def test_eddy_lsr_with_topup(tmp_path):
     config.workflow.eddy_config = str(eddy_cfg)
     unit = _pepolar_unit(CorrectionMethod.PEPOLAR)
 
-    applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)
+    applied, unmodulated, reason = jacobian_provenance_for(unit)
     assert applied == []
     assert unmodulated == ['eddy-current', 'susceptibility']
     assert reason == 'FSL eddy ran with --resamp=lsr rather than jac'
@@ -287,7 +272,7 @@ def test_eddy_lsr_with_drbuddi(tmp_path):
     config.workflow.eddy_config = str(eddy_cfg)
     unit = _pepolar_unit(CorrectionMethod.PEPOLAR)
 
-    applied, unmodulated, reason = jacobian_provenance_for(unit, t2w_sdc=False)
+    applied, unmodulated, reason = jacobian_provenance_for(unit)
     assert applied == ['sdc']
     assert unmodulated == ['eddy-current']
     assert 'susceptibility' not in unmodulated
@@ -318,8 +303,8 @@ def test_two_units_in_one_invocation_get_different_provenance():
     )
     unit_b = _pepolar_unit(CorrectionMethod.PEPOLAR)
 
-    provenance_a = jacobian_provenance_for(unit_a, t2w_sdc=False)
-    provenance_b = jacobian_provenance_for(unit_b, t2w_sdc=False)
+    provenance_a = jacobian_provenance_for(unit_a)
+    provenance_b = jacobian_provenance_for(unit_b)
 
     # Unit A: scanner already corrected the geometry (DIS3D) -> no gradwarp;
     # no fieldmap -> no sdc.

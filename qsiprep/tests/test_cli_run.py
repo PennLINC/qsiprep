@@ -770,43 +770,128 @@ def test_config_file_reload_drops_stale_dwidenoise2_config(tmp_path, restore_dwi
 
 
 def test_sdc_anat_reference_parses(minimal_args):
-    assert _parse(minimal_args).sdc_anat_reference == 'none'
-    opts = _parse(minimal_args, '--sdc-anat-reference', 't2w')
+    opts = _parse(minimal_args)
+    assert opts.sdc_anat_reference == 'synb0'
+    assert opts.sdc_fieldmapless_method == 'topup'
+    opts = _parse(
+        minimal_args,
+        '--hmc-method',
+        'tortoise',
+        '--sdc-fieldmapless-method',
+        'unpile',
+        '--sdc-anat-reference',
+        't2w',
+    )
     assert opts.sdc_anat_reference == 't2w'
+    assert opts.sdc_fieldmapless_method == 'unpile'
     assert opts.force_sdc_anat_reference is False
+
+
+@pytest.mark.parametrize(
+    ('method', 'reference'),
+    [
+        ('topup', 'synb0'),
+        ('syn', 'synb0'),
+        ('syn', 'invt1w'),
+        ('unpile', 't2w'),
+        ('unpile', 'synb0'),
+    ],
+)
+def test_valid_fieldmapless_pairs_parse(minimal_args, method, reference):
+    opts = _parse(
+        minimal_args,
+        '--hmc-method',
+        'tortoise',
+        '--sdc-fieldmapless-method',
+        method,
+        '--sdc-anat-reference',
+        reference,
+    )
+    assert (opts.sdc_fieldmapless_method, opts.sdc_anat_reference) == (method, reference)
+
+
+@pytest.mark.parametrize(
+    ('method', 'reference', 'hint'),
+    [
+        ('topup', 'invt1w', '--sdc-fieldmapless-method syn'),
+        ('topup', 't2w', '--sdc-fieldmapless-method unpile'),
+        ('syn', 't2w', '--sdc-fieldmapless-method unpile'),
+        ('unpile', 'invt1w', '--sdc-fieldmapless-method syn'),
+    ],
+)
+def test_invalid_fieldmapless_pairs_are_rejected(minimal_args, capsys, method, reference, hint):
+    with pytest.raises(SystemExit):
+        _parse(
+            minimal_args,
+            '--hmc-method',
+            'tortoise',
+            '--sdc-fieldmapless-method',
+            method,
+            '--sdc-anat-reference',
+            reference,
+        )
+    assert hint in capsys.readouterr().err
+
+
+def test_auto_reference_is_gone(minimal_args):
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--sdc-anat-reference', 'auto')
+
+
+@pytest.mark.parametrize('hmc', ['eddy', 'shoreline', 'tortoise'])
+def test_unpile_parses_with_every_hmc_method(minimal_args, hmc):
+    opts = _parse(
+        minimal_args,
+        '--hmc-method',
+        hmc,
+        '--sdc-fieldmapless-method',
+        'unpile',
+        '--sdc-anat-reference',
+        't2w',
+    )
+    assert (opts.sdc_fieldmapless_method, opts.sdc_anat_reference) == ('unpile', 't2w')
+
+
+def test_force_one_pass_sdc_parses(minimal_args):
+    assert _parse(minimal_args).two_pass_sdc is True
+    assert _parse(minimal_args, '--force', 'one-pass-sdc').two_pass_sdc is False
 
 
 def test_force_sdc_anat_reference_parses(minimal_args):
     assert _parse(minimal_args).force == []
-    opts = _parse(minimal_args, '--sdc-anat-reference', 't2w', '--force', 'sdc-anat-reference')
+    opts = _parse(minimal_args, '--force', 'sdc-anat-reference')
     assert opts.force == ['sdc-anat-reference']
     assert opts.force_sdc_anat_reference is True
 
 
 def test_force_sdc_anat_reference_requires_a_reference(minimal_args, capsys):
     with pytest.raises(SystemExit):
-        _parse(minimal_args, '--force', 'sdc-anat-reference')
+        _parse(minimal_args, '--sdc-anat-reference', 'none', '--force', 'sdc-anat-reference')
     assert 'requires an anatomical SDC reference' in capsys.readouterr().err
 
 
-@pytest.mark.parametrize('reference', ['synb0', 'invt1w'])
-def test_t1w_derived_references_require_t1w_modality(minimal_args, capsys, reference):
+@pytest.mark.parametrize(
+    ('method', 'reference'), [(None, None), ('topup', 'synb0'), ('syn', 'invt1w')]
+)
+@pytest.mark.parametrize('modality', ['T2w', 'none'])
+def test_t1w_derived_references_require_t1w_modality(
+    minimal_args, capsys, method, reference, modality
+):
+    """The default SynB0 reference needs the T1w; the error names the way out."""
+    args = ['--anat-modality', modality]
+    if method is not None:
+        args += ['--sdc-fieldmapless-method', method, '--sdc-anat-reference', reference]
     with pytest.raises(SystemExit):
-        _parse(minimal_args, '--sdc-anat-reference', reference, '--anat-modality', 'T2w')
-    assert 'requires --anat-modality T1w' in capsys.readouterr().err
+        _parse(minimal_args, *args)
+    err = capsys.readouterr().err
+    assert 'requires --anat-modality T1w' in err
+    assert '--sdc-anat-reference none' in err
 
-    # t2w and auto are exempt: auto resolves at grouping time.
     assert (
         _parse(
-            minimal_args, '--sdc-anat-reference', 't2w', '--anat-modality', 'T2w'
+            minimal_args, '--anat-modality', modality, '--sdc-anat-reference', 'none'
         ).sdc_anat_reference
-        == 't2w'
-    )
-    assert (
-        _parse(
-            minimal_args, '--sdc-anat-reference', 'auto', '--anat-modality', 'T2w'
-        ).sdc_anat_reference
-        == 'auto'
+        == 'none'
     )
 
 

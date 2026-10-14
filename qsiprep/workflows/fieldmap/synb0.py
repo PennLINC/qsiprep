@@ -26,9 +26,18 @@ from nireports.interfaces.reporting.base import (
 )
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
+from ... import config
+from ...interfaces.eddy import Synb0TopupInputs
+from ...interfaces.fmap import (
+    ModulateByWarpJacobian,
+    ParallelTOPUP,
+    PostHmcTopupInputs,
+    TopupFieldToWarp,
+)
 from ...interfaces.images import ExtractWM
 from ...interfaces.synb0 import (
     NormalizeForSynb0,
+    Synb0FieldQC,
     Synb0Inference,
     Synb0QC,
     get_synb0_atlas,
@@ -36,6 +45,7 @@ from ...interfaces.synb0 import (
     get_synb0_dir,
 )
 from ..dwi.registration import init_b0_to_anat_registration_wf
+from ..dwi.util import init_dwi_reference_wf
 
 
 def init_synb0_wf(name='synb0_wf'):
@@ -336,3 +346,313 @@ back onto the b=0 reference grid.
     ])  # fmt:skip
 
     return workflow
+
+
+def init_synb0_topup_wf(
+    raw_dwi_file,
+    pe_dir,
+    readout_time,
+    source_file,
+    omp_nthreads=1,
+    two_pass=True,
+    name='synb0_topup_wf',
+):
+    """Estimate susceptibility distortion with TOPUP from a motion-corrected b=0 and its SynB0.
+
+    The synthetic b=0 is generated from the same motion-corrected b=0 that
+    TOPUP corrects, so the pair shares its noise level and contrast; the
+    synthetic image joins TOPUP as a zero-readout volume. TOPUP runs in FSL's
+    LAS+ orientation and its field is returned as a displacement field on the
+    ``b0_template`` grid.
+
+    The U-Net carries part of its input's distortion into the synthetic b=0, so
+    TOPUP underestimates the field. With ``two_pass`` the b=0 is unwarped with
+    the first field (Jacobian-modulated), a new synthetic b=0 is generated from
+    it, and TOPUP runs again on the original b=0 paired with the new synthetic one.
+
+    .. workflow::
+        :graph2use: orig
+        :simple_form: yes
+
+        from qsiprep.workflows.fieldmap.synb0 import init_synb0_topup_wf
+        wf = init_synb0_topup_wf(
+            raw_dwi_file='sub-01_dwi.nii.gz',
+            pe_dir='j-',
+            readout_time=0.05,
+            source_file='sub-01_dwi.nii.gz',
+        )
+
+    Parameters
+    ----------
+    raw_dwi_file : str
+        The DWI file as acquired; ``pe_dir`` refers to its voxel axes.
+    pe_dir : str
+        BIDS ``PhaseEncodingDirection``.
+    readout_time : float
+        BIDS ``TotalReadoutTime`` (s).
+    source_file : str
+        Naming source for the derivatives.
+    two_pass : bool
+        Regenerate the synthetic b=0 from the b=0 the first field unwarped and run
+        TOPUP again (the default; ``--force one-pass-sdc`` turns it off).
+
+    Inputs
+    ------
+    b0_template
+        Motion-corrected, distorted b=0 average, in the frame the warp is applied in
+    t1_preproc, t1_brain, t1_seg, to_template_affine_transform, acpc_inv_transform,
+    dwi_sampling_grid
+        As for :func:`init_synb0_wf`
+
+    Outputs
+    -------
+    out_warp
+        ITK displacement field on the ``b0_template`` grid
+    out_hz
+        TOPUP's field (Hz) on the ``b0_template`` grid
+    b0_corrected
+        ``b0_template`` unwarped with ``out_warp``
+    field_qc_file
+        :class:`~qsiprep.interfaces.synb0.Synb0FieldQC` table
+    synthetic_b0, synthetic_b0_acpc, qc_file, acquired_synthetic_report, unet_input_report
+        Passed through from the last pass's :func:`init_synb0_wf`
+    """
+    workflow = Workflow(name=name)
+    workflow.__desc__ = """\
+Susceptibility distortion was estimated with TOPUP [@topup] after head motion
+correction: the motion-corrected b=0 average was paired with a synthetic
+distortion-free b=0 generated from it, which entered TOPUP as an image with
+zero readout time.{second_pass} The resulting field was converted to a displacement field
+along the phase-encoding axis and applied in the final resampling.
+""".format(
+        second_pass=(
+            ' The b=0 was then unwarped with that field (Jacobian-modulated), a new\n'
+            'synthetic b=0 was generated from it, and TOPUP was run again on the original\n'
+            'b=0 paired with the new synthetic b=0.'
+            if two_pass
+            else ''
+        )
+    )
+    inputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=[
+                'b0_template',
+                't1_preproc',
+                't1_brain',
+                't1_seg',
+                'to_template_affine_transform',
+                'acpc_inv_transform',
+                'dwi_sampling_grid',
+            ]
+        ),
+        name='inputnode',
+    )
+    outputnode = pe.Node(
+        niu.IdentityInterface(
+            fields=[
+                'out_warp',
+                'out_hz',
+                'b0_corrected',
+                'field_qc_file',
+                'synthetic_b0',
+                'synthetic_b0_acpc',
+                'qc_file',
+                'acquired_synthetic_report',
+                'unet_input_report',
+            ]
+        ),
+        name='outputnode',
+    )
+
+    topup_inputs = pe.Node(
+        PostHmcTopupInputs(raw_dwi_file=raw_dwi_file, pe_dir=pe_dir, readout_time=readout_time),
+        name='topup_inputs',
+    )
+    workflow.connect([(inputnode, topup_inputs, [('b0_template', 'b0_file')])])  # fmt:skip
+
+    passes = [
+        _add_synb0_topup_pass(workflow, inputnode, topup_inputs, source_file, omp_nthreads, '')
+    ]
+    if two_pass:
+        unwarp_b0, field_to_warp = passes[0][1], passes[0][2]
+        modulate = pe.Node(ModulateByWarpJacobian(), name='modulate_unwarped_b0')
+        workflow.connect([
+            (unwarp_b0, modulate, [('output_image', 'in_file')]),
+            (field_to_warp, modulate, [('out_warp', 'warp'), ('pe_axis', 'pe_axis')]),
+        ])  # fmt:skip
+        passes.append(
+            _add_synb0_topup_pass(
+                workflow,
+                inputnode,
+                topup_inputs,
+                source_file,
+                omp_nthreads,
+                '_pass2',
+                (modulate, 'out_file'),
+            )
+        )
+    synb0_wf, unwarp_b0, field_to_warp, field_qc = passes[-1]
+
+    workflow.connect([
+        (field_to_warp, outputnode, [
+            ('out_warp', 'out_warp'),
+            ('out_hz', 'out_hz'),
+        ]),
+        (unwarp_b0, outputnode, [('output_image', 'b0_corrected')]),
+        (field_qc, outputnode, [('qc_file', 'field_qc_file')]),
+        (synb0_wf, outputnode, [
+            ('outputnode.synthetic_b0', 'synthetic_b0'),
+            ('outputnode.synthetic_b0_acpc', 'synthetic_b0_acpc'),
+            ('outputnode.qc_file', 'qc_file'),
+            ('outputnode.acquired_synthetic_report', 'acquired_synthetic_report'),
+            ('outputnode.unet_input_report', 'unet_input_report'),
+        ]),
+    ])  # fmt:skip
+
+    return workflow
+
+
+def _add_synb0_topup_pass(
+    workflow, inputnode, topup_inputs, source_file, omp_nthreads, suffix, unet_b0=None
+):
+    """One SynB0 + TOPUP pass: synthesize a b=0, run TOPUP on the original b=0 with it.
+
+    ``unet_b0`` is the ``(node, field)`` the synthetic b=0 is generated from;
+    ``inputnode.b0_template`` when None. TOPUP always pairs the synthetic b=0 with
+    ``topup_inputs``' LAS+ copy of ``b0_template``. Returns the pass's
+    ``(synb0_wf, unwarp_b0, field_to_warp, field_qc)``.
+    """
+    b0_ref_wf = init_dwi_reference_wf(
+        gen_report=False,
+        desc='b0_for_synb0',
+        name=f'synb0_b0_ref_wf{suffix}',
+        source_file=source_file,
+    )
+    synb0_wf = init_synb0_wf(name=f'synb0_wf{suffix}')
+    synb0_topup_inputs = pe.Node(Synb0TopupInputs(), name=f'synb0_topup_inputs{suffix}')
+    topup = pe.Node(
+        ParallelTOPUP(out_field='fieldmap_HZ.nii.gz', scale=1, nthreads=omp_nthreads),
+        name=f'topup{suffix}',
+        n_procs=omp_nthreads,
+    )
+    field_to_warp = pe.Node(TopupFieldToWarp(), name=f'field_to_warp{suffix}')
+    unwarp_b0 = pe.Node(
+        ants.ApplyTransforms(dimension=3, interpolation='LanczosWindowedSinc', float=True),
+        name=f'unwarp_b0{suffix}',
+    )
+    field_qc = pe.Node(Synb0FieldQC(), name=f'field_qc{suffix}')
+
+    if unet_b0 is None:
+        unet_b0 = (inputnode, 'b0_template')
+    workflow.connect([
+        (unet_b0[0], b0_ref_wf, [(unet_b0[1], 'inputnode.b0_template')]),
+        (inputnode, synb0_wf, [
+            ('t1_preproc', 'inputnode.t1_preproc'),
+            ('t1_brain', 'inputnode.t1_brain'),
+            ('t1_seg', 'inputnode.t1_seg'),
+            ('to_template_affine_transform', 'inputnode.to_template_affine_transform'),
+            ('acpc_inv_transform', 'inputnode.acpc_inv_transform'),
+            ('dwi_sampling_grid', 'inputnode.output_grid'),
+        ]),
+        (b0_ref_wf, synb0_wf, [
+            ('outputnode.ref_image', 'inputnode.b0_ref'),
+            ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
+        ]),
+        (topup_inputs, synb0_topup_inputs, [
+            ('topup_datain', 'topup_datain'),
+            ('topup_imain', 'topup_imain'),
+        ]),
+        (synb0_wf, synb0_topup_inputs, [('outputnode.synthetic_b0', 'synthetic_b0')]),
+        (synb0_topup_inputs, topup, [
+            ('topup_datain', 'encoding_file'),
+            ('topup_imain', 'in_file'),
+            ('topup_config', 'config'),
+        ]),
+        (topup, field_to_warp, [('out_field', 'fieldmap')]),
+        (synb0_topup_inputs, field_to_warp, [('topup_datain', 'datain')]),
+        (inputnode, field_to_warp, [('b0_template', 'reference')]),
+        (inputnode, unwarp_b0, [
+            ('b0_template', 'input_image'),
+            ('b0_template', 'reference_image'),
+        ]),
+        (field_to_warp, unwarp_b0, [('out_warp', 'transforms')]),
+        (field_to_warp, field_qc, [('out_hz', 'fieldmap')]),
+        (b0_ref_wf, field_qc, [('outputnode.dwi_mask', 'mask')]),
+        (synb0_topup_inputs, field_qc, [('topup_datain', 'datain')]),
+    ])  # fmt:skip
+    return synb0_wf, unwarp_b0, field_to_warp, field_qc
+
+
+def _as_transform_list(value):
+    return [value]
+
+
+def connect_post_hmc_synb0_topup(workflow, unit, inputnode, b0, source_file, has_gradwarp):
+    """Add SynB0 + TOPUP after DIFFPREP or SHORELine head motion correction.
+
+    ``b0`` is the ``(node, field)`` of the motion-corrected b=0 average. The
+    warp is applied downstream of gradwarp, so with ``has_gradwarp`` it is
+    estimated from a gradwarp-corrected copy. ``inputnode`` provides the
+    T1w-side inputs of :func:`init_synb0_wf` and ``gradwarp_field``. Returns the
+    :func:`init_synb0_topup_wf` workflow, whose ``out_warp`` and ``b0_corrected``
+    the caller wires on.
+    """
+    from ...interfaces import DerivativesDataSink
+    from ...utils.sdc import pe_readout_time
+    from ..dwi.util import add_synb0_outputs
+
+    readout_time = pe_readout_time(unit)
+    if readout_time is None or not unit.pe_dir:
+        raise ValueError(
+            'SynB0 distortion correction needs the PhaseEncodingDirection and '
+            f'TotalReadoutTime of {unit.dwi_files[0]}.'
+        )
+    synb0_topup_wf = init_synb0_topup_wf(
+        raw_dwi_file=unit.dwi_files[0],
+        pe_dir=unit.pe_dir,
+        readout_time=readout_time,
+        source_file=source_file,
+        omp_nthreads=config.nipype.omp_nthreads,
+        two_pass=config.workflow.two_pass_sdc,
+    )
+    add_synb0_outputs(workflow, synb0_topup_wf, source_file)
+    ds_synb0_field_qc = pe.Node(
+        DerivativesDataSink(
+            source_file=source_file,
+            desc='synb0field',
+            suffix='qc',
+            extension='.tsv',
+        ),
+        name='ds_synb0_field_qc',
+        run_without_submitting=True,
+        mem_gb=0.01,
+    )
+    workflow.connect([
+        (inputnode, synb0_topup_wf, [
+            ('t1_preproc', 'inputnode.t1_preproc'),
+            ('t1_brain', 'inputnode.t1_brain'),
+            ('t1_seg', 'inputnode.t1_seg'),
+            ('to_template_affine_transform', 'inputnode.to_template_affine_transform'),
+            ('acpc_inv_transform', 'inputnode.acpc_inv_transform'),
+            ('dwi_sampling_grid', 'inputnode.dwi_sampling_grid'),
+        ]),
+        (synb0_topup_wf, ds_synb0_field_qc, [('outputnode.field_qc_file', 'in_file')]),
+    ])  # fmt:skip
+    if has_gradwarp:
+        gradwarp_topup_b0 = pe.Node(
+            ants.ApplyTransforms(interpolation='LanczosWindowedSinc', float=True),
+            name='gradwarp_topup_b0',
+        )
+        workflow.connect([
+            (b0[0], gradwarp_topup_b0, [
+                (b0[1], 'input_image'),
+                (b0[1], 'reference_image'),
+            ]),
+            (inputnode, gradwarp_topup_b0, [
+                (('gradwarp_field', _as_transform_list), 'transforms'),
+            ]),
+            (gradwarp_topup_b0, synb0_topup_wf, [('output_image', 'inputnode.b0_template')]),
+        ])  # fmt:skip
+    else:
+        workflow.connect([(b0[0], synb0_topup_wf, [(b0[1], 'inputnode.b0_template')])])  # fmt:skip
+    return synb0_topup_wf
