@@ -240,7 +240,6 @@ def init_dwi_finalize_wf(
                 'itk_b0_to_t1',
                 'b0_to_dwiref_transforms',
                 'dwiref_to_t1_affine',
-                'dwiref_to_t1_warp',
                 't1_2_mni_forward_transform',
                 'hmc_optimization_data',
                 'dwi_files',
@@ -411,8 +410,6 @@ def init_dwi_finalize_wf(
              'inputnode.b0_to_dwiref_transforms'),
             ('dwiref_to_t1_affine',
              'inputnode.dwiref_to_t1_affine'),
-            ('dwiref_to_t1_warp',
-             'inputnode.dwiref_to_t1_warp'),
             ('itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
         ]),
         (transform_dwis_t1, outputnode, [

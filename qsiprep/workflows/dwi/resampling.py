@@ -175,7 +175,6 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 't1_mask',
                 't1_brain',
                 'b0_to_dwiref_transforms',
-                'dwiref_to_t1_warp',
                 'dwiref_to_t1_affine',
                 't1_2_mni_forward_transform',
                 'name_source',
@@ -274,10 +273,11 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             ('b0_to_dwiref_transforms', 'b0_to_dwiref_transforms'),
             (('dwiref_to_t1_affine', _get_first),
              'dwiref_to_t1_affine'),
-            ('dwiref_to_t1_warp', 'dwiref_to_t1_warp'),
         ]),
-        # TODO: check that the cnr_tfm is also appropriately warped for shoreline
-        (compose_transforms, cnr_tfm, [(('out_warps', _get_first), 'transforms')]),
+        # The CNR map is computed from motion-corrected volumes (SHORELine) or is
+        # already in eddy's corrected frame, so volume 0's hmc stage must not be
+        # applied to it again.
+        (compose_transforms, cnr_tfm, [('hmc_corrected_transforms', 'transforms')]),
         (inputnode, rotate_gradients, [
             ('bvec_files', 'bvec_files'),
             ('bval_files', 'bval_files'),
@@ -308,7 +308,6 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             ('itk_b0_to_t1', 'hmcsdc_dwi_ref_to_t1w_affine'),
             ('b0_to_dwiref_transforms', 'b0_to_dwiref_transforms'),
             (('dwiref_to_t1_affine', _get_first), 'dwiref_to_t1_affine'),
-            ('dwiref_to_t1_warp', 'dwiref_to_t1_warp'),
         ]),
     ])  # fmt:skip
 

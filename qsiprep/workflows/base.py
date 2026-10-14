@@ -879,7 +879,6 @@ to workflows in *QSIPrep*'s documentation]\
                 (dwiref_wf, dwi_finalize_wf, [
                     (output_name, 'inputnode.b0_to_dwiref_transforms'),
                     ('outputnode.dwiref_to_t1_affine', 'inputnode.dwiref_to_t1_affine'),
-                    ('outputnode.dwiref_to_t1_warp', 'inputnode.dwiref_to_t1_warp'),
                     ('outputnode.dwiref', 'inputnode.dwiref'),
                     ('outputnode.dwiref_wm_seg', 'inputnode.dwiref_wm_seg'),
                 ]),
