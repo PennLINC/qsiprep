@@ -6,7 +6,7 @@ workflows. They are different images and both are worth writing:
 
 * ``t2_preproc``    -- the merged (unbiased) T2w template resampled into ACPC,
                        built from ``anat_reference_wf``'s ``bias_corrected``.
-* ``t2w_unfatsat``  -- the fat-suppressed image that TORTOISE T2Wreg and DRBUDDI
+* ``t2w_unfatsat``  -- the fat-suppressed image that DRBUDDI and unpile
                        actually register to. It descends from
                        ``outputnode.template``, so it is NOT bias corrected and
                        is NOT the same image as ``t2_preproc``.

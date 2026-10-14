@@ -51,10 +51,10 @@ def _diffprep_siblings(tmp_path):
 
 
 def test_diffprep_cmdline_off(tmp_path):
-    """Test the DIFFPREP command line with epi_mode='off'.
+    """Test the DIFFPREP command line.
 
-    DIFFPREP with epi_mode='off' drives TORTOISEProcess from --step import
-    with all extra stages (including EPI) disabled.
+    DIFFPREP drives TORTOISEProcess from --step import with all extra stages
+    (including EPI) disabled.
     """
     from qsiprep.interfaces.tortoise import DIFFPREP
 
@@ -64,7 +64,6 @@ def test_diffprep_cmdline_off(tmp_path):
         bmtxt_file=str(bmtxt),
         json_file=str(json_file),
         correction_mode='quadratic',
-        epi_mode='off',
     )
     cmd = iface.cmdline
     assert cmd.startswith('TORTOISEProcess')
@@ -79,48 +78,6 @@ def test_diffprep_cmdline_off(tmp_path):
     # The bmtxt/json siblings are found by stem, never passed as argstrs.
     assert 'dwi.bmtxt' not in cmd
     assert 'dwi.json' not in cmd
-
-
-def test_diffprep_cmdline_t2wreg(tmp_path):
-    """Test the DIFFPREP command line with epi_mode='T2Wreg'.
-
-    DIFFPREP with epi_mode='T2Wreg' emits --epi T2Wreg -s <structural>.
-    """
-    from qsiprep.interfaces.tortoise import DIFFPREP
-
-    dwi, bmtxt, json_file = _diffprep_siblings(tmp_path)
-    t2w = tmp_path / 't2w.nii'
-    _write_dummy_nii(t2w, nvols=1)
-
-    iface = DIFFPREP(
-        dwi_file=str(dwi),
-        bmtxt_file=str(bmtxt),
-        json_file=str(json_file),
-        correction_mode='motion',
-        epi_mode='T2Wreg',
-        structural_image=str(t2w),
-    )
-    cmd = iface.cmdline
-    assert '-c motion' in cmd
-    assert '--epi T2Wreg' in cmd
-    assert f'-s {t2w}' in cmd
-    assert '--epi off' not in cmd
-
-
-def test_diffprep_t2wreg_requires_structural(tmp_path):
-    """Test that epi_mode='T2Wreg' without a structural image is an error."""
-    from qsiprep.interfaces.tortoise import DIFFPREP
-
-    dwi, bmtxt, json_file = _diffprep_siblings(tmp_path)
-    iface = DIFFPREP(
-        dwi_file=str(dwi),
-        bmtxt_file=str(bmtxt),
-        json_file=str(json_file),
-        correction_mode='quadratic',
-        epi_mode='T2Wreg',
-    )
-    with pytest.raises(ValueError, match='requires a structural_image'):
-        _ = iface.cmdline
 
 
 def test_tortoise_use_cuda_swaps_the_binary(tmp_path):
@@ -271,13 +228,10 @@ def test_diffprep_boilerplate_describes_the_configured_mode(tmp_path):
         config.workflow.diffprep_config = orig
 
 
-def _stage_diffprep_outputs(tmp_path, t2wreg):
+def _stage_diffprep_outputs(tmp_path):
     """Recreate the file tree TORTOISEProcess leaves behind in a node's cwd.
 
-    The motion+eddy step writes ``<stem>_temp_proc/<stem>_proc_moteddy.*``,
-    and when ``-s`` is
-    given the StructuralAlignment + FinalData stages additionally write
-    ``<stem>_TORTOISE_final.nii`` and its own reoriented ``.bmtxt`` in the cwd.
+    The motion+eddy step writes ``<stem>_temp_proc/<stem>_proc_moteddy.*``.
     """
     dwi, bmtxt, json_file = _diffprep_siblings(tmp_path)
     temp_proc = tmp_path / 'dwi_temp_proc'
@@ -285,125 +239,41 @@ def _stage_diffprep_outputs(tmp_path, t2wreg):
     _write_dummy_nii(temp_proc / 'dwi_proc_moteddy.nii')
     (temp_proc / 'dwi_proc_moteddy.bmtxt').write_text('0 0 0 0 0 0\n1000 0 0 0 0 0\n')
     (temp_proc / 'dwi_proc_moteddy_transformations.txt').write_text('')
-    if t2wreg:
-        # The EPI stage's displacement field plus the before/after b=0 pair.
-        _write_dummy_nii(temp_proc / 'deformation_FINV.nii.gz', nvols=3)
-        _write_dummy_nii(temp_proc / 'blip_up_b0.nii', nvols=1)
-        _write_dummy_nii(temp_proc / 'blip_up_b0_corrected.nii', nvols=1)
-        _write_dummy_nii(temp_proc / 'structural_used.nii', nvols=1)
-        # StructuralAlignment + FinalData still run (--step only sets the START
-        # step), so their output exists -- the interface must ignore it.
-        _write_dummy_nii(tmp_path / 'dwi_TORTOISE_final.nii')
-        (tmp_path / 'dwi_TORTOISE_final.bmtxt').write_text('0 0 0 0 0 0\n0 0 1000 0 0 0\n')
     return dwi, bmtxt, json_file
 
 
-def test_diffprep_outputs_off_uses_moteddy(tmp_path, monkeypatch):
-    """Test that epi_mode='off' takes both the image and the bmatrix from motion+eddy."""
+def test_diffprep_outputs_use_moteddy(tmp_path, monkeypatch):
+    """Test that both the image and the bmatrix come from motion+eddy."""
     from qsiprep.interfaces.tortoise import DIFFPREP
 
-    dwi, bmtxt, json_file = _stage_diffprep_outputs(tmp_path, t2wreg=False)
+    dwi, bmtxt, json_file = _stage_diffprep_outputs(tmp_path)
     monkeypatch.chdir(tmp_path)
 
     outputs = DIFFPREP(
         dwi_file=str(dwi),
         bmtxt_file=str(bmtxt),
         json_file=str(json_file),
-        epi_mode='off',
     )._list_outputs()
 
     assert outputs['corrected_dwi_file'].endswith('dwi_temp_proc/dwi_proc_moteddy.nii')
     assert outputs['corrected_bmtxt_file'].endswith('dwi_temp_proc/dwi_proc_moteddy.bmtxt')
 
 
-def test_diffprep_outputs_t2wreg_stays_in_native_space(tmp_path, monkeypatch):
-    """Test that epi_mode='T2Wreg' emits the PRE-EPI image plus the EPI warp.
-
-    Passing ``-s`` makes TORTOISE run StructuralAlignment and FinalData, which
-    resample the DWIs into the structural's frame -- pulling coregistration and
-    ACPC alignment forward into HMC, where qsiprep does not want them (measured on
-    real data: ~12 deg of the alignment happened inside DIFFPREP, leaving
-    qsiprep's own b0->anat step with 1.7 deg). Take the native-grid motion+eddy
-    image and hand the EPI displacement field out as a transform instead, which is
-    the contract the DRBUDDI branch already uses.
-    """
+def test_diffprep_emits_no_warp(tmp_path, monkeypatch):
+    """Test that DIFFPREP hands no displacement field downstream: SDC is qsiprep's."""
     from qsiprep.interfaces.tortoise import DIFFPREP
 
-    dwi, bmtxt, json_file = _stage_diffprep_outputs(tmp_path, t2wreg=True)
-    t2w = tmp_path / 't2w.nii'
-    _write_dummy_nii(t2w, nvols=1)
+    dwi, bmtxt, json_file = _stage_diffprep_outputs(tmp_path)
     monkeypatch.chdir(tmp_path)
 
     outputs = DIFFPREP(
         dwi_file=str(dwi),
         bmtxt_file=str(bmtxt),
         json_file=str(json_file),
-        epi_mode='T2Wreg',
-        structural_image=str(t2w),
-    )._list_outputs()
-
-    # Native grid, and the bmatrix that goes with it.
-    assert outputs['corrected_dwi_file'].endswith('dwi_temp_proc/dwi_proc_moteddy.nii')
-    assert outputs['corrected_bmtxt_file'].endswith('dwi_temp_proc/dwi_proc_moteddy.bmtxt')
-    # The reoriented FinalData output exists but must NOT be used.
-    assert 'TORTOISE_final' not in outputs['corrected_dwi_file']
-    assert 'TORTOISE_final' not in outputs['corrected_bmtxt_file']
-    # SDC travels as a transform.
-    assert outputs['sdc_warp'].endswith('dwi_temp_proc/deformation_FINV.nii.gz')
-    # Named so nipype's remove_unnecessary_outputs keeps the SDC report inputs.
-    assert outputs['b0_up_image'].endswith('blip_up_b0.nii')
-    assert outputs['b0_up_corrected_image'].endswith('blip_up_b0_corrected.nii')
-    assert outputs['structural_image'].endswith('structural_used.nii')
-
-
-def test_diffprep_epi_off_emits_no_warp(tmp_path, monkeypatch):
-    """Test that no warp is emitted without the EPI stage.
-
-    Without the EPI stage there is no displacement field to hand downstream.
-    """
-    from nipype.interfaces.base import isdefined
-
-    from qsiprep.interfaces.tortoise import DIFFPREP
-
-    dwi, bmtxt, json_file = _stage_diffprep_outputs(tmp_path, t2wreg=False)
-    monkeypatch.chdir(tmp_path)
-
-    outputs = DIFFPREP(
-        dwi_file=str(dwi),
-        bmtxt_file=str(bmtxt),
-        json_file=str(json_file),
-        epi_mode='off',
     )._list_outputs()
 
     assert outputs['corrected_dwi_file'].endswith('dwi_proc_moteddy.nii')
-    assert not isdefined(outputs['sdc_warp'])
-
-
-def test_diffprep_t2wreg_missing_warp(tmp_path, monkeypatch):
-    """Test that a missing T2Wreg displacement field is an error.
-
-    A T2Wreg run without its displacement field is an error, not a silent skip.
-
-    Falling through would produce a run with no susceptibility correction at all
-    while still reporting sdc_method='T2Wreg'.
-    """
-    from qsiprep.interfaces.tortoise import DIFFPREP
-
-    dwi, bmtxt, json_file = _stage_diffprep_outputs(tmp_path, t2wreg=True)
-    t2w = tmp_path / 't2w.nii'
-    _write_dummy_nii(t2w, nvols=1)
-    (tmp_path / 'dwi_temp_proc' / 'deformation_FINV.nii.gz').unlink()
-    monkeypatch.chdir(tmp_path)
-
-    iface = DIFFPREP(
-        dwi_file=str(dwi),
-        bmtxt_file=str(bmtxt),
-        json_file=str(json_file),
-        epi_mode='T2Wreg',
-        structural_image=str(t2w),
-    )
-    with pytest.raises(FileNotFoundError, match='displacement field'):
-        iface._list_outputs()
+    assert 'sdc_warp' not in outputs
 
 
 def test_diffprep_motion_params_basic(tmp_path):
@@ -859,13 +729,15 @@ def test_t2w_available_for_sdc_requires_anat_processing(t2w_gate_config):
     extended report's t2w_n4 with an empty input (the CI failure).
     """
     from qsiplan.methods import selection_for_config
+    from qsiplan.models import GroupingPolicy
 
     from qsiprep.utils.sdc import t2w_available_for_sdc
 
+    policy = GroupingPolicy()
     selection = selection_for_config('eddy', 'drbuddi')
-    assert t2w_available_for_sdc(T2W_SUBJECT, selection, 't1w') is True
-    assert t2w_available_for_sdc({}, selection, 't1w') is False
-    assert t2w_available_for_sdc(T2W_SUBJECT, selection, 'none') is False
+    assert t2w_available_for_sdc(T2W_SUBJECT, selection, policy, 't1w') is True
+    assert t2w_available_for_sdc({}, selection, policy, 't1w') is False
+    assert t2w_available_for_sdc(T2W_SUBJECT, selection, policy, 'none') is False
 
 
 def test_t2w_available_for_sdc_requires_a_consuming_method(t2w_gate_config):
@@ -874,31 +746,37 @@ def test_t2w_available_for_sdc_requires_a_consuming_method(t2w_gate_config):
     t2w_unfatsat only exists when a selected method has a consuming stage.
 
     ``additional_t2ws`` -- the only thing that makes init_anat_preproc_wf build its
-    T2w branch -- was gated on the PEPOLAR tool alone. DIFFPREP's T2Wreg path
-    consumes the T2w without any PEPOLAR data and is not gated on that choice, so
-    a plain ``--hmc-method tortoise --ignore fieldmaps`` run requested T2w SDC
-    while nothing produced the image, and DIFFPREP died with
-    ``epi_mode="T2Wreg" requires a structural_image``.
+    T2w branch -- is gated on a consumer: DRBUDDI among the PEPOLAR tools, or
+    the fieldmap-less unpile fit against the T2w, which runs with every head
+    motion method.
     """
     from qsiplan.methods import selection_for_config
+    from qsiplan.models import GroupingPolicy
 
     from qsiprep.utils.sdc import t2w_available_for_sdc, t2w_sdc_enabled
 
+    default = GroupingPolicy()
+    unpile_t2w = GroupingPolicy(fieldmapless_method='unpile', sdc_anat_reference='t2w')
+
     # eddy + TOPUP: nothing consumes a T2w, so do not claim T2w SDC.
     selection = selection_for_config('eddy', 'topup')
-    assert t2w_sdc_enabled(selection) is False
-    assert t2w_available_for_sdc(T2W_SUBJECT, selection, 't1w') is False
+    assert t2w_sdc_enabled(selection, default) is False
+    assert t2w_available_for_sdc(T2W_SUBJECT, selection, default, 't1w') is False
 
     # DRBUDDI consumes it as its multimodal --structural.
     selection = selection_for_config('eddy', 'topup+drbuddi')
-    assert t2w_sdc_enabled(selection) is True
-    assert t2w_available_for_sdc(T2W_SUBJECT, selection, 't1w') is True
+    assert t2w_sdc_enabled(selection, default) is True
+    assert t2w_available_for_sdc(T2W_SUBJECT, selection, default, 't1w') is True
 
-    # The regression: DIFFPREP consumes it via --epi T2Wreg regardless of
-    # the PEPOLAR tool choice.
-    selection = selection_for_config('tortoise', 'auto')
-    assert t2w_sdc_enabled(selection) is True, 'tortoise'
-    assert t2w_available_for_sdc(T2W_SUBJECT, selection, 't1w') is True, 'tortoise'
+    # unpile against the synthetic b=0 consumes no T2w; a T2w consumer needs DRBUDDI.
+    selection = selection_for_config('eddy', 'topup')
+    assert t2w_sdc_enabled(selection, GroupingPolicy(fieldmapless_method='unpile')) is False
+
+    # unpile against the T2w consumes it with any head motion method.
+    for hmc, sdc in (('eddy', 'topup'), ('shoreline', 'drbuddi'), ('tortoise', 'drbuddi')):
+        selection = selection_for_config(hmc, sdc)
+        assert t2w_sdc_enabled(selection, unpile_t2w) is True, hmc
+        assert t2w_available_for_sdc(T2W_SUBJECT, selection, unpile_t2w, 't1w') is True, hmc
 
 
 def test_extended_pepolar_report_t2w_n4_gets_input():
@@ -941,7 +819,8 @@ def _make_unit(suffix=None, **extra):
 
     ``suffix`` mirrors the old scan-group vocabulary: ``None`` fieldmap-less,
     ``'rpe_series'`` a reverse-PE partner series, ``'epi'`` a dedicated epi
-    fieldmap, or a GRE suffix (``'phasediff'``/``'fieldmap'``).
+    fieldmap, a GRE suffix (``'phasediff'``/``'fieldmap'``), or ``'unpile'``
+    for unpile against the T2w (``--sdc-fieldmapless-method unpile``).
     """
     from qsiplan.models import CorrectionMethod
 
@@ -970,6 +849,15 @@ def _make_unit(suffix=None, **extra):
             else CorrectionMethod.DIRECT,
             pe_dir='j',
             estimation_sources=list(extra.get('sources', [])),
+        )
+    if suffix == 'unpile':
+        t2w = ['/data/sub-01_T2w.nii.gz']
+        return make_preproc_unit(
+            [dwi],
+            method=CorrectionMethod.UNPILE,
+            pe_dir='j',
+            estimation_sources=t2w,
+            anat_files=t2w,
         )
     # None (or the retired 'syn'): fieldmap-less.
     return make_preproc_unit([dwi], method=None, pe_dir='j')
@@ -1012,20 +900,27 @@ def test_init_diffprep_hmc_wf_contract_hmc_only():
     }
     assert required.issubset(set(outputnode.inputs.copyable_trait_names()))
     assert outputnode.inputs.sdc_method == 'None'
-    assert wf.get_node('diffprep').inputs.epi_mode == 'off'
     for node in ('tortoise_convert', 'diffprep', 'split_outputs', 'b0_ref_for_coreg'):
         assert wf.get_node(node) is not None
 
 
-def test_init_diffprep_hmc_wf_t2wreg():
-    """Test that no fieldmap plus a T2w gives TORTOISE T2Wreg.
-
-    No fieldmap + T2w -> TORTOISE T2Wreg (sdc_method='T2Wreg').
-    """
+def test_a_t2w_alone_does_not_select_unpile():
+    """No fieldmap plus a T2w is not unpile unless the plan asks for it."""
     _base_config()
     wf = _build(_make_unit(None), t2w_sdc=True)
-    assert wf.get_node('diffprep').inputs.epi_mode == 'T2Wreg'
-    assert wf.get_node('outputnode').inputs.sdc_method == 'T2Wreg'
+    assert wf.get_node('sdc_wf') is None
+    assert wf.get_node('outputnode').inputs.sdc_method == 'None'
+
+
+def test_init_diffprep_hmc_wf_unpile():
+    """Test that an explicit unpile estimation runs unpile after DIFFPREP through init_sdc_wf."""
+    _base_config()
+    wf = _build(_make_unit('unpile'), t2w_sdc=True)
+    sdc_wf = wf.get_node('sdc_wf')
+    assert sdc_wf is not None
+    assert sdc_wf.get_node('unpile_sdc_wf') is not None
+    assert sdc_wf.get_node('outputnode').inputs.method == 'unpile (T2w)'
+    assert ('outputnode.method', 'sdc_method') in _connect_fields(wf, 'sdc_wf', 'outputnode')
 
 
 def _connect_fields(wf, src, dst):
@@ -1033,10 +928,12 @@ def _connect_fields(wf, src, dst):
     return [] if edge is None else list(edge['connect'])
 
 
-def test_init_diffprep_hmc_wf_synb0_targets_the_synthetic_b0():
-    """Test that --sdc-anat-reference synb0 targets the synthetic b=0.
+def test_init_diffprep_hmc_wf_synb0_runs_topup_after_diffprep():
+    """Test that --sdc-anat-reference synb0 runs TOPUP on DIFFPREP's output.
 
-    --sdc-anat-reference synb0, no T2w -> T2Wreg registered to the synthetic b=0.
+    The synthetic b=0 is generated from the motion-corrected b=0 and paired with
+    it in TOPUP; the field travels as a warp and coregistration sees the
+    corrected b=0.
     """
     from qsiplan.models import CorrectionMethod
 
@@ -1052,84 +949,67 @@ def test_init_diffprep_hmc_wf_synb0_targets_the_synthetic_b0():
             estimation_sources=[t1w],
             anat_files=[t1w],
         )
-        wf = _build(unit, t2w_sdc=False, name='dp_synb0')
+        # A T2w being available does not bring unpile in.
+        wf = _build(unit, t2w_sdc=True, name='dp_synb0')
 
-        assert wf.get_node('diffprep').inputs.epi_mode == 'T2Wreg'
-        assert wf.get_node('outputnode').inputs.sdc_method == 'T2Wreg (SynB0)'
-        # The synthetic b=0 (not the T2w) is DIFFPREP's structural target.
-        assert wf.get_node('synb0_wf') is not None
-        assert wf.get_node('synb0_b0_ref_wf') is not None
-        assert ('outputnode.synthetic_b0', 'structural_image') in _connect_fields(
-            wf, 'synb0_wf', 'diffprep'
-        )
-        assert ('t2w_unfatsat', 'structural_image') not in _connect_fields(
-            wf, 'inputnode', 'diffprep'
-        )
-        # The raw distorted b=0 seeds the generation...
+        assert wf.get_node('outputnode').inputs.sdc_method == 'TOPUP (SynB0)'
+        assert wf.get_node('raw_b0s') is None
+        # The motion-corrected b=0 seeds the synthesis and is TOPUP's measured image.
         assert ('b0_average', 'inputnode.b0_template') in _connect_fields(
-            wf, 'raw_b0s', 'synb0_b0_ref_wf'
+            wf, 'extract_b0s', 'synb0_topup_wf'
         )
-        # ...and coregistration still sees the EPI-corrected b=0.
-        assert wf.get_node('apply_sdc_to_b0') is not None
-        # The generation QC reportlets are datasunk.
+        topup_wf = wf.get_node('synb0_topup_wf')
+        assert ('outputnode.synthetic_b0', 'synthetic_b0') in _connect_fields(
+            topup_wf, 'synb0_wf', 'synb0_topup_inputs'
+        )
+        assert ('b0_template', 'b0_file') in _connect_fields(topup_wf, 'inputnode', 'topup_inputs')
+        # The field travels as a warp, and coregistration sees the corrected b=0.
+        assert ('outputnode.out_warp', 'to_dwi_ref_warps') in [
+            (src if isinstance(src, str) else src[0], dst)
+            for src, dst in _connect_fields(wf, 'synb0_topup_wf', 'outputnode')
+        ]
+        assert 'transforms' in [
+            dst for _, dst in _connect_fields(wf, 'synb0_topup_wf', 'apply_sdc_to_b0')
+        ]
+        assert ('output_image', 'inputnode.b0_template') in _connect_fields(
+            wf, 'apply_sdc_to_b0', 'b0_ref_for_coreg'
+        )
+        # The generation and field QC are datasunk.
         assert wf.get_node('ds_report_synb0_acquired') is not None
         assert wf.get_node('ds_report_synb0_unet') is not None
+        assert wf.get_node('ds_synb0_field_qc') is not None
     finally:
         config.workflow.hmc_method = 'eddy'
 
 
-def test_t2wreg_sdc_travels_as_a_warp_not_baked_in():
-    """Test that T2Wreg SDC travels as a warp rather than being baked in.
+def test_unpile_sdc_travels_as_a_warp_not_baked_in():
+    """Test that unpile's SDC travels as a warp rather than being baked in.
 
-    The EPI field must reach to_dwi_ref_warps so qsiprep resamples once.
-
-    Taking TORTOISE's FinalData instead would bake in its StructuralAlignment,
-    performing coregistration and ACPC inside HMC. Routing the displacement field
-    to ``to_dwi_ref_warps`` puts this branch on the same footing as DRBUDDI: the
-    correction composes with HMC and coregistration in a single resampling.
+    The field must reach to_dwi_ref_warps so qsiprep resamples once, and the
+    coregistration reference is the b=0 init_sdc_wf unwarped.
     """
     _base_config()
-    wf = _build(_make_unit(None), t2w_sdc=True, name='t2wreg_warp')
+    wf = _build(_make_unit('unpile'), t2w_sdc=True, name='unpile_warp')
 
-    out_fields = [dst for _, dst in _connect_fields(wf, 'diffprep', 'outputnode')]
+    out_fields = [dst for _, dst in _connect_fields(wf, 'sdc_wf', 'outputnode')]
     assert 'to_dwi_ref_warps' in out_fields
-    # The report needs the before/after pair and the structural actually used.
-    for field in ('b0_up_image', 'b0_up_corrected_image', 't2w_image'):
-        assert field in out_fields, field
-
-
-def test_t2wreg_coregistration_uses_the_corrected_b0():
-    """Test that T2Wreg coregistration uses the corrected b=0.
-
-    Coregistration must see the undistorted b=0.
-
-    DIFFPREP's output is pre-EPI on this path, so the warp has to be applied to
-    the b=0 before it becomes the coregistration reference -- otherwise the
-    dwi->anat registration is computed on distorted data.
-    """
-    _base_config()
-    wf = _build(_make_unit(None), t2w_sdc=True, name='t2wreg_coreg')
-
-    apply_sdc = wf.get_node('apply_sdc_to_b0')
-    assert apply_sdc is not None, 'expected the b=0 to be unwarped before coregistration'
-    assert ('b0_average', 'input_image') in _connect_fields(wf, 'extract_b0s', 'apply_sdc_to_b0')
-    assert 'transforms' in [dst for _, dst in _connect_fields(wf, 'diffprep', 'apply_sdc_to_b0')]
-    assert ('output_image', 'inputnode.b0_template') in _connect_fields(
-        wf, 'apply_sdc_to_b0', 'b0_ref_for_coreg'
+    assert ('outputnode.b0_ref', 'b0_template') in _connect_fields(wf, 'sdc_wf', 'outputnode')
+    assert ('outputnode.ref_image', 'inputnode.b0_ref') in _connect_fields(
+        wf, 'b0_ref_for_coreg', 'sdc_wf'
     )
-    # The raw b=0 must NOT also feed the reference, or the corrected one is moot.
-    assert ('b0_average', 'inputnode.b0_template') not in _connect_fields(
-        wf, 'extract_b0s', 'b0_ref_for_coreg'
+    # The distorted reference must NOT also feed coregistration directly.
+    assert ('outputnode.ref_image', 'b0_template') not in _connect_fields(
+        wf, 'b0_ref_for_coreg', 'outputnode'
     )
 
 
-def test_non_t2wreg_coregistration_uses_the_b0_directly():
-    """Test that non-T2Wreg coregistration uses the b=0 directly.
+def test_hmc_only_coregistration_uses_the_b0_directly():
+    """Test that HMC-only coregistration uses the b=0 directly.
 
-    Without an in-TORTOISE EPI stage there is nothing to unwarp first.
+    Without a susceptibility correction there is nothing to unwarp first.
     """
     _base_config()
-    wf = _build(_make_unit(None), t2w_sdc=False, name='no_t2wreg_coreg')
+    wf = _build(_make_unit(None), t2w_sdc=False, name='no_sdc_coreg')
     assert wf.get_node('apply_sdc_to_b0') is None
     assert ('b0_average', 'inputnode.b0_template') in _connect_fields(
         wf, 'extract_b0s', 'b0_ref_for_coreg'
@@ -1143,7 +1023,6 @@ def test_init_diffprep_hmc_wf_fieldmapless_without_t2w():
     """
     _base_config()
     wf = _build(_make_unit(None), t2w_sdc=False)
-    assert wf.get_node('diffprep').inputs.epi_mode == 'off'
     assert wf.get_node('sdc_wf') is None
 
 
@@ -1217,8 +1096,7 @@ def test_init_diffprep_hmc_wf_honours_sloppy():
 
     It must do so with ``--niter 0`` and NOT by clearing ``is_human_brain``:
     that flag reaches the same ``iterative`` gate but also makes DIFFPREP's
-    auto-masking look for a ``<stem>_noise.nii`` and changes structural-target
-    masking on the T2Wreg path.
+    auto-masking look for a ``<stem>_noise.nii``.
     """
     config = _base_config()
 
@@ -1304,21 +1182,14 @@ def test_init_diffprep_hmc_wf_rpe_series_pe_axis(tmp_path):
     assert split.inputs.pe_axis == 'j'
 
 
-def test_drbuddi_never_sends_parser_disabled_flags(tmp_path):
-    """Test that the two DRBUDDI options disabled in TORTOISE's parser are never sent.
+def test_drbuddi_keeps_its_up_down_rigid(tmp_path):
+    """Test that the workflow never disables DRBUDDI's blip-down to blip-up registration.
 
-    ``--DRBUDDI_start_with_diffeomorphic_for_rigid_reg`` and
-    ``--DRBUDDI_disable_initial_rigid`` are both commented out of
-    DRBUDDI_parserBase.cxx, along with their getters, so neither can change the
-    registration. Worse, DRBUDDI rejects an unrecognised parameter by printing
-    "Unknown command line parameter" and then exiting 0 -- nipype records that
-    as success and the run dies afterwards collecting the
-    bdown_to_bup_rigidtrans.hdf5 that was never written.
-
-    ``sloppy`` must therefore cheapen DRBUDDI through --DRBUDDI_stage alone.
-    (``--DRBUDDI_disable_initial_rigid`` would also suppress
-    ``bdown_to_bup_rigid_trans_h5``, which DRBUDDIAggregateOutputs dereferences
-    unguarded on the rpe_series FA branch.)
+    ``--DRBUDDI_disable_initial_rigid`` skips the rigid + diffeomorphic + rigid
+    registration of the blip-down b=0 to the blip-up b=0. qsiprep motion-corrects
+    each phase-encoding series on its own, so the two b=0s reach DRBUDDI in
+    different frames and that registration has to stay on, sloppy or not.
+    ``sloppy`` cheapens DRBUDDI through --DRBUDDI_stage alone.
     """
     from qsiprep.interfaces.tortoise import DRBUDDI
 
@@ -1335,21 +1206,14 @@ def test_drbuddi_never_sends_parser_disabled_flags(tmp_path):
         'blip_down_image': str(down),
         'blip_up_json': str(up_json),
     }
-    disabled = (
-        '--DRBUDDI_start_with_diffeomorphic_for_rigid_reg',
-        '--DRBUDDI_disable_initial_rigid',
-    )
-
     for sloppy in (True, False):
         cmd = DRBUDDI(sloppy=sloppy, **common).cmdline
-        for flag in disabled:
-            assert flag not in cmd, f'{flag} is rejected by DRBUDDI (sloppy={sloppy})'
+        assert '--DRBUDDI_disable_initial_rigid' not in cmd
+        assert '--DRBUDDI_start_with_diffeomorphic_for_rigid_reg' not in cmd
 
-    # sloppy still has to do its job, just through the stage schedule
-    assert '--DRBUDDI_stage' in DRBUDDI(sloppy=True, **common).cmdline
+    assert DRBUDDI(sloppy=True, **common).cmdline.count('--DRBUDDI_stage') == 4
     assert '--DRBUDDI_stage' not in DRBUDDI(sloppy=False, **common).cmdline
 
-    # ...and the workflow must not set either trait, under sloppy or not
     rpe = tmp_path / 'sub-01_dir-PA_dwi.nii.gz'
     _write_dummy_nii(rpe)
     groups = _make_unit('rpe_series', rpe_series=[str(rpe)])
@@ -1357,12 +1221,52 @@ def test_drbuddi_never_sends_parser_disabled_flags(tmp_path):
     try:
         for sloppy in (True, False):
             config.execution.sloppy = sloppy
-            wf = _build(groups, t2w_sdc=False, name=f'no_disabled_flags_{sloppy}')
+            wf = _build(groups, t2w_sdc=False, name=f'up_down_rigid_{sloppy}')
             node = wf.get_node('drbuddi_sdc_wf.drbuddi')
             assert not isdefined(node.inputs.start_with_diffeomorphic_for_rigid_reg)
             assert not isdefined(node.inputs.disable_initial_rigid)
     finally:
         config.execution.sloppy = False
+
+
+def test_sloppy_stage_schedules_are_the_defaults_on_the_sloppy_grid():
+    """Test that the sloppy schedules keep TORTOISE's default physical sizes on the sloppy grid.
+
+    Image smoothing is a standard deviation in voxels of the ~1 mm working grid.
+    field_smoothing is a variance in voxels of each stage's downsampled grid, so
+    after the pyramid factor is rescaled it has to follow that stage's voxel size
+    squared, not the grid spacing.
+    """
+    import math
+    import re
+
+    from qsiprep.interfaces.tortoise import SLOPPY_DRBUDDI, SLOPPY_EPI_WORKING_RES
+
+    def stages(schedule):
+        return [
+            tuple(float(v) for v in m)
+            for m in re.findall(
+                r'cfs=\\\{(\d+):(\d+):([\d.]+)\\\},field_smoothing=\\\{([\d.]+):([\d.]+)\\\}',
+                schedule,
+            )
+        ]
+
+    def check(sloppy, defaults):
+        assert len(sloppy) == len(defaults)
+        for (niter, f2, s2, u2, t2), (n0, f, s, u, t) in zip(sloppy, defaults, strict=True):
+            assert niter < n0
+            assert f2 >= 1
+            assert s2 * SLOPPY_EPI_WORKING_RES == pytest.approx(s, abs=0.05)
+            stage_mm, default_mm = f2 * SLOPPY_EPI_WORKING_RES, f
+            assert math.sqrt(u2) * stage_mm == pytest.approx(math.sqrt(u) * default_mm, rel=0.02)
+            assert math.sqrt(t2) * stage_mm == pytest.approx(math.sqrt(t) * default_mm, rel=0.05)
+
+    drbuddi_defaults = [(500, 6, 4, 9, 0), (500, 4, 3, 8, 0), (500, 2, 2, 7, 0), (500, 1, 1, 7, 0)]
+    assert SLOPPY_DRBUDDI.count('--DRBUDDI_stage') == 4
+    check(stages(SLOPPY_DRBUDDI), drbuddi_defaults)
+    # the structural joins through its own metric, as in DRBUDDI's defaults
+    assert SLOPPY_DRBUDDI.count('CCJacS') == 3
+    assert SLOPPY_DRBUDDI.count('CCSK') == 1
 
 
 def test_init_diffprep_hmc_wf_pepolar_always_uses_drbuddi(tmp_path):
@@ -1444,52 +1348,50 @@ def test_sloppy_reaches_the_drbuddi_node(tmp_path):
         config.execution.sloppy = False
 
 
-def test_t2wreg_is_recognised_as_sdc_for_reporting():
-    """Test that the reportlet gate recognises T2Wreg, which carries no fieldmap.
+def test_unpile_is_recognised_as_sdc_for_reporting():
+    """Test that the reportlet gate recognises unpile, which carries no fieldmap.
 
-    Before this, ``fieldmap_type is None`` fell through both gates in
-    ``init_dwi_preproc_wf`` and T2Wreg silently produced no SDC figure, while the
-    identical correction tagged ``syn`` did produce one.
+    ``init_dwi_preproc_wf`` writes the SDC figure for every unit with an unpile
+    stage, whatever the head motion method.
     """
     from qsiplan.models import CorrectionMethod
 
     from qsiprep.tests.preproc_factory import make_preproc_unit
-    from qsiprep.utils.sdc import t2wreg_target
+    from qsiprep.workflows.fieldmap.base import unpile_target
 
     config = _base_config()
     try:
-        config.workflow.hmc_method = 'tortoise'
+        for hmc in ('tortoise', 'eddy', 'shoreline'):
+            config.workflow.hmc_method = hmc
+            assert unpile_target(_make_unit('unpile')) == 't2w', hmc
+
+        # A T2w on disk alone does not select unpile.
         t2w = ['/data/sub-01_T2w.nii.gz']
         fieldmapless = make_preproc_unit(['/data/sub-01_dwi.nii.gz'], anat_files=t2w)
-        assert t2wreg_target(fieldmapless, '/path/to/T2w.nii.gz') == 't2w'
-
-        # No T2w -> no T2Wreg -> nothing to show.
-        assert t2wreg_target(_make_unit(None), '') is None
+        assert unpile_target(fieldmapless) is None
+        assert unpile_target(_make_unit(None)) is None
         # A measured fieldmap goes through its own SDC reports instead.
         rpe = _make_unit('rpe_series', rpe_series=['/data/sub-01_dir-PA_dwi.nii.gz'])
-        assert t2wreg_target(rpe, '/path/to/T2w.nii.gz') is None
+        assert unpile_target(rpe) is None
         epi = _make_unit('epi', epi=['/data/sub-01_epi.nii.gz'])
-        assert t2wreg_target(epi, '/path/to/T2w.nii.gz') is None
+        assert unpile_target(epi) is None
 
-        # A SynB0 unit registers to the synthetic b=0 -- no T2w required.
+        # A SynB0 unit is corrected by TOPUP after DIFFPREP, not unpile; the
+        # reportlet gate counts the TOPUP stage instead.
         synb0 = make_preproc_unit(
             ['/data/sub-01_dwi.nii.gz'],
             method=CorrectionMethod.SYNB0,
             estimation_sources=['/data/sub-01_T1w.nii.gz'],
             anat_files=['/data/sub-01_T1w.nii.gz'],
         )
-        assert t2wreg_target(synb0, '') == 'synb0'
-
-        # Other methods do not run T2Wreg at all.
-        config.workflow.hmc_method = 'eddy'
-        fieldmapless = make_preproc_unit(['/data/sub-01_dwi.nii.gz'], anat_files=t2w)
-        assert t2wreg_target(fieldmapless, '/path/to/T2w.nii.gz') is None
+        assert unpile_target(synb0) is None
+        assert synb0.run.stage_with('topup') is not None
     finally:
         config.workflow.hmc_method = 'eddy'
 
 
-def test_t2wreg_reportlet_desc_is_registered_in_the_report_spec():
-    """Test that the T2Wreg reportlet desc is registered in the report spec.
+def test_sdc_reportlet_desc_is_registered_in_the_report_spec():
+    """Test that the SDC reportlet desc every fieldmap-less correction writes is in the spec.
 
     A desc absent from reports-spec.yml is written to disk but never shown.
     """
@@ -1507,7 +1409,8 @@ def test_t2wreg_reportlet_desc_is_registered_in_the_report_spec():
             desc = bids.get('desc')
             # some entries carry a list of descs
             descs.update(desc if isinstance(desc, list) else [desc])
-    assert 'sdcT2w' in descs
+    assert 'sdc' in descs
+    assert 'sdcT2w' not in descs
 
 
 def test_non_shelled_rpe_series_uses_the_stock_drbuddi_path(tmp_path):
@@ -1656,33 +1559,6 @@ def test_diffprep_passes_ncores_to_tortoise():
     assert node.inputs.ncores == 8
     # nipype's accounting and the process's real budget must agree
     assert node.n_procs == 8
-
-
-def test_diffprep_cmdline_gradwarp_and_initial_field(tmp_path):
-    """Test that the gradwarp field and the T2Wreg initializer are plain TORTOISE flags."""
-    from qsiprep.interfaces.tortoise import DIFFPREP
-
-    dwi, bmtxt, json_file = _diffprep_siblings(tmp_path)
-    t2w = tmp_path / 't2w.nii'
-    _write_dummy_nii(t2w, nvols=1)
-    field = tmp_path / 'gradwarp_field_masked.nii'
-    _write_dummy_nii(field, nvols=1)
-    init = tmp_path / 'gre_warp.nii.gz'
-    _write_dummy_nii(init, nvols=1)
-
-    iface = DIFFPREP(
-        dwi_file=str(dwi),
-        bmtxt_file=str(bmtxt),
-        json_file=str(json_file),
-        correction_mode='motion',
-        epi_mode='T2Wreg',
-        structural_image=str(t2w),
-        grad_nonlin=str(field),
-        epireg_initial_field=str(init),
-    )
-    cmd = iface.cmdline
-    assert f'--grad_nonlin {field}' in cmd
-    assert f'--EPIREG_initial_field {init}' in cmd
 
 
 @pytest.mark.integration

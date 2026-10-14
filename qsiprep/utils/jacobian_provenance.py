@@ -26,7 +26,6 @@ in comments at each branch point instead of duplicating this reasoning.
 from .. import config
 from .diffprep_config import load_diffprep_config
 from .eddy_config import eddy_applies_gre, eddy_modulates_distortion, load_eddy_args
-from .sdc import t2wreg_target
 
 #: Reason string for both eddy-current and susceptibility unmodulated entries
 #: under a non-'jac' eddy resampling method -- eddy has already baked its
@@ -37,24 +36,6 @@ _DIFFPREP_CUBIC_UNMODULATED_REASON = (
     "DIFFPREP ran with correction_mode='cubic', whose eddy-current polynomial "
     '(cubic Okan terms) has no implemented Jacobian determinant.'
 )
-
-_T2WREG_UNMODULATED_REASON = (
-    'TORTOISE applies the fieldmap-less T2Wreg (EPIREG) field without intensity '
-    'modulation: its final registration stage is not restricted to the '
-    'phase-encoding direction, so its Jacobian is not a volume change. Pass '
-    '--force jacobian to modulate by the phase-encoding component anyway.'
-)
-
-
-def t2wreg_is_weighted(unit, t2w_sdc):
-    """Check whether this unit's susceptibility field gets an intensity weight.
-
-    Only TORTOISE's T2Wreg (EPIREG) field is exempt, and ``--force jacobian``
-    lifts the exemption. Every other field (DRBUDDI, GRE, SyN) is weighted.
-    """
-    if t2wreg_target(unit, t2w_sdc) is None:
-        return True
-    return 'jacobian' in (config.workflow.force or [])
 
 
 def _gradwarp_applied(unit):
@@ -79,21 +60,16 @@ def _shoreline_sdc_applied(unit):
 
     No TOPUP-in-eddy carve-out exists for this backend: every SDC warp it
     produces (PEPOLAR -- including a TOPUP-only plan, via DRBUDDI's own
-    wrapping -- or a GRE/SyN fieldmap) is carried in ``to_dwi_ref_warps`` and
-    reaches ``ComposeJacobianWeights`` externally.
-
-    This is *not* simply whether any correction method was selected --
-    ``unit.method`` is also non-``None`` for the fieldmap-less methods
-    (SYNB0, T2Wreg), and those are only ever applied by the TORTOISE backend
-    (``init_sdc_wf``'s own docstring, ``qsiprep/workflows/fieldmap/base.py``);
-    on SHORELine (and eddy), ``qsiplan.plan._stages_for_unit`` never attaches
-    an ``ESTIMATE_AND_APPLY`` stage for either, so no warp is ever built. The
-    condition mirrors ``init_sdc_wf``'s own ``does_sdc`` gate exactly
-    (``qsiprep/workflows/fieldmap/base.py:114-115``): a real SDC warp exists
-    here precisely when there is a scanner-measured fieldmap (PEPOLAR or GRE)
-    or classic NiPreps SyN.
+    wrapping -- a GRE/SyN fieldmap, unpile, or SynB0 + TOPUP after SHORELine) is
+    carried in ``to_dwi_ref_warps`` and reaches ``ComposeJacobianWeights``
+    externally.
     """
-    return unit.has_scanner_measured_fieldmap or unit.is_nipreps_syn
+    return (
+        unit.has_scanner_measured_fieldmap
+        or unit.run.stage_with('syn') is not None
+        or unit.run.stage_with('unpile') is not None
+        or unit.run.stage_with('topup') is not None
+    )
 
 
 def _eddy_provenance(unit):
@@ -114,7 +90,7 @@ def _eddy_provenance(unit):
       DRBUDDI's own warp is separately, externally applied) -- see the F2
       regression test for exactly this combination.
     * 'sdc' is applied whenever a warp reaches ``to_dwi_ref_warps``
-      externally: DRBUDDI (whether or not TOPUP also ran), SyN, or a GRE
+      externally: DRBUDDI (whether or not TOPUP also ran), SyN, unpile, or a GRE
       fieldmap applied after ``eddy`` (``--force gre-sdc-after-eddy``). TOPUP-only and
       a GRE fieldmap eddy applied never apply 'sdc' -- they are baked into
       ``eddy``.
@@ -150,13 +126,14 @@ def _eddy_provenance(unit):
         (unit.is_pepolar and run_drbuddi)
         or (unit.is_gre and not gre_in_eddy)
         or unit.is_nipreps_syn
+        or unit.is_unpile
     ):
         applied.append('sdc')
 
     return applied, unmodulated, reason
 
 
-def _tortoise_provenance(unit, t2w_sdc):
+def _tortoise_provenance(unit):
     """Mirror ``qsiprep.workflows.dwi.diffprep``'s SDC/eddy-current recording.
 
     The eddy-current component is DIFFPREP's own Okan quadratic-transform
@@ -166,10 +143,8 @@ def _tortoise_provenance(unit, t2w_sdc):
     component at all so it is neither.
 
     The SDC component reaches ``fieldwarps`` externally for every branch
-    DIFFPREP's own decision tree takes except "no fieldmap, no T2w": PEPOLAR
-    (DRBUDDI), the T2Wreg fieldmap-less case (``t2wreg_target``
-    mirrors the same ``use_t2wreg`` gate ``diffprep.py`` computes, including
-    its ``t2w_sdc``/``--anat-modality`` dependency), and GRE/SyN.
+    DIFFPREP's own decision tree takes except "no fieldmap": PEPOLAR (DRBUDDI),
+    GRE/SyN/unpile, and SynB0 + TOPUP.
     """
     applied = []
     unmodulated = []
@@ -186,21 +161,15 @@ def _tortoise_provenance(unit, t2w_sdc):
 
     if unit.is_pepolar:
         applied.append('sdc')
-    elif unit.is_gre or unit.is_nipreps_syn:
+    elif unit.is_gre or unit.is_nipreps_syn or unit.is_unpile:
         applied.append('sdc')
-    elif t2wreg_target(unit, t2w_sdc) is not None:
-        if t2wreg_is_weighted(unit, t2w_sdc):
-            applied.append('sdc')
-        else:
-            unmodulated.append('sdc')
-            reason = (
-                f'{reason} {_T2WREG_UNMODULATED_REASON}' if reason else _T2WREG_UNMODULATED_REASON
-            )
+    elif unit.run.stage_with('topup') is not None:
+        applied.append('sdc')
 
     return applied, unmodulated, reason
 
 
-def jacobian_provenance_for(unit, t2w_sdc=False):
+def jacobian_provenance_for(unit):
     """Report which corrections this unit's run Jacobian-modulated, and why not the rest.
 
     Parameters
@@ -209,11 +178,6 @@ def jacobian_provenance_for(unit, t2w_sdc=False):
         The correction unit a single HMC+SDC run compiles, carrying the
         compiled ``run`` (stage sequence) the actual workflow builders
         dispatch on.
-    t2w_sdc : bool, optional
-        Whether a T2w is available for TORTOISE's fieldmap-less T2Wreg stage,
-        honoring ``--anat-modality``/``--ignore t2w`` -- the same value
-        ``init_dwi_preproc_wf``/``init_diffprep_hmc_wf`` receive. Irrelevant
-        off the TORTOISE backend.
 
     Returns
     -------
@@ -241,7 +205,7 @@ def jacobian_provenance_for(unit, t2w_sdc=False):
         backend_applied, unmodulated, reason = _eddy_provenance(unit)
         applied.extend(backend_applied)
     elif hmc_tool == 'tortoise':
-        backend_applied, unmodulated, reason = _tortoise_provenance(unit, t2w_sdc)
+        backend_applied, unmodulated, reason = _tortoise_provenance(unit)
         applied.extend(backend_applied)
     else:
         raise ValueError(f'Unknown HMC tool: {hmc_tool!r}')

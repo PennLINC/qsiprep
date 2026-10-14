@@ -19,6 +19,8 @@ requires-python = ">=3.11"
 dependencies = [
     'importlib_resources; python_version < "3.12"',
     "acres",
+    # Changing a pin here must land in a commit that touches this file: the pixi
+    # lock bot re-locks only when the PR's latest commit changes it or pixi.lock.
     "cs_dmri >= 0.2.0, < 0.3",
     "dipy>=1.12.0,<1.13.0",
     "indexed_gzip <= 1.8.7",
@@ -35,7 +37,8 @@ dependencies = [
     "psutil <= 5.9.8",
     "pybids >= 0.15.0, < 0.16.0",
     "pyyaml",
-    "qsiplan >= 0.4.2, < 0.5",
+    "qsiplan >= 0.5.0, < 0.6",
+    "unpile >= 0.2.0, < 0.3",
     "scikit-image",
     "scikit-learn <= 1.4.0",
     "seaborn",
@@ -281,7 +284,9 @@ markers = [
     "trxscan_motion: TRXScan truth-scored: eddy motion parameters against applied poses",
     "trxscan_offsets: TRXScan truth-scored: subject moved between T1w, AP and PA scans",
     "trxscan_diffprep: TRXScan truth-scored: DIFFPREP motion/eddy correction + DRBUDDI on the reverse-PE pair",
-    "trxscan_t2wreg: TRXScan truth-scored: DIFFPREP T2Wreg EPI correction, no fieldmap",
+    "trxscan_synb0: TRXScan truth-scored: default SynB0 + TOPUP after DIFFPREP, no fieldmap",
+    "trxscan_unpile: TRXScan truth-scored: unpile against the T2w after eddy, no fieldmap",
+    "trxscan_gre_unpile: TRXScan truth-scored: unpile refining a GRE fieldmap against the T2w, with the subject moved",
 ]
 env = [
     "RUNNING_PYTEST = 1",

@@ -26,6 +26,12 @@
 
 import sys
 
+from qsiplan import (
+    ANAT_REFERENCE_CHOICES,
+    FIELDMAPLESS_METHOD_CHOICES,
+    fieldmapless_combination_error,
+)
+
 from .. import config
 from ..utils.gpu import GPU_ALIASES, GPU_TASKS
 from ..utils.misc import load_denoise_config, load_shoreline_config
@@ -150,14 +156,17 @@ def _build_parser(**kwargs):
             # (and qsiplan's policy bridge) can read them by name.
             namespace.force_sdc_anat_reference = 'sdc-anat-reference' in (namespace.force or [])
             namespace.force_nocsf_synthstrip = 'no-csf-synthstrip' in (namespace.force or [])
-            if 'jacobian' in (namespace.force or []) and 'jacobian' in (namespace.ignore or []):
-                self.error('--force jacobian and --ignore jacobian are mutually exclusive')
+            namespace.two_pass_sdc = 'one-pass-sdc' not in (namespace.force or [])
             if namespace.force_sdc_anat_reference and namespace.sdc_anat_reference == 'none':
                 self.error(
                     '--force sdc-anat-reference requires an anatomical SDC '
-                    'reference to force: pass --sdc-anat-reference '
-                    '{synb0,t2w,invt1w,auto}'
+                    'reference to force: pass --sdc-anat-reference {synb0,invt1w,t2w}'
                 )
+            invalid = fieldmapless_combination_error(
+                namespace.sdc_fieldmapless_method, namespace.sdc_anat_reference
+            )
+            if invalid:
+                self.error(invalid)
             if (
                 namespace.sdc_anat_reference in ('synb0', 'invt1w')
                 and namespace.anat_modality != 'T1w'
@@ -165,7 +174,8 @@ def _build_parser(**kwargs):
                 self.error(
                     f'--sdc-anat-reference {namespace.sdc_anat_reference} requires '
                     '--anat-modality T1w: the reference image is derived from the '
-                    'preprocessed T1w'
+                    'preprocessed T1w. Pass --sdc-anat-reference none to leave DWI '
+                    'series without a fieldmap uncorrected.'
                 )
 
             return namespace, extras
@@ -458,7 +468,7 @@ def _build_parser(**kwargs):
             'gradwarp1D',
             'gradwarp3D',
             'sdc-anat-reference',
-            'jacobian',
+            'one-pass-sdc',
             'gre-sdc-after-eddy',
             'no-csf-synthstrip',
         ],
@@ -474,11 +484,12 @@ def _build_parser(**kwargs):
             'override, so that the selected anatomical reference replaces fieldmap '
             'application for every DWI series. It requires an --sdc-anat-reference '
             'other than "none". '
-            '"jacobian" applies Jacobian intensity modulation to the fieldmap-less '
-            'TORTOISE T2Wreg (EPIREG) correction as well. TORTOISE leaves that field '
-            'unmodulated because its final registration stage is not restricted to '
-            'the phase-encoding direction; forcing it uses the phase-encoding '
-            'component of the field only. '
+            '"one-pass-sdc" drops the second pass of the registration-based '
+            'susceptibility distortion corrections: SynB0 + TOPUP otherwise synthesizes '
+            'the SynB0 again from the b=0 unwarped by the first field and runs TOPUP '
+            'again, with every head motion method, and a GRE fieldmap is otherwise '
+            'registered to the b=0 a second time, against the b=0 its first-pass field '
+            'unwarped. '
             '"gre-sdc-after-eddy" applies a GRE fieldmap after eddy, as QSIPrep used to, '
             'instead of handing it to eddy (--field), for comparing the two on real data. '
             'It requires --hmc-method eddy, is deprecated, and will be removed in a '
@@ -810,32 +821,48 @@ def _build_parser(**kwargs):
             '"topup+drbuddi" runs TOPUP followed by DRBUDDI refinement, and requires '
             '--hmc-method eddy. '
             '"auto" selects TOPUP for eddy and DRBUDDI otherwise. '
-            'Non-PEPOLAR corrections (GRE fieldmaps, SyN, T2w registration) are chosen '
-            'by the input data and their own flags, not by this one.'
+            'Non-PEPOLAR corrections (GRE fieldmaps and the fieldmap-less correction) '
+            'are chosen by the input data and their own flags, not by this one.'
+        ),
+    )
+    g_sdc.add_argument(
+        '--sdc-fieldmapless-method',
+        action='store',
+        default='topup',
+        choices=list(FIELDMAPLESS_METHOD_CHOICES),
+        help=(
+            'Which correction handles DWI series that no fieldmap reaches, once '
+            '--sdc-anat-reference names an image. '
+            '"topup" (the default) synthesizes an undistorted b=0 from the T1w with '
+            'SynB0-DISCO and pairs it with the acquired b=0 in TOPUP: before eddy with '
+            '--hmc-method eddy, after head motion correction with --hmc-method tortoise '
+            'or shoreline. '
+            '"syn" estimates the field with a restricted ANTs SyN registration to the '
+            '--sdc-anat-reference image ("synb0" or "invt1w"). '
+            '"unpile" (experimental) fits the field with a model of the EPI readout by '
+            'matching the motion-corrected b=0 to the --sdc-anat-reference image ("synb0" '
+            'or "t2w"), after any head motion method; a GRE fieldmap that also lists the '
+            'series is refined rather than replaced. '
+            'A DWI series this correction cannot handle (no T1w, or no '
+            'PhaseEncodingDirection or TotalReadoutTime) is an error; pass '
+            '--sdc-anat-reference none to leave such series uncorrected.'
         ),
     )
     g_sdc.add_argument(
         '--sdc-anat-reference',
         action='store',
         default='none',
-        choices=['none', 'auto', 'synb0', 't2w', 'invt1w'],
+        choices=list(ANAT_REFERENCE_CHOICES),
         help=(
-            'Which anatomical-derived image serves as the reference for fieldmap-less '
-            'susceptibility distortion correction, applied as a fallback to DWI series '
-            'that no fieldmap reaches. '
+            'Which anatomical-derived image the fieldmap-less correction '
+            '(--sdc-fieldmapless-method) uses. '
+            '"none" (the default) leaves DWI series that no fieldmap reaches '
+            'uncorrected. '
             '"synb0" generates a synthetic distortion-free b=0 from the T1w with the '
             'SynB0-DISCO U-Net. '
-            '"t2w" uses the real T2w (TORTOISE T2Wreg). '
-            '"invt1w" uses the inverted-contrast T1w (nipreps-style SyN prior). '
-            '"auto" picks synb0 when the subject has a T1w, else t2w when it has a T2w, '
-            'else nothing; "invt1w" is never picked automatically. '
-            '"none" disables anatomical SDC entirely. '
-            'The engine consuming the reference is governed by --sdc-method and '
-            '--hmc-method and validated by the plan compiler. With --hmc-method eddy, '
-            'for example, a synthetic b=0 enters TOPUP as a zero-readout-time volume, '
-            'while with --hmc-method tortoise it is the DIFFPREP registration target. '
-            'synb0 and invt1w require a T1w image and a PhaseEncodingDirection on the '
-            'DWI series.'
+            '"invt1w" uses the inverted-contrast T1w (with "syn" only). '
+            '"t2w" uses the real T2w (with "unpile" only). '
+            'synb0 and invt1w require --anat-modality T1w.'
         ),
     )
 

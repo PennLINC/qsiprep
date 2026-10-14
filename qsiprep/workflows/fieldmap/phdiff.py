@@ -31,6 +31,7 @@ from ... import config
 from ...interfaces import DerivativesDataSink, Phasediff2Fieldmap, Phases2Fieldmap
 from ...interfaces.fmap import MedianFilter
 from ...interfaces.niimath import RomeoUnwrap, SkullStrip
+from .unwarp import GRE_SECOND_PASS_DESC
 from .utils import cleanup_edge_pipeline, demean_image, siemens2rads
 
 
@@ -60,11 +61,14 @@ def init_phdiff_wf(phasetype='phasediff', name='phdiff_wf'):
     """
     omp_nthreads = config.nipype.omp_nthreads
     workflow = Workflow(name=name)
-    workflow.__desc__ = """\
+    second_pass = GRE_SECOND_PASS_DESC if config.workflow.two_pass_sdc else ''
+    workflow.__desc__ = f"""\
 A deformation field to correct for susceptibility distortions was estimated
-based on a field map that was co-registered to the b=0 reference.
+based on a field map that was co-registered to the b=0 reference. The field
+map's magnitude image was rigidly registered to the b=0 reference.{second_pass}
 The phase image was unwrapped with the ROMEO algorithm [@romeo] as implemented
-in *niimath* [@niimath], median-filtered, and converted to a field map in Hz
+in *niimath* [@niimath], median-filtered, extrapolated beyond the brain mask so
+that the distorted EPI brain is covered, and converted to a field map in Hz
 following the approach of *fMRIPrep* and the HCP Pipelines [@hcppipelines].
 """
 

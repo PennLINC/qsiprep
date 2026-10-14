@@ -349,7 +349,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/61/af/99b52a8524983bfece35e51e65a0b517b22920c023e57855c95e744e19e4/pytest_env-1.5.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ca/31/d4e37e9e550c2b92a9cbc2e4d0b7420a27224968580b5a447f420847c975/pytest_xdist-3.8.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0b/d7/1959b9648791274998a9c3526f6d0ec8fd2233e4d4acce81bbae76b44b2a/python_dotenv-1.2.2-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/36/ba/5c0c54710ce34203c3b531ee200c402b8e1c84aed631318cca8d3696b4b1/qsiplan-0.4.2-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/44/8a/4546b01c2df87f2c8957734de0350d3af982da2522a6e0527c1418e1c851/qsiplan-0.5.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/10/c2/6604a71269e0c1bd75656d5a001432d16f2cc5b8c057140ec797155c295e/rdflib-7.6.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1e/db/4254e3eabe8020b458f1a747140d32277ec7a271daf1d235b70dc0b4e6e3/requests-2.32.5-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/82/3b/64d4899d73f91ba49a8c18a8ff3f0ea8f1c1d75481760df8c68ef5235bf5/rich-15.0.0-py3-none-any.whl
@@ -369,6 +369,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/61/7a/f38385f1b2d5f54221baf1db3d6371dc6eef8041d95abff39576c694e9d9/transforms3d-0.4.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/79/bc/328fc1a42f39665635c901b031ae0ee1727d1cad6c7f897d9b64f3252755/trx_python-0.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/43/89/9518bc0c3929bee36b3a4a8e3daddd6e03f92f9961c66d4983b837160543/typer-0.27.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/0f/d3/a59db140c7169d5d1307c129537625f4eb3f4dabb4cfe03cbba5670ac74f/unpile-0.2.0-py3-none-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/39/08/aaaad47bc4e9dc8c725e68f9d04865dbcb2052843ff09c97b08904852d84/urllib3-2.6.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/dc/72/957b51c56acca35701665878ad31626182199fc4afecfe67dea072210f95/wrapt-2.1.1-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
       - pypi: ./
@@ -745,7 +746,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/61/af/99b52a8524983bfece35e51e65a0b517b22920c023e57855c95e744e19e4/pytest_env-1.5.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ca/31/d4e37e9e550c2b92a9cbc2e4d0b7420a27224968580b5a447f420847c975/pytest_xdist-3.8.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0b/d7/1959b9648791274998a9c3526f6d0ec8fd2233e4d4acce81bbae76b44b2a/python_dotenv-1.2.2-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/36/ba/5c0c54710ce34203c3b531ee200c402b8e1c84aed631318cca8d3696b4b1/qsiplan-0.4.2-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/44/8a/4546b01c2df87f2c8957734de0350d3af982da2522a6e0527c1418e1c851/qsiplan-0.5.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/10/c2/6604a71269e0c1bd75656d5a001432d16f2cc5b8c057140ec797155c295e/rdflib-7.6.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1e/db/4254e3eabe8020b458f1a747140d32277ec7a271daf1d235b70dc0b4e6e3/requests-2.32.5-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/82/3b/64d4899d73f91ba49a8c18a8ff3f0ea8f1c1d75481760df8c68ef5235bf5/rich-15.0.0-py3-none-any.whl
@@ -765,6 +766,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/61/7a/f38385f1b2d5f54221baf1db3d6371dc6eef8041d95abff39576c694e9d9/transforms3d-0.4.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/79/bc/328fc1a42f39665635c901b031ae0ee1727d1cad6c7f897d9b64f3252755/trx_python-0.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/43/89/9518bc0c3929bee36b3a4a8e3daddd6e03f92f9961c66d4983b837160543/typer-0.27.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/0f/d3/a59db140c7169d5d1307c129537625f4eb3f4dabb4cfe03cbba5670ac74f/unpile-0.2.0-py3-none-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/39/08/aaaad47bc4e9dc8c725e68f9d04865dbcb2052843ff09c97b08904852d84/urllib3-2.6.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/dc/72/957b51c56acca35701665878ad31626182199fc4afecfe67dea072210f95/wrapt-2.1.1-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
       - pypi: ./
@@ -1117,7 +1119,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/61/af/99b52a8524983bfece35e51e65a0b517b22920c023e57855c95e744e19e4/pytest_env-1.5.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/ca/31/d4e37e9e550c2b92a9cbc2e4d0b7420a27224968580b5a447f420847c975/pytest_xdist-3.8.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/0b/d7/1959b9648791274998a9c3526f6d0ec8fd2233e4d4acce81bbae76b44b2a/python_dotenv-1.2.2-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/36/ba/5c0c54710ce34203c3b531ee200c402b8e1c84aed631318cca8d3696b4b1/qsiplan-0.4.2-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/44/8a/4546b01c2df87f2c8957734de0350d3af982da2522a6e0527c1418e1c851/qsiplan-0.5.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/10/c2/6604a71269e0c1bd75656d5a001432d16f2cc5b8c057140ec797155c295e/rdflib-7.6.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/1e/db/4254e3eabe8020b458f1a747140d32277ec7a271daf1d235b70dc0b4e6e3/requests-2.32.5-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/82/3b/64d4899d73f91ba49a8c18a8ff3f0ea8f1c1d75481760df8c68ef5235bf5/rich-15.0.0-py3-none-any.whl
@@ -1137,6 +1139,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/61/7a/f38385f1b2d5f54221baf1db3d6371dc6eef8041d95abff39576c694e9d9/transforms3d-0.4.2-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/79/bc/328fc1a42f39665635c901b031ae0ee1727d1cad6c7f897d9b64f3252755/trx_python-0.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/43/89/9518bc0c3929bee36b3a4a8e3daddd6e03f92f9961c66d4983b837160543/typer-0.27.1-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/0f/d3/a59db140c7169d5d1307c129537625f4eb3f4dabb4cfe03cbba5670ac74f/unpile-0.2.0-py3-none-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/39/08/aaaad47bc4e9dc8c725e68f9d04865dbcb2052843ff09c97b08904852d84/urllib3-2.6.3-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/dc/72/957b51c56acca35701665878ad31626182199fc4afecfe67dea072210f95/wrapt-2.1.1-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
       - pypi: ./
@@ -5769,10 +5772,10 @@ packages:
   - pkg:pypi/pyyaml?source=hash-mapping
   size: 206190
   timestamp: 1770223702917
-- pypi: https://files.pythonhosted.org/packages/36/ba/5c0c54710ce34203c3b531ee200c402b8e1c84aed631318cca8d3696b4b1/qsiplan-0.4.2-py3-none-any.whl
+- pypi: https://files.pythonhosted.org/packages/44/8a/4546b01c2df87f2c8957734de0350d3af982da2522a6e0527c1418e1c851/qsiplan-0.5.0-py3-none-any.whl
   name: qsiplan
-  version: 0.4.2
-  sha256: 718f2c7616bf702169f64cb6c697db19a0837415936c539f01aaa585da35bd21
+  version: 0.5.0
+  sha256: b8c7b40edcdf058240924cd7eb9095f0e4ff13d8c6c31adbd258689e432f9c00
   requires_dist:
   - bids2table>=2.3.1
   - nibabel
@@ -5788,8 +5791,8 @@ packages:
   requires_python: '>=3.11'
 - pypi: ./
   name: qsiprep
-  version: 26.2.0.dev16+g933a39788
-  sha256: 49f73a87051e186ef921123e57512c55b5d257e5bf4e6fd94cbc214d376279b2
+  version: 26.2.0.dev24+ge15c9fc2d
+  sha256: e7e57e5a6b3aa66e30e2032a07d6a0a2c2f93be997491f4eaab7265c48643a71
   requires_dist:
   - acres
   - coverage
@@ -5814,7 +5817,7 @@ packages:
   - pytest-env
   - pytest-xdist
   - pyyaml
-  - qsiplan>=0.4.2,<0.5
+  - qsiplan>=0.5.0,<0.6
   - scikit-image
   - scikit-learn<=1.4.0
   - seaborn
@@ -5823,6 +5826,7 @@ packages:
   - svgutils<=0.3.4
   - templateflow
   - transforms3d
+  - unpile>=0.2.0,<0.3
   - coverage ; extra == 'all'
   - dipy ; extra == 'all'
   - doctest-ignore-unicode ; extra == 'all'
@@ -5867,8 +5871,8 @@ packages:
   editable: true
 - pypi: ./
   name: qsiprep
-  version: 26.2.0.dev16+g933a39788
-  sha256: 49f73a87051e186ef921123e57512c55b5d257e5bf4e6fd94cbc214d376279b2
+  version: 26.2.0.dev24+ge15c9fc2d
+  sha256: e7e57e5a6b3aa66e30e2032a07d6a0a2c2f93be997491f4eaab7265c48643a71
   requires_dist:
   - acres
   - coverage
@@ -5893,7 +5897,7 @@ packages:
   - pytest-env
   - pytest-xdist
   - pyyaml
-  - qsiplan>=0.4.2,<0.5
+  - qsiplan>=0.5.0,<0.6
   - scikit-image
   - scikit-learn<=1.4.0
   - seaborn
@@ -5902,6 +5906,7 @@ packages:
   - svgutils<=0.3.4
   - templateflow
   - transforms3d
+  - unpile>=0.2.0,<0.3
   - coverage ; extra == 'all'
   - dipy ; extra == 'all'
   - doctest-ignore-unicode ; extra == 'all'
@@ -6840,6 +6845,16 @@ packages:
   - pkg:pypi/unicodedata2?source=hash-mapping
   size: 409682
   timestamp: 1770909108616
+- pypi: https://files.pythonhosted.org/packages/0f/d3/a59db140c7169d5d1307c129537625f4eb3f4dabb4cfe03cbba5670ac74f/unpile-0.2.0-py3-none-manylinux_2_28_x86_64.whl
+  name: unpile
+  version: 0.2.0
+  sha256: 888309fe2f3a62ab496f8a6657aed82c60146fe957f25d5bf271791d56ef91a2
+  requires_dist:
+  - nibabel>=5 ; extra == 'prep'
+  - nilearn>=0.10 ; extra == 'prep'
+  - numpy>=1.24 ; extra == 'prep'
+  - scipy>=1.10 ; extra == 'prep'
+  requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/39/08/aaaad47bc4e9dc8c725e68f9d04865dbcb2052843ff09c97b08904852d84/urllib3-2.6.3-py3-none-any.whl
   name: urllib3
   version: 2.6.3

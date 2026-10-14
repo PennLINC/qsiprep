@@ -91,7 +91,7 @@ nonlinearity, susceptibility distortion, coregistration.
 Head motion estimation never sees the field; motion is estimated on the raw
 grid, as TORTOISE does. Susceptibility distortion is estimated on
 gradient-corrected b=0 and FA images whenever the estimated warp is applied
-after the gradient correction, which is the case for DRBUDDI, T2Wreg and SyN
+after the gradient correction, which is the case for DRBUDDI, SyN and unpile
 on every backend. A GRE fieldmap is acquired with the same gradients as the
 DWI, so its warp is estimated on the raw b=0 and then composed with the
 gradient field and its inverse. The exception is the field ``eddy`` applies

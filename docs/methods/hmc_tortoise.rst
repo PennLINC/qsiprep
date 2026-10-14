@@ -59,15 +59,21 @@ per phase encoding direction from the model.
 **GRE fieldmap.** The fieldmap is applied to DIFFPREP's output by *QSIPrep*'s
 fieldmap workflow (see :ref:`sdc_gre`).
 
-**T2Wreg.** With no fieldmap and ``--sdc-anat-reference t2w`` (or ``auto``
-with a T2w), DIFFPREP's own T2Wreg stage nonlinearly registers the b=0 to the
-T2w in the same TORTOISE run, and the correction is baked into its output.
-With ``--sdc-anat-reference synb0``, the target is the synthetic b=0 instead.
-When the anatomical reference is forced over a GRE fieldmap (``--force
-sdc-anat-reference``), T2Wreg starts from the GRE-derived field
+**SynB0 + TOPUP** (with ``--sdc-anat-reference synb0``, the default fieldmap-less
+method). A synthetic b=0 is generated
+from DIFFPREP's motion-corrected b=0 average and the T1w, TOPUP pairs the two,
+and the field is applied at the final resampling (:ref:`sdc_synb0`).
+By default the synthetic b=0 is then generated again from the b=0 the first field
+unwarped, and TOPUP runs again; ``--force one-pass-sdc`` skips this second pass.
+
+**unpile** (``--sdc-fieldmapless-method unpile``) fits the field from
+DIFFPREP's motion-corrected b=0 and the T2w (``--sdc-anat-reference t2w``) or
+the synthetic b=0 (``synb0``), and the field is applied at the final
+resampling (:ref:`sdc_unpile`). When it is forced over a GRE fieldmap
+(``--force sdc-anat-reference``), the GRE field is the prior of the fit
 (:ref:`sdc_gre_init`).
 
-**SyN.** ``--sdc-anat-reference invt1w`` is applied to DIFFPREP's output, as
+**SyN** (``--sdc-fieldmapless-method syn``) is applied to DIFFPREP's output, as
 with ``eddy``.
 
 .. _configure_diffprep:

@@ -22,11 +22,6 @@ from):
   geometry-corrected b=0 images. That ratio replaces the Jacobian entirely,
   so no gradient-nonlinearity or eddy-current factor is applied on top of it
   (``FINALDATA.cxx``, the ``method == "LSR"`` branch).
-* The fieldmap-less T2Wreg (EPIREG) field is applied geometrically but never
-  modulated: EPIREG's final stage is not restricted to the phase-encoding
-  direction, and ``FINALDATA`` composes an EPI field into the Jacobian only
-  when it came from DRBUDDI. ``--force jacobian`` overrides that, using the
-  phase-encoding component of the field.
 
 TORTOISE eddy-current Jacobian
 ------------------------------
@@ -379,9 +374,9 @@ def jacobian_determinant(field_path, out_path, pe_axis, mask_path=None):
     composed displacement along the phase-encoding voxel axis only, with
     central differences and unity at the two edge slices. For a field that
     displaces along that axis alone (DRBUDDI, GRE, SyN) this equals the full
-    determinant; for a field with other components (gradient nonlinearity, a
-    forced T2Wreg field) it is the phase-encoding volume change TORTOISE
-    applies, and the other components are ignored.
+    determinant; for a field with other components (gradient nonlinearity) it
+    is the phase-encoding volume change TORTOISE applies, and the other
+    components are ignored.
 
     The field is an ITK displacement field: LPS world-space millimetres,
     output-space to input-space. The displacement is projected onto the
@@ -475,12 +470,6 @@ class _ComposeJacobianWeightsInputSpec(BaseInterfaceInputSpec):
         File(exists=True),
         desc='susceptibility displacement field(s): one shared, or one per DWI volume',
     )
-    weight_fieldwarps = traits.Bool(
-        True,
-        usedefault=True,
-        desc='False leaves the susceptibility field unmodulated: TORTOISE '
-        'applies its T2Wreg (EPIREG) field without Jacobian modulation',
-    )
     ec_jacobian_images = InputMultiObject(
         File(exists=True),
         desc='per-volume eddy-current Jacobian determinants (TORTOISE DIFFPREP)',
@@ -544,11 +533,7 @@ class ComposeJacobianWeights(SimpleInterface):
             validate_field_geometry(gradwarp, reference)
 
         fieldwarps = [None] * num_dwis
-        if (
-            self.inputs.weight_fieldwarps
-            and isdefined(self.inputs.fieldwarps)
-            and self.inputs.fieldwarps
-        ):
+        if isdefined(self.inputs.fieldwarps) and self.inputs.fieldwarps:
             supplied = list(self.inputs.fieldwarps)
             if len(supplied) == 1:
                 LOGGER.info('Using a single susceptibility field for all DWI volumes')
@@ -563,10 +548,6 @@ class ComposeJacobianWeights(SimpleInterface):
                 )
             for warp in set(fieldwarps):
                 validate_field_geometry(warp, reference)
-        elif isdefined(self.inputs.fieldwarps) and self.inputs.fieldwarps:
-            LOGGER.info(
-                'Susceptibility field supplied but left unmodulated (weight_fieldwarps=False)'
-            )
 
         ec_images = [None] * num_dwis
         if isdefined(self.inputs.ec_jacobian_images) and self.inputs.ec_jacobian_images:

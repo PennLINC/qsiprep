@@ -445,6 +445,7 @@ class execution(_Config):
     """A dictionary of dataset links to be used to track Sources in sidecars."""
 
     _layout = None
+    _derived_database_dir = False
 
     _paths = (
         'bids_dir',
@@ -462,12 +463,23 @@ class execution(_Config):
     @classmethod
     def init(cls):
         """Create a new BIDS Layout accessible with :attr:`~execution.layout`."""
+        if (
+            cls._layout is not None
+            and Path(cls._layout.root).resolve() != Path(cls.bids_dir).resolve()
+        ):
+            # The config is a process-wide singleton: a second dataset in the same process
+            # (several integration tests in one pytest run) must not keep the first one's
+            # layout, nor the database that layout derived for itself.
+            cls._layout = None
+            if cls._derived_database_dir:
+                cls.bids_database_dir = None
         if cls._layout is None:
             import re
 
             from bids.layout import BIDSLayout
             from bids.layout.index import BIDSLayoutIndexer
 
+            cls._derived_database_dir = cls.bids_database_dir is None
             _db_path = cls.bids_database_dir or (cls.work_dir / cls.run_uuid / 'bids_db')
             _db_path.mkdir(exist_ok=True, parents=True)
 
@@ -576,6 +588,10 @@ class workflow(_Config):
     """``--force sdc-anat-reference`` was given: the anatomical SDC reference
     overrides the fieldmap application for every DWI series (derived from
     ``force`` by the parser)."""
+    two_pass_sdc = True
+    """SynB0 + TOPUP runs a second SynB0 pass with every head motion method, and GRE
+    fieldmaps get a second registration pass; ``--force one-pass-sdc`` turns both off
+    (derived from ``force`` by the parser)."""
     force_nocsf_synthstrip = False
     """``--force no-csf-synthstrip`` was given: the nonlinear registration to the
     anatomical template uses a SynthStrip ``--no-csf`` mask as its moving-image
@@ -611,10 +627,11 @@ class workflow(_Config):
     output_resolution = None
     """Isotropic voxel size for outputs."""
     sdc_anat_reference = 'none'
-    """Which anatomical-derived image serves as the reference for fieldmap-less
-    susceptibility distortion correction, as a fallback for DWI series no
-    fieldmap reaches: ``none`` (default), ``auto``, ``synb0``, ``t2w`` or
-    ``invt1w``."""
+    """Which anatomical-derived image the fieldmap-less correction uses:
+    ``none`` (default, fieldmap-less SDC off), ``synb0``, ``invt1w`` or ``t2w``."""
+    sdc_fieldmapless_method = 'topup'
+    """Which correction handles DWI series no fieldmap reaches: ``topup`` (SynB0 +
+    TOPUP, the default), ``syn`` or ``unpile``."""
     sdc_method = None
     """Which tool corrects susceptibility distortion for PEPOLAR data:
     topup, drbuddi or topup+drbuddi (the parser resolves ``auto``)."""

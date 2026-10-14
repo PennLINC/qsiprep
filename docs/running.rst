@@ -130,15 +130,18 @@ take space-separated lists.
    * - Value
      - Effect
    * - ``sdc-anat-reference``
-     - Use the ``--sdc-anat-reference`` image for every DWI series, instead of
-       only for series no fieldmap reaches.
+     - Use the fieldmap-less correction for every DWI series, instead of only
+       for series no fieldmap reaches.
+   * - ``one-pass-sdc``
+     - Drop the second pass that SynB0 + TOPUP (a new synthetic b=0 from the
+       b=0 the first field unwarped, then TOPUP again, with every head motion
+       method) and GRE fieldmap registration (the magnitude registered again to
+       the b=0 the first field unwarped, keeping the better-scoring pass) run by
+       default. Faster, less accurate.
    * - ``gradwarp3D`` / ``gradwarp1D``
      - Apply the full 3D, or only the through-plane, gradient nonlinearity
        correction to every run regardless of ``ImageType``. Mutually
        exclusive; both need ``--gradient-file``.
-   * - ``jacobian``
-     - Also Jacobian-modulate the fieldmap-less T2Wreg correction, which
-       TORTOISE leaves unmodulated.
    * - ``gre-sdc-after-eddy``
      - Apply a GRE fieldmap to ``eddy``'s outputs, as *QSIPrep* did before
        26.1, instead of handing it to ``eddy``. For comparing the two on real
@@ -507,22 +510,36 @@ Susceptibility distortion correction
 
 Which correction a series gets is decided from the data: a fieldmap linked to
 the series is used if there is one, and reverse phase encoding is preferred
-over a GRE fieldmap when both are linked. The options below change the tool
-and provide a fallback for series that no fieldmap reaches.
+over a GRE fieldmap when both are linked. A series that no fieldmap reaches
+is left uncorrected unless ``--sdc-anat-reference`` names an image, which
+turns on the fieldmap-less correction, SynB0 + TOPUP unless
+``--sdc-fieldmapless-method`` says otherwise. The options below change the
+tools.
 
 ``--sdc-method``
   The tool for reverse phase-encoded (PEPOLAR) data. ``auto`` (the default)
   is TOPUP for ``eddy`` and DRBUDDI otherwise. ``topup`` and
   ``topup+drbuddi`` (TOPUP inside ``eddy``, then DRBUDDI refining its result)
   require ``--hmc-method eddy``; ``drbuddi`` works with every method.
+``--sdc-fieldmapless-method``
+  The correction for series that no fieldmap reaches. ``topup`` (the default)
+  synthesizes a distortion-free b=0 from the T1w with SynB0-DISCO and pairs it
+  with the acquired b=0 in TOPUP. ``syn`` registers the b=0 to the
+  ``--sdc-anat-reference`` image with a SyN registration restricted to the
+  phase-encoding axis, as fMRIPrep does. ``unpile`` fits the field by matching
+  the motion-corrected b=0 to the ``--sdc-anat-reference`` image with a model
+  of the EPI readout (:ref:`sdc_unpile`), after any head motion method.
 ``--sdc-anat-reference``
-  A fieldmap-less correction for series that no fieldmap reaches. ``synb0``
-  synthesizes a distortion-free b=0 from the T1w with SynB0-DISCO; ``t2w``
-  registers to the T2w (TORTOISE T2Wreg); ``invt1w`` registers to the
-  inverted-contrast T1w with SyN, as fMRIPrep does; ``auto`` picks ``synb0``
-  with a T1w, else ``t2w`` with a T2w, else nothing. The default ``none``
-  leaves such series uncorrected. Add ``--force sdc-anat-reference`` to use
-  the anatomical reference for every series, fieldmap or not.
+  The image the fieldmap-less correction uses. ``none`` (the default) leaves
+  series that no fieldmap reaches uncorrected. ``synb0`` is the synthetic
+  b=0, and works with every method; ``invt1w`` is the inverted-contrast T1w,
+  for ``syn``; ``t2w`` is the T2w, for ``unpile``. Any other pairing with ``--sdc-fieldmapless-method`` is an
+  error. ``synb0`` and ``invt1w`` need ``--anat-modality T1w``. A series that
+  the selected correction cannot handle (no T1w, or no
+  ``PhaseEncodingDirection`` or ``TotalReadoutTime``) is an error; pass
+  ``--sdc-anat-reference none`` to process it uncorrected instead. Add
+  ``--force sdc-anat-reference`` to use the fieldmap-less correction for every
+  series, fieldmap or not.
 
 What runs for each kind of data:
 
@@ -542,34 +559,33 @@ What runs for each kind of data:
      - Inside ``eddy``
      - Applied after DIFFPREP
      - Applied after SHORELine
-   * - T1w and ``--sdc-anat-reference synb0``
-     - Synthetic b=0 joins the TOPUP inputs (with ``topup`` in
-       ``--sdc-method``)
-     - T2Wreg to the synthetic b=0
-     - Not corrected
-   * - T2w and ``--sdc-anat-reference t2w``
-     - Not corrected
-     - T2Wreg to the T2w
-     - Not corrected
-   * - T1w and ``--sdc-anat-reference invt1w``
+   * - T1w, ``--sdc-anat-reference synb0`` (``topup``, the default method)
+     - Synthetic b=0 joins the TOPUP inputs before ``eddy``
+     - TOPUP after DIFFPREP, from the motion-corrected b=0 and a synthetic b=0
+       generated from it
+     - TOPUP after SHORELine, likewise
+   * - T1w, ``--sdc-fieldmapless-method syn``
      - SyN after ``eddy``
      - SyN after DIFFPREP
      - SyN after SHORELine
-   * - Nothing
+   * - T2w or T1w, ``--sdc-fieldmapless-method unpile``
+     - unpile after ``eddy``, against the T2w or the synthetic b=0
+     - unpile after DIFFPREP
+     - unpile after SHORELine
+   * - Nothing, or ``--sdc-anat-reference none``
      - Not corrected
      - Not corrected
      - Not corrected
 
-A selection that cannot correct a series is reported as a warning in the log
-and the report, or as an error if the fieldmap-less method was curated or
-forced. The tools themselves are described in :doc:`methods/sdc`.
+A series left uncorrected is reported as a warning in the log and the report.
+The tools themselves are described in :doc:`methods/sdc`.
 
 .. _gre_init_flags:
 
-Starting DRBUDDI or T2Wreg from a GRE fieldmap
+Starting DRBUDDI or unpile from a GRE fieldmap
 ==============================================
 
-When a series is corrected by DRBUDDI or T2Wreg and a GRE fieldmap also
+When a series is corrected by DRBUDDI or unpile and a GRE fieldmap also
 lists it, the registration starts from the field the GRE fieldmap measured
 and refines it, instead of the GRE fieldmap going unused. There is no option
 to turn this on; it happens whenever the linkage is there, and ``--ignore
@@ -578,8 +594,9 @@ fieldmaps`` or ``--ignore sdc`` turns it off. It applies to:
 * a reverse phase-encoded pair corrected by DRBUDDI: ``--hmc-method
   tortoise`` or ``shoreline``, or ``--hmc-method eddy --sdc-method drbuddi``
   (not ``topup+drbuddi``, where DRBUDDI only refines TOPUP);
-* an anatomical reference forced with ``--force sdc-anat-reference``,
-  corrected by T2Wreg (``--hmc-method tortoise``).
+* a fieldmap-less correction forced with ``--force sdc-anat-reference`` and
+  run by unpile (``--sdc-fieldmapless-method unpile``), with any head motion
+  method.
 
 The GRE fieldmap must list the series. For a reverse phase-encoded pair of
 DWI series, its ``IntendedFor`` is enough as long as nothing in the session
@@ -600,9 +617,10 @@ pair and the GRE fieldmap that way::
 For an ``epi`` fieldmap, have both it and the GRE fieldmap name the DWI
 series in their ``IntendedFor``. In the ``qsiplan`` report the series is
 then ``corrected by: pepolar`` with the GRE fieldmap listed as ``also
-eligible`` and labeled ``(initializes DRBUDDI/T2Wreg)``. During the run,
-*QSIPrep* logs ``Initializing DRBUDDI for <output> with GRE fieldmap <id>``,
-and the report's distortion correction entry ends in ``(GRE-initialized)``.
+eligible`` and labeled ``(initializes DRBUDDI/unpile)``. During the run,
+*QSIPrep* logs ``Initializing DRBUDDI for <output> with GRE fieldmap <id>``
+(or ``unpile``), and the report's distortion correction entry ends in
+``(GRE-initialized)`` or ``(GRE-refined)``.
 
 
 .. _jacobian_flags:
@@ -618,7 +636,6 @@ TORTOISE. Which component applies it depends on the backend; the table is in
 susceptibility corrections internally whenever its resampling method is
 ``jac`` (the default), and *QSIPrep* cannot undo that; with ``"method":
 "lsr"`` in ``--eddy-config`` those corrections are not modulated at all.
-``--force jacobian`` additionally modulates the T2Wreg correction.
 
 
 .. _output_resolution:

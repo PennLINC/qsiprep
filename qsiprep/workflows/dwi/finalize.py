@@ -32,8 +32,8 @@ from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SDCWarpPlot, SeriesQC
 from ...utils.eddy_config import eddy_applies_gre
-from ...utils.jacobian_provenance import jacobian_provenance_for, t2wreg_is_weighted
-from ...utils.sdc import pe_readout_time, sdc_warp_source
+from ...utils.jacobian_provenance import jacobian_provenance_for
+from ...utils.sdc import eddy_applies_topup, pe_readout_time, sdc_warp_source
 from .derivatives import init_dwi_derivatives_wf
 from .gradwarp import resolve_gradwarp_plan
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
@@ -89,9 +89,7 @@ def init_dwi_finalize_wf(
         beginning of the output file name (eg 'sub-1_buds-j')
     t2w_sdc : bool, optional
         Whether a T2w is available for SDC (honoring --anat-modality and
-        --ignore t2w). Decides, with the plan, whether DIFFPREP's T2Wreg ran,
-        and so whether it left an SDC warp to write and whether that warp
-        is Jacobian-weighted (see ``jacobian_provenance_for``).
+        --ignore t2w); kept for the reports that name the T2w consumer.
     do_biascorr : bool, optional
         Whether to apply B1 bias field correction to the resampled DWI series.
     write_derivatives : bool, optional
@@ -161,14 +159,13 @@ def init_dwi_finalize_wf(
     dwi_nvols = 10
 
     # Dispatch from the compiled run, not the deprecated config spelling: those
-    # can disagree after automatic method resolution.
-    doing_topup = unit.run.stage_with('topup') is not None
+    # can disagree after automatic method resolution. Only a field eddy applied
+    # arrives as fieldmap_hz; TOPUP after DIFFPREP arrives as a warp.
+    doing_topup = eddy_applies_topup(unit)
 
     # Determine information to be used for displacement map.
     readout_time = pe_readout_time(unit)
-    warp_source, estimation_method = sdc_warp_source(
-        unit, t2w_sdc, gre_in_eddy=eddy_applies_gre(unit)
-    )
+    warp_source, estimation_method = sdc_warp_source(unit, gre_in_eddy=eddy_applies_gre(unit))
 
     sdc_warp_meta = None
     if warp_source is not None:
@@ -377,7 +374,6 @@ def init_dwi_finalize_wf(
         concatenate=True,
         doing_topup=doing_topup,
         pe_axis=pe_axis_from_direction(unit.dwi_metadata.get('PhaseEncodingDirection', 'j')),
-        weight_fieldwarps=t2wreg_is_weighted(unit, t2w_sdc),
         sdc_warp_source=warp_source,
         sdc_pe_dir=unit.pe_dir,
         sdc_readout_time=readout_time,
@@ -517,7 +513,7 @@ def init_dwi_finalize_wf(
         jacobian_applied_corrections,
         jacobian_unmodulated_corrections,
         jacobian_unmodulated_reason,
-    ) = jacobian_provenance_for(unit, t2w_sdc)
+    ) = jacobian_provenance_for(unit)
     dwi_derivatives_wf = init_dwi_derivatives_wf(
         source_file=source_file,
         sdc_warp_meta=sdc_warp_meta,

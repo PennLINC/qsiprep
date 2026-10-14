@@ -5,17 +5,8 @@ import json
 import numpy as np
 import pytest
 
-from qsiprep.interfaces.itk import _itk_mat_to_matrix
+from qsiprep.interfaces.itk import linear_transform_matrix
 from qsiprep.interfaces.niimath import allineate_json_to_itk
-
-
-def _read_itk_txt(path):
-    lines = {ln.split(':')[0]: ln.split(':', 1)[1].split() for ln in open(path) if ':' in ln}
-    return _itk_mat_to_matrix(
-        'AffineTransform_double_3_3',
-        [float(v) for v in lines['Parameters']],
-        [float(v) for v in lines['FixedParameters']],
-    )
 
 
 def test_allineate_json_becomes_the_same_map_in_lps(tmp_path):
@@ -26,7 +17,7 @@ def test_allineate_json_becomes_the_same_map_in_lps(tmp_path):
     js = tmp_path / 'a.json'
     js.write_text(json.dumps({'fixed_to_moving': ras.ravel().tolist(), 'space': 'world'}))
     out = allineate_json_to_itk(str(js), str(tmp_path / 'a.txt'))
-    lps = _read_itk_txt(out)
+    lps = linear_transform_matrix(out)
     # a fixed point in RAS, mapped in RAS, must equal the LPS map of the same point
     flip = np.diag([-1.0, -1.0, 1.0, 1.0])
     p = np.array([10.0, 20.0, -5.0, 1.0])

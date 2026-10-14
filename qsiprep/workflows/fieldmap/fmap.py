@@ -25,13 +25,13 @@ from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from niworkflows.interfaces.images import IntraModalMerge
-from niworkflows.interfaces.nibabel import ApplyMask
 from niworkflows.interfaces.reportlets.masks import SimpleShowMaskRPT
 
 from ... import config
 from ...interfaces import DerivativesDataSink, FieldToHz, FieldToRadS
 from ...interfaces.fmap import MedianFilter
 from ...interfaces.niimath import RomeoUnwrap, SkullStrip
+from .unwarp import GRE_SECOND_PASS_DESC
 from .utils import cleanup_edge_pipeline, demean_image
 
 
@@ -58,12 +58,14 @@ def init_fmap_wf(name='fmap_wf'):
             please download the qsiprep container with FSL installed."""
         )
     workflow = Workflow(name=name)
-    workflow.__desc__ = """\
+    second_pass = GRE_SECOND_PASS_DESC if config.workflow.two_pass_sdc else ''
+    workflow.__desc__ = f"""\
 A deformation field to correct for susceptibility distortions was estimated
 from a directly measured field map, which was masked with a brain mask
 derived from its magnitude image, unwrapped with the ROMEO algorithm [@romeo]
 as implemented in *niimath* [@niimath], median-filtered and co-registered to
-the b=0 reference.
+the b=0 reference. The magnitude image was rigidly registered to the b=0
+reference.{second_pass}
 """
     inputnode = pe.Node(niu.IdentityInterface(fields=['magnitude', 'fieldmap']), name='inputnode')
     outputnode = pe.Node(
@@ -114,8 +116,6 @@ the b=0 reference.
     demean = pe.Node(niu.Function(function=demean_image), name='demean')
     cleanup_wf = cleanup_edge_pipeline(name='cleanup_wf')
 
-    applymsk = pe.Node(ApplyMask(), name='applymsk')
-
     workflow.connect([
         (skullstrip, prelude, [
             ('mask_file', 'mask_file'),
@@ -129,9 +129,8 @@ the b=0 reference.
         (denoise, demean, [('out_file', 'in_file')]),
         (demean, cleanup_wf, [('out', 'inputnode.in_file')]),
         (skullstrip, cleanup_wf, [('mask_file', 'inputnode.in_mask')]),
-        (cleanup_wf, applymsk, [('outputnode.out_file', 'in_file')]),
-        (skullstrip, applymsk, [('mask_file', 'in_mask')]),
-        (applymsk, outputnode, [('out_file', 'fmap')]),
+        # the cleanup extrapolates the field beyond the brain mask on purpose; no re-masking
+        (cleanup_wf, outputnode, [('outputnode.out_file', 'fmap')]),
     ])  # fmt:skip
 
     return workflow

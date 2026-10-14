@@ -201,11 +201,8 @@ def test_parser_accepts_ignore_jacobian(tmp_path):
     assert opts.ignore == ['jacobian']
 
 
-def test_parser_accepts_force_jacobian_and_rejects_the_pair(tmp_path):
-    """Test that --force jacobian is accepted, but not together with --ignore jacobian.
-
-    --force jacobian modulates the T2Wreg field; it cannot combine with --ignore jacobian.
-    """
+def test_parser_rejects_force_jacobian(tmp_path):
+    """Test that --force jacobian is gone: every susceptibility field is modulated."""
     from qsiprep.cli.parser import _build_parser
 
     parser = _build_parser()
@@ -213,10 +210,8 @@ def test_parser_accepts_force_jacobian_and_rejects_the_pair(tmp_path):
     bids.mkdir()
     out = tmp_path / 'out'
     base = [str(bids), str(out), 'participant', '--output-resolution', '2']
-    opts = parser.parse_args([*base, '--force', 'jacobian'])
-    assert opts.force == ['jacobian']
     with pytest.raises(SystemExit):
-        parser.parse_args([*base, '--ignore', 'jacobian', '--force', 'jacobian'])
+        parser.parse_args([*base, '--force', 'jacobian'])
 
 
 def test_parser_rejects_removed_jacobian_weighting_flag(tmp_path):
@@ -668,10 +663,15 @@ def _trxscan_run(test_name, fixture, extra, data_dir, output_dir, working_dir):
         f'--eddy-config={eddy_config}',
     ]
     parameters += TRXSCAN_COMMON + list(extra)
+    # Local runs on a machine with a GPU: QSIPREP_TEST_GPU=1 puts eddy, DIFFPREP and DRBUDDI
+    # on it (the container needs --gpus all). CI has no GPU, and the CPU and GPU builds are
+    # not numerically identical.
+    if os.environ.get('QSIPREP_TEST_GPU'):
+        parameters += ['--gpu', 'eddy', 'diffprep', 'drbuddi']
     _run_and_generate(test_name, parameters, test_main=False, check_outputs=False)
     _assert_clean_run(out_dir)
     _assert_gradient_tables_consistent(out_dir)
-    score = score_run(dataset_dir, out_dir)
+    score = score_run(dataset_dir, out_dir, work_dir=work_dir)
     # Kept with the derivatives (a CI artifact) and printed, so the numbers are findable
     # whether or not an assertion fires.
     with open(os.path.join(out_dir, 'truth_score.json'), 'w') as f:
@@ -741,22 +741,20 @@ def test_trxscan_rpe_topup(data_dir, output_dir, working_dir):
 def test_trxscan_rpe_drbuddi(data_dir, output_dir, working_dir):
     """Score the same pair through DRBUDDI, with the T2w.
 
-    The field bounds are loose on purpose: the single coarse stage --sloppy runs recovers 0.43
-    of the field (its metrics are MSJac and CC on the blips; DRBUDDI's default stages at the
-    same 2.5 mm reach 0.80, but with the T2w they land the corrected b0 4-5 degrees off frame on
-    this fixture, see SLOPPY_DRBUDDI). The coregistration is scored tightly: it starts from
-    DRBUDDI's undistorted b0 now, not from the T2w as DRBUDDI's rigid had placed it, which was
-    5 degrees off here.
+    Under --sloppy DRBUDDI runs its default four-stage schedule rescaled to the sloppy working
+    grid (``SLOPPY_DRBUDDI``), with the T2w placed on the b=0 by qsiprep's rotation search and
+    rigid refinement, so the field is expected at the level TOPUP reaches. The coregistration
+    starts from DRBUDDI's undistorted b=0.
     """
     score = _trxscan_run(
         'trxscan_rpe_drbuddi', 'rpe', ['--sdc-method=drbuddi'], data_dir, output_dir, working_dir
     )
-    _expect(score, ('sdc', 'corr'), lo=0.75, note='right pattern and sign')
-    _expect(score, ('sdc', 'slope'), 0.3, 1.2, 'the sloppy single stage recovers ~0.43')
+    _expect(score, ('sdc', 'corr'), lo=0.95, note='right pattern and sign')
+    _expect(score, ('sdc', 'slope'), 0.8, 1.1)
     _expect(
         score,
         ('b0_corrected_vs_clean',),
-        lo=score['b0_uncorrected_vs_clean'] + 0.05,
+        lo=score['b0_uncorrected_vs_clean'] + 0.15,
         note=f'uncorrected b0 scores {score["b0_uncorrected_vs_clean"]:.3f}',
     )
     _expect(score, ('coreg_error', 'rotation_deg'), hi=1.0)
@@ -778,14 +776,28 @@ def test_trxscan_epi_topup(data_dir, output_dir, working_dir):
 def test_trxscan_phasediff(data_dir, output_dir, working_dir):
     """Score a GRE phasediff fieldmap with the subject moved between the DWI, T1w and fieldmap.
 
-    Asserts what holds today: the exported field has the right sign and most of the magnitude,
-    and b0->T1w coregistration recovers the recorded movement. The image is NOT asserted to
-    improve: the fieldmap-to-b0 registration leaves ~2 deg / 2.5 mm of error on this fixture
-    and the applied warp recovers under half the field (see the TRXScan report).
+    The fieldmap-to-b0 registration recovers the recorded fieldmap offset (its shift bound is
+    what the second registration pass buys: one pass against the distorted b=0 is pulled along
+    the phase-encode axis), the field reaches eddy with the right sign and magnitude (what
+    extrapolating it beyond the fieldmap's brain mask buys), the corrected b=0 is closer to the
+    clean one than the raw b=0, and b0->T1w coregistration recovers the recorded movement.
     """
     score = _trxscan_run('trxscan_phasediff', 'phasediff', [], data_dir, output_dir, working_dir)
-    _expect(score, ('sdc', 'corr'), lo=0.7)
-    _expect(score, ('sdc', 'slope'), 0.5, 1.2)
+    _expect(
+        score,
+        ('fmap2ref', 'rotation_deg'),
+        hi=1.0,
+        note='fieldmap-to-b0 registration vs the recorded 5.4 deg fieldmap offset',
+    )
+    _expect(score, ('fmap2ref', 'translation_mm'), hi=1.0, note='at the centre of the b=0 FOV')
+    _expect(score, ('sdc', 'corr'), lo=0.97)
+    _expect(score, ('sdc', 'slope'), 0.9, 1.1, 'estimated / true PE displacement')
+    _expect(
+        score,
+        ('b0_corrected_vs_clean',),
+        lo=score['b0_uncorrected_vs_clean'] + 0.05,
+        note=f'uncorrected b0 scores {score["b0_uncorrected_vs_clean"]:.3f}; must beat it by 0.05',
+    )
     assert score['coreg_error']['truth'] == 'movement', 'scored against the recorded movement'
     _expect(
         score, ('coreg_error', 'rotation_deg'), hi=1.0, note='vs the recorded 5.4 deg movement'
@@ -829,12 +841,27 @@ def test_trxscan_gnl(data_dir, output_dir, working_dir):
 @pytest.mark.integration
 @pytest.mark.trxscan_motion
 def test_trxscan_motion(data_dir, output_dir, working_dir):
-    """Score eddy's motion parameters against the poses the simulator applied (5 mm / 2.8 deg)."""
-    score = _trxscan_run('trxscan_motion', 'motion', [], data_dir, output_dir, working_dir)
+    """Score eddy's motion parameters against the poses the simulator applied (5 mm / 2.8 deg).
+
+    The fixture is one phase encoding with no fieldmap; fieldmap-less SDC is off so the run
+    scores eddy alone.
+    """
+    score = _trxscan_run(
+        'trxscan_motion',
+        'motion',
+        ['--sdc-anat-reference=none'],
+        data_dir,
+        output_dir,
+        working_dir,
+    )
     # Same axis, same sign. eddy's estimates vary with its thread count and the sloppy
     # settings: the 5 mm trans_y component scored 0.74 on CircleCI against 0.85 locally.
-    for axis in ('trans_x', 'trans_y', 'trans_z', 'rot_x', 'rot_z'):
+    # The applied rotations are small (rot_z under a degree) and eddy tracks them less tightly
+    # than the translations at the fixtures' noise level; rot_y, the smallest, is not asserted.
+    for axis in ('trans_x', 'trans_y', 'trans_z'):
         _expect(score, ('motion', axis, 'corr'), lo=0.6, note='eddy vs applied, same axis')
+    _expect(score, ('motion', 'rot_x', 'corr'), lo=0.5, note='eddy vs applied 2.7 deg rotation')
+    _expect(score, ('motion', 'rot_z', 'corr'), lo=0.35, note='eddy vs applied 0.8 deg rotation')
     # eddy under --sloppy recovers the shape of the trace (corr 0.83-0.95 on CircleCI) but
     # only a fraction of its amplitude, and the fraction moves between runs: rot_x 0.33 on
     # CircleCI against 0.5 locally. The bound keeps "a fraction", not "most of it".
@@ -877,12 +904,12 @@ def test_trxscan_diffprep(data_dir, output_dir, working_dir):
         output_dir,
         working_dir,
     )
-    _expect(score, ('sdc', 'corr'), lo=0.75, note='right pattern and sign')
-    _expect(score, ('sdc', 'slope'), 0.3, 1.2)
+    _expect(score, ('sdc', 'corr'), lo=0.95, note='right pattern and sign')
+    _expect(score, ('sdc', 'slope'), 0.8, 1.1)
     _expect(
         score,
         ('b0_corrected_vs_clean',),
-        lo=score['b0_uncorrected_vs_clean'] + 0.05,
+        lo=score['b0_uncorrected_vs_clean'] + 0.15,
         note=f'uncorrected b0 scores {score["b0_uncorrected_vs_clean"]:.3f}',
     )
     _expect(score, ('coreg_error', 'rotation_deg'), hi=1.0)
@@ -890,36 +917,106 @@ def test_trxscan_diffprep(data_dir, output_dir, working_dir):
 
 
 @pytest.mark.integration
-@pytest.mark.trxscan_t2wreg
-def test_trxscan_t2wreg(data_dir, output_dir, working_dir):
-    """Score DIFFPREP's T2Wreg correction: one series, no fieldmap, the subject's T2w.
+@pytest.mark.trxscan_unpile
+def test_trxscan_unpile(data_dir, output_dir, working_dir):
+    """Score unpile against the T2w: one series, no fieldmap, the subject's T2w, after eddy.
 
-    With ``--hmc-method tortoise`` and no fieldmap, qsiprep lets DIFFPREP register the EPI to
-    the T2w (``--epi T2Wreg``) instead of running SyN. The field it exports has the right
-    pattern. What it does to the image is a known defect, asserted as an expected failure so
-    the Tests tab shows it and the day it passes is noticed: TORTOISE's rigid placement of
-    the T2w lands ~3 degrees off the b0 on this fixture (the same failure as DRBUDDI's
-    structural registration), so the corrected b0 scores below the uncorrected one (0.49 vs
-    0.69) and the DWI reaches ACPC space 3.5 deg / 4 mm off.
+    With ``--sdc-fieldmapless-method unpile --sdc-anat-reference t2w`` the T2w is placed on
+    the motion-corrected b=0 (rotation search plus a masked rigid), and unpile fits the field
+    and a rigid refinement of the T2w position together, on a 2 mm grid so that the T2w keeps
+    its detail. The fixture simulates the non-brain head, so the T2w has scalp and eyes to
+    match against as on real data. The corrected b=0 is required to beat the acquired one
+    against the clean b=0.
     """
     score = _trxscan_run(
-        'trxscan_t2wreg', 't2wreg', ['--hmc-method=tortoise'], data_dir, output_dir, working_dir
+        'trxscan_unpile',
+        'fieldmapless',
+        ['--sdc-fieldmapless-method=unpile', '--sdc-anat-reference=t2w'],
+        data_dir,
+        output_dir,
+        working_dir,
     )
+    # Measured 0.81 / 0.69 / 3.5 of 5.2 mm, corrected b=0 0.72 vs acquired 0.63 (2026-10-12).
     _expect(score, ('sdc', 'corr'), lo=0.7, note='right pattern and sign')
-    _expect(score, ('sdc', 'slope'), 0.4, 1.2)
-    _expect(score, ('fd_mean_mm',), hi=0.5, note='the object does not move')
-    try:
-        _expect(score, ('coreg_error', 'rotation_deg'), hi=1.0)
-        _expect(score, ('coreg_error', 'translation_mm'), hi=1.5)
-        _expect(
-            score,
-            ('b0_corrected_vs_clean',),
-            lo=score['b0_uncorrected_vs_clean'],
-            note=f'uncorrected b0 scores {score["b0_uncorrected_vs_clean"]:.3f}',
-        )
-    except AssertionError as exc:
-        pytest.xfail(f'known: T2Wreg places the T2w off the b0 frame on this fixture -- {exc}')
-    pytest.fail('T2Wreg now lands the frame: drop the xfail in this test and tighten it')
+    _expect(score, ('sdc', 'slope'), 0.5, 1.1, 'estimated / true PE displacement')
+    _expect(
+        score,
+        ('b0_corrected_vs_clean',),
+        lo=score['b0_uncorrected_vs_clean'],
+        note=f'above the acquired b=0 ({score["b0_uncorrected_vs_clean"]:.3f}) vs the clean b=0',
+    )
+    _expect(score, ('fd_mean_mm',), hi=0.1, note='the object does not move')
+    _expect(score, ('coreg_error', 'rotation_deg'), hi=1.0)
+    _expect(score, ('coreg_error', 'translation_mm'), hi=2.0)
+
+
+@pytest.mark.integration
+@pytest.mark.trxscan_gre_unpile
+def test_trxscan_gre_unpile(data_dir, output_dir, working_dir):
+    """Score unpile refining a GRE fieldmap, on the moved-subject phasediff fixture.
+
+    ``--force sdc-anat-reference`` keeps unpile in charge although a GRE fieldmap is present;
+    the fieldmap is registered to the b=0 as usual (scored as ``fmap2ref`` against the offset
+    the fixture gave it) and then handed to unpile as the prior of its fit against the T2w,
+    which refines the fieldmap's position. Scored: the fieldmap-to-EPI registration, the
+    field (the registered fieldmap alone reaches 0.99 / 0.98 of the true slope on this
+    fixture, so the refinement must keep it; the shim term lowered the slope to 0.83 and
+    is not enabled), the coregistration, and motion on a static object.
+    """
+    score = _trxscan_run(
+        'trxscan_gre_unpile',
+        'phasediff',
+        [
+            '--sdc-fieldmapless-method=unpile',
+            '--sdc-anat-reference=t2w',
+            '--force',
+            'sdc-anat-reference',
+        ],
+        data_dir,
+        output_dir,
+        working_dir,
+    )
+    # The fieldmap is registered to the eddy-resampled b=0 here (the GRE-in-eddy path
+    # registers it to the pre-eddy reference); under --sloppy that rigid lands within
+    # 1.0-1.1 deg of the recorded movement.
+    _expect(score, ('fmap2ref', 'rotation_deg'), hi=1.5)
+    _expect(score, ('fmap2ref', 'translation_mm'), hi=1.0)
+    _expect(score, ('coreg_error', 'rotation_deg'), hi=1.0)
+    _expect(score, ('coreg_error', 'translation_mm'), hi=3.0)
+    _expect(score, ('sdc', 'corr'), lo=0.9, note='the refined fieldmap keeps the measured field')
+    _expect(score, ('sdc', 'slope'), 0.85, 1.15)
+    _expect(score, ('fd_mean_mm',), hi=0.1, note='the object does not move')
+
+
+@pytest.mark.integration
+@pytest.mark.trxscan_synb0
+def test_trxscan_synb0(data_dir, output_dir, working_dir):
+    """Score the SynB0 + TOPUP fieldmap-less correction after DIFFPREP.
+
+    One phase encoding, no fieldmap, ``--hmc-method tortoise`` and ``--sdc-anat-reference
+    synb0`` (the default method once a reference is named). The U-Net
+    copies part of the b=0's distortion into the synthetic b=0, so TOPUP recovers only part of
+    the field (about half on this fixture): the slope bound is "a real fraction with the right
+    sign", not "all of it".
+    """
+    score = _trxscan_run(
+        'trxscan_synb0',
+        'fieldmapless',
+        ['--hmc-method=tortoise', '--sdc-anat-reference=synb0'],
+        data_dir,
+        output_dir,
+        working_dir,
+    )
+    _expect(score, ('sdc', 'corr'), lo=0.5, note='right pattern and sign')
+    _expect(score, ('sdc', 'slope'), 0.25, 1.0, 'estimated / true PE displacement')
+    _expect(
+        score,
+        ('sdc', 'rms_residual'),
+        hi=score['sdc']['rms_truth'],
+        note=f'below the {score["sdc"]["rms_truth"]:.2f} mm rms true displacement',
+    )
+    _expect(score, ('fd_mean_mm',), hi=1.0, note='the object does not move')
+    _expect(score, ('coreg_error', 'rotation_deg'), hi=1.0)
 
 
 def _check_arg_specified(argname, arglist):
