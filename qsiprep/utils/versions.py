@@ -59,6 +59,20 @@ def eddy_version():
     return fsl.Info.version()
 
 
+@functools.cache
+def fsl_release():
+    """Return the FSL release the FSL packages were pinned to (e.g. ``6.0.7.23``).
+
+    ``scripts/update_fsl_pins.py`` records it in ``qsiprep/data/fsl_release.json``.
+    """
+    from ..data import load as load_data
+
+    try:
+        return json.loads(load_data('fsl_release.json').read_text()).get('release')
+    except (OSError, ValueError):
+        return None
+
+
 def mrtrix3_version(dev=False):
     """Return the version of the MRtrix3 installation a command runs from.
 

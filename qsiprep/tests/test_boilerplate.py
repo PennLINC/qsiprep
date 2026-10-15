@@ -34,6 +34,7 @@ def _cfg(monkeypatch):
 def _clear_version_caches():
     for lookup in (
         versions.eddy_version,
+        versions.fsl_release,
         versions.tortoise_version,
         versions.niimath_version,
         versions.svht_denoise_version,
@@ -92,10 +93,25 @@ def test_eddy_version_comes_from_the_conda_records(tmp_path, monkeypatch):
     monkeypatch.setenv('FSLDIR', str(tmp_path))
 
     assert eddy_version() == '2602.0'
-    assert '`eddy` from *FSL* (version 2602.0) [@anderssoneddy]' in _eddy_text()
+    # The shipped record names the release these pins came from
+    assert versions.fsl_release() == '6.0.7.23'
+    assert '`eddy` from *FSL* 6.0.7.23 [@anderssoneddy]' in _eddy_text()
 
 
-def test_eddy_text_leaves_out_an_unknown_version():
+def test_eddy_text_names_eddy_version_without_a_release_record(tmp_path, monkeypatch):
+    """Without the release record, eddy's own package version is named as such."""
+    meta = tmp_path / 'conda-meta'
+    meta.mkdir()
+    (meta / 'fsl-eddy-2602.0-h1_0.json').write_text(json.dumps({'version': '2602.0'}))
+    monkeypatch.setenv('FSLDIR', str(tmp_path))
+    monkeypatch.setattr('qsiprep.interfaces.eddy.fsl_release', lambda: None)
+
+    text = _eddy_text()
+    assert '`eddy` (package version 2602.0) from *FSL* [@anderssoneddy]' in text
+
+
+def test_eddy_text_leaves_out_unknown_versions(monkeypatch):
+    monkeypatch.setattr('qsiprep.interfaces.eddy.fsl_release', lambda: None)
     text = _eddy_text()
     assert 'None' not in text
     assert 'corrected with `eddy` from *FSL* [@anderssoneddy]' in text

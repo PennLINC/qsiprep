@@ -25,7 +25,7 @@ from nipype.utils.filemanip import fname_presuffix, split_filename
 
 from .. import config
 from ..data import load as load_data
-from ..utils.versions import eddy_version, tortoise_version, versioned
+from ..utils.versions import eddy_version, fsl_release, tortoise_version, versioned
 from .epi_fmap import (
     add_synthetic_b0_to_topup_inputs,
     eddy_inputs_from_dwi_files,
@@ -463,8 +463,13 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method, gre
     run_topup = 'topup' in pepolar_method.lower()
     ext_eddy = ExtendedEddy(**eddy_config)
     inputs = ext_eddy.inputs
-    version = eddy_version()
-    eddy = f'`eddy` from *FSL* (version {version})' if version else '`eddy` from *FSL*'
+    release, version = fsl_release(), eddy_version()
+    if release:
+        eddy = f'`eddy` from *FSL* {release}'
+    elif version:
+        eddy = f'`eddy` (package version {version}) from *FSL*'
+    else:
+        eddy = '`eddy` from *FSL*'
     if inputs.slm == 'none':
         model = f'a {inputs.flm} eddy-current model'
     else:
