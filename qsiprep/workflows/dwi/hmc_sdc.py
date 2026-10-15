@@ -3,8 +3,7 @@
 Orchestrating the dwi-preprocessing workflow
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autofunction:: init_dwi_preproc_wf
-.. autofunction:: init_dwi_derivatives_wf
+.. autofunction:: init_qsiprep_hmcsdc_wf
 
 """
 

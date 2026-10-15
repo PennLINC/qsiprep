@@ -1669,6 +1669,12 @@ def test_dwi_finalize_wf_builds_grad_dev_when_a_plan_resolves(tmp_path):
 
     assert wf.get_node('grad_dev') is not None
     assert wf.get_node('ds_grad_dev') is not None
+    qc = wf.get_node('series_qc')
+    from_grad_dev = wf._graph.get_edge_data(wf.get_node('grad_dev'), qc)['connect']
+    assert ('grad_dev', 'grad_dev_file') in from_grad_dev
+    from_inputnode = wf._graph.get_edge_data(wf.get_node('inputnode'), qc)['connect']
+    assert ('gradwarp_field', 'gradwarp_field') in from_inputnode
+    assert ('dwi_mask', 'gradwarp_mask_file') in from_inputnode
 
 
 def test_dwi_finalize_wf_builds_grad_dev_for_dis3d(tmp_path):
@@ -1682,6 +1688,11 @@ def test_dwi_finalize_wf_builds_grad_dev_for_dis3d(tmp_path):
     grad_dev = wf.get_node('grad_dev')
     assert grad_dev is not None
     assert wf.get_node('ds_grad_dev') is not None
+    # No applied field for DIS3D, so image_qc.tsv gets only the rotation columns.
+    qc = wf.get_node('series_qc')
+    assert ('grad_dev', 'grad_dev_file') in wf._graph.get_edge_data(grad_dev, qc)['connect']
+    from_inputnode = wf._graph.get_edge_data(wf.get_node('inputnode'), qc)['connect']
+    assert not any(field == 'gradwarp_field' for field, _ in from_inputnode)
 
 
 def test_dwi_finalize_wf_grad_dev_initial_image_is_extracted_not_the_raw_4d_series(tmp_path):

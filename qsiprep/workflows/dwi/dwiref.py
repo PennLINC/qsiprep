@@ -3,8 +3,7 @@
 Head motion correction
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autofunction:: init_dwi_hmc_wf
-.. autofunction:: init_dwi_model_hmc_wf
+.. autofunction:: init_dwiref_wf
 
 """
 

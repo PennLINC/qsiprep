@@ -29,7 +29,7 @@ Anatomical reference preprocessing workflows
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. autofunction:: init_anat_preproc_wf
-.. autofunction:: init_skullstrip_ants_wf
+.. autofunction:: init_synthstrip_wf
 
 """
 
@@ -1084,12 +1084,20 @@ a 6-DOF transform extracted from a full Affine registration to the
         name='acpc_reg',
         n_procs=omp_nthreads,
     )
-    # Without an initial_moving_transform, RobustMNINormalization runs niworkflows'
-    # AffineInitializer (a full-resolution antsAI search) first: ~47 of the node's ~60 s.
-    # niimath's fast affine does the same job in 1-2 s (see interfaces.niimath.Allineate).
-    acpc_init = pe.Node(
-        Allineate(num_threads=omp_nthreads), name='acpc_init', n_procs=omp_nthreads
-    )
+    # Without an initial_moving_transform, RobustMNINormalization starts from niworkflows'
+    # AffineInitializer: antsAI's rotation search (~47 s), which a strongly tilted head can
+    # need. --sloppy trades that robustness for niimath's 1-2 s affine.
+    if config.execution.sloppy:
+        acpc_init = pe.Node(
+            Allineate(num_threads=omp_nthreads), name='acpc_init', n_procs=omp_nthreads
+        )
+        workflow.connect([
+            (inputnode, acpc_init, [
+                ('template_image', 'reference'),
+                ('anatomical_reference', 'in_file'),
+            ]),
+            (acpc_init, acpc_reg, [('out_transform', 'initial_moving_transform')]),
+        ])  # fmt:skip
     disassemble_transform = pe.Node(
         DisassembleTransform(),
         name='disassemble_transform',
@@ -1158,11 +1166,6 @@ estimated via symmetric nonlinear registration (SyN) using antsRegistration (@an
     )
 
     workflow.connect([
-        (inputnode, acpc_init, [
-            ('template_image', 'reference'),
-            ('anatomical_reference', 'in_file'),
-        ]),
-        (acpc_init, acpc_reg, [('out_transform', 'initial_moving_transform')]),
         (inputnode, anat_nlin_normalization, [
             ('template_image', 'reference_image'),
             ('template_mask', 'reference_mask'),

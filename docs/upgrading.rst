@@ -100,8 +100,8 @@ New options
 * ``--denoise-method dwidenoise2``, ``--denoise-method svht``,
   ``--unringing-method svht`` and ``--denoise-config``.
 * ``--mrtrix-version``: use the MRtrix3 development branch.
-* ``--anat-biascorrect``, ``--report-output-level``, ``--ignore t2w``,
-  ``--ignore phase``, ``--ignore shims``, ``--ignore fov``.
+* ``--anat-biascorrect``, ``--report-output-level``, ``--ignore
+  pepolar-dwis``, ``--ignore sdc``, ``--ignore shims``, ``--ignore fov``.
 
 ****************
 Behavior changes
@@ -114,6 +114,12 @@ Behavior changes
   ``B0FieldSource`` are supported, and BIDS URIs work in ``IntendedFor``.
   Inconsistent metadata that used to be silently worked around now stops
   the run with a named error (:ref:`grouping_errors`).
+* **Separately corrected halves are concatenated by default.**
+  ``--distortion-group-merge`` now defaults to ``concat`` instead of
+  ``none``: a reverse phase-encoded pair whose halves are corrected
+  separately, as they are with ``--hmc-method tortoise``, is written as one
+  output rather than one per phase-encoding direction. Pass ``--distortion-group-merge
+  none`` for the 26.0 behavior (:ref:`grouping_flags`).
 * **GRE fieldmaps go into eddy.** With ``--hmc-method eddy``, a GRE fieldmap
   is passed to ``eddy`` and applied inside its model rather than to its
   outputs. ``--force gre-sdc-after-eddy`` restores the old behavior for

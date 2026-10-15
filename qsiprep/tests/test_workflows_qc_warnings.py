@@ -28,8 +28,10 @@ def _reset_config():
         config.execution.output_dir,
         config.execution.sloppy,
         config.nipype.omp_nthreads,
+        config.workflow.b0_threshold,
     )
     config.workflow.ignore = []
+    config.workflow.b0_threshold = 100
     config.workflow.output_resolution = 2.0
     # config.nipype.init() is not run in construction tests, and
     # DSIStudioGQIReconstruction needs an int thread_count to build.
@@ -43,6 +45,7 @@ def _reset_config():
         config.execution.output_dir,
         config.execution.sloppy,
         config.nipype.omp_nthreads,
+        config.workflow.b0_threshold,
     ) = saved
 
 

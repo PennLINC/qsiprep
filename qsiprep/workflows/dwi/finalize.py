@@ -670,6 +670,16 @@ def init_dwi_finalize_wf(
             (grad_dev, ds_grad_dev, [('grad_dev', 'in_file')]),
         ])  # fmt:skip
 
+        workflow.connect([(grad_dev, series_qc, [('grad_dev', 'grad_dev_file')])])  # fmt:skip
+        # A DIS3D unit has no applied field, so it gets no displacement columns.
+        if gradwarp_plan.warp_dim is not None:
+            workflow.connect([
+                (inputnode, series_qc, [
+                    ('gradwarp_field', 'gradwarp_field'),
+                    ('dwi_mask', 'gradwarp_mask_file'),
+                ]),
+            ])  # fmt:skip
+
     workflow.connect([
         (inputnode, series_qc, [
             ('raw_qc_file', 'pre_qc'),

@@ -30,6 +30,7 @@ from ..viz.utils import plot_sdc_warp
 from .bids import get_bids_params
 from .dsi_studio import QC_WARNINGS_COLUMN
 from .gradients import concatenate_bvals, concatenate_bvecs
+from .gradunwarp import gradient_nonlinearity_qc
 
 SUBJECT_TEMPLATE = """{mrtrix_warning}\t<ul class="elem-desc">
 \t\t<li>Subject ID: {subject_id}</li>
@@ -599,6 +600,9 @@ class _SeriesQCInputSpec(BaseInterfaceInputSpec):
     t1_b0_series = File(exists=True, desc='time series of b=0 images')
     t1_dice_score = traits.Float()
     mni_dice_score = traits.Float()
+    grad_dev_file = File(exists=True, desc='gradient deviation tensor map in t1 space')
+    gradwarp_field = File(exists=True, desc='applied gradwarp displacement field')
+    gradwarp_mask_file = File(exists=True, desc='brain mask in the space of gradwarp_field')
     output_file_name = traits.File()
 
 
@@ -651,6 +655,17 @@ class SeriesQC(SimpleInterface):
             if isdefined(self.inputs.t1_fieldmap_hz_file):
                 image_qc.update(
                     get_fieldmap_values(self.inputs.t1_fieldmap_hz_file, self.inputs.t1_mask_file)
+                )
+            if isdefined(self.inputs.grad_dev_file):
+                field = self.inputs.gradwarp_field
+                field_mask = self.inputs.gradwarp_mask_file
+                image_qc.update(
+                    gradient_nonlinearity_qc(
+                        self.inputs.grad_dev_file,
+                        self.inputs.t1_mask_file,
+                        gradwarp_field=field if isdefined(field) else None,
+                        gradwarp_mask=field_mask if isdefined(field_mask) else None,
+                    )
                 )
 
         # Get the metadata

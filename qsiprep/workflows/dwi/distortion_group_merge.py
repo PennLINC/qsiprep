@@ -3,8 +3,7 @@
 Merging Distortion Groups
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autofunction:: init_dwi_hmc_wf
-.. autofunction:: init_dwi_model_hmc_wf
+.. autofunction:: init_distortion_group_merge_wf
 
 """
 

@@ -228,9 +228,9 @@ intensity harmonization.
 ``--dwidenoise-window`` sets the ``dwidenoise`` patch size in voxels, an odd
 integer or ``auto`` (the default, derived from the number of volumes).
 ``dwidenoise2`` sizes its patches from its own schedule, and ``svht`` from
-``extent``; both are set with ``--denoise-config`` (see below). ``dwidenoise`` and ``dwidenoise2`` are
-licensed for non-commercial use only; ``svht`` is not restricted. Its
-settings are also given with ``--denoise-config``. ``rpg`` unringing is the method for
+``extent``; both are set with ``--denoise-config`` (see below).
+``dwidenoise`` and ``dwidenoise2`` are licensed for non-commercial use only;
+``svht`` is not restricted. ``rpg`` unringing is the method for
 partial Fourier acquisitions; ``mrdegibbs`` assumes full Fourier sampling.
 ``svht`` unringing reads ``PartialFourier`` from the sidecar: it handles full
 Fourier sampling and 7/8 or 6/8 partial Fourier along the ``j`` axis, and
