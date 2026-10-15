@@ -334,6 +334,12 @@ def init_dwi_preproc_wf(
     # reference so it does not depend on the HMC backend selected above.
     gradwarp_wf = init_gradwarp_wf(unit)
     if gradwarp_wf is not None:
+        # gradwarp_wf feeds hmc_wf, so the graph visits it first, but the
+        # correction is applied after (and its text refers to) head motion and
+        # eddy current correction. Report it after hmc_wf's own text.
+        texts = (hmc_wf.__postdesc__, gradwarp_wf.__desc__)
+        hmc_wf.__postdesc__ = '\n\n' + '\n\n'.join(t.strip() for t in texts if t) + '\n\n'
+        gradwarp_wf.__desc__ = None
         if gradwarp_wf.needs_reference:
             # mk_displacementMaps.cxx (what CreateNonlinearityDisplacementMap
             # wraps) reads its reference image as a 3D NIfTI, not the 4D series

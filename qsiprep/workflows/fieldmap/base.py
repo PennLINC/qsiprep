@@ -544,12 +544,8 @@ def _gre_boilerplate(gradwarp, use):
             "to eddy's first volume) was passed to eddy, which corrected susceptibility "
             'distortion within its own model.'
         )
-    elif use == 'unpile':
-        desc.append(
-            'Rather than being applied directly, this field map was handed to unpile as '
-            'the prior of its fit and refined against the b=0.'
-        )
-    # 'drbuddi': init_drbuddi_wf's boilerplate describes the seed.
+    # 'unpile': unpile's boilerplate describes how the prior was used, which
+    # depends on its target. 'drbuddi': init_drbuddi_wf's boilerplate describes the seed.
     return '\n'.join(desc) + '\n' if desc else ''
 
 

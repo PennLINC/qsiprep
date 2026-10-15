@@ -844,16 +844,11 @@ def gen_denoising_boilerplate(do_biascorr):
     desc = [
         f'Any images with a b-value less than {b0_threshold} s/mm^2 were treated as a *b*=0 image.'
     ]
-    harmonize_b0s = not no_b0_harmonization
-    last_step = ''
-
-    if harmonize_b0s:
+    if not no_b0_harmonization:
         desc.append(
-            'The mean intensity of the DWI series was adjusted '
-            'so all the mean intensity of the b=0 images matched across each'
-            'separate DWI scanning sequence.'
+            'The intensity of each DWI series was scaled so that the mean intensity of '
+            'its b=0 images matched across the separate DWI scanning sequences.'
         )
-        last_step = True
 
     if do_biascorr:
         desc.append(
@@ -861,11 +856,8 @@ def gen_denoising_boilerplate(do_biascorr):
             '`dwibiascorrect` from MRtrix3 with the N4 algorithm '
             '[@n4] after corrected images were resampled.'
         )
-        last_step = True
 
-    if not last_step:
-        return 'No denoising steps were applied to the DWI data.'
-
+    # Denoising and unringing are described per series by init_dwi_denoising_wf.
     return ' '.join(desc)
 
 

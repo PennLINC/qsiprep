@@ -63,6 +63,8 @@ from ..dwi.registration import init_rotation_search_wf
 
 ANTS_VERSION = BrainExtraction().version or '<ver>'
 FS_VERSION = '8.2.0'
+#: Citation keys (boilerplate.bib) for the anatomical templates.
+_TEMPLATE_CITATIONS = {'MNI152NLin2009cAsym': ' [@mni]'}
 
 
 def _resample_interpolation():
@@ -291,7 +293,7 @@ workflow.
     if do_biascorr:
         desc += (
             'Each image was corrected for intensity non-uniformity (INU) using '
-            f'`N4BiasFieldCorrection` [@n4, ANTs {ANTS_VERSION}].'
+            f'`N4BiasFieldCorrection` [@n4, ANTs {ANTS_VERSION}].\n'
         )
 
     # Ensure there is 1 and only 1 anatomical reference
@@ -1066,10 +1068,11 @@ def init_anat_normalization_wf(anatomical_template, has_rois=False) -> Workflow:
     omp_nthreads = config.nipype.omp_nthreads
 
     # get a good ACPC transform
+    template_ref = _TEMPLATE_CITATIONS.get(anatomical_template, '')
     desc = f"""\
 The anatomical reference image was reoriented into AC-PC alignment via
 a 6-DOF transform extracted from a full Affine registration to the
-{anatomical_template} template. """
+{anatomical_template} template{template_ref}. """
 
     acpc_json = (
         'intramodal_ACPC.json' if not config.execution.sloppy else 'intramodal_ACPC_sloppy.json'
@@ -1130,7 +1133,7 @@ a 6-DOF transform extracted from a full Affine registration to the
 
     desc += """\
 A full nonlinear registration to the template from AC-PC space was
-estimated via symmetric nonlinear registration (SyN) using antsRegistration (@ants). """
+estimated via symmetric nonlinear registration (SyN) using antsRegistration [@ants]. """
     rigid_acpc_resample_anat = pe.Node(
         ants.ApplyTransforms(input_image_type=0, interpolation=_resample_interpolation()),
         name='rigid_acpc_resample_anat',

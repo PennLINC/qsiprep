@@ -154,7 +154,7 @@ def init_unpile_sdc_wf(
     two_pass = two_pass and target == 'synb0'
 
     workflow = Workflow(name=name)
-    workflow.__desc__ = _boilerplate(target, two_pass, gre_prior)
+    workflow.__postdesc__ = _boilerplate(target, two_pass, gre_prior)
 
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -368,36 +368,43 @@ def _as_list(value):
 
 
 def _boilerplate(target, two_pass, gre_prior):
+    """Describe the unpile fit.
+
+    The workflow reports this as its postdesc, so with ``target='synb0'`` the
+    synthetic b=0's generation (``init_synb0_wf``'s description) comes first.
+    A GRE prior's estimation is described by its own workflow, which runs
+    before this one; only how unpile used it is described here.
+    """
     reference = (
-        'a synthetic distortion-free b=0 generated from it and the T1w with SynB0-DISCO '
-        '[@synb0disco]'
+        'the synthetic distortion-free b=0 generated from it'
         if target == 'synb0'
-        else "the subject's T2w image, placed in the b=0 frame by a rigid registration"
+        else "the subject's T2w image (brought into the b=0 frame by a rigid registration)"
     )
     metric = (
         'the sum of squared differences'
         if target == 'synb0'
-        else 'local normalized cross-correlation, fitting a rigid refinement of the T2w '
-        'position together with the field'
+        else 'local normalized cross-correlation'
     )
     desc = (
-        'Susceptibility distortion was estimated with unpile [@unpile] after head motion '
-        f'correction: the motion-corrected b=0 average was matched to {reference} by '
-        f'{metric}, through a model of the EPI readout that displaces the reference along '
-        'the phase-encoding axis and accounts for signal pile-up.'
+        'Susceptibility distortion was estimated with unpile [@unpile], an experimental '
+        'method, after head motion correction. The motion-corrected b=0 average was matched '
+        f'to {reference}, with {metric} as the cost function, through a model of the EPI '
+        'readout that displaces the reference along the phase-encoding axis and accounts '
+        'for signal pile-up.'
     )
     if target == 't2w':
         desc += (
+            ' A rigid refinement of the T2w position was fitted together with the field.'
             ' The fit was carried out on a grid at about two thirds of the DWI voxel (no finer '
             f'than {FINEST_GRID_MM:g} mm) to keep the detail of the T2w.'
         )
     if gre_prior:
         desc += (
-            ' A GRE fieldmap acquired for the series was handed to unpile as a prior, with '
-            'its position refined against the b=0.'
+            ' The GRE field map was handed to unpile as the prior of its fit, with its '
+            'position refined against the b=0.'
             if target == 't2w'
-            else ' A GRE fieldmap acquired for the series was handed to unpile and applied '
-            'as given, since refining it against a synthetic b=0 pulls it toward the '
+            else ' The GRE field map was handed to unpile and applied as given, since '
+            'refining it against a synthetic b=0 pulls it toward the '
             "synthetic image's own residual distortion."
         )
     if two_pass:

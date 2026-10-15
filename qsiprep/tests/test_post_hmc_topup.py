@@ -188,7 +188,7 @@ def test_synb0_topup_second_pass_regenerates_synb0_from_the_unwarped_b0():
         'sub-01_dwi.nii.gz', 'j-', 0.05, 'sub-01_dwi.nii.gz', two_pass=False
     )
     assert single.get_node('topup_pass2') is None
-    assert 'again' not in single.__desc__
+    assert 'again' not in single.__postdesc__
 
     wf = init_synb0_topup_wf('sub-01_dwi.nii.gz', 'j-', 0.05, 'sub-01_dwi.nii.gz')
     assert ('output_image', 'in_file') in _connections(wf, 'unwarp_b0', 'modulate_unwarped_b0')
@@ -212,7 +212,7 @@ def test_synb0_topup_second_pass_regenerates_synb0_from_the_unwarped_b0():
     assert ('outputnode.synthetic_b0', 'synthetic_b0') in _connections(
         wf, 'synb0_wf_pass2', 'outputnode'
     )
-    assert 'again' in wf.__desc__
+    assert 'again' in wf.__postdesc__
 
 
 def _syn_unit(reference):

@@ -369,6 +369,8 @@ def init_fsl_hmc_wf(
         eddy_args,
         fieldmap_type,
         pepolar_method='+'.join(['topup'] * run_topup + ['drbuddi'] * run_drbuddi),
+        gre_to_eddy=gre_to_eddy,
+        synb0_two_pass=config.workflow.two_pass_sdc,
     )
 
     # Whether a spatial gradwarp field exists for this unit. It gates two
@@ -458,7 +460,9 @@ def init_fsl_hmc_wf(
                 name='synb0_b0_ref_wf',
                 source_file=source_file,
             )
-            synb0_wf = init_synb0_wf()
+            # topup_boilerplate describes the synthetic b=0 where TOPUP first uses it,
+            # which the graph would otherwise visit after the whole eddy description.
+            synb0_wf = init_synb0_wf(describe=False)
             synb0_topup_inputs = pe.Node(Synb0TopupInputs(), name='synb0_topup_inputs')
 
             # Scalar QC of the SynB0-driven field (halo/displacement checks)
@@ -524,7 +528,7 @@ def init_fsl_hmc_wf(
                     name='synb0_b0_ref_wf_pass2',
                     source_file=source_file,
                 )
-                synb0_wf_pass2 = init_synb0_wf(name='synb0_wf_pass2')
+                synb0_wf_pass2 = init_synb0_wf(name='synb0_wf_pass2', describe=False)
                 synb0_topup_inputs_pass2 = pe.Node(
                     Synb0TopupInputs(), name='synb0_topup_inputs_pass2'
                 )
@@ -580,11 +584,6 @@ def init_fsl_hmc_wf(
                 synb0_wf = synb0_wf_pass2
                 synb0_b0_ref_wf = synb0_b0_ref_wf_pass2
                 synb0_topup_inputs = synb0_topup_inputs_pass2
-                workflow.__desc__ += (
-                    ' The b=0 was then unwarped with that field (Jacobian-modulated), a new '
-                    'synthetic b=0 was generated from it, and TOPUP was run again on the '
-                    'acquired b=0 images paired with the new synthetic b=0.'
-                )
             # The derivatives and the field QC describe the last pass.
             add_synb0_outputs(workflow, synb0_wf, source_file)
             workflow.connect([
@@ -828,6 +827,7 @@ def init_fsl_hmc_wf(
 
     if not fieldmap_type:
         outputnode.inputs.sdc_method = 'None'
+        workflow.__desc__ += 'No susceptibility distortion correction was performed.\n\n'
         if has_gradwarp:
             connect_gradwarp_coreg_reference(
                 workflow, inputnode, b0_ref_for_coreg, 'outputnode.ref_image', outputnode

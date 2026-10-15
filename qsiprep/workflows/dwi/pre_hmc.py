@@ -265,8 +265,8 @@ def init_dwi_pre_hmc_wf(
         ])  # fmt:skip
 
         workflow.__postdesc__ += (
-            'Both distortion groups were then merged into a '
-            'single file, as required for the FSL workflows.\n\n'
+            ' Both phase-encoding polarity groups were then concatenated into a single '
+            'series for head motion correction.\n\n'
         )
         return workflow
 

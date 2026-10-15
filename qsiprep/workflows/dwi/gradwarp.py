@@ -232,19 +232,19 @@ _PRERESAMPLED_BY = {'eddy': 'FSL eddy', 'tortoise': "TORTOISE's DIFFPREP"}
 _CORRECTION_TEXT = {
     '3D': (
         'Gradient nonlinearity was corrected using the scanner gradient '
-        'coefficients with TORTOISE V4, applying the full three-dimensional '
+        'coefficients with TORTOISE V4 [@tortoisev4], applying the full three-dimensional '
         'gradwarp displacement field.'
     ),
     '1D': (
         'Gradient nonlinearity was corrected using the scanner gradient '
-        'coefficients with TORTOISE V4. Because the scanner had already applied '
+        'coefficients with TORTOISE V4 [@tortoisev4]. Because the scanner had already applied '
         'in-plane gradwarp correction (DIS2D), only the residual through-plane '
         'component was applied here.'
     ),
     None: (
         'The scanner had already applied full three-dimensional gradwarp '
         'correction (DIS3D), so no further spatial correction was performed. '
-        'A voxelwise gradient deviation map was computed with TORTOISE V4 to '
+        'A voxelwise gradient deviation map was computed with TORTOISE V4 [@tortoisev4] to '
         'account for the spatially varying diffusion encoding.'
     ),
 }
@@ -256,7 +256,7 @@ _CORRECTION_TEXT = {
 _FORCED_CORRECTION_TEXT = {
     '1D': (
         'Gradient nonlinearity was corrected using the scanner gradient '
-        'coefficients with TORTOISE V4. Only the through-plane component of '
+        'coefficients with TORTOISE V4 [@tortoisev4]. Only the through-plane component of '
         'the gradwarp displacement field was applied, as requested.'
     ),
 }
@@ -310,7 +310,17 @@ def gradwarp_boilerplate(warp_dim, basis='metadata'):
         text = _FORCED_CORRECTION_TEXT.get(warp_dim, _CORRECTION_TEXT[warp_dim])
     else:
         text = _CORRECTION_TEXT[warp_dim]
-    return text + _resampling_sentence() + describe_jacobian_modulation()
+    return text + _resampling_sentence() + describe_jacobian_modulation() + _GRADDEV_SENTENCE
+
+
+#: The spatial correction moves voxels but cannot fix the spatially varying
+#: diffusion encoding, so finalize computes the gradient deviation map for every
+#: resolved plan (the DIS3D text says so in its own words).
+_GRADDEV_SENTENCE = (
+    ' A voxelwise gradient deviation map was also computed with TORTOISE V4 to '
+    'account for the spatially varying diffusion encoding, which the spatial '
+    'correction does not change.'
+)
 
 
 #: Report phrasing for each resolved state.

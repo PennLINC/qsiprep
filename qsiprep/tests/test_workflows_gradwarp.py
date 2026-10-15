@@ -2367,8 +2367,7 @@ def test_forced_t2w_reference_refines_the_gre_fieldmap(tmp_path, monkeypatch):
     assert seed_wf.get_node('sdc_wf').gradwarp_mode == 'reference'
     assert sdc_wf.get_node('outputnode').inputs.method == 'unpile (T2w, GRE-refined)'
     desc = ' '.join(wf.visit_desc().split())
-    assert 'handed to unpile as a prior' in desc
-    assert 'the prior of its fit' in desc
+    assert desc.count('handed to unpile as the prior of its fit') == 1
 
 
 def test_forced_synb0_reference_over_a_gre_fieldmap_runs_topup(tmp_path, monkeypatch):

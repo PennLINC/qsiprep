@@ -47,8 +47,21 @@ from ...interfaces.synb0 import (
 from ..dwi.registration import init_b0_to_anat_registration_wf
 from ..dwi.util import init_dwi_reference_wf
 
+#: How the synthetic b=0 is made. ``init_synb0_wf`` reports it as its own
+#: description; a parent that names the synthetic b=0 inside a longer sentence
+#: (``interfaces.eddy.topup_boilerplate``) inlines it there instead.
+SYNB0_GENERATION_DESC = """\
+A synthetic distortion-free b=0 image was generated from the T1w image and
+the distorted b=0 reference using the SynB0-DISCO dual-channel U-Net
+[@synb0disco; @synb0discoValidation]. The T1w image was scaled to the
+FreeSurfer intensity convention (white matter median at 110), both inputs
+were mapped onto the U-Net's 2.5mm atlas grid through the AC-PC affine
+registration, and the mean prediction over the model folds was resampled
+back onto the b=0 reference grid.
+"""
 
-def init_synb0_wf(name='synb0_wf'):
+
+def init_synb0_wf(name='synb0_wf', describe=True):
     """Generate a synthetic distortion-free b=0 in the distorted b=0's grid.
 
     The U-Net consumes a FreeSurfer-style normalized T1w and the distorted
@@ -114,15 +127,8 @@ def init_synb0_wf(name='synb0_wf'):
 
     """
     workflow = Workflow(name=name)
-    workflow.__desc__ = """\
-A synthetic distortion-free b=0 image was generated from the T1w image and
-the distorted b=0 reference using the SynB0-DISCO dual-channel U-Net
-[@synb0disco; @synb0discoValidation]. The T1w image was scaled to the
-FreeSurfer intensity convention (white matter median at 110), both inputs
-were mapped onto the U-Net's 2.5mm atlas grid through the AC-PC affine
-registration, and the mean prediction over the model folds was resampled
-back onto the b=0 reference grid.
-"""
+    if describe:
+        workflow.__desc__ = SYNB0_GENERATION_DESC
 
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -175,6 +181,9 @@ back onto the b=0 reference grid.
         write_report=False,
         name='distorted_b0_coreg_wf',
     )
+    # SYNB0_GENERATION_DESC covers this registration; its own text would read as
+    # the DWI's coregistration, which the methods describe later.
+    b0_coreg_wf.__desc__ = None
 
     # ANTs transform lists run the last-listed transform first: images travel
     # b=0 -> AC-PC (coreg) -> pre-AC-PC (inverse rigid) -> atlas (full affine).
@@ -418,17 +427,19 @@ def init_synb0_topup_wf(
         Passed through from the last pass's :func:`init_synb0_wf`
     """
     workflow = Workflow(name=name)
-    workflow.__desc__ = """\
-Susceptibility distortion was estimated with TOPUP [@topup] after head motion
-correction: the motion-corrected b=0 average was paired with a synthetic
-distortion-free b=0 generated from it, which entered TOPUP as an image with
-zero readout time.{second_pass} The resulting field was converted to a displacement field
+    # A postdesc, so that the synthetic b=0's generation (init_synb0_wf's own
+    # description) is reported before the TOPUP estimate that uses it.
+    workflow.__postdesc__ = """\
+Susceptibility distortion was then estimated with TOPUP [@topup] after head motion
+correction: the motion-corrected b=0 average was paired with the synthetic
+b=0 generated from it, which entered TOPUP as an image with zero readout
+time.{second_pass} The resulting field was converted to a displacement field
 along the phase-encoding axis and applied in the final resampling.
 """.format(
         second_pass=(
             ' The b=0 was then unwarped with that field (Jacobian-modulated), a new\n'
-            'synthetic b=0 was generated from it, and TOPUP was run again on the original\n'
-            'b=0 paired with the new synthetic b=0.'
+            'synthetic b=0 was generated from it in the same way, and TOPUP was run again\n'
+            'on the original b=0 paired with the new synthetic b=0.'
             if two_pass
             else ''
         )

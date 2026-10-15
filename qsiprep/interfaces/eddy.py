@@ -6,6 +6,7 @@ import json
 import os
 import os.path as op
 import re
+import sys
 
 import nibabel as nb
 import numpy as np
@@ -453,13 +454,68 @@ class Eddy2SPMMotion(SimpleInterface):
         return runtime
 
 
-def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
-    """Write boilerplate text based on an eddy config dict."""
-    doing_2stage = 'drbuddi' in pepolar_method.lower()
+def fsl_package_version(package):
+    """Return the installed version of one FSL conda package, or ``None``.
+
+    The image installs FSL's tools as individual conda packages (``fsl-eddy``,
+    ``fsl-topup`` ...) with no ``$FSLDIR/etc/fslversion``, which is the only
+    place nipype's ``FSLCommand.version`` looks. Each package's own version is
+    the one worth reporting anyway, since the packages are released separately.
+    """
+    prefixes = [os.environ.get('FSLDIR'), os.environ.get('CONDA_PREFIX'), sys.prefix]
+    for prefix in dict.fromkeys(prefix for prefix in prefixes if prefix):
+        meta_dir = op.join(prefix, 'conda-meta')
+        if not op.isdir(meta_dir):
+            continue
+        for entry in sorted(os.listdir(meta_dir)):
+            if not (entry.startswith(f'{package}-') and entry.endswith('.json')):
+                continue
+            try:
+                with open(op.join(meta_dir, entry)) as fobj:
+                    record = json.load(fobj)
+            except (OSError, ValueError):
+                continue
+            if record.get('name') == package and record.get('version'):
+                return str(record['version'])
+    return None
+
+
+def _versioned(tool, package, fallback=None):
+    """Name an FSL tool with its package version when the version is known."""
+    version = fsl_package_version(package) or fallback
+    return f"FSL's {tool} (version {version})" if version else f"FSL's {tool}"
+
+
+def boilerplate_from_eddy_config(
+    eddy_config,
+    fieldmap_type,
+    pepolar_method,
+    gre_to_eddy=False,
+    synb0_two_pass=False,
+):
+    """Write boilerplate text based on an eddy config dict.
+
+    Parameters
+    ----------
+    eddy_config : dict
+        The ``--eddy-config`` arguments eddy runs with.
+    fieldmap_type : str
+        The unit's fieldmap type ('rpe_series', 'epi', 'synb0', a GRE suffix ...),
+        or '' when there is none.
+    pepolar_method : str
+        The PEPOLAR stages this run has, joined by '+' ('topup', 'drbuddi',
+        'topup+drbuddi' or '').
+    gre_to_eddy : bool
+        Whether a GRE fieldmap is handed to eddy (``--field``).
+    synb0_two_pass : bool
+        Whether the SynB0 + TOPUP estimate is run a second time.
+    """
     ext_eddy = ExtendedEddy(**eddy_config)
+    eddy_name = _versioned('eddy', 'fsl-eddy', fallback=ext_eddy.version)
     desc = [
-        f"FSL (version {ext_eddy.version})'s eddy was used for head motion correction and "
-        'Eddy current correction [@anderssoneddy].'
+        f'{eddy_name} was used for head motion correction and eddy current correction '
+        '[@anderssoneddy], and rotated the diffusion gradient directions to account for '
+        'the estimated head motion.'
     ]
 
     # Basic eddy setup
@@ -477,7 +533,7 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
         else f'and a {ext_eddy.inputs.slm} second level model were'
     )
     desc.append(
-        f'A {ext_eddy.inputs.flm} first level model {slm} used to characterize Eddy current-'
+        f'A {ext_eddy.inputs.flm} first level model {slm} used to characterize eddy current-'
         'related spatial distortion.'
     )
 
@@ -499,7 +555,7 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
     if isdefined(ext_eddy.inputs.dont_sep_offs_move) and ext_eddy.inputs.dont_sep_offs_move:
         desc.append('No attempt was made to separate field offset from subject movement.')
     else:
-        desc.append('Field offset was attempted to be separated from subject movement.')
+        desc.append('Eddy attempted to separate field offset from subject movement.')
 
     # did you peas?
     if isdefined(ext_eddy.inputs.dont_peas) and ext_eddy.inputs.dont_peas:
@@ -517,7 +573,7 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
             'both': 'both slice and multi-band group',
             traits.Undefined: 'slice',
         }[ext_eddy.inputs.outlier_type]
-        nvox = ext_eddy.inputs.outlier_nstd if isdefined(ext_eddy.inputs.outlier_nstd) else 250
+        nvox = ext_eddy.inputs.outlier_nvox if isdefined(ext_eddy.inputs.outlier_nvox) else 250
         desc.append(
             'Data were grouped by %s, only including values from '
             'slices determined to contain at least %d intracerebral '
@@ -527,13 +583,13 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
             ext_eddy.inputs.multiband_factor if isdefined(ext_eddy.inputs.multiband_factor) else 1
         )
         mb_off = (
-            ext_eddy.inputs.multiband_offset if isdefined(ext_eddy.inputs.multiband_factor) else 0
+            ext_eddy.inputs.multiband_offset if isdefined(ext_eddy.inputs.multiband_offset) else 0
         )
         if mbf > 1 and 'multi-band group' in ol_group:
             offs_txt = 'was'
             if mb_off != 0:
-                offs_txt = {-1: 'bottom', 1: 'top'}
-                offs_txt = f'and slices removed from the {offs_txt} of the volume were'
+                removed_from = {-1: 'bottom', 1: 'top'}[mb_off]
+                offs_txt = f'and slices removed from the {removed_from} of the volume were'
             desc.append(f'A multi-band acceleration factor of {mbf} {offs_txt} assumed.')
 
         # The threshold for outliers
@@ -574,27 +630,42 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
             'and lambda=%.3f [@eddys2v].' % (ext_eddy.inputs.mporder, niter, s2v_interp, lam)
         )
 
-    # distortion correction
+    # distortion correction. TOPUP's text names the field eddy applies; DRBUDDI
+    # (applied after eddy) and a GRE fieldmap are described by their own workflows.
+    topup_text = ''
     if 'topup' in pepolar_method.lower():
-        desc.append(topup_boilerplate(fieldmap_type, pepolar_method))
-    # DRBUDDI is described in its own workflow
+        topup_text = topup_boilerplate(fieldmap_type, pepolar_method, synb0_two_pass)
+    if topup_text:
+        desc.append(topup_text)
+
+    # The susceptibility field eddy itself applies, if any: TOPUP's or a GRE fieldmap's.
+    if topup_text:
+        field_applied = 'the TOPUP field'
+    elif gre_to_eddy:
+        field_applied = 'the GRE field map'
+    else:
+        field_applied = None
 
     # Jacobian modulation: whether eddy's own resampling Jacobian-modulated
-    # the eddy-current (and, when TOPUP ran, susceptibility) corrections it
-    # applied. This is independent of --ignore jacobian, which controls
-    # only the modulation QSIPrep itself applies -- see eddy_modulates_distortion.
+    # the eddy-current (and any susceptibility) corrections it applied. This is
+    # independent of --ignore jacobian, which controls only the modulation QSIPrep
+    # itself applies -- see eddy_modulates_distortion.
     from ..utils.eddy_config import eddy_modulates_distortion
 
+    if field_applied:
+        corrections = (
+            'The eddy current correction and the susceptibility distortion correction '
+            f'from {field_applied} were'
+        )
+    else:
+        corrections = 'The eddy current correction was'
     if eddy_modulates_distortion(eddy_config):
         desc.append(
-            'Eddy-current correction, and susceptibility distortion correction '
-            'when TOPUP was used, were Jacobian-modulated by eddy itself as part '
-            'of its `jac` resampling.'
+            f'{corrections} Jacobian-modulated by eddy itself as part of its `jac` resampling.'
         )
     else:
         desc.append(
-            'Eddy-current correction, and susceptibility distortion correction '
-            'when TOPUP was used, were not Jacobian-modulated, because eddy was '
+            f'{corrections} not Jacobian-modulated, because eddy was '
             f'configured with resampling method "{ext_eddy.inputs.method}" rather '
             'than "jac"; QSIPrep cannot retrofit this modulation once eddy has '
             'resampled the data.'
@@ -614,26 +685,25 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
             'knot-spacing of %.2fmm [@eddysus].' % (mbs_niter, mbs_lambda, mbs_ksp)
         )
 
-    # Format the interpolation
+    # eddy writes its corrected volumes, so they are interpolated here and again
+    # in QSIPrep's final resampling (described by init_dwi_trans_wf).
     lsr_ref = ' [@fsllsr]' if ext_eddy.inputs.method == 'lsr' else ''
-    if doing_2stage:
-        desc.append(
-            'Interpolation after head motion and initial susceptibility distortion correction'
-        )
-    else:
-        desc.append('Final interpolation')
-    desc.append(f'was performed using the `{ext_eddy.inputs.method}` method{lsr_ref}.')
-    if not doing_2stage:
-        desc.append('\n\n')
+    desc.append(
+        f'Eddy wrote out the corrected volumes using its `{ext_eddy.inputs.method}` '
+        f'interpolation{lsr_ref}.\n\n'
+    )
     return ' '.join(desc)
 
 
-def topup_boilerplate(fieldmap_type, pepolar_method):
+def topup_boilerplate(fieldmap_type, pepolar_method, synb0_two_pass=False):
     """Write boilerplate text based on fieldmaps."""
     if fieldmap_type not in ('rpe_series', 'epi', 'synb0'):
         return ''
 
+    topup_name = _versioned('TOPUP', 'fsl-topup')
     if fieldmap_type == 'synb0':
+        from ..workflows.fieldmap.synb0 import SYNB0_GENERATION_DESC
+
         # An un-forced SyNb0 never overrides a usable fieldmap, so reaching it
         # with fieldmaps or RPE series in the dataset means the user either
         # forced the anatomical reference or ignored the fieldmaps - the
@@ -652,38 +722,44 @@ def topup_boilerplate(fieldmap_type, pepolar_method):
             )
         else:
             reason = 'No fieldmap was available for these series, so '
+        second_pass = (
+            ' The b=0 was then unwarped with that field (Jacobian-modulated), a new '
+            'synthetic b=0 was generated from it, and TOPUP was run again on the '
+            'acquired b=0 images paired with the new synthetic b=0.'
+            if synb0_two_pass
+            else ''
+        )
         return (
-            '\n\n' + reason + 'susceptibility '
-            'distortion correction used a synthetic distortion-free b=0 '
-            '[@synb0disco]: the selected real b=0 images were slightly '
-            'smoothed (sigma=1.15mm) to match the smoothness of the synthetic '
-            "image, which entered FSL's TOPUP [@topup] as an additional "
-            'volume with zero total readout time. The TOPUP-estimated '
-            'fieldmap was incorporated into the Eddy current and head motion '
-            'correction interpolation.'
+            '\n\n' + reason + 'susceptibility distortion correction used a synthetic '
+            'distortion-free b=0. ' + SYNB0_GENERATION_DESC.replace('\n', ' ').strip() + ' '
+            'The selected real b=0 images were slightly smoothed (sigma=1.15mm) to match '
+            f'the smoothness of the synthetic image, which entered {topup_name} [@topup] as '
+            f'an additional volume with zero total readout time.{second_pass} The '
+            'TOPUP-estimated field was passed to eddy, which applied it in the same '
+            'resampling as the head motion and eddy current correction.'
         )
 
     desc = []
     desc.append(
-        '\n\nData was collected with reversed phase-encode blips, resulting '
+        '\n\nData were collected with reversed phase-encode blips, resulting '
         'in pairs of images with distortions going in opposite directions.'
     )
 
     if 'drbuddi' in pepolar_method.lower():
         desc.append(
-            'Distortion correction was performed in two stages. In the first stage, '
-            "FSL's TOPUP [@topup]"
+            f'Distortion correction was performed in two stages. In the first stage, {topup_name}'
         )
     else:
-        desc.append("FSL's TOPUP [@topup]")
+        desc.append(topup_name)
+    desc[-1] += ' [@topup]'
 
     desc.append('was used to estimate a susceptibility-induced off-resonance field based on')
     if fieldmap_type == 'epi':
         desc.append('b=0 reference images with reversed phase encoding directions.')
     else:
         desc.append(
-            'b=0 images extracted from multiple DWI series  '
-            'with reversed phase encoding directions.'
+            'b=0 images extracted from multiple DWI series with reversed phase encoding '
+            'directions.'
         )
     desc.append(
         "The most mutually-consistent b=0 images were chosen with TORTOISE's "
@@ -692,8 +768,8 @@ def topup_boilerplate(fieldmap_type, pepolar_method):
         'correlation.'
     )
     desc.append(
-        'The TOPUP-estimated fieldmap was incorporated into the '
-        'Eddy current and head motion correction interpolation.'
+        'The TOPUP-estimated field was passed to eddy, which applied it in the same '
+        'resampling as the head motion and eddy current correction.'
     )
 
     return ' '.join(desc)
