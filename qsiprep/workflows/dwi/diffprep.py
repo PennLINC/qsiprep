@@ -353,7 +353,7 @@ def init_diffprep_hmc_wf(
         effective_correction_mode = 'motion'
         sloppy_kwargs = {'niter': 0}
         config.loggers.workflow.warning(
-            '--sloppy: running DIFFPREP rigid-only (-c motion, --niter 0) instead '
+            '--sloppy: running DIFFPREP rigid-only (-c rigid, --niter 0) instead '
             'of %s. Eddy-current correction is DISABLED; this is for smoke-testing '
             'the pipeline, not for real data.',
             correction_mode,

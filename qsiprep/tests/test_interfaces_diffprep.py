@@ -50,6 +50,21 @@ def _diffprep_siblings(tmp_path):
     return dwi, tmp_path / 'dwi.bmtxt', tmp_path / 'dwi.json'
 
 
+def test_diffprep_motion_mode_loads_the_rigid_settings(tmp_path):
+    """TORTOISE has no motion.mec; "-c motion" silently runs quadratic correction."""
+    from qsiprep.interfaces.tortoise import DIFFPREP
+
+    dwi, bmtxt, json_file = _diffprep_siblings(tmp_path)
+    cmd = DIFFPREP(
+        dwi_file=str(dwi),
+        bmtxt_file=str(bmtxt),
+        json_file=str(json_file),
+        correction_mode='motion',
+    ).cmdline
+    assert '-c rigid' in cmd
+    assert '-c motion' not in cmd
+
+
 def test_diffprep_cmdline_off(tmp_path):
     """Test the DIFFPREP command line.
 

@@ -1267,6 +1267,11 @@ class DIFFPREP(TORTOISECommandLine):
         # bmtxt_file and json_file are passed via sibling-stem lookup, not argstr
         if name in ('bmtxt_file', 'json_file'):
             return ''
+        # TORTOISEProcess documents "-c motion", but each mode loads
+        # settings/mecc_settings/<mode>.mec and there is no motion.mec, so it falls
+        # back to quadratic without an error. rigid.mec is its rigid-only setting.
+        if name == 'correction_mode' and value == 'motion':
+            return '-c rigid'
         return super()._format_arg(name, spec, value)
 
     def _parse_inputs(self, skip=None):
