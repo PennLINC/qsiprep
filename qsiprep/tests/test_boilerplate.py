@@ -360,11 +360,19 @@ def _bvals(n_b0, shells):
         (
             [_bvals(5, {1000: 30, 3000: 30})],
             {},
-            'fit the corrected data with a diffusion tensor model (volumes with *b* ≤ 2000 '
-            's/mm²) and a fourth-order MAPMRI model (volumes above)',
+            'fit a diffusion tensor model to the volumes with *b* ≤ 2000 s/mm² and a '
+            'fourth-order MAP-MRI model to all volumes. The MAP-MRI basis is an anisotropic '
+            'SHORE basis aligned to and scaled by the tensor. Each volume was registered again '
+            'to its prediction: from the tensor for the *b*=0 volumes and from MAP-MRI for the '
+            'rest.',
             'For series with',
         ),
-        ([_bvals(5, {1500: 30})], {}, 'with a diffusion tensor model and registered', 'MAPMRI'),
+        (
+            [_bvals(5, {1500: 30})],
+            {},
+            'It then fit a diffusion tensor model to the volumes',
+            'MAPMRI',
+        ),
         # No b-values above 1200: registration to the b=0 only
         ([_bvals(5, {1000: 30})], {}, 'The transform had 14 estimated parameters', 'It then fit'),
         # Fewer than 20 volumes
@@ -385,7 +393,6 @@ def test_diffprep_text_follows_tortoise_conditions(run_bvals, kwargs, expected, 
     )
     assert expected in text
     assert absent not in text
-    assert 'SHORE' not in text
     assert 'The b-matrix was rotated with the estimated motion.' in text
 
 

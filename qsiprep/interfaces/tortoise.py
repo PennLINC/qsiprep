@@ -985,11 +985,15 @@ def bmtxt_to_fsl(bmtxt_file, working_dir=None):
 
 #: DIFFPREP refines its registration against a signal model only when the data
 #: reach above 1.2 x ``dti_bval`` (default 1000 s/mm^2) and have at least 20
-#: volumes (DIFFPREP.cxx, MotionAndEddy); it fits a tensor up to ``hardi_bval``
-#: (default 2000 s/mm^2) and MAPMRI above it.
+#: volumes (DIFFPREP.cxx, MotionAndEddy). It fits a tensor to the volumes up to
+#: ``hardi_bval`` (default 2000 s/mm^2; all volumes when fewer than 15 qualify) and,
+#: when any volume is above it, MAP-MRI (MAPMRIModel: an anisotropic SHORE basis
+#: scaled by the tensor) to all volumes. MAP-MRI then predicts every volume above
+#: 55 s/mm^2 and the tensor the rest.
 _DIFFPREP_MODEL_BVAL = 1.2 * 1000
 _DIFFPREP_HARDI_BVAL = 2000
 _DIFFPREP_MIN_VOLUMES = 20
+_DIFFPREP_MIN_TENSOR_VOLUMES = 15
 #: Extra arguments that change any of the above, which the text cannot follow
 _DIFFPREP_SETTINGS_ARGS = ('--s2v', '--repol', '--niter', '--dti_bval', '--hardi_bval')
 
@@ -1057,22 +1061,34 @@ def generate_diffprep_boilerplate(
         f'"{correction_mode}" mode, which corrects {corrects}. DIFFPREP registered each volume '
         f'to {reference}. {transform}'
     )
-    models = (
-        f'a diffusion tensor model (volumes with *b* ≤ {_DIFFPREP_HARDI_BVAL} s/mm²) and a '
-        'fourth-order MAPMRI model (volumes above)'
-    )
+    basis = ' The MAP-MRI basis is an anisotropic SHORE basis aligned to and scaled by the tensor.'
     if refined is True:
-        if max(bvals.max() for bvals in run_bvals) <= _DIFFPREP_HARDI_BVAL:
-            models = 'a diffusion tensor model'
-        desc += (
-            f' It then fit the corrected data with {models} and registered each volume again '
-            'to the image the model predicted.'
+        tensor_volumes = (
+            f'the volumes with *b* ≤ {_DIFFPREP_HARDI_BVAL} s/mm²'
+            if all(
+                np.sum(bvals <= _DIFFPREP_HARDI_BVAL) >= _DIFFPREP_MIN_TENSOR_VOLUMES
+                for bvals in run_bvals
+            )
+            else 'all volumes'
         )
+        if max(bvals.max() for bvals in run_bvals) > _DIFFPREP_HARDI_BVAL:
+            desc += (
+                f' It then fit a diffusion tensor model to {tensor_volumes} and a fourth-order '
+                f'MAP-MRI model to all volumes.{basis} Each volume was registered again to its '
+                'prediction: from the tensor for the *b*=0 volumes and from MAP-MRI for the rest.'
+            )
+        else:
+            desc += (
+                f' It then fit a diffusion tensor model to {tensor_volumes} and registered each '
+                'volume again to the image the model predicted.'
+            )
     elif refined is None:
         desc += (
             f' For series with *b*-values above {_DIFFPREP_MODEL_BVAL:g} s/mm² and at least '
-            f'{_DIFFPREP_MIN_VOLUMES} volumes, it then fit the corrected data with {models} and '
-            'registered each volume again to the image the model predicted.'
+            f'{_DIFFPREP_MIN_VOLUMES} volumes, it then fit a diffusion tensor model to the '
+            f'volumes with *b* ≤ {_DIFFPREP_HARDI_BVAL} s/mm² (and, when there were *b*-values '
+            f'above {_DIFFPREP_HARDI_BVAL} s/mm², a fourth-order MAP-MRI model to all volumes) '
+            f'and registered each volume again to the image the models predicted.{basis}'
         )
     return desc + ' The b-matrix was rotated with the estimated motion.\n\n'
 
