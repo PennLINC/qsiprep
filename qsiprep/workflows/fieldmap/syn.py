@@ -36,6 +36,7 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
 from ... import config
 from ...data import load as load_data
+from ...utils.versions import versioned
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
@@ -149,21 +150,20 @@ def init_syn_sdc_wf(bold_pe=None, atlas_threshold=2, target='invt1w'):
 
     workflow = Workflow(name='syn_sdc_wf')
     target_sentence = (
-        'to a synthetic distortion-free b0 generated from the same-subject T1w with\n'
-        'SynB0-DISCO [@synb0disco]'
+        "a synthetic distortion-free *b*=0 image generated from the subject's T1w image\n"
+        'with SynB0-DISCO [@synb0disco]'
         if target == 'synb0'
-        else 'to the same-subject T1w-reference with its intensity inverted [@fieldmapless1;\n'
+        else "the subject's T1w reference with its intensity inverted [@fieldmapless1;\n"
         '@fieldmapless2]'
     )
-    workflow.__desc__ = f"""\
-A deformation field to correct for susceptibility distortions was estimated
-based on *fMRIPrep*'s *fieldmap-less* approach.
-The deformation field is that resulting from co-registering the b0 reference
-{target_sentence}.
-Registration is performed with `antsRegistration` (ANTs {ants.Registration().version}), and
-the process regularized by constraining deformation to be nonzero only
-along the phase-encoding direction, and modulated with an average fieldmap
-template [@fieldmapless3].
+    ants_version = versioned('*ANTs*', ants.Registration().version)
+    workflow.__desc__ = f"""
+
+Susceptibility distortion was corrected without a field map, following *fMRIPrep*'s
+fieldmap-less approach: the *b*=0 reference was nonlinearly registered to
+{target_sentence}. The registration, with `antsRegistration` ({ants_version}),
+allowed deformation only along the phase-encoding direction and was modulated with an
+average field map template [@fieldmapless3].
 """
     inputnode = pe.Node(
         niu.IdentityInterface(

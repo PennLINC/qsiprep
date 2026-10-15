@@ -279,19 +279,20 @@ def init_anat_preproc_wf(
 """
     desc += (
         f"""\
-A total of {num_anat_images} {contrast}-weighted ({contrast}w) images were found within the input
+A total of {num_anat_images} {contrast}-weighted ({contrast}w) images were found in the input
 BIDS dataset.
 """
         if num_anat_images > 1
         else f"""\
-The {contrast}-weighted ({contrast}w) image was used as an anatomical reference throughout the
-workflow.
+The {contrast}-weighted ({contrast}w) image was used as the anatomical reference throughout
+preprocessing.
 """
     )
     if do_biascorr:
+        image = 'Each image was' if num_anat_images > 1 else 'It was'
         desc += (
-            'Each image was corrected for intensity non-uniformity (INU) using '
-            f'`N4BiasFieldCorrection` [@n4, ANTs {ANTS_VERSION}].'
+            f'{image} corrected for intensity nonuniformity with `N4BiasFieldCorrection` '
+            f'(*ANTs* {ANTS_VERSION}) [@n4]. '
         )
 
     # Ensure there is 1 and only 1 anatomical reference
@@ -342,10 +343,9 @@ workflow.
     # Synthstrip is used a lot elsewhere, so make boilerplate for the anatomy-specific
     # version here. TODO: get version number automatically
     workflow.__postdesc__ = f"""\
-Brain extraction was performed on the {anat_modality} image using
-SynthStrip [@synthstrip] and automated segmentation was
-performed using SynthSeg [@synthseg1; @synthseg2] from
-FreeSurfer version {FS_VERSION}. """
+The brain was extracted from the {anat_modality} image with SynthStrip [@synthstrip], and the
+image was segmented with SynthSeg [@synthseg1; @synthseg2], both from *FreeSurfer*
+{FS_VERSION}. """
     if config.workflow.force_nocsf_synthstrip:
         workflow.__postdesc__ += """\
 A second brain mask excluding CSF at the brain border (SynthStrip `--no-csf`)
@@ -600,9 +600,9 @@ def init_t2w_preproc_wf(num_t2ws, do_biascorr=True, name='t2w_preproc_wf'):
     anat_reference_wf = init_anat_template_wf(num_images=num_t2ws, do_biascorr=do_biascorr)
     # ^ this also provides some boilerplate.
     workflow.__postdesc__ = """\
-The additional T2w reference image was registered to the T1w-ACPC reference
-image using an affine transformation in antsRegistration, initialized by a
-global search over rotations (antsAI).
+The T2w image was registered to the AC-PC-aligned T1w reference with an affine
+transform estimated by `antsRegistration`, initialized by a global search over
+rotations with `antsAI`.
 """
     # Skull strip the anatomical reference
     synthstrip_anat_wf = init_synthstrip_wf(
@@ -795,9 +795,9 @@ def init_anat_template_wf(num_images, do_biascorr=True) -> Workflow:
 
     if num_images > 1:
         workflow.__desc__ = f"""\
-A {contrast}-reference map was computed after registration of
-{num_images} {contrast} images (after INU-correction) using
-`antsRegistration` [ANTs {ANTS_VERSION}; @ants].
+A {contrast} reference was computed from the {num_images} {contrast} images, after
+intensity nonuniformity correction, by registering them with `antsRegistration`
+(*ANTs* {ANTS_VERSION}) [@ants].
 """.format(
             contrast=config.workflow.anat_modality,
             num_images=num_images,
@@ -1067,8 +1067,8 @@ def init_anat_normalization_wf(anatomical_template, has_rois=False) -> Workflow:
 
     # get a good ACPC transform
     desc = f"""\
-The anatomical reference image was reoriented into AC-PC alignment via
-a 6-DOF transform extracted from a full Affine registration to the
+The anatomical reference was reoriented into AC-PC alignment with the rigid
+(6-degree-of-freedom) component of an affine registration to the
 {anatomical_template} template. """
 
     acpc_json = (
@@ -1129,8 +1129,8 @@ a 6-DOF transform extracted from a full Affine registration to the
         return workflow
 
     desc += """\
-A full nonlinear registration to the template from AC-PC space was
-estimated via symmetric nonlinear registration (SyN) using antsRegistration (@ants). """
+A nonlinear registration from AC-PC space to the template was then estimated
+with symmetric normalization (SyN) in `antsRegistration` [@ants]. """
     rigid_acpc_resample_anat = pe.Node(
         ants.ApplyTransforms(input_image_type=0, interpolation=_resample_interpolation()),
         name='rigid_acpc_resample_anat',

@@ -279,9 +279,7 @@ def test_is_displacement_field_covers_every_accepted_extension(gradient_file, ex
 
 
 @pytest.mark.parametrize('warp_dim', ['3D', '1D'])
-@pytest.mark.parametrize(
-    ('hmc_method', 'backend'), [('eddy', 'FSL eddy'), ('tortoise', 'DIFFPREP')]
-)
+@pytest.mark.parametrize(('hmc_method', 'backend'), [('eddy', '`eddy`'), ('tortoise', 'DIFFPREP')])
 def test_boilerplate_does_not_claim_single_resampling_for_preresampling_backends(
     hmc_method, backend, warp_dim
 ):
@@ -292,7 +290,7 @@ def test_boilerplate_does_not_claim_single_resampling_for_preresampling_backends
 
     assert 'resampled only once' not in text
     assert backend in text
-    assert 'single resampling' in text
+    assert 'in the final resampling' in text
 
 
 @pytest.mark.parametrize('warp_dim', ['3D', '1D'])
@@ -306,7 +304,7 @@ def test_boilerplate_claims_single_resampling_for_transform_preserving_backends(
     text = gradwarp_boilerplate(warp_dim)
 
     assert 'resampled only once' in text
-    assert 'FSL eddy' not in text
+    assert '`eddy`' not in text
     assert 'DIFFPREP' not in text
 
 
@@ -701,6 +699,22 @@ def test_dwi_preproc_wf_dis3d_runs_nothing_and_wires_nothing(tmp_path):
     # ...and it contributes no runnable nodes to the flattened graph.
     flat = [node.name for node in wf._create_flat_graph().nodes()]
     assert not [name for name in flat if name.startswith('gradwarp')]
+
+
+def test_dwi_preproc_wf_describes_gradwarp_after_head_motion_correction(tmp_path):
+    """The gradwarp field feeds the HMC backend but is applied in the final resampling.
+
+    Its text says it followed eddy's correction, so it must come after eddy's text.
+    This unit has no fieldmap, so the text must also say no SDC was performed.
+    """
+    from qsiprep.workflows.fieldmap.base import NO_SDC_DESC
+
+    desc = ' '.join(_preproc_wf(tmp_path).visit_desc().split())
+
+    assert desc.index('corrected with `eddy`') < desc.index('Gradient nonlinearity')
+    assert desc.count('Gradient nonlinearity was corrected') == 1
+    assert 'introduces.FSL' not in desc
+    assert NO_SDC_DESC.strip() in desc
 
 
 def test_dwi_preproc_wf_dis3d_still_emits_the_dis3d_boilerplate(tmp_path):
@@ -1215,8 +1229,10 @@ def test_diffprep_drbuddi_seeded_by_gre_candidate(tmp_path, monkeypatch):
     )
     desc = ' '.join(wf.visit_desc().split())
     assert 'initialized with the field map-derived deformation described above' in desc
-    assert desc.index('estimated based on a field map') < desc.index('DRBUDDI [@drbuddi]')
-    assert 'unwarped b=0' not in desc
+    assert desc.index('Susceptibility distortion was corrected with a') < desc.index(
+        'DRBUDDI [@drbuddi]'
+    )
+    assert 'unwarped with the estimated field' not in desc
 
 
 @pytest.mark.parametrize('minus_first', [False, True])
@@ -1273,7 +1289,7 @@ def test_gre_seeds_drbuddi_after_shoreline_and_eddy(
     )
     assert wf.get_node('drbuddi_sdc_wf.drbuddi').inputs.keep_initial_transform_fixed is True
     desc = ' '.join(wf.visit_desc().split())
-    assert desc.index('estimated based on a field map') < desc.index(
+    assert desc.index('Susceptibility distortion was corrected with a') < desc.index(
         'initialized with the field map-derived deformation described above'
     )
 
@@ -1895,7 +1911,7 @@ def test_shoreline_iters_sets_the_model_iteration_count(tmp_path):
     assert model_wf.get_node('shoreline_iteration002') is not None
     assert model_wf.get_node('shoreline_iteration003') is None
     assert model_wf.get_node('summarize_iterations') is not None
-    assert 'A total of 3 iterations were run' in model_wf.__desc__
+    assert 'SHORELine ran 3 iterations' in model_wf.__desc__
 
 
 def test_single_shoreline_iteration_skips_the_iteration_summary(tmp_path):
@@ -1906,14 +1922,14 @@ def test_single_shoreline_iteration_skips_the_iteration_summary(tmp_path):
     assert model_wf.get_node('initial_model_iteration') is not None
     assert model_wf.get_node('shoreline_iteration001') is None
     assert model_wf.get_node('summarize_iterations') is None
-    assert 'A total of 1 iteration was run' in model_wf.__desc__
+    assert 'SHORELine ran 1 iteration with' in model_wf.__desc__
 
 
 @pytest.mark.parametrize(
     ('shoreline_model', 'expected', 'unexpected'),
     [
-        ('tensor', 'using a tensor model', '3dSHORE'),
-        ('3dshore', 'using 3dSHORE [@merlet3dshore]', 'tensor model'),
+        ('tensor', 'in turn, a tensor model was fit', '3dSHORE'),
+        ('3dshore', 'in turn, 3dSHORE [@merlet3dshore] was fit', 'tensor model'),
     ],
 )
 def test_shoreline_methods_text_names_the_model_and_transform(
@@ -1927,7 +1943,7 @@ def test_shoreline_methods_text_names_the_model_and_transform(
     wf = init_dwi_model_hmc_wf(num_iters=2)
     assert expected in wf.__desc__
     assert unexpected not in wf.__desc__
-    assert 'using the Rigid transform' in wf.__desc__
+    assert 'with a rigid transform' in wf.__desc__
 
 
 def test_eddy_summary_leaves_hmc_transform_undefined(tmp_path):
@@ -2010,9 +2026,9 @@ def test_gre_fieldmap_goes_into_eddy(tmp_path, monkeypatch):
     # Movement-by-susceptibility is left to --eddy-config.
     assert not isdefined(eddy.inputs.estimate_move_by_susceptibility)
     desc = ' '.join(wf.visit_desc().split())
-    assert 'was passed to eddy' in desc
+    assert 'was passed to `eddy`' in desc
     assert '[@eddysus]' not in desc
-    assert 'unwarped b=0' not in desc
+    assert 'unwarped with the estimated field' not in desc
 
 
 def test_eddy_config_turns_on_movement_by_susceptibility_for_a_gre_field(tmp_path, monkeypatch):
@@ -2367,7 +2383,7 @@ def test_forced_t2w_reference_refines_the_gre_fieldmap(tmp_path, monkeypatch):
     assert seed_wf.get_node('sdc_wf').gradwarp_mode == 'reference'
     assert sdc_wf.get_node('outputnode').inputs.method == 'unpile (T2w, GRE-refined)'
     desc = ' '.join(wf.visit_desc().split())
-    assert 'handed to unpile as a prior' in desc
+    assert 'given to *unpile* as a prior' in desc
     assert 'the prior of its fit' in desc
 
 
@@ -2467,7 +2483,7 @@ def test_eddy_boilerplate_flags_lsr_as_unmodulated():
     text = boilerplate_from_eddy_config(
         {'method': 'lsr', 'flm': 'quadratic', 'slm': 'linear'}, 'epi', pepolar_method='topup'
     )
-    assert 'not Jacobian-modulated' in text
+    assert 'does not Jacobian-modulate' in text
 
 
 def test_eddy_boilerplate_states_modulation_for_the_jac_default():
@@ -2476,4 +2492,4 @@ def test_eddy_boilerplate_states_modulation_for_the_jac_default():
     text = boilerplate_from_eddy_config(
         {'method': 'jac', 'flm': 'quadratic', 'slm': 'linear'}, 'epi', pepolar_method='topup'
     )
-    assert 'Jacobian-modulated by eddy itself' in text
+    assert 'which Jacobian-modulates' in text
