@@ -1074,8 +1074,9 @@ def generate_diffprep_boilerplate(
         if max(bvals.max() for bvals in run_bvals) > _DIFFPREP_HARDI_BVAL:
             desc += (
                 f' It then fit a diffusion tensor model to {tensor_volumes} and a fourth-order '
-                f'MAP-MRI model to all volumes.{basis} Each volume was registered again to its '
-                'prediction: from the tensor for the *b*=0 volumes and from MAP-MRI for the rest.'
+                f'MAP-MRI model [@mapmri] to all volumes.{basis} Each volume was registered again '
+                'to its prediction: from the tensor for the *b*=0 volumes and from MAP-MRI for '
+                'the rest.'
             )
         else:
             desc += (
@@ -1087,7 +1088,8 @@ def generate_diffprep_boilerplate(
             f' For series with *b*-values above {_DIFFPREP_MODEL_BVAL:g} s/mm² and at least '
             f'{_DIFFPREP_MIN_VOLUMES} volumes, it then fit a diffusion tensor model to the '
             f'volumes with *b* ≤ {_DIFFPREP_HARDI_BVAL} s/mm² (and, when there were *b*-values '
-            f'above {_DIFFPREP_HARDI_BVAL} s/mm², a fourth-order MAP-MRI model to all volumes) '
+            f'above {_DIFFPREP_HARDI_BVAL} s/mm², a fourth-order MAP-MRI model [@mapmri] to all '
+            'volumes) '
             f'and registered each volume again to the image the models predicted.{basis}'
         )
     return desc + ' The b-matrix was rotated with the estimated motion.\n\n'
