@@ -18,6 +18,7 @@ where possible:
 This mirrors the SDC coverage of :func:`~qsiprep.workflows.dwi.fsl.init_fsl_hmc_wf`.
 """
 
+import numpy as np
 from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
@@ -38,6 +39,7 @@ from ...interfaces.tortoise import (
     TORTOISEConvert,
     generate_diffprep_boilerplate,
 )
+from ...utils.bids import find_bval
 from ...utils.diffprep_config import load_diffprep_config
 from ...utils.gpu import gpu_enabled
 from ...utils.sdc import eddy_applies_topup
@@ -121,6 +123,28 @@ def _write_pe_json_node(name):
         ),
         name=name,
     )
+
+
+def _diffprep_run_bvals(unit):
+    """Read the b-values of each DIFFPREP run, or ``None`` when a series has no ``.bval``.
+
+    A reverse-PE series is corrected by one DIFFPREP run per phase-encoding
+    polarity, and every other unit by a single run.
+    """
+    if unit.has_bidirectional_dwi:
+        runs = [list(unit.plus_files), list(unit.minus_files)]
+    else:
+        runs = [list(unit.dwi_files)]
+    run_bvals = []
+    for files in runs:
+        bvals = []
+        for path in files:
+            bval_file = find_bval(path)
+            if bval_file is None:
+                return None
+            bvals.append(np.loadtxt(bval_file, ndmin=1))
+        run_bvals.append(np.concatenate(bvals))
+    return run_bvals
 
 
 def _build_rpe_diffprep_stage(
@@ -339,7 +363,14 @@ def init_diffprep_hmc_wf(
 
     # Described after the --sloppy downgrade so the methods section reports the
     # correction that actually ran, not the one that was asked for.
-    workflow.__desc__ = generate_diffprep_boilerplate(effective_correction_mode)
+    workflow.__desc__ = generate_diffprep_boilerplate(
+        effective_correction_mode,
+        run_bvals=_diffprep_run_bvals(unit),
+        b0_id=diffprep_cfg['b0_id'],
+        is_human_brain=diffprep_cfg['is_human_brain'],
+        niter=sloppy_kwargs.get('niter'),
+        extra_args=diffprep_cfg['extra_args'],
+    )
 
     diffprep_kwargs = dict(
         # num_threads only sets OMP_NUM_THREADS, which TORTOISEProcess ignores

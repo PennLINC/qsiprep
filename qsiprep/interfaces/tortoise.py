@@ -983,33 +983,103 @@ def bmtxt_to_fsl(bmtxt_file, working_dir=None):
     return base + '.bvals', base + '.bvecs'
 
 
-def generate_diffprep_boilerplate(correction_mode):
+#: DIFFPREP refines its registration against a signal model only when the data
+#: reach above 1.2 x ``dti_bval`` (default 1000 s/mm^2) and have at least 20
+#: volumes (DIFFPREP.cxx, MotionAndEddy); it fits a tensor up to ``hardi_bval``
+#: (default 2000 s/mm^2) and MAPMRI above it.
+_DIFFPREP_MODEL_BVAL = 1.2 * 1000
+_DIFFPREP_HARDI_BVAL = 2000
+_DIFFPREP_MIN_VOLUMES = 20
+#: Extra arguments that change any of the above, which the text cannot follow
+_DIFFPREP_SETTINGS_ARGS = ('--s2v', '--repol', '--niter', '--dti_bval', '--hardi_bval')
+
+
+def generate_diffprep_boilerplate(
+    correction_mode, run_bvals=None, b0_id=-1, is_human_brain=True, niter=None, extra_args=()
+):
     """Generate methods boilerplate describing the DIFFPREP HMC backend.
 
     ``correction_mode`` comes from ``--diffprep-config`` (default
     ``quadratic``), so the transform model has to be named from it rather than
-    assumed.
+    assumed. ``run_bvals`` holds the b-values of each DIFFPREP run (one per
+    phase-encoding polarity of a reverse-PE series); when it is ``None`` the
+    text states the conditions under which DIFFPREP refines its registration
+    instead of whether it did.
     """
+    # The transform always has 24 parameters, but only those switched on in the
+    # mode's settings/mecc_settings/<mode>.mec optimization_flags are estimated:
+    # 6 rigid (rigid.mec), 14 (quadratic.mec), 21 (cubic.mec). The last three, the
+    # isocenter, never are.
     mode_desc = {
-        'motion': ('rigid head motion only', 'a rigid-body transform'),
+        'motion': ('rigid head motion only', 'The transform was rigid-body, with 6 parameters.'),
         'quadratic': (
-            'rigid head motion together with quadratic eddy-current distortions',
-            'a 24-parameter transform combining rigid motion with quadratic eddy-current terms',
+            'rigid head motion together with linear and quadratic eddy-current distortions',
+            'The transform had 14 estimated parameters: 6 for rigid-body motion and 8 for '
+            'linear and quadratic eddy-current distortion along the phase-encoding axis.',
         ),
         'cubic': (
-            'rigid head motion together with cubic eddy-current distortions',
-            'a transform combining rigid motion with cubic eddy-current terms',
+            'rigid head motion together with linear, quadratic and cubic eddy-current distortions',
+            'The transform had 21 estimated parameters: 6 for rigid-body motion and 15 for '
+            'linear, quadratic and cubic eddy-current distortion along the phase-encoding axis.',
         ),
     }
     corrects, transform = mode_desc[correction_mode]
+    if any(arg.startswith(_DIFFPREP_SETTINGS_ARGS) for arg in extra_args or ()):
+        run_bvals = None
+
+    if b0_id != -1:
+        reference = f'the *b*=0 volume at index {b0_id}'
+    elif run_bvals is not None and all(_count_b0s(b) >= 4 for b in run_bvals):
+        reference = 'the best *b*=0 volume, chosen by its own selection'
+    elif run_bvals is not None and all(_count_b0s(b) < 4 for b in run_bvals):
+        reference = 'the first *b*=0 volume'
+    else:
+        reference = (
+            'a reference *b*=0 volume (the best one, chosen by its own selection, when there '
+            'were at least four)'
+        )
+
+    if run_bvals is None:
+        refined = None
+    else:
+        refined = {
+            bool(is_human_brain)
+            and niter != 0
+            and len(bvals) >= _DIFFPREP_MIN_VOLUMES
+            and bool(bvals.max() > _DIFFPREP_MODEL_BVAL)
+            for bvals in run_bvals
+        }
+        refined = refined.pop() if len(refined) == 1 else None
+
     tortoise = versioned('*TORTOISE*', tortoise_version())
-    return (
+    desc = (
         f'\n\nHead motion was corrected with DIFFPREP from {tortoise} [@tortoisev4] in its '
-        f'"{correction_mode}" mode, which corrects {corrects}. DIFFPREP fits a SHORE/MAPMRI '
-        'signal model to the data and iteratively registers each volume to the volume the '
-        f'model predicts, using {transform}. The b-matrix was rotated with the estimated '
-        'motion.\n\n'
+        f'"{correction_mode}" mode, which corrects {corrects}. DIFFPREP registered each volume '
+        f'to {reference}. {transform}'
     )
+    models = (
+        f'a diffusion tensor model (volumes with *b* ≤ {_DIFFPREP_HARDI_BVAL} s/mm²) and a '
+        'fourth-order MAPMRI model (volumes above)'
+    )
+    if refined is True:
+        if max(bvals.max() for bvals in run_bvals) <= _DIFFPREP_HARDI_BVAL:
+            models = 'a diffusion tensor model'
+        desc += (
+            f' It then fit the corrected data with {models} and registered each volume again '
+            'to the image the model predicted.'
+        )
+    elif refined is None:
+        desc += (
+            f' For series with *b*-values above {_DIFFPREP_MODEL_BVAL:g} s/mm² and at least '
+            f'{_DIFFPREP_MIN_VOLUMES} volumes, it then fit the corrected data with {models} and '
+            'registered each volume again to the image the model predicted.'
+        )
+    return desc + ' The b-matrix was rotated with the estimated motion.\n\n'
+
+
+def _count_b0s(bvals):
+    """Count the volumes DIFFPREP treats as b=0: within 30 s/mm^2 of the lowest b-value."""
+    return int(np.sum(np.abs(bvals - bvals.min()) < 30))
 
 
 def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False, initialized=False):

@@ -344,3 +344,61 @@ def test_option_text_names_no_operator():
         assert 'request' not in text
         assert '--' not in text
     assert 'without Jacobian intensity modulation' in gradwarp_boilerplate('3D')
+
+
+def _bvals(n_b0, shells):
+    """B-values with ``n_b0`` b=0 volumes and ``shells`` as ``{bval: count}``."""
+    import numpy as np
+
+    return np.array([0] * n_b0 + [b for b, n in shells.items() for _ in range(n)], float)
+
+
+@pytest.mark.parametrize(
+    ('run_bvals', 'kwargs', 'expected', 'absent'),
+    [
+        # Above 1200 s/mm^2, at least 20 volumes: tensor up to 2000, MAPMRI above
+        (
+            [_bvals(5, {1000: 30, 3000: 30})],
+            {},
+            'fit the corrected data with a diffusion tensor model (volumes with *b* ≤ 2000 '
+            's/mm²) and a fourth-order MAPMRI model (volumes above)',
+            'For series with',
+        ),
+        ([_bvals(5, {1500: 30})], {}, 'with a diffusion tensor model and registered', 'MAPMRI'),
+        # No b-values above 1200: registration to the b=0 only
+        ([_bvals(5, {1000: 30})], {}, 'The transform had 14 estimated parameters', 'It then fit'),
+        # Fewer than 20 volumes
+        ([_bvals(2, {3000: 12})], {}, 'to the first *b*=0 volume', 'It then fit'),
+        # --sloppy runs DIFFPREP with --niter 0
+        ([_bvals(5, {3000: 30})], {'niter': 0}, 'best *b*=0 volume', 'It then fit'),
+        ([_bvals(5, {3000: 30})], {'b0_id': 2}, 'the *b*=0 volume at index 2', 'best'),
+        # Settings the text cannot follow, or b-values that are not known
+        ([_bvals(5, {3000: 30})], {'extra_args': ['--repol 1']}, 'For series with', 'It then'),
+        (None, {}, 'For series with *b*-values above 1200 s/mm² and at least 20', 'It then'),
+    ],
+)
+def test_diffprep_text_follows_tortoise_conditions(run_bvals, kwargs, expected, absent):
+    from qsiprep.interfaces.tortoise import generate_diffprep_boilerplate
+
+    text = ' '.join(
+        generate_diffprep_boilerplate('quadratic', run_bvals=run_bvals, **kwargs).split()
+    )
+    assert expected in text
+    assert absent not in text
+    assert 'SHORE' not in text
+    assert 'The b-matrix was rotated with the estimated motion.' in text
+
+
+def test_diffprep_run_bvals_follow_the_polarity_groups(tmp_path):
+    from qsiplan.models import CorrectionMethod
+
+    from qsiprep.workflows.dwi.diffprep import _diffprep_run_bvals
+
+    main = write_dwi_with_gradients(tmp_path / 'sub-01_dir-AP_dwi.nii.gz')
+    partner = write_dwi_with_gradients(tmp_path / 'sub-01_dir-PA_dwi.nii.gz')
+    rpe = make_preproc_unit(
+        [main, partner], method=CorrectionMethod.PEPOLAR, pe_dirs={main: 'j', partner: 'j-'}
+    )
+    assert len(_diffprep_run_bvals(rpe)) == 2
+    assert len(_diffprep_run_bvals(make_preproc_unit([main]))) == 1
+    assert _diffprep_run_bvals(make_preproc_unit([str(tmp_path / 'sub-01_dwi.nii.gz')])) is None
