@@ -293,19 +293,18 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
     _ses_name = '_ses_' + '_'.join(map(str, session_ids)) if session_ids else ''
     workflow = Workflow(name=f'sub_{subject_id}{_ses_name}_wf')
     workflow.__desc__ = f"""
-Preprocessing was performed using *QSIPrep* {config.environment.version} [@cieslak2021qsiprep],
+Preprocessing was performed with *QSIPrep* {config.environment.version} [@cieslak2021qsiprep],
 which is based on *Nipype* {config.environment.nipype_version}
-[@nipype1; @nipype2; RRID:SCR_002502] and follows *NiPreps* framework [@nipreps].
+[@nipype1; @nipype2; RRID:SCR_002502] and follows the *NiPreps* framework [@nipreps].
 
 """
     workflow.__postdesc__ = f"""
 
 Many internal operations of *QSIPrep* use
 *Nilearn* {nilearn_ver} [@nilearn, RRID:SCR_001362] and
-*Dipy* {dipy_ver} [@dipy].
-For more details of the pipeline, see [the section corresponding
-to workflows in *QSIPrep*'s documentation]\
-(https://qsiprep.readthedocs.io/en/latest/methods/index.html \
+*DIPY* {dipy_ver} [@dipy].
+For more details of the pipeline, see [the processing pipeline details in *QSIPrep*'s
+documentation](https://qsiprep.readthedocs.io/en/latest/methods/index.html \
 "QSIPrep's documentation").
 
 

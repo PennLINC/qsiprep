@@ -61,13 +61,13 @@ def init_fmap_wf(name='fmap_wf'):
     workflow = Workflow(name=name)
     second_pass = GRE_SECOND_PASS_DESC if config.workflow.two_pass_sdc else ''
     niimath = versioned('*niimath*', niimath_version())
-    workflow.__desc__ = f"""\
-A deformation field to correct for susceptibility distortions was estimated
-from a directly measured field map, which was masked with a brain mask
-derived from its magnitude image, unwrapped with the ROMEO algorithm [@romeo]
-as implemented in {niimath} [@niimath], median-filtered and co-registered to
-the b=0 reference. The magnitude image was rigidly registered to the b=0
-reference.{second_pass}
+    workflow.__desc__ = f"""
+
+Susceptibility distortion was corrected with a directly measured field map. The
+field map was masked with a brain mask derived from its magnitude image, unwrapped
+with the ROMEO algorithm [@romeo] as implemented in {niimath} [@niimath],
+median-filtered and coregistered to the *b*=0 reference by rigidly registering its
+magnitude image.{second_pass}
 """
     inputnode = pe.Node(niu.IdentityInterface(fields=['magnitude', 'fieldmap']), name='inputnode')
     outputnode = pe.Node(

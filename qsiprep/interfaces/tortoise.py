@@ -991,28 +991,25 @@ def generate_diffprep_boilerplate(correction_mode):
     assumed.
     """
     mode_desc = {
-        'motion': ('rigid head motion only', 'rigid-body transform'),
+        'motion': ('rigid head motion only', 'a rigid-body transform'),
         'quadratic': (
-            'rigid head motion together with quadratic eddy currents',
-            '24-parameter Okan-quadratic transform',
+            'rigid head motion together with quadratic eddy-current distortions',
+            'a 24-parameter transform combining rigid motion with quadratic eddy-current terms',
         ),
         'cubic': (
-            'rigid head motion together with cubic eddy currents',
-            'cubic transform',
+            'rigid head motion together with cubic eddy-current distortions',
+            'a transform combining rigid motion with cubic eddy-current terms',
         ),
     }
     corrects, transform = mode_desc[correction_mode]
-    desc = (
-        '\n\nHead motion correction was performed with the '
-        f'{versioned("TORTOISE", tortoise_version())} [@tortoisev4] software '
-        "package's DIFFPREP module, "
-        f'in "{correction_mode}" mode (correcting {corrects}). DIFFPREP fits a '
-        'SHORE/MAPMRI signal model to the data and iteratively registers each '
-        f"volume to a model-predicted target using TORTOISE's {transform}. "
-        'The corrected volumes and motion-rotated b-matrix were then passed to '
-        'the rest of the pipeline.'
+    tortoise = versioned('*TORTOISE*', tortoise_version())
+    return (
+        f'\n\nHead motion was corrected with DIFFPREP from {tortoise} [@tortoisev4] in its '
+        f'"{correction_mode}" mode, which corrects {corrects}. DIFFPREP fits a SHORE/MAPMRI '
+        'signal model to the data and iteratively registers each volume to the volume the '
+        f'model predicts, using {transform}. The b-matrix was rotated with the estimated '
+        'motion.\n\n'
     )
-    return desc + '\n\n'
 
 
 def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False, initialized=False):
@@ -1021,35 +1018,32 @@ def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False, initi
     ``initialized`` says DRBUDDI starts from a field-map-derived deformation,
     whose estimation is described by the workflow that precedes this one.
     """
-    tortoise = versioned('TORTOISE', tortoise_version())
-    desc = [f'\n\nDRBUDDI [@drbuddi], part of the {tortoise} [@tortoisev4] software package,']
-    if not with_topup:
-        # Until now there will have been no description of the SDC procedure.
-        # Add extra details about the input data.
-        desc.append(
-            'was used to perform susceptibility distortion correction. '
-            'Data were collected with reversed phase-encode blips, resulting '
-            'in pairs of images with distortions going in opposite directions.'
-        )
+    tortoise = versioned('*TORTOISE*', tortoise_version())
+    if with_topup:
+        desc = [
+            f'\n\nIn the second stage, DRBUDDI [@drbuddi] from {tortoise} [@tortoisev4] '
+            'refined the susceptibility distortion correction.'
+        ]
     else:
-        desc += ['was used to perform a second stage of distortion correction.']
+        desc = [
+            f'\n\nSusceptibility distortion was corrected with DRBUDDI [@drbuddi] from '
+            f'{tortoise} [@tortoisev4].'
+        ]
 
-    # Describe what's going on
     if fieldmap_type == 'epi':
         desc.append(
-            'DRBUDDI registered the mean motion-corrected b=0 image to a '
-            'reverse phase-encoding b=0 reference (chosen with SelectBestB0 '
-            'when several were available) to estimate'
+            'DRBUDDI registered the mean motion-corrected *b*=0 image to a *b*=0 reference '
+            'acquired with the reverse phase-encoding polarity (chosen with `SelectBestB0` '
+            'when several were available) to estimate the susceptibility-induced '
+            'off-resonance field.'
         )
     else:
         desc.append(
-            'DRBUDDI used multiple motion-corrected DWI series acquired '
-            'with opposite phase encoding '
-            'directions. A b=0 image **and** the Fractional Anisotropy '
-            'images from both phase encoding directions were used together in '
-            'a multi-modal registration to estimate'
+            'DRBUDDI estimated the susceptibility-induced off-resonance field from the '
+            'motion-corrected DWI series acquired with opposite phase-encoding polarities, '
+            'registering a *b*=0 image and a fractional anisotropy (FA) image from each '
+            'polarity together in a multimodal registration.'
         )
-    desc.append('the susceptibility-induced off-resonance field.')
 
     if initialized:
         desc.append(
@@ -1063,8 +1057,9 @@ def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False, initi
     if t2w_sdc:
         desc.append('A T2-weighted image was included in the multimodal registration.')
     desc.append(
-        'Signal intensity was adjusted '
-        'in the final interpolated images using a method similar to LSR.\n\n'
+        "Signal intensity was redistributed with TORTOISE's LSR method: each polarity's "
+        'volumes were scaled by the ratio of the harmonic mean of the two corrected *b*=0 '
+        "images to that polarity's corrected *b*=0 image.\n\n"
     )
     return ' '.join(desc)
 

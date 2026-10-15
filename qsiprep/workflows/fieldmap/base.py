@@ -333,11 +333,10 @@ def init_sdc_wf(unit, gradwarp=False, use='apply', source_file=None):
         ])  # fmt:skip
         return workflow
 
-    workflow.__postdesc__ = """\
-Based on the estimated susceptibility distortion, an
-unwarped b=0 reference was calculated for a more accurate
-co-registration with the anatomical reference.
-"""
+    workflow.__postdesc__ = (
+        'The *b*=0 reference was unwarped with the estimated field, for a more accurate '
+        'coregistration with the anatomical reference.\n\n'
+    )
 
     # PEPOLAR path
     if unit.is_pepolar:
@@ -530,26 +529,25 @@ def _gre_boilerplate(gradwarp, use):
     if gradwarp:
         desc.append(
             'As the field map is subject to the same gradient nonlinearity as the DWI, '
-            'the deformation was estimated against the b=0 reference before gradient '
+            'the deformation was estimated against the *b*=0 reference before gradient '
             'nonlinearity correction, then moved into the corrected space by composing '
             'it with the gradient nonlinearity displacement field and its inverse.'
         )
     if use == 'apply':
         desc.append(
-            'Based on the estimated susceptibility distortion, an unwarped b=0 '
-            'reference was calculated for a more accurate co-registration with the '
-            'anatomical reference.'
+            'The *b*=0 reference was unwarped with the estimated field, for a more accurate '
+            'coregistration with the anatomical reference.'
         )
     elif use == 'eddy':
         desc.append(
-            'Rather than being applied after eddy, the field map (in Hz, rigidly aligned '
-            "to eddy's first volume) was passed to eddy, which corrected susceptibility "
+            'Rather than being applied after `eddy`, the field map (in Hz, rigidly aligned '
+            'to the first DWI volume) was passed to `eddy`, which corrected susceptibility '
             'distortion within its own model.'
         )
     elif use == 'unpile':
         desc.append(
-            'Rather than being applied directly, this field map was handed to unpile as '
-            'the prior of its fit and refined against the b=0.'
+            'Rather than being applied directly, the field map was given to *unpile* as '
+            'the prior of its fit and refined against the *b*=0 reference.'
         )
     # 'drbuddi': init_drbuddi_wf's boilerplate describes the seed.
     return '\n'.join(desc) + '\n' if desc else ''

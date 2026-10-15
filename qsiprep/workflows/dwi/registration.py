@@ -14,6 +14,7 @@ from ... import config
 from ...data import load as load_data
 from ...interfaces.images import ExtractWM, ReferenceGridAtSpacing
 from ...interfaces.itk import ACPCReport, AffineToRigid
+from ...utils.versions import versioned
 
 # Slack added around a brain mask before it restricts a structural -> b=0 rigid
 FIXED_MASK_MARGIN_MM = 10.0
@@ -294,13 +295,15 @@ def init_b0_to_anat_registration_wf(
     )
 
     workflow = Workflow(name=name)
-    workflow.__desc__ = f"""\
-The b=0 reference was registered to the anatomical reference with
-`antsRegistration` (ANTs {ants.Registration().version}) using a
-{'rigid' if transform_type == 'Rigid' else 'affine'} transform, initialized by
-a global search over rotations with `antsAI` so that large differences in head
-orientation between the dMRI and the anatomical scan are recovered.
-"""
+    transform = 'rigid' if transform_type == 'Rigid' else 'affine'
+    ants_version = versioned('*ANTs*', ants.Registration().version)
+    workflow.__desc__ = (
+        f'\n\nThe *b*=0 reference was coregistered to the anatomical reference with a '
+        f'{transform} transform estimated by `antsRegistration` ({ants_version}). The '
+        'registration was initialized by a global search over rotations with `antsAI`, so '
+        'that large differences in head orientation between the DWI and anatomical scans '
+        'were recovered. '
+    )
 
     # Defines a coregistration operation
     coreg = ants.Registration()

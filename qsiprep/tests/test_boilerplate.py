@@ -92,18 +92,25 @@ def test_eddy_version_comes_from_the_conda_records(tmp_path, monkeypatch):
     monkeypatch.setenv('FSLDIR', str(tmp_path))
 
     assert eddy_version() == '2602.0'
-    assert "FSL's eddy 2602.0 was used" in _eddy_text()
+    assert '`eddy` from *FSL* (version 2602.0) [@anderssoneddy]' in _eddy_text()
 
 
 def test_eddy_text_leaves_out_an_unknown_version():
     text = _eddy_text()
     assert 'None' not in text
-    assert "FSL's eddy was used for head motion correction" in text
+    assert 'corrected with `eddy` from *FSL* [@anderssoneddy]' in text
+
+
+def test_eddy_text_does_not_call_its_resampling_final():
+    """The eddy output is resampled again into AC-PC space."""
+    text = _eddy_text(fieldmap_type='rpe_series', pepolar_method='topup')
+    assert 'final' not in text.lower()
+    assert '`eddy` resampled the data with its `jac` method' in text
 
 
 def test_eddy_text_reports_the_outlier_voxel_count_not_the_threshold():
     text = _eddy_text({'outlier_nvox': 500, 'outlier_nstd': 3})
-    assert 'at least 500 intracerebral voxels' in text
+    assert 'at least 500 brain voxels' in text
     assert 'more than 3 standard deviations' in text
 
 
@@ -111,37 +118,34 @@ def test_eddy_text_reports_the_outlier_voxel_count_not_the_threshold():
 def test_eddy_text_names_the_multiband_offset(offset, end):
     text = _eddy_text({'multiband_factor': 3, 'multiband_offset': offset, 'outlier_type': 'both'})
     assert (
-        f'A multi-band acceleration factor of 3 and slices removed from the {end} of the '
-        'volume were assumed.'
+        f'A multiband factor of 3 was assumed, with slices removed from the {end} of the volume.'
     ) in text
 
 
 def test_eddy_text_without_multiband_offset():
     text = _eddy_text({'multiband_factor': 3, 'outlier_type': 'gw'})
-    assert 'A multi-band acceleration factor of 3 was assumed.' in text
+    assert 'A multiband factor of 3 was assumed.' in text
 
 
-def test_eddy_then_drbuddi_without_topup_claims_no_initial_correction():
+def test_eddy_then_drbuddi_without_topup_claims_no_susceptibility_correction():
     text = _eddy_text(fieldmap_type='rpe_series', pepolar_method='drbuddi')
-    assert 'initial susceptibility' not in text
-    assert 'Interpolation after head motion correction was performed' in text
-    assert 'Eddy-current correction was Jacobian-modulated' in text
+    assert 'susceptibility distortion correction' not in text
+    assert 'TOPUP' not in text
+    assert 'which Jacobian-modulates the eddy-current correction.' in text
 
 
-def test_topup_then_drbuddi_names_the_initial_correction():
+def test_topup_then_drbuddi_names_the_first_stage():
     text = _eddy_text(fieldmap_type='rpe_series', pepolar_method='topup+drbuddi')
-    assert (
-        'Interpolation after head motion and initial susceptibility distortion correction'
-    ) in text
-    assert 'Eddy-current and susceptibility distortion correction were Jacobian' in text
+    assert 'In the first of two distortion-correction stages' in text
+    assert 'eddy-current and susceptibility distortion corrections.' in text
 
 
 @pytest.mark.parametrize(
     ('pepolar_method', 'gre_in_eddy', 'expected'),
     [
-        ('', False, 'Eddy-current correction was Jacobian-modulated'),
-        ('topup', False, 'Eddy-current and susceptibility distortion correction were Jacobian'),
-        ('', True, 'Eddy-current and susceptibility distortion correction were Jacobian'),
+        ('', False, 'Jacobian-modulates the eddy-current correction.'),
+        ('topup', False, 'Jacobian-modulates the eddy-current and susceptibility distortion'),
+        ('', True, 'Jacobian-modulates the eddy-current and susceptibility distortion'),
     ],
 )
 def test_eddy_jacobian_sentence_names_what_eddy_corrected(pepolar_method, gre_in_eddy, expected):
@@ -155,14 +159,18 @@ def test_eddy_jacobian_sentence_names_what_eddy_corrected(pepolar_method, gre_in
     assert 'when TOPUP was used' not in text
 
 
-def test_intensity_text_without_harmonization_or_bias_correction_keeps_denoising():
-    """Turning off harmonization and N4 does not mean nothing was denoised."""
+@pytest.mark.parametrize('harmonize', [True, False])
+def test_intensity_text_describes_harmonization_only_across_series(harmonize):
+    """Harmonizing a single series across series says nothing; it is left out."""
     from qsiprep.workflows.dwi.merge import gen_intensity_boilerplate
 
-    config.workflow.no_b0_harmonization = True
-    text = gen_intensity_boilerplate(do_biascorr=False)
-    assert 'denois' not in text
-    assert text == 'Any images with a b-value less than 100 s/mm^2 were treated as a *b*=0 image.'
+    config.workflow.no_b0_harmonization = not harmonize
+    threshold = 'Volumes with *b* < 100 s/mm² were treated as *b*=0 images.'
+    assert gen_intensity_boilerplate(1) == threshold
+    two = gen_intensity_boilerplate(2)
+    assert two.startswith(threshold)
+    assert ('matched across the series' in two) is harmonize
+    assert 'denois' not in two
 
 
 def test_bidirectional_pre_hmc_text_separates_its_sentences(tmp_path):
@@ -177,13 +185,14 @@ def test_bidirectional_pre_hmc_text_separates_its_sentences(tmp_path):
     unit = make_preproc_unit(
         [main, partner], method=CorrectionMethod.PEPOLAR, pe_dirs={main: 'j', partner: 'j-'}
     )
-    wf = init_dwi_pre_hmc_wf(unit, orientation='LPS', source_file=main, do_biascorr=True)
+    wf = init_dwi_pre_hmc_wf(unit, orientation='LPS', source_file=main)
 
     text = wf.visit_desc()
-    assert 'were resampled. Both phase encoding polarity groups were then merged' in text
+    assert 'across the series. The two polarity groups were then concatenated' in text
     # The merge runs for every head motion method, not only eddy.
     assert 'FSL' not in text
-    assert 'eachseparate' not in text
+    # Bias correction runs after resampling and is described there.
+    assert 'dwibiascorrect' not in text
 
 
 def test_no_denoising_text_ends_its_sentence():
@@ -198,7 +207,7 @@ def test_no_denoising_text_ends_its_sentence():
         n_volumes=10,
         use_phase=False,
     )
-    assert wf.__desc__.endswith('No denoising steps were applied to the DWI data. ')
+    assert wf.__desc__.endswith('Gibbs-ringing removal was applied to the DWI data. ')
 
 
 def test_synb0_text_does_not_repeat_the_coregistration_paragraph():
@@ -206,7 +215,36 @@ def test_synb0_text_does_not_repeat_the_coregistration_paragraph():
 
     text = init_synb0_wf().visit_desc()
     assert 'global search over rotations' not in text
-    assert 'the distorted\nb=0 reference was rigidly registered to the T1w image' in text
+    assert 'the distorted\n*b*=0 reference was rigidly registered to the T1w image' in text
+
+
+@pytest.mark.parametrize(
+    ('sloppy', 'expected'),
+    [(False, 'windowed-sinc (Lanczos) interpolation'), (True, 'with linear interpolation')],
+)
+def test_resampling_text_names_interpolation_and_bvec_rotation(sloppy, expected):
+    from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
+
+    config.execution.sloppy = sloppy
+    config.workflow.output_resolution = 2.0
+    wf = init_dwi_trans_wf(source_file='/data/sub-01_dwi.nii.gz', template='ACPC', mem_gb=1)
+    text = ' '.join(wf.__desc__.split())
+    assert 'resampled into AC-PC space at 2 mm isotropic resolution' in text
+    assert expected in text
+    assert 'The *b*-vectors were reoriented' in text
+
+
+@pytest.mark.parametrize('do_biascorr', [True, False])
+def test_bias_correction_is_described_after_resampling(fake_tools, do_biascorr):
+    from qsiprep.workflows.dwi.finalize import init_finalize_denoising_wf
+
+    wf = init_finalize_denoising_wf(
+        source_file='/data/sub-01_dwi.nii.gz', do_biascorr=do_biascorr, num_dwi_acquisitions=1
+    )
+    text = wf.visit_desc()
+    assert ('After resampling, B1 field inhomogeneity was corrected' in text) is do_biascorr
+    if do_biascorr:
+        assert '`dwibiascorrect` from *MRtrix3* 3.0.4 [@mrtrix3]' in text
 
 
 def test_diffprep_without_a_fieldmap_says_no_sdc(tmp_path):
@@ -248,14 +286,15 @@ def test_tortoise_texts_name_the_version(fake_tools):
     )
     from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
 
-    assert 'the TORTOISE V4.2.0 [@tortoisev4] software' in generate_diffprep_boilerplate(
+    assert 'DIFFPREP from *TORTOISE* V4.2.0 [@tortoisev4]' in generate_diffprep_boilerplate(
         'quadratic'
     )
-    assert 'part of the TORTOISE V4.2.0 [@tortoisev4]' in generate_drbuddi_boilerplate(
-        'rpe_series', t2w_sdc=False
+    assert (
+        'DRBUDDI [@drbuddi] from *TORTOISE* V4.2.0 [@tortoisev4]'
+        in generate_drbuddi_boilerplate('rpe_series', t2w_sdc=False)
     )
-    assert 'with TORTOISE V4.2.0' in gradwarp_boilerplate(None)
-    assert 'SelectBestB0 from TORTOISE V4.2.0' in _eddy_text(
+    assert 'with *TORTOISE* V4.2.0' in gradwarp_boilerplate(None)
+    assert '`SelectBestB0` from *TORTOISE* V4.2.0' in _eddy_text(
         fieldmap_type='rpe_series', pepolar_method='topup'
     )
 
@@ -265,15 +304,15 @@ def test_gradwarp_text_falls_back_to_v4(tmp_path, monkeypatch):
     from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
 
     monkeypatch.setenv('PATH', str(tmp_path))
-    assert 'with TORTOISE V4 to' in gradwarp_boilerplate(None)
+    assert 'with *TORTOISE* V4 to' in gradwarp_boilerplate(None)
 
 
 @pytest.mark.parametrize(
     ('denoise_method', 'unringing_method', 'expected'),
     [
-        ('dwidenoise', 'none', 'implemented in dwidenoise from MRtrix3 3.0.4 [@mrtrix3'),
-        ('none', 'mrdegibbs', 'using MRtrix3 3.0.4 [@mrtrix3; @mrdegibbs]'),
-        ('none', 'rpg', 'removed using TORTOISE V4.2.0 [@pfgibbs]'),
+        ('dwidenoise', 'none', 'implemented in `dwidenoise` from *MRtrix3* 3.0.4 [@mrtrix3]'),
+        ('none', 'mrdegibbs', '`mrdegibbs` from *MRtrix3* 3.0.4 [@mrtrix3; @mrdegibbs]'),
+        ('none', 'rpg', 'RPG method [@pfgibbs] as implemented in *TORTOISE* V4.2.0'),
         ('none', 'svht', 'as implemented in `svht_denoise` 0.1.20261001 [@svht_denoise]'),
         ('svht', 'none', 'as implemented in `svht_denoise` 0.1.20261001 [@svht_denoise]'),
     ],
@@ -294,9 +333,3 @@ def test_denoising_text_names_the_versions(fake_tools, denoise_method, unringing
         use_phase=False,
     )
     assert expected in ' '.join(wf.__desc__.split())
-
-
-def test_bias_correction_text_names_the_mrtrix3_version(fake_tools):
-    from qsiprep.workflows.dwi.merge import gen_intensity_boilerplate
-
-    assert '`dwibiascorrect` from MRtrix3 3.0.4 with the N4' in gen_intensity_boilerplate(True)

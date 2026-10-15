@@ -584,11 +584,6 @@ def init_fsl_hmc_wf(
                 synb0_wf = synb0_wf_pass2
                 synb0_b0_ref_wf = synb0_b0_ref_wf_pass2
                 synb0_topup_inputs = synb0_topup_inputs_pass2
-                workflow.__desc__ += (
-                    ' The b=0 was then unwarped with that field (Jacobian-modulated), a new '
-                    'synthetic b=0 was generated from it, and TOPUP was run again on the '
-                    'acquired b=0 images paired with the new synthetic b=0.'
-                )
             # The derivatives and the field QC describe the last pass.
             add_synb0_outputs(workflow, synb0_wf, source_file)
             workflow.connect([

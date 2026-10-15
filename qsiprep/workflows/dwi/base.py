@@ -262,13 +262,12 @@ def init_dwi_preproc_wf(
 
 #### Diffusion data preprocessing
 
-{denoising_desc}"""
+{denoising_desc.lstrip()}"""
 
     pre_hmc_wf = init_dwi_pre_hmc_wf(
         unit=unit,
         orientation='LAS' if unit.run.hmc_stage.tool == 'eddy' else 'LPS',
         source_file=source_file,
-        do_biascorr=do_biascorr,
     )
     test_pre_hmc_connect = pe.Node(TestInput(), name='test_pre_hmc_connect')
     hmc_tool = unit.run.hmc_stage.tool

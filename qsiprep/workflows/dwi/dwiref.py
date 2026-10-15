@@ -71,7 +71,7 @@ def init_dwiref_wf(
     omp_nthreads = config.nipype.omp_nthreads
     workflow = Workflow(name=name)
     workflow.__desc__ = (
-        'An unbiased template was constructed from the b=0 reference of each DWI run. '
+        '\n\nAn unbiased template was constructed from the *b*=0 reference of each DWI run. '
     )
 
     input_names = [name.replace('-', '_') + '_b0_template' for name in inputs_list]
@@ -120,7 +120,7 @@ def init_dwiref_wf(
         # not depend on how many groups a subject has, as fMRIPrep does for a
         # single-run --bold-coreg-level subject.
         workflow.__desc__ = (
-            'The subject had a single DWI distortion group, so its b=0 reference was used '
+            '\n\nThe subject had a single DWI distortion group, so its *b*=0 reference was used '
             'as the subject-level reference, with an identity transform, and was '
             'coregistered to the anatomical reference. '
         )
@@ -146,8 +146,8 @@ def init_dwiref_wf(
             omp_nthreads,
         )
         workflow.__desc__ += (
-            'This template was coregistered to the anatomical reference a single time, and '
-            'every DWI run inherited that shared template-to-anatomical transform. '
+            'The template was coregistered to the anatomical reference once, and every DWI '
+            'run inherited that template-to-anatomical transform. '
         )
 
     _connect_template_coregistration(
@@ -211,8 +211,8 @@ def _init_template_construction(
     linear_only = transform in ('Rigid', 'Affine')
     if linear_only:
         workflow.__desc__ += (
-            f'These were iteratively aligned to the evolving template over {num_iterations} '
-            f'iterations of {transform} registrations. '
+            f'The references were aligned to the evolving template over {num_iterations} '
+            f'iterations of {transform.lower()} registrations. '
         )
 
         # initialize_com because sessions can differ by centimetres of table
@@ -255,8 +255,8 @@ def _init_template_construction(
         template_node, template_field = linear_template_wf, 'outputnode.final_template'
     else:
         workflow.__desc__ += (
-            'These were aligned to the template using antsMultivariateTemplateConstruction2.sh '
-            f'with {transform} transforms. '
+            'The references were aligned to the template with '
+            f'`antsMultivariateTemplateConstruction2.sh` using {transform} transforms. '
         )
         runtime_opts = {'num_cores': 1, 'parallel_control': 0}
         if omp_nthreads > 1:

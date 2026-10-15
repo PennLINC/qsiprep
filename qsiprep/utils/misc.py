@@ -663,7 +663,7 @@ def load_denoise_config(path, denoise_method):
 
 _SVHT_FILTERS = {
     'optshrink': (
-        'each component was shrunk by the Frobenius-optimal rule [@gavish2017], against a '
+        'each component was shrunk by the Frobenius-optimal rule [@gavish2017], using a '
         'noise level estimated with the median estimator of @gavish2014'
     ),
     'optthresh': (
@@ -671,7 +671,7 @@ _SVHT_FILTERS = {
         '[@gavish2014]'
     ),
     'truncate': (
-        'components were truncated at the edge of the noise bulk, against a noise level '
+        'components were truncated at the edge of the noise bulk, using a noise level '
         'estimated with the median estimator of @gavish2014'
     ),
 }
@@ -812,7 +812,7 @@ _DWIDENOISE2_ESTIMATORS = {
     'exp1': 'the Marchenko-Pastur threshold search of the original `dwidenoise` [@dwidenoise1]',
     'exp2': 'a refined Marchenko-Pastur threshold search [@cordero2019complex]',
     'med': 'the median eigenvalue [@gavish2014]',
-    'mrm2023': 'a Marchenko-Pastur fit generalized to multi-dimensional data [@olesen2023]',
+    'mrm2023': 'a Marchenko-Pastur fit generalized to multidimensional data [@olesen2023]',
     'tbme2022': 'a multiple-moment generalized quarter-circle estimator [@zhu2022]',
 }
 
@@ -871,7 +871,7 @@ def describe_dwidenoise2(parameters, complex_data):
     Returns
     -------
     str
-        Boilerplate text with inline ``[@citation]`` keys, beginning with 'denoised using'
+        Boilerplate text with inline ``[@citation]`` keys, beginning with 'denoised with'
         so that the caller can supply its own subject.
     """
     used = {**_DWIDENOISE2_DEFAULTS, **parameters}
@@ -900,8 +900,9 @@ def describe_dwidenoise2(parameters, complex_data):
         schedule_desc = 'its default schedule'
 
     method = (
-        'denoised using the Marchenko-Pastur PCA method [@dwidenoise1; @dwidenoise2] as '
-        'implemented in `dwidenoise2` [@dwidenoise2software; @cordero2019complex]'
+        'denoised with Marchenko-Pastur principal component analysis (MP-PCA) '
+        '[@dwidenoise1; @dwidenoise2] as implemented in `dwidenoise2` '
+        '[@dwidenoise2software; @cordero2019complex]'
     )
     if n_iterations > 1:
         sentences = [
@@ -926,8 +927,8 @@ def describe_dwidenoise2(parameters, complex_data):
     vst_method = used.get('vst_method', 'linear' if complex_data else 'foi')
     if not complex_data and vst_method in ('foi', 'koay', 'mom'):
         vst = (
-            'a nonlinear variance-stabilizing transform was applied to render the '
-            'non-central chi distributed magnitude data approximately Gaussian and '
+            'a nonlinear variance-stabilizing transform made the noise of the magnitude data, '
+            'which follows a noncentral $\\chi$ distribution, approximately Gaussian and '
             'homoscedastic [@foi2011; @ma2020]'
         )
         if vst_method == 'koay':

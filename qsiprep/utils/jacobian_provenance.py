@@ -220,7 +220,7 @@ _JACOBIAN_SENTENCE = {
     ),
     False: (
         ' This correction was applied without Jacobian intensity modulation '
-        '(--ignore jacobian), so the local volume change it introduces '
+        '(`--ignore jacobian`), so the local volume change it introduces '
         'was not compensated for.'
     ),
 }

@@ -143,13 +143,13 @@ def test_synb0_boilerplate_reflects_ignored_fieldmaps(monkeypatch):
 
     monkeypatch.setattr(config.workflow, 'ignore', [])
     monkeypatch.setattr(config.workflow, 'force_sdc_anat_reference', False)
-    assert 'No fieldmap was available' in topup_boilerplate('synb0', 'TOPUP')
+    assert 'No field map was available' in topup_boilerplate('synb0', 'TOPUP')
 
     # Reaching SyNb0 with fieldmaps or RPE series present means the user
     # ignored them; the text must say so instead of claiming absence
     monkeypatch.setattr(config.workflow, 'ignore', ['fieldmaps', 'pepolar-dwis', 't2w'])
     text = topup_boilerplate('synb0', 'TOPUP')
-    assert 'No fieldmap was available' not in text
+    assert 'No field map was available' not in text
     assert "excluded at the user's request" in text
     assert '--ignore fieldmaps pepolar-dwis' in text
 
@@ -163,10 +163,10 @@ def test_synb0_boilerplate_reflects_forced_anat_reference(monkeypatch):
     monkeypatch.setattr(config.workflow, 'ignore', ['fieldmaps'])
     monkeypatch.setattr(config.workflow, 'force_sdc_anat_reference', True)
     text = topup_boilerplate('synb0', 'TOPUP')
-    assert 'No fieldmap was available' not in text
+    assert 'No field map was available' not in text
     assert "excluded at the user's request" not in text
     assert '--force sdc-anat-reference' in text
-    assert 'overriding any scanner-acquired fieldmap data' in text
+    assert 'overriding any scanner-acquired field map data' in text
 
 
 def test_synb0_wf_builds_without_container(monkeypatch):

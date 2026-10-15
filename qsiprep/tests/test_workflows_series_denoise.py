@@ -133,7 +133,6 @@ def test_pre_hmc_exposes_the_series_list_inputs():
         make_preproc_unit(['/data/sub-01_dwi.nii.gz']),
         orientation='LAS',
         source_file='/data/sub-01_dwi.nii.gz',
-        do_biascorr=True,
     )
     assert set(wf.get_node('inputnode').inputs.get()) == set(SERIES_LIST_FIELDS)
     # The single-polarity path hands the lists straight to the merge workflow.
@@ -149,7 +148,7 @@ def test_pre_hmc_rpe_selects_each_polarity_by_position():
         method=CorrectionMethod.PEPOLAR,
         pe_dirs={main: 'j', partner: 'j-'},
     )
-    wf = init_dwi_pre_hmc_wf(unit, orientation='LAS', source_file=main, do_biascorr=True)
+    wf = init_dwi_pre_hmc_wf(unit, orientation='LAS', source_file=main)
 
     # unit.dwi_files is (partner, main): PA is position 0, AP position 1.
     assert wf.get_node('select_plus').inputs.indices == [1]
@@ -205,7 +204,7 @@ def test_bidirectional_pre_hmc_runs_from_raw_series_to_one_merged_file(tmp_path)
 
     parent = pe.Workflow(name='parent', base_dir=str(tmp_path / 'work'))
     series_wfs = init_series_denoise_wfs([unit], orientation='LAS')
-    pre_hmc_wf = init_dwi_pre_hmc_wf(unit, orientation='LAS', source_file=ap, do_biascorr=False)
+    pre_hmc_wf = init_dwi_pre_hmc_wf(unit, orientation='LAS', source_file=ap)
     pre_hmc_wf.remove_nodes([node for node in pre_hmc_wf._graph.nodes() if 'qc' in node.name])
     connect_series_to_unit(parent, series_wfs, unit, pre_hmc_wf, 'rpe')
     parent.config['execution'] = {

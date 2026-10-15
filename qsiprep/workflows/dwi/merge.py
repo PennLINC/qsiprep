@@ -318,10 +318,13 @@ def init_merge_dwis_wf(
     )
     num_dwis = len(raw_dwi_files)
     if num_dwis > 1:
+        group = (
+            f' acquired with phase-encoding direction {phase_id}'
+            if phase_id and phase_id != 'same'
+            else ''
+        )
         desc.append(
-            'A total of %d DWI series in the %s distortion group were '
-            'concatenated, with preprocessing operations performed on individual '
-            'DWI series before concatenation.' % (num_dwis, phase_id)
+            f'The {num_dwis} DWI series{group} were concatenated after the per-series steps above.'
         )
     workflow.__desc__ = ' '.join(desc)
 
@@ -593,7 +596,7 @@ def init_dwi_denoising_wf(
                     f'Automatically using {dwidenoise_window}, {dwidenoise_window}, '
                     f'{dwidenoise_window} window for dwidenoise'
                 )
-                auto_str = 'n automatically-determined'
+                auto_str = ' (chosen automatically)'
 
             denoiser = pe.Node(
                 DWIDenoise(
@@ -634,21 +637,22 @@ def init_dwi_denoising_wf(
                 mppca_desc = describe_dwidenoise2(dwidenoise2_params, complex_data=denoise_complex)
             else:
                 mppca_desc = (
-                    'denoised using the Marchenko-Pastur PCA method implemented in dwidenoise '
-                    f'from {versioned("MRtrix3", mrtrix3_version())} '
-                    '[@mrtrix3; @dwidenoise1; @dwidenoise2] '
-                    f'with a{auto_str} window size of {dwidenoise_window} voxels. '
+                    'denoised with Marchenko-Pastur principal component analysis (MP-PCA) '
+                    '[@dwidenoise1; @dwidenoise2] as implemented in `dwidenoise` from '
+                    f'{versioned("*MRtrix3*", mrtrix3_version())} [@mrtrix3], with a window of '
+                    f'{dwidenoise_window} voxels{auto_str}. '
                 )
 
             if denoise_complex:
                 desc += (
-                    'Magnitude and phase DWI data were combined into a complex-valued file, then '
+                    'The magnitude and phase DWI data were combined into complex-valued images '
+                    'and '
                     f'{mppca_desc}'
                 )
                 if not unring_complex:
                     desc += (
-                        'After denoising, the complex-valued data were split back into '
-                        'magnitude and phase, and the denoised magnitude data were retained. '
+                        'The denoised data were then split back into magnitude and phase, and '
+                        'the magnitude was kept. '
                     )
             else:
                 desc += f'DWI data were {mppca_desc}'
@@ -659,11 +663,11 @@ def init_dwi_denoising_wf(
             last_step = 'After denoising, '
         else:
             desc += (
-                'DWI data were denoised using the Patch2Self algorithm from '
-                f'{versioned("DIPY", python_package_version("dipy"))} [@dipy; @patch2self] '
-                'with an automatically-defined window size. '
+                'DWI data were denoised with Patch2Self [@patch2self] from '
+                f'{versioned("*DIPY*", python_package_version("dipy"))} [@dipy], using ordinary '
+                'least-squares regression. '
             )
-            last_step = 'After `patch2self`, '
+            last_step = 'After Patch2Self, '
 
         # Wiring that is the same for every denoising method
         workflow.connect([
@@ -712,17 +716,17 @@ def init_dwi_denoising_wf(
     if do_unringing:
         if unringing_method == 'mrdegibbs':
             # Complex-valued unringing runs from the development branch
-            mrtrix3 = versioned('MRtrix3', mrtrix3_version(dev=unring_complex))
+            mrtrix3 = versioned('*MRtrix3*', mrtrix3_version(dev=unring_complex))
             if unring_complex:
                 desc += (
-                    f'{last_step}Gibbs ringing was removed from the complex-valued data using '
-                    f'{mrtrix3} [@mrtrix3; @mrdegibbs]. The complex-valued data were then split '
-                    'back into magnitude and phase, and the magnitude data were retained. '
+                    f'{last_step}Gibbs ringing was removed from the complex-valued data with '
+                    f'`mrdegibbs` from {mrtrix3} [@mrtrix3; @mrdegibbs]; the data were then '
+                    'split back into magnitude and phase, and the magnitude was kept. '
                 )
             else:
                 desc += (
-                    f'{last_step}Gibbs ringing was removed from the magnitude data using '
-                    f'{mrtrix3} [@mrtrix3; @mrdegibbs]. '
+                    f'{last_step}Gibbs ringing was removed from the magnitude data with '
+                    f'`mrdegibbs` from {mrtrix3} [@mrtrix3; @mrdegibbs]. '
                 )
             degibbser = pe.Node(
                 MRDeGibbs(nthreads=omp_nthreads),
@@ -731,8 +735,9 @@ def init_dwi_denoising_wf(
             )
         elif unringing_method == 'rpg':
             desc += (
-                f'{last_step}Gibbs ringing was removed using '
-                f'{versioned("TORTOISE", tortoise_version())} [@pfgibbs]. '
+                f'{last_step}Gibbs ringing, including that caused by partial Fourier '
+                'acquisition, was removed with the RPG method [@pfgibbs] as implemented in '
+                f'{versioned("*TORTOISE*", tortoise_version())}. '
             )
 
             pe_code = {
@@ -761,8 +766,8 @@ def init_dwi_denoising_wf(
             if svht_pf is not None:
                 svht_kwargs['partial_fourier'] = svht_pf
                 pf_desc = (
-                    f', together with the ringing induced by the partial Fourier ({svht_pf}) '
-                    'acquisition [@pfgibbs]'
+                    ', together with the ringing caused by partial Fourier acquisition '
+                    f'(factor {svht_pf}) [@pfgibbs]'
                 )
             desc += (
                 f'{last_step}Gibbs ringing was removed from the magnitude data by local '
@@ -801,7 +806,7 @@ def init_dwi_denoising_wf(
     chain.feed(outputnode, 'dwi_file')
 
     if not last_step:
-        desc = '\n\nNo denoising steps were applied to the DWI data. '
+        desc = '\n\nNeither denoising nor Gibbs-ringing removal was applied to the DWI data. '
 
     # If any denoising operations were run, collect their confounds
     if step_num > 1:
@@ -854,32 +859,21 @@ def _as_list(item):
     return [item]
 
 
-def gen_intensity_boilerplate(do_biascorr):
-    """Describe the b=0 threshold, b=0 intensity harmonization and bias correction.
+def gen_intensity_boilerplate(num_series):
+    """Describe the *b*=0 threshold and the *b*=0 intensity harmonization across series.
 
-    Denoising is described by :func:`init_dwi_denoising_wf`. ``do_biascorr`` is
-    the resolved decision for this output, not the ``--dwi-biascorrect`` mode:
-    under ``auto`` the mode alone cannot say whether N4 actually ran, so reading
-    the config here would state the wrong thing.
+    Denoising is described by :func:`init_dwi_denoising_wf`, and bias correction, which
+    runs after resampling, by
+    :func:`~qsiprep.workflows.dwi.finalize.init_finalize_denoising_wf`.
     """
-    no_b0_harmonization = config.workflow.no_b0_harmonization
-    b0_threshold = config.workflow.b0_threshold
     desc = [
-        f'Any images with a b-value less than {b0_threshold} s/mm^2 were treated as a *b*=0 image.'
+        f'Volumes with *b* < {config.workflow.b0_threshold} s/mm² were treated as *b*=0 images.'
     ]
-    if not no_b0_harmonization:
+    if num_series > 1 and not config.workflow.no_b0_harmonization:
         desc.append(
-            'Each DWI series was scaled so that the mean intensity of its b=0 images '
-            'matched across the separate DWI scans.'
+            'Each series was scaled so that the mean intensity of its *b*=0 images matched '
+            'across the series.'
         )
-
-    if do_biascorr:
-        desc.append(
-            'B1 field inhomogeneity was corrected using '
-            f'`dwibiascorrect` from {versioned("MRtrix3", mrtrix3_version())} with the N4 '
-            'algorithm [@n4] after corrected images were resampled.'
-        )
-
     return ' '.join(desc)
 
 

@@ -224,7 +224,7 @@ def resolve_gradwarp_plan(unit):
 #: (``interfaces/tortoise.py:1275``) -- so the series has already been resampled
 #: once by the time gradwarp is applied, and boilerplate claiming a single
 #: raw-to-final interpolation would be a methods-section error.
-_PRERESAMPLED_BY = {'eddy': 'FSL eddy', 'tortoise': "TORTOISE's DIFFPREP"}
+_PRERESAMPLED_BY = {'eddy': '`eddy`', 'tortoise': 'DIFFPREP'}
 
 
 #: What was corrected, keyed by the resolved warp dimensionality. The text must
@@ -232,18 +232,16 @@ _PRERESAMPLED_BY = {'eddy': 'FSL eddy', 'tortoise': "TORTOISE's DIFFPREP"}
 #: methods-section error.
 _CORRECTION_TEXT = {
     '3D': (
-        'Gradient nonlinearity was corrected using the scanner gradient '
-        'coefficients with {tortoise}, applying the full three-dimensional '
-        'gradwarp displacement field.'
+        'Gradient nonlinearity was corrected with {tortoise} from the scanner gradient '
+        'coefficients, applying the full three-dimensional displacement field.'
     ),
     '1D': (
-        'Gradient nonlinearity was corrected using the scanner gradient '
-        'coefficients with {tortoise}. Because the scanner had already applied '
-        'in-plane gradwarp correction (DIS2D), only the residual through-plane '
-        'component was applied here.'
+        'Gradient nonlinearity was corrected with {tortoise} from the scanner gradient '
+        'coefficients. Because the scanner had already corrected in-plane (DIS2D), only the '
+        'through-plane component was applied.'
     ),
     None: (
-        'The scanner had already applied full three-dimensional gradwarp '
+        'The scanner had already applied full three-dimensional gradient nonlinearity '
         'correction (DIS3D), so no further spatial correction was performed. '
         'A voxelwise gradient deviation map was computed with {tortoise} to '
         'account for the spatially varying diffusion encoding.'
@@ -256,9 +254,9 @@ _CORRECTION_TEXT = {
 #: DIS2D tag, which a forced plan has not consulted and may contradict.
 _FORCED_CORRECTION_TEXT = {
     '1D': (
-        'Gradient nonlinearity was corrected using the scanner gradient '
-        'coefficients with {tortoise}. Only the through-plane component of '
-        'the gradwarp displacement field was applied, as requested.'
+        'Gradient nonlinearity was corrected with {tortoise} from the scanner gradient '
+        'coefficients. Only the through-plane component of the displacement field was '
+        'applied, as requested.'
     ),
 }
 
@@ -279,15 +277,13 @@ def _resampling_sentence():
     backend = _PRERESAMPLED_BY.get(config.workflow.hmc_method)
     if backend is None:
         return (
-            ' The displacement field was combined with the head motion, eddy '
-            'current, and susceptibility distortion transforms, so the data '
-            'were resampled only once.'
+            ' The displacement field was combined with the head motion, eddy-current and '
+            'susceptibility distortion transforms, so the data were resampled only once.'
         )
     return (
-        ' The displacement field was combined with the remaining susceptibility '
-        'distortion and coregistration transforms and applied in a single '
-        f'resampling, following the motion and eddy current correction {backend} '
-        'had already applied.'
+        ' The displacement field was combined with the remaining susceptibility distortion '
+        'and coregistration transforms in the final resampling, after the head motion and '
+        f'eddy-current corrections that {backend} had already applied.'
     )
 
 
@@ -306,7 +302,7 @@ def gradwarp_boilerplate(warp_dim, basis='metadata'):
     applied to the scanner tags, since it did not read them.
     """
     # The gradient nonlinearity tools exist only in TORTOISE V4
-    tortoise = versioned('TORTOISE', tortoise_version() or 'V4')
+    tortoise = versioned('*TORTOISE*', tortoise_version() or 'V4')
     if warp_dim is None:
         return _CORRECTION_TEXT[None].format(tortoise=tortoise)
     if basis == 'forced':
