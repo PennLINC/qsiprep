@@ -1,12 +1,15 @@
 """Methods boilerplate text: what the generators state for a given configuration."""
 
 import json
+import os
+import stat
 
 import pytest
 
 from qsiprep import config
 from qsiprep.tests.gradient_fixtures import write_dwi_with_gradients
 from qsiprep.tests.preproc_factory import make_preproc_unit
+from qsiprep.utils import versions
 
 EDDY_ARGS = {'method': 'jac', 'flm': 'quadratic', 'slm': 'linear', 'repol': True}
 
@@ -23,6 +26,45 @@ def _cfg(monkeypatch):
     config.workflow.force = []
     config.workflow.gradient_file = None
     monkeypatch.delenv('FSLDIR', raising=False)
+    _clear_version_caches()
+    yield
+    _clear_version_caches()
+
+
+def _clear_version_caches():
+    for lookup in (
+        versions.eddy_version,
+        versions.tortoise_version,
+        versions.niimath_version,
+        versions.svht_denoise_version,
+    ):
+        lookup.cache_clear()
+
+
+def _fake_tool(bin_dir, name, output):
+    """Write an executable that prints ``output``, as the real tool's --version does."""
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    tool = bin_dir / name
+    tool.write_text(f"#!/bin/sh\ncat <<'EOF'\n{output}\nEOF\n")
+    tool.chmod(tool.stat().st_mode | stat.S_IEXEC)
+    return tool
+
+
+@pytest.fixture
+def fake_tools(tmp_path, monkeypatch):
+    """Put the container's tools on PATH, with the version output captured from the image."""
+    bin_dir = tmp_path / 'bin'
+    _fake_tool(bin_dir, 'niimath', 'v1.0.20260924 OpenMP GCC11.4.0 BSD (64-bit Linux)')
+    _fake_tool(bin_dir, 'svht_denoise', 'svht_denoise 0.1.20261001')
+    tortoise = tmp_path / 'TORTOISEV4'
+    _fake_tool(tortoise / 'bin', 'TORTOISEProcess', '')
+    (tortoise / 'settings').mkdir()
+    (tortoise / 'settings' / 'version.txt').write_text('TORTOISE V4.2.0\n')
+    monkeypatch.setenv(
+        'PATH', os.pathsep.join([str(bin_dir), str(tortoise / 'bin'), os.environ['PATH']])
+    )
+    monkeypatch.setenv('MRTRIX3_DEV_VERSION', '3.0.8-2071-gb98b54e9')
+    monkeypatch.setattr(config.environment, 'mrtrix3_version', '3.0.4')
 
 
 def _eddy_text(eddy_args=None, fieldmap_type='', pepolar_method='', **kwargs):
@@ -37,7 +79,7 @@ def _eddy_text(eddy_args=None, fieldmap_type='', pepolar_method='', **kwargs):
 
 def test_eddy_version_comes_from_the_conda_records(tmp_path, monkeypatch):
     """A pixi FSL has no etc/fslversion; eddy's package record has its version."""
-    from qsiprep.interfaces.eddy import eddy_version
+    from qsiprep.utils.versions import eddy_version
 
     meta = tmp_path / 'conda-meta'
     meta.mkdir()
@@ -50,7 +92,7 @@ def test_eddy_version_comes_from_the_conda_records(tmp_path, monkeypatch):
     monkeypatch.setenv('FSLDIR', str(tmp_path))
 
     assert eddy_version() == '2602.0'
-    assert "FSL's eddy (version 2602.0) was used" in _eddy_text()
+    assert "FSL's eddy 2602.0 was used" in _eddy_text()
 
 
 def test_eddy_text_leaves_out_an_unknown_version():
@@ -180,3 +222,81 @@ def test_diffprep_without_a_fieldmap_says_no_sdc(tmp_path):
         make_preproc_unit([dwi]), source_file='/data/x_dwi.nii.gz', t2w_sdc=False
     )
     assert NO_SDC_DESC.strip() in wf.visit_desc()
+
+
+def test_tool_versions_are_read_from_the_tools(fake_tools):
+    assert versions.niimath_version() == 'v1.0.20260924'
+    assert versions.svht_denoise_version() == '0.1.20261001'
+    assert versions.tortoise_version() == 'V4.2.0'
+    assert versions.mrtrix3_version() == '3.0.4'
+    assert versions.mrtrix3_version(dev=True) == '3.0.8-2071-gb98b54e9'
+
+
+def test_missing_tools_have_no_version(tmp_path, monkeypatch):
+    monkeypatch.setenv('PATH', str(tmp_path))
+    assert versions.niimath_version() is None
+    assert versions.svht_denoise_version() is None
+    assert versions.tortoise_version() is None
+    assert versions.python_package_version('not-a-real-package') is None
+    assert versions.versioned('niimath', None) == 'niimath'
+
+
+def test_tortoise_texts_name_the_version(fake_tools):
+    from qsiprep.interfaces.tortoise import (
+        generate_diffprep_boilerplate,
+        generate_drbuddi_boilerplate,
+    )
+    from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
+
+    assert 'the TORTOISE V4.2.0 [@tortoisev4] software' in generate_diffprep_boilerplate(
+        'quadratic'
+    )
+    assert 'part of the TORTOISE V4.2.0 [@tortoisev4]' in generate_drbuddi_boilerplate(
+        'rpe_series', t2w_sdc=False
+    )
+    assert 'with TORTOISE V4.2.0' in gradwarp_boilerplate(None)
+    assert 'SelectBestB0 from TORTOISE V4.2.0' in _eddy_text(
+        fieldmap_type='rpe_series', pepolar_method='topup'
+    )
+
+
+def test_gradwarp_text_falls_back_to_v4(tmp_path, monkeypatch):
+    """The gradient nonlinearity tools exist only in TORTOISE V4."""
+    from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
+
+    monkeypatch.setenv('PATH', str(tmp_path))
+    assert 'with TORTOISE V4 to' in gradwarp_boilerplate(None)
+
+
+@pytest.mark.parametrize(
+    ('denoise_method', 'unringing_method', 'expected'),
+    [
+        ('dwidenoise', 'none', 'implemented in dwidenoise from MRtrix3 3.0.4 [@mrtrix3'),
+        ('none', 'mrdegibbs', 'using MRtrix3 3.0.4 [@mrtrix3; @mrdegibbs]'),
+        ('none', 'rpg', 'removed using TORTOISE V4.2.0 [@pfgibbs]'),
+        ('none', 'svht', 'as implemented in `svht_denoise` 0.1.20261001 [@svht_denoise]'),
+        ('svht', 'none', 'as implemented in `svht_denoise` 0.1.20261001 [@svht_denoise]'),
+    ],
+)
+def test_denoising_text_names_the_versions(fake_tools, denoise_method, unringing_method, expected):
+    from qsiprep.workflows.dwi.merge import init_dwi_denoising_wf
+
+    config.workflow.denoise_method = denoise_method
+    config.workflow.unringing_method = unringing_method
+    config.workflow.denoise_config = None
+    config.workflow.dwidenoise_window = 5
+    config.workflow.mrtrix_version = 'stable'
+    wf = init_dwi_denoising_wf(
+        source_file='/data/sub-01_dwi.nii.gz',
+        partial_fourier=1.0,
+        phase_encoding_direction='j',
+        n_volumes=30,
+        use_phase=False,
+    )
+    assert expected in ' '.join(wf.__desc__.split())
+
+
+def test_bias_correction_text_names_the_mrtrix3_version(fake_tools):
+    from qsiprep.workflows.dwi.merge import gen_intensity_boilerplate
+
+    assert '`dwibiascorrect` from MRtrix3 3.0.4 with the N4' in gen_intensity_boilerplate(True)

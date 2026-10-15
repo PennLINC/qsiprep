@@ -30,6 +30,7 @@ from ...interfaces.unpile import (
     unpile_fit_grid_mm,
 )
 from ...utils.sdc import pe_readout_time
+from ...utils.versions import python_package_version, versioned
 from ..dwi.registration import init_structural_to_b0_alignment_wf
 from ..dwi.util import init_dwi_reference_wf
 from .synb0 import init_synb0_wf
@@ -381,7 +382,8 @@ def _boilerplate(target, two_pass, gre_prior):
         'position together with the field'
     )
     desc = (
-        'Susceptibility distortion was estimated with unpile [@unpile] after head motion '
+        'Susceptibility distortion was estimated with '
+        f'{versioned("unpile", python_package_version("unpile"))} [@unpile] after head motion '
         f'correction: the motion-corrected b=0 average was matched to {reference} by '
         f'{metric}, through a model of the EPI readout that displaces the reference along '
         'the phase-encoding axis and accounts for signal pile-up.'

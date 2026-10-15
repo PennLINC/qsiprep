@@ -2,7 +2,6 @@
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """Prepare files for TOPUP and eddy."""
 
-import glob
 import json
 import os
 import os.path as op
@@ -26,6 +25,7 @@ from nipype.utils.filemanip import fname_presuffix, split_filename
 
 from .. import config
 from ..data import load as load_data
+from ..utils.versions import eddy_version, tortoise_version, versioned
 from .epi_fmap import (
     add_synthetic_b0_to_topup_inputs,
     eddy_inputs_from_dwi_files,
@@ -454,22 +454,6 @@ class Eddy2SPMMotion(SimpleInterface):
         return runtime
 
 
-def eddy_version():
-    """Return the version of the installed eddy, or None when it cannot be found.
-
-    A conda/pixi FSL has no ``$FSLDIR/etc/fslversion`` (what nipype reads), and
-    its packages are versioned one by one, so eddy's own package version is read
-    from the environment's ``conda-meta`` records.
-    """
-    fsldir = os.getenv('FSLDIR')
-    if not fsldir:
-        return None
-    for record in sorted(glob.glob(op.join(fsldir, 'conda-meta', 'fsl-eddy-[0-9]*.json'))):
-        with open(record) as fobj:
-            return json.load(fobj).get('version')
-    return fsl.Info.version()
-
-
 def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method, gre_in_eddy=False):
     """Write boilerplate text based on an eddy config dict.
 
@@ -480,10 +464,8 @@ def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method, gre
     # DRBUDDI's warp is applied after eddy, so eddy's interpolation is not the last
     drbuddi_follows = 'drbuddi' in pepolar_method.lower()
     ext_eddy = ExtendedEddy(**eddy_config)
-    version = eddy_version()
-    version_txt = f' (version {version})' if version else ''
     desc = [
-        f"FSL's eddy{version_txt} was used for head motion correction and "
+        f"FSL's {versioned('eddy', eddy_version())} was used for head motion correction and "
         'eddy current correction [@anderssoneddy].'
     ]
 
@@ -716,9 +698,9 @@ def topup_boilerplate(fieldmap_type, pepolar_method):
             'with reversed phase encoding directions.'
         )
     desc.append(
-        "The most mutually-consistent b=0 images were chosen with TORTOISE's "
-        'SelectBestB0 [@tortoisev4], which rigidly aligns the candidates from '
-        'each distortion group before comparing them with a windowed '
+        'The most mutually-consistent b=0 images were chosen with SelectBestB0 from '
+        f'{versioned("TORTOISE", tortoise_version())} [@tortoisev4], which rigidly aligns '
+        'the candidates from each distortion group before comparing them with a windowed '
         'correlation.'
     )
     desc.append(

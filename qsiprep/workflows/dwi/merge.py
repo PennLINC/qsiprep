@@ -43,6 +43,13 @@ from ...utils.misc import (
     load_dwidenoise2_config,
     load_svht_config,
 )
+from ...utils.versions import (
+    mrtrix3_version,
+    python_package_version,
+    svht_denoise_version,
+    tortoise_version,
+    versioned,
+)
 from .qc import init_modelfree_qc_wf
 from .util import _get_wf_name
 
@@ -628,6 +635,7 @@ def init_dwi_denoising_wf(
             else:
                 mppca_desc = (
                     'denoised using the Marchenko-Pastur PCA method implemented in dwidenoise '
+                    f'from {versioned("MRtrix3", mrtrix3_version())} '
                     '[@mrtrix3; @dwidenoise1; @dwidenoise2] '
                     f'with a{auto_str} window size of {dwidenoise_window} voxels. '
                 )
@@ -651,7 +659,8 @@ def init_dwi_denoising_wf(
             last_step = 'After denoising, '
         else:
             desc += (
-                "DWI data were denoised using DiPy's Patch2Self algorithm [@dipy; @patch2self] "
+                'DWI data were denoised using the Patch2Self algorithm from '
+                f'{versioned("DIPY", python_package_version("dipy"))} [@dipy; @patch2self] '
                 'with an automatically-defined window size. '
             )
             last_step = 'After `patch2self`, '
@@ -702,16 +711,18 @@ def init_dwi_denoising_wf(
 
     if do_unringing:
         if unringing_method == 'mrdegibbs':
+            # Complex-valued unringing runs from the development branch
+            mrtrix3 = versioned('MRtrix3', mrtrix3_version(dev=unring_complex))
             if unring_complex:
                 desc += (
                     f'{last_step}Gibbs ringing was removed from the complex-valued data using '
-                    'MRtrix3 [@mrtrix3; @mrdegibbs]. The complex-valued data were then split '
+                    f'{mrtrix3} [@mrtrix3; @mrdegibbs]. The complex-valued data were then split '
                     'back into magnitude and phase, and the magnitude data were retained. '
                 )
             else:
                 desc += (
                     f'{last_step}Gibbs ringing was removed from the magnitude data using '
-                    'MRtrix3 [@mrtrix3; @mrdegibbs]. '
+                    f'{mrtrix3} [@mrtrix3; @mrdegibbs]. '
                 )
             degibbser = pe.Node(
                 MRDeGibbs(nthreads=omp_nthreads),
@@ -719,7 +730,10 @@ def init_dwi_denoising_wf(
                 n_procs=omp_nthreads,
             )
         elif unringing_method == 'rpg':
-            desc += f'{last_step}Gibbs ringing was removed using TORTOISE [@pfgibbs]. '
+            desc += (
+                f'{last_step}Gibbs ringing was removed using '
+                f'{versioned("TORTOISE", tortoise_version())} [@pfgibbs]. '
+            )
 
             pe_code = {
                 'i': 0,
@@ -752,8 +766,8 @@ def init_dwi_denoising_wf(
                 )
             desc += (
                 f'{last_step}Gibbs ringing was removed from the magnitude data by local '
-                f'subvoxel shifts [@mrdegibbs]{pf_desc}, as implemented in `svht_denoise` '
-                '[@svht_denoise]. '
+                f'subvoxel shifts [@mrdegibbs]{pf_desc}, as implemented in '
+                f'{versioned("`svht_denoise`", svht_denoise_version())} [@svht_denoise]. '
             )
             degibbser = pe.Node(
                 SVHTDeGibbs(nthreads=omp_nthreads, **svht_kwargs),
@@ -862,8 +876,8 @@ def gen_intensity_boilerplate(do_biascorr):
     if do_biascorr:
         desc.append(
             'B1 field inhomogeneity was corrected using '
-            '`dwibiascorrect` from MRtrix3 with the N4 algorithm '
-            '[@n4] after corrected images were resampled.'
+            f'`dwibiascorrect` from {versioned("MRtrix3", mrtrix3_version())} with the N4 '
+            'algorithm [@n4] after corrected images were resampled.'
         )
 
     return ' '.join(desc)

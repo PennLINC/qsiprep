@@ -8,6 +8,8 @@ import re
 
 import numpy as np
 
+from .versions import svht_denoise_version, versioned
+
 LOGGER = logging.getLogger('nipype.interface')
 
 _DWIDENOISE_ENUM_PARAMETERS = {
@@ -728,8 +730,9 @@ def describe_svht(parameters, real_axis):
         sentences = ['DWI data were denoised']
     sentences[0] += (
         ' by local PCA with optimal singular value shrinkage, as implemented in '
-        f'`svht_denoise` [@svht_denoise]. Overlapping {shape} patches, {size}, were '
-        f'decomposed by singular value decomposition, {filter_desc}, and {aggregator_desc}.'
+        f'{versioned("`svht_denoise`", svht_denoise_version())} [@svht_denoise]. '
+        f'Overlapping {shape} patches, {size}, were decomposed by singular value '
+        f'decomposition, {filter_desc}, and {aggregator_desc}.'
     )
     if parameters.get('demean'):
         sentences.append(

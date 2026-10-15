@@ -39,6 +39,7 @@ import sys
 from collections import defaultdict
 from copy import deepcopy
 
+from dipy import __version__ as dipy_ver
 from nilearn import __version__ as nilearn_ver
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
@@ -301,7 +302,7 @@ which is based on *Nipype* {config.environment.nipype_version}
 
 Many internal operations of *QSIPrep* use
 *Nilearn* {nilearn_ver} [@nilearn, RRID:SCR_001362] and
-*Dipy* [@dipy].
+*Dipy* {dipy_ver} [@dipy].
 For more details of the pipeline, see [the section corresponding
 to workflows in *QSIPrep*'s documentation]\
 (https://qsiprep.readthedocs.io/en/latest/methods/index.html \

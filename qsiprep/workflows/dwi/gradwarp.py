@@ -22,6 +22,7 @@ from ... import config
 from ...interfaces import DerivativesDataSink
 from ...interfaces.gradunwarp import CreateNonlinearityDisplacementMap, MaskWarpDimensions
 from ...utils.jacobian_provenance import describe_jacobian_modulation
+from ...utils.versions import tortoise_version, versioned
 from .resampling import _listify
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -232,19 +233,19 @@ _PRERESAMPLED_BY = {'eddy': 'FSL eddy', 'tortoise': "TORTOISE's DIFFPREP"}
 _CORRECTION_TEXT = {
     '3D': (
         'Gradient nonlinearity was corrected using the scanner gradient '
-        'coefficients with TORTOISE V4, applying the full three-dimensional '
+        'coefficients with {tortoise}, applying the full three-dimensional '
         'gradwarp displacement field.'
     ),
     '1D': (
         'Gradient nonlinearity was corrected using the scanner gradient '
-        'coefficients with TORTOISE V4. Because the scanner had already applied '
+        'coefficients with {tortoise}. Because the scanner had already applied '
         'in-plane gradwarp correction (DIS2D), only the residual through-plane '
         'component was applied here.'
     ),
     None: (
         'The scanner had already applied full three-dimensional gradwarp '
         'correction (DIS3D), so no further spatial correction was performed. '
-        'A voxelwise gradient deviation map was computed with TORTOISE V4 to '
+        'A voxelwise gradient deviation map was computed with {tortoise} to '
         'account for the spatially varying diffusion encoding.'
     ),
 }
@@ -256,7 +257,7 @@ _CORRECTION_TEXT = {
 _FORCED_CORRECTION_TEXT = {
     '1D': (
         'Gradient nonlinearity was corrected using the scanner gradient '
-        'coefficients with TORTOISE V4. Only the through-plane component of '
+        'coefficients with {tortoise}. Only the through-plane component of '
         'the gradwarp displacement field was applied, as requested.'
     ),
 }
@@ -304,13 +305,15 @@ def gradwarp_boilerplate(warp_dim, basis='metadata'):
     anything, or modulated. A forced plan cannot attribute the correction it
     applied to the scanner tags, since it did not read them.
     """
+    # The gradient nonlinearity tools exist only in TORTOISE V4
+    tortoise = versioned('TORTOISE', tortoise_version() or 'V4')
     if warp_dim is None:
-        return _CORRECTION_TEXT[None]
+        return _CORRECTION_TEXT[None].format(tortoise=tortoise)
     if basis == 'forced':
         text = _FORCED_CORRECTION_TEXT.get(warp_dim, _CORRECTION_TEXT[warp_dim])
     else:
         text = _CORRECTION_TEXT[warp_dim]
-    return text + _resampling_sentence() + describe_jacobian_modulation()
+    return text.format(tortoise=tortoise) + _resampling_sentence() + describe_jacobian_modulation()
 
 
 #: Report phrasing for each resolved state.

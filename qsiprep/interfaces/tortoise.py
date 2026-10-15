@@ -26,6 +26,7 @@ from nipype.interfaces.base import (
 from nipype.utils.filemanip import fname_presuffix
 from niworkflows.viz.utils import compose_view, cuts_from_bbox
 
+from ..utils.versions import tortoise_version, versioned
 from ..viz.utils import plot_denoise
 from .denoise import (
     SeriesPreprocReport,
@@ -1002,7 +1003,8 @@ def generate_diffprep_boilerplate(correction_mode):
     }
     corrects, transform = mode_desc[correction_mode]
     desc = (
-        '\n\nHead motion correction was performed with the TORTOISE [@tortoisev4] software '
+        '\n\nHead motion correction was performed with the '
+        f'{versioned("TORTOISE", tortoise_version())} [@tortoisev4] software '
         "package's DIFFPREP module, "
         f'in "{correction_mode}" mode (correcting {corrects}). DIFFPREP fits a '
         'SHORE/MAPMRI signal model to the data and iteratively registers each '
@@ -1019,7 +1021,8 @@ def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False, initi
     ``initialized`` says DRBUDDI starts from a field-map-derived deformation,
     whose estimation is described by the workflow that precedes this one.
     """
-    desc = ['\n\nDRBUDDI [@drbuddi], part of the TORTOISE [@tortoisev4] software package,']
+    tortoise = versioned('TORTOISE', tortoise_version())
+    desc = [f'\n\nDRBUDDI [@drbuddi], part of the {tortoise} [@tortoisev4] software package,']
     if not with_topup:
         # Until now there will have been no description of the SDC procedure.
         # Add extra details about the input data.
