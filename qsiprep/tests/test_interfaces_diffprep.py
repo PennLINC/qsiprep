@@ -1285,6 +1285,55 @@ def test_sloppy_stage_schedules_are_the_defaults_on_the_sloppy_grid():
     assert SLOPPY_DRBUDDI.count('CCSK') == 1
 
 
+def test_sloppy_drbuddi_metrics_resolve_without_fa(tmp_path):
+    """Test that every structural metric in the sloppy schedule finds its str_id.
+
+    DRBUDDI drops the FA metric (CC) when it has no FA images, which is always
+    the case for an epi fieldmap's b=0s. It then looks up each remaining
+    metric's options by its new position in the parsed ``metrics={...}`` list,
+    so a CC ahead of CCJacS hands CCJacS the string "CC" and the str_id parse
+    throws std::out_of_range.
+    """
+    import re
+
+    from qsiprep.interfaces.tortoise import DRBUDDI
+
+    up = tmp_path / 'up.nii'
+    down = tmp_path / 'down.nii'
+    _write_dummy_nii(up, nvols=1)
+    _write_dummy_nii(down, nvols=1)
+    up_json = tmp_path / 'up.json'
+    up_json.write_text('{"PhaseEncodingDirection": "j"}')
+
+    def stage_metrics(fieldmap_type):
+        cmd = DRBUDDI(
+            fieldmap_type=fieldmap_type,
+            sloppy=True,
+            blip_up_image=str(up),
+            blip_down_image=str(down),
+            blip_up_json=str(up_json),
+        ).cmdline
+        return [
+            m.replace('\\', '').split(':')
+            for m in re.findall(r'metrics=\\\{(.*?)\\\},restrict', cmd)
+        ]
+
+    epi = stage_metrics('epi')
+    assert len(epi) == 4
+    for metrics in epi:
+        # DRBUDDI_Diffeo::SetImagesForMetrics: CC is erased without FA, then the
+        # parser's metric strings are indexed by the post-erase position.
+        kept = [m for m in metrics if m != 'CC']
+        for pos, metric in enumerate(kept):
+            if metric.startswith(('CCJacS', 'CCSK')):
+                assert 'str_id=' in metrics[pos]
+        assert metrics[0] == 'MSJac'
+        assert any(m.startswith(('CCJacS', 'CCSK')) for m in metrics)
+
+    # A reverse-PE series gives DRBUDDI FA images, so CC stays in.
+    assert all('CC' in metrics for metrics in stage_metrics('rpe_series'))
+
+
 def test_init_diffprep_hmc_wf_pepolar_always_uses_drbuddi(tmp_path):
     """Test that TORTOISE corrects PEPOLAR with DRBUDDI regardless of --sdc-method.
 

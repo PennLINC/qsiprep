@@ -123,17 +123,31 @@ def _sloppy_stage(
     )
 
 
+_SLOPPY_DRBUDDI_STAGES = (
+    (0.25, 60, 6, 4, 9, ['MSJac', 'CC', 'CCJacS{str_id=0}']),
+    (0.2, 60, 4, 3, 8, ['MSJac', 'CC', 'CCJacS{str_id=0}']),
+    (0.25, 40, 2, 2, 7, ['MSJac', 'CC', 'CCJacS{str_id=0}']),
+    (0.15, 5, 1, 1, 7, ['MSJac', 'CC', 'CCSK{str_id=0}']),
+)
+
+
+def _sloppy_schedule(with_fa):
+    return ' '.join(
+        _sloppy_stage(
+            lr, niter, f, s, u, 0, [m for m in metrics if with_fa or m != 'CC'], True, True
+        )
+        for (lr, niter, f, s, u, metrics) in _SLOPPY_DRBUDDI_STAGES
+    )
+
+
 # The DRBUDDI schedule --sloppy runs: DRBUDDI's four-stage default for the
 # b=0 + FA + structural case, on the sloppy grid.
-SLOPPY_DRBUDDI = ' '.join(
-    _sloppy_stage(lr, niter, f, s, u, 0, metrics, True, True)
-    for (lr, niter, f, s, u, metrics) in (
-        (0.25, 60, 6, 4, 9, ['MSJac', 'CC', 'CCJacS{str_id=0}']),
-        (0.2, 60, 4, 3, 8, ['MSJac', 'CC', 'CCJacS{str_id=0}']),
-        (0.25, 40, 2, 2, 7, ['MSJac', 'CC', 'CCJacS{str_id=0}']),
-        (0.15, 5, 1, 1, 7, ['MSJac', 'CC', 'CCSK{str_id=0}']),
-    )
-)
+SLOPPY_DRBUDDI = _sloppy_schedule(with_fa=True)
+# The same schedule without the FA metric (CC) for an epi fieldmap, whose b=0s
+# give DRBUDDI no FA. DRBUDDI drops CC itself then, but keeps reading the
+# remaining metrics' options at their pre-drop positions, so CCJacS gets CC's
+# string and the str_id parse throws std::out_of_range.
+SLOPPY_DRBUDDI_EPI = _sloppy_schedule(with_fa=False)
 
 
 def sloppy_epi_working_res():
@@ -521,6 +535,8 @@ class DRBUDDI(TORTOISECommandLine):
             return ''
         if name == 'structural_image':
             return '-s ' + ' '.join(value)
+        if name == 'sloppy' and value and self.inputs.fieldmap_type == 'epi':
+            return SLOPPY_DRBUDDI_EPI
         return super()._format_arg(name, spec, value)
 
     def _list_outputs(self):
