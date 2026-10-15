@@ -161,6 +161,8 @@ def init_gre_seed_wf(unit, has_gradwarp, source_file, use):
     return workflow
 
 
+NO_SDC_DESC = '\n\nNo susceptibility distortion correction was performed.\n\n'
+
 #: The anatomical inputs callers hand :func:`init_sdc_wf`. SyN uses the first two;
 #: SyN or unpile against a SynB0 also generates the synthetic b0 from the next five, and
 #: unpile against the T2w takes the last.
@@ -321,7 +323,7 @@ def init_sdc_wf(unit, gradwarp=False, use='apply', source_file=None):
     # No SDC to do here - forward inputs to outputs. (SynB0 + TOPUP is handled by
     # the HMC backends; SyN and unpile are handled below.)
     if not does_sdc:
-        workflow.__postdesc__ = 'No susceptibility distortion correction was performed.'
+        workflow.__postdesc__ = NO_SDC_DESC
         outputnode.inputs.method = 'None'
         workflow.connect([
             (inputnode, outputnode, [
@@ -331,11 +333,10 @@ def init_sdc_wf(unit, gradwarp=False, use='apply', source_file=None):
         ])  # fmt:skip
         return workflow
 
-    workflow.__postdesc__ = """\
-Based on the estimated susceptibility distortion, an
-unwarped b=0 reference was calculated for a more accurate
-co-registration with the anatomical reference.
-"""
+    workflow.__postdesc__ = (
+        'The *b*=0 reference was unwarped with the estimated field, for a more accurate '
+        'coregistration with the anatomical reference.\n\n'
+    )
 
     # PEPOLAR path
     if unit.is_pepolar:
@@ -528,20 +529,19 @@ def _gre_boilerplate(gradwarp, use):
     if gradwarp:
         desc.append(
             'As the field map is subject to the same gradient nonlinearity as the DWI, '
-            'the deformation was estimated against the b=0 reference before gradient '
+            'the deformation was estimated against the *b*=0 reference before gradient '
             'nonlinearity correction, then moved into the corrected space by composing '
             'it with the gradient nonlinearity displacement field and its inverse.'
         )
     if use == 'apply':
         desc.append(
-            'Based on the estimated susceptibility distortion, an unwarped b=0 '
-            'reference was calculated for a more accurate co-registration with the '
-            'anatomical reference.'
+            'The *b*=0 reference was unwarped with the estimated field, for a more accurate '
+            'coregistration with the anatomical reference.'
         )
     elif use == 'eddy':
         desc.append(
-            'Rather than being applied after eddy, the field map (in Hz, rigidly aligned '
-            "to eddy's first volume) was passed to eddy, which corrected susceptibility "
+            'Rather than being applied after `eddy`, the field map (in Hz, rigidly aligned '
+            'to the first DWI volume) was passed to `eddy`, which corrected susceptibility '
             'distortion within its own model.'
         )
     # 'unpile': unpile's boilerplate describes how the prior was used, which

@@ -34,6 +34,7 @@ from ...interfaces.reports import GradientPlot, SDCWarpPlot, SeriesQC
 from ...utils.eddy_config import eddy_applies_gre
 from ...utils.jacobian_provenance import jacobian_provenance_for
 from ...utils.sdc import eddy_applies_topup, pe_readout_time, sdc_warp_source
+from ...utils.versions import mrtrix3_version, versioned
 from .derivatives import init_dwi_derivatives_wf
 from .gradwarp import resolve_gradwarp_plan
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
@@ -890,6 +891,11 @@ def init_finalize_denoising_wf(
     )
 
     if do_biascorr:
+        mrtrix3 = versioned('*MRtrix3*', mrtrix3_version())
+        workflow.__desc__ = (
+            'After resampling, B1 field inhomogeneity was corrected with `dwibiascorrect` from '
+            f'{mrtrix3} [@mrtrix3] using the N4 algorithm [@n4]. '
+        )
         # dwibiascorrect hands this mask to N4 as a WEIGHT image (-w), not a mask
         # (-x), so its binary values become the per-voxel weights of a
         # least-squares fit on log intensities. Dark voxels inside the mask are

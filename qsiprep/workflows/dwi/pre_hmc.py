@@ -18,7 +18,7 @@ from ...utils.bids import get_source_file
 from ...utils.misc import select_polarity
 
 # dwi workflows
-from .merge import SERIES_LIST_FIELDS, gen_denoising_boilerplate, init_merge_dwis_wf
+from .merge import SERIES_LIST_FIELDS, gen_intensity_boilerplate, init_merge_dwis_wf
 from .qc import init_modelfree_qc_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -28,7 +28,6 @@ def init_dwi_pre_hmc_wf(
     unit,
     orientation,
     source_file,
-    do_biascorr,
     calculate_qc=True,
     name='pre_hmc_wf',
 ):
@@ -55,7 +54,6 @@ def init_dwi_pre_hmc_wf(
             make_preproc_unit(['/completely/made/up/path/sub-01_dwi.nii.gz']),
             orientation="LPS",
             source_file='/completely/made/up/path/sub-01_dwi.nii.gz',
-            do_biascorr=True,
         )
 
     Parameters
@@ -68,9 +66,6 @@ def init_dwi_pre_hmc_wf(
     source_file : str
         Source file used to name the merged outputs when the unit has a single
         phase encoding polarity.
-    do_biascorr : bool
-        Whether bias correction is applied to this output; used to write the
-        methods boilerplate.
     calculate_qc : bool, optional
         Whether to calculate model-free QC metrics for the merged series when the
         unit has a single phase encoding polarity. Default is True.
@@ -134,11 +129,11 @@ def init_dwi_pre_hmc_wf(
         ),
         name='outputnode',
     )
-    workflow.__postdesc__ = gen_denoising_boilerplate(do_biascorr)
+    workflow.__postdesc__ = gen_intensity_boilerplate(len(unit.dwi_files))
 
     # Special case: Two reverse PE DWI series are going to get combined for eddy
     if unit.has_bidirectional_dwi:
-        workflow.__desc__ = 'Images were grouped into two phase encoding polarity groups. '
+        workflow.__desc__ = 'The series were grouped by phase-encoding polarity. '
         all_files = list(unit.dwi_files)
         plus_files = list(unit.plus_files)
         minus_files = list(unit.minus_files)
@@ -149,7 +144,7 @@ def init_dwi_pre_hmc_wf(
             raw_dwi_files=plus_files,
             orientation=orientation,
             source_file=plus_source_file,
-            phase_id=f'{pe_axis}+ phase-encoding direction',
+            phase_id=f'{pe_axis}+',
             calculate_qc=False,
             name='merge_plus',
         )
@@ -161,7 +156,7 @@ def init_dwi_pre_hmc_wf(
             raw_dwi_files=minus_files,
             orientation=orientation,
             source_file=minus_source_file,
-            phase_id=f'{pe_axis}- phase-encoding direction',
+            phase_id=f'{pe_axis}-',
             calculate_qc=False,
             name='merge_minus',
         )
@@ -265,8 +260,7 @@ def init_dwi_pre_hmc_wf(
         ])  # fmt:skip
 
         workflow.__postdesc__ += (
-            ' Both phase-encoding polarity groups were then concatenated into a single '
-            'series for head motion correction.\n\n'
+            ' The two polarity groups were then concatenated into a single series.\n\n'
         )
         return workflow
 

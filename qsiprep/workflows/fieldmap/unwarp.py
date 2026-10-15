@@ -40,8 +40,8 @@ from ...interfaces.niworkflows import FUGUEvsm2ANTSwarp
 
 #: Boilerplate for the GRE fieldmap workflows' second registration pass.
 GRE_SECOND_PASS_DESC = (
-    ' A second registration targeted the reference unwarped with the field from the\n'
-    'first, and the pass that scored better on its own unwarped reference was kept.'
+    ' A second registration targeted the *b*=0 reference unwarped with the field from the\n'
+    'first, and whichever registration better matched its own unwarped reference was kept.'
 )
 
 

@@ -47,21 +47,8 @@ from ...interfaces.synb0 import (
 from ..dwi.registration import init_b0_to_anat_registration_wf
 from ..dwi.util import init_dwi_reference_wf
 
-#: How the synthetic b=0 is made. ``init_synb0_wf`` reports it as its own
-#: description; a parent that names the synthetic b=0 inside a longer sentence
-#: (``interfaces.eddy.topup_boilerplate``) inlines it there instead.
-SYNB0_GENERATION_DESC = """\
-A synthetic distortion-free b=0 image was generated from the T1w image and
-the distorted b=0 reference using the SynB0-DISCO dual-channel U-Net
-[@synb0disco; @synb0discoValidation]. The T1w image was scaled to the
-FreeSurfer intensity convention (white matter median at 110), both inputs
-were mapped onto the U-Net's 2.5mm atlas grid through the AC-PC affine
-registration, and the mean prediction over the model folds was resampled
-back onto the b=0 reference grid.
-"""
 
-
-def init_synb0_wf(name='synb0_wf', describe=True):
+def init_synb0_wf(name='synb0_wf'):
     """Generate a synthetic distortion-free b=0 in the distorted b=0's grid.
 
     The U-Net consumes a FreeSurfer-style normalized T1w and the distorted
@@ -127,8 +114,21 @@ def init_synb0_wf(name='synb0_wf', describe=True):
 
     """
     workflow = Workflow(name=name)
-    if describe:
-        workflow.__desc__ = SYNB0_GENERATION_DESC
+    # Callers describe the correction that uses the synthetic b=0 before this
+    # text (TOPUP, unpile) or after it (SyN), so it reads either way.
+    workflow.__desc__ = """
+
+The synthetic distortion-free *b*=0 image used for susceptibility distortion
+correction was generated from the T1w image and the distorted *b*=0 reference
+with the SynB0-DISCO dual-channel U-Net
+[@synb0disco; @synb0discoValidation]. The T1w image was scaled to the
+*FreeSurfer* intensity convention (white matter median at 110), the distorted
+*b*=0 reference was rigidly registered to the T1w image, both inputs were
+mapped onto the U-Net's 2.5 mm atlas grid through that registration and the
+AC-PC affine registration, and the mean prediction over the model folds was
+resampled back onto the *b*=0 reference grid.
+
+"""
 
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -181,8 +181,8 @@ def init_synb0_wf(name='synb0_wf', describe=True):
         write_report=False,
         name='distorted_b0_coreg_wf',
     )
-    # SYNB0_GENERATION_DESC covers this registration; its own text would read as
-    # the DWI's coregistration, which the methods describe later.
+    # Described in this workflow's text; its own would repeat the paragraph of
+    # the final b=0-to-anatomical coregistration.
     b0_coreg_wf.__desc__ = None
 
     # ANTs transform lists run the last-listed transform first: images travel
@@ -427,19 +427,19 @@ def init_synb0_topup_wf(
         Passed through from the last pass's :func:`init_synb0_wf`
     """
     workflow = Workflow(name=name)
-    # A postdesc, so that the synthetic b=0's generation (init_synb0_wf's own
-    # description) is reported before the TOPUP estimate that uses it.
-    workflow.__postdesc__ = """\
-Susceptibility distortion was then estimated with TOPUP [@topup] after head motion
-correction: the motion-corrected b=0 average was paired with the synthetic
-b=0 generated from it, which entered TOPUP as an image with zero readout
-time.{second_pass} The resulting field was converted to a displacement field
-along the phase-encoding axis and applied in the final resampling.
+    workflow.__desc__ = """
+
+After head motion correction, the susceptibility-induced field was estimated with TOPUP
+[@topup] from the motion-corrected *b*=0 average and a synthetic distortion-free *b*=0
+image generated from that average, which entered TOPUP with zero readout time.{second_pass}
+The field was converted to a displacement field along the phase-encoding axis and applied
+in the final resampling.
+
 """.format(
         second_pass=(
-            ' The b=0 was then unwarped with that field (Jacobian-modulated), a new\n'
-            'synthetic b=0 was generated from it in the same way, and TOPUP was run again\n'
-            'on the original b=0 paired with the new synthetic b=0.'
+            ' The *b*=0 average was then unwarped with that field (Jacobian-modulated), a\n'
+            'new synthetic *b*=0 image was generated from it, and TOPUP was run again on the\n'
+            'original *b*=0 average paired with the new synthetic image.'
             if two_pass
             else ''
         )

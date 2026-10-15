@@ -47,6 +47,7 @@ def init_dwi_preproc_wf(
     source_file,
     anatomical_template,
     do_biascorr=True,
+    denoising_desc='',
 ) -> Workflow:
     """Build a workflow that runs the dwi preprocessing stages of qsiprep.
 
@@ -80,6 +81,10 @@ def init_dwi_preproc_wf(
     do_biascorr : bool, optional
         Whether bias correction is applied to the DWI data; used for the methods
         boilerplate and provenance. Default is True.
+    denoising_desc : str, optional
+        Methods boilerplate for the denoising of the member series, which runs
+        outside this workflow (see
+        :func:`~qsiprep.workflows.dwi.merge.init_dwi_series_denoise_wf`).
 
     Inputs
     ------
@@ -253,17 +258,16 @@ def init_dwi_preproc_wf(
         ),
         name='outputnode',
     )
-    workflow.__desc__ = """
+    workflow.__desc__ = f"""
 
 #### Diffusion data preprocessing
 
-"""
+{denoising_desc.lstrip()}"""
 
     pre_hmc_wf = init_dwi_pre_hmc_wf(
         unit=unit,
         orientation='LAS' if unit.run.hmc_stage.tool == 'eddy' else 'LPS',
         source_file=source_file,
-        do_biascorr=do_biascorr,
     )
     test_pre_hmc_connect = pe.Node(TestInput(), name='test_pre_hmc_connect')
     hmc_tool = unit.run.hmc_stage.tool
@@ -334,11 +338,9 @@ def init_dwi_preproc_wf(
     # reference so it does not depend on the HMC backend selected above.
     gradwarp_wf = init_gradwarp_wf(unit)
     if gradwarp_wf is not None:
-        # gradwarp_wf feeds hmc_wf, so the graph visits it first, but the
-        # correction is applied after (and its text refers to) head motion and
-        # eddy current correction. Report it after hmc_wf's own text.
-        texts = (hmc_wf.__postdesc__, gradwarp_wf.__desc__)
-        hmc_wf.__postdesc__ = '\n\n' + '\n\n'.join(t.strip() for t in texts if t) + '\n\n'
+        # The field feeds hmc_wf, so its text would print before the head motion
+        # correction it says it follows; describe it at the end of hmc_wf's.
+        hmc_wf.__postdesc__ = f'{hmc_wf.__postdesc__ or ""}\n\n{gradwarp_wf.__desc__}\n\n'
         gradwarp_wf.__desc__ = None
         if gradwarp_wf.needs_reference:
             # mk_displacementMaps.cxx (what CreateNonlinearityDisplacementMap
@@ -364,8 +366,7 @@ def init_dwi_preproc_wf(
             # A DIS3D unit builds no field at all: the scanner already corrected
             # the geometry, and finalize's grad_dev node is fed the coefficient
             # file rather than a field, so nothing would consume one. The empty
-            # workflow is still added to the graph so its methods boilerplate
-            # reaches the report.
+            # workflow is still added to the graph, where its plan can be read.
             workflow.add_nodes([gradwarp_wf])
         # A DIS3D unit gets no spatial correction -- applying one would
         # double-correct data the scanner already corrected.

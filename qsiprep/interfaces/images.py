@@ -615,7 +615,7 @@ class _ChooseInterpolatorOutputSpec(TraitedSpec):
 
 
 class ChooseInterpolator(SimpleInterface):
-    """If the requested output resolution is more than 10% smaller than the input, use BSpline."""
+    """Use Lanczos, or Linear when the output resolution is more than 10% finer than the input."""
 
     input_spec = _ChooseInterpolatorInputSpec
     output_spec = _ChooseInterpolatorOutputSpec

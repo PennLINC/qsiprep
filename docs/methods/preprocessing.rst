@@ -69,7 +69,6 @@ estimated and removed, which should look like edges, not anatomy.
         example_unit('single'),
         orientation='LPS',
         source_file=AP,
-        do_biascorr=True,
     )
 
 

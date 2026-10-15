@@ -39,6 +39,7 @@ import sys
 from collections import defaultdict
 from copy import deepcopy
 
+from dipy import __version__ as dipy_ver
 from nilearn import __version__ as nilearn_ver
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
@@ -104,6 +105,16 @@ def init_series_denoise_wfs(preproc_units, orientation):
     return series_wfs
 
 
+def unit_denoising_desc(series_wfs, unit):
+    """Join the denoising boilerplate of a unit's member series, once per distinct text."""
+    descs = []
+    for dwi_file in unit.dwi_files:
+        desc = series_wfs[dwi_file].denoising_desc
+        if desc not in descs:
+            descs.append(desc)
+    return ''.join(descs)
+
+
 def connect_series_to_unit(workflow, series_wfs, unit, dwi_preproc_wf, name):
     """Feed a unit's denoised member series into its preprocessing workflow.
 
@@ -111,21 +122,7 @@ def connect_series_to_unit(workflow, series_wfs, unit, dwi_preproc_wf, name):
     ``unit.dwi_files`` and connected to the matching list field on
     ``dwi_preproc_wf.inputnode``. ``name`` keeps the collector nodes unique
     within ``workflow``.
-
-    The series' denoising text is copied under the unit's "Diffusion data
-    preprocessing" heading, since the series workflows themselves sit beside the
-    anatomical workflow; :func:`silence_series_descs` then keeps them from also
-    reporting it there.
     """
-    series_text = []
-    for dwi_file in unit.dwi_files:
-        text = series_wfs[dwi_file].visit_desc().strip()
-        if text and text not in series_text:
-            series_text.append(text)
-    if series_text:
-        heading = getattr(dwi_preproc_wf, '__desc__', None) or ''
-        dwi_preproc_wf.__desc__ = heading + ' '.join(series_text) + '\n\n'
-
     for series_field, list_field in SERIES_FIELDS:
         collect = pe.Node(
             niu.Merge(len(unit.dwi_files)),
@@ -137,21 +134,6 @@ def connect_series_to_unit(workflow, series_wfs, unit, dwi_preproc_wf, name):
                 series_wfs[dwi_file], f'outputnode.{series_field}', collect, f'in{index}'
             )
         workflow.connect(collect, 'out', dwi_preproc_wf, f'inputnode.{list_field}')
-
-
-def silence_series_descs(series_wfs):
-    """Clear the series workflows' methods text once every unit has copied it."""
-    for series_wf in series_wfs.values():
-        for wf in [series_wf, *_nested_workflows(series_wf)]:
-            wf.__desc__ = None
-            wf.__postdesc__ = None
-
-
-def _nested_workflows(workflow):
-    for node in workflow._graph.nodes():
-        if isinstance(node, pe.Workflow):
-            yield node
-            yield from _nested_workflows(node)
 
 
 def _build_dwi_plan(subject_data, selection):
@@ -311,19 +293,18 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
     _ses_name = '_ses_' + '_'.join(map(str, session_ids)) if session_ids else ''
     workflow = Workflow(name=f'sub_{subject_id}{_ses_name}_wf')
     workflow.__desc__ = f"""
-Preprocessing was performed using *QSIPrep* {config.environment.version} [@cieslak2021qsiprep],
+Preprocessing was performed with *QSIPrep* {config.environment.version} [@cieslak2021qsiprep],
 which is based on *Nipype* {config.environment.nipype_version}
-[@nipype1; @nipype2; RRID:SCR_002502] and follows *NiPreps* framework [@nipreps].
+[@nipype1; @nipype2; RRID:SCR_002502] and follows the *NiPreps* framework [@nipreps].
 
 """
     workflow.__postdesc__ = f"""
 
 Many internal operations of *QSIPrep* use
 *Nilearn* {nilearn_ver} [@nilearn, RRID:SCR_001362] and
-*Dipy* [@dipy].
-For more details of the pipeline, see [the processing pipeline details
-in *QSIPrep*'s documentation]\
-(https://qsiprep.readthedocs.io/en/latest/methods/index.html \
+*DIPY* {dipy_ver} [@dipy].
+For more details of the pipeline, see [the processing pipeline details in *QSIPrep*'s
+documentation](https://qsiprep.readthedocs.io/en/latest/methods/index.html \
 "QSIPrep's documentation").
 
 
@@ -763,6 +744,7 @@ in *QSIPrep*'s documentation]\
             t2w_sdc=t2w_sdc,
             anatomical_template=anatomical_template,
             do_biascorr=do_biascorr,
+            denoising_desc=unit_denoising_desc(series_wfs, unit),
         )
         connect_series_to_unit(workflow, series_wfs, unit, dwi_preproc_wf, output_wfname)
         write_derivatives = not (
@@ -983,9 +965,6 @@ in *QSIPrep*'s documentation]\
                     ('outputnode.hmc_optimization_data', hmc_optimization_name),
                 ]),
             ])  # fmt:skip
-
-    # Every unit has copied its series' denoising text under its own heading.
-    silence_series_descs(series_wfs)
 
     for node in workflow.list_node_names():
         node_name = node.split('.')[-1]

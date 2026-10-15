@@ -223,7 +223,7 @@ def test_diffprep_boilerplate_describes_the_configured_mode(tmp_path):
 
         config.workflow.diffprep_config = None
         wf_quad = _build(_make_unit(), t2w_sdc=False, name='boiler_quad')
-        assert 'quadratic eddy currents' in wf_quad.__desc__
+        assert 'quadratic eddy-current distortions' in wf_quad.__desc__
     finally:
         config.workflow.diffprep_config = orig
 

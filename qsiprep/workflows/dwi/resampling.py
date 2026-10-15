@@ -32,40 +32,6 @@ from .util import init_dwi_reference_wf
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def resampling_boilerplate(template, output_resolution):
-    """Describe the final resampling, as ``init_dwi_trans_wf`` builds it.
-
-    The interpolator is chosen at run time by ``ChooseInterpolator`` from the
-    input voxel size, so the text states its rule rather than its outcome.
-    """
-    vox = str(output_resolution).rstrip('0').rstrip('.')
-    if config.execution.sloppy:
-        interpolation = 'linear interpolation'
-    else:
-        interpolation = (
-            'Lanczos windowed-sinc interpolation (linear interpolation when the output '
-            'voxels were more than 10% smaller than the input voxels along any axis)'
-        )
-    if 'jacobian' in (config.workflow.ignore or []):
-        jacobian = 'No Jacobian intensity modulation was applied in this step (--ignore jacobian).'
-    else:
-        jacobian = (
-            'Any gradient nonlinearity, susceptibility distortion or (with DIFFPREP) eddy '
-            'current correction applied in this step was Jacobian-modulated (after DRBUDDI, '
-            "TORTOISE's intensity-correction maps were applied instead); head motion and "
-            'coregistration were not modulated.'
-        )
-    return f"""\
-The DWI time-series were resampled to {template},
-generating a *preprocessed DWI run in {template} space* with {vox}mm isotropic voxels.
-Every remaining transform (head motion, susceptibility distortion, gradient
-nonlinearity and coregistration, as applicable) was composed into a single
-resampling with `antsApplyTransforms`, using {interpolation}. {jacobian}
-The diffusion gradient directions were rotated by the rotations this resampling
-applied to the images.
-"""
-
-
 def init_dwi_trans_wf(
     source_file,
     mem_gb,
@@ -193,7 +159,34 @@ def init_dwi_trans_wf(
     """
     workflow = Workflow(name=name)
     output_resolution = config.workflow.output_resolution
-    workflow.__desc__ = resampling_boilerplate(template, output_resolution)
+    space = 'AC-PC' if template == 'ACPC' else template
+    voxel = str(output_resolution).rstrip('0').rstrip('.')
+    # ChooseInterpolator picks the method from the data at run time
+    interpolation = (
+        'linear interpolation'
+        if config.execution.sloppy
+        else 'windowed-sinc (Lanczos) interpolation, or linear interpolation where the '
+        'output voxels were more than 10% smaller than the input voxels'
+    )
+    # ComposeJacobianWeights covers gradwarp and SDC (and DIFFPREP's eddy-current
+    # Jacobian), or DRBUDDI's LSR ratios instead; HMC and coregistration never.
+    if 'jacobian' in (config.workflow.ignore or []):
+        jacobian = 'No Jacobian modulation was applied in this step (`--ignore jacobian`). '
+    else:
+        jacobian = (
+            'Any gradient nonlinearity, susceptibility distortion or (with DIFFPREP) '
+            'eddy-current correction applied in this step was Jacobian-modulated (after '
+            "DRBUDDI, *TORTOISE*'s intensity-correction maps were applied instead); head "
+            'motion and coregistration were not modulated. '
+        )
+    workflow.__desc__ = (
+        f'\n\nThe DWI series were resampled into {space} space at {voxel} mm isotropic '
+        f'resolution with {interpolation}. The transforms not already applied were combined '
+        'so that this was a single resampling step. '
+        f'{jacobian}'
+        'The *b*-vectors were reoriented with the '
+        "affine part of each volume's head motion and coregistration transforms. "
+    )
 
     inputnode = pe.Node(
         niu.IdentityInterface(

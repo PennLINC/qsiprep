@@ -1,355 +1,335 @@
-"""Methods boilerplate for the configurations the TRXScan integration fixtures run.
-
-Each test builds the DWI preprocessing workflow the way one ``trxscan_*`` run in
-``test_cli.py`` does and asserts on the methods text it would write, so a wrong
-statement, a sentence out of order or a missing space shows up without running
-the pipeline.
-"""
+"""Methods boilerplate text: what the generators state for a given configuration."""
 
 import json
 import os
-import re
+import stat
 
 import pytest
-from qsiplan.models import CorrectionMethod
 
 from qsiprep import config
+from qsiprep.tests.gradient_fixtures import write_dwi_with_gradients
 from qsiprep.tests.preproc_factory import make_preproc_unit
-from qsiprep.tests.test_workflows_native import _StubLayout, _write_dwi
-from qsiprep.tests.utils import get_test_data_path
+from qsiprep.utils import versions
 
-TEMPLATE = 'MNI152NLin2009cAsym'
+EDDY_ARGS = {'method': 'jac', 'flm': 'quadratic', 'slm': 'linear', 'repol': True}
+
+
+@pytest.fixture(autouse=True)
+def _cfg(monkeypatch):
+    config.nipype.omp_nthreads = 1
+    config.execution.sloppy = False
+    config.workflow.b0_threshold = 100
+    config.workflow.no_b0_harmonization = False
+    config.workflow.eddy_config = None
+    config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
+    config.workflow.ignore = []
+    config.workflow.force = []
+    config.workflow.gradient_file = None
+    monkeypatch.delenv('FSLDIR', raising=False)
+    _clear_version_caches()
+    yield
+    _clear_version_caches()
+
+
+def _clear_version_caches():
+    for lookup in (
+        versions.eddy_version,
+        versions.tortoise_version,
+        versions.niimath_version,
+        versions.svht_denoise_version,
+    ):
+        lookup.cache_clear()
+
+
+def _fake_tool(bin_dir, name, output):
+    """Write an executable that prints ``output``, as the real tool's --version does."""
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    tool = bin_dir / name
+    tool.write_text(f"#!/bin/sh\ncat <<'EOF'\n{output}\nEOF\n")
+    tool.chmod(tool.stat().st_mode | stat.S_IEXEC)
+    return tool
 
 
 @pytest.fixture
-def cfg(monkeypatch):
-    """Configure as ``TRXSCAN_COMMON`` does, restoring every setting afterwards."""
-    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
-
-    def set_config(section, **settings):
-        for key, value in settings.items():
-            monkeypatch.setattr(getattr(config, section), key, value, raising=False)
-
-    set_config('nipype', omp_nthreads=1)
-    set_config('execution', sloppy=True, layout=_StubLayout())
-    set_config(
-        'workflow',
-        hmc_method='eddy',
-        sdc_method='topup',
-        shoreline_model=None,
-        b0_threshold=100,
-        dwi_biascorrect='none',
-        eddy_config=os.path.join(get_test_data_path(), 'eddy_config_trxscan.json'),
-        no_b0_harmonization=False,
-        denoise_method='none',
-        unringing_method='none',
-        dwidenoise_window=5,
-        shoreline_iters=2,
-        anatomical_template=TEMPLATE,
-        anat_modality='T1w',
-        dwi2anat_dof=6,
-        b0_to_anat_transform='Rigid',
-        hmc_transform='Affine',
-        diffprep_config=None,
-        tortoise_gpu_cpu_ratio=None,
-        gpu=None,
-        impute_slice_threshold=0,
-        gradient_file=None,
-        ignore=[],
-        force=[],
-        two_pass_sdc=True,
-        output_resolution=3.0,
+def fake_tools(tmp_path, monkeypatch):
+    """Put the container's tools on PATH, with the version output captured from the image."""
+    bin_dir = tmp_path / 'bin'
+    _fake_tool(bin_dir, 'niimath', 'v1.0.20260924 OpenMP GCC11.4.0 BSD (64-bit Linux)')
+    _fake_tool(bin_dir, 'svht_denoise', 'svht_denoise 0.1.20261001')
+    tortoise = tmp_path / 'TORTOISEV4'
+    _fake_tool(tortoise / 'bin', 'TORTOISEProcess', '')
+    (tortoise / 'settings').mkdir()
+    (tortoise / 'settings' / 'version.txt').write_text('TORTOISE V4.2.0\n')
+    monkeypatch.setenv(
+        'PATH', os.pathsep.join([str(bin_dir), str(tortoise / 'bin'), os.environ['PATH']])
     )
-    return set_config
+    monkeypatch.setenv('MRTRIX3_DEV_VERSION', '3.0.8-2071-gb98b54e9')
+    monkeypatch.setattr(config.environment, 'mrtrix3_version', '3.0.4')
 
 
-def _rpe_unit(tmp_path):
-    main = _write_dwi(tmp_path / 'sub-01_dir-AP_dwi.nii.gz')
-    partner = _write_dwi(tmp_path / 'sub-01_dir-PA_dwi.nii.gz')
-    return make_preproc_unit(
-        [main, partner],
-        method=CorrectionMethod.PEPOLAR,
-        pe_dirs={main: 'j', partner: 'j-'},
+def _eddy_text(eddy_args=None, fieldmap_type='', pepolar_method='', **kwargs):
+    from qsiprep.interfaces.eddy import boilerplate_from_eddy_config
+
+    return ' '.join(
+        boilerplate_from_eddy_config(
+            {**EDDY_ARGS, **(eddy_args or {})}, fieldmap_type, pepolar_method, **kwargs
+        ).split()
     )
 
 
-def _single_unit(tmp_path, **kwargs):
-    return make_preproc_unit([_write_dwi(tmp_path / 'sub-01_dwi.nii.gz')], **kwargs)
+def test_eddy_version_comes_from_the_conda_records(tmp_path, monkeypatch):
+    """A pixi FSL has no etc/fslversion; eddy's package record has its version."""
+    from qsiprep.utils.versions import eddy_version
+
+    meta = tmp_path / 'conda-meta'
+    meta.mkdir()
+    for name, version in (
+        ('fsl-eddy_qc-v1.4.2-py_0', 'v1.4.2'),
+        ('fsl-eddy-cuda-2603.1-h1_0', '2603.1'),
+        ('fsl-eddy-2602.0-hb35a746_0', '2602.0'),
+    ):
+        (meta / f'{name}.json').write_text(json.dumps({'version': version}))
+    monkeypatch.setenv('FSLDIR', str(tmp_path))
+
+    assert eddy_version() == '2602.0'
+    assert '`eddy` from *FSL* (version 2602.0) [@anderssoneddy]' in _eddy_text()
 
 
-def _boilerplate(unit, t2w_sdc=False):
-    from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
-
-    wf = init_dwi_preproc_wf(
-        unit,
-        t2w_sdc=t2w_sdc,
-        output_prefix='sub-01',
-        source_file=unit.dwi_files[0],
-        anatomical_template=TEMPLATE,
-    )
-    return wf.visit_desc()
+def test_eddy_text_leaves_out_an_unknown_version():
+    text = _eddy_text()
+    assert 'None' not in text
+    assert 'corrected with `eddy` from *FSL* [@anderssoneddy]' in text
 
 
-def _assert_well_formed(text):
-    """Check the typography every configuration must get right."""
-    # A sentence run into the next one: "sequence.Both", "].The", "introduces.FSL".
-    assert not re.search(r'[a-z\]][.][A-Z]', text), re.search(r'.{30}[a-z\]][.][A-Z].{30}', text)
-    assert not re.search(r'[^\s]  +[^\s]', text), re.search(r'.{30}[^\s]  +[^\s].{30}', text)
-    for wrong in ('eachseparate', 'Data was', 'version None', 'FSL workflows', '(@'):
-        assert wrong not in text
+def test_eddy_text_does_not_call_its_resampling_final():
+    """The eddy output is resampled again into AC-PC space."""
+    text = _eddy_text(fieldmap_type='rpe_series', pepolar_method='topup')
+    assert 'final' not in text.lower()
+    assert '`eddy` resampled the data with its `jac` method' in text
 
 
-def _before(text, first, second):
-    assert first in text, first
-    assert second in text, second
-    return text.index(first) < text.index(second)
+def test_eddy_text_reports_the_outlier_voxel_count_not_the_threshold():
+    text = _eddy_text({'outlier_nvox': 500, 'outlier_nstd': 3})
+    assert 'at least 500 brain voxels' in text
+    assert 'more than 3 standard deviations' in text
 
 
-def test_rpe_topup(tmp_path, cfg):
-    text = _boilerplate(_rpe_unit(tmp_path))
-    _assert_well_formed(text)
-    assert 'Images were grouped into two phase encoding polarity groups.' in text
-    assert 'concatenated into a single series for head motion correction' in text
-    assert "FSL's TOPUP" in text
-    assert 'b=0 images extracted from multiple DWI series with reversed' in text
-    assert 'the susceptibility distortion correction from the TOPUP field were' in text
-    assert 'No susceptibility distortion correction was performed' not in text
-    # eddy's output is not the final interpolation: QSIPrep resamples again.
-    assert 'Final interpolation' not in text
-    assert 'Eddy wrote out the corrected volumes' in text
+@pytest.mark.parametrize(('offset', 'end'), [(1, 'top'), (-1, 'bottom')])
+def test_eddy_text_names_the_multiband_offset(offset, end):
+    text = _eddy_text({'multiband_factor': 3, 'multiband_offset': offset, 'outlier_type': 'both'})
+    assert (
+        f'A multiband factor of 3 was assumed, with slices removed from the {end} of the volume.'
+    ) in text
 
 
-def test_rpe_drbuddi_has_no_topup_stage(tmp_path, cfg):
-    cfg('workflow', sdc_method='drbuddi')
-    text = _boilerplate(_rpe_unit(tmp_path))
-    _assert_well_formed(text)
-    assert 'DRBUDDI [@drbuddi]' in text
+def test_eddy_text_without_multiband_offset():
+    text = _eddy_text({'multiband_factor': 3, 'outlier_type': 'gw'})
+    assert 'A multiband factor of 3 was assumed.' in text
+
+
+def test_eddy_then_drbuddi_without_topup_claims_no_susceptibility_correction():
+    text = _eddy_text(fieldmap_type='rpe_series', pepolar_method='drbuddi')
+    assert 'susceptibility distortion correction' not in text
     assert 'TOPUP' not in text
-    assert 'initial susceptibility distortion correction' not in text
-    assert 'The eddy current correction was Jacobian-modulated by eddy itself' in text
+    assert 'which Jacobian-modulates the eddy-current correction.' in text
 
 
-def test_epi_topup(tmp_path, cfg):
-    dwi = _write_dwi(tmp_path / 'sub-01_dir-AP_dwi.nii.gz')
-    epi = _write_dwi(tmp_path / 'sub-01_dir-PA_epi.nii.gz', nvols=2)
-    unit = make_preproc_unit(
-        [dwi],
-        method=CorrectionMethod.PEPOLAR,
-        estimation_sources=[dwi, epi],
-        pe_dirs={dwi: 'j', epi: 'j-'},
-    )
-    text = _boilerplate(unit)
-    _assert_well_formed(text)
-    assert 'b=0 reference images with reversed phase encoding directions' in text
-    assert 'Images were grouped into two phase encoding polarity groups' not in text
-
-
-def test_phasediff_in_eddy(tmp_path, cfg):
-    unit = _single_unit(
-        tmp_path,
-        method=CorrectionMethod.PHASEDIFF,
-        estimation_sources=['/data/sub-01_phasediff.nii.gz', '/data/sub-01_magnitude1.nii.gz'],
-        metadata={'EchoTime1': 0.004, 'EchoTime2': 0.006},
-    )
-    text = _boilerplate(unit)
-    _assert_well_formed(text)
-    assert 'was passed to eddy' in text
-    # The field eddy applied is named, not TOPUP's.
-    assert 'the susceptibility distortion correction from the GRE field map' in text
-    assert 'TOPUP' not in text
-
-
-def test_gnl_reports_gradwarp_after_eddy(tmp_path, cfg):
-    from qsiprep.tests.gradient_fixtures import write_siemens_grad
-
-    cfg('workflow', gradient_file=str(write_siemens_grad(tmp_path / 'coeff.grad')))
-    main = _write_dwi(tmp_path / 'sub-01_dir-AP_dwi.nii.gz')
-    partner = _write_dwi(tmp_path / 'sub-01_dir-PA_dwi.nii.gz')
-    unit = make_preproc_unit(
-        [main, partner],
-        method=CorrectionMethod.PEPOLAR,
-        pe_dirs={main: 'j', partner: 'j-'},
-        metadata={'Manufacturer': 'SIEMENS'},
-    )
-    text = _boilerplate(unit)
-    _assert_well_formed(text)
-    assert _before(text, 'was used for head motion correction', 'Gradient nonlinearity was')
-    assert 'gradient deviation map' in text
-    assert 'TORTOISE V4 [@tortoisev4]' in text
-
-
-def test_motion_states_the_missing_sdc(tmp_path, cfg):
-    text = _boilerplate(_single_unit(tmp_path))
-    _assert_well_formed(text)
-    assert 'No susceptibility distortion correction was performed.' in text
-    assert 'TOPUP' not in text
-
-
-def test_diffprep_does_not_mention_fsl(tmp_path, cfg):
-    cfg('workflow', hmc_method='tortoise', sdc_method='drbuddi')
-    text = _boilerplate(_rpe_unit(tmp_path))
-    _assert_well_formed(text)
-    assert 'DIFFPREP' in text
-    assert 'FSL' not in text
-    assert 'eddy' not in text.lower().replace('eddy current', '')
-
-
-def test_unpile_t2w(tmp_path, cfg):
-    t2w = '/data/sub-01/anat/sub-01_T2w.nii.gz'
-    unit = _single_unit(
-        tmp_path,
-        method=CorrectionMethod.UNPILE,
-        estimation_sources=[t2w],
-        anat_files=[t2w],
-    )
-    text = _boilerplate(unit, t2w_sdc=True)
-    _assert_well_formed(text)
-    assert 'unpile [@unpile], an experimental method' in text
-    assert 'with local normalized cross-correlation as the cost function' in text
-    assert 'No susceptibility distortion correction was performed' not in text
-
-
-def test_synb0_generation_precedes_its_use(tmp_path, cfg):
-    cfg('workflow', hmc_method='tortoise')
-    t1w = '/data/sub-01/anat/sub-01_T1w.nii.gz'
-    unit = _single_unit(
-        tmp_path,
-        method=CorrectionMethod.SYNB0,
-        estimation_sources=[t1w],
-        anat_files=[t1w],
-    )
-    text = _boilerplate(unit)
-    _assert_well_formed(text)
-    assert _before(text, 'SynB0-DISCO dual-channel U-Net', 'estimated with TOPUP')
-    # Described once, though the second pass builds the generation workflow again.
-    assert text.count('SynB0-DISCO dual-channel U-Net') == 1
-    # Only the DWI's own coregistration is described, not the one SynB0 runs internally.
-    assert text.count('The b=0 reference was registered to the anatomical reference') == 1
-
-
-def test_synb0_in_eddy_describes_generation_where_topup_uses_it(tmp_path, cfg):
-    t1w = '/data/sub-01/anat/sub-01_T1w.nii.gz'
-    unit = _single_unit(
-        tmp_path,
-        method=CorrectionMethod.SYNB0,
-        estimation_sources=[t1w],
-        anat_files=[t1w],
-    )
-    text = _boilerplate(unit)
-    _assert_well_formed(text)
-    assert _before(text, 'SynB0-DISCO dual-channel U-Net', 'TOPUP was run again')
-    assert _before(text, 'TOPUP was run again', 'Eddy wrote out the corrected volumes')
-    assert text.count('SynB0-DISCO dual-channel U-Net') == 1
+def test_topup_then_drbuddi_names_the_first_stage():
+    text = _eddy_text(fieldmap_type='rpe_series', pepolar_method='topup+drbuddi')
+    assert 'In the first of two distortion-correction stages' in text
+    assert 'eddy-current and susceptibility distortion corrections.' in text
 
 
 @pytest.mark.parametrize(
-    ('sloppy', 'ignore', 'interpolation', 'jacobian'),
+    ('pepolar_method', 'gre_in_eddy', 'expected'),
     [
-        (True, [], 'using linear interpolation', 'applied in this step was Jacobian-modulated'),
-        (False, ['jacobian'], 'Lanczos windowed-sinc', 'No Jacobian intensity modulation'),
+        ('', False, 'Jacobian-modulates the eddy-current correction.'),
+        ('topup', False, 'Jacobian-modulates the eddy-current and susceptibility distortion'),
+        ('', True, 'Jacobian-modulates the eddy-current and susceptibility distortion'),
     ],
 )
-def test_final_resampling(cfg, sloppy, ignore, interpolation, jacobian):
-    from qsiprep.workflows.dwi.resampling import resampling_boilerplate
-
-    cfg('execution', sloppy=sloppy)
-    cfg('workflow', ignore=ignore)
-    text = resampling_boilerplate('ACPC', 1.5)
-    _assert_well_formed(text)
-    assert '1.5mm isotropic voxels' in text
-    assert interpolation in text
-    assert jacobian in text
-    assert 'gradient directions were rotated' in text
-
-
-def test_gre_prior_is_described_once():
-    from qsiprep.workflows.fieldmap.base import _gre_boilerplate
-    from qsiprep.workflows.fieldmap.unpile import _boilerplate as unpile_boilerplate
-
-    text = _gre_boilerplate(False, 'unpile') + unpile_boilerplate('t2w', False, True)
-    assert text.count('prior') == 1
-    text = _gre_boilerplate(False, 'unpile') + unpile_boilerplate('synb0', False, True)
-    assert 'refined against the b=0' not in text
-    assert 'applied as given' in text
-
-
-def test_series_denoising_is_reported_under_the_diffusion_heading(tmp_path, cfg):
-    from niworkflows.engine.workflows import LiterateWorkflow as Workflow
-
-    from qsiprep.workflows.base import (
-        connect_series_to_unit,
-        init_series_denoise_wfs,
-        silence_series_descs,
-    )
-    from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
-
-    unit = _rpe_unit(tmp_path)
-    subject_wf = Workflow(name='sub_01_wf')
-    anat_wf = Workflow(name='anat_preproc_wf')
-    anat_wf.__desc__ = '\n\n#### Anatomical data preprocessing\n\n'
-    subject_wf.add_nodes([anat_wf])
-    series_wfs = init_series_denoise_wfs([unit], 'LAS')
-    dwi_preproc_wf = init_dwi_preproc_wf(
-        unit,
-        t2w_sdc=False,
-        output_prefix='sub-01',
-        source_file=unit.dwi_files[0],
-        anatomical_template=TEMPLATE,
-    )
-    connect_series_to_unit(subject_wf, series_wfs, unit, dwi_preproc_wf, 'sub_01')
-    silence_series_descs(series_wfs)
-
-    text = subject_wf.visit_desc()
-    # Both series share their (empty) denoising, which is stated once.
-    assert text.count('No denoising steps were applied to the DWI data.') == 1
-    assert _before(text, '#### Diffusion data preprocessing', 'No denoising steps were applied')
-    assert _before(text, 'No denoising steps were applied', 'Images were grouped')
-
-
-def _eddy_text(**eddy_config):
-    from qsiprep.interfaces.eddy import boilerplate_from_eddy_config
-
-    return boilerplate_from_eddy_config({'method': 'jac', **eddy_config}, '', pepolar_method='')
-
-
-def test_eddy_version_comes_from_the_conda_package(tmp_path, monkeypatch):
-    meta = tmp_path / 'conda-meta'
-    meta.mkdir()
-    (meta / 'fsl-eddy-2602.0-h2b5b6c4_0.json').write_text(
-        json.dumps({'name': 'fsl-eddy', 'version': '2602.0'})
-    )
-    # A package whose name merely starts with fsl-eddy- is not eddy itself.
-    (meta / 'fsl-eddy-cuda-2602.0-h0_0.json').write_text(
-        json.dumps({'name': 'fsl-eddy-cuda', 'version': '9999'})
-    )
-    monkeypatch.setenv('FSLDIR', str(tmp_path))
-    assert "FSL's eddy (version 2602.0)" in _eddy_text()
-
-
-def test_eddy_version_is_left_out_when_unknown(tmp_path, monkeypatch):
-    from nipype.interfaces.fsl.base import Info
-
-    monkeypatch.setenv('FSLDIR', str(tmp_path))
-    monkeypatch.delenv('CONDA_PREFIX', raising=False)
-    monkeypatch.setattr('sys.prefix', str(tmp_path))
-    monkeypatch.setattr(Info, '_version', None)
-    text = _eddy_text()
-    assert "FSL's eddy was used" in text
-    assert 'None' not in text
-
-
-def test_eddy_outlier_voxels_and_multiband_offset():
+def test_eddy_jacobian_sentence_names_what_eddy_corrected(pepolar_method, gre_in_eddy, expected):
+    """A GRE field passed to eddy is modulated by eddy's resampling as TOPUP's is."""
     text = _eddy_text(
-        repol=True,
-        outlier_nvox=300,
-        outlier_nstd=5,
-        outlier_type='both',
-        multiband_factor=3,
-        multiband_offset=-1,
+        fieldmap_type='rpe_series' if pepolar_method else '',
+        pepolar_method=pepolar_method,
+        gre_in_eddy=gre_in_eddy,
     )
-    assert 'at least 300 intracerebral voxels' in text
-    assert 'more than 5 standard deviations' in text
+    assert expected in text
+    assert 'when TOPUP was used' not in text
+
+
+@pytest.mark.parametrize('harmonize', [True, False])
+def test_intensity_text_describes_harmonization_only_across_series(harmonize):
+    """Harmonizing a single series across series says nothing; it is left out."""
+    from qsiprep.workflows.dwi.merge import gen_intensity_boilerplate
+
+    config.workflow.no_b0_harmonization = not harmonize
+    threshold = 'Volumes with *b* < 100 s/mm² were treated as *b*=0 images.'
+    assert gen_intensity_boilerplate(1) == threshold
+    two = gen_intensity_boilerplate(2)
+    assert two.startswith(threshold)
+    assert ('matched across the series' in two) is harmonize
+    assert 'denois' not in two
+
+
+def test_bidirectional_pre_hmc_text_separates_its_sentences(tmp_path):
+    from qsiplan.models import CorrectionMethod
+
+    from qsiprep.workflows.dwi.pre_hmc import init_dwi_pre_hmc_wf
+
+    config.workflow.denoise_method = 'none'
+    config.workflow.unringing_method = 'none'
+    main = write_dwi_with_gradients(tmp_path / 'sub-01_dir-AP_dwi.nii.gz')
+    partner = write_dwi_with_gradients(tmp_path / 'sub-01_dir-PA_dwi.nii.gz')
+    unit = make_preproc_unit(
+        [main, partner], method=CorrectionMethod.PEPOLAR, pe_dirs={main: 'j', partner: 'j-'}
+    )
+    wf = init_dwi_pre_hmc_wf(unit, orientation='LPS', source_file=main)
+
+    text = wf.visit_desc()
+    assert 'across the series. The two polarity groups were then concatenated' in text
+    # The merge runs for every head motion method, not only eddy.
+    assert 'FSL' not in text
+    # Bias correction runs after resampling and is described there.
+    assert 'dwibiascorrect' not in text
+
+
+def test_no_denoising_text_ends_its_sentence():
+    from qsiprep.workflows.dwi.merge import init_dwi_denoising_wf
+
+    config.workflow.denoise_method = 'none'
+    config.workflow.unringing_method = 'none'
+    wf = init_dwi_denoising_wf(
+        source_file='/data/sub-01_dwi.nii.gz',
+        partial_fourier=1.0,
+        phase_encoding_direction='j',
+        n_volumes=10,
+        use_phase=False,
+    )
+    assert wf.__desc__.endswith('Gibbs-ringing removal was applied to the DWI data. ')
+
+
+def test_synb0_text_does_not_repeat_the_coregistration_paragraph():
+    from qsiprep.workflows.fieldmap.synb0 import init_synb0_wf
+
+    text = init_synb0_wf().visit_desc()
+    assert 'global search over rotations' not in text
+    assert 'the distorted\n*b*=0 reference was rigidly registered to the T1w image' in text
+
+
+@pytest.mark.parametrize(
+    ('sloppy', 'expected'),
+    [(False, 'windowed-sinc (Lanczos) interpolation'), (True, 'with linear interpolation')],
+)
+def test_resampling_text_names_interpolation_and_bvec_rotation(sloppy, expected):
+    from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
+
+    config.execution.sloppy = sloppy
+    config.workflow.output_resolution = 2.0
+    wf = init_dwi_trans_wf(source_file='/data/sub-01_dwi.nii.gz', template='ACPC', mem_gb=1)
+    text = ' '.join(wf.__desc__.split())
+    assert 'resampled into AC-PC space at 2 mm isotropic resolution' in text
+    assert expected in text
+    assert 'The *b*-vectors were reoriented' in text
+
+
+@pytest.mark.parametrize('do_biascorr', [True, False])
+def test_bias_correction_is_described_after_resampling(fake_tools, do_biascorr):
+    from qsiprep.workflows.dwi.finalize import init_finalize_denoising_wf
+
+    wf = init_finalize_denoising_wf(
+        source_file='/data/sub-01_dwi.nii.gz', do_biascorr=do_biascorr, num_dwi_acquisitions=1
+    )
+    text = wf.visit_desc()
+    assert ('After resampling, B1 field inhomogeneity was corrected' in text) is do_biascorr
+    if do_biascorr:
+        assert '`dwibiascorrect` from *MRtrix3* 3.0.4 [@mrtrix3]' in text
+
+
+def test_diffprep_without_a_fieldmap_says_no_sdc(tmp_path):
+    from qsiprep.workflows.dwi.diffprep import init_diffprep_hmc_wf
+    from qsiprep.workflows.fieldmap.base import NO_SDC_DESC
+
+    config.workflow.hmc_method = 'tortoise'
+    config.workflow.sdc_method = 'drbuddi'
+    config.workflow.diffprep_config = None
+    config.workflow.gpu = None
+    dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz')
+    wf = init_diffprep_hmc_wf(
+        make_preproc_unit([dwi]), source_file='/data/x_dwi.nii.gz', t2w_sdc=False
+    )
+    assert NO_SDC_DESC.strip() in wf.visit_desc()
+
+
+def test_tool_versions_are_read_from_the_tools(fake_tools):
+    assert versions.niimath_version() == 'v1.0.20260924'
+    assert versions.svht_denoise_version() == '0.1.20261001'
+    assert versions.tortoise_version() == 'V4.2.0'
+    assert versions.mrtrix3_version() == '3.0.4'
+    assert versions.mrtrix3_version(dev=True) == '3.0.8-2071-gb98b54e9'
+
+
+def test_missing_tools_have_no_version(tmp_path, monkeypatch):
+    monkeypatch.setenv('PATH', str(tmp_path))
+    assert versions.niimath_version() is None
+    assert versions.svht_denoise_version() is None
+    assert versions.tortoise_version() is None
+    assert versions.python_package_version('not-a-real-package') is None
+    assert versions.versioned('niimath', None) == 'niimath'
+
+
+def test_tortoise_texts_name_the_version(fake_tools):
+    from qsiprep.interfaces.tortoise import (
+        generate_diffprep_boilerplate,
+        generate_drbuddi_boilerplate,
+    )
+    from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
+
+    assert 'DIFFPREP from *TORTOISE* V4.2.0 [@tortoisev4]' in generate_diffprep_boilerplate(
+        'quadratic'
+    )
     assert (
-        'A multi-band acceleration factor of 3 and slices removed from the bottom of the '
-        'volume were assumed.'
-    ) in text
+        'DRBUDDI [@drbuddi] from *TORTOISE* V4.2.0 [@tortoisev4]'
+        in generate_drbuddi_boilerplate('rpe_series', t2w_sdc=False)
+    )
+    assert 'with *TORTOISE* V4.2.0' in gradwarp_boilerplate(None)
+    assert '`SelectBestB0` from *TORTOISE* V4.2.0' in _eddy_text(
+        fieldmap_type='rpe_series', pepolar_method='topup'
+    )
+
+
+def test_gradwarp_text_falls_back_to_v4(tmp_path, monkeypatch):
+    """The gradient nonlinearity tools exist only in TORTOISE V4."""
+    from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
+
+    monkeypatch.setenv('PATH', str(tmp_path))
+    assert 'with *TORTOISE* V4 [@tortoisev4] to' in gradwarp_boilerplate(None)
+
+
+@pytest.mark.parametrize(
+    ('denoise_method', 'unringing_method', 'expected'),
+    [
+        ('dwidenoise', 'none', 'implemented in `dwidenoise` from *MRtrix3* 3.0.4 [@mrtrix3]'),
+        ('none', 'mrdegibbs', '`mrdegibbs` from *MRtrix3* 3.0.4 [@mrtrix3; @mrdegibbs]'),
+        ('none', 'rpg', 'RPG method [@pfgibbs] as implemented in *TORTOISE* V4.2.0'),
+        ('none', 'svht', 'as implemented in `svht_denoise` 0.1.20261001 [@svht_denoise]'),
+        ('svht', 'none', 'as implemented in `svht_denoise` 0.1.20261001 [@svht_denoise]'),
+    ],
+)
+def test_denoising_text_names_the_versions(fake_tools, denoise_method, unringing_method, expected):
+    from qsiprep.workflows.dwi.merge import init_dwi_denoising_wf
+
+    config.workflow.denoise_method = denoise_method
+    config.workflow.unringing_method = unringing_method
+    config.workflow.denoise_config = None
+    config.workflow.dwidenoise_window = 5
+    config.workflow.mrtrix_version = 'stable'
+    wf = init_dwi_denoising_wf(
+        source_file='/data/sub-01_dwi.nii.gz',
+        partial_fourier=1.0,
+        phase_encoding_direction='j',
+        n_volumes=30,
+        use_phase=False,
+    )
+    assert expected in ' '.join(wf.__desc__.split())

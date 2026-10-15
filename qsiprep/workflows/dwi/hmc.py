@@ -163,7 +163,7 @@ def init_dwi_hmc_wf(
     # If we're just aligning based on the b=0 images, compute the b=0 tsnr as the cnr
     if shoreline_model == 'none':
         workflow.__postdesc__ = (
-            'Each b>0 image was transformed based on the registration of the nearest b=0 image. '
+            'Each *b*>0 image was moved with the transform of the nearest *b*=0 image. '
         )
 
         concat_b0s = pe.Node(afni.TCat(outputtype='NIFTI_GZ'), name='concat_b0s')
@@ -191,9 +191,8 @@ def init_dwi_hmc_wf(
         name='uncorrect_model_images',
     )
     workflow.__postdesc__ = (
-        'Model-generated images were transformed into alignment with each '
-        'b>0 image. Both slicewise and whole-brain QC measures (cross '
-        'correlation and R^2) were calculated.\n'
+        'Slicewise and whole-volume agreement between each *b*>0 image and its model '
+        'prediction (cross-correlation and $R^2$) was recorded for quality control.\n\n'
     )
     workflow.connect([
         (b0_hmc_wf, dwi_model_hmc_wf, [
@@ -383,13 +382,13 @@ def init_b0_hmc_wf(
         name='outputnode',
     )
 
-    desc = 'Initial motion correction was performed using only the b=0 images. '
+    desc = 'Head motion was first estimated from the *b*=0 images alone. '
 
     # Iteratively create a template
     if align_to == 'iterative':
         desc += (
-            f'An unbiased b=0 template was constructed over {num_iters} iterations '
-            f'of {transform} registrations. '
+            f'They were aligned to an unbiased *b*=0 template built over {num_iters} '
+            f'iterations of {transform.lower()} registrations. '
         )
         initial_template = pe.Node(
             ants.AverageImages(normalize=True, dimension=3),
@@ -457,8 +456,8 @@ def init_b0_hmc_wf(
 
     elif align_to == 'first':
         desc += (
-            'Each b=0 image was registered to the first b=0 image using '
-            f'a {transform} registration. '
+            'Each *b*=0 image was registered to the first *b*=0 image with '
+            f'a {transform.lower()} registration. '
         )
         reg_to_first = linear_alignment_workflow(
             iternum=0,
@@ -719,13 +718,14 @@ def init_dwi_model_hmc_wf(
     model_description = _SHORELINE_MODEL_DESCRIPTIONS.get(
         config.workflow.shoreline_model, config.workflow.shoreline_model
     )
-    iterations_run = 'iteration was' if num_iters == 1 else 'iterations were'
+    iterations = 'iteration' if num_iters == 1 else 'iterations'
+    transform = config.workflow.hmc_transform.lower()
+    transform = f'{"an" if transform[0] in "aeiou" else "a"} {transform}'
     workflow.__desc__ = (
-        'The SHORELine method was used to estimate head motion in b>0 '
-        'images. This entails leaving out each b>0 image and reconstructing '
-        f'the others using {model_description}. The signal for the left-'
-        f'out image serves as the registration target. A total of {num_iters} '
-        f'{iterations_run} run using the {config.workflow.hmc_transform} transform. '
+        'Head motion in the *b*>0 images was then estimated with SHORELine: each *b*>0 '
+        f'image was left out in turn, {model_description} was fit to the others, and the '
+        'image it predicted for the left-out *q*-space sample served as the registration '
+        f'target. SHORELine ran {num_iters} {iterations} with {transform} transform. '
     )
 
     # Merge b0s into a single volume, put the non-b0 dwis into a list
