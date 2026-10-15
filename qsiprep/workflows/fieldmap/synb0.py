@@ -114,14 +114,18 @@ def init_synb0_wf(name='synb0_wf'):
 
     """
     workflow = Workflow(name=name)
+    # Callers describe the correction that uses the synthetic b=0 before this
+    # text (TOPUP, unpile) or after it (SyN), so it reads either way.
     workflow.__desc__ = """\
-A synthetic distortion-free b=0 image was generated from the T1w image and
-the distorted b=0 reference using the SynB0-DISCO dual-channel U-Net
+The synthetic distortion-free b=0 image used for susceptibility distortion
+correction was generated from the T1w image and the distorted b=0 reference
+using the SynB0-DISCO dual-channel U-Net
 [@synb0disco; @synb0discoValidation]. The T1w image was scaled to the
-FreeSurfer intensity convention (white matter median at 110), both inputs
-were mapped onto the U-Net's 2.5mm atlas grid through the AC-PC affine
-registration, and the mean prediction over the model folds was resampled
-back onto the b=0 reference grid.
+FreeSurfer intensity convention (white matter median at 110), the distorted
+b=0 reference was rigidly registered to the T1w image, both inputs were
+mapped onto the U-Net's 2.5mm atlas grid through that registration and the
+AC-PC affine registration, and the mean prediction over the model folds was
+resampled back onto the b=0 reference grid.
 """
 
     inputnode = pe.Node(
@@ -175,6 +179,9 @@ back onto the b=0 reference grid.
         write_report=False,
         name='distorted_b0_coreg_wf',
     )
+    # Described in this workflow's text; its own would repeat the paragraph of
+    # the final b=0-to-anatomical coregistration.
+    b0_coreg_wf.__desc__ = None
 
     # ANTs transform lists run the last-listed transform first: images travel
     # b=0 -> AC-PC (coreg) -> pre-AC-PC (inverse rigid) -> atlas (full affine).

@@ -1025,7 +1025,7 @@ def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False, initi
         # Add extra details about the input data.
         desc.append(
             'was used to perform susceptibility distortion correction. '
-            'Data was collected with reversed phase-encode blips, resulting '
+            'Data were collected with reversed phase-encode blips, resulting '
             'in pairs of images with distortions going in opposite directions.'
         )
     else:

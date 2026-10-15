@@ -41,7 +41,7 @@ from ...interfaces.tortoise import (
 from ...utils.diffprep_config import load_diffprep_config
 from ...utils.gpu import gpu_enabled
 from ...utils.sdc import eddy_applies_topup
-from ..fieldmap.base import SDC_ANAT_CONNECTIONS, init_gre_seed_wf, init_sdc_wf
+from ..fieldmap.base import NO_SDC_DESC, SDC_ANAT_CONNECTIONS, init_gre_seed_wf, init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf, seeds_from_gre
 from ..fieldmap.synb0 import connect_post_hmc_synb0_topup
 from .gradwarp import (
@@ -713,6 +713,7 @@ def init_diffprep_hmc_wf(
 
     # 4. No fieldmap -> HMC only.
     outputnode.inputs.sdc_method = 'None'
+    workflow.__postdesc__ = NO_SDC_DESC
     if has_gradwarp:
         connect_gradwarp_coreg_reference(
             workflow, inputnode, b0_ref_for_coreg, 'outputnode.ref_image', outputnode

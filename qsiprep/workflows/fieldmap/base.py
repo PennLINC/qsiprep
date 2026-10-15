@@ -161,6 +161,8 @@ def init_gre_seed_wf(unit, has_gradwarp, source_file, use):
     return workflow
 
 
+NO_SDC_DESC = '\n\nNo susceptibility distortion correction was performed.\n\n'
+
 #: The anatomical inputs callers hand :func:`init_sdc_wf`. SyN uses the first two;
 #: SyN or unpile against a SynB0 also generates the synthetic b0 from the next five, and
 #: unpile against the T2w takes the last.
@@ -321,7 +323,7 @@ def init_sdc_wf(unit, gradwarp=False, use='apply', source_file=None):
     # No SDC to do here - forward inputs to outputs. (SynB0 + TOPUP is handled by
     # the HMC backends; SyN and unpile are handled below.)
     if not does_sdc:
-        workflow.__postdesc__ = 'No susceptibility distortion correction was performed.'
+        workflow.__postdesc__ = NO_SDC_DESC
         outputnode.inputs.method = 'None'
         workflow.connect([
             (inputnode, outputnode, [

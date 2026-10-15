@@ -703,6 +703,22 @@ def test_dwi_preproc_wf_dis3d_runs_nothing_and_wires_nothing(tmp_path):
     assert not [name for name in flat if name.startswith('gradwarp')]
 
 
+def test_dwi_preproc_wf_describes_gradwarp_after_head_motion_correction(tmp_path):
+    """The gradwarp field feeds the HMC backend but is applied in the final resampling.
+
+    Its text says it followed eddy's correction, so it must come after eddy's text.
+    This unit has no fieldmap, so the text must also say no SDC was performed.
+    """
+    from qsiprep.workflows.fieldmap.base import NO_SDC_DESC
+
+    desc = ' '.join(_preproc_wf(tmp_path).visit_desc().split())
+
+    assert desc.index('eddy was used for head motion') < desc.index('Gradient nonlinearity')
+    assert desc.count('Gradient nonlinearity was corrected') == 1
+    assert 'introduces.FSL' not in desc
+    assert NO_SDC_DESC.strip() in desc
+
+
 def test_dwi_preproc_wf_dis3d_still_emits_the_dis3d_boilerplate(tmp_path):
     """Test that the DIS3D boilerplate is still emitted.
 

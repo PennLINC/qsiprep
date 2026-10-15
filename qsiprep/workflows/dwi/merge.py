@@ -119,6 +119,9 @@ def init_dwi_series_denoise_wf(
         per-volume denoising/unringing confounds (when any step ran)
     validation_report
         HTML segment reporting header problems found while conforming
+
+    The returned workflow's ``denoising_desc`` attribute holds the methods
+    boilerplate for the denoising steps.
     """
     if name is None:
         _, fname, _ = split_filename(dwi_file)
@@ -146,6 +149,11 @@ def init_dwi_series_denoise_wf(
         use_phase=use_phase,
         name='denoise_wf',
     )
+    # This workflow is a child of the subject workflow, so a description left on
+    # it would print before the DWI section. The unit's own section carries it
+    # instead (init_dwi_preproc_wf's denoising_desc).
+    workflow.denoising_desc = denoise_wf.__desc__
+    denoise_wf.__desc__ = None
     workflow.connect([
         (conform_dwi, denoise_wf, [
             ('bval_file', 'inputnode.bval_file'),
@@ -779,7 +787,7 @@ def init_dwi_denoising_wf(
     chain.feed(outputnode, 'dwi_file')
 
     if not last_step:
-        desc = 'No denoising steps were applied to the DWI data.'
+        desc = '\n\nNo denoising steps were applied to the DWI data. '
 
     # If any denoising operations were run, collect their confounds
     if step_num > 1:
@@ -832,28 +840,24 @@ def _as_list(item):
     return [item]
 
 
-def gen_denoising_boilerplate(do_biascorr):
-    """Generate a methods boilerplate for the denoising workflow.
+def gen_intensity_boilerplate(do_biascorr):
+    """Describe the b=0 threshold, b=0 intensity harmonization and bias correction.
 
-    ``do_biascorr`` is the resolved decision for this output, not the
-    ``--dwi-biascorrect`` mode: under ``auto`` the mode alone cannot say whether
-    N4 actually ran, so reading the config here would state the wrong thing.
+    Denoising is described by :func:`init_dwi_denoising_wf`. ``do_biascorr`` is
+    the resolved decision for this output, not the ``--dwi-biascorrect`` mode:
+    under ``auto`` the mode alone cannot say whether N4 actually ran, so reading
+    the config here would state the wrong thing.
     """
     no_b0_harmonization = config.workflow.no_b0_harmonization
     b0_threshold = config.workflow.b0_threshold
     desc = [
         f'Any images with a b-value less than {b0_threshold} s/mm^2 were treated as a *b*=0 image.'
     ]
-    harmonize_b0s = not no_b0_harmonization
-    last_step = ''
-
-    if harmonize_b0s:
+    if not no_b0_harmonization:
         desc.append(
-            'The mean intensity of the DWI series was adjusted '
-            'so all the mean intensity of the b=0 images matched across each'
-            'separate DWI scanning sequence.'
+            'Each DWI series was scaled so that the mean intensity of its b=0 images '
+            'matched across the separate DWI scans.'
         )
-        last_step = True
 
     if do_biascorr:
         desc.append(
@@ -861,10 +865,6 @@ def gen_denoising_boilerplate(do_biascorr):
             '`dwibiascorrect` from MRtrix3 with the N4 algorithm '
             '[@n4] after corrected images were resampled.'
         )
-        last_step = True
-
-    if not last_step:
-        return 'No denoising steps were applied to the DWI data.'
 
     return ' '.join(desc)
 

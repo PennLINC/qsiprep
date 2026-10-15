@@ -227,3 +227,57 @@ def test_bidirectional_pre_hmc_runs_from_raw_series_to_one_merged_file(tmp_path)
     assert {op.basename(f) for f in results['merge_minus.merge_dwis'].original_images} == {
         'sub-01_dir-PA_dwi.nii.gz'
     }
+
+
+def test_denoising_boilerplate_is_in_the_dwi_section(tmp_path, monkeypatch):
+    """The denoising text prints inside each unit's section, after its heading.
+
+    The series workflows are children of the subject workflow, so a description
+    left on them printed before "Diffusion data preprocessing".
+    """
+    from niworkflows.engine.workflows import LiterateWorkflow
+
+    from qsiprep.workflows.base import unit_denoising_desc
+    from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
+
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    config.workflow.anat_modality = 'none'
+    config.workflow.b0_to_anat_transform = 'Rigid'
+    config.workflow.hmc_transform = 'Affine'
+    config.workflow.diffprep_config = None
+    config.workflow.tortoise_gpu_cpu_ratio = None
+    config.workflow.gpu = None
+    config.workflow.impute_slice_threshold = 0
+    config.workflow.dwi2anat_dof = 6
+    config.workflow.gradient_file = None
+
+    shared = _write_dwi(tmp_path / 'sub-01_acq-shared_dwi.nii.gz')
+    only_b = _write_dwi(tmp_path / 'sub-01_acq-B_dwi.nii.gz')
+    unit_a = make_preproc_unit([shared], output_name='sub-01_acq-A')
+    unit_b = make_preproc_unit([only_b, shared], output_name='sub-01_acq-B')
+
+    subject_wf = LiterateWorkflow(name='sub_01_wf')
+    series_wfs = init_series_denoise_wfs([unit_a, unit_b], orientation='LAS')
+    denoise_text = series_wfs[shared].denoising_desc
+    assert 'dwidenoise' in denoise_text
+    # Both series share one text, so a unit states it once.
+    assert unit_denoising_desc(series_wfs, unit_b) == denoise_text
+
+    for unit in (unit_a, unit_b):
+        dwi_preproc_wf = init_dwi_preproc_wf(
+            unit,
+            t2w_sdc=False,
+            output_prefix=unit.output_name,
+            source_file=unit.dwi_files[0],
+            anatomical_template='MNI152NLin2009cAsym',
+            denoising_desc=unit_denoising_desc(series_wfs, unit),
+        )
+        connect_series_to_unit(
+            subject_wf, series_wfs, unit, dwi_preproc_wf, unit.output_name.replace('-', '_')
+        )
+
+    boilerplate = subject_wf.visit_desc()
+    heading = boilerplate.index('#### Diffusion data preprocessing')
+    assert boilerplate.index(denoise_text) > heading
+    for section in boilerplate.split('#### Diffusion data preprocessing')[1:]:
+        assert section.count(denoise_text) == 1

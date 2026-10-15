@@ -104,6 +104,16 @@ def init_series_denoise_wfs(preproc_units, orientation):
     return series_wfs
 
 
+def unit_denoising_desc(series_wfs, unit):
+    """Join the denoising boilerplate of a unit's member series, once per distinct text."""
+    descs = []
+    for dwi_file in unit.dwi_files:
+        desc = series_wfs[dwi_file].denoising_desc
+        if desc not in descs:
+            descs.append(desc)
+    return ''.join(descs)
+
+
 def connect_series_to_unit(workflow, series_wfs, unit, dwi_preproc_wf, name):
     """Feed a unit's denoised member series into its preprocessing workflow.
 
@@ -294,7 +304,7 @@ Many internal operations of *QSIPrep* use
 *Dipy* [@dipy].
 For more details of the pipeline, see [the section corresponding
 to workflows in *QSIPrep*'s documentation]\
-(https://qsiprep.readthedocs.io/en/latest/workflows.html \
+(https://qsiprep.readthedocs.io/en/latest/methods/index.html \
 "QSIPrep's documentation").
 
 
@@ -734,6 +744,7 @@ to workflows in *QSIPrep*'s documentation]\
             t2w_sdc=t2w_sdc,
             anatomical_template=anatomical_template,
             do_biascorr=do_biascorr,
+            denoising_desc=unit_denoising_desc(series_wfs, unit),
         )
         connect_series_to_unit(workflow, series_wfs, unit, dwi_preproc_wf, output_wfname)
         write_derivatives = not (

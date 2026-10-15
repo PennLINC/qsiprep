@@ -18,7 +18,7 @@ from ...utils.bids import get_source_file
 from ...utils.misc import select_polarity
 
 # dwi workflows
-from .merge import SERIES_LIST_FIELDS, gen_denoising_boilerplate, init_merge_dwis_wf
+from .merge import SERIES_LIST_FIELDS, gen_intensity_boilerplate, init_merge_dwis_wf
 from .qc import init_modelfree_qc_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -134,7 +134,7 @@ def init_dwi_pre_hmc_wf(
         ),
         name='outputnode',
     )
-    workflow.__postdesc__ = gen_denoising_boilerplate(do_biascorr)
+    workflow.__postdesc__ = gen_intensity_boilerplate(do_biascorr)
 
     # Special case: Two reverse PE DWI series are going to get combined for eddy
     if unit.has_bidirectional_dwi:
@@ -265,8 +265,7 @@ def init_dwi_pre_hmc_wf(
         ])  # fmt:skip
 
         workflow.__postdesc__ += (
-            'Both distortion groups were then merged into a '
-            'single file, as required for the FSL workflows.\n\n'
+            ' Both phase encoding polarity groups were then merged into a single file.\n\n'
         )
         return workflow
 

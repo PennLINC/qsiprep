@@ -291,7 +291,7 @@ workflow.
     if do_biascorr:
         desc += (
             'Each image was corrected for intensity non-uniformity (INU) using '
-            f'`N4BiasFieldCorrection` [@n4, ANTs {ANTS_VERSION}].'
+            f'`N4BiasFieldCorrection` [@n4, ANTs {ANTS_VERSION}]. '
         )
 
     # Ensure there is 1 and only 1 anatomical reference
@@ -1130,7 +1130,7 @@ a 6-DOF transform extracted from a full Affine registration to the
 
     desc += """\
 A full nonlinear registration to the template from AC-PC space was
-estimated via symmetric nonlinear registration (SyN) using antsRegistration (@ants). """
+estimated via symmetric nonlinear registration (SyN) using antsRegistration [@ants]. """
     rigid_acpc_resample_anat = pe.Node(
         ants.ApplyTransforms(input_image_type=0, interpolation=_resample_interpolation()),
         name='rigid_acpc_resample_anat',
