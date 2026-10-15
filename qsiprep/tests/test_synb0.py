@@ -145,28 +145,28 @@ def test_synb0_boilerplate_reflects_ignored_fieldmaps(monkeypatch):
     monkeypatch.setattr(config.workflow, 'force_sdc_anat_reference', False)
     assert 'No field map was available' in topup_boilerplate('synb0', 'TOPUP')
 
-    # Reaching SyNb0 with fieldmaps or RPE series present means the user
-    # ignored them; the text must say so instead of claiming absence
+    # Reaching SyNb0 with fieldmaps or RPE series present means they were
+    # ignored; the text must say so instead of claiming absence
     monkeypatch.setattr(config.workflow, 'ignore', ['fieldmaps', 'pepolar-dwis', 't2w'])
     text = topup_boilerplate('synb0', 'TOPUP')
     assert 'No field map was available' not in text
-    assert "excluded at the user's request" in text
-    assert '--ignore fieldmaps pepolar-dwis' in text
+    assert 'The acquired field map data were not used' in text
+    assert 'user' not in text
+    assert '--' not in text
 
 
 def test_synb0_boilerplate_reflects_forced_anat_reference(monkeypatch):
     from qsiprep import config
     from qsiprep.interfaces.eddy import topup_boilerplate
 
-    # Forcing the anatomical reference overrides fieldmaps outright, which
-    # takes precedence over the ignored-fieldmaps wording.
+    # Forcing the anatomical reference overrides fieldmaps outright.
     monkeypatch.setattr(config.workflow, 'ignore', ['fieldmaps'])
     monkeypatch.setattr(config.workflow, 'force_sdc_anat_reference', True)
     text = topup_boilerplate('synb0', 'TOPUP')
     assert 'No field map was available' not in text
-    assert "excluded at the user's request" not in text
-    assert '--force sdc-anat-reference' in text
-    assert 'overriding any scanner-acquired field map data' in text
+    assert 'The acquired field map data were not used' in text
+    assert 'user' not in text
+    assert '--' not in text
 
 
 def test_synb0_wf_builds_without_container(monkeypatch):

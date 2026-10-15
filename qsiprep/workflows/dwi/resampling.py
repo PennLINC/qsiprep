@@ -171,7 +171,7 @@ def init_dwi_trans_wf(
     # ComposeJacobianWeights covers gradwarp and SDC (and DIFFPREP's eddy-current
     # Jacobian), or DRBUDDI's LSR ratios instead; HMC and coregistration never.
     if 'jacobian' in (config.workflow.ignore or []):
-        jacobian = 'No Jacobian modulation was applied in this step (`--ignore jacobian`). '
+        jacobian = 'No Jacobian modulation was applied in this step. '
     else:
         jacobian = (
             'Any gradient nonlinearity, susceptibility distortion or (with DIFFPREP) '

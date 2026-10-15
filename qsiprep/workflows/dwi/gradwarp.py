@@ -256,7 +256,7 @@ _FORCED_CORRECTION_TEXT = {
     '1D': (
         'Gradient nonlinearity was corrected with {tortoise} [@tortoisev4] from the scanner '
         'gradient coefficients. Only the through-plane component of the displacement field '
-        'was applied, as requested.'
+        'was applied.'
     ),
 }
 

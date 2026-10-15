@@ -589,20 +589,14 @@ def topup_boilerplate(fieldmap_type, pepolar_method):
     )
     if fieldmap_type == 'synb0':
         # An un-forced SyNb0 never overrides a usable fieldmap, so reaching it
-        # with fieldmaps or RPE series in the dataset means the user either
-        # forced the anatomical reference or ignored the fieldmaps - the
-        # boilerplate must not claim none were available in those cases.
-        ignored = sorted({'fieldmaps', 'pepolar-dwis'} & set(config.workflow.ignore or []))
-        if config.workflow.force_sdc_anat_reference:
+        # with fieldmaps or RPE series in the dataset means the anatomical
+        # reference was forced or the fieldmaps were ignored - the boilerplate
+        # must not claim none were available in those cases.
+        ignored = {'fieldmaps', 'pepolar-dwis'} & set(config.workflow.ignore or [])
+        if config.workflow.force_sdc_anat_reference or ignored:
             reason = (
-                'Anatomically referenced correction was forced at the '
-                "user's request (`--force sdc-anat-reference`), overriding any "
-                'scanner-acquired field map data, so '
-            )
-        elif ignored:
-            reason = (
-                'Any scanner-acquired field map data were excluded at the '
-                f"user's request (`--ignore {' '.join(ignored)}`), so "
+                'The acquired field map data were not used for susceptibility distortion '
+                'correction; instead, '
             )
         else:
             reason = 'No field map was available for these series, so '

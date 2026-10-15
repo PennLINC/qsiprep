@@ -333,3 +333,14 @@ def test_denoising_text_names_the_versions(fake_tools, denoise_method, unringing
         use_phase=False,
     )
     assert expected in ' '.join(wf.__desc__.split())
+
+
+def test_option_text_names_no_operator():
+    """Forced and ignored options are described as what was done, not who asked."""
+    from qsiprep.workflows.dwi.gradwarp import gradwarp_boilerplate
+
+    config.workflow.ignore = ['jacobian']
+    for text in (gradwarp_boilerplate('1D', 'forced'), gradwarp_boilerplate('3D')):
+        assert 'request' not in text
+        assert '--' not in text
+    assert 'without Jacobian intensity modulation' in gradwarp_boilerplate('3D')

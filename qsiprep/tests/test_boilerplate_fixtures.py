@@ -104,6 +104,10 @@ def _assert_well_formed(text):
     assert double is None, double.group()
     for wrong in ('eachseparate', 'Data was', 'version None', 'FSL workflows', '(@'):
         assert wrong not in text
+    # The text is pasted into a paper's methods section, where nobody ran qsiprep: it
+    # describes what was done to the data, not who asked for it or which flag did it.
+    operator = re.search(r'.{0,30}(\buser|\brequest|(?<![\w-])--[a-z]).{0,30}', text, re.I)
+    assert operator is None, operator.group()
 
 
 def _before(text, first, second):
