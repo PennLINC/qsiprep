@@ -1,5 +1,14 @@
 # What's New
 
+## 26.1.1 (October 15, 2026)
+
+### 🐛 Bug Fixes
+* Correct the methods boilerplate by @tsalo in https://github.com/PennLINC/qsiprep/pull/1187
+
+
+**Full Changelog**: https://github.com/PennLINC/qsiprep/compare/26.1.0...26.1.1
+
+
 ## 26.1.0 (October 14, 2026)
 
 26.1.0 is the official release after 26.1.0rc1. Many command-line
