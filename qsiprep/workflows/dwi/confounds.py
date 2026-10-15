@@ -59,14 +59,12 @@ def init_dwi_confs_wf():
 
     """
     workflow = Workflow(name='dwi_confs_wf')
-    workflow.__desc__ = """\
-Several confounding time-series were calculated based on the
-preprocessed DWI: framewise displacement (FD) using the
-implementation in *Nipype* [following the definitions by @power_fd_dvars].
-The head-motion estimates calculated in the correction step were also
-placed within the corresponding confounds file. Slicewise cross correlation
-was also calculated.
-"""
+    workflow.__desc__ = (
+        '\n\nFramewise displacement (FD) was calculated from the head-motion estimates with '
+        'the implementation in *Nipype* [following the definitions by @power_fd_dvars]. FD, '
+        'the head-motion estimates and the slicewise quality measures from head motion '
+        'correction were saved as per-volume confounds. '
+    )
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[

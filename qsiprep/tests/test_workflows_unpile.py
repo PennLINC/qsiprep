@@ -138,8 +138,8 @@ def test_t2w_reference_is_aligned_then_fitted_on_a_fine_grid():
     assert ('b0_ref', 'reference') in _edge(wf, 'inputnode', 'unpile_field_to_warp')
     assert ('pose_xfm', 'pose_xfm') in _edge(wf, 'unpile_fit', 'outputnode')
     assert wf.get_node('ds_unpile_score') is not None
-    assert 'two thirds of the DWI voxel' in wf.__desc__
-    assert 'rigid refinement of the T2w position' in wf.__desc__
+    assert 'two-thirds of the DWI voxel size' in wf.__desc__
+    assert 'refined that position together with the field' in wf.__desc__
 
 
 def test_sloppy_keeps_the_fine_grid_with_the_short_schedule():
@@ -186,7 +186,7 @@ def test_synb0_reference_runs_two_passes_by_default():
     # The last pass is what leaves the workflow.
     assert ('out_warp', 'out_warp') in _edge(wf, 'unpile_field_to_warp_pass2', 'outputnode')
     assert ('outputnode.synthetic_b0', 'synthetic_b0') in _edge(wf, 'synb0_wf_pass2', 'outputnode')
-    assert 'fitted again' in wf.__desc__
+    assert 'fit again' in wf.__desc__
 
 
 def test_one_pass_sdc_skips_the_second_synthesis():
@@ -194,7 +194,7 @@ def test_one_pass_sdc_skips_the_second_synthesis():
     wf = init_unpile_sdc_wf(unit, source_file=SRC, target='synb0', two_pass=False)
     assert wf.get_node('synb0_wf_pass2') is None
     assert ('out_warp', 'out_warp') in _edge(wf, 'unpile_field_to_warp', 'outputnode')
-    assert 'fitted again' not in wf.__desc__
+    assert 'fit again' not in wf.__desc__
 
 
 def test_sdc_wf_synb0_target_writes_the_synb0_outputs():
@@ -212,7 +212,7 @@ def test_gre_prior_is_applied_as_given_against_the_synb0():
     assert fit.inputs.fieldmap_refine == 'none'
     assert ('fieldmap_hz', 'fieldmap') in _edge(wf, 'inputnode', 'prepare_unpile')
     assert ('fieldmap', 'fieldmap') in _edge(wf, 'prepare_unpile', 'unpile_fit')
-    assert 'applied as given' in wf.__desc__
+    assert 'applied as acquired' in wf.__desc__
     # Both passes take the prior.
     assert ('fieldmap', 'fieldmap') in _edge(wf, 'prepare_unpile_pass2', 'unpile_fit_pass2')
 
@@ -220,7 +220,7 @@ def test_gre_prior_is_applied_as_given_against_the_synb0():
 def test_gre_prior_is_refined_in_pose_against_the_t2w():
     wf = init_unpile_sdc_wf(_unit('t2w'), source_file=SRC, target='t2w', gre_prior=True)
     assert wf.get_node('unpile_fit').inputs.fieldmap_refine == 'pose'
-    assert 'its position refined' in wf.__desc__
+    assert 'its position was refined' in wf.__desc__
 
 
 def test_missing_readout_time_is_an_error():

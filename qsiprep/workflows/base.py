@@ -39,6 +39,7 @@ import sys
 from collections import defaultdict
 from copy import deepcopy
 
+from dipy import __version__ as dipy_ver
 from nilearn import __version__ as nilearn_ver
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
@@ -102,6 +103,16 @@ def init_series_denoise_wfs(preproc_units, orientation):
                 orientation=orientation,
             )
     return series_wfs
+
+
+def unit_denoising_desc(series_wfs, unit):
+    """Join the denoising boilerplate of a unit's member series, once per distinct text."""
+    descs = []
+    for dwi_file in unit.dwi_files:
+        desc = series_wfs[dwi_file].denoising_desc
+        if desc not in descs:
+            descs.append(desc)
+    return ''.join(descs)
 
 
 def connect_series_to_unit(workflow, series_wfs, unit, dwi_preproc_wf, name):
@@ -282,19 +293,18 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
     _ses_name = '_ses_' + '_'.join(map(str, session_ids)) if session_ids else ''
     workflow = Workflow(name=f'sub_{subject_id}{_ses_name}_wf')
     workflow.__desc__ = f"""
-Preprocessing was performed using *QSIPrep* {config.environment.version} [@cieslak2021qsiprep],
+Preprocessing was performed with *QSIPrep* {config.environment.version} [@cieslak2021qsiprep],
 which is based on *Nipype* {config.environment.nipype_version}
-[@nipype1; @nipype2; RRID:SCR_002502] and follows *NiPreps* framework [@nipreps].
+[@nipype1; @nipype2; RRID:SCR_002502] and follows the *NiPreps* framework [@nipreps].
 
 """
     workflow.__postdesc__ = f"""
 
 Many internal operations of *QSIPrep* use
 *Nilearn* {nilearn_ver} [@nilearn, RRID:SCR_001362] and
-*Dipy* [@dipy].
-For more details of the pipeline, see [the section corresponding
-to workflows in *QSIPrep*'s documentation]\
-(https://qsiprep.readthedocs.io/en/latest/workflows.html \
+*DIPY* {dipy_ver} [@dipy].
+For more details of the pipeline, see [the processing pipeline details in *QSIPrep*'s
+documentation](https://qsiprep.readthedocs.io/en/latest/methods/index.html \
 "QSIPrep's documentation").
 
 
@@ -734,6 +744,7 @@ to workflows in *QSIPrep*'s documentation]\
             t2w_sdc=t2w_sdc,
             anatomical_template=anatomical_template,
             do_biascorr=do_biascorr,
+            denoising_desc=unit_denoising_desc(series_wfs, unit),
         )
         connect_series_to_unit(workflow, series_wfs, unit, dwi_preproc_wf, output_wfname)
         write_derivatives = not (

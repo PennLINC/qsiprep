@@ -600,6 +600,7 @@ workflows:
                 - trxscan_rpe_topup
                 - trxscan_rpe_drbuddi
                 - trxscan_epi_topup
+                - trxscan_epi_drbuddi
                 - trxscan_phasediff
                 - trxscan_gnl
                 - trxscan_motion
@@ -623,6 +624,7 @@ workflows:
             - trxscan_rpe_topup
             - trxscan_rpe_drbuddi
             - trxscan_epi_topup
+            - trxscan_epi_drbuddi
             - trxscan_phasediff
             - trxscan_gnl
             - trxscan_motion

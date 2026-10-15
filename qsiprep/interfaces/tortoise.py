@@ -26,6 +26,7 @@ from nipype.interfaces.base import (
 from nipype.utils.filemanip import fname_presuffix
 from niworkflows.viz.utils import compose_view, cuts_from_bbox
 
+from ..utils.versions import tortoise_version, versioned
 from ..viz.utils import plot_denoise
 from .denoise import (
     SeriesPreprocReport,
@@ -122,17 +123,31 @@ def _sloppy_stage(
     )
 
 
+_SLOPPY_DRBUDDI_STAGES = (
+    (0.25, 60, 6, 4, 9, ['MSJac', 'CC', 'CCJacS{str_id=0}']),
+    (0.2, 60, 4, 3, 8, ['MSJac', 'CC', 'CCJacS{str_id=0}']),
+    (0.25, 40, 2, 2, 7, ['MSJac', 'CC', 'CCJacS{str_id=0}']),
+    (0.15, 5, 1, 1, 7, ['MSJac', 'CC', 'CCSK{str_id=0}']),
+)
+
+
+def _sloppy_schedule(with_fa):
+    return ' '.join(
+        _sloppy_stage(
+            lr, niter, f, s, u, 0, [m for m in metrics if with_fa or m != 'CC'], True, True
+        )
+        for (lr, niter, f, s, u, metrics) in _SLOPPY_DRBUDDI_STAGES
+    )
+
+
 # The DRBUDDI schedule --sloppy runs: DRBUDDI's four-stage default for the
 # b=0 + FA + structural case, on the sloppy grid.
-SLOPPY_DRBUDDI = ' '.join(
-    _sloppy_stage(lr, niter, f, s, u, 0, metrics, True, True)
-    for (lr, niter, f, s, u, metrics) in (
-        (0.25, 60, 6, 4, 9, ['MSJac', 'CC', 'CCJacS{str_id=0}']),
-        (0.2, 60, 4, 3, 8, ['MSJac', 'CC', 'CCJacS{str_id=0}']),
-        (0.25, 40, 2, 2, 7, ['MSJac', 'CC', 'CCJacS{str_id=0}']),
-        (0.15, 5, 1, 1, 7, ['MSJac', 'CC', 'CCSK{str_id=0}']),
-    )
-)
+SLOPPY_DRBUDDI = _sloppy_schedule(with_fa=True)
+# The same schedule without the FA metric (CC) for an epi fieldmap, whose b=0s
+# give DRBUDDI no FA. DRBUDDI drops CC itself then, but keeps reading the
+# remaining metrics' options at their pre-drop positions, so CCJacS gets CC's
+# string and the str_id parse throws std::out_of_range.
+SLOPPY_DRBUDDI_EPI = _sloppy_schedule(with_fa=False)
 
 
 def sloppy_epi_working_res():
@@ -520,6 +535,8 @@ class DRBUDDI(TORTOISECommandLine):
             return ''
         if name == 'structural_image':
             return '-s ' + ' '.join(value)
+        if name == 'sloppy' and value and self.inputs.fieldmap_type == 'epi':
+            return SLOPPY_DRBUDDI_EPI
         return super()._format_arg(name, spec, value)
 
     def _list_outputs(self):
@@ -982,35 +999,121 @@ def bmtxt_to_fsl(bmtxt_file, working_dir=None):
     return base + '.bvals', base + '.bvecs'
 
 
-def generate_diffprep_boilerplate(correction_mode):
+#: DIFFPREP refines its registration against a signal model only when the data
+#: reach above 1.2 x ``dti_bval`` (default 1000 s/mm^2) and have at least 20
+#: volumes (DIFFPREP.cxx, MotionAndEddy). It fits a tensor to the volumes up to
+#: ``hardi_bval`` (default 2000 s/mm^2; all volumes when fewer than 15 qualify) and,
+#: when any volume is above it, MAP-MRI (MAPMRIModel: an anisotropic SHORE basis
+#: scaled by the tensor) to all volumes. MAP-MRI then predicts every volume above
+#: 55 s/mm^2 and the tensor the rest.
+_DIFFPREP_MODEL_BVAL = 1.2 * 1000
+_DIFFPREP_HARDI_BVAL = 2000
+_DIFFPREP_MIN_VOLUMES = 20
+_DIFFPREP_MIN_TENSOR_VOLUMES = 15
+#: Extra arguments that change any of the above, which the text cannot follow
+_DIFFPREP_SETTINGS_ARGS = ('--s2v', '--repol', '--niter', '--dti_bval', '--hardi_bval')
+
+
+def generate_diffprep_boilerplate(
+    correction_mode, run_bvals=None, b0_id=-1, is_human_brain=True, niter=None, extra_args=()
+):
     """Generate methods boilerplate describing the DIFFPREP HMC backend.
 
     ``correction_mode`` comes from ``--diffprep-config`` (default
     ``quadratic``), so the transform model has to be named from it rather than
-    assumed.
+    assumed. ``run_bvals`` holds the b-values of each DIFFPREP run (one per
+    phase-encoding polarity of a reverse-PE series); when it is ``None`` the
+    text states the conditions under which DIFFPREP refines its registration
+    instead of whether it did.
     """
+    # The transform always has 24 parameters, but only those switched on in the
+    # mode's settings/mecc_settings/<mode>.mec optimization_flags are estimated:
+    # 6 rigid (rigid.mec), 14 (quadratic.mec), 21 (cubic.mec). The last three, the
+    # isocenter, never are.
     mode_desc = {
-        'motion': ('rigid head motion only', 'rigid-body transform'),
+        'motion': ('rigid head motion only', 'The transform was rigid-body, with 6 parameters.'),
         'quadratic': (
-            'rigid head motion together with quadratic eddy currents',
-            '24-parameter Okan-quadratic transform',
+            'rigid head motion together with linear and quadratic eddy-current distortions',
+            'The transform had 14 estimated parameters: 6 for rigid-body motion and 8 for '
+            'linear and quadratic eddy-current distortion along the phase-encoding axis.',
         ),
         'cubic': (
-            'rigid head motion together with cubic eddy currents',
-            'cubic transform',
+            'rigid head motion together with linear, quadratic and cubic eddy-current distortions',
+            'The transform had 21 estimated parameters: 6 for rigid-body motion and 15 for '
+            'linear, quadratic and cubic eddy-current distortion along the phase-encoding axis.',
         ),
     }
     corrects, transform = mode_desc[correction_mode]
+    if any(arg.startswith(_DIFFPREP_SETTINGS_ARGS) for arg in extra_args or ()):
+        run_bvals = None
+
+    if b0_id != -1:
+        reference = f'the *b*=0 volume at index {b0_id}'
+    elif run_bvals is not None and all(_count_b0s(b) >= 4 for b in run_bvals):
+        reference = 'the best *b*=0 volume, chosen by its own selection'
+    elif run_bvals is not None and all(_count_b0s(b) < 4 for b in run_bvals):
+        reference = 'the first *b*=0 volume'
+    else:
+        reference = (
+            'a reference *b*=0 volume (the best one, chosen by its own selection, when there '
+            'were at least four)'
+        )
+
+    if run_bvals is None:
+        refined = None
+    else:
+        refined = {
+            bool(is_human_brain)
+            and niter != 0
+            and len(bvals) >= _DIFFPREP_MIN_VOLUMES
+            and bool(bvals.max() > _DIFFPREP_MODEL_BVAL)
+            for bvals in run_bvals
+        }
+        refined = refined.pop() if len(refined) == 1 else None
+
+    tortoise = versioned('*TORTOISE*', tortoise_version())
     desc = (
-        '\n\nHead motion correction was performed with the TORTOISE [@tortoisev4] software '
-        "package's DIFFPREP module, "
-        f'in "{correction_mode}" mode (correcting {corrects}). DIFFPREP fits a '
-        'SHORE/MAPMRI signal model to the data and iteratively registers each '
-        f"volume to a model-predicted target using TORTOISE's {transform}. "
-        'The corrected volumes and motion-rotated b-matrix were then passed to '
-        'the rest of the pipeline.'
+        f'\n\nHead motion was corrected with DIFFPREP from {tortoise} [@tortoisev4] in its '
+        f'"{correction_mode}" mode, which corrects {corrects}. DIFFPREP registered each volume '
+        f'to {reference}. {transform}'
     )
-    return desc + '\n\n'
+    basis = ' The MAP-MRI basis is an anisotropic SHORE basis aligned to and scaled by the tensor.'
+    if refined is True:
+        tensor_volumes = (
+            f'the volumes with *b* ≤ {_DIFFPREP_HARDI_BVAL} s/mm²'
+            if all(
+                np.sum(bvals <= _DIFFPREP_HARDI_BVAL) >= _DIFFPREP_MIN_TENSOR_VOLUMES
+                for bvals in run_bvals
+            )
+            else 'all volumes'
+        )
+        if max(bvals.max() for bvals in run_bvals) > _DIFFPREP_HARDI_BVAL:
+            desc += (
+                f' It then fit a diffusion tensor model to {tensor_volumes} and a fourth-order '
+                f'MAP-MRI model [@mapmri] to all volumes.{basis} Each volume was registered again '
+                'to its prediction: from the tensor for the *b*=0 volumes and from MAP-MRI for '
+                'the rest.'
+            )
+        else:
+            desc += (
+                f' It then fit a diffusion tensor model to {tensor_volumes} and registered each '
+                'volume again to the image the model predicted.'
+            )
+    elif refined is None:
+        desc += (
+            f' For series with *b*-values above {_DIFFPREP_MODEL_BVAL:g} s/mm² and at least '
+            f'{_DIFFPREP_MIN_VOLUMES} volumes, it then fit a diffusion tensor model to the '
+            f'volumes with *b* ≤ {_DIFFPREP_HARDI_BVAL} s/mm² (and, when there were *b*-values '
+            f'above {_DIFFPREP_HARDI_BVAL} s/mm², a fourth-order MAP-MRI model [@mapmri] to all '
+            'volumes) '
+            f'and registered each volume again to the image the models predicted.{basis}'
+        )
+    return desc + ' The b-matrix was rotated with the estimated motion.\n\n'
+
+
+def _count_b0s(bvals):
+    """Count the volumes DIFFPREP treats as b=0: within 30 s/mm^2 of the lowest b-value."""
+    return int(np.sum(np.abs(bvals - bvals.min()) < 30))
 
 
 def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False, initialized=False):
@@ -1019,34 +1122,32 @@ def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False, initi
     ``initialized`` says DRBUDDI starts from a field-map-derived deformation,
     whose estimation is described by the workflow that precedes this one.
     """
-    desc = ['\n\nDRBUDDI [@drbuddi], part of the TORTOISE [@tortoisev4] software package,']
-    if not with_topup:
-        # Until now there will have been no description of the SDC procedure.
-        # Add extra details about the input data.
-        desc.append(
-            'was used to perform susceptibility distortion correction. '
-            'Data was collected with reversed phase-encode blips, resulting '
-            'in pairs of images with distortions going in opposite directions.'
-        )
+    tortoise = versioned('*TORTOISE*', tortoise_version())
+    if with_topup:
+        desc = [
+            f'\n\nIn the second stage, DRBUDDI [@drbuddi] from {tortoise} [@tortoisev4] '
+            'refined the susceptibility distortion correction.'
+        ]
     else:
-        desc += ['was used to perform a second stage of distortion correction.']
+        desc = [
+            f'\n\nSusceptibility distortion was corrected with DRBUDDI [@drbuddi] from '
+            f'{tortoise} [@tortoisev4].'
+        ]
 
-    # Describe what's going on
     if fieldmap_type == 'epi':
         desc.append(
-            'DRBUDDI registered the mean motion-corrected b=0 image to a '
-            'reverse phase-encoding b=0 reference (chosen with SelectBestB0 '
-            'when several were available) to estimate'
+            'DRBUDDI registered the mean motion-corrected *b*=0 image to a *b*=0 reference '
+            'acquired with the reverse phase-encoding polarity (chosen with `SelectBestB0` '
+            'when several were available) to estimate the susceptibility-induced '
+            'off-resonance field.'
         )
     else:
         desc.append(
-            'DRBUDDI used multiple motion-corrected DWI series acquired '
-            'with opposite phase encoding '
-            'directions. A b=0 image **and** the Fractional Anisotropy '
-            'images from both phase encoding directions were used together in '
-            'a multi-modal registration to estimate'
+            'DRBUDDI estimated the susceptibility-induced off-resonance field from the '
+            'motion-corrected DWI series acquired with opposite phase-encoding polarities, '
+            'registering a *b*=0 image and a fractional anisotropy (FA) image from each '
+            'polarity together in a multimodal registration.'
         )
-    desc.append('the susceptibility-induced off-resonance field.')
 
     if initialized:
         desc.append(
@@ -1060,8 +1161,9 @@ def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False, initi
     if t2w_sdc:
         desc.append('A T2-weighted image was included in the multimodal registration.')
     desc.append(
-        'Signal intensity was adjusted '
-        'in the final interpolated images using a method similar to LSR.\n\n'
+        "Signal intensity was redistributed with TORTOISE's LSR method: each polarity's "
+        'volumes were scaled by the ratio of the harmonic mean of the two corrected *b*=0 '
+        "images to that polarity's corrected *b*=0 image.\n\n"
     )
     return ' '.join(desc)
 
@@ -1199,6 +1301,11 @@ class DIFFPREP(TORTOISECommandLine):
         # bmtxt_file and json_file are passed via sibling-stem lookup, not argstr
         if name in ('bmtxt_file', 'json_file'):
             return ''
+        # TORTOISEProcess documents "-c motion", but each mode loads
+        # settings/mecc_settings/<mode>.mec and there is no motion.mec, so it falls
+        # back to quadratic without an error. rigid.mec is its rigid-only setting.
+        if name == 'correction_mode' and value == 'motion':
+            return '-c rigid'
         return super()._format_arg(name, spec, value)
 
     def _parse_inputs(self, skip=None):

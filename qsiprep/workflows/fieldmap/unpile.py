@@ -30,6 +30,7 @@ from ...interfaces.unpile import (
     unpile_fit_grid_mm,
 )
 from ...utils.sdc import pe_readout_time
+from ...utils.versions import python_package_version, versioned
 from ..dwi.registration import init_structural_to_b0_alignment_wf
 from ..dwi.util import init_dwi_reference_wf
 from .synb0 import init_synb0_wf
@@ -368,46 +369,45 @@ def _as_list(value):
 
 
 def _boilerplate(target, two_pass, gre_prior):
-    reference = (
-        'a synthetic distortion-free b=0 generated from it and the T1w with SynB0-DISCO '
-        '[@synb0disco]'
-        if target == 'synb0'
-        else "the subject's T2w image, placed in the b=0 frame by a rigid registration"
-    )
-    metric = (
-        'the sum of squared differences'
-        if target == 'synb0'
-        else 'local normalized cross-correlation, fitting a rigid refinement of the T2w '
-        'position together with the field'
-    )
+    unpile = versioned('*unpile*', python_package_version('unpile'))
     desc = (
-        'Susceptibility distortion was estimated with unpile [@unpile] after head motion '
-        f'correction: the motion-corrected b=0 average was matched to {reference} by '
-        f'{metric}, through a model of the EPI readout that displaces the reference along '
-        'the phase-encoding axis and accounts for signal pile-up.'
+        'After head motion correction, the susceptibility-induced field was estimated with '
+        f'{unpile} [@unpile], an experimental method that models the EPI readout as a '
+        'displacement of a reference image along the phase-encoding axis, including signal '
+        'pile-up. '
     )
-    if target == 't2w':
+    if target == 'synb0':
         desc += (
-            ' The fit was carried out on a grid at about two thirds of the DWI voxel (no finer '
-            f'than {FINEST_GRID_MM:g} mm) to keep the detail of the T2w.'
+            'The motion-corrected *b*=0 average was matched, by the sum of squared '
+            'differences, to a synthetic distortion-free *b*=0 image generated from it and '
+            'the T1w image with SynB0-DISCO [@synb0disco].'
+        )
+    else:
+        desc += (
+            "The motion-corrected *b*=0 average was matched to the subject's T2w image by "
+            'local normalized cross-correlation. The T2w image was first placed in the *b*=0 '
+            'frame by a rigid registration, and *unpile* refined that position together '
+            'with the field. The fit used a grid of about two-thirds of the DWI voxel size '
+            f'(no finer than {FINEST_GRID_MM:g} mm) to preserve the detail of the T2w image.'
         )
     if gre_prior:
+        # The GRE field's estimation is described by its own workflow, just before this.
         desc += (
-            ' A GRE fieldmap acquired for the series was handed to unpile as a prior, with '
-            'its position refined against the b=0.'
+            ' The GRE field map was given to *unpile* as the prior of its fit, and '
+            'its position was refined against the *b*=0 image.'
             if target == 't2w'
-            else ' A GRE fieldmap acquired for the series was handed to unpile and applied '
-            'as given, since refining it against a synthetic b=0 pulls it toward the '
-            "synthetic image's own residual distortion."
+            else ' The GRE field map was given to *unpile* and applied '
+            'as acquired, since refining it against a synthetic *b*=0 image pulls it toward '
+            "the synthetic image's own residual distortion."
         )
     if two_pass:
         desc += (
-            ' The b=0 was then unwarped with that field (Jacobian-modulated), a new synthetic '
-            'b=0 was generated from it, and the field was fitted again against the new '
-            'synthetic b=0.'
+            ' The *b*=0 image was then unwarped with that field (Jacobian-modulated), a new '
+            'synthetic *b*=0 image was generated from it, and the field was fit again against '
+            'the new synthetic image.'
         )
     desc += (
-        ' The resulting field was converted to a displacement field along the '
-        'phase-encoding axis and applied in the final resampling.\n'
+        ' The field was converted to a displacement field along the phase-encoding axis and '
+        'applied in the final resampling.\n\n'
     )
     return desc

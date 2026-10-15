@@ -279,6 +279,7 @@ markers = [
     "trxscan_rpe_topup: TRXScan truth-scored: reverse-PE pair through TOPUP + eddy",
     "trxscan_rpe_drbuddi: TRXScan truth-scored: reverse-PE pair through DRBUDDI",
     "trxscan_epi_topup: TRXScan truth-scored: DWI + PEPOLAR epi fieldmap through TOPUP",
+    "trxscan_epi_drbuddi: TRXScan truth-scored: DWI + PEPOLAR epi fieldmap through DRBUDDI",
     "trxscan_phasediff: TRXScan truth-scored: GRE phasediff fieldmap with a moved subject",
     "trxscan_gnl: TRXScan truth-scored: strong gradient nonlinearity with --gradient-file",
     "trxscan_motion: TRXScan truth-scored: eddy motion parameters against applied poses",

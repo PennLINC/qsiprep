@@ -33,7 +33,7 @@ from ...interfaces.reports import TopupSummary
 from ...interfaces.synb0 import Synb0FieldQC
 from ...utils.eddy_config import eddy_applies_gre, eddy_modulates_distortion, load_eddy_args
 from ...utils.gpu import gpu_enabled
-from ..fieldmap.base import SDC_ANAT_CONNECTIONS, init_gre_seed_wf, init_sdc_wf
+from ..fieldmap.base import NO_SDC_DESC, SDC_ANAT_CONNECTIONS, init_gre_seed_wf, init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf, seeds_from_gre
 from ..fieldmap.synb0 import init_synb0_wf
 from .gradwarp import (
@@ -369,7 +369,11 @@ def init_fsl_hmc_wf(
         eddy_args,
         fieldmap_type,
         pepolar_method='+'.join(['topup'] * run_topup + ['drbuddi'] * run_drbuddi),
+        gre_in_eddy=gre_to_eddy,
     )
+    # init_sdc_wf, which would say so, is built only when a correction runs
+    if not (run_topup or run_drbuddi or unit.is_gre or unit.is_nipreps_syn or unit.is_unpile):
+        workflow.__postdesc__ = NO_SDC_DESC
 
     # Whether a spatial gradwarp field exists for this unit. It gates two
     # things: gradwarp-correcting SDC estimation inputs (see the note above
@@ -580,11 +584,6 @@ def init_fsl_hmc_wf(
                 synb0_wf = synb0_wf_pass2
                 synb0_b0_ref_wf = synb0_b0_ref_wf_pass2
                 synb0_topup_inputs = synb0_topup_inputs_pass2
-                workflow.__desc__ += (
-                    ' The b=0 was then unwarped with that field (Jacobian-modulated), a new '
-                    'synthetic b=0 was generated from it, and TOPUP was run again on the '
-                    'acquired b=0 images paired with the new synthetic b=0.'
-                )
             # The derivatives and the field QC describe the last pass.
             add_synb0_outputs(workflow, synb0_wf, source_file)
             workflow.connect([

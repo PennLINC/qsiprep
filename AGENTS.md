@@ -167,7 +167,7 @@ QSIPrep is a BIDS App for preprocessing diffusion MRI (dMRI/DWI) data. It handle
 
 ### FSL Dependencies
 
-The `fsl-*` packages in `[tool.pixi.dependencies]` come from the FSL conda channel, which publishes one environment file per FSL release. `scripts/update_fsl_pins.py <release>` rewrites those pins so they all come from a single release (`--check` reports drift without editing, `--list` shows the available releases); run `pixi lock` afterwards. FSL renames its CUDA eddy package from time to time -- it went `fsl-eddy-cuda-10.2` -> `fsl-eddy-cuda-11.0` -> `fsl-eddy-cuda` -- so the script verifies each pin against the channel and refuses to write one the channel cannot satisfy.
+The `fsl-*` packages in `[tool.pixi.dependencies]` come from the FSL conda channel, which publishes one environment file per FSL release. `scripts/update_fsl_pins.py <release>` rewrites those pins so they all come from a single release (`--check` reports drift without editing, `--list` shows the available releases); run `pixi lock` afterwards. It also records the release in `qsiprep/data/fsl_release.json`, which the methods boilerplate uses to name the FSL release, and `--check` fails if that record is stale. FSL renames its CUDA eddy package from time to time -- it went `fsl-eddy-cuda-10.2` -> `fsl-eddy-cuda-11.0` -> `fsl-eddy-cuda` -- so the script verifies each pin against the channel and refuses to write one the channel cannot satisfy.
 
 ### Linting Notes
 

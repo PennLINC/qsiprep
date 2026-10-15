@@ -772,6 +772,31 @@ def test_trxscan_epi_topup(data_dir, output_dir, working_dir):
 
 
 @pytest.mark.integration
+@pytest.mark.trxscan_epi_drbuddi
+def test_trxscan_epi_drbuddi(data_dir, output_dir, working_dir):
+    """Score one series plus a reverse-PE epi fieldmap through eddy and DRBUDDI, with the T2w.
+
+    DRBUDDI gets b=0s only here (the mean of the motion-corrected DWI b=0s and the best reverse
+    b=0), so it has no FA images and runs ``SLOPPY_DRBUDDI_EPI``, the sloppy schedule without
+    the FA metric.
+    """
+    score = _trxscan_run(
+        'trxscan_epi_drbuddi', 'epi', ['--sdc-method=drbuddi'], data_dir, output_dir, working_dir
+    )
+    # Measured 0.99 / 0.96 / 0.58 of 4.7 mm, corrected b=0 0.98 vs acquired 0.65 (2026-10-15).
+    _expect(score, ('sdc', 'corr'), lo=0.95, note='right pattern and sign')
+    _expect(score, ('sdc', 'slope'), 0.8, 1.1)
+    _expect(
+        score,
+        ('b0_corrected_vs_clean',),
+        lo=score['b0_uncorrected_vs_clean'] + 0.15,
+        note=f'uncorrected b0 scores {score["b0_uncorrected_vs_clean"]:.3f}',
+    )
+    _expect(score, ('coreg_error', 'rotation_deg'), hi=1.0)
+    _expect(score, ('coreg_error', 'translation_mm'), hi=1.5)
+
+
+@pytest.mark.integration
 @pytest.mark.trxscan_phasediff
 def test_trxscan_phasediff(data_dir, output_dir, working_dir):
     """Score a GRE phasediff fieldmap with the subject moved between the DWI, T1w and fieldmap.
