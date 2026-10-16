@@ -5791,8 +5791,8 @@ packages:
   requires_python: '>=3.11'
 - pypi: ./
   name: qsiprep
-  version: 26.2.0.dev11+ge61112a4b
-  sha256: 140a30adb62995a88d8a63fd1cf720a631591294ea2140109d212f5cc41b3540
+  version: 26.2.0.dev1+g4e0d19da1
+  sha256: 251d7ecd7f334cd7cbc66b977e1972878e79c325d5a1cd0d6977d2a2c990284d
   requires_dist:
   - acres
   - coverage
@@ -5809,6 +5809,7 @@ packages:
   - nireports>=24.0.3
   - niworkflows>=1.9,<=1.10
   - numpy<=1.26.3
+  - packaging
   - pandas<2.0.0
   - psutil<=5.9.8
   - pybids>=0.15.0,<0.16.0
@@ -5818,6 +5819,7 @@ packages:
   - pytest-xdist
   - pyyaml
   - qsiplan>=0.5.0,<0.6
+  - requests
   - scikit-image
   - scikit-learn<=1.4.0
   - seaborn
@@ -5871,8 +5873,8 @@ packages:
   editable: true
 - pypi: ./
   name: qsiprep
-  version: 26.2.0.dev11+ge61112a4b
-  sha256: 140a30adb62995a88d8a63fd1cf720a631591294ea2140109d212f5cc41b3540
+  version: 26.2.0.dev1+g4e0d19da1
+  sha256: 251d7ecd7f334cd7cbc66b977e1972878e79c325d5a1cd0d6977d2a2c990284d
   requires_dist:
   - acres
   - coverage
@@ -5889,6 +5891,7 @@ packages:
   - nireports>=24.0.3
   - niworkflows>=1.9,<=1.10
   - numpy<=1.26.3
+  - packaging
   - pandas<2.0.0
   - psutil<=5.9.8
   - pybids>=0.15.0,<0.16.0
@@ -5898,6 +5901,7 @@ packages:
   - pytest-xdist
   - pyyaml
   - qsiplan>=0.5.0,<0.6
+  - requests
   - scikit-image
   - scikit-learn<=1.4.0
   - seaborn
