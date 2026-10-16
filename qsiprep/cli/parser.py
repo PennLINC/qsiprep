@@ -51,6 +51,10 @@ def _build_parser(**kwargs):
     from functools import partial
     from pathlib import Path
 
+    from packaging.version import Version
+
+    from .version import check_latest, is_flagged
+
     # Deprecated options: {option string: (version it is removed in, what happens instead)}
     deprecations = {}
 
@@ -1163,6 +1167,29 @@ def _build_parser(**kwargs):
         help='show this help message and exit',
     )
     g_help.add_argument('--version', action='version', version=verstr)
+
+    currentv = Version(config.environment.version)
+    latest = check_latest()
+    if latest is not None and currentv < latest:
+        print(
+            f"""\
+You are using QSIPrep-{currentv}, and a newer version of QSIPrep is available: {latest}.
+Please check out our documentation about how and when to upgrade:
+https://qsiprep.readthedocs.io/en/latest/troubleshooting.html#version-warnings""",
+            file=sys.stderr,
+        )
+
+    _blist = is_flagged()
+    if _blist[0]:
+        _reason = _blist[1] or 'unknown'
+        print(
+            f"""\
+WARNING: Version {config.environment.version} of QSIPrep (current) has been FLAGGED
+(reason: {_reason}).
+That means some severe flaw was found in it and we strongly
+discourage its usage.""",
+            file=sys.stderr,
+        )
 
     return parser
 
