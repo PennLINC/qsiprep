@@ -26,7 +26,8 @@ version, and the relevant part of the log.
 Version warnings
 ****************
 
-At startup, *QSIPrep* checks PyPI for a newer release and prints a notice
+At startup, *QSIPrep* checks the GitHub repository's tags for a newer
+release (pre-releases excluded) and prints a notice
 to standard error if one exists. The latest release is cached in
 ``~/.cache/qsiprep/latest`` for 14 days. Process a whole dataset with one
 version (and, with containers, one image); upgrade between studies, not

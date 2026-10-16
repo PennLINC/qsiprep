@@ -18,10 +18,10 @@ from qsiprep.cli.version import DATE_FMT, check_latest, is_flagged, requests
 
 
 class MockResponse:
-    """Mocks the requests module so that PyPI is not actually queried."""
+    """Mocks the requests module so that GitHub is not actually queried."""
 
     status_code = 200
-    _json = {'releases': {'1.0.0': None, '1.0.1': None, '1.1.0': None, '1.1.1rc1': None}}
+    _json = [{'name': name} for name in ('1.1.1rc1', '1.1.0', '1.0.1', '1.0.0')]
 
     def __init__(self, code=200, json=None):
         """Allow setting different response codes."""
@@ -49,7 +49,7 @@ def test_check_latest1(tmp_path, monkeypatch):
     cachefile = Path.home() / '.cache' / 'qsiprep' / 'latest'
     assert not cachefile.exists()
 
-    # First check actually fetches from pypi
+    # First check actually fetches the tags from GitHub
     v = check_latest()
     assert cachefile.exists()
     assert isinstance(v, Version)
@@ -95,9 +95,11 @@ def test_check_latest1(tmp_path, monkeypatch):
     ('result', 'code', 'json'),
     [
         (None, 404, None),
-        (None, 200, {'releases': {'1.0.0rc1': None}}),
+        (None, 200, [{'name': '1.0.0rc1'}]),
+        (None, 200, [{'name': 'not-a-version'}, {'commit': {}}]),
         (Version('1.1.0'), 200, None),
-        (Version('1.0.0'), 200, {'releases': {'1.0.0': None}}),
+        (Version('1.0.0'), 200, [{'name': '1.0.0'}]),
+        (Version('0.10.0'), 200, [{'name': '0.9.0'}, {'name': '0.10.0'}, {'name': 'v-old'}]),
     ],
 )
 def test_check_latest2(tmp_path, monkeypatch, result, code, json):
