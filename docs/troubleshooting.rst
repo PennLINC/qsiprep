@@ -20,6 +20,31 @@ https://github.com/pennlinc/qsiprep/issues. Include the command line, the
 version, and the relevant part of the log.
 
 
+.. _version_warnings:
+
+****************
+Version warnings
+****************
+
+At startup, *QSIPrep* checks the ``pennlinc/qsiprep`` image tags on Docker
+Hub for a newer release (pre-releases excluded) and prints a notice to
+standard error if one exists. The latest release is cached in
+``~/.cache/qsiprep/latest`` for 14 days. Process a whole dataset with one
+version (and, with containers, one image); upgrade between studies, not
+in the middle of one. See :doc:`upgrading` for what changed between
+releases.
+
+It also checks whether the running version is listed in
+`.versions.json <https://github.com/pennlinc/qsiprep/blob/main/.versions.json>`_
+on the ``main`` branch, which records releases with a serious known flaw
+and the reason. A flagged version prints a ``FLAGGED`` warning with that
+reason. If yours is flagged, upgrade as soon as you can and check whether
+the flaw affects outputs you have already produced.
+
+Both checks time out after a second and are skipped silently when the
+network is unavailable.
+
+
 ********************
 Logs and crash files
 ********************
