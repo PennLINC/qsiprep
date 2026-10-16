@@ -17,11 +17,16 @@ from qsiprep.cli.parser import _build_parser
 from qsiprep.cli.version import DATE_FMT, check_latest, is_flagged, requests
 
 
+def _tags(*names):
+    """Build a Docker Hub tag listing with the given tag names."""
+    return {'count': len(names), 'next': None, 'results': [{'name': name} for name in names]}
+
+
 class MockResponse:
-    """Mocks the requests module so that GitHub is not actually queried."""
+    """Mocks the requests module so that Docker Hub is not actually queried."""
 
     status_code = 200
-    _json = [{'name': name} for name in ('1.1.1rc1', '1.1.0', '1.0.1', '1.0.0')]
+    _json = _tags('latest', 'unstable', '1.1.1rc1', '1.1.0', '1.0.1', '1.0.0')
 
     def __init__(self, code=200, json=None):
         """Allow setting different response codes."""
@@ -49,7 +54,7 @@ def test_check_latest1(tmp_path, monkeypatch):
     cachefile = Path.home() / '.cache' / 'qsiprep' / 'latest'
     assert not cachefile.exists()
 
-    # First check actually fetches the tags from GitHub
+    # First check actually fetches the tags from Docker Hub
     v = check_latest()
     assert cachefile.exists()
     assert isinstance(v, Version)
@@ -95,11 +100,13 @@ def test_check_latest1(tmp_path, monkeypatch):
     ('result', 'code', 'json'),
     [
         (None, 404, None),
-        (None, 200, [{'name': '1.0.0rc1'}]),
-        (None, 200, [{'name': 'not-a-version'}, {'commit': {}}]),
+        (None, 200, _tags('1.0.0rc1')),
+        (None, 200, _tags('latest', 'unstable')),
+        (None, 200, {'results': [{'digest': 'sha256:0'}]}),
+        (None, 200, {'message': 'not found'}),
         (Version('1.1.0'), 200, None),
-        (Version('1.0.0'), 200, [{'name': '1.0.0'}]),
-        (Version('0.10.0'), 200, [{'name': '0.9.0'}, {'name': '0.10.0'}, {'name': 'v-old'}]),
+        (Version('1.0.0'), 200, _tags('1.0.0')),
+        (Version('0.10.0'), 200, _tags('0.9.0', '0.10.0', 'latest')),
     ],
 )
 def test_check_latest2(tmp_path, monkeypatch, result, code, json):
