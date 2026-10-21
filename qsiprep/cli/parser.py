@@ -452,7 +452,8 @@ def _build_parser(**kwargs):
             'off). '
             '"shims" treats all ShimSetting values as compatible when grouping series. '
             '"fov" concatenates series with differently-oriented fields of view anyway, '
-            'in which case distortion corrections will be misapplied. '
+            "voxel for voxel without resampling, under the first series' affine, in "
+            'which case distortion corrections will be misapplied. '
             '"gradwarp" disables gradient nonlinearity correction entirely, including '
             'the voxelwise gradient deviation map. '
             '"jacobian" disables the Jacobian intensity modulation QSIPrep itself applies '
