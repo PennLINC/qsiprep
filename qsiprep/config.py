@@ -626,6 +626,9 @@ class workflow(_Config):
     """Skip re-scaling dwi scans to have matching b=0 intensities."""
     output_resolution = None
     """Isotropic voxel size for outputs."""
+    write_jacobian_4d = False
+    """Write the Jacobian intensity modulation as one map per DWI volume instead of
+    its mean over volumes."""
     sdc_anat_reference = 'none'
     """Which anatomical-derived image the fieldmap-less correction uses:
     ``none`` (default, fieldmap-less SDC off), ``synb0``, ``invt1w`` or ``t2w``."""

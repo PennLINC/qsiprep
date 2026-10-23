@@ -427,9 +427,9 @@ def test_jacobian_derivative_does_not_collide_with_preproc_dwi():
 
 
 def test_jacobian_sidecar_index_is_zero_based_and_full_length():
-    from qsiprep.interfaces.jacobian import _jacobian_sidecar
+    from qsiprep.utils.jacobian import jacobian_sidecar
 
-    sidecar = _jacobian_sidecar(
+    sidecar = jacobian_sidecar(
         weight_index=[0, 0, 1, 0],
         applied=['gradwarp', 'sdc'],
         unmodulated=[],
@@ -444,9 +444,9 @@ def test_jacobian_sidecar_index_is_zero_based_and_full_length():
 
 
 def test_jacobian_sidecar_records_a_gap():
-    from qsiprep.interfaces.jacobian import _jacobian_sidecar
+    from qsiprep.utils.jacobian import jacobian_sidecar
 
-    sidecar = _jacobian_sidecar(
+    sidecar = jacobian_sidecar(
         weight_index=[0, 0],
         applied=['gradwarp', 'sdc'],
         unmodulated=['eddy-current'],
@@ -463,9 +463,9 @@ def test_jacobian_sidecar_collapsed_case_is_written_in_full():
 
     All-zeros rather than omitted, so consumers need no special case.
     """
-    from qsiprep.interfaces.jacobian import _jacobian_sidecar
+    from qsiprep.utils.jacobian import jacobian_sidecar
 
-    sidecar = _jacobian_sidecar(
+    sidecar = jacobian_sidecar(
         weight_index=[0] * 5, applied=['sdc'], unmodulated=[], reason=None, method='Jacobian'
     )
     assert sidecar['JacobianWeightIndex'] == [0, 0, 0, 0, 0]

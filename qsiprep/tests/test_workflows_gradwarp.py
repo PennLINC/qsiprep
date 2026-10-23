@@ -1693,6 +1693,12 @@ def test_dwi_finalize_wf_builds_grad_dev_when_a_plan_resolves(tmp_path):
     assert ('dwi_mask', 'gradwarp_mask_file') in from_inputnode
 
 
+def test_grad_dev_sink_runs_in_a_worker(tmp_path):
+    """Test that the 4D grad_dev map is written off nipype's main thread."""
+    wf = _finalize_wf_with_gradients(tmp_path)
+    assert not wf.get_node('ds_grad_dev').run_without_submitting
+
+
 def test_dwi_finalize_wf_builds_grad_dev_for_dis3d(tmp_path):
     """Test that the finalize workflow builds grad_dev for a DIS3D unit.
 
