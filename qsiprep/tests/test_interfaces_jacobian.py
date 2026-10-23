@@ -1179,6 +1179,22 @@ def test_stack_jacobian_weights_two_images_stack_on_last_axis(tmp_path):
     assert np.allclose(data[..., 1], 2.0)
 
 
+def test_stack_jacobian_weights_writes_float32_from_float64_inputs(tmp_path):
+    """Test that the stacked map is float32 even when the inputs are float64.
+
+    nibabel writes an image in its header's data type, so casting the array
+    alone left the derivative in float64: twice the size, and far slower to
+    compress.
+    """
+    paths = []
+    for index, value in enumerate((1.0, 2.0)):
+        path = tmp_path / f'w{index}.nii.gz'
+        nb.Nifti1Image(np.full((8, 8, 8), value, dtype='float64'), np.eye(4)).to_filename(path)
+        paths.append(str(path))
+    result = StackJacobianWeights(weight_images=paths, weight_index=[0, 1]).run(cwd=str(tmp_path))
+    assert nb.load(result.outputs.out_file).get_data_dtype() == np.float32
+
+
 def test_stack_jacobian_weights_undefined_input_stays_undefined(tmp_path):
     """Test that an undefined input stays undefined.
 

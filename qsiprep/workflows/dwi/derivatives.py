@@ -179,7 +179,10 @@ def init_dwi_derivatives_wf(
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
 
-    # 4D DWI in ACPC space
+    # 4D DWI in ACPC space. Like the other 4D outputs (ds_jacobian, and
+    # ds_grad_dev in finalize.py), this sink runs in a worker process: writing
+    # and compressing a 4D series takes long enough that, on the main thread,
+    # it would stop nipype from dispatching any other node meanwhile.
 
     ds_dwi_t1 = pe.Node(
         DerivativesDataSink(
@@ -192,7 +195,6 @@ def init_dwi_derivatives_wf(
             compress=True,
         ),
         name='ds_dwi_t1',
-        run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
     ds_bvals_t1 = pe.Node(
@@ -343,7 +345,6 @@ def init_dwi_derivatives_wf(
                 compress=True,
             ),
             name='ds_jacobian',
-            run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
         workflow.connect([

@@ -658,7 +658,6 @@ def init_dwi_finalize_wf(
                 },
             ),
             name='ds_grad_dev',
-            run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
         workflow.connect([

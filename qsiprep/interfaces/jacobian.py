@@ -434,6 +434,18 @@ def validate_scalar_geometry(image_path, reference_path):
     _assert_world_frames_overlap(image_path, reference_path, img_a=image, img_b=reference)
 
 
+def _float32_header(img):
+    """Return a copy of ``img``'s header that stores float32 data.
+
+    nibabel writes an image in its header's data type, not the array's, so an
+    array cast to float32 but paired with a float64 source header is written
+    as float64.
+    """
+    header = img.header.copy()
+    header.set_data_dtype(np.float32)
+    return header
+
+
 class _ComposeJacobianWeightsInputSpec(BaseInterfaceInputSpec):
     dwi_files = InputMultiObject(
         File(exists=True),
@@ -1026,7 +1038,9 @@ class OkanQuadraticJacobian(SimpleInterface):
                 newpath=runtime.cwd,
                 use_ext=True,
             )
-            nb.Nifti1Image(det.astype('float32'), affine, ref.header).to_filename(out_path)
+            nb.Nifti1Image(det.astype('float32'), affine, _float32_header(ref)).to_filename(
+                out_path
+            )
             images.append(out_path)
 
         self._results['ec_jacobian_images'] = images
@@ -1116,9 +1130,9 @@ class StackJacobianWeights(SimpleInterface):
             data = np.asanyarray(images[0].dataobj)
         else:
             data = np.stack([np.asanyarray(img.dataobj) for img in images], axis=-1)
-        nb.Nifti1Image(data.astype('float32'), images[0].affine, images[0].header).to_filename(
-            out_file
-        )
+        nb.Nifti1Image(
+            data.astype('float32'), images[0].affine, _float32_header(images[0])
+        ).to_filename(out_file)
 
         method = self.inputs.method if isdefined(self.inputs.method) else METHOD_JACOBIAN
         self._results['out_file'] = out_file
