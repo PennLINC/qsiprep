@@ -27,11 +27,11 @@ from ...interfaces.dsi_studio import DSIStudioBTable
 from ...interfaces.dwi_merge import MergeFinalConfounds, SplitResampledDWIs
 from ...interfaces.gradients import ExtractB0s
 from ...interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
-from ...interfaces.jacobian import pe_axis_from_direction
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SDCWarpPlot, SeriesQC
 from ...utils.eddy_config import eddy_applies_gre
+from ...utils.jacobian import pe_axis_from_direction
 from ...utils.jacobian_provenance import jacobian_provenance_for
 from ...utils.sdc import eddy_applies_topup, pe_readout_time, sdc_warp_source
 from ...utils.versions import mrtrix3_version, versioned

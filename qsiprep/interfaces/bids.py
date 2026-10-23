@@ -24,6 +24,7 @@ from shutil import copyfileobj
 
 import nibabel as nb
 from bids.layout import Config
+from isal.igzip import IGzipFile
 from nipype import logging
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
@@ -45,20 +46,24 @@ from qsiprep.data import load as load_data
 
 LOGGER = logging.getLogger('nipype.interface')
 
-try:
-    from isal.igzip import IGzipFile
-except ImportError:  # pragma: no cover
-    IGzipFile = None
-
 
 def write_nifti_isal(fname, header, data):
     """Write a NIfTI image as niworkflows does, compressing with ISA-L.
 
     niworkflows' DerivativesDataSink writes every image it rewrites through
     ``unsafe_write_nifti_header_and_data``, which compresses with zlib at level
-    9. ISA-L writes the same gzip format, at nearly the same size, an order of
+    9. ISA-L writes the same gzip format at nearly the same size, an order of
     magnitude faster. As in niworkflows, the gzip header holds no file name or
     modification time, so the output is deterministic.
+
+    Parameters
+    ----------
+    fname : str or os.PathLike
+        Output file; compressed when it ends in ``.gz``.
+    header : nibabel.Nifti1Header
+        Header to write, with the data type and offset of ``data``.
+    data : array-like
+        Image data in Fortran order.
     """
     compress = str(fname).endswith('.gz')
     with open(fname, 'wb') as fobj:
@@ -72,8 +77,7 @@ def write_nifti_isal(fname, header, data):
             fobj.close()
 
 
-if IGzipFile is not None:
-    niworkflows_bids.unsafe_write_nifti_header_and_data = write_nifti_isal
+niworkflows_bids.unsafe_write_nifti_header_and_data = write_nifti_isal
 
 BIDS_NAME = re.compile(
     r'^(.*\/)?(?P<subject_id>sub-[a-zA-Z0-9]+)(_(?P<session_label>ses-[a-zA-Z0-9]+))?'

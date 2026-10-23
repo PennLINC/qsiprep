@@ -1643,7 +1643,7 @@ def test_reconstructed_transform_reproduces_moteddy(tmp_path, working_dir):
     import nibabel as nb
     import numpy as np
 
-    from qsiprep.interfaces.jacobian import resample_with_okan_transform
+    from qsiprep.utils.jacobian import resample_with_okan_transform
 
     work = Path(working_dir)
 

@@ -13,7 +13,8 @@ import nibabel as nb
 import numpy as np
 import pytest
 
-from qsiprep.interfaces.jacobian import (
+from qsiprep.tests.gradient_fixtures import write_itk_field
+from qsiprep.utils.jacobian import (
     check_weight_map,
     compose_fields,
     jacobian_determinant,
@@ -23,7 +24,6 @@ from qsiprep.interfaces.jacobian import (
     validate_scalar_geometry,
     weight_key,
 )
-from qsiprep.tests.gradient_fixtures import write_itk_field
 
 #: The real DRBUDDI shape/affine mismatch this module's C1 fix addresses,
 #: read directly off cached DRBUDDI outputs for a real dataset (see the
@@ -1069,7 +1069,7 @@ def test_okan_jacobian_is_evaluated_at_the_rigidly_moved_point():
     polynomial at R @ p + T, not at p. With a quadratic term the difference
     is exactly 2 * c12 * T_y along the phase axis.
     """
-    from qsiprep.interfaces.jacobian import okan_quadratic_jacobian
+    from qsiprep.utils.jacobian import okan_quadratic_jacobian
 
     c12 = 1e-3
     still = list(_IDENTITY_ROW)
@@ -1084,7 +1084,7 @@ def test_okan_jacobian_is_evaluated_at_the_rigidly_moved_point():
 
 def test_okan_coordinate_frame_centres():
     """Test the three rot_eddy_center frames from DIFFPREP::ChangeImageHeaderToDP."""
-    from qsiprep.interfaces.jacobian import _okan_coordinate_frame
+    from qsiprep.utils.jacobian import _okan_coordinate_frame
 
     affine = np.diag([-2.0, -2.0, 2.0, 1.0])
     affine[:3, 3] = [10.0, 20.0, -30.0]  # RAS origin
@@ -1297,7 +1297,7 @@ class _RecordingRun:
 
 
 def test_compose_fields_forwards_num_threads(tmp_path, monkeypatch):
-    from qsiprep.interfaces import jacobian as jac_mod
+    from qsiprep.utils import jacobian as jac_mod
 
     calls = []
     monkeypatch.setattr(jac_mod.ants, 'ApplyTransforms', _RecordingAnts(calls))
@@ -1311,7 +1311,7 @@ def test_compose_fields_forwards_num_threads(tmp_path, monkeypatch):
 
 
 def test_transport_scalar_map_forwards_num_threads(tmp_path, monkeypatch):
-    from qsiprep.interfaces import jacobian as jac_mod
+    from qsiprep.utils import jacobian as jac_mod
 
     calls = []
     monkeypatch.setattr(jac_mod.ants, 'ApplyTransforms', _RecordingAnts(calls))
@@ -1397,7 +1397,7 @@ def test_check_weight_map_tolerates_localised_pile_up(tmp_path, caplog):
 
     2% non-positive is what a real susceptibility field looks like.
     """
-    from qsiprep.interfaces.jacobian import check_weight_map
+    from qsiprep.utils.jacobian import check_weight_map
 
     weights = _map_with_nonpositive_fraction(tmp_path / 'w.nii.gz', 0.02)
     mask = _write_map(tmp_path / 'mask.nii.gz', 1.0, shape=(10, 10, 10))
@@ -1410,7 +1410,7 @@ def test_check_weight_map_warns_on_a_widespread_fold(tmp_path, caplog):
 
     Half the brain folded is a broken field, not pile-up.
     """
-    from qsiprep.interfaces.jacobian import check_weight_map
+    from qsiprep.utils.jacobian import check_weight_map
 
     weights = _map_with_nonpositive_fraction(tmp_path / 'w.nii.gz', 0.5)
     mask = _write_map(tmp_path / 'mask.nii.gz', 1.0, shape=(10, 10, 10))
@@ -1421,7 +1421,7 @@ def test_check_weight_map_warns_on_a_widespread_fold(tmp_path, caplog):
 
 
 def test_fold_report_is_silent_when_everything_is_positive(tmp_path, caplog):
-    from qsiprep.interfaces.jacobian import _report_nonpositive
+    from qsiprep.utils.jacobian import _report_nonpositive
 
     with caplog.at_level('WARNING'):
         _report_nonpositive(np.ones(100), 'subject', 'consequence')

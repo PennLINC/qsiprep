@@ -179,9 +179,7 @@ def init_dwi_derivatives_wf(
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
 
-    # 4D DWI in ACPC space. Sinks that write 4D images (this one, ds_jacobian,
-    # and ds_grad_dev in finalize.py) run in worker processes; nipype's main
-    # process dispatches no other node while a sink runs there.
+    # 4D DWI in ACPC space
 
     ds_dwi_t1 = pe.Node(
         DerivativesDataSink(
@@ -330,7 +328,7 @@ def init_dwi_derivatives_wf(
                 applied_corrections=list(jacobian_applied_corrections),
                 unmodulated_corrections=list(jacobian_unmodulated_corrections),
                 unmodulated_reason=jacobian_unmodulated_reason,
-                volumes=bool(config.workflow.write_jacobian_4d),
+                volumes=config.workflow.write_jacobian_4d,
             ),
             name='stack_jacobian',
         )
