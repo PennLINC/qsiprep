@@ -1047,13 +1047,18 @@ class OkanQuadraticJacobian(SimpleInterface):
         return runtime
 
 
-def _jacobian_sidecar(weight_index, applied, unmodulated, reason, method):
+def _jacobian_sidecar(weight_index, applied, unmodulated, reason, method, volume_deviation=None):
     """Build the sidecar for the intensity weight derivative.
 
     ``weight_index`` is zero-based, one entry per volume of the preprocessed
     DWI series, indexing volumes of the 4D weight file. Repeated maps appear
     as repeated indices; the single-map case is written out as all zeros so
     consumers need no special case.
+
+    ``volume_deviation`` is given when the file holds the mean over volumes of
+    distinct per-volume weights rather than the weights themselves: the 99th
+    percentile, over voxels, of the largest relative difference between a
+    volume's own weight and the mean.
     """
     sidecar = {
         'JacobianWeightIndex': list(weight_index) if isdefined(weight_index) else [],
@@ -1072,6 +1077,15 @@ def _jacobian_sidecar(weight_index, applied, unmodulated, reason, method):
             'not commute with it.'
         ),
     }
+    if volume_deviation is not None:
+        sidecar['JacobianWeightCombination'] = 'mean'
+        sidecar['JacobianWeightVolumeDeviation'] = volume_deviation
+        sidecar['Description'] += (
+            ' The weights differed between volumes; this file is their mean over '
+            "volumes, and each volume's own weight differs from it by at most "
+            'JacobianWeightVolumeDeviation (as a fraction, 99th percentile over '
+            'voxels). Run with --write-jacobian-4d to write one map per volume.'
+        )
     if unmodulated and reason:
         sidecar['UnmodulatedReason'] = reason
     return sidecar
@@ -1085,6 +1099,11 @@ class _StackJacobianWeightsInputSpec(BaseInterfaceInputSpec):
         desc='unique output-grid weight maps, first-appearance order',
     )
     weight_index = traits.List(traits.Int(), desc='per-volume index into weight_images')
+    volumes = traits.Bool(
+        False,
+        usedefault=True,
+        desc='write every distinct map (4D) instead of their mean over volumes (3D)',
+    )
     method = traits.Str(desc="'Jacobian' or 'LSR', from ComposeJacobianWeights")
     # Build-time facts about this run, computed by
     # qsiprep.utils.jacobian_provenance.jacobian_provenance_for and set as
@@ -1105,16 +1124,23 @@ class _StackJacobianWeightsInputSpec(BaseInterfaceInputSpec):
 
 
 class _StackJacobianWeightsOutputSpec(TraitedSpec):
-    out_file = File(desc='3D if one unique map, else 4D; Undefined if no weights were applied')
+    out_file = File(
+        desc='3D unless the maps differ and volumes is set; Undefined if no weights were applied'
+    )
     meta_dict = traits.Dict(desc='sidecar for the derivative')
 
 
 class StackJacobianWeights(SimpleInterface):
-    """Stack the unique weight maps and build the sidecar.
+    """Write the weight maps as one derivative and build its sidecar.
 
-    3D when every volume shares one map, 4D otherwise. Undefined
-    ``weight_images`` (no weights were applied this run) is propagated as
-    Undefined outputs rather than synthesizing a map of ones.
+    When every volume shares one map, that map is written (3D). When the maps
+    differ between volumes, as with eddy-current correction, the default is
+    their mean over volumes (3D), each map counted once per volume that used
+    it: the per-volume differences are small next to the spatial variation, and
+    a 4D map is as large as the DWI series. ``volumes`` writes every distinct
+    map instead (4D). Undefined ``weight_images`` (no weights were applied this
+    run) is propagated as Undefined outputs rather than synthesizing a map of
+    ones.
     """
 
     input_spec = _StackJacobianWeightsInputSpec
@@ -1126,21 +1152,53 @@ class StackJacobianWeights(SimpleInterface):
 
         images = [nb.load(path) for path in self.inputs.weight_images]
         out_file = os.path.join(runtime.cwd, 'jacobian_weights.nii.gz')
+        weight_index = (
+            list(self.inputs.weight_index) if isdefined(self.inputs.weight_index) else []
+        )
+        deviation = None
         if len(images) == 1:
-            data = np.asanyarray(images[0].dataobj)
+            data = np.asanyarray(images[0].dataobj, dtype=np.float32)
+        elif self.inputs.volumes:
+            data = np.stack([np.asanyarray(img.dataobj, dtype=np.float32) for img in images], -1)
         else:
-            data = np.stack([np.asanyarray(img.dataobj) for img in images], axis=-1)
-        nb.Nifti1Image(
-            data.astype('float32'), images[0].affine, _float32_header(images[0])
-        ).to_filename(out_file)
+            data, deviation = _volume_mean(images, weight_index)
+            weight_index = [0] * len(weight_index)
+        nb.Nifti1Image(data, images[0].affine, _float32_header(images[0])).to_filename(out_file)
 
         method = self.inputs.method if isdefined(self.inputs.method) else METHOD_JACOBIAN
         self._results['out_file'] = out_file
         self._results['meta_dict'] = _jacobian_sidecar(
-            weight_index=self.inputs.weight_index,
+            weight_index=weight_index,
             applied=self.inputs.applied_corrections,
             unmodulated=self.inputs.unmodulated_corrections,
             reason=self.inputs.unmodulated_reason,
             method=method,
+            volume_deviation=deviation,
         )
         return runtime
+
+
+def _volume_mean(images, weight_index):
+    """Mean over volumes of distinct weight maps, and how far the maps stray from it.
+
+    Map ``k`` counts once for every volume whose ``weight_index`` entry is ``k``
+    (every map once if no index is given). Returns the float32 mean and the 99th
+    percentile, over voxels where the mean is non-zero, of the largest relative
+    difference between a used map and the mean.
+    """
+    counts = np.bincount(weight_index, minlength=len(images)) if weight_index else None
+    if counts is None or not counts.any():
+        counts = np.ones(len(images), dtype=int)
+    total = np.zeros(images[0].shape, dtype=np.float64)
+    for img, count in zip(images, counts, strict=True):
+        if count:
+            total += count * np.asanyarray(img.dataobj, dtype=np.float64)
+    mean = total / counts.sum()
+    inside = mean != 0
+    largest = np.zeros(int(inside.sum()))
+    for img, count in zip(images, counts, strict=True):
+        if count:
+            values = np.asanyarray(img.dataobj, dtype=np.float64)[inside]
+            np.maximum(largest, np.abs(values / mean[inside] - 1), out=largest)
+    deviation = float(np.percentile(largest, 99)) if largest.size else 0.0
+    return mean.astype(np.float32), round(deviation, 6)

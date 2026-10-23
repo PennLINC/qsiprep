@@ -870,6 +870,16 @@ def _build_parser(**kwargs):
             'synb0 and invt1w require --anat-modality T1w.'
         ),
     )
+    g_sdc.add_argument(
+        '--write-jacobian-4d',
+        action='store_true',
+        default=False,
+        help=(
+            'Write the Jacobian intensity modulation as one map per DWI volume. By '
+            'default, when the modulation differs between volumes (as with eddy-current '
+            'correction), its mean over volumes is written as a single 3D map.'
+        ),
+    )
 
     g_gradwarp = parser.add_argument_group(
         'Gradient nonlinearity correction',

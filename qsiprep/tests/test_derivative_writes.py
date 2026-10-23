@@ -1,8 +1,7 @@
 """Tests for how DWI derivatives are written.
 
-Large 4D outputs are written in worker processes rather than on nipype's main
-thread, and every derivative niworkflows rewrites is compressed with ISA-L
-instead of zlib.
+4D sinks run in worker processes, and derivatives that niworkflows rewrites
+are compressed with ISA-L.
 """
 
 import gzip
@@ -88,12 +87,7 @@ def test_datasink_compresses_a_4d_series(tmp_path):
 
 
 def test_4d_dwi_sinks_run_in_workers(tmp_path):
-    """Test that the 4D sinks are submitted to workers and the small ones are not.
-
-    A sink with run_without_submitting=True runs in nipype's main process, which
-    dispatches no other node until it returns; compressing a 4D series there
-    stalls the whole run.
-    """
+    """Test that the 4D sinks are submitted to workers and the small ones are not."""
     from qsiprep import config
     from qsiprep.workflows.dwi.derivatives import init_dwi_derivatives_wf
 
@@ -108,3 +102,28 @@ def test_4d_dwi_sinks_run_in_workers(tmp_path):
         assert not nodes['ds_jacobian'].run_without_submitting
     assert nodes['ds_bvals_t1'].run_without_submitting
     assert nodes['ds_dwi_mask_t1'].run_without_submitting
+
+
+@pytest.mark.parametrize('flag', [False, True])
+def test_jacobian_4d_flag_reaches_the_stacking_node(tmp_path, flag):
+    """Test that --write-jacobian-4d is passed to StackJacobianWeights."""
+    from qsiprep import config
+    from qsiprep.cli.parser import _build_parser
+    from qsiprep.workflows.dwi.derivatives import init_dwi_derivatives_wf
+
+    action = next(a for a in _build_parser()._actions if a.dest == 'write_jacobian_4d')
+    assert action.option_strings == ['--write-jacobian-4d']
+    assert action.default is False
+
+    config.execution.output_dir = str(tmp_path)
+    config.workflow.hmc_method = 'tortoise'
+    config.workflow.write_local_bvecs = False
+    config.workflow.write_jacobian_4d = flag
+    try:
+        wf = init_dwi_derivatives_wf('/data/sub-01/ses-1/dwi/sub-01_ses-1_dwi.nii.gz')
+        nodes = {n.name: n for n in wf._get_all_nodes()}
+        if 'stack_jacobian' not in nodes:
+            pytest.skip('Jacobian modulation is off in this configuration')
+        assert nodes['stack_jacobian'].inputs.volumes is flag
+    finally:
+        config.workflow.write_jacobian_4d = False
