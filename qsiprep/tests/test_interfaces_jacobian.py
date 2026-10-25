@@ -13,7 +13,8 @@ import nibabel as nb
 import numpy as np
 import pytest
 
-from qsiprep.interfaces.jacobian import (
+from qsiprep.tests.gradient_fixtures import write_itk_field
+from qsiprep.utils.jacobian import (
     check_weight_map,
     compose_fields,
     jacobian_determinant,
@@ -23,7 +24,6 @@ from qsiprep.interfaces.jacobian import (
     validate_scalar_geometry,
     weight_key,
 )
-from qsiprep.tests.gradient_fixtures import write_itk_field
 
 #: The real DRBUDDI shape/affine mismatch this module's C1 fix addresses,
 #: read directly off cached DRBUDDI outputs for a real dataset (see the
@@ -1069,7 +1069,7 @@ def test_okan_jacobian_is_evaluated_at_the_rigidly_moved_point():
     polynomial at R @ p + T, not at p. With a quadratic term the difference
     is exactly 2 * c12 * T_y along the phase axis.
     """
-    from qsiprep.interfaces.jacobian import okan_quadratic_jacobian
+    from qsiprep.utils.jacobian import okan_quadratic_jacobian
 
     c12 = 1e-3
     still = list(_IDENTITY_ROW)
@@ -1084,7 +1084,7 @@ def test_okan_jacobian_is_evaluated_at_the_rigidly_moved_point():
 
 def test_okan_coordinate_frame_centres():
     """Test the three rot_eddy_center frames from DIFFPREP::ChangeImageHeaderToDP."""
-    from qsiprep.interfaces.jacobian import _okan_coordinate_frame
+    from qsiprep.utils.jacobian import _okan_coordinate_frame
 
     affine = np.diag([-2.0, -2.0, 2.0, 1.0])
     affine[:3, 3] = [10.0, 20.0, -30.0]  # RAS origin
@@ -1165,18 +1165,62 @@ def test_stack_jacobian_weights_single_image_is_3d(tmp_path):
 
 
 def test_stack_jacobian_weights_two_images_stack_on_last_axis(tmp_path):
-    """Test that multiple unique maps stack on the last axis, in first-appearance order."""
+    """Test that with volumes set, distinct maps stack on the last axis, in order."""
     first = _write_map(tmp_path / 'w0.nii.gz', 1.0)
     second = _write_map(tmp_path / 'w1.nii.gz', 2.0)
-    result = StackJacobianWeights(weight_images=[first, second], weight_index=[0, 1, 0]).run(
-        cwd=str(tmp_path)
-    )
+    result = StackJacobianWeights(
+        weight_images=[first, second], weight_index=[0, 1, 0], volumes=True
+    ).run(cwd=str(tmp_path))
     out = nb.load(result.outputs.out_file)
     data = np.asanyarray(out.dataobj)
     assert out.ndim == 4
     assert data.shape[-1] == 2
     assert np.allclose(data[..., 0], 1.0)
     assert np.allclose(data[..., 1], 2.0)
+
+
+@pytest.mark.parametrize('volumes', [False, True])
+def test_stack_jacobian_weights_writes_float32_from_float64_inputs(tmp_path, volumes):
+    """Test that the derivative is float32 even when the input maps are float64."""
+    paths = []
+    for index, value in enumerate((1.0, 2.0)):
+        path = tmp_path / f'w{index}.nii.gz'
+        nb.Nifti1Image(np.full((8, 8, 8), value, dtype='float64'), np.eye(4)).to_filename(path)
+        paths.append(str(path))
+    result = StackJacobianWeights(weight_images=paths, weight_index=[0, 1], volumes=volumes).run(
+        cwd=str(tmp_path)
+    )
+    assert nb.load(result.outputs.out_file).get_data_dtype() == np.float32
+
+
+def test_stack_jacobian_weights_defaults_to_the_mean_over_volumes(tmp_path):
+    """Test that distinct maps are written as their mean over volumes, counted per volume."""
+    first = _write_map(tmp_path / 'w0.nii.gz', 1.0)
+    second = _write_map(tmp_path / 'w1.nii.gz', 2.0)
+    result = StackJacobianWeights(weight_images=[first, second], weight_index=[0, 0, 0, 1]).run(
+        cwd=str(tmp_path)
+    )
+    out = nb.load(result.outputs.out_file)
+    meta = result.outputs.meta_dict
+    assert out.ndim == 3
+    assert np.allclose(np.asanyarray(out.dataobj), 1.25)
+    assert meta['JacobianWeightIndex'] == [0, 0, 0, 0]
+    assert meta['JacobianWeightCombination'] == 'mean'
+    # the second map lies 60% above the mean of 1.25
+    assert meta['JacobianWeightVolumeDeviation'] == pytest.approx(0.6)
+    assert '--write-jacobian-4d' in meta['Description']
+
+
+def test_stack_jacobian_weights_single_map_has_no_combination(tmp_path):
+    """Test that a map shared by every volume is written as is, with no mean fields."""
+    weight_image = _write_map(tmp_path / 'w0.nii.gz', 1.5)
+    result = StackJacobianWeights(weight_images=[weight_image], weight_index=[0, 0]).run(
+        cwd=str(tmp_path)
+    )
+    meta = result.outputs.meta_dict
+    assert np.allclose(np.asanyarray(nb.load(result.outputs.out_file).dataobj), 1.5)
+    assert 'JacobianWeightCombination' not in meta
+    assert 'JacobianWeightVolumeDeviation' not in meta
 
 
 def test_stack_jacobian_weights_undefined_input_stays_undefined(tmp_path):
@@ -1210,6 +1254,7 @@ def test_stack_jacobian_weights_meta_dict_index_matches_shape(tmp_path):
         applied_corrections=['gradwarp', 'sdc'],
         unmodulated_corrections=[],
         unmodulated_reason=None,
+        volumes=True,
     ).run(cwd=str(tmp_path))
 
     out = nb.load(result.outputs.out_file)
@@ -1252,7 +1297,7 @@ class _RecordingRun:
 
 
 def test_compose_fields_forwards_num_threads(tmp_path, monkeypatch):
-    from qsiprep.interfaces import jacobian as jac_mod
+    from qsiprep.utils import jacobian as jac_mod
 
     calls = []
     monkeypatch.setattr(jac_mod.ants, 'ApplyTransforms', _RecordingAnts(calls))
@@ -1266,7 +1311,7 @@ def test_compose_fields_forwards_num_threads(tmp_path, monkeypatch):
 
 
 def test_transport_scalar_map_forwards_num_threads(tmp_path, monkeypatch):
-    from qsiprep.interfaces import jacobian as jac_mod
+    from qsiprep.utils import jacobian as jac_mod
 
     calls = []
     monkeypatch.setattr(jac_mod.ants, 'ApplyTransforms', _RecordingAnts(calls))
@@ -1352,7 +1397,7 @@ def test_check_weight_map_tolerates_localised_pile_up(tmp_path, caplog):
 
     2% non-positive is what a real susceptibility field looks like.
     """
-    from qsiprep.interfaces.jacobian import check_weight_map
+    from qsiprep.utils.jacobian import check_weight_map
 
     weights = _map_with_nonpositive_fraction(tmp_path / 'w.nii.gz', 0.02)
     mask = _write_map(tmp_path / 'mask.nii.gz', 1.0, shape=(10, 10, 10))
@@ -1365,7 +1410,7 @@ def test_check_weight_map_warns_on_a_widespread_fold(tmp_path, caplog):
 
     Half the brain folded is a broken field, not pile-up.
     """
-    from qsiprep.interfaces.jacobian import check_weight_map
+    from qsiprep.utils.jacobian import check_weight_map
 
     weights = _map_with_nonpositive_fraction(tmp_path / 'w.nii.gz', 0.5)
     mask = _write_map(tmp_path / 'mask.nii.gz', 1.0, shape=(10, 10, 10))
@@ -1376,7 +1421,7 @@ def test_check_weight_map_warns_on_a_widespread_fold(tmp_path, caplog):
 
 
 def test_fold_report_is_silent_when_everything_is_positive(tmp_path, caplog):
-    from qsiprep.interfaces.jacobian import _report_nonpositive
+    from qsiprep.utils.jacobian import _report_nonpositive
 
     with caplog.at_level('WARNING'):
         _report_nonpositive(np.ones(100), 'subject', 'consequence')

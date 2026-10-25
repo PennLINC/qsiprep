@@ -192,7 +192,6 @@ def init_dwi_derivatives_wf(
             compress=True,
         ),
         name='ds_dwi_t1',
-        run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
     ds_bvals_t1 = pe.Node(
@@ -329,6 +328,7 @@ def init_dwi_derivatives_wf(
                 applied_corrections=list(jacobian_applied_corrections),
                 unmodulated_corrections=list(jacobian_unmodulated_corrections),
                 unmodulated_reason=jacobian_unmodulated_reason,
+                volumes=config.workflow.write_jacobian_4d,
             ),
             name='stack_jacobian',
         )
@@ -343,7 +343,6 @@ def init_dwi_derivatives_wf(
                 compress=True,
             ),
             name='ds_jacobian',
-            run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
         workflow.connect([

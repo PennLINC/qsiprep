@@ -45,6 +45,7 @@ from niworkflows.viz.utils import (
 from svgutils.transform import SVGFigure
 
 from ..utils.bids import load_sidecar
+from ..utils.jacobian import UNMODULATED_WEIGHT
 from ..viz.utils import fixed_field_of_view
 from .epi_fmap import (
     _merge_metadata,
@@ -53,7 +54,6 @@ from .epi_fmap import (
     read_nifti_sidecar,
 )
 from .images import to_lps
-from .jacobian import UNMODULATED_WEIGHT
 from .reports import topup_selection_to_report
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -235,7 +235,7 @@ class _ModulateByWarpJacobianOutputSpec(TraitedSpec):
 class ModulateByWarpJacobian(SimpleInterface):
     """Multiply an unwarped image by the Jacobian determinant of the warp that unwarped it.
 
-    Uses :func:`~qsiprep.interfaces.jacobian.jacobian_determinant`, the
+    Uses :func:`~qsiprep.utils.jacobian.jacobian_determinant`, the
     phase-encoding Jacobian TORTOISE applies.
     """
 
@@ -243,7 +243,7 @@ class ModulateByWarpJacobian(SimpleInterface):
     output_spec = _ModulateByWarpJacobianOutputSpec
 
     def _run_interface(self, runtime):
-        from .jacobian import jacobian_determinant
+        from ..utils.jacobian import jacobian_determinant
 
         det_file = jacobian_determinant(
             self.inputs.warp, op.join(runtime.cwd, 'jacobian.nii.gz'), self.inputs.pe_axis

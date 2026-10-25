@@ -179,8 +179,13 @@ The Jacobian map holds the intensity modulation *QSIPrep* itself applied,
 which is not all of it: ``eddy`` modulates its own corrections internally
 and leaves no map. The sidecar gives ``SignalRedistributionMethod``
 (``Jacobian`` or ``LSR``), ``JacobianWeightIndex`` (which volume of the map
-applies to each DWI volume; the file is 3D when every volume shares one
-map), ``AppliedCorrections`` and ``UnmodulatedCorrections``. Dividing the
+applies to each DWI volume), ``AppliedCorrections`` and
+``UnmodulatedCorrections``. When the modulation differs between volumes, as
+with eddy-current correction, the map is its mean over volumes, a single 3D
+image; ``JacobianWeightCombination`` is then ``mean`` and
+``JacobianWeightVolumeDeviation`` gives how far each volume's own weight lies
+from that mean (as a fraction, 99th percentile over voxels).
+``--write-jacobian-4d`` writes one map per volume instead. Dividing the
 preprocessed series by the indexed weight reverses the multiplication at the
 point where it was applied, not the whole preprocessing, because bias
 correction runs after it. See :ref:`jacobian_methods` for which component

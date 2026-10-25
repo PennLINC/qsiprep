@@ -21,7 +21,7 @@ import numpy as np
 import pytest
 from nipype.interfaces import ants
 
-from qsiprep.interfaces.jacobian import jacobian_determinant
+from qsiprep.utils.jacobian import jacobian_determinant
 
 
 def _compressing_field(path, shape=(24, 24, 24), amplitude=3.0):
