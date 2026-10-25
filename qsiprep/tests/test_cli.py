@@ -1,5 +1,6 @@
 """Command-line interface tests."""
 
+import argparse
 import json
 import os
 import shutil
@@ -1146,3 +1147,20 @@ def _run_and_generate(test_name, parameters, test_main=False, check_outputs=True
             optional_outputs_list = None
 
         check_generated_files(config.execution.output_dir, output_list_file, optional_outputs_list)
+
+
+def test_parser_help_formats():
+    """``qsiprep --help`` must render.
+
+    argparse applies %-formatting to every help string, so a literal percent
+    sign in a help string must be written as ``%%``; a bare one raises
+    ValueError only when the help text is rendered, which no other test does.
+    """
+    from qsiprep.cli.parser import _build_parser
+
+    parser = _build_parser()
+    help_text = parser.format_help()
+    assert '--output-resolution' in help_text
+    for action in parser._actions:
+        if action.help and action.help is not argparse.SUPPRESS:
+            parser._get_formatter()._expand_help(action)
