@@ -109,7 +109,6 @@ def init_gre_seed_wf(unit, has_gradwarp, source_file, use):
     b0_mask
         Brain mask of the b=0 reference
     """
-    from ...utils.spaces import select_acpc_anchor
     from ..dwi.gradwarp import connect_gradwarp_sdc_reference
     from ..dwi.util import init_dwi_reference_wf
 
@@ -133,9 +132,6 @@ def init_gre_seed_wf(unit, has_gradwarp, source_file, use):
 
     b0_ref_wf = init_dwi_reference_wf(source_file=source_file, name='b0_ref_wf', gen_report=False)
     sdc_wf = init_sdc_wf(gre_seed_unit(unit), gradwarp=has_gradwarp, use=use)
-    sdc_wf.inputs.inputnode.template = select_acpc_anchor(
-        config.workflow.parsed_output_spaces()
-    ).fullname
     workflow.connect([
         (inputnode, b0_ref_wf, [('b0_template', 'inputnode.b0_template')]),
         (inputnode, sdc_wf, [
@@ -273,8 +269,6 @@ def init_sdc_wf(unit, gradwarp=False, use='apply', source_file=None):
     t1_2_mni_reverse_transform
         MNI-to-T1w transform to map prior knowledge to the T1w
         fo the fieldmap-less SyN method
-    template : str
-        Name of template targeted by ``template`` output space
     t1_preproc, t1_seg, to_template_affine_transform, acpc_inv_transform, dwi_sampling_grid
         As for :func:`~qsiprep.workflows.fieldmap.synb0.init_synb0_wf`, for SyN or unpile
         against a SynB0
@@ -307,7 +301,6 @@ def init_sdc_wf(unit, gradwarp=False, use='apply', source_file=None):
                 'b0_ref',
                 'b0_ref_brain',
                 'b0_mask',
-                'template',
                 'gradwarp_field',
                 *SDC_ANAT_INPUTS,
             ]
@@ -488,7 +481,6 @@ def init_sdc_wf(unit, gradwarp=False, use='apply', source_file=None):
                 ('t1_brain', 'inputnode.t1_brain'),
                 ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
                 ('b0_ref', 'inputnode.bold_ref'),
-                ('template', 'inputnode.template'),
             ]),
         ])  # fmt:skip
         if target == 'synb0':

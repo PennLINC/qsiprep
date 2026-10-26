@@ -379,7 +379,6 @@ def test_dwi_preproc_wf_drbuddi_without_t2w_builds(tmp_path, monkeypatch):
     cfg.workflow.tortoise_gpu_cpu_ratio = None
     cfg.workflow.gpu = None
     cfg.workflow.impute_slice_threshold = 0
-    from qsiprep.utils.spaces import SpaceSpec
     from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
 
     wf = init_dwi_preproc_wf(
@@ -387,7 +386,6 @@ def test_dwi_preproc_wf_drbuddi_without_t2w_builds(tmp_path, monkeypatch):
         t2w_sdc=False,
         output_prefix='sub-01',
         source_file=SRC,
-        acpc_anchor=SpaceSpec(space='MNI152NLin2009cAsym'),
     )
     assert wf.get_node('extended_pepolar_report_wf') is not None
 
@@ -417,7 +415,6 @@ def test_dwi_preproc_wf_records_gradwarp_applied(tmp_path, monkeypatch):
     cfg.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
     cfg.workflow.ignore = []
     from qsiprep.utils.jacobian_provenance import jacobian_provenance_for
-    from qsiprep.utils.spaces import SpaceSpec
     from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
 
     src = _write_dwi(tmp_path / 'sub-01_dwi.nii.gz')
@@ -430,7 +427,6 @@ def test_dwi_preproc_wf_records_gradwarp_applied(tmp_path, monkeypatch):
             t2w_sdc=False,
             output_prefix='sub-01',
             source_file=src,
-            acpc_anchor=SpaceSpec(space='MNI152NLin2009cAsym'),
         )
         assert jacobian_provenance_for(unit) == (['gradwarp'], [], None)
     finally:
@@ -1173,7 +1169,6 @@ def test_dwi2anat_dof_reaches_the_per_unit_coregistration(tmp_path, monkeypatch,
     cfg.workflow.anat_modality = 't1w'
     cfg.workflow.dwi2anat_dof = dof
     cfg.workflow.impute_slice_threshold = 0
-    from qsiprep.utils.spaces import SpaceSpec
     from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
 
     wf = init_dwi_preproc_wf(
@@ -1181,7 +1176,6 @@ def test_dwi2anat_dof_reaches_the_per_unit_coregistration(tmp_path, monkeypatch,
         t2w_sdc=False,
         output_prefix='sub-01',
         source_file=SRC,
-        acpc_anchor=SpaceSpec(space='MNI152NLin2009cAsym'),
     )
     coreg = wf.get_node('b0_anat_coreg').get_node('b0_to_anat')
     assert coreg.inputs.transforms == [expected]

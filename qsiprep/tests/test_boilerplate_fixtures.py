@@ -88,7 +88,6 @@ def _boilerplate(unit, t2w_sdc=False):
         t2w_sdc=t2w_sdc,
         output_prefix='sub-01',
         source_file=unit.dwi_files[0],
-        acpc_anchor=SpaceSpec(space=TEMPLATE),
     )
     text = wf.visit_desc()
     _assert_well_formed(text)

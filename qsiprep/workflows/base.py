@@ -782,7 +782,6 @@ documentation](https://qsiprep.readthedocs.io/en/latest/methods/index.html \
             output_prefix=naming_name,
             source_file=source_file,
             t2w_sdc=t2w_sdc,
-            acpc_anchor=acpc_anchor,
             do_biascorr=do_biascorr,
             denoising_desc=unit_denoising_desc(series_wfs, unit),
         )

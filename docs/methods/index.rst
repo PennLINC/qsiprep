@@ -64,7 +64,6 @@ The DWI workflow for one output, with no fieldmap:
         t2w_sdc=False,
         output_prefix='',
         source_file=AP,
-        acpc_anchor=ACPC_ANCHOR,
     )
 
 The node names in these graphs are the ones that appear in the log

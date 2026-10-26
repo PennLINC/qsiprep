@@ -14,7 +14,6 @@ from qsiplan.models import CorrectionMethod
 
 from qsiprep import config
 from qsiprep.tests.preproc_factory import make_preproc_unit
-from qsiprep.utils.spaces import SpaceSpec
 from qsiprep.workflows.base import connect_series_to_unit, init_series_denoise_wfs
 from qsiprep.workflows.dwi.merge import (
     SERIES_FIELDS,
@@ -269,7 +268,6 @@ def test_denoising_boilerplate_is_in_the_dwi_section(tmp_path, monkeypatch):
             t2w_sdc=False,
             output_prefix=unit.output_name,
             source_file=unit.dwi_files[0],
-            acpc_anchor=SpaceSpec(space='MNI152NLin2009cAsym'),
             denoising_desc=unit_denoising_desc(series_wfs, unit),
         )
         connect_series_to_unit(

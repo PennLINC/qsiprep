@@ -33,7 +33,6 @@ def init_qsiprep_hmcsdc_wf(
     unit,
     source_file,
     t2w_sdc,
-    acpc_anchor,
 ):
     """Build a workflow that runs qsiprep's head motion and distortion correction.
 
@@ -47,12 +46,10 @@ def init_qsiprep_hmcsdc_wf(
 
         from qsiprep.workflows.dwi.hmc_sdc import init_qsiprep_hmcsdc_wf
         from qsiprep.tests.preproc_factory import make_preproc_unit
-        from qsiprep.utils.spaces import SpaceSpec
         wf = init_qsiprep_hmcsdc_wf(
             make_preproc_unit(['/data/sub-1/dwi/sub-1_dwi.nii.gz']),
             source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
             t2w_sdc=False,
-            acpc_anchor=SpaceSpec(space='MNI152NLin2009cAsym'),
         )
     """
     inputnode = pe.Node(
@@ -326,7 +323,6 @@ def init_qsiprep_hmcsdc_wf(
 
     # Perform SDC if possible. This will pass-through if no sdc is to be done
     b0_sdc_wf = init_sdc_wf(unit, gradwarp=has_gradwarp, source_file=source_file)
-    b0_sdc_wf.inputs.inputnode.template = acpc_anchor.fullname
 
     # init_sdc_wf builds a pure pass-through ('sdc_bypass_wf') when there is no
     # fieldmap, forwarding b0_ref straight to outputnode.b0_template -- the

@@ -50,7 +50,6 @@ is shown in the carpet plot.
         example_unit('pepolar'),
         source_file=AP,
         t2w_sdc=False,
-        acpc_anchor=ACPC_ANCHOR,
     )
 
 .. _configure_shoreline:

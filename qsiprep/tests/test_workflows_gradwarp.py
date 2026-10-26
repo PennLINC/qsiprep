@@ -630,7 +630,6 @@ def _dwi_preproc_cfg(tmp_path):
 
 
 def _preproc_wf(tmp_path, image_type=None):
-    from qsiprep.utils.spaces import SpaceSpec
     from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
 
     _dwi_preproc_cfg(tmp_path)
@@ -646,7 +645,6 @@ def _preproc_wf(tmp_path, image_type=None):
         t2w_sdc=False,
         output_prefix='sub-01',
         source_file=dwi,
-        acpc_anchor=SpaceSpec(space='MNI152NLin2009cAsym'),
     )
 
 
@@ -762,7 +760,6 @@ def test_dwi_preproc_wf_extracts_a_reference_for_a_displacement_field(tmp_path):
     import nibabel as nb
     import numpy as np
 
-    from qsiprep.utils.spaces import SpaceSpec
     from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
 
     _dwi_preproc_cfg(tmp_path)
@@ -776,7 +773,6 @@ def test_dwi_preproc_wf_extracts_a_reference_for_a_displacement_field(tmp_path):
         t2w_sdc=False,
         output_prefix='sub-01',
         source_file=dwi,
-        acpc_anchor=SpaceSpec(space='MNI152NLin2009cAsym'),
     )
 
     gradwarp_ref = wf.get_node('gradwarp_ref')
@@ -833,7 +829,6 @@ def test_gradunwarp_reportlet_desc_is_registered_in_the_report_spec():
 
 def test_dwi_preproc_wf_without_gradient_file_has_no_gradwarp_wf(tmp_path):
     """Test that the default path (no --gradient-coils) has no gradwarp_wf."""
-    from qsiprep.utils.spaces import SpaceSpec
     from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
 
     _dwi_preproc_cfg(tmp_path)
@@ -845,7 +840,6 @@ def test_dwi_preproc_wf_without_gradient_file_has_no_gradwarp_wf(tmp_path):
         t2w_sdc=False,
         output_prefix='sub-01',
         source_file=dwi,
-        acpc_anchor=SpaceSpec(space='MNI152NLin2009cAsym'),
     )
 
     assert wf.get_node('gradwarp_wf') is None
@@ -1502,14 +1496,12 @@ def _cfg_for_shoreline(tmp_path):
 
 
 def _shoreline_wf(tmp_path, unit):
-    from qsiprep.utils.spaces import SpaceSpec
     from qsiprep.workflows.dwi.hmc_sdc import init_qsiprep_hmcsdc_wf
 
     return init_qsiprep_hmcsdc_wf(
         unit,
         source_file='/data/x_dwi.nii.gz',
         t2w_sdc=False,
-        acpc_anchor=SpaceSpec(space='MNI152NLin2009cAsym'),
     )
 
 

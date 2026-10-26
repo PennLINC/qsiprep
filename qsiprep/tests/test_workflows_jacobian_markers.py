@@ -88,7 +88,6 @@ from qsiplan.models import CorrectionMethod
 from qsiprep import config
 from qsiprep.tests.preproc_factory import make_preproc_unit
 from qsiprep.utils.jacobian_provenance import jacobian_provenance_for
-from qsiprep.utils.spaces import SpaceSpec
 
 SRC = '/data/sub-01_dwi.nii.gz'
 
@@ -310,7 +309,6 @@ def test_maternal_brain_project_writes_jacobian(monkeypatch):
         unit,
         source_file=SRC,
         t2w_sdc=False,
-        acpc_anchor=SpaceSpec(space='MNI152NLin2009cAsym'),
     )
 
     has_real, source = _has_real_fieldwarps(wf)
@@ -344,7 +342,6 @@ def test_shoreline_no_fieldmap_has_no_real_fieldwarps(tmp_path):
         unit,
         source_file=SRC,
         t2w_sdc=False,
-        acpc_anchor=SpaceSpec(space='MNI152NLin2009cAsym'),
     )
 
     has_real, source = _has_real_fieldwarps(wf)
@@ -369,7 +366,6 @@ def test_shoreline_synb0_topup_warp_is_weighted():
         unit,
         source_file=SRC,
         t2w_sdc=False,
-        acpc_anchor=SpaceSpec(space='MNI152NLin2009cAsym'),
     )
 
     has_real, source = _has_real_fieldwarps(wf)
@@ -396,7 +392,6 @@ def test_shoreline_unpile_writes_jacobian():
         unit,
         source_file=SRC,
         t2w_sdc=True,
-        acpc_anchor=SpaceSpec(space='MNI152NLin2009cAsym'),
     )
 
     has_real, source = _has_real_fieldwarps(wf)
