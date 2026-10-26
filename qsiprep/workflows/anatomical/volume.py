@@ -1337,10 +1337,13 @@ def init_anat_normalization_wf(
     else:
         # get a good ACPC transform
         template_ref = _TEMPLATE_CITATIONS.get(spec.space, '')
+        cohort_note = (
+            " (cohort selected from the participant's age)" if spec.cohort_from_age else ''
+        )
         desc = f"""\
 The anatomical reference was reoriented into AC-PC alignment with the rigid
 (6-degree-of-freedom) component of an affine registration to the
-{spec.fullname} template{template_ref}. """
+{spec.fullname} template{template_ref}{cohort_note}. """
 
     if not moving_is_acpc:
         acpc_json = (

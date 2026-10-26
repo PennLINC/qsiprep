@@ -264,7 +264,7 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
             '--anat-modality none'
         )
 
-    from ..utils.spaces import resolve_output_spaces, select_acpc_anchor
+    from ..utils.spaces import describe_acpc_anchor, resolve_output_spaces, select_acpc_anchor
 
     output_spaces = config.workflow.parsed_output_spaces()
     if any(spec.needs_cohort_resolution for spec in output_spaces):
@@ -286,6 +286,16 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
     acpc_anchor = select_acpc_anchor(output_spaces)
     acpc_specs = [s for s in output_spaces if not s.standard]
     standard_specs = [s for s in output_spaces if s.standard]
+    # Several cohorts of the anchoring template is a choice the run made, so it
+    # goes to the log at a level the default verbosity shows, and to the report.
+    anchor_note = describe_acpc_anchor(output_spaces, acpc_anchor)
+    chose_between_cohorts = (
+        len({s.cohort for s in standard_specs if s.space == acpc_anchor.space}) > 1
+    )
+    log_anchor = (
+        config.loggers.workflow.warning if chose_between_cohorts else config.loggers.workflow.info
+    )
+    log_anchor(anchor_note)
 
     # The methods this run selected: the axis every routing decision reads, and
     # the grouping policy, which names the fieldmap-less correction.
@@ -342,6 +352,7 @@ documentation](https://qsiprep.readthedocs.io/en/latest/methods/index.html \
     summary = pe.Node(
         SubjectSummary(
             templates=[s.fullname for s in standard_specs],
+            acpc_anchor=anchor_note,
             mrtrix_version=config.workflow.mrtrix_version,
         ),
         name='summary',

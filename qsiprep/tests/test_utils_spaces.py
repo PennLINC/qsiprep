@@ -473,3 +473,55 @@ def test_resolve_output_spaces_dedupes_specs_that_resolve_to_one(monkeypatch):
     assert len(specs) == 3
     resolved = spaces_mod.resolve_output_spaces(specs, 'bids', '01', None)
     assert [str(s) for s in resolved] == ['acpc:res-2mm', 'MNIInfant:cohort-3']
+
+
+def test_anchor_prefers_the_age_matched_cohort_whatever_the_order(monkeypatch):
+    """cohort-auto is the cohort closest to the data, so it anchors AC-PC alignment."""
+    from qsiprep.utils import spaces as spaces_mod
+    from qsiprep.utils.spaces import select_acpc_anchor
+
+    monkeypatch.setattr(spaces_mod, '_age_in_months', lambda *a, **k: 7)
+    specs = parse_output_spaces(['acpc:res-2mm', 'MNIInfant:cohort-2', 'MNIInfant:cohort-auto'])
+    assert select_acpc_anchor(specs).cohort == 'auto'
+    resolved = spaces_mod.resolve_output_spaces(specs, 'bids', '01', None)
+    anchor = select_acpc_anchor(resolved)
+    assert anchor.cohort == '3'
+    assert anchor.cohort_from_age
+
+
+def test_anchor_is_the_first_cohort_listed_otherwise():
+    from qsiprep.utils.spaces import select_acpc_anchor
+
+    forward = parse_output_spaces(['acpc:res-2mm', 'MNIInfant:cohort-2', 'MNIInfant:cohort-3'])
+    reverse = parse_output_spaces(['acpc:res-2mm', 'MNIInfant:cohort-3', 'MNIInfant:cohort-2'])
+    assert select_acpc_anchor(forward).cohort == '2'
+    assert select_acpc_anchor(reverse).cohort == '3'
+    assert not select_acpc_anchor(forward).cohort_from_age
+
+
+def test_describe_acpc_anchor_names_the_choice(monkeypatch):
+    from qsiprep.utils import spaces as spaces_mod
+    from qsiprep.utils.spaces import describe_acpc_anchor, select_acpc_anchor
+
+    plain = parse_output_spaces(['acpc:res-2mm', 'MNI152NLin6Asym'])
+    assert describe_acpc_anchor(plain, select_acpc_anchor(plain)) == (
+        'AC-PC alignment is anchored to MNI152NLin2009cAsym.'
+    )
+
+    listed = parse_output_spaces(['acpc:res-2mm', 'MNIInfant:cohort-2', 'MNIInfant:cohort-3'])
+    assert describe_acpc_anchor(listed, select_acpc_anchor(listed)) == (
+        'AC-PC alignment is anchored to MNIInfant+2, the first cohort listed in '
+        '--output-spaces; MNIInfant cohort 3 was also requested and gets derivatives only.'
+    )
+
+    monkeypatch.setattr(spaces_mod, '_age_in_months', lambda *a, **k: 7)
+    auto = spaces_mod.resolve_output_spaces(
+        parse_output_spaces(['acpc:res-2mm', 'MNIInfant:cohort-2', 'MNIInfant:cohort-auto']),
+        'bids',
+        '01',
+        None,
+    )
+    assert describe_acpc_anchor(auto, select_acpc_anchor(auto)) == (
+        "AC-PC alignment is anchored to MNIInfant+3, the cohort chosen from the participant's "
+        'age; MNIInfant cohort 2 was also requested and gets derivatives only.'
+    )

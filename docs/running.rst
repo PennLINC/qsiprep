@@ -739,7 +739,13 @@ estimated and written once.
 
 AC-PC alignment is anchored to ``MNI152NLin2009cAsym``, or to the infant
 template when one is requested (or ``--infant`` is given), whether or not that
-template is listed in ``--output-spaces``.
+template is listed in ``--output-spaces``. When several cohorts of that infant
+template are requested, a ``cohort-auto`` entry anchors the alignment, because
+it is the cohort matched to the participant's age; otherwise the first cohort
+listed does. The other cohorts still receive their transforms and anatomical
+derivatives. The choice is logged and stated in the subject summary of the
+HTML report; the methods boilerplate names the template the AC-PC registration
+used.
 
 Cohorts
 =======

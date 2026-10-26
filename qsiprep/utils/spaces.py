@@ -59,6 +59,8 @@ class SpaceSpec:
     space: str
     resolution: Resolution | None = None
     cohort: str | None = None
+    #: The cohort was chosen from the participant's age (``cohort-auto``), not typed.
+    cohort_from_age: bool = False
 
     @property
     def standard(self) -> bool:
@@ -79,9 +81,14 @@ class SpaceSpec:
     def needs_native_resolution(self) -> bool:
         return self.resolution is not None and self.resolution.kind == 'native'
 
+    @property
+    def age_matched(self) -> bool:
+        """Whether the cohort is, or will be, the one matched to the participant's age."""
+        return self.cohort == 'auto' or self.cohort_from_age
+
     def with_cohort(self, cohort: str) -> 'SpaceSpec':
         """Return a copy with ``cohort-auto`` replaced by a concrete cohort."""
-        return replace(self, cohort=str(cohort))
+        return replace(self, cohort=str(cohort), cohort_from_age=True)
 
     def __str__(self) -> str:
         parts = [self.space]
@@ -303,18 +310,49 @@ def select_acpc_anchor(specs) -> SpaceSpec:
     """Pick the template that anchors ACPC alignment and the output grid.
 
     Derived rather than user-selectable: an infant template among the requested
-    spaces anchors ACPC, otherwise MNI152NLin2009cAsym does. Independent of the
-    order spaces were listed in.
+    spaces anchors ACPC, otherwise MNI152NLin2009cAsym does. When several cohorts
+    of that template are requested, ``cohort-auto`` anchors, because it is the
+    cohort matched to the participant's age; otherwise the first cohort listed
+    does. Works before and after :func:`resolve_output_spaces`.
     """
     for name in INFANT_ANCHORS:
-        for spec in specs:
-            if spec.space == name:
-                # The anchor fixes the ACPC grid every anatomical and the DWI FoV are
-                # written on, so it takes the template's default resolution. Honouring
-                # a res- label here would silently move that grid, and would make the
-                # anchor depend on which of two labels the user typed first.
-                return replace(spec, resolution=None)
+        candidates = [spec for spec in specs if spec.space == name]
+        if candidates:
+            age_matched = [spec for spec in candidates if spec.age_matched]
+            chosen = (age_matched or candidates)[0]
+            # The anchor fixes the ACPC grid every anatomical and the DWI FoV are
+            # written on, so it takes the template's default resolution. Honouring
+            # a res- label here would silently move that grid, and would make the
+            # anchor depend on which of two labels the user typed first.
+            return replace(chosen, resolution=None)
     return SpaceSpec(space=DEFAULT_ANCHOR)
+
+
+def describe_acpc_anchor(specs, anchor) -> str:
+    """Say which template anchors ACPC alignment and, if a choice was made, why.
+
+    The same sentence goes to the log and to the subject summary of the HTML
+    report, so a run that had to pick between requested cohorts says so in both.
+    """
+    unused = []
+    for spec in specs:
+        if spec.space == anchor.space and spec.cohort not in (None, anchor.cohort):
+            if spec.cohort not in unused:
+                unused.append(spec.cohort)
+    text = f'AC-PC alignment is anchored to {anchor.fullname}'
+    if anchor.cohort is not None and (unused or anchor.cohort_from_age):
+        if anchor.cohort_from_age:
+            text += ", the cohort chosen from the participant's age"
+        else:
+            text += ', the first cohort listed in --output-spaces'
+    if unused:
+        many = len(unused) > 1
+        text += (
+            f'; {anchor.space} cohort{"s" if many else ""} {", ".join(unused)} '
+            f'{"were" if many else "was"} also requested and {"get" if many else "gets"} '
+            'derivatives only'
+        )
+    return text + '.'
 
 
 def resolve_output_spaces(specs, bids_dir, subject_id, session_id) -> list:

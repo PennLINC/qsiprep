@@ -39,6 +39,7 @@ SUBJECT_TEMPLATE = """{mrtrix_warning}\t<ul class="elem-desc">
 {groupings}
 \t\t<li>Resampling targets: ACPC</li>
 \t\t<li>Transform targets: {output_spaces}</li>
+\t\t<li>{acpc_anchor}</li>
 \t</ul>
 """
 
@@ -172,6 +173,7 @@ class SubjectSummaryInputSpec(BaseInterfaceInputSpec):
     dwi_groupings = traits.Dict(desc='groupings of DWI files and their output names')
     output_spaces = traits.List(desc='Target spaces')
     templates = InputMultiObject(traits.Str, desc='Requested standard output spaces')
+    acpc_anchor = Str(desc='Which template anchors AC-PC alignment, and why')
     freesurfer_status = traits.Enum('Not run', 'Partial', 'Full', desc='FreeSurfer status')
     mrtrix_version = traits.Enum(
         'stable', 'dev', usedefault=True, desc='which MRtrix3 installation was used'
@@ -236,6 +238,11 @@ class SubjectSummary(SummaryInterface):
             n_outputs=n_outputs,
             groupings=groupings,
             output_spaces=f'ACPC, {templates_desc}',
+            acpc_anchor=(
+                self.inputs.acpc_anchor
+                if isdefined(self.inputs.acpc_anchor)
+                else 'AC-PC alignment is anchored to MNI152NLin2009cAsym.'
+            ),
             mrtrix_warning=(MRTRIX_DEV_WARNING if self.inputs.mrtrix_version == 'dev' else ''),
         )
 
