@@ -93,9 +93,9 @@ Removed or renamed options
      - :pr:`1127`
 
 Keep ``--infant`` when moving to ``--output-spaces``: besides adding
-``MNIInfant:cohort-auto``, it narrows the autobox padding, forces a T2w
-anatomical reference and requires ``--subject-anatomical-reference
-sessionwise``, so dropping it changes the results. Because ``--infant`` always
+``MNIInfant:cohort-auto``, it narrows the autobox padding and requires
+``--subject-anatomical-reference sessionwise``, so dropping it changes the
+results. It does not change ``--anat-modality``. Because ``--infant`` always
 requests an infant template, the old ``--infant
 --skip-anat-based-spatial-normalization`` combination, which wrote no
 standard space, has no equivalent.

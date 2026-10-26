@@ -190,8 +190,9 @@ an infant template (``MNIInfant`` or ``UNCInfant``) is already requested, and
 the infant template then anchors AC-PC alignment. The cohort matching the
 participant's age in months is read from ``participants.tsv`` or the
 ``*_sessions.tsv`` file. ``--infant`` also narrows the autobox padding of the
-output grid and forces a T2w anatomical reference, and it requires
-``--subject-anatomical-reference sessionwise``. The cohort selection follows `Nibabies
+output grid and requires ``--subject-anatomical-reference sessionwise``; it
+does not change ``--anat-modality``, so pass ``--anat-modality T2w`` when the
+T2w is the better infant reference. The cohort selection follows `Nibabies
 <https://nibabies.readthedocs.io/>`_.
 
 

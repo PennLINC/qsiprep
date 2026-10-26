@@ -547,7 +547,7 @@ class workflow(_Config):
     anat_modality = None
     """Modality to use as the anatomical reference. Images of this
     contrast will be skull stripped and segmented for use in the
-    visual reports. If --infant, T2w is forced."""
+    visual reports."""
     b0_threshold = None
     """Any value in the .bval file less than this will be considered a b=0 image."""
     dwi2anat_dof = None

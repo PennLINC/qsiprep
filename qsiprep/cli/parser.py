@@ -550,8 +550,7 @@ def _build_parser(**kwargs):
         default='T1w',
         help=(
             'Modality to use as the anatomical reference. Images of this contrast are '
-            'skull-stripped and segmented for use in the visual reports. T2w is forced when '
-            '--infant is given.'
+            'skull-stripped and segmented for use in the visual reports.'
         ),
     )
     g_anat.add_argument(
