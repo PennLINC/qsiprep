@@ -878,7 +878,7 @@ def _build_parser(**kwargs):
             'Write the volume-wise Jacobian intensity modulation as one map per DWI volume. '
             'By default, when the modulation differs between volumes (as with eddy-current '
             'correction), its mean over volumes is written as a single 3D map. The per-volume '
-            'weights differ from the mean by about 1%; use this flag when the exact weights '
+            'weights differ from the mean by about 1%%; use this flag when the exact weights '
             'are needed, for example to reverse the modulation.'
         ),
     )
