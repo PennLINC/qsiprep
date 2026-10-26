@@ -458,3 +458,18 @@ def test_removed_output_space_flags_are_rejected(tmp_path, flag):
     """Test that the flags --output-spaces replaced are gone, not silently ignored."""
     with pytest.raises(SystemExit):
         _parse(tmp_path, '--output-spaces', 'acpc:res-2mm', *flag)
+
+
+def test_resolve_output_spaces_dedupes_specs_that_resolve_to_one(monkeypatch):
+    """cohort-auto next to the cohort it resolves to is one request, not two.
+
+    Left as two, init_anat_derivatives_wf would build the same ``ds_t1_MNIInfant3_*``
+    nodes twice and nipype would refuse the duplicate node names.
+    """
+    from qsiprep.utils import spaces as spaces_mod
+
+    monkeypatch.setattr(spaces_mod, '_age_in_months', lambda *a, **k: 7)
+    specs = parse_output_spaces(['acpc:res-2mm', 'MNIInfant:cohort-auto', 'MNIInfant:cohort-3'])
+    assert len(specs) == 3
+    resolved = spaces_mod.resolve_output_spaces(specs, 'bids', '01', None)
+    assert [str(s) for s in resolved] == ['acpc:res-2mm', 'MNIInfant:cohort-3']

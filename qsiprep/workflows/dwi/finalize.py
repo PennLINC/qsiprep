@@ -51,12 +51,23 @@ def _select_grid(grids, index):
     return grids[index]
 
 
-def _grid_metadata(grid_file):
-    """Report the grid's actual voxel size, which res-native* only fixes at run time."""
+def _grid_metadata(grid_file, label=None):
+    """Describe the grid's actual voxel size for the derivatives sidecar.
+
+    BIDS defines ``Resolution`` as free text, or an object keyed by ``res-`` label
+    whose values are free text, so the size is written as a string under this
+    output's label (or bare, when the output carries no ``res-`` entity). A
+    res-native* grid is only fixed at run time, so this is where a run says what
+    it turned out to be.
+    """
     import nibabel as nb
 
     zooms = [round(float(z), 4) for z in nb.load(grid_file).header.get_zooms()[:3]]
-    return {'Resolution': zooms}
+    if len(set(zooms)) == 1:
+        size = f'{zooms[0]:g} mm isotropic'
+    else:
+        size = ' x '.join(f'{z:g}' for z in zooms) + ' mm'
+    return {'Resolution': size if label is None else {label: size}}
 
 
 def init_dwi_finalize_wf(
@@ -104,8 +115,8 @@ def init_dwi_finalize_wf(
         beginning of the output file name (eg 'sub-1_buds-j')
     acpc_specs : list of :class:`~qsiprep.utils.spaces.SpaceSpec`
         The requested ACPC output resolutions. One ``init_dwi_trans_wf`` and one
-        group of derivatives sinks is built per spec. The ``res-`` entity is only
-        written on the derivatives when more than one is requested.
+        group of derivatives sinks is built per spec. Every output on a DWI grid
+        carries its ``res-`` entity, even when only one resolution is requested.
     t2w_sdc : bool, optional
         Whether a T2w is available for SDC (honoring --anat-modality and
         --ignore t2w); kept for the reports that name the T2w consumer.
@@ -754,13 +765,14 @@ def init_dwi_finalize_wf(
             # bvec, b and b_table sinks all share this node's stem.
             grid_metadata = pe.Node(
                 niu.Function(
-                    input_names=['grid_file'],
+                    input_names=['grid_file', 'label'],
                     output_names=['meta_dict'],
                     function=_grid_metadata,
                 ),
                 name=f'grid_metadata{suffix}',
                 run_without_submitting=True,
             )
+            grid_metadata.inputs.label = label
             workflow.connect([
                 (inputnode, grid_metadata, [
                     (('dwi_sampling_grids', _select_grid, index), 'grid_file'),

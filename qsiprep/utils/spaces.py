@@ -262,16 +262,21 @@ def templateflow_kwargs(spec: SpaceSpec) -> dict:
     return kwargs
 
 
+def dedupe_specs(specs) -> list[SpaceSpec]:
+    """Drop repeated specs, keeping the first occurrence of each."""
+    seen = set()
+    unique = []
+    for spec in specs:
+        key = str(spec)
+        if key not in seen:
+            seen.add(key)
+            unique.append(spec)
+    return unique
+
+
 def parse_output_spaces(tokens: Sequence) -> list[SpaceSpec]:
     """Parse every token, de-duplicate, and check the whole request makes sense."""
-    specs = []
-    seen = set()
-    for token in tokens:
-        for spec in parse_space_token(token):
-            key = str(spec)
-            if key not in seen:
-                seen.add(key)
-                specs.append(spec)
+    specs = dedupe_specs(spec for token in tokens for spec in parse_space_token(token))
 
     if not any(spec.space == ACPC for spec in specs):
         raise OutputSpacesError(
@@ -315,12 +320,15 @@ def select_acpc_anchor(specs) -> SpaceSpec:
 def resolve_output_spaces(specs, bids_dir, subject_id, session_id) -> list:
     """Replace every ``cohort-auto`` with a cohort chosen from the participant's age.
 
-    The age is read at most once, however many templates asked for it.
+    The age is read at most once, however many templates asked for it. The result
+    is de-duplicated again: ``MNIInfant:cohort-auto`` next to ``MNIInfant:cohort-3``
+    is two requests until the age says they are one, and a repeated spec would
+    name the same nodes and files twice downstream.
     """
     from qsiprep.utils.bids import cohort_by_months
 
     if not any(spec.needs_cohort_resolution for spec in specs):
-        return list(specs)
+        return dedupe_specs(specs)
 
     months = _age_in_months(bids_dir, subject_id, session_id)
     if months is None:
@@ -344,4 +352,4 @@ def resolve_output_spaces(specs, bids_dir, subject_id, session_id) -> list:
                 f'Could not choose a {spec.space} cohort for an age of {months} months: {exc}'
             ) from None
         resolved.append(spec.with_cohort(str(cohort)))
-    return resolved
+    return dedupe_specs(resolved)

@@ -489,3 +489,57 @@ def test_split_dwis_fsl_uses_no_fsl_binary(tmp_path):
     assert len(result.outputs.dwi_files) == n
     assert result.outputs.b0_indices == [0, 3]
     assert len(result.outputs.b0_images) == 2
+
+
+def test_template_queries_follow_what_the_template_ships():
+    """Test that GetTemplate asks TemplateFlow for files the template actually has.
+
+    UNCInfant has no ``res-`` entity and files its brain mask as ``label-brain``,
+    so the MNI-shaped query (``res-1``, ``desc-brain``) found nothing and the
+    node died on an empty result although the parser had accepted the space.
+    """
+    from qsiprep.interfaces.anatomical import template_queries
+
+    image, mask = template_queries('UNCInfant', '1', '1', 'T1w')
+    assert 'resolution' not in image
+    assert 'resolution' not in mask
+    assert image['cohort'] == '1'
+    assert mask['label'] == 'brain'
+    assert 'desc' not in mask
+
+    image, mask = template_queries('MNI152NLin2009cAsym', None, '1', 'T2w')
+    assert image == {'extension': '.nii.gz', 'resolution': '1', 'desc': None, 'suffix': 'T2w'}
+    assert mask == {'extension': '.nii.gz', 'resolution': '1', 'desc': 'brain', 'suffix': 'mask'}
+
+
+def test_get_template_fetches_unlocked_from_a_read_only_cache(tmp_path, monkeypatch):
+    """A pre-fetched cache mounted read-only must not fail on the lock file.
+
+    Nothing can be mid-download in a cache nobody can write, so the lock is
+    pointless there; the node has to notice at acquire time, which is where a
+    read-only directory refuses, and carry on without it.
+    """
+    import os
+    from unittest import mock
+
+    from qsiprep.interfaces.anatomical import GetTemplate
+
+    if os.geteuid() == 0:
+        pytest.skip('root ignores directory permissions')
+
+    cache_dir = tmp_path / 'templateflow'
+    cache_dir.mkdir()
+    fake_get = _partial_download_get(cache_dir, 0.0)
+    for suffix in ('T1w', 'mask'):
+        fake_get('FAKE', suffix=suffix)
+    cache_dir.chmod(0o500)
+    monkeypatch.setenv('TEMPLATEFLOW_HOME', str(cache_dir))
+    try:
+        with mock.patch('templateflow.api.get', fake_get):
+            result = GetTemplate(template_name='FAKE', anatomical_contrast='T1w').run(
+                cwd=str(tmp_path)
+            )
+    finally:
+        cache_dir.chmod(0o700)
+    assert Path(result.outputs.template_file).stat().st_size == 1024
+    assert not (cache_dir / '.qsiprep-templateflow.lock').exists()

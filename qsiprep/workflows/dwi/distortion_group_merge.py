@@ -349,13 +349,15 @@ def init_distortion_group_merge_wf(
         # the size the same way.
         grid_metadata = pe.Node(
             niu.Function(
-                input_names=['grid_file'],
+                input_names=['grid_file', 'label'],
                 output_names=['meta_dict'],
                 function=_grid_metadata,
             ),
             name='grid_metadata',
             run_without_submitting=True,
         )
+        if resolution is not None:
+            grid_metadata.inputs.label = resolution.label
         workflow.connect([
             (inputnode, grid_metadata, [('dwi_sampling_grid', 'grid_file')]),
             (grid_metadata, merged_sidecar, [('meta_dict', 'extra_data')]),

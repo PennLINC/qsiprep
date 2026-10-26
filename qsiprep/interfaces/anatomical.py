@@ -2,7 +2,6 @@
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """Image tools interfaces."""
 
-import contextlib
 import os
 import shutil
 from pathlib import Path
@@ -223,8 +222,9 @@ def _templateflow_lock():
     safe; a warm cache skips the download, so the lock costs nothing after the
     first fetch.
 
-    A cache that cannot be written to cannot be mid-download either, so fall back
-    to no locking rather than failing the node.
+    Returns ``None`` when the cache root cannot be created: a cache that cannot
+    be written to cannot be mid-download either, so the caller fetches unlocked
+    rather than failing the node.
     """
     from filelock import FileLock
     from templateflow.conf import TF_LAYOUT
@@ -232,9 +232,84 @@ def _templateflow_lock():
     root = Path(os.getenv('TEMPLATEFLOW_HOME', TF_LAYOUT.root))
     try:
         root.mkdir(parents=True, exist_ok=True)
-        return FileLock(root / '.qsiprep-templateflow.lock', timeout=600)
     except OSError:
-        return contextlib.nullcontext()
+        return None
+    return FileLock(root / '.qsiprep-templateflow.lock', timeout=600)
+
+
+def _acquire_templateflow_lock(template_name):
+    """Take the TemplateFlow cache lock, or return ``None`` to fetch unlocked.
+
+    Acquiring is where a read-only cache fails (``mkdir(exist_ok=True)`` succeeds
+    on an existing directory, creating the lock file does not), so the fallback
+    has to happen here rather than when the lock object is built. A cache that
+    is mounted read-only, as on a cluster with a shared pre-fetched copy, holds
+    nothing half-written.
+    """
+    from filelock import Timeout
+
+    lock = _templateflow_lock()
+    if lock is None:
+        return None
+    try:
+        lock.acquire()
+    except Timeout:
+        # flock is released when its holder dies, so a wait this long means a
+        # live process is still downloading, not a stale lock. Racing it is
+        # better than failing the run outright.
+        LOGGER.warning(
+            'Timed out waiting for the TemplateFlow cache lock; fetching %s without it.',
+            template_name,
+        )
+        return None
+    except OSError as exc:
+        LOGGER.warning(
+            'Cannot create the TemplateFlow cache lock (%s); fetching %s without it.',
+            exc,
+            template_name,
+        )
+        return None
+    return lock
+
+
+def template_queries(template_name, cohort, resolution, anatomical_contrast):
+    """Build the TemplateFlow queries for a template's head image and brain mask.
+
+    Templates are not filed uniformly: UNCInfant carries no ``res-`` entity at
+    all and ships its brain mask as ``label-brain`` rather than ``desc-brain``.
+    Each query follows what the template actually provides, read from the local
+    TemplateFlow skeleton (no download), so a template the parser accepted can
+    be fetched.
+    """
+    from templateflow.conf import TF_LAYOUT
+
+    base = {'extension': '.nii.gz'}
+    if cohort is not None:
+        base['cohort'] = cohort
+    if resolution is not None and TF_LAYOUT.get_resolutions(template=template_name):
+        base['resolution'] = resolution
+
+    image = {**base, 'desc': None, 'suffix': anatomical_contrast}
+    mask = {**base, 'desc': 'brain', 'suffix': 'mask'}
+    if not TF_LAYOUT.get(template=template_name, **mask):
+        labelled = {**base, 'label': 'brain', 'suffix': 'mask'}
+        if TF_LAYOUT.get(template=template_name, **labelled):
+            mask = labelled
+    return image, mask
+
+
+def _one_file(found, template_name, query):
+    """Return the single path ``templateflow.api.get`` found, or say why not."""
+    if isinstance(found, list):
+        if not found:
+            raise FileNotFoundError(
+                f'TemplateFlow has no file for template {template_name} matching {query}.'
+            )
+        raise ValueError(
+            f'TemplateFlow has {len(found)} files for template {template_name} matching '
+            f'{query}; the query must select exactly one.'
+        )
+    return Path(found)
 
 
 class GetTemplate(SimpleInterface):
@@ -242,7 +317,6 @@ class GetTemplate(SimpleInterface):
     output_spec = _GetTemplateOutputSpec
 
     def _run_interface(self, runtime):
-        from filelock import Timeout
         from templateflow.api import get as get_template
 
         anatomical_contrast = self.inputs.anatomical_contrast
@@ -250,47 +324,30 @@ class GetTemplate(SimpleInterface):
             LOGGER.info('Using T1w modality template for ACPC alignment')
             anatomical_contrast = 'T1w'
 
+        template_name = self.inputs.template_name
         cohort = self.inputs.cohort if isdefined(self.inputs.cohort) else None
+        resolution = self.inputs.resolution if isdefined(self.inputs.resolution) else None
+        image_query, mask_query = template_queries(
+            template_name, cohort, resolution, anatomical_contrast
+        )
 
-        def _fetch_and_copy():
-            template_path = get_template(
-                self.inputs.template_name,
-                cohort=cohort,
-                resolution=self.inputs.resolution,
-                desc=None,
-                suffix=anatomical_contrast,
-                extension='.nii.gz',
-            )
-            mask_path = get_template(
-                self.inputs.template_name,
-                cohort=cohort,
-                resolution=self.inputs.resolution,
-                desc='brain',
-                suffix='mask',
-                extension='.nii.gz',
-            )
-
-            local = Path(runtime.cwd) / template_path.name
-            local_mask_file = Path(runtime.cwd) / mask_path.name
-
-            # Copy inside the lock too: the copy is the read that a concurrent
-            # download corrupts.
-            shutil.copy(template_path, local)
-            shutil.copy(mask_path, local_mask_file)
-            return local, local_mask_file
-
+        # Copy inside the lock too: the copy is the read that a concurrent
+        # download corrupts.
+        lock = _acquire_templateflow_lock(template_name)
         try:
-            with _templateflow_lock():
-                local_template, local_mask = _fetch_and_copy()
-        except Timeout:
-            # flock is released when its holder dies, so a wait this long means a
-            # live process is still downloading, not a stale lock. Racing it is
-            # better than failing the run outright.
-            LOGGER.warning(
-                'Timed out waiting for the TemplateFlow cache lock; fetching %s without it.',
-                self.inputs.template_name,
+            template_path = _one_file(
+                get_template(template_name, **image_query), template_name, image_query
             )
-            local_template, local_mask = _fetch_and_copy()
+            mask_path = _one_file(
+                get_template(template_name, **mask_query), template_name, mask_query
+            )
+            local_template = Path(runtime.cwd) / template_path.name
+            local_mask = Path(runtime.cwd) / mask_path.name
+            shutil.copy(template_path, local_template)
+            shutil.copy(mask_path, local_mask)
+        finally:
+            if lock is not None:
+                lock.release()
 
         self._results['template_file'] = str(local_template)
         self._results['mask_file'] = str(local_mask)

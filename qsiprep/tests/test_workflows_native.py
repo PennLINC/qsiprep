@@ -1318,3 +1318,34 @@ def test_single_subject_wf_builds_a_merge_workflow_per_resolution():
     assert 'resolution=spec.resolution,' in src
     assert "(('outputnode.dwi_t1', _select_grid, index), image_name)" in src
     assert "(('outputnode.bvals_t1', _select_grid, index), bval_name)" in src
+
+
+def _template_sources(wf, norm_wf_name):
+    """Name the workflow that feeds a normalization its template image."""
+    norm_wf = wf.get_node(norm_wf_name)
+    assert norm_wf is not None
+    return {
+        src.name
+        for src, _, data in wf._graph.in_edges(norm_wf, data=True)
+        for _, field in data['connect']
+        if field == 'inputnode.template_image'
+    }
+
+
+@pytest.mark.parametrize(
+    'token',
+    ['MNI152NLin6Asym:res-2:res-1', 'MNI152NLin6Asym:res-1:res-2', 'MNI152NLin6Asym:res-2'],
+)
+def test_registration_targets_the_default_resolution_whatever_label_is_listed(tmp_path, token):
+    """A res- label picks the derivative grid, not the registration target.
+
+    The one transform written for a template must not depend on which label was
+    typed first, so the registration always reads the template's default
+    (finest) grid; each label's derivatives are resampled onto their own.
+    """
+    wf = _build_anat_preproc_wf(tmp_path, ['acpc:res-2mm', token])
+    assert _template_sources(wf, 'anat_normalization_MNI152NLin6Asym_wf') == {
+        'template_lps_MNI152NLin6Asym_wf'
+    }
+    chains = {n.split('.')[0] for n in wf.list_node_names() if n.startswith('template_lps_')}
+    assert 'template_lps_MNI152NLin6Asymres2_wf' in chains, sorted(chains)

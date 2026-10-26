@@ -772,3 +772,22 @@ def test_single_merged_resolution_writes_its_res_entity(tmp_path):
     grid_paths = {n: p for n, p in paths.items() if not n.endswith('ds_report_gradients')}
     assert grid_paths
     assert all('_res-2mm' in path for path in grid_paths.values()), grid_paths
+
+
+def test_grid_metadata_writes_a_bids_shaped_resolution(tmp_path):
+    """BIDS allows ``Resolution`` as text or as ``{res label: text}``, never numbers."""
+    import nibabel as nb
+    import numpy as np
+
+    from qsiprep.workflows.dwi.finalize import _grid_metadata
+
+    iso = tmp_path / 'iso.nii.gz'
+    nb.Nifti1Image(np.zeros((2, 2, 2), dtype='float32'), np.diag([1.5, 1.5, 1.5, 1])).to_filename(
+        iso
+    )
+    assert _grid_metadata(str(iso), 'nativemin') == {
+        'Resolution': {'nativemin': '1.5 mm isotropic'}
+    }
+    aniso = tmp_path / 'aniso.nii.gz'
+    nb.Nifti1Image(np.zeros((2, 2, 2), dtype='float32'), np.diag([1, 2, 3, 1])).to_filename(aniso)
+    assert _grid_metadata(str(aniso)) == {'Resolution': '1 x 2 x 3 mm'}

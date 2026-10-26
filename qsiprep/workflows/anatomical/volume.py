@@ -33,6 +33,8 @@ Anatomical reference preprocessing workflows
 
 """
 
+from dataclasses import replace
+
 from nipype.interfaces import afni, ants, mrtrix3
 from nipype.interfaces import utility as niu
 from nipype.interfaces.ants import BrainExtraction, N4BiasFieldCorrection
@@ -497,28 +499,39 @@ was used to restrict the nonlinear registration to the template. """
     registrations = {acpc_anchor.fullname: anat_normalization_wf}
     lps_chains = {str(acpc_anchor): anchor_lps_wf}
 
-    per_spec = []
-    for spec in standard_specs:
-        label = _spec_node_label(spec)
-
-        # The grid first: the registration below reads its template from this.
-        std_lps_wf = lps_chains.get(str(spec))
-        if std_lps_wf is None:
+    def _lps_chain(chain_spec):
+        """Fetch one template grid and reorient it to LPS+, once per distinct spec."""
+        chain = lps_chains.get(str(chain_spec))
+        if chain is None:
+            chain_label = _spec_node_label(chain_spec)
             get_std_template = pe.Node(
-                GetTemplate(anatomical_contrast=anat_modality, **templateflow_kwargs(spec)),
-                name=f'get_template_{label}',
+                GetTemplate(anatomical_contrast=anat_modality, **templateflow_kwargs(chain_spec)),
+                name=f'get_template_{chain_label}',
             )
-            std_lps_wf = init_template_lps_wf(name=f'template_lps_{label}_wf')
+            chain = init_template_lps_wf(name=f'template_lps_{chain_label}_wf')
             workflow.connect([
-                (get_std_template, std_lps_wf, [
+                (get_std_template, chain, [
                     ('template_file', 'inputnode.template_file'),
                     ('mask_file', 'inputnode.mask_file'),
                 ]),
             ])  # fmt:skip
-            lps_chains[str(spec)] = std_lps_wf
+            lps_chains[str(chain_spec)] = chain
+        return chain
+
+    per_spec = []
+    for spec in standard_specs:
+        # The grid this spec's derivatives are resampled onto: the res- label asked for.
+        std_lps_wf = _lps_chain(spec)
 
         norm_wf = registrations.get(spec.fullname)
         if norm_wf is None:
+            # The registration targets the template at its default (finest)
+            # resolution whatever label was listed first. A res- label picks the
+            # grid derivatives land on, not the image the warp is estimated
+            # against, so one template gets one transform however its labels are
+            # ordered -- as fMRIPrep does.
+            registration_spec = replace(spec, resolution=None)
+            reg_lps_wf = _lps_chain(registration_spec)
             if rigid_acpc_resample_nonlinear_mask is None:
                 rigid_acpc_resample_nonlinear_mask = pe.Node(
                     ants.ApplyTransforms(input_image_type=0, interpolation=_label_interpolation()),
@@ -539,11 +552,13 @@ was used to restrict the nonlinear registration to the template. """
                 spec,
                 has_rois=has_rois,
                 moving_is_acpc=True,
-                name=f'anat_normalization_{label}_wf',
+                # Named after the template, not the label: the same registration
+                # whichever label listed it first, so a cached one is reused.
+                name=f'anat_normalization_{_spec_node_label(registration_spec)}_wf',
             )
             registrations[spec.fullname] = norm_wf
             workflow.connect([
-                (std_lps_wf, norm_wf, [
+                (reg_lps_wf, norm_wf, [
                     ('outputnode.template_lps', 'inputnode.template_image'),
                     ('outputnode.mask_lps', 'inputnode.template_mask'),
                 ]),
