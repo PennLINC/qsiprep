@@ -712,6 +712,16 @@ prints the version and exits.
 ``--sloppy``, ``--debug`` and ``--write-graph`` are for developing *QSIPrep*
 itself. ``--sloppy`` output is not fit for analysis.
 
+Templates come from TemplateFlow, in the directory named by the
+``TEMPLATEFLOW_HOME`` environment variable. The container image holds the
+files *QSIPrep* uses from the adult templates ``MNI152NLin2009cAsym`` and
+``MNI152NLin6Asym``, so a run on adult data downloads no templates. Other
+templates, including the MNIInfant cohorts used by ``--infant``, are
+downloaded when a run first needs them. For
+compute nodes without network access, populate a TemplateFlow directory once
+on a connected machine and bind it as ``TEMPLATEFLOW_HOME``, as described in
+:ref:`templateflow_cache`.
+
 
 .. _reading_the_log:
 

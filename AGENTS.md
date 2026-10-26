@@ -95,7 +95,7 @@ The config module is the single source of truth for runtime parameters. Never pa
 - Entrypoint is the CLI binary in the pixi environment (e.g., `/app/.pixi/envs/<env>/bin/<pkg>`).
 - Labels follow the `org.label-schema` convention; the `test` target additionally carries `org.opencontainers.image.revision`, which CI uses to refuse running tests against a stale image.
 - The base image is rebuilt only when its `BASE_IMAGE` tag is absent from Docker Hub. Editing `Dockerfile.base` without bumping the date tag does **not** trigger a rebuild.
-- qsiprep is the only one of the four with **no templateflow prefetch stage** — the other three bake templates into the image via `scripts/fetch_templates.py`, so qsiprep downloads them at runtime instead.
+- All four bake TemplateFlow templates into `$HOME/.cache/templateflow` via `scripts/fetch_templates.py`. The other three run it in a separate `uv` stage with an unpinned `templateflow`; qsiprep runs it in the `build` stage with the locked Pixi environment, before `COPY .` so code changes reuse the layer, copies the cache without `--link` (which would reset `$HOME`'s owner and mode), and sets `TEMPLATEFLOW_HOME` explicitly. qsiprep prefetches only the res-1 T1w, T2w and `desc-brain` mask of `MNI152NLin2009cAsym` and `MNI152NLin6Asym`; infant cohorts are downloaded at runtime.
 
 ### CircleCI
 
