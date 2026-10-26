@@ -250,8 +250,15 @@ def init_dwi_trans_wf(
         name='outputnode',
     )
 
-    # get composite warps and composed affines for warping and rotating
-    compose_transforms = pe.Node(ComposeTransforms(), name='compose_transforms')
+    # get composite warps and composed affines for warping and rotating.
+    # One antsApplyTransforms call per volume writes that volume's composite
+    # warp; num_threads runs them in the interface's ThreadPoolExecutor, paired
+    # with n_procs as for scale_dwis below.
+    compose_transforms = pe.Node(
+        ComposeTransforms(num_threads=config.nipype.omp_nthreads),
+        name='compose_transforms',
+        n_procs=config.nipype.omp_nthreads,
+    )
     get_interpolation = pe.Node(
         ChooseInterpolator(sloppy=config.execution.sloppy, output_resolution=output_resolution),
         name='get_interpolation',

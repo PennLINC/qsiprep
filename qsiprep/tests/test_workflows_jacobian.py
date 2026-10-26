@@ -188,6 +188,22 @@ def test_scale_dwis_n_procs_matches_num_threads():
     assert scale_dwis.n_procs == 4
 
 
+def test_compose_transforms_threads_from_omp_nthreads():
+    """Test that compose_transforms runs its per-volume calls in parallel.
+
+    ``ComposeTransforms`` writes one composite warp per volume with its own
+    ``antsApplyTransforms`` call. Left at the interface's ``num_threads``
+    default of 1, those calls run one after another (about 4.5 h for a
+    731-volume DSI series), so the workflow sets ``num_threads`` from
+    ``config.nipype.omp_nthreads`` and pairs it with ``n_procs``, as
+    ``scale_dwis`` does.
+    """
+    config.nipype.omp_nthreads = 4
+    compose_transforms = _trans_wf().get_node('compose_transforms')
+    assert compose_transforms.inputs.num_threads == 4
+    assert compose_transforms.n_procs == 4
+
+
 def test_compose_jacobian_consumes_gradwarp_and_fieldwarps():
     edges = _edges(_trans_wf())
     forwarded = {
