@@ -34,7 +34,7 @@ give the container-side paths as arguments::
         -v /path/to/work:/work \
         pennlinc/qsiprep:<version> \
         /data /out participant \
-        -w /work --output-resolution 2
+        -w /work --output-spaces acpc:res-2mm MNI152NLin2009cAsym
 
 Replace ``<version>`` with a release tag. ``latest`` is the last release and
 ``unstable`` the current ``main`` branch; do not use ``unstable`` for
@@ -61,7 +61,7 @@ Bind the input, output and working directories::
         -B /path/to/bids,/path/to/output,/path/to/work \
         qsiprep-<version>.sif \
         /path/to/bids /path/to/output participant \
-        -w /path/to/work --output-resolution 2
+        -w /path/to/work --output-spaces acpc:res-2mm MNI152NLin2009cAsym
 
 Add ``--nv`` to use the GPU.
 

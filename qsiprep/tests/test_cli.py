@@ -79,7 +79,8 @@ def test_cuda(data_dir, output_dir, working_dir):
         '--dwi-biascorrect=none',
         '--sdc-method=drbuddi',
         f'--eddy-config={eddy_config}',
-        '--output-resolution=5',
+        '--output-spaces=acpc:res-5mm',
+        '--output-spaces=MNI152NLin2009cAsym',
     ]
 
     _run_and_generate(TEST_NAME, parameters, test_main=False)
@@ -103,8 +104,8 @@ def test_parser_accepts_tortoise(tmp_path):
             'participant',
             '--hmc-method',
             'tortoise',
-            '--output-resolution',
-            '2',
+            '--output-spaces',
+            'acpc:res-2mm',
         ]
     )
     assert opts.hmc_method == 'tortoise'
@@ -130,8 +131,8 @@ def test_parser_rejects_removed_diffprep_hmc_models(tmp_path):
                     'participant',
                     '--hmc-method',
                     removed,
-                    '--output-resolution',
-                    '2',
+                    '--output-spaces',
+                    'acpc:res-2mm',
                 ]
             )
 
@@ -160,8 +161,8 @@ def test_parser_accepts_force_gradwarp_and_gradient_file(tmp_path, forced):
             forced,
             '--gradient-file',
             str(coeff),
-            '--output-resolution',
-            '2',
+            '--output-spaces',
+            'acpc:res-2mm',
         ]
     )
     assert opts.force == [forced]
@@ -180,7 +181,15 @@ def test_parser_accepts_ignore_gradwarp(tmp_path):
     bids.mkdir()
     out = tmp_path / 'out'
     opts = parser.parse_args(
-        [str(bids), str(out), 'participant', '--ignore', 'gradwarp', '--output-resolution', '2']
+        [
+            str(bids),
+            str(out),
+            'participant',
+            '--ignore',
+            'gradwarp',
+            '--output-spaces',
+            'acpc:res-2mm',
+        ]
     )
     assert opts.ignore == ['gradwarp']
 
@@ -197,7 +206,15 @@ def test_parser_accepts_ignore_jacobian(tmp_path):
     bids.mkdir()
     out = tmp_path / 'out'
     opts = parser.parse_args(
-        [str(bids), str(out), 'participant', '--ignore', 'jacobian', '--output-resolution', '2']
+        [
+            str(bids),
+            str(out),
+            'participant',
+            '--ignore',
+            'jacobian',
+            '--output-spaces',
+            'acpc:res-2mm',
+        ]
     )
     assert opts.ignore == ['jacobian']
 
@@ -210,7 +227,7 @@ def test_parser_rejects_force_jacobian(tmp_path):
     bids = tmp_path / 'bids'
     bids.mkdir()
     out = tmp_path / 'out'
-    base = [str(bids), str(out), 'participant', '--output-resolution', '2']
+    base = [str(bids), str(out), 'participant', '--output-spaces', 'acpc:res-2mm']
     with pytest.raises(SystemExit):
         parser.parse_args([*base, '--force', 'jacobian'])
 
@@ -232,8 +249,8 @@ def test_parser_rejects_removed_jacobian_weighting_flag(tmp_path):
                 str(bids),
                 str(out),
                 'participant',
-                '--output-resolution',
-                '2',
+                '--output-spaces',
+                'acpc:res-2mm',
                 '--no-jacobian-weighting',
             ]
         )
@@ -261,8 +278,8 @@ def test_repeated_force_accumulates(tmp_path):
             'gradwarp1D',
             '--force',
             'gradwarp3D',
-            '--output-resolution',
-            '2',
+            '--output-spaces',
+            'acpc:res-2mm',
         ]
     )
     assert opts.force == ['gradwarp1D', 'gradwarp3D']
@@ -280,7 +297,7 @@ def test_repeated_force_does_not_leak_between_parses(tmp_path):
     bids = tmp_path / 'bids'
     bids.mkdir()
     out = tmp_path / 'out'
-    base = [str(bids), str(out), 'participant', '--output-resolution', '2']
+    base = [str(bids), str(out), 'participant', '--output-spaces', 'acpc:res-2mm']
 
     assert parser.parse_args([*base, '--force', 'gradwarp1D']).force == ['gradwarp1D']
     assert parser.parse_args([*base, '--force', 'gradwarp3D']).force == ['gradwarp3D']
@@ -301,7 +318,15 @@ def test_parser_rejects_the_old_gradients_value(tmp_path, flag):
     out = tmp_path / 'out'
     with pytest.raises(SystemExit):
         parser.parse_args(
-            [str(bids), str(out), 'participant', flag, 'gradients', '--output-resolution', '2']
+            [
+                str(bids),
+                str(out),
+                'participant',
+                flag,
+                'gradients',
+                '--output-spaces',
+                'acpc:res-2mm',
+            ]
         )
 
 
@@ -321,8 +346,8 @@ def test_parser_rejects_unknown_force_value(tmp_path):
                 'participant',
                 '--force',
                 'bogus',
-                '--output-resolution',
-                '2',
+                '--output-spaces',
+                'acpc:res-2mm',
             ]
         )
 
@@ -590,7 +615,8 @@ TRXSCAN_COMMON = [
     '--sloppy',
     '--denoise-method=none',
     '--dwi-biascorrect=none',
-    '--output-resolution=3',
+    '--output-spaces=acpc:res-3mm',
+    '--output-spaces=MNI152NLin2009cAsym',
 ]
 
 

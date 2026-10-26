@@ -16,6 +16,7 @@ from qsiprep import config
 from qsiprep.tests.preproc_factory import make_preproc_unit
 from qsiprep.tests.test_workflows_native import _StubLayout, _write_dwi
 from qsiprep.tests.utils import get_test_data_path
+from qsiprep.utils.spaces import SpaceSpec
 
 TEMPLATE = 'MNI152NLin2009cAsym'
 EDDY_TEXT = 'Head motion and eddy-current distortions were corrected with'
@@ -47,7 +48,7 @@ def cfg(monkeypatch):
         unringing_method='none',
         dwidenoise_window=5,
         shoreline_iters=2,
-        anatomical_template=TEMPLATE,
+        output_spaces=['acpc:res-3mm', TEMPLATE],
         anat_modality='T1w',
         dwi2anat_dof=6,
         b0_to_anat_transform='Rigid',
@@ -60,7 +61,6 @@ def cfg(monkeypatch):
         ignore=[],
         force=[],
         two_pass_sdc=True,
-        output_resolution=3.0,
     )
     return set_config
 
@@ -88,7 +88,6 @@ def _boilerplate(unit, t2w_sdc=False):
         t2w_sdc=t2w_sdc,
         output_prefix='sub-01',
         source_file=unit.dwi_files[0],
-        anatomical_template=TEMPLATE,
     )
     text = wf.visit_desc()
     _assert_well_formed(text)
@@ -228,11 +227,18 @@ def test_synb0_describes_generation_and_coregistration_once(tmp_path, cfg, hmc_m
     ],
 )
 def test_final_resampling(cfg, sloppy, ignore, interpolation, jacobian):
+    from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
 
     cfg('execution', sloppy=sloppy)
     cfg('workflow', ignore=ignore)
-    text = init_dwi_trans_wf(source_file='sub-01_dwi.nii.gz', mem_gb=1, template='ACPC').__desc__
+    (spec,) = parse_output_spaces(['acpc:res-3mm'])
+    text = init_dwi_trans_wf(
+        source_file='sub-01_dwi.nii.gz',
+        mem_gb=1,
+        resolution=spec.resolution,
+        template='ACPC',
+    ).__desc__
     _assert_well_formed(text)
     assert interpolation in text
     # ChooseInterpolator switches to Linear, not B-spline, when upsampling.
@@ -256,5 +262,5 @@ def test_gre_prior_is_described_once(target, expected):
 def test_template_is_cited(cfg):
     from qsiprep.workflows.anatomical.volume import init_anat_normalization_wf
 
-    text = init_anat_normalization_wf(TEMPLATE).__desc__
+    text = init_anat_normalization_wf(SpaceSpec(space=TEMPLATE)).__desc__
     assert f'{TEMPLATE} template [@mni].' in text

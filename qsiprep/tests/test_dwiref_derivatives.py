@@ -147,10 +147,10 @@ def test_plus_suffixed_output_names_always_raise(names, dwi_dir):
         # The same template resampled into ACPC. `space` is taken, so the level
         # moves to `desc`.
         ({'space': 'ACPC', 'desc': 'subject'}, 'sub-01_space-ACPC_desc-subject_dwiref.nii.gz'),
-        # Reference of the preprocessed series.
+        # Reference of the preprocessed series, on a DWI grid, so it carries res-.
         (
-            {'space': 'ACPC', 'desc': 'preproc', 'acquisition': 'A'},
-            'sub-01_acq-A_space-ACPC_desc-preproc_dwiref.nii.gz',
+            {'space': 'ACPC', 'res': '2mm', 'desc': 'preproc', 'acquisition': 'A'},
+            'sub-01_acq-A_space-ACPC_res-2mm_desc-preproc_dwiref.nii.gz',
         ),
         (
             {'space': 'subject', 'desc': 'agreement'},
@@ -183,10 +183,15 @@ def test_the_two_acpc_space_images_do_not_collide():
         datatype='dwi', suffix='dwiref', extension='.nii.gz', space='ACPC', desc='subject'
     )
     reference = _render(
-        datatype='dwi', suffix='dwiref', extension='.nii.gz', space='ACPC', desc='preproc'
+        datatype='dwi',
+        suffix='dwiref',
+        extension='.nii.gz',
+        space='ACPC',
+        res='2mm',
+        desc='preproc',
     )
     assert template == 'sub-01/dwi/sub-01_space-ACPC_desc-subject_dwiref.nii.gz'
-    assert reference == 'sub-01/dwi/sub-01_space-ACPC_desc-preproc_dwiref.nii.gz'
+    assert reference == 'sub-01/dwi/sub-01_space-ACPC_res-2mm_desc-preproc_dwiref.nii.gz'
     assert template != reference
 
 

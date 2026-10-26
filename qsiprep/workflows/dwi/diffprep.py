@@ -713,7 +713,6 @@ def init_diffprep_hmc_wf(
         # HMC, so it reaches ComposeJacobianWeights externally (recorded by
         # jacobian_provenance.jacobian_provenance_for, not here).
         b0_sdc_wf = init_sdc_wf(unit, gradwarp=has_gradwarp, source_file=source_file)
-        b0_sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
 
         if has_gradwarp:
             connect_gradwarp_sdc_reference(

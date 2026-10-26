@@ -17,7 +17,7 @@ def _config(force_nocsf):
     # Not sloppy: --sloppy swaps SynthStrip for niimath -skullstrip, which has no no-csf model.
     config.execution.sloppy = False
     config.execution.output_dir = Path('/tmp/qsiprep_test_out')
-    config.execution.skip_anat_based_spatial_normalization = False
+    config.workflow.output_spaces = ['acpc:res-2mm', 'MNI152NLin2009cAsym']
     config.nipype.omp_nthreads = 1
     config.workflow.anat_modality = 'T1w'
     config.workflow.anat_biascorrect = 'n4'
@@ -30,14 +30,18 @@ def _config(force_nocsf):
 
 
 def _build(force_nocsf, name):
+    from qsiprep.utils.spaces import parse_output_spaces, select_acpc_anchor
     from qsiprep.workflows.anatomical.volume import init_anat_preproc_wf
 
-    _config(force_nocsf)
+    config = _config(force_nocsf)
+    specs = parse_output_spaces(config.workflow.output_spaces)
     return init_anat_preproc_wf(
         num_anat_images=1,
         num_additional_t2ws=0,
         has_rois=False,
-        anatomical_template='MNI152NLin2009cAsym',
+        output_spaces=specs,
+        acpc_anchor=select_acpc_anchor(specs),
+        acpc_specs=[spec for spec in specs if not spec.standard],
         name=name,
     )
 
@@ -60,7 +64,7 @@ def test_parser_sets_force_nocsf_synthstrip(tmp_path):
 
     bids = tmp_path / 'bids'
     bids.mkdir()
-    base = [str(bids), str(tmp_path / 'out'), 'participant', '--output-resolution', '2']
+    base = [str(bids), str(tmp_path / 'out'), 'participant', '--output-spaces', 'acpc:res-2mm']
     parser = _build_parser()
     assert parser.parse_args(base).force_nocsf_synthstrip is False
     opts = parser.parse_args([*base, '--force', 'no-csf-synthstrip'])

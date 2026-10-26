@@ -21,7 +21,7 @@ def _cfg(monkeypatch):
     config.workflow.b0_threshold = 100
     config.workflow.no_b0_harmonization = False
     config.workflow.eddy_config = None
-    config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
+    config.workflow.output_spaces = ['acpc:res-2mm', 'MNI152NLin2009cAsym']
     config.workflow.ignore = []
     config.workflow.force = []
     config.workflow.gradient_file = None
@@ -239,11 +239,17 @@ def test_synb0_text_does_not_repeat_the_coregistration_paragraph():
     [(False, 'windowed-sinc (Lanczos) interpolation'), (True, 'with linear interpolation')],
 )
 def test_resampling_text_names_interpolation_and_bvec_rotation(sloppy, expected):
+    from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
 
     config.execution.sloppy = sloppy
-    config.workflow.output_resolution = 2.0
-    wf = init_dwi_trans_wf(source_file='/data/sub-01_dwi.nii.gz', template='ACPC', mem_gb=1)
+    (spec,) = parse_output_spaces(['acpc:res-2mm'])
+    wf = init_dwi_trans_wf(
+        source_file='/data/sub-01_dwi.nii.gz',
+        template='ACPC',
+        mem_gb=1,
+        resolution=spec.resolution,
+    )
     text = ' '.join(wf.__desc__.split())
     assert 'resampled into AC-PC space at 2 mm isotropic resolution' in text
     assert expected in text
