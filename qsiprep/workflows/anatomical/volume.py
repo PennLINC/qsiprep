@@ -257,6 +257,7 @@ def init_anat_preproc_wf(
             **templateflow_kwargs(acpc_anchor),
         ),
         name='get_template_image',
+        run_without_submitting=True,
     )
     anchor_lps_wf = init_template_lps_wf(name='anchor_lps_wf')
     reference_grid_wfs = []
@@ -500,13 +501,14 @@ was used to restrict the nonlinear registration to the template. """
     lps_chains = {str(acpc_anchor): anchor_lps_wf}
 
     def _lps_chain(chain_spec):
-        """Fetch one template grid and reorient it to LPS+, once per distinct spec."""
+        """Fetch one template grid and reorient it to LPS+, once per spec."""
         chain = lps_chains.get(str(chain_spec))
         if chain is None:
             chain_label = _spec_node_label(chain_spec)
             get_std_template = pe.Node(
                 GetTemplate(anatomical_contrast=anat_modality, **templateflow_kwargs(chain_spec)),
                 name=f'get_template_{chain_label}',
+                run_without_submitting=True,
             )
             chain = init_template_lps_wf(name=f'template_lps_{chain_label}_wf')
             workflow.connect([
@@ -520,16 +522,11 @@ was used to restrict the nonlinear registration to the template. """
 
     per_spec = []
     for spec in standard_specs:
-        # The grid this spec's derivatives are resampled onto: the res- label asked for.
         std_lps_wf = _lps_chain(spec)
 
         norm_wf = registrations.get(spec.fullname)
         if norm_wf is None:
-            # The registration targets the template at its default (finest)
-            # resolution whatever label was listed first. A res- label picks the
-            # grid derivatives land on, not the image the warp is estimated
-            # against, so one template gets one transform however its labels are
-            # ordered -- as fMRIPrep does.
+            # Register to the default resolution; a res- label only picks the grid
             registration_spec = replace(spec, resolution=None)
             reg_lps_wf = _lps_chain(registration_spec)
             if rigid_acpc_resample_nonlinear_mask is None:
@@ -552,8 +549,6 @@ was used to restrict the nonlinear registration to the template. """
                 spec,
                 has_rois=has_rois,
                 moving_is_acpc=True,
-                # Named after the template, not the label: the same registration
-                # whichever label listed it first, so a cached one is reused.
                 name=f'anat_normalization_{_spec_node_label(registration_spec)}_wf',
             )
             registrations[spec.fullname] = norm_wf

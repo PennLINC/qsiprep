@@ -59,7 +59,7 @@ class SpaceSpec:
     space: str
     resolution: Resolution | None = None
     cohort: str | None = None
-    #: The cohort was chosen from the participant's age (``cohort-auto``), not typed.
+    #: The cohort came from ``cohort-auto``.
     cohort_from_age: bool = False
 
     @property
@@ -309,31 +309,22 @@ def _age_in_months(bids_dir, subject_id, session_id):
 def select_acpc_anchor(specs) -> SpaceSpec:
     """Pick the template that anchors ACPC alignment and the output grid.
 
-    Derived rather than user-selectable: an infant template among the requested
-    spaces anchors ACPC, otherwise MNI152NLin2009cAsym does. When several cohorts
-    of that template are requested, ``cohort-auto`` anchors, because it is the
-    cohort matched to the participant's age; otherwise the first cohort listed
-    does. Works before and after :func:`resolve_output_spaces`.
+    An infant template among the requested spaces anchors ACPC, otherwise
+    MNI152NLin2009cAsym does. Among several cohorts of that template,
+    ``cohort-auto`` wins, then the first listed.
     """
     for name in INFANT_ANCHORS:
         candidates = [spec for spec in specs if spec.space == name]
         if candidates:
             age_matched = [spec for spec in candidates if spec.age_matched]
             chosen = (age_matched or candidates)[0]
-            # The anchor fixes the ACPC grid every anatomical and the DWI FoV are
-            # written on, so it takes the template's default resolution. Honouring
-            # a res- label here would silently move that grid, and would make the
-            # anchor depend on which of two labels the user typed first.
+            # The anchor sets the ACPC grid, so it uses the template's default resolution
             return replace(chosen, resolution=None)
     return SpaceSpec(space=DEFAULT_ANCHOR)
 
 
 def describe_acpc_anchor(specs, anchor) -> str:
-    """Say which template anchors ACPC alignment and, if a choice was made, why.
-
-    The same sentence goes to the log and to the subject summary of the HTML
-    report, so a run that had to pick between requested cohorts says so in both.
-    """
+    """Describe the ACPC anchor and any requested cohorts it was chosen over."""
     unused = []
     for spec in specs:
         if spec.space == anchor.space and spec.cohort not in (None, anchor.cohort):
@@ -359,9 +350,7 @@ def resolve_output_spaces(specs, bids_dir, subject_id, session_id) -> list:
     """Replace every ``cohort-auto`` with a cohort chosen from the participant's age.
 
     The age is read at most once, however many templates asked for it. The result
-    is de-duplicated again: ``MNIInfant:cohort-auto`` next to ``MNIInfant:cohort-3``
-    is two requests until the age says they are one, and a repeated spec would
-    name the same nodes and files twice downstream.
+    is de-duplicated, since ``cohort-auto`` may resolve to a cohort also listed.
     """
     from qsiprep.utils.bids import cohort_by_months
 

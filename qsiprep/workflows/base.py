@@ -272,22 +272,15 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
             raise RuntimeError(
                 'Automatic cohort selection is only available for single session processing.'
             )
-    # Resolved per participant, and de-duplicated again afterwards: two requests
-    # can name one template cohort once the age is known.
     output_spaces = resolve_output_spaces(
         output_spaces,
         config.execution.bids_dir,
         subject_id,
         None if not session_ids else session_ids[0],
     )
-    # Derived from the resolved request. The anchor is not always listed
-    # (MNI152NLin2009cAsym anchors an acpc-only request); when it is, its cohort
-    # is concrete by now, so the anchor needs no resolution of its own.
     acpc_anchor = select_acpc_anchor(output_spaces)
     acpc_specs = [s for s in output_spaces if not s.standard]
     standard_specs = [s for s in output_spaces if s.standard]
-    # Several cohorts of the anchoring template is a choice the run made, so it
-    # goes to the log at a level the default verbosity shows, and to the report.
     anchor_note = describe_acpc_anchor(output_spaces, acpc_anchor)
     chose_between_cohorts = (
         len({s.cohort for s in standard_specs if s.space == acpc_anchor.space}) > 1

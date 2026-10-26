@@ -52,14 +52,7 @@ def _select_grid(grids, index):
 
 
 def _grid_metadata(grid_file, label=None):
-    """Describe the grid's actual voxel size for the derivatives sidecar.
-
-    BIDS defines ``Resolution`` as free text, or an object keyed by ``res-`` label
-    whose values are free text, so the size is written as a string under this
-    output's label (or bare, when the output carries no ``res-`` entity). A
-    res-native* grid is only fixed at run time, so this is where a run says what
-    it turned out to be.
-    """
+    """Report the grid's voxel size as BIDS ``Resolution``: text, keyed by res label."""
     import nibabel as nb
 
     zooms = [round(float(z), 4) for z in nb.load(grid_file).header.get_zooms()[:3]]
