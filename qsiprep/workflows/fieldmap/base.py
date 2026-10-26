@@ -82,8 +82,9 @@ def init_gre_seed_wf(unit, has_gradwarp, source_file, use):
     source_file : str
         The DWI series the b=0 reference is named after
     use : str
-        The registration that starts from the warp, ``drbuddi`` or ``t2wreg``,
-        for the boilerplate and the workflow name
+        What starts from the field: the DRBUDDI registration (``drbuddi``) or the
+        unpile fit, which takes it as a prior (``unpile``); for the boilerplate and
+        the workflow name
 
     Inputs
     ------
@@ -101,6 +102,12 @@ def init_gre_seed_wf(unit, has_gradwarp, source_file, use):
     -------
     out_warp
         The GRE-derived warp, as an ITK displacement field
+    fieldmap_hz
+        The GRE field in Hz, registered to the b=0 reference and on its grid
+    b0_ref
+        The b=0 reference unwarped with that warp
+    b0_mask
+        Brain mask of the b=0 reference
     """
     from ...utils.spaces import select_acpc_anchor
     from ..dwi.gradwarp import connect_gradwarp_sdc_reference
@@ -108,7 +115,7 @@ def init_gre_seed_wf(unit, has_gradwarp, source_file, use):
 
     config.loggers.workflow.info(
         'Initializing %s for %s with GRE fieldmap %s.',
-        'DRBUDDI' if use == 'drbuddi' else 'T2Wreg',
+        'DRBUDDI' if use == 'drbuddi' else 'unpile',
         unit.output_name,
         unit.gre_init_estimation.b0field_id,
     )
@@ -119,7 +126,10 @@ def init_gre_seed_wf(unit, has_gradwarp, source_file, use):
         ),
         name='inputnode',
     )
-    outputnode = pe.Node(niu.IdentityInterface(fields=['out_warp']), name='outputnode')
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=['out_warp', 'fieldmap_hz', 'b0_ref', 'b0_mask']),
+        name='outputnode',
+    )
 
     b0_ref_wf = init_dwi_reference_wf(source_file=source_file, name='b0_ref_wf', gen_report=False)
     sdc_wf = init_sdc_wf(gre_seed_unit(unit), gradwarp=has_gradwarp, use=use)
@@ -132,7 +142,12 @@ def init_gre_seed_wf(unit, has_gradwarp, source_file, use):
             ('t1_brain', 'inputnode.t1_brain'),
             ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
         ]),
-        (sdc_wf, outputnode, [('outputnode.out_warp', 'out_warp')]),
+        (sdc_wf, outputnode, [
+            ('outputnode.out_warp', 'out_warp'),
+            ('outputnode.fieldmap_hz', 'fieldmap_hz'),
+            ('outputnode.b0_ref', 'b0_ref'),
+        ]),
+        (b0_ref_wf, outputnode, [('outputnode.dwi_mask', 'b0_mask')]),
     ])  # fmt:skip
 
     ref_fields = ('outputnode.ref_image', 'outputnode.ref_image_brain', 'outputnode.dwi_mask')
@@ -149,14 +164,61 @@ def init_gre_seed_wf(unit, has_gradwarp, source_file, use):
     return workflow
 
 
-def init_sdc_wf(unit, gradwarp=False, use='apply'):
+NO_SDC_DESC = '\n\nNo susceptibility distortion correction was performed.\n\n'
+
+#: The anatomical inputs callers hand :func:`init_sdc_wf`. SyN uses the first two;
+#: SyN or unpile against a SynB0 also generates the synthetic b0 from the next five, and
+#: unpile against the T2w takes the last.
+SDC_ANAT_INPUTS = (
+    't1_brain',
+    't1_2_mni_reverse_transform',
+    't1_preproc',
+    't1_seg',
+    'to_template_affine_transform',
+    'acpc_inv_transform',
+    'dwi_sampling_grid',
+    't2w_unfatsat',
+)
+#: ``workflow.connect`` pairs for :data:`SDC_ANAT_INPUTS`, same names on both sides.
+SDC_ANAT_CONNECTIONS = [(field, f'inputnode.{field}') for field in SDC_ANAT_INPUTS]
+
+
+def syn_target(unit):
+    """Return the image SyN registers the b0 to: ``'synb0'``, ``'t1w'``, or None without SyN."""
+    stage = unit.run.stage_with('syn') if unit.run is not None else None
+    if stage is not None:
+        return stage.structural_target
+    if unit.is_nipreps_syn:
+        return unit.estimation.structural_target
+    return None
+
+
+def unpile_target(unit):
+    """Return the image unpile fits the b0 against: ``'synb0'``, ``'t2w'``, or None.
+
+    A unit led by a measured fieldmap (the GRE candidate :func:`gre_seed_unit` puts
+    in front of an unpile unit) is never unpile's, whatever its plan says.
+    """
+    if unit.has_scanner_measured_fieldmap:
+        return None
+    stage = unit.run.stage_with('unpile') if unit.run is not None else None
+    if stage is not None:
+        return stage.structural_target
+    if unit.is_unpile and unit.estimation is not None:
+        return unit.estimation.structural_target
+    return None
+
+
+def init_sdc_wf(unit, gradwarp=False, use='apply', source_file=None):
     """Build a workflow that applies the SDC strategy for a scanner-measured fieldmap.
 
     This workflow implements the heuristics to choose a
     :abbr:`SDC (susceptibility distortion correction)` strategy for a
-    GRE fieldmap or the fieldmap-less SyN method. Units with no such fieldmap
-    pass through unchanged; the fieldmap-less T2Wreg and SyNb0 cases are
-    handled by the TORTOISE backend, not here.
+    GRE fieldmap or the fieldmap-less methods that run after head motion
+    correction: SyN, which registers the b0 to the inverted T1w or to a SynB0
+    synthetic b0, and unpile, which fits the field against a SynB0 or the T2w.
+    Units with no such fieldmap pass through unchanged; SynB0 + TOPUP is handled
+    by the HMC backends.
 
     .. note::
         PEPOLAR fieldmaps are not supported by this workflow. They are handled
@@ -192,8 +254,11 @@ def init_sdc_wf(unit, gradwarp=False, use='apply'):
         tells :func:`connect_gradwarp_sdc_reference` which references to feed.
     use : str, optional
         What the caller does with a GRE fieldmap's warp, for the boilerplate:
-        ``apply`` (unwarp the DWI), ``eddy`` (eddy's ``--field``), or the TORTOISE
-        registration it initializes, ``t2wreg`` or ``drbuddi``.
+        ``apply`` (unwarp the DWI), ``eddy`` (eddy's ``--field``), the DRBUDDI
+        registration it initializes (``drbuddi``), or the unpile fit it is the
+        prior of (``unpile``).
+    source_file : str, optional
+        Naming source for the SynB0 reportlets and the unpile derivatives.
 
     Inputs
     ------
@@ -210,6 +275,11 @@ def init_sdc_wf(unit, gradwarp=False, use='apply'):
         fo the fieldmap-less SyN method
     template : str
         Name of template targeted by ``template`` output space
+    t1_preproc, t1_seg, to_template_affine_transform, acpc_inv_transform, dwi_sampling_grid
+        As for :func:`~qsiprep.workflows.fieldmap.synb0.init_synb0_wf`, for SyN or unpile
+        against a SynB0
+    t2w_unfatsat
+        The subject's T2w, for unpile against the T2w
 
 
     Outputs
@@ -227,7 +297,9 @@ def init_sdc_wf(unit, gradwarp=False, use='apply'):
     fieldmap_hz
         The fieldmap in Hz for eddy
     """
-    does_sdc = unit.has_scanner_measured_fieldmap or unit.is_nipreps_syn
+    target = syn_target(unit)
+    unpile_to = unpile_target(unit)
+    does_sdc = unit.has_scanner_measured_fieldmap or target is not None or unpile_to is not None
     workflow = Workflow(name='sdc_wf' if does_sdc else 'sdc_bypass_wf')
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -235,10 +307,9 @@ def init_sdc_wf(unit, gradwarp=False, use='apply'):
                 'b0_ref',
                 'b0_ref_brain',
                 'b0_mask',
-                't1_brain',
-                't1_2_mni_reverse_transform',
                 'template',
                 'gradwarp_field',
+                *SDC_ANAT_INPUTS,
             ]
         ),
         name='inputnode',
@@ -252,10 +323,10 @@ def init_sdc_wf(unit, gradwarp=False, use='apply'):
         name='outputnode',
     )
 
-    # No SDC to do here - forward inputs to outputs. (The fieldmap-less T2Wreg and
-    # SyNb0 cases are handled by the TORTOISE backend; classic SyN is handled below.)
+    # No SDC to do here - forward inputs to outputs. (SynB0 + TOPUP is handled by
+    # the HMC backends; SyN and unpile are handled below.)
     if not does_sdc:
-        workflow.__postdesc__ = 'No susceptibility distortion correction was performed.'
+        workflow.__postdesc__ = NO_SDC_DESC
         outputnode.inputs.method = 'None'
         workflow.connect([
             (inputnode, outputnode, [
@@ -265,11 +336,10 @@ def init_sdc_wf(unit, gradwarp=False, use='apply'):
         ])  # fmt:skip
         return workflow
 
-    workflow.__postdesc__ = """\
-Based on the estimated susceptibility distortion, an
-unwarped b=0 reference was calculated for a more accurate
-co-registration with the anatomical reference.
-"""
+    workflow.__postdesc__ = (
+        'The *b*=0 reference was unwarped with the estimated field, for a more accurate '
+        'coregistration with the anatomical reference.\n\n'
+    )
 
     # PEPOLAR path
     if unit.is_pepolar:
@@ -352,12 +422,67 @@ co-registration with the anatomical reference.
             _connect_transported_warp(workflow, inputnode, sdc_unwarp_wf, outputnode)
             return workflow
 
-    # FIELDMAP-less classic SyN path
-    if unit.is_nipreps_syn:
+    # FIELDMAP-less unpile path: the b=0 matched to a SynB0 or the T2w through a
+    # readout model, with a GRE candidate as the prior when the unit has one.
+    if unpile_to is not None:
+        from ..dwi.util import add_synb0_outputs
+        from .unpile import init_unpile_sdc_wf
+
+        if unpile_to == 't2w' and config.workflow.anat_modality == 'none':
+            raise ValueError(
+                f'unpile with the T2w reference was selected for {unit.dwi_files[0]}, but '
+                '--anat-modality none leaves no T2w to fit against.'
+            )
+        gre_prior = unit.gre_init_estimation is not None
+        unpile_wf = init_unpile_sdc_wf(
+            unit,
+            source_file=source_file,
+            target=unpile_to,
+            two_pass=config.workflow.two_pass_sdc,
+            gre_prior=gre_prior,
+        )
+        outputnode.inputs.method = 'unpile ({}{})'.format(
+            'SynB0' if unpile_to == 'synb0' else 'T2w', ', GRE-refined' if gre_prior else ''
+        )
+        workflow.connect([
+            (inputnode, unpile_wf, [
+                ('b0_ref', 'inputnode.b0_ref'),
+                ('b0_ref_brain', 'inputnode.b0_ref_brain'),
+                ('b0_mask', 'inputnode.b0_mask'),
+                ('t2w_unfatsat', 'inputnode.t2w_unfatsat'),
+                ('t1_preproc', 'inputnode.t1_preproc'),
+                ('t1_brain', 'inputnode.t1_brain'),
+                ('t1_seg', 'inputnode.t1_seg'),
+                ('to_template_affine_transform', 'inputnode.to_template_affine_transform'),
+                ('acpc_inv_transform', 'inputnode.acpc_inv_transform'),
+                ('dwi_sampling_grid', 'inputnode.dwi_sampling_grid'),
+            ]),
+            (unpile_wf, outputnode, [('outputnode.out_hz', 'fieldmap_hz')]),
+        ])  # fmt:skip
+        if gre_prior:
+            # The GRE field is estimated against the same b=0 reference unpile fits,
+            # registered to it and brought onto its grid in Hz.
+            gre_seed_wf = init_gre_seed_wf(unit, False, source_file, use='unpile')
+            workflow.connect([
+                (inputnode, gre_seed_wf, [
+                    ('b0_ref', 'inputnode.b0_template'),
+                    ('t1_brain', 'inputnode.t1_brain'),
+                    ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
+                ]),
+                (gre_seed_wf, unpile_wf, [('outputnode.fieldmap_hz', 'inputnode.fieldmap_hz')]),
+            ])  # fmt:skip
+        if unpile_to == 'synb0' and source_file is not None:
+            add_synb0_outputs(workflow, unpile_wf, source_file)
+        sdc_unwarp_wf = unpile_wf
+
+    # FIELDMAP-less SyN path
+    if target is not None:
         from .syn import init_syn_sdc_wf
 
-        syn_sdc_wf = init_syn_sdc_wf(bold_pe=unit.dwi_metadata.get('PhaseEncodingDirection', None))
-        outputnode.inputs.method = 'FLB ("fieldmap-less", SyN-based)'
+        syn_sdc_wf = init_syn_sdc_wf(
+            bold_pe=unit.dwi_metadata.get('PhaseEncodingDirection', None),
+            target='synb0' if target == 'synb0' else 'invt1w',
+        )
         workflow.connect([
             (inputnode, syn_sdc_wf, [
                 ('t1_brain', 'inputnode.t1_brain'),
@@ -366,6 +491,29 @@ co-registration with the anatomical reference.
                 ('template', 'inputnode.template'),
             ]),
         ])  # fmt:skip
+        if target == 'synb0':
+            from ..dwi.util import add_synb0_outputs
+            from .synb0 import init_synb0_wf
+
+            outputnode.inputs.method = 'FLB ("fieldmap-less", SyN against SynB0)'
+            synb0_wf = init_synb0_wf()
+            workflow.connect([
+                (inputnode, synb0_wf, [
+                    ('t1_preproc', 'inputnode.t1_preproc'),
+                    ('t1_brain', 'inputnode.t1_brain'),
+                    ('t1_seg', 'inputnode.t1_seg'),
+                    ('to_template_affine_transform', 'inputnode.to_template_affine_transform'),
+                    ('acpc_inv_transform', 'inputnode.acpc_inv_transform'),
+                    ('dwi_sampling_grid', 'inputnode.output_grid'),
+                    ('b0_ref', 'inputnode.b0_ref'),
+                    ('b0_ref_brain', 'inputnode.b0_ref_brain'),
+                ]),
+                (synb0_wf, syn_sdc_wf, [('outputnode.synthetic_b0', 'inputnode.synthetic_b0')]),
+            ])  # fmt:skip
+            if source_file is not None:
+                add_synb0_outputs(workflow, synb0_wf, source_file)
+        else:
+            outputnode.inputs.method = 'FLB ("fieldmap-less", SyN-based)'
         sdc_unwarp_wf = syn_sdc_wf
 
     workflow.connect([
@@ -384,29 +532,23 @@ def _gre_boilerplate(gradwarp, use):
     if gradwarp:
         desc.append(
             'As the field map is subject to the same gradient nonlinearity as the DWI, '
-            'the deformation was estimated against the b=0 reference before gradient '
+            'the deformation was estimated against the *b*=0 reference before gradient '
             'nonlinearity correction, then moved into the corrected space by composing '
             'it with the gradient nonlinearity displacement field and its inverse.'
         )
     if use == 'apply':
         desc.append(
-            'Based on the estimated susceptibility distortion, an unwarped b=0 '
-            'reference was calculated for a more accurate co-registration with the '
-            'anatomical reference.'
+            'The *b*=0 reference was unwarped with the estimated field, for a more accurate '
+            'coregistration with the anatomical reference.'
         )
     elif use == 'eddy':
         desc.append(
-            'Rather than being applied after eddy, the field map (in Hz, rigidly aligned '
-            "to eddy's first volume) was passed to eddy, which corrected susceptibility "
+            'Rather than being applied after `eddy`, the field map (in Hz, rigidly aligned '
+            'to the first DWI volume) was passed to `eddy`, which corrected susceptibility '
             'distortion within its own model.'
         )
-    elif use == 't2wreg':
-        desc.append(
-            'Rather than being applied directly, this deformation initialized the T2Wreg '
-            'registration, held fixed through its multi-resolution pyramid so that each '
-            'stage estimated only a residual correction on top of it.'
-        )
-    # 'drbuddi': init_drbuddi_wf's boilerplate describes the seed.
+    # 'unpile': unpile's boilerplate describes how the prior was used, which
+    # depends on its target. 'drbuddi': init_drbuddi_wf's boilerplate describes the seed.
     return '\n'.join(desc) + '\n' if desc else ''
 
 
@@ -440,7 +582,7 @@ def _connect_transported_warp(workflow, inputnode, sdc_unwarp_wf, outputnode):
     )
     # The unwarped reference is still in the raw frame; the coregistration
     # reference must be gradwarp-corrected like every other branch's.
-    smooth = 'NearestNeighbor' if config.execution.sloppy else 'LanczosWindowedSinc'
+    smooth = 'Linear' if config.execution.sloppy else 'LanczosWindowedSinc'
     gradwarp_unwarped_ref = pe.Node(
         ants.ApplyTransforms(dimension=3, interpolation=smooth, float=True),
         name='gradwarp_unwarped_ref',

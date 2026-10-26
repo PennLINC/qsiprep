@@ -36,6 +36,7 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
 from ... import config
 from ...data import load as load_data
+from ...utils.versions import versioned
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
@@ -72,7 +73,7 @@ class ThreshAndBin(SimpleInterface):
         return runtime
 
 
-def init_syn_sdc_wf(bold_pe=None, atlas_threshold=2):
+def init_syn_sdc_wf(bold_pe=None, atlas_threshold=2, target='invt1w'):
     """Build a workflow that estimates a fieldmap-less SDC warp with ANTs SyN.
 
     This workflow takes a skull-stripped T1w image and reference b0 image and
@@ -89,6 +90,10 @@ def init_syn_sdc_wf(bold_pe=None, atlas_threshold=2):
     This technique is a variation on those developed in
     :footcite:t:`fieldmapless2` and :footcite:t:`fieldmapless1`.
 
+    With ``target='synb0'`` the b0 is registered to a SynB0 synthetic
+    distortion-free b0 on its own grid instead of the inverted T1w; the T1w is
+    still used to bring the fieldmap atlas onto the b0.
+
     .. workflow ::
         :graph2use: orig
         :simple_form: yes
@@ -98,10 +103,21 @@ def init_syn_sdc_wf(bold_pe=None, atlas_threshold=2):
             bold_pe='j',
             omp_nthreads=8)
 
+    Parameters
+    ----------
+    bold_pe : str
+        BIDS ``PhaseEncodingDirection``
+    atlas_threshold : float
+        Fieldmap atlas displacement (mm) below which deformation is not allowed
+    target : {'invt1w', 'synb0'}
+        The image SyN registers the b0 to
+
     Inputs
     ------
-    b0_ref
+    bold_ref
         reference image
+    synthetic_b0
+        SynB0 synthetic b0 on the ``bold_ref`` grid (``target='synb0'`` only)
     template : str
         Name of template targeted by ``template`` output space
     t1_brain
@@ -133,19 +149,26 @@ def init_syn_sdc_wf(bold_pe=None, atlas_threshold=2):
         bold_pe = 'j'
 
     workflow = Workflow(name='syn_sdc_wf')
-    workflow.__desc__ = f"""\
-A deformation field to correct for susceptibility distortions was estimated
-based on *fMRIPrep*'s *fieldmap-less* approach.
-The deformation field is that resulting from co-registering the b0 reference
-to the same-subject T1w-reference with its intensity inverted [@fieldmapless1;
-@fieldmapless2].
-Registration is performed with `antsRegistration` (ANTs {ants.Registration().version}), and
-the process regularized by constraining deformation to be nonzero only
-along the phase-encoding direction, and modulated with an average fieldmap
-template [@fieldmapless3].
+    target_sentence = (
+        "a synthetic distortion-free *b*=0 image generated from the subject's T1w image\n"
+        'with SynB0-DISCO [@synb0disco]'
+        if target == 'synb0'
+        else "the subject's T1w reference with its intensity inverted [@fieldmapless1;\n"
+        '@fieldmapless2]'
+    )
+    ants_version = versioned('*ANTs*', ants.Registration().version)
+    workflow.__desc__ = f"""
+
+Susceptibility distortion was corrected without a field map, following *fMRIPrep*'s
+fieldmap-less approach: the *b*=0 reference was nonlinearly registered to
+{target_sentence}. The registration, with `antsRegistration` ({ants_version}),
+allowed deformation only along the phase-encoding direction and was modulated with an
+average field map template [@fieldmapless3].
 """
     inputnode = pe.Node(
-        niu.IdentityInterface(['bold_ref', 'template', 't1_brain', 't1_2_mni_reverse_transform']),
+        niu.IdentityInterface(
+            ['bold_ref', 'template', 't1_brain', 't1_2_mni_reverse_transform', 'synthetic_b0']
+        ),
         name='inputnode',
     )
     outputnode = pe.Node(
@@ -217,7 +240,6 @@ template [@fieldmapless3].
         (atlas_2_ref, threshold_atlas, [('output_image', 'in_file')]),
         (threshold_atlas, fixed_image_masks, [('out_file', 'in2')]),
         (inputnode, syn, [('bold_ref', 'moving_image')]),
-        (t1_2_ref, syn, [('output_image', 'fixed_image')]),
         (fixed_image_masks, syn, [('out', 'fixed_image_masks')]),
         (syn, outputnode, [('forward_transforms', 'out_warp')]),
         (syn, unwarp_ref, [('forward_transforms', 'transforms')]),
@@ -230,5 +252,9 @@ template [@fieldmapless3].
             ('output_image', 'out_reference_brain'),
         ]),
     ])  # fmt:skip
+    if target == 'synb0':
+        workflow.connect([(inputnode, syn, [('synthetic_b0', 'fixed_image')])])  # fmt:skip
+    else:
+        workflow.connect([(t1_2_ref, syn, [('output_image', 'fixed_image')])])  # fmt:skip
 
     return workflow

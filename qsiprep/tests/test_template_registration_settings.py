@@ -228,5 +228,5 @@ def test_iterative_b0_description_names_the_transform(tmp_path):
 
     _config().execution.output_dir = str(tmp_path)
     wf = init_b0_hmc_wf(align_to='iterative', transform='Rigid')
-    assert 'iterations of Rigid registrations' in wf.__desc__
+    assert 'iterations of rigid registrations' in wf.__desc__
     assert 'tortoise' not in wf.__desc__

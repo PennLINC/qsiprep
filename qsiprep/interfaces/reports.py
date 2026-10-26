@@ -30,6 +30,7 @@ from ..viz.utils import plot_sdc_warp
 from .bids import get_bids_params
 from .dsi_studio import QC_WARNINGS_COLUMN
 from .gradients import concatenate_bvals, concatenate_bvecs
+from .gradunwarp import gradient_nonlinearity_qc
 
 SUBJECT_TEMPLATE = """{mrtrix_warning}\t<ul class="elem-desc">
 \t\t<li>Subject ID: {subject_id}</li>
@@ -107,7 +108,7 @@ MRTRIX_DEV_WARNING = """\t<div class="alert alert-warning" role="alert">
 """
 
 QC_WARNINGS_TEMPLATE = """\t<div class="alert alert-warning" role="alert">
-\t\t<strong>DSI Studio could not compute some QC measures.</strong>
+\t\t<strong>Some QC measures could not be computed.</strong>
 \t\tThose values are <code>n/a</code> in this series' <code>desc-image_qc.tsv</code>.
 \t\tPreprocessing continued, but this failure can point to a problem in the data it
 \t\twas run on, such as extreme intensity values, so inspect the outputs.
@@ -605,6 +606,9 @@ class _SeriesQCInputSpec(BaseInterfaceInputSpec):
     t1_b0_series = File(exists=True, desc='time series of b=0 images')
     t1_dice_score = traits.Float()
     mni_dice_score = traits.Float()
+    grad_dev_file = File(exists=True, desc='gradient deviation tensor map in t1 space')
+    gradwarp_field = File(exists=True, desc='applied gradwarp displacement field')
+    gradwarp_mask_file = File(exists=True, desc='brain mask in the space of gradwarp_field')
     output_file_name = traits.File()
 
 
@@ -612,7 +616,7 @@ class _SeriesQCOutputSpec(TraitedSpec):
     series_qc_file = File(exists=True)
     qc_warnings_report = File(
         exists=True,
-        desc='HTML reportlet naming QC stages DSI Studio could not measure. '
+        desc='HTML reportlet naming QC stages DSI Studio or cs_dmri could not measure. '
         'Undefined when every stage succeeded.',
     )
 
@@ -657,6 +661,17 @@ class SeriesQC(SimpleInterface):
             if isdefined(self.inputs.t1_fieldmap_hz_file):
                 image_qc.update(
                     get_fieldmap_values(self.inputs.t1_fieldmap_hz_file, self.inputs.t1_mask_file)
+                )
+            if isdefined(self.inputs.grad_dev_file):
+                field = self.inputs.gradwarp_field
+                field_mask = self.inputs.gradwarp_mask_file
+                image_qc.update(
+                    gradient_nonlinearity_qc(
+                        self.inputs.grad_dev_file,
+                        self.inputs.t1_mask_file,
+                        gradwarp_field=field if isdefined(field) else None,
+                        gradwarp_mask=field_mask if isdefined(field_mask) else None,
+                    )
                 )
 
         # Get the metadata

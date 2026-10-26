@@ -51,6 +51,13 @@ def _datatype_of(suffix: str) -> str:
     return 'fmap'
 
 
+_DEFAULT_REFERENCE = {
+    CorrectionMethod.SYNB0: 'synb0',
+    CorrectionMethod.NIPREPS_SYN: 'invt1w',
+    CorrectionMethod.UNPILE: 't2w',
+}
+
+
 def make_preproc_unit(
     dwi_files,
     *,
@@ -66,6 +73,7 @@ def make_preproc_unit(
     b0field_id: str | None = None,
     output_name: str | None = None,
     anat_files=(),
+    reference: str | None = None,
 ) -> PreprocUnit:
     """Assemble a :class:`PreprocUnit` from bare file paths.
 
@@ -77,6 +85,8 @@ def make_preproc_unit(
     path), layered on top of ``metadata``.
     ``anat_files`` adds anatomical records (suffix from the filename, e.g.
     ``*_T2w.nii.gz``) so fieldmap-less plans see their structural target.
+    ``reference`` is a fieldmap-less estimation's ``--sdc-anat-reference``;
+    it defaults to the method's own (synb0, invt1w for SyN, t2w for unpile).
     """
     dwi_files = list(dwi_files)
     metadata = dict(metadata or {})
@@ -119,6 +129,7 @@ def make_preproc_unit(
             method=method,
             sources=tuple(sorted(sources)),
             provenance=provenance,
+            reference=reference or _DEFAULT_REFERENCE.get(method),
         )
 
     grouping = DWIGrouping(

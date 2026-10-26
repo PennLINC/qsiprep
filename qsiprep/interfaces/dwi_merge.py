@@ -22,6 +22,7 @@ from nipype.utils.filemanip import fname_presuffix, split_filename
 
 from ..utils.misc import safe_unit_vector
 from .epi_fmap import get_distortion_grouping
+from .nilearn import concat_imgs_on_first_grid
 
 LOGGER = logging.getLogger('nipype.workflow')
 MAX_COMBINED_SCANS = 100
@@ -176,7 +177,7 @@ class MergeDWIs(SimpleInterface):
         combine_bvals(bvals, output_file=out_bval)
         combine_bvecs(bvecs, output_file=out_bvec)
         # Concatenate into a single file
-        merged_nii = concat_imgs(to_concat, auto_resample=True)
+        merged_nii = concat_imgs_on_first_grid(to_concat)
         # Remove any negative values introduced during interpolation (if it occurs)
         pos_merged_nii = math_img('np.clip(img, 0, None)', img=merged_nii)
         pos_merged_nii.to_filename(merged_fname)
@@ -197,7 +198,7 @@ class MergeDWIs(SimpleInterface):
 
             # Merged raw series and its original gradient directions, for the pre-correction QC
             merged_raw_fname = op.join(runtime.cwd, 'merged_raw.nii.gz')
-            concat_imgs(self.inputs.raw_concatenated_files, auto_resample=True).to_filename(
+            concat_imgs_on_first_grid(self.inputs.raw_concatenated_files).to_filename(
                 merged_raw_fname
             )
             self._results['merged_raw_dwi'] = merged_raw_fname
@@ -497,7 +498,7 @@ def average_image_pairs(
     merged_bvals = []
 
     # Load the raw concatenated images for qc
-    raw_concatenated_img = concat_imgs(raw_concatenated_files)
+    raw_concatenated_img = concat_imgs_on_first_grid(raw_concatenated_files)
     raw_averaged_images = []
 
     confounds1_rename = {col: col + '_1' for col in confounds.columns}

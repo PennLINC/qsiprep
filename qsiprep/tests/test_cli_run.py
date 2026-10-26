@@ -689,32 +689,68 @@ def test_dwidenoise2_config_reaches_the_namespace(minimal_args, tmp_path):
     from pathlib import Path
 
     cfg = _dwidenoise2_json(tmp_path, decomposition='selfadjoint')
-    opts = _parse(minimal_args, '--denoise-method', 'dwidenoise2', '--dwidenoise2-config', cfg)
+    opts = _parse(minimal_args, '--denoise-method', 'dwidenoise2', '--denoise-config', cfg)
     assert opts.denoise_method == 'dwidenoise2'
-    assert opts.dwidenoise2_config == Path(cfg).absolute()
+    assert opts.denoise_config == Path(cfg).absolute()
 
 
 def test_dwidenoise2_config_defaults_to_none(minimal_args):
-    assert _parse(minimal_args, '--denoise-method', 'dwidenoise2').dwidenoise2_config is None
+    assert _parse(minimal_args, '--denoise-method', 'dwidenoise2').denoise_config is None
+
+
+def test_svht_methods_are_accepted(minimal_args):
+    opts = _parse(minimal_args, '--denoise-method', 'svht', '--unringing-method', 'svht')
+    assert opts.denoise_method == 'svht'
+    assert opts.unringing_method == 'svht'
 
 
 @pytest.mark.parametrize(
     'method_args',
-    [[], ['--denoise-method', 'dwidenoise'], ['--denoise-method', 'patch2self']],
+    [
+        [],
+        ['--denoise-method', 'dwidenoise'],
+        ['--denoise-method', 'patch2self'],
+        ['--denoise-method', 'none'],
+    ],
 )
-def test_dwidenoise2_config_requires_dwidenoise2(minimal_args, tmp_path, capsys, method_args):
+def test_denoise_config_requires_a_configurable_method(
+    minimal_args, tmp_path, capsys, method_args
+):
     cfg = _dwidenoise2_json(tmp_path)
     with pytest.raises(SystemExit):
-        _parse(minimal_args, *method_args, '--dwidenoise2-config', cfg)
-    assert '--dwidenoise2-config requires --denoise-method dwidenoise2' in (
+        _parse(minimal_args, *method_args, '--denoise-config', cfg)
+    assert '--denoise-config requires --denoise-method dwidenoise2 or svht' in (
         capsys.readouterr().err
     )
+
+
+def test_svht_config_reaches_the_namespace(minimal_args, tmp_path):
+    from pathlib import Path
+
+    cfg = _dwidenoise2_json(tmp_path, name='svht.json', demean='none', shape='cube')
+    opts = _parse(minimal_args, '--denoise-method', 'svht', '--denoise-config', cfg)
+    assert opts.denoise_config == Path(cfg).absolute()
+
+
+def test_denoise_config_is_checked_against_the_method(minimal_args, tmp_path, capsys):
+    """Test that a file is read with the keys of the selected method, not the other one."""
+    cfg = _dwidenoise2_json(tmp_path, decomposition='selfadjoint')
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--denoise-method', 'svht', '--denoise-config', cfg)
+    assert 'svht configuration file' in capsys.readouterr().err
+
+
+def test_old_dwidenoise2_config_flag_is_removed(minimal_args, tmp_path, capsys):
+    cfg = _dwidenoise2_json(tmp_path)
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--denoise-method', 'dwidenoise2', '--dwidenoise2-config', cfg)
+    assert 'unrecognized arguments' in capsys.readouterr().err
 
 
 def test_invalid_dwidenoise2_config_is_a_parse_error(minimal_args, tmp_path, capsys):
     cfg = _dwidenoise2_json(tmp_path, schedule=[{'kernel': 'rank'}])
     with pytest.raises(SystemExit):
-        _parse(minimal_args, '--denoise-method', 'dwidenoise2', '--dwidenoise2-config', cfg)
+        _parse(minimal_args, '--denoise-method', 'dwidenoise2', '--denoise-config', cfg)
     assert 'first schedule row' in capsys.readouterr().err
 
 
@@ -732,9 +768,9 @@ def restore_dwidenoise2_config():
     """Yield qsiprep.config, restoring the dwidenoise2 settings that parse_args writes."""
     from qsiprep import config
 
-    saved = (config.workflow.denoise_method, config.workflow.dwidenoise2_config)
+    saved = (config.workflow.denoise_method, config.workflow.denoise_config)
     yield config
-    config.workflow.denoise_method, config.workflow.dwidenoise2_config = saved
+    config.workflow.denoise_method, config.workflow.denoise_config = saved
 
 
 def test_dwidenoise2_config_survives_a_config_round_trip(
@@ -752,15 +788,15 @@ def test_dwidenoise2_config_survives_a_config_round_trip(
     _dwidenoise2_json(tmp_path)
     monkeypatch.chdir(tmp_path)
     opts = _parse(
-        minimal_args, '--denoise-method', 'dwidenoise2', '--dwidenoise2-config', 'dwidenoise2.json'
+        minimal_args, '--denoise-method', 'dwidenoise2', '--denoise-config', 'dwidenoise2.json'
     )
-    config.workflow.load({'dwidenoise2_config': opts.dwidenoise2_config}, init=False)
+    config.workflow.load({'denoise_config': opts.denoise_config}, init=False)
     dumped = toml.dumps({'workflow': config.workflow.get()})
     assert 'PosixPath(' not in dumped
-    config.workflow.dwidenoise2_config = None
+    config.workflow.denoise_config = None
     config.workflow.load(toml.loads(dumped)['workflow'], init=False)
-    assert config.workflow.dwidenoise2_config == tmp_path / 'dwidenoise2.json'
-    assert Path(config.workflow.dwidenoise2_config).is_absolute()
+    assert config.workflow.denoise_config == tmp_path / 'dwidenoise2.json'
+    assert Path(config.workflow.denoise_config).is_absolute()
 
 
 def test_config_file_reload_drops_stale_dwidenoise2_config(tmp_path, restore_dwidenoise2_config):
@@ -771,51 +807,133 @@ def test_config_file_reload_drops_stale_dwidenoise2_config(tmp_path, restore_dwi
     old_json = _dwidenoise2_json(tmp_path, name='old.json', decomposition='selfadjoint')
     config = _parse_with_config_file(
         tmp_path,
-        f'[workflow]\ndenoise_method = "dwidenoise2"\ndwidenoise2_config = "{old_json}"\n',
+        f'[workflow]\ndenoise_method = "dwidenoise2"\ndenoise_config = "{old_json}"\n',
         '--denoise-method',
         'dwidenoise2',
     )
-    assert config.workflow.dwidenoise2_config is None
+    assert config.workflow.denoise_config is None
 
 
 def test_sdc_anat_reference_parses(minimal_args):
-    assert _parse(minimal_args).sdc_anat_reference == 'none'
-    opts = _parse(minimal_args, '--sdc-anat-reference', 't2w')
+    opts = _parse(minimal_args)
+    assert opts.sdc_anat_reference == 'none'
+    assert opts.sdc_fieldmapless_method == 'topup'
+    opts = _parse(
+        minimal_args,
+        '--hmc-method',
+        'tortoise',
+        '--sdc-fieldmapless-method',
+        'unpile',
+        '--sdc-anat-reference',
+        't2w',
+    )
     assert opts.sdc_anat_reference == 't2w'
+    assert opts.sdc_fieldmapless_method == 'unpile'
     assert opts.force_sdc_anat_reference is False
+
+
+@pytest.mark.parametrize(
+    ('method', 'reference'),
+    [
+        ('topup', 'synb0'),
+        ('syn', 'synb0'),
+        ('syn', 'invt1w'),
+        ('unpile', 't2w'),
+        ('unpile', 'synb0'),
+    ],
+)
+def test_valid_fieldmapless_pairs_parse(minimal_args, method, reference):
+    opts = _parse(
+        minimal_args,
+        '--hmc-method',
+        'tortoise',
+        '--sdc-fieldmapless-method',
+        method,
+        '--sdc-anat-reference',
+        reference,
+    )
+    assert (opts.sdc_fieldmapless_method, opts.sdc_anat_reference) == (method, reference)
+
+
+@pytest.mark.parametrize(
+    ('method', 'reference', 'hint'),
+    [
+        ('topup', 'invt1w', '--sdc-fieldmapless-method syn'),
+        ('topup', 't2w', '--sdc-fieldmapless-method unpile'),
+        ('syn', 't2w', '--sdc-fieldmapless-method unpile'),
+        ('unpile', 'invt1w', '--sdc-fieldmapless-method syn'),
+    ],
+)
+def test_invalid_fieldmapless_pairs_are_rejected(minimal_args, capsys, method, reference, hint):
+    with pytest.raises(SystemExit):
+        _parse(
+            minimal_args,
+            '--hmc-method',
+            'tortoise',
+            '--sdc-fieldmapless-method',
+            method,
+            '--sdc-anat-reference',
+            reference,
+        )
+    assert hint in capsys.readouterr().err
+
+
+def test_auto_reference_is_gone(minimal_args):
+    with pytest.raises(SystemExit):
+        _parse(minimal_args, '--sdc-anat-reference', 'auto')
+
+
+@pytest.mark.parametrize('hmc', ['eddy', 'shoreline', 'tortoise'])
+def test_unpile_parses_with_every_hmc_method(minimal_args, hmc):
+    opts = _parse(
+        minimal_args,
+        '--hmc-method',
+        hmc,
+        '--sdc-fieldmapless-method',
+        'unpile',
+        '--sdc-anat-reference',
+        't2w',
+    )
+    assert (opts.sdc_fieldmapless_method, opts.sdc_anat_reference) == ('unpile', 't2w')
+
+
+def test_force_one_pass_sdc_parses(minimal_args):
+    assert _parse(minimal_args).two_pass_sdc is True
+    assert _parse(minimal_args, '--force', 'one-pass-sdc').two_pass_sdc is False
 
 
 def test_force_sdc_anat_reference_parses(minimal_args):
     assert _parse(minimal_args).force == []
-    opts = _parse(minimal_args, '--sdc-anat-reference', 't2w', '--force', 'sdc-anat-reference')
+    opts = _parse(minimal_args, '--sdc-anat-reference', 'synb0', '--force', 'sdc-anat-reference')
     assert opts.force == ['sdc-anat-reference']
     assert opts.force_sdc_anat_reference is True
 
 
 def test_force_sdc_anat_reference_requires_a_reference(minimal_args, capsys):
     with pytest.raises(SystemExit):
-        _parse(minimal_args, '--force', 'sdc-anat-reference')
+        _parse(minimal_args, '--sdc-anat-reference', 'none', '--force', 'sdc-anat-reference')
     assert 'requires an anatomical SDC reference' in capsys.readouterr().err
 
 
-@pytest.mark.parametrize('reference', ['synb0', 'invt1w'])
-def test_t1w_derived_references_require_t1w_modality(minimal_args, capsys, reference):
+@pytest.mark.parametrize(('method', 'reference'), [('topup', 'synb0'), ('syn', 'invt1w')])
+@pytest.mark.parametrize('modality', ['T2w', 'none'])
+def test_t1w_derived_references_require_t1w_modality(
+    minimal_args, capsys, method, reference, modality
+):
+    """A T1w-derived reference needs the T1w; the error names the way out."""
+    args = ['--anat-modality', modality]
+    args += ['--sdc-fieldmapless-method', method, '--sdc-anat-reference', reference]
     with pytest.raises(SystemExit):
-        _parse(minimal_args, '--sdc-anat-reference', reference, '--anat-modality', 'T2w')
-    assert 'requires --anat-modality T1w' in capsys.readouterr().err
+        _parse(minimal_args, *args)
+    err = capsys.readouterr().err
+    assert 'requires --anat-modality T1w' in err
+    assert '--sdc-anat-reference none' in err
 
-    # t2w and auto are exempt: auto resolves at grouping time.
     assert (
         _parse(
-            minimal_args, '--sdc-anat-reference', 't2w', '--anat-modality', 'T2w'
+            minimal_args, '--anat-modality', modality, '--sdc-anat-reference', 'none'
         ).sdc_anat_reference
-        == 't2w'
-    )
-    assert (
-        _parse(
-            minimal_args, '--sdc-anat-reference', 'auto', '--anat-modality', 'T2w'
-        ).sdc_anat_reference
-        == 'auto'
+        == 'none'
     )
 
 
@@ -989,6 +1107,29 @@ def test_dwiref_definition_parses(tmp_path):
     # `session` is the deferred remainder of #1114.
     with pytest.raises(SystemExit):
         parser.parse_args([*base, '--dwiref-definition', 'session'])
+
+
+def test_subject_dwiref_is_rejected_with_sessionwise_anatomy(tmp_path, capsys):
+    """Test that a subject dwiref cannot be combined with sessionwise processing.
+
+    A sessionwise workflow sees one session, so its "subject" dwiref would be a
+    per-session reference under a subject-level name.
+    """
+    from qsiprep.cli.parser import parse_args
+
+    with pytest.raises(SystemExit):
+        parse_args(
+            [
+                *_cli_base(tmp_path),
+                '--dwiref-definition',
+                'subject',
+                '--subject-anatomical-reference',
+                'sessionwise',
+            ]
+        )
+    assert 'incompatible with --subject-anatomical-reference sessionwise' in (
+        capsys.readouterr().err
+    )
 
 
 def test_dwiref_construction_iters_defaults_to_two(tmp_path):

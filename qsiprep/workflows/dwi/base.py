@@ -13,6 +13,7 @@ from nipype.interfaces import utility as niu
 from nipype.interfaces.base import isdefined
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
+from qsiplan.models import CorrectionMethod
 
 from ... import config
 from ...interfaces import DerivativesDataSink, DerivativesMaybeDataSink
@@ -21,7 +22,7 @@ from ...interfaces.reports import DiffusionSummary
 from ...interfaces.utils import TestInput
 from ...utils.eddy_config import eddy_applies_gre
 from ...utils.misc import DWI2ANAT_DOF_TO_TRANSFORM
-from ...utils.sdc import t2wreg_target
+from ...utils.sdc import eddy_applies_topup
 from ..fieldmap.pepolar import init_extended_pepolar_report_wf
 
 # dwi workflows
@@ -46,6 +47,7 @@ def init_dwi_preproc_wf(
     source_file,
     acpc_anchor,
     do_biascorr=True,
+    denoising_desc='',
 ) -> Workflow:
     """Build a workflow that runs the dwi preprocessing stages of qsiprep.
 
@@ -79,6 +81,10 @@ def init_dwi_preproc_wf(
     do_biascorr : bool, optional
         Whether bias correction is applied to the DWI data; used for the methods
         boilerplate and provenance. Default is True.
+    denoising_desc : str, optional
+        Methods boilerplate for the denoising of the member series, which runs
+        outside this workflow (see
+        :func:`~qsiprep.workflows.dwi.merge.init_dwi_series_denoise_wf`).
 
     Inputs
     ------
@@ -250,17 +256,16 @@ def init_dwi_preproc_wf(
         ),
         name='outputnode',
     )
-    workflow.__desc__ = """
+    workflow.__desc__ = f"""
 
 #### Diffusion data preprocessing
 
-"""
+{denoising_desc.lstrip()}"""
 
     pre_hmc_wf = init_dwi_pre_hmc_wf(
         unit=unit,
         orientation='LAS' if unit.run.hmc_stage.tool == 'eddy' else 'LPS',
         source_file=source_file,
-        do_biascorr=do_biascorr,
     )
     test_pre_hmc_connect = pe.Node(TestInput(), name='test_pre_hmc_connect')
     hmc_tool = unit.run.hmc_stage.tool
@@ -282,10 +287,9 @@ def init_dwi_preproc_wf(
 
     elif hmc_tool == 'tortoise':
         # TORTOISE DIFFPREP performs its own SDC internally (DRBUDDI for reverse-PE,
-        # TORTOISE T2Wreg for the fieldmap-less-with-T2w case, or qsiprep's
-        # init_sdc_wf for GRE/phase/SyN) -- exactly as init_fsl_hmc_wf owns
-        # its SDC. So no fieldmap guard here; the branching lives inside
-        # init_diffprep_hmc_wf.
+        # SynB0 + TOPUP after DIFFPREP, or qsiprep's init_sdc_wf for
+        # GRE/phase/SyN/unpile) -- exactly as init_fsl_hmc_wf owns its SDC. So no
+        # fieldmap guard here; the branching lives inside init_diffprep_hmc_wf.
         hmc_wf = init_diffprep_hmc_wf(
             unit=unit,
             source_file=source_file,
@@ -332,6 +336,10 @@ def init_dwi_preproc_wf(
     # reference so it does not depend on the HMC backend selected above.
     gradwarp_wf = init_gradwarp_wf(unit)
     if gradwarp_wf is not None:
+        # The field feeds hmc_wf, so its text would print before the head motion
+        # correction it says it follows; describe it at the end of hmc_wf's.
+        hmc_wf.__postdesc__ = f'{hmc_wf.__postdesc__ or ""}\n\n{gradwarp_wf.__desc__}\n\n'
+        gradwarp_wf.__desc__ = None
         if gradwarp_wf.needs_reference:
             # mk_displacementMaps.cxx (what CreateNonlinearityDisplacementMap
             # wraps) reads its reference image as a 3D NIfTI, not the 4D series
@@ -356,8 +364,7 @@ def init_dwi_preproc_wf(
             # A DIS3D unit builds no field at all: the scanner already corrected
             # the geometry, and finalize's grad_dev node is fed the coefficient
             # file rather than a field, so nothing would consume one. The empty
-            # workflow is still added to the graph so its methods boilerplate
-            # reaches the report.
+            # workflow is still added to the graph, where its plan can be read.
             workflow.add_nodes([gradwarp_wf])
         # A DIS3D unit gets no spatial correction -- applying one would
         # double-correct data the scanner already corrected.
@@ -405,13 +412,24 @@ def init_dwi_preproc_wf(
     # considerably more detailed reports.
     doing_topup = unit.run.stage_with('topup') is not None
     doing_drbuddi = unit.run.stage_with('drbuddi') is not None
-    t2wreg_to = t2wreg_target(unit, t2w_sdc)
-    if unit.is_gre or unit.is_nipreps_syn or doing_topup or t2wreg_to:
+    doing_unpile = unit.run.stage_with('unpile') is not None
+    if not config.workflow.two_pass_sdc and not (
+        (doing_topup and (not eddy_applies_topup(unit) or unit.method is CorrectionMethod.SYNB0))
+        or unit.is_gre
+        or unit.gre_init_estimation is not None
+        or (doing_unpile and unit.run.stage_with('unpile').structural_target == 'synb0')
+    ):
+        config.loggers.workflow.warning(
+            '--force one-pass-sdc changes nothing for %s: it applies to SynB0 + TOPUP, '
+            'to unpile against a SynB0, and to GRE fieldmap registration.',
+            source_file,
+        )
+    if unit.is_gre or unit.is_nipreps_syn or doing_topup or doing_unpile:
         fmap_unwarp_report_wf = init_fmap_unwarp_report_wf()
         ds_report_sdc = pe.Node(
             DerivativesDataSink(
                 datatype='figures',
-                desc='sdcT2w' if t2wreg_to == 't2w' else 'sdc',
+                desc='sdc',
                 suffix='dwi',
                 source_file=source_file,
             ),
@@ -432,7 +450,7 @@ def init_dwi_preproc_wf(
             (fmap_unwarp_report_wf, ds_report_sdc, [('outputnode.report', 'in_file')]),
         ])  # fmt:skip
 
-    if doing_topup or eddy_applies_gre(unit):
+    if eddy_applies_topup(unit) or eddy_applies_gre(unit):
         workflow.connect([(hmc_wf, outputnode, [('outputnode.fieldmap_hz', 'fieldmap_hz')])])
 
     if hmc_tool == 'tortoise':

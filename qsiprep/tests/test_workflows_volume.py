@@ -55,9 +55,9 @@ def test_subject_anatomical_reference_places_the_template(
     """Test that ``--subject-anatomical-reference`` decides where the merged template lands."""
     from nipype.interfaces import utility as niu
     from nipype.pipeline import engine as pe
-    from scipy.io import loadmat
 
     from qsiprep import config
+    from qsiprep.interfaces.itk import linear_transform
     from qsiprep.workflows.anatomical.volume import init_anat_template_wf
 
     monkeypatch.setattr(config.execution, 'sloppy', False)
@@ -91,9 +91,7 @@ def test_subject_anatomical_reference_places_the_template(
     for transform in result.transforms:
         # antsRegistration returns a list of transforms per image.
         path = transform[0] if isinstance(transform, list | tuple) else transform
-        params = loadmat(path)
-        key = next(k for k in params if 'AffineTransform' in k)
-        translations.append(np.asarray(params[key]).ravel()[9:12])
+        translations.append(np.asarray(linear_transform(path).GetTranslation()))
 
     origins = [nb.load(image).affine[:3, 3] for image in t1w_pair]
     separation = np.linalg.norm(origins[1] - origins[0])

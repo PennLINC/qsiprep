@@ -68,6 +68,25 @@ def _tsnr_meta(n_b0, median_tsnr):
 LOGGER = logging.getLogger('nipype.workflow')
 
 
+def writes_hmc_optimization():
+    """Whether this run writes the ``hmcOptimization`` derivative.
+
+    SHORELine's ``IterationSummary`` (``init_dwi_model_hmc_wf``) only exists
+    with a 3dSHORE signal model and more than one iteration, so the
+    ``hmc_optimization_data`` the HMC backends expose is a CSV worth writing
+    only then (eddy's is its outlier map, written elsewhere). Both consumers of
+    that field -- the per-run ``init_dwi_derivatives_wf`` and the
+    distortion-group merge, which has to concatenate the per-unit files before
+    sinking them -- share this one decision so neither builds a
+    ``ds_optimization`` sink the other cannot feed.
+    """
+    return (
+        config.workflow.hmc_method == 'shoreline'
+        and config.workflow.shoreline_model == '3dshore'
+        and config.workflow.shoreline_iters > 1
+    )
+
+
 def init_dwi_derivatives_wf(
     source_file,
     resolution=None,
@@ -138,12 +157,7 @@ def init_dwi_derivatives_wf(
         name='inputnode',
     )
 
-    if (
-        write_hmc_optimization
-        and config.workflow.hmc_method == 'shoreline'
-        and config.workflow.shoreline_model == '3dshore'
-        and config.workflow.shoreline_iters > 1
-    ):
+    if write_hmc_optimization and writes_hmc_optimization():
         ds_optimization = pe.Node(
             DerivativesDataSink(
                 source_file=source_file,
@@ -199,7 +213,6 @@ def init_dwi_derivatives_wf(
             **res_entities,
         ),
         name='ds_dwi_t1',
-        run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
     ds_bvals_t1 = pe.Node(
@@ -343,6 +356,7 @@ def init_dwi_derivatives_wf(
                 applied_corrections=list(jacobian_applied_corrections),
                 unmodulated_corrections=list(jacobian_unmodulated_corrections),
                 unmodulated_reason=jacobian_unmodulated_reason,
+                volumes=config.workflow.write_jacobian_4d,
             ),
             name='stack_jacobian',
         )
@@ -358,7 +372,6 @@ def init_dwi_derivatives_wf(
                 compress=True,
             ),
             name='ds_jacobian',
-            run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
         workflow.connect([

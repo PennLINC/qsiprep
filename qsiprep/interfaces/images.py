@@ -615,15 +615,17 @@ class _ChooseInterpolatorOutputSpec(TraitedSpec):
 
 
 class ChooseInterpolator(SimpleInterface):
-    """If the requested output resolution is more than 10% smaller than the input, use BSpline."""
+    """Use Lanczos, or Linear when the output resolution is more than 10% finer than the input."""
 
     input_spec = _ChooseInterpolatorInputSpec
     output_spec = _ChooseInterpolatorOutputSpec
 
     def _run_interface(self, runtime):
         if self.inputs.sloppy:
-            self._results['interpolation_method'] = 'NearestNeighbor'
-            LOGGER.warning('Using NN interpolation for sloppy mode')
+            # Linear costs the same as nearest-neighbour here, and keeps the resampled
+            # images comparable with their truth in the sloppy integration tests.
+            self._results['interpolation_method'] = 'Linear'
+            LOGGER.warning('Using Linear interpolation for sloppy mode')
             return runtime
         output_resolution = np.array(nb.load(self.inputs.output_grid).header.get_zooms()[:3])
         interpolator = 'LanczosWindowedSinc'

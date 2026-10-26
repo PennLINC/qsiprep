@@ -3,8 +3,7 @@
 Merging Distortion Groups
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autofunction:: init_dwi_hmc_wf
-.. autofunction:: init_dwi_model_hmc_wf
+.. autofunction:: init_distortion_group_merge_wf
 
 """
 
@@ -23,7 +22,8 @@ from ...interfaces.dwi_merge import AveragePEPairs, MergeDWIs
 from ...interfaces.mrtrix import MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SeriesQC
-from .derivatives import init_dwi_derivatives_wf
+from ...interfaces.shoreline import MergeIterationSummaries
+from .derivatives import init_dwi_derivatives_wf, writes_hmc_optimization
 from .finalize import _grid_metadata
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
 from .util import init_dwi_reference_wf
@@ -61,6 +61,10 @@ def init_distortion_group_merge_wf(
         One input for each input image. Path to the original dwi file
     ``[workflow_name]_raw_concatenated_image``
         One input for each input image. Path to the original images after concatenation
+    ``[workflow_name]_hmc_optimization_data``
+        One input for each input image. The unit's SHORELine iteration summary
+        (``outputnode.hmc_optimization_data`` of its ``dwi_preproc_wf``); only
+        consumed when the run writes the ``hmcOptimization`` derivative
     ``[workflow_name]_confounds``
         One input for each input image. Path to the confounds files
     ``[workflow_name]_b0_ref``
@@ -132,6 +136,7 @@ def init_distortion_group_merge_wf(
         '_original_image',
         '_raw_concatenated_image',
         '_confounds',
+        '_hmc_optimization_data',
     ]:
         input_names += [name + suffix for name in sanitized_inputs]
     inputnode = pe.Node(niu.IdentityInterface(fields=input_names), name='inputnode')
@@ -221,7 +226,7 @@ def init_distortion_group_merge_wf(
     ])  # fmt:skip
 
     # Calculate QC on the merged raw and processed data
-    raw_qc_wf = init_modelfree_qc_wf(bvec_convention='auto', name='raw_qc_wf')
+    raw_qc_wf = init_modelfree_qc_wf(bvec_convention='auto', skull_strip=True, name='raw_qc_wf')
     processed_qc_wf = init_modelfree_qc_wf(
         bvec_convention='DIPY',  # Always LPS+ when resampled
         name='processed_qc_wf',
@@ -230,6 +235,8 @@ def init_distortion_group_merge_wf(
     series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name='series_qc')
     ds_series_qc = pe.Node(
         DerivativesDataSink(
+            # The QC describes the ACPC-space merged series, as in finalize.py.
+            space='ACPC',
             desc='image',
             suffix='qc',
             extension='tsv',
@@ -241,7 +248,7 @@ def init_distortion_group_merge_wf(
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
-    # Only written when DSI Studio could not measure a QC stage; see SeriesQC.
+    # Only written when DSI Studio or cs_dmri could not measure a QC stage; see SeriesQC.
     ds_report_qc_warnings = pe.Node(
         DerivativesMaybeDataSink(
             datatype='figures',
@@ -295,6 +302,36 @@ def init_distortion_group_merge_wf(
         resolution=resolution,
         write_hmc_optimization=write_shared_outputs,
     )
+
+    # dwi_derivatives_wf builds a ds_optimization sink under the same condition,
+    # and that sink's in_file is mandatory: feed it or the merged output's
+    # datasink fails at run time. The per-unit finalize workflows return before
+    # their derivatives under --distortion-group-merge, so this is the only
+    # place the units' SHORELine iteration summaries get written: stacked into
+    # one table, a row's input_name saying which unit it came from.
+    if write_shared_outputs and writes_hmc_optimization():
+        merge_hmc_optimization = pe.Node(
+            niu.Merge(len(sanitized_inputs)), name='merge_hmc_optimization'
+        )
+        merge_iteration_summaries = pe.Node(
+            MergeIterationSummaries(input_names=list(inputs_list)),
+            name='merge_iteration_summaries',
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+        for input_num, input_name in enumerate(sanitized_inputs):
+            workflow.connect([
+                (inputnode, merge_hmc_optimization, [
+                    (input_name + '_hmc_optimization_data', 'in%d' % (input_num + 1)),
+                ]),
+            ])  # fmt:skip
+        workflow.connect([
+            (merge_hmc_optimization, merge_iteration_summaries, [
+                ('out', 'iteration_summary_files'),
+            ]),
+            (merge_iteration_summaries, dwi_derivatives_wf, [
+                ('iteration_summary_file', 'inputnode.hmc_optimization_data'),
+            ]),
+        ])  # fmt:skip
 
     # Write the provenance sidecar for the merged derivative, mirroring the
     # direct (single-run) path's unit sidecar in finalize.py.
@@ -367,6 +404,7 @@ def init_distortion_group_merge_wf(
         (distortion_merger, series_qc, [('merged_denoising_confounds', 'confounds_file')]),
         (raw_qc_wf, series_qc, [('outputnode.qc_summary', 'pre_qc')]),
         (processed_qc_wf, series_qc, [('outputnode.qc_summary', 't1_qc')]),
+        (b0_ref_wf, processed_qc_wf, [('outputnode.dwi_mask', 'inputnode.mask_file')]),
         (b0_ref_wf, t1_dice_calc, [('outputnode.dwi_mask', 'inputnode.dwi_mask')]),
         (inputnode, t1_dice_calc, [('t1_mask', 'inputnode.anatomical_mask')]),
         (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),

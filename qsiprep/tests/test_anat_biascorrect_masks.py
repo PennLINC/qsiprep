@@ -148,7 +148,7 @@ def test_auto_falls_back_to_n4_without_a_layout(monkeypatch):
 def test_t2w_shares_the_anatomical_template_path():
     """Test that T2w shares the anatomical template path.
 
-    T2w must inherit both fixes, since DRBUDDI/T2Wreg register to this image.
+    T2w must inherit both fixes, since DRBUDDI and unpile register to this image.
     """
     from qsiprep.workflows.anatomical.volume import init_t2w_preproc_wf
 

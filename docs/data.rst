@@ -193,12 +193,17 @@ ShimSetting and field of view
 
 Series whose ``ShimSetting`` differs are not pooled into one reverse
 phase-encoded estimation, because the field changed between them. Pass
-``--ignore shims`` to treat all shim settings as compatible. Series whose
-field of view is shifted are concatenated with a warning. Series whose field
-of view is rotated are an error, unless ``--ignore fov`` is given, in which
-case they are concatenated and the distortion correction is applied to data
-it was not estimated on. Series on a different voxel grid are always an
-error.
+``--ignore shims`` to treat all shim settings as compatible.
+
+Series that are concatenated are never resampled: they are stacked voxel for
+voxel under the affine of the first series, and any offset between their
+fields of view is left to head-motion correction. Series whose headers differ
+only by scanner jitter (origins within 0.05 mm, orientations within 1e-3) are
+stacked silently. Series whose field of view is shifted are stacked with a
+warning. Series whose field of view is rotated are an error, unless
+``--ignore fov`` is given, in which case they are stacked and the distortion
+correction is applied to data it was not estimated on. Series on a different
+voxel grid are always an error.
 
 
 *******************
@@ -208,7 +213,7 @@ Complex-valued data
 If you acquire complex-valued data, split it into BIDS ``part-mag`` and
 ``part-phase`` files. *QSIPrep* pairs each ``part-phase`` image with its
 magnitude and denoises them as complex data (with ``--denoise-method
-dwidenoise`` or ``dwidenoise2``), before series are concatenated. Every
+dwidenoise``, ``dwidenoise2`` or ``svht``), before series are concatenated. Every
 later step runs on the magnitude. ``part-real`` and ``part-imag`` files are
 ignored with a warning, so convert them to magnitude and phase first.
 

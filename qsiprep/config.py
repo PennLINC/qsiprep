@@ -434,6 +434,7 @@ class execution(_Config):
     """A dictionary of dataset links to be used to track Sources in sidecars."""
 
     _layout = None
+    _derived_database_dir = False
 
     _paths = (
         'bids_dir',
@@ -451,12 +452,23 @@ class execution(_Config):
     @classmethod
     def init(cls):
         """Create a new BIDS Layout accessible with :attr:`~execution.layout`."""
+        if (
+            cls._layout is not None
+            and Path(cls._layout.root).resolve() != Path(cls.bids_dir).resolve()
+        ):
+            # The config is a process-wide singleton: a second dataset in the same process
+            # (several integration tests in one pytest run) must not keep the first one's
+            # layout, nor the database that layout derived for itself.
+            cls._layout = None
+            if cls._derived_database_dir:
+                cls.bids_database_dir = None
         if cls._layout is None:
             import re
 
             from bids.layout import BIDSLayout
             from bids.layout.index import BIDSLayoutIndexer
 
+            cls._derived_database_dir = cls.bids_database_dir is None
             _db_path = cls.bids_database_dir or (cls.work_dir / cls.run_uuid / 'bids_db')
             _db_path.mkdir(exist_ok=True, parents=True)
 
@@ -546,9 +558,9 @@ class workflow(_Config):
     """Whether to N4-correct DWIs: ``n4``, ``auto`` or ``none``."""
     denoise_method = None
     """Image-based denoising method: "dwidenoise" (MRtrix3), "dwidenoise2", "patch2self"
-    (DIPY) or "none"."""
-    dwidenoise2_config = None
-    """Configuration JSON for dwidenoise2 (``--dwidenoise2-config``)."""
+    (DIPY), "svht" (svht_denoise) or "none"."""
+    denoise_config = None
+    """Configuration JSON for dwidenoise2 or svht_denoise (``--denoise-config``)."""
     distortion_group_merge = 'concat'
     """How to combine images across distortion groups (concatenate, average or none)."""
     dwidenoise_window = None
@@ -563,6 +575,10 @@ class workflow(_Config):
     """``--force sdc-anat-reference`` was given: the anatomical SDC reference
     overrides the fieldmap application for every DWI series (derived from
     ``force`` by the parser)."""
+    two_pass_sdc = True
+    """SynB0 + TOPUP runs a second SynB0 pass with every head motion method, and GRE
+    fieldmaps get a second registration pass; ``--force one-pass-sdc`` turns both off
+    (derived from ``force`` by the parser)."""
     force_nocsf_synthstrip = False
     """``--force no-csf-synthstrip`` was given: the nonlinear registration to the
     anatomical template uses a SynthStrip ``--no-csf`` mask as its moving-image
@@ -597,11 +613,15 @@ class workflow(_Config):
     """Skip re-scaling dwi scans to have matching b=0 intensities."""
     output_spaces = None
     """Canonical ``--output-spaces`` tokens, as a list of strings."""
+    write_jacobian_4d = False
+    """Write the Jacobian intensity modulation as one map per DWI volume instead of
+    its mean over volumes."""
     sdc_anat_reference = 'none'
-    """Which anatomical-derived image serves as the reference for fieldmap-less
-    susceptibility distortion correction, as a fallback for DWI series no
-    fieldmap reaches: ``none`` (default), ``auto``, ``synb0``, ``t2w`` or
-    ``invt1w``."""
+    """Which anatomical-derived image the fieldmap-less correction uses:
+    ``none`` (default, fieldmap-less SDC off), ``synb0``, ``invt1w`` or ``t2w``."""
+    sdc_fieldmapless_method = 'topup'
+    """Which correction handles DWI series no fieldmap reaches: ``topup`` (SynB0 +
+    TOPUP, the default), ``syn`` or ``unpile``."""
     sdc_method = None
     """Which tool corrects susceptibility distortion for PEPOLAR data:
     topup, drbuddi or topup+drbuddi (the parser resolves ``auto``)."""
@@ -619,7 +639,7 @@ class workflow(_Config):
     tortoise_gpu_cpu_ratio = None
     """Volumes the GPU takes per DIFFPREP pass; None leaves TORTOISE's default."""
     unringing_method = None
-    """Method for Gibbs-ringing removal. Either "none", "mrdegibbs" or "rpg"."""
+    """Method for Gibbs-ringing removal. Either "none", "mrdegibbs", "rpg" or "svht"."""
 
     @classmethod
     def init(cls):
@@ -681,7 +701,7 @@ class workflow(_Config):
     # what ``_paths`` names, and toml writes anything else as its repr, so an
     # unlisted Path reaches the workflow-building subprocess as the literal
     # string "PosixPath('/path')".
-    _paths = ('dwidenoise2_config', 'gradient_file', 'shoreline_config')
+    _paths = ('denoise_config', 'gradient_file', 'shoreline_config')
 
 
 class loggers:

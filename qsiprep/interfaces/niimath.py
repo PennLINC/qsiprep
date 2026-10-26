@@ -327,14 +327,11 @@ def allineate_json_to_itk(json_file, out_file):
     ras = np.asarray(affine['fixed_to_moving'], dtype=np.float64).reshape(4, 4)
     flip = np.diag([-1.0, -1.0, 1.0, 1.0])
     lps = flip @ ras @ flip
-    params = list(lps[:3, :3].ravel()) + list(lps[:3, 3])
-    with open(out_file, 'w') as f:
-        f.write(
-            '#Insight Transform File V1.0\n#Transform 0\n'
-            'Transform: AffineTransform_double_3_3\n'
-            'Parameters: ' + ' '.join(f'{v:.10g}' for v in params) + '\n'
-            'FixedParameters: 0 0 0\n'
-        )
+    import SimpleITK as sitk
+
+    from .itk import affine_from_matrix
+
+    sitk.WriteTransform(affine_from_matrix(lps), out_file)
     return out_file
 
 
@@ -375,10 +372,10 @@ class Allineate(CommandLine):
 
     A 12-DOF multiresolution fit (8 -> 4 -> 2 mm, Hellinger + correlation ratio) adapted from
     AFNI 3dAllineate, in 1-2 s for a 1 mm head. Used here as the initializer of the ACPC
-    registration: on a T1w rotated 25 degrees the registration started from it lands within
-    0.2 degrees of the answer antsAI's full-resolution search gave in 55 s. The rigid-only
-    ``-warp shr`` engine is not used: it is slower (36 s) and lands 4-7 degrees off on the same
-    pair.
+    registration under ``--sloppy``: on a T1w rotated 25 degrees the registration started
+    from it lands within 0.2 degrees of the answer antsAI's full-resolution search gave in
+    55 s. The rigid-only ``-warp shr`` engine is not used: it is slower (36 s) and lands 4-7
+    degrees off on the same pair.
     """
 
     input_spec = _AllineateInputSpec

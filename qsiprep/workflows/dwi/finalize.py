@@ -27,13 +27,14 @@ from ...interfaces.dsi_studio import DSIStudioBTable
 from ...interfaces.dwi_merge import MergeFinalConfounds, SplitResampledDWIs
 from ...interfaces.gradients import ExtractB0s
 from ...interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
-from ...interfaces.jacobian import pe_axis_from_direction
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SDCWarpPlot, SeriesQC
 from ...utils.eddy_config import eddy_applies_gre
-from ...utils.jacobian_provenance import jacobian_provenance_for, t2wreg_is_weighted
-from ...utils.sdc import pe_readout_time, sdc_warp_source
+from ...utils.jacobian import pe_axis_from_direction
+from ...utils.jacobian_provenance import jacobian_provenance_for
+from ...utils.sdc import eddy_applies_topup, pe_readout_time, sdc_warp_source
+from ...utils.versions import mrtrix3_version, versioned
 from .derivatives import init_dwi_derivatives_wf
 from .gradwarp import resolve_gradwarp_plan
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
@@ -107,9 +108,7 @@ def init_dwi_finalize_wf(
         written on the derivatives when more than one is requested.
     t2w_sdc : bool, optional
         Whether a T2w is available for SDC (honoring --anat-modality and
-        --ignore t2w). Decides, with the plan, whether DIFFPREP's T2Wreg ran,
-        and so whether it left an SDC warp to write and whether that warp
-        is Jacobian-weighted (see ``jacobian_provenance_for``).
+        --ignore t2w); kept for the reports that name the T2w consumer.
     do_biascorr : bool, optional
         Whether to apply B1 bias field correction to the resampled DWI series.
     write_derivatives : bool, optional
@@ -180,14 +179,13 @@ def init_dwi_finalize_wf(
     dwi_nvols = 10
 
     # Dispatch from the compiled run, not the deprecated config spelling: those
-    # can disagree after automatic method resolution.
-    doing_topup = unit.run.stage_with('topup') is not None
+    # can disagree after automatic method resolution. Only a field eddy applied
+    # arrives as fieldmap_hz; TOPUP after DIFFPREP arrives as a warp.
+    doing_topup = eddy_applies_topup(unit)
 
     # Determine information to be used for displacement map.
     readout_time = pe_readout_time(unit)
-    warp_source, estimation_method = sdc_warp_source(
-        unit, t2w_sdc, gre_in_eddy=eddy_applies_gre(unit)
-    )
+    warp_source, estimation_method = sdc_warp_source(unit, gre_in_eddy=eddy_applies_gre(unit))
 
     sdc_warp_meta = None
     if warp_source is not None:
@@ -259,7 +257,6 @@ def init_dwi_finalize_wf(
                 'itk_b0_to_t1',
                 'b0_to_dwiref_transforms',
                 'dwiref_to_t1_affine',
-                'dwiref_to_t1_warp',
                 't1_2_mni_forward_transform',
                 'hmc_optimization_data',
                 'dwi_files',
@@ -420,7 +417,7 @@ def init_dwi_finalize_wf(
         jacobian_applied_corrections,
         jacobian_unmodulated_corrections,
         jacobian_unmodulated_reason,
-    ) = jacobian_provenance_for(unit, t2w_sdc)
+    ) = jacobian_provenance_for(unit)
 
     # Fan out the resampling: one dwi_trans_wf (and, when write_derivatives, one
     # group of derivatives sinks) per requested ACPC resolution. Every output on a
@@ -463,7 +460,6 @@ def init_dwi_finalize_wf(
             concatenate=True,
             doing_topup=doing_topup,
             pe_axis=pe_axis_from_direction(unit.dwi_metadata.get('PhaseEncodingDirection', 'j')),
-            weight_fieldwarps=t2wreg_is_weighted(unit, t2w_sdc),
             sdc_warp_source=warp_source,
             sdc_pe_dir=unit.pe_dir,
             sdc_readout_time=readout_time,
@@ -498,8 +494,6 @@ def init_dwi_finalize_wf(
                  'inputnode.b0_to_dwiref_transforms'),
                 ('dwiref_to_t1_affine',
                  'inputnode.dwiref_to_t1_affine'),
-                ('dwiref_to_t1_warp',
-                 'inputnode.dwiref_to_t1_warp'),
                 ('itk_b0_to_t1', 'inputnode.itk_b0_to_t1'),
             ]),
             (inputnode, final_denoise_wf, [('confounds', 'inputnode.confounds')]),
@@ -713,7 +707,7 @@ def init_dwi_finalize_wf(
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
-        # Only written when DSI Studio could not measure a QC stage; see SeriesQC.
+        # Only written when DSI Studio or cs_dmri could not measure a QC stage; see SeriesQC.
         ds_report_qc_warnings = pe.Node(
             DerivativesMaybeDataSink(
                 datatype='figures',
@@ -869,7 +863,6 @@ def init_dwi_finalize_wf(
                     **res_entities,
                 ),
                 name=f'ds_grad_dev{suffix}',
-                run_without_submitting=True,
                 mem_gb=DEFAULT_MEMORY_MIN_GB,
             )
             workflow.connect([
@@ -877,6 +870,16 @@ def init_dwi_finalize_wf(
                 (final_denoise_wf, grad_dev, [('outputnode.t1_b0_ref', 'final_image')]),
                 (grad_dev, ds_grad_dev, [('grad_dev', 'in_file')]),
             ])  # fmt:skip
+
+            workflow.connect([(grad_dev, series_qc, [('grad_dev', 'grad_dev_file')])])  # fmt:skip
+            # A DIS3D unit has no applied field, so it gets no displacement columns.
+            if gradwarp_plan.warp_dim is not None:
+                workflow.connect([
+                    (inputnode, series_qc, [
+                        ('gradwarp_field', 'gradwarp_field'),
+                        ('dwi_mask', 'gradwarp_mask_file'),
+                    ]),
+                ])  # fmt:skip
 
         workflow.connect([
             (inputnode, series_qc, [
@@ -1028,6 +1031,11 @@ def init_finalize_denoising_wf(
     )
 
     if do_biascorr:
+        mrtrix3 = versioned('*MRtrix3*', mrtrix3_version())
+        workflow.__desc__ = (
+            'After resampling, B1 field inhomogeneity was corrected with `dwibiascorrect` from '
+            f'{mrtrix3} [@mrtrix3] using the N4 algorithm [@n4]. '
+        )
         # dwibiascorrect hands this mask to N4 as a WEIGHT image (-w), not a mask
         # (-x), so its binary values become the per-voxel weights of a
         # least-squares fit on log intensities. Dark voxels inside the mask are
@@ -1196,6 +1204,7 @@ def init_finalize_denoising_wf(
             ('dwi_t1_bvec', 'inputnode.bvec_file'),
         ]),
         (p2s_buffernode, calculate_qc, [('dwi_t1', 'inputnode.dwi_file')]),
+        (final_b0_ref, calculate_qc, [('outputnode.dwi_mask', 'inputnode.mask_file')]),
         (calculate_qc, outputnode, [('outputnode.qc_summary', 'series_qc_postproc')]),
 
         # Update confounds with new nmse's

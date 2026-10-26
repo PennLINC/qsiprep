@@ -29,7 +29,7 @@ Anatomical reference preprocessing workflows
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. autofunction:: init_anat_preproc_wf
-.. autofunction:: init_skullstrip_ants_wf
+.. autofunction:: init_synthstrip_wf
 
 """
 
@@ -64,6 +64,8 @@ from ..dwi.registration import init_rotation_search_wf
 
 ANTS_VERSION = BrainExtraction().version or '<ver>'
 FS_VERSION = '8.2.0'
+#: Citation keys (boilerplate.bib) for the anatomical templates.
+_TEMPLATE_CITATIONS = {'MNI152NLin2009cAsym': ' [@mni]'}
 
 
 def _resample_interpolation():
@@ -330,19 +332,20 @@ def init_anat_preproc_wf(
 """
     desc += (
         f"""\
-A total of {num_anat_images} {contrast}-weighted ({contrast}w) images were found within the input
+A total of {num_anat_images} {contrast}-weighted ({contrast}w) images were found in the input
 BIDS dataset.
 """
         if num_anat_images > 1
         else f"""\
-The {contrast}-weighted ({contrast}w) image was used as an anatomical reference throughout the
-workflow.
+The {contrast}-weighted ({contrast}w) image was used as the anatomical reference throughout
+preprocessing.
 """
     )
     if do_biascorr:
+        image = 'Each image was' if num_anat_images > 1 else 'It was'
         desc += (
-            'Each image was corrected for intensity non-uniformity (INU) using '
-            f'`N4BiasFieldCorrection` [@n4, ANTs {ANTS_VERSION}].'
+            f'{image} corrected for intensity nonuniformity with `N4BiasFieldCorrection` '
+            f'(*ANTs* {ANTS_VERSION}) [@n4]. '
         )
 
     # Ensure there is 1 and only 1 anatomical reference
@@ -393,10 +396,9 @@ workflow.
     # Synthstrip is used a lot elsewhere, so make boilerplate for the anatomy-specific
     # version here. TODO: get version number automatically
     workflow.__postdesc__ = f"""\
-Brain extraction was performed on the {anat_modality} image using
-SynthStrip [@synthstrip] and automated segmentation was
-performed using SynthSeg [@synthseg1; @synthseg2] from
-FreeSurfer version {FS_VERSION}. """
+The brain was extracted from the {anat_modality} image with SynthStrip [@synthstrip], and the
+image was segmented with SynthSeg [@synthseg1; @synthseg2], both from *FreeSurfer*
+{FS_VERSION}. """
     if config.workflow.force_nocsf_synthstrip:
         workflow.__postdesc__ += """\
 A second brain mask excluding CSF at the brain border (SynthStrip `--no-csf`)
@@ -796,13 +798,15 @@ was used to restrict the nonlinear registration to the template. """
 
     if num_additional_t2ws > 0:
         # t2_preproc is the merged (unbiased) T2w template in ACPC; t2w_unfatsat
-        # is the image TORTOISE T2Wreg and DRBUDDI actually register to. They
+        # is the image DRBUDDI and unpile actually register to. They
         # are different images, so both are written.
         workflow.connect([
             (inputnode, anat_derivatives_wf, [('t2w', 'inputnode.t2w_source_files')]),
-            (t2w_preproc_wf, anat_derivatives_wf, [
-                ('outputnode.t2_preproc', 'inputnode.t2_preproc'),
-                ('outputnode.t2w_unfatsat', 'inputnode.t2w_unfatsat'),
+            # From outputnode, not t2w_preproc_wf: with --anat-modality T2w the
+            # T2w is the primary anatomical and t2w_preproc_wf does not exist.
+            (outputnode, anat_derivatives_wf, [
+                ('t2_preproc', 'inputnode.t2_preproc'),
+                ('t2w_unfatsat', 'inputnode.t2w_unfatsat'),
             ]),
         ])  # fmt:skip
 
@@ -830,9 +834,9 @@ def init_t2w_preproc_wf(num_t2ws, do_biascorr=True, name='t2w_preproc_wf'):
     anat_reference_wf = init_anat_template_wf(num_images=num_t2ws, do_biascorr=do_biascorr)
     # ^ this also provides some boilerplate.
     workflow.__postdesc__ = """\
-The additional T2w reference image was registered to the T1w-ACPC reference
-image using an affine transformation in antsRegistration, initialized by a
-global search over rotations (antsAI).
+The T2w image was registered to the AC-PC-aligned T1w reference with an affine
+transform estimated by `antsRegistration`, initialized by a global search over
+rotations with `antsAI`.
 """
     # Skull strip the anatomical reference
     synthstrip_anat_wf = init_synthstrip_wf(
@@ -1025,9 +1029,9 @@ def init_anat_template_wf(num_images, do_biascorr=True) -> Workflow:
 
     if num_images > 1:
         workflow.__desc__ = f"""\
-A {contrast}-reference map was computed after registration of
-{num_images} {contrast} images (after INU-correction) using
-`antsRegistration` [ANTs {ANTS_VERSION}; @ants].
+A {contrast} reference was computed from the {num_images} {contrast} images, after
+intensity nonuniformity correction, by registering them with `antsRegistration`
+(*ANTs* {ANTS_VERSION}) [@ants].
 """.format(
             contrast=config.workflow.anat_modality,
             num_images=num_images,
@@ -1317,10 +1321,11 @@ def init_anat_normalization_wf(
         desc = ''
     else:
         # get a good ACPC transform
+        template_ref = _TEMPLATE_CITATIONS.get(spec.space, '')
         desc = f"""\
-The anatomical reference image was reoriented into AC-PC alignment via
-a 6-DOF transform extracted from a full Affine registration to the
-{spec.fullname} template. """
+The anatomical reference was reoriented into AC-PC alignment with the rigid
+(6-degree-of-freedom) component of an affine registration to the
+{spec.fullname} template{template_ref}. """
 
     if not moving_is_acpc:
         acpc_json = (
@@ -1338,12 +1343,21 @@ a 6-DOF transform extracted from a full Affine registration to the
             name='acpc_reg',
             n_procs=omp_nthreads,
         )
-        # Without an initial_moving_transform, RobustMNINormalization runs niworkflows'
-        # AffineInitializer (a full-resolution antsAI search) first: ~47 of the node's ~60 s.
-        # niimath's fast affine does the same job in 1-2 s (see interfaces.niimath.Allineate).
-        acpc_init = pe.Node(
-            Allineate(num_threads=omp_nthreads), name='acpc_init', n_procs=omp_nthreads
-        )
+        # Without an initial_moving_transform, RobustMNINormalization starts from niworkflows'
+        # AffineInitializer: antsAI's rotation search (~47 s), which a strongly tilted head can
+        # need. --sloppy trades that robustness for niimath's 1-2 s affine.
+        if config.execution.sloppy:
+            acpc_init = pe.Node(
+                Allineate(num_threads=omp_nthreads), name='acpc_init', n_procs=omp_nthreads
+            )
+            workflow.connect([
+                (inputnode, acpc_init, [
+                    ('template_image', 'reference'),
+                    ('anatomical_reference', 'in_file'),
+                ]),
+                (acpc_init, acpc_reg, [('out_transform', 'initial_moving_transform')]),
+            ])  # fmt:skip
+
         disassemble_transform = pe.Node(
             DisassembleTransform(),
             name='disassemble_transform',
@@ -1351,11 +1365,6 @@ a 6-DOF transform extracted from a full Affine registration to the
         extract_rigid_transform = pe.Node(AffineToRigid(), name='extract_rigid_transform')
 
         workflow.connect([
-            (inputnode, acpc_init, [
-                ('template_image', 'reference'),
-                ('anatomical_reference', 'in_file'),
-            ]),
-            (acpc_init, acpc_reg, [('out_transform', 'initial_moving_transform')]),
             (inputnode, acpc_reg, [
                 ('template_image', 'reference_image'),
                 ('template_mask', 'reference_mask'),
@@ -1381,8 +1390,8 @@ a 6-DOF transform extracted from a full Affine registration to the
         return workflow
 
     desc += """\
-A full nonlinear registration to the template from AC-PC space was
-estimated via symmetric nonlinear registration (SyN) using antsRegistration (@ants). """
+A nonlinear registration from AC-PC space to the template was then estimated
+with symmetric normalization (SyN) in `antsRegistration` [@ants]. """
     config.loggers.workflow.info('Running nonlinear normalization to template')
     if not moving_is_acpc:
         rigid_acpc_resample_anat = pe.Node(
@@ -1904,8 +1913,8 @@ def init_anat_derivatives_wf(output_spaces, has_t2w=False) -> Workflow:
                 't1_std_reverse_transforms',
                 't1_aseg',
                 # t2_preproc is the merged T2w template in ACPC; t2w_unfatsat
-                # is the fat-suppressed variant that drives TORTOISE T2Wreg and
-                # DRBUDDI. Separate images -- see init_t2w_preproc_wf.
+                # is the fat-suppressed variant that drives DRBUDDI and unpile.
+                # Separate images -- see init_t2w_preproc_wf.
                 't2w_source_files',
                 't2_preproc',
                 't2w_unfatsat',

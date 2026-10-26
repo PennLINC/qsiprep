@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 
-def _plan(dataset_dir, subject, hmc='eddy', sdc='topup'):
+def _plan(dataset_dir, subject, hmc='eddy', sdc='topup', **policy):
     from bids.layout import BIDSLayout
     from qsiplan import build_dwi_grouping, report_text
     from qsiplan.adapters import plan_concatenation_scheme, plan_preproc_units
@@ -24,7 +24,7 @@ def _plan(dataset_dir, subject, hmc='eddy', sdc='topup'):
     layout = BIDSLayout(str(dataset_dir), validate=False)
     subject_data = collect_data(layout, subject, bids_validate=False)[0]
     grouping = build_dwi_grouping(
-        layout=layout, subject_data=subject_data, b0_threshold=100, strict=False
+        layout=layout, subject_data=subject_data, b0_threshold=100, strict=False, **policy
     )
     plan = compile_plan(grouping, selection_for_config(hmc, sdc))
     units = plan_preproc_units(grouping, plan)
@@ -126,15 +126,28 @@ def test_phasediff_fixture_is_a_gre_estimation(data_dir):
     assert unit.estimation.method.value == 'phasediff'
 
 
-def test_t2wreg_fixture_has_no_fieldmap_and_takes_t2wreg_under_tortoise(data_dir):
-    """Test the fieldmap-less single series: no estimation with eddy, T2Wreg with DIFFPREP."""
-    dataset, subject = _fixture(data_dir, 't2wreg')
-    grouping, plan, units, concat, text = _plan(dataset, subject)
+@pytest.mark.parametrize(('hmc', 'sdc'), [('eddy', 'topup'), ('tortoise', 'drbuddi')])
+def test_fieldmapless_fixture_takes_unpile_when_asked(data_dir, hmc, sdc):
+    """Test the fieldmap-less single series: uncorrected by default, SynB0 or unpile on request."""
+    dataset, subject = _fixture(data_dir, 'fieldmapless')
+    grouping, plan, units, concat, text = _plan(dataset, subject, hmc=hmc, sdc=sdc)
     assert not grouping.errors
     (unit,) = units
     assert [os.path.basename(f) for f in unit.dwi_files] == [f'sub-{subject}_dir-AP_dwi.nii.gz']
-    assert unit.estimation is None or unit.estimation.method.value == 'none'
+    assert unit.estimation is None
+    assert 'no-sdc' in {issue.code for issue in plan.issues}
 
-    grouping, plan, units, concat, text = _plan(dataset, subject, hmc='tortoise', sdc='drbuddi')
+    grouping, plan, units, concat, text = _plan(
+        dataset, subject, hmc=hmc, sdc=sdc, sdc_anat_reference='synb0'
+    )
+    assert not grouping.errors
     (unit,) = units
-    assert unit.run.stage_with('t2wreg') is not None
+    assert unit.estimation.method.value == 'synb0'
+
+    grouping, plan, units, concat, text = _plan(
+        dataset, subject, hmc=hmc, sdc=sdc, fieldmapless_method='unpile', sdc_anat_reference='t2w'
+    )
+    assert not grouping.errors
+    (unit,) = units
+    assert unit.run.stage_with('unpile') is not None
+    assert unit.run.stage_with('unpile').structural_target == 't2w'

@@ -25,6 +25,7 @@ from nipype.utils.filemanip import fname_presuffix, split_filename
 
 from .. import config
 from ..data import load as load_data
+from ..utils.versions import eddy_version, fsl_release, tortoise_version, versioned
 from .epi_fmap import (
     add_synthetic_b0_to_topup_inputs,
     eddy_inputs_from_dwi_files,
@@ -453,179 +454,133 @@ class Eddy2SPMMotion(SimpleInterface):
         return runtime
 
 
-def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method):
-    """Write boilerplate text based on an eddy config dict."""
-    doing_2stage = 'drbuddi' in pepolar_method.lower()
+def boilerplate_from_eddy_config(eddy_config, fieldmap_type, pepolar_method, gre_in_eddy=False):
+    """Write boilerplate text based on an eddy config dict.
+
+    ``gre_in_eddy`` says a GRE fieldmap was passed to eddy, which then applies
+    the susceptibility correction in its own resampling, as it does TOPUP's field.
+    """
+    run_topup = 'topup' in pepolar_method.lower()
     ext_eddy = ExtendedEddy(**eddy_config)
+    inputs = ext_eddy.inputs
+    release, version = fsl_release(), eddy_version()
+    if release:
+        eddy = f'`eddy` from *FSL* {release}'
+    elif version:
+        eddy = f'`eddy` (package version {version}) from *FSL*'
+    else:
+        eddy = '`eddy` from *FSL*'
+    if inputs.slm == 'none':
+        model = f'a {inputs.flm} eddy-current model'
+    else:
+        model = f'a {inputs.flm} first-level and {inputs.slm} second-level eddy-current model'
     desc = [
-        f"FSL (version {ext_eddy.version})'s eddy was used for head motion correction and "
-        'Eddy current correction [@anderssoneddy].'
+        f'Head motion and eddy-current distortions were corrected with {eddy} '
+        f'[@anderssoneddy], using {model}, a *q*-space smoothing factor of '
+        f'{inputs.fudge_factor:g}, {inputs.niter} iterations and {inputs.nvoxhp} voxels to '
+        'estimate the hyperparameters.'
     ]
 
-    # Basic eddy setup
-    desc.append(
-        'Eddy was configured with a $q$-space smoothing factor '
-        'of %d,' % ext_eddy.inputs.fudge_factor
-    )
-    desc.append('a total of %d iterations,' % ext_eddy.inputs.niter)
-    desc.append('and %d voxels used to estimate hyperparameters.' % ext_eddy.inputs.nvoxhp)
-
-    # Specify flm/slm model types
-    slm = (
-        'was'
-        if ext_eddy.inputs.slm == 'none'
-        else f'and a {ext_eddy.inputs.slm} second level model were'
-    )
-    desc.append(
-        f'A {ext_eddy.inputs.flm} first level model {slm} used to characterize Eddy current-'
-        'related spatial distortion.'
-    )
-
-    # fwhm of pre-conditioning filter
-    if isdefined(ext_eddy.inputs.fwhm):
+    if isdefined(inputs.fwhm):
         desc.append(
-            f'A filter with fwhm={ext_eddy.inputs.fwhm:04f} was used to pre-condition the '
-            'data before using it to estimate distortions.'
+            f'The data were smoothed (FWHM {inputs.fwhm} mm) before the distortions were '
+            'estimated.'
         )
-
-    # force shelled scheme
-    if isdefined(ext_eddy.inputs.is_shelled) and ext_eddy.inputs.is_shelled:
-        desc.append('$q$-space coordinates were forcefully assigned to shells.')
-
-    if isdefined(ext_eddy.inputs.fep) and ext_eddy.inputs.fep:
-        desc.append('Any empty planes detected in images were filled.')
-
-    # did you sep_offs_mov?
-    if isdefined(ext_eddy.inputs.dont_sep_offs_move) and ext_eddy.inputs.dont_sep_offs_move:
-        desc.append('No attempt was made to separate field offset from subject movement.')
+    if isdefined(inputs.is_shelled) and inputs.is_shelled:
+        desc.append('The data were declared shelled, so `eddy` did not check the sampling.')
+    if isdefined(inputs.fep) and inputs.fep:
+        desc.append('Empty planes in the images were filled.')
+    if isdefined(inputs.dont_sep_offs_move) and inputs.dont_sep_offs_move:
+        desc.append('The field offset was not separated from subject movement.')
     else:
-        desc.append('Field offset was attempted to be separated from subject movement.')
-
-    # did you peas?
-    if isdefined(ext_eddy.inputs.dont_peas) and ext_eddy.inputs.dont_peas:
-        desc.append('No alignment of shells was performed post-eddy.')
+        desc.append('The field offset was modeled separately from subject movement.')
+    if isdefined(inputs.dont_peas) and inputs.dont_peas:
+        desc.append('Shells were not aligned to one another after correction.')
     else:
-        desc.append('Shells were aligned post-eddy.')
+        desc.append('Shells were aligned to one another after correction.')
 
-    # repol settings
-    if isdefined(ext_eddy.inputs.repol) and ext_eddy.inputs.repol:
-        desc.append("Eddy's outlier replacement was run [@eddyrepol].")
-
-        ol_group = {
+    if isdefined(inputs.repol) and inputs.repol:
+        group = {
             'sw': 'slice',
-            'gw': 'multi-band group',
-            'both': 'both slice and multi-band group',
+            'gw': 'multiband slice group',
+            'both': 'slice and multiband slice group',
             traits.Undefined: 'slice',
-        }[ext_eddy.inputs.outlier_type]
-        nvox = ext_eddy.inputs.outlier_nstd if isdefined(ext_eddy.inputs.outlier_nstd) else 250
+        }[inputs.outlier_type]
+        nvox = inputs.outlier_nvox if isdefined(inputs.outlier_nvox) else 250
+        nstd = inputs.outlier_nstd if isdefined(inputs.outlier_nstd) else 4
+        direction = (
+            ' in either direction' if isdefined(inputs.outlier_pos) and inputs.outlier_pos else ''
+        )
+        squares = (
+            ' (using sums of squared differences)'
+            if isdefined(inputs.outlier_sqr) and inputs.outlier_sqr
+            else ''
+        )
         desc.append(
-            'Data were grouped by %s, only including values from '
-            'slices determined to contain at least %d intracerebral '
-            'voxels.' % (ol_group, nvox)
+            f'Outliers, detected per {group}, were replaced with the `eddy` prediction '
+            f'[@eddyrepol]: data deviating from the prediction by more than {nstd} standard '
+            f'deviations{direction}{squares} were treated as outliers, and only slices with at '
+            f'least {nvox} brain voxels were assessed.'
         )
-        mbf = (
-            ext_eddy.inputs.multiband_factor if isdefined(ext_eddy.inputs.multiband_factor) else 1
-        )
-        mb_off = (
-            ext_eddy.inputs.multiband_offset if isdefined(ext_eddy.inputs.multiband_factor) else 0
-        )
-        if mbf > 1 and 'multi-band group' in ol_group:
-            offs_txt = 'was'
+        mbf = inputs.multiband_factor if isdefined(inputs.multiband_factor) else 1
+        mb_off = inputs.multiband_offset if isdefined(inputs.multiband_offset) else 0
+        if mbf > 1 and 'multiband' in group:
+            removed = ''
             if mb_off != 0:
-                offs_txt = {-1: 'bottom', 1: 'top'}
-                offs_txt = f'and slices removed from the {offs_txt} of the volume were'
-            desc.append(f'A multi-band acceleration factor of {mbf} {offs_txt} assumed.')
+                end = {-1: 'bottom', 1: 'top'}[mb_off]
+                removed = f', with slices removed from the {end} of the volume'
+            desc.append(f'A multiband factor of {mbf} was assumed{removed}.')
 
-        # The threshold for outliers
-        std_threshold = (
-            ext_eddy.inputs.outlier_nstd if isdefined(ext_eddy.inputs.outlier_nstd) else 4
-        )
-        ssq = (
-            ' sum-of-squares'
-            if isdefined(ext_eddy.inputs.outlier_sqr) and ext_eddy.inputs.outlier_sqr
-            else ''
-        )
-        pos = (
-            f' (positively or negatively{ssq})'
-            if isdefined(ext_eddy.inputs.outlier_pos) and ext_eddy.inputs.outlier_pos
-            else ''
-        )
+    if isdefined(inputs.mporder) and inputs.mporder > 0:
+        niter = inputs.slice2vol_niter if isdefined(inputs.slice2vol_niter) else 5
+        lam = inputs.slice2vol_lambda if isdefined(inputs.slice2vol_lambda) else 1
+        interp = inputs.slice2vol_interp if isdefined(inputs.slice2vol_interp) else 'trilinear'
         desc.append(
-            'Groups deviating by more than %d standard deviations%s from the prediction '
-            'had their data replaced with imputed values.' % (std_threshold, pos)
+            f'Within-volume (slice-to-volume) motion was modeled with a temporal order of '
+            f'{inputs.mporder}, {niter} iterations, {interp} interpolation and '
+            f'$\\lambda$ = {lam:g} [@eddys2v].'
         )
 
-    # slice-to-vol
-    if isdefined(ext_eddy.inputs.mporder) and ext_eddy.inputs.mporder > 0:
-        niter = (
-            ext_eddy.inputs.slice2vol_niter if isdefined(ext_eddy.inputs.slice2vol_niter) else 5
-        )
-        lam = (
-            ext_eddy.inputs.slice2vol_lambda if isdefined(ext_eddy.inputs.slice2vol_lambda) else 1
-        )
-        s2v_interp = (
-            ext_eddy.inputs.slice2vol_interp
-            if isdefined(ext_eddy.inputs.slice2vol_interp)
-            else 'trilinear'
-        )
+    if (
+        isdefined(inputs.estimate_move_by_susceptibility)
+        and inputs.estimate_move_by_susceptibility
+    ):
+        mbs_niter = inputs.mbs_niter if isdefined(inputs.mbs_niter) else 10
+        mbs_lambda = inputs.mbs_lambda if isdefined(inputs.mbs_lambda) else 10
+        mbs_ksp = inputs.mbs_ksp if isdefined(inputs.mbs_ksp) else 10
         desc.append(
-            'Slice-to-volume correction was estimated with '
-            'temporal order %d, %d iterations, %s interpolation '
-            'and lambda=%.3f [@eddys2v].' % (ext_eddy.inputs.mporder, niter, s2v_interp, lam)
+            'Changes in the susceptibility field caused by head movement were modeled with '
+            f'{mbs_niter} iterations, $\\lambda$ = {mbs_lambda:g} and a {mbs_ksp:g} mm spline '
+            'knot spacing [@eddysus].'
         )
 
-    # distortion correction
-    if 'topup' in pepolar_method.lower():
-        desc.append(topup_boilerplate(fieldmap_type, pepolar_method))
     # DRBUDDI is described in its own workflow
+    if run_topup:
+        desc.append(topup_boilerplate(fieldmap_type, pepolar_method))
 
-    # Jacobian modulation: whether eddy's own resampling Jacobian-modulated
-    # the eddy-current (and, when TOPUP ran, susceptibility) corrections it
-    # applied. This is independent of --ignore jacobian, which controls
-    # only the modulation QSIPrep itself applies -- see eddy_modulates_distortion.
+    # Whether eddy's own resampling Jacobian-modulated the corrections it applied.
+    # This is independent of --ignore jacobian, which controls only the modulation
+    # QSIPrep itself applies -- see eddy_modulates_distortion.
     from ..utils.eddy_config import eddy_modulates_distortion
 
+    corrections = (
+        'eddy-current and susceptibility distortion corrections'
+        if run_topup or gre_in_eddy
+        else 'eddy-current correction'
+    )
+    method = f'`{inputs.method}`' + (' [@fsllsr]' if inputs.method == 'lsr' else '')
     if eddy_modulates_distortion(eddy_config):
         desc.append(
-            'Eddy-current correction, and susceptibility distortion correction '
-            'when TOPUP was used, were Jacobian-modulated by eddy itself as part '
-            'of its `jac` resampling.'
+            f'`eddy` resampled the data with its {method} method, which Jacobian-modulates the '
+            f'{corrections}.'
         )
     else:
         desc.append(
-            'Eddy-current correction, and susceptibility distortion correction '
-            'when TOPUP was used, were not Jacobian-modulated, because eddy was '
-            f'configured with resampling method "{ext_eddy.inputs.method}" rather '
-            'than "jac"; QSIPrep cannot retrofit this modulation once eddy has '
-            'resampled the data.'
+            f'`eddy` resampled the data with its {method} method, which does not '
+            f'Jacobian-modulate the {corrections}; QSIPrep cannot add this modulation after '
+            '`eddy` has resampled the data.'
         )
-
-    # move by susceptibility
-    if (
-        isdefined(ext_eddy.inputs.estimate_move_by_susceptibility)
-        and ext_eddy.inputs.estimate_move_by_susceptibility
-    ):
-        mbs_niter = ext_eddy.inputs.mbs_niter if isdefined(ext_eddy.inputs.mbs_niter) else 10
-        mbs_lambda = ext_eddy.inputs.mbs_lambda if isdefined(ext_eddy.inputs.mbs_lambda) else 10
-        mbs_ksp = ext_eddy.inputs.mbs_ksp if isdefined(ext_eddy.inputs.mbs_ksp) else 10
-        desc.append(
-            'Dynamic susceptibility distortion correction was '
-            'applied with %d iterations, lambda=%.2f and spline '
-            'knot-spacing of %.2fmm [@eddysus].' % (mbs_niter, mbs_lambda, mbs_ksp)
-        )
-
-    # Format the interpolation
-    lsr_ref = ' [@fsllsr]' if ext_eddy.inputs.method == 'lsr' else ''
-    if doing_2stage:
-        desc.append(
-            'Interpolation after head motion and initial susceptibility distortion correction'
-        )
-    else:
-        desc.append('Final interpolation')
-    desc.append(f'was performed using the `{ext_eddy.inputs.method}` method{lsr_ref}.')
-    if not doing_2stage:
-        desc.append('\n\n')
-    return ' '.join(desc)
+    return ' '.join(desc) + '\n\n'
 
 
 def topup_boilerplate(fieldmap_type, pepolar_method):
@@ -633,67 +588,55 @@ def topup_boilerplate(fieldmap_type, pepolar_method):
     if fieldmap_type not in ('rpe_series', 'epi', 'synb0'):
         return ''
 
+    applied = (
+        'The estimated field was passed to `eddy`, which applied it in the same resampling as '
+        'the head motion and eddy-current corrections.'
+    )
     if fieldmap_type == 'synb0':
         # An un-forced SyNb0 never overrides a usable fieldmap, so reaching it
-        # with fieldmaps or RPE series in the dataset means the user either
-        # forced the anatomical reference or ignored the fieldmaps - the
-        # boilerplate must not claim none were available in those cases.
-        ignored = sorted({'fieldmaps', 'pepolar-dwis'} & set(config.workflow.ignore or []))
-        if config.workflow.force_sdc_anat_reference:
+        # with fieldmaps or RPE series in the dataset means the anatomical
+        # reference was forced or the fieldmaps were ignored - the boilerplate
+        # must not claim none were available in those cases.
+        ignored = {'fieldmaps', 'pepolar-dwis'} & set(config.workflow.ignore or [])
+        if config.workflow.force_sdc_anat_reference or ignored:
             reason = (
-                'Anatomically-referenced correction was forced at the '
-                "user's request (--force sdc-anat-reference), overriding any "
-                'scanner-acquired fieldmap data, so '
-            )
-        elif ignored:
-            reason = (
-                'Any scanner-acquired fieldmap data were excluded at the '
-                f"user's request (--ignore {' '.join(ignored)}), so "
+                'The acquired field map data were not used for susceptibility distortion '
+                'correction; instead, '
             )
         else:
-            reason = 'No fieldmap was available for these series, so '
+            reason = 'No field map was available for these series, so '
+        second_pass = (
+            ' The *b*=0 images were then unwarped with that field (Jacobian-modulated), a new '
+            'synthetic *b*=0 image was generated from them, and TOPUP was run again on the '
+            'acquired *b*=0 images paired with the new synthetic one.'
+            if config.workflow.two_pass_sdc
+            else ''
+        )
         return (
-            '\n\n' + reason + 'susceptibility '
-            'distortion correction used a synthetic distortion-free b=0 '
-            '[@synb0disco]: the selected real b=0 images were slightly '
-            'smoothed (sigma=1.15mm) to match the smoothness of the synthetic '
-            "image, which entered FSL's TOPUP [@topup] as an additional "
-            'volume with zero total readout time. The TOPUP-estimated '
-            'fieldmap was incorporated into the Eddy current and head motion '
-            'correction interpolation.'
+            f'\n\n{reason}the susceptibility-induced field was estimated with TOPUP [@topup] '
+            'using a synthetic distortion-free *b*=0 image [@synb0disco]: the selected *b*=0 '
+            'images were smoothed ($\\sigma$ = 1.15 mm) to match the synthetic image, which '
+            f'entered TOPUP as an additional volume with zero total readout time.{second_pass} '
+            f'{applied}'
         )
 
-    desc = []
-    desc.append(
-        '\n\nData was collected with reversed phase-encode blips, resulting '
-        'in pairs of images with distortions going in opposite directions.'
-    )
-
-    if 'drbuddi' in pepolar_method.lower():
-        desc.append(
-            'Distortion correction was performed in two stages. In the first stage, '
-            "FSL's TOPUP [@topup]"
-        )
-    else:
-        desc.append("FSL's TOPUP [@topup]")
-
-    desc.append('was used to estimate a susceptibility-induced off-resonance field based on')
     if fieldmap_type == 'epi':
-        desc.append('b=0 reference images with reversed phase encoding directions.')
-    else:
-        desc.append(
-            'b=0 images extracted from multiple DWI series  '
-            'with reversed phase encoding directions.'
+        source = (
+            '*b*=0 images of the DWI series and of the field map acquired with the reverse '
+            'phase-encoding polarity'
         )
-    desc.append(
-        "The most mutually-consistent b=0 images were chosen with TORTOISE's "
-        'SelectBestB0 [@tortoisev4], which rigidly aligns the candidates from '
-        'each distortion group before comparing them with a windowed '
-        'correlation.'
+    else:
+        source = '*b*=0 images of DWI series acquired with opposite phase-encoding polarities'
+    stage = (
+        'In the first of two distortion-correction stages, the'
+        if 'drbuddi' in pepolar_method.lower()
+        else 'The'
     )
-    desc.append(
-        'The TOPUP-estimated fieldmap was incorporated into the '
-        'Eddy current and head motion correction interpolation.'
+    tortoise = versioned('*TORTOISE*', tortoise_version())
+    return (
+        f'\n\n{stage} susceptibility-induced off-resonance field was estimated with TOPUP '
+        f'[@topup] from {source}. The most mutually consistent *b*=0 images were chosen with '
+        f'`SelectBestB0` from {tortoise} [@tortoisev4], which rigidly aligns the candidates '
+        'from each distortion group before comparing them with a windowed correlation. '
+        f'{applied}'
     )
-
-    return ' '.join(desc)

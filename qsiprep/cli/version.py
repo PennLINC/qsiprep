@@ -32,10 +32,11 @@ from qsiprep import __version__
 
 RELEASE_EXPIRY_DAYS = 14
 DATE_FMT = '%Y%m%d'
+TAGS_URL = 'https://hub.docker.com/v2/repositories/pennlinc/qsiprep/tags'
 
 
 def check_latest():
-    """Determine whether this is the latest version."""
+    """Return the newest non-prerelease version tagged on Docker Hub, or None if unknown."""
     from packaging.version import InvalidVersion, Version
 
     latest = None
@@ -66,13 +67,18 @@ def check_latest():
     if latest is None or outdated is True:
         response = None
         with suppress(Exception):
-            response = requests.get(url='https://pypi.org/pypi/qsiprep/json', timeout=1.0)
+            # The repository has under 100 tags, so the first page holds all of them.
+            response = requests.get(url=TAGS_URL, params={'page_size': 100}, timeout=1.0)
 
         if response and response.status_code == 200:
-            versions = [Version(rel) for rel in response.json()['releases'].keys()]
+            versions = []
+            # Tags such as 'latest' and 'unstable' are not versions and are skipped.
+            for tag in response.json().get('results', []):
+                with suppress(InvalidVersion, KeyError, TypeError):
+                    versions.append(Version(tag['name']))
             versions = [rel for rel in versions if not rel.is_prerelease]
             if versions:
-                latest = sorted(versions)[-1]
+                latest = max(versions)
         else:
             latest = None
 

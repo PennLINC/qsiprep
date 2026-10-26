@@ -3,8 +3,7 @@
 Orchestrating the dwi-preprocessing workflow
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autofunction:: init_dwi_preproc_wf
-.. autofunction:: init_dwi_derivatives_wf
+.. autofunction:: init_qsiprep_hmcsdc_wf
 
 """
 
@@ -17,8 +16,9 @@ from ... import config
 from ...interfaces.gradients import CombineMotions, GradientRotation, SliceQC
 from ...interfaces.images import SplitDWIsBvals, TSplit
 from ...utils.gpu import gpu_enabled
-from ..fieldmap.base import init_gre_seed_wf, init_sdc_wf
+from ..fieldmap.base import SDC_ANAT_CONNECTIONS, init_gre_seed_wf, init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf, seeds_from_gre
+from ..fieldmap.synb0 import connect_post_hmc_synb0_topup
 from .gradwarp import (
     connect_gradwarp_sdc_reference,
     connect_gradwarp_sdc_volumes,
@@ -217,9 +217,7 @@ def init_qsiprep_hmcsdc_wf(
         apply_hmc_transforms = pe.MapNode(
             ants.ApplyTransforms(
                 dimension=3,
-                interpolation=(
-                    'LanczosWindowedSinc' if not config.execution.sloppy else 'NearestNeighbor'
-                ),
+                interpolation=('LanczosWindowedSinc' if not config.execution.sloppy else 'Linear'),
             ),
             iterfield=['input_image', 'reference_image', 'transforms'],
             name='uncorrect_model_images',
@@ -290,6 +288,27 @@ def init_qsiprep_hmcsdc_wf(
 
         return workflow
 
+    if unit.run.stage_with('topup') is not None:
+        # SynB0 + TOPUP after SHORELine: the synthetic b=0 is generated from the
+        # motion-corrected template TOPUP corrects. Its warp reaches
+        # ComposeJacobianWeights externally, like the other SHORELine SDC warps.
+        synb0_topup_wf = connect_post_hmc_synb0_topup(
+            workflow,
+            unit,
+            inputnode,
+            (dwi_hmc_wf, 'outputnode.final_template'),
+            source_file,
+            has_gradwarp,
+        )
+        outputnode.inputs.sdc_method = 'TOPUP (SynB0)'
+        workflow.connect([
+            (synb0_topup_wf, outputnode, [
+                ('outputnode.b0_corrected', 'b0_template'),
+                ('outputnode.out_warp', 'to_dwi_ref_warps'),
+            ]),
+        ])  # fmt:skip
+        return workflow
+
     if unit.method is None:
         config.loggers.workflow.warning(
             'SDC: no fieldmaps found or they were ignored (%s).', source_file
@@ -306,7 +325,7 @@ def init_qsiprep_hmcsdc_wf(
         # Recorded by jacobian_provenance.jacobian_provenance_for, not here.
 
     # Perform SDC if possible. This will pass-through if no sdc is to be done
-    b0_sdc_wf = init_sdc_wf(unit, gradwarp=has_gradwarp)
+    b0_sdc_wf = init_sdc_wf(unit, gradwarp=has_gradwarp, source_file=source_file)
     b0_sdc_wf.inputs.inputnode.template = acpc_anchor.fullname
 
     # init_sdc_wf builds a pure pass-through ('sdc_bypass_wf') when there is no
@@ -336,10 +355,7 @@ def init_qsiprep_hmcsdc_wf(
         ])  # fmt:skip
 
     workflow.connect([
-        (inputnode, b0_sdc_wf, [
-            ('t1_brain', 'inputnode.t1_brain'),
-            ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-        ]),
+        (inputnode, b0_sdc_wf, SDC_ANAT_CONNECTIONS),
         (b0_sdc_wf, outputnode, [
             ('outputnode.method', 'sdc_method'),
             ('outputnode.b0_ref', 'b0_template'),

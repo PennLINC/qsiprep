@@ -185,8 +185,13 @@ The Jacobian map holds the intensity modulation *QSIPrep* itself applied,
 which is not all of it: ``eddy`` modulates its own corrections internally
 and leaves no map. The sidecar gives ``SignalRedistributionMethod``
 (``Jacobian`` or ``LSR``), ``JacobianWeightIndex`` (which volume of the map
-applies to each DWI volume; the file is 3D when every volume shares one
-map), ``AppliedCorrections`` and ``UnmodulatedCorrections``. Dividing the
+applies to each DWI volume), ``AppliedCorrections`` and
+``UnmodulatedCorrections``. When the modulation differs between volumes, as
+with eddy-current correction, the map is its mean over volumes, a single 3D
+image; ``JacobianWeightCombination`` is then ``mean`` and
+``JacobianWeightVolumeDeviation`` gives how far each volume's own weight lies
+from that mean (as a fraction, 99th percentile over voxels).
+``--write-jacobian-4d`` writes one map per volume instead. Dividing the
 preprocessed series by the indexed weight reverses the multiplication at the
 point where it was applied, not the whole preprocessing, because bias
 correction runs after it. See :ref:`jacobian_methods` for which component
@@ -200,7 +205,8 @@ example DSI Studio) can use it directly. Its orientation into ``ACPC`` space
 comes from a rigid registration TORTOISE estimates itself, recorded in the
 sidecar as ``GradientDeviationOrientation``, which is close to but not the
 same as the coregistration *QSIPrep* applied to the data. It is not written
-for outputs assembled by ``--distortion-group-merge``.
+for outputs assembled by ``--distortion-group-merge``. Its in-brain
+summary is in ``desc-image_qc.tsv`` (:ref:`qc_data`).
 
 
 **********************
@@ -262,6 +268,12 @@ nonlinear template builds produce an affine and a warp per group, which do
 not fit a single-file transform, so with the default ``BSplineSyN`` no
 transform out of ``space-distortiongroup`` is written.
 
+A subject with a single distortion group builds no template: its group's
+reference is written as ``space-subject_dwiref``, its
+``from-distortiongroup_to-subject`` transform is an identity (written
+whatever ``--dwiref-construction-transform`` is), and there is no
+``desc-templateQC`` table.
+
 Head motion, eddy-current and susceptibility corrections are applied by
 ``eddy`` and DIFFPREP inside their own resampling and do not come out as
 reusable transforms, so *QSIPrep* does not write them.
@@ -303,13 +315,62 @@ Quality control data
 
 ``<source_entities>_space-ACPC_<res>_desc-image_qc.tsv`` has one row per output
 image and is meant for comparing subjects before deciding whom to include in
-a group analysis. Columns prefixed ``raw_`` are DSI Studio's quality
-measures :footcite:p:`yeh2019` computed on the data before preprocessing,
-and ``t1_`` columns the same measures on the preprocessed data. Motion
-summaries follow: ``mean_fd`` and ``max_fd``, ``max_translation`` and
+a group analysis. Columns prefixed ``raw_`` are computed on the data before
+preprocessing, and ``t1_`` columns on the preprocessed data. Each stage has
+DSI Studio's quality measures :footcite:p:`yeh2019` and the following measures
+from `cs_dmri <https://cs-dmri.readthedocs.io>`_:
+
+``ndc``, ``ndc_masked``
+    Neighboring DWI correlation over all voxels and inside the brain mask:
+    the correlation of each diffusion-weighted volume with its nearest
+    neighbor in q-space, averaged over all of them. Unlike DSI Studio's
+    ``neighbor_corr``, it does not depend on the order of the volumes.
+``dwi_contrast_ratio``, ``dwi_contrast_ratio_masked``
+    The mean correlation of each diffusion-weighted volume with its nearest
+    q-space neighbor over its mean correlation with the volume whose
+    q-vector is closest to perpendicular to its own.
+``n_outlier_slices``
+    The number of slices whose in-plane smoothed intensity departs from the
+    average of the two adjacent slices of the same volume by more than 2.5
+    times the difference between those two slices.
+``fixel_coherence``
+    The FA-weighted fraction of anisotropic voxels whose principal diffusion
+    direction lies within 15° of that of the neighboring voxel it points to.
+``fixel_chain_length``
+    The FA-weighted mean length, in mm, of the chains formed by linking each
+    principal diffusion direction to its best continuation in the neighboring
+    voxels. Noise, misregistration and a wrong gradient table shorten chains.
+``gradient_table_ratio``
+    The longest fiber-chain length obtained with any of the 24 axis
+    permutations and flips of the gradient table, over that obtained with the
+    table as used. It is 1 when the table as used is the most consistent with
+    the anatomy; larger values suggest a permuted or flipped gradient table.
+``n_dwi_volumes``, ``n_b0_volumes``
+    The numbers of diffusion-weighted and b=0 volumes.
+
+The brain mask is a SynthStrip mask of the mean b=0 image for the raw data
+and the preprocessed DWI brain mask afterwards. Full definitions are in the
+cs_dmri documentation.
+
+The motion summaries are ``mean_fd`` and ``max_fd``, ``max_translation`` and
 ``max_rotation``, and their frame-to-frame maxima ``max_rel_translation``
 and ``max_rel_rotation``. ``t1_dice_distance`` is the Dice distance between
 the DWI brain mask and the anatomical brain mask.
+
+With ``--gradient-file``, the median, 95th percentile and maximum inside the
+brain (suffixes ``_median``, ``_p95`` and ``_maximum``) of two more measures
+are added:
+
+``gradwarp_displacement_mm``
+    The length of the gradient nonlinearity displacement *QSIPrep* applied,
+    in the brain mask of the corrected b=0 image. With ``DIS2D`` data or
+    ``--force gradwarp1D`` only the through-plane component is applied, so
+    only it is counted; ``DIS3D`` data get no spatial correction and no
+    columns.
+``graddev_rotation_deg``
+    The rotation angle of the gradient deviation matrix, in the ``ACPC``
+    brain mask: the rotation left after the matrix's scaling and shear are
+    removed, which is how far the diffusion encoding is turned at that voxel.
 
 
 .. _boilerplate:
