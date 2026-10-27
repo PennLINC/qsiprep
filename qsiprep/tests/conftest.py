@@ -13,6 +13,19 @@ def pytest_addoption(parser):
     parser.addoption('--output_dir', action='store')
 
 
+@pytest.fixture(autouse=True)
+def _no_version_checks(monkeypatch):
+    """Keep ``_build_parser`` from querying PyPI and GitHub for version notices.
+
+    ``test_version.py`` imports the real functions before this patch is applied, and
+    the banner tests replace these stubs with their own.
+    """
+    from qsiprep.cli import version
+
+    monkeypatch.setattr(version, 'check_latest', lambda: None)
+    monkeypatch.setattr(version, 'is_flagged', lambda: (False, None))
+
+
 # Set up the commandline options as fixtures
 @pytest.fixture(scope='session')
 def data_dir(request):

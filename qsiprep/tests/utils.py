@@ -139,33 +139,10 @@ def annexify(root, store=None):
 def download_test_data(dset, data_dir=None):
     """Download test data."""
     URLS = {
-        'HBCD': 'https://upenn.box.com/shared/static/gn1ec8x7mtk1f07l97d0th9idn4qv3yx.xz',
-        'DSCSDSI': 'https://upenn.box.com/shared/static/eq6nvnyazi2zlt63uowqd0zhnlh6z4yv.xz',
-        'DSCSDSI_BUDS': 'https://upenn.box.com/shared/static/bvhs3sw2swdkdyekpjhnrhvz89x3k87t.xz',
-        'DSDTI': 'https://upenn.box.com/shared/static/iefjtvfez0c2oug0g1a9ulozqe5il5xy.xz',
-        'twoses': 'https://upenn.box.com/shared/static/c949fjjhhen3ihgnzhkdw5jympm327pp.xz',
-        'multishell_output': (
-            'https://upenn.box.com/shared/static/hr7xnxicbx9iqndv1yl35bhtd61fpalp.xz'
-        ),
-        'singleshell_output': (
-            'https://upenn.box.com/shared/static/9jhf0eo3ml6ojrlxlz6lej09ny12efgg.gz'
-        ),
-        'drbuddi_rpe_series': (
-            'https://upenn.box.com/shared/static/j5mxts5wu0em1toafmrlzdndves1jnfv.xz'
-        ),
-        # CS-DSI (HASC55) reverse-PE *series*, downsampled + defaced -- exercises
-        # the non-shelled DIFFPREP rpe_series path through stock DRBUDDI.
-        # Extracts to a ``csdsi_hasc55/`` BIDS root (sub-2345/ses-1, AP+PA HASC55
-        # + defaced T1w/T2w).
-        'csdsi_rpe_series': (
-            'https://upenn.box.com/shared/static/3mmagbtddgb4lpmlc5vs4jnsyf1etp3d.xz'
-        ),
-        'drbuddi_epi': 'https://upenn.box.com/shared/static/plyuee1nbj9v8eck03s38ojji8tkspwr.xz',
-        'DSDTI_fmap': 'https://upenn.box.com/shared/static/rxr6qbi6ezku9gw3esfpnvqlcxaw7n5n.gz',
-        'DSCSDSI_fmap': 'https://upenn.box.com/shared/static/l561psez1ojzi4p3a12eidaw9vbizwdc.gz',
-        'maternal_brain_project': (
-            'https://upenn.box.com/shared/static/tkahg1ctipmfihvpa1gmibvcv0gb721h.xz'
-        ),
+        # forrest_gump: a real single-shell session with a GRE fieldmap, read by the
+        # anatomical and dataset-interpretation unit tests; nibs: a small magnitude+phase
+        # series for the denoising tests. End-to-end runs use TRXScan fixtures instead
+        # (trxscan_fixtures.py).
         'forrest_gump': 'https://upenn.box.com/shared/static/qat58an322bzzyixrrsk7cmf52q3bepq.xz',
         'nibs': 'https://upenn.box.com/shared/static/bkllff4ik51jy9ju6nben2r5zrq4a5me.xz',
     }

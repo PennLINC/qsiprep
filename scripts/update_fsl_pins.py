@@ -223,6 +223,12 @@ def main():
         help='Path to pyproject.toml (default: %(default)s)',
     )
     parser.add_argument(
+        '--release-file',
+        type=Path,
+        default=Path(__file__).parent.parent / 'qsiprep' / 'data' / 'fsl_release.json',
+        help='Where the pinned release is recorded for the methods text (default: %(default)s)',
+    )
+    parser.add_argument(
         '--check',
         action='store_true',
         help='Report needed changes and exit non-zero instead of writing them',
@@ -255,8 +261,22 @@ def main():
     for warning in warnings:
         print(f'warning: {warning}', file=sys.stderr)
 
+    # The methods boilerplate names the FSL release, which the pins alone cannot
+    # recover (consecutive releases often share every package qsiprep pins).
+    release_record = json.dumps({'release': version}) + '\n'
+    release_current = (
+        args.release_file.exists() and args.release_file.read_text() == release_record
+    )
+
     if updated == text:
-        print(f'{args.pyproject} already matches FSL {version}')
+        if release_current:
+            print(f'{args.pyproject} already matches FSL {version}')
+            return 0
+        if args.check:
+            print(f'{args.release_file} does not record FSL {version}', file=sys.stderr)
+            return 1
+        args.release_file.write_text(release_record)
+        print(f'{args.pyproject} already matches FSL {version}; recorded in {args.release_file}')
         return 0
 
     diff = difflib.unified_diff(
@@ -272,6 +292,7 @@ def main():
         return 1
 
     args.pyproject.write_text(updated)
+    args.release_file.write_text(release_record)
     print(f'Pinned {args.pyproject} to FSL {version}. Run `pixi lock` to update pixi.lock.')
     return 0
 

@@ -95,7 +95,7 @@ The config module is the single source of truth for runtime parameters. Never pa
 - Entrypoint is the CLI binary in the pixi environment (e.g., `/app/.pixi/envs/<env>/bin/<pkg>`).
 - Labels follow the `org.label-schema` convention; the `test` target additionally carries `org.opencontainers.image.revision`, which CI uses to refuse running tests against a stale image.
 - The base image is rebuilt only when its `BASE_IMAGE` tag is absent from Docker Hub. Editing `Dockerfile.base` without bumping the date tag does **not** trigger a rebuild.
-- qsiprep is the only one of the four with **no templateflow prefetch stage** — the other three bake templates into the image via `scripts/fetch_templates.py`, so qsiprep downloads them at runtime instead.
+- All four bake TemplateFlow templates into `$HOME/.cache/templateflow` via `scripts/fetch_templates.py`. The other three run it in a separate `uv` stage with an unpinned `templateflow`; qsiprep runs it in the `build` stage with the locked Pixi environment, before `COPY .` so code changes reuse the layer, copies the cache without `--link` (which would reset `$HOME`'s owner and mode), and sets `TEMPLATEFLOW_HOME` explicitly. qsiprep prefetches only the res-1 T1w, T2w and `desc-brain` mask of `MNI152NLin2009cAsym` and `MNI152NLin6Asym`; infant cohorts are downloaded at runtime.
 
 ### CircleCI
 
@@ -167,7 +167,7 @@ QSIPrep is a BIDS App for preprocessing diffusion MRI (dMRI/DWI) data. It handle
 
 ### FSL Dependencies
 
-The `fsl-*` packages in `[tool.pixi.dependencies]` come from the FSL conda channel, which publishes one environment file per FSL release. `scripts/update_fsl_pins.py <release>` rewrites those pins so they all come from a single release (`--check` reports drift without editing, `--list` shows the available releases); run `pixi lock` afterwards. FSL renames its CUDA eddy package from time to time -- it went `fsl-eddy-cuda-10.2` -> `fsl-eddy-cuda-11.0` -> `fsl-eddy-cuda` -- so the script verifies each pin against the channel and refuses to write one the channel cannot satisfy.
+The `fsl-*` packages in `[tool.pixi.dependencies]` come from the FSL conda channel, which publishes one environment file per FSL release. `scripts/update_fsl_pins.py <release>` rewrites those pins so they all come from a single release (`--check` reports drift without editing, `--list` shows the available releases); run `pixi lock` afterwards. It also records the release in `qsiprep/data/fsl_release.json`, which the methods boilerplate uses to name the FSL release, and `--check` fails if that record is stale. FSL renames its CUDA eddy package from time to time -- it went `fsl-eddy-cuda-10.2` -> `fsl-eddy-cuda-11.0` -> `fsl-eddy-cuda` -- so the script verifies each pin against the channel and refuses to write one the channel cannot satisfy.
 
 ### Linting Notes
 
@@ -175,6 +175,55 @@ QSIPrep currently uses ruff ~= 0.4.3 (older than xcp_d/aslprep). There are 13 su
 - `S605`, `DTZ005`, `B904`, `A001`, `B006`, `S607`, `S108`, `S602`, `E402`, `UP028`, `UP031`, `BLE001`
 
 These should be addressed incrementally. When fixing code that triggers these rules, remove the corresponding ignore entry.
+
+### Truth-Scored Tests (TRXScan Fixtures)
+
+The integration matrix is eleven `trxscan_*` markers in `qsiprep/tests/test_cli.py`. Each one
+preprocesses a small dataset simulated by [TRXScan](https://github.com/PennLINC/TRXScan) and
+scores the derivatives against the simulator's ground truth. There are no smoke tests on real
+data; a code path is covered by a unit test or a workflow-construction test, and gets a
+truth-scored run only when it changes what the pipeline estimates.
+
+**Fixtures.** `qsiprep/tests/trxscan_fixtures.py` holds `RECIPES` (one `trxscan-fixture`
+invocation each: `rpe`, `epi`, `phasediff`, `gnl`, `motion`, `fieldmapless`, `offsets`) and
+`TRXSCAN_VERSION`. `.circleci/trxscan_fixtures.txt` is generated from them with
+`python -m qsiprep.tests.trxscan_fixtures --spec > .circleci/trxscan_fixtures.txt`; CI diffs
+the two and uses the file's checksum as the fixture cache key, so a version bump or a recipe
+change must regenerate it. Fixtures are 3 mm, 16 directions + 2 b=0 per polarity, from the
+`sub-60501` phantom (deidentified T1w/T2w included, fetched by `trxscan-fetch sub-60501`);
+`derivatives/trxscan/` next to each fixture holds the truths: `desc-displacement` (the
+susceptibility displacement, RAS mm), `desc-cleanb0`, `desc-fieldmap`, the applied subject
+movements as ITK text transforms (`from-T1w_to-dwi`, `from-fmap_to-dwi`, `..._desc-truth_xfm.txt`),
+and for `gnl` the gradient deviation map. Locally, `fixture_dir()` generates a missing fixture
+when `trxscan-fixture` is on PATH (`pip install "trxscan[trx]==<TRXSCAN_VERSION>"`).
+
+**Running one.** From `qsiprep/tests`: `python run_local_tests.py -m trxscan_phasediff`
+(Docker, 10-25 minutes, 4 CPUs). The scores land in `truth_score.json` next to the derivatives
+(`qsiprep/tests/truth_scoring.py::score_run`: `sdc` slope/corr/rms residual against the
+displacement truth, `b0_corrected_vs_clean` and `b0_uncorrected_vs_clean`, `coreg_error`
+against the recorded movement, `fd_mean_mm` on a static object, `graddev` for GNL). Assertions
+go through `_expect(score, path, lo, hi, note)`, whose message names the quantity, its value
+and the bound, because CircleCI's Tests tab shows that message and nothing else; `_assert_clean_run`
+fails a run that wrote crash files or whose report lists errors. Eddy runs with
+`tests/data/eddy_config_trxscan.json` (seeded) so repeats are bit-identical.
+
+**Debugging a registration or correction step.** The work directory keeps every node's
+`command.txt` and outputs. The fast loop is to replay the node's own command in the container
+with one setting changed and score the result against the truth transform, about a minute per
+variant instead of a ten-minute run; only the winner goes back through the full test. ANTs
+transforms: `ConvertTransformFile 3 transformComposite.h5 out.txt`, then compose with the
+truth (`truth_scoring.read_itk_transform`, `rigid_error`). Registrations between a fieldmap
+image and the EPI reference are scored against `from-fmap_to-dwi_..._desc-truth_xfm.txt`, the
+rigid the recipe applied to the fieldmap.
+
+**Known fixture limits.** The simulated EPI has no skull unless the recipe asks for the head
+(`head=True`, TRXScan 0.3.0; the `fieldmapless` fixture does), so a step that registers a real
+T2w to a skull-free b=0 (DRBUDDI's structural rigid) is harder on those fixtures than on real
+data; the DRBUDDI T2w path is therefore tested with blip-only metrics under `--sloppy`. The GRE
+magnitude is realistic from TRXScan 0.2.1 (proton density, receive bias, Gibbs ringing, scalp
+and neck from the T1w); before that it was a flat head that registered to the truth whatever
+the settings and hid the `fmap2ref` defects fixed in #1179. When a result looks too good on a
+fixture, check what the fixture leaves out before trusting it.
 
 ---
 

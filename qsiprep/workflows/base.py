@@ -39,6 +39,7 @@ import sys
 from collections import defaultdict
 from copy import deepcopy
 
+from dipy import __version__ as dipy_ver
 from nilearn import __version__ as nilearn_ver
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
@@ -53,6 +54,7 @@ from qsiplan import (
 )
 from qsiplan.adapters import plan_concatenation_scheme, plan_preproc_units
 from qsiplan.cli_spec import policy_from_namespace
+from qsiplan.methods import HmcMethod
 from qsiplan.plan import compile_plan
 
 from .. import config
@@ -64,6 +66,7 @@ from ..interfaces import (
     InteractiveReport,
     SubjectSummary,
 )
+from ..interfaces.itk import InvertITKAffine
 from ..utils.bids import (
     check_output_names_are_bids_unique,
     collect_data,
@@ -77,7 +80,74 @@ from .anatomical.volume import anat_biascorrect_enabled, init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
 from .dwi.distortion_group_merge import init_distortion_group_merge_wf
 from .dwi.dwiref import init_dwiref_wf
-from .dwi.finalize import init_dwi_finalize_wf
+from .dwi.finalize import _select_grid, init_dwi_finalize_wf
+from .dwi.merge import SERIES_FIELDS, init_dwi_series_denoise_wf
+
+
+def init_series_denoise_wfs(preproc_units, orientation):
+    """Build one conform+denoise workflow per distinct raw DWI series.
+
+    Denoising depends only on the series, not on the unit it is corrected in,
+    so a series listed in several units (a virtual acquisition) is denoised
+    once and the result is shared. Returns ``{path: workflow}``.
+    """
+    series_wfs = {}
+    for unit in preproc_units:
+        for dwi_file in unit.dwi_files:
+            if dwi_file in series_wfs:
+                continue
+            # qsiplan's shelled/non-shelled call for this series, as for eddy's
+            record = unit.grouping.files.get(dwi_file)
+            series_wfs[dwi_file] = init_dwi_series_denoise_wf(
+                dwi_file,
+                metadata=unit.metadata_for(dwi_file),
+                phase_file=unit.dwi_phase_files.get(dwi_file),
+                orientation=orientation,
+                shelled=record.shelled if record is not None else None,
+            )
+    return series_wfs
+
+
+def unit_denoising_desc(series_wfs, unit):
+    """Join the denoising boilerplate of a unit's member series, once per distinct text."""
+    descs = []
+    for dwi_file in unit.dwi_files:
+        desc = series_wfs[dwi_file].denoising_desc
+        if desc not in descs:
+            descs.append(desc)
+    return ''.join(descs)
+
+
+def connect_series_to_unit(workflow, series_wfs, unit, dwi_preproc_wf, name):
+    """Feed a unit's denoised member series into its preprocessing workflow.
+
+    Each per-series output is collected into a list ordered like
+    ``unit.dwi_files`` and connected to the matching list field on
+    ``dwi_preproc_wf.inputnode``. ``name`` keeps the collector nodes unique
+    within ``workflow``.
+    """
+    for series_field, list_field in SERIES_FIELDS:
+        collect = pe.Node(
+            niu.Merge(len(unit.dwi_files)),
+            name=f'collect_{list_field}_{name}',
+            run_without_submitting=True,
+        )
+        for index, dwi_file in enumerate(unit.dwi_files, start=1):
+            workflow.connect(
+                series_wfs[dwi_file], f'outputnode.{series_field}', collect, f'in{index}'
+            )
+        workflow.connect(collect, 'out', dwi_preproc_wf, f'inputnode.{list_field}')
+
+
+def _first_sampling_grid(grids):
+    """Pick the reference grid for HMC/SDC out of the per-resolution list.
+
+    ``--output-spaces`` can request several ACPC resolutions, so the anatomical
+    workflow emits a list. Head motion correction needs one reference geometry,
+    and the first requested resolution is it -- matching the single grid this
+    fed before the fan-out existed.
+    """
+    return grids[0] if isinstance(grids, (list, tuple)) else grids
 
 
 def _build_dwi_plan(subject_data, selection):
@@ -128,12 +198,13 @@ def init_qsiprep_wf():
         )
         log_dir.mkdir(exist_ok=True, parents=True)
         config.to_filename(log_dir / 'qsiprep.toml')
-        # The toml only records the path, so keep the settings dwidenoise2 actually ran with
-        if (
-            config.workflow.denoise_method == 'dwidenoise2'
-            and config.workflow.dwidenoise2_config is not None
-        ):
-            shutil.copyfile(config.workflow.dwidenoise2_config, log_dir / 'dwidenoise2.json')
+        # The toml only records the path, so keep the settings the denoiser actually ran with.
+        # The parser only accepts --denoise-config for a method that reads it.
+        if config.workflow.denoise_config is not None:
+            shutil.copyfile(
+                config.workflow.denoise_config,
+                log_dir / f'{config.workflow.denoise_method}.json',
+            )
     return qsiprep_wf
 
 
@@ -196,36 +267,43 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
             '--anat-modality none'
         )
 
-    anatomical_template = config.workflow.anatomical_template
-    if config.workflow.infant:
-        from ..utils.bids import cohort_by_months, parse_bids_for_age_months
+    from ..utils.spaces import describe_acpc_anchor, resolve_output_spaces, select_acpc_anchor
 
+    output_spaces = config.workflow.parsed_output_spaces()
+    if any(spec.needs_cohort_resolution for spec in output_spaces):
         if session_ids and len(session_ids) > 1:
-            raise RuntimeError('Infant template is only available for single session processing.')
+            raise RuntimeError(
+                'Automatic cohort selection is only available for single session processing.'
+            )
+    output_spaces = resolve_output_spaces(
+        output_spaces,
+        config.execution.bids_dir,
+        subject_id,
+        None if not session_ids else session_ids[0],
+    )
+    acpc_anchor = select_acpc_anchor(output_spaces)
+    acpc_specs = [s for s in output_spaces if not s.standard]
+    standard_specs = [s for s in output_spaces if s.standard]
+    anchor_note = describe_acpc_anchor(output_spaces, acpc_anchor)
+    chose_between_cohorts = (
+        len({s.cohort for s in standard_specs if s.space == acpc_anchor.space}) > 1
+    )
+    log_anchor = (
+        config.loggers.workflow.warning if chose_between_cohorts else config.loggers.workflow.info
+    )
+    log_anchor(anchor_note)
 
-        # Calculate the age and age-specific spaces
-        session_label = None if not session_ids else session_ids[0]
-        age = parse_bids_for_age_months(
-            config.execution.bids_dir,
-            subject_id,
-            session_label,
-        )
-        if age is None:
-            ses_str = f'_ses-{session_label}' if session_label else ''
-            raise RuntimeError(f'Could not find age for sub-{subject_id}{ses_str}')
-
-        cohort = cohort_by_months(anatomical_template, age)
-        anatomical_template = f'{anatomical_template}+{cohort}'
-
-    # The methods this run selected: the axis every routing decision reads.
+    # The methods this run selected: the axis every routing decision reads, and
+    # the grouping policy, which names the fieldmap-less correction.
     selection = method_selection_from_config()
+    policy = policy_from_namespace(config.workflow)
 
     # The anatomical workflow only builds its T2w branch -- and therefore only
     # produces ``t2w_unfatsat`` -- when asked for additional T2ws. Keep this in
     # sync with utils.sdc.t2w_available_for_sdc, which decides whether the consumers of
     # that output get switched on.
     additional_t2ws = 0
-    if t2w_sdc_enabled(selection) and subject_data['t2w']:
+    if t2w_sdc_enabled(selection, policy) and subject_data['t2w']:
         additional_t2ws = len(subject_data['t2w'])
 
     # Inspect the dwi data and provide advice on pipeline choices
@@ -234,19 +312,18 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
     _ses_name = '_ses_' + '_'.join(map(str, session_ids)) if session_ids else ''
     workflow = Workflow(name=f'sub_{subject_id}{_ses_name}_wf')
     workflow.__desc__ = f"""
-Preprocessing was performed using *QSIPrep* {config.environment.version} [@cieslak2021qsiprep],
+Preprocessing was performed with *QSIPrep* {config.environment.version} [@cieslak2021qsiprep],
 which is based on *Nipype* {config.environment.nipype_version}
-[@nipype1; @nipype2; RRID:SCR_002502] and follows *NiPreps* framework [@nipreps].
+[@nipype1; @nipype2; RRID:SCR_002502] and follows the *NiPreps* framework [@nipreps].
 
 """
     workflow.__postdesc__ = f"""
 
 Many internal operations of *QSIPrep* use
 *Nilearn* {nilearn_ver} [@nilearn, RRID:SCR_001362] and
-*Dipy* [@dipy].
-For more details of the pipeline, see [the section corresponding
-to workflows in *QSIPrep*'s documentation]\
-(https://qsiprep.readthedocs.io/en/latest/workflows.html \
+*DIPY* {dipy_ver} [@dipy].
+For more details of the pipeline, see [the processing pipeline details in *QSIPrep*'s
+documentation](https://qsiprep.readthedocs.io/en/latest/methods/index.html \
 "QSIPrep's documentation").
 
 
@@ -270,7 +347,8 @@ to workflows in *QSIPrep*'s documentation]\
 
     summary = pe.Node(
         SubjectSummary(
-            template=anatomical_template,
+            templates=[s.fullname for s in standard_specs],
+            acpc_anchor=anchor_note,
             mrtrix_version=config.workflow.mrtrix_version,
         ),
         name='summary',
@@ -331,7 +409,10 @@ to workflows in *QSIPrep*'s documentation]\
         num_anat_images=num_anat_images,
         num_additional_t2ws=additional_t2ws,
         has_rois=bool(subject_data['roi']),
-        anatomical_template=anatomical_template,
+        output_spaces=output_spaces,
+        acpc_anchor=acpc_anchor,
+        acpc_specs=acpc_specs,
+        dwi_files=subject_data['dwi'],
         do_biascorr=anat_biascorrect_enabled(subject_data.get(info_modality)),
         t2w_do_biascorr=anat_biascorrect_enabled(subject_data.get('t2w')),
     )
@@ -462,22 +543,36 @@ to workflows in *QSIPrep*'s documentation]\
             if len(merged_to_subgroups[merged_group]) < 2:
                 continue
 
-            merging_group_workflows[merged_group] = init_distortion_group_merge_wf(
-                merging_strategy=config.workflow.distortion_group_merge,
-                source_file=merged_group + '_dwi.nii.gz',
-                inputs_list=merged_to_subgroups[merged_group],
-                output_prefix=merged_group,
-                name=merged_group.replace('-', '_') + '_final_merge_wf',
-                assembly=assembly_by_name[merged_group],
-                units=[units_by_name[key] for key in merged_to_subgroups[merged_group]],
-            )
-            workflow.connect([
-                (anat_preproc_wf, merging_group_workflows[merged_group], [
-                    ('outputnode.t1_brain', 'inputnode.t1_brain'),
-                    ('outputnode.t1_seg', 'inputnode.t1_seg'),
-                    ('outputnode.t1_mask', 'inputnode.t1_mask'),
-                ]),
-            ])  # fmt:skip
+            merging_group_workflows[merged_group] = [
+                init_distortion_group_merge_wf(
+                    merging_strategy=config.workflow.distortion_group_merge,
+                    source_file=merged_group + '_dwi.nii.gz',
+                    inputs_list=merged_to_subgroups[merged_group],
+                    output_prefix=merged_group,
+                    name=(
+                        merged_group.replace('-', '_')
+                        + '_final_merge_wf'
+                        + (f'_res{spec.resolution.label}' if len(acpc_specs) > 1 else '')
+                    ),
+                    assembly=assembly_by_name[merged_group],
+                    units=[units_by_name[key] for key in merged_to_subgroups[merged_group]],
+                    # Every merged output carries its res- entity, like the direct path.
+                    resolution=spec.resolution,
+                    write_shared_outputs=(index == 0),
+                )
+                for index, spec in enumerate(acpc_specs)
+            ]
+
+            for index, merge_wf in enumerate(merging_group_workflows[merged_group]):
+                workflow.connect([
+                    (anat_preproc_wf, merge_wf, [
+                        ('outputnode.t1_brain', 'inputnode.t1_brain'),
+                        ('outputnode.t1_seg', 'inputnode.t1_seg'),
+                        ('outputnode.t1_mask', 'inputnode.t1_mask'),
+                        (('outputnode.dwi_sampling_grids', _select_grid, index),
+                         'inputnode.dwi_sampling_grid'),
+                    ]),
+                ])  # fmt:skip
 
     outputs_to_files = {unit.output_name: unit for unit in preproc_units}
     summary.inputs.dwi_groupings = {
@@ -490,20 +585,11 @@ to workflows in *QSIPrep*'s documentation]\
     }
 
     # Determine the level (distortion-group, subject) at which to generate the dwiref.
-    make_dwiref = False
-    if config.workflow.dwiref_definition == 'subject':
-        if len(outputs_to_files) < 2:
-            # Warn, but don't error, when users request dwiref method that requires more than one
-            # input file but only have one.
-            config.loggers.workflow.warning(
-                'Falling back to --dwiref-definition distortion-group for sub-%s: a '
-                'subject-level dwiref needs at least 2 DWI groups and this subject '
-                'has %d. Everything else is unaffected.',
-                subject_id,
-                len(outputs_to_files),
-            )
-        else:
-            make_dwiref = True
+    # A single distortion group still gets the subject-level outputs: init_dwiref_wf
+    # uses its reference as the dwiref, so the requested level's files always exist.
+    make_dwiref = config.workflow.dwiref_definition == 'subject' and bool(outputs_to_files)
+    # One group is its own dwiref, so there is no template to QC.
+    single_group_dwiref = len(outputs_to_files) == 1
 
     if make_dwiref:
         anat_source_file = fix_multi_source_name(
@@ -529,7 +615,6 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
                 ('outputnode.t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
                 ('outputnode.t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-                ('outputnode.dwi_sampling_grid', 'inputnode.dwi_sampling_grid'),
             ]),
         ])  # fmt:skip
 
@@ -604,16 +689,26 @@ to workflows in *QSIPrep*'s documentation]\
             name='ds_acpc_to_dwiref',
             run_without_submitting=True,
         )
+        # ANTs' reverse transform is the forward .mat with an inverse flag the file cannot
+        # carry: write the actual inverse under the from-ACPC name
+        invert_acpc_to_dwiref = pe.Node(
+            InvertITKAffine(), name='invert_acpc_to_dwiref', run_without_submitting=True
+        )
         workflow.connect([
-            (dwiref_wf, ds_acpc_to_dwiref, [('outputnode.t1_to_dwiref_affine', 'in_file')]),
+            (dwiref_wf, invert_acpc_to_dwiref, [('outputnode.t1_to_dwiref_affine', 'in_file')]),
+            (invert_acpc_to_dwiref, ds_acpc_to_dwiref, [('out_file', 'in_file')]),
         ])  # fmt:skip
 
         # TemplateQC and the per-group distortiongroup->dwiref transform export exist only
         # for linear templates: mvtc2 exposes no per-input aligned images, and its
         # per-group transform is an [affine, warp] pair that does not fit a
-        # single-file .mat sink.
-        dwiref_linear = config.workflow.dwiref_construction_transform in ('Rigid', 'Affine')
-        if dwiref_linear:
+        # single-file .mat sink. A single group builds no template, so it has no
+        # TemplateQC, but its transform is an identity affine and is written.
+        dwiref_xfm_is_affine = (
+            config.workflow.dwiref_construction_transform in ('Rigid', 'Affine')
+            or single_group_dwiref
+        )
+        if dwiref_xfm_is_affine and not single_group_dwiref:
             ds_template_qc = pe.Node(
                 DerivativesDataSink(
                     source_file=anat_source_file,
@@ -652,6 +747,12 @@ to workflows in *QSIPrep*'s documentation]\
                 ]),
             ])  # fmt:skip
 
+    # Conform and denoise each raw series once, before the per-unit pipelines.
+    # The plan runs every unit through the same HMC tool (selection.hmc), so one
+    # orientation serves them all: eddy wants LAS, everything else LPS.
+    orientation = 'LAS' if selection.hmc is HmcMethod.EDDY else 'LPS'
+    series_wfs = init_series_denoise_wfs(preproc_units, orientation)
+
     # create a processing pipeline for the dwis in each session
     for output_fname, unit in outputs_to_files.items():
         # naming_name is this output's display name: a single-unit output uses
@@ -668,16 +769,19 @@ to workflows in *QSIPrep*'s documentation]\
         naming_name = output_fname if merged_here else final_output_name
         source_file = get_source_file(list(unit.dwi_files), naming_name, suffix='_dwi')
         output_wfname = output_fname.replace('-', '_')
-        t2w_sdc = t2w_available_for_sdc(subject_data, selection, config.workflow.anat_modality)
+        t2w_sdc = t2w_available_for_sdc(
+            subject_data, selection, policy, config.workflow.anat_modality
+        )
         do_biascorr = biascorr_by_output[final_output_name]
         dwi_preproc_wf = init_dwi_preproc_wf(
             unit=unit,
             output_prefix=naming_name,
             source_file=source_file,
             t2w_sdc=t2w_sdc,
-            anatomical_template=anatomical_template,
             do_biascorr=do_biascorr,
+            denoising_desc=unit_denoising_desc(series_wfs, unit),
         )
+        connect_series_to_unit(workflow, series_wfs, unit, dwi_preproc_wf, output_wfname)
         write_derivatives = not (
             merging_distortion_groups
             and concatenation_scheme[output_fname] in merging_group_workflows
@@ -687,6 +791,7 @@ to workflows in *QSIPrep*'s documentation]\
             name=dwi_preproc_wf.name.replace('dwi_preproc', 'dwi_finalize'),
             output_prefix=naming_name,
             source_file=source_file,
+            acpc_specs=acpc_specs,
             t2w_sdc=t2w_sdc,
             do_biascorr=do_biascorr,
             write_derivatives=write_derivatives,
@@ -694,7 +799,7 @@ to workflows in *QSIPrep*'s documentation]\
         )
         # The SDC displacement maps name, in their sidecars, the written transforms
         # that carried the correction from the DWI frame into ACPC.
-        warp_source, _ = sdc_warp_source(unit, t2w_sdc, gre_in_eddy=eddy_applies_gre(unit))
+        warp_source, _ = sdc_warp_source(unit, gre_in_eddy=eddy_applies_gre(unit))
         names_sdc_transforms = write_derivatives and warp_source is not None
 
         workflow.connect([
@@ -707,11 +812,12 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
                 ('outputnode.t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
                 ('outputnode.t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-                ('outputnode.dwi_sampling_grid', 'inputnode.dwi_sampling_grid'),
                 ('outputnode.t2w_unfatsat', 'inputnode.t2w_unfatsat'),
                 ('outputnode.to_template_affine_transform',
                  'inputnode.to_template_affine_transform'),
                 ('outputnode.acpc_inv_transform', 'inputnode.acpc_inv_transform'),
+                (('outputnode.dwi_sampling_grids', _first_sampling_grid),
+                 'inputnode.dwi_sampling_grid'),
             ]),
             (anat_preproc_wf, dwi_finalize_wf, [
                 ('outputnode.t1_preproc', 'inputnode.t1_preproc'),
@@ -722,7 +828,7 @@ to workflows in *QSIPrep*'s documentation]\
                 ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
                 ('outputnode.t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
                 ('outputnode.t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-                ('outputnode.dwi_sampling_grid', 'inputnode.dwi_sampling_grid'),
+                ('outputnode.dwi_sampling_grids', 'inputnode.dwi_sampling_grids'),
             ]),
             (dwi_preproc_wf, dwi_finalize_wf, [
                 ('outputnode.dwi_files', 'inputnode.dwi_files'),
@@ -795,7 +901,20 @@ to workflows in *QSIPrep*'s documentation]\
                     name=f'ds_{src}_to_{dst}_{output_wfname}',
                     run_without_submitting=True,
                 )
-                workflow.connect([(dwi_preproc_wf, ds_coreg_xfm, [(field, 'in_file')])])
+                if dst == 'ACPC':
+                    workflow.connect([(dwi_preproc_wf, ds_coreg_xfm, [(field, 'in_file')])])
+                else:
+                    # the reverse transform ANTs hands back is the forward .mat (see
+                    # InvertITKAffine): write the true inverse under the from-ACPC name
+                    invert_xfm = pe.Node(
+                        InvertITKAffine(),
+                        name=f'invert_{src}_to_{dst}_{output_wfname}',
+                        run_without_submitting=True,
+                    )
+                    workflow.connect([
+                        (dwi_preproc_wf, invert_xfm, [(field, 'in_file')]),
+                        (invert_xfm, ds_coreg_xfm, [('out_file', 'in_file')]),
+                    ])  # fmt:skip
                 if names_sdc_transforms and dst == 'ACPC':
                     connect_sdc_transform_files(
                         workflow, [ds_coreg_xfm], dwi_finalize_wf, output_wfname
@@ -812,13 +931,12 @@ to workflows in *QSIPrep*'s documentation]\
                 (dwiref_wf, dwi_finalize_wf, [
                     (output_name, 'inputnode.b0_to_dwiref_transforms'),
                     ('outputnode.dwiref_to_t1_affine', 'inputnode.dwiref_to_t1_affine'),
-                    ('outputnode.dwiref_to_t1_warp', 'inputnode.dwiref_to_t1_warp'),
                     ('outputnode.dwiref', 'inputnode.dwiref'),
                     ('outputnode.dwiref_wm_seg', 'inputnode.dwiref_wm_seg'),
                 ]),
             ])  # fmt:skip
 
-            if dwiref_linear:
+            if dwiref_xfm_is_affine:
                 # Per-group hop into the template space. Paired with
                 # from-subject_to-ACPC above, this closes the round trip:
                 # BIDS b=0 -> dwiref -> ACPC -> MNI, and back.
@@ -847,12 +965,12 @@ to workflows in *QSIPrep*'s documentation]\
                         output_wfname,
                     )
 
-        final_merge_wf = (
-            merging_group_workflows.get(concatenation_scheme[output_fname])
+        final_merge_wfs = (
+            merging_group_workflows.get(concatenation_scheme[output_fname], [])
             if merging_distortion_groups
-            else None
+            else []
         )
-        if final_merge_wf is not None:
+        for index, final_merge_wf in enumerate(final_merge_wfs):
             image_name = f'inputnode.{output_wfname}_image'
             bval_name = f'inputnode.{output_wfname}_bval'
             bvec_name = f'inputnode.{output_wfname}_bvec'
@@ -863,13 +981,16 @@ to workflows in *QSIPrep*'s documentation]\
             b0_ref_name = f'inputnode.{output_wfname}_b0_ref'
             cnr_name = f'inputnode.{output_wfname}_cnr'
             carpetplot_name = f'inputnode.{output_wfname}_carpetplot_data'
+            hmc_optimization_name = f'inputnode.{output_wfname}_hmc_optimization_data'
             workflow.connect([
+                # Slot index of each list-valued output: the merge workflow for
+                # resolution i only ever sees images already on grid i.
                 (dwi_finalize_wf, final_merge_wf, [
-                    ('outputnode.bvals_t1', bval_name),
-                    ('outputnode.bvecs_t1', bvec_name),
-                    ('outputnode.dwi_t1', image_name),
-                    ('outputnode.t1_b0_ref', b0_ref_name),
-                    ('outputnode.cnr_map_t1', cnr_name),
+                    (('outputnode.bvals_t1', _select_grid, index), bval_name),
+                    (('outputnode.bvecs_t1', _select_grid, index), bvec_name),
+                    (('outputnode.dwi_t1', _select_grid, index), image_name),
+                    (('outputnode.t1_b0_ref', _select_grid, index), b0_ref_name),
+                    (('outputnode.cnr_map_t1', _select_grid, index), cnr_name),
                 ]),
                 (dwi_preproc_wf, final_merge_wf, [
                     ('outputnode.raw_concatenated', raw_concatenated_image_name),
@@ -877,6 +998,10 @@ to workflows in *QSIPrep*'s documentation]\
                     ('outputnode.original_files', original_bids_name),
                     ('outputnode.carpetplot_data', carpetplot_name),
                     ('outputnode.confounds', confounds_name),
+                    # From the preproc, not the finalize, workflow: finalize only
+                    # forwards hmc_optimization_data when it writes derivatives,
+                    # which under a merge it does not.
+                    ('outputnode.hmc_optimization_data', hmc_optimization_name),
                 ]),
             ])  # fmt:skip
 

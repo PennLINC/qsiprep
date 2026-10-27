@@ -11,13 +11,14 @@ Susceptibility distortion correction is performed with **TORTOISE-native** tools
 where possible:
 
 * reverse-PE (``epi`` / ``rpe_series``) -> DRBUDDI (:func:`init_drbuddi_wf`)
-* GRE / phase fieldmaps -> qsiprep's fieldmap machinery (:func:`init_sdc_wf`)
-* fieldmap-less with a T2w -> TORTOISE ``--epi T2Wreg`` (baked in), else SyN
-* nothing -> HMC only
+* GRE / phase fieldmaps, SyN and unpile -> qsiprep's fieldmap machinery
+  (:func:`init_sdc_wf`)
+* no fieldmap -> SynB0 + TOPUP after DIFFPREP, else HMC only
 
 This mirrors the SDC coverage of :func:`~qsiprep.workflows.dwi.fsl.init_fsl_hmc_wf`.
 """
 
+import numpy as np
 from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
@@ -38,19 +39,20 @@ from ...interfaces.tortoise import (
     TORTOISEConvert,
     generate_diffprep_boilerplate,
 )
+from ...utils.bids import find_bval
 from ...utils.diffprep_config import load_diffprep_config
 from ...utils.gpu import gpu_enabled
-from ..fieldmap.base import init_gre_seed_wf, init_sdc_wf
+from ...utils.sdc import eddy_applies_topup
+from ..fieldmap.base import NO_SDC_DESC, SDC_ANAT_CONNECTIONS, init_gre_seed_wf, init_sdc_wf
 from ..fieldmap.drbuddi import init_drbuddi_wf, seeds_from_gre
-from ..fieldmap.synb0 import init_synb0_wf
+from ..fieldmap.synb0 import connect_post_hmc_synb0_topup
 from .gradwarp import (
     connect_gradwarp_coreg_reference,
     connect_gradwarp_sdc_reference,
     connect_gradwarp_sdc_volumes,
     resolve_gradwarp_plan,
 )
-from .registration import init_structural_to_b0_alignment_wf
-from .util import add_synb0_outputs, init_dwi_reference_wf, tortoise_convert_mem_gb
+from .util import init_dwi_reference_wf, tortoise_convert_mem_gb
 
 # BIDS PhaseEncodingDirection axes already match what TORTOISEProcess expects
 # in its own JSON input -- TORTOISE consumes "i", "j", "k" (with optional "-")
@@ -121,6 +123,28 @@ def _write_pe_json_node(name):
         ),
         name=name,
     )
+
+
+def _diffprep_run_bvals(unit):
+    """Read the b-values of each DIFFPREP run, or ``None`` when a series has no ``.bval``.
+
+    A reverse-PE series is corrected by one DIFFPREP run per phase-encoding
+    polarity, and every other unit by a single run.
+    """
+    if unit.has_bidirectional_dwi:
+        runs = [list(unit.plus_files), list(unit.minus_files)]
+    else:
+        runs = [list(unit.dwi_files)]
+    run_bvals = []
+    for files in runs:
+        bvals = []
+        for path in files:
+            bval_file = find_bval(path)
+            if bval_file is None:
+                return None
+            bvals.append(np.loadtxt(bval_file, ndmin=1))
+        run_bvals.append(np.concatenate(bvals))
+    return run_bvals
 
 
 def _build_rpe_diffprep_stage(
@@ -200,8 +224,8 @@ def init_diffprep_hmc_wf(
     """Build an HMC + SDC workflow that uses TORTOISEV4 DIFFPREP.
 
     HMC + SDC workflow that uses TORTOISEV4 DIFFPREP for motion + eddy
-    correction, and TORTOISE-native SDC (DRBUDDI / T2Wreg) or qsiprep's own
-    fieldmap machinery.
+    correction, and TORTOISE-native SDC (DRBUDDI) or qsiprep's own fieldmap
+    machinery.
 
     Drop-in peer of :func:`~qsiprep.workflows.dwi.fsl.init_fsl_hmc_wf` with an
     identical inputnode/outputnode contract. The TORTOISE binary writes the
@@ -217,8 +241,7 @@ def init_diffprep_hmc_wf(
         Path to the source DWI file (used for report naming).
     t2w_sdc : bool
         Whether a T2w image is available for distortion correction (used for
-        DRBUDDI's multi-modal registration and for the fieldmap-less T2Wreg
-        path).
+        DRBUDDI's multi-modal registration).
     name : str, optional
         Workflow name.
     """
@@ -290,8 +313,7 @@ def init_diffprep_hmc_wf(
     #
     # No TOPUP carve-out applies here: every SDC warp this backend produces is
     # carried out in to_dwi_ref_warps and applied downstream of gradwarp. The
-    # SDC half covers the DRBUDDI and GRE/SyN branches; T2Wreg qualifies under
-    # the rule but cannot be corrected yet (see branch 2).
+    # SDC half covers the DRBUDDI, GRE/SyN/unpile and SynB0 + TOPUP branches.
     gradwarp_plan = resolve_gradwarp_plan(unit)
     has_gradwarp = gradwarp_plan is not None and gradwarp_plan.warp_dim is not None
 
@@ -299,24 +321,11 @@ def init_diffprep_hmc_wf(
     # from the data rather than guessing.
     series_mem_gb = tortoise_convert_mem_gb(list(unit.dwi_files))
 
-    # TORTOISE-native T2Wreg replaces SyN for the fieldmap-less case when a
-    # structural target is available: DIFFPREP runs the ``--epi T2Wreg`` stage
-    # in the same TORTOISEProcess call and bakes the correction into its
-    # output. The plan names the target: 'synb0' (a synthetic distortion-free
-    # b=0 generated from the T1w, preferred when --sdc-anat-reference synb0
-    # produced an estimation) or 't2w' (the subject's T2w, additionally gated
-    # by ``t2w_sdc``).
-    is_fieldmapless = not unit.has_scanner_measured_fieldmap
-    t2wreg_stage = unit.run.stage_with('t2wreg')
-    synb0_target = t2wreg_stage is not None and t2wreg_stage.structural_target == 'synb0'
-    # Classic SyN is fieldmap-less too, but has its own path (init_sdc_wf below).
-    use_t2wreg = is_fieldmapless and not unit.is_nipreps_syn and (synb0_target or bool(t2w_sdc))
-    epi_mode = 'T2Wreg' if use_t2wreg else 'off'
+    # A SynB0 estimation is corrected by TOPUP after DIFFPREP, from the
+    # motion-corrected b=0 and a synthetic b=0 generated from it.
+    use_synb0_topup = unit.run.stage_with('topup') is not None and not eddy_applies_topup(unit)
     # A GRE fieldmap that lists this unit's DWI without being the applied
-    # correction starts the TORTOISE registration that is: T2Wreg when an
-    # anatomical reference was forced over it, DRBUDDI when a reverse-PE pair
-    # was preferred to it.
-    gre_t2wreg_init = use_t2wreg and unit.gre_init_estimation is not None
+    # correction seeds DRBUDDI when a reverse-PE pair was preferred to it.
     gre_drbuddi_init = seeds_from_gre(unit)
 
     # Load any user-supplied DIFFPREP config (or our defaults)
@@ -335,8 +344,8 @@ def init_diffprep_hmc_wf(
 
     # --sloppy uses ONLY --niter 0 plus rigid-only correction. Clearing
     # ``is_human_brain`` would also disable the iterative pass but is not a
-    # speed knob: it changes DIFFPREP's auto-masking and the T2Wreg structural
-    # masking. And --niter 0 alone does not bound runtime on low-b data (the
+    # speed knob: it changes DIFFPREP's auto-masking. And --niter 0 alone does
+    # not bound runtime on low-b data (the
     # always-run first pass fits a 24-parameter quadratic per volume), so the
     # correction mode is dropped to 'motion' as well.
     effective_correction_mode = correction_mode
@@ -344,7 +353,7 @@ def init_diffprep_hmc_wf(
         effective_correction_mode = 'motion'
         sloppy_kwargs = {'niter': 0}
         config.loggers.workflow.warning(
-            '--sloppy: running DIFFPREP rigid-only (-c motion, --niter 0) instead '
+            '--sloppy: running DIFFPREP rigid-only (-c rigid, --niter 0) instead '
             'of %s. Eddy-current correction is DISABLED; this is for smoke-testing '
             'the pipeline, not for real data.',
             correction_mode,
@@ -356,8 +365,11 @@ def init_diffprep_hmc_wf(
     # correction that actually ran, not the one that was asked for.
     workflow.__desc__ = generate_diffprep_boilerplate(
         effective_correction_mode,
-        t2wreg_target=('synb0' if synb0_target else 't2w') if use_t2wreg else None,
-        gradwarped=has_gradwarp,
+        run_bvals=_diffprep_run_bvals(unit),
+        b0_id=diffprep_cfg['b0_id'],
+        is_human_brain=diffprep_cfg['is_human_brain'],
+        niter=sloppy_kwargs.get('niter'),
+        extra_args=diffprep_cfg['extra_args'],
     )
 
     diffprep_kwargs = dict(
@@ -380,7 +392,6 @@ def init_diffprep_hmc_wf(
         is_human_brain=diffprep_cfg['is_human_brain'],
         rot_eddy_center=diffprep_cfg['rot_eddy_center'],
         extra_args=diffprep_cfg['extra_args'],
-        epi_mode=epi_mode,
         use_cuda=diffprep_gpu,
         **sloppy_kwargs,
     )
@@ -408,7 +419,7 @@ def init_diffprep_hmc_wf(
         )
 
         # TORTOISE reads PhaseEncodingDirection from a BIDS-style JSON next to the
-        # .nii. Generate one so DIFFPREP (and T2Wreg) can pick the right phase axis.
+        # .nii. Generate one so DIFFPREP can pick the right phase axis.
         write_pe_json = _write_pe_json_node('write_pe_json')
         write_pe_json.inputs.phase_encoding_direction = pe_dir
 
@@ -430,86 +441,6 @@ def init_diffprep_hmc_wf(
             ]),
             (write_pe_json, diffprep, [('json_file', 'json_file')]),
         ])  # fmt:skip
-
-        # T2Wreg bakes SDC into the DIFFPREP call: feed the structural target.
-        if use_t2wreg and synb0_target:
-            # Generate the synthetic distortion-free b=0 from the T1w and the
-            # raw (distorted) b=0 reference, and register DIFFPREP's EPI stage
-            # to it instead of a T2w -- its contrast matches the b=0 exactly.
-            raw_b0s = pe.Node(
-                ExtractB0s(b0_threshold=config.workflow.b0_threshold), name='raw_b0s'
-            )
-            synb0_b0_ref_wf = init_dwi_reference_wf(
-                gen_report=False,
-                desc='b0_for_synb0',
-                name='synb0_b0_ref_wf',
-                source_file=source_file,
-            )
-            synb0_wf = init_synb0_wf()
-            add_synb0_outputs(workflow, synb0_wf, source_file)
-            workflow.connect([
-                (inputnode, raw_b0s, [
-                    ('dwi_file', 'dwi_series'),
-                    ('bval_file', 'bval_file'),
-                ]),
-                (raw_b0s, synb0_b0_ref_wf, [('b0_average', 'inputnode.b0_template')]),
-                (inputnode, synb0_wf, [
-                    ('t1_preproc', 'inputnode.t1_preproc'),
-                    ('t1_brain', 'inputnode.t1_brain'),
-                    ('t1_seg', 'inputnode.t1_seg'),
-                    ('to_template_affine_transform',
-                     'inputnode.to_template_affine_transform'),
-                    ('acpc_inv_transform', 'inputnode.acpc_inv_transform'),
-                    ('dwi_sampling_grid', 'inputnode.output_grid'),
-                ]),
-                (synb0_b0_ref_wf, synb0_wf, [
-                    ('outputnode.ref_image', 'inputnode.b0_ref'),
-                    ('outputnode.ref_image_brain', 'inputnode.b0_ref_brain'),
-                ]),
-                (synb0_wf, diffprep, [('outputnode.synthetic_b0', 'structural_image')]),
-            ])  # fmt:skip
-            pre_hmc_b0s = raw_b0s
-        elif use_t2wreg:
-            # EPIREG's internal rigid registration is center-of-mass
-            # initialized, so hand it a T2w already rotated into the b=0
-            # frame (antsAI rotation search against the raw b=0 average).
-            t2wreg_b0s = pe.Node(
-                ExtractB0s(b0_threshold=config.workflow.b0_threshold), name='t2wreg_b0s'
-            )
-            t2w_to_b0_wf = init_structural_to_b0_alignment_wf(name='t2w_to_b0_wf')
-            workflow.connect([
-                (inputnode, t2wreg_b0s, [
-                    ('dwi_file', 'dwi_series'),
-                    ('bval_file', 'bval_file'),
-                ]),
-                (t2wreg_b0s, t2w_to_b0_wf, [('b0_average', 'inputnode.b0_ref')]),
-                (inputnode, t2w_to_b0_wf, [('t2w_unfatsat', 'inputnode.structural_image')]),
-                (t2w_to_b0_wf, diffprep, [
-                    ('outputnode.structural_aligned', 'structural_image'),
-                ]),
-            ])  # fmt:skip
-            pre_hmc_b0s = t2wreg_b0s
-
-        if gre_t2wreg_init:
-            # The seed is estimated on the pre-HMC b=0 average (DIFFPREP has not
-            # run yet) and handed to DIFFPREP's EPI stage.
-            diffprep.inputs.keep_initial_transform_fixed = True
-            gre_seed_wf = init_gre_seed_wf(unit, has_gradwarp, source_file, use='t2wreg')
-            workflow.connect([
-                (pre_hmc_b0s, gre_seed_wf, [('b0_average', 'inputnode.b0_template')]),
-                (inputnode, gre_seed_wf, [
-                    ('t1_brain', 'inputnode.t1_brain'),
-                    ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-                    ('gradwarp_field', 'inputnode.gradwarp_field'),
-                ]),
-                (gre_seed_wf, diffprep, [('outputnode.out_warp', 'epireg_initial_field')]),
-            ])  # fmt:skip
-
-        if use_t2wreg and has_gradwarp:
-            # The EPI stage registers a gradwarp-corrected b=0 (TORTOISE with the EPIREG
-            # gradwarp fix), so its warp lives in the corrected frame the composed chain
-            # applies it in. DIFFPREP's motion/eddy stage ignores the field.
-            workflow.connect([(inputnode, diffprep, [('gradwarp_field', 'grad_nonlin')])])
 
         corrected_node = diffprep
 
@@ -605,7 +536,7 @@ def init_diffprep_hmc_wf(
         (enhance_pre_sdc, outputnode, [('enhanced_file', 'pre_sdc_template')]),
 
         # b0 reference for coregistration (b0_template is wired below: on the
-        # T2Wreg path it has to be the SDC-corrected b=0, not the raw one)
+        # SynB0 + TOPUP path it has to be the SDC-corrected b=0, not the raw one)
         (inputnode, b0_ref_for_coreg, [
             ('t1_brain', 'inputnode.t1_brain'),
             ('t1_mask', 'inputnode.t1_mask'),
@@ -633,11 +564,10 @@ def init_diffprep_hmc_wf(
     ])  # fmt:skip
 
     # The b=0 that coregistration sees must have been through every transform
-    # that precedes coregistration in the composed chain. On every other path
-    # DIFFPREP's output already has been through SDC (there is no in-TORTOISE
-    # SDC, so the correction is a downstream warp) -- but on the T2Wreg path the
-    # EPI stage ran and we deliberately took its *pre*-EPI image, so the field is
-    # applied here, together with gradwarp when there is one.
+    # that precedes coregistration in the composed chain. On the SynB0 + TOPUP
+    # path the field is estimated from DIFFPREP's output, so it is applied here,
+    # together with gradwarp when there is one; the other branches correct the
+    # reference inside init_sdc_wf or DRBUDDI.
     #
     # Both go into one resampling, in chain order (gradwarp, then SDC). ANTs
     # applies a transform list last-first -- see ComposeTransforms, which
@@ -645,7 +575,15 @@ def init_diffprep_hmc_wf(
     # warp is listed first and the gradwarp field second. Correcting here rather
     # than downstream of b0_ref_for_coreg keeps b0_template_mask, which that
     # workflow also produces, in the same geometry as the reference itself.
-    if use_t2wreg:
+    sdc_warp_port = None
+    if use_synb0_topup:
+        synb0_topup_wf = connect_post_hmc_synb0_topup(
+            workflow, unit, inputnode, (extract_b0s, 'b0_average'), source_file, has_gradwarp
+        )
+        sdc_warp_port = (synb0_topup_wf, 'outputnode.out_warp')
+
+    if sdc_warp_port is not None:
+        sdc_warp_node, sdc_warp_field = sdc_warp_port
         apply_sdc_to_b0 = pe.Node(
             ants.ApplyTransforms(interpolation='LanczosWindowedSinc', float=True),
             name='apply_sdc_to_b0',
@@ -661,14 +599,14 @@ def init_diffprep_hmc_wf(
         if has_gradwarp:
             sdc_then_gradwarp = pe.Node(niu.Merge(2), name='sdc_then_gradwarp')
             workflow.connect([
-                (corrected_node, sdc_then_gradwarp, [('sdc_warp', 'in1')]),
+                (sdc_warp_node, sdc_then_gradwarp, [(sdc_warp_field, 'in1')]),
                 (inputnode, sdc_then_gradwarp, [('gradwarp_field', 'in2')]),
                 (sdc_then_gradwarp, apply_sdc_to_b0, [('out', 'transforms')]),
             ])  # fmt:skip
         else:
             workflow.connect([
-                (corrected_node, apply_sdc_to_b0, [
-                    (('sdc_warp', _as_transform_list), 'transforms'),
+                (sdc_warp_node, apply_sdc_to_b0, [
+                    ((sdc_warp_field, _as_transform_list), 'transforms'),
                 ]),
             ])  # fmt:skip
     else:
@@ -753,52 +691,28 @@ def init_diffprep_hmc_wf(
             ])  # fmt:skip
         return workflow
 
-    # 2. Fieldmap-less with a T2w -> TORTOISE T2Wreg. The EPI stage's displacement
-    #    field is carried out as a warp (see DIFFPREP._list_outputs) rather than
-    #    baked in, so it composes with HMC and coregistration and the data is
-    #    resampled once -- the same contract as the DRBUDDI branch above. This
-    #    keeps DIFFPREP's output in the native grid and leaves coregistration and
-    #    ACPC alignment to qsiprep instead of TORTOISE's StructuralAlignment.
-    #
-    #    By the gradwarp rule this warp's estimation inputs must be gradwarp-corrected,
-    #    since the warp is applied downstream of gradwarp: the gradwarp field is handed
-    #    to DIFFPREP (--grad_nonlin), whose EPI stage resamples its b=0 through it
-    #    before registering. Head motion correction does not use the field.
-    if use_t2wreg:
-        if gre_t2wreg_init:
-            outputnode.inputs.sdc_method = (
-                'T2Wreg (SynB0, GRE-initialized)' if synb0_target else 'T2Wreg (GRE-initialized)'
-            )
-        else:
-            outputnode.inputs.sdc_method = 'T2Wreg (SynB0)' if synb0_target else 'T2Wreg'
-        # The EPI stage's field is carried as a warp (to_dwi_ref_warps) rather
-        # than baked in -- see the module comment above -- so it reaches
-        # ComposeJacobianWeights externally, like the DRBUDDI branch
-        # (recorded by jacobian_provenance.jacobian_provenance_for, not here).
-        # b0_ref_for_coreg is already gradwarp- and SDC-corrected on this branch
-        # (see apply_sdc_to_b0 above), so it needs no further correction here.
+    # 2. SynB0 -> TOPUP after DIFFPREP, the same contract as DRBUDDI: the warp is
+    #    carried out (to_dwi_ref_warps) rather than baked in, so it composes with
+    #    HMC and coregistration and the data is resampled once; b0_ref_for_coreg is
+    #    already corrected (apply_sdc_to_b0 above).
+    if use_synb0_topup:
+        outputnode.inputs.sdc_method = 'TOPUP (SynB0)'
         workflow.connect([
             (b0_ref_for_coreg, outputnode, [('outputnode.ref_image', 'b0_template')]),
-        ])  # fmt:skip
-        workflow.connect([
-            (corrected_node, outputnode, [
-                (('sdc_warp', _as_transform_list), 'to_dwi_ref_warps'),
-                ('b0_up_image', 'b0_up_image'),
-                ('b0_up_corrected_image', 'b0_up_corrected_image'),
-                ('structural_image', 't2w_image'),
+            (synb0_topup_wf, outputnode, [
+                (('outputnode.out_warp', _as_transform_list), 'to_dwi_ref_warps'),
             ]),
         ])  # fmt:skip
         return workflow
 
-    # 3. GRE / phase fieldmaps, or classic fieldmap-less SyN -> qsiprep's
-    #    init_sdc_wf. The warp is applied downstream (to_dwi_ref_warps),
-    #    decoupled from HMC.
-    if unit.is_gre or unit.is_nipreps_syn:
+    # 3. GRE / phase fieldmaps, or the fieldmap-less SyN and unpile corrections
+    #    -> qsiprep's init_sdc_wf. The warp is applied downstream
+    #    (to_dwi_ref_warps), decoupled from HMC.
+    if unit.is_gre or unit.is_nipreps_syn or unit.is_unpile:
         # This warp is applied downstream (to_dwi_ref_warps), decoupled from
         # HMC, so it reaches ComposeJacobianWeights externally (recorded by
         # jacobian_provenance.jacobian_provenance_for, not here).
-        b0_sdc_wf = init_sdc_wf(unit, gradwarp=has_gradwarp)
-        b0_sdc_wf.inputs.inputnode.template = config.workflow.anatomical_template
+        b0_sdc_wf = init_sdc_wf(unit, gradwarp=has_gradwarp, source_file=source_file)
 
         if has_gradwarp:
             connect_gradwarp_sdc_reference(
@@ -818,10 +732,7 @@ def init_diffprep_hmc_wf(
             ])  # fmt:skip
 
         workflow.connect([
-            (inputnode, b0_sdc_wf, [
-                ('t1_brain', 'inputnode.t1_brain'),
-                ('t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-            ]),
+            (inputnode, b0_sdc_wf, SDC_ANAT_CONNECTIONS),
             (b0_sdc_wf, outputnode, [
                 ('outputnode.method', 'sdc_method'),
                 ('outputnode.b0_ref', 'b0_template'),
@@ -830,8 +741,9 @@ def init_diffprep_hmc_wf(
         ])  # fmt:skip
         return workflow
 
-    # 4. No fieldmap, no T2w -> HMC only.
+    # 4. No fieldmap -> HMC only.
     outputnode.inputs.sdc_method = 'None'
+    workflow.__postdesc__ = NO_SDC_DESC
     if has_gradwarp:
         connect_gradwarp_coreg_reference(
             workflow, inputnode, b0_ref_for_coreg, 'outputnode.ref_image', outputnode

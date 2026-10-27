@@ -53,7 +53,7 @@ orientations (three Euler angles at 20 degree spacing, up to 81 degrees per
 axis) on 4 mm resamples of the two images, refines each briefly, and hands
 the best one to ``antsRegistration`` as the starting transform. The same
 search initializes the T2w-to-T1w registration in the anatomical workflow
-and the alignment of a T2w into the b=0 frame before DRBUDDI and T2Wreg.
+and the alignment of a T2w into the b=0 frame before DRBUDDI and unpile.
 
 With ``--anat-modality none`` the reference is registered to the template
 instead, with a similarity transform in the rotation search since the scale
@@ -82,8 +82,11 @@ sessions; no rotation search is run at this step. That template is registered to
 anatomical once, and every group inherits the result, so preprocessed data
 from different groups (for example different sessions) are directly
 comparable. The agreement between each group's reference and the template
-is written as a QC table and shown in the report. Which transforms are
-written in each case is listed in :ref:`transforms`.
+is written as a QC table and shown in the report. With a single distortion
+group no template is built: that group's reference is the subject reference,
+reached by an identity transform, and it is registered to the anatomical in
+the same way. Which transforms are written in each case is listed in
+:ref:`transforms`.
 
 .. workflow::
     :graph2use: orig
@@ -106,7 +109,8 @@ Resampling
 Every transform that applies to a volume is composed into one: head motion
 (when carried rather than applied by the backend), gradient nonlinearity,
 susceptibility distortion, and coregistration. Each volume is resampled once
-with that transform onto the ``ACPC`` grid at ``--output-resolution``, with
+with that transform onto the ``ACPC`` grid of each ``acpc`` resolution in
+``--output-spaces``, with
 Lanczos windowed sinc interpolation :footcite:p:`lanczos`, or linear
 interpolation when upsampling by more than 10%. The Jacobian weights
 (:ref:`jacobian_methods`) are applied at the same step.
@@ -131,10 +135,10 @@ two states are still labeled as in the denoising figure.
     :graph2use: orig
     :simple_form: yes
 
-    from qsiprep_docs import AP
+    from qsiprep_docs import AP, OUTPUT_SPACES
     from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
 
-    wf = init_dwi_trans_wf(source_file=AP, mem_gb=3)
+    wf = init_dwi_trans_wf(source_file=AP, mem_gb=3, resolution=OUTPUT_SPACES[0].resolution)
 
 
 .. _distortion_group_merge:

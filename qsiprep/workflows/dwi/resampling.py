@@ -35,15 +35,14 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 def init_dwi_trans_wf(
     source_file,
     mem_gb,
+    resolution,
     template='ACPC',
     name='dwi_trans_wf',
     use_compression=True,
     write_local_bvecs=False,
-    write_reports=True,
     concatenate=True,
     doing_topup=False,
     pe_axis=None,
-    weight_fieldwarps=True,
     sdc_warp_source=None,
     sdc_pe_dir=None,
     sdc_readout_time=None,
@@ -60,7 +59,8 @@ def init_dwi_trans_wf(
         from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
         wf = init_dwi_trans_wf(source_file='sub-1_dwi.nii.gz',
                                template='MNI152NLin2009cAsym',
-                               output_resolution=1.2,
+                               resolution=Resolution(kind='mm', label='1p2mm',
+                                                      zooms=(1.2, 1.2, 1.2)),
                                mem_gb=3,
                                omp_nthreads=1)
 
@@ -70,6 +70,8 @@ def init_dwi_trans_wf(
         Source DWI file used to name the resampled b=0 reference reports.
     mem_gb : float
         Size of DWI file in GB
+    resolution : :class:`~qsiprep.utils.spaces.Resolution`
+        The requested output resolution, used to describe the output voxel size
     template : str, optional
         Name of template targeted by ``template`` output space
     name : str, optional
@@ -78,8 +80,6 @@ def init_dwi_trans_wf(
         Save registered DWI series as ``.nii.gz``
     write_local_bvecs : bool, optional
         if true, local bvec niftis are written
-    write_reports : bool, optional
-        Whether the resampled b=0 reference workflow writes its mask report.
     concatenate : bool, optional
         Whether to merge the resampled volumes into a single 4D series (and
         compute the resampled b=0 reference and QC). If False, the list of
@@ -90,9 +90,6 @@ def init_dwi_trans_wf(
     pe_axis : int or None, optional
         Voxel axis of the phase-encoding direction, used to compute Jacobian
         weights whenever a displacement field is supplied.
-    weight_fieldwarps : bool, optional
-        Whether the susceptibility displacement field is included in the
-        Jacobian weights. False leaves it unmodulated.
     sdc_warp_source : str or None, optional
         Where the SDC displacement field written on the output grid comes from:
         ``'fieldwarp'``, ``'topup'``, ``'gre_in_eddy'`` or ``'topup+drbuddi'``
@@ -162,11 +159,38 @@ def init_dwi_trans_wf(
         Includes rotations introduced by warpingdenoisin
     """
     workflow = Workflow(name=name)
-    output_resolution = config.workflow.output_resolution
-    workflow.__desc__ = """\
-The DWI time-series were resampled to {tpl},
-generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels.
-""".format(tpl=template, vox=str(output_resolution).rstrip('0').rstrip('.'))
+    space = 'AC-PC' if template == 'ACPC' else template
+    if resolution.kind == 'native':
+        voxel = f'the {resolution.strategy}imum native voxel size'
+    else:
+        voxel = f'{resolution.label.replace("p", ".").replace("mm", "")} mm isotropic resolution'
+
+    # ChooseInterpolator picks the method from the data at run time
+    interpolation = (
+        'linear interpolation'
+        if config.execution.sloppy
+        else 'windowed-sinc (Lanczos) interpolation, or linear interpolation where the '
+        'output voxels were more than 10% smaller than the input voxels'
+    )
+    # ComposeJacobianWeights covers gradwarp and SDC (and DIFFPREP's eddy-current
+    # Jacobian), or DRBUDDI's LSR ratios instead; HMC and coregistration never.
+    if 'jacobian' in (config.workflow.ignore or []):
+        jacobian = 'No Jacobian modulation was applied in this step. '
+    else:
+        jacobian = (
+            'Any gradient nonlinearity, susceptibility distortion or (with DIFFPREP) '
+            'eddy-current correction applied in this step was Jacobian-modulated (after '
+            "DRBUDDI, *TORTOISE*'s intensity-correction maps were applied instead); head "
+            'motion and coregistration were not modulated. '
+        )
+    workflow.__desc__ = (
+        f'\n\nThe DWI series were resampled into {space} space at {voxel} with '
+        f'{interpolation}. The transforms not already applied were combined '
+        'so that this was a single resampling step. '
+        f'{jacobian}'
+        'The *b*-vectors were reoriented with the '
+        "affine part of each volume's head motion and coregistration transforms. "
+    )
 
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -175,7 +199,6 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
                 't1_mask',
                 't1_brain',
                 'b0_to_dwiref_transforms',
-                'dwiref_to_t1_warp',
                 'dwiref_to_t1_affine',
                 't1_2_mni_forward_transform',
                 'name_source',
@@ -231,10 +254,17 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
         name='outputnode',
     )
 
-    # get composite warps and composed affines for warping and rotating
-    compose_transforms = pe.Node(ComposeTransforms(), name='compose_transforms')
+    # get composite warps and composed affines for warping and rotating.
+    # One antsApplyTransforms call per volume writes that volume's composite
+    # warp; num_threads runs them in the interface's ThreadPoolExecutor, paired
+    # with n_procs as for scale_dwis below.
+    compose_transforms = pe.Node(
+        ComposeTransforms(num_threads=config.nipype.omp_nthreads),
+        name='compose_transforms',
+        n_procs=config.nipype.omp_nthreads,
+    )
     get_interpolation = pe.Node(
-        ChooseInterpolator(sloppy=config.execution.sloppy, output_resolution=output_resolution),
+        ChooseInterpolator(sloppy=config.execution.sloppy),
         name='get_interpolation',
     )
     dwi_transform = pe.MapNode(
@@ -274,10 +304,11 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             ('b0_to_dwiref_transforms', 'b0_to_dwiref_transforms'),
             (('dwiref_to_t1_affine', _get_first),
              'dwiref_to_t1_affine'),
-            ('dwiref_to_t1_warp', 'dwiref_to_t1_warp'),
         ]),
-        # TODO: check that the cnr_tfm is also appropriately warped for shoreline
-        (compose_transforms, cnr_tfm, [(('out_warps', _get_first), 'transforms')]),
+        # The CNR map is computed from motion-corrected volumes (SHORELine) or is
+        # already in eddy's corrected frame, so volume 0's hmc stage must not be
+        # applied to it again.
+        (compose_transforms, cnr_tfm, [('hmc_corrected_transforms', 'transforms')]),
         (inputnode, rotate_gradients, [
             ('bvec_files', 'bvec_files'),
             ('bval_files', 'bval_files'),
@@ -300,7 +331,10 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             ('dwi_files', 'input_image'),
             ('output_grid', 'reference_image'),
         ]),
-        (inputnode, get_interpolation, [('dwi_files', 'dwi_files')]),
+        (inputnode, get_interpolation, [
+            ('dwi_files', 'dwi_files'),
+            ('output_grid', 'output_grid'),
+        ]),
         (get_interpolation, dwi_transform, [('interpolation_method', 'interpolation')]),
         (dwi_transform, scale_dwis, [('output_image', 'dwi_files')]),
         (inputnode, scale_dwis, [
@@ -308,7 +342,6 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             ('itk_b0_to_t1', 'hmcsdc_dwi_ref_to_t1w_affine'),
             ('b0_to_dwiref_transforms', 'b0_to_dwiref_transforms'),
             (('dwiref_to_t1_affine', _get_first), 'dwiref_to_t1_affine'),
-            ('dwiref_to_t1_warp', 'dwiref_to_t1_warp'),
         ]),
     ])  # fmt:skip
 
@@ -325,7 +358,6 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             ComposeJacobianWeights(
                 num_threads=config.nipype.omp_nthreads,
                 pe_axis=pe_axis,
-                weight_fieldwarps=weight_fieldwarps,
             ),
             name='compose_jacobian',
             n_procs=config.nipype.omp_nthreads,
@@ -375,7 +407,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
 
         def _first_sdc_warp_node():
             # Volume 0's susceptibility warp, as a node rather than an inline
-            # connection function: the DIFFPREP T2Wreg path already reaches
+            # connection function: the DIFFPREP SynB0 + TOPUP path already reaches
             # ``fieldwarps`` through one (``_as_transform_list`` in diffprep.py),
             # and nipype refuses two inline functions in series across an
             # IdentityInterface. Built only on the branches that read a
@@ -397,7 +429,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
         ])  # fmt:skip
 
         if sdc_warp_source == 'fieldwarp':
-            # DRBUDDI, GRE, SyN and T2Wreg all write the susceptibility warp
+            # DRBUDDI, GRE, SyN and unpile all write the susceptibility warp
             # directly (fieldwarps); conjugate volume 0's onto the output grid.
             first_sdc_warp = _first_sdc_warp_node()
             workflow.connect([
@@ -452,7 +484,9 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
     merge = pe.Node(Merge(compress=use_compression), name='merge', mem_gb=mem_gb * 3)
     extract_b0_series = pe.Node(ExtractB0s(), name='extract_b0_series')
     final_b0_ref = init_dwi_reference_wf(
-        gen_report=write_reports,
+        # The denoising workflow writes this reportlet from the final image; a
+        # second copy here has always raced it for the same filename.
+        gen_report=False,
         desc='resampled',
         name='final_b0_ref',
         source_file=source_file,
@@ -483,6 +517,7 @@ generating a *preprocessed DWI run in {tpl} space* with {vox}mm isotropic voxels
             ('bvecs', 'inputnode.bvec_file'),
         ]),
         (merge, calculate_qc, [('out_file', 'inputnode.dwi_file')]),
+        (final_b0_ref, calculate_qc, [('outputnode.dwi_mask', 'inputnode.mask_file')]),
         (calculate_qc, outputnode, [('outputnode.qc_summary', 'resampled_qc')]),
     ])  # fmt:skip
     # if write_local_bvecs:

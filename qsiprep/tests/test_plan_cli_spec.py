@@ -56,25 +56,35 @@ def test_planned_options_are_the_only_gaps():
 def _parse_minimal(tmp_path, *extra):
     bids_dir = tmp_path / 'bids'
     bids_dir.mkdir(exist_ok=True)
-    base = [str(bids_dir), str(tmp_path / 'out'), 'participant', '--output-resolution', '2']
+    base = [str(bids_dir), str(tmp_path / 'out'), 'participant', '--output-spaces', 'acpc:res-2mm']
     return _build_parser().parse_args([*base, *extra])
 
 
 def test_sdc_anat_reference_flag_reaches_the_grouping_policy(tmp_path):
-    assert _parse_minimal(tmp_path).sdc_anat_reference == 'none'
-    namespace = _parse_minimal(tmp_path, '--sdc-anat-reference', 'synb0')
-    assert namespace.sdc_anat_reference == 'synb0'
+    policy = cli_spec.policy_from_namespace(_parse_minimal(tmp_path))
+    assert (policy.fieldmapless_method, policy.sdc_anat_reference) == ('topup', 'none')
+    namespace = _parse_minimal(
+        tmp_path, '--sdc-fieldmapless-method', 'syn', '--sdc-anat-reference', 'invt1w'
+    )
     policy = cli_spec.policy_from_namespace(namespace)
-    assert policy.sdc_anat_reference == 'synb0'
+    assert (policy.fieldmapless_method, policy.sdc_anat_reference) == ('syn', 'invt1w')
     assert policy.force_sdc_anat_reference is False
 
 
 def test_force_sdc_anat_reference_reaches_the_grouping_policy(tmp_path):
     namespace = _parse_minimal(
-        tmp_path, '--sdc-anat-reference', 't2w', '--force', 'sdc-anat-reference'
+        tmp_path,
+        '--hmc-method',
+        'tortoise',
+        '--sdc-fieldmapless-method',
+        'unpile',
+        '--sdc-anat-reference',
+        't2w',
+        '--force',
+        'sdc-anat-reference',
     )
     policy = cli_spec.policy_from_namespace(namespace)
-    assert policy.sdc_anat_reference == 't2w'
+    assert (policy.fieldmapless_method, policy.sdc_anat_reference) == ('unpile', 't2w')
     assert policy.force_sdc_anat_reference is True
 
 
@@ -99,9 +109,8 @@ def test_shared_helpers_read_a_qsiprep_namespace():
 
 
 def test_config_selection_bridge_resolves_without_error():
-    # Regression: the config-to-selection bridge used to pass use_syn=/
-    # force_t2wreg= kwargs that qsiplan's selection_for_config dropped, raising
-    # TypeError. It now resolves cleanly to a MethodSelection.
+    # The config-to-selection bridge must only pass keywords that qsiplan's
+    # selection_for_config accepts.
     from qsiprep import config
     from qsiprep.utils.plan import method_selection_from_config
 
@@ -147,7 +156,7 @@ def test_complex_dwi_reaches_the_plan_as_a_magnitude_companion(tmp_path):
     parts (the ``part`` pre-filter is retired), qsiplan indexes only the
     magnitude and carries the phase as its companion, and the unit the workflow
     consumes exposes it through ``dwi_phase_files`` -- keyed by the magnitude
-    path, the way ``init_merge_and_denoise_wf`` looks it up -- with no phase
+    path, the way ``init_series_denoise_wfs`` looks it up -- with no phase
     leaking into any series list or sidecar override.
     """
     import os.path as op
@@ -201,6 +210,115 @@ def test_complex_dwi_reaches_the_plan_as_a_magnitude_companion(tmp_path):
     series = (*unit.dwi_files, *unit.plus_files, *unit.minus_files)
     assert not [path for path in series if 'part-phase' in path]
     assert not [path for path in unit.sidecar_overrides() if 'part-phase' in path]
+
+
+def _plan_test_dataset(tmp_path, skeleton, gradients):
+    """Group and plan a skeleton dataset the way the subject workflow does."""
+    from bids.layout import BIDSLayout
+    from qsiplan import build_dwi_grouping
+    from qsiplan.adapters import plan_concatenation_scheme, plan_preproc_units
+    from qsiplan.methods import selection_for_config
+    from qsiplan.plan import compile_plan
+
+    from qsiprep.tests.utils import build_test_dataset
+    from qsiprep.utils.bids import collect_data
+
+    root = build_test_dataset(tmp_path / 'ds', skeleton, extra_files=gradients, n_volumes=2)
+    layout = BIDSLayout(root, validate=False)
+    subject_data = collect_data(layout, '01', bids_validate=False)[0]
+    grouping = build_dwi_grouping(layout, subject_data, strict=False)
+    plan = compile_plan(grouping, selection_for_config('eddy', 'topup'))
+    return grouping, plan_preproc_units(grouping, plan), plan_concatenation_scheme(plan)
+
+
+def test_series_without_a_multipartid_is_its_own_preproc_unit(tmp_path):
+    """Test that no concatenation is guessed once any series has a MultipartID.
+
+    run-3 and run-4 share a phase encoding direction, which is all it takes to
+    pool two series in a subject with no MultipartID. Here run-1 and run-2
+    carry one, so the curator chose what to combine: run-3 and run-4 must each
+    reach the workflow as a unit, and an output, of their own.
+    """
+    import os.path as op
+
+    from qsiprep.tests.utils import SHARED_DWI_GRADIENTS
+
+    encoding = {'PhaseEncodingDirection': 'j-', 'TotalReadoutTime': 0.05}
+    combined = {**encoding, 'MultipartID': 'combined'}
+    skeleton = {
+        '01': [
+            {
+                'dwi': [
+                    {'run': '1', 'suffix': 'dwi', 'metadata': combined},
+                    {'run': '2', 'suffix': 'dwi', 'metadata': combined},
+                    {'run': '3', 'suffix': 'dwi', 'metadata': encoding},
+                    {'run': '4', 'suffix': 'dwi', 'metadata': encoding},
+                ],
+            },
+        ],
+    }
+    grouping, units, scheme = _plan_test_dataset(tmp_path, skeleton, SHARED_DWI_GRADIENTS)
+
+    members = sorted(sorted(op.basename(path) for path in unit.dwi_files) for unit in units)
+    assert members == [
+        ['sub-01_run-1_dwi.nii.gz', 'sub-01_run-2_dwi.nii.gz'],
+        ['sub-01_run-3_dwi.nii.gz'],
+        ['sub-01_run-4_dwi.nii.gz'],
+    ]
+    # Three units, three outputs: nothing is merged after correction either.
+    assert len(set(scheme.values())) == 3
+    assert 'partial-multipart' in {issue.code for issue in grouping.warnings}
+    assert not grouping.errors
+
+
+def test_a_fieldmap_link_stops_pairing_in_every_session(tmp_path):
+    """Test that reverse-PE pairing is not inferred anywhere in a linked subject.
+
+    ses-1's pair is linked with B0FieldIdentifier/B0FieldSource; ses-2 carries
+    nothing. The link speaks for the whole subject, so the ses-2 series reach
+    the workflow without a fieldmap instead of as an inferred pair.
+    """
+    import os.path as op
+
+    ap = {'PhaseEncodingDirection': 'j-', 'TotalReadoutTime': 0.05}
+    pa = {'PhaseEncodingDirection': 'j', 'TotalReadoutTime': 0.05}
+    linked = {'B0FieldIdentifier': 'pepolar01', 'B0FieldSource': 'pepolar01'}
+    skeleton = {
+        '01': [
+            {
+                'session': '1',
+                'dwi': [
+                    {'dir': 'AP', 'suffix': 'dwi', 'metadata': {**ap, **linked}},
+                    {'dir': 'PA', 'suffix': 'dwi', 'metadata': {**pa, **linked}},
+                ],
+            },
+            {
+                'session': '2',
+                'dwi': [
+                    {'dir': 'AP', 'suffix': 'dwi', 'metadata': ap},
+                    {'dir': 'PA', 'suffix': 'dwi', 'metadata': pa},
+                ],
+            },
+        ],
+    }
+    gradients = {
+        'sub-01/sub-01_dwi.bval': '0 1000\n',
+        'sub-01/sub-01_dwi.bvec': '1 0\n0 1\n0 0\n',
+    }
+    grouping, units, _ = _plan_test_dataset(tmp_path, skeleton, gradients)
+
+    corrected_by = {
+        op.basename(path): unit.estimation.b0field_id if unit.estimation else None
+        for unit in units
+        for path in unit.dwi_files
+    }
+    assert corrected_by == {
+        'sub-01_ses-1_dir-AP_dwi.nii.gz': 'pepolar01',
+        'sub-01_ses-1_dir-PA_dwi.nii.gz': 'pepolar01',
+        'sub-01_ses-2_dir-AP_dwi.nii.gz': None,
+        'sub-01_ses-2_dir-PA_dwi.nii.gz': None,
+    }
+    assert 'reverse-pe-not-inferred' in {issue.code for issue in grouping.warnings}
 
 
 @pytest.mark.parametrize('model', ['3dshore', 'tensor', 'none'])

@@ -114,7 +114,7 @@ sections:
   ordering: session,task,acquisition,ceagent,reconstruction,direction,run,echo
   reportlets:
   - bids: {datatype: figures, desc: summary, suffix: dwi}
-  # Written by SeriesQC only when DSI Studio could not compute a QC stage.
+  # Written by SeriesQC only when DSI Studio or cs_dmri could not compute a QC stage.
   - bids: {datatype: figures, desc: qcwarnings, suffix: dwi}
     subtitle: Quality control warnings
   # XXX: Appears to have no producer. Check.
@@ -236,18 +236,6 @@ sections:
       where signal piles up or drops out.
     static: false
     subtitle: DRBUDDI refinement of the TOPUP field
-
-  - bids: {datatype: figures, desc: sdcT2w, suffix: dwi}
-    caption: |
-      Results of performing susceptibility distortion correction (SDC) using
-      TORTOISE's T2Wreg, which registers the <em>b</em>=0 image to the T2-weighted
-      structural along the phase-encoding direction. The "distorted" image is the
-      motion- and eddy-corrected <em>b</em>=0 before SDC; the "corrected" image is
-      the one actually used for alignment to the anatomical reference. Check that
-      the corrected image agrees with the anatomical contours, particularly in
-      frontal and temporal regions where susceptibility distortion is largest.
-    static: false
-    subtitle: Susceptibility distortion correction (T2Wreg)
 
   - bids: {datatype: figures, desc: sdcdrbuddi, suffix: dwi}
     caption: |

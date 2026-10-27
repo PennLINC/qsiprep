@@ -250,3 +250,79 @@ class CreateGradientNonlinearityBMatrix(CommandLine):
             'grad_dev': stem + self._graddev_suffix(),
             'gradwarp_field': stem + '_gradwarp_field.nii',
         }
+
+
+def _mask_on_grid(mask_file, shape, affine):
+    """Return a boolean brain mask resampled (nearest neighbor) onto a 3D grid."""
+    from nibabel.processing import resample_from_to
+
+    mask = nb.load(mask_file)
+    if mask.shape[:3] != tuple(shape) or not np.allclose(mask.affine, affine, atol=1e-3):
+        mask = resample_from_to(mask, (tuple(shape), affine), order=0)
+    return np.asanyarray(mask.dataobj) > 0
+
+
+def graddev_rotation_degrees(tensors):
+    """Return the rotation angle, in degrees, of each 3x3 gradient deviation tensor.
+
+    The rotation is the orthogonal factor of the polar decomposition, the part of
+    the tensor left after its scaling and shear are removed. Its angle is the same
+    for a tensor and its transpose, so it does not depend on which side the tensor
+    multiplies the gradient from.
+    """
+    u, _, vt = np.linalg.svd(tensors)
+    rotations = u @ vt
+    # An improper orthogonal factor is a reflection; flip its last axis.
+    improper = np.linalg.det(rotations) < 0
+    u[improper, :, -1] *= -1
+    rotations[improper] = u[improper] @ vt[improper]
+    cos_angle = (np.trace(rotations, axis1=-2, axis2=-1) - 1) / 2
+    return np.degrees(np.arccos(np.clip(cos_angle, -1.0, 1.0)))
+
+
+def _summary(prefix, values):
+    if values.size == 0:
+        return {}
+    return {
+        f'{prefix}_median': [float(np.median(values))],
+        f'{prefix}_p95': [float(np.percentile(values, 95))],
+        f'{prefix}_maximum': [float(np.max(values))],
+    }
+
+
+def gradient_nonlinearity_qc(grad_dev, grad_dev_mask, gradwarp_field=None, gradwarp_mask=None):
+    """Summarize gradient nonlinearity inside the brain, as ``image_qc.tsv`` columns.
+
+    Parameters
+    ----------
+    grad_dev : str
+        The 9-component gradient deviation tensor map.
+    grad_dev_mask : str
+        A brain mask in the space of ``grad_dev``.
+    gradwarp_field : str or None, optional
+        The applied gradwarp displacement field (ITK, mm).
+    gradwarp_mask : str or None, optional
+        A brain mask in the space of ``gradwarp_field``.
+
+    Returns
+    -------
+    dict
+        The median, 95th percentile and maximum of the applied displacement length
+        (``gradwarp_displacement_mm_*``, only with a field) and of the rotation angle
+        of the deviation tensor (``graddev_rotation_deg_*``).
+    """
+    values = {}
+    if gradwarp_field and gradwarp_mask:
+        field_img = nb.load(gradwarp_field)
+        vectors = np.asanyarray(field_img.dataobj, dtype=np.float64)
+        vectors = vectors.reshape(field_img.shape[:3] + (-1,))
+        mask = _mask_on_grid(gradwarp_mask, field_img.shape[:3], field_img.affine)
+        values.update(_summary('gradwarp_displacement_mm', np.linalg.norm(vectors[mask], axis=-1)))
+
+    graddev_img = nb.load(grad_dev)
+    tensors = np.asanyarray(graddev_img.dataobj, dtype=np.float64)
+    mask = _mask_on_grid(grad_dev_mask, tensors.shape[:3], graddev_img.affine)
+    values.update(
+        _summary('graddev_rotation_deg', graddev_rotation_degrees(tensors[mask].reshape(-1, 3, 3)))
+    )
+    return values

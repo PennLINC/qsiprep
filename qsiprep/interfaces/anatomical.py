@@ -2,6 +2,7 @@
 # vi: set ft=python sts=4 ts=4 sw=4 et:
 """Image tools interfaces."""
 
+import os
 import shutil
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from nipype import logging
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
     File,
+    InputMultiObject,
     SimpleInterface,
     TraitedSpec,
     isdefined,
@@ -53,7 +55,7 @@ class DiceOverlap(SimpleInterface):
 
 class _VoxelSizeChooserInputSpec(BaseInterfaceInputSpec):
     voxel_size = traits.Float()
-    input_image = File(exists=True)
+    input_images = InputMultiObject(File(exists=True))
     anisotropic_strategy = traits.Enum('min', 'max', 'mean', usedefault=True)
 
 
@@ -66,24 +68,30 @@ class VoxelSizeChooser(SimpleInterface):
     output_spec = _VoxelSizeChooserOutputSpec
 
     def _run_interface(self, runtime):
-        if not isdefined(self.inputs.input_image) and not isdefined(self.inputs.voxel_size):
-            raise Exception('Either voxel_size or input_image need to be defined')
+        if not isdefined(self.inputs.input_images) and not isdefined(self.inputs.voxel_size):
+            raise Exception(
+                'VoxelSizeChooser: either voxel_size or input_images must be set '
+                '(a native resolution, e.g. res-nativemin/res-nativemax, requires '
+                'input_images).'
+            )
 
-        # A voxel size was specified without an image
+        # An explicit size always wins; the strategies only apply to measured images.
         if isdefined(self.inputs.voxel_size):
-            voxel_size = self.inputs.voxel_size
-        else:
-            # An image was provided
-            img = nb.load(self.inputs.input_image)
-            zooms = img.header.get_zooms()[:3]
-            if self.inputs.anisotropic_strategy == 'min':
-                voxel_size = min(zooms)
-            elif self.inputs.anisotropic_strategy == 'max':
-                voxel_size = max(zooms)
-            else:
-                voxel_size = np.round(np.mean(zooms), 2)
+            self._results['voxel_size'] = self.inputs.voxel_size
+            return runtime
 
-        self._results['voxel_size'] = voxel_size
+        zooms = []
+        for image in self.inputs.input_images:
+            zooms.extend(nb.load(image).header.get_zooms()[:3])
+
+        if self.inputs.anisotropic_strategy == 'min':
+            voxel_size = min(zooms)
+        elif self.inputs.anisotropic_strategy == 'max':
+            voxel_size = max(zooms)
+        else:
+            voxel_size = np.round(np.mean(zooms), 2)
+
+        self._results['voxel_size'] = float(voxel_size)
         return runtime
 
 
@@ -189,16 +197,65 @@ def calculate_nonbrain_saturation(head_img, brain_mask_img):
 
 
 class _GetTemplateInputSpec(BaseInterfaceInputSpec):
-    template_spec = traits.Str(
-        desc='Template specification of the form <template>[+<cohort>]',
-        mandatory=True,
-    )
+    template_name = traits.Str(desc='TemplateFlow template name', mandatory=True)
+    cohort = traits.Str(desc='Cohort label, if the template has one')
+    resolution = traits.Str('1', usedefault=True, desc='TemplateFlow resolution entity')
     anatomical_contrast = traits.Enum('T1w', 'T2w', 'none')
 
 
 class _GetTemplateOutputSpec(BaseInterfaceInputSpec):
     template_file = File(exists=True)
     mask_file = File(exists=True)
+
+
+def template_queries(template_name, cohort, resolution, anatomical_contrast):
+    """Build the TemplateFlow queries for a template's head image and brain mask.
+
+    Templates are not filed uniformly: UNCInfant has no ``res-`` entity and files
+    its brain mask as ``label-brain`` rather than ``desc-brain``.
+    """
+    from templateflow.conf import TF_LAYOUT
+
+    base = {'extension': '.nii.gz'}
+    if cohort is not None:
+        base['cohort'] = cohort
+    if resolution is not None and TF_LAYOUT.get_resolutions(template=template_name):
+        base['resolution'] = resolution
+
+    image = {**base, 'desc': None, 'suffix': anatomical_contrast}
+    mask = {**base, 'desc': 'brain', 'suffix': 'mask'}
+    if not TF_LAYOUT.get(template=template_name, **mask):
+        labelled = {**base, 'label': 'brain', 'suffix': 'mask'}
+        if TF_LAYOUT.get(template=template_name, **labelled):
+            mask = labelled
+    return image, mask
+
+
+def _one_file(found, template_name, query):
+    if isinstance(found, list):
+        if not found:
+            raise FileNotFoundError(f'No TemplateFlow file for {template_name} matches {query}.')
+        raise ValueError(f'{len(found)} TemplateFlow files for {template_name} match {query}.')
+    return Path(found)
+
+
+def _templateflow_lock():
+    """Lock the TemplateFlow cache for a fetch, or return ``None`` if that fails.
+
+    TemplateFlow streams a download straight into its final path, so a second
+    process fetching the same template can copy a half-written file.
+    """
+    from filelock import FileLock, Timeout
+    from templateflow.conf import TF_LAYOUT
+
+    root = Path(os.getenv('TEMPLATEFLOW_HOME', TF_LAYOUT.root))
+    lock = FileLock(root / '.qsiprep-templateflow.lock')
+    try:
+        lock.acquire(timeout=600)
+    except (OSError, Timeout) as exc:
+        LOGGER.warning('Fetching templates without the TemplateFlow cache lock: %s', exc)
+        return None
+    return lock
 
 
 class GetTemplate(SimpleInterface):
@@ -213,33 +270,28 @@ class GetTemplate(SimpleInterface):
             LOGGER.info('Using T1w modality template for ACPC alignment')
             anatomical_contrast = 'T1w'
 
-        template_name = self.inputs.template_spec
-        cohort = None
-        if '+' in template_name:
-            template_name, cohort = template_name.split('+')
-
-        template_path = get_template(
-            template_name,
-            cohort=cohort,
-            resolution='1',
-            desc=None,
-            suffix=anatomical_contrast,
-            extension='.nii.gz',
-        )
-        mask_path = get_template(
-            template_name,
-            cohort=cohort,
-            resolution='1',
-            desc='brain',
-            suffix='mask',
-            extension='.nii.gz',
+        template_name = self.inputs.template_name
+        cohort = self.inputs.cohort if isdefined(self.inputs.cohort) else None
+        resolution = self.inputs.resolution if isdefined(self.inputs.resolution) else None
+        image_query, mask_query = template_queries(
+            template_name, cohort, resolution, anatomical_contrast
         )
 
-        local_template = Path(runtime.cwd) / template_path.name
-        local_mask = Path(runtime.cwd) / mask_path.name
-
-        shutil.copy(template_path, local_template)
-        shutil.copy(mask_path, local_mask)
+        lock = _templateflow_lock()
+        try:
+            template_path = _one_file(
+                get_template(template_name, **image_query), template_name, image_query
+            )
+            mask_path = _one_file(
+                get_template(template_name, **mask_query), template_name, mask_query
+            )
+            local_template = Path(runtime.cwd) / template_path.name
+            local_mask = Path(runtime.cwd) / mask_path.name
+            shutil.copy(template_path, local_template)
+            shutil.copy(mask_path, local_mask)
+        finally:
+            if lock is not None:
+                lock.release()
 
         self._results['template_file'] = str(local_template)
         self._results['mask_file'] = str(local_mask)

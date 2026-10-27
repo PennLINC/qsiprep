@@ -9,6 +9,7 @@ import subprocess
 import nibabel as nb
 import nilearn.image as nim
 import numpy as np
+import SimpleITK as sitk
 from nipype.interfaces import ants
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
@@ -25,6 +26,7 @@ from nipype.interfaces.base import (
 from nipype.utils.filemanip import fname_presuffix
 from niworkflows.viz.utils import compose_view, cuts_from_bbox
 
+from ..utils.versions import tortoise_version, versioned
 from ..viz.utils import plot_denoise
 from .denoise import (
     SeriesPreprocReport,
@@ -43,20 +45,113 @@ from .images import split_bvals_bvecs, to_lps
 
 LOGGER = logging.getLogger('nipype.interface')
 
-# --sloppy working-grid resolution for DRBUDDI/EPIREG, in mm. TORTOISE's own
+# --sloppy working-grid resolution for DRBUDDI, in mm. TORTOISE's own
 # rule upsamples to <=1mm regardless of the acquisition, which dominates
 # runtime and memory; smoke tests do not need sub-voxel registration.
 SLOPPY_EPI_WORKING_RES = 2.5
 
-SLOPPY_DRBUDDI = (
-    '--DRBUDDI_stage '
-    r'\[learning_rate=\{0.4\},cfs=\{4:2:1\},field_smoothing=\{9:0\},'
-    r'metrics=\{MSJac:CC\},restrict_constrain=\{1:1\}\] '
+# TORTOISE's stage schedules are written for its default ~1 mm working grid.
+# Image smoothing is a standard deviation in voxels of that grid, but
+# field_smoothing is a VARIANCE in voxels of each stage's downsampled grid
+# (TORTOISE's help calls it a stdev). The sloppy schedules below keep the same
+# physical sizes on the coarser grid, with far fewer iterations per stage.
+_SLOPPY_GRID_SCALE = 1.0 / SLOPPY_EPI_WORKING_RES
+
+
+def _drbuddi_stage(
+    learning_rate,
+    niter,
+    downsample,
+    smoothing,
+    update_variance,
+    total_variance,
+    metrics,
+    restrict,
+    constrain,
+):
+    """Render one ``--DRBUDDI_stage`` argument.
+
+    Parameters
+    ----------
+    learning_rate : float
+        Gradient step size.
+    niter : int
+        Iterations in this stage.
+    downsample : int
+        Pyramid factor relative to the working grid.
+    smoothing : float
+        Image smoothing standard deviation in voxels of the working grid.
+    update_variance, total_variance : float
+        Update- and total-field smoothing variances in voxels of the stage's
+        downsampled grid.
+    metrics : list of str
+        Metric names as TORTOISE spells them (``MSJac``, ``CC``, ``CCSK{str_id=0}`` ...).
+    restrict, constrain : bool
+        Restrict the field to the phase-encoding axis; enforce up/down symmetry.
+
+    Returns
+    -------
+    str
+        The flag and its bracketed value, escaped for the shell nipype runs it through.
+    """
+    body = (
+        f'learning_rate={{{learning_rate:g}}},'
+        f'cfs={{{niter}:{downsample}:{smoothing:g}}},'
+        f'field_smoothing={{{update_variance:g}:{total_variance:g}}},'
+        f'metrics={{{":".join(metrics)}}},'
+        f'restrict_constrain={{{int(restrict)}:{int(constrain)}}}'
+    )
+    escaped = body.replace('{', r'\{').replace('}', r'\}')
+    return rf'--DRBUDDI_stage \[{escaped}\]'
+
+
+def _sloppy_stage(
+    learning_rate, niter, downsample, smoothing, update_variance, total_variance, *args
+):
+    """Render a default-grid stage on the sloppy grid at the same physical sizes."""
+    sloppy_downsample = max(1, round(downsample * _SLOPPY_GRID_SCALE))
+    # Ratio of the stage's voxel size on the default grid to that on the sloppy grid.
+    voxel_ratio = downsample * _SLOPPY_GRID_SCALE / sloppy_downsample
+    return _drbuddi_stage(
+        learning_rate,
+        niter,
+        sloppy_downsample,
+        round(smoothing * _SLOPPY_GRID_SCALE, 2),
+        round(update_variance * voxel_ratio**2, 2),
+        round(total_variance * voxel_ratio**2, 3),
+        *args,
+    )
+
+
+_SLOPPY_DRBUDDI_STAGES = (
+    (0.25, 60, 6, 4, 9, ['MSJac', 'CC', 'CCJacS{str_id=0}']),
+    (0.2, 60, 4, 3, 8, ['MSJac', 'CC', 'CCJacS{str_id=0}']),
+    (0.25, 40, 2, 2, 7, ['MSJac', 'CC', 'CCJacS{str_id=0}']),
+    (0.15, 5, 1, 1, 7, ['MSJac', 'CC', 'CCSK{str_id=0}']),
 )
 
 
+def _sloppy_schedule(with_fa):
+    return ' '.join(
+        _sloppy_stage(
+            lr, niter, f, s, u, 0, [m for m in metrics if with_fa or m != 'CC'], True, True
+        )
+        for (lr, niter, f, s, u, metrics) in _SLOPPY_DRBUDDI_STAGES
+    )
+
+
+# The DRBUDDI schedule --sloppy runs: DRBUDDI's four-stage default for the
+# b=0 + FA + structural case, on the sloppy grid.
+SLOPPY_DRBUDDI = _sloppy_schedule(with_fa=True)
+# The same schedule without the FA metric (CC) for an epi fieldmap, whose b=0s
+# give DRBUDDI no FA. DRBUDDI drops CC itself then, but keeps reading the
+# remaining metrics' options at their pre-drop positions, so CCJacS gets CC's
+# string and the str_id parse throws std::out_of_range.
+SLOPPY_DRBUDDI_EPI = _sloppy_schedule(with_fa=False)
+
+
 def sloppy_epi_working_res():
-    """Return DRBUDDI/EPIREG working-grid kwargs for ``--sloppy``, else empty.
+    """Return DRBUDDI working-grid kwargs for ``--sloppy``, else empty.
 
     Returned as kwargs so a stock (unpatched) TORTOISE is unaffected in normal
     runs -- the flag is only emitted when ``--sloppy`` is set.
@@ -345,10 +440,9 @@ class _DRBUDDIInputSpec(TORTOISEInputSpec):
     disable_initial_rigid = traits.Bool(
         False,
         argstr='--DRBUDDI_disable_initial_rigid %d',
-        desc='DRBUDDI performs an initial registration between the up and down data.'
-        'This registration starts with rigid, followed by a quick diffeomorphic '
-        'and finalized by another rigid. This parameter, when set to 1 disables '
-        'all these registrations. Default: False',
+        desc='Use the blip-down b=0 as given: skip the rigid + diffeomorphic + rigid '
+        "registration to the blip-up b=0 that precedes DRBUDDI's diffeomorphic stages. "
+        'The structural images are still rigidly registered. Default: False',
     )
     start_with_diffeomorphic_for_rigid_reg = traits.Bool(
         False,
@@ -383,8 +477,8 @@ class _DRBUDDIInputSpec(TORTOISEInputSpec):
     epi_working_res = traits.Float(
         argstr='--epi_working_res %g',
         desc=(
-            'Resolution (mm) of the internal registration grid used by DRBUDDI '
-            'and EPIREG. TORTOISE otherwise derives it from the structural (or '
+            'Resolution (mm) of the internal registration grid used by DRBUDDI. '
+            'TORTOISE otherwise derives it from the structural (or '
             'the DWI when no structural is given) divided by 1.3 until the mean '
             'is <= 1mm, which upsamples well past the acquired resolution: 1.7mm '
             'data becomes a 0.77mm grid, 9.5x the memory for no evident gain. '
@@ -441,6 +535,8 @@ class DRBUDDI(TORTOISECommandLine):
             return ''
         if name == 'structural_image':
             return '-s ' + ' '.join(value)
+        if name == 'sloppy' and value and self.inputs.fieldmap_type == 'epi':
+            return SLOPPY_DRBUDDI_EPI
         return super()._format_arg(name, spec, value)
 
     def _list_outputs(self):
@@ -457,9 +553,8 @@ class DRBUDDI(TORTOISECommandLine):
         outputs['deformation_finv'] = op.abspath('deformation_FINV.nii.gz')
         outputs['deformation_minv'] = op.abspath('deformation_MINV.nii.gz')
 
-        # There will be an hdf5 transform file if there is an initial rigid
-        if not self.inputs.disable_initial_rigid:
-            outputs['bdown_to_bup_rigid_trans_h5'] = op.abspath('bdown_to_bup_rigidtrans.hdf5')
+        # Written even under --DRBUDDI_disable_initial_rigid (as the identity)
+        outputs['bdown_to_bup_rigid_trans_h5'] = op.abspath('bdown_to_bup_rigidtrans.hdf5')
 
         # There will be FA images created if two DWI series were used as inputs
         if self.inputs.fieldmap_type == 'rpe_series':
@@ -532,13 +627,17 @@ class DRBUDDIAggregateOutputs(SimpleInterface):
     output_spec = _DRBUDDIAggregateOutputsOutputSpec
 
     def _run_interface(self, runtime):
-        # If the structural image has been used, return that as the b0ref, otherwise
-        # it's the b0_corrected_final
-        self._results['b0_ref'] = (
-            self.inputs.structural_image
-            if isdefined(self.inputs.structural_image)
-            else self.inputs.undistorted_reference
-        )
+        # Always coregister from DRBUDDI's undistorted b=0, never from
+        # ``structural_used.nii``. That file is the structural resampled through
+        # the rigid DRBUDDI estimates for it (``Rigidly registering structural
+        # image`` in its log, DRBUDDI.cxx), and that rigid is not reliable: on a
+        # TRXScan fixture with a known truth it moved a T2w handed over 0.8 deg
+        # off the b=0 frame to 5.3 deg off, the same answer from a coarse and
+        # from an exact pre-alignment. Coregistering from it put the DWI 5.3 deg
+        # / 3.8 mm off in ACPC space; from ``b0_corrected_final`` 0.4 deg /
+        # 0.4 mm. The undistorted b=0 lives on the structural's grid in the b=0
+        # frame, and it is what every corrected volume is actually aligned with.
+        self._results['b0_ref'] = self.inputs.undistorted_reference
 
         # there may be 2 transforms for the blip down data. If so, compose them
         if isdefined(self.inputs.bdown_to_bup_rigid_trans_h5):
@@ -900,46 +999,121 @@ def bmtxt_to_fsl(bmtxt_file, working_dir=None):
     return base + '.bvals', base + '.bvecs'
 
 
-def generate_diffprep_boilerplate(correction_mode, t2wreg_target=None, gradwarped=False):
+#: DIFFPREP refines its registration against a signal model only when the data
+#: reach above 1.2 x ``dti_bval`` (default 1000 s/mm^2) and have at least 20
+#: volumes (DIFFPREP.cxx, MotionAndEddy). It fits a tensor to the volumes up to
+#: ``hardi_bval`` (default 2000 s/mm^2; all volumes when fewer than 15 qualify) and,
+#: when any volume is above it, MAP-MRI (MAPMRIModel: an anisotropic SHORE basis
+#: scaled by the tensor) to all volumes. MAP-MRI then predicts every volume above
+#: 55 s/mm^2 and the tensor the rest.
+_DIFFPREP_MODEL_BVAL = 1.2 * 1000
+_DIFFPREP_HARDI_BVAL = 2000
+_DIFFPREP_MIN_VOLUMES = 20
+_DIFFPREP_MIN_TENSOR_VOLUMES = 15
+#: Extra arguments that change any of the above, which the text cannot follow
+_DIFFPREP_SETTINGS_ARGS = ('--s2v', '--repol', '--niter', '--dti_bval', '--hardi_bval')
+
+
+def generate_diffprep_boilerplate(
+    correction_mode, run_bvals=None, b0_id=-1, is_human_brain=True, niter=None, extra_args=()
+):
     """Generate methods boilerplate describing the DIFFPREP HMC backend.
 
     ``correction_mode`` comes from ``--diffprep-config`` (default
     ``quadratic``), so the transform model has to be named from it rather than
-    assumed. ``t2wreg_target`` (``'t2w'`` or ``'synb0'``) adds the EPI stage.
+    assumed. ``run_bvals`` holds the b-values of each DIFFPREP run (one per
+    phase-encoding polarity of a reverse-PE series); when it is ``None`` the
+    text states the conditions under which DIFFPREP refines its registration
+    instead of whether it did.
     """
+    # The transform always has 24 parameters, but only those switched on in the
+    # mode's settings/mecc_settings/<mode>.mec optimization_flags are estimated:
+    # 6 rigid (rigid.mec), 14 (quadratic.mec), 21 (cubic.mec). The last three, the
+    # isocenter, never are.
     mode_desc = {
-        'motion': ('rigid head motion only', 'rigid-body transform'),
+        'motion': ('rigid head motion only', 'The transform was rigid-body, with 6 parameters.'),
         'quadratic': (
-            'rigid head motion together with quadratic eddy currents',
-            '24-parameter Okan-quadratic transform',
+            'rigid head motion together with linear and quadratic eddy-current distortions',
+            'The transform had 14 estimated parameters: 6 for rigid-body motion and 8 for '
+            'linear and quadratic eddy-current distortion along the phase-encoding axis.',
         ),
         'cubic': (
-            'rigid head motion together with cubic eddy currents',
-            'cubic transform',
+            'rigid head motion together with linear, quadratic and cubic eddy-current distortions',
+            'The transform had 21 estimated parameters: 6 for rigid-body motion and 15 for '
+            'linear, quadratic and cubic eddy-current distortion along the phase-encoding axis.',
         ),
     }
     corrects, transform = mode_desc[correction_mode]
-    desc = (
-        '\n\nHead motion correction was performed with the TORTOISE [@tortoisev4] software '
-        "package's DIFFPREP module, "
-        f'in "{correction_mode}" mode (correcting {corrects}). DIFFPREP fits a '
-        'SHORE/MAPMRI signal model to the data and iteratively registers each '
-        f"volume to a model-predicted target using TORTOISE's {transform}. "
-        'The corrected volumes and motion-rotated b-matrix were then passed to '
-        'the rest of the pipeline.'
-    )
-    if t2wreg_target is not None:
-        target = {
-            't2w': "the subject's T2-weighted image",
-            'synb0': 'a synthetic distortion-free b=0 image',
-        }[t2wreg_target]
-        corrected = ', corrected for gradient nonlinearity,' if gradwarped else ''
-        desc += (
-            ' Susceptibility distortion was estimated in the same TORTOISE run by its '
-            f'T2Wreg stage, which nonlinearly registered the b=0 image{corrected} to '
-            f'{target}.'
+    if any(arg.startswith(_DIFFPREP_SETTINGS_ARGS) for arg in extra_args or ()):
+        run_bvals = None
+
+    if b0_id != -1:
+        reference = f'the *b*=0 volume at index {b0_id}'
+    elif run_bvals is not None and all(_count_b0s(b) >= 4 for b in run_bvals):
+        reference = 'the best *b*=0 volume, chosen by its own selection'
+    elif run_bvals is not None and all(_count_b0s(b) < 4 for b in run_bvals):
+        reference = 'the first *b*=0 volume'
+    else:
+        reference = (
+            'a reference *b*=0 volume (the best one, chosen by its own selection, when there '
+            'were at least four)'
         )
-    return desc + '\n\n'
+
+    if run_bvals is None:
+        refined = None
+    else:
+        refined = {
+            bool(is_human_brain)
+            and niter != 0
+            and len(bvals) >= _DIFFPREP_MIN_VOLUMES
+            and bool(bvals.max() > _DIFFPREP_MODEL_BVAL)
+            for bvals in run_bvals
+        }
+        refined = refined.pop() if len(refined) == 1 else None
+
+    tortoise = versioned('*TORTOISE*', tortoise_version())
+    desc = (
+        f'\n\nHead motion was corrected with DIFFPREP from {tortoise} [@tortoisev4] in its '
+        f'"{correction_mode}" mode, which corrects {corrects}. DIFFPREP registered each volume '
+        f'to {reference}. {transform}'
+    )
+    basis = ' The MAP-MRI basis is an anisotropic SHORE basis aligned to and scaled by the tensor.'
+    if refined is True:
+        tensor_volumes = (
+            f'the volumes with *b* ≤ {_DIFFPREP_HARDI_BVAL} s/mm²'
+            if all(
+                np.sum(bvals <= _DIFFPREP_HARDI_BVAL) >= _DIFFPREP_MIN_TENSOR_VOLUMES
+                for bvals in run_bvals
+            )
+            else 'all volumes'
+        )
+        if max(bvals.max() for bvals in run_bvals) > _DIFFPREP_HARDI_BVAL:
+            desc += (
+                f' It then fit a diffusion tensor model to {tensor_volumes} and a fourth-order '
+                f'MAP-MRI model [@mapmri] to all volumes.{basis} Each volume was registered again '
+                'to its prediction: from the tensor for the *b*=0 volumes and from MAP-MRI for '
+                'the rest.'
+            )
+        else:
+            desc += (
+                f' It then fit a diffusion tensor model to {tensor_volumes} and registered each '
+                'volume again to the image the model predicted.'
+            )
+    elif refined is None:
+        desc += (
+            f' For series with *b*-values above {_DIFFPREP_MODEL_BVAL:g} s/mm² and at least '
+            f'{_DIFFPREP_MIN_VOLUMES} volumes, it then fit a diffusion tensor model to the '
+            f'volumes with *b* ≤ {_DIFFPREP_HARDI_BVAL} s/mm² (and, when there were *b*-values '
+            f'above {_DIFFPREP_HARDI_BVAL} s/mm², a fourth-order MAP-MRI model [@mapmri] to all '
+            'volumes) '
+            f'and registered each volume again to the image the models predicted.{basis}'
+        )
+    return desc + ' The b-matrix was rotated with the estimated motion.\n\n'
+
+
+def _count_b0s(bvals):
+    """Count the volumes DIFFPREP treats as b=0: within 30 s/mm^2 of the lowest b-value."""
+    return int(np.sum(np.abs(bvals - bvals.min()) < 30))
 
 
 def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False, initialized=False):
@@ -948,34 +1122,32 @@ def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False, initi
     ``initialized`` says DRBUDDI starts from a field-map-derived deformation,
     whose estimation is described by the workflow that precedes this one.
     """
-    desc = ['\n\nDRBUDDI [@drbuddi], part of the TORTOISE [@tortoisev4] software package,']
-    if not with_topup:
-        # Until now there will have been no description of the SDC procedure.
-        # Add extra details about the input data.
-        desc.append(
-            'was used to perform susceptibility distortion correction. '
-            'Data was collected with reversed phase-encode blips, resulting '
-            'in pairs of images with distortions going in opposite directions.'
-        )
+    tortoise = versioned('*TORTOISE*', tortoise_version())
+    if with_topup:
+        desc = [
+            f'\n\nIn the second stage, DRBUDDI [@drbuddi] from {tortoise} [@tortoisev4] '
+            'refined the susceptibility distortion correction.'
+        ]
     else:
-        desc += ['was used to perform a second stage of distortion correction.']
+        desc = [
+            f'\n\nSusceptibility distortion was corrected with DRBUDDI [@drbuddi] from '
+            f'{tortoise} [@tortoisev4].'
+        ]
 
-    # Describe what's going on
     if fieldmap_type == 'epi':
         desc.append(
-            'DRBUDDI registered the mean motion-corrected b=0 image to a '
-            'reverse phase-encoding b=0 reference (chosen with SelectBestB0 '
-            'when several were available) to estimate'
+            'DRBUDDI registered the mean motion-corrected *b*=0 image to a *b*=0 reference '
+            'acquired with the reverse phase-encoding polarity (chosen with `SelectBestB0` '
+            'when several were available) to estimate the susceptibility-induced '
+            'off-resonance field.'
         )
     else:
         desc.append(
-            'DRBUDDI used multiple motion-corrected DWI series acquired '
-            'with opposite phase encoding '
-            'directions. A b=0 image **and** the Fractional Anisotropy '
-            'images from both phase encoding directions were used together in '
-            'a multi-modal registration to estimate'
+            'DRBUDDI estimated the susceptibility-induced off-resonance field from the '
+            'motion-corrected DWI series acquired with opposite phase-encoding polarities, '
+            'registering a *b*=0 image and a fractional anisotropy (FA) image from each '
+            'polarity together in a multimodal registration.'
         )
-    desc.append('the susceptibility-induced off-resonance field.')
 
     if initialized:
         desc.append(
@@ -989,8 +1161,9 @@ def generate_drbuddi_boilerplate(fieldmap_type, t2w_sdc, with_topup=False, initi
     if t2w_sdc:
         desc.append('A T2-weighted image was included in the multimodal registration.')
     desc.append(
-        'Signal intensity was adjusted '
-        'in the final interpolated images using a method similar to LSR.\n\n'
+        "Signal intensity was redistributed with TORTOISE's LSR method: each polarity's "
+        'volumes were scaled by the ratio of the harmonic mean of the two corrected *b*=0 '
+        "images to that polarity's corrected *b*=0 image.\n\n"
     )
     return ' '.join(desc)
 
@@ -1080,36 +1253,6 @@ class _DIFFPREPInputSpec(TORTOISEInputSpec):
     )
     disable_itk_threads = traits.Bool(True, usedefault=True, argstr='--disable_itk_threads')
     use_cuda = traits.Bool(False, usedefault=True, desc=_USE_CUDA_TRAIT_DESC)
-    epi_mode = traits.Enum(
-        'off',
-        'T2Wreg',
-        usedefault=True,
-        desc='TORTOISE --epi mode. "off": no in-TORTOISE SDC (default). '
-        '"T2Wreg": structural EPI correction using --structural_image.',
-    )
-    structural_image = File(
-        exists=True,
-        desc='T2w structural image for --epi T2Wreg (must NOT be a T1w). '
-        'Required when epi_mode == "T2Wreg".',
-    )
-    grad_nonlin = File(
-        exists=True,
-        argstr='--grad_nonlin %s',
-        desc='Gradwarp displacement field (the TORTOISE "_inv" convention, i.e. the field '
-        'qsiprep builds), so the T2Wreg stage registers a gradwarp-corrected b=0. The '
-        'motion/eddy stage does not consume it.',
-    )
-    epireg_initial_field = File(
-        exists=True,
-        argstr='--EPIREG_initial_field %s',
-        desc='Initial EPI displacement field for T2Wreg, in the b=0 world frame (e.g. the '
-        'warp derived from a GRE fieldmap); the registration refines it.',
-    )
-    keep_initial_transform_fixed = traits.Bool(
-        argstr='--DRBUDDI_keep_initial_transform_fixed %d',
-        desc='Hold epireg_initial_field fixed through the multi-resolution pyramid, so each '
-        'stage learns a residual on top of it instead of low-passing and re-estimating it',
-    )
 
 
 class _DIFFPREPOutputSpec(TraitedSpec):
@@ -1121,13 +1264,6 @@ class _DIFFPREPOutputSpec(TraitedSpec):
         exists=True,
         desc='Per-volume 24-parameter Okan-quadratic transforms as written by DIFFPREP.',
     )
-    # epi_mode == 'T2Wreg' only. The EPI stage's displacement field is emitted as
-    # a transform rather than baked into the image, so qsiprep can compose it with
-    # HMC and coregistration and resample once -- the same contract DRBUDDI has.
-    sdc_warp = File(desc='EPI (susceptibility) displacement field, in the DWI world frame.')
-    b0_up_image = File(desc='b=0 before the EPI correction (for the SDC report).')
-    b0_up_corrected_image = File(desc='b=0 after the EPI correction (for the SDC report).')
-    structural_image = File(desc='The T2w TORTOISE actually registered against.')
 
 
 class DIFFPREP(TORTOISECommandLine):
@@ -1135,9 +1271,9 @@ class DIFFPREP(TORTOISECommandLine):
 
     Runs the ``TORTOISEProcess`` binary starting from the Import step (so the
     proc.nii/proc.bmtxt/proc.json working files get staged) with all stages
-    other than motion+eddy (and optionally the EPI/``T2Wreg`` stage) disabled
-    via their own flags. See ``_base_step_flags`` for why ``--step import``
-    (not ``--step motioneddy``) is required. Emits the per-volume corrected
+    other than motion+eddy disabled via their own flags. See ``_base_step_flags``
+    for why ``--step import`` (not ``--step motioneddy``) is required. Emits the
+    per-volume corrected
     DWI, rotated bmatrix, and 24-parameter transform file.
     """
 
@@ -1149,10 +1285,6 @@ class DIFFPREP(TORTOISECommandLine):
     # Hardcoded flags that put TORTOISE into "DIFFPREP-only" mode. qsiprep
     # already runs its own denoising / gibbs / SDC stages, so we explicitly
     # turn each of them off -- but we still START from the Import step.
-    #
-    # NOTE: ``--epi`` is appended separately in ``_parse_inputs`` so it can
-    # switch between ``off`` (SDC handled downstream by qsiprep) and ``T2Wreg``
-    # (structural EPI correction performed here and baked into the output).
     _base_step_flags = (
         '--step import '
         '--denoising off '
@@ -1161,29 +1293,27 @@ class DIFFPREP(TORTOISECommandLine):
         '--do_QC 0 '
         '--remove_temp 0 '
         '--s2v 0 '
-        '--repol 0'
+        '--repol 0 '
+        '--epi off'
     )
 
     def _format_arg(self, name, spec, value):
         # bmtxt_file and json_file are passed via sibling-stem lookup, not argstr
         if name in ('bmtxt_file', 'json_file'):
             return ''
+        # TORTOISEProcess documents "-c motion", but each mode loads
+        # settings/mecc_settings/<mode>.mec and there is no motion.mec, so it falls
+        # back to quadratic without an error. rigid.mec is its rigid-only setting.
+        if name == 'correction_mode' and value == 'motion':
+            return '-c rigid'
         return super()._format_arg(name, spec, value)
 
     def _parse_inputs(self, skip=None):
         skip = list(skip or [])
-        # These are handled manually below (no argstr / sibling-file lookup).
-        skip += ['epi_mode', 'structural_image', 'extra_args']
+        # Handled manually below (no argstr).
+        skip += ['extra_args']
         parsed = super()._parse_inputs(skip=skip)
         parsed.append(self._base_step_flags)
-
-        # EPI (susceptibility) stage.
-        if self.inputs.epi_mode == 'T2Wreg':
-            if not isdefined(self.inputs.structural_image):
-                raise ValueError('epi_mode="T2Wreg" requires a structural_image (T2w).')
-            parsed.append(f'--epi T2Wreg -s {op.abspath(self.inputs.structural_image)}')
-        else:
-            parsed.append('--epi off')
 
         if isdefined(self.inputs.extra_args) and self.inputs.extra_args:
             parsed.append(' '.join(self.inputs.extra_args))
@@ -1211,37 +1341,9 @@ class DIFFPREP(TORTOISECommandLine):
         # they always come from that step regardless of what follows.
         outputs['transformations_file'] = proc_base + '_moteddy_transformations.txt'
 
-        # Motion+eddy output, in the input's own grid. This is what qsiprep wants
-        # in EVERY case -- including T2Wreg, see below.
+        # Motion+eddy output, in the input's own grid.
         outputs['corrected_dwi_file'] = proc_base + '_moteddy.nii'
         outputs['corrected_bmtxt_file'] = proc_base + '_moteddy.bmtxt'
-
-        if self.inputs.epi_mode == 'T2Wreg':
-            # Deliberately NOT the ``*_TORTOISE_final.nii`` FINALDATA image:
-            # passing ``-s`` also runs StructuralAlignment + FinalData, which
-            # would pull coregistration and ACPC alignment forward into HMC.
-            # Emit the EPI stage's displacement field instead, so qsiprep
-            # composes it with HMC and coregistration and resamples once -- the
-            # same contract as the standalone DRBUDDI path. There is no way to
-            # stop TORTOISE before StructuralAlignment (``--step`` only sets the
-            # *start* step); those stages still run and their output is unused.
-            sdc_warp = op.join(temp_proc, 'deformation_FINV.nii.gz')
-            if not op.exists(sdc_warp):
-                raise FileNotFoundError(
-                    f'epi_mode="T2Wreg": expected the EPI displacement field {sdc_warp}, '
-                    'found none.'
-                )
-            outputs['sdc_warp'] = sdc_warp
-            # Named outputs so nipype's remove_unnecessary_outputs keeps them --
-            # they are the before/after pair the SDC report needs.
-            for key, fname in (
-                ('b0_up_image', 'blip_up_b0.nii'),
-                ('b0_up_corrected_image', 'blip_up_b0_corrected.nii'),
-                ('structural_image', 'structural_used.nii'),
-            ):
-                candidate = op.join(temp_proc, fname)
-                if op.exists(candidate):
-                    outputs[key] = candidate
         return outputs
 
 
@@ -1351,14 +1453,6 @@ class DIFFPREPSplitOutputs(SimpleInterface):
     input_spec = _DIFFPREPSplitOutputsInputSpec
     output_spec = _DIFFPREPSplitOutputsOutputSpec
 
-    _identity_itk = (
-        '#Insight Transform File V1.0\n'
-        '#Transform 0\n'
-        'Transform: MatrixOffsetTransformBase_double_3_3\n'
-        'Parameters: 1 0 0 0 1 0 0 0 1 0 0 0\n'
-        'FixedParameters: 0 0 0\n'
-    )
-
     def _run_interface(self, runtime):
         dwi_img = nb.load(self.inputs.corrected_dwi_file)
         nvols = 1 if dwi_img.ndim < 4 else dwi_img.shape[3]
@@ -1405,8 +1499,7 @@ class DIFFPREPSplitOutputs(SimpleInterface):
         forward_transforms = []
         for vol_idx in range(nvols):
             xfm_path = op.join(runtime.cwd, f'diffprep_identity_{vol_idx:04d}.txt')
-            with open(xfm_path, 'w') as fobj:
-                fobj.write(self._identity_itk)
+            sitk.WriteTransform(sitk.AffineTransform(3), xfm_path)
             forward_transforms.append(xfm_path)
 
         self._results['dwi_files'] = per_vol_dwis

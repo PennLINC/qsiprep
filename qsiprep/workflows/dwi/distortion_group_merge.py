@@ -3,8 +3,7 @@
 Merging Distortion Groups
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autofunction:: init_dwi_hmc_wf
-.. autofunction:: init_dwi_model_hmc_wf
+.. autofunction:: init_distortion_group_merge_wf
 
 """
 
@@ -23,7 +22,9 @@ from ...interfaces.dwi_merge import AveragePEPairs, MergeDWIs
 from ...interfaces.mrtrix import MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.reports import GradientPlot, SeriesQC
-from .derivatives import init_dwi_derivatives_wf
+from ...interfaces.shoreline import MergeIterationSummaries
+from .derivatives import init_dwi_derivatives_wf, writes_hmc_optimization
+from .finalize import _grid_metadata
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
 from .util import init_dwi_reference_wf
 
@@ -39,6 +40,8 @@ def init_distortion_group_merge_wf(
     name,
     assembly=None,
     units=(),
+    resolution=None,
+    write_shared_outputs=True,
 ) -> Workflow:
     r"""Combine the finalized DWI series of several correction units into one output.
 
@@ -58,6 +61,10 @@ def init_distortion_group_merge_wf(
         One input for each input image. Path to the original dwi file
     ``[workflow_name]_raw_concatenated_image``
         One input for each input image. Path to the original images after concatenation
+    ``[workflow_name]_hmc_optimization_data``
+        One input for each input image. The unit's SHORELine iteration summary
+        (``outputnode.hmc_optimization_data`` of its ``dwi_preproc_wf``); only
+        consumed when the run writes the ``hmcOptimization`` derivative
     ``[workflow_name]_confounds``
         One input for each input image. Path to the confounds files
     ``[workflow_name]_b0_ref``
@@ -89,6 +96,14 @@ def init_distortion_group_merge_wf(
         The correction units being merged. Their phase encoding directions color
         the gradient plot, and they are recorded in the provenance sidecar when
         ``assembly`` is given.
+    resolution : :class:`~qsiprep.utils.spaces.Resolution` or None, optional
+        Set when more than one ACPC resolution was requested. Adds a ``res-<label>``
+        entity to every sink this workflow owns, so sibling merge workflows for the
+        other resolutions do not write the same filenames.
+    write_shared_outputs : bool, optional
+        The sampling-scheme reportlet and the hmcOptimization sidecar do not vary by
+        output resolution, so exactly one merge workflow per output writes them.
+        Pass ``True`` for the first resolution and ``False`` for the rest.
 
     Outputs
     -------
@@ -106,9 +121,10 @@ def init_distortion_group_merge_wf(
         Contrast-to-noise map for the merged series
     """
     workflow = Workflow(name=name)
+    res_entities = {'res': resolution.label} if resolution is not None else {}
     source_file = 'dwi/' + source_file
     sanitized_inputs = [name.replace('-', '_') for name in inputs_list]
-    input_names = ['t1_brain', 't1_mask', 't1_seg']
+    input_names = ['t1_brain', 't1_mask', 't1_seg', 'dwi_sampling_grid']
     for suffix in [
         '_image',
         '_bval',
@@ -120,6 +136,7 @@ def init_distortion_group_merge_wf(
         '_original_image',
         '_raw_concatenated_image',
         '_confounds',
+        '_hmc_optimization_data',
     ]:
         input_names += [name + suffix for name in sanitized_inputs]
     inputnode = pe.Node(niu.IdentityInterface(fields=input_names), name='inputnode')
@@ -191,6 +208,7 @@ def init_distortion_group_merge_wf(
         name='merged_b0_ref',
         gen_report=True,
         source_file=source_file,
+        sink_entities=res_entities,
     )
     concat_cnr_images = pe.Node(Merge(), name='concat_cnr_images')
 
@@ -208,7 +226,7 @@ def init_distortion_group_merge_wf(
     ])  # fmt:skip
 
     # Calculate QC on the merged raw and processed data
-    raw_qc_wf = init_modelfree_qc_wf(bvec_convention='auto', name='raw_qc_wf')
+    raw_qc_wf = init_modelfree_qc_wf(bvec_convention='auto', skull_strip=True, name='raw_qc_wf')
     processed_qc_wf = init_modelfree_qc_wf(
         bvec_convention='DIPY',  # Always LPS+ when resampled
         name='processed_qc_wf',
@@ -217,23 +235,27 @@ def init_distortion_group_merge_wf(
     series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name='series_qc')
     ds_series_qc = pe.Node(
         DerivativesDataSink(
+            # The QC describes the ACPC-space merged series, as in finalize.py.
+            space='ACPC',
             desc='image',
             suffix='qc',
             extension='tsv',
             source_file=source_file,
             base_directory=config.execution.output_dir,
+            **res_entities,
         ),
         name='ds_series_qc',
         run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
-    # Only written when DSI Studio could not measure a QC stage; see SeriesQC.
+    # Only written when DSI Studio or cs_dmri could not measure a QC stage; see SeriesQC.
     ds_report_qc_warnings = pe.Node(
         DerivativesMaybeDataSink(
             datatype='figures',
             desc='qcwarnings',
             suffix='dwi',
             source_file=source_file,
+            **res_entities,
         ),
         name='ds_report_qc_warnings',
         run_without_submitting=True,
@@ -244,26 +266,72 @@ def init_distortion_group_merge_wf(
     gtab_t1 = pe.Node(MRTrixGradientTable(), name='gtab_t1')
     btab_t1 = pe.Node(DSIStudioBTable(bvec_convention='DIPY'), name='btab_t1')
     t1_dice_calc = init_mask_overlap_wf(name='t1_dice_calc')
-    gradient_plot = pe.Node(GradientPlot(), name='gradient_plot', run_without_submitting=True)
-    if units:
-        gradient_plot.inputs.source_pe_dirs = {
-            path: overrides['PhaseEncodingDirection']
-            for unit in units
-            for path, overrides in unit.sidecar_overrides().items()
-        }
-    ds_report_gradients = pe.Node(
-        DerivativesDataSink(
-            datatype='figures',
-            desc='samplingscheme',
-            suffix='dwi',
-            source_file=source_file,
-        ),
-        name='ds_report_gradients',
-        run_without_submitting=True,
-        mem_gb=DEFAULT_MEMORY_MIN_GB,
+    if write_shared_outputs:
+        # bvecs do not change with the output grid, so one merge workflow per
+        # output draws the sampling scheme.
+        gradient_plot = pe.Node(GradientPlot(), name='gradient_plot', run_without_submitting=True)
+        if units:
+            gradient_plot.inputs.source_pe_dirs = {
+                path: overrides['PhaseEncodingDirection']
+                for unit in units
+                for path, overrides in unit.sidecar_overrides().items()
+            }
+        ds_report_gradients = pe.Node(
+            DerivativesDataSink(
+                datatype='figures',
+                desc='samplingscheme',
+                suffix='dwi',
+                source_file=source_file,
+            ),
+            name='ds_report_gradients',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+        workflow.connect([
+            (outputnode, gradient_plot, [('bvecs_t1', 'final_bvec_file')]),
+            (distortion_merger, gradient_plot, [
+                ('out_bvec', 'orig_bvec_files'),
+                ('out_bval', 'orig_bval_files'),
+                ('original_images', 'source_files'),
+            ]),
+            (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')]),
+        ])  # fmt:skip
+
+    dwi_derivatives_wf = init_dwi_derivatives_wf(
+        source_file=source_file,
+        resolution=resolution,
+        write_hmc_optimization=write_shared_outputs,
     )
 
-    dwi_derivatives_wf = init_dwi_derivatives_wf(source_file=source_file)
+    # dwi_derivatives_wf builds a ds_optimization sink under the same condition,
+    # and that sink's in_file is mandatory: feed it or the merged output's
+    # datasink fails at run time. The per-unit finalize workflows return before
+    # their derivatives under --distortion-group-merge, so this is the only
+    # place the units' SHORELine iteration summaries get written: stacked into
+    # one table, a row's input_name saying which unit it came from.
+    if write_shared_outputs and writes_hmc_optimization():
+        merge_hmc_optimization = pe.Node(
+            niu.Merge(len(sanitized_inputs)), name='merge_hmc_optimization'
+        )
+        merge_iteration_summaries = pe.Node(
+            MergeIterationSummaries(input_names=list(inputs_list)),
+            name='merge_iteration_summaries',
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+        for input_num, input_name in enumerate(sanitized_inputs):
+            workflow.connect([
+                (inputnode, merge_hmc_optimization, [
+                    (input_name + '_hmc_optimization_data', 'in%d' % (input_num + 1)),
+                ]),
+            ])  # fmt:skip
+        workflow.connect([
+            (merge_hmc_optimization, merge_iteration_summaries, [
+                ('out', 'iteration_summary_files'),
+            ]),
+            (merge_iteration_summaries, dwi_derivatives_wf, [
+                ('iteration_summary_file', 'inputnode.hmc_optimization_data'),
+            ]),
+        ])  # fmt:skip
 
     # Write the provenance sidecar for the merged derivative, mirroring the
     # direct (single-run) path's unit sidecar in finalize.py.
@@ -275,6 +343,25 @@ def init_distortion_group_merge_wf(
             ),
             name='merged_sidecar',
         )
+        # A res-native* grid is reported nowhere but here: its size is only known
+        # at run time, and finalize.py builds no grid_metadata for a unit that gets
+        # merged. Computed by the same function as the direct path, so both report
+        # the size the same way.
+        grid_metadata = pe.Node(
+            niu.Function(
+                input_names=['grid_file', 'label'],
+                output_names=['meta_dict'],
+                function=_grid_metadata,
+            ),
+            name='grid_metadata',
+            run_without_submitting=True,
+        )
+        if resolution is not None:
+            grid_metadata.inputs.label = resolution.label
+        workflow.connect([
+            (inputnode, grid_metadata, [('dwi_sampling_grid', 'grid_file')]),
+            (grid_metadata, merged_sidecar, [('meta_dict', 'extra_data')]),
+        ])  # fmt:skip
         ds_merged_sidecar = pe.Node(
             DerivativesDataSink(
                 space='ACPC',
@@ -282,6 +369,7 @@ def init_distortion_group_merge_wf(
                 extension='.json',
                 source_file=source_file,
                 base_directory=config.execution.output_dir,
+                **res_entities,
             ),
             name='ds_merged_sidecar',
             run_without_submitting=True,
@@ -318,6 +406,7 @@ def init_distortion_group_merge_wf(
         (distortion_merger, series_qc, [('merged_denoising_confounds', 'confounds_file')]),
         (raw_qc_wf, series_qc, [('outputnode.qc_summary', 'pre_qc')]),
         (processed_qc_wf, series_qc, [('outputnode.qc_summary', 't1_qc')]),
+        (b0_ref_wf, processed_qc_wf, [('outputnode.dwi_mask', 'inputnode.mask_file')]),
         (b0_ref_wf, t1_dice_calc, [('outputnode.dwi_mask', 'inputnode.dwi_mask')]),
         (inputnode, t1_dice_calc, [('t1_mask', 'inputnode.anatomical_mask')]),
         (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
@@ -330,14 +419,7 @@ def init_distortion_group_merge_wf(
             ('merged_denoising_confounds', 'confounds'),
         ]),
 
-        # Report the merged gradients
-        (outputnode, gradient_plot, [('bvecs_t1', 'final_bvec_file')]),
-        (distortion_merger, gradient_plot, [
-            ('out_bvec', 'orig_bvec_files'),
-            ('out_bval', 'orig_bval_files'),
-            ('original_images', 'source_files'),
-        ]),
-        (gradient_plot, ds_report_gradients, [('plot_file', 'in_file')]),
+        # Gradient tables for the merged series
         (distortion_merger, gtab_t1, [
             ('out_bval', 'bval_file'),
             ('out_bvec', 'bvec_file'),

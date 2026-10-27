@@ -27,15 +27,17 @@ with the ``epi`` fieldmap's ``IntendedFor`` naming the three DWI runs. One way
 to process these data is::
 
   qsiprep /path/to/bids /path/to/output participant \
-      --output-resolution 1.7 \
+      --output-spaces acpc:res-1p7mm MNI152NLin2009cAsym \
       -w /path/to/work
 
 The three positional arguments follow the BIDS App convention.
-``--output-resolution`` has no default: it is the isotropic voxel size, in
-mm, of the preprocessed DWI (see :ref:`output_resolution`). With these
+``--output-spaces`` has no default and must include at least one ``acpc``
+entry: ``acpc:res-1p7mm`` makes the preprocessed DWI 1.7 mm isotropic, and
+``MNI152NLin2009cAsym`` asks for the transforms to that template and the
+anatomical derivatives in it (see :ref:`output_spaces_ref`). With these
 options the three runs are denoised separately, concatenated, motion and
 distortion corrected as one series with ``eddy`` and TOPUP, and written to
-``/path/to/output/sub-1/ses-1/dwi/sub-1_ses-1_acq-multishell_space-ACPC_desc-preproc_dwi.nii.gz``.
+``/path/to/output/sub-1/ses-1/dwi/sub-1_ses-1_acq-multishell_space-ACPC_res-1p7mm_desc-preproc_dwi.nii.gz``.
 
 How to run the container versions of this command is on the
 :doc:`installation` page.
@@ -130,15 +132,18 @@ take space-separated lists.
    * - Value
      - Effect
    * - ``sdc-anat-reference``
-     - Use the ``--sdc-anat-reference`` image for every DWI series, instead of
-       only for series no fieldmap reaches.
+     - Use the fieldmap-less correction for every DWI series, instead of only
+       for series no fieldmap reaches.
+   * - ``one-pass-sdc``
+     - Drop the second pass that SynB0 + TOPUP (a new synthetic b=0 from the
+       b=0 the first field unwarped, then TOPUP again, with every head motion
+       method) and GRE fieldmap registration (the magnitude registered again to
+       the b=0 the first field unwarped, keeping the better-scoring pass) run by
+       default. Faster, less accurate.
    * - ``gradwarp3D`` / ``gradwarp1D``
      - Apply the full 3D, or only the through-plane, gradient nonlinearity
        correction to every run regardless of ``ImageType``. Mutually
        exclusive; both need ``--gradient-file``.
-   * - ``jacobian``
-     - Also Jacobian-modulate the fieldmap-less T2Wreg correction, which
-       TORTOISE leaves unmodulated.
    * - ``gre-sdc-after-eddy``
      - Apply a GRE fieldmap to ``eddy``'s outputs, as *QSIPrep* did before
        26.1, instead of handing it to ``eddy``. For comparing the two on real
@@ -149,6 +154,8 @@ take space-separated lists.
        brains where the default mask is looser than the template's. Saved
        brain masks and everything downstream of them are unaffected.
 
+
+.. _anatomical_flags:
 
 *********************
 Anatomical processing
@@ -169,19 +176,23 @@ See :ref:`anatomical_methods` for what each involves.
 
 ``--anat-biascorrect`` runs N4 on the anatomical images (``n4``, the default),
 never (``none``), or only when ``ImageType`` does not contain ``NORM``
-(``auto``). ``--anatomical-template`` has one choice,
-``MNI152NLin2009cAsym``; ``--infant`` replaces it with the infant template.
-``--skip-anat-based-spatial-normalization`` skips the nonlinear
-registration to the template, which saves about twenty minutes; the
-template-space anatomical derivatives and the ``ACPC`` to template transform
-are then not written. ``--force no-csf-synthstrip`` masks that registration with a
+(``auto``). The anatomical reference is registered nonlinearly to every
+standard space listed in ``--output-spaces``. Listing none (for example
+``--output-spaces acpc:res-2mm``) skips that registration, which saves about
+twenty minutes per template; the template-space anatomical derivatives and
+the ``ACPC`` to template transforms are then not written.
+``--force no-csf-synthstrip`` masks that registration with a
 tighter brain mask when the default one lets the dura land on the
 template's brain edge, as in atrophied brains (see :ref:`anatomical_methods`).
 
-``--infant`` swaps the template for the MNIInfant cohort matching the
-participant's age in months, read from ``participants.tsv`` or the
-``*_sessions.tsv`` file. It requires ``--subject-anatomical-reference
-sessionwise``. The cohort selection follows `Nibabies
+``--infant`` appends ``MNIInfant:cohort-auto`` to ``--output-spaces``, unless
+an infant template (``MNIInfant`` or ``UNCInfant``) is already requested, and
+the infant template then anchors AC-PC alignment. The cohort matching the
+participant's age in months is read from ``participants.tsv`` or the
+``*_sessions.tsv`` file. ``--infant`` also narrows the autobox padding of the
+output grid and requires ``--subject-anatomical-reference sessionwise``; it
+does not change ``--anat-modality``, so pass ``--anat-modality T2w`` when the
+T2w is the better infant reference. The cohort selection follows `Nibabies
 <https://nibabies.readthedocs.io/>`_.
 
 
@@ -209,8 +220,9 @@ intensity harmonization.
      - Ringing at sharp edges
      - Smooth intensity non-uniformity
    * - Tools
-     - ``dwidenoise`` (MRtrix3), ``dwidenoise2``, ``patch2self`` (DIPY)
-     - ``mrdegibbs`` (MRtrix3), ``rpg`` (TORTOISE)
+     - ``dwidenoise`` (MRtrix3), ``dwidenoise2``, ``patch2self`` (DIPY),
+       ``svht`` (``svht_denoise``)
+     - ``mrdegibbs`` (MRtrix3), ``rpg`` (TORTOISE), ``svht`` (``svht_denoise``)
      - ``N4BiasFieldCorrection`` on the b=0 images, applied to the series
    * - Default
      - ``dwidenoise``
@@ -223,9 +235,14 @@ intensity harmonization.
 
 ``--dwidenoise-window`` sets the ``dwidenoise`` patch size in voxels, an odd
 integer or ``auto`` (the default, derived from the number of volumes).
-``dwidenoise2`` sizes its patches from its own schedule, set with
-``--dwidenoise2-config`` (see below). ``rpg`` unringing is the method for
+``dwidenoise2`` sizes its patches from its own schedule, and ``svht`` from
+``extent``; both are set with ``--denoise-config`` (see below).
+``dwidenoise`` and ``dwidenoise2`` are licensed for non-commercial use only;
+``svht`` is not restricted. ``rpg`` unringing is the method for
 partial Fourier acquisitions; ``mrdegibbs`` assumes full Fourier sampling.
+``svht`` unringing reads ``PartialFourier`` from the sidecar: it handles full
+Fourier sampling and 7/8 or 6/8 partial Fourier along the ``j`` axis, and
+stops with an error for any other partial Fourier acquisition.
 ``--dwi-biascorrect auto`` skips bias correction when every DWI's
 ``ImageType`` contains ``NORM``, and ``none`` skips it always. We recommend
 ``none`` for prescan-normalized data. ``--no-b0-harmonization`` skips the
@@ -236,15 +253,25 @@ With ``part-phase`` data, ``dwidenoise`` and ``dwidenoise2`` denoise the
 complex signal. Whether the complex data are carried into unringing depends
 on ``--mrtrix-version``: only the ``dev`` branch of MRtrix3 has a
 complex-valued ``mrdegibbs``; with ``stable`` the data are reduced to
-magnitude after denoising. ``--ignore phase`` drops the phase images
-altogether.
+magnitude after denoising. ``svht`` denoising rotates the magnitude and phase
+onto the real axis instead, and keeps the magnitude of the result.
+``--ignore phase`` drops the phase images altogether.
 
-dwidenoise2 settings
-====================
+Denoising settings
+==================
 
-``--dwidenoise2-config`` takes a JSON file with settings for
-``--denoise-method dwidenoise2``. Every key is optional and unknown keys are
-an error. Each key sets the ``dwidenoise2`` option of the same name, except
+``--denoise-config`` takes a JSON file with settings for the denoiser that
+``--denoise-method`` selects, which must be ``dwidenoise2`` or ``svht``. The
+keys the file may set depend on that method. Every key is optional and
+unknown keys are an error. Settings the two tools share use the same key and
+spelling. The file is checked when the command line is parsed, and a copy is
+written to ``sub-<label>/log/<run uuid>/<method>.json`` in the output
+directory.
+
+dwidenoise2
+-----------
+
+Each key sets the ``dwidenoise2`` option of the same name, except
 ``filter_method``, which sets ``-filter``, and ``schedule``.
 
 ================================  ==========================================================
@@ -310,9 +337,60 @@ reconstruction pass.
 ``"legacy"`` or ``"vlarge"`` (recommended by ``dwidenoise2`` for more than
 255 volumes). Without a ``schedule`` key, ``dwidenoise2`` uses its default,
 except that ``fixed_rank`` selects the single-iteration ``fixedrank``
-schedule and ``"vst_method": "none"`` a single iteration. The file is checked
-when the command line is parsed, and a copy is written to
-``sub-<label>/log/<run uuid>/dwidenoise2.json`` in the output directory.
+schedule and ``"vst_method": "none"`` a single iteration.
+
+svht
+----
+
+Each key sets the ``svht_denoise`` option of the same name, except
+``filter_method``, which sets ``-filter``, and ``demean``.
+
+================================  ==========================================================
+Key                               JSON value
+================================  ==========================================================
+``demean``                        ``"none"`` (the default) or ``"shells"``; ``"shells"``
+                                  is recommended only for shelled schemes
+``extent``                        an odd positive integer whose cube exceeds the number of
+                                  volumes; omitted, ``svht_denoise`` picks the smallest
+``filter_method``                 ``"optshrink"``, ``"optthresh"`` or ``"truncate"``
+``aggregator``                    ``"gaussian"``, ``"uniform"`` or ``"exclusive"``
+``aggregator_fwhm``               a number greater than 0; needs the ``"gaussian"``
+                                  aggregator
+``shape``                         ``"sphere"`` or ``"cube"``
+``stride``                        ``1`` or ``2``; ``"exclusive"`` needs ``1``
+``vst``                           ``true`` or ``false``
+``noise_dof``                     an integer from 1 to 64
+``preserve_noise_bias``           ``true`` or ``false``
+================================  ==========================================================
+
+Keys the file omits keep the ``svht_denoise`` defaults.
+
+``"demean": "shells"`` removes the mean of each *b*-value shell before PCA and
+restores it afterwards, and passes the series' b-values to ``svht_denoise``
+with ``-bval``. **Use it only for shelled schemes** (single- or multi-shell
+acquisitions). ``svht_denoise`` groups b-values into shells by clustering, with
+neighbours less than 80 s/mm² apart sharing a shell. On a non-shelled scheme
+(DSI, CS-DSI), that turns nearly every distinct b-value into its own shell of a
+few volumes. Each such mean is restored without being denoised, so much of
+the signal, and its noise, bypasses the denoiser. Even with ``"shells"``,
+demeaning is skipped for a series where it would leave ``svht_denoise`` fewer
+than three volumes to estimate the noise from.
+
+``extent`` is the side of a cubic patch; a spherical patch holds at least
+``extent`` cubed voxels. It is checked against each series' volume count when
+the workflow is built. ``--dwidenoise-window`` does not apply to ``svht``.
+``vst``, ``noise_dof`` and ``preserve_noise_bias`` describe the
+variance-stabilizing transform of magnitude data, so they are an error for a
+series with ``part-phase`` data, which ``svht_denoise`` rotates onto the real
+axis instead.
+
+.. code-block:: json
+
+  {
+    "filter_method": "optthresh",
+    "shape": "cube",
+    "noise_dof": 4
+  }
 
 
 .. _gradwarp_flags:
@@ -452,22 +530,36 @@ Susceptibility distortion correction
 
 Which correction a series gets is decided from the data: a fieldmap linked to
 the series is used if there is one, and reverse phase encoding is preferred
-over a GRE fieldmap when both are linked. The options below change the tool
-and provide a fallback for series that no fieldmap reaches.
+over a GRE fieldmap when both are linked. A series that no fieldmap reaches
+is left uncorrected unless ``--sdc-anat-reference`` names an image, which
+turns on the fieldmap-less correction, SynB0 + TOPUP unless
+``--sdc-fieldmapless-method`` says otherwise. The options below change the
+tools.
 
 ``--sdc-method``
   The tool for reverse phase-encoded (PEPOLAR) data. ``auto`` (the default)
   is TOPUP for ``eddy`` and DRBUDDI otherwise. ``topup`` and
   ``topup+drbuddi`` (TOPUP inside ``eddy``, then DRBUDDI refining its result)
   require ``--hmc-method eddy``; ``drbuddi`` works with every method.
+``--sdc-fieldmapless-method``
+  The correction for series that no fieldmap reaches. ``topup`` (the default)
+  synthesizes a distortion-free b=0 from the T1w with SynB0-DISCO and pairs it
+  with the acquired b=0 in TOPUP. ``syn`` registers the b=0 to the
+  ``--sdc-anat-reference`` image with a SyN registration restricted to the
+  phase-encoding axis, as fMRIPrep does. ``unpile`` fits the field by matching
+  the motion-corrected b=0 to the ``--sdc-anat-reference`` image with a model
+  of the EPI readout (:ref:`sdc_unpile`), after any head motion method.
 ``--sdc-anat-reference``
-  A fieldmap-less correction for series that no fieldmap reaches. ``synb0``
-  synthesizes a distortion-free b=0 from the T1w with SynB0-DISCO; ``t2w``
-  registers to the T2w (TORTOISE T2Wreg); ``invt1w`` registers to the
-  inverted-contrast T1w with SyN, as fMRIPrep does; ``auto`` picks ``synb0``
-  with a T1w, else ``t2w`` with a T2w, else nothing. The default ``none``
-  leaves such series uncorrected. Add ``--force sdc-anat-reference`` to use
-  the anatomical reference for every series, fieldmap or not.
+  The image the fieldmap-less correction uses. ``none`` (the default) leaves
+  series that no fieldmap reaches uncorrected. ``synb0`` is the synthetic
+  b=0, and works with every method; ``invt1w`` is the inverted-contrast T1w,
+  for ``syn``; ``t2w`` is the T2w, for ``unpile``. Any other pairing with ``--sdc-fieldmapless-method`` is an
+  error. ``synb0`` and ``invt1w`` need ``--anat-modality T1w``. A series that
+  the selected correction cannot handle (no T1w, or no
+  ``PhaseEncodingDirection`` or ``TotalReadoutTime``) is an error; pass
+  ``--sdc-anat-reference none`` to process it uncorrected instead. Add
+  ``--force sdc-anat-reference`` to use the fieldmap-less correction for every
+  series, fieldmap or not.
 
 What runs for each kind of data:
 
@@ -487,34 +579,33 @@ What runs for each kind of data:
      - Inside ``eddy``
      - Applied after DIFFPREP
      - Applied after SHORELine
-   * - T1w and ``--sdc-anat-reference synb0``
-     - Synthetic b=0 joins the TOPUP inputs (with ``topup`` in
-       ``--sdc-method``)
-     - T2Wreg to the synthetic b=0
-     - Not corrected
-   * - T2w and ``--sdc-anat-reference t2w``
-     - Not corrected
-     - T2Wreg to the T2w
-     - Not corrected
-   * - T1w and ``--sdc-anat-reference invt1w``
+   * - T1w, ``--sdc-anat-reference synb0`` (``topup``, the default method)
+     - Synthetic b=0 joins the TOPUP inputs before ``eddy``
+     - TOPUP after DIFFPREP, from the motion-corrected b=0 and a synthetic b=0
+       generated from it
+     - TOPUP after SHORELine, likewise
+   * - T1w, ``--sdc-fieldmapless-method syn``
      - SyN after ``eddy``
      - SyN after DIFFPREP
      - SyN after SHORELine
-   * - Nothing
+   * - T2w or T1w, ``--sdc-fieldmapless-method unpile``
+     - unpile after ``eddy``, against the T2w or the synthetic b=0
+     - unpile after DIFFPREP
+     - unpile after SHORELine
+   * - Nothing, or ``--sdc-anat-reference none``
      - Not corrected
      - Not corrected
      - Not corrected
 
-A selection that cannot correct a series is reported as a warning in the log
-and the report, or as an error if the fieldmap-less method was curated or
-forced. The tools themselves are described in :doc:`methods/sdc`.
+A series left uncorrected is reported as a warning in the log and the report.
+The tools themselves are described in :doc:`methods/sdc`.
 
 .. _gre_init_flags:
 
-Starting DRBUDDI or T2Wreg from a GRE fieldmap
+Starting DRBUDDI or unpile from a GRE fieldmap
 ==============================================
 
-When a series is corrected by DRBUDDI or T2Wreg and a GRE fieldmap also
+When a series is corrected by DRBUDDI or unpile and a GRE fieldmap also
 lists it, the registration starts from the field the GRE fieldmap measured
 and refines it, instead of the GRE fieldmap going unused. There is no option
 to turn this on; it happens whenever the linkage is there, and ``--ignore
@@ -523,8 +614,9 @@ fieldmaps`` or ``--ignore sdc`` turns it off. It applies to:
 * a reverse phase-encoded pair corrected by DRBUDDI: ``--hmc-method
   tortoise`` or ``shoreline``, or ``--hmc-method eddy --sdc-method drbuddi``
   (not ``topup+drbuddi``, where DRBUDDI only refines TOPUP);
-* an anatomical reference forced with ``--force sdc-anat-reference``,
-  corrected by T2Wreg (``--hmc-method tortoise``).
+* a fieldmap-less correction forced with ``--force sdc-anat-reference`` and
+  run by unpile (``--sdc-fieldmapless-method unpile``), with any head motion
+  method.
 
 The GRE fieldmap must list the series. For a reverse phase-encoded pair of
 DWI series, its ``IntendedFor`` is enough as long as nothing in the session
@@ -545,9 +637,10 @@ pair and the GRE fieldmap that way::
 For an ``epi`` fieldmap, have both it and the GRE fieldmap name the DWI
 series in their ``IntendedFor``. In the ``qsiplan`` report the series is
 then ``corrected by: pepolar`` with the GRE fieldmap listed as ``also
-eligible`` and labeled ``(initializes DRBUDDI/T2Wreg)``. During the run,
-*QSIPrep* logs ``Initializing DRBUDDI for <output> with GRE fieldmap <id>``,
-and the report's distortion correction entry ends in ``(GRE-initialized)``.
+eligible`` and labeled ``(initializes DRBUDDI/unpile)``. During the run,
+*QSIPrep* logs ``Initializing DRBUDDI for <output> with GRE fieldmap <id>``
+(or ``unpile``), and the report's distortion correction entry ends in
+``(GRE-initialized)`` or ``(GRE-refined)``.
 
 
 .. _jacobian_flags:
@@ -563,31 +656,125 @@ TORTOISE. Which component applies it depends on the backend; the table is in
 susceptibility corrections internally whenever its resampling method is
 ``jac`` (the default), and *QSIPrep* cannot undo that; with ``"method":
 "lsr"`` in ``--eddy-config`` those corrections are not modulated at all.
-``--force jacobian`` additionally modulates the T2Wreg correction.
 
 
 .. _output_resolution:
+.. _output_spaces_ref:
 
-***************************
-Output space and resolution
-***************************
+*****************************
+Output spaces and resolutions
+*****************************
 
-All outputs are written in the subject's ``ACPC`` space: aligned to the
+All DWI outputs are written in the subject's ``ACPC`` space: aligned to the
 anatomical reference and rotated so that the origin is at the anterior
 commissure, with the same orientation convention as the MNI templates. The
 T1w cannot align white matter to a template accurately, so the preprocessed
-DWI is not written in template space; spatial normalization is done after
-models are fit, in `QSIRecon`_. The transform from ``ACPC`` to
-``MNI152NLin2009cAsym`` is written with the anatomical derivatives.
+DWI is never written in template space; spatial normalization is done after
+models are fit, in `QSIRecon`_.
 
-``--output-resolution`` sets the isotropic voxel size of the preprocessed
-DWI. Pass the acquired resolution to keep it, or a smaller value to upsample;
-some downstream methods, such as fixel-based analysis, recommend at least
-1.3 mm. Head motion correction, distortion correction, coregistration and
-resampling are combined so the data are interpolated as few times as
-possible (once with SHORELine, twice with ``eddy`` and DIFFPREP, which write
-their own corrected volumes). Resampling uses Lanczos windowed sinc
-interpolation, or linear interpolation when upsampling by more than 10%.
+``--output-spaces`` says where outputs are written. It takes one or more
+space-delimited tokens, each naming a space and, optionally, a resolution or
+cohort::
+
+  --output-spaces acpc:res-2mm MNI152NLin2009cAsym
+
+At least one ``acpc`` entry is required, and ``acpc`` always needs an explicit
+resolution.
+
+Resolutions
+===========
+
+A ``res-`` key sets the resolution of a space. Which forms are accepted depends
+on whether the space is ``acpc`` or a standard space.
+
+On ``acpc``:
+
+- **Isotropic physical size**, in millimeters, such as ``res-2mm`` or
+  ``res-1p5mm`` (``p`` is the decimal point). Anisotropic sizes such as
+  ``res-6x6x3mm`` are rejected, because reconstruction requires isotropic DWI.
+- **Native-resolution strategies**, ``res-nativemin`` and ``res-nativemax``.
+  These take the smallest or largest voxel dimension across the input DWI runs
+  and use it isotropically: a 3x4x5 mm input gives 3x3x3 mm for ``nativemin``
+  and 5x5x5 mm for ``nativemax``. The value is only known once the DWI headers
+  are read, so the resolved voxel size is recorded in the ``Resolution`` key of
+  each output's JSON sidecar.
+
+Pass the acquired resolution to keep it, or a smaller value to upsample; some
+downstream methods, such as fixel-based analysis, recommend at least 1.3 mm.
+Head motion correction, distortion correction, coregistration and resampling
+are combined so the data are interpolated as few times as possible (once with
+SHORELine, twice with ``eddy`` and DIFFPREP, which write their own corrected
+volumes). Resampling uses Lanczos windowed sinc interpolation, or linear
+interpolation when upsampling by more than 10%.
+
+On standard spaces, only **TemplateFlow resolution labels** are accepted, such
+as ``res-1`` or ``res-2``. The label selects the TemplateFlow grid the template
+is fetched on, and appears as the ``res-`` entity in the output filenames.
+Which labels exist varies by template; an unavailable label is rejected with
+the list of valid ones. Physical (``mm``) sizes are not implemented for
+standard spaces and are rejected: *QSIPrep* does not resample standard-space
+outputs to an arbitrary voxel size.
+
+Multiple ``acpc`` resolutions
+=============================
+
+Listing ``acpc`` more than once (``acpc:res-2mm acpc:res-1p5mm``) resamples and
+writes the preprocessed DWI once per resolution, each costing roughly another
+full resampling pass. Every DWI derivative carries the ``res-`` entity of its
+resolution, even when only one is requested, as in fMRIPrep, and `QSIRecon`_
+selects which resolution to reconstruct by that entity.
+
+Multiple ``acpc`` resolutions work with ``--distortion-group-merge``. Each
+resolution is merged separately and written with its own ``res-`` entity, so
+*N* resolutions cost *N* merges, each with its own QC, on top of the *N*
+resampling passes per correction unit.
+
+Standard spaces
+===============
+
+Any other space name (``MNI152NLin2009cAsym``, ``MNI152NLin6Asym``,
+``MNIInfant``, ...) is a TemplateFlow template. Each standard space gets the
+``ACPC`` to template transforms and the anatomical derivatives (preprocessed
+T1w/T2w, brain mask and segmentation) resampled into it, but never DWI. Each
+template needs its own nonlinear registration of the anatomical reference, so
+*N* templates cost *N* registrations. Requesting no standard space at all
+(``--output-spaces acpc:res-2mm``) skips the registration entirely, unless
+fieldmap-less distortion correction (``--sdc-anat-reference``) needs it.
+
+A template may be listed at several TemplateFlow resolutions, either as
+repeated tokens or with repeated ``res-`` keys::
+
+  --output-spaces acpc:res-2mm MNI152NLin2009cAsym:res-1:res-2
+
+Each resolution gets its own anatomical derivatives, tagged with its own
+``res-`` entity. The transform does not depend on the resolution, so it is
+estimated and written once.
+
+AC-PC alignment is anchored to ``MNI152NLin2009cAsym``, or to the infant
+template when one is requested (or ``--infant`` is given), whether or not that
+template is listed in ``--output-spaces``. When several cohorts of that infant
+template are requested, a ``cohort-auto`` entry anchors the alignment, because
+it is the cohort matched to the participant's age; otherwise the first cohort
+listed does. The other cohorts still receive their transforms and anatomical
+derivatives. The choice is logged and stated in the subject summary of the
+HTML report; the methods boilerplate names the template the AC-PC registration
+used.
+
+Cohorts
+=======
+
+Templates with cohorts, such as ``MNIInfant``, require a ``cohort-`` key.
+``cohort-auto`` (``MNIInfant:cohort-auto``) picks the cohort from the
+participant's age at run time, as ``--infant`` does (see
+:ref:`anatomical_flags`); an explicit cohort such as ``MNIInfant:cohort-3``
+skips that lookup.
+
+``--output-spaces`` replaces ``--output-resolution``,
+``--anatomical-template`` and ``--skip-anat-based-spatial-normalization``;
+:doc:`upgrading` lists their equivalents.
+
+Coregistration
+==============
 
 ``--dwi2anat-dof`` is the number of degrees of freedom of the DWI to
 anatomical registration, 6 (rigid, the default) or 12 (affine).
@@ -604,8 +791,13 @@ from every group's reference, registers that once, and has every group
 inherit the result, so that data from different groups end up on exactly the
 same alignment. ``--dwiref-construction-iters`` (at least 2) and
 ``--dwiref-construction-transform`` (``Rigid``, ``Affine``, ``BSplineSyN`` or
-``SyN``) configure the template build. Which transforms are written in each
-case is described in :ref:`transforms`.
+``SyN``) configure the template build. A subject with a single distortion
+group gets the same ``subject`` outputs: no template is built, and that
+group's reference becomes the subject reference, with an identity transform.
+``subject`` cannot be combined with ``--subject-anatomical-reference
+sessionwise``, which processes each session on its own and so cannot build a
+reference that spans the subject's sessions. Which transforms are written in
+each case is described in :ref:`transforms`.
 
 
 ***********************
@@ -634,6 +826,16 @@ prints the version and exits.
 
 ``--sloppy``, ``--debug`` and ``--write-graph`` are for developing *QSIPrep*
 itself. ``--sloppy`` output is not fit for analysis.
+
+Templates come from TemplateFlow, in the directory named by the
+``TEMPLATEFLOW_HOME`` environment variable. The container image holds the
+files *QSIPrep* uses from the adult templates ``MNI152NLin2009cAsym`` and
+``MNI152NLin6Asym``, so a run on adult data downloads no templates. Other
+templates, including the MNIInfant cohorts used by ``--infant``, are
+downloaded when a run first needs them. For
+compute nodes without network access, populate a TemplateFlow directory once
+on a connected machine and bind it as ``TEMPLATEFLOW_HOME``, as described in
+:ref:`templateflow_cache`.
 
 
 .. _reading_the_log:

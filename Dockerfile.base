@@ -1,15 +1,15 @@
 ARG BASE_IMAGE=ubuntu:jammy-20250730
 ARG TAG_FREESURFER=26.9.2
 ARG TAG_MRTRIX3=26.1.0
-ARG TAG_MRTRIX3DEV=26.9.1
+ARG TAG_MRTRIX3DEV=26.9.9
 ARG TAG_3TISSUE=26.1.0
 ARG TAG_DSISTUDIO=26.1.2
 ARG TAG_AFNI=AFNI_25.2.09
-ARG TAG_TORTOISE=26.9.5
-ARG TAG_TORTOISECUDA=26.9.5
+ARG TAG_TORTOISE=26.10.3
+ARG TAG_TORTOISECUDA=26.10.3
 ARG TAG_SYNB0=26.1.2
 ARG TAG_TRXSCAN=26.8.3
-ARG TAG_NIIMATH=26.9.4
+ARG TAG_NIIMATH=26.10.2
 
 FROM pennlinc/qsiprep-freesurfer:${TAG_FREESURFER} AS build_freesurfer
 FROM pennlinc/qsiprep-mrtrix3:${TAG_MRTRIX3} AS build_mrtrix3
@@ -123,6 +123,7 @@ COPY --from=build_trxscan /opt/trxscan /opt/trxscan
 ENV PATH="$PATH:/opt/trxscan/bin"
 
 ## niimath (fslmaths-compatible; -romeo/-fmapprep/-fugue for FSL-free GRE SDC)
+## and svht_denoise (--denoise-method svht, --unringing-method svht)
 COPY --from=build_niimath /opt/niimath /opt/niimath
 ENV PATH="$PATH:/opt/niimath/bin"
 
@@ -136,7 +137,6 @@ ENV HOME="/home/qsiprep" \
     KMP_WARNINGS=0 \
     CRN_SHARED_DATA=/niworkflows_data \
     IS_DOCKER_8395080871=1 \
-    ARTHOME="/opt/art" \
     DIPY_HOME=/home/qsiprep/.dipy
 
 ENV FSLOUTPUTTYPE="NIFTI_GZ" \
@@ -215,13 +215,6 @@ ENV C3DPATH="/opt/convert3d-nightly" \
 # Install Qt runtime deps for DSI Studio and copy binaries
 COPY --from=build_dsistudio /opt/dsi-studio /opt/dsi-studio
 
-# Install ACPC-detect
-WORKDIR /opt/art
-ENV PATH="/opt/art/bin:$PATH"
-RUN cd /opt/art \
-    && curl -fsSL https://osf.io/73h5s/download \
-    | tar xz --strip-components 1
-
 # Unless otherwise specified each process should only use one thread - nipype
 # will handle parallelization
 ENV \
@@ -232,7 +225,6 @@ ENV \
     KMP_WARNINGS=0 \
     CRN_SHARED_DATA=/niworkflows_data \
     IS_DOCKER_8395080871=1 \
-    ARTHOME="/opt/art" \
     DIPY_HOME=/home/qsiprep/.dipy \
     TF_USE_LEGACY_KERAS=1 \
     TF_ENABLE_ONEDNN_OPTS=0 \

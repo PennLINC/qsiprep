@@ -229,25 +229,6 @@ class FixHeaderSynthStrip(SynthStrip):
         return runtime
 
 
-class MockSynthStrip(SimpleInterface):
-    input_spec = _SynthStripInputSpec
-    output_spec = _SynthStripOutputSpec
-
-    def _run_interface(self, runtime):
-        from nipype.interfaces.fsl import BET
-
-        this_bet = BET(
-            mask=True,
-            in_file=self.inputs.input_image,
-            output_type='NIFTI_GZ',
-        )
-        result = this_bet.run()
-        self._results['out_brain'] = result.outputs.out_file
-        self._results['out_brain_mask'] = result.outputs.mask_file
-
-        return runtime
-
-
 class _SynthSegInputSpec(FSTraitedSpecOpenMP):
     input_image = File(argstr='--i %s', exists=True, mandatory=True)
     num_threads = traits.Int(
@@ -336,19 +317,14 @@ class MockSynthSeg(SimpleInterface):
     output_spec = _SynthSegOutputSpec
 
     def _run_interface(self, runtime):
-        from nipype.interfaces.fsl import BET
+        from .niimath import SkullStrip
 
         output_qc = op.join(runtime.cwd, 'fake_synthseg_qc.csv')
         with open(output_qc, 'w') as qcf:
             qcf.write('Test QC file\n')
 
-        # Get a brain mask
-        this_bet = BET(
-            mask=True,
-            in_file=self.inputs.input_image,
-            output_type='NIFTI_GZ',
-        )
-        result = this_bet.run()
+        # Get a brain mask (niimath's surface stripper; FSL BET is gone)
+        result = SkullStrip(in_file=self.inputs.input_image).run(cwd=runtime.cwd)
         self._results['out_post'] = result.outputs.out_file
 
         # Make a fake segmentation

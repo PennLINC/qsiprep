@@ -34,7 +34,7 @@ give the container-side paths as arguments::
         -v /path/to/work:/work \
         pennlinc/qsiprep:<version> \
         /data /out participant \
-        -w /work --output-resolution 2
+        -w /work --output-spaces acpc:res-2mm MNI152NLin2009cAsym
 
 Replace ``<version>`` with a release tag. ``latest`` is the last release and
 ``unstable`` the current ``main`` branch; do not use ``unstable`` for
@@ -61,43 +61,66 @@ Bind the input, output and working directories::
         -B /path/to/bids,/path/to/output,/path/to/work \
         qsiprep-<version>.sif \
         /path/to/bids /path/to/output participant \
-        -w /path/to/work --output-resolution 2
+        -w /path/to/work --output-spaces acpc:res-2mm MNI152NLin2009cAsym
 
 Add ``--nv`` to use the GPU.
 
-.. note::
-    **Running QSIPrep with Apptainer on Non-Internet Nodes**
 
-    QSIPrep relies on TemplateFlow to provide standard anatomical templates. By default, it downloads
-    necessary files into the ``$TEMPLATEFLOW_HOME`` directory (default: ``$HOME/.cache/templateflow``).
-    However, when running with ``--containall``, the default location may not be accessible, and any
-    missing templates will be tentatively downloaded into the temporary QSIPrep working directory instead.
-    To avoid this, you must always set and bind ``TEMPLATEFLOW_HOME`` explicitly.
+.. _templateflow_cache:
 
-    Steps to ensure successful execution:
+**********************
+TemplateFlow templates
+**********************
 
-    1. On an **internet-enabled node**, set and bind the ``TEMPLATEFLOW_HOME`` variable to a persistent
-       directory before running QSIPrep. This will ensure all necessary templates are downloaded into the
-       specified location:
+*QSIPrep* takes its standard templates from `TemplateFlow
+<https://www.templateflow.org/>`_. The container image already holds the files
+it uses from the two adult templates: the 1 mm T1w and ``desc-brain`` mask of
+``MNI152NLin2009cAsym`` and ``MNI152NLin6Asym``, and the 1 mm T2w of
+``MNI152NLin2009cAsym`` (about 38 MB compressed). They are in
+``/home/qsiprep/.cache/templateflow``, where the image's ``TEMPLATEFLOW_HOME``
+points, so a run on adult data downloads no templates and needs no extra bind.
 
-       .. code-block:: sh
+Any other template, such as the MNIInfant cohort that ``--infant`` selects, is
+downloaded into ``$TEMPLATEFLOW_HOME`` the first time a run needs it. Inside
+the image that download does not persist: Docker discards it with the
+container, and an Apptainer image is read-only, so the download fails unless
+``--writable-tmpfs`` gives the container a temporary overlay, which is
+discarded as well.
 
-          export TEMPLATEFLOW_HOME=/path/to/persistent/templateflow
-          apptainer run --cleanenv --containall \
-            -B ${TEMPLATEFLOW_HOME}:${TEMPLATEFLOW_HOME} \
-            --env "TEMPLATEFLOW_HOME=$TEMPLATEFLOW_HOME" \
-            /path/to/qsiprep_<VERSION>.sif <your commands>
+To keep downloaded templates between runs, or to run on nodes without network
+access, bind a TemplateFlow directory and set ``TEMPLATEFLOW_HOME`` to it. The
+bound directory replaces the image's cache, so it must hold the adult
+templates as well. Populate it once on a machine with network access, starting
+from the image's cache::
 
-    2. If the ``TEMPLATEFLOW_HOME`` directory is not accessible on your target HPC node, manually copy it
-       to the target system after the first run.
+    $ mkdir -p /path/to/templateflow
+    $ apptainer exec --containall -B /path/to/templateflow qsiprep-<version>.sif \
+        cp -r /home/qsiprep/.cache/templateflow/. /path/to/templateflow/
 
-    3. On nodes without internet access, bind the copied ``TEMPLATEFLOW_HOME`` directory and set the
-       environment variable as described above before running QSIPrep.
-    4. It may help to run a single subject or session on its own before running many jobs that access the templates. The single run will download the necessary templates and prevent multiple jobs from attempting to download the templates simultaneously.
+then add the templates the image leaves out. For MNIInfant cohort 1, the files
+*QSIPrep* uses are::
 
+    $ apptainer exec --containall -B /path/to/templateflow \
+        --env TEMPLATEFLOW_HOME=/path/to/templateflow \
+        qsiprep-<version>.sif python -c "
+    from templateflow.api import get
+    get('MNIInfant', cohort='1', resolution=1, desc=None, suffix=['T1w', 'T2w'], extension='.nii.gz')
+    get('MNIInfant', cohort='1', resolution=1, desc='brain', suffix='mask', extension='.nii.gz')"
 
-    For additional troubleshooting, see `fmriprep docs <https://fmriprep.org/en/stable/faq.html#how-do-you-use-templateflow-in-the-absence-of-access-to-the-internet>`_
-    or `this thread on Neurostars <https://neurostars.org/t/issue-with-qsiprep-templateflow-on-hpc-host-with-no-internet-access/31259/10?u=pierre-nedelec>`_.
+Copy the directory to the cluster if the compute nodes cannot see it, and bind
+it in every run::
+
+    $ apptainer run --containall --writable-tmpfs \
+        -B /path/to/bids,/path/to/output,/path/to/work,/path/to/templateflow \
+        --env TEMPLATEFLOW_HOME=/path/to/templateflow \
+        qsiprep-<version>.sif \
+        /path/to/bids /path/to/output participant \
+        -w /path/to/work --output-resolution 2
+
+With Docker, the equivalent options are
+``-v /path/to/templateflow:/templateflow -e TEMPLATEFLOW_HOME=/templateflow``.
+A run that needs a file missing from the bound directory tries to download it,
+and fails without network access.
 
 
 **************
@@ -111,6 +134,10 @@ Python Library
 Every tool listed under :ref:`external_dependencies` has to be installed and
 configured separately, so this route is for people who maintain their own
 environment and know why they want it. Everyone else should use a container.
+Templates are downloaded into ``$TEMPLATEFLOW_HOME`` (``~/.cache/templateflow``
+on Linux by default) when a run first needs them;
+``python scripts/fetch_templates.py`` in a source checkout fetches the ones
+the container image holds.
 
 
 .. _external_dependencies:

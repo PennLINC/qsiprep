@@ -68,8 +68,30 @@ def _tsnr_meta(n_b0, median_tsnr):
 LOGGER = logging.getLogger('nipype.workflow')
 
 
+def writes_hmc_optimization():
+    """Whether this run writes the ``hmcOptimization`` derivative.
+
+    SHORELine's ``IterationSummary`` (``init_dwi_model_hmc_wf``) only exists
+    with a 3dSHORE signal model and more than one iteration, so the
+    ``hmc_optimization_data`` the HMC backends expose is a CSV worth writing
+    only then (eddy's is its outlier map, written elsewhere). Both consumers of
+    that field -- the per-run ``init_dwi_derivatives_wf`` and the
+    distortion-group merge, which has to concatenate the per-unit files before
+    sinking them -- share this one decision so neither builds a
+    ``ds_optimization`` sink the other cannot feed.
+    """
+    return (
+        config.workflow.hmc_method == 'shoreline'
+        and config.workflow.shoreline_model == '3dshore'
+        and config.workflow.shoreline_iters > 1
+    )
+
+
 def init_dwi_derivatives_wf(
     source_file,
+    resolution=None,
+    write_hmc_optimization=True,
+    name='dwi_derivatives_wf',
     sdc_warp_meta=None,
     sdc_refinement_meta=None,
     jacobian_applied_corrections=(),
@@ -88,9 +110,25 @@ def init_dwi_derivatives_wf(
     which the caller (``init_dwi_finalize_wf``) computes from the ``unit`` it has
     and this function does not. They are set directly as ``StackJacobianWeights``
     node inputs, because they are per-run facts, not invocation-global ones.
+
+    Parameters
+    ----------
+    resolution : Resolution or None
+        The ACPC resolution these derivatives are on. Adds a ``res-<label>`` entity
+        to every ACPC DWI sink below, as the pipeline always does. ``None`` writes
+        no ``res-`` entity and is kept only for callers that build this workflow
+        on its own.
+    write_hmc_optimization : bool
+        The hmcOptimization sidecar is produced before resampling and does not vary
+        by output resolution. When ``init_dwi_derivatives_wf`` is instantiated once
+        per ACPC resolution, every instance would otherwise write the exact same
+        path -- a same-path collision under nipype's MultiProc plugin. Callers doing
+        that fan-out should pass this as ``True`` for exactly one instance (its first
+        spec) and ``False`` for the rest.
     """
     output_dir = str(config.execution.output_dir)
-    workflow = Workflow(name='dwi_derivatives_wf')
+    workflow = Workflow(name=name)
+    res_entities = {'res': resolution.label} if resolution is not None else {}
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
@@ -119,11 +157,7 @@ def init_dwi_derivatives_wf(
         name='inputnode',
     )
 
-    if (
-        config.workflow.hmc_method == 'shoreline'
-        and config.workflow.shoreline_model == '3dshore'
-        and config.workflow.shoreline_iters > 1
-    ):
+    if write_hmc_optimization and writes_hmc_optimization():
         ds_optimization = pe.Node(
             DerivativesDataSink(
                 source_file=source_file,
@@ -158,6 +192,7 @@ def init_dwi_derivatives_wf(
             suffix='dwimap',
             extension='.nii.gz',
             compress=True,
+            **res_entities,
         ),
         name='ds_tsnr',
         run_without_submitting=True,
@@ -175,9 +210,9 @@ def init_dwi_derivatives_wf(
             suffix='dwi',
             extension='.nii.gz',
             compress=True,
+            **res_entities,
         ),
         name='ds_dwi_t1',
-        run_without_submitting=True,
         mem_gb=DEFAULT_MEMORY_MIN_GB,
     )
     ds_bvals_t1 = pe.Node(
@@ -188,6 +223,7 @@ def init_dwi_derivatives_wf(
             suffix='dwi',
             extension='.bval',
             desc='preproc',
+            **res_entities,
         ),
         name='ds_bvals_t1',
         run_without_submitting=True,
@@ -201,6 +237,7 @@ def init_dwi_derivatives_wf(
             suffix='dwi',
             extension='.bvec',
             desc='preproc',
+            **res_entities,
         ),
         name='ds_bvecs_t1',
         run_without_submitting=True,
@@ -215,6 +252,7 @@ def init_dwi_derivatives_wf(
             suffix='dwiref',
             extension='.nii.gz',
             compress=True,
+            **res_entities,
         ),
         name='ds_t1_b0_ref',
         run_without_submitting=True,
@@ -229,6 +267,7 @@ def init_dwi_derivatives_wf(
             suffix='mask',
             extension='.nii.gz',
             compress=True,
+            **res_entities,
         ),
         name='ds_dwi_mask_t1',
         run_without_submitting=True,
@@ -247,6 +286,7 @@ def init_dwi_derivatives_wf(
             meta_dict={
                 'Description': _cnr_description(config.workflow.hmc_method),
             },
+            **res_entities,
         ),
         name='ds_cnr_map_t1',
         run_without_submitting=True,
@@ -260,6 +300,7 @@ def init_dwi_derivatives_wf(
             desc='preproc',
             suffix='dwi',
             extension='.b',
+            **res_entities,
         ),
         name='ds_gradient_table_t1',
         run_without_submitting=True,
@@ -273,6 +314,7 @@ def init_dwi_derivatives_wf(
             desc='preproc',
             suffix='dwi',
             extension='.b_table.txt',
+            **res_entities,
         ),
         name='ds_btable_t1',
         run_without_submitting=True,
@@ -314,6 +356,7 @@ def init_dwi_derivatives_wf(
                 applied_corrections=list(jacobian_applied_corrections),
                 unmodulated_corrections=list(jacobian_unmodulated_corrections),
                 unmodulated_reason=jacobian_unmodulated_reason,
+                volumes=config.workflow.write_jacobian_4d,
             ),
             name='stack_jacobian',
         )
@@ -322,13 +365,13 @@ def init_dwi_derivatives_wf(
                 source_file=source_file,
                 base_directory=output_dir,
                 space='ACPC',
+                **res_entities,
                 desc='jacobian',
                 suffix='dwimap',
                 extension='.nii.gz',
                 compress=True,
             ),
             name='ds_jacobian',
-            run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
         workflow.connect([
@@ -369,6 +412,7 @@ def init_dwi_derivatives_wf(
                 source_file=source_file,
                 base_directory=output_dir,
                 space='ACPC',
+                **res_entities,
                 desc=desc,
                 suffix='displacement',
                 extension='.nii.gz',

@@ -6,7 +6,7 @@ workflows. They are different images and both are worth writing:
 
 * ``t2_preproc``    -- the merged (unbiased) T2w template resampled into ACPC,
                        built from ``anat_reference_wf``'s ``bias_corrected``.
-* ``t2w_unfatsat``  -- the fat-suppressed image that TORTOISE T2Wreg and DRBUDDI
+* ``t2w_unfatsat``  -- the fat-suppressed image that DRBUDDI and unpile
                        actually register to. It descends from
                        ``outputnode.template``, so it is NOT bias corrected and
                        is NOT the same image as ``t2_preproc``.
@@ -24,6 +24,7 @@ def _config():
     config.execution.sloppy = True
     config.execution.output_dir = Path('/tmp/qsiprep_test_out')
     config.nipype.omp_nthreads = 1
+    config.workflow.output_spaces = ['acpc:res-2mm', 'MNI152NLin2009cAsym']
     config.workflow.anat_modality = 'T1w'
     config.workflow.anat_biascorrect = 'n4'
     config.workflow.subject_anatomical_reference = 'unbiased'
@@ -33,15 +34,20 @@ def _config():
     return config
 
 
-def _build(num_additional_t2ws, name):
+def _build(num_additional_t2ws, name, anat_modality='T1w'):
+    from qsiprep.utils.spaces import select_acpc_anchor
     from qsiprep.workflows.anatomical.volume import init_anat_preproc_wf
 
-    _config()
+    config = _config()
+    config.workflow.anat_modality = anat_modality
+    output_spaces = config.workflow.parsed_output_spaces()
     return init_anat_preproc_wf(
         num_anat_images=2,
         num_additional_t2ws=num_additional_t2ws,
         has_rois=False,
-        anatomical_template='MNI152NLin2009cAsym',
+        output_spaces=output_spaces,
+        acpc_anchor=select_acpc_anchor(output_spaces),
+        acpc_specs=[s for s in output_spaces if not s.standard],
         name=name,
     )
 
@@ -257,3 +263,18 @@ def test_base_sinks_both_templates_to_their_own_spaces():
     assert "('outputnode.dwiref_acpc', 'in_file')" in src
     assert "('outputnode.dwiref', 'in_file')" in src
     assert "name='ds_dwiref_acpc'" in src
+
+
+def test_t2w_as_the_anatomical_modality_still_builds_the_sinks():
+    """Test that ``--anat-modality T2w`` with T2w SDC builds and writes the T2w products.
+
+    With T2w as the primary anatomical the T2w branch is the ACPC-resampled head and
+    unfatsat, not ``t2w_preproc_wf`` (which only exists next to a T1w). Connecting the
+    derivatives to that absent node crashed workflow construction with an
+    UnboundLocalError, so the T2w-only path has to be built from ``outputnode``.
+    """
+    wf = _build(1, 't2w_primary', anat_modality='T2w')
+    names = _names(wf)
+    assert not any('t2w_preproc_wf' in n for n in names)
+    assert any('ds_t2_preproc' in n for n in names)
+    assert any('ds_t2w_unfatsat' in n for n in names)

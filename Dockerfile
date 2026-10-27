@@ -1,4 +1,4 @@
-ARG BASE_IMAGE=pennlinc/qsiprep-base:20260923
+ARG BASE_IMAGE=pennlinc/qsiprep-base:20261005
 
 FROM ghcr.io/prefix-dev/pixi:0.58.0 AS build
 RUN apt-get update && \
@@ -20,6 +20,12 @@ RUN --mount=type=cache,target=/root/.cache/rattler pixi install -e qsiprep -e te
 RUN --mount=type=cache,target=/root/.npm pixi run --as-is -e qsiprep npm install -g svgo@^3.2.0 bids-validator@1.14.10
 RUN pixi shell-hook -e qsiprep --as-is | grep -v PATH > /shell-hook.sh
 RUN pixi shell-hook -e test --as-is | grep -v PATH > /test-shell-hook.sh
+
+# Prefetch the adult templates before COPY . so code changes do not download them again.
+# Modes are set here so the chmod in the base stage leaves the files unchanged.
+COPY scripts/fetch_templates.py /app/scripts/fetch_templates.py
+RUN TQDM_DISABLE=1 pixi run --as-is -e qsiprep python scripts/fetch_templates.py --tf-dir /templateflow && \
+    chmod -R go=u /templateflow
 
 # Finally, install the package
 COPY . /app
@@ -52,6 +58,9 @@ RUN test "$(command -v mrdegibbs)"      = "/opt/mrtrix3-stable/bin/mrdegibbs" &&
     test "$(/opt/mrtrix3-stable/bin/mrinfo -version | head -1 | awk '{print $3}')" = "$MRTRIX3_STABLE_VERSION" && \
     test "$(/opt/mrtrix3-dev/bin/mrinfo -version | head -1 | awk '{print $3}')" = "$MRTRIX3_DEV_VERSION"
 
+# Not COPY --link, which would reset the owner and mode of $HOME.
+COPY --from=build /templateflow $HOME/.cache/templateflow
+ENV TEMPLATEFLOW_HOME="$HOME/.cache/templateflow"
 RUN chmod -R go=u $HOME
 WORKDIR /tmp
 
@@ -72,6 +81,9 @@ RUN test "$(command -v python)" = "/app/.pixi/envs/test/bin/python" && \
     /app/.pixi/envs/test/bin/python -c "import contourpy" && \
     /opt/freesurfer/bin/fspython -c "import nibabel, scipy, surfa, tensorflow" && \
     /opt/freesurfer-torch/bin/python -c "import nibabel, scipy, surfa, torch; assert torch.version.cuda"
+# The prefetched templates resolve without network access.
+RUN --network=none python -c "from templateflow.api import get; \
+    print(get('MNI152NLin2009cAsym', resolution=1, desc=None, suffix='T1w', extension='.nii.gz'))"
 ARG VCS_REF
 LABEL org.opencontainers.image.revision=$VCS_REF
 
@@ -100,6 +112,9 @@ RUN test "$(command -v python)" = "/app/.pixi/envs/qsiprep/bin/python" && \
     /opt/freesurfer/bin/fspython -m py_compile /opt/freesurfer/bin/mri_synthseg && \
     /opt/freesurfer-torch/bin/python -c "import nibabel, scipy, surfa, torch; assert torch.version.cuda" && \
     /opt/freesurfer-torch/bin/python -m py_compile /opt/freesurfer/bin/mri_synthstrip
+# The prefetched templates resolve without network access.
+RUN --network=none python -c "from templateflow.api import get; \
+    print(get('MNI152NLin2009cAsym', resolution=1, desc=None, suffix='T1w', extension='.nii.gz'))"
 
 ENTRYPOINT ["/app/.pixi/envs/qsiprep/bin/qsiprep"]
 ARG BUILD_DATE

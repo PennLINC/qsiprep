@@ -29,8 +29,9 @@ What runs
 3. A new model is fit to the updated images and vectors, and the
    leave-one-out registration is repeated (``"iters"`` times, default 2).
 4. Susceptibility distortion correction runs on the result: DRBUDDI for
-   reverse phase-encoded data, or a GRE fieldmap or SyN. ``synb0`` and
-   ``t2w`` anatomical references are not supported on this backend.
+   reverse phase-encoded data, a GRE fieldmap, or with no fieldmap SynB0 +
+   TOPUP on the motion-corrected b=0 (:ref:`sdc_synb0`), SyN, or unpile
+   (:ref:`sdc_unpile`).
 
 The motion transforms are carried, not applied, so the data are interpolated
 once, at the final resampling. Six (or twelve, with an affine transform)
@@ -41,7 +42,7 @@ is shown in the carpet plot.
     :graph2use: colored
     :simple_form: yes
 
-    from qsiprep_docs import example_unit, configure, AP, ANATOMICAL_TEMPLATE
+    from qsiprep_docs import example_unit, configure, AP, ACPC_ANCHOR
     from qsiprep.workflows.dwi.hmc_sdc import init_qsiprep_hmcsdc_wf
 
     configure(workflow__hmc_method='shoreline', workflow__sdc_method='drbuddi')
@@ -49,7 +50,6 @@ is shown in the carpet plot.
         example_unit('pepolar'),
         source_file=AP,
         t2w_sdc=False,
-        anatomical_template=ANATOMICAL_TEMPLATE,
     )
 
 .. _configure_shoreline:

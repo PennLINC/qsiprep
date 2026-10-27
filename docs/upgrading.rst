@@ -56,8 +56,8 @@ Removed or renamed options
      - ``--sdc-method``
      - :pr:`1140`
    * - ``--force-syn``, ``--use-syn-sdc``
-     - ``--sdc-anat-reference invt1w``, with ``--force sdc-anat-reference``
-       to override fieldmaps
+     - ``--sdc-fieldmapless-method syn --sdc-anat-reference invt1w``, with
+       ``--force sdc-anat-reference`` to override fieldmaps
      - :pr:`1111`
    * - ``--b0-to-t1w-transform``
      - ``--dwi2anat-dof 6`` (rigid) or ``12`` (affine)
@@ -76,27 +76,59 @@ Removed or renamed options
    * - ``--b0-motion-corr-to``, ``--fmap-no-demean``, ``--fmap-bspline``
      - Removed.
      - :pr:`1124`, :pr:`1130`, :pr:`1131`
+   * - ``--output-resolution 2``
+     - ``--output-spaces acpc:res-2mm MNI152NLin2009cAsym``
+     - :pr:`1127`
+   * - ``--output-resolution 1.5``
+     - ``--output-spaces acpc:res-1p5mm MNI152NLin2009cAsym``
+     - :pr:`1127`
+   * - ``--output-resolution 2 --infant``
+     - ``--infant --output-spaces acpc:res-2mm MNIInfant:cohort-auto``
+     - :pr:`1127`
+   * - ``--anatomical-template``
+     - List the template in ``--output-spaces``
+     - :pr:`1127`
+   * - ``--skip-anat-based-spatial-normalization``
+     - Request no standard space, as in ``--output-spaces acpc:res-2mm``
+     - :pr:`1127`
+
+Keep ``--infant`` when moving to ``--output-spaces``: besides adding
+``MNIInfant:cohort-auto``, it narrows the autobox padding and requires
+``--subject-anatomical-reference sessionwise``, so dropping it changes the
+results. It does not change ``--anat-modality``. Because ``--infant`` always
+requests an infant template, the old ``--infant
+--skip-anat-based-spatial-normalization`` combination, which wrote no
+standard space, has no equivalent.
 
 ***********
 New options
 ***********
 
+* ``--output-spaces``: one or more ``acpc`` resolutions for the preprocessed
+  DWI, including ``res-nativemin``/``res-nativemax``, and any number of
+  TemplateFlow standard spaces for the transforms and anatomical derivatives,
+  with ``cohort-auto`` age-based cohort selection (:ref:`output_spaces_ref`).
 * ``--hmc-method tortoise`` and ``--diffprep-config``: TORTOISE DIFFPREP
   head motion and eddy-current correction (:doc:`methods/hmc_tortoise`).
 * ``--sdc-method``: ``topup``, ``drbuddi`` or ``topup+drbuddi`` for reverse
   phase-encoded data (:doc:`methods/sdc`).
-* ``--sdc-anat-reference``: ``synb0``, ``t2w``, ``invt1w`` or ``auto``
-  fieldmap-less correction as a fallback, and ``--force sdc-anat-reference``.
+* ``--sdc-fieldmapless-method`` (``topup``, ``syn``, ``unpile``) and
+  ``--sdc-anat-reference`` (``synb0``, ``invt1w``, ``t2w``, ``none``): the
+  correction for series no fieldmap reaches, and ``--force
+  sdc-anat-reference`` to use it for every series (:ref:`sdc_flags`).
+* ``--force one-pass-sdc``: drops the second pass of SynB0 + TOPUP (with
+  every head motion method) and of GRE fieldmap registration.
 * ``--gradient-file``, ``--force gradwarp1D``/``gradwarp3D``, ``--ignore
   gradwarp``: gradient nonlinearity correction (:ref:`gradwarp_flags`).
-* ``--ignore jacobian``, ``--force jacobian``: intensity modulation after
-  distortion correction (:ref:`jacobian_flags`).
+* ``--ignore jacobian``: intensity modulation after distortion correction
+  (:ref:`jacobian_flags`).
 * ``--gpu`` and ``--tortoise-gpu-cpu-ratio``: per-task GPU selection,
   replacing ``use_cuda`` in the configuration files.
-* ``--denoise-method dwidenoise2`` and ``--dwidenoise2-config``.
+* ``--denoise-method dwidenoise2``, ``--denoise-method svht``,
+  ``--unringing-method svht`` and ``--denoise-config``.
 * ``--mrtrix-version``: use the MRtrix3 development branch.
-* ``--anat-biascorrect``, ``--report-output-level``, ``--ignore t2w``,
-  ``--ignore phase``, ``--ignore shims``, ``--ignore fov``.
+* ``--anat-biascorrect``, ``--report-output-level``, ``--ignore
+  pepolar-dwis``, ``--ignore sdc``, ``--ignore shims``, ``--ignore fov``.
 
 ****************
 Behavior changes
@@ -109,12 +141,30 @@ Behavior changes
   ``B0FieldSource`` are supported, and BIDS URIs work in ``IntendedFor``.
   Inconsistent metadata that used to be silently worked around now stops
   the run with a named error (:ref:`grouping_errors`).
+* **Separately corrected halves are concatenated by default.**
+  ``--distortion-group-merge`` now defaults to ``concat`` instead of
+  ``none``: a reverse phase-encoded pair whose halves are corrected
+  separately, as they are with ``--hmc-method tortoise``, is written as one
+  output rather than one per phase-encoding direction. Pass ``--distortion-group-merge
+  none`` for the 26.0 behavior (:ref:`grouping_flags`).
 * **GRE fieldmaps go into eddy.** With ``--hmc-method eddy``, a GRE fieldmap
   is passed to ``eddy`` and applied inside its model rather than to its
   outputs. ``--force gre-sdc-after-eddy`` restores the old behavior for
   comparison and is deprecated.
-* **A GRE fieldmap initializes DRBUDDI and T2Wreg** when a series is also
-  corrected by reverse phase encoding (:ref:`sdc_gre_init`).
+* **Fieldmap-less correction is still off by default, but the flags changed.**
+  ``--use-syn-sdc`` is gone; ``--sdc-anat-reference synb0`` turns the
+  correction on, and ``--sdc-fieldmapless-method`` picks it: SynB0 + TOPUP
+  (the default, with every head motion method: before ``eddy``, after
+  DIFFPREP or SHORELine), ``syn`` for the old SyN registration, or
+  ``unpile``, which is experimental, against the synthetic b=0 or the T2w
+  (``--sdc-anat-reference t2w``, :ref:`sdc_unpile`). Once requested, a
+  series the correction cannot handle (no T1w, no ``PhaseEncodingDirection``
+  or ``TotalReadoutTime``) stops the run with an error. A T2w no longer
+  selects a correction by itself.
+* **A GRE fieldmap initializes DRBUDDI, and is unpile's prior,** when a
+  series is also corrected by reverse phase encoding or by a forced
+  fieldmap-less correction (:ref:`sdc_gre_init`).
+
 * **Intensity modulation** after distortion correction is now applied by
   *QSIPrep* for the corrections it resamples itself, and written as a
   derivative.

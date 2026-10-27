@@ -25,12 +25,14 @@ from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from niworkflows.interfaces.images import IntraModalMerge
-from niworkflows.interfaces.reportlets.masks import BETRPT
+from niworkflows.interfaces.reportlets.masks import SimpleShowMaskRPT
 
 from ... import config
 from ...interfaces import DerivativesDataSink, Phasediff2Fieldmap, Phases2Fieldmap
 from ...interfaces.fmap import MedianFilter
-from ...interfaces.niimath import RomeoUnwrap
+from ...interfaces.niimath import RomeoUnwrap, SkullStrip
+from ...utils.versions import niimath_version, versioned
+from .unwarp import GRE_SECOND_PASS_DESC
 from .utils import cleanup_edge_pipeline, demean_image, siemens2rads
 
 
@@ -60,11 +62,15 @@ def init_phdiff_wf(phasetype='phasediff', name='phdiff_wf'):
     """
     omp_nthreads = config.nipype.omp_nthreads
     workflow = Workflow(name=name)
-    workflow.__desc__ = """\
-A deformation field to correct for susceptibility distortions was estimated
-based on a field map that was co-registered to the b=0 reference.
+    second_pass = GRE_SECOND_PASS_DESC if config.workflow.two_pass_sdc else ''
+    niimath = versioned('*niimath*', niimath_version())
+    workflow.__desc__ = f"""
+
+Susceptibility distortion was corrected with a gradient-echo (GRE) field map. The field
+map's magnitude image was rigidly registered to the *b*=0 reference.{second_pass}
 The phase image was unwrapped with the ROMEO algorithm [@romeo] as implemented
-in *niimath* [@niimath], median-filtered, and converted to a field map in Hz
+in {niimath} [@niimath], median-filtered, extrapolated beyond the brain mask so
+that the distorted EPI brain is covered, and converted to a field map in Hz
 following the approach of *fMRIPrep* and the HCP Pipelines [@hcppipelines].
 """
 
@@ -99,14 +105,15 @@ following the approach of *fMRIPrep* and the HCP Pipelines [@hcppipelines].
         name='n4',
         n_procs=omp_nthreads,
     )
-    bet = pe.Node(BETRPT(generate_report=True, frac=0.6, mask=True), name='bet')
+    # niimath's surface stripper on the N4-corrected magnitude (replaces FSL BET)
+    skullstrip = pe.Node(SkullStrip(), name='skullstrip')
+    skullstrip_rpt = pe.Node(SimpleShowMaskRPT(), name='skullstrip_rpt')
     ds_report_fmap_mask = pe.Node(
         DerivativesDataSink(datatype='figures', desc='brainmask', suffix='fieldmap'),
         name='ds_report_fmap_mask',
         mem_gb=0.01,
         run_without_submitting=True,
     )
-    # uses mask from bet; outputs a mask
 
     # niimath -romeo performs phase-unwrapping
     prelude = pe.Node(RomeoUnwrap(), name='prelude')
@@ -154,19 +161,21 @@ The phase difference used for unwarping was calculated using two separate phase 
         (inputnode, magmrg, [('magnitude', 'in_files')]),
         (magmrg, n4, [('out_avg', 'input_image')]),
         (n4, prelude, [('output_image', 'magnitude_file')]),
-        (n4, bet, [('output_image', 'in_file')]),
-        (bet, prelude, [('mask_file', 'mask_file')]),
+        (n4, skullstrip, [('output_image', 'in_file')]),
+        (n4, skullstrip_rpt, [('output_image', 'background_file')]),
+        (skullstrip, skullstrip_rpt, [('mask_file', 'mask_file')]),
+        (skullstrip, prelude, [('mask_file', 'mask_file')]),
         (prelude, denoise, [('unwrapped_phase_file', 'in_file')]),
         (denoise, demean, [('out_file', 'in_file')]),
         (demean, cleanup_wf, [('out', 'inputnode.in_file')]),
-        (bet, cleanup_wf, [('mask_file', 'inputnode.in_mask')]),
+        (skullstrip, cleanup_wf, [('mask_file', 'inputnode.in_mask')]),
         (cleanup_wf, compfmap, [('outputnode.out_file', 'in_file')]),
         (compfmap, outputnode, [('out_file', 'fmap')]),
-        (bet, outputnode, [
+        (skullstrip, outputnode, [
             ('mask_file', 'fmap_mask'),
             ('out_file', 'fmap_ref'),
         ]),
-        (bet, ds_report_fmap_mask, [('out_report', 'in_file')]),
+        (skullstrip_rpt, ds_report_fmap_mask, [('out_report', 'in_file')]),
     ])  # fmt:skip
 
     return workflow

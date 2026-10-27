@@ -28,14 +28,14 @@ def _reset_config_impl():
     """
     saved = (
         config.workflow.ignore,
-        config.workflow.output_resolution,
+        config.workflow.output_spaces,
         config.nipype.omp_nthreads,
         config.workflow.b0_threshold,
         config.workflow.dwi2anat_dof,
         config.workflow.force,
     )
     config.workflow.ignore = []
-    config.workflow.output_resolution = 2.0
+    config.workflow.output_spaces = ['acpc:res-2mm']
     # config.nipype.init() normally resolves this; it is not run in these bare
     # construction tests, so init_modelfree_qc_wf's DSIStudioGQIReconstruction
     # node (which requires an int thread_count) fails to build without it.
@@ -47,7 +47,7 @@ def _reset_config_impl():
     yield
     (
         config.workflow.ignore,
-        config.workflow.output_resolution,
+        config.workflow.output_spaces,
         config.nipype.omp_nthreads,
         config.workflow.b0_threshold,
         config.workflow.dwi2anat_dof,
@@ -85,10 +85,26 @@ def test_reset_config_fixture_restores_omp_nthreads():
     assert config.nipype.omp_nthreads == 99
 
 
+def _acpc_resolution():
+    """Return the ACPC output resolution these construction tests resample to."""
+    from qsiprep.utils.spaces import parse_output_spaces
+
+    return parse_output_spaces(['acpc:res-2mm'])[0].resolution
+
+
+def _acpc_specs():
+    from qsiprep.utils.spaces import parse_output_spaces
+
+    specs = parse_output_spaces(config.workflow.output_spaces)
+    return [spec for spec in specs if not spec.standard]
+
+
 def _trans_wf():
     from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
 
-    return init_dwi_trans_wf(source_file='/data/sub-1_dwi.nii.gz', mem_gb=1)
+    return init_dwi_trans_wf(
+        source_file='/data/sub-1_dwi.nii.gz', mem_gb=1, resolution=_acpc_resolution()
+    )
 
 
 def _edges(workflow):
@@ -186,6 +202,22 @@ def test_scale_dwis_n_procs_matches_num_threads():
     wf = _trans_wf()
     scale_dwis = wf.get_node('scale_dwis')
     assert scale_dwis.n_procs == 4
+
+
+def test_compose_transforms_threads_from_omp_nthreads():
+    """Test that compose_transforms runs its per-volume calls in parallel.
+
+    ``ComposeTransforms`` writes one composite warp per volume with its own
+    ``antsApplyTransforms`` call. Left at the interface's ``num_threads``
+    default of 1, those calls run one after another (about 4.5 h for a
+    731-volume DSI series), so the workflow sets ``num_threads`` from
+    ``config.nipype.omp_nthreads`` and pairs it with ``n_procs``, as
+    ``scale_dwis`` does.
+    """
+    config.nipype.omp_nthreads = 4
+    compose_transforms = _trans_wf().get_node('compose_transforms')
+    assert compose_transforms.inputs.num_threads == 4
+    assert compose_transforms.n_procs == 4
 
 
 def test_compose_jacobian_consumes_gradwarp_and_fieldwarps():
@@ -427,9 +459,9 @@ def test_jacobian_derivative_does_not_collide_with_preproc_dwi():
 
 
 def test_jacobian_sidecar_index_is_zero_based_and_full_length():
-    from qsiprep.interfaces.jacobian import _jacobian_sidecar
+    from qsiprep.utils.jacobian import jacobian_sidecar
 
-    sidecar = _jacobian_sidecar(
+    sidecar = jacobian_sidecar(
         weight_index=[0, 0, 1, 0],
         applied=['gradwarp', 'sdc'],
         unmodulated=[],
@@ -444,9 +476,9 @@ def test_jacobian_sidecar_index_is_zero_based_and_full_length():
 
 
 def test_jacobian_sidecar_records_a_gap():
-    from qsiprep.interfaces.jacobian import _jacobian_sidecar
+    from qsiprep.utils.jacobian import jacobian_sidecar
 
-    sidecar = _jacobian_sidecar(
+    sidecar = jacobian_sidecar(
         weight_index=[0, 0],
         applied=['gradwarp', 'sdc'],
         unmodulated=['eddy-current'],
@@ -463,9 +495,9 @@ def test_jacobian_sidecar_collapsed_case_is_written_in_full():
 
     All-zeros rather than omitted, so consumers need no special case.
     """
-    from qsiprep.interfaces.jacobian import _jacobian_sidecar
+    from qsiprep.utils.jacobian import jacobian_sidecar
 
-    sidecar = _jacobian_sidecar(
+    sidecar = jacobian_sidecar(
         weight_index=[0] * 5, applied=['sdc'], unmodulated=[], reason=None, method='Jacobian'
     )
     assert sidecar['JacobianWeightIndex'] == [0, 0, 0, 0, 0]
@@ -549,6 +581,7 @@ def _finalize_wf(tmp_path, write_derivatives=True):
         name='dwi_finalize_wf',
         source_file=dwi,
         output_prefix='sub-01',
+        acpc_specs=_acpc_specs(),
         write_derivatives=write_derivatives,
     )
 
@@ -556,7 +589,9 @@ def _finalize_wf(tmp_path, write_derivatives=True):
 def test_jacobian_weights_reach_the_derivatives_workflow_through_finalize(tmp_path):
     """Test that Jacobian weights reach the derivatives workflow through finalize.
 
-    The full inter-workflow chain: trans_wf -> finalize outputnode -> derivatives_wf.
+    The full inter-workflow chain: trans_wf -> finalize outputnode, and
+    trans_wf -> derivatives_wf. Each ACPC resolution's derivatives read their
+    own trans_wf; the outputnode carries only the first resolution.
 
     This is the shape of the boundary Task 10 and Task 11 each missed once in
     ``workflows/base.py`` (a dropped edge between two outputnodes, no error,
@@ -565,7 +600,7 @@ def test_jacobian_weights_reach_the_derivatives_workflow_through_finalize(tmp_pa
     channel, so this is the boundary that matters for it, not ``base.py``.
     """
     wf = _finalize_wf(tmp_path)
-    trans_wf = wf.get_node('transform_dwis_t1')
+    trans_wf = wf.get_node('dwi_trans_wf')
     outputnode = wf.get_node('outputnode')
     deriv_wf = wf.get_node('dwi_derivatives_wf')
     assert deriv_wf.get_node('stack_jacobian') is not None
@@ -578,19 +613,22 @@ def test_jacobian_weights_reach_the_derivatives_workflow_through_finalize(tmp_pa
         'jacobian_weight_index',
     ) in trans_to_out['connect']
 
-    out_to_deriv = wf._graph.get_edge_data(outputnode, deriv_wf)
-    assert out_to_deriv is not None
-    assert ('jacobian_weights', 'inputnode.jacobian_weights') in out_to_deriv['connect']
+    trans_to_deriv = wf._graph.get_edge_data(trans_wf, deriv_wf)
+    assert trans_to_deriv is not None
     assert (
-        'jacobian_weight_index',
+        'outputnode.jacobian_weights',
+        'inputnode.jacobian_weights',
+    ) in trans_to_deriv['connect']
+    assert (
+        'outputnode.jacobian_weight_index',
         'inputnode.jacobian_weight_index',
-    ) in out_to_deriv['connect']
+    ) in trans_to_deriv['connect']
 
 
 def test_jacobian_weights_do_not_reach_finalize_when_weighting_off(tmp_path):
     config.workflow.ignore = ['jacobian']
     wf = _finalize_wf(tmp_path)
-    trans_wf = wf.get_node('transform_dwis_t1')
+    trans_wf = wf.get_node('dwi_trans_wf')
     outputnode = wf.get_node('outputnode')
     deriv_wf = wf.get_node('dwi_derivatives_wf')
     assert deriv_wf.get_node('stack_jacobian') is None

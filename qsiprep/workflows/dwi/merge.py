@@ -5,8 +5,9 @@
 Merge and denoise dwi images
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. autofunction:: init_dwi_preproc_wf
-.. autofunction:: init_dwi_derivatives_wf
+.. autofunction:: init_dwi_series_denoise_wf
+.. autofunction:: init_merge_dwis_wf
+.. autofunction:: init_dwi_denoising_wf
 
 """
 
@@ -30,13 +31,25 @@ from ...interfaces.mrtrix import (
     PolarToComplex,
 )
 from ...interfaces.nilearn import Merge
+from ...interfaces.svht import SVHTDeGibbs, SVHTDenoise
 from ...interfaces.tortoise import Gibbs
 from ...utils.bids import IMPORTANT_DWI_FIELDS, update_metadata_from_nifti_header
 from ...utils.misc import (
     check_dwidenoise2_demodulation,
+    check_svht_extent,
+    check_svht_phase,
     describe_dwidenoise2,
+    describe_svht,
     load_dwidenoise2_config,
+    load_svht_config,
     resolve_dwidenoise2_demean,
+)
+from ...utils.versions import (
+    mrtrix3_version,
+    python_package_version,
+    svht_denoise_version,
+    tortoise_version,
+    versioned,
 )
 from .qc import init_modelfree_qc_wf
 from .util import _get_wf_name
@@ -44,26 +57,172 @@ from .util import _get_wf_name
 DEFAULT_MEMORY_MIN_GB = 0.01
 
 
-def init_merge_and_denoise_wf(
+# Each raw DWI series is conformed and denoised exactly once, by
+# init_dwi_series_denoise_wf at the subject level, and the results travel
+# down to the per-unit workflows as lists ordered like ``unit.dwi_files``.
+# (series workflow output, list field carried downstream)
+SERIES_FIELDS = (
+    ('dwi_file', 'dwi_files'),
+    ('bval_file', 'bval_files'),
+    ('bvec_file', 'bvec_files'),
+    ('raw_dwi_file', 'raw_dwi_files'),
+    ('noise_image', 'noise_images'),
+    ('confounds', 'denoising_confounds'),
+    ('validation_report', 'validation_reports'),
+)
+SERIES_LIST_FIELDS = tuple(list_field for _, list_field in SERIES_FIELDS)
+
+
+def init_dwi_series_denoise_wf(
+    dwi_file,
+    metadata,
+    phase_file=None,
+    orientation='LPS',
+    shelled=None,
+    name=None,
+):
+    """Build a workflow that conforms and denoises one raw DWI series.
+
+    A series may belong to several preprocessing units (virtual acquisitions
+    list it under more than one ``MultipartID``), and denoising depends only on
+    the series itself, so this workflow is built once per raw file at the
+    subject level and its outputs are shared by every unit that uses the file.
+
+    .. workflow::
+        :graph2use: orig
+        :simple_form: yes
+
+        from qsiprep.workflows.dwi.merge import init_dwi_series_denoise_wf
+        wf = init_dwi_series_denoise_wf(
+            '/path/to/dwi/sub-1_dwi.nii.gz',
+            metadata={'PhaseEncodingDirection': 'j'},
+        )
+
+    Parameters
+    ----------
+    dwi_file : str
+        the raw DWI series, in its original BIDS directory
+    metadata : dict
+        the sidecar metadata of ``dwi_file`` (``PreprocUnit.metadata_for``)
+    phase_file : str, optional
+        the ``part-phase`` companion of ``dwi_file``, when the acquisition is
+        complex-valued and the phase has not been ignored
+    orientation : str, optional
+        Orientation the series is conformed to ('LPS' or 'LAS').
+    shelled : bool or None, optional
+        qsiplan's classification of the series' q-space sampling
+        (``FileRecord.shelled``), passed to :func:`init_dwi_denoising_wf`.
+    name : str, optional
+        Name of workflow. Derived from the file name when omitted.
+
+    Outputs
+    -------
+    dwi_file
+        the series, conformed and denoised
+    bval_file
+        bvals of the series
+    bvec_file
+        bvecs of the series, conformed
+    raw_dwi_file
+        the series, conformed but not denoised
+    noise_image
+        noise image estimated by the denoiser (when one ran)
+    confounds
+        per-volume denoising/unringing confounds (when any step ran)
+    validation_report
+        HTML segment reporting header problems found while conforming
+
+    The returned workflow's ``denoising_desc`` attribute holds the methods
+    boilerplate for the denoising steps.
+    """
+    if name is None:
+        _, fname, _ = split_filename(dwi_file)
+        name = _get_wf_name(fname).replace('preproc', 'denoise')
+    workflow = Workflow(name=name)
+    outputnode = pe.Node(
+        niu.IdentityInterface(fields=[series_field for series_field, _ in SERIES_FIELDS]),
+        name='outputnode',
+    )
+
+    row = get_acq_parameters_df([dwi_file], metadata_lookup=lambda _: metadata).iloc[0]
+
+    conform_dwi = pe.Node(
+        ConformDwi(orientation=orientation, dwi_file=dwi_file),
+        name='conform_dwi',
+    )
+    use_phase = phase_file is not None and 'phase' not in config.workflow.ignore
+    if phase_file is not None:
+        config.loggers.workflow.info('Phase file found for %s', dwi_file)
+    denoise_wf = init_dwi_denoising_wf(
+        partial_fourier=row.PartialFourier,
+        phase_encoding_direction=row.PhaseEncodingAxis,
+        source_file=dwi_file,
+        n_volumes=row.NumVolumes,
+        use_phase=use_phase,
+        shelled=shelled,
+        name='denoise_wf',
+    )
+    # This workflow is a child of the subject workflow, so a description left on
+    # it would print before the DWI section. The unit's own section carries it
+    # instead (init_dwi_preproc_wf's denoising_desc).
+    workflow.denoising_desc = denoise_wf.__desc__
+    denoise_wf.__desc__ = None
+    workflow.connect([
+        (conform_dwi, denoise_wf, [
+            ('bval_file', 'inputnode.bval_file'),
+            ('bvec_file', 'inputnode.bvec_file'),
+            ('dwi_file', 'inputnode.dwi_file'),
+        ]),
+        (conform_dwi, outputnode, [
+            ('dwi_file', 'raw_dwi_file'),
+            ('out_report', 'validation_report'),
+        ]),
+        (denoise_wf, outputnode, [
+            ('outputnode.dwi_file', 'dwi_file'),
+            ('outputnode.bval_file', 'bval_file'),
+            ('outputnode.bvec_file', 'bvec_file'),
+            ('outputnode.noise_image', 'noise_image'),
+            ('outputnode.confounds', 'confounds'),
+        ]),
+    ])  # fmt:skip
+
+    if use_phase:
+        conform_phase = pe.Node(
+            ConformDwi(orientation=orientation, dwi_file=phase_file),
+            name='conform_phase',
+        )
+        workflow.connect([
+            (conform_phase, denoise_wf, [('dwi_file', 'inputnode.dwi_phase_file')]),
+        ])  # fmt:skip
+
+    return workflow
+
+
+def init_merge_dwis_wf(
     unit,
     raw_dwi_files,
     orientation,
     source_file,
     calculate_qc=False,
     phase_id='same',
-    name='merge_and_denoise_wf',
+    name='merge_dwis_wf',
 ):
-    """Build a workflow that conforms, denoises and merges a set of DWI series.
+    """Build a workflow that merges already-denoised DWI series.
+
+    The series arrive conformed and denoised from
+    :func:`init_dwi_series_denoise_wf`, one list entry per file in
+    ``raw_dwi_files`` and in the same order.
 
     .. workflow::
         :graph2use: orig
         :simple_form: yes
 
-        from qsiprep.workflows.dwi import init_merge_and_denoise_wf
+        from qsiprep.workflows.dwi.merge import init_merge_dwis_wf
         from qsiprep.tests.preproc_factory import make_preproc_unit
-        wf = init_merge_and_denoise_wf(
+        wf = init_merge_dwis_wf(
             make_preproc_unit(['/path/to/dwi/sub-1_dwi.nii.gz']),
             ['/path/to/dwi/sub-1_dwi.nii.gz'],
+            orientation='LPS',
             source_file='/data/sub-1/dwi/sub-1_dwi.nii.gz',
         )
 
@@ -71,12 +230,11 @@ def init_merge_and_denoise_wf(
     ----------
     unit : :class:`~qsiplan.adapters.PreprocUnit`
         the unit these series belong to; sidecar metadata comes from its
-        records, and each magnitude's ``part-phase`` companion comes from
-        ``unit.dwi_phase_files`` (the plan), so the layout is never re-read
+        records, so the layout is never re-read
     raw_dwi_files : list
         list of raw (in their original BIDS directory) dwi nifti files
     orientation : str
-        Orientation each image is conformed to ('LPS' or 'LAS'). Also selects the
+        Orientation the series were conformed to ('LPS' or 'LAS'). Selects the
         bvec convention used for QC ('DIPY' for 'LPS', 'FSL' otherwise).
     source_file : str
         Source file whose name (without extension) is used as the prefix of the
@@ -88,7 +246,24 @@ def init_merge_and_denoise_wf(
         Label for the distortion group, used in the methods boilerplate.
         Default is ``'same'``.
     name : str, optional
-        Name of workflow (default: ``merge_and_denoise_wf``)
+        Name of workflow (default: ``merge_dwis_wf``)
+
+    Inputs
+    ------
+    dwi_files
+        conformed, denoised series, one per entry of ``raw_dwi_files``
+    bval_files
+        bvals of each series
+    bvec_files
+        conformed bvecs of each series
+    raw_dwi_files
+        conformed, not denoised series
+    noise_images
+        noise image of each series
+    denoising_confounds
+        denoising confounds of each series
+    validation_reports
+        conformation report of each series
 
     Outputs
     -------
@@ -102,16 +277,21 @@ def init_merge_and_denoise_wf(
         bvecs from merged images
     merged_json
         JSON file containing slice timings for slice2vol
-    noise_image
+    noise_images
         image(s) created by ``dwidenoise``
+    denoising_confounds
+        confounds from denoising, aligned to the merged series
     original_files
         names of the original files for each volume
     qc_summary
         DSI Studio QC text file
+    validation_reports
+        the conformation reports, passed through
 
     """
     workflow = Workflow(name=name)
     omp_nthreads = config.nipype.omp_nthreads
+    inputnode = pe.Node(niu.IdentityInterface(fields=list(SERIES_LIST_FIELDS)), name='inputnode')
     outputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
@@ -131,7 +311,6 @@ def init_merge_and_denoise_wf(
     )
     desc = []
 
-    # DWIs will be merged at some point.
     merge_dwis = pe.Node(
         MergeDWIs(
             bids_dwi_files=raw_dwi_files,
@@ -143,116 +322,37 @@ def init_merge_and_denoise_wf(
         name='merge_dwis',
         n_procs=omp_nthreads,
     )
-    # Create a denoising workflow for each input image
     num_dwis = len(raw_dwi_files)
     if num_dwis > 1:
+        group = (
+            f' acquired with phase-encoding direction {phase_id}'
+            if phase_id and phase_id != 'same'
+            else ''
+        )
         desc.append(
-            'A total of %d DWI series in the %s distortion group were '
-            'concatenated, with preprocessing operations performed on individual '
-            'DWI series before concatenation.' % (num_dwis, phase_id)
+            f'The {num_dwis} DWI series{group} were concatenated after the per-series steps above.'
         )
     workflow.__desc__ = ' '.join(desc)
-    conformed_bvals = pe.Node(niu.Merge(num_dwis), name='conformed_bvals')
-    conformed_bvecs = pe.Node(niu.Merge(num_dwis), name='conformed_bvecs')
-    conformed_images = pe.Node(niu.Merge(num_dwis), name='conformed_images')
-    conformed_raw_images = pe.Node(niu.Merge(num_dwis), name='conformed_raw_images')
-    conformation_reports = pe.Node(niu.Merge(num_dwis), name='conformation_reports')
-    # derivatives from denoising
-    denoising_confounds = pe.Node(niu.Merge(num_dwis), name='denoising_confounds')
-    noise_images = pe.Node(niu.Merge(num_dwis), name='noise_images')
-    # Collect conformers and denoisers
-    conformers = []
-    denoising_wfs = []
-
-    # Get a data frame of the raw_dwi_files and their imaging parameters:
-    dwi_df = get_acq_parameters_df(raw_dwi_files, metadata_lookup=unit.metadata_for)
-    for i_dwi, row in dwi_df.iterrows():
-        dwi_num = i_dwi + 1  # start at 1
-        dwi_file = row.BIDSFile
-
-        # Conform each image to the requested orientation
-        conformers.append(
-            pe.Node(ConformDwi(orientation=orientation), name=f'conform_dwis{dwi_num:02d}'),
-        )
-        conformers[-1].inputs.dwi_file = dwi_file
-
-        # Build the denoising workflow
-        _, fname, _ = split_filename(dwi_file)
-        wf_name = _get_wf_name(fname).replace('preproc', 'denoise')
-
-        # The part-phase companion of a complex-valued acquisition comes
-        # from the plan: qsiplan pairs each magnitude with its phase sibling
-        # (keyed by the magnitude path) and is the single source of truth, so
-        # there is no layout re-glob here.
-        phase_file = unit.dwi_phase_files.get(dwi_file)
-        phase_available = phase_file is not None
-        if phase_available:
-            config.loggers.workflow.info('Phase file found for %s', dwi_file)
-
-        use_phase = phase_available and 'phase' not in config.workflow.ignore
-        if use_phase:
-            conform_phase = pe.Node(
-                ConformDwi(
-                    orientation=orientation,
-                    dwi_file=phase_file,
-                ),
-                name=f'conform_phase{dwi_num}',
-            )
-
-        # qsiplan's shelled/non-shelled call for this series, as for eddy's
-        record = unit.grouping.files.get(dwi_file)
-        n_volumes = row.NumVolumes
-        denoising_wfs.append(
-            init_dwi_denoising_wf(
-                partial_fourier=row.PartialFourier,
-                phase_encoding_direction=row.PhaseEncodingAxis,
-                source_file=dwi_file,
-                n_volumes=n_volumes,
-                use_phase=use_phase,
-                shelled=record.shelled if record is not None else None,
-                name=wf_name,
-            ),
-        )
-        workflow.connect([
-            (conformers[-1], denoising_wfs[-1], [
-                ('bval_file', 'inputnode.bval_file'),
-                ('bvec_file', 'inputnode.bvec_file'),
-                ('dwi_file', 'inputnode.dwi_file'),
-            ]),
-            (denoising_wfs[-1], denoising_confounds, [
-                ('outputnode.confounds', f'in{dwi_num}'),
-            ]),
-            (denoising_wfs[-1], noise_images, [('outputnode.noise_image', f'in{dwi_num}')]),
-        ])  # fmt:skip
-
-        if use_phase:
-            workflow.connect([
-                (conform_phase, denoising_wfs[-1], [('dwi_file', 'inputnode.dwi_phase_file')]),
-            ])  # fmt:skip
-
-        dwi_source = denoising_wfs[-1]
-        edge_prefix = 'outputnode.'
-
-        workflow.connect([
-            (dwi_source, conformed_images, [(f'{edge_prefix}dwi_file', f'in{dwi_num}')]),
-            (conformers[-1], conformed_raw_images, [('dwi_file', f'in{dwi_num}')]),
-            (dwi_source, conformed_bvals, [(f'{edge_prefix}bval_file', f'in{dwi_num}')]),
-            (dwi_source, conformed_bvecs, [(f'{edge_prefix}bvec_file', f'in{dwi_num}')]),
-            (conformers[-1], conformation_reports, [('out_report', f'in{dwi_num}')]),
-        ])  # fmt:skip
 
     # Get an orientation-conformed version of the raw inputs and their gradients
     raw_merge = pe.Node(Merge(is_dwi=True), name='raw_merge', n_procs=omp_nthreads)
 
-    # Merge the either conformed-only or conformed-and-denoised data
     workflow.connect([
-        (conformed_images, merge_dwis, [('out', 'dwi_files')]),
-        (conformed_raw_images, raw_merge, [('out', 'in_files')]),
+        (inputnode, merge_dwis, [
+            ('dwi_files', 'dwi_files'),
+            ('bval_files', 'bval_files'),
+            ('bvec_files', 'bvec_files'),
+            ('denoising_confounds', 'denoising_confounds'),
+        ]),
+        (inputnode, raw_merge, [('raw_dwi_files', 'in_files')]),
+        (inputnode, outputnode, [
+            ('noise_images', 'noise_images'),
+            ('validation_reports', 'validation_reports'),
+        ]),
         (raw_merge, outputnode, [('out_file', 'merged_raw_image')]),
-        (conformed_bvals, merge_dwis, [('out', 'bval_files')]),
-        (conformed_bvecs, merge_dwis, [('out', 'bvec_files')]),
-        (conformation_reports, outputnode, [('out', 'validation_reports')]),
         (merge_dwis, outputnode, [
+            ('out_dwi', 'merged_image'),
+            ('merged_denoising_confounds', 'denoising_confounds'),
             ('original_images', 'original_files'),
             ('out_bval', 'merged_bval'),
             ('out_bvec', 'merged_bvec'),
@@ -264,6 +364,7 @@ def init_merge_and_denoise_wf(
     if calculate_qc:
         qc_wf = init_modelfree_qc_wf(
             bvec_convention='DIPY' if orientation == 'LPS' else 'FSL',
+            skull_strip=True,
         )
         workflow.connect([
             (qc_wf, outputnode, [('outputnode.qc_summary', 'qc_summary')]),
@@ -273,16 +374,6 @@ def init_merge_and_denoise_wf(
                 ('out_bvec', 'inputnode.bvec_file'),
             ]),
         ])  # fmt:skip
-
-    # We have denoised and combined, therefore we are done
-    workflow.connect([
-        (denoising_confounds, merge_dwis, [('out', 'denoising_confounds')]),
-        (merge_dwis, outputnode, [
-            ('out_dwi', 'merged_image'),
-            ('merged_denoising_confounds', 'denoising_confounds'),
-        ]),
-        (noise_images, outputnode, [('out', 'noise_images')]),
-    ])  # fmt:skip
 
     return workflow
 
@@ -294,9 +385,11 @@ class _ImageChain:
     Whether that image is complex-valued is not a property of the chain position but of
     which steps have run: ``dwidenoise`` handed complex data emits complex data, and so
     does ``mrdegibbs`` on MRtrix3's development branch, while ``dwibiascorrect`` and
-    TORTOISE's ``rpg`` are magnitude-only. Tracking the domain alongside the current
-    image lets :func:`to_magnitude` insert the split at the last step that can still
-    consume complex data, instead of always splitting right after denoising.
+    TORTOISE's ``rpg`` are magnitude-only. ``svht_denoise`` handed phase data emits the
+    signed real-axis rotation, which is not magnitude either and is flagged the same
+    way. Tracking the domain alongside the current image lets :func:`to_magnitude`
+    insert the split at the last step that can still consume complex data, instead of
+    always splitting right after denoising.
     """
 
     def __init__(self, workflow, node, field, omp_nthreads):
@@ -359,8 +452,10 @@ def init_dwi_denoising_wf(
         and the 'auto' option is selected.
     use_phase : bool
         True if phase data are available for the DWI scan.
-        If True, and ``denoise_method`` is ``dwidenoise``, then ``dwidenoise``
-        will be run on the complex-valued data.
+        If True, and ``denoise_method`` is ``dwidenoise`` or ``dwidenoise2``, then
+        the denoiser will be run on the complex-valued data. If ``denoise_method``
+        is ``svht``, then ``svht_denoise`` will rotate the magnitude and phase data
+        onto the real axis before denoising.
     shelled : bool or None, optional
         qsiplan's classification of the series' q-space sampling. With ``dwidenoise2`` it
         decides the ``-demean`` mode (see
@@ -428,21 +523,29 @@ def init_dwi_denoising_wf(
     denoise_method = config.workflow.denoise_method
     dwidenoise2_params = {}
     if denoise_method == 'dwidenoise2':
-        if config.workflow.dwidenoise2_config is not None:
-            dwidenoise2_params = load_dwidenoise2_config(config.workflow.dwidenoise2_config)
+        if config.workflow.denoise_config is not None:
+            dwidenoise2_params = load_dwidenoise2_config(config.workflow.denoise_config)
         check_dwidenoise2_demodulation(dwidenoise2_params, use_phase)
         # Always explicit: dwidenoise2's own shell inference segfaults on pseudo-shells
         dwidenoise2_params['demean'] = resolve_dwidenoise2_demean(
             dwidenoise2_params, shelled, source_file
         )
+    svht_params = {}
+    if denoise_method == 'svht':
+        if config.workflow.denoise_config is not None:
+            svht_params.update(load_svht_config(config.workflow.denoise_config))
+        check_svht_phase(svht_params, use_phase)
+        check_svht_extent(svht_params, n_volumes)
 
     unringing_method = config.workflow.unringing_method
-    do_denoise = denoise_method in ('patch2self', 'dwidenoise', 'dwidenoise2')
-    do_unringing = config.workflow.unringing_method in ('mrdegibbs', 'rpg')
+    do_denoise = denoise_method in ('patch2self', 'dwidenoise', 'dwidenoise2', 'svht')
+    do_unringing = config.workflow.unringing_method in ('mrdegibbs', 'rpg', 'svht')
     harmonize_b0s = not config.workflow.no_b0_harmonization
 
-    # Only the dwidenoise variants denoise complex data; the rest use magnitude alone.
+    # Only the dwidenoise variants denoise complex data; the rest use magnitude alone,
+    # except svht_denoise, which reads the phase itself and denoises the real-axis rotation.
     denoise_complex = do_denoise and denoise_method.startswith('dwidenoise') and use_phase
+    denoise_real_axis = denoise_method == 'svht' and use_phase
     # Only the development-branch mrdegibbs reads and writes complex data.
     unring_complex = (
         denoise_complex
@@ -509,7 +612,7 @@ def init_dwi_denoising_wf(
                     f'Automatically using {dwidenoise_window}, {dwidenoise_window}, '
                     f'{dwidenoise_window} window for dwidenoise'
                 )
-                auto_str = 'n automatically-determined'
+                auto_str = ' (chosen automatically)'
 
             denoiser = pe.Node(
                 DWIDenoise(
@@ -519,6 +622,22 @@ def init_dwi_denoising_wf(
                 name='denoiser',
                 n_procs=omp_nthreads,
             )
+        elif denoise_method == 'svht':
+            # svht_denoise sizes its patches from the volume count unless --denoise-config
+            # sets "extent"; --dwidenoise-window is for dwidenoise alone
+            svht_kwargs = dict(svht_params)
+            if denoise_real_axis:
+                # PhaseToRad (below) supplies the phase in radians
+                svht_kwargs['phase_units'] = 'radians'
+
+            denoiser = pe.Node(
+                SVHTDenoise(nthreads=omp_nthreads, **svht_kwargs),
+                name='denoiser',
+                n_procs=omp_nthreads,
+            )
+            if svht_params.get('demean', False):
+                # Opt-in demeaning reads the shells from the b-values
+                workflow.connect([(inputnode, denoiser, [('bval_file', 'bval_file')])])
         else:
             denoiser = pe.Node(
                 Patch2Self(),
@@ -534,31 +653,37 @@ def init_dwi_denoising_wf(
                 mppca_desc = describe_dwidenoise2(dwidenoise2_params, complex_data=denoise_complex)
             else:
                 mppca_desc = (
-                    'denoised using the Marchenko-Pastur PCA method implemented in dwidenoise '
-                    '[@mrtrix3; @dwidenoise1; @dwidenoise2] '
-                    f'with a{auto_str} window size of {dwidenoise_window} voxels. '
+                    'denoised with Marchenko-Pastur principal component analysis (MP-PCA) '
+                    '[@dwidenoise1; @dwidenoise2] as implemented in `dwidenoise` from '
+                    f'{versioned("*MRtrix3*", mrtrix3_version())} [@mrtrix3], with a window of '
+                    f'{dwidenoise_window} voxels{auto_str}. '
                 )
 
             if denoise_complex:
                 desc += (
-                    'Magnitude and phase DWI data were combined into a complex-valued file, then '
+                    'The magnitude and phase DWI data were combined into complex-valued images '
+                    'and '
                     f'{mppca_desc}'
                 )
                 if not unring_complex:
                     desc += (
-                        'After denoising, the complex-valued data were split back into '
-                        'magnitude and phase, and the denoised magnitude data were retained. '
+                        'The denoised data were then split back into magnitude and phase, and '
+                        'the magnitude was kept. '
                     )
             else:
                 desc += f'DWI data were {mppca_desc}'
 
             last_step = 'After MP-PCA, '
+        elif denoise_method == 'svht':
+            desc += describe_svht(svht_params, real_axis=denoise_real_axis)
+            last_step = 'After denoising, '
         else:
             desc += (
-                "DWI data were denoised using DiPy's Patch2Self algorithm [@dipy; @patch2self] "
-                'with an automatically-defined window size. '
+                'DWI data were denoised with Patch2Self [@patch2self] from '
+                f'{versioned("*DIPY*", python_package_version("dipy"))} [@dipy], using ordinary '
+                'least-squares regression. '
             )
-            last_step = 'After `patch2self`, '
+            last_step = 'After Patch2Self, '
 
         # Wiring that is the same for every denoising method
         workflow.connect([
@@ -570,26 +695,34 @@ def init_dwi_denoising_wf(
 
         # The complex-valued path only changes what feeds the denoiser; the denoiser
         # wiring itself is the same either way.
-        if denoise_complex:
+        if denoise_complex or denoise_real_axis:
             phase_to_radians = pe.Node(
                 PhaseToRad(),
                 name='phase_to_radians',
                 n_procs=omp_nthreads,
             )
+            workflow.connect([
+                (inputnode, phase_to_radians, [('dwi_phase_file', 'phase_file')]),
+            ])  # fmt:skip
+        if denoise_complex:
             combine_complex = pe.Node(
                 PolarToComplex(),
                 name='combine_complex',
                 n_procs=omp_nthreads,
             )
             workflow.connect([
-                (inputnode, phase_to_radians, [('dwi_phase_file', 'phase_file')]),
                 (phase_to_radians, combine_complex, [('phase_file', 'phase_file')]),
             ])  # fmt:skip
             chain.feed(combine_complex, 'mag_file')
             chain.advance(combine_complex, 'out_file', is_complex=True)
+        elif denoise_real_axis:
+            # svht_denoise takes the magnitude and phase separately
+            workflow.connect([
+                (phase_to_radians, denoiser, [('phase_file', 'phase_file')]),
+            ])  # fmt:skip
 
         chain.feed(denoiser, 'in_file')
-        chain.advance(denoiser, 'out_file', is_complex=denoise_complex)
+        chain.advance(denoiser, 'out_file', is_complex=denoise_complex or denoise_real_axis)
         # Hold the complex data if unringing can use them; otherwise split here
         if not unring_complex:
             chain.to_magnitude()
@@ -598,16 +731,18 @@ def init_dwi_denoising_wf(
 
     if do_unringing:
         if unringing_method == 'mrdegibbs':
+            # Complex-valued unringing runs from the development branch
+            mrtrix3 = versioned('*MRtrix3*', mrtrix3_version(dev=unring_complex))
             if unring_complex:
                 desc += (
-                    f'{last_step}Gibbs ringing was removed from the complex-valued data using '
-                    'MRtrix3 [@mrtrix3; @mrdegibbs]. The complex-valued data were then split '
-                    'back into magnitude and phase, and the magnitude data were retained. '
+                    f'{last_step}Gibbs ringing was removed from the complex-valued data with '
+                    f'`mrdegibbs` from {mrtrix3} [@mrtrix3; @mrdegibbs]; the data were then '
+                    'split back into magnitude and phase, and the magnitude was kept. '
                 )
             else:
                 desc += (
-                    f'{last_step}Gibbs ringing was removed from the magnitude data using '
-                    'MRtrix3 [@mrtrix3; @mrdegibbs]. '
+                    f'{last_step}Gibbs ringing was removed from the magnitude data with '
+                    f'`mrdegibbs` from {mrtrix3} [@mrtrix3; @mrdegibbs]. '
                 )
             degibbser = pe.Node(
                 MRDeGibbs(nthreads=omp_nthreads),
@@ -615,7 +750,11 @@ def init_dwi_denoising_wf(
                 n_procs=omp_nthreads,
             )
         elif unringing_method == 'rpg':
-            desc += f'{last_step}Gibbs ringing was removed using TORTOISE [@pfgibbs]. '
+            desc += (
+                f'{last_step}Gibbs ringing, including that caused by partial Fourier '
+                'acquisition, was removed with the RPG method [@pfgibbs] as implemented in '
+                f'{versioned("*TORTOISE*", tortoise_version())}. '
+            )
 
             pe_code = {
                 'i': 0,
@@ -633,6 +772,26 @@ def init_dwi_denoising_wf(
                     phase_encoding_dir=pe_code,
                     num_threads=omp_nthreads,
                 ),
+                name='degibbser',
+                n_procs=omp_nthreads,
+            )
+        elif unringing_method == 'svht':
+            svht_pf = _svht_partial_fourier(partial_fourier, phase_encoding_direction)
+            svht_kwargs = {}
+            pf_desc = ''
+            if svht_pf is not None:
+                svht_kwargs['partial_fourier'] = svht_pf
+                pf_desc = (
+                    ', together with the ringing caused by partial Fourier acquisition '
+                    f'(factor {svht_pf}) [@pfgibbs]'
+                )
+            desc += (
+                f'{last_step}Gibbs ringing was removed from the magnitude data by local '
+                f'subvoxel shifts [@mrdegibbs]{pf_desc}, as implemented in '
+                f'{versioned("`svht_denoise`", svht_denoise_version())} [@svht_denoise]. '
+            )
+            degibbser = pe.Node(
+                SVHTDeGibbs(nthreads=omp_nthreads, **svht_kwargs),
                 name='degibbser',
                 n_procs=omp_nthreads,
             )
@@ -663,7 +822,7 @@ def init_dwi_denoising_wf(
     chain.feed(outputnode, 'dwi_file')
 
     if not last_step:
-        desc = 'No denoising steps were applied to the DWI data.'
+        desc = '\n\nNeither denoising nor Gibbs-ringing removal was applied to the DWI data. '
 
     # If any denoising operations were run, collect their confounds
     if step_num > 1:
@@ -678,44 +837,59 @@ def init_dwi_denoising_wf(
     return workflow
 
 
+# The partial Fourier factors svht_denoise implements; it refuses any other
+_SVHT_PARTIAL_FOURIER = (0.875, 0.75)
+
+
+def _svht_partial_fourier(partial_fourier, phase_encoding_direction):
+    """Resolve the ``-pF`` factor for ``svht_denoise`` unringing.
+
+    Returns ``None`` for full k-space, including when the factor is not recorded.
+    ``svht_denoise`` implements only 7/8 and 6/8, and only along the second voxel
+    axis, so anything else raises rather than silently leaving the ringing in place.
+    """
+    if partial_fourier is None or pd.isna(partial_fourier) or partial_fourier > 0.99:
+        return None
+
+    for factor in _SVHT_PARTIAL_FOURIER:
+        if abs(partial_fourier - factor) < 0.01:
+            break
+    else:
+        raise ValueError(
+            '--unringing-method svht supports partial Fourier factors of 7/8 (0.875) and '
+            f'6/8 (0.75), but this series has a PartialFourier of {partial_fourier}. '
+            'Use --unringing-method rpg instead.'
+        )
+
+    if phase_encoding_direction not in ('j', 'j-'):
+        raise ValueError(
+            '--unringing-method svht corrects partial Fourier ringing only along the j '
+            f'axis, but this series is phase-encoded along {phase_encoding_direction}. '
+            'Use --unringing-method rpg instead.'
+        )
+
+    return factor
+
+
 def _as_list(item):
     return [item]
 
 
-def gen_denoising_boilerplate(do_biascorr):
-    """Generate a methods boilerplate for the denoising workflow.
+def gen_intensity_boilerplate(num_series):
+    """Describe the *b*=0 threshold and the *b*=0 intensity harmonization across series.
 
-    ``do_biascorr`` is the resolved decision for this output, not the
-    ``--dwi-biascorrect`` mode: under ``auto`` the mode alone cannot say whether
-    N4 actually ran, so reading the config here would state the wrong thing.
+    Denoising is described by :func:`init_dwi_denoising_wf`, and bias correction, which
+    runs after resampling, by
+    :func:`~qsiprep.workflows.dwi.finalize.init_finalize_denoising_wf`.
     """
-    no_b0_harmonization = config.workflow.no_b0_harmonization
-    b0_threshold = config.workflow.b0_threshold
     desc = [
-        f'Any images with a b-value less than {b0_threshold} s/mm^2 were treated as a *b*=0 image.'
+        f'Volumes with *b* < {config.workflow.b0_threshold} s/mm² were treated as *b*=0 images.'
     ]
-    harmonize_b0s = not no_b0_harmonization
-    last_step = ''
-
-    if harmonize_b0s:
+    if num_series > 1 and not config.workflow.no_b0_harmonization:
         desc.append(
-            'The mean intensity of the DWI series was adjusted '
-            'so all the mean intensity of the b=0 images matched across each'
-            'separate DWI scanning sequence.'
+            'Each series was scaled so that the mean intensity of its *b*=0 images matched '
+            'across the series.'
         )
-        last_step = True
-
-    if do_biascorr:
-        desc.append(
-            'B1 field inhomogeneity was corrected using '
-            '`dwibiascorrect` from MRtrix3 with the N4 algorithm '
-            '[@n4] after corrected images were resampled.'
-        )
-        last_step = True
-
-    if not last_step:
-        return 'No denoising steps were applied to the DWI data.'
-
     return ' '.join(desc)
 
 

@@ -20,6 +20,31 @@ https://github.com/pennlinc/qsiprep/issues. Include the command line, the
 version, and the relevant part of the log.
 
 
+.. _version_warnings:
+
+****************
+Version warnings
+****************
+
+At startup, *QSIPrep* checks the ``pennlinc/qsiprep`` image tags on Docker
+Hub for a newer release (pre-releases excluded) and prints a notice to
+standard error if one exists. The latest release is cached in
+``~/.cache/qsiprep/latest`` for 14 days. Process a whole dataset with one
+version (and, with containers, one image); upgrade between studies, not
+in the middle of one. See :doc:`upgrading` for what changed between
+releases.
+
+It also checks whether the running version is listed in
+`.versions.json <https://github.com/pennlinc/qsiprep/blob/main/.versions.json>`_
+on the ``main`` branch, which records releases with a serious known flaw
+and the reason. A flagged version prints a ``FLAGGED`` warning with that
+reason. If yours is flagged, upgrade as soon as you can and check whether
+the flaw affects outputs you have already produced.
+
+Both checks time out after a second and are skipped silently when the
+network is unavailable.
+
+
 ********************
 Logs and crash files
 ********************
@@ -60,6 +85,14 @@ meaning in the :external+qsiplan:doc:`qsiplan issue-code reference
 ``unlinked-fmap``
   A fieldmap in ``fmap/`` lists no DWI series in its ``IntendedFor`` or
   ``B0FieldIdentifier``, so it is not used. See :ref:`linking_fieldmaps`.
+``partial-multipart``
+  Some series of the subject have a ``MultipartID`` and others do not, so
+  each series without one is an output of its own. Set ``MultipartID`` on
+  every series you want combined (:ref:`grouping`).
+``reverse-pe-not-inferred``
+  The subject has linked fieldmaps, so no reverse phase-encoded pairs are
+  inferred and the series named get no fieldmap. Link them too
+  (:ref:`linking_fieldmaps`).
 ``fov-grid-mismatch`` / ``fov-oblique``
   Series that would be concatenated were acquired on different grids or with
   differently rotated fields of view. Use ``--separate-all-dwis``, or
@@ -88,8 +121,8 @@ FAQ
 
 **My GRE fieldmap shows up as "also eligible" and is not applied.**
   The series is also linked to a reverse phase-encoded correction, which
-  *QSIPrep* prefers. The GRE fieldmap is not wasted: it initializes DRBUDDI
-  or T2Wreg (:ref:`sdc_gre_init`). To apply the GRE fieldmap itself, list
+  *QSIPrep* prefers. The GRE fieldmap is not wasted: it initializes DRBUDDI,
+  or is unpile's prior (:ref:`sdc_gre_init`). To apply the GRE fieldmap itself, list
   only it in the series' ``B0FieldSource`` or pass ``--ignore pepolar-dwis``.
 
 **SHORELine printed a removal notice.**

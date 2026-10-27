@@ -22,6 +22,7 @@ from nipype.interfaces.base import (
     traits,
 )
 from nipype.utils.filemanip import fname_presuffix
+from qsiplan.models import GridInfo
 from scipy import ndimage
 from scipy.ndimage.morphology import binary_fill_holes
 from skimage import morphology as sim
@@ -29,6 +30,54 @@ from skimage.segmentation import watershed
 from sklearn.preprocessing import power_transform, robust_scale
 
 LOGGER = logging.getLogger('nipype.interface')
+
+
+def _grid_info(img):
+    return GridInfo(
+        shape=tuple(int(dim) for dim in img.shape[:3]),
+        zooms=tuple(float(zoom) for zoom in img.header.get_zooms()[:3]),
+        affine=tuple(tuple(float(val) for val in row) for row in np.asarray(img.affine)),
+    )
+
+
+def concat_imgs_on_first_grid(in_imgs, **kwargs):
+    """Concatenate images voxel for voxel under the first one's affine, never resampling.
+
+    Planning has already compared the series of each correction unit with
+    :meth:`qsiplan.models.GridInfo.compare`; this applies the same comparison so the
+    concatenation does what the plan allowed. Every image on the first image's voxel
+    grid (``'match'``, ``'shifted'``, or ``'oblique'``, which planning allows only with
+    ``--ignore fov``) takes the first image's affine and is stacked as is, with no
+    interpolation; any field-of-view offset is left to head-motion correction. An image
+    on a different grid (``'grid'``: matrix or voxel size) is an error, as it is at
+    planning time.
+
+    Extra keyword arguments go to :func:`nilearn.image.concat_imgs`.
+    """
+    imgs = [nb.load(img) if isinstance(img, str | os.PathLike) else img for img in in_imgs]
+    names = [img.get_filename() or f'image #{index}' for index, img in enumerate(imgs)]
+    ref_img = imgs[0]
+    ref_grid = _grid_info(ref_img)
+    on_grid = [ref_img]
+    for img, name in zip(imgs[1:], names[1:], strict=True):
+        relation = ref_grid.compare(_grid_info(img))
+        if relation == 'grid':
+            raise ValueError(
+                f'{name} (shape {img.shape[:3]}, voxel size {img.header.get_zooms()[:3]}) '
+                f'is not on the voxel grid of {names[0]} (shape {ref_img.shape[:3]}, voxel '
+                f'size {ref_img.header.get_zooms()[:3]}) and cannot be stacked with it.'
+            )
+        if relation != 'match':
+            LOGGER.warning(
+                'Field of view of %s is %s relative to %s; stacking it without resampling, '
+                'under the affine of %s.',
+                name,
+                relation,
+                names[0],
+                names[0],
+            )
+        on_grid.append(img.__class__(img.dataobj, ref_img.affine, img.header))
+    return concat_imgs(on_grid, **kwargs)
 
 
 class MaskEPIInputSpec(BaseInterfaceInputSpec):
@@ -135,7 +184,10 @@ class Merge(SimpleInterface):
         self._results['out_file'] = fname_presuffix(
             self.inputs.in_files[0], suffix='_merged' + ext, newpath=runtime.cwd, use_ext=False
         )
-        new_nii = concat_imgs(self.inputs.in_files, dtype=self.inputs.dtype)
+        new_nii = concat_imgs_on_first_grid(self.inputs.in_files, dtype=self.inputs.dtype)
+        # nilearn copies the first input's header, so a float64 input would be
+        # written back as float64 whatever dtype asked for
+        new_nii.header.set_data_dtype(self.inputs.dtype)
 
         if isdefined(self.inputs.header_source):
             src_hdr = nb.load(self.inputs.header_source).header

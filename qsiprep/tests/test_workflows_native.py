@@ -34,12 +34,11 @@ class _StubFile:
 
 
 class _StubLayout:
-    """Minimal stand-in so denoising/merge nodes can query the layout.
+    """Minimal stand-in for ``config.execution.layout``.
 
-    ``pre_hmc`` feeds ``init_merge_and_denoise_wf``, which still probes for
-    part-phase companion files through the layout (the grouping does not model
-    them); the probes here find none (the common case). Sidecar metadata must
-    come from the unit's records, never the layout - hence no ``get_metadata``.
+    Nothing in the pre-HMC builders should touch it any more (phase companions
+    come from the unit, sidecar metadata from its records), so every probe
+    finds nothing and ``get_metadata`` fails loudly.
     """
 
     def get_metadata(self, path):
@@ -71,7 +70,7 @@ def _cfg(hmc_method='eddy', sdc_method='topup', layout=None):
     config.workflow.denoise_method = 'dwidenoise'
     config.workflow.dwidenoise_window = 5
     config.workflow.shoreline_iters = 2
-    config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
+    config.workflow.output_spaces = ['acpc:res-2mm', 'MNI152NLin2009cAsym']
     return config
 
 
@@ -94,7 +93,6 @@ def test_pre_hmc_single_series_builds(tmp_path):
         make_preproc_unit([src]),
         orientation='LAS',
         source_file=src,
-        do_biascorr=True,
     )
     assert wf.get_node('outputnode') is not None
     # A single series is merged directly, not split into polarity groups.
@@ -109,7 +107,6 @@ def test_pre_hmc_rpe_series_splits_into_polarity_groups(tmp_path):
         _rpe_unit(tmp_path),
         orientation='LAS',
         source_file=SRC,
-        do_biascorr=True,
     )
     assert wf.get_node('merge_plus') is not None
     assert wf.get_node('merge_minus') is not None
@@ -175,6 +172,51 @@ def test_fsl_hmc_synb0_feeds_topup(tmp_path):
     assert wf.get_node('ds_report_synb0_unet') is not None
 
 
+def test_fsl_hmc_synb0_second_pass_feeds_eddy(tmp_path):
+    """Test that the SynB0 second pass regenerates the synthetic b=0 and feeds eddy."""
+    _cfg(sdc_method='topup')
+    from qsiprep.workflows.dwi.fsl import init_fsl_hmc_wf
+
+    saved = config.workflow.two_pass_sdc
+    try:
+        config.workflow.two_pass_sdc = True
+        wf = init_fsl_hmc_wf(_synb0_unit(tmp_path), source_file=SRC, t2w_sdc=False)
+        for name in (
+            'synb0_field_to_warp',
+            'synb0_unwarp_b0',
+            'synb0_modulate_b0',
+            'synb0_b0_ref_wf_pass2',
+            'synb0_wf_pass2',
+            'synb0_topup_inputs_pass2',
+            'topup_pass2',
+        ):
+            assert wf.get_node(name) is not None, name
+        eddy = wf.get_node('eddy')
+        assert wf._graph.get_edge_data(wf.get_node('topup'), eddy) is None
+        edge = wf._graph.get_edge_data(wf.get_node('topup_pass2'), eddy)
+        assert ('out_field', 'field') in edge['connect']
+        # The second synthesis starts from the first pass's unwarped, modulated b=0...
+        edge = wf._graph.get_edge_data(
+            wf.get_node('synb0_modulate_b0'), wf.get_node('synb0_b0_ref_wf_pass2')
+        )
+        assert ('out_file', 'inputnode.b0_template') in edge['connect']
+        # ...while the second TOPUP still pairs the acquired b=0 images with it.
+        edge = wf._graph.get_edge_data(
+            wf.get_node('gather_inputs'), wf.get_node('synb0_topup_inputs_pass2')
+        )
+        assert ('topup_imain', 'topup_imain') in edge['connect']
+        assert 'TOPUP was run again' in wf.__desc__
+
+        config.workflow.two_pass_sdc = False
+        wf = init_fsl_hmc_wf(_synb0_unit(tmp_path), source_file=SRC, t2w_sdc=False)
+        assert wf.get_node('topup_pass2') is None
+        edge = wf._graph.get_edge_data(wf.get_node('topup'), wf.get_node('eddy'))
+        assert ('out_field', 'field') in edge['connect']
+        assert 'TOPUP was run again' not in wf.__desc__
+    finally:
+        config.workflow.two_pass_sdc = saved
+
+
 def test_synb0_reportlet_descs_are_registered_in_the_report_spec():
     """Test that the SynB0 reportlet descs are registered in the report spec.
 
@@ -195,19 +237,19 @@ def test_synb0_reportlet_descs_are_registered_in_the_report_spec():
     assert {'synb0acquired', 'synb0unet'} <= descs
 
 
-def test_fsl_hmc_synb0_without_topup_is_uncorrected(tmp_path):
-    """Test that a SynB0 unit without a TOPUP stage is processed without SDC.
+def test_fsl_hmc_synb0_runs_topup_whatever_the_pepolar_tool(tmp_path):
+    """Test that SynB0 under eddy runs TOPUP even with --sdc-method drbuddi.
 
-    With no TOPUP stage in the plan (DRBUDDI-only eddy), nothing consumes
-    the synthetic b=0 and the series is processed without SDC.
+    --sdc-method picks the PEPOLAR tools; the fieldmap-less SynB0 + TOPUP
+    correction does not depend on it.
     """
     _cfg(sdc_method='drbuddi')
     from qsiprep.workflows.dwi.fsl import init_fsl_hmc_wf
 
     wf = init_fsl_hmc_wf(_synb0_unit(tmp_path), source_file=SRC, t2w_sdc=False)
-    assert wf.get_node('topup') is None
-    assert wf.get_node('synb0_wf') is None
-    assert wf.get_node('outputnode').inputs.sdc_method == 'None'
+    assert wf.get_node('topup') is not None
+    assert wf.get_node('synb0_wf') is not None
+    assert wf.get_node('outputnode').inputs.sdc_method == 'TOPUP (SynB0)'
 
 
 def test_subject_summary_renders_native_groupings():
@@ -221,7 +263,7 @@ def test_subject_summary_renders_native_groupings():
     summary = SubjectSummary(
         t1w=[],
         subject_id='01',
-        template='MNI152NLin2009cAsym',
+        templates=['MNI152NLin2009cAsym'],
         dwi_groupings={
             'sub-01': {
                 'pe_dir': 'j',
@@ -344,7 +386,6 @@ def test_dwi_preproc_wf_drbuddi_without_t2w_builds(tmp_path, monkeypatch):
         t2w_sdc=False,
         output_prefix='sub-01',
         source_file=SRC,
-        anatomical_template='MNI152NLin2009cAsym',
     )
     assert wf.get_node('extended_pepolar_report_wf') is not None
 
@@ -386,9 +427,8 @@ def test_dwi_preproc_wf_records_gradwarp_applied(tmp_path, monkeypatch):
             t2w_sdc=False,
             output_prefix='sub-01',
             source_file=src,
-            anatomical_template='MNI152NLin2009cAsym',
         )
-        assert jacobian_provenance_for(unit, t2w_sdc=False) == (['gradwarp'], [], None)
+        assert jacobian_provenance_for(unit) == (['gradwarp'], [], None)
     finally:
         config.workflow.gradient_file = None
 
@@ -606,6 +646,185 @@ def test_drbuddi_blip_assignments_from_sidecars_needs_no_disk():
 # here and in test_interfaces_diffprep.
 
 
+def test_diffprep_sdc_uses_the_acpc_anchor(tmp_path):
+    """Diffprep reads the ACPC anchor selected from output_spaces, not a template config field."""
+    from qsiprep import config
+    from qsiprep.utils.spaces import parse_output_spaces, select_acpc_anchor
+
+    config.workflow.output_spaces = ['acpc:res-2mm', 'MNIInfant:cohort-3']
+    specs = parse_output_spaces(config.workflow.output_spaces)
+    anchor = select_acpc_anchor(specs)
+    assert anchor.fullname == 'MNIInfant+3'
+
+    # The config field diffprep.py used to read must be gone, so any surviving
+    # reader is a build-time AttributeError rather than a silent None.
+    assert not hasattr(config.workflow, 'anatomical_template')
+
+
+def test_template_lps_wf_reorients_to_lps():
+    from qsiprep.workflows.anatomical.volume import init_template_lps_wf
+
+    wf = init_template_lps_wf()
+    # AFNI spells LPS+ as RAI.
+    assert wf.get_node('reorient_brain').inputs.orientation == 'RAI'
+    assert wf.get_node('reorient_mask').inputs.orientation == 'RAI'
+    assert wf.get_node('outputnode') is not None
+
+    # Node attributes alone would pass even if the two reorients' sources were
+    # swapped (masked brain into reorient_mask, raw mask into reorient_brain).
+    # Task 13 reuses this sub-workflow for every standard space, so pin the
+    # actual wiring, not just node presence.
+    assert wf.get_node('mask_template').inputs.expr == 'a*b'
+    edges = {(u.name, v.name): d['connect'] for u, v, d in wf._graph.edges(data=True)}
+
+    # reorient_brain is fed from mask_template's masked output, not the raw template.
+    assert ('mask_template', 'reorient_brain') in edges
+    assert edges[('mask_template', 'reorient_brain')] == [('out_file', 'in_file')]
+    assert ('inputnode', 'reorient_brain') not in edges
+
+    # reorient_mask is fed straight from inputnode.mask_file, bypassing mask_template.
+    assert ('inputnode', 'reorient_mask') in edges
+    assert edges[('inputnode', 'reorient_mask')] == [('mask_file', 'in_file')]
+    assert ('mask_template', 'reorient_mask') not in edges
+
+
+def test_one_output_grid_per_acpc_resolution(tmp_path):
+    from qsiprep.utils.spaces import parse_output_spaces, select_acpc_anchor
+    from qsiprep.workflows.anatomical.volume import init_anat_preproc_wf
+
+    config.workflow.output_spaces = ['acpc:res-2mm', 'acpc:res-1p5mm']
+    config.workflow.anat_modality = 'T1w'
+    config.workflow.infant = False
+    config.nipype.omp_nthreads = 1
+    config.execution.output_dir = str(tmp_path)
+    specs = parse_output_spaces(config.workflow.output_spaces)
+    acpc_specs = [s for s in specs if not s.standard]
+
+    wf = init_anat_preproc_wf(
+        num_anat_images=1,
+        num_additional_t2ws=0,
+        has_rois=False,
+        output_spaces=specs,
+        acpc_anchor=select_acpc_anchor(specs),
+        acpc_specs=acpc_specs,
+        do_biascorr=False,
+        t2w_do_biascorr=False,
+    )
+    names = wf.list_node_names()
+    assert any('output_grid_res2mm_wf' in n for n in names)
+    assert any('output_grid_res1p5mm_wf' in n for n in names)
+
+
+def _build_anat_preproc_wf(tmp_path, output_spaces, sdc_anat_reference='none', has_rois=False):
+    from qsiprep.utils.spaces import parse_output_spaces, select_acpc_anchor
+    from qsiprep.workflows.anatomical.volume import init_anat_preproc_wf
+
+    config.workflow.output_spaces = output_spaces
+    config.workflow.anat_modality = 'T1w'
+    config.workflow.infant = False
+    config.workflow.sdc_anat_reference = sdc_anat_reference
+    config.nipype.omp_nthreads = 1
+    config.execution.output_dir = str(tmp_path)
+    specs = parse_output_spaces(config.workflow.output_spaces)
+    acpc_specs = [s for s in specs if not s.standard]
+
+    return init_anat_preproc_wf(
+        num_anat_images=1,
+        num_additional_t2ws=0,
+        has_rois=has_rois,
+        output_spaces=specs,
+        acpc_anchor=select_acpc_anchor(specs),
+        acpc_specs=acpc_specs,
+        do_biascorr=False,
+        t2w_do_biascorr=False,
+    )
+
+
+def test_anchor_normalization_is_not_duplicated(tmp_path):
+    # The default request's standard space IS the ACPC anchor -- normalize once.
+    wf = _build_anat_preproc_wf(tmp_path, ['acpc:res-2mm', 'MNI152NLin2009cAsym'])
+    norm_wfs = {n.split('.')[0] for n in wf.list_node_names() if 'anat_normalization' in n}
+    assert len(norm_wfs) == 1, f'anchor normalization duplicated: {sorted(norm_wfs)}'
+
+
+def test_distinct_standard_spaces_each_normalize(tmp_path):
+    # A non-anchor space gets its own registration.
+    wf = _build_anat_preproc_wf(
+        tmp_path, ['acpc:res-2mm', 'MNI152NLin2009cAsym', 'MNI152NLin6Asym']
+    )
+    norm_wfs = {n.split('.')[0] for n in wf.list_node_names() if 'anat_normalization' in n}
+    assert len(norm_wfs) == 2, f'expected 2 normalizations, got {sorted(norm_wfs)}'
+
+
+def test_two_resolutions_of_one_template_build(tmp_path):
+    """Rule 6 of the spec: one template may be asked for at several resolutions.
+
+    Node names used to key on spec.fullname alone, so this raised
+    ``OSError: Duplicate node name``; building at all is the regression guard.
+
+    Both resolutions now share one registration -- a res- label changes the grid
+    the template is fetched on, not where the registration lands -- so the count
+    here is one, not one per resolution.
+    """
+    wf = _build_anat_preproc_wf(tmp_path, ['acpc:res-2mm', 'MNI152NLin2009cAsym:res-1:res-2'])
+    norm_wfs = {n.split('.')[0] for n in wf.list_node_names() if 'anat_normalization' in n}
+    assert norm_wfs == {'anat_normalization_wf'}, sorted(norm_wfs)
+
+
+def test_two_resolutions_of_one_template_report_once(tmp_path):
+    """Reportlet filenames have no res- entity, so one figure per template."""
+    from qsiprep.utils.spaces import parse_output_spaces
+    from qsiprep.workflows.anatomical.volume import init_anat_reports_wf
+
+    config.workflow.anat_modality = 'T1w'
+    config.execution.output_dir = str(tmp_path)
+    specs = parse_output_spaces(['acpc:res-2mm', 'MNI152NLin2009cAsym:res-1:res-2'])
+    wf = init_anat_reports_wf(output_spaces=specs)
+    reports = [n for n in wf.list_node_names() if 'ds_report_t1_2_' in n]
+    assert reports == ['ds_report_t1_2_MNI152NLin2009cAsymres1'], reports
+
+
+def test_two_resolutions_of_one_template_write_one_transform(tmp_path):
+    from qsiprep.utils.spaces import parse_output_spaces
+    from qsiprep.workflows.anatomical.volume import init_anat_derivatives_wf
+
+    config.workflow.anat_modality = 'T1w'
+    config.execution.output_dir = str(tmp_path)
+    specs = parse_output_spaces(['acpc:res-2mm', 'MNI152NLin2009cAsym:res-1:res-2'])
+    wf = init_anat_derivatives_wf(output_spaces=specs)
+    warps = sorted(n for n in wf.list_node_names() if n.endswith('_warp'))
+    assert warps == [
+        'ds_t1_MNI152NLin2009cAsymres1_inv_warp',
+        'ds_t1_MNI152NLin2009cAsymres1_warp',
+    ], warps
+
+
+def test_no_standard_space_skips_the_nonlinear_normalization(tmp_path):
+    """Nothing consumes the nonlinear transform, so antsRegistration must not run.
+
+    The space list decides: with no standard space, only the rigid AC-PC
+    registration is built.
+    """
+    wf = _build_anat_preproc_wf(tmp_path, ['acpc:res-2mm'])
+    names = wf.list_node_names()
+    assert not any('anat_nlin_normalization' in n for n in names), (
+        'a nonlinear normalization was built with no standard space requested'
+    )
+    # The rigid AC-PC registration still has to happen.
+    assert any(n.endswith('anat_normalization_wf.acpc_reg') for n in names)
+
+
+def test_syn_sdc_keeps_the_nonlinear_normalization(tmp_path):
+    """Fieldmap-less SDC pulls its atlas prior through t1_2_mni_reverse_transform."""
+    wf = _build_anat_preproc_wf(tmp_path, ['acpc:res-2mm'], sdc_anat_reference='invt1w')
+    assert any('anat_nlin_normalization' in n for n in wf.list_node_names())
+
+
+def test_standard_space_keeps_the_nonlinear_normalization(tmp_path):
+    wf = _build_anat_preproc_wf(tmp_path, ['acpc:res-2mm', 'MNI152NLin2009cAsym'])
+    assert any('anat_nlin_normalization' in n for n in wf.list_node_names())
+
+
 def test_unknown_hmc_method_is_rejected_at_selection_time(tmp_path):
     """Test that an unknown HMC method is rejected at selection time.
 
@@ -731,6 +950,211 @@ def test_distortion_group_merge_wf_writes_the_assembly_sidecar(tmp_path):
     assert bare.get_node('merged_sidecar') is None
 
 
+MULTI_STANDARD = ['acpc:res-2mm', 'MNI152NLin2009cAsym', 'MNI152NLin6Asym']
+
+
+def test_non_anchor_normalization_starts_from_acpc(tmp_path):
+    """A from-ACPC transform must actually start at ACPC.
+
+    Each normalization used to estimate its own rigid alignment to its own
+    template, so a non-anchor space's composite mapped from that space's rigid
+    frame -- while the images it gets applied to are in the anchor's.
+    """
+    wf = _build_anat_preproc_wf(tmp_path, MULTI_STANDARD)
+    norm_wf = wf.get_node('anat_normalization_MNI152NLin6Asym_wf')
+    assert norm_wf is not None
+    assert norm_wf.get_node('acpc_reg') is None, (
+        'a non-anchor space must not estimate its own ACPC frame'
+    )
+    nlin = norm_wf.get_node('anat_nlin_normalization')
+    inputnode = norm_wf.get_node('inputnode')
+    edge = norm_wf._graph.get_edge_data(inputnode, nlin)
+    assert edge is not None
+    assert ('anatomical_reference', 'moving_image') in edge['connect']
+
+
+def test_non_anchor_normalization_is_fed_the_acpc_anatomical(tmp_path):
+    """The moving image must be the ACPC-resampled head, not the raw reference."""
+    wf = _build_anat_preproc_wf(tmp_path, MULTI_STANDARD)
+    norm_wf = wf.get_node('anat_normalization_MNI152NLin6Asym_wf')
+    sources = {
+        src.name
+        for src, _, data in wf._graph.in_edges(norm_wf, data=True)
+        for _, field in data['connect']
+        if field == 'inputnode.anatomical_reference'
+    }
+    assert sources == {'rigid_acpc_resample_head'}
+
+
+@pytest.mark.parametrize(
+    ('force_nocsf', 'expected'),
+    [(False, 'rigid_acpc_resample_mask'), (True, 'rigid_acpc_resample_nonlinear_mask')],
+)
+def test_non_anchor_normalization_gets_the_acpc_nonlinear_mask(tmp_path, force_nocsf, expected):
+    """Test that a non-anchor SyN is restricted by the same mask as the anchor's.
+
+    Under --force no-csf-synthstrip that is the --no-csf mask, resampled into the
+    ACPC frame the non-anchor registration works in.
+    """
+    config.workflow.force_nocsf_synthstrip = force_nocsf
+    try:
+        wf = _build_anat_preproc_wf(tmp_path, MULTI_STANDARD)
+    finally:
+        config.workflow.force_nocsf_synthstrip = False
+    norm_wf = wf.get_node('anat_normalization_MNI152NLin6Asym_wf')
+    sources = {
+        src.name
+        for src, _, data in wf._graph.in_edges(norm_wf, data=True)
+        for _, field in data['connect']
+        if field == 'inputnode.nonlinear_brain_mask'
+    }
+    assert sources == {expected}
+    nlin = norm_wf.get_node('anat_nlin_normalization')
+    edge = norm_wf._graph.get_edge_data(norm_wf.get_node('inputnode'), nlin)
+    assert ('nonlinear_brain_mask', 'moving_mask') in edge['connect']
+
+
+def test_non_anchor_normalization_gets_an_acpc_lesion_mask(tmp_path):
+    """The lesion mask must share the moving image's frame.
+
+    Each normalization used to resample the ROI itself with its own rigid
+    transform. Once the moving image arrives already in ACPC, a raw-frame ROI
+    would mask the wrong anatomy.
+    """
+    wf = _build_anat_preproc_wf(tmp_path, MULTI_STANDARD, has_rois=True)
+    norm_wf = wf.get_node('anat_normalization_MNI152NLin6Asym_wf')
+    assert norm_wf.get_node('rigid_acpc_resample_roi') is None, (
+        'the ROI is resampled once by the caller, not again per space'
+    )
+    sources = {
+        src.name
+        for src, _, data in wf._graph.in_edges(norm_wf, data=True)
+        for _, field in data['connect']
+        if field == 'inputnode.roi'
+    }
+    assert sources == {'rigid_acpc_resample_roi'}
+    nlin = norm_wf.get_node('anat_nlin_normalization')
+    edge = norm_wf._graph.get_edge_data(norm_wf.get_node('inputnode'), nlin)
+    assert ('roi', 'lesion_mask') in edge['connect']
+
+
+def test_res_labels_of_one_template_share_a_registration(tmp_path):
+    """res- labels differ only in the grid the template was fetched on."""
+    wf = _build_anat_preproc_wf(
+        tmp_path, ['acpc:res-2mm', 'MNI152NLin2009cAsym:res-1', 'MNI152NLin2009cAsym:res-2']
+    )
+    registrations = {
+        name.split('.')[0] for name in wf.list_node_names() if 'anat_normalization' in name
+    }
+    assert registrations == {'anat_normalization_wf'}, (
+        f'expected one registration to MNI152NLin2009cAsym, got {sorted(registrations)}'
+    )
+
+
+def test_derivatives_reuse_the_preproc_template_chain(tmp_path):
+    """The grid images are resampled onto must be the grid they were registered to."""
+    wf = _build_anat_preproc_wf(tmp_path, MULTI_STANDARD)
+    duplicated = [
+        name for name in wf.list_node_names() if 'get_template' in name and name.endswith('_deriv')
+    ]
+    assert not duplicated, f'derivatives refetch templates: {duplicated}'
+    duplicated_lps = [name for name in wf.list_node_names() if '_deriv_wf' in name]
+    assert not duplicated_lps, f'derivatives rebuild the LPS chain: {duplicated_lps}'
+
+
+def test_transform_and_grid_lists_stay_index_aligned(tmp_path):
+    """Test that the transform and grid lists stay index-aligned.
+
+    Registrations dedup per template, LPS chains per spec -- two different keys
+    over one list. Every slot of both merges must be filled, from the producer
+    belonging to that spec, or a Select(index=N) pairs one space's transform with
+    another space's grid.
+    """
+    from qsiprep.utils.spaces import parse_output_spaces
+    from qsiprep.workflows.anatomical.volume import _spec_node_label
+
+    spaces = [
+        'acpc:res-2mm',
+        'MNI152NLin2009cAsym:res-1',
+        'MNI152NLin2009cAsym:res-2',
+        'MNI152NLin6Asym',
+    ]
+    wf = _build_anat_preproc_wf(tmp_path, spaces)
+    specs = [s for s in parse_output_spaces(spaces) if s.standard]
+    n_standard = len(specs)
+
+    def _slot_sources(merge_name):
+        merge = wf.get_node(merge_name)
+        assert merge is not None, f'{merge_name} is missing'
+        arity = merge.interface._numinputs
+        assert arity == n_standard, f'{merge_name} has {arity} slots for {n_standard} specs'
+        sources = {}
+        for src, _, data in wf._graph.in_edges(merge, data=True):
+            for _, field in data['connect']:
+                sources[field] = src.name
+        assert set(sources) == {f'in{i}' for i in range(1, n_standard + 1)}, (
+            f'{merge_name} slots not all connected: {sorted(sources)}'
+        )
+        return sources
+
+    lps_sources = _slot_sources('merge_std_template_lps')
+    _slot_sources('merge_std_forward_transforms')
+
+    # Slot N of the grid list must be the chain built for spec N.
+    for position, spec in enumerate(specs, start=1):
+        label = _spec_node_label(spec)
+        source = lps_sources[f'in{position}']
+        assert label in source or source == 'anchor_lps_wf', (
+            f'slot in{position} grid comes from {source}, not the chain for {label}'
+        )
+
+
+def test_merged_native_resolution_reaches_the_sidecar(tmp_path):
+    """Test that a merged res-native* resolution reaches the sidecar.
+
+    res-native* is reported nowhere but the sidecar, and the merge workflow
+    writes its own -- so the resolved grid has to reach that one too.
+    """
+    from qsiplan.plan import OutputAssembly
+
+    from qsiprep.workflows.dwi.distortion_group_merge import init_distortion_group_merge_wf
+
+    cfg = _cfg(layout=_StubLayout())
+    cfg.execution.output_dir = str(tmp_path / 'out')
+    a_file = _write_dwi(tmp_path / 'sub-01_acq-hi_dwi.nii.gz')
+    b_file = _write_dwi(tmp_path / 'sub-01_acq-lo_dwi.nii.gz')
+    unit_a = make_preproc_unit([a_file])
+    unit_b = make_preproc_unit([b_file])
+    assembly = OutputAssembly(
+        output_group='sub-01',
+        input_runs=(unit_a.output_name, unit_b.output_name),
+        strategy='concat',
+        output_name='sub-01',
+    )
+    wf = init_distortion_group_merge_wf(
+        merging_strategy='concat',
+        inputs_list=[unit_a.output_name, unit_b.output_name],
+        source_file='sub-01_dwi.nii.gz',
+        output_prefix='sub-01',
+        name='merge_wf',
+        assembly=assembly,
+        units=[unit_a, unit_b],
+    )
+    grid_metadata = wf.get_node('grid_metadata')
+    merged_sidecar = wf.get_node('merged_sidecar')
+    assert grid_metadata is not None, 'the merged output reports no resolved voxel size'
+    edge = wf._graph.get_edge_data(grid_metadata, merged_sidecar)
+    assert edge is not None
+    assert ('meta_dict', 'extra_data') in edge['connect']
+    sources = {
+        src.name
+        for src, _, data in wf._graph.in_edges(grid_metadata, data=True)
+        for _, field in data['connect']
+        if field == 'grid_file'
+    }
+    assert sources == {'inputnode'}
+
+
 @pytest.mark.parametrize(('dof', 'expected'), [(6, 'Rigid'), (12, 'Affine')])
 def test_dwi2anat_dof_reaches_the_per_unit_coregistration(tmp_path, monkeypatch, dof, expected):
     """Test that --dwi2anat-dof reaches the per-unit coregistration.
@@ -752,7 +1176,170 @@ def test_dwi2anat_dof_reaches_the_per_unit_coregistration(tmp_path, monkeypatch,
         t2w_sdc=False,
         output_prefix='sub-01',
         source_file=SRC,
-        anatomical_template='MNI152NLin2009cAsym',
     )
     coreg = wf.get_node('b0_anat_coreg').get_node('b0_to_anat')
     assert coreg.inputs.transforms == [expected]
+
+
+def _merge_wf(tmp_path, resolution=None, write_shared_outputs=True, name='merge_wf'):
+    """Build a distortion-group merge workflow with a real assembly, for the sink tests."""
+    from qsiplan.plan import OutputAssembly
+
+    from qsiprep.workflows.dwi.distortion_group_merge import init_distortion_group_merge_wf
+
+    # Callers pass subdirectories so sibling workflows get separate inputs.
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    cfg = _cfg(layout=_StubLayout())
+    cfg.execution.output_dir = str(tmp_path / 'out')
+    a_file = _write_dwi(tmp_path / 'sub-01_acq-hi_dwi.nii.gz')
+    b_file = _write_dwi(tmp_path / 'sub-01_acq-lo_dwi.nii.gz')
+    unit_a = make_preproc_unit([a_file])
+    unit_b = make_preproc_unit([b_file])
+    assembly = OutputAssembly(
+        output_group='sub-01',
+        input_runs=(unit_a.output_name, unit_b.output_name),
+        strategy='concat',
+        output_name='sub-01',
+    )
+    return init_distortion_group_merge_wf(
+        merging_strategy='concat',
+        inputs_list=[unit_a.output_name, unit_b.output_name],
+        source_file='sub-01_dwi.nii.gz',
+        output_prefix='sub-01',
+        name=name,
+        assembly=assembly,
+        units=[unit_a, unit_b],
+        resolution=resolution,
+        write_shared_outputs=write_shared_outputs,
+    )
+
+
+def test_merged_series_qc_names_its_space(tmp_path):
+    """Test that the merged series QC is written as space-ACPC, like the direct path.
+
+    Regression: the merge workflow's sink had no space entity, so merged outputs
+    wrote desc-image_qc.tsv where unmerged ones write space-ACPC_desc-image_qc.tsv.
+    """
+    import json
+
+    from bids.layout.writing import build_path
+
+    from qsiprep.data import load as load_data
+
+    sink = _merge_wf(tmp_path).get_node('ds_series_qc')
+    assert sink.inputs.space == 'ACPC'
+
+    patterns = json.loads(load_data('io_spec.json').read_text())['default_path_patterns']
+    path = build_path(
+        {
+            'subject': '01',
+            'datatype': 'dwi',
+            'space': sink.inputs.space,
+            'desc': sink.inputs.desc,
+            'suffix': sink.inputs.suffix,
+            'extension': sink.inputs.extension,
+        },
+        patterns,
+    )
+    assert path == 'sub-01/dwi/sub-01_space-ACPC_desc-image_qc.tsv'
+
+
+MERGE_RES_SINKS = ('ds_series_qc', 'ds_report_qc_warnings', 'ds_merged_sidecar')
+
+
+def test_merge_wf_labels_its_sinks_with_the_resolution(tmp_path):
+    """Test that each merge workflow names its grid on every sink it owns.
+
+    Two merge workflows write to one directory, so an unlabelled sink collides.
+    """
+    from qsiprep.utils.spaces import parse_output_spaces
+
+    (spec,) = parse_output_spaces(['acpc:res-1p5mm'])
+    wf = _merge_wf(tmp_path, resolution=spec.resolution)
+    for sink_name in MERGE_RES_SINKS:
+        sink = wf.get_node(sink_name)
+        assert sink is not None, f'{sink_name} is missing'
+        assert sink.inputs.res == '1p5mm', f'{sink_name} carries no res- entity'
+    # The nested b=0 reportlet is the one an entity test forgets; it lives inside
+    # merged_b0_ref, not at the top level.
+    report_sink = wf.get_node('merged_b0_ref').get_node('ds_report_b0_mask')
+    assert report_sink is not None
+    assert report_sink.inputs.res == '1p5mm'
+    # The derivatives workflow gets the resolution too.
+    assert wf.get_node('dwi_derivatives_wf').get_node('ds_dwi_t1').inputs.res == '1p5mm'
+
+
+def test_merge_wf_without_a_resolution_writes_no_res_entity(tmp_path):
+    """Test that resolution=None leaves res- off the merge workflow's sinks.
+
+    base.py always passes a resolution; None remains for building the workflow on
+    its own.
+    """
+    from nipype.interfaces.base import isdefined
+
+    wf = _merge_wf(tmp_path)
+    for sink_name in MERGE_RES_SINKS:
+        assert not isdefined(wf.get_node(sink_name).inputs.res)
+    assert not isdefined(wf.get_node('merged_b0_ref').get_node('ds_report_b0_mask').inputs.res)
+
+
+def test_merge_wf_writes_shared_outputs_only_once(tmp_path):
+    """Test that only one merge workflow per output plots the sampling scheme.
+
+    bvecs do not change with the output grid, so the figure would be identical.
+    """
+    with_shared = _merge_wf(tmp_path / 'a', write_shared_outputs=True)
+    without = _merge_wf(tmp_path / 'b', write_shared_outputs=False, name='merge_wf_res2')
+    assert with_shared.get_node('ds_report_gradients') is not None
+    assert without.get_node('ds_report_gradients') is None
+    assert without.get_node('gradient_plot') is None
+
+
+def test_single_subject_wf_builds_a_merge_workflow_per_resolution():
+    """Test that each ACPC spec gets its own merge workflow, fed slot i.
+
+    Textual: the integrated graph is built for real in
+    test_two_resolutions_build_two_merge_workflows.
+    """
+    import inspect
+
+    from qsiprep.workflows import base
+
+    src = inspect.getsource(base.init_single_subject_wf)
+    assert 'for index, spec in enumerate(acpc_specs)' in src
+    assert 'write_shared_outputs=(index == 0)' in src
+    # Every merged output carries its res- entity, even with one resolution.
+    assert 'resolution=spec.resolution,' in src
+    assert "(('outputnode.dwi_t1', _select_grid, index), image_name)" in src
+    assert "(('outputnode.bvals_t1', _select_grid, index), bval_name)" in src
+
+
+def _template_sources(wf, norm_wf_name):
+    """Name the workflow that feeds a normalization its template image."""
+    norm_wf = wf.get_node(norm_wf_name)
+    assert norm_wf is not None
+    return {
+        src.name
+        for src, _, data in wf._graph.in_edges(norm_wf, data=True)
+        for _, field in data['connect']
+        if field == 'inputnode.template_image'
+    }
+
+
+@pytest.mark.parametrize(
+    'token',
+    ['MNI152NLin6Asym:res-2:res-1', 'MNI152NLin6Asym:res-1:res-2', 'MNI152NLin6Asym:res-2'],
+)
+def test_registration_targets_the_default_resolution_whatever_label_is_listed(tmp_path, token):
+    """A res- label picks the derivative grid, not the registration target.
+
+    The one transform written for a template must not depend on which label was
+    typed first, so the registration always reads the template's default
+    (finest) grid; each label's derivatives are resampled onto their own.
+    """
+    wf = _build_anat_preproc_wf(tmp_path, ['acpc:res-2mm', token])
+    assert _template_sources(wf, 'anat_normalization_MNI152NLin6Asym_wf') == {
+        'template_lps_MNI152NLin6Asym_wf'
+    }
+    chains = {n.split('.')[0] for n in wf.list_node_names() if n.startswith('template_lps_')}
+    assert 'template_lps_MNI152NLin6Asymres2_wf' in chains, sorted(chains)

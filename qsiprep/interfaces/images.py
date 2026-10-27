@@ -439,13 +439,20 @@ class Conform(SimpleInterface):
         if self.inputs.deoblique_header:
             is_oblique = np.any(np.abs(nb.affines.obliquity(reoriented.affine)) > 0)
             if is_oblique:
-                LOGGER.warning('Removing obliquity from image affine')
-                new_affine = reoriented.affine.copy()
-                new_affine[:, :-1] = 0
-                new_affine[(0, 1, 2), (0, 1, 2)] = reoriented.header.get_zooms()[:3] * np.sign(
-                    reoriented.affine[(0, 1, 2), (0, 1, 2)]
+                # Resample onto an axis-aligned grid that covers the same world volume.
+                # Zeroing the direction cosines instead (the old behaviour) kept the voxels
+                # and the origin, which moved every voxel in world space by the obliquity
+                # (21 mm at the brain centre for a 5 degree tilt) and misplaced the anatomy
+                # for everything that works in scanner coordinates, gradient nonlinearity
+                # correction included.
+                LOGGER.warning(
+                    'Oblique anatomical image: resampling onto an axis-aligned grid '
+                    '(world coordinates preserved)'
                 )
-                reoriented = nb.Nifti1Image(reoriented.get_fdata(), new_affine, reoriented.header)
+                target_affine, target_shape = deoblique_grid(reoriented)
+                data = nli.resample_img(reoriented, target_affine, target_shape).get_fdata()
+                conform_xfm = conform_xfm.dot(np.linalg.inv(reoriented.affine).dot(target_affine))
+                reoriented = nb.Nifti1Image(data, target_affine, reoriented.header)
 
         # Image may be reoriented, rescaled, and/or resized
         if reoriented is not orig_img:
@@ -465,6 +472,38 @@ class Conform(SimpleInterface):
         self._results['out_file'] = out_name
 
         return runtime
+
+
+def deoblique_grid(img):
+    """Return an axis-aligned ``(affine, shape)`` covering an oblique image's world volume.
+
+    The grid keeps the image's voxel sizes and axis polarities (its closest canonical
+    orientation) and spans the world bounding box of the oblique field of view, so
+    resampling onto it preserves every voxel's world position.
+    """
+    affine = np.asarray(img.affine, dtype=np.float64)
+    zooms = np.asarray(img.header.get_zooms()[:3], dtype=np.float64)
+    ornt = nb.io_orientation(affine)  # closest canonical axis and polarity per voxel axis
+    signs = np.ones(3)
+    for _vox_axis, (world_axis, flip) in enumerate(ornt):
+        signs[int(world_axis)] = flip
+    shape = np.asarray(img.shape[:3])
+    corners = np.array(
+        [
+            [i, j, k, 1.0]
+            for i in (0, shape[0] - 1)
+            for j in (0, shape[1] - 1)
+            for k in (0, shape[2] - 1)
+        ]
+    )
+    world = (affine @ corners.T)[:3]
+    lo, hi = world.min(axis=1), world.max(axis=1)
+    new_zooms = np.array([zooms[int(ornt[v, 0])] for v in range(3)])  # zoom per world axis
+    new_shape = np.ceil((hi - lo) / new_zooms).astype(int) + 1
+    target_affine = np.eye(4)
+    target_affine[:3, :3] = np.diag(signs * new_zooms)
+    target_affine[:3, 3] = np.where(signs > 0, lo, hi)
+    return target_affine, tuple(int(n) for n in new_shape)
 
 
 class ConformDwiInputSpec(BaseInterfaceInputSpec):
@@ -565,7 +604,7 @@ class ConformDwi(SimpleInterface):
 
 class _ChooseInterpolatorInputSpec(BaseInterfaceInputSpec):
     dwi_files = InputMultiObject(File(exists=True), mandatory=True)
-    output_resolution = traits.Float(mandatory=True)
+    output_grid = File(exists=True, mandatory=True)
     sloppy = traits.Bool(False, usedefault=True)
 
 
@@ -576,21 +615,22 @@ class _ChooseInterpolatorOutputSpec(TraitedSpec):
 
 
 class ChooseInterpolator(SimpleInterface):
-    """If the requested output resolution is more than 10% smaller than the input, use BSpline."""
+    """Use Lanczos, or Linear when the output resolution is more than 10% finer than the input."""
 
     input_spec = _ChooseInterpolatorInputSpec
     output_spec = _ChooseInterpolatorOutputSpec
 
     def _run_interface(self, runtime):
         if self.inputs.sloppy:
-            self._results['interpolation_method'] = 'NearestNeighbor'
-            LOGGER.warning('Using NN interpolation for sloppy mode')
+            # Linear costs the same as nearest-neighbour here, and keeps the resampled
+            # images comparable with their truth in the sloppy integration tests.
+            self._results['interpolation_method'] = 'Linear'
+            LOGGER.warning('Using Linear interpolation for sloppy mode')
             return runtime
-        output_resolution = np.array([self.inputs.output_resolution] * 3)
+        output_resolution = np.array(nb.load(self.inputs.output_grid).header.get_zooms()[:3])
         interpolator = 'LanczosWindowedSinc'
         for input_file in self.inputs.dwi_files:
             resolution_cutoff = 0.9 * np.array(nb.load(input_file).header.get_zooms()[:3])
-            print(output_resolution, resolution_cutoff)
             if np.any(output_resolution < resolution_cutoff):
                 interpolator = 'Linear'
                 LOGGER.warning('Using Linear interpolation for upsampling')

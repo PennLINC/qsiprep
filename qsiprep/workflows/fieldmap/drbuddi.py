@@ -258,12 +258,9 @@ def init_drbuddi_wf(
             **sloppy_epi_working_res(),
             **_synth_shell_kwargs(synth_shell_bval, synth_shell_ndirs),
             use_cuda=use_cuda,
-            # NOTE: --DRBUDDI_start_with_diffeomorphic_for_rigid_reg and
-            # --DRBUDDI_disable_initial_rigid look like natural companions to
-            # ``sloppy``, but both are commented out of TORTOISE's parser:
-            # DRBUDDI prints "Unknown command line parameter", exits 0 (which
-            # nipype reads as success), and the run dies later on missing
-            # outputs. Neither flag is safe to send.
+            # The blip-up and blip-down b=0s reach DRBUDDI in separate frames
+            # (each series is motion-corrected on its own), so its up/down
+            # rigid stays on even though the structural is pre-aligned.
         ),
         name='drbuddi',
         n_procs=config.nipype.omp_nthreads,

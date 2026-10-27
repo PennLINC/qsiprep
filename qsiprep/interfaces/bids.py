@@ -22,7 +22,9 @@ import re
 from json import dump, loads
 from shutil import copyfileobj
 
+import nibabel as nb
 from bids.layout import Config
+from isal.igzip import IGzipFile
 from nipype import logging
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
@@ -36,12 +38,47 @@ from nipype.interfaces.base import (
     traits,
 )
 from nipype.utils.filemanip import copyfile, fname_presuffix
+from niworkflows.interfaces import bids as niworkflows_bids
 from niworkflows.interfaces.bids import DerivativesDataSink as BaseDerivativesDataSink
 from niworkflows.interfaces.bids import _DerivativesDataSinkInputSpec
 
 from qsiprep.data import load as load_data
 
 LOGGER = logging.getLogger('nipype.interface')
+
+
+def write_nifti_isal(fname, header, data):
+    """Write a NIfTI image as niworkflows does, compressing with ISA-L.
+
+    niworkflows' DerivativesDataSink writes every image it rewrites through
+    ``unsafe_write_nifti_header_and_data``, which compresses with zlib at level
+    9. ISA-L writes the same gzip format at nearly the same size, an order of
+    magnitude faster. As in niworkflows, the gzip header holds no file name or
+    modification time, so the output is deterministic.
+
+    Parameters
+    ----------
+    fname : str or os.PathLike
+        Output file; compressed when it ends in ``.gz``.
+    header : nibabel.Nifti1Header
+        Header to write, with the data type and offset of ``data``.
+    data : array-like
+        Image data in Fortran order.
+    """
+    compress = str(fname).endswith('.gz')
+    with open(fname, 'wb') as fobj:
+        if compress:
+            fobj = IGzipFile('', 'wb', fileobj=fobj, mtime=0)
+        header.write_to(fobj)
+        nb.volumeutils.array_to_file(
+            data, fobj, header.get_data_dtype(), offset=header.get_data_offset()
+        )
+        if compress:
+            fobj.close()
+
+
+niworkflows_bids.unsafe_write_nifti_header_and_data = write_nifti_isal
+
 BIDS_NAME = re.compile(
     r'^(.*\/)?(?P<subject_id>sub-[a-zA-Z0-9]+)(_(?P<session_label>ses-[a-zA-Z0-9]+))?'
     '(_(?P<task_id>task-[a-zA-Z0-9]+))?(_(?P<acq_id>acq-[a-zA-Z0-9]+))?'
@@ -241,6 +278,11 @@ class DerivativesMaybeDataSink(DerivativesDataSink):
 
 class _DerivativesSidecarInputSpec(BaseInterfaceInputSpec):
     sidecar_data = traits.Dict()
+    # Anything only a running node can know -- the voxel size a res-native* grid
+    # turned out to be, say. Merged over sidecar_data rather than attached to a
+    # DerivativesDataSink, because niworkflows would then write it to the same
+    # <stem>.json this node writes and one would silently overwrite the other.
+    extra_data = traits.Dict()
     source_file = File()
 
 
@@ -256,8 +298,11 @@ class DerivativesSidecar(SimpleInterface):
         json_fname = fname_presuffix(
             self.inputs.source_file, use_ext=False, suffix='.json', newpath=runtime.cwd
         )
+        sidecar_data = dict(self.inputs.sidecar_data)
+        if isdefined(self.inputs.extra_data):
+            sidecar_data.update(self.inputs.extra_data)
         with open(json_fname, 'w') as jsonf:
-            dump(self.inputs.sidecar_data, jsonf, sort_keys=True, indent=4)
+            dump(sidecar_data, jsonf, sort_keys=True, indent=4)
         self._results['derivatives_json'] = json_fname
         return runtime
 

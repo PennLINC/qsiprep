@@ -239,7 +239,7 @@ def test_gradwarp_reportlet_resampling_honours_sloppy(tmp_path):
     finally:
         config.execution.sloppy = False
 
-    assert wf.get_node('corrected_ref').inputs.interpolation == 'NearestNeighbor'
+    assert wf.get_node('corrected_ref').inputs.interpolation == 'Linear'
 
 
 def test_dis3d_builds_no_reportlet(tmp_path):
@@ -279,9 +279,7 @@ def test_is_displacement_field_covers_every_accepted_extension(gradient_file, ex
 
 
 @pytest.mark.parametrize('warp_dim', ['3D', '1D'])
-@pytest.mark.parametrize(
-    ('hmc_method', 'backend'), [('eddy', 'FSL eddy'), ('tortoise', 'DIFFPREP')]
-)
+@pytest.mark.parametrize(('hmc_method', 'backend'), [('eddy', '`eddy`'), ('tortoise', 'DIFFPREP')])
 def test_boilerplate_does_not_claim_single_resampling_for_preresampling_backends(
     hmc_method, backend, warp_dim
 ):
@@ -292,7 +290,7 @@ def test_boilerplate_does_not_claim_single_resampling_for_preresampling_backends
 
     assert 'resampled only once' not in text
     assert backend in text
-    assert 'single resampling' in text
+    assert 'in the final resampling' in text
 
 
 @pytest.mark.parametrize('warp_dim', ['3D', '1D'])
@@ -306,7 +304,7 @@ def test_boilerplate_claims_single_resampling_for_transform_preserving_backends(
     text = gradwarp_boilerplate(warp_dim)
 
     assert 'resampled only once' in text
-    assert 'FSL eddy' not in text
+    assert '`eddy`' not in text
     assert 'DIFFPREP' not in text
 
 
@@ -489,23 +487,27 @@ def _trans_wf_gradwarp_sources(wf):
     ]
 
 
-def test_dwi_trans_wf_exposes_a_gradwarp_field_input():
+def _trans_wf(name='trans_wf'):
+    from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
 
-    config.workflow.output_resolution = 1.2
-    wf = init_dwi_trans_wf(
-        source_file='sub-1_dwi.nii.gz', mem_gb=1, name='trans_wf', use_compression=False
+    (spec,) = parse_output_spaces(['acpc:res-1p2mm'])
+    return init_dwi_trans_wf(
+        source_file='sub-1_dwi.nii.gz',
+        mem_gb=1,
+        resolution=spec.resolution,
+        name=name,
+        use_compression=False,
     )
+
+
+def test_dwi_trans_wf_exposes_a_gradwarp_field_input():
+    wf = _trans_wf()
     assert 'gradwarp_field' in wf.get_node('inputnode').inputs.trait_get()
 
 
 def test_dwi_trans_wf_connects_gradwarp_to_compose_transforms():
-    from qsiprep.workflows.dwi.resampling import init_dwi_trans_wf
-
-    config.workflow.output_resolution = 1.2
-    wf = init_dwi_trans_wf(
-        source_file='sub-1_dwi.nii.gz', mem_gb=1, name='trans_wf', use_compression=False
-    )
+    wf = _trans_wf()
     assert _trans_wf_gradwarp_sources(wf) == ['inputnode']
 
 
@@ -538,11 +540,11 @@ def test_listify_rejects_a_list_input():
         _listify(['a.nii.gz', 'b.nii.gz'])
 
 
-def _finalize_cfg(tmp_path):
+def _finalize_cfg(tmp_path, output_spaces=('acpc:res-1p2mm',)):
     config.execution.output_dir = str(tmp_path)
     config.execution.sloppy = False
     config.workflow.sdc_method = 'topup'
-    config.workflow.output_resolution = 1.2
+    config.workflow.output_spaces = list(output_spaces)
     config.workflow.dwiref_definition = 'distortion-group'
     # Read when the bias-correction node is built (do_biascorr=True paths);
     # set here so these tests do not depend on which module ran before them.
@@ -551,17 +553,20 @@ def _finalize_cfg(tmp_path):
     config.nipype.omp_nthreads = 1
 
 
-def _finalize_wf(tmp_path, write_derivatives=False):
+def _finalize_wf(tmp_path, write_derivatives=False, output_spaces=('acpc:res-1p2mm',)):
+    from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.dwi.finalize import init_dwi_finalize_wf
 
-    _finalize_cfg(tmp_path)
+    _finalize_cfg(tmp_path, output_spaces=output_spaces)
     dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz')
     unit = make_preproc_unit([dwi])
+    specs = parse_output_spaces(config.workflow.output_spaces)
     return init_dwi_finalize_wf(
         unit=unit,
         name='dwi_finalize_wf',
         source_file=dwi,
         output_prefix='sub-01',
+        acpc_specs=[s for s in specs if not s.standard],
         # These tests are about gradwarp, not N4; building the bias-correction
         # node would need b0_threshold, which this fixture does not configure.
         do_biascorr=False,
@@ -576,7 +581,9 @@ def test_dwi_finalize_wf_exposes_a_gradwarp_field_input(tmp_path):
 
 def test_dwi_finalize_wf_connects_gradwarp_field_to_trans_wf(tmp_path):
     wf = _finalize_wf(tmp_path)
-    trans_wf = wf.get_node('transform_dwis_t1')
+    # One dwi_trans_wf is built per requested ACPC resolution; a single
+    # resolution takes the unsuffixed name.
+    trans_wf = wf.get_node('dwi_trans_wf')
     edge = wf._graph.get_edge_data(wf.get_node('inputnode'), trans_wf)
     assert edge is not None
     assert ('gradwarp_field', 'inputnode.gradwarp_field') in edge['connect']
@@ -617,7 +624,6 @@ def _dwi_preproc_cfg(tmp_path):
     config.workflow.denoise_method = 'dwidenoise'
     config.workflow.dwidenoise_window = 5
     config.workflow.shoreline_iters = 2
-    config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
     config.workflow.anat_modality = 't1w'
     config.workflow.dwi2anat_dof = 6
     config.workflow.hmc_transform = 'Affine'
@@ -639,7 +645,6 @@ def _preproc_wf(tmp_path, image_type=None):
         t2w_sdc=False,
         output_prefix='sub-01',
         source_file=dwi,
-        anatomical_template='MNI152NLin2009cAsym',
     )
 
 
@@ -703,6 +708,22 @@ def test_dwi_preproc_wf_dis3d_runs_nothing_and_wires_nothing(tmp_path):
     assert not [name for name in flat if name.startswith('gradwarp')]
 
 
+def test_dwi_preproc_wf_describes_gradwarp_after_head_motion_correction(tmp_path):
+    """The gradwarp field feeds the HMC backend but is applied in the final resampling.
+
+    Its text says it followed eddy's correction, so it must come after eddy's text.
+    This unit has no fieldmap, so the text must also say no SDC was performed.
+    """
+    from qsiprep.workflows.fieldmap.base import NO_SDC_DESC
+
+    desc = ' '.join(_preproc_wf(tmp_path).visit_desc().split())
+
+    assert desc.index('corrected with `eddy`') < desc.index('Gradient nonlinearity')
+    assert desc.count('Gradient nonlinearity was corrected') == 1
+    assert 'introduces.FSL' not in desc
+    assert NO_SDC_DESC.strip() in desc
+
+
 def test_dwi_preproc_wf_dis3d_still_emits_the_dis3d_boilerplate(tmp_path):
     """Test that the DIS3D boilerplate is still emitted.
 
@@ -752,7 +773,6 @@ def test_dwi_preproc_wf_extracts_a_reference_for_a_displacement_field(tmp_path):
         t2w_sdc=False,
         output_prefix='sub-01',
         source_file=dwi,
-        anatomical_template='MNI152NLin2009cAsym',
     )
 
     gradwarp_ref = wf.get_node('gradwarp_ref')
@@ -820,7 +840,6 @@ def test_dwi_preproc_wf_without_gradient_file_has_no_gradwarp_wf(tmp_path):
         t2w_sdc=False,
         output_prefix='sub-01',
         source_file=dwi,
-        anatomical_template='MNI152NLin2009cAsym',
     )
 
     assert wf.get_node('gradwarp_wf') is None
@@ -958,7 +977,6 @@ def _cfg_for_fsl(tmp_path, sdc_method):
     config.workflow.b0_threshold = 100
     config.workflow.eddy_config = None
     config.workflow.denoise_method = 'dwidenoise'
-    config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
     config.execution.sloppy = False
     config.nipype.omp_nthreads = 1
 
@@ -1074,7 +1092,7 @@ def test_gradwarp_sdc_resampling_honours_sloppy(tmp_path):
     config.execution.sloppy = True
     try:
         wf = _fsl_wf(tmp_path, _syn_unit(tmp_path))
-        assert wf.get_node('gradwarp_sdc_inputs').inputs.interpolation == 'NearestNeighbor'
+        assert wf.get_node('gradwarp_sdc_inputs').inputs.interpolation == 'Linear'
     finally:
         config.execution.sloppy = False
 
@@ -1102,7 +1120,6 @@ def _cfg_for_diffprep(tmp_path):
     config.workflow.diffprep_config = None
     config.workflow.b0_threshold = 100
     config.workflow.sdc_method = 'drbuddi'
-    config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
     config.workflow.gpu = None
     config.execution.sloppy = False
     config.nipype.omp_nthreads = 1
@@ -1215,8 +1232,10 @@ def test_diffprep_drbuddi_seeded_by_gre_candidate(tmp_path, monkeypatch):
     )
     desc = ' '.join(wf.visit_desc().split())
     assert 'initialized with the field map-derived deformation described above' in desc
-    assert desc.index('estimated based on a field map') < desc.index('DRBUDDI [@drbuddi]')
-    assert 'unwarped b=0' not in desc
+    assert desc.index('Susceptibility distortion was corrected with a') < desc.index(
+        'DRBUDDI [@drbuddi]'
+    )
+    assert 'unwarped with the estimated field' not in desc
 
 
 @pytest.mark.parametrize('minus_first', [False, True])
@@ -1273,7 +1292,7 @@ def test_gre_seeds_drbuddi_after_shoreline_and_eddy(
     )
     assert wf.get_node('drbuddi_sdc_wf.drbuddi').inputs.keep_initial_transform_fixed is True
     desc = ' '.join(wf.visit_desc().split())
-    assert desc.index('estimated based on a field map') < desc.index(
+    assert desc.index('Susceptibility distortion was corrected with a') < desc.index(
         'initialized with the field map-derived deformation described above'
     )
 
@@ -1416,39 +1435,52 @@ def test_diffprep_no_fieldmap_branch_gradwarps_the_coregistration_reference(tmp_
     )
 
 
-def _diffprep_t2wreg_wf(tmp_path, unit):
+def _unpile_unit(tmp_path):
+    """Build a fieldmap-less unit with an explicit unpile estimation against the T2w."""
+    from qsiplan.models import CorrectionMethod
+
+    dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz')
+    t2w = ['/data/sub-01_T2w.nii.gz']
+    return make_preproc_unit(
+        [dwi],
+        method=CorrectionMethod.UNPILE,
+        metadata={'Manufacturer': 'SIEMENS'},
+        estimation_sources=t2w,
+        anat_files=t2w,
+    )
+
+
+def _diffprep_unpile_wf(tmp_path, unit):
     from qsiprep.workflows.dwi.diffprep import init_diffprep_hmc_wf
 
     return init_diffprep_hmc_wf(unit, source_file='/data/x_dwi.nii.gz', t2w_sdc=True)
 
 
-def test_diffprep_t2wreg_reference_gets_gradwarp_then_sdc(tmp_path):
-    """Test that the T2Wreg reference gets gradwarp, then SDC.
+def test_diffprep_unpile_branch_gradwarps_the_sdc_reference(tmp_path):
+    """Test that unpile's reference is gradwarp-corrected, like SyN's.
 
-    Both transforms go into the one resampling of the pre-SDC b=0 that this
-    branch already performs, in chain order. ANTs applies a transform list
-    last-first, so the SDC warp is in1 and the gradwarp field in2.
+    unpile's warp is applied downstream of gradwarp, so the b=0 it fits is
+    resampled through the gradwarp field first, and coregistration sees the
+    reference init_sdc_wf unwarped.
     """
     _cfg_for_diffprep(tmp_path)
-    wf = _diffprep_t2wreg_wf(tmp_path, _plain_unit(tmp_path))
+    wf = _diffprep_unpile_wf(tmp_path, _unpile_unit(tmp_path))
 
-    assert _connects(wf, 'diffprep', 'sdc_then_gradwarp', 'sdc_warp', 'in1')
-    assert _connects(wf, 'inputnode', 'sdc_then_gradwarp', 'gradwarp_field', 'in2')
-    assert _connects(wf, 'sdc_then_gradwarp', 'apply_sdc_to_b0', 'out', 'transforms')
-    # No second correction downstream: b0_ref_for_coreg derives the mask from
-    # this same image, so both stay in one geometry.
+    assert _connects(wf, 'gradwarp_sdc_inputs', 'sdc_wf', 'output_image', 'inputnode.b0_ref')
+    assert not _connects(
+        wf, 'b0_ref_for_coreg', 'sdc_wf', 'outputnode.ref_image', 'inputnode.b0_ref'
+    )
     assert wf.get_node('gradwarp_coreg_ref') is None
-    assert _connects(wf, 'b0_ref_for_coreg', 'outputnode', 'outputnode.ref_image', 'b0_template')
+    assert _connects(wf, 'sdc_wf', 'outputnode', 'outputnode.b0_ref', 'b0_template')
 
 
-def test_diffprep_t2wreg_without_gradwarp_applies_sdc_alone(tmp_path):
+def test_diffprep_unpile_without_gradwarp_fits_the_raw_reference(tmp_path):
     _cfg_for_diffprep(tmp_path)
     config.workflow.gradient_file = None
-    wf = _diffprep_t2wreg_wf(tmp_path, _plain_unit(tmp_path))
+    wf = _diffprep_unpile_wf(tmp_path, _unpile_unit(tmp_path))
 
-    assert wf.get_node('sdc_then_gradwarp') is None
-    assert wf.get_node('gradwarp_coreg_ref') is None
-    assert _connects(wf, 'diffprep', 'apply_sdc_to_b0', 'sdc_warp', 'transforms')
+    assert wf.get_node('gradwarp_sdc_inputs') is None
+    assert _connects(wf, 'b0_ref_for_coreg', 'sdc_wf', 'outputnode.ref_image', 'inputnode.b0_ref')
 
 
 def _cfg_for_shoreline(tmp_path):
@@ -1459,7 +1491,6 @@ def _cfg_for_shoreline(tmp_path):
     config.workflow.shoreline_iters = 2
     config.workflow.b0_threshold = 100
     config.workflow.sdc_method = 'drbuddi'
-    config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
     config.execution.sloppy = False
     config.nipype.omp_nthreads = 1
 
@@ -1471,7 +1502,6 @@ def _shoreline_wf(tmp_path, unit):
         unit,
         source_file='/data/x_dwi.nii.gz',
         t2w_sdc=False,
-        anatomical_template='MNI152NLin2009cAsym',
     )
 
 
@@ -1625,22 +1655,30 @@ def test_graddev_filename_renders_with_space_entity(tmp_path):
     assert out.endswith('sub-01_space-ACPC_graddev.nii.gz')
 
 
-def _finalize_wf_with_gradients(tmp_path, image_type=None, write_derivatives=True):
+def _finalize_wf_with_gradients(
+    tmp_path,
+    image_type=None,
+    write_derivatives=True,
+    output_spaces=('acpc:res-1p2mm',),
+):
     """Build a finalize_wf with a resolved gradwarp plan, for the grad_dev tests."""
+    from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.dwi.finalize import init_dwi_finalize_wf
 
-    _finalize_cfg(tmp_path)
+    _finalize_cfg(tmp_path, output_spaces=output_spaces)
     config.workflow.gradient_file = str(write_siemens_grad(tmp_path / 'coeff.grad'))
     dwi = write_dwi_with_gradients(tmp_path / 'sub-01_dwi.nii.gz')
     metadata = {'Manufacturer': 'SIEMENS'}
     if image_type is not None:
         metadata['ImageType'] = image_type
     unit = make_preproc_unit([dwi], metadata=metadata)
+    specs = parse_output_spaces(config.workflow.output_spaces)
     return init_dwi_finalize_wf(
         unit=unit,
         name='dwi_finalize_wf',
         source_file=dwi,
         output_prefix='sub-01',
+        acpc_specs=[s for s in specs if not s.standard],
         write_derivatives=write_derivatives,
     )
 
@@ -1656,6 +1694,18 @@ def test_dwi_finalize_wf_builds_grad_dev_when_a_plan_resolves(tmp_path):
 
     assert wf.get_node('grad_dev') is not None
     assert wf.get_node('ds_grad_dev') is not None
+    qc = wf.get_node('series_qc')
+    from_grad_dev = wf._graph.get_edge_data(wf.get_node('grad_dev'), qc)['connect']
+    assert ('grad_dev', 'grad_dev_file') in from_grad_dev
+    from_inputnode = wf._graph.get_edge_data(wf.get_node('inputnode'), qc)['connect']
+    assert ('gradwarp_field', 'gradwarp_field') in from_inputnode
+    assert ('dwi_mask', 'gradwarp_mask_file') in from_inputnode
+
+
+def test_grad_dev_sink_runs_in_a_worker(tmp_path):
+    """Test that the 4D grad_dev map is written off nipype's main thread."""
+    wf = _finalize_wf_with_gradients(tmp_path)
+    assert not wf.get_node('ds_grad_dev').run_without_submitting
 
 
 def test_dwi_finalize_wf_builds_grad_dev_for_dis3d(tmp_path):
@@ -1669,6 +1719,11 @@ def test_dwi_finalize_wf_builds_grad_dev_for_dis3d(tmp_path):
     grad_dev = wf.get_node('grad_dev')
     assert grad_dev is not None
     assert wf.get_node('ds_grad_dev') is not None
+    # No applied field for DIS3D, so image_qc.tsv gets only the rotation columns.
+    qc = wf.get_node('series_qc')
+    assert ('grad_dev', 'grad_dev_file') in wf._graph.get_edge_data(grad_dev, qc)['connect']
+    from_inputnode = wf._graph.get_edge_data(wf.get_node('inputnode'), qc)['connect']
+    assert not any(field == 'gradwarp_field' for field, _ in from_inputnode)
 
 
 def test_dwi_finalize_wf_grad_dev_initial_image_is_extracted_not_the_raw_4d_series(tmp_path):
@@ -1707,14 +1762,17 @@ def test_dwi_finalize_wf_grad_dev_final_image_is_the_final_b0_reference(tmp_path
 
     The final b0 ref (``init_dwi_reference_wf``'s ``ref_image``) is already a
     single volume, so ``-f`` needs no extraction -- unlike ``-i``.
+
+    It is taken from this resolution's ``final_denoise_wf`` rather than from
+    ``outputnode``, which only ever carries the first requested resolution.
     """
     wf = _finalize_wf_with_gradients(tmp_path)
 
-    outputnode = wf.get_node('outputnode')
+    denoise_wf = wf.get_node('final_denoise_wf')
     grad_dev = wf.get_node('grad_dev')
-    edge = wf._graph.get_edge_data(outputnode, grad_dev)
+    edge = wf._graph.get_edge_data(denoise_wf, grad_dev)
     assert edge is not None
-    assert ('t1_b0_ref', 'final_image') in edge['connect']
+    assert ('outputnode.t1_b0_ref', 'final_image') in edge['connect']
 
 
 def test_dwi_finalize_wf_grad_dev_sidecar_records_coefficient_basename_only(tmp_path):
@@ -1742,6 +1800,95 @@ def test_dwi_finalize_wf_grad_dev_sidecar_records_the_orientation_approximation(
 
     assert 'CreateGradientNonlinearityBMatrix' in note
     assert 'not by the coregistration transform' in note
+
+
+# ---------------------------------------------------------------------------
+# grad_dev under more than one requested ACPC resolution. The L matrix is
+# voxelwise, so it belongs to an output grid, not to the unit.
+# ---------------------------------------------------------------------------
+
+MULTI_ACPC = ('acpc:res-2mm', 'acpc:res-1p5mm')
+
+
+def test_grad_dev_is_built_for_every_acpc_resolution(tmp_path):
+    """Test that grad_dev is built for every ACPC resolution.
+
+    Each requested grid gets its own L map: a 2mm L map does not describe a
+    1.5mm volume.
+    """
+    wf = _finalize_wf_with_gradients(tmp_path, output_spaces=MULTI_ACPC)
+
+    assert wf.get_node('grad_dev_res2mm') is not None
+    assert wf.get_node('grad_dev_res1p5mm') is not None
+    # The unsuffixed name is the single-resolution one and must not appear.
+    assert wf.get_node('grad_dev') is None
+
+
+def test_grad_dev_takes_the_b0_reference_of_its_own_resolution(tmp_path):
+    """A cross-wired final_image would orient the L matrix off the wrong grid."""
+    wf = _finalize_wf_with_gradients(tmp_path, output_spaces=MULTI_ACPC)
+
+    for suffix in ('_res2mm', '_res1p5mm'):
+        denoise_wf = wf.get_node(f'final_denoise_wf{suffix}')
+        edge = wf._graph.get_edge_data(denoise_wf, wf.get_node(f'grad_dev{suffix}'))
+        assert edge is not None
+        assert ('outputnode.t1_b0_ref', 'final_image') in edge['connect']
+
+
+def test_grad_dev_initial_reference_is_extracted_once(tmp_path):
+    """``-i`` is the raw native b=0, which does not depend on the output grid."""
+    wf = _finalize_wf_with_gradients(tmp_path, output_spaces=MULTI_ACPC)
+
+    initial_ref = wf.get_node('grad_dev_initial_ref')
+    assert initial_ref is not None
+    assert wf.get_node('grad_dev_initial_ref_res2mm') is None
+
+    fed = [
+        node.name
+        for _, node in wf._graph.out_edges(initial_ref)
+        if node.name.startswith('grad_dev')
+    ]
+    assert sorted(fed) == ['grad_dev_res1p5mm', 'grad_dev_res2mm']
+
+
+def test_graddev_paths_do_not_collide_across_acpc_resolutions(tmp_path):
+    """Test that graddev paths do not collide across ACPC resolutions.
+
+    Distinct entities are not enough -- io_spec.json decides what survives
+    into the filename, so render the paths and check they differ.
+    """
+    from qsiprep.tests.test_output_spaces_naming import (
+        assert_no_collisions,
+        render_datasink_paths,
+    )
+
+    wf = _finalize_wf_with_gradients(tmp_path, output_spaces=MULTI_ACPC)
+
+    found = {}
+    for name in ('ds_grad_dev_res2mm', 'ds_grad_dev_res1p5mm'):
+        node = wf.get_node(name)
+        assert node is not None
+        found[name] = {
+            'space': node.inputs.space,
+            'suffix': node.inputs.suffix,
+            'extension': node.inputs.extension,
+            'res': node.inputs.res,
+        }
+
+    paths = render_datasink_paths(found, {'subject': '01', 'datatype': 'dwi'})
+    assert_no_collisions(paths)
+    assert paths['ds_grad_dev_res2mm'].endswith('sub-01_space-ACPC_res-2mm_graddev.nii.gz')
+    assert paths['ds_grad_dev_res1p5mm'].endswith('sub-01_space-ACPC_res-1p5mm_graddev.nii.gz')
+
+
+def test_gradient_warp_dimensions_is_written_for_every_resolution(tmp_path):
+    """Every resolution writes its own preproc sidecar, so each needs the key."""
+    wf = _finalize_wf_with_gradients(tmp_path, output_spaces=MULTI_ACPC)
+
+    for suffix in ('_res2mm', '_res1p5mm'):
+        sidecar = wf.get_node(f'merged_sidecar{suffix}')
+        assert sidecar is not None
+        assert sidecar.inputs.sidecar_data['GradientWarpDimensions'] == '3D'
 
 
 def test_dwi_finalize_wf_adds_gradient_warp_dimensions_to_the_main_sidecar(tmp_path):
@@ -1871,7 +2018,7 @@ def test_shoreline_iters_sets_the_model_iteration_count(tmp_path):
     assert model_wf.get_node('shoreline_iteration002') is not None
     assert model_wf.get_node('shoreline_iteration003') is None
     assert model_wf.get_node('summarize_iterations') is not None
-    assert 'A total of 3 iterations were run' in model_wf.__desc__
+    assert 'SHORELine ran 3 iterations' in model_wf.__desc__
 
 
 def test_single_shoreline_iteration_skips_the_iteration_summary(tmp_path):
@@ -1882,14 +2029,14 @@ def test_single_shoreline_iteration_skips_the_iteration_summary(tmp_path):
     assert model_wf.get_node('initial_model_iteration') is not None
     assert model_wf.get_node('shoreline_iteration001') is None
     assert model_wf.get_node('summarize_iterations') is None
-    assert 'A total of 1 iteration was run' in model_wf.__desc__
+    assert 'SHORELine ran 1 iteration with' in model_wf.__desc__
 
 
 @pytest.mark.parametrize(
     ('shoreline_model', 'expected', 'unexpected'),
     [
-        ('tensor', 'using a tensor model', '3dSHORE'),
-        ('3dshore', 'using 3dSHORE [@merlet3dshore]', 'tensor model'),
+        ('tensor', 'in turn, a tensor model was fit', '3dSHORE'),
+        ('3dshore', 'in turn, 3dSHORE [@merlet3dshore] was fit', 'tensor model'),
     ],
 )
 def test_shoreline_methods_text_names_the_model_and_transform(
@@ -1903,7 +2050,7 @@ def test_shoreline_methods_text_names_the_model_and_transform(
     wf = init_dwi_model_hmc_wf(num_iters=2)
     assert expected in wf.__desc__
     assert unexpected not in wf.__desc__
-    assert 'using the Rigid transform' in wf.__desc__
+    assert 'with a rigid transform' in wf.__desc__
 
 
 def test_eddy_summary_leaves_hmc_transform_undefined(tmp_path):
@@ -1943,7 +2090,7 @@ def _cfg_gre(after_eddy=False):
     config.workflow.b0_threshold = 100
     config.workflow.eddy_config = None
     config.workflow.denoise_method = 'dwidenoise'
-    config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
+    config.workflow.output_spaces = ['acpc:res-2mm', 'MNI152NLin2009cAsym']
     config.workflow.gradient_file = None  # no gradient unwarping
     config.workflow.force = ['gre-sdc-after-eddy'] if after_eddy else []
     config.execution.sloppy = False
@@ -1970,6 +2117,14 @@ def test_gre_fieldmap_goes_into_eddy(tmp_path, monkeypatch):
 
     assert {'field', 'field_mat'} <= _incoming(wf, 'eddy')
     assert any(n.name == 'gre_to_eddy_reg' for n in wf._get_all_nodes())
+    # --field_mat comes from registering the distorted reference the field sits on to
+    # eddy's first volume, not the unwarped reference (a rigid fit between an unwarped
+    # and a distorted b=0 absorbs part of the distortion).
+    assert _connects(
+        wf, 'pre_eddy_b0_ref_wf', 'gre_to_eddy_reg', 'outputnode.ref_image', 'in_file'
+    )
+    assert not _connects(wf, 'sdc_wf', 'gre_to_eddy_reg', 'outputnode.b0_ref', 'in_file')
+    assert _connects(wf, 'gather_inputs', 'gre_to_eddy_reg', 'eddy_first', 'reference')
     # eddy bakes in the SDC: the field must NOT also be applied after eddy.
     assert not _connects(wf, 'sdc_wf', 'outputnode', 'outputnode.out_warp', 'to_dwi_ref_warps')
     assert _connects(wf, 'gather_inputs', 'outputnode', 'forward_warps', 'to_dwi_ref_warps')
@@ -1978,9 +2133,9 @@ def test_gre_fieldmap_goes_into_eddy(tmp_path, monkeypatch):
     # Movement-by-susceptibility is left to --eddy-config.
     assert not isdefined(eddy.inputs.estimate_move_by_susceptibility)
     desc = ' '.join(wf.visit_desc().split())
-    assert 'was passed to eddy' in desc
+    assert 'was passed to `eddy`' in desc
     assert '[@eddysus]' not in desc
-    assert 'unwarped b=0' not in desc
+    assert 'unwarped with the estimated field' not in desc
 
 
 def test_eddy_config_turns_on_movement_by_susceptibility_for_a_gre_field(tmp_path, monkeypatch):
@@ -2010,6 +2165,7 @@ def test_finalize_rebuilds_the_displacement_map_from_a_gre_field_eddy_applied(tm
     """
     from qsiplan.models import CorrectionMethod
 
+    from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.dwi.finalize import init_dwi_finalize_wf
 
     _finalize_cfg(tmp_path)
@@ -2025,12 +2181,13 @@ def test_finalize_rebuilds_the_displacement_map_from_a_gre_field_eddy_applied(tm
         name='dwi_finalize_wf',
         source_file=dwi,
         output_prefix='sub-01',
+        acpc_specs=parse_output_spaces(config.workflow.output_spaces),
         do_biascorr=False,
         write_derivatives=False,
     )
 
-    trans_wf = wf.get_node('transform_dwis_t1')
-    assert _connects(wf, 'inputnode', 'transform_dwis_t1', 'fieldmap_hz', 'inputnode.fieldmap_hz')
+    trans_wf = wf.get_node('dwi_trans_wf')
+    assert _connects(wf, 'inputnode', 'dwi_trans_wf', 'fieldmap_hz', 'inputnode.fieldmap_hz')
     assert trans_wf.get_node('hz_to_warp') is not None
     assert trans_wf.get_node('fieldmap_hz_tfm') is None
 
@@ -2042,12 +2199,16 @@ def test_gre_field_sent_to_eddy_is_the_registered_hz_map(tmp_path, monkeypatch):
     conversion between it and ``out_hz`` changes the correction strength.
     """
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    monkeypatch.setattr(config.workflow, 'two_pass_sdc', True)
     _cfg_gre()
     wf = _fsl_wf(tmp_path, _phasediff_unit())
     unwarp = wf.get_node('sdc_wf.sdc_unwarp_wf')
 
-    assert _connects(unwarp, 'fmap2ref_apply', 'outputnode', 'output_image', 'out_hz')
-    assert 'tohz' not in {node.name for node in unwarp._graph.nodes}
+    assert _connects(unwarp, 'choose_pass', 'outputnode', 'out_hz', 'out_hz')
+    for name in ('fmap_apply_pass1_wf', 'fmap_apply_pass2_wf'):
+        apply_wf = unwarp.get_node(name)
+        assert _connects(apply_wf, 'fmap2ref_apply', 'outputnode', 'output_image', 'out_hz')
+    assert 'tohz' not in {node.name for node in unwarp._get_all_nodes()}
     assert _connects(wf, 'sdc_wf', 'eddy', 'outputnode.fieldmap_hz', 'field')
 
 
@@ -2256,27 +2417,7 @@ def test_invert_displacement_field_round_trips(tmp_path, monkeypatch):
     assert residual.max() < 0.05
 
 
-# --- T2Wreg: gradwarped inputs and a GRE-seeded registration ------------------
-
-
-def test_diffprep_t2wreg_hands_the_gradwarp_field_to_diffprep(tmp_path):
-    """Test that DIFFPREP's T2Wreg stage gets the gradwarp field.
-
-    The EPI stage registers a gradwarp-corrected b=0, so its warp is in the corrected frame.
-    """
-    _cfg_for_diffprep(tmp_path)
-    wf = _diffprep_t2wreg_wf(tmp_path, _plain_unit(tmp_path))
-
-    assert wf.get_node('diffprep').inputs.epi_mode == 'T2Wreg'
-    assert _connects(wf, 'inputnode', 'diffprep', 'gradwarp_field', 'grad_nonlin')
-
-
-def test_diffprep_t2wreg_without_gradwarp_passes_no_field(tmp_path):
-    _cfg_for_diffprep(tmp_path)
-    config.workflow.gradient_file = None
-    wf = _diffprep_t2wreg_wf(tmp_path, _plain_unit(tmp_path))
-
-    assert not _connects(wf, 'inputnode', 'diffprep', 'gradwarp_field', 'grad_nonlin')
+# --- unpile: a GRE candidate becomes the prior of the fit ----------------------
 
 
 def _forced_anat_unit_with_gre(method):
@@ -2294,7 +2435,7 @@ def _forced_anat_unit_with_gre(method):
     dwi = gre_unit.dwi_files[0]
     anat = (
         '/data/sub-01_T2w.nii.gz'
-        if method is CorrectionMethod.T2WREG
+        if method is CorrectionMethod.UNPILE
         else '/data/sub-01_T1w.nii.gz'
     )
     unit = make_preproc_unit(
@@ -2315,47 +2456,49 @@ def _forced_anat_unit_with_gre(method):
     return dataclasses.replace(unit, grouping=grouping)
 
 
-def test_forced_t2w_reference_is_seeded_by_the_gre_fieldmap(tmp_path, monkeypatch):
-    """Test that a forced T2w reference is seeded by the GRE fieldmap.
+def test_forced_t2w_reference_refines_the_gre_fieldmap(tmp_path, monkeypatch):
+    """Test that a forced T2w reference takes the GRE fieldmap as unpile's prior.
 
-    --force sdc-anat-reference over a GRE fieldmap: T2Wreg runs against the T2w,
-    starting from the GRE warp, and the GRE warp is not also applied after HMC.
+    --force sdc-anat-reference over a GRE fieldmap: unpile runs against the T2w
+    with the GRE field as its prior, and the GRE warp is not also applied after HMC.
     """
     from qsiplan.models import CorrectionMethod
 
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg_for_diffprep(tmp_path)
-    unit = _forced_anat_unit_with_gre(CorrectionMethod.T2WREG)
-    assert unit.run.stage_with('t2wreg').structural_target == 't2w'
-    wf = _diffprep_t2wreg_wf(tmp_path, unit)
+    unit = _forced_anat_unit_with_gre(CorrectionMethod.UNPILE)
+    assert unit.run.stage_with('unpile').structural_target == 't2w'
+    wf = _diffprep_unpile_wf(tmp_path, unit)
 
-    diffprep = wf.get_node('diffprep')
-    assert diffprep.inputs.epi_mode == 'T2Wreg'
+    sdc_wf = wf.get_node('sdc_wf')
+    assert sdc_wf is not None
+    seed_wf = sdc_wf.get_node('unpile_gre_seed_wf')
+    assert seed_wf is not None
+    # The GRE field, in Hz on the fitted b=0's grid, is the prior of the fit.
     assert _connects(
-        wf, 't2wreg_gre_seed_wf', 'diffprep', 'outputnode.out_warp', 'epireg_initial_field'
+        sdc_wf,
+        'unpile_gre_seed_wf',
+        'unpile_sdc_wf',
+        'outputnode.fieldmap_hz',
+        'inputnode.fieldmap_hz',
     )
-    # The seed is held fixed through the multi-resolution pyramid.
-    assert diffprep.inputs.keep_initial_transform_fixed is True
-    assert _connects(wf, 'inputnode', 'diffprep', 'gradwarp_field', 'grad_nonlin')
-    # The seed is estimated on a pre-HMC reference, in the gradwarp-corrected frame.
-    assert wf.get_node('t2wreg_gre_seed_wf.sdc_wf').gradwarp_mode == 'transport'
-    seed_wf = wf.get_node('t2wreg_gre_seed_wf')
-    assert _connects(seed_wf, 'b0_ref_wf', 'sdc_wf', 'outputnode.ref_image', 'inputnode.b0_ref')
-    assert _connects(wf, 't2wreg_b0s', 't2wreg_gre_seed_wf', 'b0_average', 'inputnode.b0_template')
-    assert wf.get_node('sdc_wf') is None
-    assert wf.get_node('outputnode').inputs.sdc_method == 'T2Wreg (GRE-initialized)'
+    assert _connects(sdc_wf, 'inputnode', 'unpile_gre_seed_wf', 'b0_ref', 'inputnode.b0_template')
+    unpile_wf = sdc_wf.get_node('unpile_sdc_wf')
+    assert _connects(unpile_wf, 'inputnode', 'prepare_unpile', 'fieldmap_hz', 'fieldmap')
+    assert _connects(unpile_wf, 'prepare_unpile', 'unpile_fit', 'fieldmap', 'fieldmap')
+    assert unpile_wf.get_node('unpile_fit').inputs.fieldmap_refine == 'pose'
+    # The GRE field is estimated against the gradwarp-corrected reference unpile fits,
+    # not transported from the raw frame.
+    assert seed_wf.get_node('sdc_wf').gradwarp_mode == 'reference'
+    assert sdc_wf.get_node('outputnode').inputs.method == 'unpile (T2w, GRE-refined)'
     desc = ' '.join(wf.visit_desc().split())
-    assert "to the subject's T2-weighted image" in desc
-    assert 'this deformation initialized the T2Wreg registration, held fixed' in desc
-    assert 'its inverse' in desc  # the transport sentence
-    assert 'unwarped b=0' not in desc
+    assert desc.count('given to *unpile* as the prior of its fit') == 1
 
 
-def test_forced_synb0_reference_is_seeded_by_the_gre_fieldmap(tmp_path, monkeypatch):
-    """Test that a forced SynB0 reference is seeded by the GRE fieldmap.
+def test_forced_synb0_reference_over_a_gre_fieldmap_runs_topup(tmp_path, monkeypatch):
+    """Test that a forced SynB0 reference over a GRE fieldmap runs TOPUP after DIFFPREP.
 
-    A forced SynB0 reference over a GRE fieldmap runs T2Wreg against the
-    synthetic b=0 through the SynB0 branch, starting from the GRE warp.
+    TOPUP takes no initial field, so the GRE fieldmap does not seed it.
     """
     from qsiplan.models import CorrectionMethod
 
@@ -2365,36 +2508,51 @@ def test_forced_synb0_reference_is_seeded_by_the_gre_fieldmap(tmp_path, monkeypa
     _cfg_for_diffprep(tmp_path)
     config.workflow.gradient_file = None
     unit = _forced_anat_unit_with_gre(CorrectionMethod.SYNB0)
-    assert unit.run.stage_with('t2wreg').structural_target == 'synb0'
+    assert unit.run.stage_with('topup').structural_target == 'synb0'
     wf = init_diffprep_hmc_wf(unit, source_file='/data/x_dwi.nii.gz', t2w_sdc=False)
 
-    diffprep = wf.get_node('diffprep')
-    assert diffprep.inputs.epi_mode == 'T2Wreg'
-    assert wf.get_node('synb0_wf') is not None
-    assert wf.get_node('t2wreg_b0s') is None
-    assert _connects(
-        wf, 't2wreg_gre_seed_wf', 'diffprep', 'outputnode.out_warp', 'epireg_initial_field'
-    )
-    assert diffprep.inputs.keep_initial_transform_fixed is True
-    assert wf.get_node('outputnode').inputs.sdc_method == 'T2Wreg (SynB0, GRE-initialized)'
+    assert wf.get_node('synb0_topup_wf') is not None
+    assert wf.get_node('sdc_wf') is None
+    assert wf.get_node('outputnode').inputs.sdc_method == 'TOPUP (SynB0)'
 
 
-def test_t2wreg_without_a_gre_candidate_is_not_seeded(tmp_path, monkeypatch):
+def test_synb0_topup_is_estimated_on_the_gradwarp_corrected_b0(tmp_path, monkeypatch):
+    """Test that SynB0 TOPUP estimates from, and applies in, the gradwarp-corrected frame."""
+    from qsiplan.models import CorrectionMethod
+
+    from qsiprep.workflows.dwi.diffprep import init_diffprep_hmc_wf
+
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg_for_diffprep(tmp_path)
-    wf = _diffprep_t2wreg_wf(tmp_path, _plain_unit(tmp_path))
+    unit = _forced_anat_unit_with_gre(CorrectionMethod.SYNB0)
+    wf = init_diffprep_hmc_wf(unit, source_file='/data/x_dwi.nii.gz', t2w_sdc=False)
 
-    assert wf.get_node('diffprep').inputs.epi_mode == 'T2Wreg'
-    assert wf.get_node('t2wreg_gre_seed_wf') is None
-    assert wf.get_node('outputnode').inputs.sdc_method == 'T2Wreg'
+    assert _connects(wf, 'extract_b0s', 'gradwarp_topup_b0', 'b0_average', 'input_image')
+    assert _connects(
+        wf, 'gradwarp_topup_b0', 'synb0_topup_wf', 'output_image', 'inputnode.b0_template'
+    )
+    assert _connects(wf, 'synb0_topup_wf', 'sdc_then_gradwarp', 'outputnode.out_warp', 'in1')
+    assert _connects(wf, 'inputnode', 'sdc_then_gradwarp', 'gradwarp_field', 'in2')
+
+
+def test_unpile_without_a_gre_candidate_has_no_prior(tmp_path, monkeypatch):
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    _cfg_for_diffprep(tmp_path)
+    wf = _diffprep_unpile_wf(tmp_path, _unpile_unit(tmp_path))
+
+    sdc_wf = wf.get_node('sdc_wf')
+    assert sdc_wf.get_node('unpile_gre_seed_wf') is None
+    assert sdc_wf.get_node('outputnode').inputs.method == 'unpile (T2w)'
+    fit = sdc_wf.get_node('unpile_sdc_wf').get_node('unpile_fit')
+    assert not fit.inputs.fieldmap_refine
 
 
 def test_gre_with_t2w_stays_on_the_fieldmap_path_by_default(tmp_path, monkeypatch):
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg_for_diffprep(tmp_path)
-    wf = _diffprep_t2wreg_wf(tmp_path, _phasediff_unit())
+    wf = _diffprep_unpile_wf(tmp_path, _phasediff_unit())
 
-    assert wf.get_node('diffprep').inputs.epi_mode == 'off'
+    assert wf.get_node('sdc_wf').get_node('unpile_sdc_wf') is None
     assert _connects(wf, 'sdc_wf', 'outputnode', 'outputnode.out_warp', 'to_dwi_ref_warps')
 
 
@@ -2433,7 +2591,7 @@ def test_eddy_boilerplate_flags_lsr_as_unmodulated():
     text = boilerplate_from_eddy_config(
         {'method': 'lsr', 'flm': 'quadratic', 'slm': 'linear'}, 'epi', pepolar_method='topup'
     )
-    assert 'not Jacobian-modulated' in text
+    assert 'does not Jacobian-modulate' in text
 
 
 def test_eddy_boilerplate_states_modulation_for_the_jac_default():
@@ -2442,4 +2600,4 @@ def test_eddy_boilerplate_states_modulation_for_the_jac_default():
     text = boilerplate_from_eddy_config(
         {'method': 'jac', 'flm': 'quadratic', 'slm': 'linear'}, 'epi', pepolar_method='topup'
     )
-    assert 'Jacobian-modulated by eddy itself' in text
+    assert 'which Jacobian-modulates' in text
