@@ -53,7 +53,7 @@ def _cfg():
     config.workflow.dwidenoise_window = 5
     config.workflow.unringing_method = 'none'
     config.workflow.ignore = []
-    config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
+    config.workflow.output_spaces = ['acpc:res-2mm', 'MNI152NLin2009cAsym']
 
 
 def test_series_denoise_wf_conforms_then_denoises(tmp_path):
@@ -268,7 +268,6 @@ def test_denoising_boilerplate_is_in_the_dwi_section(tmp_path, monkeypatch):
             t2w_sdc=False,
             output_prefix=unit.output_name,
             source_file=unit.dwi_files[0],
-            anatomical_template='MNI152NLin2009cAsym',
             denoising_desc=unit_denoising_desc(series_wfs, unit),
         )
         connect_series_to_unit(

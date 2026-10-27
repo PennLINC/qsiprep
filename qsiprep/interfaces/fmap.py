@@ -45,7 +45,7 @@ from niworkflows.viz.utils import (
 from svgutils.transform import SVGFigure
 
 from ..utils.bids import load_sidecar
-from ..utils.jacobian import UNMODULATED_WEIGHT
+from ..utils.jacobian import UNMODULATED_WEIGHT, float32_header
 from ..viz.utils import fixed_field_of_view
 from .epi_fmap import (
     _merge_metadata,
@@ -1302,6 +1302,7 @@ def _resample_jacobian_weight(args):
         output_image=resampled_weight_image,
         interpolation='LanczosWindowedSinc',
         dimension=3,
+        float=True,
     )
     xfm.terminal_output = 'allatonce'
     xfm.resource_monitor = False
@@ -1428,7 +1429,13 @@ class ApplyJacobianWeights(SimpleInterface):
         scaled_dwi_images = []
         for dwi_file in self.inputs.dwi_files:
             scaled_dwi_file = fname_presuffix(dwi_file, newpath=runtime.cwd, suffix='_scaled')
-            image.math_img('a*b', a=dwi_file, b=dwi_files_to_weights[dwi_file]).to_filename(
+            dwi_img = nb.load(dwi_file)
+            weight_img = nb.load(dwi_files_to_weights[dwi_file])
+            scaled = np.asanyarray(dwi_img.dataobj, dtype=np.float32)
+            weight = np.asanyarray(weight_img.dataobj, dtype=np.float32)
+            if scaled.ndim == 4 and weight.ndim == 3:
+                weight = weight[..., np.newaxis]
+            nb.Nifti1Image(scaled * weight, dwi_img.affine, float32_header(dwi_img)).to_filename(
                 scaled_dwi_file
             )
             scaled_dwi_images.append(scaled_dwi_file)

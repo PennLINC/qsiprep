@@ -31,7 +31,7 @@ def _config():
     config.workflow.sdc_method = None
     config.workflow.two_pass_sdc = True
     config.workflow.anat_modality = 'T1w'
-    config.workflow.anatomical_template = 'MNI152NLin2009cAsym'
+    config.workflow.output_spaces = ['acpc:res-2mm', 'MNI152NLin2009cAsym']
     config.execution.sloppy = False
     config.nipype.omp_nthreads = 2
     yield

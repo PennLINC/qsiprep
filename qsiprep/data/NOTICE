@@ -13,3 +13,17 @@ under the MIT License.
 
 This software may be distributed through an add-on package called
 "Docker Wrapper" that is under the BSD 3-clause License.
+
+mni_lps_fmap_atlas.nii.gz
+-------------------------
+An average B0 fieldmap in MNI152NLin2009cAsym space (1 mm, LPS+), used by the
+fieldmap-less susceptibility distortion correction workflow as a registration mask
+after thresholding and binarization. Derived from the average fieldmap template
+described in:
+
+    Treiber JM, White NS, Steed TC, et al. Characterization and Correction of
+    Geometric Distortions in 814 Diffusion Weighted Images. PLoS One.
+    2016;11(3):e0152472. doi:10.1371/journal.pone.0152472
+
+This file has no TemplateFlow equivalent. Contributing it upstream is tracked
+separately; until then it ships with QSIPrep.

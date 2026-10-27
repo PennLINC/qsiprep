@@ -118,8 +118,6 @@ def init_syn_sdc_wf(bold_pe=None, atlas_threshold=2, target='invt1w'):
         reference image
     synthetic_b0
         SynB0 synthetic b0 on the ``bold_ref`` grid (``target='synb0'`` only)
-    template : str
-        Name of template targeted by ``template`` output space
     t1_brain
         skull-stripped, bias-corrected structural image
     t1_2_mni_reverse_transform
@@ -167,7 +165,7 @@ average field map template [@fieldmapless3].
 """
     inputnode = pe.Node(
         niu.IdentityInterface(
-            ['bold_ref', 'template', 't1_brain', 't1_2_mni_reverse_transform', 'synthetic_b0']
+            ['bold_ref', 't1_brain', 't1_2_mni_reverse_transform', 'synthetic_b0']
         ),
         name='inputnode',
     )

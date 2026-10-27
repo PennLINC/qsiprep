@@ -45,7 +45,6 @@ def init_dwi_preproc_wf(
     t2w_sdc,
     output_prefix,
     source_file,
-    anatomical_template,
     do_biascorr=True,
     denoising_desc='',
 ) -> Workflow:
@@ -61,8 +60,7 @@ def init_dwi_preproc_wf(
             make_preproc_unit(['/data/bids/sub-1/dwi/sub-1_dwi.nii.gz']),
             t2w_sdc=False,
             output_prefix='',
-            source_file='/data/bids/sub-1/dwi/sub-1_dwi.nii.gz',
-            anatomical_template='MNI152NLin2009cAsym')
+            source_file='/data/bids/sub-1/dwi/sub-1_dwi.nii.gz')
 
     Parameters
     ----------
@@ -74,10 +72,6 @@ def init_dwi_preproc_wf(
         beginning of the output file name (eg 'sub-1_buds-j')
     source_file : str
         The file name template used for derivatives
-    anatomical_template : str
-        Name of the anatomical template (e.g., ``'MNI152NLin2009cAsym'``), passed to
-        the SHORELine head motion and distortion correction workflow for
-        fieldmap-less SDC.
     do_biascorr : bool, optional
         Whether bias correction is applied to the DWI data; used for the methods
         boilerplate and provenance. Default is True.
@@ -128,8 +122,6 @@ def init_dwi_preproc_wf(
         FreeSurfer SUBJECTS_DIR
     subject_id
         FreeSurfer subject ID
-    dwi_sampling_grid
-        A NIfTI1 file with the grid spacing and FoV to resample the DWIs
 
     Outputs
     -------
@@ -276,7 +268,6 @@ def init_dwi_preproc_wf(
             unit=unit,
             source_file=source_file,
             t2w_sdc=t2w_sdc,
-            anatomical_template=anatomical_template,
         )
 
     elif hmc_tool == 'eddy':
