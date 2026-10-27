@@ -446,23 +446,29 @@ was used to restrict the nonlinear registration to the template. """
     # evaluates immediately, so a declaration further down would be an
     # UnboundLocalError for every non-anchor space.
     rigid_acpc_resample_brain = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation=_resample_interpolation()),
+        ants.ApplyTransforms(
+            input_image_type=0, float=True, interpolation=_resample_interpolation()
+        ),
         name='rigid_acpc_resample_brain',
     )
     rigid_acpc_resample_head = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation=_resample_interpolation()),
+        ants.ApplyTransforms(
+            input_image_type=0, float=True, interpolation=_resample_interpolation()
+        ),
         name='rigid_acpc_resample_head',
     )
     rigid_acpc_resample_unfatsat = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation=_resample_interpolation()),
+        ants.ApplyTransforms(
+            input_image_type=0, float=True, interpolation=_resample_interpolation()
+        ),
         name='rigid_acpc_resample_unfatsat',
     )
     rigid_acpc_resample_aseg = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation=_label_interpolation()),
+        ants.ApplyTransforms(input_image_type=0, float=True, interpolation=_label_interpolation()),
         name='rigid_acpc_resample_aseg',
     )
     rigid_acpc_resample_mask = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation=_label_interpolation()),
+        ants.ApplyTransforms(input_image_type=0, float=True, interpolation=_label_interpolation()),
         name='rigid_acpc_resample_mask',
     )
 
@@ -479,7 +485,9 @@ was used to restrict the nonlinear registration to the template. """
         # moving_is_acpc the per-space workflows no longer estimate the rigid
         # transform that resampling needs.
         rigid_acpc_resample_roi = pe.Node(
-            ants.ApplyTransforms(input_image_type=0, interpolation=_label_interpolation()),
+            ants.ApplyTransforms(
+                input_image_type=0, float=True, interpolation=_label_interpolation()
+            ),
             name='rigid_acpc_resample_roi',
         )
         workflow.connect([
@@ -531,7 +539,9 @@ was used to restrict the nonlinear registration to the template. """
             reg_lps_wf = _lps_chain(registration_spec)
             if rigid_acpc_resample_nonlinear_mask is None:
                 rigid_acpc_resample_nonlinear_mask = pe.Node(
-                    ants.ApplyTransforms(input_image_type=0, interpolation=_label_interpolation()),
+                    ants.ApplyTransforms(
+                        input_image_type=0, float=True, interpolation=_label_interpolation()
+                    ),
                     name='rigid_acpc_resample_nonlinear_mask',
                 )
                 workflow.connect([
@@ -868,11 +878,15 @@ rotations with `antsAI`.
 
     # Resampling
     rigid_resample_t2w = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation=_resample_interpolation()),
+        ants.ApplyTransforms(
+            input_image_type=0, float=True, interpolation=_resample_interpolation()
+        ),
         name='rigid_resample_t2w',
     )
     rigid_resample_unfatsat = pe.Node(
-        ants.ApplyTransforms(input_image_type=0, interpolation=_resample_interpolation()),
+        ants.ApplyTransforms(
+            input_image_type=0, float=True, interpolation=_resample_interpolation()
+        ),
         name='rigid_resample_unfatsat',
     )
 
@@ -1408,11 +1422,15 @@ with symmetric normalization (SyN) in `antsRegistration` [@ants]. """
     config.loggers.workflow.info('Running nonlinear normalization to template')
     if not moving_is_acpc:
         rigid_acpc_resample_anat = pe.Node(
-            ants.ApplyTransforms(input_image_type=0, interpolation=_resample_interpolation()),
+            ants.ApplyTransforms(
+                input_image_type=0, float=True, interpolation=_resample_interpolation()
+            ),
             name='rigid_acpc_resample_anat',
         )
         rigid_acpc_resample_mask = pe.Node(
-            ants.ApplyTransforms(input_image_type=0, interpolation=_label_interpolation()),
+            ants.ApplyTransforms(
+                input_image_type=0, float=True, interpolation=_label_interpolation()
+            ),
             name='rigid_acpc_resample_mask',
         )
 
@@ -1494,7 +1512,9 @@ with symmetric normalization (SyN) in `antsRegistration` [@ants]. """
             ])  # fmt:skip
         else:
             rigid_acpc_resample_roi = pe.Node(
-                ants.ApplyTransforms(input_image_type=0, interpolation=_label_interpolation()),
+                ants.ApplyTransforms(
+                    input_image_type=0, float=True, interpolation=_label_interpolation()
+                ),
                 name='rigid_acpc_resample_roi',
             )
             workflow.connect([
@@ -1539,6 +1559,7 @@ def init_dl_prep_wf(name='dl_prep_wf') -> Workflow:
             dimension=3,
             interpolation='BSpline',
             transforms=['identity'],
+            float=True,
         ),
         name='resample_skulled_to_reference',
     )
@@ -1602,7 +1623,7 @@ def init_synthstrip_wf(
 
     mask_to_original_grid = pe.Node(
         ants.ApplyTransforms(
-            dimension=3, transforms=['identity'], interpolation='NearestNeighbor'
+            dimension=3, transforms=['identity'], interpolation='NearestNeighbor', float=True
         ),
         name='mask_to_original_grid',
     )
@@ -2196,15 +2217,21 @@ def init_anat_derivatives_wf(output_spaces, has_t2w=False) -> Workflow:
             )
 
             resample_std_preproc = pe.Node(
-                ants.ApplyTransforms(input_image_type=0, interpolation=_resample_interpolation()),
+                ants.ApplyTransforms(
+                    input_image_type=0, float=True, interpolation=_resample_interpolation()
+                ),
                 name=f'resample_{label}_preproc',
             )
             resample_std_mask = pe.Node(
-                ants.ApplyTransforms(input_image_type=0, interpolation=_label_interpolation()),
+                ants.ApplyTransforms(
+                    input_image_type=0, float=True, interpolation=_label_interpolation()
+                ),
                 name=f'resample_{label}_mask',
             )
             resample_std_dseg = pe.Node(
-                ants.ApplyTransforms(input_image_type=0, interpolation=_label_interpolation()),
+                ants.ApplyTransforms(
+                    input_image_type=0, float=True, interpolation=_label_interpolation()
+                ),
                 name=f'resample_{label}_dseg',
             )
 

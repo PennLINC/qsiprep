@@ -107,3 +107,21 @@ def test_concat_names_in_memory_images():
 
     with pytest.raises(ValueError, match=r'image #1 .* grid of image #0'):
         concat_imgs_on_first_grid([first, second])
+
+
+def test_merge_writes_the_requested_dtype(tmp_path):
+    """Test that a float64 input does not make the merged series float64.
+
+    nilearn copies the first input's header, whose dtype nibabel then writes with.
+    """
+    files = []
+    for index in range(2):
+        path = tmp_path / f'vol{index}.nii.gz'
+        nb.Nifti1Image(np.full((*SHAPE, 1), 1.5, dtype='float64'), REF_AFFINE).to_filename(path)
+        files.append(str(path))
+
+    result = Merge(in_files=files).run(cwd=str(tmp_path))
+
+    merged = nb.load(result.outputs.out_file)
+    assert merged.get_data_dtype() == np.float32
+    np.testing.assert_array_equal(merged.get_fdata(), 1.5)

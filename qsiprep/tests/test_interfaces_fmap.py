@@ -547,3 +547,32 @@ def test_floor_nonpositive_weights_is_a_noop_when_all_positive(tmp_path, caplog)
 
     assert np.all(nb.load(str(weight_path)).get_fdata() == 1.0)
     assert caplog.messages == []
+
+
+def test_apply_jacobian_weights_writes_float32(tmp_path, monkeypatch):
+    """Test that scaled volumes are float32 whatever the inputs are stored as.
+
+    nilearn's math_img built the product with no header, so the file took the
+    float64 dtype of the computation, and the merged series inherited it.
+    """
+    from qsiprep.interfaces import fmap as fmap_module
+    from qsiprep.interfaces.fmap import ApplyJacobianWeights
+
+    monkeypatch.setattr(fmap_module, '_resample_jacobian_weight', lambda args: args[0])
+
+    def _double(path, value):
+        nb.Nifti1Image(np.full((8, 8, 8), value, dtype='float64'), np.eye(4)).to_filename(path)
+        return str(path)
+
+    dwis = [_double(tmp_path / f'd{i}.nii.gz', 2.0) for i in range(2)]
+    weight = _double(tmp_path / 'w.nii.gz', 0.5)
+    result = ApplyJacobianWeights(
+        dwi_files=dwis,
+        jacobian_weight_images=[weight, weight],
+        reference_image=_unit_image(tmp_path / 'grid.nii.gz'),
+    ).run(cwd=str(tmp_path))
+
+    for scaled in result.outputs.scaled_images:
+        img = nb.load(scaled)
+        assert img.get_data_dtype() == np.float32
+        np.testing.assert_array_equal(img.get_fdata(), 1.0)

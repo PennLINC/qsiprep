@@ -185,6 +185,9 @@ class Merge(SimpleInterface):
             self.inputs.in_files[0], suffix='_merged' + ext, newpath=runtime.cwd, use_ext=False
         )
         new_nii = concat_imgs_on_first_grid(self.inputs.in_files, dtype=self.inputs.dtype)
+        # nilearn copies the first input's header, so a float64 input would be
+        # written back as float64 whatever dtype asked for
+        new_nii.header.set_data_dtype(self.inputs.dtype)
 
         if isdefined(self.inputs.header_source):
             src_hdr = nb.load(self.inputs.header_source).header
