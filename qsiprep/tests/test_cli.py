@@ -1199,7 +1199,7 @@ def test_parser_help_formats():
 
     parser = _build_parser()
     help_text = parser.format_help()
-    assert '--output-resolution' in help_text
+    assert '--output-spaces' in help_text
     for action in parser._actions:
         if action.help and action.help is not argparse.SUPPRESS:
             parser._get_formatter()._expand_help(action)
