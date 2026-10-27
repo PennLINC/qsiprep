@@ -87,9 +87,10 @@ def test_dwidenoise2_has_no_kernel_options(tmp_path, kernel_option):
 
 
 def _write_image(path, data=None):
-    """Write a small 4D image standing in for dwidenoise2's output."""
+    """Write a small 4D image standing in for dwidenoise2's input or output."""
     if data is None:
-        data = np.ones((4, 4, 3, 5), dtype=np.float32)
+        # Varies across volumes, so no voxel is invalid to dwidenoise2
+        data = np.ones((4, 4, 3, 5), dtype=np.float32) * np.arange(1, 6, dtype=np.float32)
     nb.Nifti1Image(data, np.eye(4)).to_filename(str(path))
 
 
@@ -581,14 +582,27 @@ def _dead_background(dtype=np.float32):
 
 @pytest.mark.parametrize('dtype', [np.float32, np.int16, np.complex64])
 def test_invalid_voxel_mask(dtype):
-    """Test that voxels zero in every volume are invalid and partly zero ones are not."""
+    """Test that voxels constant across volumes are invalid and partly zero ones are not."""
     data = _dead_background(dtype)
     data[2, 2, 1, 0] = 0  # zero in one volume only: still valid
+    data[0, 5, 3, :] = 7  # constant but not zero: dwidenoise2 excludes it too
     mask = mrtrix.invalid_voxel_mask(data)
 
     assert mask[0, 0, 0]
+    assert mask[0, 5, 3]
     assert not mask[2, 2, 1]
     assert mask.sum() == 6 * 6 * 4 - 4 * 4 * 2
+
+
+def test_invalid_voxel_mask_complex():
+    """Test that a complex voxel is invalid only if both its parts are constant."""
+    data = _dead_background(np.complex64)
+    data[0, 0, 0, :] = 3 + 4j
+    data[0, 0, 1, :] = 3 + 1j * np.arange(5)  # constant real part, varying phase
+    mask = mrtrix.invalid_voxel_mask(data)
+
+    assert mask[0, 0, 0]
+    assert not mask[0, 0, 1]
 
 
 def test_invalid_voxel_mask_flags_non_finite():

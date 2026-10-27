@@ -399,9 +399,9 @@ def check_finite_image(path, label):
 def invalid_voxel_mask(data):
     """Find the voxels dwidenoise2 treats as invalid.
 
-    dwidenoise2 excludes voxels that are zero in every volume or non-finite in any volume,
-    and then segfaults during noise level estimation (a background zeroed by masking or
-    defacing is enough). Zeros in only some volumes are not excluded.
+    dwidenoise2 excludes voxels that hold the same value in every volume (such as a
+    background zeroed by masking or defacing) or a non-finite value in any volume, and then
+    segfaults during noise level estimation. Zeros in only some volumes are not excluded.
 
     Parameters
     ----------
@@ -413,7 +413,7 @@ def invalid_voxel_mask(data):
     :class:`numpy.ndarray`
         Boolean 3D mask of the invalid voxels.
     """
-    return ~np.isfinite(data).all(axis=-1) | (data == 0).all(axis=-1)
+    return ~np.isfinite(data).all(axis=-1) | (data == data[..., :1]).all(axis=-1)
 
 
 def fill_invalid_voxels(data, mask, seed=0):
@@ -522,8 +522,8 @@ class DWIDenoise2(SeriesPreprocReport, MRTrix3Base):
         invalid = invalid_voxel_mask(np.asanyarray(in_img.dataobj))
         if invalid.any():
             LOGGER.warning(
-                '%s has %d voxels that are zero in every volume or not finite; they are filled '
-                'with small values for dwidenoise2 and set to zero in its output.',
+                '%s has %d voxels that are constant across volumes or not finite; they are '
+                'filled with small values for dwidenoise2 and set to zero in its output.',
                 self.inputs.in_file,
                 int(invalid.sum()),
             )
