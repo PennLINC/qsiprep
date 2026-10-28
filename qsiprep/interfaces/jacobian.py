@@ -91,7 +91,10 @@ class _ComposeJacobianWeightsInputSpec(BaseInterfaceInputSpec):
         'they are the whole weight: no Jacobian factor is applied on top.',
     )
     num_threads = traits.Int(
-        1, usedefault=True, nohash=True, desc='ITK threads for each ANTs call'
+        1,
+        usedefault=True,
+        nohash=True,
+        desc='threads, split between volumes built concurrently and ITK within each ANTs call',
     )
 
 
@@ -229,57 +232,80 @@ class ComposeJacobianWeights(SimpleInterface):
             )
         LOGGER.info('Computed %d unique Jacobian determinant(s)', len(determinants))
 
-        weights = []
-        cache = {}
-        for index, (fieldwarp, ec_image) in enumerate(zip(fieldwarps, ec_images, strict=True)):
+        # Tag the roles: (None, 'f.nii.gz') and ('f.nii.gz', None) are
+        # different weights that would otherwise share a key. Each unique
+        # weight remembers the first volume that needs it, for its filename.
+        cache_keys = [
+            (gradwarp, fieldwarp, ec_image)
+            for fieldwarp, ec_image in zip(fieldwarps, ec_images, strict=True)
+        ]
+        first_index = {}
+        for index, cache_key in enumerate(cache_keys):
+            first_index.setdefault(cache_key, index)
+
+        def build_weight(job):
+            unique_index, (cache_key, index), ants_threads = job
+            _, fieldwarp, ec_image = cache_key
             factors = []
             key = weight_key(gradwarp, fieldwarp)
             if key:
                 factors.append(determinants[key])
-
-            # Tag the roles: (None, 'f.nii.gz') and ('f.nii.gz', None) are
-            # different weights that would otherwise share a key.
-            cache_key = (gradwarp, fieldwarp, ec_image)
-            if cache_key not in cache:
-                ec_factor = ec_image
-                if ec_image and key:
-                    ec_factor = transport_scalar_map(
+            ec_factor = ec_image
+            if ec_image and key:
+                ec_factor = transport_scalar_map(
+                    ec_image,
+                    composed_transforms[key],
+                    reference,
+                    fname_presuffix(
                         ec_image,
-                        composed_transforms[key],
-                        reference,
-                        fname_presuffix(
-                            ec_image,
-                            suffix=f'_ectransport-{len(cache):05d}',
-                            newpath=runtime.cwd,
-                            use_ext=True,
-                        ),
-                        num_threads=num_threads,
-                    )
-                if ec_factor:
-                    factors.append(ec_factor)
-                weight_map = multiply_maps(
-                    factors,
-                    fname_presuffix(
-                        self.inputs.dwi_files[index],
-                        suffix=f'_jacobian-{index:05d}',
+                        suffix=f'_ectransport-{unique_index:05d}',
                         newpath=runtime.cwd,
                         use_ext=True,
                     ),
-                    like_path=reference,
+                    num_threads=ants_threads,
                 )
-                cache[cache_key] = weight_map
-                mask_for_weight = resample_like(
+            if ec_factor:
+                factors.append(ec_factor)
+            weight_map = multiply_maps(
+                factors,
+                fname_presuffix(
+                    self.inputs.dwi_files[index],
+                    suffix=f'_jacobian-{index:05d}',
+                    newpath=runtime.cwd,
+                    use_ext=True,
+                ),
+                like_path=reference,
+            )
+            mask_for_weight = resample_like(
+                self.inputs.mask,
+                weight_map,
+                fname_presuffix(
                     self.inputs.mask,
-                    weight_map,
-                    fname_presuffix(
-                        self.inputs.mask,
-                        suffix=f'_mask-{len(cache):05d}',
-                        newpath=runtime.cwd,
-                        use_ext=True,
-                    ),
-                )
-                check_weight_map(weight_map, mask_for_weight)
-            weights.append(cache[cache_key])
+                    suffix=f'_mask-{unique_index:05d}',
+                    newpath=runtime.cwd,
+                    use_ext=True,
+                ),
+            )
+            check_weight_map(weight_map, mask_for_weight)
+            return weight_map
+
+        # Each eddy-current Jacobian is a small, separate transport, so the
+        # threads go to concurrent volumes rather than to ITK within one call.
+        num_workers = max(1, min(num_threads, len(first_index)))
+        ants_threads = max(1, num_threads // num_workers)
+        jobs = [
+            (unique_index, item, ants_threads)
+            for unique_index, item in enumerate(first_index.items())
+        ]
+        if num_workers == 1:
+            weight_maps = [build_weight(job) for job in jobs]
+        else:
+            from concurrent.futures import ThreadPoolExecutor
+
+            with ThreadPoolExecutor(max_workers=num_workers) as pool:
+                weight_maps = list(pool.map(build_weight, jobs))
+        cache = dict(zip(first_index, weight_maps, strict=True))
+        weights = [cache[cache_key] for cache_key in cache_keys]
 
         LOGGER.info('Finished: %d unique weight map(s) for %d volumes', len(cache), num_dwis)
         self._results['jacobian_weight_images'] = weights
