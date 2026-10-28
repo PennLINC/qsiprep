@@ -96,11 +96,14 @@ def init_series_denoise_wfs(preproc_units, orientation):
         for dwi_file in unit.dwi_files:
             if dwi_file in series_wfs:
                 continue
+            # qsiplan's shelled/non-shelled call for this series, as for eddy's
+            record = unit.grouping.files.get(dwi_file)
             series_wfs[dwi_file] = init_dwi_series_denoise_wf(
                 dwi_file,
                 metadata=unit.metadata_for(dwi_file),
                 phase_file=unit.dwi_phase_files.get(dwi_file),
                 orientation=orientation,
+                shelled=record.shelled if record is not None else None,
             )
     return series_wfs
 

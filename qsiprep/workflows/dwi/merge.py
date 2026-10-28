@@ -42,6 +42,7 @@ from ...utils.misc import (
     describe_svht,
     load_dwidenoise2_config,
     load_svht_config,
+    resolve_dwidenoise2_demean,
 )
 from ...utils.versions import (
     mrtrix3_version,
@@ -77,6 +78,7 @@ def init_dwi_series_denoise_wf(
     metadata,
     phase_file=None,
     orientation='LPS',
+    shelled=None,
     name=None,
 ):
     """Build a workflow that conforms and denoises one raw DWI series.
@@ -107,6 +109,9 @@ def init_dwi_series_denoise_wf(
         complex-valued and the phase has not been ignored
     orientation : str, optional
         Orientation the series is conformed to ('LPS' or 'LAS').
+    shelled : bool or None, optional
+        qsiplan's classification of the series' q-space sampling
+        (``FileRecord.shelled``), passed to :func:`init_dwi_denoising_wf`.
     name : str, optional
         Name of workflow. Derived from the file name when omitted.
 
@@ -154,6 +159,7 @@ def init_dwi_series_denoise_wf(
         source_file=dwi_file,
         n_volumes=row.NumVolumes,
         use_phase=use_phase,
+        shelled=shelled,
         name='denoise_wf',
     )
     # This workflow is a child of the subject workflow, so a description left on
@@ -427,6 +433,7 @@ def init_dwi_denoising_wf(
     phase_encoding_direction,
     n_volumes,
     use_phase,
+    shelled=None,
     name='denoise_wf',
 ):
     """Build a workflow to denoise a DWI series.
@@ -449,6 +456,11 @@ def init_dwi_denoising_wf(
         the denoiser will be run on the complex-valued data. If ``denoise_method``
         is ``svht``, then ``svht_denoise`` will rotate the magnitude and phase data
         onto the real axis before denoising.
+    shelled : bool or None, optional
+        qsiplan's classification of the series' q-space sampling. With ``dwidenoise2`` it
+        decides the ``-demean`` mode (see
+        :func:`~qsiprep.utils.misc.resolve_dwidenoise2_demean`); ``None`` (unclassified,
+        the default) is treated as non-shelled.
     name : str, optional
         name of the workflow
 
@@ -514,6 +526,10 @@ def init_dwi_denoising_wf(
         if config.workflow.denoise_config is not None:
             dwidenoise2_params = load_dwidenoise2_config(config.workflow.denoise_config)
         check_dwidenoise2_demodulation(dwidenoise2_params, use_phase)
+        # Always explicit: dwidenoise2's own shell inference segfaults on pseudo-shells
+        dwidenoise2_params['demean'] = resolve_dwidenoise2_demean(
+            dwidenoise2_params, shelled, source_file
+        )
     svht_params = {}
     if denoise_method == 'svht':
         if config.workflow.denoise_config is not None:

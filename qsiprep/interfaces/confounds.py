@@ -25,6 +25,7 @@ from nipype.interfaces.base import (
 )
 
 from .gradients import concatenate_bvals, concatenate_bvecs
+from .mrtrix import DWIDENOISE2_NONFINITE_COLUMN
 from .niworkflows import dMRIPlot
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -109,6 +110,15 @@ def _confounds_column_metadata(columns):
             meta[col] = {'Description': eddy_block, 'Source': 'FSL eddy'}
         elif col.startswith('diffprep_ec_'):
             meta[col] = {'Description': okan_block, 'Source': 'TORTOISE DIFFPREP'}
+        elif col == DWIDENOISE2_NONFINITE_COLUMN:
+            meta[col] = {
+                'Description': (
+                    'Number of voxels in this volume where dwidenoise2 wrote a non-finite '
+                    'value next to the voxels it excluded, and the undenoised input value '
+                    'was kept instead'
+                ),
+                'Source': 'dwidenoise2',
+            }
     return meta
 
 
