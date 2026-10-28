@@ -942,6 +942,43 @@ def test_compose_weights_applies_ec_only(tmp_path):
     assert len(set(weights)) == 3
 
 
+def test_compose_weights_threaded_matches_serial(tmp_path):
+    """Test that building the per-volume weights concurrently keeps each volume's own map."""
+    fieldwarp = _write_field(tmp_path / 'warp.nii.gz', (8, 8, 8), np.eye(4), amplitude=0.02)
+    ec = [_write_map(tmp_path / f'ec{i}.nii.gz', 1.0 + 0.05 * i) for i in range(5)]
+    # The last volume shares the first one's eddy-current Jacobian.
+    ec_images = ec + [ec[0]]
+
+    results = {}
+    for num_threads in (1, 4):
+        cwd = tmp_path / f'threads{num_threads}'
+        cwd.mkdir()
+        interface = ComposeJacobianWeights(
+            dwi_files=_dwi_volumes(tmp_path, len(ec_images)),
+            b0_ref_image=_write_map(tmp_path / 'ref.nii.gz', 1.0),
+            mask=_write_map(tmp_path / 'mask.nii.gz', 1.0),
+            pe_axis=0,
+            fieldwarps=[fieldwarp],
+            ec_jacobian_images=ec_images,
+            num_threads=num_threads,
+        )
+        weights = interface.run(cwd=str(cwd)).outputs.jacobian_weight_images
+        results[num_threads] = weights
+
+    serial, threaded = results[1], results[4]
+    assert len(set(threaded)) == 5
+    assert threaded[0] == threaded[5]
+    medians = []
+    for serial_path, threaded_path in zip(serial, threaded, strict=True):
+        serial_data = np.asanyarray(nb.load(serial_path).dataobj)
+        threaded_data = np.asanyarray(nb.load(threaded_path).dataobj)
+        np.testing.assert_allclose(threaded_data, serial_data, rtol=1e-6)
+        medians.append(float(np.median(threaded_data)))
+    # Each weight carries its own volume's eddy-current factor, in volume order.
+    assert medians[:5] == sorted(medians[:5])
+    assert len(set(medians[:5])) == 5
+
+
 def test_compose_weights_lsr_ratios_are_the_whole_weight(tmp_path):
     """Test that TORTOISE's LSR ratios are the whole weight.
 

@@ -1,0 +1,54 @@
+name: PR template checks
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  required-sections:
+    name: Check that required sections are answered
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the LLM-use and human-contributor boxes
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          body=$(printf '%s\n' "${PR_BODY}" | tr -d '\r')
+          checked='^\s*[-*]\s*\[[xX]\]\s*'
+          llm_options='(No LLM tools were used in this pull request|LLM tools were used to generate at least part of the content of this pull request|This pull request was generated entirely by an LLM)'
+          human_option='I am a human being and I both understand and support the changes I propose in this pull request'
+          failed=0
+
+          n_llm=$(printf '%s\n' "${body}" | grep -cE "${checked}${llm_options}\.\s*$" || true)
+          if [[ "${n_llm}" -ne 1 ]]; then
+            echo "::error::'Use of LLM tools' must have exactly one option checked; found ${n_llm}."
+            failed=1
+          fi
+
+          n_human=$(printf '%s\n' "${body}" | grep -cE "${checked}${human_option}\.\s*$" || true)
+          if [[ "${n_human}" -ne 1 ]]; then
+            echo "::error::The 'I am a human being' box under 'Use of LLM tools' must be checked."
+            failed=1
+          fi
+
+          if [[ "${failed}" -ne 0 ]]; then
+            exit 1
+          fi
+
+          echo "All required sections answered."

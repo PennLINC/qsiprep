@@ -54,8 +54,13 @@ def eddy_version():
     if not fsldir:
         return None
     for record in sorted(glob.glob(os.path.join(fsldir, 'conda-meta', 'fsl-eddy-[0-9]*.json'))):
-        with open(record) as fobj:
-            return json.load(fobj).get('version')
+        # pixi writes these records owner-only, so a non-root run (Apptainer,
+        # docker --user) on an image that did not open them up cannot read them.
+        try:
+            with open(record) as fobj:
+                return json.load(fobj).get('version')
+        except OSError:
+            continue
     return fsl.Info.version()
 
 

@@ -220,6 +220,17 @@ def test_compose_transforms_threads_from_omp_nthreads():
     assert compose_transforms.n_procs == 4
 
 
+def test_compose_jacobian_threads_from_omp_nthreads():
+    """Test that compose_jacobian gets omp_nthreads and reserves the matching slots.
+
+    The interface spends them building per-volume weight maps concurrently.
+    """
+    config.nipype.omp_nthreads = 4
+    compose_jacobian = _trans_wf().get_node('compose_jacobian')
+    assert compose_jacobian.inputs.num_threads == 4
+    assert compose_jacobian.n_procs == 4
+
+
 def test_compose_jacobian_consumes_gradwarp_and_fieldwarps():
     edges = _edges(_trans_wf())
     forwarded = {

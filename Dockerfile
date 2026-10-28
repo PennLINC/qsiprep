@@ -38,6 +38,10 @@ RUN --mount=type=cache,target=/root/.cache/rattler pixi install -e qsiprep --fro
 # Pixi envs do not include pip; use uv to install into the env's Python.
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     /root/.local/bin/uv pip install --python /app/.pixi/envs/qsiprep/bin/python --no-deps --force-reinstall .
+# pixi writes conda-meta records owner-only (0600). Non-root runs (Apptainer,
+# docker --user) read eddy's record for its version, so open them up here,
+# before the environments are copied into the runtime stages.
+RUN chmod -R a+rX /app/.pixi/envs/qsiprep/conda-meta /app/.pixi/envs/test/conda-meta
 
 FROM ${BASE_IMAGE} AS base
 WORKDIR /home/qsiprep
