@@ -22,6 +22,7 @@ from nipype.interfaces.mrtrix3 import MRConvert
 from nipype.interfaces.mrtrix3.base import MRTrix3Base, MRTrix3BaseInputSpec
 from nipype.utils.filemanip import fname_presuffix, which
 from niworkflows.viz.utils import compose_view, cuts_from_bbox
+from scipy import ndimage
 
 from ..utils.misc import format_dwidenoise2_schedule
 from ..viz.utils import plot_denoise
@@ -37,6 +38,12 @@ LOGGER = logging.getLogger('nipype.interface')
 _DWIDENOISE2_SCHEDULE_FILE = 'schedule.txt'
 # The input copy with invalid voxels filled, written uncompressed to save time
 _DWIDENOISE2_FILLED_INPUT = 'dwidenoise2_input_filled.nii'
+# Invalid voxels within this many voxels of valid data are left for dwidenoise2 to exclude
+_DWIDENOISE2_FILL_MARGIN = 8
+# Valid voxels this close to invalid ones keep their input where dwidenoise2 writes NaN
+_DWIDENOISE2_REPAIR_DISTANCE = 2
+# Confounds column counting, per volume, the voxels that kept their input value
+DWIDENOISE2_NONFINITE_COLUMN = 'DWIDenoise2_nonfinite_voxels'
 RC3_ROOT = which('average_response')  # Only exists in RC3
 if RC3_ROOT is not None:
     # Use the directory containing average_response
@@ -400,8 +407,9 @@ def invalid_voxel_mask(data):
     """Find the voxels dwidenoise2 treats as invalid.
 
     dwidenoise2 excludes voxels that hold the same value in every volume (such as a
-    background zeroed by masking or defacing) or a non-finite value in any volume, and then
-    segfaults during noise level estimation. Zeros in only some volumes are not excluded.
+    background zeroed by masking or defacing) or a non-finite value in any volume, and
+    segfaults during noise level estimation when a large region of them lies far from
+    valid data. Zeros in only some volumes are not excluded.
 
     Parameters
     ----------
@@ -416,6 +424,52 @@ def invalid_voxel_mask(data):
     return ~np.isfinite(data).all(axis=-1) | (data == data[..., :1]).all(axis=-1)
 
 
+def distant_invalid_voxels(invalid, margin=_DWIDENOISE2_FILL_MARGIN):
+    """Select the invalid voxels more than ``margin`` voxels from any valid voxel.
+
+    Only these are filled. dwidenoise2 excludes the invalid voxels near valid data itself,
+    which keeps the fill out of the patches of valid voxels; filling those as well biases
+    the noise estimate low there.
+
+    Parameters
+    ----------
+    invalid : :class:`numpy.ndarray`
+        Boolean 3D mask of the invalid voxels, from :func:`invalid_voxel_mask`.
+    margin : float, optional
+        Distance from valid data, in voxels, within which invalid voxels are not selected.
+
+    Returns
+    -------
+    :class:`numpy.ndarray`
+        Boolean 3D mask of the invalid voxels to fill.
+    """
+    if invalid.all():
+        return invalid.copy()
+    return invalid & (ndimage.distance_transform_edt(invalid) > margin)
+
+
+def voxels_near_invalid(invalid, distance=_DWIDENOISE2_REPAIR_DISTANCE):
+    """Select the valid voxels within ``distance`` voxels of an invalid voxel.
+
+    Where dwidenoise2 writes a non-finite value into one of these, the input value is kept.
+
+    Parameters
+    ----------
+    invalid : :class:`numpy.ndarray`
+        Boolean 3D mask of the invalid voxels, from :func:`invalid_voxel_mask`.
+    distance : float, optional
+        Distance from the invalid voxels, in voxels.
+
+    Returns
+    -------
+    :class:`numpy.ndarray`
+        Boolean 3D mask of the selected valid voxels.
+    """
+    if not invalid.any() or invalid.all():
+        return np.zeros_like(invalid)
+    return ~invalid & (ndimage.distance_transform_edt(~invalid) <= distance)
+
+
 def fill_invalid_voxels(data, mask, seed=0):
     """Give invalid voxels small positive values that dwidenoise2 accepts.
 
@@ -428,7 +482,7 @@ def fill_invalid_voxels(data, mask, seed=0):
     data : :class:`numpy.ndarray`
         4D image data, real or complex.
     mask : :class:`numpy.ndarray`
-        Boolean 3D mask of the voxels to fill, from :func:`invalid_voxel_mask`.
+        Boolean 3D mask of the voxels to fill, from :func:`distant_invalid_voxels`.
     seed : int, optional
         Seed of the random generator.
 
@@ -515,25 +569,30 @@ class DWIDenoise2(SeriesPreprocReport, MRTrix3Base):
             with open(os.path.join(runtime.cwd, _DWIDENOISE2_SCHEDULE_FILE), 'w') as fobj:
                 fobj.write(format_dwidenoise2_schedule(self.inputs.schedule))
 
-        # dwidenoise2 segfaults once it excludes invalid voxels, so it gets a copy in which
-        # they hold small values, and they are set back to zero in its output
+        # dwidenoise2 segfaults on a large region of invalid voxels far from valid data, so
+        # it gets a copy in which those hold small values
         self._filled_input = None
+        self._extra_confounds = {}
         in_img = nb.load(self.inputs.in_file)
         invalid = invalid_voxel_mask(np.asanyarray(in_img.dataobj))
-        if invalid.any():
+        to_fill = distant_invalid_voxels(invalid)
+        if to_fill.any():
             LOGGER.warning(
-                '%s has %d voxels that are constant across volumes or not finite; they are '
-                'filled with small values for dwidenoise2 and set to zero in its output.',
+                '%s has %d voxels that are constant across volumes or not finite; the %d more '
+                'than %d voxels from valid data are filled with small values for dwidenoise2.',
                 self.inputs.in_file,
                 int(invalid.sum()),
+                int(to_fill.sum()),
+                _DWIDENOISE2_FILL_MARGIN,
             )
-            filled = fill_invalid_voxels(np.asanyarray(in_img.dataobj), invalid)
+            filled = fill_invalid_voxels(np.asanyarray(in_img.dataobj), to_fill)
             self._filled_input = os.path.join(runtime.cwd, _DWIDENOISE2_FILLED_INPUT)
             # The input header may be integer or scaled, which would round the fill to zero
             header = in_img.header.copy()
             header.set_data_dtype(filled.dtype)
             header.set_slope_inter(1, 0)
             nb.Nifti1Image(filled, in_img.affine, header).to_filename(self._filled_input)
+            del filled
         try:
             runtime = super()._run_interface(runtime)
         finally:
@@ -551,13 +610,31 @@ class DWIDenoise2(SeriesPreprocReport, MRTrix3Base):
         outputs = self._list_outputs()
         if not os.path.exists(outputs['out_file']):
             raise RuntimeError(f'dwidenoise2 exited without writing {outputs["out_file"]}.')
+        n_volumes = in_img.shape[3] if len(in_img.shape) > 3 else 1
+        repaired = np.zeros(n_volumes, dtype=int)
         if invalid.any():
             out_img = nb.load(outputs['out_file'])
             out_data = np.asanyarray(out_img.dataobj).copy()
+            # dwidenoise2 can write NaN into valid voxels at the edge of the excluded region;
+            # those keep their input value
+            repair = ~np.isfinite(out_data) & voxels_near_invalid(invalid)[..., None]
+            if repair.any():
+                LOGGER.warning(
+                    'dwidenoise2 wrote non-finite values into %d voxels of %s next to the '
+                    'voxels it excluded; they keep their input values.',
+                    int(repair.any(axis=-1).sum()),
+                    self.inputs.in_file,
+                )
+                out_data[repair] = np.asanyarray(in_img.dataobj)[repair]
+                repaired = repair.reshape(-1, n_volumes).sum(axis=0)
+            # Excluded voxels are zero, as dwidenoise2 writes them, and so are filled ones
             out_data[invalid] = 0
             nb.Nifti1Image(out_data, out_img.affine, out_img.header).to_filename(
                 outputs['out_file']
             )
+            del out_data
+        self._extra_confounds = {DWIDENOISE2_NONFINITE_COLUMN: repaired.tolist()}
+        # Any other non-finite value is a failure of dwidenoise2, not of the fill
         check_finite_image(outputs['out_file'], 'dwidenoise2 output')
         if isdefined(outputs.get('noise_image')) and os.path.exists(outputs['noise_image']):
             check_finite_image(outputs['noise_image'], 'dwidenoise2 noise map')

@@ -573,11 +573,16 @@ def test_check_finite_image(tmp_path, value, dtype):
         mrtrix.check_finite_image(str(tmp_path / 'bad.nii.gz'), 'test image')
 
 
-def _dead_background(dtype=np.float32):
-    """Signal in a central block, zero in every volume elsewhere, as after masking."""
-    data = np.zeros((6, 6, 4, 5), dtype=dtype)
+def _dead_background(dtype=np.float32, shape=(6, 6, 4)):
+    """Signal in a corner block, zero in every volume elsewhere, as after masking."""
+    data = np.zeros((*shape, 5), dtype=dtype)
     data[1:5, 1:5, 1:3, :] = np.arange(1, 6, dtype=np.float32) * 100
     return data
+
+
+def _wide_background(dtype=np.float32):
+    """As :func:`_dead_background`, with zeros reaching beyond the fill margin."""
+    return _dead_background(dtype, shape=(24, 24, 4))
 
 
 @pytest.mark.parametrize('dtype', [np.float32, np.int16, np.complex64])
@@ -635,6 +640,33 @@ def test_fill_invalid_voxels(dtype):
     np.testing.assert_array_equal(filled, mrtrix.fill_invalid_voxels(data, mask))
 
 
+def test_distant_invalid_voxels():
+    """Test that only invalid voxels beyond the margin from valid data are selected."""
+    invalid = np.ones((8, 3, 3), dtype=bool)
+    invalid[0] = False  # valid data at x = 0, so a voxel at x = k is k voxels away
+
+    selected = mrtrix.distant_invalid_voxels(invalid, margin=3)
+    assert not selected[:4].any()
+    assert selected[4:].all()
+    # A zeroed border narrower than the default margin is left to dwidenoise2
+    assert not mrtrix.distant_invalid_voxels(invalid).any()
+    everything = np.ones((4, 4, 4), dtype=bool)
+    assert mrtrix.distant_invalid_voxels(everything).all()
+
+
+def test_voxels_near_invalid():
+    """Test that only valid voxels within the distance of an invalid voxel are selected."""
+    invalid = np.zeros((8, 3, 3), dtype=bool)
+    invalid[0] = True  # a valid voxel at x = k is k voxels from the invalid ones
+
+    near = mrtrix.voxels_near_invalid(invalid, distance=2)
+    assert not near[0].any()
+    assert near[1:3].all()
+    assert not near[3:].any()
+    assert not mrtrix.voxels_near_invalid(np.zeros((4, 4, 4), dtype=bool)).any()
+    assert not mrtrix.voxels_near_invalid(np.ones((4, 4, 4), dtype=bool)).any()
+
+
 def _identity_dwidenoise2(monkeypatch, seen):
     """Replace dwidenoise2 with a command that copies the image it is given to its output."""
     from nipype.interfaces.base import CommandLine
@@ -654,13 +686,14 @@ def _identity_dwidenoise2(monkeypatch, seen):
 def test_dwidenoise2_fills_and_restores_invalid_voxels(tmp_path, monkeypatch, dtype):
     """Test the workaround for dwidenoise2's segfault on a zeroed background.
 
-    dwidenoise2 must never see an invalid voxel, the output must be zero exactly where the
-    input was, and the filled copy must not be left behind.
+    dwidenoise2 must see the invalid voxels beyond the fill margin filled and the nearer
+    ones untouched, the output must be zero exactly where the input was, and the filled
+    copy must not be left behind.
     """
     from nipype.interfaces.base.support import Bunch
 
     monkeypatch.chdir(tmp_path)
-    data = _dead_background(dtype)
+    data = _wide_background(dtype)
     in_file = tmp_path / 'dwi.nii.gz'
     _write_image(in_file, data)
     seen = {}
@@ -669,21 +702,30 @@ def test_dwidenoise2_fills_and_restores_invalid_voxels(tmp_path, monkeypatch, dt
     mrtrix.DWIDenoise2(in_file=in_file)._run_interface(Bunch(cwd=str(tmp_path)))
 
     assert seen['input'].endswith(mrtrix._DWIDENOISE2_FILLED_INPUT)
-    assert not mrtrix.invalid_voxel_mask(seen['data']).any()
-    out = np.asanyarray(nb.load(tmp_path / 'dwi_denoised.nii.gz').dataobj)
     mask = mrtrix.invalid_voxel_mask(data)
+    distant = mrtrix.distant_invalid_voxels(mask)
+    assert distant.any()
+    assert distant.sum() < mask.sum()
+    np.testing.assert_array_equal(mrtrix.invalid_voxel_mask(seen['data']), mask & ~distant)
+    out = np.asanyarray(nb.load(tmp_path / 'dwi_denoised.nii.gz').dataobj)
     assert np.all(out[mask] == 0)
     np.testing.assert_array_equal(out[~mask], data[~mask])
     assert not (tmp_path / mrtrix._DWIDENOISE2_FILLED_INPUT).exists()
 
 
-def test_dwidenoise2_leaves_clean_input_alone(tmp_path, monkeypatch):
-    """Test that an input without invalid voxels is passed to dwidenoise2 as it is."""
+@pytest.mark.parametrize('background', [False, True])
+def test_dwidenoise2_leaves_input_without_distant_invalid_voxels_alone(
+    tmp_path, monkeypatch, background
+):
+    """Test that an input with no invalid voxels beyond the margin is passed as it is.
+
+    A zeroed border narrower than the margin is excluded by dwidenoise2 itself.
+    """
     from nipype.interfaces.base.support import Bunch
 
     monkeypatch.chdir(tmp_path)
     in_file = tmp_path / 'dwi.nii.gz'
-    _write_image(in_file)
+    _write_image(in_file, _dead_background() if background else None)
     seen = {}
     _identity_dwidenoise2(monkeypatch, seen)
 
@@ -693,13 +735,94 @@ def test_dwidenoise2_leaves_clean_input_alone(tmp_path, monkeypatch):
     assert not (tmp_path / mrtrix._DWIDENOISE2_FILLED_INPUT).exists()
 
 
+def _nan_dwidenoise2(monkeypatch, voxels):
+    """Replace dwidenoise2 with a copy of its input that is NaN at ``voxels``, all volumes."""
+    from nipype.interfaces.base import CommandLine
+
+    def fake_run(self, runtime, correct_return_codes=(0,)):
+        out = np.asanyarray(nb.load(self.cmdline.split()[-2]).dataobj).astype(np.float32)
+        for voxel in voxels:
+            out[voxel] = np.nan
+        _write_image('dwi_denoised.nii.gz', out)
+        runtime.returncode = 0
+        return runtime
+
+    monkeypatch.setattr(CommandLine, '_run_interface', fake_run)
+
+
+def test_dwidenoise2_keeps_the_input_where_it_writes_nan_at_the_edge(tmp_path, monkeypatch):
+    """Test the repair of NaN that dwidenoise2 writes next to the voxels it excluded.
+
+    A valid voxel next to the excluded region keeps its input value and is counted in the
+    confounds; an excluded voxel is zero like the rest of the excluded region.
+    """
+    import pandas as pd
+    from nipype.interfaces.base.support import Bunch
+
+    monkeypatch.chdir(tmp_path)
+    data = _dead_background()
+    in_file = tmp_path / 'dwi.nii.gz'
+    _write_image(in_file, data)
+    edge, excluded = (1, 1, 1), (0, 0, 0)
+    _nan_dwidenoise2(monkeypatch, [edge, excluded])
+
+    iface = mrtrix.DWIDenoise2(in_file=in_file)
+    iface._run_interface(Bunch(cwd=str(tmp_path)))
+
+    out = np.asanyarray(nb.load(tmp_path / 'dwi_denoised.nii.gz').dataobj)
+    np.testing.assert_array_equal(out[edge], data[edge])
+    assert np.all(out[excluded] == 0)
+    assert iface._extra_confounds == {mrtrix.DWIDENOISE2_NONFINITE_COLUMN: [1] * 5}
+    iface._calculate_nmse(nb.load(in_file), nb.load(tmp_path / 'dwi_denoised.nii.gz'))
+    confounds = pd.read_csv(iface._nmse_text)
+    assert confounds[mrtrix.DWIDENOISE2_NONFINITE_COLUMN].tolist() == [1] * 5
+
+
+def test_dwidenoise2_rejects_nan_away_from_the_excluded_voxels(tmp_path, monkeypatch):
+    """Test that NaN deeper than the repair distance still stops the run."""
+    from nipype.interfaces.base.support import Bunch
+
+    monkeypatch.chdir(tmp_path)
+    data = np.zeros((12, 12, 8, 5), dtype=np.float32)
+    data[1:11, 1:11, 1:7, :] = np.arange(1, 6, dtype=np.float32) * 100
+    in_file = tmp_path / 'dwi.nii.gz'
+    _write_image(in_file, data)
+    _nan_dwidenoise2(monkeypatch, [(6, 6, 4)])  # 3 or more voxels from the zeros
+
+    with pytest.raises(RuntimeError, match='non-finite'):
+        mrtrix.DWIDenoise2(in_file=in_file)._run_interface(Bunch(cwd=str(tmp_path)))
+
+
+def test_dwidenoise2_counts_no_repairs_on_clean_input(tmp_path, monkeypatch):
+    """Test that the confounds column is written, as zeros, when nothing was repaired."""
+    from nipype.interfaces.base.support import Bunch
+
+    monkeypatch.chdir(tmp_path)
+    in_file = tmp_path / 'dwi.nii.gz'
+    _write_image(in_file)
+    _identity_dwidenoise2(monkeypatch, {})
+
+    iface = mrtrix.DWIDenoise2(in_file=in_file)
+    iface._run_interface(Bunch(cwd=str(tmp_path)))
+
+    assert iface._extra_confounds == {mrtrix.DWIDENOISE2_NONFINITE_COLUMN: [0] * 5}
+
+
+def test_dwidenoise2_nonfinite_column_is_described():
+    """Test that the confounds sidecar describes the repaired-voxel count."""
+    from qsiprep.interfaces.confounds import _confounds_column_metadata
+
+    meta = _confounds_column_metadata([mrtrix.DWIDENOISE2_NONFINITE_COLUMN, 'trans_x'])
+    assert 'non-finite' in meta[mrtrix.DWIDENOISE2_NONFINITE_COLUMN]['Description']
+
+
 def test_dwidenoise2_removes_the_filled_copy_after_a_crash(tmp_path, monkeypatch):
     """Test that the filled copy is removed and the crash still reported."""
     from nipype.interfaces.base.support import Bunch
 
     monkeypatch.chdir(tmp_path)
     in_file = tmp_path / 'dwi.nii.gz'
-    _write_image(in_file, _dead_background())
+    _write_image(in_file, _wide_background())
     _fake_dwidenoise2(monkeypatch, returncode=11, stderr='Segmentation fault')
 
     with pytest.raises(RuntimeError, match='exited with code 11'):

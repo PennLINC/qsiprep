@@ -78,9 +78,10 @@ class SeriesPreprocReport(reporting.ReportCapableInterface):
             scaled_diff = np.abs(corrected_data - orig_data).mean() / baseline
             differences.append(scaled_diff)
         title = str(self.__class__)[:-2].split('.')[-1]
-        pd.DataFrame(
-            {title + '_pre': pres, title + '_post': posts, title + '_change': differences}
-        ).to_csv(output_file, index=False)
+        columns = {title + '_pre': pres, title + '_post': posts, title + '_change': differences}
+        # Per-volume columns an interface recorded while it ran
+        columns.update(getattr(self, '_extra_confounds', {}))
+        pd.DataFrame(columns).to_csv(output_file, index=False)
         self._nmse_text = output_file
 
     def _generate_report(self):

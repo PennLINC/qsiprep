@@ -257,6 +257,8 @@ magnitude after denoising. ``svht`` denoising rotates the magnitude and phase
 onto the real axis instead, and keeps the magnitude of the result.
 ``--ignore phase`` drops the phase images altogether.
 
+.. _denoise_config:
+
 Denoising settings
 ==================
 
@@ -306,12 +308,20 @@ data. ``noise_in`` only seeds the variance-stabilizing transform.
 pseudo-shells that leave volumes unassigned. When ``demean`` is omitted, every
 series uses ``"all"``; ``"shells"`` is allowed only for series *QSIPrep*
 classifies as shelled (the classification that decides whether ``eddy`` can
-be used). Voxels that hold the same value in every volume, such as a
-background zeroed by masking or defacing, or a non-finite value in any volume,
-crash ``dwidenoise2``; they are given small positive values for denoising and
-set back to zero in its output. A ``dwidenoise2`` run
-that fails, or that writes NaN or infinite values, stops processing at the
-denoising step.
+be used).
+
+``dwidenoise2`` excludes voxels that hold the same value in every volume, such
+as a background zeroed by masking or defacing, or a non-finite value in any
+volume, and crashes when a large region of them lies far from valid data.
+Excluded voxels more than 8 voxels from valid data are given small positive
+values for denoising; nearer ones are left for ``dwidenoise2`` to exclude,
+because filled voxels inside the patches of valid voxels bias the noise
+estimate low. All excluded voxels are zero in the output. ``dwidenoise2`` can
+write NaN into valid voxels at the edge of the region it excluded; where this
+happens within 2 voxels of that region, the voxel keeps its undenoised value,
+and the ``DWIDenoise2_nonfinite_voxels`` column of the confounds counts such
+voxels in each volume. A ``dwidenoise2`` run that fails, or that writes NaN
+or infinite values anywhere else, stops processing at the denoising step.
 
 ``schedule`` lists the iterations of the multi-resolution noise estimation.
 Each iteration is an object whose keys are the columns of a ``dwidenoise2``
