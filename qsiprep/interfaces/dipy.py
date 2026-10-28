@@ -90,7 +90,13 @@ class Patch2Self(SeriesPreprocReport, SimpleInterface):
 
         # Back to nifti
         denoised_img = nb.Nifti1Image(denoised_arr, noisy_img.affine, noisy_img.header)
-        p2s_residuals = nb.Nifti1Image(noise_residuals, noisy_img.affine, noisy_img.header)
+        # The input's header may be integer, which would round the residual RMS
+        noise_header = noisy_img.header.copy()
+        noise_header.set_data_dtype(np.float32)
+        noise_header.set_slope_inter(1, 0)
+        p2s_residuals = nb.Nifti1Image(
+            noise_residuals.astype(np.float32), noisy_img.affine, noise_header
+        )
         denoised_img.to_filename(denoised_file)
         p2s_residuals.to_filename(noise_file)
         self._results['out_file'] = denoised_file

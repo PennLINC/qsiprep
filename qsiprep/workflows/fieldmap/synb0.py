@@ -211,6 +211,7 @@ resampled back onto the *b*=0 reference grid.
             dimension=3,
             interpolation='LanczosWindowedSinc',
             invert_transform_flags=[True, True, True],
+            float=True,
         ),
         name='resample_to_native',
     )
@@ -224,6 +225,7 @@ resampled back onto the *b*=0 reference grid.
             dimension=3,
             interpolation='LanczosWindowedSinc',
             invert_transform_flags=[True, True],
+            float=True,
         ),
         name='resample_to_acpc',
     )
