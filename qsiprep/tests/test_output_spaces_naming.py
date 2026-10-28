@@ -378,7 +378,17 @@ def test_single_fixed_acpc_writes_no_resolution_metadata(tmp_path):
     assert not any(n.endswith('grid_metadata') for n in wf.list_node_names())
 
 
-def test_one_normalization_per_standard_space():
+@pytest.fixture
+def anat_output_dir(monkeypatch):
+    """Give the anatomical sinks the base directory they read from the config.
+
+    The fixtures above set it without restoring it, so a test that relies on them
+    having run fails when pytest-xdist schedules it on another worker.
+    """
+    monkeypatch.setattr(config.execution, 'output_dir', '/tmp/qsiprep-naming-test')
+
+
+def test_one_normalization_per_standard_space(anat_output_dir):
     from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.anatomical.volume import init_anat_derivatives_wf
 
@@ -390,7 +400,7 @@ def test_one_normalization_per_standard_space():
     assert 'MNI152NLin6Asym' in targets
 
 
-def test_standard_space_anatomicals_are_written():
+def test_standard_space_anatomicals_are_written(anat_output_dir):
     from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.anatomical.volume import init_anat_derivatives_wf
 
@@ -403,7 +413,7 @@ def test_standard_space_anatomicals_are_written():
     assert all(e.get('res') == '1' for e in mni)
 
 
-def test_bare_standard_space_writes_no_res_entity():
+def test_bare_standard_space_writes_no_res_entity(anat_output_dir):
     from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.anatomical.volume import init_anat_derivatives_wf
 
@@ -415,7 +425,7 @@ def test_bare_standard_space_writes_no_res_entity():
     assert all('res' not in e for e in mni)
 
 
-def test_cohort_is_a_separate_entity_on_space_but_inline_on_transforms():
+def test_cohort_is_a_separate_entity_on_space_but_inline_on_transforms(anat_output_dir):
     from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.anatomical.volume import init_anat_derivatives_wf
 
