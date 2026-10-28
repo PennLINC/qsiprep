@@ -353,8 +353,12 @@ and DIFFPREP add their per-volume eddy-current field coefficients as
 ``eddy_ec_*`` and ``diffprep_ec_*`` columns. The last columns are
 bookkeeping: which input file, gradient direction and b-value each volume
 came from, which helps track down corrupted volumes or a motion model that
-fails on particular gradient strengths. The accompanying JSON sidecar
-describes each column.
+fails on particular gradient strengths. With ``--denoise-method dwidenoise2``,
+``DWIDenoise2_nonfinite_voxels`` counts the voxels of each volume where
+``dwidenoise2`` wrote a non-finite value next to the region it excluded and
+the undenoised value was kept (see :ref:`denoise_config`); a value above zero
+marks a series whose edge voxels were not all denoised. The accompanying JSON
+sidecar describes each column.
 
 
 .. _qc_data:
