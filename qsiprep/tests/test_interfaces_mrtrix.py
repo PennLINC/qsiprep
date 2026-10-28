@@ -6,6 +6,7 @@ import subprocess
 import nibabel as nb
 import numpy as np
 import pytest
+from nipype.interfaces.base import isdefined
 from traits.trait_errors import TraitError
 
 from qsiprep import config
@@ -137,6 +138,86 @@ def test_dwidenoise2_writes_schedule_at_run_time(tmp_path, monkeypatch):
     interface._run_interface(Bunch(cwd=str(node_dir)))
 
     assert calls == [format_dwidenoise2_schedule(_SCHEDULE_ROWS)]
+
+
+def test_dwidenoise2_writes_the_rank_density_only_when_asked(tmp_path, monkeypatch):
+    """Test that -rankpermm_out is passed and listed only when rank_density is set."""
+    monkeypatch.chdir(tmp_path)
+    in_file = tmp_path / 'dwi.nii.gz'
+    in_file.touch()
+
+    interface = mrtrix.DWIDenoise2(in_file=in_file)
+    assert '-rankpermm_out' not in interface.cmdline
+    assert not isdefined(interface._list_outputs().get('rank_density'))
+
+    interface = mrtrix.DWIDenoise2(in_file=in_file, rank_density='rank_density.nii.gz')
+    assert '-rankpermm_out rank_density.nii.gz' in interface.cmdline
+    assert interface._list_outputs()['rank_density'] == str(tmp_path / 'rank_density.nii.gz')
+
+
+@pytest.mark.parametrize(
+    ('interface_class', 'field', 'flag'),
+    [
+        (mrtrix.DWIDenoise, 'rank_image', '-rank'),
+        (mrtrix.DWIDenoise2, 'rank_output', '-rank_output'),
+    ],
+)
+def test_mrtrix_denoisers_write_the_rank_only_when_asked(
+    tmp_path,
+    monkeypatch,
+    interface_class,
+    field,
+    flag,
+):
+    """Test that the rank flag is passed and its output listed only when its input is set."""
+    monkeypatch.chdir(tmp_path)
+    in_file = tmp_path / 'dwi.nii.gz'
+    in_file.touch()
+
+    interface = interface_class(in_file=in_file)
+    assert f'{flag} ' not in interface.cmdline
+    assert not isdefined(interface._list_outputs().get(field))
+
+    interface = interface_class(in_file=in_file, **{field: 'rank.nii.gz'})
+    assert f'{flag} rank.nii.gz' in interface.cmdline
+    assert interface._list_outputs()[field] == str(tmp_path / 'rank.nii.gz')
+
+
+def test_dwidenoise2_missing_rank_density_is_an_error(tmp_path, monkeypatch):
+    """Test that a requested rank density map dwidenoise2 did not write stops the node."""
+    from nipype.interfaces.base import CommandLine
+    from nipype.interfaces.base.support import Bunch
+
+    def fake_run(self, runtime, correct_return_codes=(0,)):
+        _write_image('dwi_denoised.nii.gz')
+        return runtime
+
+    monkeypatch.setattr(CommandLine, '_run_interface', fake_run)
+    monkeypatch.chdir(tmp_path)
+    in_file = tmp_path / 'dwi.nii.gz'
+    _write_image(in_file)
+
+    interface = mrtrix.DWIDenoise2(in_file=in_file, rank_density='rank_density.nii.gz')
+    with pytest.raises(RuntimeError, match='multi-row schedule'):
+        interface._run_interface(Bunch(cwd=str(tmp_path)))
+
+
+@pytest.mark.parametrize(
+    ('params', 'expected'),
+    [
+        ({}, True),
+        ({'schedule': [{'kernel': 'aspect=2.0'}, {'kernel': 'rank'}]}, True),
+        ({'noise_in': 2.0}, True),
+        ({'schedule': [{'kernel': 'aspect=2.0'}]}, False),
+        ({'fixed_rank': 4}, False),
+        ({'vst_method': 'none'}, False),
+    ],
+)
+def test_dwidenoise2_writes_rank_density_with_a_multi_row_schedule(params, expected):
+    """Test which dwidenoise2 parameters give a rank density map (checked against 3.0.8-2071)."""
+    from qsiprep.utils.misc import dwidenoise2_writes_rank_density
+
+    assert dwidenoise2_writes_rank_density(params) is expected
 
 
 def test_dwidenoise2_without_schedule_writes_nothing(tmp_path, monkeypatch):

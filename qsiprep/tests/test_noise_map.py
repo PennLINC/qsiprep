@@ -1,4 +1,6 @@
-"""The denoisers' noise maps are carried to the ACPC grid and scaled like the signal.
+"""The denoisers' noise and rank density maps are carried to the ACPC grid.
+
+Noise maps are scaled like the signal; rank density maps are only resampled.
 
 The transport tests run ``antsApplyTransforms`` and are skipped when it is absent,
 so the file is still collectable outside the container.
@@ -32,6 +34,16 @@ AFFINE = np.diag([-2.0, -2.0, 2.0, 1.0])
 SHAPE = (12, 12, 12)
 # Away from the edges, where linear interpolation of the zero background reaches in
 INTERIOR = (slice(2, -2),) * 3
+# The native sidecar fields of two series dwidenoise denoised with different windows
+SERIES_META = [
+    {
+        'DenoisingMethod': 'dwidenoise',
+        'Software': {'Name': 'MRtrix3', 'Tool': 'dwidenoise', 'Version': '3.0.4'},
+        'UsedPhase': used_phase,
+        'DenoisingParameters': {'extent': [extent] * 3},
+    }
+    for used_phase, extent in [(False, 5), (True, 7)]
+]
 
 
 def _write_confounds(path, series, bvals, corrections=None, sep='\t'):
@@ -167,9 +179,10 @@ def test_noise_maps_take_the_factors_of_their_reference_volume(tmp_path):
             weight_method='Jacobian',
             bias_field=bias,
             native_noise_maps=[
-                '/out/sub-01/dwi/sub-01_dir-AP_stat-noise_dwimap.nii.gz',
-                '/out/sub-01/dwi/sub-01_dir-PA_stat-noise_dwimap.nii.gz',
+                '/out/sub-01/dwi/sub-01_dir-AP_stat-std_desc-noise_dwimap.nii.gz',
+                '/out/sub-01/dwi/sub-01_dir-PA_stat-std_desc-noise_dwimap.nii.gz',
             ],
+            series_meta=SERIES_META,
             output_dir='/out',
             approximations=['a note'],
         )  # fmt:skip
@@ -188,6 +201,8 @@ def test_noise_maps_take_the_factors_of_their_reference_volume(tmp_path):
 
     meta = result.outputs.meta_dict
     assert meta['Quantity'] == 'sigma'
+    assert meta['Units'] == 'arbitrary'
+    assert meta['Software'] == SERIES_META[0]['Software']
     assert meta['NoiseMapIndex'] == [0, 0, 0, 1, 1, 1]
     assert meta['AppliedScaling'] == [
         'b0 harmonization', 'complex channel scaling', 'Jacobian', 'bias field'
@@ -198,10 +213,90 @@ def test_noise_maps_take_the_factors_of_their_reference_volume(tmp_path):
     assert [entry['ReferenceVolume'] for entry in series] == [0, 4]
     assert [entry['HarmonizationScale'] for entry in series] == [1.1, 0.9]
     assert series[1]['ChannelScaling'] == pytest.approx(1 / math.sqrt(2))
-    assert series[0]['NativeNoiseMap'] == 'bids::sub-01/dwi/sub-01_dir-AP_stat-noise_dwimap.nii.gz'
+    assert series[0]['NativeNoiseMap'] == (
+        'bids::sub-01/dwi/sub-01_dir-AP_stat-std_desc-noise_dwimap.nii.gz'
+    )
     assert series[1]['Source'] == 'sub-01/dwi/sub-01_dir-PA_dwi.nii.gz'
     assert series[1]['PhaseEncodingDirection'] == 'j'
+    # Each series keeps its own parameters
+    assert [entry['DenoisingParameters'] for entry in series] == [
+        {'extent': [5, 5, 5]},
+        {'extent': [7, 7, 7]},
+    ]
+    assert series[1]['UsedPhase'] is True
     json.dumps(meta)  # the sink writes it as JSON
+
+
+@requires_ants
+@pytest.mark.parametrize(
+    ('kind', 'key', 'units', 'contents'),
+    [
+        ('rank', 'RankMap', 'count', 'principal components kept as signal'),
+        ('rankdensity', 'RankDensityMap', '1/mm', 'rank per mm of kernel radius'),
+    ],
+)
+def test_rank_maps_are_resampled_unscaled(tmp_path, kind, key, units, contents):
+    """Test that rank maps follow their b=0's transform but take no intensity factor."""
+    weights = [_write_image(tmp_path / 'w0.nii.gz', np.full(SHAPE, 0.5))]
+    bias = _write_image(tmp_path / 'bias.nii.gz', np.full(SHAPE, 2.0))
+    result = ResampleNoiseMaps(
+        **_resample_inputs(
+            tmp_path,
+            kind=kind,
+            denoise_method='dwidenoise2',
+            weight_images=weights,
+            weight_index=[0] * 6,
+            weight_method='Jacobian',
+            bias_field=bias,
+            native_noise_maps=[
+                f'/out/sub-01/dwi/sub-01_dir-AP_desc-{kind}_dwimap.nii.gz',
+                f'/out/sub-01/dwi/sub-01_dir-PA_desc-{kind}_dwimap.nii.gz',
+            ],
+            series_meta=SERIES_META,
+            output_dir='/out',
+        )
+    ).run(cwd=str(tmp_path))
+
+    data = nb.load(result.outputs.out_file).get_fdata()
+    np.testing.assert_allclose(data[INTERIOR + (0,)], _ramp(1.0)[INTERIOR], rtol=1e-5)
+    np.testing.assert_allclose(data[INTERIOR + (1,)], _ramp(3.0)[INTERIOR], rtol=1e-5)
+
+    meta = result.outputs.meta_dict
+    assert meta['Units'] == units
+    assert meta['DenoisingMethod'] == 'dwidenoise2'
+    assert contents in meta['Description']
+    for absent in ('Quantity', 'AppliedScaling', 'SignalRedistributionMethod', 'NoiseMapIndex'):
+        assert absent not in meta
+
+    assert meta[f'{key}Index'] == [0, 0, 0, 1, 1, 1]
+    series = meta[f'{key}Series']
+    assert [entry['ReferenceVolume'] for entry in series] == [0, 4]
+    assert 'HarmonizationScale' not in series[0]
+    assert series[0][f'Native{key}'] == f'bids::sub-01/dwi/sub-01_dir-AP_desc-{kind}_dwimap.nii.gz'
+    json.dumps(meta)
+
+
+@requires_ants
+def test_the_field_eddy_applied_does_not_modulate_a_rank_density(tmp_path):
+    """Test that a rank density map is moved by the field eddy applied but not modulated."""
+    slope, readout = 0.4, 0.05
+    jj = np.broadcast_to(np.arange(SHAPE[1])[None, :, None], SHAPE)
+    inputs = _resample_inputs(
+        tmp_path,
+        kind='rankdensity',
+        fieldmap_hz=_write_image(tmp_path / 'hz.nii.gz', slope * jj),
+        fieldmap_modulated=True,
+        readout_times=[readout, readout],
+        channel_scales=[1.0, 1.0],
+    )
+    inputs['noise_images'] = [
+        _write_image(tmp_path / 'flat_a.nii.gz', np.full(SHAPE, 0.3)),
+        _write_image(tmp_path / 'flat_b.nii.gz', np.full(SHAPE, 0.3)),
+    ]
+    result = ResampleNoiseMaps(**inputs).run(cwd=str(tmp_path))
+
+    data = nb.load(result.outputs.out_file).get_fdata()
+    np.testing.assert_allclose(data[(slice(3, -3),) * 3], 0.3, rtol=1e-4)
 
 
 @requires_ants
@@ -314,6 +409,40 @@ def test_concatenated_units_take_the_merge_harmonization(tmp_path):
     assert meta['Approximations'] == ['eddy note']
 
 
+def test_concatenated_rank_density_maps_are_not_rescaled(tmp_path):
+    """Test that concatenating rank density maps offsets their indices but keeps the values."""
+    unit_a = _write_image(tmp_path / 'a.nii.gz', 0.2 * np.ones(SHAPE))
+    unit_b = _write_image(tmp_path / 'b.nii.gz', 0.4 * np.ones(SHAPE))
+    common = {'Description': 'd', 'Units': '1/mm', 'DenoisingMethod': 'dwidenoise2',
+              'Software': {'Name': 'MRtrix3'}, 'Interpolation': 'Linear'}  # fmt:skip
+
+    def _meta(name):
+        return {**common, 'RankDensityMapIndex': [0, 0],
+                'RankDensityMapSeries': [{'Source': name, 'ReferenceVolume': 0}]}  # fmt:skip
+
+    confounds = _write_confounds(
+        tmp_path / 'merged_confounds.csv',
+        ['a1', 'a1', 'b1', 'b1'],
+        [0, 1000, 0, 1000],
+        [2.0, 2.0, 0.5, 0.5],
+        sep=',',
+    )
+    result = ConcatNoiseMaps(
+        kind='rankdensity',
+        noise_maps=[unit_a, unit_b],
+        meta_dicts=[_meta('a1'), _meta('b1')],
+        confounds_file=confounds,
+    ).run(cwd=str(tmp_path))
+
+    np.testing.assert_allclose(nb.load(result.outputs.out_file).get_fdata()[0, 0, 0], [0.2, 0.4])
+    meta = result.outputs.meta_dict
+    assert meta['RankDensityMapIndex'] == [0, 0, 1, 1]
+    assert [entry['ReferenceVolume'] for entry in meta['RankDensityMapSeries']] == [0, 2]
+    assert meta['Units'] == '1/mm'
+    assert meta['Software'] == {'Name': 'MRtrix3'}
+    assert 'AppliedScaling' not in meta
+
+
 # ---------------------------------------------------------------------------
 # Workflow construction
 
@@ -389,10 +518,16 @@ def test_finalize_carries_the_noise_maps_to_acpc(
     assert node.inputs.series_sources == ['sub-01_dir-AP_dwi.nii.gz', 'sub-01_dir-PA_dwi.nii.gz']
     assert bool(node.inputs.approximations) == (hmc_method == 'eddy')
 
+    assert ('denoising_meta', 'series_meta') in from_inputnode
+
     sink = wf.get_node('dwi_derivatives_wf').get_node('ds_noise_map_t1')
     assert sink.inputs.space == 'ACPC'
-    assert sink.inputs.statistic == 'noise'
+    assert sink.inputs.statistic == 'std'
+    assert sink.inputs.desc == 'noise'
     assert sink.inputs.res == '1p2mm'
+    # Stable dwidenoise estimates no rank, and no dwidenoise a rank density
+    assert wf.get_node('resample_rank') is None
+    assert wf.get_node('resample_rank_density') is None
     # Only res-native* or several resolutions report the grid
     assert not isdefined(node.inputs.resolution_label)
 
@@ -425,21 +560,106 @@ def test_each_acpc_resolution_gets_its_own_noise_map(tmp_path, monkeypatch):
         }
 
 
+@pytest.mark.parametrize(
+    ('denoise_method', 'mrtrix_version', 'writes_rank'),
+    [
+        ('svht', 'stable', True),
+        ('dwidenoise', 'dev', True),
+        ('dwidenoise', 'stable', False),
+        ('patch2self', 'stable', False),
+    ],
+)
+def test_finalize_carries_the_rank_maps_to_acpc(
+    tmp_path,
+    monkeypatch,
+    denoise_method,
+    mrtrix_version,
+    writes_rank,
+):
+    """Test that rank maps follow the volumes, unscaled, for the denoisers that write them."""
+    monkeypatch.setattr(config.workflow, 'mrtrix_version', mrtrix_version)
+    wf = _finalize_wf(tmp_path, monkeypatch, 'shoreline', 'drbuddi', denoise_method)
+    node = wf.get_node('resample_rank')
+    sink = wf.get_node('dwi_derivatives_wf').get_node('ds_rank_map_t1')
+    if not writes_rank:
+        assert node is None
+        assert sink is None
+        return
+
+    edges = _edges(wf)
+    assert node.inputs.kind == 'rank'
+    assert ('final_denoise_wf', 'resample_rank') not in edges
+    assert edges[('inputnode', 'resample_rank')] >= {
+        ('rank_images', 'noise_images'),
+        ('native_rank_maps', 'native_noise_maps'),
+    }
+    assert edges[('resample_rank', 'dwi_derivatives_wf')] == {
+        ('out_file', 'inputnode.rank_map_t1'),
+        ('meta_dict', 'inputnode.rank_map_meta'),
+    }
+    assert sink.inputs.desc == 'rank'
+    assert sink.inputs.space == 'ACPC'
+    assert wf.get_node('resample_rank_density') is None
+
+
+def test_finalize_carries_the_rank_density_maps_to_acpc(tmp_path, monkeypatch):
+    """Test that dwidenoise2's rank density maps follow the volumes but take no scaling."""
+    monkeypatch.setattr(config.workflow, 'denoise_config', None)
+    wf = _finalize_wf(tmp_path, monkeypatch, 'eddy', 'topup', 'dwidenoise2')
+    node = wf.get_node('resample_rank_density')
+    edges = _edges(wf)
+
+    assert node.inputs.kind == 'rankdensity'
+    assert node.inputs.channel_scales == [1.0, 1.0]
+    assert not node.inputs.fieldmap_modulated
+    assert edges[('dwi_trans_wf', 'resample_rank_density')] == {
+        ('outputnode.volume_transforms', 'volume_transforms'),
+    }
+    assert ('final_denoise_wf', 'resample_rank_density') not in edges
+    assert edges[('inputnode', 'resample_rank_density')] >= {
+        ('rank_density_images', 'noise_images'),
+        ('native_rank_density_maps', 'native_noise_maps'),
+        ('denoising_meta', 'series_meta'),
+        ('fieldmap_hz', 'fieldmap_hz'),
+    }
+    assert edges[('resample_rank_density', 'dwi_derivatives_wf')] == {
+        ('out_file', 'inputnode.rank_density_t1'),
+        ('meta_dict', 'inputnode.rank_density_meta'),
+    }
+    sink = wf.get_node('dwi_derivatives_wf').get_node('ds_rank_density_t1')
+    assert sink.inputs.space == 'ACPC'
+    assert sink.inputs.desc == 'rankdensity'
+    assert not isdefined(sink.inputs.statistic)
+    assert sink.inputs.res == '1p2mm'
+    # The noise map is still written, and is still scaled
+    assert wf.get_node('resample_noise').inputs.kind == 'noise'
+
+
 def test_finalize_skips_the_noise_maps_without_a_denoiser(tmp_path, monkeypatch):
     """Test that no noise map node or sink is built when denoising is off."""
     wf = _finalize_wf(tmp_path, monkeypatch, 'eddy', 'topup', 'none')
 
     assert wf.get_node('resample_noise') is None
+    assert wf.get_node('resample_rank_density') is None
     assert wf.get_node('dwi_derivatives_wf').get_node('ds_noise_map_t1') is None
+    assert wf.get_node('dwi_derivatives_wf').get_node('ds_rank_density_t1') is None
 
 
 @pytest.mark.parametrize('strategy', ['concat', 'average'])
-def test_merge_concatenates_noise_maps_only_when_concatenating(tmp_path, monkeypatch, strategy):
-    """Test that concatenated units join their noise maps and averaged pairs write none."""
+@pytest.mark.parametrize('denoise_method', ['dwidenoise', 'dwidenoise2', 'svht'])
+def test_merge_concatenates_noise_maps_only_when_concatenating(
+    tmp_path,
+    monkeypatch,
+    strategy,
+    denoise_method,
+):
+    """Test that concatenated units join their denoiser maps and averaged pairs write none."""
     from qsiprep.workflows.dwi.distortion_group_merge import init_distortion_group_merge_wf
 
     monkeypatch.setattr(config.execution, 'output_dir', str(tmp_path / 'out'))
-    monkeypatch.setattr(config.workflow, 'denoise_method', 'dwidenoise')
+    monkeypatch.setattr(config.workflow, 'denoise_method', denoise_method)
+    monkeypatch.setattr(config.workflow, 'denoise_config', None)
+    monkeypatch.setattr(config.workflow, 'mrtrix_version', 'stable')
     monkeypatch.setattr(config.nipype, 'omp_nthreads', 1)
     from qsiprep.utils.spaces import parse_output_spaces
 
@@ -452,9 +672,14 @@ def test_merge_concatenates_noise_maps_only_when_concatenating(tmp_path, monkeyp
         resolution=parse_output_spaces(['acpc:res-2mm'])[0].resolution,
     )
     concat = wf.get_node('concat_noise_maps')
+    concat_rank = wf.get_node('concat_rank_density_maps')
+    concat_rank_map = wf.get_node('concat_rank_maps')
     if strategy == 'average':
         assert concat is None
+        assert concat_rank is None
+        assert concat_rank_map is None
         return
+
     edges = _edges(wf)
     assert edges[('distortion_merger', 'concat_noise_maps')] == {
         ('merged_denoising_confounds', 'confounds_file')
@@ -468,3 +693,25 @@ def test_merge_concatenates_noise_maps_only_when_concatenating(tmp_path, monkeyp
         ('meta_dict', 'inputnode.noise_map_meta'),
     }
     assert wf.get_node('dwi_derivatives_wf').get_node('ds_noise_map_t1').inputs.res == '2mm'
+    # Stable dwidenoise has no rank map
+    assert (concat_rank_map is None) == (denoise_method == 'dwidenoise')
+    if concat_rank_map is not None:
+        assert concat_rank_map.inputs.kind == 'rank'
+        assert edges[('concat_rank_maps', 'dwi_derivatives_wf')] == {
+            ('out_file', 'inputnode.rank_map_t1'),
+            ('meta_dict', 'inputnode.rank_map_meta'),
+        }
+
+    if denoise_method != 'dwidenoise2':
+        assert concat_rank is None
+        return
+
+    assert concat_rank.inputs.kind == 'rankdensity'
+    assert edges[('inputnode', 'merge_rank_density_maps')] == {
+        ('dir_AP_rank_density', 'in1'),
+        ('dir_PA_rank_density', 'in2'),
+    }
+    assert edges[('concat_rank_density_maps', 'dwi_derivatives_wf')] == {
+        ('out_file', 'inputnode.rank_density_t1'),
+        ('meta_dict', 'inputnode.rank_density_meta'),
+    }

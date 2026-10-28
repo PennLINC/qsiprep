@@ -27,6 +27,18 @@ def test_svht_denoise_cmdline(tmp_path):
     assert {'-phase', phase_file, '-phaseunits', 'radians', '-extent', '7'} <= set(cmdline)
 
 
+def test_svht_denoise_writes_the_rank_only_when_asked(tmp_path, monkeypatch):
+    """Test that -rank is passed and its output listed only when rank_image is set."""
+    monkeypatch.chdir(tmp_path)
+    in_file = _write_image(tmp_path / 'dwi.nii.gz')
+
+    assert '-rank' not in SVHTDenoise(in_file=in_file).cmdline
+
+    denoise = SVHTDenoise(in_file=in_file, rank_image='rank.nii.gz')
+    assert '-rank rank.nii.gz' in denoise.cmdline
+    assert denoise._list_outputs()['rank_image'] == str(tmp_path / 'rank.nii.gz')
+
+
 def _write_bvals(path, bvals):
     path.write_text(' '.join(str(b) for b in bvals) + '\n')
     return str(path)

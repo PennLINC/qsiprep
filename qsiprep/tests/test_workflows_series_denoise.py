@@ -16,6 +16,7 @@ from qsiprep import config
 from qsiprep.tests.preproc_factory import make_preproc_unit
 from qsiprep.workflows.base import connect_series_to_unit, init_series_denoise_wfs
 from qsiprep.workflows.dwi.merge import (
+    DENOISER_OUTPUT_FIELDS,
     SERIES_FIELDS,
     SERIES_LIST_FIELDS,
     init_dwi_series_denoise_wf,
@@ -69,10 +70,10 @@ def test_series_denoise_wf_conforms_then_denoises(tmp_path):
     # The denoiser is sized from this file's own volume count.
     denoiser = wf.get_node('denoise_wf').get_node('denoiser')
     assert denoiser.inputs.extent == (5, 5, 5)
-    # The written noise map is collected at the subject level, outside SERIES_FIELDS
+    # The written denoiser maps are collected at the subject level, outside SERIES_FIELDS
     assert set(wf.get_node('outputnode').inputs.get()) == {
         series_field for series_field, _ in SERIES_FIELDS
-    } | {'noise_map_file'}
+    } | set(DENOISER_OUTPUT_FIELDS)
 
 
 def test_series_denoise_wf_conforms_the_phase_companion(tmp_path):

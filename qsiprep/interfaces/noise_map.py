@@ -1,4 +1,8 @@
-"""Carry the denoisers' noise maps onto the output grid, scaled like the signal."""
+"""Carry the denoisers' noise, rank and rank density maps onto the output grid.
+
+Noise maps are scaled like the signal. Rank and rank density maps are not intensities, so they
+are only resampled.
+"""
 
 import os
 
@@ -26,6 +30,42 @@ NOISE_QUANTITIES = {
     'svht': 'sigma',
     'patch2self': 'residual_rms',
 }
+
+#: The stat- entity of each quantity's map
+NOISE_STATISTICS = {
+    'sigma': 'std',
+    'residual_rms': 'rms',
+}
+
+#: The sidecar Units of each kind of map. A noise map is in the intensity units of its
+#: series, a rank map counts signal components, and a rank density is signal rank per mm
+#: of kernel radius.
+MAP_UNITS = {
+    'noise': 'arbitrary',
+    'rank': 'count',
+    'rankdensity': '1/mm',
+}
+
+#: The prefix of the sidecar keys that index each kind of map's volumes and series
+_MAP_KEYS = {
+    'noise': 'NoiseMap',
+    'rank': 'RankMap',
+    'rankdensity': 'RankDensityMap',
+}
+
+#: What each kind of map holds, for the ACPC sidecar
+_MAP_CONTENTS = {
+    'rank': 'Signal rank (the number of principal components kept as signal)',
+    'rankdensity': (
+        'Signal-rank density (signal rank per mm of kernel radius) that sized the '
+        'reconstruction kernel'
+    ),
+}
+
+
+def noise_map_statistic(denoise_method):
+    """Return the stat- entity of the noise map ``denoise_method`` writes."""
+    return NOISE_STATISTICS[NOISE_QUANTITIES[denoise_method]]
 
 
 def read_confounds(path):
@@ -125,10 +165,23 @@ def scale_noise_map(noise, factor=1.0, weight=None, bias=None):
 
 
 class _ResampleNoiseMapsInputSpec(BaseInterfaceInputSpec):
+    kind = traits.Enum(
+        'noise',
+        'rank',
+        'rankdensity',
+        usedefault=True,
+        desc='which map noise_images holds. Rank and rank density maps take none of the '
+        "signal's intensity factors.",
+    )
     noise_images = InputMultiObject(
         File(exists=True),
         mandatory=True,
-        desc="each member series' native noise map, in the order of series_files",
+        desc="each member series' native map, in the order of series_files",
+    )
+    series_meta = traits.List(
+        traits.Dict(),
+        desc="each member series' native sidecar, which names the denoiser's software "
+        'and parameters',
     )
     series_files = traits.List(
         traits.Str(), mandatory=True, desc='the member series (raw BIDS paths)'
@@ -137,7 +190,7 @@ class _ResampleNoiseMapsInputSpec(BaseInterfaceInputSpec):
         traits.Str(), mandatory=True, desc='BIDS URI of each member series'
     )
     native_noise_maps = traits.List(
-        traits.Str(), desc='the written native noise map derivative of each series'
+        traits.Str(), desc='the written native map derivative of each series'
     )
     output_dir = traits.Str(desc='root of the derivatives dataset, to name native_noise_maps')
     channel_scales = traits.List(
@@ -189,17 +242,18 @@ class _ResampleNoiseMapsInputSpec(BaseInterfaceInputSpec):
 
 
 class _ResampleNoiseMapsOutputSpec(TraitedSpec):
-    out_file = File(exists=True, desc='the noise map on the output grid, one volume per series')
+    out_file = File(exists=True, desc='the map on the output grid, one volume per series')
     meta_dict = traits.Dict(desc='the sidecar of out_file')
 
 
 class ResampleNoiseMaps(SimpleInterface):
-    """Carry each member series' noise map to the output grid and intensity scale.
+    """Carry each member series' noise, rank or rank density map to the output grid.
 
-    Each series' map follows the transform of the series' first b=0 volume and is
-    scaled as that volume's signal was: b=0 harmonization, the channel scaling
-    that makes every map a per-channel sigma, the Jacobian or LSR weight, eddy's
-    own modulation of the field it applied, and division by the bias field.
+    Each series' map follows the transform of the series' first b=0 volume. A noise
+    map is also scaled as that volume's signal was: b=0 harmonization, the channel
+    scaling that makes every map a per-channel sigma, the Jacobian or LSR weight,
+    eddy's own modulation of the field it applied, and division by the bias field.
+    Rank and rank density maps are not intensities, so they are only resampled.
     """
 
     input_spec = _ResampleNoiseMapsInputSpec
@@ -208,7 +262,11 @@ class ResampleNoiseMaps(SimpleInterface):
     def _run_interface(self, runtime):
         inputs = self.inputs
         num_series = len(inputs.series_files)
-        for name in ('noise_images', 'series_sources', 'channel_scales', 'pe_directions'):
+        counted = ['noise_images', 'series_sources', 'channel_scales', 'pe_directions']
+        if isdefined(inputs.series_meta) and inputs.series_meta:
+            counted.append('series_meta')
+
+        for name in counted:
             count = len(getattr(inputs, name))
             if count != num_series:
                 raise ValueError(f'{name} has {count} entries, not {num_series}')
@@ -221,12 +279,15 @@ class ResampleNoiseMaps(SimpleInterface):
                 f'{len(inputs.volume_transforms)} volume transforms for '
                 f'{len(noise_map_index)} output volumes'
             )
+        scaled = inputs.kind == 'noise'
         weights = None
-        if isdefined(inputs.weight_images) and inputs.weight_images:
+        if scaled and isdefined(inputs.weight_images) and inputs.weight_images:
             weights = [inputs.weight_images[i] for i in inputs.weight_index]
+
         bias = None
-        if isdefined(inputs.bias_field):
+        if scaled and isdefined(inputs.bias_field):
             bias = np.asanyarray(nb.load(inputs.bias_field).dataobj)
+
         fieldmap_hz = inputs.fieldmap_hz if isdefined(inputs.fieldmap_hz) else None
 
         volumes = []
@@ -239,15 +300,20 @@ class ResampleNoiseMaps(SimpleInterface):
                 native,
                 inputs.reference_image,
                 [inputs.volume_transforms[reference]],
-                os.path.join(runtime.cwd, f'noise_series{series_num:02d}.nii.gz'),
+                os.path.join(runtime.cwd, f'{inputs.kind}_series{series_num:02d}.nii.gz'),
                 num_threads=inputs.num_threads,
             )
+            resampled = np.asanyarray(nb.load(resampled).dataobj)
+            if not scaled:
+                volumes.append(resampled.astype(np.float32))
+                continue
+
             weight = None
             if weights is not None:
                 weight = np.asanyarray(nb.load(weights[reference]).dataobj)
             volumes.append(
                 scale_noise_map(
-                    np.asanyarray(nb.load(resampled).dataobj),
+                    resampled,
                     factor=harmonization_scales[series_num] * inputs.channel_scales[series_num],
                     weight=weight,
                     bias=bias,
@@ -258,7 +324,7 @@ class ResampleNoiseMaps(SimpleInterface):
         data = volumes[0] if num_series == 1 else np.stack(volumes, axis=-1)
         out_img = nb.Nifti1Image(data, grid.affine)
         out_img.header.set_xyzt_units('mm')
-        out_file = os.path.join(runtime.cwd, 'noise_map.nii.gz')
+        out_file = os.path.join(runtime.cwd, f'{inputs.kind}_map.nii.gz')
         out_img.to_filename(out_file)
         self._results['out_file'] = out_file
         self._results['meta_dict'] = self._sidecar(
@@ -286,10 +352,10 @@ class ResampleNoiseMaps(SimpleInterface):
             native,
             fieldmap_hz,
             [warp],
-            os.path.join(series_dir, 'noise_corrected_frame.nii.gz'),
+            os.path.join(series_dir, f'{self.inputs.kind}_corrected_frame.nii.gz'),
             num_threads=self.inputs.num_threads,
         )
-        if not self.inputs.fieldmap_modulated:
+        if self.inputs.kind != 'noise' or not self.inputs.fieldmap_modulated:
             return corrected
 
         jacobian = jacobian_determinant(
@@ -307,64 +373,98 @@ class ResampleNoiseMaps(SimpleInterface):
 
     def _sidecar(self, noise_map_index, reference_volumes, harmonization_scales, weights, bias):
         inputs = self.inputs
+        key = _MAP_KEYS[inputs.kind]
         quantity = NOISE_QUANTITIES[inputs.denoise_method]
-        if quantity == 'sigma':
-            what = (
-                'Noise standard deviation per channel of each member series, estimated by '
-                f'{inputs.denoise_method} on the raw series'
+        if inputs.kind != 'noise':
+            description = (
+                f'{_MAP_CONTENTS[inputs.kind]} estimated by {inputs.denoise_method} for each '
+                "member series, carried to the output grid with the transform of that series' "
+                'reference b=0 volume. It is not an intensity, so it is not scaled, and '
+                'linear interpolation makes it fractional between voxels. Volume k of the '
+                f'map describes the output volumes whose {key}Index is k.'
             )
         else:
-            what = (
-                'Root mean square over volumes of the residual Patch2Self removed from each '
-                'member series; it mixes noise with fit error and is not a noise standard '
-                'deviation'
+            if quantity == 'sigma':
+                what = (
+                    'Noise standard deviation per channel of each member series, estimated by '
+                    f'{inputs.denoise_method} on the raw series'
+                )
+            else:
+                what = (
+                    'Root mean square over volumes of the residual Patch2Self removed from '
+                    'each member series; it mixes noise with fit error and is not a noise '
+                    'standard deviation'
+                )
+            description = (
+                f"{what}, carried to the output grid with the transform of that series' "
+                'reference b=0 volume and scaled as its signal was, in the intensity units '
+                'of the preprocessed series. Volume k of the noise map describes the output '
+                f'volumes whose {key}Index is k. It describes the noise in the source data: '
+                'interpolation lowers the noise of the preprocessed series and correlates it '
+                'spatially, so its per-voxel noise is somewhat smaller.'
             )
-        description = (
-            f"{what}, carried to the output grid with the transform of that series' "
-            'reference b=0 volume and scaled as its signal was. Volume k of the noise map '
-            'describes the output volumes whose NoiseMapIndex is k. It describes the noise '
-            'in the source data: interpolation lowers the noise of the preprocessed series '
-            'and correlates it spatially, so its per-voxel noise is somewhat smaller.'
-        )
 
         applied = []
-        if any(abs(scale - 1.0) > 1e-6 for scale in harmonization_scales):
-            applied.append('b0 harmonization')
-        if any(abs(scale - 1.0) > 1e-6 for scale in inputs.channel_scales):
-            applied.append('complex channel scaling')
-        if isdefined(inputs.fieldmap_hz) and inputs.fieldmap_modulated:
-            applied.append('eddy Jacobian')
-        if weights is not None:
-            method = inputs.weight_method if isdefined(inputs.weight_method) else 'Jacobian'
-            applied.append(method)
-        if bias is not None:
-            applied.append('bias field')
+        if inputs.kind == 'noise':
+            if any(abs(scale - 1.0) > 1e-6 for scale in harmonization_scales):
+                applied.append('b0 harmonization')
 
+            if any(abs(scale - 1.0) > 1e-6 for scale in inputs.channel_scales):
+                applied.append('complex channel scaling')
+
+            if isdefined(inputs.fieldmap_hz) and inputs.fieldmap_modulated:
+                applied.append('eddy Jacobian')
+
+            if weights is not None:
+                method = inputs.weight_method if isdefined(inputs.weight_method) else 'Jacobian'
+                applied.append(method)
+
+            if bias is not None:
+                applied.append('bias field')
+
+        series_meta = inputs.series_meta if isdefined(inputs.series_meta) else []
         series = []
         for series_num in range(len(inputs.series_files)):
             entry = {
                 'Source': inputs.series_sources[series_num],
                 'PhaseEncodingDirection': inputs.pe_directions[series_num],
                 'ReferenceVolume': reference_volumes[series_num],
-                'HarmonizationScale': harmonization_scales[series_num],
-                'ChannelScaling': inputs.channel_scales[series_num],
             }
+            if inputs.kind == 'noise':
+                entry['HarmonizationScale'] = harmonization_scales[series_num]
+                entry['ChannelScaling'] = inputs.channel_scales[series_num]
+
             if isdefined(inputs.native_noise_maps) and inputs.native_noise_maps:
                 native = inputs.native_noise_maps[series_num]
                 if isdefined(inputs.output_dir):
                     native = f'bids::{os.path.relpath(native, inputs.output_dir)}'
-                entry['NativeNoiseMap'] = native
+                entry[f'Native{key}'] = native
+
+            if series_meta:
+                # Parameters can differ between series, e.g. dwidenoise's automatic window
+                for field in ('UsedPhase', 'DenoisingParameters'):
+                    if field in series_meta[series_num]:
+                        entry[field] = series_meta[series_num][field]
             series.append(entry)
 
         sidecar = {
             'Description': description,
+            'Units': MAP_UNITS[inputs.kind],
             'DenoisingMethod': inputs.denoise_method,
-            'Quantity': quantity,
-            'Interpolation': 'Linear',
-            'AppliedScaling': applied,
-            'NoiseMapIndex': list(noise_map_index),
-            'NoiseMapSeries': series,
         }
+        if series_meta and 'Software' in series_meta[0]:
+            sidecar['Software'] = series_meta[0]['Software']
+
+        if inputs.kind == 'noise':
+            sidecar['Quantity'] = quantity
+            sidecar['AppliedScaling'] = applied
+        sidecar.update(
+            {
+                'Interpolation': 'Linear',
+                f'{key}Index': list(noise_map_index),
+                f'{key}Series': series,
+            }
+        )
         if weights is not None and isdefined(inputs.weight_method):
             sidecar['SignalRedistributionMethod'] = inputs.weight_method
         if isdefined(inputs.approximations) and inputs.approximations:
@@ -377,9 +477,14 @@ class ResampleNoiseMaps(SimpleInterface):
 
 
 class _ConcatNoiseMapsInputSpec(BaseInterfaceInputSpec):
-    noise_maps = InputMultiObject(
-        File(exists=True), mandatory=True, desc="each correction unit's noise map"
+    kind = traits.Enum(
+        'noise',
+        'rank',
+        'rankdensity',
+        usedefault=True,
+        desc='which map noise_maps holds. Only noise maps take the harmonization.',
     )
+    noise_maps = InputMultiObject(File(exists=True), mandatory=True, desc="each unit's map")
     meta_dicts = traits.List(traits.Dict(), mandatory=True, desc='their sidecars')
     confounds_file = File(
         exists=True,
@@ -390,15 +495,15 @@ class _ConcatNoiseMapsInputSpec(BaseInterfaceInputSpec):
 
 
 class _ConcatNoiseMapsOutputSpec(TraitedSpec):
-    out_file = File(exists=True, desc='the noise maps of all units, one volume per series')
+    out_file = File(exists=True, desc='the maps of all units, one volume per series')
     meta_dict = traits.Dict(desc='the sidecar of out_file')
 
 
 class ConcatNoiseMaps(SimpleInterface):
-    """Join the noise maps of correction units concatenated into one output.
+    """Join the denoiser maps of correction units concatenated into one output.
 
     The merge harmonizes the b=0 intensity of the units once more, so each unit's
-    maps are scaled by the factor its volumes received there, and the volume and
+    noise maps are scaled by the factor its volumes received there. The volume and
     series indices are offset to the merged output.
     """
 
@@ -406,8 +511,11 @@ class ConcatNoiseMaps(SimpleInterface):
     output_spec = _ConcatNoiseMapsOutputSpec
 
     def _run_interface(self, runtime):
+        kind = self.inputs.kind
+        key = _MAP_KEYS[kind]
         if len(self.inputs.noise_maps) != len(self.inputs.meta_dicts):
-            raise ValueError('Each noise map needs its sidecar')
+            raise ValueError('Each map needs its sidecar')
+
         confounds = read_confounds(self.inputs.confounds_file)
         if 'series_b0_correction' in confounds:
             totals = np.nan_to_num(
@@ -427,54 +535,65 @@ class ConcatNoiseMaps(SimpleInterface):
             data = np.asanyarray(img.dataobj)
             if data.ndim == 3:
                 data = data[..., np.newaxis]
-            for series_num, entry in enumerate(meta['NoiseMapSeries']):
+
+            for series_num, entry in enumerate(meta[f'{key}Series']):
                 reference = entry['ReferenceVolume'] + volume_offset
-                merge_scale = totals[reference] / entry['HarmonizationScale']
-                volumes.append(data[..., series_num] * merge_scale)
-                series.append(
-                    {
-                        **entry,
-                        'ReferenceVolume': int(reference),
-                        'HarmonizationScale': float(totals[reference]),
-                    }
-                )
-            index += [len(series) - data.shape[-1] + i for i in meta['NoiseMapIndex']]
-            volume_offset += len(meta['NoiseMapIndex'])
+                entry = {**entry, 'ReferenceVolume': int(reference)}
+                if kind == 'noise':
+                    merge_scale = totals[reference] / entry['HarmonizationScale']
+                    volumes.append(data[..., series_num] * merge_scale)
+                    entry['HarmonizationScale'] = float(totals[reference])
+                else:
+                    volumes.append(data[..., series_num])
+                series.append(entry)
+            index += [len(series) - data.shape[-1] + i for i in meta[f'{key}Index']]
+            volume_offset += len(meta[f'{key}Index'])
 
         if volume_offset != len(confounds):
             raise ValueError(
-                f'The noise maps describe {volume_offset} volumes but the merged output '
+                f'The maps describe {volume_offset} volumes but the merged output '
                 f'has {len(confounds)}'
             )
         merged = volumes[0] if len(volumes) == 1 else np.stack(volumes, axis=-1)
-        out_file = os.path.join(runtime.cwd, 'noise_map.nii.gz')
+        out_file = os.path.join(runtime.cwd, f'{kind}_map.nii.gz')
         out_img = nb.Nifti1Image(merged.astype(np.float32), affine)
         out_img.header.set_xyzt_units('mm')
         out_img.to_filename(out_file)
 
         first = self.inputs.meta_dicts[0]
-        applied = []
-        for meta in self.inputs.meta_dicts:
-            applied += [item for item in meta['AppliedScaling'] if item not in applied]
-        if 'b0 harmonization' not in applied and any(
-            abs(entry['HarmonizationScale'] - 1.0) > 1e-6 for entry in series
-        ):
-            applied.insert(0, 'b0 harmonization')
+        sidecar = {
+            field: first[field]
+            for field in ('Description', 'Units', 'DenoisingMethod', 'Software', 'Quantity')
+            if field in first
+        }
+        if kind == 'noise':
+            applied = []
+            for meta in self.inputs.meta_dicts:
+                applied += [item for item in meta['AppliedScaling'] if item not in applied]
+
+            if 'b0 harmonization' not in applied and any(
+                abs(entry['HarmonizationScale'] - 1.0) > 1e-6 for entry in series
+            ):
+                applied.insert(0, 'b0 harmonization')
+            sidecar['AppliedScaling'] = applied
+
         approximations = []
         for meta in self.inputs.meta_dicts:
             approximations += [
                 item for item in meta.get('Approximations', []) if item not in approximations
             ]
-        sidecar = {
-            **{key: first[key] for key in ('Description', 'DenoisingMethod', 'Quantity')},
-            'Interpolation': first['Interpolation'],
-            'AppliedScaling': applied,
-            'NoiseMapIndex': index,
-            'NoiseMapSeries': series,
-        }
-        for key in ('SignalRedistributionMethod', 'Resolution'):
-            if key in first:
-                sidecar[key] = first[key]
+
+        sidecar.update(
+            {
+                'Interpolation': first['Interpolation'],
+                f'{key}Index': index,
+                f'{key}Series': series,
+            }
+        )
+        for field in ('SignalRedistributionMethod', 'Resolution'):
+            if field in first:
+                sidecar[field] = first[field]
+
         if approximations:
             sidecar['Approximations'] = approximations
         self._results['out_file'] = out_file

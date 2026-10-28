@@ -78,7 +78,7 @@ from ..utils.plan import method_selection_from_config
 from ..utils.sdc import sdc_warp_source, t2w_available_for_sdc, t2w_sdc_enabled
 from .anatomical.volume import anat_biascorrect_enabled, init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
-from .dwi.derivatives import writes_noise_maps
+from .dwi.derivatives import written_denoiser_maps
 from .dwi.distortion_group_merge import init_distortion_group_merge_wf
 from .dwi.dwiref import init_dwiref_wf
 from .dwi.finalize import _select_grid, init_dwi_finalize_wf
@@ -152,11 +152,15 @@ def _first_sampling_grid(grids):
 
 
 def connect_noise_maps_to_unit(workflow, series_wfs, unit, dwi_finalize_wf, name):
-    """Feed a unit's native noise maps, in ``unit.dwi_files`` order, to its finalize workflow."""
-    for series_field, input_field in (
-        ('noise_image', 'noise_images'),
-        ('noise_map_file', 'native_noise_maps'),
-    ):
+    """Feed a unit's native denoiser maps, in ``unit.dwi_files`` order, to its finalize wf."""
+    fields = [('denoising_meta', 'denoising_meta')]
+    for denoiser_map in written_denoiser_maps():
+        fields += [
+            (denoiser_map.series_image, denoiser_map.images),
+            (denoiser_map.series_file, denoiser_map.native),
+        ]
+
+    for series_field, input_field in fields:
         collect = pe.Node(
             niu.Merge(len(unit.dwi_files)),
             # connect_series_to_unit already owns collect_noise_images_<name>
@@ -817,7 +821,7 @@ documentation](https://qsiprep.readthedocs.io/en/latest/methods/index.html \
             write_derivatives=write_derivatives,
             make_dwiref=make_dwiref,
         )
-        if writes_noise_maps():
+        if written_denoiser_maps():
             connect_noise_maps_to_unit(workflow, series_wfs, unit, dwi_finalize_wf, output_wfname)
         # The SDC displacement maps name, in their sidecars, the written transforms
         # that carried the correction from the DWI frame into ACPC.
@@ -1004,15 +1008,17 @@ documentation](https://qsiprep.readthedocs.io/en/latest/methods/index.html \
             cnr_name = f'inputnode.{output_wfname}_cnr'
             carpetplot_name = f'inputnode.{output_wfname}_carpetplot_data'
             hmc_optimization_name = f'inputnode.{output_wfname}_hmc_optimization_data'
-            if writes_noise_maps():
+            for denoiser_map in written_denoiser_maps():
+                field = denoiser_map.field
                 workflow.connect([
                     (dwi_finalize_wf, final_merge_wf, [
-                        (('outputnode.noise_map_t1', _select_grid, index),
-                         f'inputnode.{output_wfname}_noise_map'),
-                        (('outputnode.noise_map_meta', _select_grid, index),
-                         f'inputnode.{output_wfname}_noise_map_meta'),
+                        ((f'outputnode.{field}_t1', _select_grid, index),
+                         f'inputnode.{output_wfname}_{field}'),
+                        ((f'outputnode.{field}_meta', _select_grid, index),
+                         f'inputnode.{output_wfname}_{field}_meta'),
                     ]),
                 ])  # fmt:skip
+
             workflow.connect([
                 # Slot index of each list-valued output: the merge workflow for
                 # resolution i only ever sees images already on grid i.

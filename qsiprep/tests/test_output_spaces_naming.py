@@ -473,7 +473,7 @@ SINGLE_ACPC_DWI_PATHS = {
     ),
     'ds_tsnr': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_stat-tsnr_dwimap.nii.gz',
     'ds_noise_map_t1': (
-        'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_stat-noise_dwimap.nii.gz'
+        'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_stat-std_desc-noise_dwimap.nii.gz'
     ),
 }
 

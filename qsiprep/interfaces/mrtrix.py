@@ -136,6 +136,13 @@ class DWIDenoiseInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
         keep_extension=False,
         desc='the output noise map',
     )
+    rank_image = File(
+        argstr='-rank %s',
+        desc=(
+            'the signal rank selected for each voxel. Only the development-branch '
+            'dwidenoise has -rank.'
+        ),
+    )
     out_file = File(
         name_template='%s_denoised.nii.gz',
         name_source=['in_file'],
@@ -151,6 +158,7 @@ class DWIDenoiseInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
 
 class DWIDenoiseOutputSpec(SeriesPreprocReportOutputSpec):
     noise_image = File(desc='the output noise map', exists=True)
+    rank_image = File(desc='the signal rank selected for each voxel', exists=True)
     out_file = File(desc='the output denoised DWI image', exists=True)
 
 
@@ -176,6 +184,12 @@ class DWIDenoise(SeriesPreprocReport, MRTrix3Base):
     _cmd = 'dwidenoise'
     input_spec = DWIDenoiseInputSpec
     output_spec = DWIDenoiseOutputSpec
+
+    def _list_outputs(self):
+        outputs = super()._list_outputs()
+        if isdefined(self.inputs.rank_image):
+            outputs['rank_image'] = os.path.abspath(self.inputs.rank_image)
+        return outputs
 
     def _get_plotting_images(self):
         input_dwi = load_img(self.inputs.in_file)
@@ -309,6 +323,13 @@ class DWIDenoise2InputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
     rank_output = File(
         argstr='-rank_output %s',
         desc='estimated output rank after patch aggregation',
+    )
+    rank_density = File(
+        argstr='-rankpermm_out %s',
+        desc=(
+            'the signal-rank density (rank per mm of kernel radius) that sized the '
+            'reconstruction kernel; only written with a multi-row schedule'
+        ),
     )
     variance_removed = File(
         argstr='-variance_removed %s',
@@ -516,6 +537,7 @@ class DWIDenoise2OutputSpec(SeriesPreprocReportOutputSpec):
     rank_pcanonzero = File(exists=True, desc='non-zero PCA rank before denoising')
     rank_input = File(exists=True, desc='estimated input rank per denoising patch')
     rank_output = File(exists=True, desc='estimated output rank after patch aggregation')
+    rank_density = File(exists=True, desc='signal rank per mm of kernel radius')
     variance_removed = File(exists=True, desc='fraction of variance removed by PCA')
     eigenspectra = File(exists=True, desc='matrix of eigenvalue spectra across patches')
     residual_statistics = traits.Tuple(
@@ -638,7 +660,22 @@ class DWIDenoise2(SeriesPreprocReport, MRTrix3Base):
         check_finite_image(outputs['out_file'], 'dwidenoise2 output')
         if isdefined(outputs.get('noise_image')) and os.path.exists(outputs['noise_image']):
             check_finite_image(outputs['noise_image'], 'dwidenoise2 noise map')
+        if isdefined(self.inputs.rank_density):
+            # dwidenoise2 exits successfully without the map when its schedule has one row
+            if not os.path.exists(outputs['rank_density']):
+                raise RuntimeError(
+                    f'dwidenoise2 wrote no rank density map ({outputs["rank_density"]}); it '
+                    'writes one only with a multi-row schedule.'
+                )
+            check_finite_image(outputs['rank_density'], 'dwidenoise2 rank density map')
         return runtime
+
+    def _list_outputs(self):
+        outputs = super()._list_outputs()
+        for name in ('rank_output', 'rank_density'):
+            if isdefined(getattr(self.inputs, name)):
+                outputs[name] = os.path.abspath(getattr(self.inputs, name))
+        return outputs
 
     def _get_plotting_images(self):
         input_dwi = load_img(self.inputs.in_file)

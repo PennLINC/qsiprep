@@ -31,6 +31,7 @@ from ...interfaces.mrtrix import (
     PolarToComplex,
 )
 from ...interfaces.nilearn import Merge
+from ...interfaces.noise_map import MAP_UNITS, noise_map_statistic
 from ...interfaces.svht import SVHTDeGibbs, SVHTDenoise
 from ...interfaces.tortoise import Gibbs
 from ...utils.bids import IMPORTANT_DWI_FIELDS, update_metadata_from_nifti_header
@@ -40,6 +41,7 @@ from ...utils.misc import (
     check_svht_phase,
     describe_dwidenoise2,
     describe_svht,
+    dwidenoise2_writes_rank_density,
     load_dwidenoise2_config,
     load_svht_config,
     resolve_dwidenoise2_demean,
@@ -51,6 +53,7 @@ from ...utils.versions import (
     tortoise_version,
     versioned,
 )
+from .derivatives import writes_rank_maps
 from .qc import init_modelfree_qc_wf
 from .util import _get_wf_name
 
@@ -71,6 +74,16 @@ SERIES_FIELDS = (
     ('validation_report', 'validation_reports'),
 )
 SERIES_LIST_FIELDS = tuple(list_field for _, list_field in SERIES_FIELDS)
+# Series workflow outputs that only some denoisers produce, collected at the subject
+# level rather than with SERIES_FIELDS
+DENOISER_OUTPUT_FIELDS = (
+    'noise_map_file',
+    'denoising_meta',
+    'rank_image',
+    'rank_file',
+    'rank_density_image',
+    'rank_density_file',
+)
 
 
 def init_dwi_series_denoise_wf(
@@ -129,6 +142,17 @@ def init_dwi_series_denoise_wf(
         noise image estimated by the denoiser (when one ran)
     noise_map_file
         the noise image as written to the derivatives (when a denoiser ran)
+    denoising_meta
+        the denoiser's software and parameters, as in the noise map's sidecar (when a
+        denoiser ran)
+    rank_image
+        signal rank map estimated by the denoiser (when it writes one)
+    rank_file
+        the rank map as written to the derivatives (when the denoiser writes one)
+    rank_density_image
+        signal-rank density map estimated by the denoiser (dwidenoise2 only)
+    rank_density_file
+        the rank density map as written to the derivatives (dwidenoise2 only)
     confounds
         per-volume denoising/unringing confounds (when any step ran)
     validation_report
@@ -141,10 +165,10 @@ def init_dwi_series_denoise_wf(
         _, fname, _ = split_filename(dwi_file)
         name = _get_wf_name(fname).replace('preproc', 'denoise')
     workflow = Workflow(name=name)
-    # noise_map_file is collected at the subject level, not with SERIES_FIELDS
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=[series_field for series_field, _ in SERIES_FIELDS] + ['noise_map_file']
+            fields=[series_field for series_field, _ in SERIES_FIELDS]
+            + list(DENOISER_OUTPUT_FIELDS)
         ),
         name='outputnode',
     )
@@ -187,8 +211,10 @@ def init_dwi_series_denoise_wf(
             ('outputnode.bval_file', 'bval_file'),
             ('outputnode.bvec_file', 'bvec_file'),
             ('outputnode.noise_image', 'noise_image'),
-            ('outputnode.noise_map_file', 'noise_map_file'),
             ('outputnode.confounds', 'confounds'),
+        ]),
+        (denoise_wf, outputnode, [
+            (f'outputnode.{field}', field) for field in DENOISER_OUTPUT_FIELDS
         ]),
     ])  # fmt:skip
 
@@ -493,6 +519,17 @@ def init_dwi_denoising_wf(
         path to the noise image
     noise_map_file
         path of the noise image as written to the derivatives
+    denoising_meta
+        the denoiser's software and parameters, as in the noise map's sidecar
+    rank_image
+        path to the signal rank map (dwidenoise from the development branch,
+        dwidenoise2 and svht only)
+    rank_file
+        path of the rank map as written to the derivatives
+    rank_density_image
+        path to the signal-rank density map (dwidenoise2 with a multi-row schedule only)
+    rank_density_file
+        path of the rank density map as written to the derivatives
     confounds
         path to the confounds file
     """
@@ -507,8 +544,8 @@ def init_dwi_denoising_wf(
                 'bval_file',
                 'bvec_file',
                 'noise_image',
-                'noise_map_file',
                 'confounds',
+                *DENOISER_OUTPUT_FIELDS,
             ],
         ),
         name='outputnode',
@@ -585,18 +622,15 @@ def init_dwi_denoising_wf(
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
+        # Its sidecar is set once the denoiser's parameters are known, below
         ds_noise_map = pe.Node(
             DerivativesDataSink(
                 source_file=source_file,
-                statistic='noise',
+                statistic=noise_map_statistic(denoise_method),
+                desc='noise',
                 suffix='dwimap',
                 extension='.nii.gz',
                 compress=True,
-                meta_dict={
-                    'Description': _noise_map_description(
-                        denoise_method, used_phase=denoise_complex or denoise_real_axis
-                    ),
-                },
             ),
             name='ds_noise_map',
             run_without_submitting=True,
@@ -613,6 +647,7 @@ def init_dwi_denoising_wf(
                 name='denoiser',
                 n_procs=omp_nthreads,
             )
+            denoiser_params = dict(dwidenoise2_params)
 
             # dwidenoise2 needs the gradient table to demean by shell. Temporary
             # workaround for a bug in dwidenoise2: supply the gradients as a single
@@ -648,6 +683,7 @@ def init_dwi_denoising_wf(
                 name='denoiser',
                 n_procs=omp_nthreads,
             )
+            denoiser_params = {'extent': [dwidenoise_window] * 3}
         elif denoise_method == 'svht':
             # svht_denoise sizes its patches from the volume count unless --denoise-config
             # sets "extent"; --dwidenoise-window is for dwidenoise alone
@@ -661,6 +697,7 @@ def init_dwi_denoising_wf(
                 name='denoiser',
                 n_procs=omp_nthreads,
             )
+            denoiser_params = svht_kwargs
             if svht_params.get('demean', False):
                 # Opt-in demeaning reads the shells from the b-values
                 workflow.connect([(inputnode, denoiser, [('bval_file', 'bval_file')])])
@@ -670,7 +707,78 @@ def init_dwi_denoising_wf(
                 name='denoiser',
                 n_procs=omp_nthreads,
             )
+            denoiser_params = {
+                parameter: getattr(denoiser.inputs, parameter)
+                for parameter in (
+                    'model',
+                    'b0_threshold',
+                    'b0_denoising',
+                    'clip_negative_vals',
+                    'shift_intensity',
+                )
+            }
             workflow.connect([(inputnode, denoiser, [('bval_file', 'bval_file')])])
+
+        # The sidecars name the denoiser and the parameters QSIPrep set; the rest are the
+        # tool's defaults
+        provenance = _denoiser_provenance(
+            denoise_method,
+            denoiser_params,
+            used_phase=denoise_complex or denoise_real_axis,
+        )
+        ds_noise_map.inputs.meta_dict = {
+            'Description': _noise_map_description(
+                denoise_method,
+                used_phase=denoise_complex or denoise_real_axis,
+                complex_data=denoise_complex,
+            ),
+            'Units': MAP_UNITS['noise'],
+            **provenance,
+        }
+        outputnode.inputs.denoising_meta = provenance
+
+        # The denoiser's other maps, where it estimates them:
+        # (map name, denoiser output, desc- entity, description)
+        rank_maps = []
+        if writes_rank_maps():
+            rank_maps.append(
+                (
+                    'rank',
+                    'rank_output' if denoise_method == 'dwidenoise2' else 'rank_image',
+                    'rank',
+                    _rank_map_description(denoise_method),
+                )
+            )
+
+        if denoise_method == 'dwidenoise2' and dwidenoise2_writes_rank_density(dwidenoise2_params):
+            rank_maps.append(
+                ('rank_density', 'rank_density', 'rankdensity', _rank_density_description())
+            )
+
+        for map_name, denoiser_output, desc_entity, description in rank_maps:
+            setattr(denoiser.inputs, denoiser_output, f'{map_name}.nii.gz')
+            ds_rank_map = pe.Node(
+                DerivativesDataSink(
+                    source_file=source_file,
+                    desc=desc_entity,
+                    suffix='dwimap',
+                    extension='.nii.gz',
+                    compress=True,
+                    meta_dict={
+                        'Description': description,
+                        'Units': MAP_UNITS[desc_entity],
+                        **provenance,
+                    },
+                ),
+                name=f'ds_{map_name}',
+                run_without_submitting=True,
+                mem_gb=DEFAULT_MEMORY_MIN_GB,
+            )
+            workflow.connect([
+                (denoiser, ds_rank_map, [(denoiser_output, 'in_file')]),
+                (denoiser, outputnode, [(denoiser_output, f'{map_name}_image')]),
+                (ds_rank_map, outputnode, [('out_file', f'{map_name}_file')]),
+            ])  # fmt:skip
 
         if denoise_method.startswith('dwidenoise'):
             if denoise_method == 'dwidenoise2':
@@ -899,12 +1007,12 @@ def _svht_partial_fourier(partial_fourier, phase_encoding_direction):
     return factor
 
 
-def _noise_map_description(denoise_method, used_phase):
+def _noise_map_description(denoise_method, used_phase, complex_data=False):
     """Return the sidecar description of the noise map written for one denoised series."""
     if denoise_method == 'patch2self':
         desc = (
             'Root mean square over volumes of the residual removed by Patch2Self, '
-            'a voxelwise noise level.'
+            'a voxelwise noise level that also contains fit error.'
         )
     else:
         tool = {
@@ -913,12 +1021,91 @@ def _noise_map_description(denoise_method, used_phase):
             'svht': 'svht_denoise',
         }[denoise_method]
         desc = f'Noise level (standard deviation) estimated by {tool} while denoising.'
-        if used_phase:
+        if complex_data:
+            desc += (
+                ' The magnitude and phase of the series were denoised as complex data, so this '
+                'is the total noise of the real and imaginary channels; divide by the square '
+                'root of 2 for the noise of one channel.'
+            )
+        elif used_phase:
             desc += ' The phase of the series was used in denoising.'
+    if denoise_method == 'dwidenoise2':
+        desc += ' It is on the coarser grid of the last iteration of the schedule.'
     return (
-        f'{desc} It is aligned with the raw series, conformed to the output orientation, '
+        f'{desc} It is in the intensity units of the raw series, aligned with it and '
+        'conformed to the output orientation, before any motion or distortion correction.'
+    )
+
+
+def _rank_map_description(denoise_method):
+    """Return the sidecar description of the signal rank map written for one denoised series."""
+    desc = {
+        'dwidenoise': (
+            'Signal rank selected by dwidenoise (MRtrix3) at each voxel: the number of '
+            'principal components of the patch centered on the voxel that were kept as signal.'
+        ),
+        'dwidenoise2': (
+            'Estimated signal rank of the output of dwidenoise2 (MRtrix3) at each voxel, '
+            'accounting for the aggregation of overlapping patches: a weighted mean of the '
+            'components the patches covering the voxel kept as signal, so it need not be a '
+            'whole number.'
+        ),
+        'svht': 'Number of principal components svht_denoise retained as signal at each voxel.',
+    }[denoise_method]
+    return (
+        f'{desc} It is on the grid of the raw series, aligned with it and conformed to the '
+        'output orientation, before any motion or distortion correction.'
+    )
+
+
+def _rank_density_description():
+    """Return the sidecar description of the rank density map dwidenoise2 wrote for a series."""
+    return (
+        'Signal-rank density (signal rank per mm of kernel radius) that dwidenoise2 (MRtrix3) '
+        'derived from the penultimate iteration of its schedule and used to size the '
+        'rank-adaptive kernel of its reconstruction. It is on the coarser grid of the '
+        'schedule, aligned with the raw series and conformed to the output orientation, '
         'before any motion or distortion correction.'
     )
+
+
+def _denoiser_provenance(denoise_method, parameters, used_phase):
+    """Return the sidecar fields naming the denoiser that ran on a series and its parameters.
+
+    Parameters
+    ----------
+    denoise_method : str
+        The ``--denoise-method``.
+    parameters : dict
+        The parameters QSIPrep set; the denoiser's defaults apply to the rest.
+    used_phase : bool
+        Whether the phase of the series was used in denoising.
+    """
+    if denoise_method == 'patch2self':
+        software = {
+            'Name': 'DIPY',
+            'Tool': 'patch2self',
+            'Version': python_package_version('dipy'),
+        }
+    elif denoise_method == 'svht':
+        software = {
+            'Name': 'svht_denoise',
+            'Tool': 'svht_denoise',
+            'Version': svht_denoise_version(),
+        }
+    else:
+        # dwidenoise2 exists only in the development tree
+        software = {
+            'Name': 'MRtrix3',
+            'Tool': denoise_method,
+            'Version': mrtrix3_version(dev=denoise_method == 'dwidenoise2'),
+        }
+    return {
+        'DenoisingMethod': denoise_method,
+        'Software': {field: value for field, value in software.items() if value is not None},
+        'UsedPhase': used_phase,
+        'DenoisingParameters': parameters,
+    }
 
 
 def _as_list(item):

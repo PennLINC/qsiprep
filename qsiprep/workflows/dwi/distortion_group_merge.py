@@ -24,7 +24,12 @@ from ...interfaces.nilearn import Merge
 from ...interfaces.noise_map import ConcatNoiseMaps
 from ...interfaces.reports import GradientPlot, SeriesQC
 from ...interfaces.shoreline import MergeIterationSummaries
-from .derivatives import init_dwi_derivatives_wf, writes_hmc_optimization, writes_noise_maps
+from .derivatives import (
+    DENOISER_MAPS,
+    init_dwi_derivatives_wf,
+    writes_hmc_optimization,
+    written_denoiser_maps,
+)
 from .finalize import _grid_metadata
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
 from .util import init_dwi_reference_wf
@@ -76,6 +81,10 @@ def init_distortion_group_merge_wf(
         One input for each input image. The unit's noise maps on the ACPC grid
         and their sidecar; only consumed when a denoiser ran and the units are
         concatenated
+    ``[workflow_name]_rank_map``, ``[workflow_name]_rank_map_meta``,
+    ``[workflow_name]_rank_density``, ``[workflow_name]_rank_density_meta``
+        The same for the unit's rank and rank density maps; only consumed when the
+        denoiser wrote them
 
     Parameters
     ----------
@@ -142,8 +151,11 @@ def init_distortion_group_merge_wf(
         '_raw_concatenated_image',
         '_confounds',
         '_hmc_optimization_data',
-        '_noise_map',
-        '_noise_map_meta',
+        *(
+            f'_{denoiser_map.field}{meta}'
+            for denoiser_map in DENOISER_MAPS
+            for meta in ('', '_meta')
+        ),
     ]:
         input_names += [name + suffix for name in sanitized_inputs]
     inputnode = pe.Node(niu.IdentityInterface(fields=input_names), name='inputnode')
@@ -310,41 +322,47 @@ def init_distortion_group_merge_wf(
         write_hmc_optimization=write_shared_outputs,
     )
 
-    # Averaged phase-encoding pairs mix two series per volume, so only concat gets a map
-    if writes_noise_maps():
-        if merging_strategy.startswith('concat'):
-            merge_noise_maps = pe.Node(niu.Merge(len(sanitized_inputs)), name='merge_noise_maps')
-            merge_noise_meta = pe.Node(niu.Merge(len(sanitized_inputs)), name='merge_noise_meta')
-            concat_noise_maps = pe.Node(
-                ConcatNoiseMaps(), name='concat_noise_maps', mem_gb=DEFAULT_MEMORY_MIN_GB
+    # Averaged phase-encoding pairs mix two series per volume, so only concat gets maps
+    denoiser_maps = written_denoiser_maps()
+    if denoiser_maps and merging_strategy.startswith('concat'):
+        for denoiser_map in denoiser_maps:
+            field = denoiser_map.field
+            prefix = field.removesuffix('_map')
+            merge_maps = pe.Node(niu.Merge(len(sanitized_inputs)), name=f'merge_{prefix}_maps')
+            merge_meta = pe.Node(niu.Merge(len(sanitized_inputs)), name=f'merge_{prefix}_meta')
+            concat_maps = pe.Node(
+                ConcatNoiseMaps(kind=denoiser_map.kind),
+                name=f'concat_{prefix}_maps',
+                mem_gb=DEFAULT_MEMORY_MIN_GB,
             )
             for input_num, input_name in enumerate(sanitized_inputs):
                 workflow.connect([
-                    (inputnode, merge_noise_maps, [
-                        (input_name + '_noise_map', 'in%d' % (input_num + 1)),
+                    (inputnode, merge_maps, [
+                        (f'{input_name}_{field}', 'in%d' % (input_num + 1)),
                     ]),
-                    (inputnode, merge_noise_meta, [
-                        (input_name + '_noise_map_meta', 'in%d' % (input_num + 1)),
+                    (inputnode, merge_meta, [
+                        (f'{input_name}_{field}_meta', 'in%d' % (input_num + 1)),
                     ]),
                 ])  # fmt:skip
+
             workflow.connect([
-                (merge_noise_maps, concat_noise_maps, [('out', 'noise_maps')]),
-                (merge_noise_meta, concat_noise_maps, [('out', 'meta_dicts')]),
-                (distortion_merger, concat_noise_maps, [
+                (merge_maps, concat_maps, [('out', 'noise_maps')]),
+                (merge_meta, concat_maps, [('out', 'meta_dicts')]),
+                (distortion_merger, concat_maps, [
                     ('merged_denoising_confounds', 'confounds_file'),
                 ]),
-                (concat_noise_maps, dwi_derivatives_wf, [
-                    ('out_file', 'inputnode.noise_map_t1'),
-                    ('meta_dict', 'inputnode.noise_map_meta'),
+                (concat_maps, dwi_derivatives_wf, [
+                    ('out_file', f'inputnode.{field}_t1'),
+                    ('meta_dict', f'inputnode.{field}_meta'),
                 ]),
             ])  # fmt:skip
-        elif write_shared_outputs:
-            LOGGER.warning(
-                'No ACPC noise map is written for %s: averaging phase-encoding pairs '
-                'combines two series in each volume. The native noise map of each '
-                'series is still written.',
-                output_prefix,
-            )
+    elif denoiser_maps and write_shared_outputs:
+        LOGGER.warning(
+            'No ACPC denoiser maps are written for %s: averaging phase-encoding '
+            'pairs combines two series in each volume. The native maps of each series are '
+            'still written.',
+            output_prefix,
+        )
 
     # dwi_derivatives_wf builds a ds_optimization sink under the same condition,
     # and that sink's in_file is mandatory: feed it or the merged output's

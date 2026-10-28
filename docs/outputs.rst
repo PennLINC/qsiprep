@@ -208,54 +208,108 @@ same as the coregistration *QSIPrep* applied to the data. It is not written
 for outputs assembled by ``--distortion-group-merge``. Its in-brain
 summary is in ``desc-image_qc.tsv`` (:ref:`qc_data`).
 
-Noise maps
-==========
+Denoiser outputs
+================
 
-Present unless ``--denoise-method none``::
+Present unless ``--denoise-method none``, each with a ``.json`` sidecar::
 
-  # One per input DWI series, as the denoiser wrote it
-  <series_entities>_stat-noise_dwimap.nii.gz
-  <series_entities>_stat-noise_dwimap.json
+  # The noise level: stat-std, or stat-rms for patch2self
+  <source_entities>[_res-<label>]_stat-<statistic>_desc-noise_dwimap.nii.gz
 
-  # One per output and acpc resolution, with one volume per member series
-  <source_entities>_space-ACPC_<res>_stat-noise_dwimap.nii.gz
-  <source_entities>_space-ACPC_<res>_stat-noise_dwimap.json
+  # The signal rank: dwidenoise2, svht, and dwidenoise with --mrtrix-version dev
+  <source_entities>[_res-<label>]_desc-rank_dwimap.nii.gz
 
-Each series is denoised before the series of an output are concatenated, so
-the native map is named after the input series, and a series shared by several
-outputs has a single native map. It is not on a DWI output grid, so it carries
-no ``res-``. It is a 3D image aligned with the raw series, reoriented to the
-output orientation but not corrected for motion or distortion. ``dwidenoise2`` writes it on the coarser grid of the last
-iteration of its schedule, so it can differ in voxel size from the series.
-``dwidenoise``, ``dwidenoise2`` and ``svht`` write the noise standard
-deviation they estimated, in the intensity units of the series; ``patch2self``
-writes the root mean square over volumes of the residual it removed, which
-also contains fit error.
+  # The signal-rank density: dwidenoise2 with a multi-row schedule
+  <source_entities>[_res-<label>]_desc-rankdensity_dwimap.nii.gz
 
-The ``space-ACPC`` map carries each member series' map onto the output grid of
-each ``acpc`` resolution with the transform of that series' first b=0 volume,
-and scales it as that volume's signal was scaled at that resolution: by the
-b=0 harmonization, the Jacobian or LSR weight, and division by the bias
-field. Because these factors multiply the
-signal, a noise standard deviation takes them unchanged. Maps from
-``dwidenoise`` and ``dwidenoise2`` run on complex data are divided by
-the square root of 2, so every map holds the noise of one channel. The map is 3D
-for an output made of one series and 4D otherwise. The sidecar gives, for each
-volume of the preprocessed series, the noise map volume that describes it
-(``NoiseMapIndex``), and for each member series its source, reference volume,
-harmonization scale and channel scaling (``NoiseMapSeries``).
+Each map is written twice. The native map, one per input DWI series, is named
+after that series and has no ``space-`` or ``res-``: each series is denoised
+before the series of an output are concatenated, so a series shared by several
+outputs has a single native map. It is a 3D image aligned with the raw series,
+reoriented to the output orientation but not corrected for motion or
+distortion. The ``space-ACPC`` map, one per output and ``acpc`` resolution, is
+named after the output and carries ``space-ACPC`` and ``res-<label>``. It is
+3D for an output made of one series and 4D otherwise, with one volume per
+member series.
 
-The map describes the noise of the source data, not exactly that of the
+.. list-table:: Which maps each ``--denoise-method`` writes
+   :header-rows: 1
+
+   * - Method
+     - ``desc-noise``
+     - ``desc-rank``
+     - ``desc-rankdensity``
+   * - ``dwidenoise``
+     - ``stat-std``
+     - with ``--mrtrix-version dev``
+     - no
+   * - ``dwidenoise2``
+     - ``stat-std``
+     - yes
+     - with a multi-row schedule
+   * - ``svht``
+     - ``stat-std``
+     - yes
+     - no
+   * - ``patch2self``
+     - ``stat-rms``
+     - no
+     - no
+
+The noise map holds the noise standard deviation the denoiser estimated, in
+the intensity units of the series (``Units`` ``arbitrary``). ``patch2self``
+estimates none, so its map is the root mean square over volumes of the
+residual it removed, which also contains fit error. On complex data
+``dwidenoise`` and ``dwidenoise2`` estimate the total noise of the real and
+imaginary channels; the native map keeps it, and the ``space-ACPC`` map is
+divided by the square root of 2, so it holds the noise of one channel.
+
+The rank map holds the number of principal components kept as signal at each
+voxel (``Units`` ``count``). ``dwidenoise`` and ``svht`` give the rank of the
+patch centered on the voxel. ``dwidenoise2`` gives the rank of its output after
+combining overlapping patches, a weighted mean that need not be a whole
+number.
+
+The rank density map holds the signal rank per mm of kernel radius
+(``Units`` ``1/mm``) that ``dwidenoise2`` derived from the penultimate
+iteration of its schedule and used to size the kernel of its final pass. A
+schedule of one row (``"legacy"``, or one given in ``--denoise-config``), a
+``"fixed_rank"`` or ``"vst_method"`` ``"none"`` runs a single pass, which
+estimates no density, so no map is written.
+
+``dwidenoise2`` writes its noise and rank density maps on the coarser grid of
+its schedule, so they can differ in voxel size from the series.
+
+Every sidecar names the denoiser: ``DenoisingMethod``, ``Software`` (its
+``Name``, ``Tool`` and ``Version``), ``UsedPhase``, and
+``DenoisingParameters``, the parameters *QSIPrep* set (the denoiser's defaults
+apply to the rest), along with ``Description`` and ``Units``.
+
+The ``space-ACPC`` maps carry each member series' map onto the output grid of
+each ``acpc`` resolution with the transform of that series' first b=0 volume.
+The noise map is also scaled as that volume's signal was scaled at that
+resolution: by the b=0 harmonization, the Jacobian or LSR weight, and division
+by the bias field. Because these factors multiply the signal, a noise standard
+deviation takes them unchanged. The rank and rank density maps are not
+intensities, so they are only resampled, and linear interpolation makes them
+fractional between voxels. The sidecar gives, for each volume of the
+preprocessed series, the map volume that describes it (``NoiseMapIndex``,
+``RankMapIndex`` or ``RankDensityMapIndex``), and for each member series its
+source, reference volume, native map, and denoising parameters
+(``NoiseMapSeries``, ``RankMapSeries`` or ``RankDensityMapSeries``); the noise
+map's entries add the harmonization scale and channel scaling.
+
+The noise map describes the noise of the source data, not exactly that of the
 preprocessed series: interpolation lowers the noise of each voxel and
-correlates it with its neighbours. Two further simplifications are listed in
-the sidecar's ``Approximations``. ``eddy`` and DIFFPREP resample the data
+correlates it with its neighbors. Further simplifications are listed in the
+sidecar's ``Approximations``. ``eddy`` and DIFFPREP resample the data
 themselves and export no per-volume transform, so for them the head motion of
-the reference b=0 volume is not applied to the map; a susceptibility field
+the reference b=0 volume is not applied to the maps; a susceptibility field
 ``eddy`` applied itself (TOPUP, or a GRE fieldmap) is rebuilt from the field,
-as for the ``desc-sdc`` displacement map, and its Jacobian applied when
-``eddy`` modulated the data. ``eddy``'s least-squares restoration
+as for the ``desc-sdc`` displacement map, and its Jacobian applied to the noise
+map when ``eddy`` modulated the data. ``eddy``'s least-squares restoration
 (``--resamp=lsr``) combines volumes of opposite phase encoding, which is not
-modeled. With ``--distortion-group-merge average`` no ``space-ACPC`` map is
+modeled. With ``--distortion-group-merge average`` no ``space-ACPC`` maps are
 written, because every averaged volume mixes two series.
 
 

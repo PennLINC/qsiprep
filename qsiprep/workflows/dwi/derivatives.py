@@ -7,6 +7,8 @@ Writing outputs from a dwi preproc workflow
 
 """
 
+from dataclasses import dataclass
+
 from nipype import logging
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
@@ -73,6 +75,107 @@ def writes_noise_maps():
     from ...interfaces.noise_map import NOISE_QUANTITIES
 
     return config.workflow.denoise_method in NOISE_QUANTITIES
+
+
+def writes_rank_density():
+    """Whether this run's denoiser writes signal-rank density maps.
+
+    Only dwidenoise2 estimates one, and only with a multi-row schedule.
+    """
+    from ...utils.misc import dwidenoise2_writes_rank_density, load_dwidenoise2_config
+
+    if config.workflow.denoise_method != 'dwidenoise2':
+        return False
+
+    params = {}
+    if config.workflow.denoise_config is not None:
+        params = load_dwidenoise2_config(config.workflow.denoise_config)
+    return dwidenoise2_writes_rank_density(params)
+
+
+def writes_rank_maps():
+    """Whether this run's denoiser writes signal-rank maps.
+
+    svht_denoise and dwidenoise2 always can; dwidenoise only from the development
+    branch, as the stable one has no ``-rank``.
+    """
+    denoise_method = config.workflow.denoise_method
+    if denoise_method == 'dwidenoise':
+        return config.workflow.mrtrix_version == 'dev'
+    return denoise_method in ('dwidenoise2', 'svht')
+
+
+@dataclass(frozen=True)
+class DenoiserMap:
+    """A map a denoiser writes per series, and the fields that carry it.
+
+    ``field`` names the derivatives and finalize outputs (``<field>_t1`` and
+    ``<field>_meta``) and the merge inputs (``<output>_<field>``); ``kind`` is the
+    :class:`~qsiprep.interfaces.noise_map.ResampleNoiseMaps` kind. The series
+    workflows output the denoiser's image as ``series_image`` and its written
+    derivative as ``series_file``, which the finalize workflow takes, in
+    ``unit.dwi_files`` order, as ``images`` and ``native``.
+    """
+
+    field: str
+    kind: str
+    series_image: str
+    series_file: str
+    images: str
+    native: str
+    # The name of the finalize workflow's resampling node
+    resample_node: str
+
+
+DENOISER_MAPS = (
+    DenoiserMap(
+        'noise_map',
+        'noise',
+        'noise_image',
+        'noise_map_file',
+        'noise_images',
+        'native_noise_maps',
+        'resample_noise',
+    ),
+    DenoiserMap(
+        'rank_map',
+        'rank',
+        'rank_image',
+        'rank_file',
+        'rank_images',
+        'native_rank_maps',
+        'resample_rank',
+    ),
+    DenoiserMap(
+        'rank_density',
+        'rankdensity',
+        'rank_density_image',
+        'rank_density_file',
+        'rank_density_images',
+        'native_rank_density_maps',
+        'resample_rank_density',
+    ),
+)
+
+
+def written_denoiser_maps():
+    """Return the :class:`DenoiserMap` of each map this run's denoiser writes."""
+    writes = {
+        'noise': writes_noise_maps(),
+        'rank': writes_rank_maps(),
+        'rankdensity': writes_rank_density(),
+    }
+    return [denoiser_map for denoiser_map in DENOISER_MAPS if writes[denoiser_map.kind]]
+
+
+def denoiser_map_entities(kind):
+    """Return the BIDS entities, other than space and res, of a denoiser map."""
+    if kind == 'noise':
+        from ...interfaces.noise_map import noise_map_statistic
+
+        return {'statistic': noise_map_statistic(config.workflow.denoise_method), 'desc': 'noise'}
+
+    return {'desc': kind}
 
 
 def writes_hmc_optimization():
@@ -159,9 +262,12 @@ def init_dwi_derivatives_wf(
                 'sdc_warp_to_template',
                 'sdc_refinement_to_template',
                 'sdc_transform_files',
-                # Only set when a denoiser ran: see ResampleNoiseMaps
-                'noise_map_t1',
-                'noise_map_meta',
+                # Only set for the maps the denoiser wrote: see ResampleNoiseMaps
+                *(
+                    f'{denoiser_map.field}{suffix}'
+                    for denoiser_map in DENOISER_MAPS
+                    for suffix in ('_t1', '_meta')
+                ),
             ]
         ),
         name='inputnode',
@@ -438,30 +544,32 @@ def init_dwi_derivatives_wf(
             (sidecar, ds_sdc_field, [('meta', 'meta_dict')]),
         ])  # fmt:skip
 
-    # If requested, write local bvecs
-    # Maybe sink: outputs averaged from phase-encoding pairs have no noise map
-    if writes_noise_maps():
-        ds_noise_map_t1 = pe.Node(
+    # Maybe sinks: outputs averaged from phase-encoding pairs have no denoiser maps
+    for denoiser_map in written_denoiser_maps():
+        field = denoiser_map.field
+        ds_denoiser_map = pe.Node(
             DerivativesMaybeDataSink(
                 source_file=source_file,
                 base_directory=output_dir,
                 space='ACPC',
-                statistic='noise',
                 suffix='dwimap',
                 extension='.nii.gz',
                 compress=True,
+                **denoiser_map_entities(denoiser_map.kind),
                 **res_entities,
             ),
-            name='ds_noise_map_t1',
+            name=f'ds_{field}_t1',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
         workflow.connect([
-            (inputnode, ds_noise_map_t1, [
-                ('noise_map_t1', 'in_file'),
-                ('noise_map_meta', 'meta_dict'),
+            (inputnode, ds_denoiser_map, [
+                (f'{field}_t1', 'in_file'),
+                (f'{field}_meta', 'meta_dict'),
             ]),
         ])  # fmt:skip
+
+    # If requested, write local bvecs
 
     # if config.workflow.write_local_bvecs:
     #     ds_local_bvecs_t1 = pe.Node(

@@ -961,13 +961,37 @@ def test_noise_map_is_written_per_series(monkeypatch, denoise_method, use_phase)
     assert connections[('ds_noise_map', 'outputnode')] == {('out_file', 'noise_map_file')}
     sink = workflow.get_node('ds_noise_map')
     assert sink.inputs.source_file == ['sub-01_dwi.nii.gz']
-    assert sink.inputs.statistic == 'noise'
+    assert sink.inputs.statistic == ('rms' if denoise_method == 'patch2self' else 'std')
+    assert sink.inputs.desc == 'noise'
     assert sink.inputs.suffix == 'dwimap'
     # The map is on the raw series' grid, not in ACPC space
     assert not isdefined(sink.inputs.space)
-    description = sink.inputs.meta_dict['Description']
+    meta = sink.inputs.meta_dict
+    description = meta['Description']
     assert ('phase' in description) == (use_phase and denoise_method != 'patch2self')
     assert ('residual' in description) == (denoise_method == 'patch2self')
+    # dwidenoise's complex noise is the total of both channels
+    complex_data = use_phase and denoise_method.startswith('dwidenoise')
+    assert ('square root of 2' in description) == complex_data
+    assert meta['Units'] == 'arbitrary'
+    assert meta['DenoisingMethod'] == denoise_method
+    assert meta['UsedPhase'] == (use_phase and denoise_method != 'patch2self')
+    assert meta['Software']['Tool'] == {'svht': 'svht_denoise'}.get(denoise_method, denoise_method)
+    expected_parameter = {
+        'dwidenoise': 'extent',
+        'dwidenoise2': 'demean',
+        'svht': None,
+        'patch2self': 'model',
+    }[denoise_method]
+    if expected_parameter is not None:
+        assert expected_parameter in meta['DenoisingParameters']
+
+    json.dumps(meta)  # the sink writes it as JSON
+    # The ACPC maps repeat the per-series parameters
+    assert workflow.get_node('outputnode').inputs.denoising_meta == {
+        field: meta[field]
+        for field in ('DenoisingMethod', 'Software', 'UsedPhase', 'DenoisingParameters')
+    }
 
 
 def test_no_noise_map_without_denoising(monkeypatch):
@@ -975,6 +999,91 @@ def test_no_noise_map_without_denoising(monkeypatch):
     workflow = _build_denoising_wf(monkeypatch, 'none', 'none', use_phase=False)
 
     assert 'ds_noise_map' not in workflow.list_node_names()
+    assert 'ds_rank_density' not in workflow.list_node_names()
+
+
+@pytest.mark.parametrize(
+    ('denoise_method', 'mrtrix_version', 'rank_output'),
+    [
+        ('dwidenoise', 'dev', 'rank_image'),
+        ('dwidenoise', 'stable', None),
+        ('dwidenoise2', 'stable', 'rank_output'),
+        ('svht', 'stable', 'rank_image'),
+        ('patch2self', 'stable', None),
+    ],
+)
+def test_rank_map_is_written_per_series(monkeypatch, denoise_method, mrtrix_version, rank_output):
+    """Test that the denoisers with a rank output write it to a desc-rank sink."""
+    workflow = _build_denoising_wf(
+        monkeypatch,
+        denoise_method,
+        'none',
+        use_phase=False,
+        mrtrix_version=mrtrix_version,
+    )
+    if rank_output is None:
+        assert 'ds_rank' not in workflow.list_node_names()
+        return
+
+    connections = _connections(workflow)
+    assert getattr(workflow.get_node('denoiser').inputs, rank_output) == 'rank.nii.gz'
+    assert connections[('denoiser', 'ds_rank')] == {(rank_output, 'in_file')}
+    assert (rank_output, 'rank_image') in connections[('denoiser', 'outputnode')]
+    assert connections[('ds_rank', 'outputnode')] == {('out_file', 'rank_file')}
+    sink = workflow.get_node('ds_rank')
+    assert sink.inputs.desc == 'rank'
+    assert not isdefined(sink.inputs.statistic)
+    meta = sink.inputs.meta_dict
+    assert meta['Units'] == 'count'
+    assert meta['DenoisingMethod'] == denoise_method
+    assert 'signal' in meta['Description']
+
+
+@pytest.mark.parametrize('denoise_method', ['dwidenoise', 'svht', 'patch2self'])
+def test_only_dwidenoise2_writes_a_rank_density_map(monkeypatch, denoise_method):
+    """Test that the denoisers without a rank density output get no rank density sink."""
+    workflow = _build_denoising_wf(monkeypatch, denoise_method, 'none', use_phase=False)
+
+    assert 'ds_rank_density' not in workflow.list_node_names()
+
+
+@pytest.mark.parametrize('use_phase', [False, True])
+def test_dwidenoise2_rank_density_map_is_written_per_series(monkeypatch, use_phase):
+    """Test that dwidenoise2's rank density map goes to a desc-rankdensity sink."""
+    workflow = _build_denoising_wf(monkeypatch, 'dwidenoise2', 'none', use_phase=use_phase)
+    connections = _connections(workflow)
+
+    assert workflow.get_node('denoiser').inputs.rank_density == 'rank_density.nii.gz'
+    assert connections[('denoiser', 'ds_rank_density')] == {('rank_density', 'in_file')}
+    assert ('rank_density', 'rank_density_image') in connections[('denoiser', 'outputnode')]
+    assert connections[('ds_rank_density', 'outputnode')] == {('out_file', 'rank_density_file')}
+    sink = workflow.get_node('ds_rank_density')
+    assert sink.inputs.desc == 'rankdensity'
+    assert not isdefined(sink.inputs.statistic)
+    assert sink.inputs.suffix == 'dwimap'
+    meta = sink.inputs.meta_dict
+    assert meta['Units'] == '1/mm'
+    assert meta['DenoisingMethod'] == 'dwidenoise2'
+    assert meta['Software']['Name'] == 'MRtrix3'
+    assert meta['UsedPhase'] == use_phase
+    assert 'rank per mm of kernel radius' in meta['Description']
+
+
+@pytest.mark.parametrize(
+    'settings',
+    [
+        {'fixed_rank': 4},
+        {'schedule': 'legacy'},
+        {'vst_method': 'none'},
+    ],
+)
+def test_single_pass_dwidenoise2_writes_no_rank_density_map(monkeypatch, tmp_path, settings):
+    """Test that dwidenoise2 runs that estimate no rank density get no rank density sink."""
+    _use_denoise_config(monkeypatch, tmp_path, settings)
+    workflow = _build_denoising_wf(monkeypatch, 'dwidenoise2', 'none', use_phase=False)
+
+    assert 'ds_rank_density' not in workflow.list_node_names()
+    assert not isdefined(workflow.get_node('denoiser').inputs.rank_density)
 
 
 def test_noise_map_sink_names_the_series(tmp_path):
@@ -991,7 +1100,8 @@ def test_noise_map_sink_names_the_series(tmp_path):
         base_directory=str(tmp_path / 'out'),
         source_file=str(source_file),
         in_file=str(noise_file),
-        statistic='noise',
+        statistic='std',
+        desc='noise',
         suffix='dwimap',
         extension='.nii.gz',
         compress=True,
@@ -1000,9 +1110,22 @@ def test_noise_map_sink_names_the_series(tmp_path):
     sink.run(cwd=str(tmp_path))
 
     out_dir = tmp_path / 'out' / 'sub-01' / 'ses-1' / 'dwi'
-    stem = 'sub-01_ses-1_acq-multishell_dir-AP_run-2_stat-noise_dwimap'
+    stem = 'sub-01_ses-1_acq-multishell_dir-AP_run-2_stat-std_desc-noise_dwimap'
     assert (out_dir / f'{stem}.nii.gz').is_file()
     assert json.loads((out_dir / f'{stem}.json').read_text())['Description'] == 'test'
+
+    rank_sink = DerivativesDataSink(
+        base_directory=str(tmp_path / 'out'),
+        source_file=str(source_file),
+        in_file=str(noise_file),
+        desc='rankdensity',
+        suffix='dwimap',
+        extension='.nii.gz',
+        compress=True,
+    )
+    rank_sink.run(cwd=str(tmp_path))
+    stem = 'sub-01_ses-1_acq-multishell_dir-AP_run-2_desc-rankdensity_dwimap'
+    assert (out_dir / f'{stem}.nii.gz').is_file()
 
 
 def _dwidenoise2_config(monkeypatch, tmp_path, settings=None):

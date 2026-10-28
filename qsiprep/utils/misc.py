@@ -464,6 +464,28 @@ def load_dwidenoise2_config(path):
     return params
 
 
+def dwidenoise2_writes_rank_density(params):
+    """Whether dwidenoise2 writes a signal-rank density map with these parameters.
+
+    dwidenoise2 derives the density (``-rankpermm_out``) from the penultimate row of a
+    multi-row schedule. A fixed rank, ``vst_method`` "none" and a single-row schedule all
+    run one pass, and then it writes nothing.
+
+    Parameters
+    ----------
+    params : dict
+        DWIDenoise2 parameters, as returned by :func:`load_dwidenoise2_config`.
+
+    Returns
+    -------
+    bool
+    """
+    if 'fixed_rank' in params or params.get('vst_method') == 'none':
+        return False
+    schedule = params.get('schedule')
+    return schedule is None or len(schedule) > 1
+
+
 def check_dwidenoise2_demodulation(params, use_phase):
     """Reject phase demodulation of magnitude-only data.
 
