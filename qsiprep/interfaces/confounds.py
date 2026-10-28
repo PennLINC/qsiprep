@@ -25,7 +25,7 @@ from nipype.interfaces.base import (
 )
 
 from .gradients import concatenate_bvals, concatenate_bvecs
-from .mrtrix import DWIDENOISE2_NONFINITE_COLUMN
+from .mrtrix import DWIDENOISE2_NOISE_NAN_COLUMN, DWIDENOISE2_NONFINITE_COLUMN
 from .niworkflows import dMRIPlot
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -116,6 +116,16 @@ def _confounds_column_metadata(columns):
                     'Number of voxels in this volume where dwidenoise2 wrote a non-finite '
                     'value next to the voxels it excluded, and the undenoised input value '
                     'was kept instead'
+                ),
+                'Source': 'dwidenoise2',
+            }
+        elif col == DWIDENOISE2_NOISE_NAN_COLUMN:
+            meta[col] = {
+                'Description': (
+                    'Number of voxels that dwidenoise2 marked with NaN in the noise map of the '
+                    'series this volume belongs to, because the PCA of a patch failed; the '
+                    'same in every volume of the series. The native noise map keeps them, and '
+                    'they take the median of their neighbors before the map is resampled'
                 ),
                 'Source': 'dwidenoise2',
             }

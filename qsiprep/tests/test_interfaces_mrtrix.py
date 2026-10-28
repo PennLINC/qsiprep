@@ -609,13 +609,34 @@ def test_dwidenoise2_rejects_nan_slices(tmp_path, monkeypatch):
         mrtrix.DWIDenoise2(in_file=in_file)._run_interface(Bunch(cwd=str(tmp_path)))
 
 
-def test_dwidenoise2_rejects_a_non_finite_noise_map(tmp_path, monkeypatch):
-    """Test that the noise map is held to the same standard as the denoised image."""
+def test_dwidenoise2_keeps_and_counts_nan_in_the_noise_map(tmp_path, monkeypatch):
+    """Test that NaN, dwidenoise2's mark of a failed patch, stays in the noise map, counted."""
+    from nipype.interfaces.base.support import Bunch
+
+    in_file = _denoise2_in(tmp_path, monkeypatch)
+    noise = np.full((2, 2, 2), 2.0, dtype=np.float32)
+    noise[0, 0, 0] = np.nan
+    _fake_dwidenoise2(monkeypatch, out=np.ones((4, 4, 3, 5), dtype=np.float32), noise=noise)
+
+    iface = mrtrix.DWIDenoise2(in_file=in_file)
+    iface._run_interface(Bunch(cwd=str(tmp_path)))
+
+    written = np.asanyarray(nb.load(tmp_path / 'dwi_noise.nii.gz').dataobj)
+    assert np.isnan(written[0, 0, 0])
+    assert iface._extra_confounds[mrtrix.DWIDENOISE2_NOISE_NAN_COLUMN] == [1] * 5
+
+
+@pytest.mark.parametrize('bad', ['inf', 'all_nan'])
+def test_dwidenoise2_rejects_a_bad_noise_map(tmp_path, monkeypatch, bad):
+    """Test that an infinite value, or a map with no finite voxel, still stops the run."""
     from nipype.interfaces.base.support import Bunch
 
     in_file = _denoise2_in(tmp_path, monkeypatch)
     noise = np.ones((2, 2, 2), dtype=np.float32)
-    noise[0, 0, 0] = np.inf
+    if bad == 'inf':
+        noise[0, 0, 0] = np.inf
+    else:
+        noise[:] = np.nan
     _fake_dwidenoise2(monkeypatch, out=np.ones((4, 4, 3, 5), dtype=np.float32), noise=noise)
 
     with pytest.raises(RuntimeError, match='noise map'):
@@ -853,7 +874,10 @@ def test_dwidenoise2_keeps_the_input_where_it_writes_nan_at_the_edge(tmp_path, m
     out = np.asanyarray(nb.load(tmp_path / 'dwi_denoised.nii.gz').dataobj)
     np.testing.assert_array_equal(out[edge], data[edge])
     assert np.all(out[excluded] == 0)
-    assert iface._extra_confounds == {mrtrix.DWIDENOISE2_NONFINITE_COLUMN: [1] * 5}
+    assert iface._extra_confounds == {
+        mrtrix.DWIDENOISE2_NONFINITE_COLUMN: [1] * 5,
+        mrtrix.DWIDENOISE2_NOISE_NAN_COLUMN: [0] * 5,
+    }
     iface._calculate_nmse(nb.load(in_file), nb.load(tmp_path / 'dwi_denoised.nii.gz'))
     confounds = pd.read_csv(iface._nmse_text)
     assert confounds[mrtrix.DWIDENOISE2_NONFINITE_COLUMN].tolist() == [1] * 5
@@ -886,15 +910,21 @@ def test_dwidenoise2_counts_no_repairs_on_clean_input(tmp_path, monkeypatch):
     iface = mrtrix.DWIDenoise2(in_file=in_file)
     iface._run_interface(Bunch(cwd=str(tmp_path)))
 
-    assert iface._extra_confounds == {mrtrix.DWIDENOISE2_NONFINITE_COLUMN: [0] * 5}
+    assert iface._extra_confounds == {
+        mrtrix.DWIDENOISE2_NONFINITE_COLUMN: [0] * 5,
+        mrtrix.DWIDENOISE2_NOISE_NAN_COLUMN: [0] * 5,
+    }
 
 
 def test_dwidenoise2_nonfinite_column_is_described():
     """Test that the confounds sidecar describes the repaired-voxel count."""
     from qsiprep.interfaces.confounds import _confounds_column_metadata
 
-    meta = _confounds_column_metadata([mrtrix.DWIDENOISE2_NONFINITE_COLUMN, 'trans_x'])
+    meta = _confounds_column_metadata(
+        [mrtrix.DWIDENOISE2_NONFINITE_COLUMN, mrtrix.DWIDENOISE2_NOISE_NAN_COLUMN, 'trans_x']
+    )
     assert 'non-finite' in meta[mrtrix.DWIDENOISE2_NONFINITE_COLUMN]['Description']
+    assert 'noise map' in meta[mrtrix.DWIDENOISE2_NOISE_NAN_COLUMN]['Description']
 
 
 def test_dwidenoise2_removes_the_filled_copy_after_a_crash(tmp_path, monkeypatch):

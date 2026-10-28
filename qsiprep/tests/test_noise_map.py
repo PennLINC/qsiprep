@@ -22,6 +22,7 @@ from qsiprep.interfaces.dwi_merge import _total_b0_correction, harmonize_b0s
 from qsiprep.interfaces.noise_map import (
     ConcatNoiseMaps,
     ResampleNoiseMaps,
+    fill_nonfinite_median,
     scale_noise_map,
     series_reference_volumes,
 )
@@ -106,6 +107,41 @@ def test_noise_scales_linearly_with_the_signal():
         scale_noise_map(noise, factor=1.5, weight=weight, bias=bias),
         [[1.5, 0.0], [3.0, 0.0]],
     )
+
+
+def test_fill_nonfinite_median():
+    """Test that non-finite voxels take the median of their finite neighbors."""
+    data = np.arange(5 * 5 * 5, dtype=np.float32).reshape(5, 5, 5)
+    data[2, 2, 2] = np.nan
+    data[0, 0, 0] = np.inf
+    filled, count = fill_nonfinite_median(data)
+
+    assert count == 2
+    assert np.all(np.isfinite(filled))
+    box = data[1:4, 1:4, 1:4]
+    assert filled[2, 2, 2] == np.median(box[np.isfinite(box)])
+    corner = data[:2, :2, :2]
+    assert filled[0, 0, 0] == np.median(corner[np.isfinite(corner)])
+    unchanged = np.isfinite(data)
+    np.testing.assert_array_equal(filled[unchanged], data[unchanged])
+
+
+def test_fill_nonfinite_median_fills_a_block_from_its_edges():
+    """Test that voxels with no finite neighbor are filled from those filled before them."""
+    data = np.full((7, 7, 7), 3.0, dtype=np.float32)
+    data[1:6, 1:6, 1:6] = np.nan
+    filled, count = fill_nonfinite_median(data)
+
+    assert count == 125
+    np.testing.assert_array_equal(filled, 3.0)
+
+
+def test_fill_nonfinite_median_leaves_an_all_nan_image():
+    """Test that an image with no finite voxel is returned unfilled rather than looping."""
+    filled, count = fill_nonfinite_median(np.full((3, 3, 3), np.nan))
+
+    assert count == 27
+    assert np.isnan(filled).all()
 
 
 def test_b0_corrections_compound_across_merges():
@@ -297,6 +333,30 @@ def test_the_field_eddy_applied_does_not_modulate_a_rank_density(tmp_path):
 
     data = nb.load(result.outputs.out_file).get_fdata()
     np.testing.assert_allclose(data[(slice(3, -3),) * 3], 0.3, rtol=1e-4)
+
+
+@requires_ants
+def test_nan_in_a_native_map_is_filled_before_resampling(tmp_path):
+    """Test that a failed patch's NaN takes its neighbors' median instead of becoming zero."""
+    (tmp_path / 'clean').mkdir()
+    (tmp_path / 'nan').mkdir()
+    clean = ResampleNoiseMaps(**_resample_inputs(tmp_path / 'clean')).run(
+        cwd=str(tmp_path / 'clean')
+    )
+    inputs = _resample_inputs(tmp_path / 'nan')
+    marked = _ramp(1.0)
+    marked[6, 6, 6] = np.nan
+    inputs['noise_images'][0] = _write_image(tmp_path / 'nan' / 'noise_a.nii.gz', marked)
+    result = ResampleNoiseMaps(**inputs).run(cwd=str(tmp_path / 'nan'))
+
+    data = nb.load(result.outputs.out_file).get_fdata()
+    assert np.isfinite(data).all()
+    # The median of a linear ramp's 26 neighbors is its own value, so nothing changes
+    np.testing.assert_allclose(data, nb.load(clean.outputs.out_file).get_fdata(), rtol=1e-5)
+    # The native map keeps its NaN
+    assert np.isnan(nb.load(inputs['noise_images'][0]).get_fdata()[6, 6, 6])
+    series = result.outputs.meta_dict['NoiseMapSeries']
+    assert [entry['FilledNativeVoxels'] for entry in series] == [1, 0]
 
 
 @requires_ants

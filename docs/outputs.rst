@@ -278,7 +278,9 @@ schedule of one row (``"legacy"``, or one given in ``--denoise-config``), a
 estimates no density, so no map is written.
 
 ``dwidenoise2`` writes its noise and rank density maps on the coarser grid of
-its schedule, so they can differ in voxel size from the series.
+its schedule, so they can differ in voxel size from the series. It marks each
+patch whose principal component analysis failed with NaN in its noise map,
+and the native map keeps these values.
 
 Every sidecar names the denoiser: ``DenoisingMethod``, ``Software`` (its
 ``Name``, ``Tool`` and ``Version``), ``UsedPhase``, and
@@ -287,7 +289,9 @@ apply to the rest), along with ``Description`` and ``Units``.
 
 The ``space-ACPC`` maps carry each member series' map onto the output grid of
 each ``acpc`` resolution with the transform of that series' first b=0 volume.
-The noise map is also scaled as that volume's signal was scaled at that
+Before that, each non-finite voxel of a native map takes the median of its
+finite neighbors, which keeps the interpolation from treating it as zero. The
+noise map is also scaled as that volume's signal was scaled at that
 resolution: by the b=0 harmonization, the Jacobian or LSR weight, and division
 by the bias field. Because these factors multiply the signal, a noise standard
 deviation takes them unchanged. The rank and rank density maps are not
@@ -295,7 +299,8 @@ intensities, so they are only resampled, and linear interpolation makes them
 fractional between voxels. The sidecar gives, for each volume of the
 preprocessed series, the map volume that describes it (``NoiseMapIndex``,
 ``RankMapIndex`` or ``RankDensityMapIndex``), and for each member series its
-source, reference volume, native map, and denoising parameters
+source, reference volume, native map, number of filled native voxels
+(``FilledNativeVoxels``), and denoising parameters
 (``NoiseMapSeries``, ``RankMapSeries`` or ``RankDensityMapSeries``); the noise
 map's entries add the harmonization scale and channel scaling.
 
@@ -411,7 +416,9 @@ fails on particular gradient strengths. With ``--denoise-method dwidenoise2``,
 ``DWIDenoise2_nonfinite_voxels`` counts the voxels of each volume where
 ``dwidenoise2`` wrote a non-finite value next to the region it excluded and
 the undenoised value was kept (see :ref:`denoise_config`); a value above zero
-marks a series whose edge voxels were not all denoised. The accompanying JSON
+marks a series whose edge voxels were not all denoised.
+``DWIDenoise2_noise_map_nan_voxels`` repeats, in every volume of a series, the
+number of voxels ``dwidenoise2`` marked with NaN in that series' noise map. The accompanying JSON
 sidecar describes each column.
 
 

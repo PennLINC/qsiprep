@@ -147,6 +147,44 @@ def apply_transforms(image, reference, transforms, out_file, num_threads=1):
     return out_file
 
 
+def fill_nonfinite_median(data):
+    """Replace non-finite voxels with the median of their finite neighbors.
+
+    dwidenoise2 writes NaN into its noise map for each patch whose PCA failed. ANTs would
+    read those as zeros and pull the interpolated values around them down, so each such
+    voxel takes the median of the finite values among its 26 neighbors before resampling.
+    A voxel with no finite neighbor is filled in a later pass, from the values filled
+    before it.
+
+    Parameters
+    ----------
+    data : :class:`numpy.ndarray`
+        3D image data.
+
+    Returns
+    -------
+    filled : :class:`numpy.ndarray`
+        A copy of ``data`` with the non-finite voxels filled. Voxels stay non-finite only if
+        the image has no finite voxel at all.
+    count : int
+        The number of non-finite voxels in ``data``.
+    """
+    filled = np.array(data, copy=True)
+    bad = ~np.isfinite(filled)
+    count = int(bad.sum())
+    while bad.any() and not bad.all():
+        values = {}
+        for voxel in map(tuple, np.argwhere(bad)):
+            box = tuple(slice(max(i - 1, 0), i + 2) for i in voxel)
+            neighbors = filled[box][~bad[box]]
+            if neighbors.size:
+                values[voxel] = np.median(neighbors)
+        for voxel, value in values.items():
+            filled[voxel] = value
+            bad[voxel] = False
+    return filled, count
+
+
 def scale_noise_map(noise, factor=1.0, weight=None, bias=None):
     """Apply the signal's intensity factors to a noise standard deviation map.
 
@@ -291,8 +329,9 @@ class ResampleNoiseMaps(SimpleInterface):
         fieldmap_hz = inputs.fieldmap_hz if isdefined(inputs.fieldmap_hz) else None
 
         volumes = []
+        self._filled = []
         for series_num in range(num_series):
-            native = inputs.noise_images[series_num]
+            native = self._fill_native(runtime, series_num, inputs.noise_images[series_num])
             if fieldmap_hz is not None:
                 native = self._apply_eddy_field(runtime, series_num, native, fieldmap_hz)
             reference = reference_volumes[series_num]
@@ -331,6 +370,29 @@ class ResampleNoiseMaps(SimpleInterface):
             noise_map_index, reference_volumes, harmonization_scales, weights, bias
         )
         return runtime
+
+    def _fill_native(self, runtime, series_num, native):
+        """Fill the native map's non-finite voxels on its own grid, before any resampling."""
+        img = nb.load(native)
+        filled, count = fill_nonfinite_median(np.asanyarray(img.dataobj))
+        self._filled.append(count)
+        if not count:
+            return native
+        if not np.isfinite(filled).all():
+            raise ValueError(f'{native} has no finite voxel to fill its {count} others from')
+        LOGGER.warning(
+            '%d voxels of %s are not finite; they take the median of their neighbors.',
+            count,
+            native,
+        )
+        header = img.header.copy()
+        header.set_data_dtype(np.float32)
+        header.set_slope_inter(1, 0)
+        out_file = os.path.join(
+            runtime.cwd, f'{self.inputs.kind}_series{series_num:02d}_filled.nii.gz'
+        )
+        nb.Nifti1Image(filled.astype(np.float32), img.affine, header).to_filename(out_file)
+        return out_file
 
     def _apply_eddy_field(self, runtime, series_num, native, fieldmap_hz):
         """Undo the susceptibility distortion eddy corrected internally, as eddy did."""
@@ -403,6 +465,11 @@ class ResampleNoiseMaps(SimpleInterface):
                 'interpolation lowers the noise of the preprocessed series and correlates it '
                 'spatially, so its per-voxel noise is somewhat smaller.'
             )
+        description += (
+            ' Non-finite voxels of a native map (dwidenoise2 marks each patch whose PCA '
+            'failed with NaN) took the median of their finite neighbors before resampling; '
+            'FilledNativeVoxels counts them for each series.'
+        )
 
         applied = []
         if inputs.kind == 'noise':
@@ -440,6 +507,7 @@ class ResampleNoiseMaps(SimpleInterface):
                     native = f'bids::{os.path.relpath(native, inputs.output_dir)}'
                 entry[f'Native{key}'] = native
 
+            entry['FilledNativeVoxels'] = self._filled[series_num]
             if series_meta:
                 # Parameters can differ between series, e.g. dwidenoise's automatic window
                 for field in ('UsedPhase', 'DenoisingParameters'):
