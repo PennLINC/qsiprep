@@ -98,6 +98,17 @@ def test_eddy_version_comes_from_the_conda_records(tmp_path, monkeypatch):
     assert '`eddy` from *FSL* 6.0.7.23 [@anderssoneddy]' in _eddy_text()
 
 
+def test_eddy_version_survives_an_unreadable_record(tmp_path, monkeypatch):
+    """A record the run cannot open leaves the version unknown instead of failing."""
+    from qsiprep.utils.versions import eddy_version
+
+    # A directory raises on open() even for root, unlike a chmod 000 file.
+    (tmp_path / 'conda-meta' / 'fsl-eddy-2602.0-hb35a746_0.json').mkdir(parents=True)
+    monkeypatch.setenv('FSLDIR', str(tmp_path))
+
+    assert eddy_version() is None
+
+
 def test_eddy_text_names_eddy_version_without_a_release_record(tmp_path, monkeypatch):
     """Without the release record, eddy's own package version is named as such."""
     meta = tmp_path / 'conda-meta'
