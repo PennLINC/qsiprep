@@ -8,6 +8,8 @@ Gibbs ringing by local subvoxel shifts, with partial Fourier support. Unlike
 ``dwidenoise`` and ``dwidenoise2``, it is not restricted to non-commercial use.
 """
 
+import os
+
 import nibabel as nb
 import numpy as np
 from nilearn.image import load_img
@@ -74,6 +76,7 @@ class _SVHTDenoiseInputSpec(CommandLineInputSpec, SeriesPreprocReportInputSpec):
         keep_extension=False,
         desc='the output noise map',
     )
+    rank_image = File(argstr='-rank %s', desc='the number of components retained per voxel')
     phase_file = File(
         exists=True,
         argstr='-phase %s',
@@ -153,6 +156,7 @@ class _SVHTDenoiseInputSpec(CommandLineInputSpec, SeriesPreprocReportInputSpec):
 
 class _SVHTDenoiseOutputSpec(SeriesPreprocReportOutputSpec):
     noise_image = File(desc='the output noise map', exists=True)
+    rank_image = File(desc='the number of components retained per voxel', exists=True)
     out_file = File(desc='the output denoised DWI series', exists=True)
 
 
@@ -190,6 +194,12 @@ class SVHTDenoise(SeriesPreprocReport, CommandLine):
                 _MIN_NOISE_COLUMNS,
             )
         return super()._run_interface(runtime)
+
+    def _list_outputs(self):
+        outputs = super()._list_outputs()
+        if isdefined(self.inputs.rank_image):
+            outputs['rank_image'] = os.path.abspath(self.inputs.rank_image)
+        return outputs
 
     def _format_arg(self, name, spec, value):
         if name in ('demean', 'bval_file') and not self._demean_is_possible():

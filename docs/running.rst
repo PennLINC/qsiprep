@@ -320,8 +320,12 @@ estimate low. All excluded voxels are zero in the output. ``dwidenoise2`` can
 write NaN into valid voxels at the edge of the region it excluded; where this
 happens within 2 voxels of that region, the voxel keeps its undenoised value,
 and the ``DWIDenoise2_nonfinite_voxels`` column of the confounds counts such
-voxels in each volume. A ``dwidenoise2`` run that fails, or that writes NaN
-or infinite values anywhere else, stops processing at the denoising step.
+voxels in each volume. ``dwidenoise2`` marks each patch whose PCA failed with
+NaN in its noise map; the native noise map keeps them, the
+``DWIDenoise2_noise_map_nan_voxels`` column counts them, and they take the
+median of their neighbors before the map is resampled. A ``dwidenoise2`` run
+that fails, or that writes NaN or infinite values anywhere else, stops
+processing at the denoising step.
 
 ``schedule`` lists the iterations of the multi-resolution noise estimation.
 Each iteration is an object whose keys are the columns of a ``dwidenoise2``

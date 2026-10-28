@@ -6,6 +6,7 @@ import subprocess
 import nibabel as nb
 import numpy as np
 import pytest
+from nipype.interfaces.base import isdefined
 from traits.trait_errors import TraitError
 
 from qsiprep import config
@@ -137,6 +138,86 @@ def test_dwidenoise2_writes_schedule_at_run_time(tmp_path, monkeypatch):
     interface._run_interface(Bunch(cwd=str(node_dir)))
 
     assert calls == [format_dwidenoise2_schedule(_SCHEDULE_ROWS)]
+
+
+def test_dwidenoise2_writes_the_rank_density_only_when_asked(tmp_path, monkeypatch):
+    """Test that -rankpermm_out is passed and listed only when rank_density is set."""
+    monkeypatch.chdir(tmp_path)
+    in_file = tmp_path / 'dwi.nii.gz'
+    in_file.touch()
+
+    interface = mrtrix.DWIDenoise2(in_file=in_file)
+    assert '-rankpermm_out' not in interface.cmdline
+    assert not isdefined(interface._list_outputs().get('rank_density'))
+
+    interface = mrtrix.DWIDenoise2(in_file=in_file, rank_density='rank_density.nii.gz')
+    assert '-rankpermm_out rank_density.nii.gz' in interface.cmdline
+    assert interface._list_outputs()['rank_density'] == str(tmp_path / 'rank_density.nii.gz')
+
+
+@pytest.mark.parametrize(
+    ('interface_class', 'field', 'flag'),
+    [
+        (mrtrix.DWIDenoise, 'rank_image', '-rank'),
+        (mrtrix.DWIDenoise2, 'rank_output', '-rank_output'),
+    ],
+)
+def test_mrtrix_denoisers_write_the_rank_only_when_asked(
+    tmp_path,
+    monkeypatch,
+    interface_class,
+    field,
+    flag,
+):
+    """Test that the rank flag is passed and its output listed only when its input is set."""
+    monkeypatch.chdir(tmp_path)
+    in_file = tmp_path / 'dwi.nii.gz'
+    in_file.touch()
+
+    interface = interface_class(in_file=in_file)
+    assert f'{flag} ' not in interface.cmdline
+    assert not isdefined(interface._list_outputs().get(field))
+
+    interface = interface_class(in_file=in_file, **{field: 'rank.nii.gz'})
+    assert f'{flag} rank.nii.gz' in interface.cmdline
+    assert interface._list_outputs()[field] == str(tmp_path / 'rank.nii.gz')
+
+
+def test_dwidenoise2_missing_rank_density_is_an_error(tmp_path, monkeypatch):
+    """Test that a requested rank density map dwidenoise2 did not write stops the node."""
+    from nipype.interfaces.base import CommandLine
+    from nipype.interfaces.base.support import Bunch
+
+    def fake_run(self, runtime, correct_return_codes=(0,)):
+        _write_image('dwi_denoised.nii.gz')
+        return runtime
+
+    monkeypatch.setattr(CommandLine, '_run_interface', fake_run)
+    monkeypatch.chdir(tmp_path)
+    in_file = tmp_path / 'dwi.nii.gz'
+    _write_image(in_file)
+
+    interface = mrtrix.DWIDenoise2(in_file=in_file, rank_density='rank_density.nii.gz')
+    with pytest.raises(RuntimeError, match='multi-row schedule'):
+        interface._run_interface(Bunch(cwd=str(tmp_path)))
+
+
+@pytest.mark.parametrize(
+    ('params', 'expected'),
+    [
+        ({}, True),
+        ({'schedule': [{'kernel': 'aspect=2.0'}, {'kernel': 'rank'}]}, True),
+        ({'noise_in': 2.0}, True),
+        ({'schedule': [{'kernel': 'aspect=2.0'}]}, False),
+        ({'fixed_rank': 4}, False),
+        ({'vst_method': 'none'}, False),
+    ],
+)
+def test_dwidenoise2_writes_rank_density_with_a_multi_row_schedule(params, expected):
+    """Test which dwidenoise2 parameters give a rank density map (checked against 3.0.8-2071)."""
+    from qsiprep.utils.misc import dwidenoise2_writes_rank_density
+
+    assert dwidenoise2_writes_rank_density(params) is expected
 
 
 def test_dwidenoise2_without_schedule_writes_nothing(tmp_path, monkeypatch):
@@ -528,13 +609,34 @@ def test_dwidenoise2_rejects_nan_slices(tmp_path, monkeypatch):
         mrtrix.DWIDenoise2(in_file=in_file)._run_interface(Bunch(cwd=str(tmp_path)))
 
 
-def test_dwidenoise2_rejects_a_non_finite_noise_map(tmp_path, monkeypatch):
-    """Test that the noise map is held to the same standard as the denoised image."""
+def test_dwidenoise2_keeps_and_counts_nan_in_the_noise_map(tmp_path, monkeypatch):
+    """Test that NaN, dwidenoise2's mark of a failed patch, stays in the noise map, counted."""
+    from nipype.interfaces.base.support import Bunch
+
+    in_file = _denoise2_in(tmp_path, monkeypatch)
+    noise = np.full((2, 2, 2), 2.0, dtype=np.float32)
+    noise[0, 0, 0] = np.nan
+    _fake_dwidenoise2(monkeypatch, out=np.ones((4, 4, 3, 5), dtype=np.float32), noise=noise)
+
+    iface = mrtrix.DWIDenoise2(in_file=in_file)
+    iface._run_interface(Bunch(cwd=str(tmp_path)))
+
+    written = np.asanyarray(nb.load(tmp_path / 'dwi_noise.nii.gz').dataobj)
+    assert np.isnan(written[0, 0, 0])
+    assert iface._extra_confounds[mrtrix.DWIDENOISE2_NOISE_NAN_COLUMN] == [1] * 5
+
+
+@pytest.mark.parametrize('bad', ['inf', 'all_nan'])
+def test_dwidenoise2_rejects_a_bad_noise_map(tmp_path, monkeypatch, bad):
+    """Test that an infinite value, or a map with no finite voxel, still stops the run."""
     from nipype.interfaces.base.support import Bunch
 
     in_file = _denoise2_in(tmp_path, monkeypatch)
     noise = np.ones((2, 2, 2), dtype=np.float32)
-    noise[0, 0, 0] = np.inf
+    if bad == 'inf':
+        noise[0, 0, 0] = np.inf
+    else:
+        noise[:] = np.nan
     _fake_dwidenoise2(monkeypatch, out=np.ones((4, 4, 3, 5), dtype=np.float32), noise=noise)
 
     with pytest.raises(RuntimeError, match='noise map'):
@@ -772,7 +874,10 @@ def test_dwidenoise2_keeps_the_input_where_it_writes_nan_at_the_edge(tmp_path, m
     out = np.asanyarray(nb.load(tmp_path / 'dwi_denoised.nii.gz').dataobj)
     np.testing.assert_array_equal(out[edge], data[edge])
     assert np.all(out[excluded] == 0)
-    assert iface._extra_confounds == {mrtrix.DWIDENOISE2_NONFINITE_COLUMN: [1] * 5}
+    assert iface._extra_confounds == {
+        mrtrix.DWIDENOISE2_NONFINITE_COLUMN: [1] * 5,
+        mrtrix.DWIDENOISE2_NOISE_NAN_COLUMN: [0] * 5,
+    }
     iface._calculate_nmse(nb.load(in_file), nb.load(tmp_path / 'dwi_denoised.nii.gz'))
     confounds = pd.read_csv(iface._nmse_text)
     assert confounds[mrtrix.DWIDENOISE2_NONFINITE_COLUMN].tolist() == [1] * 5
@@ -805,15 +910,21 @@ def test_dwidenoise2_counts_no_repairs_on_clean_input(tmp_path, monkeypatch):
     iface = mrtrix.DWIDenoise2(in_file=in_file)
     iface._run_interface(Bunch(cwd=str(tmp_path)))
 
-    assert iface._extra_confounds == {mrtrix.DWIDENOISE2_NONFINITE_COLUMN: [0] * 5}
+    assert iface._extra_confounds == {
+        mrtrix.DWIDENOISE2_NONFINITE_COLUMN: [0] * 5,
+        mrtrix.DWIDENOISE2_NOISE_NAN_COLUMN: [0] * 5,
+    }
 
 
 def test_dwidenoise2_nonfinite_column_is_described():
     """Test that the confounds sidecar describes the repaired-voxel count."""
     from qsiprep.interfaces.confounds import _confounds_column_metadata
 
-    meta = _confounds_column_metadata([mrtrix.DWIDENOISE2_NONFINITE_COLUMN, 'trans_x'])
+    meta = _confounds_column_metadata(
+        [mrtrix.DWIDENOISE2_NONFINITE_COLUMN, mrtrix.DWIDENOISE2_NOISE_NAN_COLUMN, 'trans_x']
+    )
     assert 'non-finite' in meta[mrtrix.DWIDENOISE2_NONFINITE_COLUMN]['Description']
+    assert 'noise map' in meta[mrtrix.DWIDENOISE2_NOISE_NAN_COLUMN]['Description']
 
 
 def test_dwidenoise2_removes_the_filled_copy_after_a_crash(tmp_path, monkeypatch):

@@ -634,15 +634,15 @@ def _assert_clean_run(out_dir):
 
 
 def _assert_no_float64_images(out_dir):
-    """Fail on any preprocessed image stored as float64: twice the size for no precision gained."""
+    """Fail on any output image stored as float64: twice the size for no precision gained."""
     import nibabel as nb
 
     doubles = [
         path.name
-        for path in sorted(Path(out_dir).glob('sub-*/**/*_desc-preproc_*.nii.gz'))
+        for path in sorted(Path(out_dir).glob('sub-*/**/*.nii.gz'))
         if nb.load(path).get_data_dtype() == 'float64'
     ]
-    assert not doubles, 'preprocessed images written as float64: ' + ', '.join(doubles[:5])
+    assert not doubles, 'images written as float64: ' + ', '.join(doubles[:5])
 
 
 def _assert_gradient_tables_consistent(out_dir):

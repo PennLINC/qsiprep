@@ -103,6 +103,7 @@ def collect_datasink_entities(workflow, full_names=False):
             'to',
             'mode',
             'model',
+            'statistic',
             'extension',
             'datatype',
         ):
@@ -162,6 +163,8 @@ def dwi_config():
     config.execution.output_dir = '/tmp/qsiprep-naming-test'
     config.workflow.hmc_method = 'tortoise'
     config.workflow.write_local_bvecs = False
+    # A denoiser that writes noise maps, so their sink is named too
+    config.workflow.denoise_method = 'dwidenoise'
     return config
 
 
@@ -375,7 +378,17 @@ def test_single_fixed_acpc_writes_no_resolution_metadata(tmp_path):
     assert not any(n.endswith('grid_metadata') for n in wf.list_node_names())
 
 
-def test_one_normalization_per_standard_space():
+@pytest.fixture
+def anat_output_dir(monkeypatch):
+    """Give the anatomical sinks the base directory they read from the config.
+
+    The fixtures above set it without restoring it, so a test that relies on them
+    having run fails when pytest-xdist schedules it on another worker.
+    """
+    monkeypatch.setattr(config.execution, 'output_dir', '/tmp/qsiprep-naming-test')
+
+
+def test_one_normalization_per_standard_space(anat_output_dir):
     from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.anatomical.volume import init_anat_derivatives_wf
 
@@ -387,7 +400,7 @@ def test_one_normalization_per_standard_space():
     assert 'MNI152NLin6Asym' in targets
 
 
-def test_standard_space_anatomicals_are_written():
+def test_standard_space_anatomicals_are_written(anat_output_dir):
     from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.anatomical.volume import init_anat_derivatives_wf
 
@@ -400,7 +413,7 @@ def test_standard_space_anatomicals_are_written():
     assert all(e.get('res') == '1' for e in mni)
 
 
-def test_bare_standard_space_writes_no_res_entity():
+def test_bare_standard_space_writes_no_res_entity(anat_output_dir):
     from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.anatomical.volume import init_anat_derivatives_wf
 
@@ -412,7 +425,7 @@ def test_bare_standard_space_writes_no_res_entity():
     assert all('res' not in e for e in mni)
 
 
-def test_cohort_is_a_separate_entity_on_space_but_inline_on_transforms():
+def test_cohort_is_a_separate_entity_on_space_but_inline_on_transforms(anat_output_dir):
     from qsiprep.utils.spaces import parse_output_spaces
     from qsiprep.workflows.anatomical.volume import init_anat_derivatives_wf
 
@@ -466,9 +479,12 @@ SINGLE_ACPC_DWI_PATHS = {
     ),
     'ds_dwi_mask_t1': ('sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_desc-brain_mask.nii.gz'),
     'ds_cnr_map_t1': (
-        'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_model-MAPMRI_dwimap.nii.gz'
+        'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_model-MAPMRI_stat-cnr_dwimap.nii.gz'
     ),
-    'ds_tsnr': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_dwimap.nii.gz',
+    'ds_tsnr': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_stat-tsnr_dwimap.nii.gz',
+    'ds_noise_map_t1': (
+        'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_stat-std_desc-noise_dwimap.nii.gz'
+    ),
 }
 
 

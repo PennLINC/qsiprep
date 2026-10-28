@@ -44,6 +44,8 @@ _DWIDENOISE2_FILL_MARGIN = 8
 _DWIDENOISE2_REPAIR_DISTANCE = 2
 # Confounds column counting, per volume, the voxels that kept their input value
 DWIDENOISE2_NONFINITE_COLUMN = 'DWIDenoise2_nonfinite_voxels'
+# Confounds column repeating, in every volume of a series, its noise map's NaN voxel count
+DWIDENOISE2_NOISE_NAN_COLUMN = 'DWIDenoise2_noise_map_nan_voxels'
 RC3_ROOT = which('average_response')  # Only exists in RC3
 if RC3_ROOT is not None:
     # Use the directory containing average_response
@@ -136,6 +138,13 @@ class DWIDenoiseInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
         keep_extension=False,
         desc='the output noise map',
     )
+    rank_image = File(
+        argstr='-rank %s',
+        desc=(
+            'the signal rank selected for each voxel. Only the development-branch '
+            'dwidenoise has -rank.'
+        ),
+    )
     out_file = File(
         name_template='%s_denoised.nii.gz',
         name_source=['in_file'],
@@ -151,6 +160,7 @@ class DWIDenoiseInputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
 
 class DWIDenoiseOutputSpec(SeriesPreprocReportOutputSpec):
     noise_image = File(desc='the output noise map', exists=True)
+    rank_image = File(desc='the signal rank selected for each voxel', exists=True)
     out_file = File(desc='the output denoised DWI image', exists=True)
 
 
@@ -176,6 +186,12 @@ class DWIDenoise(SeriesPreprocReport, MRTrix3Base):
     _cmd = 'dwidenoise'
     input_spec = DWIDenoiseInputSpec
     output_spec = DWIDenoiseOutputSpec
+
+    def _list_outputs(self):
+        outputs = super()._list_outputs()
+        if isdefined(self.inputs.rank_image):
+            outputs['rank_image'] = os.path.abspath(self.inputs.rank_image)
+        return outputs
 
     def _get_plotting_images(self):
         input_dwi = load_img(self.inputs.in_file)
@@ -310,6 +326,13 @@ class DWIDenoise2InputSpec(MRTrix3BaseInputSpec, SeriesPreprocReportInputSpec):
         argstr='-rank_output %s',
         desc='estimated output rank after patch aggregation',
     )
+    rank_density = File(
+        argstr='-rankpermm_out %s',
+        desc=(
+            'the signal-rank density (rank per mm of kernel radius) that sized the '
+            'reconstruction kernel; only written with a multi-row schedule'
+        ),
+    )
     variance_removed = File(
         argstr='-variance_removed %s',
         desc='fraction of variance removed by PCA',
@@ -401,6 +424,34 @@ def check_finite_image(path, label):
         f'{label} {path} has {int(bad.sum())} non-finite voxels, in slice(s) {slices} of '
         f'{volumes} volume(s).'
     )
+
+
+def count_noise_map_nan(path):
+    """Count the NaN voxels of a dwidenoise2 noise map, and reject any other bad value.
+
+    dwidenoise2 marks each patch whose PCA failed with NaN in its noise map. The native
+    noise map keeps them; :class:`~qsiprep.interfaces.noise_map.ResampleNoiseMaps` fills
+    them from their neighbors before resampling.
+
+    Parameters
+    ----------
+    path : str
+        The noise map.
+
+    Returns
+    -------
+    int
+        The number of NaN voxels.
+
+    Raises
+    ------
+    RuntimeError
+        If the map holds an infinite value or has no finite voxel.
+    """
+    data = np.asanyarray(nb.load(path).dataobj)
+    if np.isinf(data).any() or not np.isfinite(data).any():
+        check_finite_image(path, 'dwidenoise2 noise map')
+    return int(np.isnan(data).sum())
 
 
 def invalid_voxel_mask(data):
@@ -516,6 +567,7 @@ class DWIDenoise2OutputSpec(SeriesPreprocReportOutputSpec):
     rank_pcanonzero = File(exists=True, desc='non-zero PCA rank before denoising')
     rank_input = File(exists=True, desc='estimated input rank per denoising patch')
     rank_output = File(exists=True, desc='estimated output rank after patch aggregation')
+    rank_density = File(exists=True, desc='signal rank per mm of kernel radius')
     variance_removed = File(exists=True, desc='fraction of variance removed by PCA')
     eigenspectra = File(exists=True, desc='matrix of eigenvalue spectra across patches')
     residual_statistics = traits.Tuple(
@@ -633,12 +685,38 @@ class DWIDenoise2(SeriesPreprocReport, MRTrix3Base):
                 outputs['out_file']
             )
             del out_data
-        self._extra_confounds = {DWIDENOISE2_NONFINITE_COLUMN: repaired.tolist()}
+        noise_nan = 0
+        if isdefined(outputs.get('noise_image')) and os.path.exists(outputs['noise_image']):
+            noise_nan = count_noise_map_nan(outputs['noise_image'])
+            if noise_nan:
+                LOGGER.warning(
+                    'dwidenoise2 marked %d voxels of the noise map for %s with NaN, where the '
+                    'PCA of a patch failed.',
+                    noise_nan,
+                    self.inputs.in_file,
+                )
+        self._extra_confounds = {
+            DWIDENOISE2_NONFINITE_COLUMN: repaired.tolist(),
+            DWIDENOISE2_NOISE_NAN_COLUMN: [noise_nan] * n_volumes,
+        }
         # Any other non-finite value is a failure of dwidenoise2, not of the fill
         check_finite_image(outputs['out_file'], 'dwidenoise2 output')
-        if isdefined(outputs.get('noise_image')) and os.path.exists(outputs['noise_image']):
-            check_finite_image(outputs['noise_image'], 'dwidenoise2 noise map')
+        if isdefined(self.inputs.rank_density):
+            # dwidenoise2 exits successfully without the map when its schedule has one row
+            if not os.path.exists(outputs['rank_density']):
+                raise RuntimeError(
+                    f'dwidenoise2 wrote no rank density map ({outputs["rank_density"]}); it '
+                    'writes one only with a multi-row schedule.'
+                )
+            check_finite_image(outputs['rank_density'], 'dwidenoise2 rank density map')
         return runtime
+
+    def _list_outputs(self):
+        outputs = super()._list_outputs()
+        for name in ('rank_output', 'rank_density'):
+            if isdefined(getattr(self.inputs, name)):
+                outputs[name] = os.path.abspath(getattr(self.inputs, name))
+        return outputs
 
     def _get_plotting_images(self):
         input_dwi = load_img(self.inputs.in_file)
