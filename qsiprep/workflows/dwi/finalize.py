@@ -29,13 +29,19 @@ from ...interfaces.gradients import ExtractB0s
 from ...interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
+from ...interfaces.noise_map import ResampleNoiseMaps
 from ...interfaces.reports import GradientPlot, SDCWarpPlot, SeriesQC
-from ...utils.eddy_config import eddy_applies_gre
+from ...utils.eddy_config import (
+    eddy_applies_gre,
+    eddy_modulates_distortion,
+    effective_eddy_resampling_method,
+    load_eddy_args,
+)
 from ...utils.jacobian import pe_axis_from_direction
 from ...utils.jacobian_provenance import jacobian_provenance_for
 from ...utils.sdc import eddy_applies_topup, pe_readout_time, sdc_warp_source
 from ...utils.versions import mrtrix3_version, versioned
-from .derivatives import init_dwi_derivatives_wf
+from .derivatives import init_dwi_derivatives_wf, writes_noise_maps
 from .gradwarp import resolve_gradwarp_plan
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
 from .resampling import init_dwi_trans_wf
@@ -300,6 +306,9 @@ def init_dwi_finalize_wf(
                 'fieldmap_hz',
                 # Transforms to ACPC space, in the order they apply
                 'sdc_transform_files',
+                # Native noise maps and their written paths, in unit.dwi_files order
+                'noise_images',
+                'native_noise_maps',
             ]
         ),
         name='inputnode',
@@ -329,6 +338,9 @@ def init_dwi_finalize_wf(
                 'sdc_warp_to_template',
                 # TOPUP+DRBUDDI only: DRBUDDI's refinement of the TOPUP field
                 'sdc_refinement_to_template',
+                # One list slot per resolution, like dwi_t1
+                'noise_map_t1',
+                'noise_map_meta',
             ]
         ),
         name='outputnode',
@@ -437,10 +449,15 @@ def init_dwi_finalize_wf(
     # every ACPC spec reaches the outputnode as one slot of a list in acpc_specs
     # order. A single resolution gives a one-element list, so consumers index rather
     # than special-case.
+    merged_fields = ['dwi_t1', 'bvals_t1', 'bvecs_t1', 't1_b0_ref', 'cnr_map_t1']
+    if writes_noise_maps():
+        merged_fields += ['noise_map_t1', 'noise_map_meta']
     merged_outputs = {
         field: pe.Node(niu.Merge(len(acpc_specs)), name=f'merge_out_{field}')
-        for field in ('dwi_t1', 'bvals_t1', 'bvecs_t1', 't1_b0_ref', 'cnr_map_t1')
+        for field in merged_fields
     }
+    # A field eddy applied itself arrives as fieldmap_hz, as for the SDC map
+    fieldmap_in_eddy = doing_topup or warp_source == 'gre_in_eddy'
     workflow.connect(
         [(merge, outputnode, [('out', field)]) for field, merge in merged_outputs.items()]
     )
@@ -534,6 +551,43 @@ def init_dwi_finalize_wf(
                 ('outputnode.t1_b0_ref', f'in{index + 1}'),
             ]),
         ])  # fmt:skip
+
+        resample_noise = None
+        if writes_noise_maps():
+            resample_noise = _noise_map_node(
+                unit, fieldmap_in_eddy=fieldmap_in_eddy, name=f'resample_noise{suffix}'
+            )
+            if write_resolution_meta:
+                resample_noise.inputs.resolution_label = label
+            workflow.connect([
+                (inputnode, resample_noise, [
+                    ('noise_images', 'noise_images'),
+                    ('native_noise_maps', 'native_noise_maps'),
+                    ('confounds', 'confounds_file'),
+                    (('dwi_sampling_grids', _select_grid, index), 'reference_image'),
+                ]),
+                (dwi_trans_wf, resample_noise, [
+                    ('outputnode.volume_transforms', 'volume_transforms'),
+                ]),
+                (resample_noise, merged_outputs['noise_map_t1'], [('out_file', f'in{index + 1}')]),
+                (resample_noise, merged_outputs['noise_map_meta'], [
+                    ('meta_dict', f'in{index + 1}'),
+                ]),
+            ])  # fmt:skip
+            if fieldmap_in_eddy:
+                workflow.connect([(inputnode, resample_noise, [('fieldmap_hz', 'fieldmap_hz')])])
+            if 'jacobian' not in (config.workflow.ignore or []):
+                workflow.connect([
+                    (dwi_trans_wf, resample_noise, [
+                        ('outputnode.jacobian_weights', 'weight_images'),
+                        ('outputnode.jacobian_weight_index', 'weight_index'),
+                        ('outputnode.jacobian_method', 'weight_method'),
+                    ]),
+                ])  # fmt:skip
+            if do_biascorr:
+                workflow.connect([
+                    (final_denoise_wf, resample_noise, [('outputnode.bias_field', 'bias_field')]),
+                ])  # fmt:skip
 
         if index == 0:
             # Nothing outside this workflow reads these per resolution: the direct
@@ -672,6 +726,14 @@ def init_dwi_finalize_wf(
             (gtab_t1, dwi_derivatives_wf, [('gradient_file', 'inputnode.gradient_table_t1')]),
             (btab_t1, dwi_derivatives_wf, [('btable_file', 'inputnode.btable_t1')]),
         ])  # fmt:skip
+
+        if resample_noise is not None:
+            workflow.connect([
+                (resample_noise, dwi_derivatives_wf, [
+                    ('out_file', 'inputnode.noise_map_t1'),
+                    ('meta_dict', 'inputnode.noise_map_meta'),
+                ]),
+            ])  # fmt:skip
 
         if 'jacobian' not in (config.workflow.ignore or []):
             workflow.connect([
@@ -937,6 +999,83 @@ def init_dwi_finalize_wf(
     return workflow
 
 
+def _noise_map_node(unit, fieldmap_in_eddy, name='resample_noise'):
+    """Build the node that carries the unit's noise maps to the ACPC grid.
+
+    Parameters
+    ----------
+    unit : :class:`~qsiplan.adapters.PreprocUnit`
+        The correction unit.
+    fieldmap_in_eddy : bool
+        Whether eddy applied an off-resonance field (TOPUP's, or a GRE
+        fieldmap's) in its own resampling, which the noise maps must then undo
+        before following the volumes' transforms.
+    """
+    import math
+
+    denoise_method = config.workflow.denoise_method
+    use_phase = 'phase' not in (config.workflow.ignore or [])
+    overrides = unit.sidecar_overrides()
+    bids_dir = str(config.execution.bids_dir) if config.execution.bids_dir else None
+
+    def _meta(dwi_file, key):
+        value = overrides.get(dwi_file, {}).get(key)
+        return unit.metadata_for(dwi_file).get(key) if value is None else value
+
+    series_files = list(unit.dwi_files)
+    channel_scales = []
+    sources = []
+    for dwi_file in series_files:
+        # dwidenoise(2) report complex noise summed over both channels
+        complex_denoised = (
+            denoise_method.startswith('dwidenoise')
+            and use_phase
+            and unit.dwi_phase_files.get(dwi_file) is not None
+        )
+        channel_scales.append(1 / math.sqrt(2) if complex_denoised else 1.0)
+        sources.append(
+            os.path.relpath(dwi_file, bids_dir) if bids_dir else os.path.basename(dwi_file)
+        )
+    pe_directions = [_meta(dwi_file, 'PhaseEncodingDirection') or '' for dwi_file in series_files]
+    readout_times = [_meta(dwi_file, 'TotalReadoutTime') for dwi_file in series_files]
+
+    hmc_tool = unit.run.hmc_stage.tool
+    approximations = []
+    if hmc_tool in ('eddy', 'tortoise'):
+        backend = 'eddy' if hmc_tool == 'eddy' else 'DIFFPREP'
+        approximations.append(
+            f'{backend} resampled the volumes itself and exports no transform for them, so the '
+            "head motion of each series' reference b=0 volume is not applied to its noise map."
+        )
+    fieldmap_modulated = False
+    if hmc_tool == 'eddy':
+        eddy_args = load_eddy_args()
+        fieldmap_modulated = fieldmap_in_eddy and eddy_modulates_distortion(eddy_args)
+        if effective_eddy_resampling_method(eddy_args) == 'lsr':
+            approximations.append(
+                "eddy's least-squares restoration combines volumes of opposite phase "
+                'encoding; its effect on the noise is not modeled.'
+            )
+
+    return pe.Node(
+        ResampleNoiseMaps(
+            series_files=series_files,
+            series_sources=sources,
+            channel_scales=channel_scales,
+            pe_directions=pe_directions,
+            readout_times=[None if trt is None else float(trt) for trt in readout_times],
+            denoise_method=denoise_method,
+            b0_threshold=config.workflow.b0_threshold,
+            fieldmap_modulated=fieldmap_modulated,
+            approximations=approximations,
+            output_dir=str(config.execution.output_dir),
+            num_threads=config.nipype.omp_nthreads,
+        ),
+        name=name,
+        n_procs=config.nipype.omp_nthreads,
+    )
+
+
 def _extract_first_b0(in_file, b0_indices, newpath=None):
     """Pull the first b=0 volume off a (possibly 4D) raw DWI series.
 
@@ -1010,6 +1149,8 @@ def init_finalize_denoising_wf(
                 't1_b0_ref',
                 'dwi_mask_t1',
                 'series_qc_postproc',
+                # Only defined with bias correction: the field the series was divided by
+                'bias_field',
             ]
         ),
         name='outputnode',
@@ -1224,4 +1365,6 @@ def init_finalize_denoising_wf(
         # The final version
         (p2s_buffernode, outputnode, [('dwi_t1', 'dwi_t1')]),
     ])  # fmt:skip
+    if do_biascorr:
+        workflow.connect([(bias_corrected, outputnode, [('bias_field', 'bias_field')])])
     return workflow

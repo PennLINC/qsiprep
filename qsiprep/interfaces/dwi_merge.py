@@ -120,6 +120,12 @@ class MergeDWIs(SimpleInterface):
                 for fname in self.inputs.denoising_confounds
             ]
             _confounds_df = pd.concat(confounds, axis=0, ignore_index=True)
+            if 'series_b0_correction' in _confounds_df:
+                # Inputs harmonized by an earlier merge: record the total scale
+                provenance_df['series_b0_correction'] = _total_b0_correction(
+                    provenance_df['series_b0_correction'],
+                    _confounds_df['series_b0_correction'],
+                )
             confounds_df = pd.concat([provenance_df, _confounds_df], axis=1, ignore_index=False)
         else:
             confounds_df = provenance_df
@@ -762,7 +768,7 @@ def harmonize_b0s(dwi_files, bvals, b0_threshold, do_harmonization):
         corrections = b0_all_mean / np.array(b0_means)
         harmonized_niis = []
         for nii_img, correction in zip(dwi_niis, corrections, strict=False):
-            if np.isnan(b0_mean) or np.isnan(correction):
+            if np.isnan(correction):
                 # XXX: No clue why b0_all_mean or b0_means could be NaNs here.
                 harmonized_niis.append(nii_img)
                 LOGGER.warning('An image has no b=0 images and cannot be harmonized')
@@ -774,6 +780,21 @@ def harmonize_b0s(dwi_files, bvals, b0_threshold, do_harmonization):
         corrections = np.ones(num_dwis)
 
     return to_concat, b0_means, corrections
+
+
+def _total_b0_correction(this_merge, earlier):
+    """Compound this merge's b=0 harmonization factor with an earlier merge's.
+
+    A NaN factor marks a series that was left unscaled because it had no b=0
+    volume, so it counts as 1 in the product.
+    """
+    this_merge = np.asarray(this_merge, dtype=float)
+    earlier = np.asarray(earlier, dtype=float)
+    if this_merge.shape != earlier.shape:
+        raise ValueError(
+            f'{this_merge.size} volumes were merged but the confounds describe {earlier.size}'
+        )
+    return np.nan_to_num(this_merge, nan=1.0) * np.nan_to_num(earlier, nan=1.0)
 
 
 def create_provenance_dataframe(

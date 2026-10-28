@@ -103,6 +103,7 @@ def collect_datasink_entities(workflow, full_names=False):
             'to',
             'mode',
             'model',
+            'statistic',
             'extension',
             'datatype',
         ):
@@ -162,6 +163,8 @@ def dwi_config():
     config.execution.output_dir = '/tmp/qsiprep-naming-test'
     config.workflow.hmc_method = 'tortoise'
     config.workflow.write_local_bvecs = False
+    # A denoiser that writes noise maps, so their sink is named too
+    config.workflow.denoise_method = 'dwidenoise'
     return config
 
 
@@ -466,9 +469,12 @@ SINGLE_ACPC_DWI_PATHS = {
     ),
     'ds_dwi_mask_t1': ('sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_desc-brain_mask.nii.gz'),
     'ds_cnr_map_t1': (
-        'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_model-MAPMRI_dwimap.nii.gz'
+        'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_model-MAPMRI_stat-cnr_dwimap.nii.gz'
     ),
-    'ds_tsnr': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_dwimap.nii.gz',
+    'ds_tsnr': 'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_stat-tsnr_dwimap.nii.gz',
+    'ds_noise_map_t1': (
+        'sub-01/ses-1/dwi/sub-01_ses-1_space-ACPC_res-2mm_stat-noise_dwimap.nii.gz'
+    ),
 }
 
 

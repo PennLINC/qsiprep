@@ -68,6 +68,13 @@ def _tsnr_meta(n_b0, median_tsnr):
 LOGGER = logging.getLogger('nipype.workflow')
 
 
+def writes_noise_maps():
+    """Whether this run's denoiser writes noise maps."""
+    from ...interfaces.noise_map import NOISE_QUANTITIES
+
+    return config.workflow.denoise_method in NOISE_QUANTITIES
+
+
 def writes_hmc_optimization():
     """Whether this run writes the ``hmcOptimization`` derivative.
 
@@ -152,6 +159,9 @@ def init_dwi_derivatives_wf(
                 'sdc_warp_to_template',
                 'sdc_refinement_to_template',
                 'sdc_transform_files',
+                # Only set when a denoiser ran: see ResampleNoiseMaps
+                'noise_map_t1',
+                'noise_map_meta',
             ]
         ),
         name='inputnode',
@@ -429,6 +439,30 @@ def init_dwi_derivatives_wf(
         ])  # fmt:skip
 
     # If requested, write local bvecs
+    # Maybe sink: outputs averaged from phase-encoding pairs have no noise map
+    if writes_noise_maps():
+        ds_noise_map_t1 = pe.Node(
+            DerivativesMaybeDataSink(
+                source_file=source_file,
+                base_directory=output_dir,
+                space='ACPC',
+                statistic='noise',
+                suffix='dwimap',
+                extension='.nii.gz',
+                compress=True,
+                **res_entities,
+            ),
+            name='ds_noise_map_t1',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+        workflow.connect([
+            (inputnode, ds_noise_map_t1, [
+                ('noise_map_t1', 'in_file'),
+                ('noise_map_meta', 'meta_dict'),
+            ]),
+        ])  # fmt:skip
+
     # if config.workflow.write_local_bvecs:
     #     ds_local_bvecs_t1 = pe.Node(
     #         DerivativesDataSink(

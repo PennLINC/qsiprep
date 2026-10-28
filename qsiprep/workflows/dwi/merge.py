@@ -122,6 +122,8 @@ def init_dwi_series_denoise_wf(
         the series, conformed but not denoised
     noise_image
         noise image estimated by the denoiser (when one ran)
+    noise_map_file
+        the noise image as written to the derivatives (when a denoiser ran)
     confounds
         per-volume denoising/unringing confounds (when any step ran)
     validation_report
@@ -134,8 +136,11 @@ def init_dwi_series_denoise_wf(
         _, fname, _ = split_filename(dwi_file)
         name = _get_wf_name(fname).replace('preproc', 'denoise')
     workflow = Workflow(name=name)
+    # noise_map_file is collected at the subject level, not with SERIES_FIELDS
     outputnode = pe.Node(
-        niu.IdentityInterface(fields=[series_field for series_field, _ in SERIES_FIELDS]),
+        niu.IdentityInterface(
+            fields=[series_field for series_field, _ in SERIES_FIELDS] + ['noise_map_file']
+        ),
         name='outputnode',
     )
 
@@ -176,6 +181,7 @@ def init_dwi_series_denoise_wf(
             ('outputnode.bval_file', 'bval_file'),
             ('outputnode.bvec_file', 'bvec_file'),
             ('outputnode.noise_image', 'noise_image'),
+            ('outputnode.noise_map_file', 'noise_map_file'),
             ('outputnode.confounds', 'confounds'),
         ]),
     ])  # fmt:skip
@@ -473,6 +479,8 @@ def init_dwi_denoising_wf(
         path to the denoised bvec file
     noise_image
         path to the noise image
+    noise_map_file
+        path of the noise image as written to the derivatives
     confounds
         path to the confounds file
     """
@@ -487,6 +495,7 @@ def init_dwi_denoising_wf(
                 'bval_file',
                 'bvec_file',
                 'noise_image',
+                'noise_map_file',
                 'confounds',
             ],
         ),
@@ -557,6 +566,23 @@ def init_dwi_denoising_wf(
                 source_file=source_file,
             ),
             name=f'ds_report_{name}_denoising',
+            run_without_submitting=True,
+            mem_gb=DEFAULT_MEMORY_MIN_GB,
+        )
+        ds_noise_map = pe.Node(
+            DerivativesDataSink(
+                source_file=source_file,
+                statistic='noise',
+                suffix='dwimap',
+                extension='.nii.gz',
+                compress=True,
+                meta_dict={
+                    'Description': _noise_map_description(
+                        denoise_method, used_phase=denoise_complex or denoise_real_axis
+                    ),
+                },
+            ),
+            name='ds_noise_map',
             run_without_submitting=True,
             mem_gb=DEFAULT_MEMORY_MIN_GB,
         )
@@ -672,6 +698,8 @@ def init_dwi_denoising_wf(
         # Wiring that is the same for every denoising method
         workflow.connect([
             (denoiser, ds_report_denoising, [('out_report', 'in_file')]),
+            (denoiser, ds_noise_map, [('noise_image', 'in_file')]),
+            (ds_noise_map, outputnode, [('out_file', 'noise_map_file')]),
             (denoiser, merge_confounds, [('nmse_text', f'in{step_num}')]),
             # The noise image is a derivative, so it always comes straight from the denoiser
             (denoiser, outputnode, [('noise_image', 'noise_image')]),
@@ -853,6 +881,28 @@ def _svht_partial_fourier(partial_fourier, phase_encoding_direction):
         )
 
     return factor
+
+
+def _noise_map_description(denoise_method, used_phase):
+    """Return the sidecar description of the noise map written for one denoised series."""
+    if denoise_method == 'patch2self':
+        desc = (
+            'Root mean square over volumes of the residual removed by Patch2Self, '
+            'a voxelwise noise level.'
+        )
+    else:
+        tool = {
+            'dwidenoise': 'dwidenoise (MRtrix3)',
+            'dwidenoise2': 'dwidenoise2 (MRtrix3)',
+            'svht': 'svht_denoise',
+        }[denoise_method]
+        desc = f'Noise level (standard deviation) estimated by {tool} while denoising.'
+        if used_phase:
+            desc += ' The phase of the series was used in denoising.'
+    return (
+        f'{desc} It is aligned with the raw series, conformed to the output orientation, '
+        'before any motion or distortion correction.'
+    )
 
 
 def _as_list(item):

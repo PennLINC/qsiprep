@@ -21,9 +21,10 @@ from ...interfaces.dsi_studio import DSIStudioBTable
 from ...interfaces.dwi_merge import AveragePEPairs, MergeDWIs
 from ...interfaces.mrtrix import MRTrixGradientTable
 from ...interfaces.nilearn import Merge
+from ...interfaces.noise_map import ConcatNoiseMaps
 from ...interfaces.reports import GradientPlot, SeriesQC
 from ...interfaces.shoreline import MergeIterationSummaries
-from .derivatives import init_dwi_derivatives_wf, writes_hmc_optimization
+from .derivatives import init_dwi_derivatives_wf, writes_hmc_optimization, writes_noise_maps
 from .finalize import _grid_metadata
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
 from .util import init_dwi_reference_wf
@@ -71,6 +72,10 @@ def init_distortion_group_merge_wf(
         One input for each input image. Path to the b=0 reference image
     ``[workflow_name]_carpetplot_data``
         One input for each input image. Path to the hmc carpetplot data
+    ``[workflow_name]_noise_map``, ``[workflow_name]_noise_map_meta``
+        One input for each input image. The unit's noise maps on the ACPC grid
+        and their sidecar; only consumed when a denoiser ran and the units are
+        concatenated
 
     Parameters
     ----------
@@ -137,6 +142,8 @@ def init_distortion_group_merge_wf(
         '_raw_concatenated_image',
         '_confounds',
         '_hmc_optimization_data',
+        '_noise_map',
+        '_noise_map_meta',
     ]:
         input_names += [name + suffix for name in sanitized_inputs]
     inputnode = pe.Node(niu.IdentityInterface(fields=input_names), name='inputnode')
@@ -302,6 +309,42 @@ def init_distortion_group_merge_wf(
         resolution=resolution,
         write_hmc_optimization=write_shared_outputs,
     )
+
+    # Averaged phase-encoding pairs mix two series per volume, so only concat gets a map
+    if writes_noise_maps():
+        if merging_strategy.startswith('concat'):
+            merge_noise_maps = pe.Node(niu.Merge(len(sanitized_inputs)), name='merge_noise_maps')
+            merge_noise_meta = pe.Node(niu.Merge(len(sanitized_inputs)), name='merge_noise_meta')
+            concat_noise_maps = pe.Node(
+                ConcatNoiseMaps(), name='concat_noise_maps', mem_gb=DEFAULT_MEMORY_MIN_GB
+            )
+            for input_num, input_name in enumerate(sanitized_inputs):
+                workflow.connect([
+                    (inputnode, merge_noise_maps, [
+                        (input_name + '_noise_map', 'in%d' % (input_num + 1)),
+                    ]),
+                    (inputnode, merge_noise_meta, [
+                        (input_name + '_noise_map_meta', 'in%d' % (input_num + 1)),
+                    ]),
+                ])  # fmt:skip
+            workflow.connect([
+                (merge_noise_maps, concat_noise_maps, [('out', 'noise_maps')]),
+                (merge_noise_meta, concat_noise_maps, [('out', 'meta_dicts')]),
+                (distortion_merger, concat_noise_maps, [
+                    ('merged_denoising_confounds', 'confounds_file'),
+                ]),
+                (concat_noise_maps, dwi_derivatives_wf, [
+                    ('out_file', 'inputnode.noise_map_t1'),
+                    ('meta_dict', 'inputnode.noise_map_meta'),
+                ]),
+            ])  # fmt:skip
+        elif write_shared_outputs:
+            LOGGER.warning(
+                'No ACPC noise map is written for %s: averaging phase-encoding pairs '
+                'combines two series in each volume. The native noise map of each '
+                'series is still written.',
+                output_prefix,
+            )
 
     # dwi_derivatives_wf builds a ds_optimization sink under the same condition,
     # and that sink's in_file is mandatory: feed it or the merged output's

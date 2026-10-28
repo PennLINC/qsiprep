@@ -78,6 +78,7 @@ from ..utils.plan import method_selection_from_config
 from ..utils.sdc import sdc_warp_source, t2w_available_for_sdc, t2w_sdc_enabled
 from .anatomical.volume import anat_biascorrect_enabled, init_anat_preproc_wf
 from .dwi.base import init_dwi_preproc_wf
+from .dwi.derivatives import writes_noise_maps
 from .dwi.distortion_group_merge import init_distortion_group_merge_wf
 from .dwi.dwiref import init_dwiref_wf
 from .dwi.finalize import _select_grid, init_dwi_finalize_wf
@@ -145,6 +146,25 @@ def _first_sampling_grid(grids):
     fed before the fan-out existed.
     """
     return grids[0] if isinstance(grids, (list, tuple)) else grids
+
+
+def connect_noise_maps_to_unit(workflow, series_wfs, unit, dwi_finalize_wf, name):
+    """Feed a unit's native noise maps, in ``unit.dwi_files`` order, to its finalize workflow."""
+    for series_field, input_field in (
+        ('noise_image', 'noise_images'),
+        ('noise_map_file', 'native_noise_maps'),
+    ):
+        collect = pe.Node(
+            niu.Merge(len(unit.dwi_files)),
+            # connect_series_to_unit already owns collect_noise_images_<name>
+            name=f'collect_finalize_{input_field}_{name}',
+            run_without_submitting=True,
+        )
+        for index, dwi_file in enumerate(unit.dwi_files, start=1):
+            workflow.connect(
+                series_wfs[dwi_file], f'outputnode.{series_field}', collect, f'in{index}'
+            )
+        workflow.connect(collect, 'out', dwi_finalize_wf, f'inputnode.{input_field}')
 
 
 def _build_dwi_plan(subject_data, selection):
@@ -794,6 +814,8 @@ documentation](https://qsiprep.readthedocs.io/en/latest/methods/index.html \
             write_derivatives=write_derivatives,
             make_dwiref=make_dwiref,
         )
+        if writes_noise_maps():
+            connect_noise_maps_to_unit(workflow, series_wfs, unit, dwi_finalize_wf, output_wfname)
         # The SDC displacement maps name, in their sidecars, the written transforms
         # that carried the correction from the DWI frame into ACPC.
         warp_source, _ = sdc_warp_source(unit, gre_in_eddy=eddy_applies_gre(unit))
@@ -979,6 +1001,15 @@ documentation](https://qsiprep.readthedocs.io/en/latest/methods/index.html \
             cnr_name = f'inputnode.{output_wfname}_cnr'
             carpetplot_name = f'inputnode.{output_wfname}_carpetplot_data'
             hmc_optimization_name = f'inputnode.{output_wfname}_hmc_optimization_data'
+            if writes_noise_maps():
+                workflow.connect([
+                    (dwi_finalize_wf, final_merge_wf, [
+                        (('outputnode.noise_map_t1', _select_grid, index),
+                         f'inputnode.{output_wfname}_noise_map'),
+                        (('outputnode.noise_map_meta', _select_grid, index),
+                         f'inputnode.{output_wfname}_noise_map_meta'),
+                    ]),
+                ])  # fmt:skip
             workflow.connect([
                 # Slot index of each list-valued output: the merge workflow for
                 # resolution i only ever sees images already on grid i.

@@ -69,9 +69,10 @@ def test_series_denoise_wf_conforms_then_denoises(tmp_path):
     # The denoiser is sized from this file's own volume count.
     denoiser = wf.get_node('denoise_wf').get_node('denoiser')
     assert denoiser.inputs.extent == (5, 5, 5)
+    # The written noise map is collected at the subject level, outside SERIES_FIELDS
     assert set(wf.get_node('outputnode').inputs.get()) == {
         series_field for series_field, _ in SERIES_FIELDS
-    }
+    } | {'noise_map_file'}
 
 
 def test_series_denoise_wf_conforms_the_phase_companion(tmp_path):

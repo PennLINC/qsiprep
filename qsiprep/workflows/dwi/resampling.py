@@ -243,6 +243,8 @@ def init_dwi_trans_wf(
                 'jacobian_weights',
                 'jacobian_weight_index',
                 'jacobian_method',
+                # Each volume's composed transform to the output grid
+                'volume_transforms',
                 # Only written out if TOPUP was used
                 'fieldmap_hz_resampled',
                 # The SDC displacement field on the output grid
@@ -327,6 +329,7 @@ def init_dwi_trans_wf(
         ]),
         (cnr_tfm, outputnode, [('output_image', 'cnr_map_resampled')]),
         (compose_transforms, dwi_transform, [('out_warps', 'transforms')]),
+        (compose_transforms, outputnode, [('out_warps', 'volume_transforms')]),
         (inputnode, dwi_transform, [
             ('dwi_files', 'input_image'),
             ('output_grid', 'reference_image'),

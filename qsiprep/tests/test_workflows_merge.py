@@ -938,3 +938,68 @@ def test_no_bias_correction_plumbing_survives_in_the_merge_stack(monkeypatch):
     assert not [name for name in workflow.list_node_names() if 'bias' in name]
     outputs = workflow.get_node('outputnode').outputs.copyable_trait_names()
     assert 'bias_image' not in outputs
+
+
+@pytest.mark.parametrize(
+    ('denoise_method', 'use_phase'),
+    [
+        ('dwidenoise', False),
+        ('dwidenoise', True),
+        ('dwidenoise2', False),
+        ('svht', False),
+        ('svht', True),
+        ('patch2self', False),
+    ],
+)
+def test_noise_map_is_written_per_series(monkeypatch, denoise_method, use_phase):
+    """Test that the denoiser's noise map goes to a derivatives sink named after the series."""
+    workflow = _build_denoising_wf(monkeypatch, denoise_method, 'none', use_phase=use_phase)
+    connections = _connections(workflow)
+
+    assert connections[('denoiser', 'ds_noise_map')] == {('noise_image', 'in_file')}
+    # The written path names the native map in the ACPC map's sidecar
+    assert connections[('ds_noise_map', 'outputnode')] == {('out_file', 'noise_map_file')}
+    sink = workflow.get_node('ds_noise_map')
+    assert sink.inputs.source_file == ['sub-01_dwi.nii.gz']
+    assert sink.inputs.statistic == 'noise'
+    assert sink.inputs.suffix == 'dwimap'
+    # The map is on the raw series' grid, not in ACPC space
+    assert not isdefined(sink.inputs.space)
+    description = sink.inputs.meta_dict['Description']
+    assert ('phase' in description) == (use_phase and denoise_method != 'patch2self')
+    assert ('residual' in description) == (denoise_method == 'patch2self')
+
+
+def test_no_noise_map_without_denoising(monkeypatch):
+    """Test that no noise map sink is built when denoising is off."""
+    workflow = _build_denoising_wf(monkeypatch, 'none', 'none', use_phase=False)
+
+    assert 'ds_noise_map' not in workflow.list_node_names()
+
+
+def test_noise_map_sink_names_the_series(tmp_path):
+    """Test the file name the noise map sink writes for a raw series."""
+    from qsiprep.interfaces import DerivativesDataSink
+
+    source_file = tmp_path / 'bids' / 'sub-01' / 'ses-1' / 'dwi'
+    source_file.mkdir(parents=True)
+    source_file = source_file / 'sub-01_ses-1_acq-multishell_dir-AP_run-2_dwi.nii.gz'
+    noise_file = tmp_path / 'noise.nii.gz'
+    nb.Nifti1Image(np.ones((4, 4, 4), dtype=np.float32), np.eye(4)).to_filename(noise_file)
+
+    sink = DerivativesDataSink(
+        base_directory=str(tmp_path / 'out'),
+        source_file=str(source_file),
+        in_file=str(noise_file),
+        statistic='noise',
+        suffix='dwimap',
+        extension='.nii.gz',
+        compress=True,
+        meta_dict={'Description': 'test'},
+    )
+    sink.run(cwd=str(tmp_path))
+
+    out_dir = tmp_path / 'out' / 'sub-01' / 'ses-1' / 'dwi'
+    stem = 'sub-01_ses-1_acq-multishell_dir-AP_run-2_stat-noise_dwimap'
+    assert (out_dir / f'{stem}.nii.gz').is_file()
+    assert json.loads((out_dir / f'{stem}.json').read_text())['Description'] == 'test'
