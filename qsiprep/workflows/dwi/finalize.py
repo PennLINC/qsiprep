@@ -29,7 +29,7 @@ from ...interfaces.gradients import ExtractB0s
 from ...interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
-from ...interfaces.noise_map import ResampleNoiseMaps
+from ...interfaces.noise_map import NOISE_QUANTITIES, ResampleNoiseMaps
 from ...interfaces.reports import GradientPlot, SDCWarpPlot, SeriesQC
 from ...utils.eddy_config import (
     eddy_applies_gre,
@@ -1006,6 +1006,23 @@ def init_dwi_finalize_wf(
             (inputnode, t1_dice_calc, [('t1_mask', 'inputnode.anatomical_mask')]),
             (merged_sidecar, ds_merged_sidecar, [('derivatives_json', 'in_file')]),
         ])  # fmt:skip
+
+        for field, resample_map in resample_maps.items():
+            workflow.connect([
+                (resample_map, series_qc, [
+                    ('out_file', f'{field}_file'),
+                    ('meta_dict', f'{field}_meta'),
+                ]),
+            ])  # fmt:skip
+        if 'noise_map' in resample_maps:
+            series_qc.inputs.noise_quantity = NOISE_QUANTITIES[config.workflow.denoise_method]
+        if 'jacobian' not in (config.workflow.ignore or []):
+            workflow.connect([
+                (dwi_trans_wf, series_qc, [
+                    ('outputnode.jacobian_weights', 'jacobian_weights'),
+                    ('outputnode.jacobian_weight_index', 'jacobian_weight_index'),
+                ]),
+            ])  # fmt:skip
 
         if index == 0:
             workflow.connect([

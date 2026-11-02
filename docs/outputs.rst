@@ -195,7 +195,8 @@ from that mean (as a fraction, 99th percentile over voxels).
 preprocessed series by the indexed weight reverses the multiplication at the
 point where it was applied, not the whole preprocessing, because bias
 correction runs after it. See :ref:`jacobian_methods` for which component
-modulates what.
+modulates what. Its in-brain summary is in ``desc-image_qc.tsv``
+(:ref:`qc_data`).
 
 The gradient deviation map holds, as nine volumes in row-major order, the
 3x3 matrix ``L`` such that the gradient actually applied at a voxel is
@@ -207,6 +208,8 @@ sidecar as ``GradientDeviationOrientation``, which is close to but not the
 same as the coregistration *QSIPrep* applied to the data. It is not written
 for outputs assembled by ``--distortion-group-merge``. Its in-brain
 summary is in ``desc-image_qc.tsv`` (:ref:`qc_data`).
+
+.. _denoising_maps:
 
 Denoiser outputs
 ================
@@ -315,7 +318,9 @@ as for the ``desc-sdc`` displacement map, and its Jacobian applied to the noise
 map when ``eddy`` modulated the data. ``eddy``'s least-squares restoration
 (``--resamp=lsr``) combines volumes of opposite phase encoding, which is not
 modeled. With ``--distortion-group-merge average`` no ``space-ACPC`` maps are
-written, because every averaged volume mixes two series.
+written, because every averaged volume mixes two series. The in-brain
+summaries of the ``space-ACPC`` maps are in ``desc-image_qc.tsv``
+(:ref:`qc_data`).
 
 
 **********************
@@ -486,6 +491,36 @@ are added:
     The rotation angle of the gradient deviation matrix, in the ``ACPC``
     brain mask: the rotation left after the matrix's scaling and shear are
     removed, which is how far the diffusion encoding is turned at that voxel.
+
+When a denoiser wrote ``space-ACPC`` noise, rank or rank density maps
+(:ref:`denoising_maps`), their median, mean, standard deviation, 5th and 95th
+percentiles in the ``ACPC`` brain mask are added (suffixes ``_median``,
+``_mean``, ``_standard_deviation``, ``_p05`` and ``_p95``):
+
+``noise_sigma``, or ``noise_residual_rms`` with ``patch2self``
+    The noise map, in the intensity units of the preprocessed series. Its
+    scale depends on the scanner and on bias field correction, so compare it
+    across subjects from the same scanner and protocol.
+``rank``, ``rank_density``
+    The signal rank and signal-rank density maps.
+
+Each member series' map counts once per output volume it describes, so a
+short series, such as a few reverse phase-encoding b=0 volumes, weighs little.
+With ``--distortion-group-merge average`` no ``space-ACPC`` maps are written
+and these columns are absent.
+
+When *QSIPrep* applied Jacobian or LSR weights, the same five summaries of the
+weights in the ``ACPC`` brain mask are added as ``jacobian_weight_*``, along
+with ``jacobian_weight_volume_deviation``. Weights that differ between volumes
+are averaged over volumes first, as in the default ``desc-jacobian`` map, so
+the columns do not depend on ``--write-jacobian-4d``;
+``jacobian_weight_volume_deviation`` is how far each volume's own weight lies
+from that mean (as a fraction, 99th percentile over voxels), and 0 when every
+volume shares one map. A weight below 1 dims signal the acquisition
+compressed, approaching 0 where it piled up, and a weight above 1 brightens
+signal it stretched, so a low ``jacobian_weight_p05`` flags strong pile-up. As
+for the derivative, modulation ``eddy`` applies internally is not included,
+and an output assembled by ``--distortion-group-merge`` gets no columns.
 
 
 .. _boilerplate:
