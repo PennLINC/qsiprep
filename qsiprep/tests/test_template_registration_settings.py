@@ -203,6 +203,26 @@ def test_within_scan_hmc_still_uses_shoreline(tmp_path):
     assert all(all(x == 1e-08 for x in v) for v in thr.values()), thr
 
 
+@pytest.mark.parametrize('align_to', ['iterative', 'first'])
+@pytest.mark.parametrize('transform', TRANSFORMS)
+def test_every_round_runs_the_requested_transform(tmp_path, align_to, transform):
+    """Test that every round runs the requested transform.
+
+    The rounds were built without it and ran Rigid, so SHORELine's default Affine
+    and --dwiref-construction-transform Affine gave rigid b=0 templates.
+    """
+    from qsiprep.workflows.dwi.hmc import init_b0_hmc_wf
+
+    _config().execution.output_dir = str(tmp_path)
+    wf = init_b0_hmc_wf(align_to=align_to, transform=transform, num_iters=3)
+    stages = {
+        n.fullname: n.inputs.transforms for n in wf._get_all_nodes() if n.name.startswith('reg_')
+    }
+    assert len(stages) == (3 if align_to == 'iterative' else 1), stages
+    expected = _cfg('shoreline', 'precise', transform)['transforms']
+    assert all(v == expected for v in stages.values()), stages
+
+
 def test_init_b0_hmc_wf_has_no_spatial_bias_correct():
     """Test that init_b0_hmc_wf has no spatial_bias_correct parameter.
 

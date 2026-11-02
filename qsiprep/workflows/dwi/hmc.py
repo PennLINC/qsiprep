@@ -469,6 +469,7 @@ def init_b0_hmc_wf(
         )
         initial_reg = linear_alignment_workflow(
             iternum=0,
+            transform=transform,
             omp_nthreads=omp_nthreads,
             use_masks=use_masks,
             initialize_com=initialize_com,
@@ -491,6 +492,7 @@ def init_b0_hmc_wf(
             reg_iters.append(
                 linear_alignment_workflow(
                     iternum=iternum,
+                    transform=transform,
                     omp_nthreads=omp_nthreads,
                     use_masks=use_masks,
                     initialize_com=initialize_com,
@@ -526,6 +528,7 @@ def init_b0_hmc_wf(
         )
         reg_to_first = linear_alignment_workflow(
             iternum=0,
+            transform=transform,
             omp_nthreads=omp_nthreads,
             use_masks=use_masks,
             initialize_com=initialize_com,

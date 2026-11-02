@@ -82,7 +82,8 @@ Every key is optional; unknown keys are an error.
    * - ``transform``
      - ``"Affine"``, ``"Rigid"``
      - ``"Affine"``
-     - Transformation optimized during head motion correction.
+     - Transformation optimized in both the b=0 alignment and the model-based
+       registrations.
 
 
 **********
