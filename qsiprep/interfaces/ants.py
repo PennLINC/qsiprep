@@ -85,6 +85,11 @@ class MultivariateTemplateConstruction2InputSpec(ANTSCommandInputSpec):
     gradient_step = traits.Float(0.25, usedefault=True, mandatory=True, argstr='-g %.3f')
     use_full_affine = traits.Bool(False, usedefault=True, argstr='-y %d')
     usefloat = traits.Bool(True, argstr='-e %d', usedefault=True)
+    initial_template = File(
+        exists=True,
+        argstr='-z %s',
+        desc='starting template; without it the script averages the centre-of-mass aligned inputs',
+    )
 
 
 class MultivariateTemplateConstruction2OutputSpec(TraitedSpec):

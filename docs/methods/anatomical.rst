@@ -22,9 +22,12 @@ chosen, the steps are:
 2. **Merge.** If there are several images, they are N4-corrected and aligned
    to one another. With ``--subject-anatomical-reference first-lex`` (the
    default) they are registered to the first image in lexical order; with
-   ``unbiased`` an unbiased mid-point template is built instead. The extra
-   cost of the unbiased template is small for two images and about an order
-   of magnitude for three or more.
+   ``unbiased`` an unbiased mid-point template is built instead. Its first
+   round registers every image to the first one and averages them after
+   resampling each once to their mean position; the second registers every
+   image to that template. The registration mask, made from the first image,
+   moves with the template. The extra cost of the unbiased template is small
+   for two images and about an order of magnitude for three or more.
 3. **Brain extraction** with SynthStrip :footcite:p:`synthstrip`.
 4. **Tissue segmentation** with SynthSeg :footcite:p:`synthseg1`, giving the
    tissue-class ``dseg`` and the regional ``desc-aseg_dseg`` derivatives.

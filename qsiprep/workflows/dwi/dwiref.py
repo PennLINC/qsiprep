@@ -18,7 +18,7 @@ from ...interfaces.ants import MultivariateTemplateConstruction2
 from ...interfaces.images import ExtractWM
 from ...interfaces.template_qc import TemplateQC
 from ...utils.misc import DWI2ANAT_DOF_TO_TRANSFORM
-from .hmc import init_b0_hmc_wf
+from .hmc import init_b0_hmc_wf, linear_alignment_workflow
 from .registration import init_b0_to_anat_registration_wf
 from .util import _list_squeeze
 
@@ -211,7 +211,9 @@ def _init_template_construction(
     if linear_only:
         workflow.__desc__ += (
             f'The references were aligned to the evolving template over {num_iterations} '
-            f'iterations of {transform.lower()} registrations. '
+            f'iterations of {transform.lower()} registrations, the first of which '
+            'registered each reference to the first and averaged them after resampling '
+            'each once to their mean position. '
         )
 
         # initialize_com because sessions can differ by centimetres of table
@@ -255,7 +257,15 @@ def _init_template_construction(
     else:
         workflow.__desc__ += (
             'The references were aligned to the template with '
-            f'`antsMultivariateTemplateConstruction2.sh` using {transform} transforms. '
+            f'`antsMultivariateTemplateConstruction2.sh` using {transform} transforms, '
+            'starting from a template made by rigidly registering each reference to the '
+            'first and averaging them after resampling each once to their mean position. '
+        )
+        seed_template_wf = linear_alignment_workflow(
+            omp_nthreads=omp_nthreads,
+            initialize_com=True,
+            settings='unbiased_template',
+            seed_from_first=True,
         )
         runtime_opts = {'num_cores': 1, 'parallel_control': 0}
         if omp_nthreads > 1:
@@ -272,6 +282,8 @@ def _init_template_construction(
             n_procs=omp_nthreads,
         )
         workflow.connect([
+            (rename_inputs, seed_template_wf, [('out_file', 'inputnode.image_paths')]),
+            (seed_template_wf, ants_mvtc2, [('outputnode.updated_template', 'initial_template')]),
             (rename_inputs, ants_mvtc2, [('out_file', 'input_images')]),
             (ants_mvtc2, split_outputs, [('forward_transforms', 'inlist')]),
             (ants_mvtc2, outputnode, [('templates', 'dwiref')]),

@@ -10,6 +10,8 @@ Two defects:
 2. ``Rigid`` is not in antsMultivariateTemplateConstruction2's enum
    (BSplineSyN/SyN/Affine), so the CLI advertised a choice the backend could not
    honour. Linear templates now go through ``init_b0_hmc_wf`` instead.
+3. ``init_b0_hmc_wf`` then dropped the transform on the way to its registrations,
+   so an Affine template was built from rigid registrations.
 """
 
 import pytest
@@ -67,6 +69,16 @@ def test_requested_transform_reaches_the_nonlinear_backend():
     wf = _build('SyN')
     node = next(n for n in wf._get_all_nodes() if n.name == 'ants_mvtc2')
     assert node.inputs.transform == 'SyN'
+
+
+@pytest.mark.parametrize('transform', ['Rigid', 'Affine'])
+def test_linear_template_registrations_use_the_requested_transform(transform):
+    wf = _build(transform, num_iterations=3, name=f'xfm_{transform}')
+    regs = [n for n in wf._get_all_nodes() if n.name.startswith('reg_')]
+    assert len(regs) == 3
+    expected = ['Rigid', 'Affine'] if transform == 'Affine' else ['Rigid']
+    for node in regs:
+        assert node.inputs.transforms == expected, node.fullname
 
 
 @pytest.mark.parametrize('transform', ['Rigid', 'Affine'])

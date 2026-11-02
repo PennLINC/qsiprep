@@ -1180,10 +1180,9 @@ intensity nonuniformity correction, by registering them with `antsRegistration`
 
     # Make an unbiased template, same as used for b=0 registration. The merge
     # registration is masked: unmasked, face/jaw/neck -- which move relative to
-    # the brain between sessions -- can pull the brains out of alignment. One
-    # mask suffices because the fixed image in every registration is the
-    # template; it is built from the first conformed image and dilated for
-    # slack.
+    # the brain between sessions -- can pull the brains out of alignment. The
+    # mask is built from the first conformed image, which the first round
+    # registers to, and dilated for slack; it moves with the template after that.
     align_to = config.workflow.subject_anatomical_reference
     anat_merge_wf = init_b0_hmc_wf(
         align_to='first' if (align_to == 'first-lex') else 'iterative',
