@@ -580,6 +580,12 @@ def test_finalize_carries_the_noise_maps_to_acpc(
 
     assert ('denoising_meta', 'series_meta') in from_inputnode
 
+    assert edges[('resample_noise', 'series_qc')] == {
+        ('out_file', 'noise_map_file'),
+        ('meta_dict', 'noise_map_meta'),
+    }
+    assert wf.get_node('series_qc').inputs.noise_quantity == 'sigma'
+
     sink = wf.get_node('dwi_derivatives_wf').get_node('ds_noise_map_t1')
     assert sink.inputs.space == 'ACPC'
     assert sink.inputs.statistic == 'std'
@@ -641,6 +647,8 @@ def test_finalize_carries_the_rank_maps_to_acpc(
     wf = _finalize_wf(tmp_path, monkeypatch, 'shoreline', 'drbuddi', denoise_method)
     node = wf.get_node('resample_rank')
     sink = wf.get_node('dwi_derivatives_wf').get_node('ds_rank_map_t1')
+    noise_quantity = 'residual_rms' if denoise_method == 'patch2self' else 'sigma'
+    assert wf.get_node('series_qc').inputs.noise_quantity == noise_quantity
     if not writes_rank:
         assert node is None
         assert sink is None
@@ -656,6 +664,10 @@ def test_finalize_carries_the_rank_maps_to_acpc(
     assert edges[('resample_rank', 'dwi_derivatives_wf')] == {
         ('out_file', 'inputnode.rank_map_t1'),
         ('meta_dict', 'inputnode.rank_map_meta'),
+    }
+    assert edges[('resample_rank', 'series_qc')] == {
+        ('out_file', 'rank_map_file'),
+        ('meta_dict', 'rank_map_meta'),
     }
     assert sink.inputs.desc == 'rank'
     assert sink.inputs.space == 'ACPC'
@@ -685,6 +697,10 @@ def test_finalize_carries_the_rank_density_maps_to_acpc(tmp_path, monkeypatch):
     assert edges[('resample_rank_density', 'dwi_derivatives_wf')] == {
         ('out_file', 'inputnode.rank_density_t1'),
         ('meta_dict', 'inputnode.rank_density_meta'),
+    }
+    assert edges[('resample_rank_density', 'series_qc')] == {
+        ('out_file', 'rank_density_file'),
+        ('meta_dict', 'rank_density_meta'),
     }
     sink = wf.get_node('dwi_derivatives_wf').get_node('ds_rank_density_t1')
     assert sink.inputs.space == 'ACPC'
@@ -734,13 +750,19 @@ def test_merge_concatenates_noise_maps_only_when_concatenating(
     concat = wf.get_node('concat_noise_maps')
     concat_rank = wf.get_node('concat_rank_density_maps')
     concat_rank_map = wf.get_node('concat_rank_maps')
+    edges = _edges(wf)
+    assert edges[('merged_b0_ref', 'series_qc')] == {('outputnode.dwi_mask', 't1_mask_file')}
     if strategy == 'average':
         assert concat is None
         assert concat_rank is None
         assert concat_rank_map is None
+        assert not any(source.startswith('concat_') for source, _ in edges if _ == 'series_qc')
         return
 
-    edges = _edges(wf)
+    assert edges[('concat_noise_maps', 'series_qc')] == {
+        ('out_file', 'noise_map_file'),
+        ('meta_dict', 'noise_map_meta'),
+    }
     assert edges[('distortion_merger', 'concat_noise_maps')] == {
         ('merged_denoising_confounds', 'confounds_file')
     }
@@ -774,4 +796,8 @@ def test_merge_concatenates_noise_maps_only_when_concatenating(
     assert edges[('concat_rank_density_maps', 'dwi_derivatives_wf')] == {
         ('out_file', 'inputnode.rank_density_t1'),
         ('meta_dict', 'inputnode.rank_density_meta'),
+    }
+    assert edges[('concat_rank_density_maps', 'series_qc')] == {
+        ('out_file', 'rank_density_file'),
+        ('meta_dict', 'rank_density_meta'),
     }

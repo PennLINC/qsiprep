@@ -26,11 +26,12 @@ from nipype.interfaces.base import (
     traits,
 )
 
+from ..utils.jacobian import volume_mean
 from ..viz.utils import plot_sdc_warp
 from .bids import get_bids_params
 from .dsi_studio import QC_WARNINGS_COLUMN
 from .gradients import concatenate_bvals, concatenate_bvecs
-from .gradunwarp import gradient_nonlinearity_qc
+from .gradunwarp import _mask_on_grid, gradient_nonlinearity_qc
 
 SUBJECT_TEMPLATE = """{mrtrix_warning}\t<ul class="elem-desc">
 \t\t<li>Subject ID: {subject_id}</li>
@@ -610,12 +611,32 @@ class _SeriesQCInputSpec(BaseInterfaceInputSpec):
     t1_mask_file = File(exists=True, desc='brain mask in t1 space')
     t1_cnr_file = File(exists=True, desc='CNR file in t1 space')
     t1_fieldmap_hz_file = File(exists=True, desc='Fieldmap in Hz file in t1 space')
-    t1_b0_series = File(exists=True, desc='time series of b=0 images')
+    t1_tsnr_file = File(exists=True, desc='b=0 temporal SNR map in t1 space')
     t1_dice_score = traits.Float()
     mni_dice_score = traits.Float()
     grad_dev_file = File(exists=True, desc='gradient deviation tensor map in t1 space')
     gradwarp_field = File(exists=True, desc='applied gradwarp displacement field')
     gradwarp_mask_file = File(exists=True, desc='brain mask in the space of gradwarp_field')
+    noise_map_file = File(
+        exists=True, desc='denoiser noise map in t1 space, one volume per member series'
+    )
+    noise_map_meta = traits.Dict(desc='sidecar of noise_map_file')
+    noise_quantity = traits.Enum(
+        'sigma',
+        'residual_rms',
+        usedefault=True,
+        desc='what the noise map holds, which names its columns',
+    )
+    rank_map_file = File(exists=True, desc='denoiser signal rank map in t1 space')
+    rank_map_meta = traits.Dict(desc='sidecar of rank_map_file')
+    rank_density_file = File(exists=True, desc='denoiser signal rank density map in t1 space')
+    rank_density_meta = traits.Dict(desc='sidecar of rank_density_file')
+    jacobian_weights = InputMultiObject(
+        File(exists=True), desc='distinct Jacobian or LSR weight maps in t1 space'
+    )
+    jacobian_weight_index = traits.List(
+        traits.Int(), desc='per-volume index into jacobian_weights'
+    )
     output_file_name = traits.File()
 
 
@@ -662,12 +683,35 @@ class SeriesQC(SimpleInterface):
         if isdefined(self.inputs.t1_mask_file):
             if isdefined(self.inputs.t1_cnr_file):
                 image_qc.update(get_cnr_values(self.inputs.t1_cnr_file, self.inputs.t1_mask_file))
-            if isdefined(self.inputs.t1_b0_series):
-                # TODO: Add a function to get b=0 TSNR
-                pass
+            if isdefined(self.inputs.t1_tsnr_file):
+                image_qc.update(
+                    get_tsnr_values(self.inputs.t1_tsnr_file, self.inputs.t1_mask_file)
+                )
             if isdefined(self.inputs.t1_fieldmap_hz_file):
                 image_qc.update(
                     get_fieldmap_values(self.inputs.t1_fieldmap_hz_file, self.inputs.t1_mask_file)
+                )
+            for map_name, prefix, index_key in DENOISER_MAP_QC:
+                map_file = getattr(self.inputs, f'{map_name}_file')
+                if not isdefined(map_file):
+                    continue
+                meta = getattr(self.inputs, f'{map_name}_meta')
+                image_qc.update(
+                    get_denoiser_map_values(
+                        map_file,
+                        self.inputs.t1_mask_file,
+                        prefix or f'noise_{self.inputs.noise_quantity}',
+                        volume_index=meta.get(index_key) if isdefined(meta) else None,
+                    )
+                )
+            if isdefined(self.inputs.jacobian_weights):
+                weight_index = self.inputs.jacobian_weight_index
+                image_qc.update(
+                    get_jacobian_values(
+                        self.inputs.jacobian_weights,
+                        self.inputs.t1_mask_file,
+                        weight_index=weight_index if isdefined(weight_index) else None,
+                    )
                 )
             if isdefined(self.inputs.grad_dev_file):
                 field = self.inputs.gradwarp_field
@@ -735,6 +779,156 @@ def get_fieldmap_values(fieldmap_image, brain_mask):
         hz_values = masker.fit_transform(fieldmap_img).flatten()
         freqs[f'fieldmap_hz_{strategy}'] = hz_values
     return freqs
+
+
+#: The denoiser maps SeriesQC summarizes: input name, column prefix (the noise map's
+#: names its quantity) and the sidecar key giving each output volume's map volume
+DENOISER_MAP_QC = (
+    ('noise_map', None, 'NoiseMapIndex'),
+    ('rank_map', 'rank', 'RankMapIndex'),
+    ('rank_density', 'rank_density', 'RankDensityMapIndex'),
+)
+
+
+def _weighted_quantiles(values, weights, quantiles):
+    order = np.argsort(values)
+    cumulative = np.cumsum(weights[order])
+    positions = np.searchsorted(cumulative, np.asarray(quantiles) * cumulative[-1])
+    return values[order][np.minimum(positions, values.size - 1)]
+
+
+def get_denoiser_map_values(map_file, brain_mask, prefix, volume_index=None):
+    """Summarize a denoiser map inside the brain mask, as ``image_qc.tsv`` columns.
+
+    Parameters
+    ----------
+    map_file : str
+        A noise, rank or rank density map on the output grid, one volume per
+        member series.
+    brain_mask : str
+        A brain mask of the output.
+    prefix : str
+        The column prefix.
+    volume_index : list of int or None, optional
+        The map volume describing each output volume (the sidecar's
+        ``NoiseMapIndex`` and its kin). Each map volume then counts once per output
+        volume it describes, so a short series weighs less than a long one. Without
+        it every map volume counts once.
+
+    Returns
+    -------
+    dict
+        See :func:`summarize_in_mask`.
+    """
+    map_img = nb.load(map_file)
+    data = np.asanyarray(map_img.dataobj, dtype=np.float64)
+    return summarize_in_mask(data, map_img.affine, brain_mask, prefix, volume_index=volume_index)
+
+
+def get_tsnr_values(tsnr_image, brain_mask):
+    """Summarize the b=0 temporal SNR map inside the brain mask, as ``image_qc.tsv`` columns.
+
+    :class:`~qsiprep.interfaces.tsnr.DWITSNR` writes 0 where it has no estimate
+    (no variance across the b=0 volumes, or fewer than two of them), so those
+    voxels are left out, as they are from the sidecar's ``MedianTSNR``.
+
+    Returns
+    -------
+    dict
+        The ``b0_tsnr`` summaries of :func:`summarize_in_mask`; empty when the map
+        has no estimate in the brain.
+    """
+    tsnr_img = nb.load(tsnr_image)
+    data = np.asanyarray(tsnr_img.dataobj, dtype=np.float64)
+    data[data == 0] = np.nan
+    return summarize_in_mask(data, tsnr_img.affine, brain_mask, 'b0_tsnr')
+
+
+def get_jacobian_values(weight_images, brain_mask, weight_index=None):
+    """Summarize the applied Jacobian or LSR weights inside the brain mask.
+
+    Distinct maps (one per volume with eddy-current correction) are first averaged
+    over volumes, as the default ``desc-jacobian`` derivative is, so the columns do
+    not depend on ``--write-jacobian-4d``.
+
+    Parameters
+    ----------
+    weight_images : list of str
+        The distinct weight maps on the output grid.
+    brain_mask : str
+        A brain mask of the output.
+    weight_index : list of int or None, optional
+        The map applied to each output volume.
+
+    Returns
+    -------
+    dict
+        The ``jacobian_weight`` summaries of :func:`summarize_in_mask`, and
+        ``jacobian_weight_volume_deviation``: the 99th percentile over voxels of the
+        largest relative difference between a volume's own weight and the mean,
+        0 when every volume shares one map.
+    """
+    images = [nb.load(path) for path in weight_images]
+    if len(images) == 1:
+        data, deviation = np.asanyarray(images[0].dataobj, dtype=np.float64), 0.0
+    else:
+        data, deviation = volume_mean(images, list(weight_index or []))
+    values = summarize_in_mask(data, images[0].affine, brain_mask, 'jacobian_weight')
+    values['jacobian_weight_volume_deviation'] = [deviation]
+    return values
+
+
+def summarize_in_mask(data, affine, brain_mask, prefix, volume_index=None):
+    """Summarize a 3D or 4D map inside a brain mask, as ``image_qc.tsv`` columns.
+
+    Parameters
+    ----------
+    data : numpy.ndarray
+        The map.
+    affine : numpy.ndarray
+        Its voxel-to-world affine.
+    brain_mask : str
+        A brain mask, resampled to the map's grid if needed.
+    prefix : str
+        The column prefix.
+    volume_index : list of int or None, optional
+        For a 4D map, the map volume of each output volume; each map volume counts
+        once per entry. Without it every map volume counts once.
+
+    Returns
+    -------
+    dict
+        The ``_median``, ``_mean``, ``_standard_deviation``, ``_p05`` and ``_p95``
+        of the map over the brain voxels of every volume. Empty when no brain
+        voxel has a finite value.
+    """
+    if data.ndim == 3:
+        data = data[..., np.newaxis]
+    mask = _mask_on_grid(brain_mask, data.shape[:3], affine)
+
+    if volume_index is None:
+        volume_weights = np.ones(data.shape[3])
+    else:
+        volume_weights = np.bincount(volume_index, minlength=data.shape[3])[: data.shape[3]]
+
+    in_mask = data[mask]
+    weights = np.broadcast_to(volume_weights.astype(np.float64), in_mask.shape)
+    keep = np.isfinite(in_mask) & (weights > 0)
+    values, weights = in_mask[keep], weights[keep]
+    if values.size == 0:
+        return {}
+
+    mean = np.average(values, weights=weights)
+    p05, median, p95 = _weighted_quantiles(values, weights, [0.05, 0.5, 0.95])
+    return {
+        f'{prefix}_median': [float(median)],
+        f'{prefix}_mean': [float(mean)],
+        f'{prefix}_standard_deviation': [
+            float(np.sqrt(np.average((values - mean) ** 2, weights=weights)))
+        ],
+        f'{prefix}_p05': [float(p05)],
+        f'{prefix}_p95': [float(p95)],
+    }
 
 
 def get_cnr_values(cnr_image, brain_mask):

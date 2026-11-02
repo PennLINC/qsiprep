@@ -1181,6 +1181,73 @@ def test_dwi2anat_dof_reaches_the_per_unit_coregistration(tmp_path, monkeypatch,
     assert coreg.inputs.transforms == [expected]
 
 
+@pytest.mark.parametrize('prefix', ['eddy_ec', 'diffprep_ec'])
+def test_gather_confounds_keeps_the_eddy_current_columns(tmp_path, prefix):
+    import pandas as pd
+
+    from qsiprep.interfaces.confounds import _gather_confounds
+
+    pd.DataFrame({'FramewiseDisplacement': [np.nan, 0.2]}).to_csv(
+        tmp_path / 'fd.tsv', sep='\t', index=False
+    )
+    motion = pd.DataFrame(
+        np.zeros((2, 6)), columns=['trans_x', 'trans_y', 'trans_z', 'rot_x', 'rot_y', 'rot_z']
+    )
+    motion.to_csv(tmp_path / 'motion.tsv', sep='\t', index=False)
+    ec = pd.DataFrame([[0.1, 0.2], [0.3, 0.4]], columns=[f'{prefix}_00', f'{prefix}_01'])
+    ec.to_csv(tmp_path / 'ec.tsv', sep='\t', index=False)
+
+    out_file, confounds_list = _gather_confounds(
+        fdisp=str(tmp_path / 'fd.tsv'),
+        motion=str(tmp_path / 'motion.tsv'),
+        ec=str(tmp_path / 'ec.tsv'),
+        newpath=str(tmp_path),
+    )
+
+    confounds = pd.read_csv(out_file, sep='\t')
+    np.testing.assert_allclose(confounds[[f'{prefix}_00', f'{prefix}_01']], ec.to_numpy())
+    assert 'Eddy-current parameters' in confounds_list
+
+
+@pytest.mark.parametrize(
+    ('hmc_method', 'sdc_method', 'ec_node', 'ec_port'),
+    [
+        ('eddy', 'topup', 'spm_motion', 'eddy_ec_file'),
+        ('tortoise', 'drbuddi', 'motion_params', 'diffprep_ec_file'),
+    ],
+)
+def test_eddy_current_parameters_reach_the_confounds(
+    tmp_path, monkeypatch, hmc_method, sdc_method, ec_node, ec_port
+):
+    """Test that each backend's eddy-current parameters are wired into the confounds table."""
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    cfg = _cfg(hmc_method=hmc_method, sdc_method=sdc_method, layout=_StubLayout())
+    cfg.workflow.anat_modality = 't1w'
+    cfg.workflow.dwi2anat_dof = 6
+    cfg.workflow.hmc_transform = 'Affine'
+    cfg.workflow.diffprep_config = None
+    cfg.workflow.tortoise_gpu_cpu_ratio = None
+    cfg.workflow.gpu = None
+    cfg.workflow.impute_slice_threshold = 0
+    from qsiprep.workflows.dwi.base import init_dwi_preproc_wf
+
+    wf = init_dwi_preproc_wf(
+        _rpe_unit(tmp_path), t2w_sdc=False, output_prefix='sub-01', source_file=SRC
+    )
+
+    def connections(workflow, src, dst):
+        edge = workflow._graph.get_edge_data(workflow.get_node(src), workflow.get_node(dst))
+        return set(edge['connect']) if edge else set()
+
+    hmc = wf.get_node('hmc_sdc_wf')
+    confounds_wf = wf.get_node('dwi_confs_wf')
+    assert (ec_port, 'ec_file') in connections(hmc, ec_node, 'outputnode')
+    assert ('outputnode.ec_file', 'inputnode.ec_file') in connections(
+        wf, 'hmc_sdc_wf', 'dwi_confs_wf'
+    )
+    assert ('ec_file', 'ec') in connections(confounds_wf, 'inputnode', 'concat')
+
+
 def _merge_wf(tmp_path, resolution=None, write_shared_outputs=True, name='merge_wf'):
     """Build a distortion-group merge workflow with a real assembly, for the sink tests."""
     from qsiplan.plan import OutputAssembly

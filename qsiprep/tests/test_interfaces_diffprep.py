@@ -320,6 +320,23 @@ def test_diffprep_motion_params_basic(tmp_path):
     np.testing.assert_allclose(spm, expected, atol=1e-5)
 
 
+def test_diffprep_motion_params_writes_the_eddy_current_columns(tmp_path):
+    """Test that the 18 non-rigid parameters become diffprep_ec_00..17, unconverted."""
+    import pandas as pd
+
+    from qsiprep.interfaces.tortoise import DIFFPREPMotionParams
+
+    full = np.random.default_rng(1).standard_normal((3, 24))
+    transforms_file = tmp_path / 'sub-1_dwi_moteddy_transformations.txt'
+    transforms_file.write_text('\n'.join(' '.join(f'{v:.6f}' for v in row) for row in full))
+
+    res = DIFFPREPMotionParams(transformations_file=str(transforms_file)).run(cwd=str(tmp_path))
+
+    ec = pd.read_csv(res.outputs.diffprep_ec_file, sep='\t')
+    assert list(ec.columns) == [f'diffprep_ec_{i:02d}' for i in range(18)]
+    np.testing.assert_allclose(ec.to_numpy(), full[:, 6:], atol=1e-5)
+
+
 def test_diffprep_motion_params_plain_whitespace(tmp_path):
     """Test that motion parameters parse from plain whitespace-separated values.
 
