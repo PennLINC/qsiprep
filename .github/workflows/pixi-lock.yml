@@ -35,7 +35,7 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "Pull request did not touch pyproject.toml or pixi.lock; skipping lockfile validation."
           fi
-      - uses: prefix-dev/setup-pixi@v0.10.2
+      - uses: prefix-dev/setup-pixi@v0.11.2
         if: ${{ steps.dependencies.outputs.changed == 'true' }}
         with:
           pixi-version: v0.58.0
@@ -74,7 +74,7 @@ jobs:
         run: |
           git config user.name "nipreps[bot]"
           git config user.email "bot@nipreps.org"
-      - uses: prefix-dev/setup-pixi@v0.10.2
+      - uses: prefix-dev/setup-pixi@v0.11.2
         if: ${{ steps.latest-commit.outputs.run_lockfile_update == 'true' }}
         with:
           pixi-version: v0.58.0
