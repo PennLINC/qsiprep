@@ -22,6 +22,8 @@ permissions:
 jobs:
   required-sections:
     name: Check that required sections are answered
+    # Dependabot PRs do not use the PR template
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Require the LLM-use and human-contributor boxes
