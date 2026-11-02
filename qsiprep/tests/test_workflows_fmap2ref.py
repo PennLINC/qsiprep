@@ -178,3 +178,16 @@ def test_fmap2ref_settings_are_rigid():
         assert 'Affine' not in settings['transforms'], name
         assert all(t in ('Translation', 'Rigid') for t in settings['transforms']), name
         assert not any(settings['use_histogram_matching']), name
+
+
+@pytest.mark.parametrize(
+    'name', ['fmap-any_registration.json', 'fmap-any_registration_testing.json']
+)
+def test_fmap2ref_settings_have_no_12mm_level(name):
+    """Test that no level shrinks a 3 mm b=0 to 12 mm.
+
+    At that level the --sloppy settings settled on a false optimum for 9 of 1000 ANTs seeds
+    (up to 6.7 deg / 88 mm on the phasediff fixture), which the finer levels did not leave.
+    """
+    settings = json.loads(load_data(name).read_text())
+    assert max(max(level) for level in settings['shrink_factors']) <= 2

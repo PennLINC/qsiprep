@@ -138,6 +138,8 @@ def init_sdc_unwarp_wf(name='sdc_unwarp_wf'):
     # The biased, flat-brain magnitude and the EPI b0 have unrelated histograms, and matching
     # them hands the mutual information a wrong intensity correspondence.
     ants_settings = str(load_data('fmap-any_registration.json'))
+    # The --sloppy settings have no 12 mm level: with it, 9 of 1000 ANTs seeds landed up to
+    # 6.7 deg / 88 mm off on the phasediff fixture; without it none did, at the same median.
     if config.execution.sloppy:
         ants_settings = str(load_data('fmap-any_registration_testing.json'))
     fmap2ref_reg = pe.Node(
