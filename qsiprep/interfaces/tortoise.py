@@ -1393,7 +1393,9 @@ class DIFFPREPMotionParams(SimpleInterface):
     eddy/SHORELine motion files (which qsiprep now also exports in RAS via
     :func:`~qsiprep.interfaces.gradients.get_ras_motion_params`). The remaining
     18 Okan parameters encode the eddy-current polynomial + rotation/eddy
-    centre and are intentionally dropped -- they are not rigid head motion.
+    centre. They are not rigid head motion, so they stay out of the motion
+    file and are written unchanged (still LPS) as the ``diffprep_ec_00`` ...
+    ``diffprep_ec_17`` confounds columns.
     """
 
     input_spec = _DIFFPREPMotionParamsInputSpec
