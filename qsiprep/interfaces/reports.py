@@ -611,7 +611,7 @@ class _SeriesQCInputSpec(BaseInterfaceInputSpec):
     t1_mask_file = File(exists=True, desc='brain mask in t1 space')
     t1_cnr_file = File(exists=True, desc='CNR file in t1 space')
     t1_fieldmap_hz_file = File(exists=True, desc='Fieldmap in Hz file in t1 space')
-    t1_b0_series = File(exists=True, desc='time series of b=0 images')
+    t1_tsnr_file = File(exists=True, desc='b=0 temporal SNR map in t1 space')
     t1_dice_score = traits.Float()
     mni_dice_score = traits.Float()
     grad_dev_file = File(exists=True, desc='gradient deviation tensor map in t1 space')
@@ -683,9 +683,10 @@ class SeriesQC(SimpleInterface):
         if isdefined(self.inputs.t1_mask_file):
             if isdefined(self.inputs.t1_cnr_file):
                 image_qc.update(get_cnr_values(self.inputs.t1_cnr_file, self.inputs.t1_mask_file))
-            if isdefined(self.inputs.t1_b0_series):
-                # TODO: Add a function to get b=0 TSNR
-                pass
+            if isdefined(self.inputs.t1_tsnr_file):
+                image_qc.update(
+                    get_tsnr_values(self.inputs.t1_tsnr_file, self.inputs.t1_mask_file)
+                )
             if isdefined(self.inputs.t1_fieldmap_hz_file):
                 image_qc.update(
                     get_fieldmap_values(self.inputs.t1_fieldmap_hz_file, self.inputs.t1_mask_file)
@@ -822,6 +823,25 @@ def get_denoiser_map_values(map_file, brain_mask, prefix, volume_index=None):
     map_img = nb.load(map_file)
     data = np.asanyarray(map_img.dataobj, dtype=np.float64)
     return summarize_in_mask(data, map_img.affine, brain_mask, prefix, volume_index=volume_index)
+
+
+def get_tsnr_values(tsnr_image, brain_mask):
+    """Summarize the b=0 temporal SNR map inside the brain mask, as ``image_qc.tsv`` columns.
+
+    :class:`~qsiprep.interfaces.tsnr.DWITSNR` writes 0 where it has no estimate
+    (no variance across the b=0 volumes, or fewer than two of them), so those
+    voxels are left out, as they are from the sidecar's ``MedianTSNR``.
+
+    Returns
+    -------
+    dict
+        The ``b0_tsnr`` summaries of :func:`summarize_in_mask`; empty when the map
+        has no estimate in the brain.
+    """
+    tsnr_img = nb.load(tsnr_image)
+    data = np.asanyarray(tsnr_img.dataobj, dtype=np.float64)
+    data[data == 0] = np.nan
+    return summarize_in_mask(data, tsnr_img.affine, brain_mask, 'b0_tsnr')
 
 
 def get_jacobian_values(weight_images, brain_mask, weight_index=None):

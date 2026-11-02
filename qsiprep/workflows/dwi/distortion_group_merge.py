@@ -478,6 +478,7 @@ def init_distortion_group_merge_wf(
         (inputnode, t1_dice_calc, [('t1_mask', 'inputnode.anatomical_mask')]),
         (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
         (b0_ref_wf, series_qc, [('outputnode.dwi_mask', 't1_mask_file')]),
+        (dwi_derivatives_wf, series_qc, [('tsnr.out_file', 't1_tsnr_file')]),
         (series_qc, ds_series_qc, [('series_qc_file', 'in_file')]),
         (series_qc, ds_report_qc_warnings, [('qc_warnings_report', 'in_file')]),
         (distortion_merger, outputnode, [

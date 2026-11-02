@@ -987,10 +987,8 @@ def init_dwi_finalize_wf(
             (dwi_trans_wf, series_qc, [
                 ('outputnode.cnr_map_resampled', 't1_cnr_file'),
             ]),
-            (final_denoise_wf, series_qc, [
-                ('outputnode.dwi_mask_t1', 't1_mask_file'),
-                ('outputnode.t1_b0_series', 't1_b0_series'),
-            ]),
+            (final_denoise_wf, series_qc, [('outputnode.dwi_mask_t1', 't1_mask_file')]),
+            (dwi_derivatives_wf, series_qc, [('tsnr.out_file', 't1_tsnr_file')]),
             (dwi_trans_wf, series_qc, [('outputnode.resampled_qc', 't1_qc')]),
             (dwi_trans_wf, t1_dice_calc, [
                 ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask'),

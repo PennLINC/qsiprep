@@ -132,6 +132,9 @@ Per output, in ``dwi/``::
   # Contrast-to-noise ratio of the head motion model, per shell
   <source_entities>_space-ACPC_<res>_model-<label>_stat-cnr_dwimap.nii.gz
 
+  # Temporal SNR across the b=0 volumes of the preprocessed series
+  <source_entities>_space-ACPC_<res>_stat-tsnr_dwimap.nii.gz
+
 The ``.bval``/``.bvec`` pair is read correctly by FSL, DSI Studio and DIPY
 but not by MRtrix3, which mis-reads FSL-style vectors; use the ``.b`` file
 there (``mrconvert -grad *_dwi.b``). The brain mask is generous on purpose.
@@ -476,6 +479,15 @@ The motion summaries are ``mean_fd`` and ``max_fd``, ``max_translation`` and
 ``max_rotation``, and their frame-to-frame maxima ``max_rel_translation``
 and ``max_rel_rotation``. ``t1_dice_distance`` is the Dice distance between
 the DWI brain mask and the anatomical brain mask.
+
+``b0_tsnr_median``, ``_mean``, ``_standard_deviation``, ``_p05`` and ``_p95``
+summarize the ``stat-tsnr`` map in the ``ACPC`` brain mask: each voxel's mean
+over its standard deviation across the b=0 volumes of the preprocessed series.
+Voxels without an estimate (no variance across the b=0 volumes) are left out,
+and a series with fewer than two b=0 volumes gets no columns. When an output
+combines several series, the differences between their b=0 volumes, such as
+residual distortion between opposite phase encodings, lower it as noise and
+motion do.
 
 With ``--gradient-file``, the median, 95th percentile and maximum inside the
 brain (suffixes ``_median``, ``_p95`` and ``_maximum``) of two more measures

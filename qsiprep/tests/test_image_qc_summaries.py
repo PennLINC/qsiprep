@@ -6,7 +6,12 @@ import pandas as pd
 import pytest
 
 from qsiprep import config
-from qsiprep.interfaces.reports import SeriesQC, get_denoiser_map_values, get_jacobian_values
+from qsiprep.interfaces.reports import (
+    SeriesQC,
+    get_denoiser_map_values,
+    get_jacobian_values,
+    get_tsnr_values,
+)
 from qsiprep.tests.test_noise_map import _edges, _finalize_wf
 
 AFFINE = np.diag([-2.0, -2.0, 2.0, 1.0])
@@ -188,3 +193,78 @@ def test_finalize_passes_the_jacobian_weights_to_series_qc(tmp_path, monkeypatch
     }
     assert (expected <= connections) == (not ignore)
     assert not ignore or not (expected & connections)
+
+
+# ---------------------------------------------------------------------------
+# b=0 temporal SNR
+
+
+def test_tsnr_summary_leaves_out_voxels_without_an_estimate(tmp_path):
+    """Test that DWITSNR's zeros (no variance, or outside its mask) are not counted."""
+    tsnr = np.zeros(SHAPE)
+    tsnr[INTERIOR] = 20.0
+    tsnr[2, 2, 2:6] = 0.0
+    tsnr[2, 3, 2:4] = 30.0
+    mask = np.zeros(SHAPE)
+    mask[1:-1, 1:-1, 1:-1] = 1
+
+    values = get_tsnr_values(
+        _write_image(tmp_path / 'tsnr.nii.gz', tsnr),
+        _write_image(tmp_path / 'mask.nii.gz', mask),
+    )
+
+    n_values = 8**3 - 4
+    assert values['b0_tsnr_median'] == [20.0]
+    assert values['b0_tsnr_mean'] == [pytest.approx((20.0 * (n_values - 2) + 60.0) / n_values)]
+    assert values['b0_tsnr_p95'] == [20.0]
+
+
+def test_series_qc_writes_the_tsnr_columns(tmp_path, monkeypatch):
+    row = _series_qc_row(
+        tmp_path,
+        monkeypatch,
+        t1_mask_file=_write_image(tmp_path / 'mask.nii.gz', np.ones(SHAPE)),
+        t1_tsnr_file=_write_image(tmp_path / 'tsnr.nii.gz', np.full(SHAPE, 12.5)),
+    )
+
+    assert row['b0_tsnr_median'] == 12.5
+    assert row['b0_tsnr_standard_deviation'] == 0.0
+
+
+def test_series_qc_writes_no_tsnr_columns_from_an_empty_map(tmp_path, monkeypatch):
+    """Test that a series with fewer than two b=0 volumes (an all-zero map) gets no columns."""
+    row = _series_qc_row(
+        tmp_path,
+        monkeypatch,
+        t1_mask_file=_write_image(tmp_path / 'mask.nii.gz', np.ones(SHAPE)),
+        t1_tsnr_file=_write_image(tmp_path / 'tsnr.nii.gz', np.zeros(SHAPE)),
+    )
+
+    assert not any(column.startswith('b0_tsnr') for column in row.index)
+
+
+def test_finalize_passes_the_tsnr_map_to_series_qc(tmp_path, monkeypatch):
+    wf = _finalize_wf(tmp_path, monkeypatch, 'shoreline', 'drbuddi', 'dwidenoise')
+
+    assert _edges(wf)[('dwi_derivatives_wf', 'series_qc')] == {('tsnr.out_file', 't1_tsnr_file')}
+
+
+def test_merge_passes_the_tsnr_map_to_series_qc(tmp_path, monkeypatch):
+    from qsiprep.utils.spaces import parse_output_spaces
+    from qsiprep.workflows.dwi.distortion_group_merge import init_distortion_group_merge_wf
+
+    monkeypatch.setattr(config.execution, 'output_dir', str(tmp_path / 'out'))
+    monkeypatch.setattr(config.workflow, 'denoise_method', 'none')
+    monkeypatch.setattr(config.nipype, 'omp_nthreads', 1)
+    wf = init_distortion_group_merge_wf(
+        merging_strategy='concat',
+        inputs_list=['dir-AP', 'dir-PA'],
+        source_file='sub-01_dwi.nii.gz',
+        output_prefix='sub-01',
+        name='merge_wf',
+        resolution=parse_output_spaces(['acpc:res-2mm'])[0].resolution,
+    )
+
+    edges = _edges(wf)
+    assert edges[('dwi_derivatives_wf', 'series_qc')] == {('tsnr.out_file', 't1_tsnr_file')}
+    assert edges[('merged_b0_ref', 'series_qc')] == {('outputnode.dwi_mask', 't1_mask_file')}
