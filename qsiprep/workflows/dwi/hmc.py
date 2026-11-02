@@ -244,12 +244,19 @@ def linear_alignment_workflow(
     use_masks=False,
     initialize_com=False,
     settings='shoreline',
+    seed_from_first=False,
 ):
     """Build a workflow that linearly aligns a set of images to a template.
 
     Takes a template image and a set of input images, does
     a linear alignment to the template and updates it with the
-    inverse of the average affine transform to the new template
+    inverse of the average affine transform to the new template.
+
+    With ``seed_from_first`` the images are registered to the first of them instead,
+    and the updated template is the average of every input resampled once to their
+    mean position, on the grid of the plain input average.
+
+    With ``use_masks``, ``updated_mask`` is ``template_mask`` moved with the template.
 
     Returns
     -------
@@ -258,15 +265,19 @@ def linear_alignment_workflow(
     """
     iteration_wf = Workflow(name='iterative_alignment_%03d' % iternum)
     # ``template_mask`` is optional. When supplied, registration is driven by the
-    # masked region only. The fixed image in every registration here IS the
-    # template, so a single mask in template space is sufficient -- there is no
-    # need for a mask per moving image.
+    # masked region only. It is in the fixed image's space: the template's, or the
+    # first input's with ``seed_from_first``.
     input_node_fields = ['image_paths', 'template_image', 'template_mask', 'iteration_num']
     inputnode = pe.Node(niu.IdentityInterface(fields=input_node_fields), name='inputnode')
     inputnode.inputs.iteration_num = iternum
     outputnode = pe.Node(
         niu.IdentityInterface(
-            fields=['registered_image_paths', 'affine_transforms', 'updated_template']
+            fields=[
+                'registered_image_paths',
+                'affine_transforms',
+                'updated_template',
+                'updated_mask',
+            ]
         ),
         name='outputnode',
     )
@@ -286,19 +297,17 @@ def linear_alignment_workflow(
 
     # Run the images through antsRegistration
     iteration_wf.connect(inputnode, 'image_paths', iter_reg, 'moving_image')  # fmt:skip
-    iteration_wf.connect(inputnode, 'template_image', iter_reg, 'fixed_image')  # fmt:skip
+    if seed_from_first:
+        iteration_wf.connect(inputnode, ('image_paths', first_image),
+                             iter_reg, 'fixed_image')  # fmt:skip
+    else:
+        iteration_wf.connect(inputnode, 'template_image', iter_reg, 'fixed_image')  # fmt:skip
     if use_masks:
         iteration_wf.connect(
             inputnode, ('template_mask', _as_list), iter_reg, 'fixed_image_masks'
         )  # fmt:skip
 
-    # Average the images
-    averaged_images = pe.Node(
-        ants.AverageImages(normalize=True, dimension=3), name='averaged_images'
-    )
-    iteration_wf.connect(iter_reg, 'warped_image', averaged_images, 'images')  # fmt:skip
-
-    # Apply the inverse to the average image
+    # Average the transforms
     transforms_to_list = pe.Node(niu.Merge(1), name='transforms_to_list')
     transforms_to_list.inputs.ravel_inputs = True
     iteration_wf.connect(iter_reg, 'forward_transforms', transforms_to_list, 'in1')  # fmt:skip
@@ -306,26 +315,86 @@ def linear_alignment_workflow(
     avg_affines.inputs.dimension = 3
     avg_affines.inputs.output_affine_transform = 'AveragedAffines.mat'
     iteration_wf.connect(transforms_to_list, 'out', avg_affines, 'transforms')  # fmt:skip
-
-    invert_average = pe.Node(ants.ApplyTransforms(), name='invert_average')
-    invert_average.inputs.interpolation = 'HammingWindowedSinc'
-    invert_average.inputs.invert_transform_flags = [True]
-
     avg_to_list = pe.Node(niu.Merge(1), name='to_list')
     iteration_wf.connect(avg_affines, 'affine_transform', avg_to_list, 'in1')  # fmt:skip
-    iteration_wf.connect(avg_to_list, 'out', invert_average, 'transforms')  # fmt:skip
-    iteration_wf.connect(averaged_images, 'output_average_image',
-                         invert_average, 'input_image')  # fmt:skip
-    iteration_wf.connect(averaged_images, 'output_average_image',
-                         invert_average, 'reference_image')  # fmt:skip
-    iteration_wf.connect(invert_average, 'output_image', outputnode,
-                         'updated_template')  # fmt:skip
+
+    if seed_from_first:
+        # Used only for its grid, which AverageImages takes from the largest input
+        input_grid = pe.Node(ants.AverageImages(normalize=True, dimension=3), name='input_grid')
+        midpoint_transforms = pe.Node(
+            niu.Function(
+                function=_midpoint_transforms, output_names=['transforms', 'invert_flags']
+            ),
+            name='midpoint_transforms',
+        )
+        to_midpoint = pe.MapNode(
+            ants.ApplyTransforms(interpolation='HammingWindowedSinc'),
+            iterfield=['input_image', 'transforms', 'invert_transform_flags'],
+            name='to_midpoint',
+        )
+        midpoint_average = pe.Node(
+            ants.AverageImages(normalize=True, dimension=3), name='midpoint_average'
+        )
+        iteration_wf.connect([
+            (inputnode, input_grid, [('image_paths', 'images')]),
+            (avg_affines, midpoint_transforms, [('affine_transform', 'average_affine')]),
+            (iter_reg, midpoint_transforms, [('forward_transforms', 'forward_transforms')]),
+            (inputnode, to_midpoint, [('image_paths', 'input_image')]),
+            (input_grid, to_midpoint, [('output_average_image', 'reference_image')]),
+            (midpoint_transforms, to_midpoint, [
+                ('transforms', 'transforms'),
+                ('invert_flags', 'invert_transform_flags'),
+            ]),
+            (to_midpoint, midpoint_average, [('output_image', 'images')]),
+            (midpoint_average, outputnode, [('output_average_image', 'updated_template')]),
+        ])  # fmt:skip
+        template_grid = input_grid
+    else:
+        # Average the images
+        averaged_images = pe.Node(
+            ants.AverageImages(normalize=True, dimension=3), name='averaged_images'
+        )
+        iteration_wf.connect(iter_reg, 'warped_image', averaged_images, 'images')  # fmt:skip
+
+        # Apply the inverse to the average image
+        invert_average = pe.Node(ants.ApplyTransforms(), name='invert_average')
+        invert_average.inputs.interpolation = 'HammingWindowedSinc'
+        invert_average.inputs.invert_transform_flags = [True]
+        iteration_wf.connect(avg_to_list, 'out', invert_average, 'transforms')  # fmt:skip
+        iteration_wf.connect(averaged_images, 'output_average_image',
+                             invert_average, 'input_image')  # fmt:skip
+        iteration_wf.connect(averaged_images, 'output_average_image',
+                             invert_average, 'reference_image')  # fmt:skip
+        iteration_wf.connect(invert_average, 'output_image', outputnode,
+                             'updated_template')  # fmt:skip
+        template_grid = averaged_images
+
+    if use_masks:
+        # The first input's transform to itself is ~identity, so this holds when seeding too
+        update_mask = pe.Node(
+            ants.ApplyTransforms(interpolation='NearestNeighbor', invert_transform_flags=[True]),
+            name='update_mask',
+        )
+        iteration_wf.connect([
+            (inputnode, update_mask, [('template_mask', 'input_image')]),
+            (avg_to_list, update_mask, [('out', 'transforms')]),
+            (template_grid, update_mask, [('output_average_image', 'reference_image')]),
+            (update_mask, outputnode, [('output_image', 'updated_mask')]),
+        ])  # fmt:skip
+
     iteration_wf.connect(iter_reg, 'forward_transforms', outputnode,
                          'affine_transforms')  # fmt:skip
     iteration_wf.connect(iter_reg, 'warped_image', outputnode,
                          'registered_image_paths')  # fmt:skip
 
     return iteration_wf
+
+
+def _midpoint_transforms(average_affine, forward_transforms):
+    """Return each input's transform stack from the mean position, and its invert flags."""
+    transforms = [[average_affine, *xfms] for xfms in forward_transforms]
+    invert_flags = [[True] + [False] * len(xfms) for xfms in forward_transforms]
+    return transforms, invert_flags
 
 
 def init_b0_hmc_wf(
@@ -349,6 +418,11 @@ def init_b0_hmc_wf(
     actually fires (1e-06 rather than 1e-08). Measured on 0.94 mm T1w against the
     merge template: 16x faster, reaching an identical metric value to five
     decimal places. See test_template_registration_settings.py.
+
+    With ``align_to='iterative'``, the first of ``num_iters`` rounds registers every
+    image to the first and starts the template at their mean position; each later
+    round registers the images to the previous round's template. ``final_template``
+    is the last round's target, so it matches ``forward_transforms``.
 
     TODO: Rename to init_unbiased_alignment_wf.
     Used in three places: dwiref, anatomical merge, dwi hmc.
@@ -388,24 +462,18 @@ def init_b0_hmc_wf(
     if align_to == 'iterative':
         desc += (
             f'They were aligned to an unbiased *b*=0 template built over {num_iters} '
-            f'iterations of {transform.lower()} registrations. '
+            f'iterations of {transform.lower()} registrations. The first iteration '
+            'registered each image to the first one and averaged them after resampling '
+            'each once to their mean position; later iterations registered the images '
+            'to the current template. '
         )
-        initial_template = pe.Node(
-            ants.AverageImages(normalize=True, dimension=3),
-            name='initial_template',
-        )
-        workflow.connect([(inputnode, initial_template, [('b0_images', 'images')])])
-
-        # Store the registration targets
-        iter_templates = pe.Node(niu.Merge(num_iters), name='iteration_templates')
-        workflow.connect([(initial_template, iter_templates, [('output_average_image', 'in1')])])
-
         initial_reg = linear_alignment_workflow(
             iternum=0,
             omp_nthreads=omp_nthreads,
             use_masks=use_masks,
             initialize_com=initialize_com,
             settings=settings,
+            seed_from_first=True,
         )
         workflow.connect([
             (inputnode, initial_reg, [
@@ -413,10 +481,10 @@ def init_b0_hmc_wf(
                 # only used if use_masks
                 ('template_mask', 'inputnode.template_mask'),
             ]),
-            (initial_template, initial_reg, [
-                ('output_average_image', 'inputnode.template_image'),
-            ]),
         ])  # fmt:skip
+
+        # Store the registration targets after the first image
+        iter_templates = pe.Node(niu.Merge(num_iters - 1), name='iteration_templates')
 
         reg_iters = [initial_reg]
         for iternum in range(1, num_iters):
@@ -429,17 +497,14 @@ def init_b0_hmc_wf(
                     settings=settings,
                 )
             )
+            carried = [('outputnode.updated_template', 'inputnode.template_image')]
+            if use_masks:
+                carried.append(('outputnode.updated_mask', 'inputnode.template_mask'))
             workflow.connect([
-                (inputnode, reg_iters[-1], [
-                    ('b0_images', 'inputnode.image_paths'),
-                    # only used if use_masks
-                    ('template_mask', 'inputnode.template_mask'),
-                ]),
-                (reg_iters[-2], reg_iters[-1], [
-                    ('outputnode.updated_template', 'inputnode.template_image'),
-                ]),
-                (reg_iters[-1], iter_templates, [
-                    ('outputnode.updated_template', f'in{iternum + 1}'),
+                (inputnode, reg_iters[-1], [('b0_images', 'inputnode.image_paths')]),
+                (reg_iters[-2], reg_iters[-1], carried),
+                (reg_iters[-2], iter_templates, [
+                    ('outputnode.updated_template', f'in{iternum}'),
                 ]),
             ])  # fmt:skip
 

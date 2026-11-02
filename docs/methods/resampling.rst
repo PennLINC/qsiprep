@@ -73,11 +73,15 @@ Subject-level DWI reference
 :func:`qsiprep.workflows.dwi.dwiref.init_dwiref_wf`
 
 With ``--dwiref-definition subject``, the references of all the subject's
-distortion groups are first combined into one mid-point template with
-``antsMultivariateTemplateConstruction2``, using the transform and number of
-iterations from ``--dwiref-construction-transform`` and
-``--dwiref-construction-iters``. These registrations are initialized from
-the images' centers of mass, which absorbs table-position shifts between
+distortion groups are first combined into one mid-point template, using the
+transform and number of iterations from ``--dwiref-construction-transform``
+and ``--dwiref-construction-iters``. The starting template is built by rigidly
+registering every reference to the first one and averaging them after
+resampling each once to their mean position. ``Rigid`` and ``Affine``
+templates then iterate registrations to the current template;
+``BSplineSyN`` and ``SyN`` templates continue from the starting template with
+``antsMultivariateTemplateConstruction2``. These registrations are initialized
+from the images' centers of mass, which absorbs table-position shifts between
 sessions; no rotation search is run at this step. That template is registered to the
 anatomical once, and every group inherits the result, so preprocessed data
 from different groups (for example different sessions) are directly

@@ -169,14 +169,11 @@ def test_b0_dwiref_uses_the_template_settings(tmp_path):
     assert all(v == [1e-06] for v in thr.values()), thr
 
 
-def test_nonlinear_dwiref_does_not_use_these_settings(tmp_path):
-    """Test that the nonlinear dwiref does not use these settings.
+def test_nonlinear_dwiref_seed_uses_these_settings(tmp_path):
+    """Test that the nonlinear dwiref's only registration node is its rigid seed.
 
-    BSplineSyN is built by antsMultivariateTemplateConstruction2.
-
-    That path never goes through init_b0_hmc_wf, so it carries its own
-    registration parameters inside the ANTs script and this change does not reach
-    it. Documented here so the boundary is not mistaken for a gap.
+    BSplineSyN is built by antsMultivariateTemplateConstruction2, which carries its
+    own registration parameters; the starting template it is given is built here.
     """
     from qsiprep.workflows.dwi.dwiref import init_dwiref_wf
 
@@ -189,7 +186,8 @@ def test_nonlinear_dwiref_does_not_use_these_settings(tmp_path):
     )
     names = {n.name for n in wf._get_all_nodes()}
     assert 'ants_mvtc2' in names
-    assert not any(n.startswith('reg_') for n in names), names
+    thr = {k: v for k, v in _thresholds(wf).items() if k.startswith('reg_')}
+    assert thr == {'reg_000': [1e-06]}, thr
 
 
 def test_within_scan_hmc_still_uses_shoreline(tmp_path):
