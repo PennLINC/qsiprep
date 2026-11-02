@@ -237,12 +237,14 @@ def _syn_unit(reference):
         ('synb0', ('inputnode', 'synthetic_b0'), 'SyN (SynB0)'),
     ],
 )
-def test_syn_registers_to_its_reference(reference, fixed_source, label):
+def test_syn_registers_to_its_reference(monkeypatch, reference, fixed_source, label):
     from qsiprep import config
     from qsiprep.utils.sdc import sdc_warp_source
     from qsiprep.workflows.fieldmap.base import init_sdc_wf
 
     config.nipype.omp_nthreads = 1
+    # The ACPC SynB0 derivative takes the res- of the first acpc output space
+    monkeypatch.setattr(config.workflow, 'output_spaces', ['acpc:res-2mm'])
     unit = _syn_unit(reference)
     wf = init_sdc_wf(unit, source_file='/data/sub-01_dwi.nii.gz')
     syn_wf = wf.get_node('syn_sdc_wf')
