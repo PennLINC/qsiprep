@@ -364,8 +364,8 @@ def _build_parser(**kwargs):
             'dimension of the runs that make up each output (a 3x4x5 mm input gives '
             '3x3x3 mm for nativemin and 5x5x5 mm for nativemax), or "res-native", the '
             "runs' own voxel size, which may be anisotropic. QSIRecon rejects anisotropic "
-            'input. A native resolution needs every run of an output to have the same '
-            'voxel size. '
+            'input. "res-native" needs every run of an output to have the same voxel '
+            'size; nativemin and nativemax take the extreme dimension across the runs. '
             'On a template space, the resolution is a TemplateFlow resolution label '
             '("res-1", "res-2"), which selects the grid the template is fetched on; a '
             'template may be listed at several labels ("MNI152NLin2009cAsym:res-1:res-2"). '

@@ -296,9 +296,9 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
         bids_space,
         describe_acpc_anchor,
         dwi_specs_of,
-        resolve_native_zooms,
         resolve_output_spaces,
         resolved_zooms,
+        run_zooms,
         select_acpc_anchor,
         spec_node_suffix,
         zooms_label,
@@ -784,8 +784,9 @@ documentation](https://qsiprep.readthedocs.io/en/latest/methods/index.html \
                 'apart.'
             )
 
-    # Native resolutions are the voxel size of each output's own runs, so they are
-    # resolved per output, here, where each output's runs are known.
+    # Native resolutions come from each output's own runs, so they are resolved per
+    # output, here, where each output's runs are known. nativemin and nativemax take
+    # the smallest or largest dimension across the runs; res-native needs one size.
     native_specs = [spec for spec in dwi_specs if spec.resolution.kind == 'native']
     native_zooms = {}
     for destination, subgroups in merged_to_subgroups.items():
@@ -793,16 +794,18 @@ documentation](https://qsiprep.readthedocs.io/en/latest/methods/index.html \
             break
 
         dwi_files = [path for name in subgroups for path in units_by_name[name].dwi_files]
-        try:
-            native_zooms[destination] = resolve_native_zooms(dwi_files)
-        except NativeResolutionMismatch as exc:
-            requested = ', '.join(str(spec) for spec in native_specs)
-            example = f'{native_specs[0].space}:res-{zooms_label((min(exc.smallest),) * 3)}'
-            raise OutputSpacesError(
-                f'{destination} combines runs with different voxel sizes '
-                f'({exc.listing}), so {requested} is ambiguous. Request a physical '
-                f'size instead, for example {example}.'
-            ) from None
+        native_zooms[destination] = run_zooms(dwi_files)
+        for spec in native_specs:
+            try:
+                resolved_zooms(spec.resolution, native_zooms[destination])
+            except NativeResolutionMismatch as exc:
+                example = f'{spec.space}:res-{zooms_label((min(exc.smallest),) * 3)}'
+                raise OutputSpacesError(
+                    f'{destination} combines runs with different voxel sizes '
+                    f'({exc.listing}), so {spec} is ambiguous. Request '
+                    f'{spec.space}:res-nativemin, res-nativemax or a physical size '
+                    f'instead, for example {example}.'
+                ) from None
 
     # One grid per space and voxel size, shared by every output that resolves to
     # it. A dwiref grid at the distortion-group level is each unit's own, built

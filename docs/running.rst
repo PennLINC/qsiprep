@@ -754,11 +754,12 @@ On ``acpc``, ``anat`` and ``dwiref``:
 
 `QSIRecon`_ rejects anisotropic DWI. Native resolutions are taken from the runs
 of each output, after concatenation and ``--distortion-group-merge``, so two
-outputs of one subject can have different native resolutions. An output that
-combines runs of different voxel sizes has no single native resolution: the run
-stops with an error naming each run's voxel size and asking for a physical size.
-The resolved voxel size is recorded in the ``Resolution`` key of each output's
-JSON sidecar.
+outputs of one subject can have different native resolutions. For an output
+that combines runs of different voxel sizes, ``nativemin`` and ``nativemax``
+take the smallest or largest dimension across all of its runs. ``res-native``
+has no single voxel size there, so the run stops with an error naming each
+run's voxel size. The resolved voxel size is recorded in the ``Resolution`` key
+of each output's JSON sidecar.
 
 Pass the acquired resolution to keep it, or a smaller value to upsample; some
 downstream methods, such as fixel-based analysis, recommend at least 1.3 mm.

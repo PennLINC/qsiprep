@@ -396,16 +396,34 @@ def acq_b_is_coarser(monkeypatch):
     monkeypatch.setattr(spaces, 'canonical_zooms', fake_zooms)
 
 
-def test_the_default_refuses_an_output_that_mixes_voxel_sizes(tmp_path, acq_b_is_coarser):
-    """Test that acpc:res-nativemin fails when one output merges runs of two voxel sizes."""
+@pytest.mark.parametrize(('token', 'label'), [('acpc', '1mm'), ('acpc:res-nativemax', '2p5mm')])
+def test_min_and_max_span_merged_runs_of_different_sizes(tmp_path, acq_b_is_coarser, token, label):
+    """Test that the default builds when one output merges runs of two voxel sizes.
+
+    nativemin and nativemax take the smallest or largest dimension across all the
+    output's runs, as they did before outputs were resolved one at a time.
+    """
+    wf = _subject_wf(tmp_path, '--distortion-group-merge', 'concat', '--output-spaces', token)
+    grids = {name.split('.')[0] for name in wf.list_node_names() if 'output_grid_acpc' in name}
+    assert grids == {f'output_grid_acpc_{label}_wf'}
+
+
+def test_native_refuses_an_output_that_mixes_voxel_sizes(tmp_path, acq_b_is_coarser):
+    """Test that res-native fails when one output merges runs of two voxel sizes."""
     from qsiprep.utils.spaces import OutputSpacesError
 
     with pytest.raises(OutputSpacesError) as excinfo:
-        _subject_wf(tmp_path, '--distortion-group-merge', 'concat')
+        _subject_wf(
+            tmp_path,
+            '--distortion-group-merge',
+            'concat',
+            '--output-spaces',
+            'acpc:res-native',
+        )
     message = str(excinfo.value)
     assert 'combines runs with different voxel sizes' in message
     assert 'sub-01_acq-b_dir-AP_dwi.nii.gz: 2.5 mm isotropic' in message
-    assert 'acpc:res-nativemin is ambiguous' in message
+    assert 'acpc:res-native is ambiguous' in message
     assert 'acpc:res-1mm' in message
 
 

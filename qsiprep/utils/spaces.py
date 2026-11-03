@@ -372,7 +372,7 @@ def canonical_zooms(path) -> tuple:
 
 
 class NativeResolutionMismatch(OutputSpacesError):
-    """The runs of one output do not share a voxel size, so ``res-native*`` is ambiguous."""
+    """The runs of one output do not share a voxel size, so ``res-native`` is ambiguous."""
 
     def __init__(self, zooms_by_file):
         self.zooms_by_file = dict(zooms_by_file)
@@ -392,6 +392,11 @@ class NativeResolutionMismatch(OutputSpacesError):
         return tuple(min(axis) for axis in zip(*self.zooms_by_file.values(), strict=True))
 
 
+def run_zooms(dwi_files) -> dict:
+    """Return each run's voxel size on world-aligned axes, keyed by its path."""
+    return {path: canonical_zooms(path) for path in dwi_files}
+
+
 def resolve_native_zooms(dwi_files) -> tuple:
     """Return the voxel size ``dwi_files`` share, on world-aligned axes.
 
@@ -400,17 +405,24 @@ def resolve_native_zooms(dwi_files) -> tuple:
     NativeResolutionMismatch
         If the runs do not all have the same voxel size.
     """
-    zooms = {path: canonical_zooms(path) for path in dwi_files}
+    zooms = run_zooms(dwi_files)
     if len(set(zooms.values())) > 1:
         raise NativeResolutionMismatch(zooms)
     return next(iter(zooms.values()))
 
 
-def resolved_zooms(resolution, native_zooms=None) -> tuple:
+def resolved_zooms(resolution, zooms_by_run=None) -> tuple:
     """Return the voxel size a DWI resolution means for one output.
 
-    ``native_zooms`` is the voxel size the output's runs share, from
-    :func:`resolve_native_zooms`. Only native resolutions read it.
+    ``zooms_by_run`` maps each of the output's runs to its voxel size, from
+    :func:`run_zooms`. Only native resolutions read it. ``nativemin`` and
+    ``nativemax`` take the smallest or largest dimension across all the runs;
+    ``native`` needs the runs to share one voxel size.
+
+    Raises
+    ------
+    NativeResolutionMismatch
+        For ``res-native`` when the runs do not all have the same voxel size.
     """
     if resolution.kind == 'mm':
         return tuple(resolution.zooms)
@@ -418,16 +430,19 @@ def resolved_zooms(resolution, native_zooms=None) -> tuple:
     if resolution.kind != 'native':
         raise OutputSpacesError(f'res-{resolution.label} is not a DWI resolution.')
 
-    if native_zooms is None:
+    if not zooms_by_run:
         raise OutputSpacesError(f'res-{resolution.label} needs the voxel size of the DWI runs.')
 
+    dimensions = [zoom for zooms in zooms_by_run.values() for zoom in zooms]
     if resolution.strategy == 'min':
-        return (min(native_zooms),) * 3
+        return (min(dimensions),) * 3
 
     if resolution.strategy == 'max':
-        return (max(native_zooms),) * 3
+        return (max(dimensions),) * 3
 
-    return tuple(native_zooms)
+    if len(set(zooms_by_run.values())) > 1:
+        raise NativeResolutionMismatch(zooms_by_run)
+    return tuple(next(iter(zooms_by_run.values())))
 
 
 def zooms_label(zooms) -> str:

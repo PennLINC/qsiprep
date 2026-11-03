@@ -78,7 +78,29 @@ def test_a_sagittal_run_is_compared_axis_for_axis(tmp_path):
 )
 def test_resolved_zooms(token, expected):
     (spec,) = parse_space_token(token)
-    assert resolved_zooms(spec.resolution, (1.5, 2.0, 3.0)) == expected
+    assert resolved_zooms(spec.resolution, {'a.nii.gz': (1.5, 2.0, 3.0)}) == expected
+
+
+@pytest.mark.parametrize(
+    ('token', 'expected'),
+    [
+        ('acpc:res-nativemin', (1.5, 1.5, 1.5)),
+        ('acpc:res-nativemax', (2.5, 2.5, 2.5)),
+    ],
+)
+def test_min_and_max_span_runs_of_different_sizes(token, expected):
+    """Test that nativemin and nativemax take the extreme dimension across all runs."""
+    (spec,) = parse_space_token(token)
+    runs = {'hi.nii.gz': (1.5, 1.5, 2.0), 'lo.nii.gz': (2.5, 2.5, 2.5)}
+    assert resolved_zooms(spec.resolution, runs) == expected
+
+
+def test_native_refuses_runs_of_different_sizes():
+    """Test that res-native, which keeps the runs' grid, needs them to share one size."""
+    (spec,) = parse_space_token('acpc:res-native')
+    runs = {'hi.nii.gz': (1.5, 1.5, 1.5), 'lo.nii.gz': (2.0, 2.0, 2.0)}
+    with pytest.raises(NativeResolutionMismatch):
+        resolved_zooms(spec.resolution, runs)
 
 
 def test_a_native_resolution_needs_the_runs():

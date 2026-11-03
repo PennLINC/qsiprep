@@ -179,9 +179,9 @@ Behavior changes
   written at ``acpc:res-nativemin``, the smallest voxel dimension of each
   output's own runs, and named ``space-ACPC_res-nativemin``. Every output on a
   DWI grid carries its ``res-`` entity, even with one resolution, so `QSIRecon`_
-  must select ACPC outputs by ``res-``. An output that combines runs of
-  different voxel sizes has no native resolution and stops the run with an
-  error; request a physical size such as ``acpc:res-2mm`` for it.
+  must select ACPC outputs by ``res-``. ``res-native``, the runs' own voxel
+  size, stops the run for an output that combines runs of different voxel
+  sizes.
 * **Anatomical derivatives at the anatomical's voxel size.** The
   ``space-ACPC`` anatomicals, the subject dwiref template in ACPC, and the
   anatomicals of a template listed without a TemplateFlow ``res-`` label are
