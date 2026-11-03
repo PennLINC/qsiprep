@@ -62,8 +62,15 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
+          HEAD_AUTHOR="$(git log -1 --format=%an HEAD)"
           CHANGED_FILES="$(git diff --name-only "$BASE_SHA"...HEAD -- pyproject.toml pixi.lock)"
-          if [ -n "$CHANGED_FILES" ]; then
+          if [ "$HEAD_AUTHOR" == "nipreps[bot]" ]; then
+            # A head commit from the bot was produced by this job, so the lockfile is
+            # already up to date. Running again would only rewrite the workspace
+            # package version and push once more.
+            echo "run_lockfile_update=false" >> "$GITHUB_OUTPUT"
+            echo "Head commit was pushed by nipreps[bot]; skipping lockfile update."
+          elif [ -n "$CHANGED_FILES" ]; then
             echo "run_lockfile_update=true" >> "$GITHUB_OUTPUT"
           else
             echo "run_lockfile_update=false" >> "$GITHUB_OUTPUT"
@@ -92,8 +99,26 @@ jobs:
         run: >
           uvx datalad run -i pixi.lock -i pyproject.toml -o pixi.lock --
           bash -lc "if pixi lock --check; then echo 'Lockfile up to date'; else pixi lock; fi"
-      - name: Push updated lockfile, if needed
+      # pixi lock resolves the workspace package with its hatch-vcs version, which
+      # changes with every commit, so datalad may commit a lockfile that differs
+      # from the head commit only in the version, sha256 and editable lines of the
+      # "pypi: ./" workspace package entries. Pushing that commit would trigger
+      # another run that rewrites the version again, and so on. Push only when
+      # something else changed.
+      - name: Check whether the lockfile changed beyond the workspace package version
         if: ${{ steps.latest-commit.outputs.run_lockfile_update == 'true' }}
+        id: lockfile-diff
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if git diff --exit-code -I '^  (version|sha256|editable): ' "$HEAD_SHA" HEAD -- pixi.lock; then
+            echo "push=false" >> "$GITHUB_OUTPUT"
+            echo "Lockfile is unchanged apart from the workspace package version; nothing to push."
+          else
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Push updated lockfile, if needed
+        if: ${{ steps.lockfile-diff.outputs.push == 'true' }}
         run: git push origin "HEAD:refs/heads/$BRANCH"
         env:
           BRANCH: ${{ github.event.pull_request.head.ref }}
