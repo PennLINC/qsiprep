@@ -609,3 +609,55 @@ def test_dropping_the_coregistration_lands_in_the_reference_frame(
     coreg_edges = _edges_into(wf, 'b0_anat_coreg')
     moving = {(src, source) for src, source, dest in coreg_edges if dest.endswith('ref_b0_brain')}
     assert moving == {(backend, 'outputnode.b0_template')}
+
+
+def test_subject_dwiref_grids_of_two_sizes_share_one_mask(tmp_path):
+    """Test that two subject-level dwiref voxel sizes build, sharing the template's mask.
+
+    The mask does not depend on the voxel size, so it is built once; building it per
+    grid gave two nodes one name.
+    """
+    wf = _subject_wf(
+        tmp_path,
+        '--distortion-group-merge',
+        'concat',
+        '--dwiref-definition',
+        'subject',
+        '--output-spaces',
+        'dwiref:res-2mm',
+        'dwiref:res-1p5mm',
+    )
+    for label in ('2mm', '1p5mm'):
+        edges = _edges_into(wf, f'output_grid_subject_{label}')
+        assert ('acpc_mask_to_subject_dwiref', 'output_image', 'fov_mask') in edges
+
+
+def test_subject_dwiref_default_with_two_native_sizes(tmp_path, acq_b_is_coarser):
+    """Test the default dwiref when unmerged outputs differ in native voxel size."""
+    wf = _subject_wf(
+        tmp_path,
+        '--dwiref-definition',
+        'subject',
+        '--output-spaces',
+        'dwiref',
+        dataset=_write_two_output_dataset(tmp_path / 'bids'),
+    )
+    grids = {name for name in wf.list_node_names() if name.startswith('output_grid_subject')}
+    assert grids == {'output_grid_subject_1mm', 'output_grid_subject_2p5mm'}
+
+
+def test_two_dwiref_specs_of_one_size_share_a_unit_grid(tmp_path):
+    """Test that res-native and res-nativemin on isotropic runs share each unit's grid."""
+    wf = _subject_wf(
+        tmp_path,
+        '--dwiref-definition',
+        'distortion-group',
+        '--output-spaces',
+        'dwiref:res-native',
+        'dwiref:res-nativemin',
+        dataset=_write_two_output_dataset(tmp_path / 'bids'),
+    )
+    for unit in ('acq_a', 'acq_b'):
+        grid = f'output_grid_distortiongroup_1mm_sub_01_{unit}'
+        edges = _edges_into(wf, f'dwi_sampling_grids_sub_01_{unit}')
+        assert edges == {(grid, 'out_file', 'in1'), (grid, 'out_file', 'in2')}

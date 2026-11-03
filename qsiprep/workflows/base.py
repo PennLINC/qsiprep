@@ -806,8 +806,30 @@ documentation](https://qsiprep.readthedocs.io/en/latest/methods/index.html \
 
     # One grid per space and voxel size, shared by every output that resolves to
     # it. A dwiref grid at the distortion-group level is each unit's own, built
-    # in the loop below.
+    # in the loop below and cached per unit and voxel size.
     grid_nodes = {}
+
+    subject_dwiref_mask = None
+    if dwiref_level == 'subject' and any(spec.space == DWIREF for spec in dwi_specs):
+        # The template has no mask of its own, so the ACPC brain mask is carried
+        # into its frame through the inverse of its coregistration, and its grids
+        # are cropped to it as the distortion-group grids are to their b=0 masks.
+        # It does not depend on the voxel size, so every subject grid shares it.
+        subject_dwiref_mask = pe.Node(
+            ants.ApplyTransforms(
+                interpolation='NearestNeighbor',
+                float=True,
+                invert_transform_flags=[True],
+            ),
+            name='acpc_mask_to_subject_dwiref',
+        )
+        workflow.connect([
+            (anat_preproc_wf, subject_dwiref_mask, [('outputnode.t1_mask', 'input_image')]),
+            (dwiref_wf, subject_dwiref_mask, [
+                ('outputnode.dwiref', 'reference_image'),
+                (('outputnode.dwiref_to_t1_affine', _get_first), 'transforms'),
+            ]),
+        ])  # fmt:skip
 
     def _grid_source(spec, destination):
         """Return the node and field of the grid one output's spec is resampled onto."""
@@ -835,26 +857,10 @@ documentation](https://qsiprep.readthedocs.io/en/latest/methods/index.html \
             ])  # fmt:skip
             grid_nodes[key] = (grid, 'out_file')
         else:
-            # The template has no mask of its own, so the ACPC brain mask is carried
-            # into its frame through the inverse of its coregistration, and the grid
-            # is cropped to it as the distortion-group grids are to their b=0 masks.
-            mask_to_dwiref = pe.Node(
-                ants.ApplyTransforms(
-                    interpolation='NearestNeighbor',
-                    float=True,
-                    invert_transform_flags=[True],
-                ),
-                name='acpc_mask_to_subject_dwiref',
-            )
             grid = pe.Node(SamplingGrid(zooms=list(zooms)), name=f'output_grid_subject_{label}')
             workflow.connect([
-                (anat_preproc_wf, mask_to_dwiref, [('outputnode.t1_mask', 'input_image')]),
-                (dwiref_wf, mask_to_dwiref, [
-                    ('outputnode.dwiref', 'reference_image'),
-                    (('outputnode.dwiref_to_t1_affine', _get_first), 'transforms'),
-                ]),
                 (dwiref_wf, grid, [('outputnode.dwiref', 'fixed_image')]),
-                (mask_to_dwiref, grid, [('output_image', 'fov_mask')]),
+                (subject_dwiref_mask, grid, [('output_image', 'fov_mask')]),
             ])  # fmt:skip
             grid_nodes[key] = (grid, 'out_file')
         return grid_nodes[key]
@@ -993,18 +999,22 @@ documentation](https://qsiprep.readthedocs.io/en/latest/methods/index.html \
             zip(dwi_specs, grid_sources[final_output_name], strict=True), start=1
         ):
             if source is None:
+                # Two dwiref specs that resolve to one voxel size share this unit's grid
                 zooms = resolved_zooms(spec.resolution, native_zooms.get(final_output_name))
-                grid = pe.Node(
-                    SamplingGrid(zooms=list(zooms)),
-                    name=f'output_grid_distortiongroup_{zooms_label(zooms)}_{output_wfname}',
-                )
-                workflow.connect([
-                    (dwi_preproc_wf, grid, [
-                        ('outputnode.b0_ref_image', 'fixed_image'),
-                        ('outputnode.dwi_mask', 'fov_mask'),
-                    ]),
-                ])  # fmt:skip
-                source = (grid, 'out_file')
+                key = ('distortiongroup', output_wfname, zooms)
+                if key not in grid_nodes:
+                    grid = pe.Node(
+                        SamplingGrid(zooms=list(zooms)),
+                        name=f'output_grid_distortiongroup_{zooms_label(zooms)}_{output_wfname}',
+                    )
+                    workflow.connect([
+                        (dwi_preproc_wf, grid, [
+                            ('outputnode.b0_ref_image', 'fixed_image'),
+                            ('outputnode.dwi_mask', 'fov_mask'),
+                        ]),
+                    ])  # fmt:skip
+                    grid_nodes[key] = (grid, 'out_file')
+                source = grid_nodes[key]
             workflow.connect(source[0], source[1], unit_grids, f'in{index}')
         workflow.connect(unit_grids, 'out', dwi_finalize_wf, 'inputnode.dwi_sampling_grids')
 
