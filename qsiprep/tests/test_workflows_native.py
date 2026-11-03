@@ -688,31 +688,16 @@ def test_template_lps_wf_reorients_to_lps():
     assert ('mask_template', 'reorient_mask') not in edges
 
 
-def test_one_output_grid_per_acpc_resolution(tmp_path):
-    from qsiprep.utils.spaces import parse_output_spaces, select_acpc_anchor
-    from qsiprep.workflows.anatomical.volume import init_anat_preproc_wf
+def test_anat_preproc_wf_builds_no_dwi_grid(tmp_path):
+    """Test that the DWI grids are no longer subject-level anatomical outputs.
 
-    config.workflow.output_spaces = ['acpc:res-2mm', 'acpc:res-1p5mm']
-    config.workflow.anat_modality = 'T1w'
-    config.workflow.infant = False
-    config.nipype.omp_nthreads = 1
-    config.execution.output_dir = str(tmp_path)
-    specs = parse_output_spaces(config.workflow.output_spaces)
-    acpc_specs = [s for s in specs if not s.standard]
-
-    wf = init_anat_preproc_wf(
-        num_anat_images=1,
-        num_additional_t2ws=0,
-        has_rois=False,
-        output_spaces=specs,
-        acpc_anchor=select_acpc_anchor(specs),
-        acpc_specs=acpc_specs,
-        do_biascorr=False,
-        t2w_do_biascorr=False,
-    )
-    names = wf.list_node_names()
-    assert any('output_grid_res2mm_wf' in n for n in names)
-    assert any('output_grid_res1p5mm_wf' in n for n in names)
+    Each output's grid depends on that output's runs, so init_single_subject_wf
+    builds them; the anatomical workflow only exposes the anchor they are cut from.
+    """
+    wf = _build_anat_preproc_wf(tmp_path, ['acpc:res-2mm', 'acpc:res-1p5mm'])
+    assert not any('output_grid' in name for name in wf.list_node_names())
+    edge = wf._graph.get_edge_data(wf.get_node('anchor_lps_wf'), wf.get_node('outputnode'))
+    assert ('outputnode.template_lps', 'acpc_grid_template') in edge['connect']
 
 
 def _build_anat_preproc_wf(tmp_path, output_spaces, sdc_anat_reference='none', has_rois=False):
@@ -726,7 +711,6 @@ def _build_anat_preproc_wf(tmp_path, output_spaces, sdc_anat_reference='none', h
     config.nipype.omp_nthreads = 1
     config.execution.output_dir = str(tmp_path)
     specs = parse_output_spaces(config.workflow.output_spaces)
-    acpc_specs = [s for s in specs if not s.standard]
 
     return init_anat_preproc_wf(
         num_anat_images=1,
@@ -734,7 +718,6 @@ def _build_anat_preproc_wf(tmp_path, output_spaces, sdc_anat_reference='none', h
         has_rois=has_rois,
         output_spaces=specs,
         acpc_anchor=select_acpc_anchor(specs),
-        acpc_specs=acpc_specs,
         do_biascorr=False,
         t2w_do_biascorr=False,
     )
@@ -1052,7 +1035,11 @@ def test_res_labels_of_one_template_share_a_registration(tmp_path):
 
 
 def test_derivatives_reuse_the_preproc_template_chain(tmp_path):
-    """The grid images are resampled onto must be the grid they were registered to."""
+    """Test that template-space grids are derived from the chain they were registered to.
+
+    A bare template is written on its own field of view at the anatomical's voxel
+    size, so its grid is built from the chain's template, with no second fetch.
+    """
     wf = _build_anat_preproc_wf(tmp_path, MULTI_STANDARD)
     duplicated = [
         name for name in wf.list_node_names() if 'get_template' in name and name.endswith('_deriv')
@@ -1060,6 +1047,19 @@ def test_derivatives_reuse_the_preproc_template_chain(tmp_path):
     assert not duplicated, f'derivatives refetch templates: {duplicated}'
     duplicated_lps = [name for name in wf.list_node_names() if '_deriv_wf' in name]
     assert not duplicated_lps, f'derivatives rebuild the LPS chain: {duplicated_lps}'
+
+    derivatives_wf = wf.get_node('anat_derivatives_wf')
+    grid = derivatives_wf.get_node('MNI152NLin6Asym_anat_grid')
+    assert grid is not None, 'the bare template is not gridded at the anatomical voxel size'
+    sources = {
+        (src.name, field)
+        for src, _, data in derivatives_wf._graph.in_edges(grid, data=True)
+        for _, field in data['connect']
+    }
+    assert sources == {
+        ('select_MNI152NLin6Asym_template_lps', 'fixed_image'),
+        ('inputnode', 'zooms_image'),
+    }
 
 
 def test_transform_and_grid_lists_stay_index_aligned(tmp_path):
@@ -1080,7 +1080,7 @@ def test_transform_and_grid_lists_stay_index_aligned(tmp_path):
         'MNI152NLin6Asym',
     ]
     wf = _build_anat_preproc_wf(tmp_path, spaces)
-    specs = [s for s in parse_output_spaces(spaces) if s.standard]
+    specs = [s for s in parse_output_spaces(spaces) if s.is_template]
     n_standard = len(specs)
 
     def _slot_sources(merge_name):
@@ -1373,7 +1373,7 @@ def test_single_subject_wf_builds_a_merge_workflow_per_resolution():
     from qsiprep.workflows import base
 
     src = inspect.getsource(base.init_single_subject_wf)
-    assert 'for index, spec in enumerate(acpc_specs)' in src
+    assert 'for index, spec in enumerate(dwi_specs)' in src
     assert 'write_shared_outputs=(index == 0)' in src
     # Every merged output carries its res- entity, even with one resolution.
     assert 'resolution=spec.resolution,' in src

@@ -316,8 +316,8 @@ def _build_parser(**kwargs):
     g_required = parser.add_argument_group(
         'Required arguments',
         description=(
-            'Every QSIPrep run needs these four. The three positional arguments follow the BIDS '
-            'App convention; --output-spaces has no default and must be given explicitly.'
+            'Every QSIPrep run needs these three positional arguments, which follow the BIDS '
+            'App convention.'
         ),
     )
     g_required.add_argument(
@@ -340,29 +340,38 @@ def _build_parser(**kwargs):
         choices=['participant'],
         help='Processing stage to run. Only "participant" is supported by QSIPrep.',
     )
-    g_required.add_argument(
+
+    g_spaces = parser.add_argument_group(
+        'Output spaces',
+        description='Where the preprocessed DWI is written, and which templates get transforms.',
+    )
+    g_spaces.add_argument(
         '--output-spaces',
         nargs='+',
         action=OutputSpacesAction,
         default=None,
         metavar='SPACE',
         help=(
-            'Standard and non-standard spaces to write outputs to, space delimited. '
-            'At least one "acpc" space is required, because QSIPrep writes preprocessed '
-            'DWI in ACPC space only -- for example "acpc:res-2mm". '
-            'On "acpc", the resolution is an isotropic physical size with an "mm" '
-            'suffix ("res-2mm", "res-1p5mm"), or "res-nativemin"/"res-nativemax", which '
-            'take the smallest or largest voxel dimension of the input DWI runs (a '
-            '3x4x5 mm input gives 3x3x3 mm for nativemin and 5x5x5 mm for nativemax). '
-            'Anisotropic sizes are rejected on "acpc". '
-            'On a standard space, the resolution is a TemplateFlow resolution label '
+            'Spaces to write outputs to, space delimited. Defaults to "acpc:res-nativemin". '
+            'The preprocessed DWI is resampled into the DWI spaces: "acpc" (the AC-PC '
+            'aligned anatomical frame, the only one QSIRecon reads), "anat" (the '
+            'anatomical frame before AC-PC alignment) and "dwiref" (the DWI reference '
+            'frame --dwiref-definition chose, named space-distortiongroup or '
+            'space-subject). At least one DWI space is required. '
+            'On a DWI space, the resolution is a physical size with an "mm" suffix '
+            '("res-2mm", "res-1p5mm", or anisotropic "res-1p5x1p5x3mm"), "res-nativemin" '
+            '(the default) or "res-nativemax", which take the smallest or largest voxel '
+            'dimension of the runs that make up each output (a 3x4x5 mm input gives '
+            '3x3x3 mm for nativemin and 5x5x5 mm for nativemax), or "res-native", the '
+            "runs' own voxel size, which may be anisotropic. QSIRecon rejects anisotropic "
+            'input. A native resolution needs every run of an output to have the same '
+            'voxel size. '
+            'On a template space, the resolution is a TemplateFlow resolution label '
             '("res-1", "res-2"), which selects the grid the template is fetched on; a '
             'template may be listed at several labels ("MNI152NLin2009cAsym:res-1:res-2"). '
-            'Physical "mm" sizes are NOT implemented for standard spaces -- QSIPrep does '
-            'not resample standard-space output to an arbitrary voxel size, so such a '
-            'token has no effect. '
-            'Listing "acpc" more than once writes the preprocessed DWI at each '
-            'resolution. Standard spaces produce transforms and anatomical derivatives; '
+            'Physical "mm" sizes are not implemented for template spaces. '
+            'Listing a DWI space more than once writes the preprocessed DWI at each '
+            'resolution. Template spaces produce transforms and anatomical derivatives; '
             'DWI is never resampled into them. Templates with cohorts accept '
             '"cohort-auto" to pick one from the participant\'s age, as in '
             '"MNIInfant:cohort-auto".'
@@ -1254,19 +1263,20 @@ def _finalize_output_spaces(opts, parser=None):
     Runs after the whole command line has been read, so the result does not depend
     on the order options were given in.
     """
-    from qsiprep.utils.spaces import INFANT_ANCHORS, OutputSpacesError, parse_output_spaces
+    from qsiprep.utils.spaces import (
+        ACPC,
+        DEFAULT_OUTPUT_SPACES,
+        INFANT_ANCHORS,
+        OutputSpacesError,
+        parse_output_spaces,
+    )
 
     def fail(message):
         if parser is not None:
             parser.error(message)
         raise SystemExit(message)
 
-    given = list(opts.output_spaces or [])
-    if not given:
-        fail(
-            '--output-spaces is required and must include at least one "acpc" space, '
-            'for example: --output-spaces acpc:res-2mm MNI152NLin2009cAsym'
-        )
+    given = list(opts.output_spaces or DEFAULT_OUTPUT_SPACES)
 
     # Any infant template already anchors AC-PC (see INFANT_ANCHORS); only add the
     # default one when the request names none.
@@ -1278,20 +1288,26 @@ def _finalize_output_spaces(opts, parser=None):
     except OutputSpacesError as exc:
         fail(str(exc))
 
-    # A physical size on a standard space parses but does nothing: nothing resamples
+    # A physical size on a template space parses but does nothing: nothing resamples
     # to it and no res- entity is written, so it lands on exactly the filenames the
     # bare template writes. Reject it rather than silently overwriting them.
     unimplemented = [
         str(spec)
         for spec in specs
-        if spec.standard and spec.resolution is not None and spec.resolution.kind == 'mm'
+        if spec.is_template and spec.resolution is not None and spec.resolution.kind == 'mm'
     ]
     if unimplemented:
         fail(
-            f'Physical sizes on standard spaces are not implemented: '
-            f'{", ".join(unimplemented)}. QSIPrep writes standard-space anatomicals on '
-            "the template's own grid, so use a TemplateFlow res- label (for example "
-            'MNI152NLin2009cAsym:res-2) or drop the resolution.'
+            f'Physical sizes on template spaces are not implemented: '
+            f'{", ".join(unimplemented)}. QSIPrep writes template-space anatomicals on '
+            "the template's own field of view, so use a TemplateFlow res- label (for "
+            'example MNI152NLin2009cAsym:res-2) or drop the resolution.'
+        )
+
+    if not any(spec.space == ACPC for spec in specs):
+        config.loggers.cli.warning(
+            'No "acpc" output space was requested. QSIRecon reads only space-ACPC '
+            'preprocessed DWI, so these outputs cannot be reconstructed with it.'
         )
 
     opts.output_spaces = [str(spec) for spec in specs]

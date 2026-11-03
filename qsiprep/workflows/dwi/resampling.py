@@ -30,6 +30,8 @@ from .qc import init_modelfree_qc_wf
 from .util import init_dwi_reference_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
+#: The ComposeTransforms stages ApplyJacobianWeights transports the weights through.
+_TRANSPORT_STAGES = ('to b=0 affine', 'to b=0 warp', 'b=0 to T1w')
 
 
 def init_dwi_trans_wf(
@@ -46,6 +48,7 @@ def init_dwi_trans_wf(
     sdc_warp_source=None,
     sdc_pe_dir=None,
     sdc_readout_time=None,
+    drop_stages=(),
 ):
     """Build a workflow that resamples dwi images to the output grid in a single shot.
 
@@ -73,7 +76,8 @@ def init_dwi_trans_wf(
     resolution : :class:`~qsiprep.utils.spaces.Resolution`
         The requested output resolution, used to describe the output voxel size
     template : str, optional
-        Name of template targeted by ``template`` output space
+        The output space, for the methods text: ``'ACPC'``, or a phrase naming the
+        space (``'the space of the anatomical reference'``).
     name : str, optional
         Name of workflow (default: ``dwi_trans_wf``)
     use_compression : bool, optional
@@ -101,6 +105,9 @@ def init_dwi_trans_wf(
     sdc_readout_time : float or None, optional
         Total readout time used to rebuild the displacement field from a
         fieldmap in Hz.
+    drop_stages : sequence of str, optional
+        Transform stages left out of the chain (see ``ComposeTransforms``), so it
+        ends in an earlier frame: a ``dwiref`` output drops the coregistration.
 
     Inputs
     ------
@@ -136,6 +143,9 @@ def init_dwi_trans_wf(
         undefined if no gradwarp correction is being applied
     output_grid
         File defining the output space
+    trailing_transform
+        A transform applied after every other stage, such as ACPC to anat; left
+        undefined for ACPC and dwiref outputs
     t1_mask
         Brain mask from the t1w
 
@@ -159,11 +169,15 @@ def init_dwi_trans_wf(
         Includes rotations introduced by warpingdenoisin
     """
     workflow = Workflow(name=name)
-    space = 'AC-PC' if template == 'ACPC' else template
-    if resolution.kind == 'native':
+    space = 'AC-PC space' if template == 'ACPC' else template
+    if resolution.kind == 'native' and resolution.strategy is None:
+        voxel = 'the native voxel size of the input'
+    elif resolution.kind == 'native':
         voxel = f'the {resolution.strategy}imum native voxel size'
+    elif len(set(resolution.zooms)) == 1:
+        voxel = f'{resolution.zooms[0]:g} mm isotropic resolution'
     else:
-        voxel = f'{resolution.label.replace("p", ".").replace("mm", "")} mm isotropic resolution'
+        voxel = '×'.join(f'{zoom:g}' for zoom in resolution.zooms) + ' mm voxels'
 
     # ChooseInterpolator picks the method from the data at run time
     interpolation = (
@@ -184,7 +198,7 @@ def init_dwi_trans_wf(
             'motion and coregistration were not modulated. '
         )
     workflow.__desc__ = (
-        f'\n\nThe DWI series were resampled into {space} space at {voxel} with '
+        f'\n\nThe DWI series were resampled into {space} at {voxel} with '
         f'{interpolation}. The transforms not already applied were combined '
         'so that this was a single resampling step. '
         f'{jacobian}'
@@ -213,6 +227,8 @@ def init_dwi_trans_wf(
                 'fieldwarps',
                 'gradwarp_field',
                 'output_grid',
+                # Applied after every other stage: ACPC to anat for an anat output
+                'trailing_transform',
                 'ec_jacobian_images',
                 # Only set when DRBUDDI ran: TORTOISE's LSR ratios, which
                 # replace the Jacobian weight.
@@ -261,7 +277,10 @@ def init_dwi_trans_wf(
     # warp; num_threads runs them in the interface's ThreadPoolExecutor, paired
     # with n_procs as for scale_dwis below.
     compose_transforms = pe.Node(
-        ComposeTransforms(num_threads=config.nipype.omp_nthreads),
+        ComposeTransforms(
+            num_threads=config.nipype.omp_nthreads,
+            drop_stages=list(drop_stages),
+        ),
         name='compose_transforms',
         n_procs=config.nipype.omp_nthreads,
     )
@@ -282,8 +301,14 @@ def init_dwi_trans_wf(
     # nipype's MultiProc scheduler reserves that many slots for this node
     # instead of co-scheduling other work against a node that is itself
     # running up to omp_nthreads concurrent antsApplyTransforms processes.
+    # The Jacobian transport drops the stages the resampling drops, so the weights
+    # land in the frame the DWI does. hmc, gradwarp and fieldwarp are not transport.
+    transport_drop = [stage for stage in drop_stages if stage in _TRANSPORT_STAGES]
     scale_dwis = pe.Node(
-        ApplyJacobianWeights(num_threads=config.nipype.omp_nthreads),
+        ApplyJacobianWeights(
+            num_threads=config.nipype.omp_nthreads,
+            drop_stages=transport_drop,
+        ),
         name='scale_dwis',
         n_procs=config.nipype.omp_nthreads,
     )
@@ -306,6 +331,7 @@ def init_dwi_trans_wf(
             ('b0_to_dwiref_transforms', 'b0_to_dwiref_transforms'),
             (('dwiref_to_t1_affine', _get_first),
              'dwiref_to_t1_affine'),
+            ('trailing_transform', 'trailing_transform'),
         ]),
         # The CNR map is computed from motion-corrected volumes (SHORELine) or is
         # already in eddy's corrected frame, so volume 0's hmc stage must not be
@@ -345,6 +371,7 @@ def init_dwi_trans_wf(
             ('itk_b0_to_t1', 'hmcsdc_dwi_ref_to_t1w_affine'),
             ('b0_to_dwiref_transforms', 'b0_to_dwiref_transforms'),
             (('dwiref_to_t1_affine', _get_first), 'dwiref_to_t1_affine'),
+            ('trailing_transform', 'trailing_transform'),
         ]),
     ])  # fmt:skip
 

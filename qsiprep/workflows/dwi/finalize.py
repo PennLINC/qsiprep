@@ -40,11 +40,19 @@ from ...utils.eddy_config import (
 from ...utils.jacobian import pe_axis_from_direction
 from ...utils.jacobian_provenance import jacobian_provenance_for
 from ...utils.sdc import eddy_applies_topup, pe_readout_time, sdc_warp_source
+from ...utils.spaces import (
+    ACPC,
+    ANAT,
+    DWIREF,
+    bids_space,
+    res_entities_for,
+    spec_node_suffix,
+)
 from ...utils.versions import mrtrix3_version, versioned
 from .derivatives import DENOISER_MAPS, init_dwi_derivatives_wf, written_denoiser_maps
 from .gradwarp import resolve_gradwarp_plan
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
-from .resampling import init_dwi_trans_wf
+from .resampling import _get_first, init_dwi_trans_wf
 
 # dwi workflows
 from .util import _create_mem_gb, init_dwi_reference_wf
@@ -55,6 +63,36 @@ DEFAULT_MEMORY_MIN_GB = 0.01
 def _select_grid(grids, index):
     """Pick one output grid out of the list the anatomical workflow produced."""
     return grids[index]
+
+
+def dwiref_level_name(make_dwiref):
+    """Return the ``space-`` value of the dwiref frame a run resolved to."""
+    return 'subject' if make_dwiref else 'distortiongroup'
+
+
+def dropped_stages(spec, dwiref_level):
+    """Return the ``ComposeTransforms`` stages a DWI spec leaves out of its chain.
+
+    ``acpc`` and ``anat`` keep the whole chain (``anat`` adds a trailing rigid). A
+    ``dwiref`` output stops in its reference frame: before the coregistration, and,
+    at the distortion-group level, before the subject-template stages too.
+    """
+    if spec.space != DWIREF:
+        return ()
+    if dwiref_level == 'subject':
+        return ('b=0 to T1w',)
+    return ('to b=0 affine', 'to b=0 warp', 'b=0 to T1w')
+
+
+def space_phrase(spec, dwiref_level):
+    """Name a DWI spec's space for the methods text."""
+    if spec.space == ANAT:
+        return 'the space of the anatomical reference (before AC-PC alignment)'
+    if spec.space == DWIREF and dwiref_level == 'subject':
+        return 'the space of the subject-level *b*=0 reference (the dwiref template)'
+    if spec.space == DWIREF:
+        return "the space of each distortion group's *b*=0 reference"
+    return 'ACPC'
 
 
 def _grid_metadata(grid_file, label=None):
@@ -74,7 +112,7 @@ def init_dwi_finalize_wf(
     name,
     source_file,
     output_prefix,
-    acpc_specs,
+    dwi_specs,
     t2w_sdc=False,
     do_biascorr=True,
     write_derivatives=True,
@@ -90,7 +128,7 @@ def init_dwi_finalize_wf(
         wf = init_dwi_finalize_wf(name='finalize_wf',
                                   omp_nthreads=1,
                                   output_dir='.',
-                                  acpc_specs=parse_output_spaces(['acpc:res-2mm']),
+                                  dwi_specs=parse_output_spaces(['acpc:res-2mm']),
                                   template='MNI152NLin2009cAsym',
                                   b0_threshold=100,
                                   low_mem=False,
@@ -112,10 +150,11 @@ def init_dwi_finalize_wf(
         The file name template used for derivatives and reports.
     output_prefix : str
         beginning of the output file name (eg 'sub-1_buds-j')
-    acpc_specs : list of :class:`~qsiprep.utils.spaces.SpaceSpec`
-        The requested ACPC output resolutions. One ``init_dwi_trans_wf`` and one
-        group of derivatives sinks is built per spec. Every output on a DWI grid
-        carries its ``res-`` entity, even when only one resolution is requested.
+    dwi_specs : list of :class:`~qsiprep.utils.spaces.SpaceSpec`
+        The requested DWI output spaces (``acpc``, ``anat``, ``dwiref``) and
+        resolutions. One ``init_dwi_trans_wf`` and one group of derivatives sinks
+        is built per spec. Every output on a DWI grid carries its ``res-`` entity,
+        even when only one is requested, except ``res-native``.
     t2w_sdc : bool, optional
         Whether a T2w is available for SDC (honoring --anat-modality and
         --ignore t2w); kept for the reports that name the T2w consumer.
@@ -127,7 +166,9 @@ def init_dwi_finalize_wf(
         then return the resampled, non-concatenated images
     make_dwiref : bool, optional
         Whether an across-session dwiref template was built, in which case a
-        reportlet of this session's b=0 aligned to the template is written.
+        reportlet of this session's b=0 aligned to the template is written. It also
+        names the frame of a ``dwiref`` output: ``subject`` when True, otherwise
+        ``distortiongroup``.
 
     Inputs
     ------
@@ -152,7 +193,11 @@ def init_dwi_finalize_wf(
         FreeSurfer subject ID
     dwi_sampling_grids
         A list of NIfTI1 files with the grid spacing and FoV to resample the DWIs
-        to, one per requested ACPC resolution, in ``acpc_specs`` order.
+        to, one per requested DWI spec, in ``dwi_specs`` order.
+    acpc_transform
+        The rigid AC-PC alignment (resamples the anatomical frame into ACPC)
+    acpc_inv_transform
+        Its inverse, which carries an ``anat`` output from ACPC to the anatomical frame
     b0_ref_image
         A Nifti of the b0 reference that was used for hmc and sdc
     dwiref
@@ -197,18 +242,21 @@ def init_dwi_finalize_wf(
     readout_time = pe_readout_time(unit)
     warp_source, estimation_method = sdc_warp_source(unit, gre_in_eddy=eddy_applies_gre(unit))
 
+    dwiref_level = dwiref_level_name(make_dwiref)
+
     sdc_warp_meta = None
     if warp_source is not None:
+        # {space} is filled in per output space below
         layout = (
-            'Stored on the ACPC output grid in the ITK displacement-field layout, with '
-            'vectors in ACPC world coordinates (LPS, mm), so 3D Slicer or ITK-SNAP can '
+            'Stored on the {space} output grid in the ITK displacement-field layout, with '
+            'vectors in {space} world coordinates (LPS, mm), so 3D Slicer or ITK-SNAP can '
             'display it. It is a map for inspection, not a transform for resampling: '
-            'it holds no DWI-to-ACPC coregistration, and qsiprep applies the correction '
+            'it holds no DWI-to-{space} coregistration, and qsiprep applies the correction '
             'in DWI space.'
         )
         description = (
             'Susceptibility (EPI) distortion displacement of the first DWI series. At '
-            'each point of the corrected ACPC image, the vector points to where that '
+            'each point of the corrected {space} image, the vector points to where that '
             f'tissue appeared in the distorted data. {layout}'
         )
         rebuilt_topup = (
@@ -297,6 +345,9 @@ def init_dwi_finalize_wf(
                 't1_aparc',
                 't1_2_mni_reverse_transform',
                 'dwi_sampling_grids',
+                # Anatomical frame <-> ACPC, for anat outputs and their Dice
+                'acpc_transform',
+                'acpc_inv_transform',
                 'raw_qc_file',
                 'coreg_score',
                 'raw_concatenated',
@@ -444,26 +495,29 @@ def init_dwi_finalize_wf(
     ) = jacobian_provenance_for(unit)
 
     # Fan out the resampling: one dwi_trans_wf (and, when write_derivatives, one
-    # group of derivatives sinks) per requested ACPC resolution. Every output on a
-    # DWI grid carries its res- entity, as in fMRIPrep, so QSIRecon selects a
-    # resolution by name. Node names only gain a suffix with several resolutions,
-    # which keeps single-resolution working directories reusable.
-    multi_acpc = len(acpc_specs) > 1
+    # group of derivatives sinks) per requested DWI space and resolution. Every
+    # output on a DWI grid carries its res- entity, as in fMRIPrep, so QSIRecon
+    # selects a resolution by name. Node names only gain a suffix with several
+    # specs, which keeps single-spec working directories reusable.
+    multi_spec = len(dwi_specs) > 1
+    # Figures carry space- only when a space other than ACPC is written, so an
+    # ACPC-only run keeps its reportlet names.
+    figures_name_space = any(spec.space != ACPC for spec in dwi_specs)
     # Built once, from the first spec that reaches the derivatives section below.
     gradient_plot = None
     grad_dev_initial_ref = None
 
-    # The merge path (final_merge_wf in base.py) consumes these per resolution, so
-    # every ACPC spec reaches the outputnode as one slot of a list in acpc_specs
-    # order. A single resolution gives a one-element list, so consumers index rather
-    # than special-case.
+    # The merge path (final_merge_wf in base.py) consumes these per spec, so every
+    # DWI spec reaches the outputnode as one slot of a list in dwi_specs order. A
+    # single spec gives a one-element list, so consumers index rather than
+    # special-case.
     merged_fields = ['dwi_t1', 'bvals_t1', 'bvecs_t1', 't1_b0_ref', 'cnr_map_t1']
     denoiser_maps = written_denoiser_maps()
     for denoiser_map in denoiser_maps:
         merged_fields += [f'{denoiser_map.field}_t1', f'{denoiser_map.field}_meta']
 
     merged_outputs = {
-        field: pe.Node(niu.Merge(len(acpc_specs)), name=f'merge_out_{field}')
+        field: pe.Node(niu.Merge(len(dwi_specs)), name=f'merge_out_{field}')
         for field in merged_fields
     }
     # A field eddy applied itself arrives as fieldmap_hz, as for the SDC map
@@ -472,19 +526,21 @@ def init_dwi_finalize_wf(
         [(merge, outputnode, [('out', field)]) for field, merge in merged_outputs.items()]
     )
 
-    for index, spec in enumerate(acpc_specs):
+    for index, spec in enumerate(dwi_specs):
         label = spec.resolution.label
-        suffix = f'_res{label}' if multi_acpc else ''
-        res_entities = {'res': label}
-        # res-native* is resolved from the DWI headers at run time, so its res-
-        # entity is symbolic (res-nativemin) and the sidecar is the only place a
-        # run reports the voxel size it turned out to be.
-        write_resolution_meta = multi_acpc or spec.resolution.kind == 'native'
+        suffix = spec_node_suffix(spec, dwi_specs)
+        space = bids_space(spec, dwiref_level)
+        res_entities = res_entities_for(spec)
+        figure_entities = {**res_entities, **({'space': space} if figures_name_space else {})}
+        # res-native* is resolved from the DWI headers, so its res- entity is
+        # symbolic (res-nativemin) and the sidecar is the only place a run reports
+        # the voxel size it turned out to be.
+        write_resolution_meta = multi_spec or spec.resolution.kind == 'native'
 
         dwi_trans_wf = init_dwi_trans_wf(
             source_file=source_file,
             name=f'dwi_trans_wf{suffix}',
-            template='ACPC',
+            template=space_phrase(spec, dwiref_level),
             resolution=spec.resolution,
             mem_gb=mem_gb['resampled'],
             use_compression=False,
@@ -494,6 +550,7 @@ def init_dwi_finalize_wf(
             sdc_warp_source=warp_source,
             sdc_pe_dir=unit.pe_dir,
             sdc_readout_time=readout_time,
+            drop_stages=dropped_stages(spec, dwiref_level),
         )
 
         # Apply denoising to the interpolated data if requested
@@ -501,7 +558,7 @@ def init_dwi_finalize_wf(
             source_file=source_file,
             do_biascorr=do_biascorr,
             num_dwi_acquisitions=len(all_dwis),
-            sink_entities=res_entities,
+            sink_entities=figure_entities,
             name=f'final_denoise_wf{suffix}',
         )
 
@@ -539,6 +596,15 @@ def init_dwi_finalize_wf(
             ]),
         ])  # fmt:skip
 
+        if spec.space == ANAT:
+            # The full ACPC chain, then ACPC to the anatomical frame. The rigid's
+            # rotation reaches the b-vectors through compose_affines.
+            workflow.connect([
+                (inputnode, dwi_trans_wf, [
+                    ('acpc_inv_transform', 'inputnode.trailing_transform'),
+                ]),
+            ])  # fmt:skip
+
         if doing_topup or warp_source == 'gre_in_eddy':
             workflow.connect([
                 (inputnode, dwi_trans_wf, [('fieldmap_hz', 'inputnode.fieldmap_hz')]),
@@ -573,7 +639,7 @@ def init_dwi_finalize_wf(
                 name=f'{denoiser_map.resample_node}{suffix}',
             )
             resample_maps[field] = resample_map
-            if write_resolution_meta:
+            if write_resolution_meta and res_entities:
                 resample_map.inputs.resolution_label = label
 
             workflow.connect([
@@ -655,6 +721,35 @@ def init_dwi_finalize_wf(
         gtab_t1 = pe.Node(MRTrixGradientTable(), name=f'gtab_t1{suffix}')
         btab_t1 = pe.Node(DSIStudioBTable(bvec_convention='DIPY'), name=f'btab_t1{suffix}')
         t1_dice_calc = init_mask_overlap_wf(name=f't1_dice_calc{suffix}')
+        # The anatomical mask is in ACPC, so the Dice is always computed there. An
+        # output in another space carries its mask into ACPC first; the score
+        # describes the same overlap whichever space reports it.
+        if spec.space == ACPC:
+            workflow.connect([
+                (dwi_trans_wf, t1_dice_calc, [
+                    ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask'),
+                ]),
+            ])  # fmt:skip
+        else:
+            mask_to_acpc = pe.Node(
+                ants.ApplyTransforms(interpolation='NearestNeighbor', float=True),
+                name=f'dwi_mask_to_acpc{suffix}',
+            )
+            workflow.connect([
+                (dwi_trans_wf, mask_to_acpc, [('outputnode.resampled_dwi_mask', 'input_image')]),
+                (inputnode, mask_to_acpc, [('t1_mask', 'reference_image')]),
+                (mask_to_acpc, t1_dice_calc, [('output_image', 'inputnode.dwi_mask')]),
+            ])  # fmt:skip
+            if spec.space == ANAT:
+                workflow.connect([(inputnode, mask_to_acpc, [('acpc_transform', 'transforms')])])
+            elif dwiref_level == 'subject':
+                workflow.connect([
+                    (inputnode, mask_to_acpc, [
+                        (('dwiref_to_t1_affine', _get_first), 'transforms'),
+                    ]),
+                ])  # fmt:skip
+            else:
+                workflow.connect([(inputnode, mask_to_acpc, [('itk_b0_to_t1', 'transforms')])])
 
         if gradient_plot is None:
             # bvecs don't change with the output grid, so the sampling-scheme
@@ -695,7 +790,7 @@ def init_dwi_finalize_wf(
             # resolution.
             for field, desc, title in sdc_fields:
                 plot = pe.Node(
-                    SDCWarpPlot(title=f'{title} (ACPC space)'),
+                    SDCWarpPlot(title=f'{title} ({space} space)'),
                     name=f'{desc}_plot',
                     mem_gb=DEFAULT_MEMORY_MIN_GB,
                 )
@@ -719,14 +814,14 @@ def init_dwi_finalize_wf(
         dwi_derivatives_wf = init_dwi_derivatives_wf(
             source_file=source_file,
             resolution=spec.resolution,
+            space=space,
             # hmcOptimization is produced before resampling and is the same for
-            # every ACPC resolution; writing it from every dwi_derivatives_wf
-            # instance would be a same-path collision, so only the first spec
-            # writes it.
+            # every DWI spec; writing it from every dwi_derivatives_wf instance
+            # would be a same-path collision, so only the first spec writes it.
             write_hmc_optimization=(index == 0),
             name=f'dwi_derivatives_wf{suffix}',
-            sdc_warp_meta=sdc_warp_meta,
-            sdc_refinement_meta=sdc_refinement_meta,
+            sdc_warp_meta=_format_space(sdc_warp_meta, space),
+            sdc_refinement_meta=_format_space(sdc_refinement_meta, space),
             jacobian_applied_corrections=jacobian_applied_corrections,
             jacobian_unmodulated_corrections=jacobian_unmodulated_corrections,
             jacobian_unmodulated_reason=jacobian_unmodulated_reason,
@@ -768,7 +863,9 @@ def init_dwi_finalize_wf(
                 ]),
             ])  # fmt:skip
 
-        if sdc_fields:
+        if sdc_fields and spec.space == ACPC:
+            # The written transforms name the chain into ACPC, so other spaces'
+            # maps leave TransformFile out rather than name the wrong chain.
             workflow.connect([
                 (inputnode, dwi_derivatives_wf, [
                     ('sdc_transform_files', 'inputnode.sdc_transform_files'),
@@ -785,7 +882,7 @@ def init_dwi_finalize_wf(
         series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name=f'series_qc{suffix}')
         ds_series_qc = pe.Node(
             DerivativesDataSink(
-                space='ACPC',
+                space=space,
                 desc='image',
                 suffix='qc',
                 extension='tsv',
@@ -804,7 +901,7 @@ def init_dwi_finalize_wf(
                 desc='qcwarnings',
                 suffix='dwi',
                 source_file=source_file,
-                **res_entities,
+                **figure_entities,
             ),
             name=f'ds_report_qc_warnings{suffix}',
             run_without_submitting=True,
@@ -824,7 +921,7 @@ def init_dwi_finalize_wf(
         )
         ds_merged_sidecar = pe.Node(
             DerivativesDataSink(
-                space='ACPC',
+                space=space,
                 desc='preproc',
                 extension='.json',
                 source_file=source_file,
@@ -851,7 +948,8 @@ def init_dwi_finalize_wf(
                 name=f'grid_metadata{suffix}',
                 run_without_submitting=True,
             )
-            grid_metadata.inputs.label = label
+            if res_entities:
+                grid_metadata.inputs.label = label
             workflow.connect([
                 (inputnode, grid_metadata, [
                     (('dwi_sampling_grids', _select_grid, index), 'grid_file'),
@@ -862,7 +960,7 @@ def init_dwi_finalize_wf(
         # Write the carpetplot data (which is the text output from eddy)
         ds_carpetplot_data = pe.Node(
             DerivativesDataSink(
-                space='ACPC',
+                space=space,
                 desc='slice',
                 suffix='qc',
                 source_file=source_file,
@@ -880,7 +978,7 @@ def init_dwi_finalize_wf(
         # volume and has nowhere to put spatially varying information. So this is
         # produced whenever a gradwarp plan resolves, even for a DIS3D unit that
         # gets no spatial correction at all. The L matrix is voxelwise, so it is
-        # produced once per requested ACPC resolution, on that grid.
+        # produced once per requested DWI spec, on that grid.
         if gradwarp_plan is not None:
             if grad_dev_initial_ref is None:
                 # CreateGradientNonlinearityBMatrix reads both -f and -i as 3D
@@ -921,7 +1019,7 @@ def init_dwi_finalize_wf(
                 DerivativesDataSink(
                     source_file=source_file,
                     base_directory=config.execution.output_dir,
-                    space='ACPC',
+                    space=space,
                     suffix='graddev',
                     extension='.nii.gz',
                     compress=True,
@@ -947,7 +1045,7 @@ def init_dwi_finalize_wf(
                         'GradientDeviationOrientation': (
                             'Oriented by a rigid registration estimated internally by '
                             "TORTOISE's CreateGradientNonlinearityBMatrix between the raw "
-                            'native b=0 and the final ACPC b=0, not by the coregistration '
+                            f'native b=0 and the final {space} b=0, not by the coregistration '
                             'transform QSIPrep applied to the data.'
                         ),
                     },
@@ -990,9 +1088,6 @@ def init_dwi_finalize_wf(
             (final_denoise_wf, series_qc, [('outputnode.dwi_mask_t1', 't1_mask_file')]),
             (dwi_derivatives_wf, series_qc, [('tsnr.out_file', 't1_tsnr_file')]),
             (dwi_trans_wf, series_qc, [('outputnode.resampled_qc', 't1_qc')]),
-            (dwi_trans_wf, t1_dice_calc, [
-                ('outputnode.resampled_dwi_mask', 'inputnode.dwi_mask'),
-            ]),
             (dwi_trans_wf, gtab_t1, [
                 ('outputnode.bvals', 'bval_file'),
                 ('outputnode.rotated_bvecs', 'bvec_file'),
@@ -1036,6 +1131,16 @@ def init_dwi_finalize_wf(
             ])  # fmt:skip
 
     return workflow
+
+
+def _format_space(meta, space):
+    """Fill the output space into an SDC map's sidecar text."""
+    if meta is None:
+        return None
+    return {
+        key: value.format(space=space) if isinstance(value, str) else value
+        for key, value in meta.items()
+    }
 
 
 def _noise_map_node(unit, fieldmap_in_eddy, kind='noise', name='resample_noise'):

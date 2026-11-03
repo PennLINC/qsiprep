@@ -28,6 +28,7 @@ from scipy.spatial.transform import Rotation as R
 from sklearn.metrics import r2_score
 from transforms3d.affines import decompose44
 
+from ..data import load as load_data
 from ..utils.misc import invert_displacement_field, safe_unit_vector
 
 LOGGER = logging.getLogger('nipype.interface')
@@ -339,6 +340,19 @@ class ExtractB0s(SimpleInterface):
         return runtime
 
 
+#: Transform stages, native-to-target. ``to output space`` is the trailing
+#: transform that carries ACPC on to another frame (ACPC to anat).
+TRANSFORM_STAGES = (
+    'hmc',
+    'gradwarp',
+    'fieldwarp',
+    'to b=0 affine',
+    'to b=0 warp',
+    'b=0 to T1w',
+    'to output space',
+)
+
+
 class ComposeTransformsInputSpec(ApplyTransformsInputSpec):
     input_image = File(mandatory=False)
     dwi_files = InputMultiObject(File(exists=True), mandatory=True, desc='list of dwi files')
@@ -360,8 +374,16 @@ class ComposeTransformsInputSpec(ApplyTransformsInputSpec):
     )
     dwiref_to_t1_affine = File(exists=True, desc='affine from the dwiref to t1')
     hmcsdc_dwi_ref_to_t1w_affine = File(exists=True, desc='affine from dwi ref to t1w')
-    t1_2_mni_forward_transform = InputMultiObject(
-        File(exists=True), mandatory=False, desc='composite (h5) transform to mni'
+    drop_stages = traits.List(
+        traits.Enum(*TRANSFORM_STAGES),
+        value=[],
+        usedefault=True,
+        desc='stages left out of the chain, so it ends in an earlier frame (dwiref)',
+    )
+    trailing_transform = File(
+        exists=True,
+        mandatory=False,
+        desc='a transform applied after every other stage (ACPC to anat)',
     )
     save_cmd = traits.Bool(
         True, usedefault=True, desc='write a log of command lines that were applied'
@@ -400,14 +422,7 @@ class ComposeTransforms(SimpleInterface):
     #: Transform stages, native-to-target. Reversed for ANTs before use.
     #: gradwarp sits between hmc and fieldwarp, matching TORTOISE's
     #: FINALDATA.cxx:930-976 composite order.
-    _TRANSFORM_STAGES = (
-        'hmc',
-        'gradwarp',
-        'fieldwarp',
-        'to b=0 affine',
-        'to b=0 warp',
-        'b=0 to T1w',
-    )
+    _TRANSFORM_STAGES = TRANSFORM_STAGES
 
     #: Inputs consumed here that must not be forwarded to ApplyTransforms.
     _POPPED_KEYS = (
@@ -427,7 +442,8 @@ class ComposeTransforms(SimpleInterface):
         'fieldwarps',
         'hmcsdc_dwi_ref_to_t1w_affine',
         'interpolation',
-        't1_2_mni_forward_transform',
+        'drop_stages',
+        'trailing_transform',
         'copy_dtype',
     )
 
@@ -440,21 +456,32 @@ class ComposeTransforms(SimpleInterface):
         return list(cls._POPPED_KEYS)
 
     @classmethod
+    def _stage_names(cls, included, drop=()):
+        """Return the stages of ``included`` that are not in ``drop``, in stage order.
+
+        ``drop`` names the stages an output space leaves out of the chain: a
+        ``dwiref`` output stops before the coregistration (and, at the
+        distortion-group level, before the subject-template stages), so its chain
+        ends in the reference frame instead of ACPC.
+        """
+        return [name for name in included if name not in set(drop)]
+
+    @classmethod
     def _sdc_warp_stage_names(cls, included):
         """Return the stages that move the SDC displacement field to the output grid.
 
         The susceptibility warp *is* the ``fieldwarp`` stage, applied to the DWI
         after ``hmc`` and ``gradwarp`` (see :attr:`_TRANSFORM_STAGES`). It
         therefore lives in the motion- and gradwarp-corrected DWI frame, so only
-        the stages that move that frame to the anatomical reference remain: the
-        intramodal-template stages, then the b=0-to-T1w coregistration. ``hmc``,
-        ``gradwarp`` and ``fieldwarp`` itself are dropped (re-applying them would
-        double-count), and MNI stages are excluded because the derivative stays
-        in ACPC. ``included`` is the stage names actually present, in
-        :attr:`_TRANSFORM_STAGES` order.
+        the stages that move that frame to the output grid remain: the
+        intramodal-template stages, the b=0-to-T1w coregistration and the trailing
+        transform. ``hmc``, ``gradwarp`` and ``fieldwarp`` itself are dropped
+        (re-applying them would double-count). ``included`` is the stage names
+        actually present, in :attr:`_TRANSFORM_STAGES` order, after any
+        ``drop_stages`` were removed.
         """
         drop = {'hmc', 'gradwarp', 'fieldwarp'}
-        return [name for name in included if name in cls._TRANSFORM_STAGES and name not in drop]
+        return [name for name in included if name not in drop]
 
     @classmethod
     def _hmc_corrected_stage_names(cls, included):
@@ -520,6 +547,11 @@ class ComposeTransforms(SimpleInterface):
             elif len(dwiref_transforms) > 2:
                 raise Exception('Unsupported dwiref transform')
 
+        # The same transform after ACPC for every image, such as ACPC to anat
+        trailing = self.inputs.trailing_transform
+        if isdefined(trailing):
+            trailing = [trailing] * num_dwis
+
         by_name = {
             'hmc': hmc_affines,
             'gradwarp': gradwarp,
@@ -527,8 +559,10 @@ class ComposeTransforms(SimpleInterface):
             'to b=0 affine': dwiref_affine,
             'to b=0 warp': dwiref_warp,
             'b=0 to T1w': coreg_to_t1,
+            'to output space': trailing,
         }
-        transform_order = [(by_name[name], name) for name in self._TRANSFORM_STAGES]
+        kept = self._stage_names(self._TRANSFORM_STAGES, self.inputs.drop_stages)
+        transform_order = [(by_name[name], name) for name in kept]
 
         for transform_list, transform_name in transform_order:
             LOGGER.info(transform_name)
@@ -536,13 +570,17 @@ class ComposeTransforms(SimpleInterface):
                 image_transforms.append(transform_list)
                 image_transform_names.append(transform_name)
 
-        # Same t1-to-mni transform for every image
-        mni_xform = self.inputs.t1_2_mni_forward_transform
-        if isdefined(mni_xform):
-            assert len(mni_xform) == 2
-            image_transforms.append([mni_xform[0]] * num_dwis)
-            image_transforms.append([mni_xform[1]] * num_dwis)
-            image_transform_names += ['mni affine', 'mni warp']
+        if not image_transforms:
+            # Nothing is left to apply (eddy, resampled into its own reference frame):
+            # an explicit identity, so every consumer still gets one file per volume.
+            identity = str(load_data('itkIdentityTransform.txt'))
+            LOGGER.info('No transform stage remains: resampling with an identity')
+            self._results['out_warps'] = [identity] * num_dwis
+            self._results['out_affines'] = [identity] * num_dwis
+            self._results['transform_lists'] = [[identity] for _ in range(num_dwis)]
+            self._results['sdc_warp_transforms'] = ['identity']
+            self._results['hmc_corrected_transforms'] = ['identity']
+            return runtime
 
         # Check that all the transform lists have the same numbers of transforms
         assert all(len(xform_list) == len(image_transforms[0]) for xform_list in image_transforms)

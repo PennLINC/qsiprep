@@ -104,10 +104,12 @@ standard space, has no equivalent.
 New options
 ***********
 
-* ``--output-spaces``: one or more ``acpc`` resolutions for the preprocessed
-  DWI, including ``res-nativemin``/``res-nativemax``, and any number of
-  TemplateFlow standard spaces for the transforms and anatomical derivatives,
-  with ``cohort-auto`` age-based cohort selection (:ref:`output_spaces_ref`).
+* ``--output-spaces``: the DWI spaces and resolutions for the preprocessed DWI
+  (``acpc``, ``anat`` and ``dwiref``, at a physical size, ``res-native``,
+  ``res-nativemin`` or ``res-nativemax``), and any number of TemplateFlow
+  template spaces for the transforms and anatomical derivatives, with
+  ``cohort-auto`` age-based cohort selection (:ref:`output_spaces_ref`). It is
+  optional and defaults to ``acpc:res-nativemin``.
 * ``--hmc-method tortoise`` and ``--diffprep-config``: TORTOISE DIFFPREP
   head motion and eddy-current correction (:doc:`methods/hmc_tortoise`).
 * ``--sdc-method``: ``topup``, ``drbuddi`` or ``topup+drbuddi`` for reverse
@@ -173,6 +175,20 @@ Behavior changes
   application use niimath's ROMEO implementation instead of PRELUDE and
   FUGUE.
 * **SHORELine is deprecated** and prints a removal notice.
+* **Output resolution.** Without ``--output-spaces`` the preprocessed DWI is
+  written at ``acpc:res-nativemin``, the smallest voxel dimension of each
+  output's own runs, and named ``space-ACPC_res-nativemin``. Every output on a
+  DWI grid carries its ``res-`` entity, even with one resolution, so `QSIRecon`_
+  must select ACPC outputs by ``res-``. An output that combines runs of
+  different voxel sizes has no native resolution and stops the run with an
+  error; request a physical size such as ``acpc:res-2mm`` for it.
+* **Anatomical derivatives at the anatomical's voxel size.** The
+  ``space-ACPC`` anatomicals, the subject dwiref template in ACPC, and the
+  anatomicals of a template listed without a TemplateFlow ``res-`` label are
+  written at the anatomical's own voxel size, on the template's field of view,
+  instead of on the template's 1 mm grid. Filenames are unchanged, and so is the
+  content for a 1 mm isotropic anatomical. The anatomicals the DWI is
+  registered to are unchanged.
 * **Output naming** follows fMRIPrep 26.0 for the coregistration reference:
   ``space-distortiongroup`` or ``space-subject`` on the reference image and
   ``desc-coreg`` on the transforms (:ref:`transforms`).

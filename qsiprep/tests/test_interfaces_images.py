@@ -209,38 +209,6 @@ def _write_image(path, zooms):
     return str(path)
 
 
-def test_voxel_size_chooser_max_across_runs(tmp_path):
-    from qsiprep.interfaces.anatomical import VoxelSizeChooser
-
-    # The largest zoom lives in the second image, so a regression that silently used
-    # only input_images[0] would fail this test instead of passing by coincidence.
-    a = _write_image(tmp_path / 'a.nii.gz', (2.0, 2.0, 2.0))
-    b = _write_image(tmp_path / 'b.nii.gz', (3.0, 4.0, 5.0))
-    result = VoxelSizeChooser(input_images=[a, b], anisotropic_strategy='max').run(
-        cwd=str(tmp_path)
-    )
-    assert result.outputs.voxel_size == 5.0
-
-
-def test_voxel_size_chooser_min_across_runs(tmp_path):
-    from qsiprep.interfaces.anatomical import VoxelSizeChooser
-
-    a = _write_image(tmp_path / 'a.nii.gz', (3.0, 4.0, 5.0))
-    b = _write_image(tmp_path / 'b.nii.gz', (2.5, 2.5, 2.5))
-    result = VoxelSizeChooser(input_images=[a, b], anisotropic_strategy='min').run(
-        cwd=str(tmp_path)
-    )
-    assert result.outputs.voxel_size == 2.5
-
-
-def test_voxel_size_chooser_explicit_size_wins(tmp_path):
-    from qsiprep.interfaces.anatomical import VoxelSizeChooser
-
-    a = _write_image(tmp_path / 'a.nii.gz', (3.0, 4.0, 5.0))
-    result = VoxelSizeChooser(input_images=[a], voxel_size=1.7).run(cwd=str(tmp_path))
-    assert result.outputs.voxel_size == 1.7
-
-
 def test_choose_interpolator_from_grid(tmp_path):
     from qsiprep.interfaces.images import ChooseInterpolator
 

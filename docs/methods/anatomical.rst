@@ -90,7 +90,6 @@ images, that space is not exactly aligned with any one of them; the
         has_rois=False,
         output_spaces=OUTPUT_SPACES,
         acpc_anchor=ACPC_ANCHOR,
-        acpc_specs=[spec for spec in OUTPUT_SPACES if not spec.standard],
     )
 
 

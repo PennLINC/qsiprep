@@ -271,7 +271,7 @@ def _build_finalize(tmp_path, output_spaces, write_derivatives=True):
     config.workflow.intramodal_template_iters = 0
     config.execution.output_dir = '/tmp/qsiprep-naming-test'
     specs = parse_output_spaces(output_spaces)
-    acpc_specs = [s for s in specs if not s.standard]
+    dwi_specs = [s for s in specs if s.writes_dwi]
 
     src = _write_dwi(tmp_path / 'sub-01_dwi.nii.gz')
     wf = init_dwi_finalize_wf(
@@ -279,10 +279,10 @@ def _build_finalize(tmp_path, output_spaces, write_derivatives=True):
         name='dwi_finalize_wf',
         source_file=src,
         output_prefix='sub-01',
-        acpc_specs=acpc_specs,
+        dwi_specs=dwi_specs,
         write_derivatives=write_derivatives,
     )
-    return wf, acpc_specs
+    return wf, dwi_specs
 
 
 def test_single_acpc_builds_one_trans_wf(tmp_path):
@@ -707,20 +707,20 @@ def test_finalize_outputnode_carries_every_acpc_resolution(tmp_path):
 
     The merge path reads this outputnode, and it used to expose only index 0.
     """
-    wf, acpc_specs = _build_finalize(
+    wf, dwi_specs = _build_finalize(
         tmp_path, ['acpc:res-2mm', 'acpc:res-1p5mm'], write_derivatives=False
     )
     outputnode = wf.get_node('outputnode')
     for field in ('dwi_t1', 'bvals_t1', 'bvecs_t1', 't1_b0_ref', 'cnr_map_t1'):
         merge = wf.get_node(f'merge_out_{field}')
         assert merge is not None, f'{field} is not merged across resolutions'
-        assert merge.interface._numinputs == len(acpc_specs)
+        assert merge.interface._numinputs == len(dwi_specs)
         filled = {
             name
             for _, _, data in wf._graph.in_edges(merge, data=True)
             for _, name in data['connect']
         }
-        assert filled == {f'in{i}' for i in range(1, len(acpc_specs) + 1)}, (
+        assert filled == {f'in{i}' for i in range(1, len(dwi_specs) + 1)}, (
             f'merge_out_{field} slots not all connected: {sorted(filled)}'
         )
         edge = wf._graph.get_edge_data(merge, outputnode)

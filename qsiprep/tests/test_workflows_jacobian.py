@@ -96,7 +96,7 @@ def _acpc_specs():
     from qsiprep.utils.spaces import parse_output_spaces
 
     specs = parse_output_spaces(config.workflow.output_spaces)
-    return [spec for spec in specs if not spec.standard]
+    return [spec for spec in specs if spec.writes_dwi]
 
 
 def _trans_wf():
@@ -592,7 +592,7 @@ def _finalize_wf(tmp_path, write_derivatives=True):
         name='dwi_finalize_wf',
         source_file=dwi,
         output_prefix='sub-01',
-        acpc_specs=_acpc_specs(),
+        dwi_specs=_acpc_specs(),
         write_derivatives=write_derivatives,
     )
 

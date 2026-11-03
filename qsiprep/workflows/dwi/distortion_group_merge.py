@@ -10,6 +10,7 @@ Merging Distortion Groups
 import logging
 
 import nipype.pipeline.engine as pe
+from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from qsiplan.adapters import assembly_to_sidecar
@@ -24,6 +25,7 @@ from ...interfaces.nilearn import Merge
 from ...interfaces.noise_map import NOISE_QUANTITIES, ConcatNoiseMaps
 from ...interfaces.reports import GradientPlot, SeriesQC
 from ...interfaces.shoreline import MergeIterationSummaries
+from ...utils.spaces import resolution_entities
 from .derivatives import (
     DENOISER_MAPS,
     init_dwi_derivatives_wf,
@@ -48,6 +50,8 @@ def init_distortion_group_merge_wf(
     units=(),
     resolution=None,
     write_shared_outputs=True,
+    space='ACPC',
+    figures_name_space=False,
 ) -> Workflow:
     r"""Combine the finalized DWI series of several correction units into one output.
 
@@ -111,13 +115,21 @@ def init_distortion_group_merge_wf(
         the gradient plot, and they are recorded in the provenance sidecar when
         ``assembly`` is given.
     resolution : :class:`~qsiprep.utils.spaces.Resolution` or None, optional
-        Set when more than one ACPC resolution was requested. Adds a ``res-<label>``
-        entity to every sink this workflow owns, so sibling merge workflows for the
-        other resolutions do not write the same filenames.
+        The output resolution. Adds a ``res-<label>`` entity (none for
+        ``res-native``) to every sink this workflow owns, so sibling merge workflows
+        for the other resolutions do not write the same filenames.
     write_shared_outputs : bool, optional
         The sampling-scheme reportlet and the hmcOptimization sidecar do not vary by
-        output resolution, so exactly one merge workflow per output writes them.
-        Pass ``True`` for the first resolution and ``False`` for the rest.
+        output space, so exactly one merge workflow per output writes them. Pass
+        ``True`` for the first DWI spec and ``False`` for the rest.
+    space : str, optional
+        The ``space-`` entity of the merged series: ``ACPC``, ``anat`` or
+        ``subject`` (a subject-level dwiref; a distortion-group dwiref is never
+        merged). Outside ACPC, ``inputnode.to_acpc_transform`` carries the merged
+        mask into ACPC for its Dice with the anatomical mask.
+    figures_name_space : bool, optional
+        Add ``space-`` to the reportlets, as finalize does when a space other than
+        ACPC was requested.
 
     Outputs
     -------
@@ -135,10 +147,11 @@ def init_distortion_group_merge_wf(
         Contrast-to-noise map for the merged series
     """
     workflow = Workflow(name=name)
-    res_entities = {'res': resolution.label} if resolution is not None else {}
+    res_entities = resolution_entities(resolution)
+    figure_entities = {**res_entities, **({'space': space} if figures_name_space else {})}
     source_file = 'dwi/' + source_file
     sanitized_inputs = [name.replace('-', '_') for name in inputs_list]
-    input_names = ['t1_brain', 't1_mask', 't1_seg', 'dwi_sampling_grid']
+    input_names = ['t1_brain', 't1_mask', 't1_seg', 'dwi_sampling_grid', 'to_acpc_transform']
     for suffix in [
         '_image',
         '_bval',
@@ -227,7 +240,7 @@ def init_distortion_group_merge_wf(
         name='merged_b0_ref',
         gen_report=True,
         source_file=source_file,
-        sink_entities=res_entities,
+        sink_entities=figure_entities,
     )
     concat_cnr_images = pe.Node(Merge(), name='concat_cnr_images')
 
@@ -254,8 +267,8 @@ def init_distortion_group_merge_wf(
     series_qc = pe.Node(SeriesQC(output_file_name=output_prefix), name='series_qc')
     ds_series_qc = pe.Node(
         DerivativesDataSink(
-            # The QC describes the ACPC-space merged series, as in finalize.py.
-            space='ACPC',
+            # The QC describes the merged series in its space, as in finalize.py.
+            space=space,
             desc='image',
             suffix='qc',
             extension='tsv',
@@ -274,7 +287,7 @@ def init_distortion_group_merge_wf(
             desc='qcwarnings',
             suffix='dwi',
             source_file=source_file,
-            **res_entities,
+            **figure_entities,
         ),
         name='ds_report_qc_warnings',
         run_without_submitting=True,
@@ -319,6 +332,7 @@ def init_distortion_group_merge_wf(
     dwi_derivatives_wf = init_dwi_derivatives_wf(
         source_file=source_file,
         resolution=resolution,
+        space=space,
         write_hmc_optimization=write_shared_outputs,
     )
 
@@ -423,7 +437,7 @@ def init_distortion_group_merge_wf(
             name='grid_metadata',
             run_without_submitting=True,
         )
-        if resolution is not None:
+        if res_entities:
             grid_metadata.inputs.label = resolution.label
         workflow.connect([
             (inputnode, grid_metadata, [('dwi_sampling_grid', 'grid_file')]),
@@ -431,7 +445,7 @@ def init_distortion_group_merge_wf(
         ])  # fmt:skip
         ds_merged_sidecar = pe.Node(
             DerivativesDataSink(
-                space='ACPC',
+                space=space,
                 desc='preproc',
                 extension='.json',
                 source_file=source_file,
@@ -444,6 +458,25 @@ def init_distortion_group_merge_wf(
         )
         workflow.connect([
             (merged_sidecar, ds_merged_sidecar, [('derivatives_json', 'in_file')]),
+        ])  # fmt:skip
+
+    # The anatomical mask is in ACPC, so the Dice is computed there, as in finalize.py
+    if space == 'ACPC':
+        workflow.connect([
+            (b0_ref_wf, t1_dice_calc, [('outputnode.dwi_mask', 'inputnode.dwi_mask')]),
+        ])  # fmt:skip
+    else:
+        mask_to_acpc = pe.Node(
+            ants.ApplyTransforms(interpolation='NearestNeighbor', float=True),
+            name='dwi_mask_to_acpc',
+        )
+        workflow.connect([
+            (b0_ref_wf, mask_to_acpc, [('outputnode.dwi_mask', 'input_image')]),
+            (inputnode, mask_to_acpc, [
+                ('t1_mask', 'reference_image'),
+                ('to_acpc_transform', 'transforms'),
+            ]),
+            (mask_to_acpc, t1_dice_calc, [('output_image', 'inputnode.dwi_mask')]),
         ])  # fmt:skip
 
     workflow.connect([
@@ -474,7 +507,6 @@ def init_distortion_group_merge_wf(
         (raw_qc_wf, series_qc, [('outputnode.qc_summary', 'pre_qc')]),
         (processed_qc_wf, series_qc, [('outputnode.qc_summary', 't1_qc')]),
         (b0_ref_wf, processed_qc_wf, [('outputnode.dwi_mask', 'inputnode.mask_file')]),
-        (b0_ref_wf, t1_dice_calc, [('outputnode.dwi_mask', 'inputnode.dwi_mask')]),
         (inputnode, t1_dice_calc, [('t1_mask', 'inputnode.anatomical_mask')]),
         (t1_dice_calc, series_qc, [('outputnode.dice_score', 't1_dice_score')]),
         (b0_ref_wf, series_qc, [('outputnode.dwi_mask', 't1_mask_file')]),
