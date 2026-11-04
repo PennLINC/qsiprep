@@ -612,7 +612,8 @@ class workflow(_Config):
     no_b0_harmonization = False
     """Skip re-scaling dwi scans to have matching b=0 intensities."""
     output_spaces = None
-    """Canonical ``--output-spaces`` tokens, as a list of strings."""
+    """Canonical ``--output-spaces`` tokens, as a list of strings. ``None`` means the
+    default, ``acpc:res-nativemin``."""
     write_jacobian_4d = False
     """Write the Jacobian intensity modulation as one map per DWI volume instead of
     its mean over volumes."""
@@ -693,9 +694,9 @@ class workflow(_Config):
     @classmethod
     def parsed_output_spaces(cls):
         """Parse :attr:`output_spaces` into :class:`~qsiprep.utils.spaces.SpaceSpec`."""
-        from qsiprep.utils.spaces import parse_output_spaces
+        from qsiprep.utils.spaces import DEFAULT_OUTPUT_SPACES, parse_output_spaces
 
-        return parse_output_spaces(cls.output_spaces or [])
+        return parse_output_spaces(cls.output_spaces or DEFAULT_OUTPUT_SPACES)
 
     # Settings holding a Path must be listed here. ``get()`` only stringifies
     # what ``_paths`` names, and toml writes anything else as its repr, so an

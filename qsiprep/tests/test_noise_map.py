@@ -540,7 +540,7 @@ def _finalize_wf(
         name='dwi_finalize_wf',
         source_file=source,
         output_prefix='sub-01',
-        acpc_specs=parse_output_spaces(config.workflow.output_spaces),
+        dwi_specs=parse_output_spaces(config.workflow.output_spaces),
         do_biascorr=True,
         write_derivatives=write_derivatives,
     )

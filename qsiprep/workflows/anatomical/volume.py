@@ -47,7 +47,7 @@ from niworkflows.interfaces.reportlets.masks import ROIsPlot
 from ... import config
 from ...data import load as load_data
 from ...interfaces import Conform, DerivativesDataSink
-from ...interfaces.anatomical import DesaturateSkull, GetTemplate, VoxelSizeChooser
+from ...interfaces.anatomical import DesaturateSkull, GetTemplate
 from ...interfaces.ants import ImageMath
 from ...interfaces.freesurfer import (
     FixHeaderSynthStrip,
@@ -55,13 +55,13 @@ from ...interfaces.freesurfer import (
     PrepareSynthStripGrid,
     SynthSeg,
 )
-from ...interfaces.images import AnatomicalReportlet
+from ...interfaces.images import AnatomicalReportlet, SamplingGrid
 from ...interfaces.itk import AffineToRigid, DisassembleTransform
 from ...interfaces.niimath import Allineate, SkullStrip
 from ...interfaces.niworkflows import RobustMNINormalizationRPT
 from ...utils.gpu import gpu_enabled
 from ...utils.misc import fix_multi_source_name
-from ...utils.spaces import templateflow_kwargs
+from ...utils.spaces import NATIVE_FRAMES, templateflow_kwargs
 from ..dwi.registration import init_rotation_search_wf
 
 ANTS_VERSION = BrainExtraction().version or '<ver>'
@@ -120,8 +120,6 @@ def init_anat_preproc_wf(
     has_rois,
     output_spaces,
     acpc_anchor,
-    acpc_specs,
-    dwi_files=None,
     do_biascorr=True,
     t2w_do_biascorr=True,
     name='anat_preproc_wf',
@@ -160,12 +158,6 @@ def init_anat_preproc_wf(
         Every requested output space, with cohorts already resolved.
     acpc_anchor : :class:`~qsiprep.utils.spaces.SpaceSpec`
         The template that anchors ACPC alignment and the output grid's bounding box.
-    acpc_specs : :obj:`list` of :class:`~qsiprep.utils.spaces.SpaceSpec`
-        The requested ACPC spaces, one per output resolution, in output order.
-    dwi_files : :obj:`list`, optional
-        Paths to the subject's DWI runs, used to measure ``native`` resolutions.
-        When empty or ``None``, native grids fall back to the ACPC anchor
-        template since they have no consumer anyway.
     do_biascorr : bool, optional
         Whether to apply N4 bias correction to the T1w(?) or not. Default is True.
     t2w_do_biascorr : bool, optional
@@ -210,8 +202,15 @@ def init_anat_preproc_wf(
         (its rigid component) was extracted from. Maps the pre-AC-PC
         anatomical reference; compose with ``acpc_inv_transform`` to map
         AC-PC space linearly into the template space (used by SyNb0).
-    t1_resampling_grid
-        Image of the preprocessed t1 to be used as the reference output for dwis
+    acpc_grid_template
+        The AC-PC anchor template in LPS, whose field of view the ACPC DWI grids
+        are built on
+    acpc_anat_grid
+        The anchor template's field of view at the anatomical's own voxel size: the
+        grid the written ACPC anatomicals are on
+    anat_preproc, anat_brain, anat_mask, anat_dseg
+        The bias-corrected anatomical reference, its brain, brain mask and
+        segmentation, in the anatomical frame before AC-PC alignment
     """
     anat_modality = config.workflow.anat_modality
     dwi_only = anat_modality == 'none'
@@ -241,7 +240,12 @@ def init_anat_preproc_wf(
                 'template_transforms',
                 'acpc_transform',
                 'acpc_inv_transform',
-                'dwi_sampling_grids',
+                'acpc_grid_template',
+                'acpc_anat_grid',
+                'anat_preproc',
+                'anat_brain',
+                'anat_mask',
+                'anat_dseg',
                 'standard_forward_transforms',
                 'standard_reverse_transforms',
                 'standard_template_lps',
@@ -260,47 +264,15 @@ def init_anat_preproc_wf(
         run_without_submitting=True,
     )
     anchor_lps_wf = init_template_lps_wf(name='anchor_lps_wf')
-    reference_grid_wfs = []
 
+    # The DWI grids are built per output in init_single_subject_wf, where each
+    # output's runs are known; they all take their ACPC field of view from here.
     workflow.connect([
         (get_template, anchor_lps_wf, [
             ('template_file', 'inputnode.template_file'),
             ('mask_file', 'inputnode.mask_file'),
         ]),
-    ])  # fmt:skip
-
-    # One grid per requested ACPC resolution. The autobox is identical across them;
-    # only the final resample differs, so this is cheap.
-    for spec in acpc_specs:
-        grid_wf = init_output_grid_wf(
-            spec.resolution,
-            name=f'output_grid_res{spec.resolution.label}_wf',
-        )
-        reference_grid_wfs.append(grid_wf)
-        workflow.connect([
-            (anchor_lps_wf, grid_wf, [('outputnode.template_lps', 'inputnode.template_image')]),
-        ])  # fmt:skip
-
-        if spec.resolution.kind == 'native':
-            # Measured from the DWI runs at run time. Under --anat-only there are no
-            # DWI files and the grid has no consumer, so fall back to the anchor.
-            if dwi_files:
-                grid_wf.inputs.inputnode.input_images = dwi_files
-            else:
-                workflow.connect([
-                    (anchor_lps_wf, grid_wf, [
-                        ('outputnode.template_lps', 'inputnode.input_images'),
-                    ]),
-                ])  # fmt:skip
-
-    merge_grids = pe.Node(niu.Merge(len(acpc_specs)), name='merge_grids')
-    for index, grid_wf in enumerate(reference_grid_wfs, start=1):
-        workflow.connect([
-            (grid_wf, merge_grids, [('outputnode.grid_image', f'in{index}')]),
-        ])  # fmt:skip
-
-    workflow.connect([
-        (merge_grids, outputnode, [('out', 'dwi_sampling_grids')]),
+        (anchor_lps_wf, outputnode, [('outputnode.template_lps', 'acpc_grid_template')]),
     ])  # fmt:skip
 
     if dwi_only:
@@ -407,7 +379,7 @@ image was segmented with SynthSeg [@synthseg1; @synthseg2], both from *FreeSurfe
 A second brain mask excluding CSF at the brain border (SynthStrip `--no-csf`)
 was used to restrict the nonlinear registration to the template. """
 
-    standard_specs = [spec for spec in output_spaces if spec.standard]
+    standard_specs = [spec for spec in output_spaces if spec.is_template]
 
     # The anchor's *nonlinear* component is only ever consumed by a standard-space
     # output or by fieldmap-less SDC, which warps its atlas prior into subject space
@@ -793,6 +765,74 @@ was used to restrict the nonlinear registration to the template. """
             (merge_std_reports, anat_reports_wf, [('out', 'inputnode.t1_2_mni_reports')]),
         ])  # fmt:skip
 
+    # The anatomical frame before AC-PC alignment, for anat and dwiref outputs
+    workflow.connect([
+        (anat_reference_wf, outputnode, [('outputnode.bias_corrected', 'anat_preproc')]),
+        (synthstrip_anat_wf, outputnode, [
+            ('outputnode.brain_image', 'anat_brain'),
+            ('outputnode.brain_mask', 'anat_mask'),
+        ]),
+    ])  # fmt:skip
+    write_native_anat = any(spec.space in NATIVE_FRAMES for spec in output_spaces)
+    if write_native_anat:
+        anat_aseg_to_dseg = pe.Node(
+            mrtrix3.LabelConvert(
+                in_lut=in_lut,
+                in_config=in_config,
+                out_file='anat_dseg.nii.gz',
+            ),
+            name='anat_aseg_to_dseg',
+        )
+        workflow.connect([
+            (synthseg_anat_wf, anat_aseg_to_dseg, [('outputnode.aparc_image', 'in_file')]),
+            (anat_aseg_to_dseg, outputnode, [('out_file', 'anat_dseg')]),
+        ])  # fmt:skip
+
+    # The written ACPC anatomicals are at the anatomical's own voxel size, on the
+    # anchor template's field of view (D9). They are resampled from the anatomical
+    # frame in one step. The ACPC anatomicals on the outputnode, which DWI
+    # processing registers to, stay on the anchor template's grid, so estimation
+    # is unchanged.
+    acpc_anat_grid = pe.Node(SamplingGrid(), name='acpc_anat_grid')
+    written_acpc_preproc = pe.Node(
+        ants.ApplyTransforms(
+            input_image_type=0, float=True, interpolation=_resample_interpolation()
+        ),
+        name='written_acpc_preproc',
+    )
+    written_acpc_mask = pe.Node(
+        ants.ApplyTransforms(input_image_type=0, float=True, interpolation=_label_interpolation()),
+        name='written_acpc_mask',
+    )
+    written_acpc_aseg = pe.Node(
+        ants.ApplyTransforms(input_image_type=0, float=True, interpolation=_label_interpolation()),
+        name='written_acpc_aseg',
+    )
+    written_acpc_dseg = pe.Node(
+        mrtrix3.LabelConvert(
+            in_lut=in_lut,
+            in_config=in_config,
+            out_file='acpc_dseg.nii.gz',
+        ),
+        name='written_acpc_dseg',
+    )
+    workflow.connect([
+        (anchor_lps_wf, acpc_anat_grid, [('outputnode.template_lps', 'fixed_image')]),
+        (anat_reference_wf, acpc_anat_grid, [('outputnode.bias_corrected', 'zooms_image')]),
+        (acpc_anat_grid, outputnode, [('out_file', 'acpc_anat_grid')]),
+        (anat_reference_wf, written_acpc_preproc, [('outputnode.bias_corrected', 'input_image')]),
+        (synthstrip_anat_wf, written_acpc_mask, [('outputnode.brain_mask', 'input_image')]),
+        (synthseg_anat_wf, written_acpc_aseg, [('outputnode.aparc_image', 'input_image')]),
+        (written_acpc_aseg, written_acpc_dseg, [('output_image', 'in_file')]),
+    ])  # fmt:skip
+    for node in (written_acpc_preproc, written_acpc_mask, written_acpc_aseg):
+        workflow.connect([
+            (acpc_anat_grid, node, [('out_file', 'reference_image')]),
+            (anat_normalization_wf, node, [
+                ('outputnode.to_template_rigid_transform', 'transforms'),
+            ]),
+        ])  # fmt:skip
+
     anat_derivatives_wf = init_anat_derivatives_wf(
         output_spaces=output_spaces,
         has_t2w=num_additional_t2ws > 0,
@@ -801,32 +841,67 @@ was used to restrict the nonlinear registration to the template. """
     workflow.connect([
         (anat_reference_wf, anat_derivatives_wf, [
             ('outputnode.valid_list', 'inputnode.source_files'),
+            ('outputnode.bias_corrected', 'inputnode.anat_reference'),
         ]),
         (outputnode, anat_derivatives_wf, [
             ('anat_template_transforms', 'inputnode.t1_template_transforms'),
             ('acpc_transform', 'inputnode.t1_acpc_transform'),
             ('acpc_inv_transform', 'inputnode.t1_acpc_inv_transform'),
-            ('t1_preproc', 'inputnode.t1_preproc'),
-            ('t1_mask', 'inputnode.t1_mask'),
-            ('t1_seg', 'inputnode.t1_seg'),
-            ('t1_aseg', 'inputnode.t1_aseg'),
             ('standard_forward_transforms', 'inputnode.t1_std_forward_transforms'),
             ('standard_template_lps', 'inputnode.t1_std_template_lps'),
             ('standard_reverse_transforms', 'inputnode.t1_std_reverse_transforms'),
         ]),
+        (written_acpc_preproc, anat_derivatives_wf, [('output_image', 'inputnode.t1_preproc')]),
+        (written_acpc_mask, anat_derivatives_wf, [('output_image', 'inputnode.t1_mask')]),
+        (written_acpc_dseg, anat_derivatives_wf, [('out_file', 'inputnode.t1_seg')]),
+        (written_acpc_aseg, anat_derivatives_wf, [('output_image', 'inputnode.t1_aseg')]),
     ])  # fmt:skip
+
+    if write_native_anat:
+        workflow.connect([
+            (outputnode, anat_derivatives_wf, [
+                ('anat_preproc', 'inputnode.anat_preproc'),
+                ('anat_mask', 'inputnode.anat_mask'),
+                ('anat_dseg', 'inputnode.anat_dseg'),
+            ]),
+        ])  # fmt:skip
 
     if num_additional_t2ws > 0:
         # t2_preproc is the merged (unbiased) T2w template in ACPC; t2w_unfatsat
         # is the image DRBUDDI and unpile actually register to. They
-        # are different images, so both are written.
+        # are different images, so both are written. They exist only in ACPC, so
+        # the written copies are moved onto the anatomical-resolution grid as is.
+        written_t2_preproc = pe.Node(
+            ants.ApplyTransforms(
+                input_image_type=0,
+                float=True,
+                interpolation=_resample_interpolation(),
+                transforms=['identity'],
+            ),
+            name='written_t2_preproc',
+        )
+        written_t2w_unfatsat = pe.Node(
+            ants.ApplyTransforms(
+                input_image_type=0,
+                float=True,
+                interpolation=_resample_interpolation(),
+                transforms=['identity'],
+            ),
+            name='written_t2w_unfatsat',
+        )
         workflow.connect([
             (inputnode, anat_derivatives_wf, [('t2w', 'inputnode.t2w_source_files')]),
             # From outputnode, not t2w_preproc_wf: with --anat-modality T2w the
             # T2w is the primary anatomical and t2w_preproc_wf does not exist.
-            (outputnode, anat_derivatives_wf, [
-                ('t2_preproc', 'inputnode.t2_preproc'),
-                ('t2w_unfatsat', 'inputnode.t2w_unfatsat'),
+            (outputnode, written_t2_preproc, [('t2_preproc', 'input_image')]),
+            (outputnode, written_t2w_unfatsat, [('t2w_unfatsat', 'input_image')]),
+            (acpc_anat_grid, written_t2_preproc, [('out_file', 'reference_image')]),
+            (acpc_anat_grid, written_t2w_unfatsat, [('out_file', 'reference_image')]),
+            (written_t2_preproc, anat_derivatives_wf, [
+                ('output_image', 'inputnode.t2_preproc'),
+            ]),
+            (written_t2w_unfatsat, anat_derivatives_wf, [
+                ('output_image', 'inputnode.t2w_unfatsat'),
             ]),
         ])  # fmt:skip
 
@@ -1740,29 +1815,19 @@ def init_template_lps_wf(name='template_lps_wf') -> Workflow:
     return workflow
 
 
-def init_output_grid_wf(resolution, name='output_grid_wf') -> Workflow:
-    """Generate a non-oblique, uniform voxel-size grid around a brain.
+def init_output_grid_wf(zooms, name='output_grid_wf') -> Workflow:
+    """Generate a non-oblique ACPC grid around the anchor template.
 
     Parameters
     ----------
-    resolution : :class:`~qsiprep.utils.spaces.Resolution`
-        The resolution to build the grid at. A ``native`` resolution leaves the size
-        undefined so ``VoxelSizeChooser`` measures it from the DWI runs at run time.
+    zooms : tuple of float
+        The voxel size along the world x, y and z axes, in mm. The template is LPS,
+        so its axes are the world axes. A native resolution is resolved to a size
+        before the workflow is built (see :func:`~qsiprep.utils.spaces.resolved_zooms`).
     """
     workflow = Workflow(name=name)
-    inputnode = pe.Node(
-        niu.IdentityInterface(fields=['template_image', 'input_images']),
-        name='inputnode',
-    )
+    inputnode = pe.Node(niu.IdentityInterface(fields=['template_image']), name='inputnode')
     outputnode = pe.Node(niu.IdentityInterface(fields=['grid_image']), name='outputnode')
-
-    if resolution.kind == 'native':
-        voxel_size = traits.Undefined
-        strategy = resolution.strategy
-    else:
-        # acpc resolutions are validated isotropic, so any axis is the size.
-        voxel_size = resolution.zooms[0]
-        strategy = 'max'
 
     padding = 4 if config.workflow.infant else 8
 
@@ -1772,12 +1837,9 @@ def init_output_grid_wf(resolution, name='output_grid_wf') -> Workflow:
     deoblique_autobox = pe.Node(
         afni.Warp(outputtype='NIFTI_GZ', deoblique=True), name='deoblique_autobox'
     )
-    voxel_size_chooser = pe.Node(
-        VoxelSizeChooser(voxel_size=voxel_size, anisotropic_strategy=strategy),
-        name='voxel_size_chooser',
-    )
     resample_to_voxel_size = pe.Node(
-        afni.Resample(outputtype='NIFTI_GZ'), name='resample_to_voxel_size'
+        afni.Resample(outputtype='NIFTI_GZ', voxel_size=tuple(float(zoom) for zoom in zooms)),
+        name='resample_to_voxel_size',
     )
 
     workflow.connect([
@@ -1785,16 +1847,9 @@ def init_output_grid_wf(resolution, name='output_grid_wf') -> Workflow:
         (autobox_template, deoblique_autobox, [('out_file', 'in_file')]),
         (deoblique_autobox, resample_to_voxel_size, [('out_file', 'in_file')]),
         (resample_to_voxel_size, outputnode, [('out_file', 'grid_image')]),
-        (inputnode, voxel_size_chooser, [('input_images', 'input_images')]),
-        (voxel_size_chooser, resample_to_voxel_size, [(('voxel_size', _tupleize), 'voxel_size')]),
     ])  # fmt:skip
 
     return workflow
-
-
-def _tupleize(value):
-    # Nipype did not like having a Tuple output trait
-    return (value, value, value)
 
 
 def init_anat_reports_wf(output_spaces) -> Workflow:
@@ -1809,7 +1864,7 @@ def init_anat_reports_wf(output_spaces) -> Workflow:
         must feed ``inputnode.t1_2_mni_reports`` a list in that same order.
     """
     anat_modality = config.workflow.anat_modality
-    standard_specs = [spec for spec in output_spaces if spec.standard]
+    standard_specs = [spec for spec in output_spaces if spec.is_template]
 
     workflow = Workflow(name='anat_reports_wf')
 
@@ -1924,12 +1979,18 @@ def init_anat_derivatives_wf(output_spaces, has_t2w=False) -> Workflow:
     ----------
     output_spaces : :obj:`list` of :class:`~qsiprep.utils.spaces.SpaceSpec`
         Every requested output space, with cohorts already resolved. Every
-        standard (non-ACPC) space among these gets its own from-ACPC/to-<space>
+        template space among these gets its own from-ACPC/to-<space>
         transform pair and resampled ``desc-preproc`` anatomical, brain mask
-        and dseg.
+        and dseg. A template space without a TemplateFlow ``res-`` label is
+        written on the template's field of view at the anatomical's own voxel
+        size. An ``anat`` or ``dwiref`` space also writes the anatomical, brain
+        mask and dseg once in the anatomical frame, with no ``space-`` entity.
+    has_t2w : bool, optional
+        Whether a T2w template and its unfatsat variant are written.
     """
     workflow = Workflow(name='anat_derivatives_wf')
-    standard_specs = [spec for spec in output_spaces if spec.standard]
+    standard_specs = [spec for spec in output_spaces if spec.is_template]
+    write_native_anat = any(spec.space in NATIVE_FRAMES for spec in output_spaces)
 
     inputnode = pe.Node(
         niu.IdentityInterface(
@@ -1951,6 +2012,13 @@ def init_anat_derivatives_wf(output_spaces, has_t2w=False) -> Workflow:
                 't2w_source_files',
                 't2_preproc',
                 't2w_unfatsat',
+                # The anatomical reference before AC-PC alignment: its voxel size
+                # is the one the anatomicals are written at
+                'anat_reference',
+                # Written in the anatomical frame, for anat and dwiref outputs
+                'anat_preproc',
+                'anat_mask',
+                'anat_dseg',
             ]
         ),
         name='inputnode',
@@ -2120,6 +2188,28 @@ def init_anat_derivatives_wf(output_spaces, has_t2w=False) -> Workflow:
             (t2_name, ds_t2w_unfatsat, [('out', 'source_file')]),
         ])  # fmt:skip
 
+    if write_native_anat:
+        # The native anatomical frame is the anatomical itself, so it has no space-
+        # entity, as in fMRIPrep: sub-01_desc-preproc_T1w.nii.gz
+        for field, entities in (
+            ('anat_preproc', {'desc': 'preproc', 'keep_dtype': True}),
+            ('anat_mask', {'desc': 'brain', 'suffix': 'mask'}),
+            ('anat_dseg', {'suffix': 'dseg'}),
+        ):
+            ds_native = pe.Node(
+                DerivativesDataSink(
+                    compress=True,
+                    base_directory=config.execution.output_dir,
+                    **entities,
+                ),
+                name=f'ds_{field}',
+                run_without_submitting=True,
+            )
+            workflow.connect([
+                (inputnode, ds_native, [(field, 'in_file')]),
+                (t1_name, ds_native, [('out', 'source_file')]),
+            ])  # fmt:skip
+
     if standard_specs:
         # A transform filename has no res- entity, so two resolutions of one
         # template would name the same file. Write it once.
@@ -2209,11 +2299,22 @@ def init_anat_derivatives_wf(output_spaces, has_t2w=False) -> Workflow:
             # The grid comes from the chain init_anat_preproc_wf already built for
             # this spec, not a second fetch: deriving it independently would let the
             # image land on a different grid than the transform was estimated
-            # against, and cost a TemplateFlow lookup plus three AFNI launches for a
-            # byte-identical result.
+            # against, and cost a TemplateFlow lookup plus three AFNI launches.
             select_template_lps = pe.Node(
                 niu.Select(index=index), name=f'select_{label}_template_lps'
             )
+            if res_entities:
+                # A TemplateFlow res- label names the grid: TemplateFlow's own
+                template_grid, template_grid_field = select_template_lps, 'out'
+            else:
+                # Without one, the template's field of view at the anatomical's
+                # own voxel size (D9), so no res- entity means "native"
+                template_grid = pe.Node(SamplingGrid(), name=f'{label}_anat_grid')
+                template_grid_field = 'out_file'
+                workflow.connect([
+                    (select_template_lps, template_grid, [('out', 'fixed_image')]),
+                    (inputnode, template_grid, [('anat_reference', 'zooms_image')]),
+                ])  # fmt:skip
 
             resample_std_preproc = pe.Node(
                 ants.ApplyTransforms(
@@ -2248,19 +2349,19 @@ def init_anat_derivatives_wf(output_spaces, has_t2w=False) -> Workflow:
                 (inputnode, select_template_lps, [('t1_std_template_lps', 'inlist')]),
 
                 (inputnode, resample_std_preproc, [('t1_preproc', 'input_image')]),
-                (select_template_lps, resample_std_preproc, [('out', 'reference_image')]),
+                (template_grid, resample_std_preproc, [(template_grid_field, 'reference_image')]),
                 (select_forward, resample_std_preproc, [('out', 'transforms')]),
                 (resample_std_preproc, ds_std_preproc, [('output_image', 'in_file')]),
                 (t1_name, ds_std_preproc, [('out', 'source_file')]),
 
                 (inputnode, resample_std_mask, [('t1_mask', 'input_image')]),
-                (select_template_lps, resample_std_mask, [('out', 'reference_image')]),
+                (template_grid, resample_std_mask, [(template_grid_field, 'reference_image')]),
                 (select_forward, resample_std_mask, [('out', 'transforms')]),
                 (resample_std_mask, ds_std_mask, [('output_image', 'in_file')]),
                 (t1_name, ds_std_mask, [('out', 'source_file')]),
 
                 (inputnode, resample_std_dseg, [('t1_seg', 'input_image')]),
-                (select_template_lps, resample_std_dseg, [('out', 'reference_image')]),
+                (template_grid, resample_std_dseg, [(template_grid_field, 'reference_image')]),
                 (select_forward, resample_std_dseg, [('out', 'transforms')]),
                 (resample_std_dseg, ds_std_dseg, [('output_image', 'in_file')]),
                 (t1_name, ds_std_dseg, [('out', 'source_file')]),

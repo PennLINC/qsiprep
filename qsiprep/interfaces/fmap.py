@@ -1259,6 +1259,17 @@ class _ApplyJacobianWeightsInputSpec(ApplyTransformsInputSpec):
     hmcsdc_dwi_ref_to_t1w_affine = File(
         exists=True, mandatory=False, desc='affine from dwi ref to t1w'
     )
+    drop_stages = traits.List(
+        traits.Enum('to b=0 affine', 'to b=0 warp', 'b=0 to T1w'),
+        value=[],
+        usedefault=True,
+        desc='transport stages left out, as ComposeTransforms leaves them out (dwiref)',
+    )
+    trailing_transform = File(
+        exists=True,
+        mandatory=False,
+        desc='a transform applied after every other stage (ACPC to anat)',
+    )
 
     save_cmd = traits.Bool(
         True, usedefault=True, desc='write a log of command lines that were applied'
@@ -1309,6 +1320,34 @@ def _resample_jacobian_weight(args):
     xfm_runtime = xfm.run().runtime
     LOGGER.info(xfm_runtime.cmdline)
     return resampled_weight_image
+
+
+def _transport_stack(
+    dwiref_affine,
+    dwiref_warp,
+    coreg_to_t1,
+    drop_stages=(),
+    trailing_transform=None,
+):
+    """Return the ANTs-ordered transforms carrying the b=0 reference to the output grid.
+
+    The stages follow ``ComposeTransforms``: the subject-template stages, the
+    coregistration, then any trailing transform (ACPC to anat). ``drop_stages``
+    leaves stages out the way ``ComposeTransforms.drop_stages`` does, so the weights
+    land in the same frame as the DWI. With nothing left, the stack is an identity.
+    """
+    stages = [
+        ('to b=0 affine', dwiref_affine),
+        ('to b=0 warp', dwiref_warp),
+        ('b=0 to T1w', coreg_to_t1),
+        ('to output space', trailing_transform),
+    ]
+    stack = [
+        transform
+        for name, transform in stages
+        if transform is not None and isdefined(transform) and name not in set(drop_stages)
+    ]
+    return stack[::-1] or ['identity']
 
 
 class ApplyJacobianWeights(SimpleInterface):
@@ -1374,11 +1413,13 @@ class ApplyJacobianWeights(SimpleInterface):
                 raise Exception('Unsupported dwiref transform')
 
         # Find the chain of transforms from undistorted b=0 reference to the output space
-        transform_stack = [
-            transform
-            for transform in [dwiref_affine, dwiref_warp, coreg_to_t1]
-            if isdefined(transform)
-        ][::-1]
+        transform_stack = _transport_stack(
+            dwiref_affine,
+            dwiref_warp,
+            coreg_to_t1,
+            drop_stages=self.inputs.drop_stages,
+            trailing_transform=self.inputs.trailing_transform,
+        )
 
         # There are a few unique weight images. Find them, in first-appearance
         # order (dict preserves insertion order) -- weight_index below indexes

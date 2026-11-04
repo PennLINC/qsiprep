@@ -138,11 +138,92 @@ def test_sdc_warp_stage_names_drops_dwi_native_stages():
     assert 'hmc' not in kept
     assert 'gradwarp' not in kept
     assert 'fieldwarp' not in kept
-    assert kept == ['to b=0 affine', 'to b=0 warp', 'b=0 to T1w']
-    # MNI stages are excluded because the derivative stays in ACPC.
-    assert ComposeTransforms._sdc_warp_stage_names(['fieldwarp', 'b=0 to T1w', 'mni warp']) == [
-        'b=0 to T1w'
+    # The trailing transform (ACPC to anat) carries the map to an anat grid too.
+    assert kept == ['to b=0 affine', 'to b=0 warp', 'b=0 to T1w', 'to output space']
+
+
+def test_stage_names_honour_dropped_stages():
+    """Test that a dwiref output's dropped stages leave every sub-chain too.
+
+    The SDC map and the CNR map follow the DWI, so they must not be conjugated
+    through a coregistration the DWI did not get.
+    """
+    from qsiprep.interfaces.gradients import ComposeTransforms
+
+    stages = list(ComposeTransforms._TRANSFORM_STAGES)
+    kept = ComposeTransforms._stage_names(stages, ['b=0 to T1w'])
+    assert 'b=0 to T1w' not in kept
+    assert ComposeTransforms._sdc_warp_stage_names(kept) == [
+        'to b=0 affine',
+        'to b=0 warp',
+        'to output space',
     ]
+    assert 'b=0 to T1w' not in ComposeTransforms._hmc_corrected_stage_names(kept)
+
+
+def _identity_inputs(tmp_path):
+    import SimpleITK as sitk
+
+    dwis = []
+    for index in range(2):
+        dwi = str(tmp_path / f'sub-01_vol{index}_dwi.nii.gz')
+        nb.Nifti1Image(np.zeros((4, 4, 4), dtype='float32'), np.eye(4)).to_filename(dwi)
+        dwis.append(dwi)
+    ref = str(tmp_path / 'ref.nii.gz')
+    nb.Nifti1Image(np.zeros((4, 4, 4), dtype='float32'), np.eye(4)).to_filename(ref)
+    coreg = str(tmp_path / 'coreg.mat')
+    sitk.WriteTransform(sitk.AffineTransform(3), coreg)
+    return dwis, ref, coreg
+
+
+def test_dropping_the_only_stage_resamples_with_an_identity(tmp_path):
+    """Test that eddy at the distortion-group level gets an identity, not the coreg shortcut.
+
+    Eddy hands over corrected volumes, so coregistration is the only stage. A dwiref
+    output drops it, and must then resample in the reference frame as is.
+    """
+    from qsiprep.interfaces.gradients import ComposeTransforms
+
+    dwis, ref, coreg = _identity_inputs(tmp_path)
+    result = ComposeTransforms(
+        dwi_files=dwis,
+        reference_image=ref,
+        hmcsdc_dwi_ref_to_t1w_affine=coreg,
+        drop_stages=['b=0 to T1w'],
+    ).run(cwd=str(tmp_path))
+    warps = result.outputs.out_warps
+    affines = result.outputs.out_affines
+    assert len(warps) == len(affines) == 2
+    assert all(path.endswith('itkIdentityTransform.txt') for path in warps + affines)
+    assert coreg not in warps
+    sdc = result.outputs.sdc_warp_transforms
+    assert (sdc if isinstance(sdc, list) else [sdc]) == ['identity']
+
+
+def test_trailing_transform_applies_last(tmp_path):
+    """Test that the trailing transform (ACPC to anat) is the last stage applied.
+
+    ANTs applies its list last to first, so the stage applied last is listed first.
+    The trailing transform needs a second stage to avoid the coreg shortcut, so this
+    test runs antsApplyTransforms.
+    """
+    import SimpleITK as sitk
+
+    from qsiprep.interfaces.gradients import ComposeTransforms
+
+    if shutil.which('antsApplyTransforms') is None:
+        pytest.skip('antsApplyTransforms is not installed')
+
+    dwis, ref, coreg = _identity_inputs(tmp_path)
+    trailing = str(tmp_path / 'acpc_to_anat.mat')
+    sitk.WriteTransform(sitk.AffineTransform(3), trailing)
+    result = ComposeTransforms(
+        dwi_files=dwis,
+        reference_image=ref,
+        hmcsdc_dwi_ref_to_t1w_affine=coreg,
+        trailing_transform=trailing,
+    ).run(cwd=str(tmp_path))
+    assert result.outputs.transform_lists[0] == [trailing, coreg]
 
 
 def test_compose_transforms_exposes_the_sdc_warp_subchain(tmp_path):
@@ -645,7 +726,7 @@ def test_finalize_writes_the_refinement_only_for_topup_drbuddi(tmp_path, monkeyp
         name='dwi_finalize_wf',
         source_file=source,
         output_prefix='sub-01',
-        acpc_specs=parse_output_spaces(config.workflow.output_spaces),
+        dwi_specs=parse_output_spaces(config.workflow.output_spaces),
         do_biascorr=False,
         write_derivatives=True,
     )

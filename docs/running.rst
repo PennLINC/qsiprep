@@ -26,18 +26,18 @@ Suppose the BIDS input contains::
 with the ``epi`` fieldmap's ``IntendedFor`` naming the three DWI runs. One way
 to process these data is::
 
-  qsiprep /path/to/bids /path/to/output participant \
-      --output-spaces acpc:res-1p7mm MNI152NLin2009cAsym \
-      -w /path/to/work
+  qsiprep /path/to/bids /path/to/output participant -w /path/to/work
 
-The three positional arguments follow the BIDS App convention.
-``--output-spaces`` has no default and must include at least one ``acpc``
-entry: ``acpc:res-1p7mm`` makes the preprocessed DWI 1.7 mm isotropic, and
-``MNI152NLin2009cAsym`` asks for the transforms to that template and the
-anatomical derivatives in it (see :ref:`output_spaces_ref`). With these
-options the three runs are denoised separately, concatenated, motion and
-distortion corrected as one series with ``eddy`` and TOPUP, and written to
-``/path/to/output/sub-1/ses-1/dwi/sub-1_ses-1_acq-multishell_space-ACPC_res-1p7mm_desc-preproc_dwi.nii.gz``.
+The three positional arguments follow the BIDS App convention. Without
+``--output-spaces``, the preprocessed DWI is written in ``ACPC`` space at
+``res-nativemin``, the smallest voxel dimension of the input runs, made
+isotropic (see :ref:`output_spaces_ref`). With these options the three runs are
+denoised separately, concatenated, motion and distortion corrected as one
+series with ``eddy`` and TOPUP, and written to
+``/path/to/output/sub-1/ses-1/dwi/sub-1_ses-1_acq-multishell_space-ACPC_res-nativemin_desc-preproc_dwi.nii.gz``.
+Adding ``--output-spaces acpc:res-1p7mm MNI152NLin2009cAsym`` would instead make
+the preprocessed DWI 1.7 mm isotropic (``space-ACPC_res-1p7mm``) and also write
+the transforms to that template and the anatomical derivatives in it.
 
 How to run the container versions of this command is on the
 :doc:`installation` page.
@@ -680,39 +680,86 @@ susceptibility corrections internally whenever its resampling method is
 Output spaces and resolutions
 *****************************
 
-All DWI outputs are written in the subject's ``ACPC`` space: aligned to the
-anatomical reference and rotated so that the origin is at the anterior
-commissure, with the same orientation convention as the MNI templates. The
-T1w cannot align white matter to a template accurately, so the preprocessed
-DWI is never written in template space; spatial normalization is done after
-models are fit, in `QSIRecon`_.
-
 ``--output-spaces`` says where outputs are written. It takes one or more
 space-delimited tokens, each naming a space and, optionally, a resolution or
 cohort::
 
   --output-spaces acpc:res-2mm MNI152NLin2009cAsym
 
-At least one ``acpc`` entry is required, and ``acpc`` always needs an explicit
-resolution.
+It defaults to ``acpc:res-nativemin``. At least one DWI space is required.
+
+DWI spaces
+==========
+
+The preprocessed DWI can be written in three spaces. Each is resampled in a
+single step from the raw data, so requesting several does not add
+interpolations to any of them.
+
+``acpc``
+  The anatomical reference, rotated so that the origin is at the anterior
+  commissure, with the same orientation convention as the MNI templates
+  (``space-ACPC``). This is the only space `QSIRecon`_ reads, so a run without
+  ``acpc`` logs a warning.
+``anat``
+  The anatomical reference before AC-PC alignment (``space-anat``), as
+  fMRIPrep's ``T1w`` space. It needs an anatomical image, so it cannot be used
+  with ``--anat-modality none``.
+``dwiref``
+  The DWI reference frame that ``--dwiref-definition`` chose (see
+  :ref:`dwiref_flags`): each distortion group's own *b*\=0 reference
+  (``space-distortiongroup``) or the subject-level *b*\=0 template
+  (``space-subject``). The DWI is written beside the reference image it was
+  resampled into, and no coregistration to the anatomical is applied. At the
+  distortion-group level each distortion group has its own frame, so their
+  ``dwiref`` outputs cannot be merged: combining ``dwiref`` with
+  ``--distortion-group-merge`` stops the run when an output merges distortion
+  groups. Use ``--dwiref-definition subject`` to give them one shared frame, or
+  ``--distortion-group-merge none`` to keep them apart.
+
+Every DWI grid is axis-aligned and LPS-oriented, even in ``dwiref``, whose
+reference image may be oblique: a space is a coordinate frame, not a voxel
+grid. ``acpc`` grids cover the AC-PC anchor template, ``anat`` grids the
+anatomical brain mask and ``dwiref`` grids the *b*\=0 brain mask, each with a
+small margin. The DWI brain mask's Dice overlap with the anatomical brain mask
+is computed in ``ACPC`` for every space and written to its series QC file.
+
+Whenever ``anat`` or ``dwiref`` is requested, the preprocessed anatomical, its
+brain mask and its segmentation are also written once in the anatomical frame,
+at the anatomical's own resolution and with no ``space-`` entity
+(``sub-1_desc-preproc_T1w.nii.gz``), as in fMRIPrep. Bring them into a
+``dwiref`` frame with the written ``from-anat_to-ACPC`` and
+``from-ACPC_to-<level>`` transforms.
+
+The T1w cannot align white matter to a template accurately, so the preprocessed
+DWI is never written in template space; spatial normalization is done after
+models are fit, in `QSIRecon`_.
 
 Resolutions
 ===========
 
 A ``res-`` key sets the resolution of a space. Which forms are accepted depends
-on whether the space is ``acpc`` or a standard space.
+on whether the space is a DWI space or a template space.
 
-On ``acpc``:
+On ``acpc``, ``anat`` and ``dwiref``:
 
-- **Isotropic physical size**, in millimeters, such as ``res-2mm`` or
-  ``res-1p5mm`` (``p`` is the decimal point). Anisotropic sizes such as
-  ``res-6x6x3mm`` are rejected, because reconstruction requires isotropic DWI.
-- **Native-resolution strategies**, ``res-nativemin`` and ``res-nativemax``.
-  These take the smallest or largest voxel dimension across the input DWI runs
-  and use it isotropically: a 3x4x5 mm input gives 3x3x3 mm for ``nativemin``
-  and 5x5x5 mm for ``nativemax``. The value is only known once the DWI headers
-  are read, so the resolved voxel size is recorded in the ``Resolution`` key of
-  each output's JSON sidecar.
+- **Physical size**, in millimeters, such as ``res-2mm`` or ``res-1p5mm``
+  (``p`` is the decimal point), or anisotropic, such as ``res-1p5x1p5x3mm``
+  along the left-right, posterior-anterior and inferior-superior axes.
+- **Native-resolution strategies**, ``res-nativemin`` (the default) and
+  ``res-nativemax``. These take the smallest or largest voxel dimension of the
+  runs that make up each output and use it isotropically: a 3x4x5 mm input
+  gives 3x3x3 mm for ``nativemin`` and 5x5x5 mm for ``nativemax``.
+- **The native voxel size**, ``res-native``: the runs' own voxel size along each
+  world axis, which may be anisotropic. Its outputs carry no ``res-`` entity.
+
+`QSIRecon`_ rejects anisotropic DWI. Native resolutions are taken from the runs
+of each output, after concatenation and ``--distortion-group-merge``, so two
+outputs of one subject can have different native resolutions. For an output
+that combines runs of different voxel sizes, ``nativemin`` and ``nativemax``
+take the smallest or largest dimension across all of its runs. ``res-native``
+has no single voxel size there, so the run stops with an error naming each
+run's voxel size. The resolved voxel size is recorded in the ``Resolution`` key
+of each output's JSON sidecar.
 
 Pass the acquired resolution to keep it, or a smaller value to upsample; some
 downstream methods, such as fixel-based analysis, recommend at least 1.3 mm.
@@ -722,33 +769,35 @@ SHORELine, twice with ``eddy`` and DIFFPREP, which write their own corrected
 volumes). Resampling uses Lanczos windowed sinc interpolation, or linear
 interpolation when upsampling by more than 10%.
 
-On standard spaces, only **TemplateFlow resolution labels** are accepted, such
+On template spaces, only **TemplateFlow resolution labels** are accepted, such
 as ``res-1`` or ``res-2``. The label selects the TemplateFlow grid the template
 is fetched on, and appears as the ``res-`` entity in the output filenames.
 Which labels exist varies by template; an unavailable label is rejected with
 the list of valid ones. Physical (``mm``) sizes are not implemented for
-standard spaces and are rejected: *QSIPrep* does not resample standard-space
-outputs to an arbitrary voxel size.
+template spaces and are rejected. A template listed without a label is written
+on the template's field of view at the anatomical's own voxel size, with no
+``res-`` entity, and so are the ``ACPC`` anatomicals.
 
-Multiple ``acpc`` resolutions
-=============================
+Several DWI spaces and resolutions
+==================================
 
-Listing ``acpc`` more than once (``acpc:res-2mm acpc:res-1p5mm``) resamples and
-writes the preprocessed DWI once per resolution, each costing roughly another
-full resampling pass. Every DWI derivative carries the ``res-`` entity of its
-resolution, even when only one is requested, as in fMRIPrep, and `QSIRecon`_
-selects which resolution to reconstruct by that entity.
+Listing several DWI spaces or resolutions (``acpc:res-2mm acpc:res-1p5mm
+anat``) resamples and writes the preprocessed DWI once per entry, each costing
+roughly another full resampling pass. Every DWI derivative carries the
+``res-`` entity of its resolution, even when only one is requested, as in
+fMRIPrep, except ``res-native``. `QSIRecon`_ selects which resolution to
+reconstruct by that entity.
 
-Multiple ``acpc`` resolutions work with ``--distortion-group-merge``. Each
-resolution is merged separately and written with its own ``res-`` entity, so
-*N* resolutions cost *N* merges, each with its own QC, on top of the *N*
-resampling passes per correction unit.
+Several DWI spaces and resolutions work with ``--distortion-group-merge``.
+Each is merged separately and written with its own ``space-`` and ``res-``
+entities, so *N* entries cost *N* merges, each with its own QC, on top of the
+*N* resampling passes per correction unit.
 
-Standard spaces
+Template spaces
 ===============
 
 Any other space name (``MNI152NLin2009cAsym``, ``MNI152NLin6Asym``,
-``MNIInfant``, ...) is a TemplateFlow template. Each standard space gets the
+``MNIInfant``, ...) is a TemplateFlow template. Each template space gets the
 ``ACPC`` to template transforms and the anatomical derivatives (preprocessed
 T1w/T2w, brain mask and segmentation) resampled into it, but never DWI. Each
 template needs its own nonlinear registration of the anatomical reference, so

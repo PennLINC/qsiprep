@@ -14,7 +14,6 @@ from nipype import logging
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
     File,
-    InputMultiObject,
     SimpleInterface,
     TraitedSpec,
     isdefined,
@@ -50,48 +49,6 @@ class DiceOverlap(SimpleInterface):
         self._results['dice_score'] = distance.dice(
             t1_img.get_fdata().flatten(), dwi_img.get_fdata().flatten()
         )
-        return runtime
-
-
-class _VoxelSizeChooserInputSpec(BaseInterfaceInputSpec):
-    voxel_size = traits.Float()
-    input_images = InputMultiObject(File(exists=True))
-    anisotropic_strategy = traits.Enum('min', 'max', 'mean', usedefault=True)
-
-
-class _VoxelSizeChooserOutputSpec(TraitedSpec):
-    voxel_size = traits.Float()
-
-
-class VoxelSizeChooser(SimpleInterface):
-    input_spec = _VoxelSizeChooserInputSpec
-    output_spec = _VoxelSizeChooserOutputSpec
-
-    def _run_interface(self, runtime):
-        if not isdefined(self.inputs.input_images) and not isdefined(self.inputs.voxel_size):
-            raise Exception(
-                'VoxelSizeChooser: either voxel_size or input_images must be set '
-                '(a native resolution, e.g. res-nativemin/res-nativemax, requires '
-                'input_images).'
-            )
-
-        # An explicit size always wins; the strategies only apply to measured images.
-        if isdefined(self.inputs.voxel_size):
-            self._results['voxel_size'] = self.inputs.voxel_size
-            return runtime
-
-        zooms = []
-        for image in self.inputs.input_images:
-            zooms.extend(nb.load(image).header.get_zooms()[:3])
-
-        if self.inputs.anisotropic_strategy == 'min':
-            voxel_size = min(zooms)
-        elif self.inputs.anisotropic_strategy == 'max':
-            voxel_size = max(zooms)
-        else:
-            voxel_size = np.round(np.mean(zooms), 2)
-
-        self._results['voxel_size'] = float(voxel_size)
         return runtime
 
 

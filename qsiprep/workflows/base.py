@@ -41,6 +41,7 @@ from copy import deepcopy
 
 from dipy import __version__ as dipy_ver
 from nilearn import __version__ as nilearn_ver
+from nipype.interfaces import ants
 from nipype.interfaces import utility as niu
 from nipype.pipeline import engine as pe
 from niworkflows.engine.workflows import LiterateWorkflow as Workflow
@@ -66,6 +67,7 @@ from ..interfaces import (
     InteractiveReport,
     SubjectSummary,
 )
+from ..interfaces.images import SamplingGrid
 from ..interfaces.itk import InvertITKAffine
 from ..utils.bids import (
     check_output_names_are_bids_unique,
@@ -76,13 +78,18 @@ from ..utils.eddy_config import eddy_applies_gre
 from ..utils.misc import dwi_biascorrect_enabled, fix_multi_source_name
 from ..utils.plan import method_selection_from_config
 from ..utils.sdc import sdc_warp_source, t2w_available_for_sdc, t2w_sdc_enabled
-from .anatomical.volume import anat_biascorrect_enabled, init_anat_preproc_wf
+from .anatomical.volume import (
+    anat_biascorrect_enabled,
+    init_anat_preproc_wf,
+    init_output_grid_wf,
+)
 from .dwi.base import init_dwi_preproc_wf
 from .dwi.derivatives import written_denoiser_maps
 from .dwi.distortion_group_merge import init_distortion_group_merge_wf
 from .dwi.dwiref import init_dwiref_wf
-from .dwi.finalize import _select_grid, init_dwi_finalize_wf
+from .dwi.finalize import _select_grid, dwiref_level_name, init_dwi_finalize_wf
 from .dwi.merge import SERIES_FIELDS, init_dwi_series_denoise_wf
+from .dwi.resampling import _get_first
 
 
 def init_series_denoise_wfs(preproc_units, orientation):
@@ -138,17 +145,6 @@ def connect_series_to_unit(workflow, series_wfs, unit, dwi_preproc_wf, name):
                 series_wfs[dwi_file], f'outputnode.{series_field}', collect, f'in{index}'
             )
         workflow.connect(collect, 'out', dwi_preproc_wf, f'inputnode.{list_field}')
-
-
-def _first_sampling_grid(grids):
-    """Pick the reference grid for HMC/SDC out of the per-resolution list.
-
-    ``--output-spaces`` can request several ACPC resolutions, so the anatomical
-    workflow emits a list. Head motion correction needs one reference geometry,
-    and the first requested resolution is it -- matching the single grid this
-    fed before the fan-out existed.
-    """
-    return grids[0] if isinstance(grids, (list, tuple)) else grids
 
 
 def connect_noise_maps_to_unit(workflow, series_wfs, unit, dwi_finalize_wf, name):
@@ -291,7 +287,22 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
             '--anat-modality none'
         )
 
-    from ..utils.spaces import describe_acpc_anchor, resolve_output_spaces, select_acpc_anchor
+    from ..utils.spaces import (
+        ACPC,
+        ANAT,
+        DWIREF,
+        NativeResolutionMismatch,
+        OutputSpacesError,
+        bids_space,
+        describe_acpc_anchor,
+        dwi_specs_of,
+        resolve_output_spaces,
+        resolved_zooms,
+        run_zooms,
+        select_acpc_anchor,
+        spec_node_suffix,
+        zooms_label,
+    )
 
     output_spaces = config.workflow.parsed_output_spaces()
     if any(spec.needs_cohort_resolution for spec in output_spaces):
@@ -306,8 +317,13 @@ def init_single_subject_wf(subject_id: str, session_ids: list):
         None if not session_ids else session_ids[0],
     )
     acpc_anchor = select_acpc_anchor(output_spaces)
-    acpc_specs = [s for s in output_spaces if not s.standard]
-    standard_specs = [s for s in output_spaces if s.standard]
+    dwi_specs = dwi_specs_of(output_spaces)
+    standard_specs = [s for s in output_spaces if s.is_template]
+    if config.workflow.anat_modality == 'none' and any(s.space == ANAT for s in dwi_specs):
+        raise OutputSpacesError(
+            'The "anat" output space is the anatomical frame, so it needs an anatomical '
+            'image, but --anat-modality is none. Use "acpc" or "dwiref" instead.'
+        )
     anchor_note = describe_acpc_anchor(output_spaces, acpc_anchor)
     chose_between_cohorts = (
         len({s.cohort for s in standard_specs if s.space == acpc_anchor.space}) > 1
@@ -435,8 +451,6 @@ documentation](https://qsiprep.readthedocs.io/en/latest/methods/index.html \
         has_rois=bool(subject_data['roi']),
         output_spaces=output_spaces,
         acpc_anchor=acpc_anchor,
-        acpc_specs=acpc_specs,
-        dwi_files=subject_data['dwi'],
         do_biascorr=anat_biascorrect_enabled(subject_data.get(info_modality)),
         t2w_do_biascorr=anat_biascorrect_enabled(subject_data.get('t2w')),
     )
@@ -554,50 +568,6 @@ documentation](https://qsiprep.readthedocs.io/en/latest/methods/index.html \
         for destination, subgroups in merged_to_subgroups.items()
     }
 
-    # Read unconditionally below even when no merge is happening.
-    merging_group_workflows = {}
-    if merging_distortion_groups:
-        merged_group_names = sorted(set(concatenation_scheme.values()))
-        assembly_by_name = {assembly.output_name: assembly for assembly in plan.outputs}
-
-        for merged_group in merged_group_names:
-            # Outputs with a single correction unit keep the direct path:
-            # there is nothing to merge, and the legacy merge workflow is
-            # only exercised when corrected units actually combine.
-            if len(merged_to_subgroups[merged_group]) < 2:
-                continue
-
-            merging_group_workflows[merged_group] = [
-                init_distortion_group_merge_wf(
-                    merging_strategy=config.workflow.distortion_group_merge,
-                    source_file=merged_group + '_dwi.nii.gz',
-                    inputs_list=merged_to_subgroups[merged_group],
-                    output_prefix=merged_group,
-                    name=(
-                        merged_group.replace('-', '_')
-                        + '_final_merge_wf'
-                        + (f'_res{spec.resolution.label}' if len(acpc_specs) > 1 else '')
-                    ),
-                    assembly=assembly_by_name[merged_group],
-                    units=[units_by_name[key] for key in merged_to_subgroups[merged_group]],
-                    # Every merged output carries its res- entity, like the direct path.
-                    resolution=spec.resolution,
-                    write_shared_outputs=(index == 0),
-                )
-                for index, spec in enumerate(acpc_specs)
-            ]
-
-            for index, merge_wf in enumerate(merging_group_workflows[merged_group]):
-                workflow.connect([
-                    (anat_preproc_wf, merge_wf, [
-                        ('outputnode.t1_brain', 'inputnode.t1_brain'),
-                        ('outputnode.t1_seg', 'inputnode.t1_seg'),
-                        ('outputnode.t1_mask', 'inputnode.t1_mask'),
-                        (('outputnode.dwi_sampling_grids', _select_grid, index),
-                         'inputnode.dwi_sampling_grid'),
-                    ]),
-                ])  # fmt:skip
-
     outputs_to_files = {unit.output_name: unit for unit in preproc_units}
     summary.inputs.dwi_groupings = {
         unit.output_name: {
@@ -677,7 +647,27 @@ documentation](https://qsiprep.readthedocs.io/en/latest/methods/index.html \
             name='ds_dwiref_acpc',
             run_without_submitting=True,
         )
-        workflow.connect([(dwiref_wf, ds_dwiref_acpc, [('outputnode.dwiref_acpc', 'in_file')])])
+        if config.workflow.anat_modality == 'none':
+            workflow.connect([
+                (dwiref_wf, ds_dwiref_acpc, [('outputnode.dwiref_acpc', 'in_file')]),
+            ])  # fmt:skip
+        else:
+            # Written on the grid the ACPC anatomicals are written on (D9)
+            dwiref_acpc_to_anat_grid = pe.Node(
+                ants.ApplyTransforms(
+                    interpolation='LanczosWindowedSinc',
+                    float=True,
+                    transforms=['identity'],
+                ),
+                name='dwiref_acpc_to_anat_grid',
+            )
+            workflow.connect([
+                (dwiref_wf, dwiref_acpc_to_anat_grid, [('outputnode.dwiref_acpc', 'input_image')]),
+                (anat_preproc_wf, dwiref_acpc_to_anat_grid, [
+                    ('outputnode.acpc_anat_grid', 'reference_image'),
+                ]),
+                (dwiref_acpc_to_anat_grid, ds_dwiref_acpc, [('output_image', 'in_file')]),
+            ])  # fmt:skip
 
         # Without this the dwiref space is a dead end: nothing can be mapped
         # into or out of it after the fact.
@@ -771,6 +761,184 @@ documentation](https://qsiprep.readthedocs.io/en/latest/methods/index.html \
                 ]),
             ])  # fmt:skip
 
+    # A dwiref output lands in the frame --dwiref-definition resolved to, and
+    # beside that frame's reference image.
+    dwiref_level = dwiref_level_name(make_dwiref)
+    figures_name_space = any(spec.space != ACPC for spec in dwi_specs)
+    if (
+        merging_distortion_groups
+        and dwiref_level == 'distortiongroup'
+        and any(spec.space == DWIREF for spec in dwi_specs)
+    ):
+        # Each distortion group is its own reference frame, so their dwiref outputs
+        # cannot be concatenated (D11).
+        merged = sorted(name for name, units in merged_to_subgroups.items() if len(units) > 1)
+        if merged:
+            raise OutputSpacesError(
+                f'sub-{subject_id}: the "dwiref" output space cannot be merged with '
+                f'--distortion-group-merge {config.workflow.distortion_group_merge} '
+                'when --dwiref-definition is distortion-group: '
+                f'{", ".join(merged)} would combine distortion groups that each have '
+                'their own reference frame. Use --dwiref-definition subject to give '
+                'them one shared frame, or --distortion-group-merge none to keep them '
+                'apart.'
+            )
+
+    # Native resolutions come from each output's own runs, so they are resolved per
+    # output, here, where each output's runs are known. nativemin and nativemax take
+    # the smallest or largest dimension across the runs; res-native needs one size.
+    native_specs = [spec for spec in dwi_specs if spec.resolution.kind == 'native']
+    native_zooms = {}
+    for destination, subgroups in merged_to_subgroups.items():
+        if not native_specs:
+            break
+
+        dwi_files = [path for name in subgroups for path in units_by_name[name].dwi_files]
+        native_zooms[destination] = run_zooms(dwi_files)
+        for spec in native_specs:
+            try:
+                resolved_zooms(spec.resolution, native_zooms[destination])
+            except NativeResolutionMismatch as exc:
+                example = f'{spec.space}:res-{zooms_label((min(exc.smallest),) * 3)}'
+                raise OutputSpacesError(
+                    f'{destination} combines runs with different voxel sizes '
+                    f'({exc.listing}), so {spec} is ambiguous. Request '
+                    f'{spec.space}:res-nativemin, res-nativemax or a physical size '
+                    f'instead, for example {example}.'
+                ) from None
+
+    # One grid per space and voxel size, shared by every output that resolves to
+    # it. A dwiref grid at the distortion-group level is each unit's own, built
+    # in the loop below and cached per unit and voxel size.
+    grid_nodes = {}
+
+    subject_dwiref_mask = None
+    if dwiref_level == 'subject' and any(spec.space == DWIREF for spec in dwi_specs):
+        # The template has no mask of its own, so the ACPC brain mask is carried
+        # into its frame through the inverse of its coregistration, and its grids
+        # are cropped to it as the distortion-group grids are to their b=0 masks.
+        # It does not depend on the voxel size, so every subject grid shares it.
+        subject_dwiref_mask = pe.Node(
+            ants.ApplyTransforms(
+                interpolation='NearestNeighbor',
+                float=True,
+                invert_transform_flags=[True],
+            ),
+            name='acpc_mask_to_subject_dwiref',
+        )
+        workflow.connect([
+            (anat_preproc_wf, subject_dwiref_mask, [('outputnode.t1_mask', 'input_image')]),
+            (dwiref_wf, subject_dwiref_mask, [
+                ('outputnode.dwiref', 'reference_image'),
+                (('outputnode.dwiref_to_t1_affine', _get_first), 'transforms'),
+            ]),
+        ])  # fmt:skip
+
+    def _grid_source(spec, destination):
+        """Return the node and field of the grid one output's spec is resampled onto."""
+        zooms = resolved_zooms(spec.resolution, native_zooms.get(destination))
+        label = zooms_label(zooms)
+        key = (spec.space, zooms)
+        if key in grid_nodes:
+            return grid_nodes[key]
+
+        if spec.space == ACPC:
+            grid = init_output_grid_wf(zooms, name=f'output_grid_acpc_{label}_wf')
+            workflow.connect([
+                (anat_preproc_wf, grid, [
+                    ('outputnode.acpc_grid_template', 'inputnode.template_image'),
+                ]),
+            ])  # fmt:skip
+            grid_nodes[key] = (grid, 'outputnode.grid_image')
+        elif spec.space == ANAT:
+            grid = pe.Node(SamplingGrid(zooms=list(zooms)), name=f'output_grid_anat_{label}')
+            workflow.connect([
+                (anat_preproc_wf, grid, [
+                    ('outputnode.anat_brain', 'fixed_image'),
+                    ('outputnode.anat_mask', 'fov_mask'),
+                ]),
+            ])  # fmt:skip
+            grid_nodes[key] = (grid, 'out_file')
+        else:
+            grid = pe.Node(SamplingGrid(zooms=list(zooms)), name=f'output_grid_subject_{label}')
+            workflow.connect([
+                (dwiref_wf, grid, [('outputnode.dwiref', 'fixed_image')]),
+                (subject_dwiref_mask, grid, [('output_image', 'fov_mask')]),
+            ])  # fmt:skip
+            grid_nodes[key] = (grid, 'out_file')
+        return grid_nodes[key]
+
+    grid_sources = {
+        destination: [
+            None
+            if spec.space == DWIREF and dwiref_level == 'distortiongroup'
+            else _grid_source(spec, destination)
+            for spec in dwi_specs
+        ]
+        for destination in merged_to_subgroups
+    }
+
+    # Read unconditionally below even when no merge is happening.
+    merging_group_workflows = {}
+    if merging_distortion_groups:
+        merged_group_names = sorted(set(concatenation_scheme.values()))
+        assembly_by_name = {assembly.output_name: assembly for assembly in plan.outputs}
+
+        for merged_group in merged_group_names:
+            # Outputs with a single correction unit keep the direct path:
+            # there is nothing to merge, and the legacy merge workflow is
+            # only exercised when corrected units actually combine.
+            if len(merged_to_subgroups[merged_group]) < 2:
+                continue
+
+            merging_group_workflows[merged_group] = [
+                init_distortion_group_merge_wf(
+                    merging_strategy=config.workflow.distortion_group_merge,
+                    source_file=merged_group + '_dwi.nii.gz',
+                    inputs_list=merged_to_subgroups[merged_group],
+                    output_prefix=merged_group,
+                    name=(
+                        merged_group.replace('-', '_')
+                        + '_final_merge_wf'
+                        + spec_node_suffix(spec, dwi_specs)
+                    ),
+                    assembly=assembly_by_name[merged_group],
+                    units=[units_by_name[key] for key in merged_to_subgroups[merged_group]],
+                    # Every merged output carries its res- entity, like the direct path.
+                    resolution=spec.resolution,
+                    write_shared_outputs=(index == 0),
+                    space=bids_space(spec, dwiref_level),
+                    figures_name_space=figures_name_space,
+                )
+                for index, spec in enumerate(dwi_specs)
+            ]
+
+            for index, merge_wf in enumerate(merging_group_workflows[merged_group]):
+                spec = dwi_specs[index]
+                grid, grid_field = grid_sources[merged_group][index]
+                workflow.connect([
+                    (anat_preproc_wf, merge_wf, [
+                        ('outputnode.t1_brain', 'inputnode.t1_brain'),
+                        ('outputnode.t1_seg', 'inputnode.t1_seg'),
+                        ('outputnode.t1_mask', 'inputnode.t1_mask'),
+                    ]),
+                    (grid, merge_wf, [(grid_field, 'inputnode.dwi_sampling_grid')]),
+                ])  # fmt:skip
+                # The merged mask goes into ACPC for its Dice with the anatomical mask
+                if spec.space == ANAT:
+                    workflow.connect([
+                        (anat_preproc_wf, merge_wf, [
+                            ('outputnode.acpc_transform', 'inputnode.to_acpc_transform'),
+                        ]),
+                    ])  # fmt:skip
+                elif spec.space == DWIREF:
+                    # Only the subject level gets here: its units share one frame
+                    workflow.connect([
+                        (dwiref_wf, merge_wf, [
+                            ('outputnode.dwiref_to_t1_affine', 'inputnode.to_acpc_transform'),
+                        ]),
+                    ])  # fmt:skip
+
     # Conform and denoise each raw series once, before the per-unit pipelines.
     # The plan runs every unit through the same HMC tool (selection.hmc), so one
     # orientation serves them all: eddy wants LAS, everything else LPS.
@@ -815,7 +983,7 @@ documentation](https://qsiprep.readthedocs.io/en/latest/methods/index.html \
             name=dwi_preproc_wf.name.replace('dwi_preproc', 'dwi_finalize'),
             output_prefix=naming_name,
             source_file=source_file,
-            acpc_specs=acpc_specs,
+            dwi_specs=dwi_specs,
             t2w_sdc=t2w_sdc,
             do_biascorr=do_biascorr,
             write_derivatives=write_derivatives,
@@ -823,6 +991,51 @@ documentation](https://qsiprep.readthedocs.io/en/latest/methods/index.html \
         )
         if written_denoiser_maps():
             connect_noise_maps_to_unit(workflow, series_wfs, unit, dwi_finalize_wf, output_wfname)
+        # The grid of each DWI spec, in dwi_specs order. A dwiref grid at the
+        # distortion-group level is this unit's own reference frame.
+        unit_grids = pe.Node(
+            niu.Merge(len(dwi_specs)),
+            name=f'dwi_sampling_grids_{output_wfname}',
+            run_without_submitting=True,
+        )
+        for index, (spec, source) in enumerate(
+            zip(dwi_specs, grid_sources[final_output_name], strict=True), start=1
+        ):
+            if source is None:
+                # Two dwiref specs that resolve to one voxel size share this unit's grid
+                zooms = resolved_zooms(spec.resolution, native_zooms.get(final_output_name))
+                key = ('distortiongroup', output_wfname, zooms)
+                if key not in grid_nodes:
+                    grid = pe.Node(
+                        SamplingGrid(zooms=list(zooms)),
+                        name=f'output_grid_distortiongroup_{zooms_label(zooms)}_{output_wfname}',
+                    )
+                    workflow.connect([
+                        (dwi_preproc_wf, grid, [
+                            ('outputnode.b0_ref_image', 'fixed_image'),
+                            ('outputnode.dwi_mask', 'fov_mask'),
+                        ]),
+                    ])  # fmt:skip
+                    grid_nodes[key] = (grid, 'out_file')
+                source = grid_nodes[key]
+            workflow.connect(source[0], source[1], unit_grids, f'in{index}')
+        workflow.connect(unit_grids, 'out', dwi_finalize_wf, 'inputnode.dwi_sampling_grids')
+
+        # SynB0 writes its synthetic b=0 on the first ACPC grid. Without an acpc
+        # output it is written on the b=0 grid instead (add_synb0_outputs), and the
+        # ACPC anatomical only stands in for a grid nothing writes.
+        acpc_sources = [
+            source
+            for spec, source in zip(dwi_specs, grid_sources[final_output_name], strict=True)
+            if spec.space == ACPC
+        ]
+        synb0_grid, synb0_field = (
+            acpc_sources[0] if acpc_sources else (anat_preproc_wf, 'outputnode.t1_brain')
+        )
+        workflow.connect([
+            (synb0_grid, dwi_preproc_wf, [(synb0_field, 'inputnode.dwi_sampling_grid')]),
+        ])  # fmt:skip
+
         # The SDC displacement maps name, in their sidecars, the written transforms
         # that carried the correction from the DWI frame into ACPC.
         warp_source, _ = sdc_warp_source(unit, gre_in_eddy=eddy_applies_gre(unit))
@@ -842,8 +1055,6 @@ documentation](https://qsiprep.readthedocs.io/en/latest/methods/index.html \
                 ('outputnode.to_template_affine_transform',
                  'inputnode.to_template_affine_transform'),
                 ('outputnode.acpc_inv_transform', 'inputnode.acpc_inv_transform'),
-                (('outputnode.dwi_sampling_grids', _first_sampling_grid),
-                 'inputnode.dwi_sampling_grid'),
             ]),
             (anat_preproc_wf, dwi_finalize_wf, [
                 ('outputnode.t1_preproc', 'inputnode.t1_preproc'),
@@ -854,7 +1065,8 @@ documentation](https://qsiprep.readthedocs.io/en/latest/methods/index.html \
                 ('outputnode.t1_aparc', 'inputnode.t1_aparc'),
                 ('outputnode.t1_2_mni_forward_transform', 'inputnode.t1_2_mni_forward_transform'),
                 ('outputnode.t1_2_mni_reverse_transform', 'inputnode.t1_2_mni_reverse_transform'),
-                ('outputnode.dwi_sampling_grids', 'inputnode.dwi_sampling_grids'),
+                ('outputnode.acpc_transform', 'inputnode.acpc_transform'),
+                ('outputnode.acpc_inv_transform', 'inputnode.acpc_inv_transform'),
             ]),
             (dwi_preproc_wf, dwi_finalize_wf, [
                 ('outputnode.dwi_files', 'inputnode.dwi_files'),

@@ -18,14 +18,14 @@ Outputs
    motion and image quality.
 
 Files follow the `BIDS Derivatives`_ naming rules. Volumetric outputs are in
-``ACPC`` space (see :ref:`output_spaces_ref`) and carry ``space-ACPC`` in
-their names. Outputs on a DWI grid also carry the ``res-<label>`` of the
-``acpc`` resolution they were resampled to (for example ``res-2mm``), even when
-only one was requested, so each resolution has its own files. Anatomical
-derivatives carry no ``res-``: the ``space-ACPC`` anatomicals are on the
-grid of the template that anchors AC-PC alignment, at TemplateFlow's default
-resolution (1 mm for ``MNI152NLin2009cAsym``), not on a DWI grid. Below,
-``<res>`` stands for that ``res-<label>`` entity.
+``ACPC`` space by default (see :ref:`output_spaces_ref`) and carry
+``space-ACPC`` in their names. Outputs on a DWI grid also carry the
+``res-<label>`` of the resolution they were resampled to (for example
+``res-2mm`` or ``res-nativemin``), even when only one was requested, so each
+resolution has its own files; only ``res-native`` outputs go without it.
+Anatomical derivatives carry no ``res-`` unless a TemplateFlow resolution was
+requested: they are at the anatomical's own voxel size. Below, ``<res>`` stands
+for that ``res-<label>`` entity.
 
 
 *****************
@@ -110,7 +110,11 @@ model's prediction agrees with that slice.
 Preprocessed DWI
 ****************
 
-Per output, in ``dwi/``::
+Per output and DWI space, in ``dwi/``. The files are listed for ``acpc``; an
+``anat`` output writes the same files with ``space-anat``, and a ``dwiref``
+output with ``space-distortiongroup`` or ``space-subject``, the level
+``--dwiref-definition`` resolved to, beside that level's
+``space-<level>_dwiref`` reference image::
 
   # The preprocessed DWI series, its gradient tables, and its brain mask
   <source_entities>_space-ACPC_<res>_desc-preproc_dwi.nii.gz
@@ -339,11 +343,23 @@ in LPS+ orientation and AC-PC aligned::
   <source_entities>_space-ACPC_desc-aseg_dseg.nii.gz      # SynthSeg regions
   <source_entities>_space-ACPC_desc-unfatsat_T2w.nii.gz   # when a T2w is present
 
-With ``--anat-modality T2w`` the reference is ``desc-preproc_T2w``. The
-preprocessed reference, brain mask and ``dseg`` are also written in every
-standard space listed in ``--output-spaces``, as ``space-<template>``, with
-``cohort-<label>`` for templates with cohorts and ``res-<label>`` when a
-TemplateFlow resolution was requested.
+They are on the field of view of the template that anchors AC-PC alignment,
+at the anatomical's own voxel size. With ``--anat-modality T2w`` the reference
+is ``desc-preproc_T2w``. The preprocessed reference, brain mask and ``dseg``
+are also written in every template space listed in ``--output-spaces``, as
+``space-<template>``, with ``cohort-<label>`` for templates with cohorts. A
+template listed with a TemplateFlow resolution is written on that grid, with
+``res-<label>``; one listed without is written on the template's field of view
+at the anatomical's own voxel size, with no ``res-``.
+
+When ``anat`` or ``dwiref`` is among the output spaces, the reference, brain
+mask and ``dseg`` are also written once in the anatomical frame, before AC-PC
+alignment, at the anatomical's own resolution and with no ``space-`` entity, as
+fMRIPrep writes its native-space anatomicals::
+
+  <source_entities>_desc-preproc_T1w.nii.gz
+  <source_entities>_desc-brain_mask.nii.gz
+  <source_entities>_dseg.nii.gz
 
 
 .. _transforms:

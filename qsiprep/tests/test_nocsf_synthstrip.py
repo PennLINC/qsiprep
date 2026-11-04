@@ -41,7 +41,6 @@ def _build(force_nocsf, name):
         has_rois=False,
         output_spaces=specs,
         acpc_anchor=select_acpc_anchor(specs),
-        acpc_specs=[spec for spec in specs if not spec.standard],
         name=name,
     )
 

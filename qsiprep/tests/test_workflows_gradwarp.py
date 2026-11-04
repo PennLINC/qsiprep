@@ -566,7 +566,7 @@ def _finalize_wf(tmp_path, write_derivatives=False, output_spaces=('acpc:res-1p2
         name='dwi_finalize_wf',
         source_file=dwi,
         output_prefix='sub-01',
-        acpc_specs=[s for s in specs if not s.standard],
+        dwi_specs=[s for s in specs if s.writes_dwi],
         # These tests are about gradwarp, not N4; building the bias-correction
         # node would need b0_threshold, which this fixture does not configure.
         do_biascorr=False,
@@ -1678,7 +1678,7 @@ def _finalize_wf_with_gradients(
         name='dwi_finalize_wf',
         source_file=dwi,
         output_prefix='sub-01',
-        acpc_specs=[s for s in specs if not s.standard],
+        dwi_specs=[s for s in specs if s.writes_dwi],
         write_derivatives=write_derivatives,
     )
 
@@ -2181,7 +2181,7 @@ def test_finalize_rebuilds_the_displacement_map_from_a_gre_field_eddy_applied(tm
         name='dwi_finalize_wf',
         source_file=dwi,
         output_prefix='sub-01',
-        acpc_specs=parse_output_spaces(config.workflow.output_spaces),
+        dwi_specs=parse_output_spaces(config.workflow.output_spaces),
         do_biascorr=False,
         write_derivatives=False,
     )

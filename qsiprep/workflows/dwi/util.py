@@ -22,6 +22,7 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 
 from ... import config
 from ...interfaces import DerivativesDataSink
+from ...utils.spaces import ACPC, res_entities_for
 from ..anatomical import init_synthstrip_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -34,7 +35,9 @@ def add_synb0_outputs(workflow, synb0_wf, source_file):
     acquired-vs-synthetic and U-Net-input figures (registered in
     ``reports-spec.yml`` as ``synb0acquired``/``synb0unet``) and the same
     ``space-ACPC_desc-synb0_dwiref`` image derivative - the synthetic b=0 on
-    the DWI output grid, kept regardless of which correction consumed it.
+    the first ACPC output grid, kept regardless of which correction consumed it.
+    Without an ``acpc`` output space, the synthetic b=0 is written on the unit's
+    own b=0 grid instead, as ``space-distortiongroup_desc-synb0_dwiref``.
     """
     ds_report_synb0_acquired = pe.Node(
         DerivativesDataSink(
@@ -60,13 +63,18 @@ def add_synb0_outputs(workflow, synb0_wf, source_file):
     )
     # synthetic_b0_acpc is resampled onto the first ACPC grid, so it carries
     # that resolution's res- entity like every other output on a DWI grid.
-    acpc_specs = [s for s in config.workflow.parsed_output_spaces() if not s.standard]
-    res_entities = {'res': acpc_specs[0].resolution.label} if acpc_specs else {}
+    acpc_specs = [s for s in config.workflow.parsed_output_spaces() if s.space == ACPC]
+    if acpc_specs:
+        synb0_field = 'outputnode.synthetic_b0_acpc'
+        entities = {'space': 'ACPC', **res_entities_for(acpc_specs[0])}
+    else:
+        # Already on the unit's b=0 grid, in its distortion-group frame
+        synb0_field = 'outputnode.synthetic_b0'
+        entities = {'space': 'distortiongroup'}
     ds_synb0_dwiref = pe.Node(
         DerivativesDataSink(
             source_file=source_file,
-            space='ACPC',
-            **res_entities,
+            **entities,
             desc='synb0',
             suffix='dwiref',
             extension='.nii.gz',
@@ -92,7 +100,7 @@ def add_synb0_outputs(workflow, synb0_wf, source_file):
             ('outputnode.acquired_synthetic_report', 'in_file'),
         ]),
         (synb0_wf, ds_report_synb0_unet, [('outputnode.unet_input_report', 'in_file')]),
-        (synb0_wf, ds_synb0_dwiref, [('outputnode.synthetic_b0_acpc', 'in_file')]),
+        (synb0_wf, ds_synb0_dwiref, [(synb0_field, 'in_file')]),
         (synb0_wf, ds_synb0_qc, [('outputnode.qc_file', 'in_file')]),
     ])  # fmt:skip
 

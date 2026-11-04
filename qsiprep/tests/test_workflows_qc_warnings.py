@@ -79,7 +79,7 @@ def test_finalize_sinks_the_qc_warnings_reportlet(tmp_path):
         name='dwi_finalize_wf',
         source_file=dwi,
         output_prefix='sub-01',
-        acpc_specs=parse_output_spaces(config.workflow.output_spaces),
+        dwi_specs=parse_output_spaces(config.workflow.output_spaces),
     )
 
     assert ('qc_warnings_report', 'in_file') in _edge(wf, 'series_qc', 'ds_report_qc_warnings')

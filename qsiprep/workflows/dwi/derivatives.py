@@ -20,6 +20,7 @@ from ...interfaces.bids import DerivativesMaybeDataSink
 from ...interfaces.jacobian import StackJacobianWeights
 from ...interfaces.tsnr import DWITSNR
 from ...utils.sdc import sdc_displacement_sidecar
+from ...utils.spaces import resolution_entities
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
@@ -200,6 +201,7 @@ def writes_hmc_optimization():
 def init_dwi_derivatives_wf(
     source_file,
     resolution=None,
+    space='ACPC',
     write_hmc_optimization=True,
     name='dwi_derivatives_wf',
     sdc_warp_meta=None,
@@ -211,7 +213,7 @@ def init_dwi_derivatives_wf(
     """Set up a battery of datasinks to store derivatives in the right location.
 
     When ``sdc_warp_meta`` is given (a dict of sidecar metadata), the SDC
-    (susceptibility) displacement is also written as a map on the ACPC output grid,
+    (susceptibility) displacement is also written as a map on the output grid,
     for inspection rather than for resampling. ``sdc_refinement_meta`` does the
     same for DRBUDDI's refinement of the TOPUP field (TOPUP+DRBUDDI only).
 
@@ -224,10 +226,13 @@ def init_dwi_derivatives_wf(
     Parameters
     ----------
     resolution : Resolution or None
-        The ACPC resolution these derivatives are on. Adds a ``res-<label>`` entity
-        to every ACPC DWI sink below, as the pipeline always does. ``None`` writes
-        no ``res-`` entity and is kept only for callers that build this workflow
-        on its own.
+        The resolution these derivatives are on. Adds a ``res-<label>`` entity to
+        every DWI sink below, as the pipeline always does, except for
+        ``res-native``. ``None`` writes no ``res-`` entity and is kept only for
+        callers that build this workflow on its own.
+    space : str
+        The ``space-`` entity of every DWI sink: ``ACPC``, ``anat``, or the dwiref
+        level (``distortiongroup`` or ``subject``).
     write_hmc_optimization : bool
         The hmcOptimization sidecar is produced before resampling and does not vary
         by output resolution. When ``init_dwi_derivatives_wf`` is instantiated once
@@ -238,7 +243,7 @@ def init_dwi_derivatives_wf(
     """
     output_dir = str(config.execution.output_dir)
     workflow = Workflow(name=name)
-    res_entities = {'res': resolution.label} if resolution is not None else {}
+    res_entities = resolution_entities(resolution)
     inputnode = pe.Node(
         niu.IdentityInterface(
             fields=[
@@ -303,7 +308,7 @@ def init_dwi_derivatives_wf(
         DerivativesDataSink(
             source_file=source_file,
             base_directory=output_dir,
-            space='ACPC',
+            space=space,
             statistic='tsnr',
             suffix='dwimap',
             extension='.nii.gz',
@@ -321,7 +326,7 @@ def init_dwi_derivatives_wf(
         DerivativesDataSink(
             source_file=source_file,
             base_directory=output_dir,
-            space='ACPC',
+            space=space,
             desc='preproc',
             suffix='dwi',
             extension='.nii.gz',
@@ -335,7 +340,7 @@ def init_dwi_derivatives_wf(
         DerivativesDataSink(
             source_file=source_file,
             base_directory=output_dir,
-            space='ACPC',
+            space=space,
             suffix='dwi',
             extension='.bval',
             desc='preproc',
@@ -349,7 +354,7 @@ def init_dwi_derivatives_wf(
         DerivativesDataSink(
             source_file=source_file,
             base_directory=output_dir,
-            space='ACPC',
+            space=space,
             suffix='dwi',
             extension='.bvec',
             desc='preproc',
@@ -363,7 +368,7 @@ def init_dwi_derivatives_wf(
         DerivativesDataSink(
             source_file=source_file,
             base_directory=output_dir,
-            space='ACPC',
+            space=space,
             desc='preproc',
             suffix='dwiref',
             extension='.nii.gz',
@@ -378,7 +383,7 @@ def init_dwi_derivatives_wf(
         DerivativesDataSink(
             source_file=source_file,
             base_directory=output_dir,
-            space='ACPC',
+            space=space,
             desc='brain',
             suffix='mask',
             extension='.nii.gz',
@@ -393,7 +398,7 @@ def init_dwi_derivatives_wf(
         DerivativesDataSink(
             source_file=source_file,
             base_directory=output_dir,
-            space='ACPC',
+            space=space,
             model=_cnr_model_label(config.workflow.hmc_method, config.workflow.shoreline_model),
             statistic='cnr',
             suffix='dwimap',
@@ -412,7 +417,7 @@ def init_dwi_derivatives_wf(
         DerivativesDataSink(
             source_file=source_file,
             base_directory=output_dir,
-            space='ACPC',
+            space=space,
             desc='preproc',
             suffix='dwi',
             extension='.b',
@@ -426,7 +431,7 @@ def init_dwi_derivatives_wf(
         DerivativesDataSink(
             source_file=source_file,
             base_directory=output_dir,
-            space='ACPC',
+            space=space,
             desc='preproc',
             suffix='dwi',
             extension='.b_table.txt',
@@ -480,7 +485,7 @@ def init_dwi_derivatives_wf(
             DerivativesMaybeDataSink(
                 source_file=source_file,
                 base_directory=output_dir,
-                space='ACPC',
+                space=space,
                 **res_entities,
                 desc='jacobian',
                 suffix='dwimap',
@@ -527,7 +532,7 @@ def init_dwi_derivatives_wf(
             DerivativesDataSink(
                 source_file=source_file,
                 base_directory=output_dir,
-                space='ACPC',
+                space=space,
                 **res_entities,
                 desc=desc,
                 suffix='displacement',
@@ -551,7 +556,7 @@ def init_dwi_derivatives_wf(
             DerivativesMaybeDataSink(
                 source_file=source_file,
                 base_directory=output_dir,
-                space='ACPC',
+                space=space,
                 suffix='dwimap',
                 extension='.nii.gz',
                 compress=True,

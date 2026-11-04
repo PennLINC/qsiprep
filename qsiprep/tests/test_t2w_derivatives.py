@@ -47,7 +47,6 @@ def _build(num_additional_t2ws, name, anat_modality='T1w'):
         has_rois=False,
         output_spaces=output_spaces,
         acpc_anchor=select_acpc_anchor(output_spaces),
-        acpc_specs=[s for s in output_spaces if not s.standard],
         name=name,
     )
 

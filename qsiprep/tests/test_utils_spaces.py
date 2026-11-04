@@ -12,7 +12,7 @@ from qsiprep.utils.spaces import (
 def test_acpc_isotropic_mm():
     (spec,) = parse_space_token('acpc:res-2mm')
     assert spec.space == 'acpc'
-    assert spec.standard is False
+    assert spec.is_template is False
     assert spec.cohort is None
     assert spec.resolution.kind == 'mm'
     assert spec.resolution.zooms == (2.0, 2.0, 2.0)
@@ -41,14 +41,59 @@ def test_acpc_bare_number_is_rejected():
         parse_space_token('acpc:res-2')
 
 
-def test_acpc_anisotropic_is_rejected():
-    with pytest.raises(OutputSpacesError, match='isotropic'):
-        parse_space_token('acpc:res-2x2x3mm')
+@pytest.mark.parametrize('space', ['acpc', 'anat', 'dwiref'])
+def test_dwi_space_accepts_an_anisotropic_size(space):
+    """Test that every DWI space takes an anisotropic physical size."""
+    (spec,) = parse_space_token(f'{space}:res-1p5x1p5x3mm')
+    assert spec.resolution.kind == 'mm'
+    assert spec.resolution.zooms == (1.5, 1.5, 3.0)
+    assert spec.resolution.label == '1p5x1p5x3mm'
 
 
-def test_acpc_requires_a_resolution():
-    with pytest.raises(OutputSpacesError, match='res-'):
-        parse_space_token('acpc')
+@pytest.mark.parametrize('space', ['acpc', 'anat', 'dwiref'])
+def test_dwi_space_defaults_to_nativemin(space):
+    """Test that a DWI space without a resolution gets res-nativemin."""
+    (spec,) = parse_space_token(space)
+    assert spec.resolution.kind == 'native'
+    assert spec.resolution.strategy == 'min'
+    assert spec.resolution.label == 'nativemin'
+    assert str(spec) == f'{space}:res-nativemin'
+
+
+def test_plain_native_is_per_axis():
+    """Test that res-native parses as the runs' own voxel size, with no strategy."""
+    (spec,) = parse_space_token('acpc:res-native')
+    assert spec.resolution.kind == 'native'
+    assert spec.resolution.strategy is None
+    assert spec.resolution.label == 'native'
+
+
+@pytest.mark.parametrize('token', ['anat:cohort-1', 'dwiref:res-2mm:cohort-1'])
+def test_native_frames_reject_a_cohort(token):
+    with pytest.raises(OutputSpacesError, match='does not accept a cohort'):
+        parse_space_token(token)
+
+
+def test_native_frames_reject_a_bare_number():
+    with pytest.raises(OutputSpacesError, match='anat:res-2mm'):
+        parse_space_token('anat:res-2')
+
+
+@pytest.mark.parametrize(
+    ('token', 'is_template', 'writes_dwi'),
+    [
+        ('acpc:res-2mm', False, True),
+        ('anat:res-2mm', False, True),
+        ('dwiref:res-native', False, True),
+        ('MNI152NLin2009cAsym', True, False),
+        ('MNI152NLin6Asym:res-2', True, False),
+    ],
+)
+def test_space_kind_properties(token, is_template, writes_dwi):
+    """Test that each space reports whether it is a template and whether it carries DWI."""
+    (spec,) = parse_space_token(token)
+    assert spec.is_template is is_template
+    assert spec.writes_dwi is writes_dwi
 
 
 def test_acpc_rejects_cohort():
@@ -58,7 +103,7 @@ def test_acpc_rejects_cohort():
 
 def test_standard_space_bare():
     (spec,) = parse_space_token('MNI152NLin2009cAsym')
-    assert spec.standard is True
+    assert spec.is_template is True
     assert spec.resolution is None
     assert str(spec) == 'MNI152NLin2009cAsym'
 
@@ -90,9 +135,10 @@ def test_unknown_resolution_label_is_rejected():
         parse_space_token('MNI152NLin2009cAsym:res-9')
 
 
-def test_native_rejected_on_standard_space():
+@pytest.mark.parametrize('value', ['nativemax', 'native'])
+def test_native_rejected_on_standard_space(value):
     with pytest.raises(OutputSpacesError, match='native'):
-        parse_space_token('MNI152NLin2009cAsym:res-nativemax')
+        parse_space_token(f'MNI152NLin2009cAsym:res-{value}')
 
 
 def test_unknown_space_is_rejected():
@@ -143,9 +189,14 @@ def test_with_cohort_replaces_auto():
     assert spec.cohort == 'auto'  # original untouched
 
 
-def test_parse_output_spaces_requires_acpc():
-    with pytest.raises(OutputSpacesError, match='acpc'):
+def test_parse_output_spaces_requires_a_dwi_space():
+    with pytest.raises(OutputSpacesError, match='at least one DWI space'):
         parse_output_spaces(['MNI152NLin2009cAsym'])
+
+
+def test_parse_output_spaces_accepts_a_native_frame_alone():
+    specs = parse_output_spaces(['anat'])
+    assert [str(s) for s in specs] == ['anat:res-nativemin']
 
 
 def test_parse_output_spaces_allows_multiple_acpc():
@@ -238,7 +289,7 @@ def test_infant_does_not_duplicate_an_explicit_infant_template(tmp_path):
     assert opts.output_spaces == ['acpc:res-2mm', 'MNIInfant:cohort-3']
 
 
-def test_missing_acpc_is_an_error(tmp_path):
+def test_missing_dwi_space_is_an_error(tmp_path):
     from qsiprep.cli.parser import _finalize_output_spaces
 
     opts = _parse(tmp_path, '--output-spaces', 'MNI152NLin2009cAsym')
@@ -246,12 +297,47 @@ def test_missing_acpc_is_an_error(tmp_path):
         _finalize_output_spaces(opts)
 
 
-def test_nothing_given_at_all_is_an_error(tmp_path):
+def test_nothing_given_defaults_to_acpc_nativemin(tmp_path):
     from qsiprep.cli.parser import _finalize_output_spaces
 
     opts = _parse(tmp_path)
-    with pytest.raises(SystemExit):
+    _finalize_output_spaces(opts)
+    assert opts.output_spaces == ['acpc:res-nativemin']
+
+
+def test_a_bare_acpc_gets_nativemin(tmp_path):
+    from qsiprep.cli.parser import _finalize_output_spaces
+
+    opts = _parse(tmp_path, '--output-spaces', 'acpc', 'MNI152NLin2009cAsym')
+    _finalize_output_spaces(opts)
+    assert opts.output_spaces == ['acpc:res-nativemin', 'MNI152NLin2009cAsym']
+
+
+def test_no_acpc_warns_that_qsirecon_needs_it(tmp_path, caplog):
+    """Test that a run without acpc is allowed, with a warning naming QSIRecon."""
+    from qsiprep.cli.parser import _finalize_output_spaces
+
+    opts = _parse(tmp_path, '--output-spaces', 'anat:res-2mm')
+    with caplog.at_level('WARNING', logger='cli'):
         _finalize_output_spaces(opts)
+    assert opts.output_spaces == ['anat:res-2mm']
+    assert 'QSIRecon' in caplog.text
+
+
+def test_acpc_does_not_warn(tmp_path, caplog):
+    from qsiprep.cli.parser import _finalize_output_spaces
+
+    opts = _parse(tmp_path, '--output-spaces', 'acpc:res-2mm', 'anat:res-2mm')
+    with caplog.at_level('WARNING', logger='cli'):
+        _finalize_output_spaces(opts)
+    assert 'QSIRecon' not in caplog.text
+
+
+def test_config_defaults_to_acpc_nativemin():
+    from qsiprep import config
+
+    config.workflow.output_spaces = None
+    assert [str(s) for s in config.workflow.parsed_output_spaces()] == ['acpc:res-nativemin']
 
 
 def test_config_round_trips_output_spaces(tmp_path):

@@ -627,16 +627,152 @@ class ChooseInterpolator(SimpleInterface):
             self._results['interpolation_method'] = 'Linear'
             LOGGER.warning('Using Linear interpolation for sloppy mode')
             return runtime
-        output_resolution = np.array(nb.load(self.inputs.output_grid).header.get_zooms()[:3])
+        from ..utils.spaces import canonical_zooms
+
+        # Pair the axes by world direction, not by index: a sagittal run's slice
+        # axis is the grid's x axis.
+        output_resolution = np.array(canonical_zooms(self.inputs.output_grid))
         interpolator = 'LanczosWindowedSinc'
         for input_file in self.inputs.dwi_files:
-            resolution_cutoff = 0.9 * np.array(nb.load(input_file).header.get_zooms()[:3])
+            resolution_cutoff = 0.9 * np.array(canonical_zooms(input_file))
             if np.any(output_resolution < resolution_cutoff):
                 interpolator = 'Linear'
                 LOGGER.warning('Using Linear interpolation for upsampling')
                 break
         self._results['interpolation_method'] = interpolator
         return runtime
+
+
+class _SamplingGridInputSpec(BaseInterfaceInputSpec):
+    fixed_image = File(
+        exists=True,
+        mandatory=True,
+        desc='image whose world frame and field of view the grid covers',
+    )
+    zooms = traits.List(
+        traits.Float(),
+        minlen=3,
+        maxlen=3,
+        desc='voxel size of the grid along the world x, y and z axes, in mm',
+    )
+    zooms_image = File(
+        exists=True,
+        desc='image whose voxel size, on its closest world axes, the grid takes instead',
+    )
+    fov_mask = File(
+        exists=True,
+        desc='mask in the space of fixed_image; the grid is cropped to its bounding box',
+    )
+    margin = traits.Int(2, usedefault=True, desc='voxels of the grid added around the mask')
+
+
+class _SamplingGridOutputSpec(TraitedSpec):
+    out_file = File(exists=True, desc='empty LPS image on the grid')
+
+
+class SamplingGrid(SimpleInterface):
+    """Build an axis-aligned LPS output grid over an image's field of view.
+
+    This is what niworkflows' ``GenerateSamplingReference`` does for fMRIPrep's
+    native-space grids (a diagonal affine at the requested voxel size, cropped to a
+    mask's bounding box plus two voxels), oriented LPS because every QSIPrep
+    gradient writer assumes an axis-aligned LPS grid. The grid is in the world frame
+    of ``fixed_image``, which may itself be oblique: a space is a coordinate frame,
+    not a voxel grid.
+    """
+
+    input_spec = _SamplingGridInputSpec
+    output_spec = _SamplingGridOutputSpec
+
+    def _run_interface(self, runtime):
+        from ..utils.spaces import canonical_zooms
+
+        if isdefined(self.inputs.zooms):
+            zooms = self.inputs.zooms
+        elif isdefined(self.inputs.zooms_image):
+            zooms = canonical_zooms(self.inputs.zooms_image)
+        else:
+            raise ValueError('SamplingGrid needs zooms or zooms_image.')
+
+        mask_img = nb.load(self.inputs.fov_mask) if isdefined(self.inputs.fov_mask) else None
+        grid = axis_aligned_grid(
+            nb.load(self.inputs.fixed_image),
+            zooms,
+            mask_img=mask_img,
+            margin=self.inputs.margin,
+        )
+        out_file = fname_presuffix(
+            self.inputs.fixed_image, suffix='_grid', newpath=runtime.cwd, use_ext=True
+        )
+        grid.to_filename(out_file)
+        self._results['out_file'] = out_file
+        return runtime
+
+
+def axis_aligned_grid(fov_img, zooms, mask_img=None, margin=2):
+    """Return an empty LPS image covering ``fov_img`` (or ``mask_img``) at ``zooms``.
+
+    Parameters
+    ----------
+    fov_img : :class:`nibabel.spatialimages.SpatialImage`
+        Image whose field of view the grid covers when there is no mask.
+    zooms : sequence of float
+        Voxel size along the world x, y and z axes, in mm.
+    mask_img : :class:`nibabel.spatialimages.SpatialImage`, optional
+        A mask; the grid then covers its non-zero voxels, plus ``margin`` voxels of
+        the grid on every side.
+    margin : int, optional
+        Voxels of the grid added around the mask.
+
+    Returns
+    -------
+    :class:`nibabel.nifti1.Nifti1Image`
+        A zero-filled image with a diagonal LPS affine, whose voxel centers lie
+        within the covered region.
+    """
+    zooms = np.round(np.asarray(zooms, dtype=float), 3)
+    source = fov_img if mask_img is None else mask_img
+    if mask_img is None:
+        low = np.zeros(3)
+        high = np.asarray(fov_img.shape[:3], dtype=float) - 1
+    else:
+        voxels = np.argwhere(np.asanyarray(mask_img.dataobj) > 0)
+        if voxels.size == 0:
+            raise ValueError('The field-of-view mask is empty.')
+        low = voxels.min(0)[:3].astype(float)
+        high = voxels.max(0)[:3].astype(float)
+
+    # Every corner of the covered voxel block, out to the voxels' outer faces
+    low, high = low - 0.5, high + 0.5
+    corners = np.array(
+        [
+            [x, y, z, 1.0]
+            for x in (low[0], high[0])
+            for y in (low[1], high[1])
+            for z in (low[2], high[2])
+        ]
+    )
+    world = (source.affine @ corners.T).T[:, :3]
+    lower = world.min(0)
+    upper = world.max(0)
+    if mask_img is not None:
+        lower -= margin * zooms
+        upper += margin * zooms
+
+    shape = np.maximum(np.ceil((upper - lower) / zooms - 1e-6).astype(int), 1)
+    # L and P point toward -x and -y in RAS, so voxel 0 sits at the right, anterior,
+    # inferior corner of the region.
+    affine = np.diag([-zooms[0], -zooms[1], zooms[2], 1.0])
+    affine[:3, 3] = [
+        upper[0] - zooms[0] / 2,
+        upper[1] - zooms[1] / 2,
+        lower[2] + zooms[2] / 2,
+    ]
+    grid = nb.Nifti1Image(np.zeros(shape, dtype=np.uint8), affine)
+    grid.header.set_zooms(tuple(zooms))
+    grid.header.set_qform(affine, code=1)
+    grid.header.set_sform(affine, code=1)
+    return grid
 
 
 class _ReferenceGridAtSpacingInputSpec(BaseInterfaceInputSpec):
