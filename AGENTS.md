@@ -169,6 +169,20 @@ QSIPrep is a BIDS App for preprocessing diffusion MRI (dMRI/DWI) data. It handle
 
 The `fsl-*` packages in `[tool.pixi.dependencies]` come from the FSL conda channel, which publishes one environment file per FSL release. `scripts/update_fsl_pins.py <release>` rewrites those pins so they all come from a single release (`--check` reports drift without editing, `--list` shows the available releases); run `pixi lock` afterwards. It also records the release in `qsiprep/data/fsl_release.json`, which the methods boilerplate uses to name the FSL release, and `--check` fails if that record is stale. FSL renames its CUDA eddy package from time to time -- it went `fsl-eddy-cuda-10.2` -> `fsl-eddy-cuda-11.0` -> `fsl-eddy-cuda` -- so the script verifies each pin against the channel and refuses to write one the channel cannot satisfy.
 
+### GitHub Lockfile Workflow
+
+`.github/workflows/pixi-lock.yml` runs on every `pull_request` event (not `pull_request_target`; `actions/checkout` refuses to check out a fork's head there). `.maint/INSTRUCTIONS.md` lists its steps.
+
+- Fork PRs run `validate-lockfile` with read-only permissions and no persisted credentials: `pixi lock --check` only, no push.
+- Same-repo PRs run `update-lockfile` (the only job with `contents: write`). It checks out with `persist-credentials: false`, runs `pixi lock --check`, and then restores the committed file with `git checkout -- pixi.lock`. Only when the check failed does it run `datalad run ... -- pixi lock` and push the commit to the PR branch (plain, non-forced). The push step alone receives the token, through an `http.extraheader` on the command line.
+- That keeps the token out of the steps that run the PR's code, but it is not full isolation: code run by `pixi lock` or DataLad can still tamper with the push step (a git hook, `$GITHUB_ENV`, `$GITHUB_PATH`). Full isolation needs fMRIPrep's two-workflow split (nipreps/fmriprep#3722), which is not ported.
+- Any nonzero exit from `pixi lock --check` counts as stale, including a transient failure. A PR that deletes `pixi.lock` fails at the reset instead of being regenerated.
+- The reset matters: `pixi lock --check` exits 0 but still rewrites the workspace package's hatch-vcs version in `pixi.lock` on every commit. Until 2026-11, the check ran inside `datalad run`, so that rewrite was committed and pushed, and each bot push queued another run (PennLINC/qsirecon#396). Do not move the check back under `datalad run`.
+- A push made with `GITHUB_TOKEN` does not start the bot commit's checks on its own: GitHub queues them as "action required", and a maintainer must approve them.
+- Both jobs look for `pyproject.toml` or `pixi.lock` edits anywhere in the PR (`git diff base...HEAD`), not only the latest commit, and skip their pixi steps otherwise.
+- `check-lockfile` is an aggregate job that fails unless exactly the applicable job succeeded; require it, not the two underlying jobs, as the status check.
+- Third-party actions are pinned to commit SHAs with a `# vX.Y.Z` comment.
+
 ### Linting Notes
 
 QSIPrep currently uses ruff ~= 0.4.3 (older than xcp_d/aslprep). There are 13 suppressed lint rules marked with `# TODO: Fix these` in `pyproject.toml`:

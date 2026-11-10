@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout pull request
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
@@ -35,7 +35,7 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "Pull request did not touch pyproject.toml or pixi.lock; skipping lockfile validation."
           fi
-      - uses: prefix-dev/setup-pixi@v0.11.2
+      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
         if: ${{ steps.dependencies.outputs.changed == 'true' }}
         with:
           pixi-version: v0.58.0
@@ -53,75 +53,72 @@ jobs:
       contents: write
     steps:
       - name: Checkout pull request
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
+          # The token goes to the push step alone, so the pixi and DataLad steps,
+          # which build the PR's package, never find it in .git/config.
+          persist-credentials: false
       - name: Check pull request for dependency edits
-        id: latest-commit
+        id: dependencies
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
-          HEAD_AUTHOR="$(git log -1 --format=%an HEAD)"
           CHANGED_FILES="$(git diff --name-only "$BASE_SHA"...HEAD -- pyproject.toml pixi.lock)"
-          if [ "$HEAD_AUTHOR" == "nipreps[bot]" ]; then
-            # A head commit from the bot was produced by this job, so the lockfile is
-            # already up to date. Running again would only rewrite the workspace
-            # package version and push once more.
-            echo "run_lockfile_update=false" >> "$GITHUB_OUTPUT"
-            echo "Head commit was pushed by nipreps[bot]; skipping lockfile update."
-          elif [ -n "$CHANGED_FILES" ]; then
-            echo "run_lockfile_update=true" >> "$GITHUB_OUTPUT"
+          if [ -n "$CHANGED_FILES" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           else
-            echo "run_lockfile_update=false" >> "$GITHUB_OUTPUT"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "Pull request did not touch pyproject.toml or pixi.lock; skipping lockfile update."
           fi
-      - name: Set git identity
-        if: ${{ steps.latest-commit.outputs.run_lockfile_update == 'true' }}
-        run: |
-          git config user.name "nipreps[bot]"
-          git config user.email "bot@nipreps.org"
-      - uses: prefix-dev/setup-pixi@v0.11.2
-        if: ${{ steps.latest-commit.outputs.run_lockfile_update == 'true' }}
+      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+        if: ${{ steps.dependencies.outputs.changed == 'true' }}
         with:
           pixi-version: v0.58.0
           run-install: false
           cache: false
+      # pixi lock --check can pass and still rewrite pixi.lock, because the workspace
+      # package's hatch-vcs version changes with every commit. Restore the committed
+      # file after the check, so that only a real update below is ever committed.
+      - name: Check lockfile
+        if: ${{ steps.dependencies.outputs.changed == 'true' }}
+        id: check
+        run: |
+          if pixi lock --check; then
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+            echo "Lockfile up to date."
+          else
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          fi
+          # Leave a clean tree for datalad run to record the update
+          git checkout -- pixi.lock
+      - name: Set git identity
+        if: ${{ steps.check.outputs.stale == 'true' }}
+        run: |
+          git config user.name "nipreps[bot]"
+          git config user.email "bot@nipreps.org"
       - name: Install the latest version of uv
-        if: ${{ steps.latest-commit.outputs.run_lockfile_update == 'true' }}
-        uses: astral-sh/setup-uv@v7
+        if: ${{ steps.check.outputs.stale == 'true' }}
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
       # Lock all environments (default, test, qsiprep). The qsiprep env must use the
       # non-editable workspace package variant (production feature) so the Docker
       # runtime image can copy only the env; the Dockerfile forces a non-editable
       # install if the lockfile resolves qsiprep to the editable variant.
       - name: Update lockfile
-        if: ${{ steps.latest-commit.outputs.run_lockfile_update == 'true' }}
-        run: >
-          uvx datalad run -i pixi.lock -i pyproject.toml -o pixi.lock --
-          bash -lc "if pixi lock --check; then echo 'Lockfile up to date'; else pixi lock; fi"
-      # pixi lock resolves the workspace package with its hatch-vcs version, which
-      # changes with every commit, so datalad may commit a lockfile that differs
-      # from the head commit only in the version, sha256 and editable lines of the
-      # "pypi: ./" workspace package entries. Pushing that commit would trigger
-      # another run that rewrites the version again, and so on. Push only when
-      # something else changed.
-      - name: Check whether the lockfile changed beyond the workspace package version
-        if: ${{ steps.latest-commit.outputs.run_lockfile_update == 'true' }}
-        id: lockfile-diff
+        if: ${{ steps.check.outputs.stale == 'true' }}
+        run: uvx datalad run -i pixi.lock -i pyproject.toml -o pixi.lock -- pixi lock
+      - name: Push updated lockfile
+        if: ${{ steps.check.outputs.stale == 'true' }}
         env:
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          if git diff --exit-code -I '^  (version|sha256|editable): ' "$HEAD_SHA" HEAD -- pixi.lock; then
-            echo "push=false" >> "$GITHUB_OUTPUT"
-            echo "Lockfile is unchanged apart from the workspace package version; nothing to push."
-          else
-            echo "push=true" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Push updated lockfile, if needed
-        if: ${{ steps.lockfile-diff.outputs.push == 'true' }}
-        run: git push origin "HEAD:refs/heads/$BRANCH"
-        env:
+          GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
+            push "https://github.com/$GITHUB_REPOSITORY.git" "HEAD:refs/heads/$BRANCH"
 
   check-lockfile:
     if: ${{ always() }}
