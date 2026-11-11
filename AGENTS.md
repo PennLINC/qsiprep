@@ -171,17 +171,15 @@ The `fsl-*` packages in `[tool.pixi.dependencies]` come from the FSL conda chann
 
 ### GitHub Lockfile Workflow
 
-`.github/workflows/pixi-lock.yml` runs on every `pull_request` event (not `pull_request_target`; `actions/checkout` refuses to check out a fork's head there). `.maint/INSTRUCTIONS.md` lists its steps.
+Two workflows keep `pixi.lock` in sync with `pyproject.toml` on pull requests, split so that the PR's code never runs in a job that can write to the repository (adapted from nipreps/fmriprep#3722, as in xcp_d). `.maint/INSTRUCTIONS.md` describes them step by step.
 
-- Fork PRs run `validate-lockfile` with read-only permissions and no persisted credentials: `pixi lock --check` only, no push.
-- Same-repo PRs run `update-lockfile` (the only job with `contents: write`). It checks out with `persist-credentials: false`, runs `pixi lock --check`, and then restores the committed file with `git checkout -- pixi.lock`. Only when the check failed does it run `datalad run ... -- pixi lock` and push the commit to the PR branch (plain, non-forced). The push step alone receives the token, through an `http.extraheader` on the command line.
-- That keeps the token out of the steps that run the PR's code, but it is not full isolation: code run by `pixi lock` or DataLad can still tamper with the push step (a git hook, `$GITHUB_ENV`, `$GITHUB_PATH`). Full isolation needs fMRIPrep's two-workflow split (nipreps/fmriprep#3722), which is not ported.
-- Any nonzero exit from `pixi lock --check` counts as stale, including a transient failure. A PR that deletes `pixi.lock` fails at the reset instead of being regenerated.
+- `.github/workflows/pixi-lock.yml` ("Pixi lock") runs on every `pull_request` event (not `pull_request_target`) in one job, `check-lockfile`, with a read-only token and `persist-credentials: false`. It runs `pixi lock --check` and then restores the committed file with `git checkout -- pixi.lock`. If the lockfile is stale on a same-repo PR, it runs `datalad run ... -- pixi lock`, uploads the commit as a `pixi-lock` patch artifact, and fails. On a fork PR it only fails. A PR that deletes `pixi.lock` fails with a request to restore it; a deleted lockfile is never regenerated, because the push workflow accepts only a patch that modifies `pixi.lock`.
+- `.github/workflows/pixi-lock-push.yml` ("Pixi lock push") runs on `workflow_run` after a failed "Pixi lock" run from a same-repo PR. It has `contents: write` and never runs the PR's code. It treats the artifact as untrusted: it checks the zip's entries, that the PR is open and its head still matches the run, and that the patch changes only `pixi.lock`. It then applies only the diff, writes the commit and its DataLad record itself, and pushes non-forced. Keep these checks if you edit it.
+- `workflow_run` uses the copy of `pixi-lock-push.yml` on `main`, so it cannot be tested on a PR; it takes effect after merge. Renaming the "Pixi lock" workflow breaks the link between the two.
 - The reset matters: `pixi lock --check` exits 0 but still rewrites the workspace package's hatch-vcs version in `pixi.lock` on every commit. Until 2026-11, the check ran inside `datalad run`, so that rewrite was committed and pushed, and each bot push queued another run (PennLINC/qsirecon#396). Do not move the check back under `datalad run`.
-- A push made with `GITHUB_TOKEN` does not start the bot commit's checks on its own: GitHub queues them as "action required", and a maintainer must approve them.
-- Both jobs look for `pyproject.toml` or `pixi.lock` edits anywhere in the PR (`git diff base...HEAD`), not only the latest commit, and skip their pixi steps otherwise.
-- `check-lockfile` is an aggregate job that fails unless exactly the applicable job succeeded; require it, not the two underlying jobs, as the status check.
+- Checks on the bot's commit do not start on their own: GitHub may hold them as "action required" for a maintainer to approve, or not queue them at all.
 - Third-party actions are pinned to commit SHAs with a `# vX.Y.Z` comment.
+- `check-lockfile` looks for `pyproject.toml` or `pixi.lock` edits anywhere in the PR (`git diff base...HEAD`), not only the latest commit, and passes without running pixi otherwise. Require it as the status check.
 
 ### Linting Notes
 
