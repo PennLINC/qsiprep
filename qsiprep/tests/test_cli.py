@@ -17,6 +17,7 @@ from qsiprep.cli.workflow import build_boilerplate, build_workflow
 from qsiprep.reports.core import generate_reports
 from qsiprep.tests.utils import check_generated_files, download_test_data, get_test_data_path
 from qsiprep.utils.bids import write_bidsignore, write_derivative_description
+from qsiprep.workflows.fieldmap.base import GRE_SEEDS_UNPILE
 
 nipype_config.enable_debug_mode()
 nipype_config.update_config({'execution': {'remove_unnecessary_outputs': False}})
@@ -1017,6 +1018,13 @@ def test_trxscan_unpile(data_dir, output_dir, working_dir):
 
 @pytest.mark.integration
 @pytest.mark.trxscan_gre_unpile
+@pytest.mark.skipif(
+    not GRE_SEEDS_UNPILE,
+    reason=(
+        'GRE priors for unpile are disabled (fieldmap.base.GRE_SEEDS_UNPILE); '
+        'this test is not in the CircleCI matrix until they are re-enabled'
+    ),
+)
 def test_trxscan_gre_unpile(data_dir, output_dir, working_dir):
     """Score unpile refining a GRE fieldmap, on the moved-subject phasediff fixture.
 
