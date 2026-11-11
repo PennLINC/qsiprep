@@ -70,7 +70,7 @@ unwarped, and TOPUP runs again; ``--force one-pass-sdc`` skips this second pass.
 DIFFPREP's motion-corrected b=0 and the T2w (``--sdc-anat-reference t2w``) or
 the synthetic b=0 (``synb0``), and the field is applied at the final
 resampling (:ref:`sdc_unpile`). When it is forced over a GRE fieldmap
-(``--force sdc-anat-reference``), the GRE field is the prior of the fit
+(``--force sdc-anat-reference``), the GRE fieldmap is currently not used
 (:ref:`sdc_gre_init`).
 
 **SyN** (``--sdc-fieldmapless-method syn``) is applied to DIFFPREP's output, as

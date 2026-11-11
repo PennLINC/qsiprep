@@ -35,6 +35,13 @@ from ..dwi.registration import init_structural_to_b0_alignment_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
+# Seeding DRBUDDI from a GRE fieldmap that also lists a PEPOLAR unit is disabled
+# for now: it did not perform well. The code path is kept (and unit-tested by
+# patching this flag) so the method can be revisited. While it is False, a GRE
+# fieldmap listed alongside a PEPOLAR correction goes unused, and DRBUDDI starts
+# from identity.
+GRE_SEEDS_DRBUDDI = False
+
 
 def _synth_shell_kwargs(bval, ndirs):
     """Return DRBUDDI shell-synthesis kwargs, or an empty dict when the opt-in is off.
@@ -77,10 +84,11 @@ def seeds_from_gre(unit):
 
     This is the case for any PEPOLAR unit that a GRE fieldmap also lists, except
     when DRBUDDI only refines TOPUP's correction, which a full GRE warp would
-    duplicate.
+    duplicate. Always False while :data:`GRE_SEEDS_DRBUDDI` is off.
     """
     return (
-        unit.is_pepolar
+        GRE_SEEDS_DRBUDDI
+        and unit.is_pepolar
         and unit.gre_init_estimation is not None
         and unit.run.stage_with('topup') is None
     )

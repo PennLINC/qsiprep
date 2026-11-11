@@ -49,6 +49,20 @@ from .unwarp import init_sdc_unwarp_wf
 
 DEFAULT_MEMORY_MIN_GB = 0.01
 
+# Using a GRE fieldmap that also lists the series as the prior of an unpile fit
+# is disabled for now: it did not perform well. The code path is kept (and
+# unit-tested by patching this flag) so the method can be revisited. While it is
+# False, unpile fits without a prior and that GRE fieldmap goes unused.
+GRE_SEEDS_UNPILE = False
+
+
+def unpile_has_gre_prior(unit):
+    """Check whether unpile takes ``unit``'s GRE candidate as the prior of its fit.
+
+    Always False while :data:`GRE_SEEDS_UNPILE` is off.
+    """
+    return GRE_SEEDS_UNPILE and unit.gre_init_estimation is not None
+
 
 def gre_seed_unit(unit):
     """Return ``unit`` seen through its GRE candidate.
@@ -426,7 +440,7 @@ def init_sdc_wf(unit, gradwarp=False, use='apply', source_file=None):
                 f'unpile with the T2w reference was selected for {unit.dwi_files[0]}, but '
                 '--anat-modality none leaves no T2w to fit against.'
             )
-        gre_prior = unit.gre_init_estimation is not None
+        gre_prior = unpile_has_gre_prior(unit)
         unpile_wf = init_unpile_sdc_wf(
             unit,
             source_file=source_file,

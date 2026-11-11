@@ -23,6 +23,8 @@ from ...interfaces.utils import TestInput
 from ...utils.eddy_config import eddy_applies_gre
 from ...utils.misc import DWI2ANAT_DOF_TO_TRANSFORM
 from ...utils.sdc import eddy_applies_topup
+from ..fieldmap.base import unpile_has_gre_prior
+from ..fieldmap.drbuddi import seeds_from_gre
 from ..fieldmap.pepolar import init_extended_pepolar_report_wf
 
 # dwi workflows
@@ -409,7 +411,8 @@ def init_dwi_preproc_wf(
     if not config.workflow.two_pass_sdc and not (
         (doing_topup and (not eddy_applies_topup(unit) or unit.method is CorrectionMethod.SYNB0))
         or unit.is_gre
-        or unit.gre_init_estimation is not None
+        or seeds_from_gre(unit)
+        or (doing_unpile and unpile_has_gre_prior(unit))
         or (doing_unpile and unit.run.stage_with('unpile').structural_target == 'synb0')
     ):
         config.loggers.workflow.warning(

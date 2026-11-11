@@ -163,9 +163,10 @@ Behavior changes
   series the correction cannot handle (no T1w, no ``PhaseEncodingDirection``
   or ``TotalReadoutTime``) stops the run with an error. A T2w no longer
   selects a correction by itself.
-* **A GRE fieldmap initializes DRBUDDI, and is unpile's prior,** when a
-  series is also corrected by reverse phase encoding or by a forced
-  fieldmap-less correction (:ref:`sdc_gre_init`).
+* **A GRE fieldmap is not used alongside DRBUDDI or unpile.** Starting
+  DRBUDDI from a GRE fieldmap that also lists a reverse phase-encoded pair,
+  and using it as the prior of a forced unpile correction, are currently
+  disabled; that GRE fieldmap goes unused (:ref:`sdc_gre_init`).
 
 * **Intensity modulation** after distortion correction is now applied by
   *QSIPrep* for the corrections it resamples itself, and written as a

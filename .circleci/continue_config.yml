@@ -608,7 +608,9 @@ workflows:
                 - trxscan_diffprep
                 - trxscan_synb0
                 - trxscan_unpile
-                - trxscan_gre_unpile
+                # trxscan_gre_unpile is left out while GRE priors for unpile are
+                # disabled (qsiprep.workflows.fieldmap.base.GRE_SEEDS_UNPILE); add it
+                # back here and to merge_coverage when they are re-enabled.
           requires: [image_prep, get_data, gen_trxscan_fixtures]
           filters: *default_filters
 
@@ -632,7 +634,6 @@ workflows:
             - trxscan_diffprep
             - trxscan_synb0
             - trxscan_unpile
-            - trxscan_gre_unpile
             - unit_tests
           filters: *default_filters
 
