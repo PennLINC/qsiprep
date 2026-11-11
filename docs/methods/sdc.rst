@@ -165,30 +165,15 @@ reference is computed for coregistration.
 
 .. _sdc_gre_init:
 
-Starting DRBUDDI and unpile from a GRE fieldmap
-===============================================
+GRE fieldmaps alongside DRBUDDI or unpile
+=========================================
 
-Registration-based correction infers the field by matching images, which is
-ambiguous where the field piles several voxels' signal into one or drops it
-out. A GRE fieldmap measures the field directly. So when a series is
-corrected by DRBUDDI and a GRE fieldmap also lists it, the GRE-derived warp
-is the registration's starting point: the initial transform of the primary
-direction and, negated, of the reverse direction, held fixed through the
-registration's multi-resolution pyramid so that each stage estimates a
-residual correction on top of it rather than smoothing it away. When the
-series is corrected by unpile against the T2w (:ref:`sdc_unpile`), the GRE
-field in Hz is the prior of the fit: unpile keeps it and refines its position
-against the b=0. Its shim-polynomial and residual terms are not used: on the
-simulated fieldmap fixture each lowered the amplitude of a well-registered
-field. Against the synthetic b=0 the fieldmap is applied as given, since the
-synthetic image carries part of the distortion and refining against it pulls
-the field toward that bias.
-
-This happens whenever the linkage is present, on every backend that runs
-DRBUDDI (except when DRBUDDI only refines TOPUP) and on unpile when it is
-forced over the GRE fieldmap. How to set up the sidecars is in
-:ref:`gre_init_flags`. The report's distortion correction entry ends in
-``(GRE-initialized)`` or ``(GRE-refined)`` and the boilerplate describes it.
+Starting DRBUDDI from a GRE fieldmap that also lists a reverse phase-encoded
+pair, and handing unpile such a GRE fieldmap as the prior of its fit, are
+currently disabled, because neither performed well. When a series is
+corrected by DRBUDDI or unpile and a GRE fieldmap also lists it, that GRE
+fieldmap goes unused: DRBUDDI starts from identity and unpile fits without a
+prior (:ref:`gre_init_flags`).
 
 
 .. _sdc_synb0:
@@ -284,7 +269,7 @@ finer than 1.5 mm), which keeps the detail of the T2w that the metric needs;
 the field is brought back onto the EPI grid afterwards. With the synthetic
 b=0, a second pass regenerates the synthetic image from the b=0 the first
 field unwarped, as SynB0 + TOPUP does; ``--force one-pass-sdc`` skips it. A
-GRE fieldmap that also lists the series is the prior of the fit
+GRE fieldmap that also lists the series is currently not used as a prior
 (:ref:`sdc_gre_init`). The fit's settings and scores are written as the
 ``desc-unpile_qc.json`` derivative, and the fitted position of the T2w as an
 ITK transform in the working directory.

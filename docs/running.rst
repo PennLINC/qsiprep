@@ -617,45 +617,16 @@ The tools themselves are described in :doc:`methods/sdc`.
 
 .. _gre_init_flags:
 
-Starting DRBUDDI or unpile from a GRE fieldmap
-==============================================
+GRE fieldmaps alongside DRBUDDI or unpile
+=========================================
 
-When a series is corrected by DRBUDDI or unpile and a GRE fieldmap also
-lists it, the registration starts from the field the GRE fieldmap measured
-and refines it, instead of the GRE fieldmap going unused. There is no option
-to turn this on; it happens whenever the linkage is there, and ``--ignore
-fieldmaps`` or ``--ignore sdc`` turns it off. It applies to:
-
-* a reverse phase-encoded pair corrected by DRBUDDI: ``--hmc-method
-  tortoise`` or ``shoreline``, or ``--hmc-method eddy --sdc-method drbuddi``
-  (not ``topup+drbuddi``, where DRBUDDI only refines TOPUP);
-* a fieldmap-less correction forced with ``--force sdc-anat-reference`` and
-  run by unpile (``--sdc-fieldmapless-method unpile``), with any head motion
-  method.
-
-The GRE fieldmap must list the series. For a reverse phase-encoded pair of
-DWI series, its ``IntendedFor`` is enough as long as nothing in the session
-uses ``B0FieldIdentifier``/``B0FieldSource``; once anything does, link the
-pair and the GRE fieldmap that way::
-
-    sub-01/
-      fmap/
-        sub-01_magnitude1.json   {"B0FieldIdentifier": "gre", ...}
-        sub-01_magnitude2.json   {"B0FieldIdentifier": "gre", ...}
-        sub-01_phasediff.json    {"B0FieldIdentifier": "gre", ...}
-      dwi/
-        sub-01_dir-AP_dwi.json   {"B0FieldIdentifier": "pepolar",
-                                  "B0FieldSource": ["pepolar", "gre"], ...}
-        sub-01_dir-PA_dwi.json   {"B0FieldIdentifier": "pepolar",
-                                  "B0FieldSource": ["pepolar", "gre"], ...}
-
-For an ``epi`` fieldmap, have both it and the GRE fieldmap name the DWI
-series in their ``IntendedFor``. In the ``qsiplan`` report the series is
-then ``corrected by: pepolar`` with the GRE fieldmap listed as ``also
-eligible`` and labeled ``(initializes DRBUDDI/unpile)``. During the run,
-*QSIPrep* logs ``Initializing DRBUDDI for <output> with GRE fieldmap <id>``
-(or ``unpile``), and the report's distortion correction entry ends in
-``(GRE-initialized)`` or ``(GRE-refined)``.
+Starting DRBUDDI from a GRE fieldmap that also lists a reverse phase-encoded
+pair, and using such a GRE fieldmap as the prior of an unpile correction
+forced with ``--force sdc-anat-reference``, are currently disabled, because
+neither performed well. The ``qsiplan`` report may still label that GRE
+fieldmap ``(initializes DRBUDDI/unpile)``, but *QSIPrep* does not use it:
+DRBUDDI starts from identity and unpile fits without a prior. To apply the
+GRE fieldmap itself, see :doc:`troubleshooting`.
 
 
 .. _jacobian_flags:

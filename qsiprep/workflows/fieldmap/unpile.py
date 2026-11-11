@@ -10,8 +10,9 @@ motion-corrected b=0 and an undistorted reference with a model of the EPI readou
 reference is moved and stretched along the phase-encoding axis the way the readout does,
 pile-up included, and the field that makes it match the b=0 is fitted. The reference is a
 SynB0 synthetic b=0 (same contrast; :ref:`sdc_synb0`) or the subject's T2w, whose position
-is fitted together with the field. A GRE fieldmap that also lists the series is handed to
-unpile as a prior and refined rather than replaced. The field is applied in the final
+is fitted together with the field. Handing unpile a GRE fieldmap that also lists the series
+as a prior (``gre_prior``) is currently disabled by ``fieldmap.base.GRE_SEEDS_UNPILE``.
+The field is applied in the final
 resampling, after any head motion method.
 """
 

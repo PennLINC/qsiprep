@@ -1209,12 +1209,51 @@ def _rpe_unit_with_gre_candidate(tmp_path, minus_first=False):
     return dataclasses.replace(unit, grouping=grouping)
 
 
+def _enable_gre_seeding(monkeypatch):
+    """Turn on GRE seeding of DRBUDDI, which is disabled by default."""
+    from qsiprep.workflows.fieldmap import drbuddi
+
+    monkeypatch.setattr(drbuddi, 'GRE_SEEDS_DRBUDDI', True)
+
+
+@pytest.mark.parametrize('builder', ['diffprep', 'shoreline', 'eddy'])
+def test_gre_candidate_does_not_seed_drbuddi_by_default(tmp_path, monkeypatch, builder):
+    """Test that a GRE candidate leaves DRBUDDI unseeded while seeding is disabled.
+
+    GRE seeding of DRBUDDI is switched off, so a PEPOLAR unit that a GRE
+    fieldmap also lists gets the stock DRBUDDI correction on every HMC path.
+    """
+    from qsiprep.workflows.fieldmap.drbuddi import seeds_from_gre
+
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    if builder == 'diffprep':
+        _cfg_for_diffprep(tmp_path)
+    elif builder == 'shoreline':
+        _cfg_for_shoreline(tmp_path)
+    else:
+        _cfg_for_fsl(tmp_path, 'drbuddi')
+
+    config.workflow.gradient_file = None
+    unit = _rpe_unit_with_gre_candidate(tmp_path)
+    assert unit.gre_init_estimation is not None
+    assert not seeds_from_gre(unit)
+    build = {'diffprep': _diffprep_wf, 'shoreline': _shoreline_wf, 'eddy': _fsl_wf}[builder]
+    wf = build(tmp_path, unit)
+
+    assert wf.get_node('drbuddi_sdc_wf') is not None
+    assert wf.get_node('drbuddi_gre_seed_wf') is None
+    assert wf.get_node('drbuddi_sdc_wf.negate_initial_field') is None
+    assert 'initialized with the field map' not in wf.visit_desc()
+    assert 'GRE-initialized' not in wf.get_node('drbuddi_sdc_wf.outputnode').inputs.method
+
+
 def test_diffprep_drbuddi_seeded_by_gre_candidate(tmp_path, monkeypatch):
     """Test that a GRE candidate seeds DIFFPREP's DRBUDDI.
 
     A PEPOLAR unit that also carries a GRE fieldmap seeds DRBUDDI's initial
     field from a GRE warp built on the pre-SDC b=0.
     """
+    _enable_gre_seeding(monkeypatch)
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg_for_diffprep(tmp_path)
     config.workflow.gradient_file = None
@@ -1245,6 +1284,7 @@ def test_diffprep_drbuddi_seed_is_built_for_the_up_series(tmp_path, monkeypatch,
     The GRE warp is DRBUDDI's initial up field, so it must be built for the
     up (plus) series' phase encoding even when the minus series comes first.
     """
+    _enable_gre_seeding(monkeypatch)
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg_for_diffprep(tmp_path)
     config.workflow.gradient_file = None
@@ -1273,6 +1313,7 @@ def test_gre_seeds_drbuddi_after_shoreline_and_eddy(
     DRBUDDI starts from the GRE candidate on every HMC path, with the warp built
     on the b=0 average of the volumes DRBUDDI corrects.
     """
+    _enable_gre_seeding(monkeypatch)
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     if builder == 'shoreline':
         _cfg_for_shoreline(tmp_path)
@@ -1303,6 +1344,7 @@ def test_gre_does_not_seed_drbuddi_after_topup(tmp_path, monkeypatch):
     After TOPUP, DRBUDDI only refines TOPUP's correction; starting it from the
     full GRE warp would correct twice.
     """
+    _enable_gre_seeding(monkeypatch)
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg_for_fsl(tmp_path, 'topup+drbuddi')
     config.workflow.gradient_file = None
@@ -1339,6 +1381,7 @@ def test_diffprep_drbuddi_gre_seed_transports_with_gradwarp(tmp_path, monkeypatc
     frame (transport) and fed the gradwarp field, matching the corrected up/down
     volumes -- not skipped.
     """
+    _enable_gre_seeding(monkeypatch)
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg_for_diffprep(tmp_path)  # sets gradient_file -> has_gradwarp
     wf = _diffprep_wf(tmp_path, _rpe_unit_with_gre_candidate(tmp_path))
@@ -2464,6 +2507,9 @@ def test_forced_t2w_reference_refines_the_gre_fieldmap(tmp_path, monkeypatch):
     """
     from qsiplan.models import CorrectionMethod
 
+    from qsiprep.workflows.fieldmap import base as fmap_base
+
+    monkeypatch.setattr(fmap_base, 'GRE_SEEDS_UNPILE', True)
     monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
     _cfg_for_diffprep(tmp_path)
     unit = _forced_anat_unit_with_gre(CorrectionMethod.UNPILE)
@@ -2493,6 +2539,30 @@ def test_forced_t2w_reference_refines_the_gre_fieldmap(tmp_path, monkeypatch):
     assert sdc_wf.get_node('outputnode').inputs.method == 'unpile (T2w, GRE-refined)'
     desc = ' '.join(wf.visit_desc().split())
     assert desc.count('given to *unpile* as the prior of its fit') == 1
+
+
+def test_forced_t2w_reference_ignores_the_gre_fieldmap_by_default(tmp_path, monkeypatch):
+    """Test that unpile takes no GRE prior while GRE seeding of unpile is disabled.
+
+    --force sdc-anat-reference over a GRE fieldmap runs unpile against the T2w
+    without a prior, and the GRE fieldmap goes unused.
+    """
+    from qsiplan.models import CorrectionMethod
+
+    from qsiprep.workflows.fieldmap.base import unpile_has_gre_prior
+
+    monkeypatch.setenv('FSLDIR', '/tmp/fakefsl')
+    _cfg_for_diffprep(tmp_path)
+    unit = _forced_anat_unit_with_gre(CorrectionMethod.UNPILE)
+    assert unit.gre_init_estimation is not None
+    assert not unpile_has_gre_prior(unit)
+    wf = _diffprep_unpile_wf(tmp_path, unit)
+
+    sdc_wf = wf.get_node('sdc_wf')
+    assert sdc_wf.get_node('unpile_gre_seed_wf') is None
+    assert sdc_wf.get_node('outputnode').inputs.method == 'unpile (T2w)'
+    assert not sdc_wf.get_node('unpile_sdc_wf').get_node('unpile_fit').inputs.fieldmap_refine
+    assert 'given to *unpile*' not in wf.visit_desc()
 
 
 def test_forced_synb0_reference_over_a_gre_fieldmap_runs_topup(tmp_path, monkeypatch):
