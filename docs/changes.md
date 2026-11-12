@@ -1,10 +1,46 @@
 # What's New
 
+## 26.2.0 (November 12, 2026)
+
+### 🛠 Breaking Changes
+
+* Add new `--output-spaces` parameter by @tsalo in https://github.com/PennLINC/qsiprep/pull/1127
+* Write preprocessed DWI in anat and dwiref spaces, with per-output native resolutions by @tsalo in https://github.com/PennLINC/qsiprep/pull/1205
+* Disable GRE-seeded DRBUDDI and unpile by @tsalo in https://github.com/PennLINC/qsiprep/pull/1208
+
+### 🎉 Exciting New Features
+
+* Warn users about newer releases and flagged versions by @tsalo in https://github.com/PennLINC/qsiprep/pull/1188
+* Add denoiser-map, Jacobian and b=0 tSNR summaries to desc-image_qc.tsv; test eddy-current confounds by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1203
+
+### 🐛 Bug Fixes
+
+* Handle --ignore fov consistently by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1189
+* Prevent dwidenoise2 segfaults (non-shelled data, zeroed background); stop on crashed or NaN output by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1165
+* Build Jacobian weights in parallel; make conda-meta readable for non-root runs by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1197
+
+### Other Changes
+
+* Faster, smaller DWI derivatives: 3D Jacobian map, 4D sinks in workers, ISA-L gzip by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1190
+* Fix the help text crash and test that --help renders by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1191
+* Run compose_transforms on omp_nthreads threads by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1192
+* Fix the --help test after --output-spaces landed by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1194
+* Write the preprocessed DWI and anatomicals as float32 by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1195
+* Bake the adult TemplateFlow templates into the Docker image by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1193
+* Update contributing guidelines and PR template by @tsalo in https://github.com/PennLINC/qsiprep/pull/1198
+* Write the denoisers' noise and rank maps as derivatives by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1196
+* Skip PR template checks on Dependabot PRs and validate fork lockfiles read-only by @tsalo in https://github.com/PennLINC/qsiprep/pull/1201
+* Make the iterative averaging for templates more robust by @mattcieslak in https://github.com/PennLINC/qsiprep/pull/1202
+* Stop the lockfile workflow from committing version-only churn by @tsalo in https://github.com/PennLINC/qsiprep/pull/1204
+* Split lockfile automation so PR code never runs with a write token by @tsalo in https://github.com/PennLINC/qsiprep/pull/1207
+
+**Full Changelog**: https://github.com/PennLINC/qsiprep/compare/26.1.1...26.2.0
+
+
 ## 26.1.1 (October 15, 2026)
 
 ### 🐛 Bug Fixes
 * Correct the methods boilerplate by @tsalo in https://github.com/PennLINC/qsiprep/pull/1187
-
 
 **Full Changelog**: https://github.com/PennLINC/qsiprep/compare/26.1.0...26.1.1
 
