@@ -343,6 +343,78 @@ def test_generate_reports_session_level_finds_reportlets(tmp_path):
     )
 
 
+def test_report_keeps_merged_run_figures(tmp_path):
+    """Test that figures of a merged series appear next to per-run figures.
+
+    Merging runs drops the ``run`` entity from the merged series' figures,
+    while the per-run denoising and unringing figures keep it.
+    nireports used to drop every figure without an ordering entity in that case
+    (https://github.com/PennLINC/qsiprep/issues/1209).
+    """
+    from qsiprep import data
+    from qsiprep.reports.core import Report
+
+    figures_dir = tmp_path / 'sub-01' / 'figures'
+    figures_dir.mkdir(parents=True)
+    per_run = [
+        figures_dir / f'sub-01_run-00{run}_desc-{desc}_dwi.svg'
+        for run in range(1, 5)
+        for desc in ('denoising', 'unringing')
+    ]
+    merged = [
+        figures_dir / 'sub-01_desc-carpetplot_dwi.svg',
+        figures_dir / 'sub-01_desc-coreg_dwi.svg',
+        figures_dir / 'sub-01_desc-sdc_dwi.svg',
+        figures_dir / 'sub-01_desc-sdcwarp_dwi.svg',
+        figures_dir / 'sub-01_desc-synb0acquired_dwi.svg',
+        figures_dir / 'sub-01_desc-synb0unet_dwi.svg',
+        figures_dir / 'sub-01_res-2mm_desc-biascorrpost_dwi.svg',
+        figures_dir / 'sub-01_res-2mm_desc-resampledb0ref_dwi.svg',
+    ]
+    anatomical = [
+        figures_dir / 'sub-01_dseg.svg',
+        figures_dir / 'sub-01_space-MNI152NLin2009cAsym_T1w.svg',
+    ]
+    for reportlet in [*per_run, *merged, *anatomical]:
+        reportlet.write_text(
+            (
+                '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1">'
+                f'<!--{reportlet.name}--></svg>'
+            ),
+            encoding='utf-8',
+        )
+
+    merged_html = [
+        figures_dir / 'sub-01_desc-summary_dwi.html',
+        figures_dir / 'sub-01_desc-samplingscheme_dwi.html',
+        figures_dir / 'sub-01_desc-topupsummary_dwi.html',
+    ]
+    for reportlet in merged_html:
+        reportlet.write_text(f'<div>{reportlet.name}</div>', encoding='utf-8')
+
+    out_report = tmp_path / 'report.html'
+    robj = Report(
+        tmp_path,
+        'madeoutuuid',
+        bootstrap_file=data.load('reports-spec.yml'),
+        out_filename=out_report,
+        reportlets_dir=tmp_path,
+        subject='01',
+    )
+    assert robj.generate_report() == 0
+
+    report_html = out_report.read_text(encoding='utf-8')
+    for reportlet in [*per_run, *merged, *anatomical, *merged_html]:
+        assert reportlet.name in report_html, f'{reportlet.name} is missing from the report'
+
+    assert 'Reports for: merged scans.' in report_html
+    assert 'Reports for: .' not in report_html
+    # The merged series comes after the per-run blocks in the Diffusion section.
+    assert report_html.index('sub-01_desc-sdc_dwi.svg') > report_html.index(
+        'sub-01_run-004_desc-unringing_dwi.svg'
+    )
+
+
 def test_spec_to_report_entities():
     from qsiprep.utils.spaces import SpaceSpec
     from qsiprep.workflows.anatomical.volume import _spec_to_report_entities
