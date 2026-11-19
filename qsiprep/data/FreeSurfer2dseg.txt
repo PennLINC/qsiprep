@@ -52,7 +52,7 @@
 2   Left-Putamen
 2   Left-Pallidum
 1   3rd-Ventricle
-1   1th-Ventricle
+1   4th-Ventricle
 3   Brain-Stem
 2   Left-Hippocampus
 2   Left-Amygdala
