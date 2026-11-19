@@ -22,9 +22,53 @@
 #
 from pathlib import Path
 
-from nireports.assembler.report import Report
+from nireports.assembler.report import Report as NiReportsReport
 
 from qsiprep import config, data
+
+# nireports titles each combination of ordering entities "Reports for: <entities>.",
+# which is "Reports for: ." for figures that have none of them.
+_EMPTY_COMBINATION_TITLE = 'Reports for: .'
+_UNORDERED_TITLE = 'Reports for: merged scans.'
+
+
+class Report(NiReportsReport):
+    """A nireports Report that keeps figures lacking every ordering entity.
+
+    A section with an ``ordering`` (e.g., ``session,acquisition,run``) is split into one
+    block per combination of those entities' values.
+    nireports drops the combination in which every ordering entity is absent,
+    so once any figure carries one of the entities,
+    figures without any of them disappear from the report.
+    In QSIPrep, that happens when several runs are merged:
+    the per-run denoising and unringing figures keep their ``run`` entity,
+    while the figures of the merged series have none.
+    """
+
+    @staticmethod
+    def _process_orderings(orderings, hits):
+        entities, value_combos = NiReportsReport._process_orderings(orderings, hits)
+        if not value_combos:
+            # No figure has an ordering entity, so the section is not split at all.
+            return entities, value_combos
+
+        none_member = (None,) * len(orderings)
+        has_unordered = any(
+            tuple(hit.get_entities().get(k, None) for k in orderings) == none_member
+            for hit in hits
+        )
+        if has_unordered:
+            # Query with every kept entity absent, after the per-entity blocks.
+            value_combos.append((None,) * len(entities))
+
+        return entities, value_combos
+
+    def index(self, config):
+        super().index(config)
+        for section in self.sections:
+            for reportlet in section.reportlets:
+                if reportlet.title == _EMPTY_COMBINATION_TITLE:
+                    reportlet.title = _UNORDERED_TITLE
 
 
 def run_reports(
