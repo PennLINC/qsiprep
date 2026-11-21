@@ -191,11 +191,13 @@ def test_dropping_the_only_stage_resamples_with_an_identity(tmp_path):
         hmcsdc_dwi_ref_to_t1w_affine=coreg,
         drop_stages=['b=0 to T1w'],
     ).run(cwd=str(tmp_path))
-    warps = result.outputs.out_warps
+    chains = result.outputs.transform_lists
     affines = result.outputs.out_affines
-    assert len(warps) == len(affines) == 2
-    assert all(path.endswith('itkIdentityTransform.txt') for path in warps + affines)
-    assert coreg not in warps
+    assert len(chains) == len(affines) == 2
+    assert all(len(chain) == 1 for chain in chains)
+    applied = [chain[0] for chain in chains]
+    assert all(path.endswith('itkIdentityTransform.txt') for path in applied + affines)
+    assert coreg not in applied
     sdc = result.outputs.sdc_warp_transforms
     assert (sdc if isinstance(sdc, list) else [sdc]) == ['identity']
 
@@ -224,6 +226,53 @@ def test_trailing_transform_applies_last(tmp_path):
         trailing_transform=trailing,
     ).run(cwd=str(tmp_path))
     assert result.outputs.transform_lists[0] == [trailing, coreg]
+
+
+def test_compose_transforms_writes_no_composite_warp(tmp_path):
+    """Test that each volume gets its transform chain and no image is written for it."""
+    import SimpleITK as sitk
+
+    from qsiprep.interfaces.gradients import ComposeTransforms
+
+    if shutil.which('antsApplyTransforms') is None:
+        pytest.skip('antsApplyTransforms is not installed')
+
+    dwis, ref, coreg = _identity_inputs(tmp_path)
+    trailing = str(tmp_path / 'acpc_to_anat.mat')
+    sitk.WriteTransform(sitk.AffineTransform(3), trailing)
+    run_dir = tmp_path / 'run'
+    run_dir.mkdir()
+    result = ComposeTransforms(
+        dwi_files=dwis,
+        reference_image=ref,
+        hmcsdc_dwi_ref_to_t1w_affine=coreg,
+        trailing_transform=trailing,
+    ).run(cwd=str(run_dir))
+    assert result.outputs.transform_lists == [[trailing, coreg]] * 2
+    assert len(result.outputs.out_affines) == 2
+    assert not list(run_dir.glob('*.nii*'))
+
+
+def test_one_volume_keeps_its_chain_nested(tmp_path):
+    """Test that a one-volume series still gives a list of chains, for the MapNode."""
+    from qsiprep.interfaces.gradients import ComposeTransforms
+
+    dwis, ref, coreg = _identity_inputs(tmp_path)
+    result = ComposeTransforms(
+        dwi_files=dwis[:1], reference_image=ref, hmcsdc_dwi_ref_to_t1w_affine=coreg
+    ).run(cwd=str(tmp_path))
+    assert result.outputs.transform_lists == [[coreg]]
+
+
+def test_coreg_only_gives_one_chain_per_volume(tmp_path):
+    """Test that the coregistration-only shortcut returns a chain for every volume."""
+    from qsiprep.interfaces.gradients import ComposeTransforms
+
+    dwis, ref, coreg = _identity_inputs(tmp_path)
+    result = ComposeTransforms(
+        dwi_files=dwis, reference_image=ref, hmcsdc_dwi_ref_to_t1w_affine=coreg
+    ).run(cwd=str(tmp_path))
+    assert result.outputs.transform_lists == [[coreg], [coreg]]
 
 
 def test_compose_transforms_exposes_the_sdc_warp_subchain(tmp_path):

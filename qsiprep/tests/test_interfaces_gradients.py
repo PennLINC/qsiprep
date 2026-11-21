@@ -100,10 +100,3 @@ def test_compose_transforms_stage_names_match_the_runtime_lookup():
     source = inspect.getsource(ComposeTransforms._run_interface)
     for stage in ComposeTransforms._TRANSFORM_STAGES:
         assert f"'{stage}':" in source, stage
-
-
-def test_compose_transforms_gradwarp_is_not_forwarded_to_apply_transforms():
-    """Test that every custom input is popped before ifargs reaches ApplyTransforms."""
-    from qsiprep.interfaces.gradients import ComposeTransforms
-
-    assert 'gradwarp' in ComposeTransforms._popped_keys()

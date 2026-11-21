@@ -251,10 +251,10 @@ class _ResampleNoiseMapsInputSpec(BaseInterfaceInputSpec):
         desc="the output's confounds: each volume's series, b-value and b=0 harmonization",
     )
     b0_threshold = traits.Float(100, usedefault=True)
-    volume_transforms = InputMultiObject(
-        File(exists=True),
+    volume_transforms = traits.List(
+        traits.List(File(exists=True)),
         mandatory=True,
-        desc='the composed transform of each output volume to the output grid',
+        desc='the ANTs-ordered transforms of each output volume to the output grid',
     )
     reference_image = File(exists=True, mandatory=True, desc='the output grid')
     weight_images = InputMultiObject(
@@ -338,7 +338,7 @@ class ResampleNoiseMaps(SimpleInterface):
             resampled = apply_transforms(
                 native,
                 inputs.reference_image,
-                [inputs.volume_transforms[reference]],
+                inputs.volume_transforms[reference],
                 os.path.join(runtime.cwd, f'{inputs.kind}_series{series_num:02d}.nii.gz'),
                 num_threads=inputs.num_threads,
             )

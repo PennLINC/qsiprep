@@ -207,7 +207,7 @@ def test_scale_dwis_n_procs_matches_num_threads():
 def test_compose_transforms_threads_from_omp_nthreads():
     """Test that compose_transforms runs its per-volume calls in parallel.
 
-    ``ComposeTransforms`` writes one composite warp per volume with its own
+    ``ComposeTransforms`` composes each volume's affines with its own
     ``antsApplyTransforms`` call. Left at the interface's ``num_threads``
     default of 1, those calls run one after another (about 4.5 h for a
     731-volume DSI series), so the workflow sets ``num_threads`` from
@@ -218,6 +218,13 @@ def test_compose_transforms_threads_from_omp_nthreads():
     compose_transforms = _trans_wf().get_node('compose_transforms')
     assert compose_transforms.inputs.num_threads == 4
     assert compose_transforms.n_procs == 4
+
+
+def test_dwis_are_resampled_through_their_transform_chains():
+    """Test that dwi_transform and the outputnode get each volume's chain."""
+    edges = {(src, dst): connect for src, dst, connect in _edges(_trans_wf())}
+    assert ('transform_lists', 'transforms') in edges[('compose_transforms', 'dwi_transform')]
+    assert ('transform_lists', 'volume_transforms') in edges[('compose_transforms', 'outputnode')]
 
 
 def test_compose_jacobian_threads_from_omp_nthreads():

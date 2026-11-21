@@ -259,7 +259,7 @@ def init_dwi_trans_wf(
                 'jacobian_weights',
                 'jacobian_weight_index',
                 'jacobian_method',
-                # Each volume's composed transform to the output grid
+                # Each volume's ANTs-ordered transforms to the output grid
                 'volume_transforms',
                 # Only written out if TOPUP was used
                 'fieldmap_hz_resampled',
@@ -272,10 +272,10 @@ def init_dwi_trans_wf(
         name='outputnode',
     )
 
-    # get composite warps and composed affines for warping and rotating.
-    # One antsApplyTransforms call per volume writes that volume's composite
-    # warp; num_threads runs them in the interface's ThreadPoolExecutor, paired
-    # with n_procs as for scale_dwis below.
+    # Each volume's transform chain for warping, and its composed affine for rotating.
+    # One antsApplyTransforms call per volume composes the affines; num_threads runs
+    # them in the interface's ThreadPoolExecutor, paired with n_procs as for
+    # scale_dwis below.
     compose_transforms = pe.Node(
         ComposeTransforms(
             num_threads=config.nipype.omp_nthreads,
@@ -354,8 +354,8 @@ def init_dwi_trans_wf(
             ('output_grid', 'reference_image'),
         ]),
         (cnr_tfm, outputnode, [('output_image', 'cnr_map_resampled')]),
-        (compose_transforms, dwi_transform, [('out_warps', 'transforms')]),
-        (compose_transforms, outputnode, [('out_warps', 'volume_transforms')]),
+        (compose_transforms, dwi_transform, [('transform_lists', 'transforms')]),
+        (compose_transforms, outputnode, [('transform_lists', 'volume_transforms')]),
         (inputnode, dwi_transform, [
             ('dwi_files', 'input_image'),
             ('output_grid', 'reference_image'),
@@ -423,7 +423,9 @@ def init_dwi_trans_wf(
                 ('fieldmap_hz', 'input_image'),
                 ('output_grid', 'reference_image'),
             ]),
-            (compose_transforms, fieldmap_hz_tfm, [(('out_warps', _get_first), 'transforms')]),
+            (compose_transforms, fieldmap_hz_tfm, [
+                (('transform_lists', _get_first), 'transforms'),
+            ]),
             (fieldmap_hz_tfm, outputnode, [('output_image', 'fieldmap_hz_resampled')]),
         ])  # fmt:skip
 

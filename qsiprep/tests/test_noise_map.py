@@ -191,7 +191,7 @@ def _resample_inputs(tmp_path, **overrides):
         'readout_times': [0.05, 0.05],
         'denoise_method': 'dwidenoise',
         'confounds_file': confounds,
-        'volume_transforms': [IDENTITY] * 6,
+        'volume_transforms': [[IDENTITY]] * 6,
         'reference_image': grid,
     }  # fmt:skip
     inputs.update(overrides)
@@ -375,7 +375,7 @@ def test_a_single_series_gives_a_3d_map(tmp_path):
     inputs['confounds_file'] = _write_confounds(
         tmp_path / 'one.tsv', ['sub-01_dir-AP_dwi.nii.gz'] * 2, [0, 1000]
     )
-    inputs['volume_transforms'] = [IDENTITY] * 2
+    inputs['volume_transforms'] = [[IDENTITY]] * 2
     inputs['resolution_label'] = 'nativemin'
     result = ResampleNoiseMaps(**inputs).run(cwd=str(tmp_path))
 
