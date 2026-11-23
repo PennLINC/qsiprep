@@ -1015,6 +1015,42 @@ def jacobian_sidecar(weight_index, applied, unmodulated, reason, method, volume_
     return sidecar
 
 
+class VolumeMean:
+    """Accumulate the mean over volumes of distinct weight maps, one map at a time.
+
+    Only the running sum and the voxelwise extremes are held, so the maps need
+    not exist together.
+    """
+
+    def __init__(self):
+        self.total = None
+        self.num_volumes = 0
+
+    def add(self, values, count=1):
+        """Add a map that ``count`` volumes used."""
+        values = np.asanyarray(values, dtype=np.float64)
+        if self.total is None:
+            self.total = np.zeros(values.shape, dtype=np.float64)
+            self.lowest = values.copy()
+            self.highest = values.copy()
+        self.total += count * values
+        np.minimum(self.lowest, values, out=self.lowest)
+        np.maximum(self.highest, values, out=self.highest)
+        self.num_volumes += count
+
+    def result(self):
+        """Return the mean map and the deviation, as :func:`volume_mean` does."""
+        mean = self.total / self.num_volumes
+        inside = mean != 0
+        # The largest difference from the mean is at one of the two extremes
+        largest = np.maximum(
+            np.abs(self.lowest[inside] / mean[inside] - 1),
+            np.abs(self.highest[inside] / mean[inside] - 1),
+        )
+        deviation = float(np.percentile(largest, 99)) if largest.size else 0.0
+        return mean.astype(np.float32), round(deviation, 6)
+
+
 def volume_mean(images, weight_index):
     """Return the mean over volumes of distinct weight maps.
 
@@ -1039,16 +1075,8 @@ def volume_mean(images, weight_index):
     counts = np.bincount(weight_index, minlength=len(images)) if weight_index else None
     if counts is None or not counts.any():
         counts = np.ones(len(images), dtype=int)
-    total = np.zeros(images[0].shape, dtype=np.float64)
+    running = VolumeMean()
     for img, count in zip(images, counts, strict=True):
         if count:
-            total += count * np.asanyarray(img.dataobj, dtype=np.float64)
-    mean = total / counts.sum()
-    inside = mean != 0
-    largest = np.zeros(int(inside.sum()))
-    for img, count in zip(images, counts, strict=True):
-        if count:
-            values = np.asanyarray(img.dataobj, dtype=np.float64)[inside]
-            np.maximum(largest, np.abs(values / mean[inside] - 1), out=largest)
-    deviation = float(np.percentile(largest, 99)) if largest.size else 0.0
-    return mean.astype(np.float32), round(deviation, 6)
+            running.add(img.dataobj, count)
+    return running.result()

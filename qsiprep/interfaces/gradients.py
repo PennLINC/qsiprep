@@ -12,7 +12,6 @@ from dipy.reconst.dti import decompose_tensor
 from dipy.sims.voxel import all_tensor_evecs
 from nilearn import image as nim
 from nipype.interfaces import ants
-from nipype.interfaces.ants.resampling import ApplyTransformsInputSpec
 from nipype.interfaces.base import (
     BaseInterfaceInputSpec,
     File,
@@ -353,8 +352,7 @@ TRANSFORM_STAGES = (
 )
 
 
-class ComposeTransformsInputSpec(ApplyTransformsInputSpec):
-    input_image = File(mandatory=False)
+class ComposeTransformsInputSpec(BaseInterfaceInputSpec):
     dwi_files = InputMultiObject(File(exists=True), mandatory=True, desc='list of dwi files')
     reference_image = File(exists=True, mandatory=True, desc='output grid')
     # Transforms to apply
@@ -388,18 +386,17 @@ class ComposeTransformsInputSpec(ApplyTransformsInputSpec):
     save_cmd = traits.Bool(
         True, usedefault=True, desc='write a log of command lines that were applied'
     )
-    copy_dtype = traits.Bool(False, usedefault=True, desc='copy dtype from inputs to outputs')
     num_threads = traits.Int(1, usedefault=True, nohash=True, desc='number of parallel processes')
-    transforms = File(mandatory=False)
 
 
 class ComposeTransformsOutputSpec(TraitedSpec):
-    out_warps = OutputMultiObject(File(exists=True), desc='composed all transforms to output_grid')
     out_affines = OutputMultiObject(
         File(exists=True), desc='composed affine-only transforms to output_grid'
     )
-    transform_lists = OutputMultiObject(
-        traits.List(File(exists=True)), desc='lists of transforms for each image'
+    # A plain List: OutputMultiObject would unwrap a one-volume series to a flat list
+    transform_lists = traits.List(
+        traits.List(File(exists=True)),
+        desc="each volume's ANTs-ordered transforms to output_grid",
     )
     sdc_warp_transforms = OutputMultiObject(
         traits.Either(File(exists=True), traits.Enum('identity')),
@@ -416,6 +413,12 @@ class ComposeTransformsOutputSpec(TraitedSpec):
 
 
 class ComposeTransforms(SimpleInterface):
+    """Chain each volume's transforms to the output grid and compose its affines.
+
+    The chain is handed to ``antsApplyTransforms`` as is. A composite warp sampled on
+    the output grid gives the same image, at three times the size of the volume.
+    """
+
     input_spec = ComposeTransformsInputSpec
     output_spec = ComposeTransformsOutputSpec
 
@@ -424,36 +427,9 @@ class ComposeTransforms(SimpleInterface):
     #: FINALDATA.cxx:930-976 composite order.
     _TRANSFORM_STAGES = TRANSFORM_STAGES
 
-    #: Inputs consumed here that must not be forwarded to ApplyTransforms.
-    _POPPED_KEYS = (
-        'environ',
-        'ignore_exception',
-        'print_out_composite_warp_file',
-        'terminal_output',
-        'output_image',
-        'input_image',
-        'transforms',
-        'dwi_files',
-        'original_b0_indices',
-        'hmc_affines',
-        'gradwarp',
-        'b0_to_dwiref_transforms',
-        'dwiref_to_t1_affine',
-        'fieldwarps',
-        'hmcsdc_dwi_ref_to_t1w_affine',
-        'interpolation',
-        'drop_stages',
-        'trailing_transform',
-        'copy_dtype',
-    )
-
     @classmethod
     def _transform_order_names(cls):
         return list(cls._TRANSFORM_STAGES)
-
-    @classmethod
-    def _popped_keys(cls):
-        return list(cls._POPPED_KEYS)
 
     @classmethod
     def _stage_names(cls, included, drop=()):
@@ -575,7 +551,6 @@ class ComposeTransforms(SimpleInterface):
             # an explicit identity, so every consumer still gets one file per volume.
             identity = str(load_data('itkIdentityTransform.txt'))
             LOGGER.info('No transform stage remains: resampling with an identity')
-            self._results['out_warps'] = [identity] * num_dwis
             self._results['out_affines'] = [identity] * num_dwis
             self._results['transform_lists'] = [[identity] for _ in range(num_dwis)]
             self._results['sdc_warp_transforms'] = ['identity']
@@ -608,72 +583,40 @@ class ComposeTransforms(SimpleInterface):
 
         # If there is just a coreg transform, then we have everything
         if image_transform_names == ['b=0 to T1w']:
-            self._results['out_warps'] = image_transforms[0]
             self._results['out_affines'] = image_transforms[0]
-            self._results['transform_lists'] = image_transforms
+            self._results['transform_lists'] = [[coreg] for coreg in image_transforms[0]]
             return runtime
 
         # Reverse the order for ANTs
         image_transforms = image_transforms[::-1]
 
         # List of lists, one list per input file
-        xfms_list = []
-        for image_num in range(num_dwis):
-            xfms_list.append([xfm[image_num] for xfm in image_transforms])
-
-        LOGGER.info('Composing %s transforms', ' -> '.join(image_transform_names))
-
-        # Get all inputs from the ApplyTransforms object
-        ifargs = self.inputs.get()
-
-        # Extract number of input images and transforms
-        # Get number of parallel jobs
-        num_threads = ifargs.pop('num_threads')
-        save_cmd = ifargs.pop('save_cmd')
-
-        # Remove certain keys
-        for key in self._POPPED_KEYS:
-            ifargs.pop(key, None)
-
-        # In qsiprep the transforms have already been merged
-        assert len(xfms_list) == num_dwis
+        xfms_list = [[xfm[image_num] for xfm in image_transforms] for image_num in range(num_dwis)]
+        LOGGER.info('Chaining %s transforms', ' -> '.join(image_transform_names))
         self._results['transform_lists'] = xfms_list
 
-        # Inputs are ready to run in parallel
+        num_threads = self.inputs.num_threads
         if num_threads < 1:
             num_threads = None
 
+        worker_args = [
+            (in_file, in_xfm, self.inputs.reference_image, i, runtime.cwd)
+            for i, (in_file, in_xfm) in enumerate(zip(dwi_files, xfms_list, strict=True))
+        ]
         if num_threads == 1:
-            out_files = [
-                _compose_tfms((in_file, in_xfm, ifargs, i, runtime.cwd))
-                for i, (in_file, in_xfm) in enumerate(zip(dwi_files, xfms_list, strict=False))
-            ]
+            out_files = [_compose_tfms(args) for args in worker_args]
         else:
             from concurrent.futures import ThreadPoolExecutor
 
             with ThreadPoolExecutor(max_workers=num_threads) as pool:
-                mapper = pool.map(
-                    _compose_tfms,
-                    [
-                        (in_file, in_xfm, ifargs, i, runtime.cwd)
-                        for i, (in_file, in_xfm) in enumerate(
-                            zip(dwi_files, xfms_list, strict=False)
-                        )
-                    ],
-                )
-                out_files = list(mapper)
+                out_files = list(pool.map(_compose_tfms, worker_args))
 
-        # Collect output file names, after sorting by index
-        self._results['out_warps'] = [el[0] for el in out_files]
-        self._results['out_affines'] = [el[2] for el in out_files]
+        self._results['out_affines'] = [el[0] for el in out_files]
 
-        if save_cmd:
+        if self.inputs.save_cmd:
             self._results['log_cmdline'] = os.path.join(runtime.cwd, 'command.txt')
             with open(self._results['log_cmdline'], 'w') as cmdfile:
-                print(
-                    '\n-------\n'.join(['\n-------\n'.join([el[1], el[3]]) for el in out_files]),
-                    file=cmdfile,
-                )
+                print('\n-------\n'.join(el[1] for el in out_files), file=cmdfile)
         return runtime
 
 
@@ -1099,38 +1042,13 @@ def aattp_rotate_vec(orig_vec, transform, runtime):
 
 
 def _compose_tfms(args):
-    """Create a composite transform from inputs."""
-    in_file, in_xform, ifargs, index, newpath = args
-    out_file = fname_presuffix(
-        in_file, suffix='_xform-%05d' % index, newpath=newpath, use_ext=True
-    )
-
-    xfm = ants.ApplyTransforms(
-        input_image=in_file,
-        transforms=in_xform,
-        output_image=out_file,
-        print_out_composite_warp_file=True,
-        interpolation='LanczosWindowedSinc',
-        **ifargs,
-    )
-    xfm.terminal_output = 'allatonce'
-    xfm.resource_monitor = False
-    runtime = xfm.run().runtime
-    LOGGER.info(runtime.cmdline)
-
-    # Force floating point precision
-    nii = nb.load(out_file, mmap=False)
-    nii.set_data_dtype(np.dtype('float32'))
-    nii.to_filename(out_file)
-
-    # Get just the affine Transforms
+    """Compose the affine transforms of one volume's chain into a single affine."""
+    in_file, in_xform, reference_image, index, newpath = args
     affines = [transform for transform in in_xform if '.nii' not in transform]
     out_affine = fname_presuffix(
         in_file, suffix='_affine_xform-%05d.mat' % index, newpath=newpath, use_ext=False
     )
-    affine_file, affine_cmd = compose_affines(ifargs['reference_image'], affines, out_affine)
-
-    return (out_file, runtime.cmdline, affine_file, affine_cmd)
+    return compose_affines(reference_image, affines, out_affine)
 
 
 def compose_affines(reference_image, affine_list, output_file):

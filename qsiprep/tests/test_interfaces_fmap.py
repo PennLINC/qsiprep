@@ -1,12 +1,14 @@
 """Tests for the qsiprep.interfaces.fmap module."""
 
 import json
+import shutil
 from pathlib import Path
 
 import nibabel as nb
 import numpy as np
 import pytest
 from nipype.interfaces.base import isdefined
+from nipype.utils.filemanip import fname_presuffix
 
 from qsiprep.interfaces.fmap import (
     B0RPEFieldmap,
@@ -486,6 +488,229 @@ def test_apply_jacobian_weights_parallel_path_uses_a_thread_per_unique_map(tmp_p
     calling_thread = threading.current_thread().ident
     assert len(seen_threads) == 2  # one call per unique map
     assert all(thread_id != calling_thread for thread_id in seen_threads)
+
+
+def _fake_chain(monkeypatch):
+    """Stand in for antsApplyTransforms: the resampled volume is the input, doubled."""
+    from qsiprep.interfaces import fmap as fmap_module
+
+    def _apply_chain(dwi_file, transforms, reference_image, interpolation, out_file):
+        img = nb.load(dwi_file)
+        nb.Nifti1Image(2 * img.get_fdata(dtype='float32'), img.affine).to_filename(out_file)
+        return out_file
+
+    def _resample_jacobian_weight(args):
+        weight_image, _, _, newpath = args
+        out_file = fname_presuffix(weight_image, suffix='_r', newpath=newpath)
+        return shutil.copy(weight_image, out_file)
+
+    monkeypatch.setattr(fmap_module, '_apply_chain', _apply_chain)
+    monkeypatch.setattr(fmap_module, '_resample_jacobian_weight', _resample_jacobian_weight)
+
+
+@pytest.mark.parametrize('num_threads', [1, 3])
+def test_apply_jacobian_weights_stacks_the_series_and_keeps_no_volume(
+    tmp_path, monkeypatch, num_threads
+):
+    """Test that the 4D series is the only image the node leaves behind.
+
+    Each volume is resampled, weighted and placed in the series; its resampled
+    copy is removed. The series takes its repetition time from header_source
+    and is stored non-negative.
+    """
+    from qsiprep.interfaces.fmap import ApplyJacobianWeights
+
+    _fake_chain(monkeypatch)
+    inputs = tmp_path / 'inputs'
+    work = tmp_path / 'work'
+    inputs.mkdir()
+    work.mkdir()
+    dwis = [_unit_image(inputs / f'd{i}.nii', value=value) for i, value in enumerate((1, -2, 3))]
+    w_a = _unit_image(inputs / 'w_a.nii.gz', value=2.0)
+    w_b = _unit_image(inputs / 'w_b.nii.gz', value=3.0)
+    chain = str(inputs / 'chain.mat')
+    Path(chain).write_text('placeholder')
+    header_source = inputs / 'source.nii.gz'
+    source = nb.Nifti1Image(np.zeros((8, 8, 8, 3), 'float32'), np.eye(4))
+    source.header.set_zooms((1, 1, 1, 4.2))
+    source.header.set_xyzt_units('mm', 'sec')
+    source.to_filename(header_source)
+
+    result = ApplyJacobianWeights(
+        dwi_files=dwis,
+        volume_transforms=[[chain]] * 3,
+        jacobian_weight_images=[w_a, w_b, w_a],
+        reference_image=_unit_image(inputs / 'grid.nii.gz'),
+        header_source=str(header_source),
+        merge=True,
+        compress=False,
+        num_threads=num_threads,
+    ).run(cwd=str(work))
+
+    series = nb.load(result.outputs.out_file)
+    assert series.shape == (8, 8, 8, 3)
+    assert series.get_data_dtype() == np.float32
+    # Doubled by the stand-in resampling, weighted, then made non-negative
+    assert [float(series.dataobj[0, 0, 0, i]) for i in range(3)] == [4.0, 12.0, 12.0]
+    assert series.header.get_zooms()[3] == pytest.approx(4.2)
+    assert series.header.get_xyzt_units()[1] == 'sec'
+    assert not isdefined(result.outputs.scaled_images)
+    assert result.outputs.weight_index == [0, 1, 0]
+    # Without average_weights each distinct map stays, on the output grid
+    assert sorted(path.name for path in work.glob('*.nii*')) == [
+        'd0_merged.nii',
+        'w_a_r.nii.gz',
+        'w_b_r.nii.gz',
+    ]
+
+
+@pytest.mark.parametrize('num_threads', [1, 3])
+def test_apply_jacobian_weights_keeps_only_the_mean_of_per_volume_maps(
+    tmp_path, monkeypatch, num_threads
+):
+    """Test that averaging leaves one weight map, equal to volume_mean of them all.
+
+    The maps one volume uses are resampled in that volume's job and removed; the
+    one two volumes share is resampled first and removed at the end.
+    """
+    from qsiprep.interfaces.fmap import ApplyJacobianWeights
+    from qsiprep.utils.jacobian import volume_mean
+
+    _fake_chain(monkeypatch)
+    inputs = tmp_path / 'inputs'
+    work = tmp_path / 'work'
+    inputs.mkdir()
+    work.mkdir()
+    dwis = [_unit_image(inputs / f'd{i}.nii') for i in range(4)]
+    values = (0.8, 1.2, 1.5)
+    maps = [_unit_image(inputs / f'w{i}.nii.gz', value=v) for i, v in enumerate(values)]
+    chain = str(inputs / 'chain.mat')
+    Path(chain).write_text('placeholder')
+
+    result = ApplyJacobianWeights(
+        dwi_files=dwis,
+        volume_transforms=[[chain]] * 4,
+        jacobian_weight_images=[maps[0], maps[1], maps[0], maps[2]],
+        reference_image=_unit_image(inputs / 'grid.nii.gz'),
+        merge=True,
+        average_weights=True,
+        num_threads=num_threads,
+    ).run(cwd=str(work))
+
+    series = nb.load(result.outputs.out_file)
+    np.testing.assert_allclose(
+        [float(series.dataobj[0, 0, 0, i]) for i in range(4)], [1.6, 2.4, 1.6, 3.0], rtol=1e-6
+    )
+    expected, deviation = volume_mean([nb.load(path) for path in maps], [0, 1, 0, 2])
+    mean_file = result.outputs.resampled_weight_images
+    assert np.array_equal(np.asanyarray(nb.load(mean_file).dataobj), expected)
+    assert result.outputs.weight_volume_deviation == deviation
+    assert result.outputs.weight_index == [0, 0, 0, 0]
+    assert result.outputs.weight_transforms == ['identity']
+    assert sorted(path.name for path in work.glob('*.nii*')) == [
+        'd0_merged.nii.gz',
+        'mean_weight.nii.gz',
+    ]
+    # The unresampled maps are another node's files
+    assert all(Path(path).exists() for path in maps)
+
+
+def test_apply_jacobian_weights_does_not_average_a_single_shared_map(tmp_path, monkeypatch):
+    """Test that one map for every volume is kept as it is, with no deviation."""
+    from qsiprep.interfaces.fmap import ApplyJacobianWeights
+
+    _fake_chain(monkeypatch)
+    inputs = tmp_path / 'inputs'
+    work = tmp_path / 'work'
+    inputs.mkdir()
+    work.mkdir()
+    dwis = [_unit_image(inputs / f'd{i}.nii') for i in range(2)]
+    weight = _unit_image(inputs / 'w.nii.gz', value=3.0)
+    chain = str(inputs / 'chain.mat')
+    Path(chain).write_text('placeholder')
+
+    result = ApplyJacobianWeights(
+        dwi_files=dwis,
+        volume_transforms=[[chain]] * 2,
+        jacobian_weight_images=[weight, weight],
+        reference_image=_unit_image(inputs / 'grid.nii.gz'),
+        merge=True,
+        average_weights=True,
+    ).run(cwd=str(work))
+
+    assert Path(result.outputs.resampled_weight_images).name == 'w_r.nii.gz'
+    assert result.outputs.weight_index == [0, 0]
+    assert not isdefined(result.outputs.weight_volume_deviation)
+
+
+def test_apply_jacobian_weights_writes_each_volume_once_without_merge(tmp_path, monkeypatch):
+    """Test that, unmerged, only the weighted copy of each volume is left."""
+    from qsiprep.interfaces.fmap import ApplyJacobianWeights
+
+    _fake_chain(monkeypatch)
+    inputs = tmp_path / 'inputs'
+    work = tmp_path / 'work'
+    inputs.mkdir()
+    work.mkdir()
+    dwis = [_unit_image(inputs / f'd{i}.nii') for i in range(2)]
+    chain = str(inputs / 'chain.mat')
+    Path(chain).write_text('placeholder')
+    weight = _unit_image(inputs / 'w.nii.gz', value=3.0)
+
+    result = ApplyJacobianWeights(
+        dwi_files=dwis,
+        volume_transforms=[[chain]] * 2,
+        jacobian_weight_images=[weight, weight],
+        reference_image=_unit_image(inputs / 'grid.nii.gz'),
+    ).run(cwd=str(work))
+
+    scaled = result.outputs.scaled_images
+    assert [Path(path).name for path in scaled] == ['d0_trans_scaled.nii', 'd1_trans_scaled.nii']
+    assert all(np.all(nb.load(path).get_fdata() == 6.0) for path in scaled)
+    assert not isdefined(result.outputs.out_file)
+    assert sorted(path.name for path in work.glob('*.nii*')) == [
+        'd0_trans_scaled.nii',
+        'd1_trans_scaled.nii',
+        'w_r.nii.gz',
+    ]
+
+
+def test_apply_jacobian_weights_resamples_without_weights(tmp_path, monkeypatch):
+    """Test that the volumes are still resampled when there is nothing to weight."""
+    from qsiprep.interfaces.fmap import ApplyJacobianWeights
+
+    _fake_chain(monkeypatch)
+    inputs = tmp_path / 'inputs'
+    work = tmp_path / 'work'
+    inputs.mkdir()
+    work.mkdir()
+    dwis = [_unit_image(inputs / f'd{i}.nii') for i in range(2)]
+    chain = str(inputs / 'chain.mat')
+    Path(chain).write_text('placeholder')
+
+    result = ApplyJacobianWeights(
+        dwi_files=dwis,
+        volume_transforms=[[chain]] * 2,
+        reference_image=_unit_image(inputs / 'grid.nii.gz'),
+        merge=True,
+    ).run(cwd=str(work))
+
+    assert np.all(nb.load(result.outputs.out_file).get_fdata() == 2.0)
+    assert not isdefined(result.outputs.resampled_weight_images)
+    assert [path.name for path in work.glob('*.nii*')] == ['d0_merged.nii.gz']
+
+
+def test_apply_jacobian_weights_rejects_a_chain_count_mismatch(tmp_path):
+    from qsiprep.interfaces.fmap import ApplyJacobianWeights
+
+    chain = str(tmp_path / 'chain.mat')
+    Path(chain).write_text('placeholder')
+    with pytest.raises(ValueError, match='1 transform chains for 3 DWI volumes'):
+        ApplyJacobianWeights(
+            dwi_files=[_unit_image(tmp_path / f'd{i}.nii.gz') for i in range(3)],
+            volume_transforms=[[chain]],
+            reference_image=_unit_image(tmp_path / 'grid.nii.gz'),
+        ).run()
 
 
 def test_apply_scaling_images_name_is_gone():

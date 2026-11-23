@@ -24,8 +24,6 @@ from ...interfaces.gradients import (  # LocalGradientRotation,
     GradientRotation,
 )
 from ...interfaces.images import ChooseInterpolator
-from ...interfaces.jacobian import ComposeJacobianWeights
-from ...interfaces.nilearn import Merge
 from .qc import init_modelfree_qc_wf
 from .util import init_dwi_reference_wf
 
@@ -44,7 +42,6 @@ def init_dwi_trans_wf(
     write_local_bvecs=False,
     concatenate=True,
     doing_topup=False,
-    pe_axis=None,
     sdc_warp_source=None,
     sdc_pe_dir=None,
     sdc_readout_time=None,
@@ -91,9 +88,6 @@ def init_dwi_trans_wf(
     doing_topup : bool, optional
         Whether TOPUP was used, in which case ``inputnode.fieldmap_hz`` is
         resampled to the output grid.
-    pe_axis : int or None, optional
-        Voxel axis of the phase-encoding direction, used to compute Jacobian
-        weights whenever a displacement field is supplied.
     sdc_warp_source : str or None, optional
         Where the SDC displacement field written on the output grid comes from:
         ``'fieldwarp'``, ``'topup'``, ``'gre_in_eddy'`` or ``'topup+drbuddi'``
@@ -125,12 +119,8 @@ def init_dwi_trans_wf(
         individual bval files
     bvec_files
         one-lined bvec files
-    b0_ref_image
-        b0 template for the dwi series
     b0_indices
         List of indices that contain a b0 image
-    dwi_mask
-        Skull-stripping mask of reference image
     name_source
         DWI series NIfTI file
         Used to recover original information lost during processing
@@ -143,6 +133,10 @@ def init_dwi_trans_wf(
         undefined if no gradwarp correction is being applied
     output_grid
         File defining the output space
+    jacobian_weight_images
+        Each volume's intensity weight map in undistorted b=0 reference space
+        (``ComposeJacobianWeights``), which does not depend on the output grid.
+        Undefined when no correction is modulated.
     trailing_transform
         A transform applied after every other stage, such as ACPC to anat; left
         undefined for ACPC and dwiref outputs
@@ -220,19 +214,15 @@ def init_dwi_trans_wf(
                 'cnr_map',
                 'bval_files',
                 'bvec_files',
-                'b0_ref_image',
                 'b0_indices',
-                'dwi_mask',
                 'hmc_xforms',
                 'fieldwarps',
                 'gradwarp_field',
                 'output_grid',
                 # Applied after every other stage: ACPC to anat for an anat output
                 'trailing_transform',
-                'ec_jacobian_images',
-                # Only set when DRBUDDI ran: TORTOISE's LSR ratios, which
-                # replace the Jacobian weight.
-                'sdc_scaling_images',
+                # Each volume's weight map before resampling
+                'jacobian_weight_images',
                 # Only written out if TOPUP was used
                 'fieldmap_hz',
             ]
@@ -254,12 +244,15 @@ def init_dwi_trans_wf(
                 'b0_series',
                 'resampled_qc',
                 # Only defined when Jacobian weighting applied (no --ignore jacobian)
-                # weights: the unique output-grid weight maps and the
-                # per-volume index into them.
+                # weights: the output-grid weight maps and the per-volume index
+                # into them. Without --write-jacobian-4d that is one map, the mean
+                # over volumes, and the deviation of a volume from it.
                 'jacobian_weights',
                 'jacobian_weight_index',
-                'jacobian_method',
-                # Each volume's composed transform to the output grid
+                'jacobian_weight_deviation',
+                # The transforms that carry an unresampled weight map to the output grid
+                'jacobian_weight_transforms',
+                # Each volume's ANTs-ordered transforms to the output grid
                 'volume_transforms',
                 # Only written out if TOPUP was used
                 'fieldmap_hz_resampled',
@@ -272,10 +265,10 @@ def init_dwi_trans_wf(
         name='outputnode',
     )
 
-    # get composite warps and composed affines for warping and rotating.
-    # One antsApplyTransforms call per volume writes that volume's composite
-    # warp; num_threads runs them in the interface's ThreadPoolExecutor, paired
-    # with n_procs as for scale_dwis below.
+    # Each volume's transform chain for warping, and its composed affine for rotating.
+    # One antsApplyTransforms call per volume composes the affines; num_threads runs
+    # them in the interface's ThreadPoolExecutor, paired with n_procs as for
+    # scale_dwis below.
     compose_transforms = pe.Node(
         ComposeTransforms(
             num_threads=config.nipype.omp_nthreads,
@@ -288,12 +281,9 @@ def init_dwi_trans_wf(
         ChooseInterpolator(sloppy=config.execution.sloppy),
         name='get_interpolation',
     )
-    dwi_transform = pe.MapNode(
-        ants.ApplyTransforms(float=True),
-        name='dwi_transform',
-        iterfield=['input_image', 'transforms'],
-    )
-    # num_threads parallelizes the per-unique-map antsApplyTransports calls
+    # scale_dwis resamples each volume through its chain, weights it and stacks the
+    # series, so one copy of the series is written rather than three.
+    # num_threads parallelizes the per-volume and per-unique-map antsApplyTransforms calls
     # inside the interface's own ThreadPoolExecutor -- see ApplyJacobianWeights'
     # docstring. n_procs must be paired with it (as every other in-node
     # fan-out in this repo does -- e.g. diffprep.py's synth_dwis, fsl.py's
@@ -301,6 +291,7 @@ def init_dwi_trans_wf(
     # nipype's MultiProc scheduler reserves that many slots for this node
     # instead of co-scheduling other work against a node that is itself
     # running up to omp_nthreads concurrent antsApplyTransforms processes.
+    # spread_resampling_threads raises both once the whole run is built.
     # The Jacobian transport drops the stages the resampling drops, so the weights
     # land in the frame the DWI does. hmc, gradwarp and fieldwarp are not transport.
     transport_drop = [stage for stage in drop_stages if stage in _TRANSPORT_STAGES]
@@ -308,9 +299,13 @@ def init_dwi_trans_wf(
         ApplyJacobianWeights(
             num_threads=config.nipype.omp_nthreads,
             drop_stages=transport_drop,
+            merge=concatenate,
+            compress=use_compression,
+            average_weights=not config.workflow.write_jacobian_4d,
         ),
         name='scale_dwis',
         n_procs=config.nipype.omp_nthreads,
+        mem_gb=mem_gb * 2,
     )
     rotate_gradients = pe.Node(GradientRotation(), name='rotate_gradients')
     cnr_image_type = pe.Node(GetImageType(), name='cnr_image_type')
@@ -354,19 +349,16 @@ def init_dwi_trans_wf(
             ('output_grid', 'reference_image'),
         ]),
         (cnr_tfm, outputnode, [('output_image', 'cnr_map_resampled')]),
-        (compose_transforms, dwi_transform, [('out_warps', 'transforms')]),
-        (compose_transforms, outputnode, [('out_warps', 'volume_transforms')]),
-        (inputnode, dwi_transform, [
-            ('dwi_files', 'input_image'),
-            ('output_grid', 'reference_image'),
-        ]),
+        (compose_transforms, scale_dwis, [('transform_lists', 'volume_transforms')]),
+        (compose_transforms, outputnode, [('transform_lists', 'volume_transforms')]),
         (inputnode, get_interpolation, [
             ('dwi_files', 'dwi_files'),
             ('output_grid', 'output_grid'),
         ]),
-        (get_interpolation, dwi_transform, [('interpolation_method', 'interpolation')]),
-        (dwi_transform, scale_dwis, [('output_image', 'dwi_files')]),
+        (get_interpolation, scale_dwis, [('interpolation_method', 'interpolation')]),
         (inputnode, scale_dwis, [
+            ('dwi_files', 'dwi_files'),
+            ('name_source', 'header_source'),
             ('output_grid', 'reference_image'),
             ('itk_b0_to_t1', 'hmcsdc_dwi_ref_to_t1w_affine'),
             ('b0_to_dwiref_transforms', 'b0_to_dwiref_transforms'),
@@ -375,40 +367,18 @@ def init_dwi_trans_wf(
         ]),
     ])  # fmt:skip
 
-    # The weight covers gradwarp and SDC only. HMC is excluded by policy and is
-    # coordinate-safe to exclude because it is the outermost transform in the
-    # pull-back (see the design spec); coregistration and the dwiref and
-    # template warps are excluded because modulating by a spatial-normalization
-    # warp is VBM-style volume modulation, wrong for DWI signal.
+    # The weight maps come from the caller, which builds them once for every
+    # output grid (compose_jacobian in init_dwi_finalize_wf).
     if 'jacobian' not in (config.workflow.ignore or []):
-        # num_threads/n_procs paired as for scale_dwis above: the node shells
-        # out to antsApplyTransforms and CreateJacobianDeterminantImage, which
-        # run single-threaded on nipype's default.
-        compose_jacobian = pe.Node(
-            ComposeJacobianWeights(
-                num_threads=config.nipype.omp_nthreads,
-                pe_axis=pe_axis,
-            ),
-            name='compose_jacobian',
-            n_procs=config.nipype.omp_nthreads,
-        )
         workflow.connect([
-            (inputnode, compose_jacobian, [
-                ('dwi_files', 'dwi_files'),
-                ('b0_ref_image', 'b0_ref_image'),
-                ('dwi_mask', 'mask'),
-                (('gradwarp_field', _listify), 'gradwarp_field'),
-                ('fieldwarps', 'fieldwarps'),
-                ('ec_jacobian_images', 'ec_jacobian_images'),
-                ('sdc_scaling_images', 'sdc_scaling_images'),
-            ]),
-            (compose_jacobian, scale_dwis, [
+            (inputnode, scale_dwis, [
                 ('jacobian_weight_images', 'jacobian_weight_images'),
             ]),
-            (compose_jacobian, outputnode, [('method', 'jacobian_method')]),
             (scale_dwis, outputnode, [
                 ('resampled_weight_images', 'jacobian_weights'),
                 ('weight_index', 'jacobian_weight_index'),
+                ('weight_volume_deviation', 'jacobian_weight_deviation'),
+                ('weight_transforms', 'jacobian_weight_transforms'),
             ]),
         ])  # fmt:skip
 
@@ -423,7 +393,9 @@ def init_dwi_trans_wf(
                 ('fieldmap_hz', 'input_image'),
                 ('output_grid', 'reference_image'),
             ]),
-            (compose_transforms, fieldmap_hz_tfm, [(('out_warps', _get_first), 'transforms')]),
+            (compose_transforms, fieldmap_hz_tfm, [
+                (('transform_lists', _get_first), 'transforms'),
+            ]),
             (fieldmap_hz_tfm, outputnode, [('output_image', 'fieldmap_hz_resampled')]),
         ])  # fmt:skip
 
@@ -511,7 +483,6 @@ def init_dwi_trans_wf(
         workflow.connect([(scale_dwis, outputnode, [('scaled_images', 'dwi_resampled')])])
         return workflow
 
-    merge = pe.Node(Merge(compress=use_compression), name='merge', mem_gb=mem_gb * 3)
     extract_b0_series = pe.Node(ExtractB0s(), name='extract_b0_series')
     final_b0_ref = init_dwi_reference_wf(
         # The denoising workflow writes this reportlet from the final image; a
@@ -523,10 +494,8 @@ def init_dwi_trans_wf(
     )
 
     workflow.connect([
-        (inputnode, merge, [('name_source', 'header_source')]),
-        (scale_dwis, merge, [('scaled_images', 'in_files')]),
-        (merge, outputnode, [('out_file', 'dwi_resampled')]),
-        (merge, extract_b0_series, [('out_file', 'dwi_series')]),
+        (scale_dwis, outputnode, [('out_file', 'dwi_resampled')]),
+        (scale_dwis, extract_b0_series, [('out_file', 'dwi_series')]),
         (inputnode, extract_b0_series, [('b0_indices', 'b0_indices')]),
         (extract_b0_series, final_b0_ref, [('b0_average', 'inputnode.b0_template')]),
         (inputnode, final_b0_ref, [('t1_mask', 'inputnode.t1_mask')]),
@@ -546,7 +515,7 @@ def init_dwi_trans_wf(
             ('bvals', 'inputnode.bval_file'),
             ('bvecs', 'inputnode.bvec_file'),
         ]),
-        (merge, calculate_qc, [('out_file', 'inputnode.dwi_file')]),
+        (scale_dwis, calculate_qc, [('out_file', 'inputnode.dwi_file')]),
         (final_b0_ref, calculate_qc, [('outputnode.dwi_mask', 'inputnode.mask_file')]),
         (calculate_qc, outputnode, [('outputnode.qc_summary', 'resampled_qc')]),
     ])  # fmt:skip
@@ -559,6 +528,27 @@ def init_dwi_trans_wf(
     #     ])  # fmt:skip
 
     return workflow
+
+
+def spread_resampling_threads(workflow):
+    """Give each resampling node its share of the run's processes.
+
+    The resampling nodes of a run tend to be ready together, at the end. A run
+    with one of them has nothing to run beside it, so it takes every process;
+    several take ``nprocs`` divided between them, and no fewer than
+    ``omp_nthreads`` each.
+    """
+    nodes = [
+        node
+        for node in workflow._get_all_nodes()
+        if isinstance(node.interface, ApplyJacobianWeights)
+    ]
+    if not nodes:
+        return
+    threads = max(config.nipype.omp_nthreads, config.nipype.nprocs // len(nodes))
+    for node in nodes:
+        node.inputs.num_threads = threads
+        node.n_procs = threads
 
 
 def _hz_to_warp(in_file, readout_time, pe_dir, newpath=None):

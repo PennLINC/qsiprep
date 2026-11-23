@@ -637,6 +637,10 @@ class _SeriesQCInputSpec(BaseInterfaceInputSpec):
     jacobian_weight_index = traits.List(
         traits.Int(), desc='per-volume index into jacobian_weights'
     )
+    jacobian_weight_deviation = traits.Float(
+        desc='given when jacobian_weights is already the mean over volumes of '
+        "distinct maps: the deviation of a volume's weight from it"
+    )
     output_file_name = traits.File()
 
 
@@ -706,11 +710,13 @@ class SeriesQC(SimpleInterface):
                 )
             if isdefined(self.inputs.jacobian_weights):
                 weight_index = self.inputs.jacobian_weight_index
+                deviation = self.inputs.jacobian_weight_deviation
                 image_qc.update(
                     get_jacobian_values(
                         self.inputs.jacobian_weights,
                         self.inputs.t1_mask_file,
                         weight_index=weight_index if isdefined(weight_index) else None,
+                        volume_deviation=deviation if isdefined(deviation) else 0.0,
                     )
                 )
             if isdefined(self.inputs.grad_dev_file):
@@ -844,7 +850,7 @@ def get_tsnr_values(tsnr_image, brain_mask):
     return summarize_in_mask(data, tsnr_img.affine, brain_mask, 'b0_tsnr')
 
 
-def get_jacobian_values(weight_images, brain_mask, weight_index=None):
+def get_jacobian_values(weight_images, brain_mask, weight_index=None, volume_deviation=0.0):
     """Summarize the applied Jacobian or LSR weights inside the brain mask.
 
     Distinct maps (one per volume with eddy-current correction) are first averaged
@@ -859,6 +865,9 @@ def get_jacobian_values(weight_images, brain_mask, weight_index=None):
         A brain mask of the output.
     weight_index : list of int or None, optional
         The map applied to each output volume.
+    volume_deviation : float, optional
+        The deviation to report for a single map, when that map is already the
+        mean over volumes of distinct maps.
 
     Returns
     -------
@@ -870,7 +879,8 @@ def get_jacobian_values(weight_images, brain_mask, weight_index=None):
     """
     images = [nb.load(path) for path in weight_images]
     if len(images) == 1:
-        data, deviation = np.asanyarray(images[0].dataobj, dtype=np.float64), 0.0
+        data = np.asanyarray(images[0].dataobj, dtype=np.float64)
+        deviation = volume_deviation
     else:
         data, deviation = volume_mean(images, list(weight_index or []))
     values = summarize_in_mask(data, images[0].affine, brain_mask, 'jacobian_weight')

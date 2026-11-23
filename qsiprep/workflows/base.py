@@ -89,7 +89,7 @@ from .dwi.distortion_group_merge import init_distortion_group_merge_wf
 from .dwi.dwiref import init_dwiref_wf
 from .dwi.finalize import _select_grid, dwiref_level_name, init_dwi_finalize_wf
 from .dwi.merge import SERIES_FIELDS, init_dwi_series_denoise_wf
-from .dwi.resampling import _get_first
+from .dwi.resampling import _get_first, spread_resampling_threads
 
 
 def init_series_denoise_wfs(preproc_units, orientation):
@@ -225,6 +225,7 @@ def init_qsiprep_wf():
                 config.workflow.denoise_config,
                 log_dir / f'{config.workflow.denoise_method}.json',
             )
+    spread_resampling_threads(qsiprep_wf)
     return qsiprep_wf
 
 

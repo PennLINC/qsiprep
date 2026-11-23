@@ -11,6 +11,7 @@
 """
 
 import json
+import os
 import os.path as op
 from collections import defaultdict
 
@@ -45,7 +46,7 @@ from niworkflows.viz.utils import (
 from svgutils.transform import SVGFigure
 
 from ..utils.bids import load_sidecar
-from ..utils.jacobian import UNMODULATED_WEIGHT, float32_header
+from ..utils.jacobian import UNMODULATED_WEIGHT, VolumeMean, float32_header
 from ..viz.utils import fixed_field_of_view
 from .epi_fmap import (
     _merge_metadata,
@@ -1245,9 +1246,26 @@ class _ApplyJacobianWeightsInputSpec(ApplyTransformsInputSpec):
     dwi_files = InputMultiObject(
         File(exists=True),
         mandatory=True,
-        desc='list of dwi files, already resampled into their output space',
+        desc='split DWI volumes: unresampled with volume_transforms, else on the output grid',
+    )
+    volume_transforms = traits.List(
+        traits.List(File(exists=True)),
+        desc="each volume's ANTs-ordered transforms to the output grid, applied with "
+        'interpolation',
     )
     reference_image = File(exists=True, mandatory=True, desc='output grid')
+    merge = traits.Bool(
+        False, usedefault=True, desc='write the series as one 4D image, not one file per volume'
+    )
+    header_source = File(
+        exists=True, desc='image whose repetition time and time units the 4D series takes'
+    )
+    compress = traits.Bool(True, usedefault=True, desc='gzip the 4D series')
+    average_weights = traits.Bool(
+        False,
+        usedefault=True,
+        desc='keep the mean over volumes of the resampled weight maps, not each map',
+    )
 
     # Transforms to apply
     b0_to_dwiref_transforms = InputMultiObject(
@@ -1285,15 +1303,27 @@ class _ApplyJacobianWeightsInputSpec(ApplyTransformsInputSpec):
 
 
 class _ApplyJacobianWeightsOutputSpec(TraitedSpec):
-    scaled_images = OutputMultiObject(File(exists=True), desc='Weighted dwi files')
+    scaled_images = OutputMultiObject(
+        File(exists=True), desc='the weighted volumes; Undefined with merge'
+    )
+    out_file = File(exists=True, desc='the weighted series as one 4D image (merge)')
     resampled_weight_images = OutputMultiObject(
         File(exists=True),
         desc='the unique weight maps, resampled to the output grid, in '
-        'first-appearance order; indexed by the derivative sidecar',
+        'first-appearance order; with average_weights, their mean over volumes',
     )
     weight_index = traits.List(
         traits.Int(),
         desc='for each DWI volume, its index into resampled_weight_images',
+    )
+    weight_volume_deviation = traits.Float(
+        desc='with average_weights and maps that differ between volumes: the 99th '
+        'percentile over voxels of the largest relative difference between a '
+        "volume's own weight and the mean"
+    )
+    weight_transforms = traits.List(
+        traits.Str(),
+        desc='the ANTs-ordered transforms that carry a weight map to the output grid',
     )
 
 
@@ -1320,6 +1350,92 @@ def _resample_jacobian_weight(args):
     xfm_runtime = xfm.run().runtime
     LOGGER.info(xfm_runtime.cmdline)
     return resampled_weight_image
+
+
+def _apply_chain(dwi_file, transforms, reference_image, interpolation, out_file):
+    """Resample one DWI volume to the output grid through its transform chain."""
+    xfm = ants.ApplyTransforms(
+        input_image=dwi_file,
+        transforms=transforms,
+        reference_image=reference_image,
+        output_image=out_file,
+        interpolation=interpolation,
+        float=True,
+    )
+    xfm.terminal_output = 'allatonce'
+    xfm.resource_monitor = False
+    LOGGER.info(xfm.run().runtime.cmdline)
+    return out_file
+
+
+def _resample_and_weight(args):
+    """Resample one DWI volume through its transform chain and weight it.
+
+    Returns the weighted image, or its filename with ``to_file``. The unweighted
+    resampled volume is removed, so a volume is on disk at most once.
+
+    ``weight_image`` is on the output grid unless ``weight_transforms`` is given.
+    Then it is carried there, used and removed, and returned as an image for the
+    mean over volumes; otherwise the second value returned is None.
+    """
+    (
+        dwi_file,
+        transforms,
+        weight_image,
+        weight_transforms,
+        reference_image,
+        interpolation,
+        newpath,
+        to_file,
+    ) = args
+    resampled = dwi_file
+    if transforms is not None:
+        resampled = _apply_chain(
+            dwi_file,
+            transforms,
+            reference_image,
+            interpolation,
+            fname_presuffix(dwi_file, suffix='_trans', newpath=newpath),
+        )
+    if weight_image is None and to_file:
+        return resampled, None
+
+    # Not memory-mapped: the file is about to be removed
+    img = nb.load(resampled, mmap=False)
+    data = np.asanyarray(img.dataobj, dtype=np.float32)
+    used_weight = None
+    if weight_image is not None:
+        if weight_transforms is not None:
+            weight_image = _resample_jacobian_weight(
+                (weight_image, weight_transforms, reference_image, newpath)
+            )
+            _floor_nonpositive_weights(weight_image)
+        weight_img = nb.load(weight_image, mmap=False)
+        weight = np.asanyarray(weight_img.dataobj, dtype=np.float32)
+        if weight_transforms is not None:
+            used_weight = nb.Nifti1Image(weight, weight_img.affine, weight_img.header)
+            os.remove(weight_image)
+        if data.ndim == 4 and weight.ndim == 3:
+            weight = weight[..., np.newaxis]
+        data = data * weight
+    weighted = nb.Nifti1Image(data, img.affine, float32_header(img))
+    if to_file:
+        scaled_file = fname_presuffix(resampled, newpath=newpath, suffix='_scaled')
+        weighted.to_filename(scaled_file)
+    if transforms is not None:
+        os.remove(resampled)
+    return (scaled_file if to_file else weighted), used_weight
+
+
+def _in_order(worker, jobs, num_threads):
+    """Yield ``worker(job)`` for each job, in order, running ``num_threads`` at a time."""
+    if num_threads == 1:
+        yield from map(worker, jobs)
+        return
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=num_threads) as pool:
+        yield from pool.map(worker, jobs)
 
 
 def _transport_stack(
@@ -1351,7 +1467,16 @@ def _transport_stack(
 
 
 class ApplyJacobianWeights(SimpleInterface):
-    """Transport Jacobian weight maps to the output grid and multiply them in.
+    """Resample the DWIs to the output grid, weight them, and stack the series.
+
+    Each volume is resampled through its ``volume_transforms`` chain, multiplied
+    by its weight map and, with ``merge``, placed in the 4D series. Its
+    unweighted copy is removed as soon as it is read, so the series is on disk
+    once rather than as resampled, weighted and merged copies.
+
+    With ``average_weights`` the resampled weight maps are reduced to their mean
+    over volumes as they are used, which is what the default derivative holds,
+    so a run with one map per volume keeps one map instead of one per volume.
 
     The maps arrive in undistorted b=0-reference space. Resampling them through
     the dwiref and coregistration transforms is what evaluates the gradwarp
@@ -1383,12 +1508,77 @@ class ApplyJacobianWeights(SimpleInterface):
     output_spec = _ApplyJacobianWeightsOutputSpec
 
     def _run_interface(self, runtime):
-        if not isdefined(self.inputs.jacobian_weight_images):
-            LOGGER.info('Not applying Jacobian weights to resampled DWIs')
-            self._results['scaled_images'] = self.inputs.dwi_files
-            return runtime
-        LOGGER.info('Applying Jacobian weights to resampled dwis')
+        dwi_files = self.inputs.dwi_files
+        num_threads = self.inputs.num_threads
+        if num_threads < 1:
+            num_threads = None
 
+        chains = [None] * len(dwi_files)
+        if isdefined(self.inputs.volume_transforms):
+            chains = self.inputs.volume_transforms
+            if len(chains) != len(dwi_files):
+                raise ValueError(
+                    f'Got {len(chains)} transform chains for {len(dwi_files)} DWI volumes.'
+                )
+
+        volume_weights = [(None, None)] * len(dwi_files)
+        self._weight_index = None
+        if isdefined(self.inputs.jacobian_weight_images):
+            LOGGER.info('Applying Jacobian weights to resampled dwis')
+            volume_weights = self._transport_weights(runtime, num_threads)
+        else:
+            LOGGER.info('Not applying Jacobian weights to resampled DWIs')
+
+        jobs = [
+            (
+                dwi_file,
+                chain,
+                weight_image,
+                weight_transforms,
+                self.inputs.reference_image,
+                self.inputs.interpolation,
+                runtime.cwd,
+                not self.inputs.merge,
+            )
+            for dwi_file, chain, (weight_image, weight_transforms) in zip(
+                dwi_files, chains, volume_weights, strict=True
+            )
+        ]
+        volumes = self._averaging_weights(
+            _in_order(_resample_and_weight, jobs, num_threads), volume_weights, runtime
+        )
+        if not self.inputs.merge:
+            self._results['scaled_images'] = list(volumes)
+            return runtime
+
+        series = None
+        for index, volume in enumerate(volumes):
+            if series is None:
+                first = volume
+                series = np.empty(volume.shape[:3] + (len(dwi_files),), dtype=np.float32)
+            # Interpolation can undershoot zero, which a DWI signal cannot be
+            series[..., index] = np.abs(np.asanyarray(volume.dataobj).reshape(series.shape[:3]))
+
+        merged = nb.Nifti1Image(series, first.affine, first.header)
+        if isdefined(self.inputs.header_source):
+            src_hdr = nb.load(self.inputs.header_source).header
+            merged.header.set_xyzt_units(t=src_hdr.get_xyzt_units()[-1])
+            merged.header.set_zooms(list(merged.header.get_zooms()[:3]) + [src_hdr.get_zooms()[3]])
+        ext = '.nii.gz' if self.inputs.compress else '.nii'
+        self._results['out_file'] = fname_presuffix(
+            dwi_files[0], suffix='_merged' + ext, newpath=runtime.cwd, use_ext=False
+        )
+        merged.to_filename(self._results['out_file'])
+        return runtime
+
+    def _transport_weights(self, runtime, num_threads):
+        """Resample the weight maps to the output grid; return each volume's map.
+
+        Each volume gets ``(weight image, transforms)``, with None for the
+        transforms of a map already on the output grid. When the maps are being
+        averaged, a map only one volume uses is not resampled here: that volume's
+        job carries it over and removes it.
+        """
         if not len(self.inputs.jacobian_weight_images) == len(self.inputs.dwi_files):
             raise Exception('Mismatch between Jacobian weight images and dwis')
 
@@ -1420,76 +1610,95 @@ class ApplyJacobianWeights(SimpleInterface):
             drop_stages=self.inputs.drop_stages,
             trailing_transform=self.inputs.trailing_transform,
         )
+        self._results['weight_transforms'] = transform_stack
 
         # There are a few unique weight images. Find them, in first-appearance
         # order (dict preserves insertion order) -- weight_index below indexes
         # into this order, so it must not be incidental (e.g. set iteration).
-        weights_to_dwis = defaultdict(list)
-        for dwi_image, weight_image in zip(
-            self.inputs.dwi_files, self.inputs.jacobian_weight_images, strict=False
-        ):
-            weights_to_dwis[weight_image].append(dwi_image)
-        unique_weight_images = list(weights_to_dwis.keys())
-
-        num_threads = self.inputs.num_threads
-        if num_threads < 1:
-            num_threads = None
-
-        worker_args = [
-            (weight_image, transform_stack, self.inputs.reference_image, runtime.cwd)
-            for weight_image in unique_weight_images
-        ]
-
-        # As in ComposeTransforms: serial below the threshold keeps debugging
-        # simple and avoids pool overhead for the common one-or-two-map case.
-        if num_threads == 1:
-            resampled_unique = [_resample_jacobian_weight(args) for args in worker_args]
-        else:
-            from concurrent.futures import ThreadPoolExecutor
-
-            with ThreadPoolExecutor(max_workers=num_threads) as pool:
-                resampled_unique = list(pool.map(_resample_jacobian_weight, worker_args))
-
-        # The pre-transport guard cannot see post-resampling values -- see
-        # _floor_nonpositive_weights.
-        for resampled_weight_image in resampled_unique:
-            _floor_nonpositive_weights(resampled_weight_image)
-
-        # Link the resampled weight map to resampled dwis
+        native_images = list(self.inputs.jacobian_weight_images)
+        unique_weight_images = list(dict.fromkeys(native_images))
         index_of_weight = {
             weight_image: index for index, weight_image in enumerate(unique_weight_images)
         }
-        dwi_files_to_weights = {}
-        for weight_image, resampled_weight_image in zip(
-            unique_weight_images, resampled_unique, strict=True
-        ):
-            for dwi_file in weights_to_dwis[weight_image]:
-                dwi_files_to_weights[dwi_file] = resampled_weight_image
-
-        # Do the math
-        scaled_dwi_images = []
-        for dwi_file in self.inputs.dwi_files:
-            scaled_dwi_file = fname_presuffix(dwi_file, newpath=runtime.cwd, suffix='_scaled')
-            dwi_img = nb.load(dwi_file)
-            weight_img = nb.load(dwi_files_to_weights[dwi_file])
-            scaled = np.asanyarray(dwi_img.dataobj, dtype=np.float32)
-            weight = np.asanyarray(weight_img.dataobj, dtype=np.float32)
-            if scaled.ndim == 4 and weight.ndim == 3:
-                weight = weight[..., np.newaxis]
-            nb.Nifti1Image(scaled * weight, dwi_img.affine, float32_header(dwi_img)).to_filename(
-                scaled_dwi_file
-            )
-            scaled_dwi_images.append(scaled_dwi_file)
-
-        self._results['scaled_images'] = scaled_dwi_images
-        self._results['resampled_weight_images'] = resampled_unique
-        # The per-volume lookup, as indices into resampled_unique -- the only
+        # The per-volume lookup, as indices into the unique maps -- the only
         # thing that carries the volume-to-map mapping into the BIDS sidecar.
-        self._results['weight_index'] = [
-            index_of_weight[weight_image] for weight_image in self.inputs.jacobian_weight_images
+        weight_index = [index_of_weight[weight_image] for weight_image in native_images]
+        averaging = self.inputs.average_weights and len(unique_weight_images) > 1
+        uses = np.bincount(weight_index)
+        shared = [
+            weight_image
+            for weight_image, count in zip(unique_weight_images, uses, strict=True)
+            if count > 1 or not averaging
         ]
 
-        return runtime
+        worker_args = [
+            (weight_image, transform_stack, self.inputs.reference_image, runtime.cwd)
+            for weight_image in shared
+        ]
+        resampled = dict(
+            zip(
+                shared,
+                _in_order(_resample_jacobian_weight, worker_args, num_threads),
+                strict=True,
+            )
+        )
+
+        # The pre-transport guard cannot see post-resampling values -- see
+        # _floor_nonpositive_weights.
+        for resampled_weight_image in resampled.values():
+            _floor_nonpositive_weights(resampled_weight_image)
+
+        if averaging:
+            self._weight_index = weight_index
+            self._resampled_up_front = list(resampled.values())
+        else:
+            self._results['resampled_weight_images'] = list(resampled.values())
+            self._results['weight_index'] = weight_index
+        return [
+            (resampled[weight_image], None)
+            if weight_image in resampled
+            else (weight_image, transform_stack)
+            for weight_image in native_images
+        ]
+
+    def _averaging_weights(self, results, volume_weights, runtime):
+        """Yield each volume from ``results``, averaging the weight maps as they pass.
+
+        Without ``average_weights``, or when every volume shares one map, the
+        volumes pass through. Otherwise the mean over volumes replaces the maps in
+        ``resampled_weight_images``, as :func:`~qsiprep.utils.jacobian.volume_mean`
+        computes it, and the maps resampled up front are removed.
+        """
+        weight_index = self._weight_index
+        if weight_index is None:
+            for volume, _ in results:
+                yield volume
+            return
+
+        uses = np.bincount(weight_index)
+        running = VolumeMean()
+        first_weight = None
+        averaged = set()
+        for index, (volume, weight) in enumerate(results):
+            if weight_index[index] not in averaged:
+                averaged.add(weight_index[index])
+                if weight is None:
+                    weight = nb.load(volume_weights[index][0])
+                if first_weight is None:
+                    first_weight = weight
+                running.add(weight.dataobj, uses[weight_index[index]])
+            yield volume
+
+        mean, deviation = running.result()
+        mean_file = op.join(runtime.cwd, 'mean_weight.nii.gz')
+        nb.Nifti1Image(mean, first_weight.affine, float32_header(first_weight)).to_filename(
+            mean_file
+        )
+        for weight_image in self._resampled_up_front:
+            os.remove(weight_image)
+        self._results['resampled_weight_images'] = [mean_file]
+        self._results['weight_index'] = [0] * len(weight_index)
+        self._results['weight_volume_deviation'] = deviation
 
 
 class _PEPOLARReportInputSpec(BaseInterfaceInputSpec):

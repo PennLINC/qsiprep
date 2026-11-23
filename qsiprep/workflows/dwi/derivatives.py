@@ -263,6 +263,7 @@ def init_dwi_derivatives_wf(
                 # weights: see StackJacobianWeights below.
                 'jacobian_weights',
                 'jacobian_weight_index',
+                'jacobian_weight_deviation',
                 'jacobian_method',
                 'sdc_warp_to_template',
                 'sdc_refinement_to_template',
@@ -499,6 +500,7 @@ def init_dwi_derivatives_wf(
             (inputnode, stack_jacobian, [
                 ('jacobian_weights', 'weight_images'),
                 ('jacobian_weight_index', 'weight_index'),
+                ('jacobian_weight_deviation', 'volume_deviation'),
                 ('jacobian_method', 'method'),
             ]),
             (stack_jacobian, ds_jacobian, [

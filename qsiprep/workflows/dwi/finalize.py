@@ -27,6 +27,7 @@ from ...interfaces.dsi_studio import DSIStudioBTable
 from ...interfaces.dwi_merge import MergeFinalConfounds, SplitResampledDWIs
 from ...interfaces.gradients import ExtractB0s
 from ...interfaces.gradunwarp import CreateGradientNonlinearityBMatrix
+from ...interfaces.jacobian import ComposeJacobianWeights
 from ...interfaces.mrtrix import DWIBiasCorrect, MRTrixGradientTable
 from ...interfaces.nilearn import Merge
 from ...interfaces.noise_map import NOISE_QUANTITIES, ResampleNoiseMaps
@@ -52,7 +53,7 @@ from ...utils.versions import mrtrix3_version, versioned
 from .derivatives import DENOISER_MAPS, init_dwi_derivatives_wf, written_denoiser_maps
 from .gradwarp import resolve_gradwarp_plan
 from .qc import init_mask_overlap_wf, init_modelfree_qc_wf
-from .resampling import _get_first, init_dwi_trans_wf
+from .resampling import _get_first, _listify, init_dwi_trans_wf
 
 # dwi workflows
 from .util import _create_mem_gb, init_dwi_reference_wf
@@ -153,8 +154,9 @@ def init_dwi_finalize_wf(
     dwi_specs : list of :class:`~qsiprep.utils.spaces.SpaceSpec`
         The requested DWI output spaces (``acpc``, ``anat``, ``dwiref``) and
         resolutions. One ``init_dwi_trans_wf`` and one group of derivatives sinks
-        is built per spec. Every output on a DWI grid carries its ``res-`` entity,
-        even when only one is requested, except ``res-native``.
+        is built per spec; the Jacobian weight maps they resample are built once.
+        Every output on a DWI grid carries its ``res-`` entity, even when only one
+        is requested, except ``res-native``.
     t2w_sdc : bool, optional
         Whether a T2w is available for SDC (honoring --anat-modality and
         --ignore t2w); kept for the reports that name the T2w consumer.
@@ -526,6 +528,40 @@ def init_dwi_finalize_wf(
         [(merge, outputnode, [('out', field)]) for field, merge in merged_outputs.items()]
     )
 
+    # The weight covers gradwarp and SDC only. HMC is excluded by policy and is
+    # coordinate-safe to exclude because it is the outermost transform in the
+    # pull-back (see the design spec); coregistration and the dwiref and
+    # template warps are excluded because modulating by a spatial-normalization
+    # warp is VBM-style volume modulation, wrong for DWI signal.
+    weighting = 'jacobian' not in (config.workflow.ignore or [])
+    if weighting:
+        # The maps are in undistorted b=0 reference space, so one set serves every
+        # output grid. num_threads/n_procs are paired as for scale_dwis: the node
+        # shells out to antsApplyTransforms and CreateJacobianDeterminantImage,
+        # which run single-threaded on nipype's default.
+        compose_jacobian = pe.Node(
+            ComposeJacobianWeights(
+                num_threads=config.nipype.omp_nthreads,
+                pe_axis=pe_axis_from_direction(
+                    unit.dwi_metadata.get('PhaseEncodingDirection', 'j')
+                ),
+            ),
+            name='compose_jacobian',
+            n_procs=config.nipype.omp_nthreads,
+        )
+        workflow.connect([
+            (inputnode, compose_jacobian, [
+                ('dwi_files', 'dwi_files'),
+                ('b0_ref_image', 'b0_ref_image'),
+                ('dwi_mask', 'mask'),
+                (('gradwarp_field', _listify), 'gradwarp_field'),
+                ('fieldwarps', 'fieldwarps'),
+                ('ec_jacobian_images', 'ec_jacobian_images'),
+                ('sdc_scaling_images', 'sdc_scaling_images'),
+            ]),
+            (compose_jacobian, outputnode, [('method', 'jacobian_method')]),
+        ])  # fmt:skip
+
     for index, spec in enumerate(dwi_specs):
         label = spec.resolution.label
         suffix = spec_node_suffix(spec, dwi_specs)
@@ -546,7 +582,6 @@ def init_dwi_finalize_wf(
             use_compression=False,
             concatenate=True,
             doing_topup=doing_topup,
-            pe_axis=pe_axis_from_direction(unit.dwi_metadata.get('PhaseEncodingDirection', 'j')),
             sdc_warp_source=warp_source,
             sdc_pe_dir=unit.pe_dir,
             sdc_readout_time=readout_time,
@@ -567,15 +602,11 @@ def init_dwi_finalize_wf(
                 ('b0_indices', 'inputnode.b0_indices'),
                 ('bval_files', 'inputnode.bval_files'),
                 ('bvec_files', 'inputnode.bvec_files'),
-                ('b0_ref_image', 'inputnode.b0_ref_image'),
                 ('cnr_map', 'inputnode.cnr_map'),
                 ('t1_mask', 'inputnode.t1_mask'),
-                ('dwi_mask', 'inputnode.dwi_mask'),
                 ('hmc_xforms', 'inputnode.hmc_xforms'),
                 ('fieldwarps', 'inputnode.fieldwarps'),
                 ('gradwarp_field', 'inputnode.gradwarp_field'),
-                ('ec_jacobian_images', 'inputnode.ec_jacobian_images'),
-                ('sdc_scaling_images', 'inputnode.sdc_scaling_images'),
                 ('dwi_files', 'inputnode.dwi_files'),
                 (('dwi_sampling_grids', _select_grid, index), 'inputnode.output_grid'),
                 ('b0_to_dwiref_transforms',
@@ -595,6 +626,13 @@ def init_dwi_finalize_wf(
                 ('outputnode.resampled_qc', 'inputnode.series_qc_t1'),
             ]),
         ])  # fmt:skip
+
+        if weighting:
+            workflow.connect([
+                (compose_jacobian, dwi_trans_wf, [
+                    ('jacobian_weight_images', 'inputnode.jacobian_weight_images'),
+                ]),
+            ])  # fmt:skip
 
         if spec.space == ANAT:
             # The full ACPC chain, then ACPC to the anatomical frame. The rigid's
@@ -665,12 +703,14 @@ def init_dwi_finalize_wf(
                 # Only the noise map takes the signal's intensity factors
                 continue
 
-            if 'jacobian' not in (config.workflow.ignore or []):
+            if weighting:
                 workflow.connect([
+                    (compose_jacobian, resample_map, [
+                        ('jacobian_weight_images', 'native_weight_images'),
+                        ('method', 'weight_method'),
+                    ]),
                     (dwi_trans_wf, resample_map, [
-                        ('outputnode.jacobian_weights', 'weight_images'),
-                        ('outputnode.jacobian_weight_index', 'weight_index'),
-                        ('outputnode.jacobian_method', 'weight_method'),
+                        ('outputnode.jacobian_weight_transforms', 'weight_transforms'),
                     ]),
                 ])  # fmt:skip
 
@@ -699,12 +739,11 @@ def init_dwi_finalize_wf(
                         ('outputnode.fieldmap_hz_resampled', 'fieldmap_hz_t1'),
                     ]),
                 ])  # fmt:skip
-            if 'jacobian' not in (config.workflow.ignore or []):
+            if weighting:
                 workflow.connect([
                     (dwi_trans_wf, outputnode, [
                         ('outputnode.jacobian_weights', 'jacobian_weights'),
                         ('outputnode.jacobian_weight_index', 'jacobian_weight_index'),
-                        ('outputnode.jacobian_method', 'jacobian_method'),
                     ]),
                 ])  # fmt:skip
             for field, _, _ in sdc_fields:
@@ -854,12 +893,16 @@ def init_dwi_finalize_wf(
                 ]),
             ])  # fmt:skip
 
-        if 'jacobian' not in (config.workflow.ignore or []):
+        if weighting:
             workflow.connect([
+                (compose_jacobian, dwi_derivatives_wf, [
+                    ('method', 'inputnode.jacobian_method'),
+                ]),
                 (dwi_trans_wf, dwi_derivatives_wf, [
                     ('outputnode.jacobian_weights', 'inputnode.jacobian_weights'),
                     ('outputnode.jacobian_weight_index', 'inputnode.jacobian_weight_index'),
-                    ('outputnode.jacobian_method', 'inputnode.jacobian_method'),
+                    ('outputnode.jacobian_weight_deviation',
+                     'inputnode.jacobian_weight_deviation'),
                 ]),
             ])  # fmt:skip
 
@@ -1109,11 +1152,12 @@ def init_dwi_finalize_wf(
             ])  # fmt:skip
         if 'noise_map' in resample_maps:
             series_qc.inputs.noise_quantity = NOISE_QUANTITIES[config.workflow.denoise_method]
-        if 'jacobian' not in (config.workflow.ignore or []):
+        if weighting:
             workflow.connect([
                 (dwi_trans_wf, series_qc, [
                     ('outputnode.jacobian_weights', 'jacobian_weights'),
                     ('outputnode.jacobian_weight_index', 'jacobian_weight_index'),
+                    ('outputnode.jacobian_weight_deviation', 'jacobian_weight_deviation'),
                 ]),
             ])  # fmt:skip
 

@@ -170,6 +170,21 @@ def test_series_qc_writes_the_jacobian_columns(tmp_path, monkeypatch):
     assert row['jacobian_weight_volume_deviation'] == 0.0
 
 
+def test_series_qc_reports_the_deviation_of_an_already_averaged_map(tmp_path, monkeypatch):
+    """Test that a mean taken upstream keeps its deviation column."""
+    row = _series_qc_row(
+        tmp_path,
+        monkeypatch,
+        t1_mask_file=_write_image(tmp_path / 'mask.nii.gz', np.ones(SHAPE)),
+        jacobian_weights=[_write_image(tmp_path / 'w.nii.gz', np.full(SHAPE, 0.9))],
+        jacobian_weight_index=[0, 0, 0, 0],
+        jacobian_weight_deviation=0.333333,
+    )
+
+    assert row['jacobian_weight_median'] == pytest.approx(0.9)
+    assert row['jacobian_weight_volume_deviation'] == pytest.approx(0.333333)
+
+
 def test_series_qc_writes_no_jacobian_columns_without_weights(tmp_path, monkeypatch):
     """Test that a run that applied no weights gets no columns, not a map of ones."""
     row = _series_qc_row(
@@ -190,6 +205,7 @@ def test_finalize_passes_the_jacobian_weights_to_series_qc(tmp_path, monkeypatch
     expected = {
         ('outputnode.jacobian_weights', 'jacobian_weights'),
         ('outputnode.jacobian_weight_index', 'jacobian_weight_index'),
+        ('outputnode.jacobian_weight_deviation', 'jacobian_weight_deviation'),
     }
     assert (expected <= connections) == (not ignore)
     assert not ignore or not (expected & connections)

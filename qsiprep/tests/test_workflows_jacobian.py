@@ -1,7 +1,8 @@
-"""Construction tests for Jacobian weighting inside the resampling workflow.
+"""Construction tests for Jacobian weighting in the finalize and resampling workflows.
 
-Asserts the graph, not the numbers: that the weighting node exists, that it is
-fed from the right sources, and that ``--ignore jacobian`` removes it.
+Asserts the graph, not the numbers: that the node composing the weight maps
+exists once in the finalize workflow, that it is fed from the right sources,
+that it feeds each resampling workflow, and that ``--ignore jacobian`` removes it.
 The numeric correctness of the weights lives in
 ``test_interfaces_jacobian.py`` and ``test_jacobian_conservation.py``.
 """
@@ -129,18 +130,55 @@ def _source_name(source):
     return source[0] if isinstance(source, tuple) else source
 
 
-def test_compose_jacobian_node_exists():
-    assert _trans_wf().get_node('compose_jacobian') is not None
+def _has_edge(workflow, src, dst, pair):
+    return any(s == src and d == dst and pair in connect for s, d, connect in _edges(workflow))
 
 
-def test_compose_jacobian_feeds_the_weighting_node():
-    edges = _edges(_trans_wf())
-    assert any(
-        src == 'compose_jacobian'
-        and dst == 'scale_dwis'
-        and ('jacobian_weight_images', 'jacobian_weight_images') in connect
-        for src, dst, connect in edges
+def test_compose_jacobian_node_exists(tmp_path):
+    """Test that the finalize workflow builds the weight maps, not the resampling one."""
+    wf = _finalize_wf(tmp_path)
+    assert wf.get_node('compose_jacobian') is not None
+    assert wf.get_node('dwi_trans_wf').get_node('compose_jacobian') is None
+
+
+def test_compose_jacobian_feeds_the_weighting_node(tmp_path):
+    assert _has_edge(
+        _finalize_wf(tmp_path),
+        'compose_jacobian',
+        'dwi_trans_wf',
+        ('jacobian_weight_images', 'inputnode.jacobian_weight_images'),
     )
+    assert _has_edge(
+        _trans_wf(),
+        'inputnode',
+        'scale_dwis',
+        ('jacobian_weight_images', 'jacobian_weight_images'),
+    )
+
+
+def test_resolutions_share_one_set_of_weight_maps(tmp_path):
+    """Test that the weight maps are built once for every output resolution.
+
+    They are in undistorted b=0 reference space, so no output grid changes them.
+    """
+    from qsiprep.interfaces.jacobian import ComposeJacobianWeights
+
+    config.workflow.output_spaces = ['acpc:res-1p5mm', 'acpc:res-2mm']
+    wf = _finalize_wf(tmp_path)
+
+    composing = [
+        node.fullname
+        for node in wf._get_all_nodes()
+        if isinstance(node.interface, ComposeJacobianWeights)
+    ]
+    assert composing == ['dwi_finalize_wf.compose_jacobian']
+    for label in ('1p5mm', '2mm'):
+        assert _has_edge(
+            wf,
+            'compose_jacobian',
+            f'dwi_trans_wf_res{label}',
+            ('jacobian_weight_images', 'inputnode.jacobian_weight_images'),
+        )
 
 
 def test_scale_dwis_outputs_reach_outputnode():
@@ -159,11 +197,62 @@ def test_scale_dwis_outputs_reach_outputnode():
     def _has(src, dst, pair):
         return any(s == src and d == dst and pair in connect for s, d, connect in edges)
 
-    assert _has(
-        'compose_jacobian', 'scale_dwis', ('jacobian_weight_images', 'jacobian_weight_images')
-    )
+    assert _has('inputnode', 'scale_dwis', ('jacobian_weight_images', 'jacobian_weight_images'))
     assert _has('scale_dwis', 'outputnode', ('resampled_weight_images', 'jacobian_weights'))
     assert _has('scale_dwis', 'outputnode', ('weight_index', 'jacobian_weight_index'))
+
+
+@pytest.mark.parametrize('write_4d', [False, True])
+def test_only_the_mean_weight_map_is_kept_unless_the_4d_map_is_written(monkeypatch, write_4d):
+    """Test that scale_dwis averages its weight maps, and what the noise map needs instead.
+
+    The noise map takes the weight of one volume per series, so the workflow
+    gives out the transforms to resample an unresampled map with.
+    """
+    monkeypatch.setattr(config.workflow, 'write_jacobian_4d', write_4d)
+    wf = _trans_wf()
+    assert wf.get_node('scale_dwis').inputs.average_weights is (not write_4d)
+
+    edges = _edges(wf)
+
+    def _has(src, dst, pair):
+        return any(s == src and d == dst and pair in connect for s, d, connect in edges)
+
+    assert _has(
+        'scale_dwis', 'outputnode', ('weight_volume_deviation', 'jacobian_weight_deviation')
+    )
+    assert _has('scale_dwis', 'outputnode', ('weight_transforms', 'jacobian_weight_transforms'))
+
+
+@pytest.mark.parametrize(
+    ('num_resamplings', 'threads'),
+    [(1, 16), (2, 8), (3, 5), (8, 4)],
+)
+def test_resampling_nodes_share_the_processes_of_the_run(monkeypatch, num_resamplings, threads):
+    """Test that one resampling takes every process and several split them.
+
+    Each node gets ``nprocs`` divided by the number of resampling nodes, and no
+    fewer than ``omp_nthreads``; ``n_procs`` follows so the scheduler knows.
+    """
+    from nipype.pipeline import engine as pe
+
+    from qsiprep.interfaces.fmap import ApplyJacobianWeights
+    from qsiprep.workflows.dwi.resampling import spread_resampling_threads
+
+    monkeypatch.setattr(config.nipype, 'nprocs', 16)
+    config.nipype.omp_nthreads = 4
+    parent = pe.Workflow(name='parent')
+    for index in range(num_resamplings):
+        child = pe.Workflow(name=f'trans{index}')
+        child.add_nodes([pe.Node(ApplyJacobianWeights(num_threads=4), name='scale_dwis')])
+        parent.add_nodes([child])
+
+    spread_resampling_threads(parent)
+
+    nodes = [node for node in parent._get_all_nodes() if node.name == 'scale_dwis']
+    assert len(nodes) == num_resamplings
+    assert {node.inputs.num_threads for node in nodes} == {threads}
+    assert {node.n_procs for node in nodes} == {threads}
 
 
 def test_scale_dwis_num_threads_is_set_from_omp_nthreads():
@@ -207,7 +296,7 @@ def test_scale_dwis_n_procs_matches_num_threads():
 def test_compose_transforms_threads_from_omp_nthreads():
     """Test that compose_transforms runs its per-volume calls in parallel.
 
-    ``ComposeTransforms`` writes one composite warp per volume with its own
+    ``ComposeTransforms`` composes each volume's affines with its own
     ``antsApplyTransforms`` call. Left at the interface's ``num_threads``
     default of 1, those calls run one after another (about 4.5 h for a
     731-volume DSI series), so the workflow sets ``num_threads`` from
@@ -220,19 +309,51 @@ def test_compose_transforms_threads_from_omp_nthreads():
     assert compose_transforms.n_procs == 4
 
 
-def test_compose_jacobian_threads_from_omp_nthreads():
+def test_dwis_are_resampled_through_their_transform_chains():
+    """Test that scale_dwis and the outputnode get each volume's chain."""
+    edges = {(src, dst): connect for src, dst, connect in _edges(_trans_wf())}
+    chain = ('transform_lists', 'volume_transforms')
+    assert chain in edges[('compose_transforms', 'scale_dwis')]
+    assert chain in edges[('compose_transforms', 'outputnode')]
+
+
+def test_one_node_resamples_weights_and_stacks_the_series():
+    """Test that no node holds a per-volume copy of the resampled series.
+
+    ``scale_dwis`` takes the unresampled volumes and writes the 4D series; a
+    separate resampling MapNode and merge node each kept their own copy.
+    """
+    wf = _trans_wf()
+    assert wf.get_node('dwi_transform') is None
+    assert wf.get_node('merge') is None
+    assert wf.get_node('scale_dwis').inputs.merge is True
+
+    edges = {(src, dst): connect for src, dst, connect in _edges(wf)}
+    sources = {_source_name(source) for source, _ in edges[('inputnode', 'scale_dwis')]}
+    assert {'dwi_files', 'name_source', 'output_grid'} <= sources
+    assert ('interpolation_method', 'interpolation') in edges[('get_interpolation', 'scale_dwis')]
+    assert ('out_file', 'dwi_resampled') in edges[('scale_dwis', 'outputnode')]
+    assert ('out_file', 'inputnode.dwi_file') in [
+        pair
+        for (src, dst), connect in edges.items()
+        if src == 'scale_dwis' and dst.startswith('calculate_qc')
+        for pair in connect
+    ]
+
+
+def test_compose_jacobian_threads_from_omp_nthreads(tmp_path):
     """Test that compose_jacobian gets omp_nthreads and reserves the matching slots.
 
     The interface spends them building per-volume weight maps concurrently.
     """
     config.nipype.omp_nthreads = 4
-    compose_jacobian = _trans_wf().get_node('compose_jacobian')
+    compose_jacobian = _finalize_wf(tmp_path).get_node('compose_jacobian')
     assert compose_jacobian.inputs.num_threads == 4
     assert compose_jacobian.n_procs == 4
 
 
-def test_compose_jacobian_consumes_gradwarp_and_fieldwarps():
-    edges = _edges(_trans_wf())
+def test_compose_jacobian_consumes_gradwarp_and_fieldwarps(tmp_path):
+    edges = _edges(_finalize_wf(tmp_path))
     forwarded = {
         pair
         for src, dst, connect in edges
@@ -248,9 +369,9 @@ def test_compose_jacobian_consumes_gradwarp_and_fieldwarps():
     assert 'ec_jacobian_images' in sources
 
 
-def test_ignore_jacobian_removes_the_node():
+def test_ignore_jacobian_removes_the_node(tmp_path):
     config.workflow.ignore = ['jacobian']
-    assert _trans_wf().get_node('compose_jacobian') is None
+    assert _finalize_wf(tmp_path).get_node('compose_jacobian') is None
 
 
 def test_ignore_jacobian_leaves_weights_unconnected():
@@ -262,23 +383,25 @@ def test_ignore_jacobian_leaves_weights_unconnected():
     )
 
 
-def test_hmc_xforms_never_reach_the_jacobian_node():
+def test_hmc_xforms_never_reach_the_jacobian_node(tmp_path):
     """Test that HMC transforms never reach the Jacobian node.
 
     HMC is excluded by policy; a wire here would silently modulate by it.
     """
-    edges = _edges(_trans_wf())
+    edges = _edges(_finalize_wf(tmp_path))
     forwarded = {
         pair for src, dst, connect in edges if dst == 'compose_jacobian' for pair in connect
     }
+    assert forwarded
     assert not any('hmc' in _source_name(source) for source, _ in forwarded)
 
 
-def test_coreg_and_template_transforms_never_reach_the_jacobian_node():
-    edges = _edges(_trans_wf())
+def test_coreg_and_template_transforms_never_reach_the_jacobian_node(tmp_path):
+    edges = _edges(_finalize_wf(tmp_path))
     forwarded = {
         pair for src, dst, connect in edges if dst == 'compose_jacobian' for pair in connect
     }
+    assert forwarded
     excluded = ('itk_b0_to_t1', 'dwiref', 't1_2_mni')
     for source, _ in forwarded:
         assert not any(name in _source_name(source) for name in excluded), source
@@ -389,19 +512,18 @@ def test_sdc_unwarp_wf_has_no_dead_jacobian_node():
     assert 'out_jacobian' not in workflow.get_node('outputnode').outputs.copyable_trait_names()
 
 
-def test_sdc_scaling_images_reach_compose_jacobian():
+def test_sdc_scaling_images_reach_compose_jacobian(tmp_path):
     """Test that DRBUDDI's LSR ratio images reach ComposeJacobianWeights.
 
     DRBUDDI's LSR ratio images (TORTOISE's default signal redistribution
     for reverse phase-encoded data) feed ComposeJacobianWeights, where they
     replace the analytic determinant.
     """
-    wf = _trans_wf()
-    edges = {(src, dst): dict(connect) for src, dst, connect in _edges(wf)}
-    assert ('sdc_scaling_images', 'sdc_scaling_images') in edges[
-        ('inputnode', 'compose_jacobian')
-    ].items()
-    assert ('method', 'jacobian_method') in edges[('compose_jacobian', 'outputnode')].items()
+    wf = _finalize_wf(tmp_path)
+    assert _has_edge(
+        wf, 'inputnode', 'compose_jacobian', ('sdc_scaling_images', 'sdc_scaling_images')
+    )
+    assert _has_edge(wf, 'compose_jacobian', 'outputnode', ('method', 'jacobian_method'))
 
 
 def test_drbuddi_aggregate_writes_lsr_scaling_output():
@@ -569,6 +691,7 @@ def test_stack_jacobian_receives_weights_from_inputnode(tmp_path):
     assert set(edges[('inputnode', 'stack_jacobian')]) == {
         ('jacobian_weights', 'weight_images'),
         ('jacobian_weight_index', 'weight_index'),
+        ('jacobian_weight_deviation', 'volume_deviation'),
         ('jacobian_method', 'method'),
     }
 
@@ -690,8 +813,8 @@ def test_zero_distortion_corrections_produces_no_weights_and_does_not_raise(tmp_
     (``test_interfaces_jacobian.py``'s
     ``test_compose_weights_with_no_fields_is_undefined`` pins that half).
     Feeding that Undefined output straight into ``ApplyJacobianWeights`` --
-    exactly how ``compose_jacobian -> scale_dwis`` are wired in
-    ``resampling.py`` -- must pass the DWIs through unmodified rather than
+    as ``compose_jacobian`` reaches each ``scale_dwis`` from
+    ``finalize.py`` -- must pass the DWIs through unmodified rather than
     raising, with no ANTs binary required since nothing is ever resampled.
     """
     import nibabel as nb

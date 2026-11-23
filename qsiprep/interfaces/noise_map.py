@@ -251,16 +251,20 @@ class _ResampleNoiseMapsInputSpec(BaseInterfaceInputSpec):
         desc="the output's confounds: each volume's series, b-value and b=0 harmonization",
     )
     b0_threshold = traits.Float(100, usedefault=True)
-    volume_transforms = InputMultiObject(
-        File(exists=True),
+    volume_transforms = traits.List(
+        traits.List(File(exists=True)),
         mandatory=True,
-        desc='the composed transform of each output volume to the output grid',
+        desc='the ANTs-ordered transforms of each output volume to the output grid',
     )
     reference_image = File(exists=True, mandatory=True, desc='the output grid')
-    weight_images = InputMultiObject(
-        File(exists=True), desc='the intensity weight maps, on the output grid'
+    native_weight_images = InputMultiObject(
+        File(exists=True),
+        desc="each output volume's intensity weight map, in undistorted b=0 reference space",
     )
-    weight_index = traits.List(traits.Int(), desc='for each volume, its weight map')
+    weight_transforms = traits.List(
+        traits.Either(File(exists=True), traits.Enum('identity')),
+        desc='the ANTs-ordered transforms that carry a weight map to the output grid',
+    )
     weight_method = traits.Str(desc="'Jacobian' or 'LSR'")
     fieldmap_hz = File(
         exists=True,
@@ -291,6 +295,8 @@ class ResampleNoiseMaps(SimpleInterface):
     map is also scaled as that volume's signal was: b=0 harmonization, the channel
     scaling that makes every map a per-channel sigma, the Jacobian or LSR weight,
     eddy's own modulation of the field it applied, and division by the bias field.
+    That volume's weight map is resampled here, with the transforms the signal's
+    weights took.
     Rank and rank density maps are not intensities, so they are only resampled.
     """
 
@@ -319,8 +325,12 @@ class ResampleNoiseMaps(SimpleInterface):
             )
         scaled = inputs.kind == 'noise'
         weights = None
-        if scaled and isdefined(inputs.weight_images) and inputs.weight_images:
-            weights = [inputs.weight_images[i] for i in inputs.weight_index]
+        if scaled and isdefined(inputs.native_weight_images) and inputs.native_weight_images:
+            weights = list(inputs.native_weight_images)
+            if len(weights) != len(noise_map_index):
+                raise ValueError(
+                    f'{len(weights)} weight maps for {len(noise_map_index)} output volumes'
+                )
 
         bias = None
         if scaled and isdefined(inputs.bias_field):
@@ -338,7 +348,7 @@ class ResampleNoiseMaps(SimpleInterface):
             resampled = apply_transforms(
                 native,
                 inputs.reference_image,
-                [inputs.volume_transforms[reference]],
+                inputs.volume_transforms[reference],
                 os.path.join(runtime.cwd, f'{inputs.kind}_series{series_num:02d}.nii.gz'),
                 num_threads=inputs.num_threads,
             )
@@ -349,7 +359,7 @@ class ResampleNoiseMaps(SimpleInterface):
 
             weight = None
             if weights is not None:
-                weight = np.asanyarray(nb.load(weights[reference]).dataobj)
+                weight = self._weight_on_grid(runtime, series_num, weights[reference])
             volumes.append(
                 scale_noise_map(
                     resampled,
@@ -370,6 +380,23 @@ class ResampleNoiseMaps(SimpleInterface):
             noise_map_index, reference_volumes, harmonization_scales, weights, bias
         )
         return runtime
+
+    def _weight_on_grid(self, runtime, series_num, native_weight):
+        """Carry one volume's weight map to the output grid, as the signal's was."""
+        from .fmap import _floor_nonpositive_weights, _resample_jacobian_weight
+
+        series_dir = os.path.join(runtime.cwd, f'weight_series{series_num:02d}')
+        os.makedirs(series_dir, exist_ok=True)
+        resampled = _resample_jacobian_weight(
+            (
+                native_weight,
+                list(self.inputs.weight_transforms),
+                self.inputs.reference_image,
+                series_dir,
+            )
+        )
+        _floor_nonpositive_weights(resampled)
+        return np.asanyarray(nb.load(resampled).dataobj)
 
     def _fill_native(self, runtime, series_num, native):
         """Fill the native map's non-finite voxels on its own grid, before any resampling."""
