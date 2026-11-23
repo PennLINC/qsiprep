@@ -1,6 +1,7 @@
 """Tests for the qsiprep.interfaces.dsi_studio module."""
 
 import os
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -11,8 +12,9 @@ import qsiprep.interfaces.dsi_studio as dsi_studio_mod
 from qsiprep.interfaces.dsi_studio import (
     DSIStudioCreateSrc,
     DSIStudioGQIReconstruction,
-    DSIStudioSrcQC,
+    DSIStudioQC,
     _get_dsi_studio_environment,
+    _run_qc_action,
 )
 
 APPTAINER_PATH = '/.singularity.d/libs'
@@ -68,7 +70,7 @@ def test_dsi_studio_qc_sanitizes_environment(monkeypatch, tmp_path):
     monkeypatch.setenv('LD_LIBRARY_PATH', os.pathsep.join(paths))
     src_file = tmp_path / 'input.src.gz'
     src_file.touch()
-    # A real qc.txt and a clean exit: the interface now rejects both a bad
+    # A real qc.txt and a clean exit: the QC action rejects both a bad
     # exit status and an empty output, and this test is about the environment.
     (tmp_path / 'qc.txt').write_text('header\ninput\t32 39 34\t5 5 5\n')
     process = Mock()
@@ -77,8 +79,7 @@ def test_dsi_studio_qc_sanitizes_environment(monkeypatch, tmp_path):
     popen = Mock(return_value=process)
     monkeypatch.setattr(dsi_studio_mod, 'Popen', popen)
 
-    interface = DSIStudioSrcQC(src_file=str(src_file))
-    interface._run_interface(SimpleNamespace(cwd=str(tmp_path)))
+    _run_qc_action(str(src_file), str(tmp_path), str(tmp_path / 'src_qc.txt'))
 
     environment = popen.call_args.kwargs['env']
     assert environment['LD_LIBRARY_PATH'] == '/opt/freesurfer/lib'
@@ -116,7 +117,7 @@ _SRC_ROW = (
 
 
 def _run_qc(tmp_path, monkeypatch, returncode, qc_contents):
-    """Run DSIStudioSrcQC against a stubbed dsi_studio; return its results."""
+    """Run the QC action against a stubbed dsi_studio; return its table and warning."""
     src_file = tmp_path / 'input.src.gz'
     src_file.touch()
     if qc_contents is not None:
@@ -127,9 +128,11 @@ def _run_qc(tmp_path, monkeypatch, returncode, qc_contents):
     process.returncode = returncode
     monkeypatch.setattr(dsi_studio_mod, 'Popen', Mock(return_value=process))
 
-    interface = DSIStudioSrcQC(src_file=str(src_file))
-    interface._run_interface(SimpleNamespace(cwd=str(tmp_path)))
-    return interface._results
+    results = {'qc_txt': str(tmp_path / 'src_qc.txt')}
+    problem = _run_qc_action(str(src_file), str(tmp_path), results['qc_txt'])
+    if problem is not None:
+        results['warning'] = problem
+    return results
 
 
 def test_qc_warns_on_a_segfault_and_names_the_signal(tmp_path, monkeypatch, caplog):
@@ -159,7 +162,7 @@ def test_qc_warns_on_an_empty_output_despite_success(tmp_path, monkeypatch):
 def test_qc_creates_an_empty_file_when_none_was_written(tmp_path, monkeypatch):
     """Test that QC creates an empty file when none was written.
 
-    qc_txt is declared exists=True, so a missing file would fail the node.
+    The QC tables are declared exists=True, so a missing file would fail the node.
     """
     results = _run_qc(tmp_path, monkeypatch, 0, None)
 
@@ -173,6 +176,54 @@ def test_qc_is_silent_on_a_real_measurement(tmp_path, monkeypatch, caplog):
 
     assert 'warning' not in results
     assert not caplog.records
+
+
+def test_qc_keeps_both_tables_and_removes_the_src_and_the_fit(tmp_path, monkeypatch):
+    """Test that the src file and the GQI fit are gone once their QC tables are written."""
+    dwi_file = tmp_path / 'dwi.nii.gz'
+    bval_file = tmp_path / 'dwi.bval'
+    bvec_file = tmp_path / 'dwi.bvec'
+    for path in (dwi_file, bval_file, bvec_file):
+        path.touch()
+    work = tmp_path / 'work'
+    work.mkdir()
+    src_file = work / 'dwi.src.gz'
+    fib_file = work / 'dwi.src.gz.gqi.fib.gz'
+
+    def _made(path, output):
+        def run(self, cwd=None):
+            path.write_text('large')
+            return SimpleNamespace(outputs=SimpleNamespace(**{output: str(path)}))
+
+        return run
+
+    monkeypatch.setattr(DSIStudioCreateSrc, 'run', _made(src_file, 'output_src'))
+    monkeypatch.setattr(DSIStudioGQIReconstruction, 'run', _made(fib_file, 'output_fib'))
+
+    def popen(cmd, cwd, **kwargs):
+        # DSI Studio writes qc.txt whichever file it is given
+        kind = 'fib' if cmd[-1].endswith('.fib.gz') else 'src'
+        (Path(cwd) / 'qc.txt').write_text(f'header\n{kind}\t0.42\n')
+        process = Mock()
+        process.communicate.return_value = (b'', b'')
+        process.returncode = 0
+        return process
+
+    monkeypatch.setattr(dsi_studio_mod, 'Popen', popen)
+
+    interface = DSIStudioQC(
+        dwi_file=str(dwi_file), bval_file=str(bval_file), bvec_file=str(bvec_file)
+    )
+    interface._run_interface(SimpleNamespace(cwd=str(work)))
+
+    results = interface._results
+    assert Path(results['src_qc']).read_text() == 'header\nsrc\t0.42\n'
+    assert Path(results['fib_qc']).read_text() == 'header\nfib\t0.42\n'
+    assert 'src_qc_warning' not in results
+    assert 'fib_qc_warning' not in results
+    assert not src_file.exists()
+    assert not fib_file.exists()
+    assert sorted(path.name for path in work.iterdir()) == ['fib_qc.txt', 'src_qc.txt']
 
 
 def test_load_src_qc_file_parses_a_real_row(tmp_path):
@@ -254,7 +305,7 @@ def test_merge_qc_has_an_empty_warning_column_when_qc_succeeds(tmp_path):
 def test_merge_qc_passes_the_upstream_reason_through(tmp_path):
     """Test that merging QC passes the upstream reason through.
 
-    The reason DSIStudioSrcQC gave is what reaches the report.
+    The reason DSIStudioQC gave is what reaches the report.
     """
     table = _merge(
         tmp_path,

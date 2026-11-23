@@ -17,7 +17,7 @@ from nipype.interfaces.base import (
     isdefined,
     traits,
 )
-from nipype.utils.filemanip import fname_presuffix, split_filename
+from nipype.utils.filemanip import split_filename
 
 from .. import config
 
@@ -141,13 +141,6 @@ class DSIStudioCreateSrc(DSIStudioCommandLine):
         return outputs
 
 
-class _DSIStudioQCOutputSpec(TraitedSpec):
-    qc_txt = File(exists=True, desc='Text file with QC measures')
-    warning = traits.Str(
-        desc='Why DSI Studio produced no QC measurements. Undefined when it succeeded.'
-    )
-
-
 def _describe_exit(returncode):
     """Render a subprocess status, naming the signal when there was one."""
     if returncode is None:
@@ -189,63 +182,41 @@ def _qc_output_problem(returncode, qc_txt):
     return None
 
 
-class DSIStudioQC(SimpleInterface):
-    output_spec = _DSIStudioQCOutputSpec
+def _run_qc_action(source_file, cwd, qc_txt):
+    """Run DSI Studio's QC on one src or fib file and move its table to ``qc_txt``.
 
-    def _run_interface(self, runtime):
-        # DSI Studio (0.12.2) action=qc has two modes, depending on whether the
-        # input is a file (src.gz|nii.gz)|(fib.gz) or a directory. For
-        # directories, the action will be run on a number of detected files
-        # (which *cannot* be symbolic links for some reason).
-        src_file = fname_presuffix(self.inputs.src_file, newpath=runtime.cwd)
-        cmd = ['dsi_studio', '--action=qc', '--source=' + src_file]
-        proc = Popen(
-            cmd,
-            cwd=runtime.cwd,
-            env=_get_dsi_studio_environment(),
-            stdout=PIPE,
-            stderr=PIPE,
+    Returns why there are no measurements, or None. ``qc_txt`` exists either
+    way: an empty file reads as "no measurements" downstream.
+    """
+    cmd = ['dsi_studio', '--action=qc', '--source=' + source_file]
+    proc = Popen(
+        cmd,
+        cwd=cwd,
+        env=_get_dsi_studio_environment(),
+        stdout=PIPE,
+        stderr=PIPE,
+    )
+    out, err = proc.communicate()
+    if out:
+        LOGGER.info(out.decode())
+    if err:
+        LOGGER.critical(err.decode())
+
+    # DSI Studio names the table qc.txt for src and fib files alike
+    written = op.join(cwd, 'qc.txt')
+    problem = _qc_output_problem(proc.returncode, written)
+    if problem is not None:
+        LOGGER.warning(
+            'No DSI Studio QC measurements for %s; QC values will be n/a. %s Command: %s',
+            source_file,
+            problem,
+            ' '.join(cmd),
         )
-        out, err = proc.communicate()
-        if out:
-            LOGGER.info(out.decode())
-        if err:
-            LOGGER.critical(err.decode())
-
-        qc_txt = op.join(runtime.cwd, 'qc.txt')
-        problem = _qc_output_problem(proc.returncode, qc_txt)
-        if problem is not None:
-            LOGGER.warning(
-                'No DSI Studio QC measurements for %s; QC values will be n/a. %s Command: %s',
-                src_file,
-                problem,
-                ' '.join(cmd),
-            )
-            self._results['warning'] = problem
-            if not op.exists(qc_txt):
-                # qc_txt is declared exists=True. An empty file reads as "no
-                # measurements" downstream, which is what this is.
-                open(qc_txt, 'w').close()
-        self._results['qc_txt'] = qc_txt
-        return runtime
-
-
-class _DSIStudioSrcQCInputSpec(DSIStudioCommandLineInputSpec):
-    src_file = File(exists=True, copyfile=False, argstr='%s', desc='DSI Studio src[.gz] file')
-
-
-class DSIStudioSrcQC(DSIStudioQC):
-    input_spec = _DSIStudioSrcQCInputSpec
-    ext = '.src.gz'
-
-
-class _DSIStudioFibQCInputSpec(DSIStudioCommandLineInputSpec):
-    src_file = File(exists=True, copyfile=False, argstr='%s', desc='DSI Studio fib[.gz] file')
-
-
-class DSIStudioFibQC(DSIStudioQC):
-    input_spec = _DSIStudioFibQCInputSpec
-    ext = '.fib.gz'
+    if op.exists(written):
+        os.replace(written, qc_txt)
+    else:
+        open(qc_txt, 'w').close()
+    return problem
 
 
 # Step 2 reonstruct ODFs: This is needed still in preprocessing because it's used for QC
@@ -338,11 +309,81 @@ class DSIStudioGQIReconstruction(DSIStudioCommandLine):
         return outputs
 
 
+class _DSIStudioQCInputSpec(BaseInterfaceInputSpec):
+    dwi_file = File(exists=True, mandatory=True, desc='a single 4D DWI series')
+    bval_file = File(exists=True, mandatory=True, desc='b-values of dwi_file')
+    bvec_file = File(exists=True, mandatory=True, desc='b-vectors of dwi_file')
+    bvec_convention = traits.Enum(
+        ('DIPY', 'FSL'),
+        usedefault=True,
+        desc='Convention used for bvecs. FSL assumes LAS+ no matter image orientation',
+    )
+    check_btable = traits.Enum(
+        (0, 1),
+        usedefault=True,
+        desc='Check if btable matches nifti orientation (not foolproof)',
+    )
+    num_threads = traits.Int(1, usedefault=True, nohash=True, desc='threads for the GQI fit')
+
+
+class _DSIStudioQCOutputSpec(TraitedSpec):
+    src_qc = File(exists=True, desc='QC measures of the src file')
+    fib_qc = File(exists=True, desc='QC measures of the GQI fit')
+    src_qc_warning = traits.Str(
+        desc='Why DSI Studio produced no src QC measurements. Undefined when it succeeded.'
+    )
+    fib_qc_warning = traits.Str(
+        desc='Why DSI Studio produced no fib QC measurements. Undefined when it succeeded.'
+    )
+
+
+class DSIStudioQC(SimpleInterface):
+    """Run DSI Studio's src and fib QC on a DWI series and keep only the measurements.
+
+    The src file and the GQI fit are made here and removed once their QC tables
+    are written. Nothing else reads them, and the fit with its ODFs is larger
+    than the series it was made from.
+    """
+
+    input_spec = _DSIStudioQCInputSpec
+    output_spec = _DSIStudioQCOutputSpec
+
+    def _run_interface(self, runtime):
+        create_src = DSIStudioCreateSrc(
+            input_nifti_file=self.inputs.dwi_file,
+            input_bvals_file=self.inputs.bval_file,
+            input_bvecs_file=self.inputs.bvec_file,
+            bvec_convention=self.inputs.bvec_convention,
+        )
+        create_src.resource_monitor = False
+        src_file = create_src.run(cwd=runtime.cwd).outputs.output_src
+        self._results['src_qc'] = op.join(runtime.cwd, 'src_qc.txt')
+        problem = _run_qc_action(src_file, runtime.cwd, self._results['src_qc'])
+        if problem is not None:
+            self._results['src_qc_warning'] = problem
+
+        fit_gqi = DSIStudioGQIReconstruction(
+            input_src_file=src_file,
+            thread_count=self.inputs.num_threads,
+            check_btable=self.inputs.check_btable,
+        )
+        fit_gqi.resource_monitor = False
+        fib_file = fit_gqi.run(cwd=runtime.cwd).outputs.output_fib
+        self._results['fib_qc'] = op.join(runtime.cwd, 'fib_qc.txt')
+        problem = _run_qc_action(fib_file, runtime.cwd, self._results['fib_qc'])
+        if problem is not None:
+            self._results['fib_qc_warning'] = problem
+
+        os.remove(fib_file)
+        os.remove(src_file)
+        return runtime
+
+
 class _DSIStudioQCMergeInputSpec(BaseInterfaceInputSpec):
     src_qc = File(exists=True, mandatory=True)
     fib_qc = File(exists=True, mandatory=True)
-    src_qc_warning = traits.Str(desc='why DSIStudioSrcQC produced no measurements')
-    fib_qc_warning = traits.Str(desc='why DSIStudioFibQC produced no measurements')
+    src_qc_warning = traits.Str(desc='why DSIStudioQC produced no src measurements')
+    fib_qc_warning = traits.Str(desc='why DSIStudioQC produced no fib measurements')
     cs_dmri_qc = File(exists=True, desc="cs_dmri's one-row QC table (CsDmriQC)")
     cs_dmri_qc_warning = traits.Str(desc='why CsDmriQC produced no measurements')
 

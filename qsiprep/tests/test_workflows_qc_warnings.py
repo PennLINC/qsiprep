@@ -2,7 +2,7 @@
 
 DSI Studio can fail without saying so. QC must not fail a run, so a failed
 QC stage becomes n/a in image_qc.tsv, and its reason travels
-DSIStudioQC.warning -> DSIStudioMergeQC -> merged_qc.csv -> SeriesQC, which
+DSIStudioQC's warnings -> DSIStudioMergeQC -> merged_qc.csv -> SeriesQC, which
 writes a reportlet that ds_report_qc_warnings sinks as desc-qcwarnings. A
 dropped edge anywhere in that chain produces no error, only a missing warning,
 so each hop is checked here.
@@ -34,7 +34,7 @@ def _reset_config():
     config.workflow.b0_threshold = 100
     config.workflow.output_spaces = ['acpc:res-2mm']
     # config.nipype.init() is not run in construction tests, and
-    # DSIStudioGQIReconstruction needs an int thread_count to build.
+    # DSIStudioQC needs an int num_threads to build.
     config.nipype.omp_nthreads = 1
     yield
     (
@@ -60,8 +60,9 @@ def test_qc_workflow_carries_both_warnings_to_the_merge():
 
     wf = init_modelfree_qc_wf()
 
-    assert ('warning', 'src_qc_warning') in _edge(wf, 'raw_src_qc', 'merged_qc')
-    assert ('warning', 'fib_qc_warning') in _edge(wf, 'raw_fib_qc', 'merged_qc')
+    edge = _edge(wf, 'dsi_studio_qc', 'merged_qc')
+    assert ('src_qc_warning', 'src_qc_warning') in edge
+    assert ('fib_qc_warning', 'fib_qc_warning') in edge
 
 
 def test_finalize_sinks_the_qc_warnings_reportlet(tmp_path):

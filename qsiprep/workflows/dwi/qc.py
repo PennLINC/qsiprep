@@ -15,13 +15,7 @@ from niworkflows.engine.workflows import LiterateWorkflow as Workflow
 from ... import config
 from ...interfaces.anatomical import DiceOverlap
 from ...interfaces.cs_dmri import CsDmriQC
-from ...interfaces.dsi_studio import (
-    DSIStudioCreateSrc,
-    DSIStudioFibQC,
-    DSIStudioGQIReconstruction,
-    DSIStudioMergeQC,
-    DSIStudioSrcQC,
-)
+from ...interfaces.dsi_studio import DSIStudioMergeQC, DSIStudioQC
 from ...interfaces.gradients import ExtractB0s
 
 DEFAULT_MEMORY_MIN_GB = 0.01
@@ -68,39 +62,28 @@ def init_modelfree_qc_wf(bvec_convention='DIPY', skull_strip=False, name='dwi_qc
     )
     outputnode = pe.Node(niu.IdentityInterface(fields=['qc_summary']), name='outputnode')
 
-    raw_src = pe.Node(
-        DSIStudioCreateSrc(
-            bvec_convention='FSL' if bvec_convention == 'auto' else bvec_convention
+    # One node, so the src file and the GQI fit are gone once their QC tables exist
+    dsi_studio_qc = pe.Node(
+        DSIStudioQC(
+            bvec_convention='FSL' if bvec_convention == 'auto' else bvec_convention,
+            check_btable=1 if bvec_convention == 'auto' else 0,
+            num_threads=omp_nthreads,
         ),
-        name='raw_src',
+        name='dsi_studio_qc',
         n_procs=omp_nthreads,
     )
-    raw_src_qc = pe.Node(DSIStudioSrcQC(), name='raw_src_qc', n_procs=omp_nthreads)
-    raw_gqi = pe.Node(
-        DSIStudioGQIReconstruction(
-            thread_count=omp_nthreads, check_btable=1 if bvec_convention == 'auto' else 0
-        ),
-        name='raw_gqi',
-        n_procs=omp_nthreads,
-    )
-    raw_fib_qc = pe.Node(DSIStudioFibQC(), name='raw_fib_qc', n_procs=omp_nthreads)
     merged_qc = pe.Node(DSIStudioMergeQC(), name='merged_qc', n_procs=omp_nthreads)
     workflow.connect([
-        (inputnode, raw_src, [
-            ('dwi_file', 'input_nifti_file'),
-            ('bval_file', 'input_bvals_file'),
-            ('bvec_file', 'input_bvecs_file'),
+        (inputnode, dsi_studio_qc, [
+            ('dwi_file', 'dwi_file'),
+            ('bval_file', 'bval_file'),
+            ('bvec_file', 'bvec_file'),
         ]),
-        (raw_src, raw_src_qc, [('output_src', 'src_file')]),
-        (raw_src, raw_gqi, [('output_src', 'input_src_file')]),
-        (raw_gqi, raw_fib_qc, [('output_fib', 'src_file')]),
-        (raw_fib_qc, merged_qc, [
-            ('qc_txt', 'fib_qc'),
-            ('warning', 'fib_qc_warning'),
-        ]),
-        (raw_src_qc, merged_qc, [
-            ('qc_txt', 'src_qc'),
-            ('warning', 'src_qc_warning'),
+        (dsi_studio_qc, merged_qc, [
+            ('src_qc', 'src_qc'),
+            ('src_qc_warning', 'src_qc_warning'),
+            ('fib_qc', 'fib_qc'),
+            ('fib_qc_warning', 'fib_qc_warning'),
         ]),
         (merged_qc, outputnode, [('qc_file', 'qc_summary')]),
     ])  # fmt:skip
