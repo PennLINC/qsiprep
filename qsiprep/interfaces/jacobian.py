@@ -463,6 +463,10 @@ class _StackJacobianWeightsInputSpec(BaseInterfaceInputSpec):
         desc='unique output-grid weight maps, first-appearance order',
     )
     weight_index = traits.List(traits.Int(), desc='per-volume index into weight_images')
+    volume_deviation = traits.Float(
+        desc='given when weight_images is already the mean over volumes of distinct '
+        'maps: the deviation of a volume from it, as volume_mean reports it'
+    )
     volumes = traits.Bool(
         False,
         usedefault=True,
@@ -501,10 +505,11 @@ class StackJacobianWeights(SimpleInterface):
     differ between volumes, as with eddy-current correction, the default is
     their mean over volumes (3D), each map counted once per volume that used
     it: the per-volume differences are small next to the spatial variation, and
-    a 4D map is as large as the DWI series. ``volumes`` writes every distinct
-    map instead (4D). Undefined ``weight_images`` (no weights were applied this
-    run) is propagated as Undefined outputs rather than synthesizing a map of
-    ones.
+    a 4D map is as large as the DWI series. ``ApplyJacobianWeights`` takes that
+    mean itself when it can, and then ``volume_deviation`` arrives with the one
+    map. ``volumes`` writes every distinct map instead (4D). Undefined
+    ``weight_images`` (no weights were applied this run) is propagated as
+    Undefined outputs rather than synthesizing a map of ones.
     """
 
     input_spec = _StackJacobianWeightsInputSpec
@@ -522,6 +527,8 @@ class StackJacobianWeights(SimpleInterface):
         deviation = None
         if len(images) == 1:
             data = np.asanyarray(images[0].dataobj, dtype=np.float32)
+            if isdefined(self.inputs.volume_deviation):
+                deviation = self.inputs.volume_deviation
         elif self.inputs.volumes:
             data = np.stack([np.asanyarray(img.dataobj, dtype=np.float32) for img in images], -1)
         else:

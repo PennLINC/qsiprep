@@ -210,8 +210,8 @@ def test_noise_maps_take_the_factors_of_their_reference_volume(tmp_path):
         **_resample_inputs(
             tmp_path,
             # Volume 0 (series a's b=0) uses weight 0, volume 4 (series b's) weight 1
-            weight_images=weights,
-            weight_index=[0, 1, 1, 0, 1, 0],
+            native_weight_images=[weights[i] for i in (0, 1, 1, 0, 1, 0)],
+            weight_transforms=['identity'],
             weight_method='Jacobian',
             bias_field=bias,
             native_noise_maps=[
@@ -280,8 +280,8 @@ def test_rank_maps_are_resampled_unscaled(tmp_path, kind, key, units, contents):
             tmp_path,
             kind=kind,
             denoise_method='dwidenoise2',
-            weight_images=weights,
-            weight_index=[0] * 6,
+            native_weight_images=weights * 6,
+            weight_transforms=['identity'],
             weight_method='Jacobian',
             bias_field=bias,
             native_noise_maps=[
@@ -562,10 +562,13 @@ def test_finalize_carries_the_noise_maps_to_acpc(
     node = wf.get_node('resample_noise')
     edges = _edges(wf)
 
-    assert edges[('dwi_trans_wf', 'resample_noise')] >= {
+    assert edges[('dwi_trans_wf', 'resample_noise')] == {
         ('outputnode.volume_transforms', 'volume_transforms'),
-        ('outputnode.jacobian_weights', 'weight_images'),
-        ('outputnode.jacobian_weight_index', 'weight_index'),
+        ('outputnode.jacobian_weight_transforms', 'weight_transforms'),
+    }
+    assert edges[('compose_jacobian', 'resample_noise')] == {
+        ('jacobian_weight_images', 'native_weight_images'),
+        ('method', 'weight_method'),
     }
     assert edges[('final_denoise_wf', 'resample_noise')] == {
         ('outputnode.bias_field', 'bias_field')
@@ -610,6 +613,10 @@ def test_each_acpc_resolution_gets_its_own_noise_map(tmp_path, monkeypatch):
         assert node.inputs.resolution_label == label
         assert ('outputnode.volume_transforms', 'volume_transforms') in edges[
             (f'dwi_trans_wf_res{label}', f'resample_noise_res{label}')
+        ]
+        # Every resolution reads the one set of unresampled weight maps
+        assert ('jacobian_weight_images', 'native_weight_images') in edges[
+            ('compose_jacobian', f'resample_noise_res{label}')
         ]
         assert edges[(f'final_denoise_wf_res{label}', f'resample_noise_res{label}')] == {
             ('outputnode.bias_field', 'bias_field')

@@ -846,6 +846,12 @@ threads across all processes and ``--omp-nthreads`` the number per process;
 ``--use-plugin`` (or ``--nipype-plugin-file``) points at a Nipype plugin
 file for cluster schedulers.
 
+The final resampling of each output is the one step that may use more than
+``--omp-nthreads`` threads. The ``--nprocs`` threads are divided between the
+resamplings of the run (one per output series and resolution), with no fewer
+than ``--omp-nthreads`` each, so a run with a single output resamples with all
+of them and a run with many outputs resamples several at once.
+
 ``-w``/``--work-dir`` is where intermediate files go; a run that stops can be
 restarted with the same working directory and picks up where it left off.
 ``--report-output-level`` chooses where the HTML reports are written

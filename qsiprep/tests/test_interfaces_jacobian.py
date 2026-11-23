@@ -1248,6 +1248,20 @@ def test_stack_jacobian_weights_defaults_to_the_mean_over_volumes(tmp_path):
     assert '--write-jacobian-4d' in meta['Description']
 
 
+def test_stack_jacobian_weights_writes_an_already_averaged_map_as_a_mean(tmp_path):
+    """Test that a mean taken upstream gets the sidecar of a mean taken here."""
+    mean_image = _write_map(tmp_path / 'mean.nii.gz', 1.25)
+    result = StackJacobianWeights(
+        weight_images=[mean_image], weight_index=[0, 0, 0, 0], volume_deviation=0.6
+    ).run(cwd=str(tmp_path))
+    meta = result.outputs.meta_dict
+    assert np.allclose(np.asanyarray(nb.load(result.outputs.out_file).dataobj), 1.25)
+    assert meta['JacobianWeightIndex'] == [0, 0, 0, 0]
+    assert meta['JacobianWeightCombination'] == 'mean'
+    assert meta['JacobianWeightVolumeDeviation'] == pytest.approx(0.6)
+    assert '--write-jacobian-4d' in meta['Description']
+
+
 def test_stack_jacobian_weights_single_map_has_no_combination(tmp_path):
     """Test that a map shared by every volume is written as is, with no mean fields."""
     weight_image = _write_map(tmp_path / 'w0.nii.gz', 1.5)
